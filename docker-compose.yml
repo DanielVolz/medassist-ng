@@ -1,5 +1,6 @@
 services:
   backend:
+    image: medassist-backend:latest
     build:
       context: ./backend
     env_file:
@@ -16,6 +17,7 @@ services:
       start_period: 10s
 
   frontend:
+    image: medassist-frontend:latest
     build:
       context: ./frontend
     ports:

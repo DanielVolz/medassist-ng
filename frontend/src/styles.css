@@ -65,6 +65,11 @@ body {
 .tag.subtle { background: rgba(255, 255, 255, 0.04); color: #c1cbe0; }
 
 .med-actions { display: flex; align-items: center; gap: 0.5rem; }
+.slice-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
+.slice-pill { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.slice-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.65rem; background: #0d1424; border: 1px solid #1f2a3d; padding: 0.85rem; border-radius: 10px; margin-bottom: 0.5rem; }
+.slices h3 { margin: 0; }
+.gap { gap: 0.6rem; }
 
 button {
   padding: 0.65rem 1rem;

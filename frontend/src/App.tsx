@@ -3,26 +3,34 @@ import { z } from "zod";
 
 const healthSchema = z.object({ status: z.string() });
 
+type Slice = {
+  usage: number;
+  every: number;
+  start: string; // ISO date string
+};
+
 type Medication = {
-  id: string;
+  id: number;
   name: string;
-  dosage: string;
-  frequency: string;
-  timeOfDay: string;
-  startDate: string;
-  notes?: string;
-  active: boolean;
+  count: number;
+  stripSize: number;
+  slices: Slice[];
+  updatedAt: string | number | null;
 };
 
-type DoseEvent = {
-  id: string;
-  medId: string;
-  medName: string;
-  time: Date;
-  notes?: string;
+type FormState = {
+  name: string;
+  count: string;
+  stripSize: string;
+  slices: Array<{ usage: string; every: string; start: string }>;
 };
 
-// Simple backend health check
+const defaultSlice = (): FormState["slices"][number] => ({
+  usage: "1",
+  every: "1",
+  start: new Date().toISOString().slice(0, 16),
+});
+
 function useHealth() {
   const [status, setStatus] = useState<string>("loading");
   useEffect(() => {
@@ -38,136 +46,120 @@ function useHealth() {
   return status;
 }
 
-const starterMeds: Medication[] = [
-  {
-    id: "med-1",
-    name: "Lisinopril",
-    dosage: "10 mg",
-    frequency: "Daily",
-    timeOfDay: "08:00",
-    startDate: "2025-11-28",
-    notes: "Blood pressure",
-    active: true,
-  },
-  {
-    id: "med-2",
-    name: "Metformin",
-    dosage: "500 mg",
-    frequency: "2x daily",
-    timeOfDay: "08:00",
-    startDate: "2025-12-01",
-    notes: "Before meals",
-    active: true,
-  },
-  {
-    id: "med-3",
-    name: "Vitamin D",
-    dosage: "2000 IU",
-    frequency: "Weekly",
-    timeOfDay: "09:00",
-    startDate: "2025-12-05",
-    notes: "Sunday dose",
-    active: false,
-  },
-];
-
-const frequencies = ["Daily", "2x daily", "Weekly", "As needed"] as const;
-
 export default function App() {
   const status = useHealth();
-  const [meds, setMeds] = useState<Medication[]>(starterMeds);
-  const [form, setForm] = useState({
-    name: "",
-    dosage: "",
-    frequency: "Daily",
-    timeOfDay: "08:00",
-    notes: "",
-  });
+  const [meds, setMeds] = useState<Medication[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<FormState>({ name: "", count: "0", stripSize: "1", slices: [defaultSlice()] });
 
-  const activeCount = meds.filter((m) => m.active).length;
+  const activeCount = meds.length;
 
-  const schedule: DoseEvent[] = useMemo(() => {
-    const daysAhead = 3;
-    const events: DoseEvent[] = [];
-    const now = new Date();
-    for (let d = 0; d <= daysAhead; d++) {
-      const base = new Date(now);
-      base.setDate(now.getDate() + d);
-      meds
-        .filter((m) => m.active)
-        .forEach((m) => {
-          if (m.frequency === "As needed") return;
-          const [h, min] = m.timeOfDay.split(":").map(Number);
-          const when = new Date(base);
-          when.setHours(h ?? 8, min ?? 0, 0, 0);
-          events.push({
-            id: `${m.id}-${when.toISOString()}`,
-            medId: m.id,
-            medName: m.name,
-            time: when,
-            notes: m.notes,
-          });
-          if (m.frequency === "2x daily") {
-            const evening = new Date(when);
-            evening.setHours(20, 0, 0, 0);
-            events.push({
-              id: `${m.id}-${evening.toISOString()}`,
-              medId: m.id,
-              medName: m.name,
-              time: evening,
-              notes: m.notes,
-            });
-          }
-        });
-    }
-    return events.sort((a, b) => a.time.getTime() - b.time.getTime());
-  }, [meds]);
+  const schedule = useMemo(() => buildSchedulePreview(meds), [meds]);
 
-  const handleAdd = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadMeds();
+  }, []);
+
+  function loadMeds() {
+    setLoading(true);
+    fetch("/medications")
+      .then((res) => res.json())
+      .then((data: Medication[]) => setMeds(data))
+      .catch(() => setMeds([]))
+      .finally(() => setLoading(false));
+  }
+
+  function setSliceValue(idx: number, field: keyof FormState["slices"][number], value: string) {
+    setForm((prev) => {
+      const next = [...prev.slices];
+      next[idx] = { ...next[idx], [field]: value };
+      return { ...prev, slices: next };
+    });
+  }
+
+  function addSlice() {
+    setForm((prev) => ({ ...prev, slices: [...prev.slices, defaultSlice()] }));
+  }
+
+  function removeSlice(idx: number) {
+    setForm((prev) => ({ ...prev, slices: prev.slices.filter((_, i) => i !== idx) }));
+  }
+
+  function startEdit(med: Medication) {
+    setEditingId(med.id);
+    setForm({
+      name: med.name,
+      count: String(med.count),
+      stripSize: String(med.stripSize),
+      slices: med.slices.map((s) => ({
+        usage: String(s.usage),
+        every: String(s.every),
+        start: toInputValue(s.start),
+      })),
+    });
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setForm({ name: "", count: "0", stripSize: "1", slices: [defaultSlice()] });
+  }
+
+  async function saveMedication(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.dosage.trim()) return;
-    const newMed: Medication = {
-      id: crypto.randomUUID(),
-      name: form.name.trim(),
-      dosage: form.dosage.trim(),
-      frequency: form.frequency,
-      timeOfDay: form.timeOfDay,
-      startDate: new Date().toISOString().slice(0, 10),
-      notes: form.notes.trim() || undefined,
-      active: true,
-    };
-    setMeds((prev) => [newMed, ...prev]);
-    setForm({ name: "", dosage: "", frequency: "Daily", timeOfDay: "08:00", notes: "" });
-  };
+    if (!form.name.trim()) return;
+    setSaving(true);
 
-  const toggleActive = (id: string) => {
-    setMeds((prev) => prev.map((m) => (m.id === id ? { ...m, active: !m.active } : m)));
-  };
+    const payload = {
+      name: form.name.trim(),
+      count: Number(form.count) || 0,
+      stripSize: Number(form.stripSize) || 1,
+      slices: form.slices.map((s) => ({
+        usage: Number(s.usage) || 0,
+        every: Math.max(1, Number(s.every) || 1),
+        start: toIsoString(s.start),
+      })),
+    };
+
+    const method = editingId ? "PUT" : "POST";
+    const url = editingId ? `/medications/${editingId}` : "/medications";
+
+    await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => null);
+
+    setSaving(false);
+    resetForm();
+    loadMeds();
+  }
 
   return (
     <main className="page">
       <header className="hero">
         <div>
-          <p className="eyebrow">Medassist · Rebuild Preview</p>
-          <h1>Deine Medikationszentrale</h1>
-          <p className="sub">Schneller Überblick über Medikamente, Einnahmeplan und Erinnerungen.</p>
+          <p className="eyebrow">Medassist · Planner</p>
+          <h1>Medikationspläne anlegen & bearbeiten</h1>
+          <p className="sub">Slices wie früher: usage, every (days), start (Datum/Uhrzeit), plus Bestand & Strip-Size.</p>
           <div className="badges">
             <span className="pill success">Backend: {status}</span>
-            <span className="pill">Aktive Medikamente: {activeCount}</span>
+            <span className="pill">Einträge: {meds.length}</span>
           </div>
         </div>
         <div className="stats">
           <div className="stat">
             <p className="label">Heute geplant</p>
-            <p className="value">{schedule.filter((e) => isToday(e.time)).length}</p>
+            <p className="value">{schedule.today}</p>
           </div>
           <div className="stat">
-            <p className="label">Diese Woche</p>
-            <p className="value">{schedule.length}</p>
+            <p className="label">Nächste 3 Tage</p>
+            <p className="value">{schedule.nextThree}</p>
           </div>
           <div className="stat">
-            <p className="label">Ohne Login</p>
-            <p className="value">Demo</p>
+            <p className="label">Aktive Slices</p>
+            <p className="value">{schedule.totalSlices}</p>
           </div>
         </div>
       </header>
@@ -176,23 +168,27 @@ export default function App() {
         <article className="card meds">
           <div className="card-head">
             <h2>Medikamentenliste</h2>
-            <span className="pill">{meds.length} gesamt</span>
+            <span className="pill">{loading ? "lädt..." : `${meds.length} gesamt`}</span>
           </div>
           <div className="med-list">
             {meds.map((med) => (
               <div key={med.id} className="med-row">
                 <div>
                   <div className="med-name">{med.name}</div>
-                  <div className="muted">{med.dosage} · {med.frequency} · Start {med.startDate}</div>
-                  {med.notes && <div className="tag">{med.notes}</div>}
+                  <div className="muted">Bestand: {med.count} · Strip-Size: {med.stripSize}</div>
+                  <div className="tag subtle">Slices: {med.slices.length}</div>
+                  <div className="slice-list">
+                    {med.slices.map((s, idx) => (
+                      <div key={`${med.id}-${idx}`} className="slice-pill">
+                        <span className="pill">{s.usage} meds</span>
+                        <span className="pill neutral">alle {s.every} Tage</span>
+                        <span className="pill subtle">ab {formatDateTime(s.start)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="med-actions">
-                  <span className={`pill ${med.active ? "success" : "neutral"}`}>
-                    {med.active ? "aktiv" : "pausiert"}
-                  </span>
-                  <button className="ghost" onClick={() => toggleActive(med.id)}>
-                    {med.active ? "Pausieren" : "Aktivieren"}
-                  </button>
+                  <button className="ghost" onClick={() => startEdit(med)}>Bearbeiten</button>
                 </div>
               </div>
             ))}
@@ -201,38 +197,56 @@ export default function App() {
 
         <article className="card form">
           <div className="card-head">
-            <h2>Neues Medikament</h2>
-            <span className="pill">ohne Login</span>
+            <h2>{editingId ? "Eintrag bearbeiten" : "Neuer Eintrag"}</h2>
+            <span className="pill">Slices wie alte App</span>
           </div>
-          <form className="form-grid" onSubmit={handleAdd}>
+          <form className="form-grid" onSubmit={saveMedication}>
             <label>
               Name
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z.B. Ibuprofen" />
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z.B. Lisinopril" required />
             </label>
             <label>
-              Dosierung
-              <input value={form.dosage} onChange={(e) => setForm({ ...form, dosage: e.target.value })} placeholder="z.B. 400 mg" />
+              Bestand (count)
+              <input type="number" min="0" value={form.count} onChange={(e) => setForm({ ...form, count: e.target.value })} />
             </label>
             <label>
-              Einnahmezeit
-              <input type="time" value={form.timeOfDay} onChange={(e) => setForm({ ...form, timeOfDay: e.target.value })} />
+              Strip Size
+              <input type="number" min="1" value={form.stripSize} onChange={(e) => setForm({ ...form, stripSize: e.target.value })} />
             </label>
-            <label>
-              Frequenz
-              <select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}>
-                {frequencies.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="full">
-              Notizen
-              <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Erinnerung oder Kontext" />
-            </label>
-            <div className="full align-end">
-              <button type="submit">Hinzufügen</button>
+
+            <div className="full slices">
+              <div className="card-head">
+                <h3>Slice / Plan</h3>
+                <button type="button" className="ghost" onClick={addSlice}>+ Slice</button>
+              </div>
+              {form.slices.map((s, idx) => (
+                <div key={idx} className="slice-row">
+                  <label>
+                    Usage (meds)
+                    <input type="number" min="0" step="0.1" value={s.usage} onChange={(e) => setSliceValue(idx, "usage", e.target.value)} />
+                  </label>
+                  <label>
+                    Every (days)
+                    <input type="number" min="1" value={s.every} onChange={(e) => setSliceValue(idx, "every", e.target.value)} />
+                  </label>
+                  <label>
+                    Start (Datum/Zeit)
+                    <input type="datetime-local" value={s.start} onChange={(e) => setSliceValue(idx, "start", e.target.value)} />
+                  </label>
+                  {form.slices.length > 1 && (
+                    <button type="button" className="ghost" onClick={() => removeSlice(idx)}>Entfernen</button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="full align-end gap">
+              {editingId && (
+                <button type="button" className="ghost" onClick={resetForm}>
+                  Abbrechen
+                </button>
+              )}
+              <button type="submit" disabled={saving}>{saving ? "Speichern..." : "Speichern"}</button>
             </div>
           </form>
         </article>
@@ -241,62 +255,80 @@ export default function App() {
       <section className="grid">
         <article className="card">
           <div className="card-head">
-            <h2>Nächste Einnahmen</h2>
-            <span className="pill">3 Tage Vorschau</span>
+            <h2>Nächste Einnahmen (3 Tage)</h2>
+            <span className="pill neutral">Preview</span>
           </div>
           <div className="timeline">
-            {schedule.slice(0, 8).map((event) => (
+            {schedule.events.slice(0, 10).map((event) => (
               <div key={event.id} className="time-row">
-                <div className="time-chip">{formatTime(event.time)}</div>
+                <div className="time-chip">{event.timeStr}</div>
                 <div>
                   <div className="med-name">{event.medName}</div>
-                  <div className="muted">{formatDate(event.time)}</div>
-                  {event.notes && <div className="tag subtle">{event.notes}</div>}
+                  <div className="muted">{event.dateStr}</div>
+                  <div className="tag subtle">{event.usage} meds</div>
                 </div>
               </div>
             ))}
           </div>
-        </article>
-
-        <article className="card">
-          <div className="card-head">
-            <h2>Highlights</h2>
-            <span className="pill neutral">Demo-Daten</span>
-          </div>
-          <div className="highlights">
-            <div>
-              <p className="label">Aktive Pläne</p>
-              <p className="value">{activeCount}</p>
-            </div>
-            <div>
-              <p className="label">Starttermine</p>
-              <p className="value">{meds.filter((m) => m.startDate).length}</p>
-            </div>
-            <div>
-              <p className="label">Backend Health</p>
-              <p className="value">{status}</p>
-            </div>
-          </div>
-          <p className="muted small">Login und Synchronisation kommen später – dies ist ein sichtbarer Preview.</p>
         </article>
       </section>
     </main>
   );
 }
 
-function isToday(date: Date) {
+function toIsoString(value: string) {
+  // Accept datetime-local value; fallback to now
+  if (!value) return new Date().toISOString();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
+function toInputValue(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 16);
+  const iso = date.toISOString();
+  return iso.slice(0, 16);
+}
+
+function formatDateTime(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString([], { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function buildSchedulePreview(meds: Medication[]) {
+  const events: Array<{ id: string; medName: string; timeStr: string; dateStr: string; usage: number; when: number }> = [];
   const now = new Date();
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-  );
-}
+  const end = new Date();
+  end.setDate(end.getDate() + 3);
 
-function formatTime(date: Date) {
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
+  meds.forEach((med) => {
+    med.slices.forEach((slice, idx) => {
+      const start = new Date(slice.start);
+      if (Number.isNaN(start.getTime())) return;
+      // generate occurrences within next 3 days (simplified)
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + slice.every)) {
+        if (d < now) continue;
+        const whenMs = d.getTime();
+        events.push({
+          id: `${med.id}-${idx}-${whenMs}`,
+          medName: med.name,
+          usage: slice.usage,
+          when: whenMs,
+          timeStr: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          dateStr: d.toLocaleDateString([], { weekday: "short", day: "2-digit", month: "short" }),
+        });
+      }
+    });
+  });
 
-function formatDate(date: Date) {
-  return date.toLocaleDateString([], { weekday: "short", day: "2-digit", month: "short" });
+  events.sort((a, b) => a.when - b.when);
+
+  const todayCount = events.filter((e) => {
+    const t = new Date(e.when);
+    const n = new Date();
+    return t.getFullYear() === n.getFullYear() && t.getMonth() === n.getMonth() && t.getDate() === n.getDate();
+  }).length;
+
+  return { events, today: todayCount, nextThree: events.length, totalSlices: meds.reduce((acc, m) => acc + m.slices.length, 0) };
 }

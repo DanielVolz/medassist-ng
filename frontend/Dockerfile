@@ -1,5 +1,5 @@
 # Frontend build
-FROM node:22-slim AS builder
+FROM node:25-slim AS builder
 WORKDIR /app
 COPY package.json tsconfig.json tsconfig.node.json vite.config.ts index.html ./
 COPY src ./src

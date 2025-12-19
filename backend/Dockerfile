@@ -1,5 +1,5 @@
 # Backend build
-FROM node:22-slim AS builder
+FROM node:25-slim AS builder
 WORKDIR /app
 COPY package.json tsconfig.json drizzle.config.ts ./
 COPY src ./src
@@ -9,7 +9,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Runtime
-FROM node:22-slim AS runner
+FROM node:25-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/node_modules ./node_modules

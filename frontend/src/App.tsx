@@ -93,6 +93,7 @@ export default function App() {
 		smtpSecure: false,
 		hasSmtpPassword: false,
 		lastAutoEmailSent: null as string | null,
+		nextScheduledCheck: null as string | null,
 	});
 	const [savedSettings, setSavedSettings] = useState(settings);
 	const [settingsLoading, setSettingsLoading] = useState(false);
@@ -721,7 +722,7 @@ export default function App() {
 									{settings.emailEnabled && (
 										<>
 											<div className="setting-info-box">
-												<p>🤖 <strong>How it works:</strong> The server checks hourly. When a medication drops below the threshold, you get an email.</p>
+												<p>🤖 <strong>How it works:</strong> The server checks daily at 6:00 AM. When a medication drops below the threshold, you get an email.</p>
 											</div>
 											<div className="setting-group">
 												<label>
@@ -758,11 +759,12 @@ export default function App() {
 													<span className="toggle-slider"></span>
 												</label>
 											</div>
-											{settings.lastAutoEmailSent && (
-												<div className="setting-info-box success">
-													<p>✓ Last automatic email: <strong>{new Date(settings.lastAutoEmailSent).toLocaleString()}</strong></p>
-												</div>
-											)}
+											<div className="setting-info-box">
+												<p>⏰ <strong>Next automatic check:</strong> {settings.nextScheduledCheck ? new Date(settings.nextScheduledCheck).toLocaleString() : "—"}</p>
+												{settings.lastAutoEmailSent && (
+													<p style={{ marginTop: "0.5rem" }}>✓ Last automatic email: <strong>{new Date(settings.lastAutoEmailSent).toLocaleString()}</strong></p>
+												)}
+											</div>
 										</>
 									)}
 

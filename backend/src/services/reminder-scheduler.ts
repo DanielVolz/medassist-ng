@@ -20,7 +20,28 @@ type ReminderState = {
   lastAutoEmailSent: string | null; // ISO date string
   lastAutoEmailDate: string | null; // YYYY-MM-DD - to track if we already sent today
   notifiedMedications: string[]; // List of medication names that have been notified (cleared when restocked)
+  nextScheduledCheck: string | null; // ISO date string for when the next check is scheduled
 };
+
+const REMINDER_HOUR = 6; // 6:00 AM
+
+function getNextScheduledTime(): Date {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(REMINDER_HOUR, 0, 0, 0);
+  
+  // If we're past today's scheduled time, schedule for tomorrow
+  if (now >= next) {
+    next.setDate(next.getDate() + 1);
+  }
+  
+  return next;
+}
+
+function getMsUntilNextCheck(): number {
+  const next = getNextScheduledTime();
+  return next.getTime() - Date.now();
+}
 
 const notificationSettingsFile = resolve(process.cwd(), "data", "notification-settings.json");
 const reminderStateFile = resolve(process.cwd(), "data", "reminder-state.json");
@@ -53,12 +74,13 @@ function loadReminderState(): ReminderState {
         lastAutoEmailSent: saved.lastAutoEmailSent ?? null,
         lastAutoEmailDate: saved.lastAutoEmailDate ?? null,
         notifiedMedications: saved.notifiedMedications ?? [],
+        nextScheduledCheck: saved.nextScheduledCheck ?? null,
       };
     }
   } catch {
     // ignore
   }
-  return { lastAutoEmailSent: null, lastAutoEmailDate: null, notifiedMedications: [] };
+  return { lastAutoEmailSent: null, lastAutoEmailDate: null, notifiedMedications: [], nextScheduledCheck: null };
 }
 
 function saveReminderState(state: ReminderState): void {
@@ -301,11 +323,13 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   const result = await sendReminderEmail(settings.notificationEmail, medsToNotify);
   
   if (result.success) {
-    // Update state
+    // Update state (preserve nextScheduledCheck)
+    const currentState = loadReminderState();
     saveReminderState({
       lastAutoEmailSent: new Date().toISOString(),
       lastAutoEmailDate: today,
       notifiedMedications: [...new Set([...stillLowStock, ...medsToNotify.map((m) => m.name)])],
+      nextScheduledCheck: currentState.nextScheduledCheck,
     });
     logger.info(`[Reminder] Email sent successfully to ${settings.notificationEmail}`);
   } else {
@@ -313,24 +337,53 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   }
 }
 
-let schedulerInterval: NodeJS.Timeout | null = null;
+let schedulerTimeout: NodeJS.Timeout | null = null;
+
+function scheduleNextCheck(logger: { info: (msg: string) => void; error: (msg: string) => void }): void {
+  const msUntilNext = getMsUntilNextCheck();
+  const nextTime = getNextScheduledTime();
+  
+  // Save next scheduled time to state
+  const state = loadReminderState();
+  saveReminderState({
+    ...state,
+    nextScheduledCheck: nextTime.toISOString(),
+  });
+  
+  logger.info(`[Reminder] Next check scheduled for ${nextTime.toLocaleString()} (in ${Math.round(msUntilNext / 1000 / 60)} minutes)`);
+  
+  schedulerTimeout = setTimeout(() => {
+    checkAndSendReminder(logger).catch((err) => logger.error(`[Reminder] Error: ${err}`));
+    // Schedule the next check after this one completes
+    scheduleNextCheck(logger);
+  }, msUntilNext);
+}
 
 export function startReminderScheduler(logger: { info: (msg: string) => void; error: (msg: string) => void }): void {
-  // Run check immediately on startup
   logger.info("[Reminder] Starting reminder scheduler...");
-  checkAndSendReminder(logger).catch((err) => logger.error(`[Reminder] Error: ${err}`));
   
-  // Then run every hour to check (will only send once per day)
-  schedulerInterval = setInterval(() => {
+  // Check if we need to run immediately (missed today's check)
+  const state = loadReminderState();
+  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const todayAt6AM = new Date(now);
+  todayAt6AM.setHours(REMINDER_HOUR, 0, 0, 0);
+  
+  // If it's past 6 AM today and we haven't checked today, run immediately
+  if (now >= todayAt6AM && state.lastAutoEmailDate !== today) {
+    logger.info("[Reminder] Missed today's check, running now...");
     checkAndSendReminder(logger).catch((err) => logger.error(`[Reminder] Error: ${err}`));
-  }, 60 * 60 * 1000); // Every hour
+  }
   
-  logger.info("[Reminder] Scheduler started - checking hourly, sending max once per day");
+  // Schedule next check at 6 AM
+  scheduleNextCheck(logger);
+  
+  logger.info(`[Reminder] Scheduler started - daily check at ${REMINDER_HOUR}:00`);
 }
 
 export function stopReminderScheduler(): void {
-  if (schedulerInterval) {
-    clearInterval(schedulerInterval);
-    schedulerInterval = null;
+  if (schedulerTimeout) {
+    clearTimeout(schedulerTimeout);
+    schedulerTimeout = null;
   }
 }

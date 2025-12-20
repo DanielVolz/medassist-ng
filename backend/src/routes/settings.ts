@@ -80,6 +80,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       hasSmtpPassword: !!process.env.SMTP_PASS,
       // Reminder state
       lastAutoEmailSent: reminderState.lastAutoEmailSent,
+      nextScheduledCheck: reminderState.nextScheduledCheck,
     });
   });
 

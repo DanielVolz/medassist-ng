@@ -11,6 +11,7 @@ import { authRoutes } from "./routes/auth.js";
 import { medicationRoutes } from "./routes/medications.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { plannerRoutes } from "./routes/planner.js";
+import { startReminderScheduler } from "./services/reminder-scheduler.js";
 
 const app = Fastify({
   logger: {
@@ -65,6 +66,12 @@ const start = async () => {
   try {
     await app.listen({ port: env.PORT, host: "0.0.0.0" });
     app.log.info(`Server running on ${env.PORT}`);
+    
+    // Start the automatic reminder scheduler
+    startReminderScheduler({
+      info: (msg) => app.log.info(msg),
+      error: (msg) => app.log.error(msg),
+    });
   } catch (err) {
     app.log.error(err);
     process.exit(1);

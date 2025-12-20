@@ -1,7 +1,7 @@
 # Backend build
 FROM node:25-slim AS builder
 WORKDIR /app
-COPY package.json tsconfig.json drizzle.config.ts ./
+COPY package.json tsconfig.json ./
 COPY src ./src
 RUN npm install
 RUN npm run build

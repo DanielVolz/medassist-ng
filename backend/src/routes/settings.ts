@@ -2,11 +2,13 @@ import { FastifyInstance } from "fastify";
 import nodemailer from "nodemailer";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
+import { getReminderState } from "../services/reminder-scheduler.js";
 
 type SettingsBody = {
   emailEnabled: boolean;
   notificationEmail: string;
   reminderDaysBefore: number;
+  repeatDailyReminders: boolean;
   lowStockDays: number;
   normalStockDays: number;
   highStockDays: number;
@@ -24,6 +26,7 @@ type NotificationSettings = {
   emailEnabled: boolean;
   notificationEmail: string;
   reminderDaysBefore: number;
+  repeatDailyReminders: boolean;
   lowStockDays: number;
   normalStockDays: number;
   highStockDays: number;
@@ -37,6 +40,7 @@ function loadNotificationSettings(): NotificationSettings {
         emailEnabled: saved.emailEnabled ?? false,
         notificationEmail: saved.notificationEmail ?? "",
         reminderDaysBefore: saved.reminderDaysBefore ?? 7,
+        repeatDailyReminders: saved.repeatDailyReminders ?? false,
         lowStockDays: saved.lowStockDays ?? 30,
         normalStockDays: saved.normalStockDays ?? 90,
         highStockDays: saved.highStockDays ?? 180,
@@ -45,7 +49,7 @@ function loadNotificationSettings(): NotificationSettings {
   } catch {
     // ignore
   }
-  return { emailEnabled: false, notificationEmail: "", reminderDaysBefore: 7, lowStockDays: 30, normalStockDays: 90, highStockDays: 180 };
+  return { emailEnabled: false, notificationEmail: "", reminderDaysBefore: 7, repeatDailyReminders: false, lowStockDays: 30, normalStockDays: 90, highStockDays: 180 };
 }
 
 function saveNotificationSettings(settings: NotificationSettings): void {
@@ -56,12 +60,14 @@ export async function settingsRoutes(app: FastifyInstance) {
   // Get settings - notification from JSON file, SMTP from process.env
   app.get("/settings", async (_request, reply) => {
     const notification = loadNotificationSettings();
+    const reminderState = getReminderState();
     
     return reply.send({
       // Notification settings (user-configurable, stored in JSON)
       emailEnabled: notification.emailEnabled,
       notificationEmail: notification.notificationEmail,
       reminderDaysBefore: notification.reminderDaysBefore,
+      repeatDailyReminders: notification.repeatDailyReminders,
       lowStockDays: notification.lowStockDays,
       normalStockDays: notification.normalStockDays,
       highStockDays: notification.highStockDays,
@@ -72,6 +78,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       smtpFrom: process.env.SMTP_FROM ?? "",
       smtpSecure: process.env.SMTP_SECURE === "true",
       hasSmtpPassword: !!process.env.SMTP_PASS,
+      // Reminder state
+      lastAutoEmailSent: reminderState.lastAutoEmailSent,
     });
   });
 
@@ -84,6 +92,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       emailEnabled: body.emailEnabled,
       notificationEmail: body.notificationEmail,
       reminderDaysBefore: body.reminderDaysBefore,
+      repeatDailyReminders: body.repeatDailyReminders ?? false,
       lowStockDays: body.lowStockDays ?? 30,
       normalStockDays: body.normalStockDays ?? 90,
       highStockDays: body.highStockDays ?? 180,

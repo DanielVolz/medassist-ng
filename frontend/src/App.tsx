@@ -81,6 +81,7 @@ export default function App() {
 		emailEnabled: false,
 		notificationEmail: "",
 		reminderDaysBefore: 7,
+		repeatDailyReminders: false,
 		lowStockDays: 30,
 		normalStockDays: 90,
 		highStockDays: 180,
@@ -91,6 +92,7 @@ export default function App() {
 		smtpFrom: "",
 		smtpSecure: false,
 		hasSmtpPassword: false,
+		lastAutoEmailSent: null as string | null,
 	});
 	const [savedSettings, setSavedSettings] = useState(settings);
 	const [settingsLoading, setSettingsLoading] = useState(false);
@@ -102,17 +104,12 @@ export default function App() {
 	const [plannerEmailResult, setPlannerEmailResult] = useState<{ success: boolean; message: string } | null>(null);
 	const [sendingReminderEmail, setSendingReminderEmail] = useState(false);
 	const [reminderEmailResult, setReminderEmailResult] = useState<{ success: boolean; message: string } | null>(null);
-	const [lastReminderSent, setLastReminderSent] = useState<string | null>(() => {
-		if (typeof window !== "undefined") {
-			return localStorage.getItem("lastReminderSent");
-		}
-		return null;
-	});
 
 	// Check if settings have changed
 	const settingsChanged = settings.emailEnabled !== savedSettings.emailEnabled ||
 		settings.notificationEmail !== savedSettings.notificationEmail ||
 		settings.reminderDaysBefore !== savedSettings.reminderDaysBefore ||
+		settings.repeatDailyReminders !== savedSettings.repeatDailyReminders ||
 		settings.lowStockDays !== savedSettings.lowStockDays ||
 		settings.normalStockDays !== savedSettings.normalStockDays ||
 		settings.highStockDays !== savedSettings.highStockDays;
@@ -172,6 +169,7 @@ export default function App() {
 			emailEnabled: settings.emailEnabled,
 			notificationEmail: settings.notificationEmail,
 			reminderDaysBefore: settings.reminderDaysBefore,
+			repeatDailyReminders: settings.repeatDailyReminders,
 			lowStockDays: settings.lowStockDays,
 			normalStockDays: settings.normalStockDays,
 			highStockDays: settings.highStockDays,
@@ -261,10 +259,9 @@ export default function App() {
 			});
 			const data = await res.json();
 			if (res.ok) {
-				const sentDate = new Date().toLocaleDateString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-				setLastReminderSent(sentDate);
-				localStorage.setItem("lastReminderSent", sentDate);
 				setReminderEmailResult({ success: true, message: data.message || "Email sent!" });
+				// Reload settings to get updated lastAutoEmailSent
+				loadSettings();
 			} else {
 				setReminderEmailResult({ success: false, message: data.error || "Failed to send" });
 			}
@@ -401,7 +398,7 @@ export default function App() {
 							<section className="email-status-bar">
 								<span className="email-status-icon">📧</span>
 								<span className="email-status-text">
-									Email reminders active — Next check: <strong>{getNextReminderDate(settings.reminderDaysBefore, coverage.low)}</strong>
+									Automatic reminders active — {getReminderStatusText(settings.reminderDaysBefore, coverage.low, settings.lastAutoEmailSent)}
 								</span>
 								<span className="email-status-recipient">→ {settings.notificationEmail}</span>
 							</section>
@@ -418,27 +415,25 @@ export default function App() {
 									<p className="success-text">All good, enough stock.</p>
 								) : (
 									<>
-										<div className="table table-7">
+										<div className="table table-6">
 											<div className="table-head">
 												<span>Name</span>
 												<span>Current pills</span>
 												<span>Days left</span>
 												<span>Status</span>
 												<span>Runs out</span>
-												<span>Next reminder</span>
-												<span>Email sent</span>
+												<span>Auto-remind</span>
 											</div>
 											{coverage.low.map((row) => {
 												const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 												return (
 													<div key={row.name} className="table-row">
-														<span>{row.name}</span>
-														<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
-														<span className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
-														<span className={`status-chip ${status.className}`}>{status.label}</span>
-														<span>{row.depletionDate ?? "-"}</span>
-														<span className="next-reminder-date">{getNextReminderForMed(row, settings.reminderDaysBefore)}</span>
-														<span className="email-sent-status">{lastReminderSent ?? "—"}</span>
+														<span data-label="Name">{row.name}</span>
+														<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
+														<span data-label="Days" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
+														<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
+														<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
+														<span data-label="Auto-remind" className="next-reminder-date">{getNextReminderForMed(row, settings.reminderDaysBefore)}</span>
 													</div>
 												);
 											})}
@@ -446,7 +441,7 @@ export default function App() {
 										{settings.emailEnabled && settings.notificationEmail && (
 											<div className="email-send-action">
 												<button type="button" className="ghost" onClick={sendReminderEmail} disabled={sendingReminderEmail}>
-													{sendingReminderEmail ? "Sending..." : "📧 Send Reminder Email"}
+													{sendingReminderEmail ? "Sending..." : "📧 Send Reminder Now"}
 												</button>
 												{reminderEmailResult && (
 													<span className={reminderEmailResult.success ? "success-text" : "danger-text"}>
@@ -478,11 +473,11 @@ export default function App() {
 										const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 										return (
 											<div key={row.name} className="table-row">
-												<span>{row.name}</span>
-												<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
-												<span className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
-												<span>{row.depletionDate ?? "-"}</span>
-												<span className={`status-chip ${status.className}`}>{status.label}</span>
+												<span data-label="Name">{row.name}</span>
+												<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
+												<span data-label="Days left" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
+												<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
+												<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
 											</div>
 										);
 									})}
@@ -671,11 +666,11 @@ export default function App() {
 										</div>
 										{plannerRows.map((row) => (
 											<div key={row.medicationId} className="table-row">
-												<span>{row.medicationName}</span>
-												<span><strong>{row.plannerUsage}</strong> pills</span>
-												<span>{row.stripsNeeded} × {row.stripSize}</span>
-													<span>{row.stripsAvailable} blisters</span>
-												<span className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "✓ Enough" : "⚠ Out of Stock"}</span>
+												<span data-label="Medication">{row.medicationName}</span>
+												<span data-label="Usage"><strong>{row.plannerUsage}</strong> pills</span>
+												<span data-label="Blisters">{row.stripsNeeded} × {row.stripSize}</span>
+												<span data-label="Available">{row.stripsAvailable} blisters</span>
+												<span data-label="Status" className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "✓ Enough" : "⚠ Out of Stock"}</span>
 											</div>
 										))}
 									</div>
@@ -701,8 +696,8 @@ export default function App() {
 					<section className="grid">
 						<article className="card">
 							<div className="card-head">
-								<h2>Email Notifications</h2>
-								<span className="pill neutral">Reminder settings</span>
+								<h2>Automatic Email Reminders</h2>
+								<span className="pill neutral">Daily check</span>
 							</div>
 							{settingsLoading ? (
 								<p>Loading settings...</p>
@@ -710,8 +705,8 @@ export default function App() {
 								<form className="settings-form" onSubmit={saveSettings}>
 									<div className="setting-row">
 										<div className="setting-info">
-											<label className="setting-label">Enable Email Reminders</label>
-											<p className="setting-desc">Get notified when medication is running low</p>
+											<label className="setting-label">Enable Automatic Reminders</label>
+											<p className="setting-desc">Automatically send email when medications are running low</p>
 										</div>
 										<label className="toggle-switch">
 											<input
@@ -725,9 +720,12 @@ export default function App() {
 
 									{settings.emailEnabled && (
 										<>
+											<div className="setting-info-box">
+												<p>🤖 <strong>How it works:</strong> The server checks hourly. When a medication drops below the threshold, you get an email.</p>
+											</div>
 											<div className="setting-group">
 												<label>
-													Notification Email
+													Send reminder to
 													<input
 														type="email"
 														value={settings.notificationEmail}
@@ -736,16 +734,35 @@ export default function App() {
 													/>
 												</label>
 												<label>
-													Remind me (days before)
+													When stock lasts less than (days)
 													<input
 														type="number"
 														min="1"
-														max="30"
+														max="90"
 														value={settings.reminderDaysBefore}
 														onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
 													/>
 												</label>
 											</div>
+											<div className="setting-row">
+												<div className="setting-info">
+													<label className="setting-label">Repeat daily reminders</label>
+													<p className="setting-desc">Send daily emails while stock is low (otherwise only once per medication)</p>
+												</div>
+												<label className="toggle-switch small">
+													<input
+														type="checkbox"
+														checked={settings.repeatDailyReminders}
+														onChange={(e) => setSettings({ ...settings, repeatDailyReminders: e.target.checked })}
+													/>
+													<span className="toggle-slider"></span>
+												</label>
+											</div>
+											{settings.lastAutoEmailSent && (
+												<div className="setting-info-box success">
+													<p>✓ Last automatic email: <strong>{new Date(settings.lastAutoEmailSent).toLocaleString()}</strong></p>
+												</div>
+											)}
 										</>
 									)}
 
@@ -945,38 +962,58 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 	return { low, all: coverage };
 }
 
-function getNextReminderDate(reminderDaysBefore: number, lowStock: Coverage[]): string {
-	// Find the earliest depletion date among low stock items
-	const earliestDepletion = lowStock
-		.filter((c) => c.depletionTime !== null)
-		.sort((a, b) => (a.depletionTime ?? 0) - (b.depletionTime ?? 0))[0];
+function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[], lastSent: string | null): React.ReactNode {
+	// Find the earliest medication that needs a reminder (based on reminderDaysBefore)
+	const medsNeedingReminder = lowStock
+		.filter((c) => c.depletionTime !== null && c.daysLeft !== null && c.daysLeft <= reminderDaysBefore)
+		.sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
 
-	if (earliestDepletion && earliestDepletion.depletionTime) {
-		// Reminder would be sent X days before depletion
-		const reminderTime = earliestDepletion.depletionTime - reminderDaysBefore * 86_400_000;
-		const now = Date.now();
-		
-		if (reminderTime <= now) {
-			// Reminder is due now or overdue
-			return "Today";
+	const formatLastSent = (iso: string) => {
+		const date = new Date(iso);
+		return date.toLocaleDateString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+	};
+
+	if (medsNeedingReminder.length > 0) {
+		// There are medications that need reminders
+		if (lastSent) {
+			return (
+				<>
+					<strong className="warning-text">⚠ {medsNeedingReminder.length} med{medsNeedingReminder.length > 1 ? "s" : ""} need reorder</strong>
+					{" · "}Last email: {formatLastSent(lastSent)}
+				</>
+			);
 		}
-		
-		return new Date(reminderTime).toLocaleDateString([], {
-			weekday: "short",
-			day: "2-digit",
-			month: "short",
-		});
+		return <strong className="warning-text">⚠ {medsNeedingReminder.length} med{medsNeedingReminder.length > 1 ? "s" : ""} need reorder — waiting for first check</strong>;
 	}
 
-	// No low stock - check daily (next day at 9am)
-	const tomorrow = new Date();
-	tomorrow.setDate(tomorrow.getDate() + 1);
-	tomorrow.setHours(9, 0, 0, 0);
-	return tomorrow.toLocaleDateString([], {
-		weekday: "short",
-		day: "2-digit",
-		month: "short",
-	});
+	// Calculate when next reminder would be triggered
+	const allWithDepletion = lowStock
+		.filter((c) => c.depletionTime !== null && c.daysLeft !== null)
+		.sort((a, b) => (a.daysLeft ?? Infinity) - (b.daysLeft ?? Infinity));
+
+	if (allWithDepletion.length > 0) {
+		const nextMed = allWithDepletion[0];
+		const daysUntilReminder = (nextMed.daysLeft ?? 0) - reminderDaysBefore;
+		if (daysUntilReminder > 0) {
+			return (
+				<>
+					<span className="success-text">✓ All OK</span>
+					{" · "}Next: <strong>{nextMed.name}</strong> in {daysUntilReminder} days
+				</>
+			);
+		}
+	}
+
+	// No low stock medications at all
+	if (lastSent) {
+		return (
+			<>
+				<span className="success-text">✓ All stock OK</span>
+				{" · "}Last email: {formatLastSent(lastSent)}
+			</>
+		);
+	}
+	return <span className="success-text">✓ All stock OK — no reminders needed</span>;
 }
 
 function getNextReminderForMed(med: Coverage, reminderDaysBefore: number): string {

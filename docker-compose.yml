@@ -1,26 +1,29 @@
 services:
-  backend:
-    image: medassist-backend:latest
-    build:
-      context: ./backend
+  backend-dev:
+    image: node:25-slim
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+      - ./backend/data:/app/data
     env_file:
       - .env
-    volumes:
-      - ./backend/data:/app/data
     ports:
       - "3000:3000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
-  frontend:
-    image: medassist-frontend:latest
-    build:
-      context: ./frontend
+  frontend-dev:
+    image: node:25-slim
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host --port 5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
     ports:
-      - "4173:80"
+      - "5173:5173"
     depends_on:
-      - backend
+      - backend-dev
+
+volumes:
+  backend_node_modules:
+  frontend_node_modules:

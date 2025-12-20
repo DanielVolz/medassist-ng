@@ -81,6 +81,9 @@ export default function App() {
 		emailEnabled: false,
 		notificationEmail: "",
 		reminderDaysBefore: 7,
+		lowStockDays: 30,
+		normalStockDays: 90,
+		highStockDays: 180,
 		smtpHost: "",
 		smtpPort: 587,
 		smtpUser: "",
@@ -95,11 +98,24 @@ export default function App() {
 	const [settingsSaved, setSettingsSaved] = useState(false);
 	const [testingEmail, setTestingEmail] = useState(false);
 	const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+	const [sendingPlannerEmail, setSendingPlannerEmail] = useState(false);
+	const [plannerEmailResult, setPlannerEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+	const [sendingReminderEmail, setSendingReminderEmail] = useState(false);
+	const [reminderEmailResult, setReminderEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+	const [lastReminderSent, setLastReminderSent] = useState<string | null>(() => {
+		if (typeof window !== "undefined") {
+			return localStorage.getItem("lastReminderSent");
+		}
+		return null;
+	});
 
 	// Check if settings have changed
 	const settingsChanged = settings.emailEnabled !== savedSettings.emailEnabled ||
 		settings.notificationEmail !== savedSettings.notificationEmail ||
-		settings.reminderDaysBefore !== savedSettings.reminderDaysBefore;
+		settings.reminderDaysBefore !== savedSettings.reminderDaysBefore ||
+		settings.lowStockDays !== savedSettings.lowStockDays ||
+		settings.normalStockDays !== savedSettings.normalStockDays ||
+		settings.highStockDays !== savedSettings.highStockDays;
 
 	const schedule = useMemo(() => buildSchedulePreview(meds), [meds]);
 	const totalTablets = useMemo(() => deriveTotal(form), [form]);
@@ -156,6 +172,9 @@ export default function App() {
 			emailEnabled: settings.emailEnabled,
 			notificationEmail: settings.notificationEmail,
 			reminderDaysBefore: settings.reminderDaysBefore,
+			lowStockDays: settings.lowStockDays,
+			normalStockDays: settings.normalStockDays,
+			highStockDays: settings.highStockDays,
 			smtpHost: settings.smtpHost,
 			smtpPort: settings.smtpPort,
 			smtpUser: settings.smtpUser,
@@ -196,6 +215,63 @@ export default function App() {
 			setTestEmailResult({ success: false, message: "Network error" });
 		}
 		setTestingEmail(false);
+	}
+
+	async function sendPlannerEmail() {
+		if (!settings.notificationEmail || plannerRows.length === 0) return;
+		setSendingPlannerEmail(true);
+		setPlannerEmailResult(null);
+
+		try {
+			const res = await fetch("/api/planner/send-email", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					email: settings.notificationEmail,
+					from: range.start,
+					until: range.end,
+					rows: plannerRows,
+				}),
+			});
+			const data = await res.json();
+			if (res.ok) {
+				setPlannerEmailResult({ success: true, message: data.message || "Email sent!" });
+			} else {
+				setPlannerEmailResult({ success: false, message: data.error || "Failed to send" });
+			}
+		} catch {
+			setPlannerEmailResult({ success: false, message: "Network error" });
+		}
+		setSendingPlannerEmail(false);
+	}
+
+	async function sendReminderEmail() {
+		if (!settings.notificationEmail || coverage.low.length === 0) return;
+		setSendingReminderEmail(true);
+		setReminderEmailResult(null);
+
+		try {
+			const res = await fetch("/api/reminder/send-email", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					email: settings.notificationEmail,
+					lowStock: coverage.low,
+				}),
+			});
+			const data = await res.json();
+			if (res.ok) {
+				const sentDate = new Date().toLocaleDateString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+				setLastReminderSent(sentDate);
+				localStorage.setItem("lastReminderSent", sentDate);
+				setReminderEmailResult({ success: true, message: data.message || "Email sent!" });
+			} else {
+				setReminderEmailResult({ success: false, message: data.error || "Failed to send" });
+			}
+		} catch {
+			setReminderEmailResult({ success: false, message: "Network error" });
+		}
+		setSendingReminderEmail(false);
 	}
 
 	async function deleteMed(id: number) {
@@ -321,6 +397,15 @@ export default function App() {
 				<Route path="/" element={<Navigate to="/dashboard" replace />} />
 				<Route path="/dashboard" element={
 					<>
+						{settings.emailEnabled && settings.notificationEmail && (
+							<section className="email-status-bar">
+								<span className="email-status-icon">📧</span>
+								<span className="email-status-text">
+									Email reminders active — Next check: <strong>{getNextReminderDate(settings.reminderDaysBefore, coverage.low)}</strong>
+								</span>
+								<span className="email-status-recipient">→ {settings.notificationEmail}</span>
+							</section>
+						)}
 						<section className="grid">
 							<article className="card">
 								<div className="card-head">
@@ -330,24 +415,45 @@ export default function App() {
 								{coverage.low.length === 0 ? (
 									<p className="success-text">All good, enough stock.</p>
 								) : (
-									<div className="table">
-										<div className="table-head">
-											<span>Name</span>
-											<span>Current pills</span>
-											<span>Days left</span>
-											<span>Runs out</span>
-											<span>Next dose</span>
-										</div>
-										{coverage.low.map((row) => (
-											<div key={row.name} className="table-row">
-												<span>{row.name}</span>
-												<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
-												<span className={row.daysLeft !== null && row.daysLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.daysLeft)}</span>
-												<span>{row.depletionDate ?? "-"}</span>
-												<span>{row.nextDose ?? "-"}</span>
+									<>
+										<div className="table table-7">
+											<div className="table-head">
+												<span>Name</span>
+												<span>Current pills</span>
+												<span>Days left</span>
+												<span>Status</span>
+												<span>Runs out</span>
+												<span>Next reminder</span>
+												<span>Email sent</span>
 											</div>
-										))}
-									</div>
+											{coverage.low.map((row) => {
+												const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
+												return (
+													<div key={row.name} className="table-row">
+														<span>{row.name}</span>
+														<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
+														<span className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
+														<span className={`status-chip ${status.className}`}>{status.label}</span>
+														<span>{row.depletionDate ?? "-"}</span>
+														<span className="next-reminder-date">{getNextReminderForMed(row, settings.reminderDaysBefore)}</span>
+														<span className="email-sent-status">{lastReminderSent ?? "—"}</span>
+													</div>
+												);
+											})}
+										</div>
+										{settings.emailEnabled && settings.notificationEmail && (
+											<div className="email-send-action">
+												<button type="button" className="ghost" onClick={sendReminderEmail} disabled={sendingReminderEmail}>
+													{sendingReminderEmail ? "Sending..." : "📧 Send Reminder Email"}
+												</button>
+												{reminderEmailResult && (
+													<span className={reminderEmailResult.success ? "success-text" : "danger-text"}>
+														{reminderEmailResult.message}
+													</span>
+												)}
+											</div>
+										)}
+									</>
 								)}
 							</article>
 						</section>
@@ -358,21 +464,26 @@ export default function App() {
 									<h2>Medication Overview</h2>
 									<span className="pill neutral">Stock</span>
 								</div>
-								<div className="table table-4">
+								<div className="table table-5">
 									<div className="table-head">
 										<span>Name</span>
 										<span>Current pills</span>
 										<span>Days left</span>
 										<span>Runs out</span>
+										<span>Status</span>
 									</div>
-									{coverage.all.map((row) => (
-										<div key={row.name} className="table-row">
-											<span>{row.name}</span>
-											<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
-											<span>{formatNumber(row.daysLeft)}</span>
-											<span>{row.depletionDate ?? "-"}</span>
-										</div>
-									))}
+									{coverage.all.map((row) => {
+										const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
+										return (
+											<div key={row.name} className="table-row">
+												<span>{row.name}</span>
+												<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
+												<span className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
+												<span>{row.depletionDate ?? "-"}</span>
+												<span className={`status-chip ${status.className}`}>{status.label}</span>
+											</div>
+										);
+									})}
 								</div>
 							</article>
 						</section>
@@ -547,24 +658,38 @@ export default function App() {
 								</div>
 							</form>
 							{plannerRows.length > 0 && (
-								<div className="table">
-									<div className="table-head">
-										<span>Medication</span>
-										<span>Usage</span>
-										<span>Blisters needed</span>
-										<span>Available</span>
-										<span>Status</span>
-									</div>
-									{plannerRows.map((row) => (
-										<div key={row.medicationId} className="table-row">
-											<span>{row.medicationName}</span>
-											<span><strong>{row.plannerUsage}</strong> pills</span>
-											<span>{row.stripsNeeded} × {row.stripSize}</span>
-											<span>{row.stripsAvailable}</span>
-											<span className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "Enough" : "Low"}</span>
+								<>
+									<div className="table">
+										<div className="table-head">
+											<span>Medication</span>
+											<span>Usage</span>
+											<span>Blisters needed</span>
+											<span>Available</span>
+											<span>Status</span>
 										</div>
-									))}
-								</div>
+										{plannerRows.map((row) => (
+											<div key={row.medicationId} className="table-row">
+												<span>{row.medicationName}</span>
+												<span><strong>{row.plannerUsage}</strong> pills</span>
+												<span>{row.stripsNeeded} × {row.stripSize}</span>
+													<span>{row.stripsAvailable} blisters</span>
+												<span className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "✓ Enough" : "⚠ Out of Stock"}</span>
+											</div>
+										))}
+									</div>
+									{settings.emailEnabled && settings.notificationEmail && (
+										<div className="planner-email-action">
+											<button type="button" className="ghost" onClick={sendPlannerEmail} disabled={sendingPlannerEmail}>
+												{sendingPlannerEmail ? "Sending..." : "📧 Send via Email"}
+											</button>
+											{plannerEmailResult && (
+												<span className={plannerEmailResult.success ? "success-text" : "danger-text"}>
+													{plannerEmailResult.message}
+												</span>
+											)}
+										</div>
+									)}
+								</>
 							)}
 						</article>
 					</section>
@@ -619,10 +744,43 @@ export default function App() {
 													/>
 												</label>
 											</div>
+										</>
+									)}
 
+									<div className="setting-section">
+										<h3>Stock Thresholds</h3>
+										<p className="setting-hint">Define stock levels based on how many days of medication you have left.</p>
+										<div className="setting-group">
+											<label>
+												Low Stock (days)
+												<input
+													type="number"
+													min="1"
+													max="365"
+													value={settings.lowStockDays}
+													onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
+												/>
+												<span className="input-hint">⚠ Yellow below this</span>
+											</label>
+											<label>
+												High Stock (days)
+												<input
+													type="number"
+													min="1"
+													max="730"
+													value={settings.highStockDays}
+													onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
+												/>
+												<span className="input-hint">★ Green with star above this</span>
+											</label>
+										</div>
+									</div>
+
+									{settings.emailEnabled && (
+										<>
 											<div className="setting-section">
 												<h3>SMTP Configuration</h3>
-												<p className="setting-hint">Diese Einstellungen werden in der <code>.env</code> Datei konfiguriert.</p>
+												<p className="setting-hint">These settings are configured in the <code>.env</code> file.</p>
 												<div className="smtp-readonly">
 													<div className="smtp-field">
 														<span className="smtp-label">Host</span>
@@ -646,7 +804,7 @@ export default function App() {
 													</div>
 													<div className="smtp-field">
 														<span className="smtp-label">SSL/TLS</span>
-														<span className="smtp-value">{settings.smtpSecure ? "Ja" : "Nein"}</span>
+														<span className="smtp-value">{settings.smtpSecure ? "Yes" : "No"}</span>
 													</div>
 												</div>
 											</div>
@@ -783,4 +941,91 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 
 	const low = coverage.filter((c) => c.medsLeft <= 0 || (c.daysLeft !== null && c.daysLeft <= 3));
 	return { low, all: coverage };
+}
+
+function getNextReminderDate(reminderDaysBefore: number, lowStock: Coverage[]): string {
+	// Find the earliest depletion date among low stock items
+	const earliestDepletion = lowStock
+		.filter((c) => c.depletionTime !== null)
+		.sort((a, b) => (a.depletionTime ?? 0) - (b.depletionTime ?? 0))[0];
+
+	if (earliestDepletion && earliestDepletion.depletionTime) {
+		// Reminder would be sent X days before depletion
+		const reminderTime = earliestDepletion.depletionTime - reminderDaysBefore * 86_400_000;
+		const now = Date.now();
+		
+		if (reminderTime <= now) {
+			// Reminder is due now or overdue
+			return "Today";
+		}
+		
+		return new Date(reminderTime).toLocaleDateString([], {
+			weekday: "short",
+			day: "2-digit",
+			month: "short",
+		});
+	}
+
+	// No low stock - check daily (next day at 9am)
+	const tomorrow = new Date();
+	tomorrow.setDate(tomorrow.getDate() + 1);
+	tomorrow.setHours(9, 0, 0, 0);
+	return tomorrow.toLocaleDateString([], {
+		weekday: "short",
+		day: "2-digit",
+		month: "short",
+	});
+}
+
+function getNextReminderForMed(med: Coverage, reminderDaysBefore: number): string {
+	if (!med.depletionTime) return "—";
+	
+	const reminderTime = med.depletionTime - reminderDaysBefore * 86_400_000;
+	const now = Date.now();
+	
+	if (reminderTime <= now) {
+		return "Due now";
+	}
+	
+	return new Date(reminderTime).toLocaleDateString([], {
+		day: "2-digit",
+		month: "short",
+	});
+}
+
+type StockStatus = {
+	level: "out-of-stock" | "low" | "normal" | "high";
+	className: string;
+	label: string;
+};
+
+type StockThresholds = {
+	lowStockDays: number;
+	normalStockDays: number;
+	highStockDays: number;
+};
+
+function getStockStatus(daysLeft: number | null, medsLeft: number, thresholds: StockThresholds): StockStatus {
+	// Out of stock: 0 pills
+	if (medsLeft <= 0 || daysLeft === 0) {
+		return { level: "out-of-stock", className: "danger", label: "Out of Stock" };
+	}
+	
+	// No schedule set (no daysLeft calculation possible)
+	if (daysLeft === null) {
+		return { level: "normal", className: "success", label: "No Schedule" };
+	}
+	
+	// High stock: > highStockDays (e.g. > 180 days)
+	if (daysLeft > thresholds.highStockDays) {
+		return { level: "high", className: "high", label: "★ High Stock" };
+	}
+	
+	// Normal stock: between lowStockDays and highStockDays
+	if (daysLeft >= thresholds.lowStockDays) {
+		return { level: "normal", className: "success", label: "Normal" };
+	}
+	
+	// Low stock: < lowStockDays (e.g. < 30 days)
+	return { level: "low", className: "warning", label: "Low Stock" };
 }

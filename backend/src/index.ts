@@ -10,6 +10,7 @@ import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { medicationRoutes } from "./routes/medications.js";
 import { settingsRoutes } from "./routes/settings.js";
+import { plannerRoutes } from "./routes/planner.js";
 
 const app = Fastify({
   logger: {
@@ -58,6 +59,7 @@ await app.register(healthRoutes);
 await app.register(authRoutes);
 await app.register(medicationRoutes);
 await app.register(settingsRoutes);
+await app.register(plannerRoutes);
 
 const start = async () => {
   try {

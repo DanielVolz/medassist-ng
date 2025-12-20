@@ -7,6 +7,9 @@ type SettingsBody = {
   emailEnabled: boolean;
   notificationEmail: string;
   reminderDaysBefore: number;
+  lowStockDays: number;
+  normalStockDays: number;
+  highStockDays: number;
 };
 
 type TestEmailBody = {
@@ -21,17 +24,28 @@ type NotificationSettings = {
   emailEnabled: boolean;
   notificationEmail: string;
   reminderDaysBefore: number;
+  lowStockDays: number;
+  normalStockDays: number;
+  highStockDays: number;
 };
 
 function loadNotificationSettings(): NotificationSettings {
   try {
     if (existsSync(notificationSettingsFile)) {
-      return JSON.parse(readFileSync(notificationSettingsFile, "utf-8"));
+      const saved = JSON.parse(readFileSync(notificationSettingsFile, "utf-8"));
+      return {
+        emailEnabled: saved.emailEnabled ?? false,
+        notificationEmail: saved.notificationEmail ?? "",
+        reminderDaysBefore: saved.reminderDaysBefore ?? 7,
+        lowStockDays: saved.lowStockDays ?? 30,
+        normalStockDays: saved.normalStockDays ?? 90,
+        highStockDays: saved.highStockDays ?? 180,
+      };
     }
   } catch {
     // ignore
   }
-  return { emailEnabled: false, notificationEmail: "", reminderDaysBefore: 7 };
+  return { emailEnabled: false, notificationEmail: "", reminderDaysBefore: 7, lowStockDays: 30, normalStockDays: 90, highStockDays: 180 };
 }
 
 function saveNotificationSettings(settings: NotificationSettings): void {
@@ -48,6 +62,9 @@ export async function settingsRoutes(app: FastifyInstance) {
       emailEnabled: notification.emailEnabled,
       notificationEmail: notification.notificationEmail,
       reminderDaysBefore: notification.reminderDaysBefore,
+      lowStockDays: notification.lowStockDays,
+      normalStockDays: notification.normalStockDays,
+      highStockDays: notification.highStockDays,
       // SMTP settings (admin-configured, from .env)
       smtpHost: process.env.SMTP_HOST ?? "",
       smtpPort: parseInt(process.env.SMTP_PORT ?? "587"),
@@ -67,6 +84,9 @@ export async function settingsRoutes(app: FastifyInstance) {
       emailEnabled: body.emailEnabled,
       notificationEmail: body.notificationEmail,
       reminderDaysBefore: body.reminderDaysBefore,
+      lowStockDays: body.lowStockDays ?? 30,
+      normalStockDays: body.normalStockDays ?? 90,
+      highStockDays: body.highStockDays ?? 180,
     });
 
     return reply.send({ success: true });

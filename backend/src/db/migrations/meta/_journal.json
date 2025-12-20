@@ -2,6 +2,7 @@
   "entries": [
     { "idx": 0, "version": 1, "when": 1734633120, "tag": "0000_init", "breakpoint": false },
     { "idx": 1, "version": 1, "when": 1734633121, "tag": "0001_add_strips", "breakpoint": false },
-    { "idx": 2, "version": 1, "when": 1734633122, "tag": "0002_pack_inventory", "breakpoint": false }
+    { "idx": 2, "version": 1, "when": 1734633122, "tag": "0002_pack_inventory", "breakpoint": false },
+    { "idx": 3, "version": 1, "when": 1734710400, "tag": "0003_add_email_settings", "breakpoint": false }
   ]
 }

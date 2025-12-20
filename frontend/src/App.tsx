@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 
 type Slice = {
 	usage: number;
@@ -70,7 +71,35 @@ export default function App() {
 	const [editingId, setEditingId] = useState<number | null>(null);
 	const [form, setForm] = useState<FormState>(defaultForm());
 	const [range, setRange] = useState<{ start: string; end: string }>({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
-	const [view, setView] = useState<"dashboard" | "medications" | "planner">("dashboard");
+
+	const navigate = useNavigate();
+	const location = useLocation();
+	const currentPath = location.pathname;
+
+	// Settings state
+	const [settings, setSettings] = useState({
+		emailEnabled: false,
+		notificationEmail: "",
+		reminderDaysBefore: 7,
+		smtpHost: "",
+		smtpPort: 587,
+		smtpUser: "",
+		smtpPass: "",
+		smtpFrom: "",
+		smtpSecure: false,
+		hasSmtpPassword: false,
+	});
+	const [savedSettings, setSavedSettings] = useState(settings);
+	const [settingsLoading, setSettingsLoading] = useState(false);
+	const [settingsSaving, setSettingsSaving] = useState(false);
+	const [settingsSaved, setSettingsSaved] = useState(false);
+	const [testingEmail, setTestingEmail] = useState(false);
+	const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+
+	// Check if settings have changed
+	const settingsChanged = settings.emailEnabled !== savedSettings.emailEnabled ||
+		settings.notificationEmail !== savedSettings.notificationEmail ||
+		settings.reminderDaysBefore !== savedSettings.reminderDaysBefore;
 
 	const schedule = useMemo(() => buildSchedulePreview(meds), [meds]);
 	const totalTablets = useMemo(() => deriveTotal(form), [form]);
@@ -92,6 +121,7 @@ export default function App() {
 
 	useEffect(() => {
 		loadMeds();
+		loadSettings();
 	}, []);
 
 	function loadMeds() {
@@ -101,6 +131,71 @@ export default function App() {
 			.then((data: Medication[]) => setMeds(data))
 			.catch(() => setMeds([]))
 			.finally(() => setLoading(false));
+	}
+
+	function loadSettings() {
+		setSettingsLoading(true);
+		fetch("/api/settings")
+			.then((res) => res.json())
+			.then((data) => {
+				const newSettings = { ...settings, ...data, smtpPass: "" };
+				setSettings(newSettings);
+				setSavedSettings(newSettings);
+				setSettingsSaved(false);
+			})
+			.catch(() => {})
+			.finally(() => setSettingsLoading(false));
+	}
+
+	async function saveSettings(e: React.FormEvent) {
+		e.preventDefault();
+		setSettingsSaving(true);
+		setTestEmailResult(null);
+		
+		const payload = {
+			emailEnabled: settings.emailEnabled,
+			notificationEmail: settings.notificationEmail,
+			reminderDaysBefore: settings.reminderDaysBefore,
+			smtpHost: settings.smtpHost,
+			smtpPort: settings.smtpPort,
+			smtpUser: settings.smtpUser,
+			smtpPass: settings.smtpPass || undefined,
+			smtpFrom: settings.smtpFrom,
+			smtpSecure: settings.smtpSecure,
+		};
+
+		await fetch("/api/settings", {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(payload),
+		}).catch(() => null);
+
+		setSettingsSaving(false);
+		setSavedSettings(settings);
+		setSettingsSaved(true);
+	}
+
+	async function testEmail() {
+		if (!settings.notificationEmail) return;
+		setTestingEmail(true);
+		setTestEmailResult(null);
+
+		try {
+			const res = await fetch("/api/settings/test-email", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ email: settings.notificationEmail }),
+			});
+			const data = await res.json();
+			if (res.ok) {
+				setTestEmailResult({ success: true, message: data.message || "Email sent!" });
+			} else {
+				setTestEmailResult({ success: false, message: data.error || "Failed to send" });
+			}
+		} catch {
+			setTestEmailResult({ success: false, message: "Network error" });
+		}
+		setTestingEmail(false);
 	}
 
 	async function deleteMed(id: number) {
@@ -186,6 +281,22 @@ export default function App() {
 		setPlannerRows([]);
 	}
 
+	const [theme, setTheme] = useState<"light" | "dark">(() => {
+		if (typeof window !== "undefined") {
+			return (localStorage.getItem("theme") as "light" | "dark") || "dark";
+		}
+		return "dark";
+	});
+
+	useEffect(() => {
+		document.documentElement.setAttribute("data-theme", theme);
+		localStorage.setItem("theme", theme);
+	}, [theme]);
+
+	function toggleTheme() {
+		setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+	}
+
 	return (
 		<main className="page">
 			<header className="hero">
@@ -193,263 +304,377 @@ export default function App() {
 					<p className="eyebrow">Medassist · Planner</p>
 					<h1>Manage medication plans</h1>
 				</div>
-				<div className="tabs">
-					<button className={view === "dashboard" ? "pill primary" : "pill"} onClick={() => setView("dashboard")}>Dashboard</button>
-					<button className={view === "medications" ? "pill primary" : "pill"} onClick={() => setView("medications")}>Medications</button>
-					<button className={view === "planner" ? "pill primary" : "pill"} onClick={() => setView("planner")}>Planner</button>
+				<div className="header-actions">
+					<div className="tabs">
+						<button className={currentPath === "/dashboard" || currentPath === "/" ? "pill primary" : "pill"} onClick={() => navigate("/dashboard")}>Dashboard</button>
+						<button className={currentPath === "/medications" ? "pill primary" : "pill"} onClick={() => navigate("/medications")}>Medications</button>
+						<button className={currentPath === "/planner" ? "pill primary" : "pill"} onClick={() => navigate("/planner")}>Planner</button>
+						<button className={currentPath === "/settings" ? "pill primary" : "pill"} onClick={() => navigate("/settings")}>⚙️</button>
+					</div>
+					<button className="theme-toggle" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+						{theme === "dark" ? "☀️" : "🌙"}
+					</button>
 				</div>
 			</header>
 
-			{view === "dashboard" && (
-				<>
-					<section className="grid">
-						<article className="card">
-							<div className="card-head">
-								<h2>Reorder Reminder</h2>
-								<span className="pill neutral">Stock watch</span>
-							</div>
-							{coverage.low.length === 0 ? (
-								<p className="success-text">All good, enough stock.</p>
-							) : (
-								<div className="table">
+			<Routes>
+				<Route path="/" element={<Navigate to="/dashboard" replace />} />
+				<Route path="/dashboard" element={
+					<>
+						<section className="grid">
+							<article className="card">
+								<div className="card-head">
+									<h2>Reorder Reminder</h2>
+									<span className="pill neutral">Stock watch</span>
+								</div>
+								{coverage.low.length === 0 ? (
+									<p className="success-text">All good, enough stock.</p>
+								) : (
+									<div className="table">
+										<div className="table-head">
+											<span>Name</span>
+											<span>Current pills</span>
+											<span>Days left</span>
+											<span>Runs out</span>
+											<span>Next dose</span>
+										</div>
+										{coverage.low.map((row) => (
+											<div key={row.name} className="table-row">
+												<span>{row.name}</span>
+												<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
+												<span className={row.daysLeft !== null && row.daysLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.daysLeft)}</span>
+												<span>{row.depletionDate ?? "-"}</span>
+												<span>{row.nextDose ?? "-"}</span>
+											</div>
+										))}
+									</div>
+								)}
+							</article>
+						</section>
+
+						<section className="grid">
+							<article className="card">
+								<div className="card-head">
+									<h2>Medication Overview</h2>
+									<span className="pill neutral">Stock</span>
+								</div>
+								<div className="table table-4">
 									<div className="table-head">
 										<span>Name</span>
 										<span>Current pills</span>
 										<span>Days left</span>
 										<span>Runs out</span>
-										<span>Next dose</span>
 									</div>
-									{coverage.low.map((row) => (
+									{coverage.all.map((row) => (
 										<div key={row.name} className="table-row">
 											<span>{row.name}</span>
 											<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
-											<span className={row.daysLeft !== null && row.daysLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.daysLeft)}</span>
+											<span>{formatNumber(row.daysLeft)}</span>
 											<span>{row.depletionDate ?? "-"}</span>
-											<span>{row.nextDose ?? "-"}</span>
 										</div>
 									))}
 								</div>
-								)}
 							</article>
 						</section>
 
-					<section className="grid">
-						<article className="card">
-							<div className="card-head">
-								<h2>Medication Overview</h2>
-								<span className="pill neutral">Stock</span>
-							</div>
-							<div className="table table-4">
-								<div className="table-head">
-									<span>Name</span>
-									<span>Current pills</span>
-									<span>Days left</span>
-									<span>Runs out</span>
+						<section className="grid">
+							<article className="card">
+								<div className="card-head">
+									<h2>Upcoming Schedules</h2>
+									<span className="pill neutral">Next 10</span>
 								</div>
-								{coverage.all.map((row) => (
-									<div key={row.name} className="table-row">
-										<span>{row.name}</span>
-										<span className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
-										<span>{formatNumber(row.daysLeft)}</span>
-										<span>{row.depletionDate ?? "-"}</span>
+								<div className="timeline">
+									{groupedSchedule.map((day) => (
+										<div key={day.dateStr} className="day-block">
+											<div className="day-divider">{day.dateStr}</div>
+											{day.meds.map((item) => {
+												const depletionTime = depletionByMed[item.medName];
+												const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+												return (
+													<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+														<div className="time-main">
+															<div className="med-name">{item.medName}</div>
+															<div className="tag-row">
+																<span className="tag subtle">{item.total} pills total</span>
+																<span className={`tag ${outOfStock ? "danger" : "success"}`}>
+																	{outOfStock ? "⚠ No pills left" : "✓ Stock OK"}
+																</span>
+															</div>
+														</div>
+														<div className="time-col">
+															<div className="time-chip times-chip">{item.times.join(" · ")}</div>
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									))}
+								</div>
+							</article>
+						</section>
+					</>
+				} />
+
+				<Route path="/medications" element={
+					<section className="grid">
+						<article className="card meds">
+							<div className="card-head">
+								<h2>Medication list</h2>
+								<span className="pill neutral">{loading ? "Loading..." : `${meds.length} entries`}</span>
+							</div>
+							<div className="med-list">
+								{meds.map((med) => (
+									<div key={med.id} className="med-row">
+										<div className="med-header">
+											<div className="med-info">
+												<div className="med-name">{med.name}</div>
+												<div className="med-details">
+													<span>Packs: <strong>{med.packCount ?? 1}</strong></span>
+													<span>Blisters per pack: <strong>{med.stripsPerPack ?? med.strips ?? 1}</strong></span>
+													<span>Pills per blister: <strong>{med.tabsPerStrip ?? med.stripSize}</strong></span>
+													<span>Loose: <strong>{med.looseTablets ?? 0}</strong></span>
+												</div>
+												<div className="med-total">Total: {med.count} pills</div>
+											</div>
+											<div className="med-actions">
+												<button className="ghost" onClick={() => startEdit(med)}>Edit</button>
+												<button className="ghost danger" onClick={() => deleteMed(med.id)}>Delete</button>
+											</div>
+										</div>
+										<div className="slice-list">
+											{med.slices.map((s, idx) => (
+												<div key={`${med.id}-${idx}`} className="slice-row-simple">
+													{s.usage} {s.usage === 1 ? "pill" : "pills"} · every {s.every} {s.every === 1 ? "day" : "days"} · from {formatDateTime(s.start)}
+												</div>
+											))}
+										</div>
 									</div>
 								))}
 							</div>
 						</article>
-					</section>
 
+						<article className="card form">
+							<div className="card-head">
+								<h2>{editingId ? "Edit entry" : "New entry"}</h2>
+								<span className="pill">Packs + loose pills</span>
+							</div>
+							<form className="form-grid" onSubmit={saveMedication}>
+								<label>
+									Name
+									<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z.B. Lisinopril" required />
+								</label>
+								<label>
+									Packs
+									<input type="number" min="0" value={form.packCount} onChange={(e) => handleValueChange("packCount", e.target.value)} />
+								</label>
+								<label>
+									Blisters per pack
+									<input type="number" min="1" value={form.stripsPerPack} onChange={(e) => handleValueChange("stripsPerPack", e.target.value)} />
+								</label>
+								<label>
+									Pills per blister
+									<input type="number" min="1" value={form.tabsPerStrip} onChange={(e) => handleValueChange("tabsPerStrip", e.target.value)} />
+								</label>
+								<label>
+									Loose pills
+									<input type="number" min="0" value={form.looseTablets} onChange={(e) => handleValueChange("looseTablets", e.target.value)} />
+								</label>
+								<label>
+									Total (pills)
+									<div className="static-value">{formatNumber(totalTablets)}</div>
+								</label>
+
+								<div className="full slices">
+									<div className="card-head">
+										<h3>Intake schedule</h3>
+										<button type="button" className="ghost" onClick={addSlice}>+ Intake</button>
+									</div>
+									{form.slices.map((s, idx) => (
+										<div key={idx} className="slice-row">
+											<div className="slice-inputs">
+												<label>
+													Usage (pills)
+													<input type="number" min="0" step="0.1" value={s.usage} onChange={(e) => setSliceValue(idx, "usage", e.target.value)} />
+												</label>
+												<label>
+													Every (days)
+													<input type="number" min="1" value={s.every} onChange={(e) => setSliceValue(idx, "every", e.target.value)} />
+												</label>
+												<label>
+													Start (date/time)
+													<input type="datetime-local" step="60" value={s.start} onChange={(e) => setSliceValue(idx, "start", e.target.value)} />
+												</label>
+											</div>
+											{form.slices.length > 1 && (
+												<button type="button" className="ghost" onClick={() => removeSlice(idx)}>Remove</button>
+											)}
+										</div>
+									))}
+								</div>
+
+								<div className="full align-end gap">
+									{editingId && (
+										<button type="button" className="ghost" onClick={resetForm}>
+											Cancel
+										</button>
+									)}
+									<button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+								</div>
+							</form>
+						</article>
+					</section>
+				} />
+
+				<Route path="/planner" element={
 					<section className="grid">
 						<article className="card">
 							<div className="card-head">
-								<h2>Upcoming Schedules</h2>
-								<span className="pill neutral">Next 10</span>
+								<h2>Demand Calculator</h2>
+								<span className="pill neutral">Plan your supply</span>
 							</div>
-						<div className="timeline">
-							{groupedSchedule.map((day) => (
-								<div key={day.dateStr} className="day-block">
-									<div className="day-divider">{day.dateStr}</div>
-									{day.meds.map((item) => {
-										const depletionTime = depletionByMed[item.medName];
-										const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
-										return (
-											<div key={`${day.dateStr}-${item.medName}`} className="time-row">
-												<div className="time-main">
-													<div className="med-name">{item.medName}</div>
-													<div className="tag-row">
-														<span className="tag subtle">{item.total} pills total</span>
-														<span className={`tag ${outOfStock ? "danger" : "success"}`}>
-															{outOfStock ? "⚠ No pills left" : "✓ Stock OK"}
-														</span>
+							<form className="planner" onSubmit={runPlanner}>
+								<label>
+									From
+									<input type="datetime-local" step="60" value={range.start} onChange={(e) => setRange({ ...range, start: e.target.value })} />
+								</label>
+								<label>
+									Until
+									<input type="datetime-local" step="60" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} />
+								</label>
+								<div className="planner-actions">
+									<button type="button" className="ghost" onClick={resetRange}>Reset</button>
+									<button type="submit" disabled={plannerLoading}>{plannerLoading ? "Calculating..." : "Calculate"}</button>
+								</div>
+							</form>
+							{plannerRows.length > 0 && (
+								<div className="table">
+									<div className="table-head">
+										<span>Medication</span>
+										<span>Usage</span>
+										<span>Blisters needed</span>
+										<span>Available</span>
+										<span>Status</span>
+									</div>
+									{plannerRows.map((row) => (
+										<div key={row.medicationId} className="table-row">
+											<span>{row.medicationName}</span>
+											<span><strong>{row.plannerUsage}</strong> pills</span>
+											<span>{row.stripsNeeded} × {row.stripSize}</span>
+											<span>{row.stripsAvailable}</span>
+											<span className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "Enough" : "Low"}</span>
+										</div>
+									))}
+								</div>
+							)}
+						</article>
+					</section>
+				} />
+
+				<Route path="/settings" element={
+					<section className="grid">
+						<article className="card">
+							<div className="card-head">
+								<h2>Email Notifications</h2>
+								<span className="pill neutral">Reminder settings</span>
+							</div>
+							{settingsLoading ? (
+								<p>Loading settings...</p>
+							) : (
+								<form className="settings-form" onSubmit={saveSettings}>
+									<div className="setting-row">
+										<div className="setting-info">
+											<label className="setting-label">Enable Email Reminders</label>
+											<p className="setting-desc">Get notified when medication is running low</p>
+										</div>
+										<label className="toggle-switch">
+											<input
+												type="checkbox"
+												checked={settings.emailEnabled}
+												onChange={(e) => setSettings({ ...settings, emailEnabled: e.target.checked })}
+											/>
+											<span className="toggle-slider"></span>
+										</label>
+									</div>
+
+									{settings.emailEnabled && (
+										<>
+											<div className="setting-group">
+												<label>
+													Notification Email
+													<input
+														type="email"
+														value={settings.notificationEmail}
+														onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
+														placeholder="your@email.com"
+													/>
+												</label>
+												<label>
+													Remind me (days before)
+													<input
+														type="number"
+														min="1"
+														max="30"
+														value={settings.reminderDaysBefore}
+														onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
+													/>
+												</label>
+											</div>
+
+											<div className="setting-section">
+												<h3>SMTP Configuration</h3>
+												<p className="setting-hint">Diese Einstellungen werden in der <code>.env</code> Datei konfiguriert.</p>
+												<div className="smtp-readonly">
+													<div className="smtp-field">
+														<span className="smtp-label">Host</span>
+														<span className="smtp-value">{settings.smtpHost || "—"}</span>
+													</div>
+													<div className="smtp-field">
+														<span className="smtp-label">Port</span>
+														<span className="smtp-value">{settings.smtpPort}</span>
+													</div>
+													<div className="smtp-field">
+														<span className="smtp-label">User</span>
+														<span className="smtp-value">{settings.smtpUser || "—"}</span>
+													</div>
+													<div className="smtp-field">
+														<span className="smtp-label">Password</span>
+														<span className="smtp-value">{settings.hasSmtpPassword ? "••••••••" : "—"}</span>
+													</div>
+													<div className="smtp-field">
+														<span className="smtp-label">From</span>
+														<span className="smtp-value">{settings.smtpFrom || "—"}</span>
+													</div>
+													<div className="smtp-field">
+														<span className="smtp-label">SSL/TLS</span>
+														<span className="smtp-value">{settings.smtpSecure ? "Ja" : "Nein"}</span>
 													</div>
 												</div>
-												<div className="time-col">
-													<div className="time-chip times-chip">{item.times.join(" · ")}</div>
-												</div>
 											</div>
-										);
-									})}
-								</div>
-							))}
-					</div>
+
+											<div className="setting-actions">
+												<button type="button" className="ghost" onClick={testEmail} disabled={testingEmail || !settings.notificationEmail}>
+													{testingEmail ? "Sending..." : "Send Test Email"}
+												</button>
+												{testEmailResult && (
+													<span className={testEmailResult.success ? "success-text" : "danger-text"}>
+														{testEmailResult.message}
+													</span>
+												)}
+											</div>
+										</>
+									)}
+
+									<div className="form-footer">
+										<button type="submit" disabled={settingsSaving || (!settingsChanged && settingsSaved)}>
+											{settingsSaving ? "Saving..." : settingsSaved && !settingsChanged ? "Saved ✓" : "Save Settings"}
+										</button>
+									</div>
+								</form>
+							)}
 						</article>
 					</section>
-				</>
-			)}
-
-			{view === "medications" && (
-				<section className="grid">
-					<article className="card meds">
-						<div className="card-head">
-							<h2>Medication list</h2>
-							<span className="pill neutral">{loading ? "Loading..." : `${meds.length} entries`}</span>
-						</div>
-						<div className="med-list">
-							{meds.map((med) => (
-								<div key={med.id} className="med-row">
-									<div className="med-header">
-										<div className="med-info">
-											<div className="med-name">{med.name}</div>
-											<div className="med-details">
-												<span>Packs: <strong>{med.packCount ?? 1}</strong></span>
-												<span>Blisters per pack: <strong>{med.stripsPerPack ?? med.strips ?? 1}</strong></span>
-												<span>Pills per blister: <strong>{med.tabsPerStrip ?? med.stripSize}</strong></span>
-												<span>Loose: <strong>{med.looseTablets ?? 0}</strong></span>
-											</div>
-											<div className="med-total">Total: {med.count} pills</div>
-										</div>
-										<div className="med-actions">
-											<button className="ghost" onClick={() => startEdit(med)}>Edit</button>
-											<button className="ghost danger" onClick={() => deleteMed(med.id)}>Delete</button>
-										</div>
-									</div>
-									<div className="slice-list">
-										{med.slices.map((s, idx) => (
-											<div key={`${med.id}-${idx}`} className="slice-row-simple">
-												{s.usage} {s.usage === 1 ? "pill" : "pills"} · every {s.every} {s.every === 1 ? "day" : "days"} · from {formatDateTime(s.start)}
-											</div>
-										))}
-									</div>
-								</div>
-							))}
-						</div>
-					</article>
-
-					<article className="card form">
-						<div className="card-head">
-							<h2>{editingId ? "Edit entry" : "New entry"}</h2>
-							<span className="pill">Packs + loose pills</span>
-						</div>
-						<form className="form-grid" onSubmit={saveMedication}>
-							<label>
-								Name
-								<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z.B. Lisinopril" required />
-							</label>
-							<label>
-								Packs
-								<input type="number" min="0" value={form.packCount} onChange={(e) => handleValueChange("packCount", e.target.value)} />
-							</label>
-							<label>
-								Blisters per pack
-								<input type="number" min="1" value={form.stripsPerPack} onChange={(e) => handleValueChange("stripsPerPack", e.target.value)} />
-							</label>
-							<label>
-								Pills per blister
-								<input type="number" min="1" value={form.tabsPerStrip} onChange={(e) => handleValueChange("tabsPerStrip", e.target.value)} />
-							</label>
-							<label>
-								Loose pills
-								<input type="number" min="0" value={form.looseTablets} onChange={(e) => handleValueChange("looseTablets", e.target.value)} />
-							</label>
-							<label>
-								Total (pills)
-								<div className="static-value">{formatNumber(totalTablets)}</div>
-							</label>
-
-							<div className="full slices">
-								<div className="card-head">
-									<h3>Intake schedule</h3>
-									<button type="button" className="ghost" onClick={addSlice}>+ Intake</button>
-								</div>
-								{form.slices.map((s, idx) => (
-									<div key={idx} className="slice-row">
-										<div className="slice-inputs">
-											<label>
-												Usage (pills)
-												<input type="number" min="0" step="0.1" value={s.usage} onChange={(e) => setSliceValue(idx, "usage", e.target.value)} />
-											</label>
-											<label>
-												Every (days)
-												<input type="number" min="1" value={s.every} onChange={(e) => setSliceValue(idx, "every", e.target.value)} />
-											</label>
-											<label>
-												Start (date/time)
-												<input type="datetime-local" step="60" value={s.start} onChange={(e) => setSliceValue(idx, "start", e.target.value)} />
-											</label>
-										</div>
-										{form.slices.length > 1 && (
-											<button type="button" className="ghost" onClick={() => removeSlice(idx)}>Remove</button>
-										)}
-									</div>
-								))}
-							</div>
-
-							<div className="full align-end gap">
-								{editingId && (
-									<button type="button" className="ghost" onClick={resetForm}>
-										Cancel
-									</button>
-								)}
-								<button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
-							</div>
-						</form>
-					</article>
-				</section>
-			)}
-
-			{view === "planner" && (
-				<section className="grid">
-					<article className="card">
-						<div className="card-head">
-							<h2>Demand Calculator</h2>
-							<span className="pill neutral">Plan your supply</span>
-						</div>
-						<form className="planner" onSubmit={runPlanner}>
-							<label>
-								From
-								<input type="datetime-local" step="60" value={range.start} onChange={(e) => setRange({ ...range, start: e.target.value })} />
-							</label>
-							<label>
-								Until
-								<input type="datetime-local" step="60" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} />
-							</label>
-							<div className="planner-actions">
-								<button type="button" className="ghost" onClick={resetRange}>Reset</button>
-								<button type="submit" disabled={plannerLoading}>{plannerLoading ? "Calculating..." : "Calculate"}</button>
-							</div>
-						</form>
-						{plannerRows.length > 0 && (
-							<div className="table">
-								<div className="table-head">
-									<span>Medication</span>
-									<span>Usage</span>
-									<span>Blisters needed</span>
-									<span>Available</span>
-									<span>Status</span>
-								</div>
-								{plannerRows.map((row) => (
-									<div key={row.medicationId} className="table-row">
-										<span>{row.medicationName}</span>
-										<span><strong>{row.plannerUsage}</strong> pills</span>
-										<span>{row.stripsNeeded} × {row.stripSize}</span>
-										<span>{row.stripsAvailable}</span>
-										<span className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "Enough" : "Low"}</span>
-									</div>
-								))}
-							</div>
-						)}
-					</article>
-				</section>
-			)}
+				} />
+			</Routes>
 		</main>
 	);
 }

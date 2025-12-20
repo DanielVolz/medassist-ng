@@ -45,5 +45,9 @@ export const settings = sqliteTable("settings", {
   smtpFrom: text("smtp_from"),
   smtpSecure: integer("smtp_secure", { mode: "boolean" }).notNull().default(false),
   emailsPerDay: integer("emails_per_day").notNull().default(3),
+  // Email notification settings
+  emailEnabled: integer("email_enabled", { mode: "boolean" }).notNull().default(false),
+  notificationEmail: text("notification_email"),
+  reminderDaysBefore: integer("reminder_days_before").notNull().default(7),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });

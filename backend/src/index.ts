@@ -9,6 +9,7 @@ import { env } from "./plugins/env.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { medicationRoutes } from "./routes/medications.js";
+import { settingsRoutes } from "./routes/settings.js";
 
 const app = Fastify({
   logger: {
@@ -56,6 +57,7 @@ await app.register(jwt, { secret: env.JWT_SECRET, cookie: { cookieName: "access_
 await app.register(healthRoutes);
 await app.register(authRoutes);
 await app.register(medicationRoutes);
+await app.register(settingsRoutes);
 
 const start = async () => {
   try {

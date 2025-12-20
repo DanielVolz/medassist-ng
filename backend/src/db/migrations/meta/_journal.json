@@ -3,6 +3,9 @@
     { "idx": 0, "version": 1, "when": 1734633120, "tag": "0000_init", "breakpoint": false },
     { "idx": 1, "version": 1, "when": 1734700000, "tag": "0001_add_strips", "breakpoint": false },
     { "idx": 2, "version": 1, "when": 1734800000, "tag": "0002_pack_inventory", "breakpoint": false },
-    { "idx": 3, "version": 1, "when": 1734900000, "tag": "0003_add_image_url", "breakpoint": false }
+    { "idx": 3, "version": 1, "when": 1734900000, "tag": "0003_add_image_url", "breakpoint": false },
+    { "idx": 4, "version": 1, "when": 1735000000, "tag": "0004_add_expiry_date", "breakpoint": false },
+    { "idx": 5, "version": 1, "when": 1735100000, "tag": "0005_add_notes", "breakpoint": false },
+    { "idx": 6, "version": 1, "when": 1735200000, "tag": "0006_add_generic_name", "breakpoint": false }
   ]
 }

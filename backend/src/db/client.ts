@@ -13,6 +13,9 @@ export const db = drizzle(client);
 async function runMigrations() {
   const migrations = [
     { name: "image_url", sql: "ALTER TABLE medications ADD COLUMN image_url TEXT" },
+    { name: "expiry_date", sql: "ALTER TABLE medications ADD COLUMN expiry_date TEXT" },
+    { name: "notes", sql: "ALTER TABLE medications ADD COLUMN notes TEXT" },
+    { name: "generic_name", sql: "ALTER TABLE medications ADD COLUMN generic_name TEXT" },
   ];
 
   for (const migration of migrations) {

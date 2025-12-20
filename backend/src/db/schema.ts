@@ -13,6 +13,7 @@ export const users = sqliteTable("users", {
 export const medications = sqliteTable("medications", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name", { length: 100 }).notNull().unique(),
+  genericName: text("generic_name", { length: 100 }),
   count: integer("count").notNull().default(0),
   strips: integer("strips").notNull().default(0),
   packCount: integer("pack_count").notNull().default(1),
@@ -24,6 +25,8 @@ export const medications = sqliteTable("medications", {
   startJson: text("start_json").notNull().default("[]"),
   stripSize: integer("strip_size").notNull().default(1),
   imageUrl: text("image_url"),
+  expiryDate: text("expiry_date"),
+  notes: text("notes"),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

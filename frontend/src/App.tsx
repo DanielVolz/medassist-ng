@@ -10,6 +10,7 @@ type Slice = {
 type Medication = {
 	id: number;
 	name: string;
+	genericName?: string | null;
 	count: number;
 	strips: number;
 	stripSize: number;
@@ -19,6 +20,8 @@ type Medication = {
 	looseTablets?: number;
 	slices: Slice[];
 	imageUrl?: string | null;
+	expiryDate?: string | null;
+	notes?: string | null;
 	updatedAt: string | number | null;
 };
 
@@ -36,16 +39,19 @@ type FormSlice = { usage: string; every: string; start: string };
 
 type FormState = {
 	name: string;
+	genericName: string;
 	packCount: string;
 	stripsPerPack: string;
 	tabsPerStrip: string;
 	looseTablets: string;
+	expiryDate: string;
+	notes: string;
 	slices: FormSlice[];
 };
 
 const defaultSlice = (): FormSlice => ({ usage: "1", every: "1", start: toInputValue(new Date().toISOString()) });
 
-const defaultForm = (): FormState => ({ name: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", slices: [defaultSlice()] });
+const defaultForm = (): FormState => ({ name: "", genericName: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", expiryDate: "", notes: "", slices: [defaultSlice()] });
 
 const todayIso = () => new Date().toISOString();
 const plusDaysIso = (days: number) => {
@@ -110,6 +116,42 @@ export default function App() {
 	const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
 	const [showImageLightbox, setShowImageLightbox] = useState(false);
 
+	// Track taken doses (stored in localStorage)
+	const [takenDoses, setTakenDoses] = useState<Set<string>>(() => {
+		try {
+			const stored = localStorage.getItem("takenDoses");
+			if (stored) {
+				const parsed = JSON.parse(stored);
+				// Clean up old entries (older than 7 days)
+				const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+				const filtered = parsed.filter((item: { id: string; timestamp: number }) => item.timestamp > weekAgo);
+				return new Set(filtered.map((item: { id: string }) => item.id));
+			}
+		} catch {}
+		return new Set();
+	});
+
+	function markDoseTaken(doseId: string) {
+		setTakenDoses((prev) => {
+			const next = new Set(prev);
+			next.add(doseId);
+			// Persist with timestamp for cleanup
+			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
+			localStorage.setItem("takenDoses", JSON.stringify(items));
+			return next;
+		});
+	}
+
+	function undoDoseTaken(doseId: string) {
+		setTakenDoses((prev) => {
+			const next = new Set(prev);
+			next.delete(doseId);
+			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
+			localStorage.setItem("takenDoses", JSON.stringify(items));
+			return next;
+		});
+	}
+
 	// Close modal on Escape key
 	useEffect(() => {
 		const handleEscape = (e: KeyboardEvent) => {
@@ -139,12 +181,13 @@ export default function App() {
 	const coverage = useMemo(() => calculateCoverage(meds, schedule.events), [meds, schedule.events]);
 	const depletionByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c.depletionTime])), [coverage.all]);
 	const groupedSchedule = useMemo(() => {
-		const days = new Map<string, { dateStr: string; meds: Map<string, { medName: string; total: number; times: string[]; lastWhen: number }> }>();
-		schedule.events.slice(0, 30).forEach((event) => {
+		type DoseInfo = { id: string; timeStr: string; when: number; usage: number };
+		const days = new Map<string, { dateStr: string; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
+		schedule.events.slice(0, 200).forEach((event) => {
 			const day = days.get(event.dateStr) ?? { dateStr: event.dateStr, meds: new Map() };
-			const medEntry = day.meds.get(event.medName) ?? { medName: event.medName, total: 0, times: [], lastWhen: event.when };
+			const medEntry = day.meds.get(event.medName) ?? { medName: event.medName, total: 0, doses: [], lastWhen: event.when };
 			medEntry.total += event.usage;
-			medEntry.times.push(event.timeStr);
+			medEntry.doses.push({ id: event.id, timeStr: event.timeStr, when: event.when, usage: event.usage });
 			medEntry.lastWhen = Math.max(medEntry.lastWhen, event.when);
 			day.meds.set(event.medName, medEntry);
 			days.set(event.dateStr, day);
@@ -341,10 +384,13 @@ export default function App() {
 		setEditingId(med.id);
 		setForm({
 			name: med.name,
+			genericName: med.genericName ?? "",
 			packCount: String(med.packCount ?? 1),
 			stripsPerPack: String(med.stripsPerPack ?? med.strips ?? 1),
 			tabsPerStrip: String(med.tabsPerStrip ?? med.stripSize ?? 1),
 			looseTablets: String(med.looseTablets ?? 0),
+			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
+			notes: med.notes ?? "",
 			slices: med.slices.map((s) => ({ usage: String(s.usage), every: String(s.every), start: toInputValue(s.start) })),
 		});
 	}
@@ -365,10 +411,13 @@ export default function App() {
 
 		const payload = {
 			name: form.name.trim(),
+			genericName: form.genericName.trim() || null,
 			packCount: Number(form.packCount) || 0,
 			stripsPerPack: Math.max(1, Number(form.stripsPerPack) || 1),
 			tabsPerStrip: Math.max(1, Number(form.tabsPerStrip) || 1),
 			looseTablets: Math.max(0, Number(form.looseTablets) || 0),
+			expiryDate: form.expiryDate || null,
+			notes: form.notes.trim() || null,
 			slices: form.slices.map((s) => ({ usage: Number(s.usage) || 0, every: Math.max(1, Number(s.every) || 1), start: toIsoString(s.start) })),
 		};
 
@@ -473,7 +522,7 @@ export default function App() {
 												const med = meds.find(m => m.name === row.name);
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}</span>
+														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
 														<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 														<span data-label="Days" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 														<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
@@ -519,7 +568,7 @@ export default function App() {
 										const med = meds.find(m => m.name === row.name);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}</span>
+												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
 												<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 												<span data-label="Days left" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 												<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
@@ -535,7 +584,7 @@ export default function App() {
 							<article className="card">
 								<div className="card-head">
 									<h2>Upcoming Schedules</h2>
-									<span className="pill neutral">Next 10</span>
+									<span className="pill neutral">Next 10 days</span>
 								</div>
 								<div className="timeline">
 									{groupedSchedule.map((day) => (
@@ -545,8 +594,10 @@ export default function App() {
 												const depletionTime = depletionByMed[item.medName];
 												const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
 												const med = meds.find(m => m.name === item.medName);
+												const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+												const takenCount = item.doses.filter((d) => takenDoses.has(d.id)).length;
 												return (
-													<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 														<div className="time-main">
 															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />{item.medName}</div>
 															<div className="tag-row">
@@ -556,8 +607,21 @@ export default function App() {
 																</span>
 															</div>
 														</div>
-														<div className="time-col">
-															<div className="time-chip times-chip">{item.times.join(" · ")}</div>
+														<div className="doses-col">
+															{item.doses.map((dose) => {
+																const isTaken = takenDoses.has(dose.id);
+																return (
+																	<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""}`}>
+																		<span className="dose-time">{dose.timeStr}</span>
+																		<span className="dose-usage">{dose.usage} pill{dose.usage !== 1 ? "s" : ""}</span>
+																		{isTaken ? (
+																			<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title="Undo">↩</button>
+																		) : (
+																			<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title="Mark as taken">✓</button>
+																		)}
+																	</div>
+																);
+															})}
 														</div>
 													</div>
 												);
@@ -618,8 +682,12 @@ export default function App() {
 							</div>
 							<form className="form-grid" onSubmit={saveMedication}>
 								<label>
-									Name
-									<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z.B. Lisinopril" required />
+									Commercial Name
+									<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Ozempic" required />
+								</label>
+								<label>
+									Generic Name
+									<input value={form.genericName} onChange={(e) => setForm({ ...form, genericName: e.target.value })} placeholder="e.g. Semaglutide (optional)" />
 								</label>
 								<label>
 									Packs
@@ -640,6 +708,21 @@ export default function App() {
 								<label>
 									Total (pills)
 									<div className="static-value">{formatNumber(totalTablets)}</div>
+								</label>
+								<label>
+									Expiry Date <span className="optional-label">(optional)</span>
+									<input type="date" value={form.expiryDate} onChange={(e) => handleValueChange("expiryDate", e.target.value)} />
+								</label>
+
+								<label className="full">
+									Notes <span className="optional-label">(optional)</span>
+									<textarea 
+										value={form.notes} 
+										onChange={(e) => handleValueChange("notes", e.target.value)} 
+										placeholder="e.g. Take with food, avoid alcohol..."
+										rows={2}
+										maxLength={500}
+									/>
 								</label>
 
 								<div className="full slices">
@@ -946,7 +1029,10 @@ export default function App() {
 								<MedicationAvatar name={selectedMed.name} imageUrl={selectedMed.imageUrl} size="lg" />
 								{selectedMed.imageUrl && <span className="expand-icon">🔍</span>}
 							</div>
-							<h2>{selectedMed.name}</h2>
+							<div className="med-detail-titles">
+								<h2>{selectedMed.name}</h2>
+								{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
+							</div>
 						</div>
 
 						<div className="med-detail-body">
@@ -972,6 +1058,12 @@ export default function App() {
 									<div className="med-detail-item">
 										<span className="med-detail-label">Loose Pills</span>
 										<span className="med-detail-value">{selectedMed.looseTablets ?? 0}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">Expiry Date</span>
+										<span className={`med-detail-value ${selectedMed.expiryDate && new Date(selectedMed.expiryDate) < new Date() ? 'danger-text' : ''}`}>
+											{selectedMed.expiryDate ? new Date(selectedMed.expiryDate).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+										</span>
 									</div>
 								</div>
 							</div>
@@ -1015,6 +1107,15 @@ export default function App() {
 									</div>
 								);
 							})()}
+
+							{selectedMed.notes && (
+								<div className="med-detail-section">
+									<h3>📝 Notes</h3>
+									<div className="med-notes-content">
+										{selectedMed.notes}
+									</div>
+								</div>
+							)}
 						</div>
 
 						<div className="med-detail-footer">
@@ -1073,7 +1174,7 @@ function buildSchedulePreview(meds: Medication[]) {
 	const events: Array<{ id: string; medName: string; timeStr: string; dateStr: string; usage: number; when: number }> = [];
 	const now = new Date();
 	const end = new Date();
-	end.setDate(end.getDate() + 3);
+	end.setDate(end.getDate() + 10);
 
 	meds.forEach((med) => {
 		med.slices.forEach((slice, idx) => {

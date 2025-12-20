@@ -225,6 +225,12 @@ body {
 .warning-text { color: var(--warning); font-weight: 700; }
 .success-text { color: var(--success); font-weight: 700; }
 
+.optional-label { 
+  font-size: 0.75rem; 
+  color: var(--text-secondary); 
+  font-weight: 400; 
+}
+
 .med-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
 .med-actions button { padding: 0.5rem 0.9rem; }
 
@@ -291,6 +297,7 @@ input:focus, select:focus {
 .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem 1.25rem; }
 .form-grid label { display: flex; flex-direction: column; gap: 0.4rem; color: var(--text-secondary); font-size: 0.85rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; }
 .form-grid .full { grid-column: 1 / -1; }
+.form-grid .optional-label { text-transform: none; font-weight: 400; font-size: 0.75rem; }
 .align-end { display: flex; justify-content: flex-end; gap: 0.75rem; }
 
 .timeline { display: flex; flex-direction: column; gap: 1rem; }
@@ -304,7 +311,7 @@ input:focus, select:focus {
   font-size: 0.95rem;
   letter-spacing: 0.02em;
 }
-.time-row { display: grid; grid-template-columns: minmax(200px, 280px) 1fr; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.time-row { display: grid; grid-template-columns: minmax(200px, 280px) 1fr; align-items: start; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); transition: opacity 0.2s ease; }
 [data-theme=\"light\"] .time-row { border-bottom-color: rgba(0,0,0,0.06); }
 .time-row:last-child { border-bottom: none; padding-bottom: 0; }
 .time-main { display: flex; flex-direction: column; gap: 0.4rem; }
@@ -324,6 +331,96 @@ input:focus, select:focus {
   font-variant-numeric: tabular-nums;
 }
 .times-chip { white-space: nowrap; }
+
+/* Dose tracking */
+.doses-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.dose-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--accent-bg);
+  border: 1px solid rgba(47, 134, 246, 0.3);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.dose-item.taken {
+  background: var(--success-bg);
+  border-color: rgba(57, 217, 138, 0.3);
+  opacity: 0.7;
+}
+
+.dose-item.taken .dose-time,
+.dose-item.taken .dose-usage {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.dose-time {
+  font-weight: 600;
+  color: var(--accent-light);
+  min-width: 50px;
+}
+
+.dose-usage {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.dose-btn {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dose-btn.take {
+  background: var(--success-bg);
+  border: 1px solid var(--success);
+  color: var(--success);
+}
+
+.dose-btn.take:hover {
+  background: var(--success);
+  color: white;
+  transform: scale(1.1);
+}
+
+.dose-btn.undo {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-secondary);
+  color: var(--text-secondary);
+}
+
+.dose-btn.undo:hover {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+  color: var(--warning);
+  transform: scale(1.1);
+}
+
+.time-row.taken {
+  opacity: 0.6;
+}
+
+.time-row.taken .med-name {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
 
 .highlights { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem; }
 
@@ -510,6 +607,16 @@ input:focus, select:focus {
   .time-row {
     grid-template-columns: 1fr;
     gap: 0.5rem;
+  }
+  
+  .doses-col {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .dose-item {
+    flex: 1 1 auto;
+    min-width: 140px;
   }
   
   .time-chip {
@@ -1017,6 +1124,19 @@ input:focus, select:focus {
   text-align: center;
 }
 
+.med-detail-titles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.med-generic-name {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 400;
+}
+
 .med-detail-header .med-avatar-lg {
   width: 100px;
   height: 100px;
@@ -1238,4 +1358,17 @@ input:focus, select:focus {
   .med-detail-grid {
     gap: 0.5rem;
   }
+}
+
+/* Notes icon indicator */
+.notes-icon {
+  margin-left: 0.35rem;
+  font-size: 0.85em;
+  cursor: help;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+
+.notes-icon:hover {
+  opacity: 1;
 }

@@ -412,7 +412,9 @@ export default function App() {
 									<h2>Reorder Reminder</h2>
 									<span className="pill neutral">Stock watch</span>
 								</div>
-								{coverage.low.length === 0 ? (
+								{meds.length === 0 ? (
+									<p className="muted">No medications configured yet.</p>
+								) : coverage.low.length === 0 ? (
 									<p className="success-text">All good, enough stock.</p>
 								) : (
 									<>

@@ -13,9 +13,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+# Copy migration SQL files (needed for runtime migrations)
+COPY --from=builder /app/src/db/migrations ./dist/db/migrations
 COPY package.json .
-# Create data directory for runtime (will be mounted as volume)
-RUN mkdir -p /app/data && chown node:node /app/data
-USER node
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+# Run migrations before starting the server
+CMD ["sh", "-c", "mkdir -p /app/data && node dist/db/migrate.js && node dist/index.js"]

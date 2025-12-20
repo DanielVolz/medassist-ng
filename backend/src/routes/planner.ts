@@ -5,6 +5,7 @@ import { updateReminderSentTime } from "../services/reminder-scheduler.js";
 type PlannerRow = {
   medicationId: number;
   medicationName: string;
+  totalPills: number;
   plannerUsage: number;
   stripSize: number;
   stripsNeeded: number;
@@ -68,7 +69,8 @@ export async function plannerRoutes(app: FastifyInstance) {
         (row) => `
         <tr>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${row.medicationName}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.plannerUsage}</strong> pills</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.totalPills}</strong></td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.plannerUsage}</strong></td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.stripsNeeded} × ${row.stripSize}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.stripsAvailable}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">
@@ -77,7 +79,7 @@ export async function plannerRoutes(app: FastifyInstance) {
                 ? "background: #d1fae5; color: #065f46;"
                 : "background: #fee2e2; color: #991b1b;"
             }">
-              ${row.enough ? "✓ OK" : "⚠ Low"}
+              ${row.enough ? "✓ OK" : "✗ Out of Stock"}
             </span>
           </td>
         </tr>
@@ -108,10 +110,11 @@ export async function plannerRoutes(app: FastifyInstance) {
           </div>
 
           <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-            <table style="width: 100%; border-collapse: collapse; background: white; min-width: 500px;">
+            <table style="width: 100%; border-collapse: collapse; background: white; min-width: 550px;">
               <thead>
                 <tr style="background: #f3f4f6;">
                   <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Medication</th>
+                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Stock</th>
                   <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Usage</th>
                   <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Needed</th>
                   <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Available</th>
@@ -135,7 +138,7 @@ Supply overview from ${fromDate} to ${untilDate}
 
 ${summaryText}
 
-${rows.map((r) => `${r.medicationName}: ${r.plannerUsage} pills needed, ${r.stripsAvailable} blisters available (${r.stripsNeeded} needed) - ${r.enough ? "Enough" : "OUT OF STOCK"}`).join("\n")}
+${rows.map((r) => `${r.medicationName}: ${r.totalPills} pills in stock, ${r.plannerUsage} pills needed, ${r.stripsAvailable} blisters available (${r.stripsNeeded} needed) - ${r.enough ? "Enough" : "OUT OF STOCK"}`).join("\n")}
 
 ---
 Sent from MedAssist Medication Planner`;

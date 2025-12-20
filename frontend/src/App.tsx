@@ -28,6 +28,7 @@ type Medication = {
 type PlannerRow = {
 	medicationId: number;
 	medicationName: string;
+	totalPills: number;
 	plannerUsage: number;
 	stripSize: number;
 	stripsNeeded: number;
@@ -495,12 +496,20 @@ export default function App() {
 		setTheme((prev) => (prev === "dark" ? "light" : "dark"));
 	}
 
+	// Page titles based on current route
+	const pageInfo = {
+		"/dashboard": { eyebrow: "MedAssist · Overview", title: "Dashboard" },
+		"/medications": { eyebrow: "MedAssist · Inventory", title: "Manage Medications" },
+		"/planner": { eyebrow: "MedAssist · Planner", title: "Demand Calculator" },
+		"/settings": { eyebrow: "MedAssist · Configuration", title: "Settings" },
+	}[currentPath] || { eyebrow: "MedAssist · Overview", title: "Dashboard" };
+
 	return (
 		<main className="page">
 			<header className="hero">
 				<div>
-					<p className="eyebrow">Medassist · Planner</p>
-					<h1>Manage medication plans</h1>
+					<p className="eyebrow">{pageInfo.eyebrow}</p>
+					<h1>{pageInfo.title}</h1>
 				</div>
 				<div className="header-actions">
 					<div className="tabs">

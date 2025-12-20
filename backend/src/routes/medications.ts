@@ -261,6 +261,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       const packCount = row.packCount ?? 1;
       const stripsPerPack = row.stripsPerPack ?? row.strips ?? 1;
       const looseTablets = row.looseTablets ?? 0;
+      const totalPills = row.count;
 
       const stripsNeeded = tabsPerStrip > 0 ? Math.ceil(usageTotal / tabsPerStrip) : 0;
       const stripsAvailable = packCount * stripsPerPack + (tabsPerStrip > 0 ? looseTablets / tabsPerStrip : 0);
@@ -268,6 +269,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       return {
         medicationId: row.id,
         medicationName: row.name,
+        totalPills,
         plannerUsage: usageTotal,
         stripSize: tabsPerStrip,
         stripsNeeded,

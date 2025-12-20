@@ -555,23 +555,26 @@ export default function App() {
 									<h2>Medication Overview</h2>
 									<span className="pill neutral">Stock</span>
 								</div>
-								<div className="table table-5">
+								<div className="table table-6">
 									<div className="table-head">
 										<span>Name</span>
 										<span>Current pills</span>
 										<span>Days left</span>
 										<span>Runs out</span>
+										<span>Expiry</span>
 										<span>Status</span>
 									</div>
 									{coverage.all.map((row) => {
 										const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 										const med = meds.find(m => m.name === row.name);
+										const expiryClass = getExpiryClass(med?.expiryDate);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
 												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
 												<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 												<span data-label="Days left" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 												<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
+												<span data-label="Expiry" className={expiryClass}>{med?.expiryDate ? new Date(med.expiryDate).toLocaleDateString([], { day: "2-digit", month: "short", year: "2-digit" }) : "-"}</span>
 												<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
 											</div>
 										);
@@ -710,16 +713,16 @@ export default function App() {
 									<div className="static-value">{formatNumber(totalTablets)}</div>
 								</label>
 								<label>
-									Expiry Date <span className="optional-label">(optional)</span>
-									<input type="date" value={form.expiryDate} onChange={(e) => handleValueChange("expiryDate", e.target.value)} />
+									Expiry Date
+									<input type="date" value={form.expiryDate} onChange={(e) => handleValueChange("expiryDate", e.target.value)} placeholder="optional" />
 								</label>
 
 								<label className="full">
-									Notes <span className="optional-label">(optional)</span>
+									Notes
 									<textarea 
 										value={form.notes} 
 										onChange={(e) => handleValueChange("notes", e.target.value)} 
-										placeholder="e.g. Take with food, avoid alcohol..."
+										placeholder="e.g. Take with food, avoid alcohol... (optional)"
 										rows={2}
 										maxLength={500}
 									/>
@@ -1210,6 +1213,18 @@ function formatNumber(value: number | null) {
 	if (value === null || Number.isNaN(value)) return "-";
 	if (Math.abs(value % 1) < 0.05) return Math.round(value).toLocaleString();
 	return value.toFixed(1);
+}
+
+function getExpiryClass(expiryDate: string | null | undefined): string {
+	if (!expiryDate) return "";
+	const now = new Date();
+	const expiry = new Date(expiryDate);
+	const diffMs = expiry.getTime() - now.getTime();
+	const diffDays = diffMs / (1000 * 60 * 60 * 24);
+	
+	if (diffDays <= 7) return "danger-text"; // 1 week or less (or expired)
+	if (diffDays <= 30) return "warning-text"; // 1 month or less
+	return "success-text"; // more than 1 month
 }
 
 function calculateCoverage(meds: Medication[], events: Array<{ medName: string; when: number }>) {

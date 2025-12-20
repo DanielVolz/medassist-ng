@@ -70,7 +70,7 @@ await app.register(rateLimit, {
 });
 await app.register(cookie, { secret: env.COOKIE_SECRET });
 await app.register(jwt, { secret: env.JWT_SECRET, cookie: { cookieName: "access_token", signed: false } });
-await app.register(fastifyMultipart, { limits: { fileSize: 2 * 1024 * 1024 } }); // 2MB limit
+await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
 await app.register(fastifyStatic, {
   root: imagesDir,
   prefix: "/images/",

@@ -3,6 +3,7 @@ import { db } from "../db/client.js";
 import { medications } from "../db/schema.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
+import { loadNotificationSettings, sendShoutrrrNotification } from "../routes/settings.js";
 
 type Slice = { usage: number; every: number; start: string };
 
@@ -14,6 +15,8 @@ type NotificationSettings = {
   lowStockDays: number;
   normalStockDays: number;
   highStockDays: number;
+  shoutrrrEnabled: boolean;
+  shoutrrrUrl: string;
 };
 
 type ReminderState = {
@@ -43,28 +46,7 @@ function getMsUntilNextCheck(): number {
   return next.getTime() - Date.now();
 }
 
-const notificationSettingsFile = resolve(process.cwd(), "data", "notification-settings.json");
 const reminderStateFile = resolve(process.cwd(), "data", "reminder-state.json");
-
-function loadNotificationSettings(): NotificationSettings {
-  try {
-    if (existsSync(notificationSettingsFile)) {
-      const saved = JSON.parse(readFileSync(notificationSettingsFile, "utf-8"));
-      return {
-        emailEnabled: saved.emailEnabled ?? false,
-        notificationEmail: saved.notificationEmail ?? "",
-        reminderDaysBefore: saved.reminderDaysBefore ?? 7,
-        repeatDailyReminders: saved.repeatDailyReminders ?? false,
-        lowStockDays: saved.lowStockDays ?? 30,
-        normalStockDays: saved.normalStockDays ?? 90,
-        highStockDays: saved.highStockDays ?? 180,
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return { emailEnabled: false, notificationEmail: "", reminderDaysBefore: 7, repeatDailyReminders: false, lowStockDays: 30, normalStockDays: 90, highStockDays: 180 };
-}
 
 function loadReminderState(): ReminderState {
   try {
@@ -265,9 +247,12 @@ Automatic reminder from MedAssist`;
 async function checkAndSendReminder(logger: { info: (msg: string) => void; error: (msg: string) => void }): Promise<void> {
   const settings = loadNotificationSettings();
   
-  // Check if email reminders are enabled
-  if (!settings.emailEnabled || !settings.notificationEmail) {
-    logger.info("[Reminder] Email reminders disabled or no email configured");
+  // Check if any notifications are enabled
+  const emailEnabled = settings.emailEnabled && settings.notificationEmail;
+  const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl;
+  
+  if (!emailEnabled && !shoutrrrEnabled) {
+    logger.info("[Reminder] No notifications enabled");
     return;
   }
 
@@ -320,10 +305,38 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
 
   logger.info(`[Reminder] Sending reminder for ${medsToNotify.length} medications...`);
   
-  const result = await sendReminderEmail(settings.notificationEmail, medsToNotify);
+  let emailSuccess = false;
+  let shoutrrrSuccess = false;
   
-  if (result.success) {
-    // Update state (preserve nextScheduledCheck)
+  // Send email if enabled
+  if (emailEnabled) {
+    const result = await sendReminderEmail(settings.notificationEmail, medsToNotify);
+    emailSuccess = result.success;
+    if (result.success) {
+      logger.info(`[Reminder] Email sent successfully to ${settings.notificationEmail}`);
+    } else {
+      logger.error(`[Reminder] Failed to send email: ${result.error}`);
+    }
+  }
+  
+  // Send Shoutrrr notification if enabled
+  if (shoutrrrEnabled) {
+    const title = `⚠️ MedAssist: ${medsToNotify.length} Medication${medsToNotify.length > 1 ? "s" : ""} Running Low`;
+    const message = medsToNotify
+      .map((m) => `• ${m.name}: ${m.medsLeft} pills, ${m.daysLeft ?? 0} days left`)
+      .join("\n");
+    
+    const result = await sendShoutrrrNotification(settings.shoutrrrUrl, title, message);
+    shoutrrrSuccess = result.success;
+    if (result.success) {
+      logger.info(`[Reminder] Push notification sent successfully`);
+    } else {
+      logger.error(`[Reminder] Failed to send push notification: ${result.error}`);
+    }
+  }
+  
+  // Update state if any notification was sent successfully
+  if (emailSuccess || shoutrrrSuccess) {
     const currentState = loadReminderState();
     saveReminderState({
       lastAutoEmailSent: new Date().toISOString(),
@@ -331,9 +344,6 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
       notifiedMedications: [...new Set([...stillLowStock, ...medsToNotify.map((m) => m.name)])],
       nextScheduledCheck: currentState.nextScheduledCheck,
     });
-    logger.info(`[Reminder] Email sent successfully to ${settings.notificationEmail}`);
-  } else {
-    logger.error(`[Reminder] Failed to send email: ${result.error}`);
   }
 }
 

@@ -12,10 +12,16 @@ type SettingsBody = {
   lowStockDays: number;
   normalStockDays: number;
   highStockDays: number;
+  shoutrrrEnabled: boolean;
+  shoutrrrUrl: string;
 };
 
 type TestEmailBody = {
   email: string;
+};
+
+type TestShoutrrrBody = {
+  url: string;
 };
 
 // Notification settings are stored in a JSON file (user-configurable)
@@ -30,6 +36,8 @@ type NotificationSettings = {
   lowStockDays: number;
   normalStockDays: number;
   highStockDays: number;
+  shoutrrrEnabled: boolean;
+  shoutrrrUrl: string;
 };
 
 function loadNotificationSettings(): NotificationSettings {
@@ -44,17 +52,22 @@ function loadNotificationSettings(): NotificationSettings {
         lowStockDays: saved.lowStockDays ?? 30,
         normalStockDays: saved.normalStockDays ?? 90,
         highStockDays: saved.highStockDays ?? 180,
+        shoutrrrEnabled: saved.shoutrrrEnabled ?? false,
+        shoutrrrUrl: saved.shoutrrrUrl ?? "",
       };
     }
   } catch {
     // ignore
   }
-  return { emailEnabled: false, notificationEmail: "", reminderDaysBefore: 7, repeatDailyReminders: false, lowStockDays: 30, normalStockDays: 90, highStockDays: 180 };
+  return { emailEnabled: false, notificationEmail: "", reminderDaysBefore: 7, repeatDailyReminders: false, lowStockDays: 30, normalStockDays: 90, highStockDays: 180, shoutrrrEnabled: false, shoutrrrUrl: "" };
 }
 
 function saveNotificationSettings(settings: NotificationSettings): void {
   writeFileSync(notificationSettingsFile, JSON.stringify(settings, null, 2));
 }
+
+// Export for use in reminder scheduler
+export { loadNotificationSettings };
 
 export async function settingsRoutes(app: FastifyInstance) {
   // Get settings - notification from JSON file, SMTP from process.env
@@ -71,6 +84,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       lowStockDays: notification.lowStockDays,
       normalStockDays: notification.normalStockDays,
       highStockDays: notification.highStockDays,
+      shoutrrrEnabled: notification.shoutrrrEnabled,
+      shoutrrrUrl: notification.shoutrrrUrl,
       // SMTP settings (admin-configured, from .env)
       smtpHost: process.env.SMTP_HOST ?? "",
       smtpPort: parseInt(process.env.SMTP_PORT ?? "587"),
@@ -97,6 +112,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       lowStockDays: body.lowStockDays ?? 30,
       normalStockDays: body.normalStockDays ?? 90,
       highStockDays: body.highStockDays ?? 180,
+      shoutrrrEnabled: body.shoutrrrEnabled ?? false,
+      shoutrrrUrl: body.shoutrrrUrl ?? "",
     });
 
     return reply.send({ success: true });
@@ -150,4 +167,79 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: `Failed to send email: ${errorMessage}` });
     }
   });
+
+  // Test Shoutrrr/ntfy notification
+  app.post<{ Body: TestShoutrrrBody }>("/settings/test-shoutrrr", async (request, reply) => {
+    const { url } = request.body;
+    
+    if (!url) {
+      return reply.status(400).send({ error: "Notification URL is required" });
+    }
+
+    try {
+      const result = await sendShoutrrrNotification(url, "MedAssist Test", "This is a test notification from MedAssist. If you received this, your notification configuration is working correctly!");
+      
+      if (result.success) {
+        return reply.send({ success: true, message: "Test notification sent successfully" });
+      } else {
+        return reply.status(500).send({ error: result.error });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      return reply.status(500).send({ error: `Failed to send notification: ${errorMessage}` });
+    }
+  });
+}
+
+// Send notification via Shoutrrr-compatible URL (supports ntfy, Discord, Telegram, etc.)
+export async function sendShoutrrrNotification(urlStr: string, title: string, message: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Parse the URL to determine the service
+    let targetUrl: string;
+    let method = "POST";
+    let headers: Record<string, string> = {};
+    let body: string | undefined;
+
+    // Handle different URL formats
+    if (urlStr.startsWith("ntfy://")) {
+      // ntfy://[user:pass@]host/topic -> https://host/topic
+      const parsed = new URL(urlStr.replace("ntfy://", "https://"));
+      targetUrl = `https://${parsed.host}${parsed.pathname}`;
+      headers = { "Title": title };
+      body = message;
+      
+      // Handle basic auth if present
+      if (parsed.username && parsed.password) {
+        headers["Authorization"] = "Basic " + Buffer.from(`${parsed.username}:${parsed.password}`).toString("base64");
+      }
+    } else if (urlStr.startsWith("https://ntfy.") || urlStr.includes("ntfy.sh") || urlStr.includes("/ntfy/")) {
+      // Direct ntfy HTTPS URL
+      targetUrl = urlStr;
+      headers = { "Title": title };
+      body = message;
+    } else if (urlStr.startsWith("http://") || urlStr.startsWith("https://")) {
+      // Generic webhook URL - send as JSON
+      targetUrl = urlStr;
+      headers = { "Content-Type": "application/json" };
+      body = JSON.stringify({ title, message, text: `${title}\n\n${message}` });
+    } else {
+      return { success: false, error: "Unsupported URL format. Use ntfy:// or https:// URL" };
+    }
+
+    const response = await fetch(targetUrl, {
+      method,
+      headers,
+      body,
+    });
+
+    if (response.ok) {
+      return { success: true };
+    } else {
+      const errorText = await response.text();
+      return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, error: errorMessage };
+  }
 }

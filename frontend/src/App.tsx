@@ -101,6 +101,9 @@ export default function App() {
 		hasSmtpPassword: false,
 		lastAutoEmailSent: null as string | null,
 		nextScheduledCheck: null as string | null,
+		// Shoutrrr/ntfy settings
+		shoutrrrEnabled: false,
+		shoutrrrUrl: "",
 	});
 	const [savedSettings, setSavedSettings] = useState(settings);
 	const [settingsLoading, setSettingsLoading] = useState(false);
@@ -108,6 +111,8 @@ export default function App() {
 	const [settingsSaved, setSettingsSaved] = useState(false);
 	const [testingEmail, setTestingEmail] = useState(false);
 	const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+	const [testingShoutrrr, setTestingShoutrrr] = useState(false);
+	const [testShoutrrrResult, setTestShoutrrrResult] = useState<{ success: boolean; message: string } | null>(null);
 	const [sendingPlannerEmail, setSendingPlannerEmail] = useState(false);
 	const [plannerEmailResult, setPlannerEmailResult] = useState<{ success: boolean; message: string } | null>(null);
 	const [sendingReminderEmail, setSendingReminderEmail] = useState(false);
@@ -174,7 +179,9 @@ export default function App() {
 		settings.repeatDailyReminders !== savedSettings.repeatDailyReminders ||
 		settings.lowStockDays !== savedSettings.lowStockDays ||
 		settings.normalStockDays !== savedSettings.normalStockDays ||
-		settings.highStockDays !== savedSettings.highStockDays;
+		settings.highStockDays !== savedSettings.highStockDays ||
+		settings.shoutrrrEnabled !== savedSettings.shoutrrrEnabled ||
+		settings.shoutrrrUrl !== savedSettings.shoutrrrUrl;
 
 	const schedule = useMemo(() => buildSchedulePreview(meds), [meds]);
 	const totalTablets = useMemo(() => deriveTotal(form), [form]);
@@ -236,6 +243,8 @@ export default function App() {
 			lowStockDays: settings.lowStockDays,
 			normalStockDays: settings.normalStockDays,
 			highStockDays: settings.highStockDays,
+			shoutrrrEnabled: settings.shoutrrrEnabled,
+			shoutrrrUrl: settings.shoutrrrUrl,
 			smtpHost: settings.smtpHost,
 			smtpPort: settings.smtpPort,
 			smtpUser: settings.smtpUser,
@@ -276,6 +285,29 @@ export default function App() {
 			setTestEmailResult({ success: false, message: "Network error" });
 		}
 		setTestingEmail(false);
+	}
+
+	async function testShoutrrr() {
+		if (!settings.shoutrrrUrl) return;
+		setTestingShoutrrr(true);
+		setTestShoutrrrResult(null);
+
+		try {
+			const res = await fetch("/api/settings/test-shoutrrr", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ url: settings.shoutrrrUrl }),
+			});
+			const data = await res.json();
+			if (res.ok) {
+				setTestShoutrrrResult({ success: true, message: data.message || "Notification sent!" });
+			} else {
+				setTestShoutrrrResult({ success: false, message: data.error || "Failed to send" });
+			}
+		} catch {
+			setTestShoutrrrResult({ success: false, message: "Network error" });
+		}
+		setTestingShoutrrr(false);
 	}
 
 	async function sendPlannerEmail() {
@@ -475,9 +507,9 @@ export default function App() {
 						<button className={currentPath === "/dashboard" || currentPath === "/" ? "pill primary" : "pill"} onClick={() => navigate("/dashboard")}>Dashboard</button>
 						<button className={currentPath === "/medications" ? "pill primary" : "pill"} onClick={() => navigate("/medications")}>Medications</button>
 						<button className={currentPath === "/planner" ? "pill primary" : "pill"} onClick={() => navigate("/planner")}>Planner</button>
-						<button className={currentPath === "/settings" ? "pill primary" : "pill"} onClick={() => navigate("/settings")}>⚙️</button>
 					</div>
-					<button className="theme-toggle" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+					<button className={`icon-btn ${currentPath === "/settings" ? "active" : ""}`} onClick={() => navigate("/settings")} title="Settings">⚙️</button>
+					<button className="icon-btn" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
 						{theme === "dark" ? "☀️" : "🌙"}
 					</button>
 				</div>
@@ -860,80 +892,209 @@ export default function App() {
 					<section className="grid">
 						<article className="card">
 							<div className="card-head">
-								<h2>Automatic Email Reminders</h2>
-								<span className="pill neutral">Daily check</span>
+								<h2>Automatic Reminders</h2>
+								<span className="pill neutral">Daily check at 6:00 AM</span>
 							</div>
 							{settingsLoading ? (
 								<p>Loading settings...</p>
 							) : (
 								<form className="settings-form" onSubmit={saveSettings}>
-									<div className="setting-row">
-										<div className="setting-info">
-											<label className="setting-label">Enable Automatic Reminders</label>
-											<p className="setting-desc">Automatically send email when medications are running low</p>
+									<div className="setting-info-box">
+										<p>🤖 <strong>How it works:</strong> The server checks daily at 6:00 AM. When a medication drops below the threshold, you get notified via <strong>all enabled channels</strong> below.</p>
+										<div className="enabled-channels" style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+											<button
+												type="button"
+												className={`pill clickable ${settings.emailEnabled ? "success" : "neutral"}`}
+												onClick={async () => {
+													const newSettings = { ...settings, emailEnabled: !settings.emailEnabled };
+													setSettings(newSettings);
+													try {
+														await fetch("/api/settings/notifications", {
+															method: "PUT",
+															headers: { "Content-Type": "application/json" },
+															body: JSON.stringify(newSettings),
+														});
+													} catch (e) { console.error(e); }
+												}}
+												style={{ cursor: "pointer", border: "none" }}
+											>
+												📧 Email: {settings.emailEnabled ? "ON" : "OFF"}
+											</button>
+											<button
+												type="button"
+												className={`pill clickable ${settings.shoutrrrEnabled ? "success" : "neutral"}`}
+												onClick={async () => {
+													const newSettings = { ...settings, shoutrrrEnabled: !settings.shoutrrrEnabled };
+													setSettings(newSettings);
+													try {
+														await fetch("/api/settings/notifications", {
+															method: "PUT",
+															headers: { "Content-Type": "application/json" },
+															body: JSON.stringify(newSettings),
+														});
+													} catch (e) { console.error(e); }
+												}}
+												style={{ cursor: "pointer", border: "none" }}
+											>
+												🔔 Push: {settings.shoutrrrEnabled ? "ON" : "OFF"}
+											</button>
 										</div>
-										<label className="toggle-switch">
-											<input
-												type="checkbox"
-												checked={settings.emailEnabled}
-												onChange={(e) => setSettings({ ...settings, emailEnabled: e.target.checked })}
-											/>
-											<span className="toggle-slider"></span>
-										</label>
 									</div>
 
-									{settings.emailEnabled && (
-										<>
-											<div className="setting-info-box">
-												<p>🤖 <strong>How it works:</strong> The server checks daily at 6:00 AM. When a medication drops below the threshold, you get an email.</p>
+									<div className="setting-section">
+										<h3>⚙️ Reminder Settings</h3>
+										<p className="setting-hint">These settings apply to both Email and Push notifications.</p>
+										<div className="setting-group">
+											<label>
+												Reminder threshold (days)
+												<input
+													type="number"
+													min="1"
+													max="90"
+													value={settings.reminderDaysBefore}
+													onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
+												/>
+												<span className="input-hint">Send reminder when stock lasts less than this</span>
+											</label>
+										</div>
+										<div className="setting-row">
+											<div className="setting-info">
+												<label className="setting-label">Repeat daily reminders</label>
+												<p className="setting-desc">Send daily notifications while stock is low (otherwise only once per medication)</p>
 											</div>
-											<div className="setting-group">
-												<label>
-													Send reminder to
-													<input
-														type="email"
-														value={settings.notificationEmail}
-														onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
-														placeholder="your@email.com"
-													/>
-												</label>
-												<label>
-													When stock lasts less than (days)
-													<input
-														type="number"
-														min="1"
-														max="90"
-														value={settings.reminderDaysBefore}
-														onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
-													/>
-												</label>
-											</div>
-											<div className="setting-row">
-												<div className="setting-info">
-													<label className="setting-label">Repeat daily reminders</label>
-													<p className="setting-desc">Send daily emails while stock is low (otherwise only once per medication)</p>
-												</div>
-												<label className="toggle-switch small">
-													<input
-														type="checkbox"
-														checked={settings.repeatDailyReminders}
-														onChange={(e) => setSettings({ ...settings, repeatDailyReminders: e.target.checked })}
-													/>
-													<span className="toggle-slider"></span>
-												</label>
-											</div>
-											<div className="setting-info-box">
-												<p>⏰ <strong>Next automatic check:</strong> {settings.nextScheduledCheck ? new Date(settings.nextScheduledCheck).toLocaleString() : "—"}</p>
-												{settings.lastAutoEmailSent && (
-													<p style={{ marginTop: "0.5rem" }}>✓ Last automatic email: <strong>{new Date(settings.lastAutoEmailSent).toLocaleString()}</strong></p>
-												)}
-											</div>
-										</>
-									)}
+											<label className="toggle-switch small">
+												<input
+													type="checkbox"
+													checked={settings.repeatDailyReminders}
+													onChange={(e) => setSettings({ ...settings, repeatDailyReminders: e.target.checked })}
+												/>
+												<span className="toggle-slider"></span>
+											</label>
+										</div>
+										<div className="setting-info-box">
+											<p>⏰ <strong>Next automatic check:</strong> {settings.nextScheduledCheck ? new Date(settings.nextScheduledCheck).toLocaleString() : "—"}</p>
+											{settings.lastAutoEmailSent && (
+												<p style={{ marginTop: "0.5rem" }}>✓ Last notification sent: <strong>{new Date(settings.lastAutoEmailSent).toLocaleString()}</strong></p>
+											)}
+										</div>
+									</div>
 
 									<div className="setting-section">
-										<h3>Stock Thresholds</h3>
-										<p className="setting-hint">Define stock levels based on how many days of medication you have left.</p>
+										<h3>📧 Email Notifications</h3>
+										<div className="setting-row">
+											<div className="setting-info">
+												<label className="setting-label">Enable Email Notifications</label>
+												<p className="setting-desc">Receive reminders via email</p>
+											</div>
+											<label className="toggle-switch">
+												<input
+													type="checkbox"
+													checked={settings.emailEnabled}
+													onChange={(e) => setSettings({ ...settings, emailEnabled: e.target.checked })}
+												/>
+												<span className="toggle-slider"></span>
+											</label>
+										</div>
+
+										{settings.emailEnabled && (
+											<>
+												<div className="setting-group">
+													<label className="full">
+														Email address
+														<input
+															type="email"
+															value={settings.notificationEmail}
+															onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
+															placeholder="your@email.com"
+														/>
+													</label>
+												</div>
+												<div className="smtp-readonly">
+													<div className="smtp-field">
+														<span className="smtp-label">SMTP Host</span>
+														<span className="smtp-value">{settings.smtpHost || "—"}</span>
+													</div>
+													<div className="smtp-field">
+														<span className="smtp-label">Port</span>
+														<span className="smtp-value">{settings.smtpPort}</span>
+													</div>
+													<div className="smtp-field">
+														<span className="smtp-label">From</span>
+														<span className="smtp-value">{settings.smtpFrom || "—"}</span>
+													</div>
+													<div className="smtp-field">
+														<span className="smtp-label">Status</span>
+														<span className="smtp-value">{settings.hasSmtpPassword ? "✓ Configured" : "Not configured"}</span>
+													</div>
+												</div>
+												<p className="setting-hint" style={{ marginTop: "0.5rem" }}>SMTP is configured via <code>.env</code> file</p>
+												<div className="setting-actions">
+													<button type="button" className="ghost" onClick={testEmail} disabled={testingEmail || !settings.notificationEmail}>
+														{testingEmail ? "Sending..." : "Send Test Email"}
+													</button>
+													{testEmailResult && (
+														<span className={testEmailResult.success ? "success-text" : "danger-text"}>
+															{testEmailResult.message}
+														</span>
+													)}
+												</div>
+											</>
+										)}
+									</div>
+
+									<div className="setting-section">
+										<h3>🔔 Shoutrrr Push Notifications</h3>
+										<p className="setting-hint">Send push notifications via Shoutrrr-compatible services (ntfy, Discord, Telegram, Slack, etc.). Uses the same reminder threshold.</p>
+										
+										<div className="setting-row">
+											<div className="setting-info">
+												<label className="setting-label">Enable Shoutrrr Notifications</label>
+												<p className="setting-desc">Receive reminders via push notification services</p>
+											</div>
+											<label className="toggle-switch">
+												<input
+													type="checkbox"
+													checked={settings.shoutrrrEnabled}
+													onChange={(e) => setSettings({ ...settings, shoutrrrEnabled: e.target.checked })}
+												/>
+												<span className="toggle-slider"></span>
+											</label>
+										</div>
+
+										{settings.shoutrrrEnabled && (
+											<>
+												<div className="setting-group">
+													<label className="full">
+														Notification URL
+														<input
+															type="url"
+															value={settings.shoutrrrUrl}
+															onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
+															placeholder="https://ntfy.sh/your-topic"
+															pattern="(https?|ntfy|discord|telegram|slack):\/\/.+"
+														/>
+														<span className="input-hint">
+															Examples: <code>https://ntfy.sh/mytopic</code> · <code>ntfy://ntfy.sh/mytopic</code> · <code>discord://token@id</code>
+														</span>
+													</label>
+												</div>
+												<div className="setting-actions">
+													<button type="button" className="ghost" onClick={testShoutrrr} disabled={testingShoutrrr || !settings.shoutrrrUrl}>
+														{testingShoutrrr ? "Sending..." : "Send Test Notification"}
+													</button>
+													{testShoutrrrResult && (
+														<span className={testShoutrrrResult.success ? "success-text" : "danger-text"}>
+															{testShoutrrrResult.message}
+														</span>
+													)}
+												</div>
+											</>
+										)}
+									</div>
+
+									<div className="setting-section">
+										<h3>📊 Stock Thresholds</h3>
+										<p className="setting-hint">Define stock level colors based on how many days of medication you have left.</p>
 										<div className="setting-group">
 											<label>
 												Low Stock (days)
@@ -959,52 +1120,6 @@ export default function App() {
 											</label>
 										</div>
 									</div>
-
-									{settings.emailEnabled && (
-										<>
-											<div className="setting-section">
-												<h3>SMTP Configuration</h3>
-												<p className="setting-hint">These settings are configured in the <code>.env</code> file.</p>
-												<div className="smtp-readonly">
-													<div className="smtp-field">
-														<span className="smtp-label">Host</span>
-														<span className="smtp-value">{settings.smtpHost || "—"}</span>
-													</div>
-													<div className="smtp-field">
-														<span className="smtp-label">Port</span>
-														<span className="smtp-value">{settings.smtpPort}</span>
-													</div>
-													<div className="smtp-field">
-														<span className="smtp-label">User</span>
-														<span className="smtp-value">{settings.smtpUser || "—"}</span>
-													</div>
-													<div className="smtp-field">
-														<span className="smtp-label">Password</span>
-														<span className="smtp-value">{settings.hasSmtpPassword ? "••••••••" : "—"}</span>
-													</div>
-													<div className="smtp-field">
-														<span className="smtp-label">From</span>
-														<span className="smtp-value">{settings.smtpFrom || "—"}</span>
-													</div>
-													<div className="smtp-field">
-														<span className="smtp-label">SSL/TLS</span>
-														<span className="smtp-value">{settings.smtpSecure ? "Yes" : "No"}</span>
-													</div>
-												</div>
-											</div>
-
-											<div className="setting-actions">
-												<button type="button" className="ghost" onClick={testEmail} disabled={testingEmail || !settings.notificationEmail}>
-													{testingEmail ? "Sending..." : "Send Test Email"}
-												</button>
-												{testEmailResult && (
-													<span className={testEmailResult.success ? "success-text" : "danger-text"}>
-														{testEmailResult.message}
-													</span>
-												)}
-											</div>
-										</>
-									)}
 
 									<div className="form-footer">
 										<button type="submit" disabled={settingsSaving || (!settingsChanged && settingsSaved)}>

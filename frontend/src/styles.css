@@ -850,3 +850,392 @@ input:focus, select:focus {
 @media (max-width: 600px) {
   .setting-group { grid-template-columns: 1fr; }
 }
+
+/* Medication Avatar */
+.med-avatar {
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.med-avatar-sm { width: 28px; height: 28px; }
+.med-avatar-md { width: 40px; height: 40px; }
+.med-avatar-lg { width: 56px; height: 56px; }
+
+.med-avatar-initials {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.7em;
+}
+.med-avatar-sm.med-avatar-initials { font-size: 0.65em; }
+.med-avatar-lg.med-avatar-initials { font-size: 1.1em; }
+
+/* Table/Timeline cells with avatar */
+.cell-with-avatar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.time-main .med-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Medication list name row with avatar */
+.med-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Image upload section */
+.image-upload-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-primary);
+}
+
+.image-preview {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.image-preview img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+}
+
+.image-upload-section input[type="file"] {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.image-upload-section input[type="file"]::file-selector-button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-right: 0.75rem;
+  font-weight: 500;
+}
+
+.image-upload-section input[type="file"]::file-selector-button:hover {
+  background: var(--accent-light);
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+  border: 1px solid var(--border-primary);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s, color 0.2s;
+}
+
+.modal-close:hover {
+  background: var(--border-primary);
+  color: var(--text-primary);
+}
+
+/* Medication Detail Modal */
+.med-detail-modal {
+  padding: 0;
+}
+
+.med-detail-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 2rem 1.5rem;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.med-detail-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.med-detail-header .med-avatar-lg {
+  width: 100px;
+  height: 100px;
+  font-size: 2.5rem;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.med-detail-body {
+  padding: 1.5rem 2rem;
+  background: var(--bg-primary);
+}
+
+.med-detail-section {
+  margin-bottom: 1.5rem;
+}
+
+.med-detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.med-detail-section h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin: 0 0 0.75rem;
+}
+
+.med-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.med-detail-item {
+  background: var(--bg-secondary);
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.med-detail-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.med-detail-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.med-detail-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.med-detail-schedules {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.med-schedule-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg-secondary);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.med-schedule-usage {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.med-schedule-freq {
+  color: var(--text-secondary);
+}
+
+.med-schedule-time {
+  margin-left: auto;
+  font-weight: 500;
+}
+
+.med-detail-footer {
+  padding: 1rem 2rem 1.5rem;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  border-radius: 0 0 12px 12px;
+}
+
+/* Clickable avatar wrapper */
+.med-detail-avatar-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.med-detail-avatar-wrapper.clickable {
+  cursor: pointer;
+}
+
+.med-detail-avatar-wrapper.clickable:hover .med-avatar-lg {
+  transform: scale(1.05);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+.med-detail-avatar-wrapper .expand-icon {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 0.9rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.med-detail-avatar-wrapper.clickable:hover .expand-icon {
+  opacity: 1;
+}
+
+/* Image Lightbox */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 2rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  font-size: 2rem;
+  color: white;
+  cursor: pointer;
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.lightbox-image {
+  max-width: 90vw;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: zoomIn 0.3s ease;
+}
+
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Clickable rows */
+.table-row.clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.table-row.clickable:hover {
+  background: var(--bg-secondary);
+}
+
+/* Mobile adjustments for modal */
+@media (max-width: 500px) {
+  .modal-content {
+    max-height: 85vh;
+    border-radius: 12px 12px 0 0;
+    margin-top: auto;
+  }
+
+  .med-detail-header {
+    padding: 1.5rem 1.5rem 1rem;
+  }
+
+  .med-detail-header .med-avatar-lg {
+    width: 80px;
+    height: 80px;
+    font-size: 2rem;
+  }
+
+  .med-detail-body {
+    padding: 1rem 1.5rem;
+  }
+
+  .med-detail-footer {
+    padding: 1rem 1.5rem;
+  }
+
+  .med-detail-grid {
+    gap: 0.5rem;
+  }
+}

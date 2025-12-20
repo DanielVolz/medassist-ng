@@ -35,6 +35,7 @@ async function main() {
       every_json text NOT NULL DEFAULT '[]',
       start_json text NOT NULL DEFAULT '[]',
       strip_size integer NOT NULL DEFAULT 1,
+      image_url text,
       updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
     );
 

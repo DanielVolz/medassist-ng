@@ -3,6 +3,11 @@ import { z } from "zod";
 import { db } from "../db/client.js";
 import { medications } from "../db/schema.js";
 import { eq } from "drizzle-orm";
+import { createWriteStream, existsSync, unlinkSync } from "fs";
+import { resolve, extname } from "path";
+import { pipeline } from "stream/promises";
+
+const IMAGES_DIR = resolve(process.cwd(), "data/images");
 
 const sliceSchema = z.object({
   usage: z.number().nonnegative(),
@@ -54,6 +59,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       tabsPerStrip: row.tabsPerStrip ?? row.stripSize ?? 1,
       looseTablets: row.looseTablets ?? 0,
       slices: parseSlices(row),
+      imageUrl: row.imageUrl,
       updatedAt: row.updatedAt,
     }));
   });
@@ -97,6 +103,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       tabsPerStrip: inserted.tabsPerStrip,
       looseTablets: inserted.looseTablets,
       slices,
+      imageUrl: inserted.imageUrl,
       updatedAt: inserted.updatedAt,
     };
   });
@@ -146,6 +153,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       tabsPerStrip: result[0].tabsPerStrip,
       looseTablets: result[0].looseTablets,
       slices,
+      imageUrl: result[0].imageUrl,
       updatedAt: result[0].updatedAt,
     };
   });
@@ -154,8 +162,65 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
+    // Delete associated image if exists
+    const [existing] = await db.select().from(medications).where(eq(medications.id, idNum));
+    if (existing?.imageUrl) {
+      const imagePath = resolve(IMAGES_DIR, existing.imageUrl);
+      if (existsSync(imagePath)) unlinkSync(imagePath);
+    }
+
     const deleted = await db.delete(medications).where(eq(medications.id, idNum)).returning();
     if (!deleted.length) return reply.notFound();
+    return reply.status(204).send();
+  });
+
+  // Upload medication image
+  app.post<{ Params: { id: string } }>("/medications/:id/image", async (req, reply) => {
+    const idNum = Number(req.params.id);
+    if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
+
+    const [existing] = await db.select().from(medications).where(eq(medications.id, idNum));
+    if (!existing) return reply.notFound();
+
+    const data = await req.file();
+    if (!data) return reply.badRequest("No file uploaded");
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowedTypes.includes(data.mimetype)) {
+      return reply.badRequest("Invalid file type. Allowed: JPEG, PNG, WebP, GIF");
+    }
+
+    const ext = extname(data.filename) || ".jpg";
+    const filename = `med-${idNum}-${Date.now()}${ext}`;
+    const filepath = resolve(IMAGES_DIR, filename);
+
+    await pipeline(data.file, createWriteStream(filepath));
+
+    // Delete old image if exists
+    if (existing.imageUrl) {
+      const oldPath = resolve(IMAGES_DIR, existing.imageUrl);
+      if (existsSync(oldPath)) unlinkSync(oldPath);
+    }
+
+    await db.update(medications).set({ imageUrl: filename, updatedAt: new Date() }).where(eq(medications.id, idNum));
+
+    return { success: true, imageUrl: filename };
+  });
+
+  // Delete medication image
+  app.delete<{ Params: { id: string } }>("/medications/:id/image", async (req, reply) => {
+    const idNum = Number(req.params.id);
+    if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
+
+    const [existing] = await db.select().from(medications).where(eq(medications.id, idNum));
+    if (!existing) return reply.notFound();
+
+    if (existing.imageUrl) {
+      const filepath = resolve(IMAGES_DIR, existing.imageUrl);
+      if (existsSync(filepath)) unlinkSync(filepath);
+    }
+
+    await db.update(medications).set({ imageUrl: null, updatedAt: new Date() }).where(eq(medications.id, idNum));
     return reply.status(204).send();
   });
 

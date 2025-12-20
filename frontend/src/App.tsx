@@ -18,6 +18,7 @@ type Medication = {
 	tabsPerStrip?: number;
 	looseTablets?: number;
 	slices: Slice[];
+	imageUrl?: string | null;
 	updatedAt: string | number | null;
 };
 
@@ -105,6 +106,24 @@ export default function App() {
 	const [plannerEmailResult, setPlannerEmailResult] = useState<{ success: boolean; message: string } | null>(null);
 	const [sendingReminderEmail, setSendingReminderEmail] = useState(false);
 	const [reminderEmailResult, setReminderEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+	const [uploadingImage, setUploadingImage] = useState(false);
+	const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
+	const [showImageLightbox, setShowImageLightbox] = useState(false);
+
+	// Close modal on Escape key
+	useEffect(() => {
+		const handleEscape = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				if (showImageLightbox) {
+					setShowImageLightbox(false);
+				} else if (selectedMed) {
+					setSelectedMed(null);
+				}
+			}
+		};
+		document.addEventListener("keydown", handleEscape);
+		return () => document.removeEventListener("keydown", handleEscape);
+	}, [selectedMed, showImageLightbox]);
 
 	// Check if settings have changed
 	const settingsChanged = settings.emailEnabled !== savedSettings.emailEnabled ||
@@ -278,6 +297,30 @@ export default function App() {
 		loadMeds();
 	}
 
+	async function uploadMedImage(medId: number, file: File) {
+		setUploadingImage(true);
+		const formData = new FormData();
+		formData.append("file", file);
+		
+		try {
+			const res = await fetch(`/api/medications/${medId}/image`, {
+				method: "POST",
+				body: formData,
+			});
+			if (res.ok) {
+				loadMeds();
+			}
+		} catch {
+			// ignore
+		}
+		setUploadingImage(false);
+	}
+
+	async function deleteMedImage(medId: number) {
+		await fetch(`/api/medications/${medId}/image`, { method: "DELETE" }).catch(() => null);
+		loadMeds();
+	}
+
 	function setSliceValue(idx: number, field: keyof FormSlice, value: string) {
 		setForm((prev) => {
 			const next = [...prev.slices];
@@ -427,9 +470,10 @@ export default function App() {
 											</div>
 											{coverage.low.map((row) => {
 												const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
+												const med = meds.find(m => m.name === row.name);
 												return (
-													<div key={row.name} className="table-row">
-														<span data-label="Name">{row.name}</span>
+													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
+														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}</span>
 														<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 														<span data-label="Days" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 														<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
@@ -472,9 +516,10 @@ export default function App() {
 									</div>
 									{coverage.all.map((row) => {
 										const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
+										const med = meds.find(m => m.name === row.name);
 										return (
-											<div key={row.name} className="table-row">
-												<span data-label="Name">{row.name}</span>
+											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
+												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}</span>
 												<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 												<span data-label="Days left" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 												<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
@@ -499,10 +544,11 @@ export default function App() {
 											{day.meds.map((item) => {
 												const depletionTime = depletionByMed[item.medName];
 												const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+												const med = meds.find(m => m.name === item.medName);
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className="time-row">
 														<div className="time-main">
-															<div className="med-name">{item.medName}</div>
+															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />{item.medName}</div>
 															<div className="tag-row">
 																<span className="tag subtle">{item.total} pills total</span>
 																<span className={`tag ${outOfStock ? "danger" : "success"}`}>
@@ -536,7 +582,10 @@ export default function App() {
 									<div key={med.id} className="med-row">
 										<div className="med-header">
 											<div className="med-info">
-												<div className="med-name">{med.name}</div>
+												<div className="med-name-row">
+													<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
+													<div className="med-name">{med.name}</div>
+												</div>
 												<div className="med-details">
 													<span>Packs: <strong>{med.packCount ?? 1}</strong></span>
 													<span>Blisters per pack: <strong>{med.stripsPerPack ?? med.strips ?? 1}</strong></span>
@@ -621,6 +670,31 @@ export default function App() {
 									))}
 								</div>
 
+								{editingId && (
+									<div className="full image-upload-section">
+										<label className="setting-label">Medication Image</label>
+										{(() => {
+											const currentMed = meds.find(m => m.id === editingId);
+											if (currentMed?.imageUrl) {
+												return (
+													<div className="image-preview">
+														<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
+														<button type="button" className="ghost danger" onClick={() => deleteMedImage(editingId)}>Remove Image</button>
+													</div>
+												);
+											}
+											return (
+												<input 
+													type="file" 
+													accept="image/jpeg,image/png,image/webp,image/gif"
+													onChange={(e) => e.target.files?.[0] && uploadMedImage(editingId, e.target.files[0])}
+													disabled={uploadingImage}
+												/>
+											);
+										})()}
+									</div>
+								)}
+
 								<div className="full align-end gap">
 									{editingId && (
 										<button type="button" className="ghost" onClick={resetForm}>
@@ -665,15 +739,18 @@ export default function App() {
 											<span>Available</span>
 											<span>Status</span>
 										</div>
-										{plannerRows.map((row) => (
-											<div key={row.medicationId} className="table-row">
-												<span data-label="Medication">{row.medicationName}</span>
-												<span data-label="Usage"><strong>{row.plannerUsage}</strong> pills</span>
-												<span data-label="Blisters">{row.stripsNeeded} × {row.stripSize}</span>
-												<span data-label="Available">{row.stripsAvailable} blisters</span>
-												<span data-label="Status" className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "✓ Enough" : "⚠ Out of Stock"}</span>
-											</div>
-										))}
+										{plannerRows.map((row) => {
+											const med = meds.find(m => m.name === row.medicationName);
+											return (
+												<div key={row.medicationId} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
+													<span data-label="Medication" className="cell-with-avatar"><MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />{row.medicationName}</span>
+													<span data-label="Usage"><strong>{row.plannerUsage}</strong> pills</span>
+													<span data-label="Blisters">{row.stripsNeeded} × {row.stripSize}</span>
+													<span data-label="Available">{row.stripsAvailable} blisters</span>
+													<span data-label="Status" className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "✓ Enough" : "⚠ Out of Stock"}</span>
+												</div>
+											);
+										})}
 									</div>
 									{settings.emailEnabled && settings.notificationEmail && (
 										<div className="planner-email-action">
@@ -854,6 +931,113 @@ export default function App() {
 					</section>
 				} />
 			</Routes>
+
+			{/* Medication Detail Modal */}
+			{selectedMed && (
+				<div className="modal-overlay" onClick={() => setSelectedMed(null)}>
+					<div className="modal-content med-detail-modal" onClick={(e) => e.stopPropagation()}>
+						<button className="modal-close" onClick={() => setSelectedMed(null)}>×</button>
+						
+						<div className="med-detail-header">
+							<div 
+								className={`med-detail-avatar-wrapper ${selectedMed.imageUrl ? 'clickable' : ''}`}
+								onClick={() => selectedMed.imageUrl && setShowImageLightbox(true)}
+							>
+								<MedicationAvatar name={selectedMed.name} imageUrl={selectedMed.imageUrl} size="lg" />
+								{selectedMed.imageUrl && <span className="expand-icon">🔍</span>}
+							</div>
+							<h2>{selectedMed.name}</h2>
+						</div>
+
+						<div className="med-detail-body">
+							<div className="med-detail-section">
+								<h3>Stock Information</h3>
+								<div className="med-detail-grid">
+									<div className="med-detail-item">
+										<span className="med-detail-label">Total Pills</span>
+										<span className="med-detail-value">{formatNumber(selectedMed.count)}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">Packs</span>
+										<span className="med-detail-value">{selectedMed.packCount ?? 0}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">Blisters/Pack</span>
+										<span className="med-detail-value">{selectedMed.stripsPerPack ?? 0}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">Pills/Blister</span>
+										<span className="med-detail-value">{selectedMed.tabsPerStrip ?? 1}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">Loose Pills</span>
+										<span className="med-detail-value">{selectedMed.looseTablets ?? 0}</span>
+									</div>
+								</div>
+							</div>
+
+							{selectedMed.slices.length > 0 && (
+								<div className="med-detail-section">
+									<h3>Intake Schedule</h3>
+									<div className="med-detail-schedules">
+										{selectedMed.slices.map((slice, idx) => (
+											<div key={idx} className="med-schedule-item">
+												<span className="med-schedule-usage">{slice.usage} pill{slice.usage !== 1 ? "s" : ""}</span>
+												<span className="med-schedule-freq">every {slice.every} day{slice.every !== 1 ? "s" : ""}</span>
+												<span className="med-schedule-time">at {new Date(slice.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+											</div>
+										))}
+									</div>
+								</div>
+							)}
+
+							{(() => {
+								const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
+								if (!medCoverage) return null;
+								const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings);
+								return (
+									<div className="med-detail-section">
+										<h3>Coverage Status</h3>
+										<div className="med-detail-grid">
+											<div className="med-detail-item">
+												<span className="med-detail-label">Days Left</span>
+												<span className="med-detail-value">{medCoverage.daysLeft !== null ? formatNumber(medCoverage.daysLeft) : "—"}</span>
+											</div>
+											<div className="med-detail-item">
+												<span className="med-detail-label">Runs Out</span>
+												<span className="med-detail-value">{medCoverage.depletionDate ?? "—"}</span>
+											</div>
+											<div className="med-detail-item full-width">
+												<span className="med-detail-label">Status</span>
+												<span className={`status-chip ${status.className}`}>{status.label}</span>
+											</div>
+										</div>
+									</div>
+								);
+							})()}
+						</div>
+
+						<div className="med-detail-footer">
+							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); setEditingId(selectedMed.id); }}>
+								Edit Medication
+							</button>
+						</div>
+					</div>
+
+					{/* Image Lightbox */}
+					{showImageLightbox && selectedMed.imageUrl && (
+						<div className="lightbox-overlay" onClick={() => setShowImageLightbox(false)}>
+							<button className="lightbox-close" onClick={() => setShowImageLightbox(false)}>×</button>
+							<img 
+								src={`/api/images/${selectedMed.imageUrl}`} 
+								alt={selectedMed.name} 
+								className="lightbox-image"
+								onClick={(e) => e.stopPropagation()}
+							/>
+						</div>
+					)}
+				</div>
+			)}
 		</main>
 	);
 }
@@ -1069,4 +1253,14 @@ function getStockStatus(daysLeft: number | null, medsLeft: number, thresholds: S
 	
 	// Low stock: < lowStockDays (e.g. < 30 days)
 	return { level: "low", className: "warning", label: "Low Stock" };
+}
+
+function MedicationAvatar({ name, imageUrl, size = "sm" }: { name: string; imageUrl?: string | null; size?: "sm" | "md" | "lg" }) {
+	const initials = name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "?";
+	const sizeClass = `med-avatar med-avatar-${size}`;
+	
+	if (imageUrl) {
+		return <img src={`/api/images/${imageUrl}`} alt={name} className={sizeClass} />;
+	}
+	return <div className={`${sizeClass} med-avatar-initials`}>{initials}</div>;
 }

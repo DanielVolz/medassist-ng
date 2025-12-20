@@ -23,6 +23,7 @@ export const medications = sqliteTable("medications", {
   everyJson: text("every_json").notNull().default("[]"),
   startJson: text("start_json").notNull().default("[]"),
   stripSize: integer("strip_size").notNull().default(1),
+  imageUrl: text("image_url"),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

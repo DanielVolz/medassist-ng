@@ -5,6 +5,10 @@ import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import cookie, { CookieSerializeOptions } from "@fastify/cookie";
 import jwt from "@fastify/jwt";
+import fastifyMultipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
+import { resolve } from "path";
+import { existsSync, mkdirSync } from "fs";
 import { env } from "./plugins/env.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
@@ -12,6 +16,12 @@ import { medicationRoutes } from "./routes/medications.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { plannerRoutes } from "./routes/planner.js";
 import { startReminderScheduler } from "./services/reminder-scheduler.js";
+
+// Ensure images directory exists
+const imagesDir = resolve(process.cwd(), "data/images");
+if (!existsSync(imagesDir)) {
+  mkdirSync(imagesDir, { recursive: true });
+}
 
 const app = Fastify({
   logger: {
@@ -55,6 +65,12 @@ await app.register(rateLimit, {
 });
 await app.register(cookie, { secret: env.COOKIE_SECRET });
 await app.register(jwt, { secret: env.JWT_SECRET, cookie: { cookieName: "access_token", signed: false } });
+await app.register(fastifyMultipart, { limits: { fileSize: 2 * 1024 * 1024 } }); // 2MB limit
+await app.register(fastifyStatic, {
+  root: imagesDir,
+  prefix: "/images/",
+  decorateReply: false,
+});
 
 await app.register(healthRoutes);
 await app.register(authRoutes);

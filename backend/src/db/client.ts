@@ -9,7 +9,7 @@ const client = createClient({ url });
 
 export const db = drizzle(client);
 
-// Auto-run migrations on import (self-healing database)
+// Auto-run migrations (self-healing database)
 async function runMigrations() {
   const migrations = [
     { name: "image_url", sql: "ALTER TABLE medications ADD COLUMN image_url TEXT" },
@@ -28,5 +28,5 @@ async function runMigrations() {
   }
 }
 
-// Run migrations immediately
-runMigrations().catch(console.error);
+// Export promise so server can await it before starting
+export const migrationsReady = runMigrations();

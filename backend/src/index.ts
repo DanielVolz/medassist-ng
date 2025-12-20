@@ -10,12 +10,17 @@ import fastifyStatic from "@fastify/static";
 import { resolve } from "path";
 import { existsSync, mkdirSync } from "fs";
 import { env } from "./plugins/env.js";
+import { migrationsReady } from "./db/client.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { medicationRoutes } from "./routes/medications.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { plannerRoutes } from "./routes/planner.js";
 import { startReminderScheduler } from "./services/reminder-scheduler.js";
+
+// Wait for database migrations before anything else
+await migrationsReady;
+console.log("[DB] Migrations complete, starting server...");
 
 // Ensure images directory exists
 const imagesDir = resolve(process.cwd(), "data/images");

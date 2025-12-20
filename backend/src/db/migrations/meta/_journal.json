@@ -1,0 +1,8 @@
+{
+  "entries": [
+    { "idx": 0, "version": 1, "when": 1734633120, "tag": "0000_init", "breakpoint": false },
+    { "idx": 1, "version": 1, "when": 1734700000, "tag": "0001_add_strips", "breakpoint": false },
+    { "idx": 2, "version": 1, "when": 1734800000, "tag": "0002_pack_inventory", "breakpoint": false },
+    { "idx": 3, "version": 1, "when": 1734900000, "tag": "0003_add_image_url", "breakpoint": false }
+  ]
+}

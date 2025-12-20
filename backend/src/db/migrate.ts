@@ -73,6 +73,21 @@ async function main() {
     console.log("Executing:", stmt.trim().substring(0, 50) + "...");
     await client.execute(stmt);
   }
+
+  // Run migrations for existing databases
+  console.log("Running migrations for existing databases...");
+  
+  // Migration: Add image_url column if it doesn't exist
+  try {
+    await client.execute("ALTER TABLE medications ADD COLUMN image_url TEXT");
+    console.log("Added image_url column");
+  } catch (e: any) {
+    if (e.message?.includes("duplicate column") || e.message?.includes("already exists")) {
+      console.log("image_url column already exists, skipping");
+    } else {
+      throw e;
+    }
+  }
   
   console.log("Database setup complete!");
   process.exit(0);

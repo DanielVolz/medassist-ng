@@ -62,6 +62,25 @@ Notifications:   data/notification-settings.json (editable via UI)
 - **API responses**: Return objects directly, Fastify serializes to JSON
 - **Environment**: Copy `.env.example` → `.env`, secrets must be 10+ chars
 
+## ⚠️ Database Migrations (CRITICAL)
+
+**When adding/modifying database columns, ALWAYS:**
+
+1. **Update schema**: `backend/src/db/schema.ts`
+2. **Create migration file**: `backend/src/db/migrations/XXXX_description.sql`
+   ```sql
+   -- Example: Adding a new column
+   ALTER TABLE medications ADD COLUMN new_column TEXT;
+   ```
+3. **Update journal**: `backend/src/db/migrations/meta/_journal.json`
+   ```json
+   { "idx": X, "version": 1, "when": TIMESTAMP, "tag": "XXXX_description", "breakpoint": false }
+   ```
+
+**Why this matters**: The dev database might get updated manually, but production will break without proper migration files. This causes `SQLITE_ERROR: no such column` errors in prod.
+
+**Migration naming**: `0001_add_strips.sql`, `0002_pack_inventory.sql`, `0003_add_image_url.sql`
+
 ## File Locations
 
 | Purpose | Location |

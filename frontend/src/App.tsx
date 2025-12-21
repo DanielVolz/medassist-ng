@@ -1445,6 +1445,11 @@ export default function App() {
 							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
 								Close
 							</button>
+							{selectedMed.slices.length > 0 && (
+								<button className="ghost" onClick={() => generateICS(selectedMed)} title="Export schedule to calendar">
+									📅 Export to Calendar
+								</button>
+							)}
 							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
 								Edit Medication
 							</button>
@@ -1555,6 +1560,63 @@ function formatDateTime(value: string) {
 	const d = new Date(value);
 	if (Number.isNaN(d.getTime())) return value;
 	return d.toLocaleString([], { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function generateICS(med: Medication) {
+	const formatICSDate = (date: Date) => {
+		return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+	};
+	
+	const events = med.slices.map((slice, idx) => {
+		const start = new Date(slice.start);
+		const end = new Date(start.getTime() + 15 * 60 * 1000); // 15 min duration
+		const interval = slice.every;
+		
+		const pillInfo = `${slice.usage} pill${slice.usage !== 1 ? 's' : ''}${med.pillWeightMg ? ` (${slice.usage * med.pillWeightMg} mg)` : ''}`;
+		const summary = `💊 ${med.name} - ${pillInfo}`;
+		const description = [
+			`Medication: ${med.name}`,
+			med.genericName ? `Generic: ${med.genericName}` : '',
+			med.takenBy ? `For: ${med.takenBy}` : '',
+			`Dosage: ${pillInfo}`,
+			`Frequency: every ${interval} day${interval !== 1 ? 's' : ''}`,
+			med.notes ? `Notes: ${med.notes}` : '',
+		].filter(Boolean).join('\\n');
+		
+		return `BEGIN:VEVENT
+UID:medassist-${med.id}-${idx}@medassist
+DTSTAMP:${formatICSDate(new Date())}
+DTSTART:${formatICSDate(start)}
+DTEND:${formatICSDate(end)}
+RRULE:FREQ=DAILY;INTERVAL=${interval}
+SUMMARY:${summary}
+DESCRIPTION:${description}
+BEGIN:VALARM
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:Time to take ${med.name}
+END:VALARM
+END:VEVENT`;
+	}).join('\n');
+	
+	const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//MedAssist//Medication Schedule//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:${med.name} Schedule
+${events}
+END:VCALENDAR`;
+	
+	const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+	const url = URL.createObjectURL(blob);
+	const link = document.createElement('a');
+	link.href = url;
+	link.download = `${med.name.replace(/[^a-zA-Z0-9]/g, '_')}_schedule.ics`;
+	document.body.appendChild(link);
+	link.click();
+	document.body.removeChild(link);
+	URL.revokeObjectURL(url);
 }
 
 function buildSchedulePreview(meds: Medication[]) {

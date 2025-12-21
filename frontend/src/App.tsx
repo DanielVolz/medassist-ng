@@ -585,7 +585,7 @@ export default function App() {
 												const med = meds.find(m => m.name === row.name);
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
+														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.intakeRemindersEnabled && <span className="reminder-icon" title="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
 														<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 														<span data-label="Days" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 														<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
@@ -633,7 +633,7 @@ export default function App() {
 										const expiryClass = getExpiryClass(med?.expiryDate);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
+												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.intakeRemindersEnabled && <span className="reminder-icon" title="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
 												<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 												<span data-label="Days left" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 												<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
@@ -665,7 +665,7 @@ export default function App() {
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 														<div className="time-main">
-															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />{item.medName}</div>
+															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />{item.medName}{med?.intakeRemindersEnabled && <span className="reminder-icon" title="Intake reminders enabled">🔔</span>}</div>
 															<div className="tag-row">
 																<span className="tag subtle">{item.total} pills total</span>
 																<span className={`tag ${outOfStock ? "danger" : "success"}`}>
@@ -1260,11 +1260,11 @@ export default function App() {
 										</span>
 									</div>
 								</div>
-							</div>
+						</div>
 
 							{selectedMed.slices.length > 0 && (
 								<div className="med-detail-section">
-									<h3>Intake Schedule</h3>
+									<h3>Intake Schedule {selectedMed.intakeRemindersEnabled && <span className="reminder-icon" title="Intake reminders enabled">🔔</span>}</h3>
 									<div className="med-detail-schedules">
 										{selectedMed.slices.map((slice, idx) => (
 											<div key={idx} className="med-schedule-item">
@@ -1566,7 +1566,7 @@ function getStockStatus(daysLeft: number | null, medsLeft: number, thresholds: S
 	
 	// High stock: > highStockDays (e.g. > 180 days)
 	if (daysLeft > thresholds.highStockDays) {
-		return { level: "high", className: "high", label: "★ High Stock" };
+		return { level: "high", className: "high", label: "High Stock" };
 	}
 	
 	// Normal stock: between lowStockDays and highStockDays

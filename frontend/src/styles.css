@@ -1927,3 +1927,21 @@ textarea {
 .notes-icon:hover {
   opacity: 1;
 }
+
+/* Reminder icon indicator */
+.reminder-icon {
+  margin-left: 0.35rem;
+  font-size: 0.85em;
+  cursor: help;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+
+.reminder-icon:hover {
+  opacity: 1;
+}
+
+h3 .reminder-icon {
+  font-size: 0.75em;
+  vertical-align: middle;
+}

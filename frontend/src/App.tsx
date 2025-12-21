@@ -233,6 +233,16 @@ export default function App() {
 
 	async function saveSettings(e: React.FormEvent) {
 		e.preventDefault();
+		
+		// Validate email if email notifications are enabled
+		if (settings.emailEnabled && settings.notificationEmail) {
+			const emailRegex = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/i;
+			if (!emailRegex.test(settings.notificationEmail)) {
+				setTestEmailResult({ success: false, message: "Invalid email address" });
+				return;
+			}
+		}
+		
 		setSettingsSaving(true);
 		setTestEmailResult(null);
 		
@@ -531,13 +541,13 @@ export default function App() {
 				<Route path="/" element={<Navigate to="/dashboard" replace />} />
 				<Route path="/dashboard" element={
 					<>
-						{settings.emailEnabled && settings.notificationEmail && (
+						{(settings.emailEnabled || settings.shoutrrrEnabled) && (
 							<section className="email-status-bar">
-								<span className="email-status-icon">📧</span>
+								<span className="email-status-icon">{settings.emailEnabled && settings.shoutrrrEnabled ? "🔔" : settings.emailEnabled ? "📧" : "🔔"}</span>
 								<span className="email-status-text">
 									Automatic reminders active — {getReminderStatusText(settings.reminderDaysBefore, coverage.low, settings.lastAutoEmailSent)}
 								</span>
-								<span className="email-status-recipient">→ {settings.notificationEmail}</span>
+								{settings.emailEnabled && settings.notificationEmail && <span className="email-status-recipient">→ {settings.notificationEmail}</span>}
 							</section>
 						)}
 						<section className="grid">
@@ -576,10 +586,10 @@ export default function App() {
 												);
 											})}
 										</div>
-										{settings.emailEnabled && settings.notificationEmail && (
+										{(settings.emailEnabled || settings.shoutrrrEnabled) && (
 											<div className="email-send-action">
 												<button type="button" className="ghost" onClick={sendReminderEmail} disabled={sendingReminderEmail}>
-													{sendingReminderEmail ? "Sending..." : "📧 Send Reminder Now"}
+													{sendingReminderEmail ? "Sending..." : "🔔 Send Reminder Now"}
 												</button>
 												{reminderEmailResult && (
 													<span className={reminderEmailResult.success ? "success-text" : "danger-text"}>
@@ -972,8 +982,42 @@ export default function App() {
 
 									<div className="setting-section">
 										<div className="section-header">
+											<h3>📊 Stock Display</h3>
+										</div>
+										<div className="setting-group">
+											<label>
+												<span className="field-label">Low Stock (days)</span>
+												<div className="input-with-tooltip">
+													<input
+														type="number"
+														min="1"
+														max="365"
+														value={settings.lowStockDays}
+														onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
+													/>
+													<span className="info-tooltip" data-tooltip="Yellow warning color when supply is below this threshold. Only affects display, not reminders.">ⓘ</span>
+												</div>
+											</label>
+											<label>
+												<span className="field-label">High Stock (days)</span>
+												<div className="input-with-tooltip">
+													<input
+														type="number"
+														min="1"
+														max="730"
+														value={settings.highStockDays}
+														onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
+													/>
+													<span className="info-tooltip" data-tooltip="Green with star when supply is above this threshold. Only affects display, not reminders.">ⓘ</span>
+												</div>
+											</label>
+										</div>
+									</div>
+
+									<div className="setting-section">
+										<div className="section-header">
 											<h3>⚙️ Reminder Threshold</h3>
-											<span className="info-tooltip" title="Applies to both Email and Push notifications. When a medication's remaining supply falls below this threshold, you'll receive a notification.">ⓘ</span>
+											<span className="info-tooltip" data-tooltip="Applies to both Email and Push notifications. When a medication's remaining supply falls below this threshold, you'll receive a notification.">ⓘ</span>
 										</div>
 										<div className="threshold-input">
 											<label>
@@ -993,7 +1037,7 @@ export default function App() {
 										<div className="setting-row compact">
 											<label className="setting-label">
 												Repeat daily
-												<span className="info-tooltip small" title="When enabled, sends reminders every day while stock is low. Otherwise, only notifies once per medication until restocked.">ⓘ</span>
+												<span className="info-tooltip small" data-tooltip="When enabled, sends reminders every day while stock is low. Otherwise, only notifies once per medication until restocked.">ⓘ</span>
 											</label>
 											<label className="toggle-switch small">
 												<input
@@ -1019,6 +1063,9 @@ export default function App() {
 														value={settings.notificationEmail}
 														onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
 														placeholder="your@email.com"
+														pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$"
+														required
+														autoComplete="email"
 													/>
 												</label>
 											</div>
@@ -1027,7 +1074,7 @@ export default function App() {
 													SMTP: {settings.smtpHost || "Not configured"}:{settings.smtpPort}
 													{settings.hasSmtpPassword && " ✓"}
 												</span>
-												<span className="info-tooltip small" title={`Host: ${settings.smtpHost || "—"}\nPort: ${settings.smtpPort}\nFrom: ${settings.smtpFrom || "—"}\n\nConfigured via .env file`}>ⓘ</span>
+												<span className="info-tooltip small" data-tooltip={`Host: ${settings.smtpHost || "—"}\nPort: ${settings.smtpPort}\nFrom: ${settings.smtpFrom || "—"}\n\nConfigured via .env file`}>ⓘ</span>
 											</div>
 											<div className="setting-actions">
 												<button type="button" className="ghost" onClick={testEmail} disabled={testingEmail || !settings.notificationEmail}>
@@ -1051,14 +1098,16 @@ export default function App() {
 											<div className="setting-group">
 												<label className="full">
 													<span className="field-label">Notification URL</span>
-													<input
-														type="url"
-														value={settings.shoutrrrUrl}
-														onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
-														placeholder="https://ntfy.sh/your-topic"
-														pattern="(https?|ntfy|discord|telegram|slack):\/\/.+"
-													/>
-													<span className="field-examples">e.g. https://ntfy.sh/mytopic, discord://token@id</span>
+													<div className="input-with-tooltip">
+														<input
+															type="url"
+															value={settings.shoutrrrUrl}
+															onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
+															placeholder="https://ntfy.sh/your-topic"
+															pattern="(https?|ntfy|discord|telegram|slack):\/\/.+"
+														/>
+														<span className="info-tooltip" data-tooltip="e.g. https://ntfy.sh/mytopic, discord://token@id">ⓘ</span>
+													</div>
 												</label>
 											</div>
 											<div className="setting-actions">
@@ -1073,45 +1122,6 @@ export default function App() {
 											</div>
 										</div>
 									)}
-
-									<div className="setting-section">
-										<div className="section-header">
-											<h3>📊 Stock Display</h3>
-											<span className="info-tooltip" title="These thresholds control the color-coding in the medication overview. They don't affect when reminders are sent.">ⓘ</span>
-										</div>
-										<div className="threshold-grid">
-											<label className="threshold-card warning">
-												<span className="threshold-icon">⚠️</span>
-												<span className="threshold-title">Low Stock</span>
-												<div className="threshold-input-wrap">
-													<input
-														type="number"
-														min="1"
-														max="365"
-														value={settings.lowStockDays}
-														onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
-													/>
-													<span>days</span>
-												</div>
-												<span className="threshold-desc">Yellow warning</span>
-											</label>
-											<label className="threshold-card success">
-												<span className="threshold-icon">✓</span>
-												<span className="threshold-title">High Stock</span>
-												<div className="threshold-input-wrap">
-													<input
-														type="number"
-														min="1"
-														max="730"
-														value={settings.highStockDays}
-														onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
-													/>
-													<span>days</span>
-												</div>
-												<span className="threshold-desc">Green with star</span>
-											</label>
-										</div>
-									</div>
 
 									<div className="form-footer">
 										<button type="submit" disabled={settingsSaving || (!settingsChanged && settingsSaved)}>

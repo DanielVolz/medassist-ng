@@ -200,12 +200,15 @@ export async function sendShoutrrrNotification(urlStr: string, title: string, me
     let headers: Record<string, string> = {};
     let body: string | undefined;
 
+    // Remove emojis from title for header compatibility (ntfy doesn't support unicode in headers)
+    const cleanTitle = title.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|⚠️/gu, "").trim();
+
     // Handle different URL formats
     if (urlStr.startsWith("ntfy://")) {
       // ntfy://[user:pass@]host/topic -> https://host/topic
       const parsed = new URL(urlStr.replace("ntfy://", "https://"));
       targetUrl = `https://${parsed.host}${parsed.pathname}`;
-      headers = { "Title": title };
+      headers = { "Title": cleanTitle, "Tags": "warning" };
       body = message;
       
       // Handle basic auth if present
@@ -215,7 +218,7 @@ export async function sendShoutrrrNotification(urlStr: string, title: string, me
     } else if (urlStr.startsWith("https://ntfy.") || urlStr.includes("ntfy.sh") || urlStr.includes("/ntfy/")) {
       // Direct ntfy HTTPS URL
       targetUrl = urlStr;
-      headers = { "Title": title };
+      headers = { "Title": cleanTitle, "Tags": "warning" };
       body = message;
     } else if (urlStr.startsWith("http://") || urlStr.startsWith("https://")) {
       // Generic webhook URL - send as JSON

@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import nodemailer from "nodemailer";
 import { updateReminderSentTime } from "../services/reminder-scheduler.js";
+import { loadNotificationSettings, sendShoutrrrNotification } from "./settings.js";
 
 type PlannerRow = {
   medicationId: number;
@@ -169,74 +170,76 @@ Sent from MedAssist Medication Planner`;
     }
   });
 
-  // Reminder email for low stock medications
+  // Reminder notification for low stock medications (supports email and push)
   app.post<{ Body: ReminderEmailBody }>("/reminder/send-email", async (request, reply) => {
     const { email, lowStock } = request.body;
 
-    if (!email || !lowStock || lowStock.length === 0) {
-      return reply.status(400).send({ error: "Missing email or low stock data" });
+    if (!lowStock || lowStock.length === 0) {
+      return reply.status(400).send({ error: "Missing low stock data" });
     }
 
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-    const smtpPort = parseInt(process.env.SMTP_PORT ?? "587");
-    const smtpSecure = process.env.SMTP_SECURE === "true";
-    const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+    const notificationSettings = loadNotificationSettings();
+    const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
 
-    if (!smtpHost || !smtpUser) {
-      return reply.status(400).send({ error: "SMTP not configured" });
-    }
+    // Send email if enabled
+    if (notificationSettings.emailEnabled && email) {
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+      const smtpPort = parseInt(process.env.SMTP_PORT ?? "587");
+      const smtpSecure = process.env.SMTP_SECURE === "true";
+      const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
 
-    // Build HTML table with horizontal scroll for mobile
-    const tableRows = lowStock
-      .map(
-        (row) => `
-        <tr>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${row.name}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.medsLeft}</strong></td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.daysLeft ?? 0}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.depletionDate ?? "-"}</td>
-        </tr>
-      `
-      )
-      .join("");
+      if (smtpHost && smtpUser) {
+        // Build HTML table with horizontal scroll for mobile
+        const tableRows = lowStock
+          .map(
+            (row) => `
+          <tr>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${row.name}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.medsLeft}</strong></td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.daysLeft ?? 0}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.depletionDate ?? "-"}</td>
+          </tr>
+        `
+          )
+          .join("");
 
-    const html = `
-      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
-        <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">⚠️ MedAssist - Reorder Reminder</h2>
-          <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">The following medications are running low and need to be reordered:</p>
-          
-          <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #fef2f2; border: 1px solid #fecaca;">
-            <p style="margin: 0; color: #991b1b; font-weight: 500; font-size: 13px;">
-              ⚠️ ${lowStock.length} medication${lowStock.length > 1 ? "s" : ""} running low!
-            </p>
+        const html = `
+          <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
+            <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">⚠️ MedAssist - Reorder Reminder</h2>
+              <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">The following medications are running low and need to be reordered:</p>
+              
+              <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #fef2f2; border: 1px solid #fecaca;">
+                <p style="margin: 0; color: #991b1b; font-weight: 500; font-size: 13px;">
+                  ⚠️ ${lowStock.length} medication${lowStock.length > 1 ? "s" : ""} running low!
+                </p>
+              </div>
+
+              <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                <table style="width: 100%; border-collapse: collapse; background: white; min-width: 400px;">
+                  <thead>
+                    <tr style="background: #f3f4f6;">
+                      <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Medication</th>
+                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Pills</th>
+                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Days</th>
+                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Runs Out</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${tableRows}
+                  </tbody>
+                </table>
+              </div>
+
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
+              <p style="color: #9ca3af; font-size: 11px; margin: 0;">Sent from MedAssist Medication Planner</p>
+            </div>
           </div>
+        `;
 
-          <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-            <table style="width: 100%; border-collapse: collapse; background: white; min-width: 400px;">
-              <thead>
-                <tr style="background: #f3f4f6;">
-                  <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Medication</th>
-                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Pills</th>
-                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Days</th>
-                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Runs Out</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows}
-              </tbody>
-            </table>
-          </div>
-
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-          <p style="color: #9ca3af; font-size: 11px; margin: 0;">Sent from MedAssist Medication Planner</p>
-        </div>
-      </div>
-    `;
-
-    const plainText = `MedAssist - Reorder Reminder
+        const plainText = `MedAssist - Reorder Reminder
 
 The following medications are running low:
 
@@ -245,32 +248,72 @@ ${lowStock.map((r) => `${r.name}: ${r.medsLeft} pills left, ${r.daysLeft ?? 0} d
 ---
 Sent from MedAssist Medication Planner`;
 
-    try {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpSecure,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass ?? "",
-        },
-      });
+        try {
+          const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpSecure,
+            auth: {
+              user: smtpUser,
+              pass: smtpPass ?? "",
+            },
+          });
 
-      await transporter.sendMail({
-        from: smtpFrom,
-        to: email,
-        subject: `⚠️ MedAssist - ${lowStock.length} Medication${lowStock.length > 1 ? "s" : ""} Running Low`,
-        text: plainText,
-        html,
-      });
+          await transporter.sendMail({
+            from: smtpFrom,
+            to: email,
+            subject: `⚠️ MedAssist - ${lowStock.length} Medication${lowStock.length > 1 ? "s" : ""} Running Low`,
+            text: plainText,
+            html,
+          });
 
-      // Update the reminder state to record this email was sent
+          results.email = true;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          results.errors.push(`Email: ${errorMessage}`);
+        }
+      }
+    }
+
+    // Send push notification if enabled
+    if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
+      const title = `${lowStock.length} Medication${lowStock.length > 1 ? "s" : ""} Running Low`;
+      const message = lowStock
+        .map((r) => `- ${r.name}: ${r.medsLeft} pills (${r.daysLeft ?? 0} days)`)
+        .join("\n");
+
+      try {
+        const pushResult = await sendShoutrrrNotification(notificationSettings.shoutrrrUrl, title, message);
+        if (pushResult.success) {
+          results.push = true;
+        } else {
+          results.errors.push(`Push: ${pushResult.error}`);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        results.errors.push(`Push: ${errorMessage}`);
+      }
+    }
+
+    // Update the reminder state to record this notification was sent
+    if (results.email || results.push) {
       updateReminderSentTime();
+    }
 
-      return reply.send({ success: true, message: "Reminder email sent" });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      return reply.status(500).send({ error: `Failed to send email: ${errorMessage}` });
+    // Build response message
+    const sentChannels: string[] = [];
+    if (results.email) sentChannels.push("email");
+    if (results.push) sentChannels.push("push");
+
+    if (sentChannels.length > 0) {
+      return reply.send({ 
+        success: true, 
+        message: `Reminder sent via ${sentChannels.join(" and ")}` 
+      });
+    } else if (results.errors.length > 0) {
+      return reply.status(500).send({ error: results.errors.join("; ") });
+    } else {
+      return reply.status(400).send({ error: "No notification channels configured" });
     }
   });
 }

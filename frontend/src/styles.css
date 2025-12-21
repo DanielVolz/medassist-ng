@@ -891,7 +891,7 @@ textarea {
 }
 
 .info-tooltip::after {
-  content: attr(title);
+  content: attr(data-tooltip);
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
@@ -904,6 +904,8 @@ textarea {
   font-weight: 400;
   line-height: 1.4;
   white-space: pre-line;
+  text-transform: none;
+  letter-spacing: normal;
   min-width: 200px;
   max-width: 280px;
   text-align: left;
@@ -1084,13 +1086,13 @@ textarea {
   font-size: 0.9rem;
 }
 
-/* Field Label */
+/* Field Label with inline tooltip */
 .field-label {
-  display: block;
-  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
@@ -1101,6 +1103,25 @@ textarea {
   color: var(--text-secondary);
   margin-top: 0.35rem;
   font-family: "SF Mono", "Fira Code", monospace;
+}
+
+/* Input with tooltip inside */
+.input-with-tooltip {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-tooltip input {
+  width: 100%;
+  padding-right: 2.5rem;
+}
+
+.input-with-tooltip .info-tooltip {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* SMTP Info */
@@ -1120,86 +1141,6 @@ textarea {
   font-family: "SF Mono", "Fira Code", monospace;
 }
 
-/* Threshold Cards */
-.threshold-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.threshold-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 1rem;
-  background: var(--bg-input);
-  border: 2px solid var(--border-primary);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-
-.threshold-card:hover,
-.threshold-card:focus-within {
-  border-color: var(--accent);
-}
-
-.threshold-card.warning {
-  border-color: rgba(252, 211, 77, 0.3);
-}
-
-.threshold-card.warning:hover,
-.threshold-card.warning:focus-within {
-  border-color: #fcd34d;
-}
-
-.threshold-card.success {
-  border-color: rgba(57, 217, 138, 0.3);
-}
-
-.threshold-card.success:hover,
-.threshold-card.success:focus-within {
-  border-color: #39d98a;
-}
-
-.threshold-icon {
-  font-size: 1.25rem;
-}
-
-.threshold-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-primary);
-}
-
-.threshold-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.25rem;
-}
-
-.threshold-input-wrap input {
-  width: 60px;
-  text-align: center;
-  padding: 0.35rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.threshold-input-wrap span {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.threshold-desc {
-  font-size: 0.7rem;
-  color: var(--text-secondary);
-}
-
 @media (max-width: 500px) {
   .channels-overview {
     flex-direction: column;
@@ -1214,10 +1155,6 @@ textarea {
   .schedule-info {
     width: 100%;
     align-items: center;
-  }
-  
-  .threshold-grid {
-    grid-template-columns: 1fr;
   }
 }
 

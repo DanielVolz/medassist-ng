@@ -77,15 +77,26 @@ async function main() {
   // Run migrations for existing databases
   console.log("Running migrations for existing databases...");
   
-  // Migration: Add image_url column if it doesn't exist
-  try {
-    await client.execute("ALTER TABLE medications ADD COLUMN image_url TEXT");
-    console.log("Added image_url column");
-  } catch (e: any) {
-    if (e.message?.includes("duplicate column") || e.message?.includes("already exists")) {
-      console.log("image_url column already exists, skipping");
-    } else {
-      throw e;
+  const migrations = [
+    { column: "image_url", sql: "ALTER TABLE medications ADD COLUMN image_url TEXT" },
+    { column: "expiry_date", sql: "ALTER TABLE medications ADD COLUMN expiry_date TEXT" },
+    { column: "notes", sql: "ALTER TABLE medications ADD COLUMN notes TEXT" },
+    { column: "generic_name", sql: "ALTER TABLE medications ADD COLUMN generic_name TEXT" },
+    { column: "intake_reminders_enabled", sql: "ALTER TABLE medications ADD COLUMN intake_reminders_enabled INTEGER NOT NULL DEFAULT 0" },
+    { column: "pill_weight_mg", sql: "ALTER TABLE medications ADD COLUMN pill_weight_mg INTEGER" },
+    { column: "taken_by", sql: "ALTER TABLE medications ADD COLUMN taken_by TEXT" },
+  ];
+  
+  for (const migration of migrations) {
+    try {
+      await client.execute(migration.sql);
+      console.log(`Added ${migration.column} column`);
+    } catch (e: any) {
+      if (e.message?.includes("duplicate column") || e.message?.includes("already exists")) {
+        console.log(`${migration.column} column already exists, skipping`);
+      } else {
+        throw e;
+      }
     }
   }
   

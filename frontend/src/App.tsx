@@ -148,6 +148,11 @@ export default function App() {
 	const [uploadingImage, setUploadingImage] = useState(false);
 	const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
 	const [showImageLightbox, setShowImageLightbox] = useState(false);
+	const [selectedUser, setSelectedUser] = useState<string | null>(null);
+	const [scheduleDays, setScheduleDays] = useState<number>(() => {
+		const stored = localStorage.getItem("scheduleDays");
+		return stored ? Number(stored) : 30;
+	});
 
 	// Track taken doses (stored in localStorage)
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(() => {
@@ -191,6 +196,8 @@ export default function App() {
 			if (e.key === "Escape") {
 				if (showImageLightbox) {
 					setShowImageLightbox(false);
+				} else if (selectedUser) {
+					setSelectedUser(null);
 				} else if (selectedMed) {
 					setSelectedMed(null);
 				}
@@ -198,7 +205,7 @@ export default function App() {
 		};
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
-	}, [selectedMed, showImageLightbox]);
+	}, [selectedMed, showImageLightbox, selectedUser]);
 
 	// Check if settings have changed
 	const settingsChanged = settings.emailEnabled !== savedSettings.emailEnabled ||
@@ -218,7 +225,7 @@ export default function App() {
 	const groupedSchedule = useMemo(() => {
 		type DoseInfo = { id: string; timeStr: string; when: number; usage: number };
 		const days = new Map<string, { dateStr: string; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
-		schedule.events.slice(0, 200).forEach((event) => {
+		schedule.events.slice(0, 2000).forEach((event) => {
 			const day = days.get(event.dateStr) ?? { dateStr: event.dateStr, meds: new Map() };
 			const medEntry = day.meds.get(event.medName) ?? { medName: event.medName, total: 0, doses: [], lastWhen: event.when };
 			medEntry.total += event.usage;
@@ -227,8 +234,8 @@ export default function App() {
 			day.meds.set(event.medName, medEntry);
 			days.set(event.dateStr, day);
 		});
-		return Array.from(days.values()).map((d) => ({ dateStr: d.dateStr, meds: Array.from(d.meds.values()) }));
-	}, [schedule.events]);
+		return Array.from(days.values()).map((d) => ({ dateStr: d.dateStr, meds: Array.from(d.meds.values()) })).slice(0, scheduleDays);
+	}, [schedule.events, scheduleDays]);
 
 	useEffect(() => {
 		loadMeds();
@@ -614,7 +621,7 @@ export default function App() {
 												const med = meds.find(m => m.name === row.name);
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge">{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip="Has notes">📝</span>}</span>
+														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip="Has notes">📝</span>}</span>
 														<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 														<span data-label="Days" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 														<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
@@ -662,7 +669,7 @@ export default function App() {
 										const expiryClass = getExpiryClass(med?.expiryDate);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge">{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip="Has notes">📝</span>}</span>
+												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip="Has notes">📝</span>}</span>
 												<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 												<span data-label="Days left" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 												<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
@@ -679,7 +686,19 @@ export default function App() {
 							<article className="card">
 								<div className="card-head">
 									<h2>Upcoming Schedules</h2>
-									<span className="pill neutral">Next 10 days</span>
+									<select 
+										className="schedule-days-select"
+										value={scheduleDays}
+										onChange={(e) => {
+											const val = Number(e.target.value);
+											setScheduleDays(val);
+											localStorage.setItem("scheduleDays", String(val));
+										}}
+									>
+										<option value={30}>1 month</option>
+										<option value={90}>3 months</option>
+										<option value={180}>6 months</option>
+									</select>
 								</div>
 								<div className="timeline">
 									{groupedSchedule.map((day) => (
@@ -708,7 +727,7 @@ export default function App() {
 																return (
 																	<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""}`}>
 																		<span className="dose-time">{dose.timeStr}</span>
-																		<span className="dose-usage">{dose.usage} pill{dose.usage !== 1 ? "s" : ""}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> taken by <span className="taken-by-name">{med.takenBy}</span></span>}</span>
+																		<span className="dose-usage">{dose.usage} pill{dose.usage !== 1 ? "s" : ""}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> taken by <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
 																		{isTaken ? (
 																			<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title="Undo">↩</button>
 																		) : (
@@ -1380,6 +1399,51 @@ export default function App() {
 					)}
 				</div>
 			)}
+
+			{/* User Medications Modal */}
+			{selectedUser && (
+				<div className="modal-overlay" onClick={() => setSelectedUser(null)}>
+					<div className="modal-content user-meds-modal" onClick={(e) => e.stopPropagation()}>
+						<button className="modal-close" onClick={() => setSelectedUser(null)}>×</button>
+						
+						<div className="user-meds-header">
+							<div className="user-avatar">{selectedUser.charAt(0).toUpperCase()}</div>
+							<h2>{selectedUser}'s Medications</h2>
+						</div>
+
+						<div className="user-meds-list">
+							{meds.filter(m => m.takenBy === selectedUser).map((med) => {
+								const medCoverage = coverage.all.find(c => c.name === med.name);
+								const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
+								return (
+									<div 
+										key={med.id} 
+										className="user-med-item clickable"
+										onClick={() => { setSelectedUser(null); setSelectedMed(med); }}
+									>
+										<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="sm" />
+										<div className="user-med-info">
+											<span className="user-med-name">{med.name}</span>
+											{med.genericName && <span className="user-med-generic">{med.genericName}</span>}
+										</div>
+										<div className="user-med-stats">
+											<span className="user-med-pills">{formatNumber(med.count)} pills</span>
+											{status && <span className={`status-chip ${status.className}`}>{status.label}</span>}
+										</div>
+									</div>
+								);
+							})}
+							{meds.filter(m => m.takenBy === selectedUser).length === 0 && (
+								<div className="user-meds-empty">No medications found for {selectedUser}</div>
+							)}
+						</div>
+
+						<div className="user-meds-footer">
+							<button className="ghost" onClick={() => setSelectedUser(null)}>Close</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</main>
 	);
 }
@@ -1431,7 +1495,7 @@ function buildSchedulePreview(meds: Medication[]) {
 	const events: Array<{ id: string; medName: string; timeStr: string; dateStr: string; usage: number; when: number }> = [];
 	const now = new Date();
 	const end = new Date();
-	end.setDate(end.getDate() + 10);
+	end.setDate(end.getDate() + 180); // 6 months horizon
 
 	meds.forEach((med) => {
 		med.slices.forEach((slice, idx) => {

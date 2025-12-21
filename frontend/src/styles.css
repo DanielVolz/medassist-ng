@@ -111,6 +111,8 @@ body {
 [data-theme="light"] .icon-btn:hover { background: rgba(0, 0, 0, 0.08); }
 [data-theme="light"] .icon-btn.active { background: rgba(47, 134, 246, 0.12); }
 
+.hero-title { display: flex; align-items: center; gap: 1rem; }
+.hero-logo { width: 48px; height: 48px; }
 .hero h1 { margin: 0.15rem 0 0; font-size: 1.6rem; font-weight: 600; }
 .sub { color: var(--text-secondary); margin: 0; }
 .eyebrow { letter-spacing: 0.06em; text-transform: uppercase; color: #7ca7ff; font-size: 0.75rem; margin: 0; font-weight: 500; }

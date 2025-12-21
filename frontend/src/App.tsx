@@ -507,9 +507,12 @@ export default function App() {
 	return (
 		<main className="page">
 			<header className="hero">
-				<div>
-					<p className="eyebrow">{pageInfo.eyebrow}</p>
-					<h1>{pageInfo.title}</h1>
+				<div className="hero-title">
+					<img src="/favicon.svg" alt="MedAssist" className="hero-logo" />
+					<div>
+						<p className="eyebrow">{pageInfo.eyebrow}</p>
+						<h1>{pageInfo.title}</h1>
+					</div>
 				</div>
 				<div className="header-actions">
 					<div className="tabs">
@@ -1405,7 +1408,7 @@ function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[],
 			return (
 				<>
 					<strong className="warning-text">⚠ {medsNeedingReminder.length} med{medsNeedingReminder.length > 1 ? "s" : ""} need reorder</strong>
-					{" · "}Last email: {formatLastSent(lastSent)}
+					{" · "}Last reminder: {formatLastSent(lastSent)}
 				</>
 			);
 		}
@@ -1435,7 +1438,7 @@ function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[],
 		return (
 			<>
 				<span className="success-text">✓ All stock OK</span>
-				{" · "}Last email: {formatLastSent(lastSent)}
+				{" · "}Last reminder: {formatLastSent(lastSent)}
 			</>
 		);
 	}

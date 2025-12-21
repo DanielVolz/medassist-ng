@@ -279,7 +279,7 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.06); transform: none; }
 button.ghost.danger { border-color: rgba(239, 68, 68, 0.4); color: var(--danger); }
 button.ghost.danger:hover { background: var(--danger-bg); }
 
-input, select {
+input, select, textarea {
   width: 100%;
   padding: 0.7rem 0.85rem;
   border-radius: 8px;
@@ -287,12 +287,17 @@ input, select {
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.95rem;
+  font-family: inherit;
   transition: border-color 150ms ease, box-shadow 150ms ease, background 200ms ease;
 }
-input:focus, select:focus {
+input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(47, 134, 246, 0.15);
+}
+textarea {
+  resize: vertical;
+  min-height: 60px;
 }
 
 .static-value {

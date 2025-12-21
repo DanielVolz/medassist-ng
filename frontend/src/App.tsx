@@ -557,6 +557,7 @@ export default function App() {
 		"/medications": { eyebrow: "MedAssist · Inventory", title: "Manage Medications" },
 		"/planner": { eyebrow: "MedAssist · Planner", title: "Demand Calculator" },
 		"/settings": { eyebrow: "MedAssist · Configuration", title: "Settings" },
+		"/schedule": { eyebrow: "MedAssist · Schedule", title: "Upcoming Schedules" },
 	}[currentPath] || { eyebrow: "MedAssist · Overview", title: "Dashboard" };
 
 	return (
@@ -685,7 +686,7 @@ export default function App() {
 						<section className="grid">
 							<article className="card">
 								<div className="card-head">
-									<h2>Upcoming Schedules</h2>
+									<h2 className="clickable" onClick={() => navigate("/schedule")}>Upcoming Schedules</h2>
 									<select 
 										className="schedule-days-select"
 										value={scheduleDays}
@@ -1261,6 +1262,71 @@ export default function App() {
 								</div>
 							</form>
 						)}
+					</section>
+				} />
+
+				<Route path="/schedule" element={
+					<section className="grid">
+						<article className="card schedule-full">
+							<div className="card-head">
+								<h2>Upcoming Schedules</h2>
+								<select 
+									className="schedule-days-select"
+									value={scheduleDays}
+									onChange={(e) => {
+										const val = Number(e.target.value);
+										setScheduleDays(val);
+										localStorage.setItem("scheduleDays", String(val));
+									}}
+								>
+									<option value={30}>1 month</option>
+									<option value={90}>3 months</option>
+									<option value={180}>6 months</option>
+								</select>
+							</div>
+							<div className="timeline">
+								{groupedSchedule.map((day) => (
+									<div key={day.dateStr} className="day-block">
+										<div className="day-divider">{day.dateStr}</div>
+										{day.meds.map((item) => {
+											const depletionTime = depletionByMed[item.medName];
+											const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+											const med = meds.find(m => m.name === item.medName);
+											const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+											return (
+												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+													<div className="time-main">
+														<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}</div>
+														<div className="tag-row">
+															<span className="tag subtle">{item.total} pills total</span>
+															<span className={`tag ${outOfStock ? "danger" : "success"}`}>
+																{outOfStock ? "⚠ No pills left" : "✓ Stock OK"}
+															</span>
+														</div>
+													</div>
+													<div className="doses-col">
+														{item.doses.map((dose) => {
+															const isTaken = takenDoses.has(dose.id);
+															return (
+																<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""}`}>
+																	<span className="dose-time">{dose.timeStr}</span>
+																	<span className="dose-usage">{dose.usage} pill{dose.usage !== 1 ? "s" : ""}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> taken by <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																	{isTaken ? (
+																		<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title="Undo">↩</button>
+																	) : (
+																		<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title="Mark as taken">✓</button>
+																	)}
+																</div>
+															);
+														})}
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								))}
+							</div>
+						</article>
 					</section>
 				} />
 			</Routes>

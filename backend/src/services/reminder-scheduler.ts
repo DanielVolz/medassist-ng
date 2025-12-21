@@ -26,19 +26,112 @@ type ReminderState = {
   nextScheduledCheck: string | null; // ISO date string for when the next check is scheduled
 };
 
-const REMINDER_HOUR = 6; // 6:00 AM
+const REMINDER_HOUR = 6; // 6:00 AM local time
+
+// Get current timezone from TZ env variable or default to UTC
+function getTimezone(): string {
+  return process.env.TZ || "UTC";
+}
+
+// Format a date in the configured timezone
+function formatInTimezone(date: Date): string {
+  return date.toLocaleString("de-DE", { 
+    timeZone: getTimezone(),
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+// Get current hour in the configured timezone
+function getCurrentHourInTimezone(): number {
+  const now = new Date();
+  const timeStr = now.toLocaleString("en-US", { 
+    timeZone: getTimezone(), 
+    hour: "numeric", 
+    hour12: false 
+  });
+  return parseInt(timeStr, 10);
+}
+
+// Get today's date string in the configured timezone (YYYY-MM-DD)
+function getTodayInTimezone(): string {
+  const now = new Date();
+  const parts = now.toLocaleDateString("en-CA", { timeZone: getTimezone() }).split("-");
+  return parts.join("-"); // YYYY-MM-DD format
+}
 
 function getNextScheduledTime(): Date {
   const now = new Date();
-  const next = new Date(now);
-  next.setHours(REMINDER_HOUR, 0, 0, 0);
+  const tz = getTimezone();
   
-  // If we're past today's scheduled time, schedule for tomorrow
-  if (now >= next) {
-    next.setDate(next.getDate() + 1);
+  // Get current time components in the target timezone
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const getPart = (type: string) => parts.find(p => p.type === type)?.value || "0";
+  
+  const currentHour = parseInt(getPart("hour"), 10);
+  const currentMinute = parseInt(getPart("minute"), 10);
+  
+  // Calculate if we need tomorrow
+  const needTomorrow = currentHour > REMINDER_HOUR || (currentHour === REMINDER_HOUR && currentMinute > 0);
+  
+  // Get the date we want to schedule for
+  const year = parseInt(getPart("year"), 10);
+  const month = parseInt(getPart("month"), 10);
+  let day = parseInt(getPart("day"), 10);
+  
+  if (needTomorrow) {
+    day += 1;
   }
   
-  return next;
+  // Handle month overflow simply by adding a day to now if needed
+  let targetDate: Date;
+  if (needTomorrow) {
+    targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  } else {
+    targetDate = new Date(now);
+  }
+  
+  // Get the target date's date string in the timezone
+  const targetFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const [targetYear, targetMonth, targetDay] = targetFormatter.format(targetDate).split("-").map(Number);
+  
+  // Now we need to find the UTC time that corresponds to REMINDER_HOUR:00 on targetDate in the target timezone
+  // Use a search approach: start with a guess and adjust
+  const guessUtc = new Date(Date.UTC(targetYear, targetMonth - 1, targetDay, REMINDER_HOUR, 0, 0, 0));
+  
+  // Check what hour this UTC time corresponds to in the target timezone
+  const checkFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "2-digit",
+    hour12: false
+  });
+  
+  // Adjust based on the difference
+  const guessHour = parseInt(checkFormatter.format(guessUtc), 10);
+  const hourDiff = guessHour - REMINDER_HOUR;
+  
+  // Apply correction (if guessHour is higher, we need to subtract time)
+  const correctedUtc = new Date(guessUtc.getTime() - hourDiff * 60 * 60 * 1000);
+  
+  return correctedUtc;
 }
 
 function getMsUntilNextCheck(): number {
@@ -75,7 +168,7 @@ export function getReminderState(): ReminderState {
 
 export function updateReminderSentTime(): void {
   const state = loadReminderState();
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayInTimezone();
   saveReminderState({
     ...state,
     lastAutoEmailSent: new Date().toISOString(),
@@ -257,7 +350,7 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   }
 
   const state = loadReminderState();
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const today = getTodayInTimezone(); // YYYY-MM-DD in configured timezone
 
   // Get all medications that need a reminder
   const allLowStock = await getMedicationsNeedingReminder(settings.reminderDaysBefore);
@@ -360,7 +453,7 @@ function scheduleNextCheck(logger: { info: (msg: string) => void; error: (msg: s
     nextScheduledCheck: nextTime.toISOString(),
   });
   
-  logger.info(`[Reminder] Next check scheduled for ${nextTime.toLocaleString()} (in ${Math.round(msUntilNext / 1000 / 60)} minutes)`);
+  logger.info(`[Reminder] Next check scheduled for ${formatInTimezone(nextTime)} (${getTimezone()}) (in ${Math.round(msUntilNext / 1000 / 60)} minutes)`);
   
   schedulerTimeout = setTimeout(() => {
     checkAndSendReminder(logger).catch((err) => logger.error(`[Reminder] Error: ${err}`));
@@ -370,25 +463,23 @@ function scheduleNextCheck(logger: { info: (msg: string) => void; error: (msg: s
 }
 
 export function startReminderScheduler(logger: { info: (msg: string) => void; error: (msg: string) => void }): void {
-  logger.info("[Reminder] Starting reminder scheduler...");
+  logger.info(`[Reminder] Starting reminder scheduler (timezone: ${getTimezone()})...`);
   
   // Check if we need to run immediately (missed today's check)
   const state = loadReminderState();
-  const today = new Date().toISOString().split("T")[0];
-  const now = new Date();
-  const todayAt6AM = new Date(now);
-  todayAt6AM.setHours(REMINDER_HOUR, 0, 0, 0);
+  const today = getTodayInTimezone();
+  const currentHour = getCurrentHourInTimezone();
   
-  // If it's past 6 AM today and we haven't checked today, run immediately
-  if (now >= todayAt6AM && state.lastAutoEmailDate !== today) {
+  // If it's past REMINDER_HOUR today in the configured timezone and we haven't checked today, run immediately
+  if (currentHour >= REMINDER_HOUR && state.lastAutoEmailDate !== today) {
     logger.info("[Reminder] Missed today's check, running now...");
     checkAndSendReminder(logger).catch((err) => logger.error(`[Reminder] Error: ${err}`));
   }
   
-  // Schedule next check at 6 AM
+  // Schedule next check at REMINDER_HOUR
   scheduleNextCheck(logger);
   
-  logger.info(`[Reminder] Scheduler started - daily check at ${REMINDER_HOUR}:00`);
+  logger.info(`[Reminder] Scheduler started - daily check at ${REMINDER_HOUR}:00 ${getTimezone()}`);
 }
 
 export function stopReminderScheduler(): void {

@@ -862,37 +862,361 @@ textarea {
   color: var(--success);
 }
 
-.smtp-readonly {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+/* Info Tooltips */
+.info-tooltip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: help;
+  transition: color 0.15s;
+  position: relative;
+}
+
+.info-tooltip:hover {
+  color: var(--accent);
+}
+
+.info-tooltip.small {
+  width: 1rem;
+  height: 1rem;
+  font-size: 0.75rem;
+}
+
+.info-tooltip[title] {
+  position: relative;
+}
+
+.info-tooltip::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: pre-line;
+  min-width: 200px;
+  max-width: 280px;
+  text-align: left;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-primary);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0.15s;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.info-tooltip::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--border-primary);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0.15s;
+  z-index: 101;
+}
+
+.info-tooltip:hover::after,
+.info-tooltip:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Channels Overview */
+.channels-overview {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+}
+
+.channels-status {
+  display: flex;
   gap: 0.75rem;
 }
 
-.smtp-field {
+.channel-btn {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.25rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.75rem 1.25rem;
   background: var(--bg-input);
-  border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border: 2px solid var(--border-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 80px;
 }
 
-.smtp-label {
-  font-size: 0.7rem;
+.channel-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.channel-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.channel-icon {
+  font-size: 1.5rem;
+}
+
+.channel-name {
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-secondary);
 }
 
-.smtp-value {
+.channel-status {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.channel-status.on {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.channel-status.off {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+}
+
+.schedule-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.schedule-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.schedule-label {
+  color: var(--text-secondary);
+}
+
+.schedule-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Section Header with Tooltip */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-light);
+}
+
+/* Threshold Input */
+.threshold-input {
+  margin-bottom: 1rem;
+}
+
+.threshold-label {
+  display: block;
   font-size: 0.9rem;
   color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.threshold-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.threshold-field input {
+  width: 80px;
+  text-align: center;
+}
+
+.threshold-unit {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* Compact Setting Row */
+.setting-row.compact {
+  padding: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.setting-row.compact .setting-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+/* Field Label */
+.field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.field-examples {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.35rem;
   font-family: "SF Mono", "Fira Code", monospace;
 }
 
+/* SMTP Info */
+.smtp-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-input);
+  border-radius: 8px;
+  margin-top: 0.75rem;
+}
+
+.smtp-summary {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+/* Threshold Cards */
+.threshold-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.threshold-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1rem;
+  background: var(--bg-input);
+  border: 2px solid var(--border-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.threshold-card:hover,
+.threshold-card:focus-within {
+  border-color: var(--accent);
+}
+
+.threshold-card.warning {
+  border-color: rgba(252, 211, 77, 0.3);
+}
+
+.threshold-card.warning:hover,
+.threshold-card.warning:focus-within {
+  border-color: #fcd34d;
+}
+
+.threshold-card.success {
+  border-color: rgba(57, 217, 138, 0.3);
+}
+
+.threshold-card.success:hover,
+.threshold-card.success:focus-within {
+  border-color: #39d98a;
+}
+
+.threshold-icon {
+  font-size: 1.25rem;
+}
+
+.threshold-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
+}
+
+.threshold-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.threshold-input-wrap input {
+  width: 60px;
+  text-align: center;
+  padding: 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.threshold-input-wrap span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.threshold-desc {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 500px) {
-  .smtp-readonly {
+  .channels-overview {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .channels-status {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .schedule-info {
+    width: 100%;
+    align-items: center;
+  }
+  
+  .threshold-grid {
     grid-template-columns: 1fr;
   }
 }

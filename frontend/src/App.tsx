@@ -11,6 +11,7 @@ type Medication = {
 	id: number;
 	name: string;
 	genericName?: string | null;
+	takenBy?: string | null;
 	count: number;
 	strips: number;
 	stripSize: number;
@@ -18,6 +19,7 @@ type Medication = {
 	stripsPerPack?: number;
 	tabsPerStrip?: number;
 	looseTablets?: number;
+	pillWeightMg?: number | null;
 	slices: Slice[];
 	imageUrl?: string | null;
 	expiryDate?: string | null;
@@ -42,10 +44,12 @@ type FormSlice = { usage: string; every: string; start: string };
 type FormState = {
 	name: string;
 	genericName: string;
+	takenBy: string;
 	packCount: string;
 	stripsPerPack: string;
 	tabsPerStrip: string;
 	looseTablets: string;
+	pillWeightMg: string;
 	expiryDate: string;
 	notes: string;
 	intakeRemindersEnabled: boolean;
@@ -54,7 +58,7 @@ type FormState = {
 
 const defaultSlice = (): FormSlice => ({ usage: "1", every: "1", start: toInputValue(new Date().toISOString()) });
 
-const defaultForm = (): FormState => ({ name: "", genericName: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", expiryDate: "", notes: "", intakeRemindersEnabled: false, slices: [defaultSlice()] });
+const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, slices: [defaultSlice()] });
 
 const todayIso = () => new Date().toISOString();
 const plusDaysIso = (days: number) => {
@@ -74,13 +78,29 @@ type Coverage = {
 
 export default function App() {
 	const [meds, setMeds] = useState<Medication[]>([]);
-	const [plannerRows, setPlannerRows] = useState<PlannerRow[]>([]);
+	const [plannerRows, setPlannerRows] = useState<PlannerRow[]>(() => {
+		if (typeof window !== "undefined") {
+			const saved = localStorage.getItem("plannerRows");
+			if (saved) {
+				try { return JSON.parse(saved); } catch { return []; }
+			}
+		}
+		return [];
+	});
 	const [plannerLoading, setPlannerLoading] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editingId, setEditingId] = useState<number | null>(null);
 	const [form, setForm] = useState<FormState>(defaultForm());
-	const [range, setRange] = useState<{ start: string; end: string }>({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
+	const [range, setRange] = useState<{ start: string; end: string }>(() => {
+		if (typeof window !== "undefined") {
+			const saved = localStorage.getItem("plannerRange");
+			if (saved) {
+				try { return JSON.parse(saved); } catch { /* ignore */ }
+			}
+		}
+		return { start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) };
+	});
 
 	const navigate = useNavigate();
 	const location = useLocation();
@@ -435,10 +455,12 @@ export default function App() {
 		setForm({
 			name: med.name,
 			genericName: med.genericName ?? "",
+			takenBy: med.takenBy ?? "",
 			packCount: String(med.packCount ?? 1),
 			stripsPerPack: String(med.stripsPerPack ?? med.strips ?? 1),
 			tabsPerStrip: String(med.tabsPerStrip ?? med.stripSize ?? 1),
 			looseTablets: String(med.looseTablets ?? 0),
+			pillWeightMg: med.pillWeightMg ? String(med.pillWeightMg) : "",
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
 			intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
@@ -463,10 +485,12 @@ export default function App() {
 		const payload = {
 			name: form.name.trim(),
 			genericName: form.genericName.trim() || null,
+			takenBy: form.takenBy.trim() || null,
 			packCount: Number(form.packCount) || 0,
 			stripsPerPack: Math.max(1, Number(form.stripsPerPack) || 1),
 			tabsPerStrip: Math.max(1, Number(form.tabsPerStrip) || 1),
 			looseTablets: Math.max(0, Number(form.looseTablets) || 0),
+			pillWeightMg: form.pillWeightMg ? Number(form.pillWeightMg) : null,
 			expiryDate: form.expiryDate || null,
 			notes: form.notes.trim() || null,
 			intakeRemindersEnabled: form.intakeRemindersEnabled,
@@ -492,11 +516,16 @@ export default function App() {
 			.catch(() => []) as PlannerRow[];
 		setPlannerRows(rows);
 		setPlannerLoading(false);
+		// Save to localStorage
+		localStorage.setItem("plannerRange", JSON.stringify(range));
+		localStorage.setItem("plannerRows", JSON.stringify(rows));
 	}
 
 	function resetRange() {
 		setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
 		setPlannerRows([]);
+		localStorage.removeItem("plannerRange");
+		localStorage.removeItem("plannerRows");
 	}
 
 	const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -585,7 +614,7 @@ export default function App() {
 												const med = meds.find(m => m.name === row.name);
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.intakeRemindersEnabled && <span className="reminder-icon" title="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
+														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge">{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip="Has notes">📝</span>}</span>
 														<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 														<span data-label="Days" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 														<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
@@ -633,7 +662,7 @@ export default function App() {
 										const expiryClass = getExpiryClass(med?.expiryDate);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.intakeRemindersEnabled && <span className="reminder-icon" title="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon" title="Has notes">📝</span>}</span>
+												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge">{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip="Has notes">📝</span>}</span>
 												<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
 												<span data-label="Days left" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
 												<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
@@ -665,7 +694,7 @@ export default function App() {
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 														<div className="time-main">
-															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />{item.medName}{med?.intakeRemindersEnabled && <span className="reminder-icon" title="Intake reminders enabled">🔔</span>}</div>
+															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}</div>
 															<div className="tag-row">
 																<span className="tag subtle">{item.total} pills total</span>
 																<span className={`tag ${outOfStock ? "danger" : "success"}`}>
@@ -679,7 +708,7 @@ export default function App() {
 																return (
 																	<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""}`}>
 																		<span className="dose-time">{dose.timeStr}</span>
-																		<span className="dose-usage">{dose.usage} pill{dose.usage !== 1 ? "s" : ""}</span>
+																		<span className="dose-usage">{dose.usage} pill{dose.usage !== 1 ? "s" : ""}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> taken by <span className="taken-by-name">{med.takenBy}</span></span>}</span>
 																		{isTaken ? (
 																			<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title="Undo">↩</button>
 																		) : (
@@ -756,6 +785,10 @@ export default function App() {
 									<input value={form.genericName} onChange={(e) => setForm({ ...form, genericName: e.target.value })} placeholder="e.g. Semaglutide (optional)" />
 								</label>
 								<label>
+									Taken by
+									<input value={form.takenBy} onChange={(e) => setForm({ ...form, takenBy: e.target.value })} placeholder="e.g. John, Sarah (optional)" />
+								</label>
+								<label>
 									Packs
 									<input type="number" min="0" value={form.packCount} onChange={(e) => handleValueChange("packCount", e.target.value)} />
 								</label>
@@ -770,6 +803,10 @@ export default function App() {
 								<label>
 									Loose pills
 									<input type="number" min="0" value={form.looseTablets} onChange={(e) => handleValueChange("looseTablets", e.target.value)} />
+								</label>
+								<label>
+									Pill weight (mg)
+									<input type="number" min="1" value={form.pillWeightMg} onChange={(e) => handleValueChange("pillWeightMg", e.target.value)} placeholder="e.g. 240" />
 								</label>
 								<label>
 									Total (pills)
@@ -906,7 +943,7 @@ export default function App() {
 													<span data-label="Usage"><strong>{row.plannerUsage}</strong> pills</span>
 													<span data-label="Blisters">{row.stripsNeeded} × {row.stripSize}</span>
 													<span data-label="Available">{row.stripsAvailable} blisters</span>
-													<span data-label="Status" className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "✓ Enough" : "⚠ Out of Stock"}</span>
+													<span data-label="Status" className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "Enough" : "Out of Stock"}</span>
 												</div>
 											);
 										})}
@@ -1226,6 +1263,7 @@ export default function App() {
 							<div className="med-detail-titles">
 								<h2>{selectedMed.name}</h2>
 								{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
+								{selectedMed.takenBy && <span className="med-taken-by">for {selectedMed.takenBy}</span>}
 							</div>
 						</div>
 
@@ -1253,6 +1291,12 @@ export default function App() {
 										<span className="med-detail-label">Loose Pills</span>
 										<span className="med-detail-value">{selectedMed.looseTablets ?? 0}</span>
 									</div>
+									{selectedMed.pillWeightMg && (
+										<div className="med-detail-item">
+											<span className="med-detail-label">Pill Weight</span>
+											<span className="med-detail-value">{selectedMed.pillWeightMg} mg</span>
+										</div>
+									)}
 									<div className="med-detail-item">
 										<span className="med-detail-label">Expiry Date</span>
 										<span className={`med-detail-value ${selectedMed.expiryDate && new Date(selectedMed.expiryDate) < new Date() ? 'danger-text' : ''}`}>
@@ -1264,11 +1308,11 @@ export default function App() {
 
 							{selectedMed.slices.length > 0 && (
 								<div className="med-detail-section">
-									<h3>Intake Schedule {selectedMed.intakeRemindersEnabled && <span className="reminder-icon" title="Intake reminders enabled">🔔</span>}</h3>
+									<h3>Intake Schedule {selectedMed.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}</h3>
 									<div className="med-detail-schedules">
 										{selectedMed.slices.map((slice, idx) => (
 											<div key={idx} className="med-schedule-item">
-												<span className="med-schedule-usage">{slice.usage} pill{slice.usage !== 1 ? "s" : ""}</span>
+												<span className="med-schedule-usage">{slice.usage} pill{slice.usage !== 1 ? "s" : ""}{selectedMed.pillWeightMg && ` (${slice.usage * selectedMed.pillWeightMg} mg)`}</span>
 												<span className="med-schedule-freq">every {slice.every} day{slice.every !== 1 ? "s" : ""}</span>
 												<span className="med-schedule-time">at {new Date(slice.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
 											</div>
@@ -1313,7 +1357,10 @@ export default function App() {
 						</div>
 
 						<div className="med-detail-footer">
-							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); setEditingId(selectedMed.id); }}>
+							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
+								Close
+							</button>
+							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
 								Edit Medication
 							</button>
 						</div>

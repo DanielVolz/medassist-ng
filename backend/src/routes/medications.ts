@@ -18,10 +18,12 @@ const sliceSchema = z.object({
 const medicationSchema = z.object({
   name: z.string().trim().min(1).max(100),
   genericName: z.string().trim().max(100).nullable().optional(),
+  takenBy: z.string().trim().max(100).nullable().optional(),
   packCount: z.number().int().min(0).default(1),
   stripsPerPack: z.number().int().min(1).default(1),
   tabsPerStrip: z.number().int().min(1).default(1),
   looseTablets: z.number().int().min(0).default(0),
+  pillWeightMg: z.number().int().min(1).nullable().optional(),
   expiryDate: z.string().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
   intakeRemindersEnabled: z.boolean().default(false),
@@ -56,6 +58,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       id: row.id,
       name: row.name,
       genericName: row.genericName,
+      takenBy: row.takenBy,
       count: row.count,
       strips: row.strips,
       stripSize: row.stripSize,
@@ -63,6 +66,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       stripsPerPack: row.stripsPerPack ?? row.strips ?? 1,
       tabsPerStrip: row.tabsPerStrip ?? row.stripSize ?? 1,
       looseTablets: row.looseTablets ?? 0,
+      pillWeightMg: row.pillWeightMg,
       slices: parseSlices(row),
       imageUrl: row.imageUrl,
       expiryDate: row.expiryDate,
@@ -76,7 +80,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const parsed = medicationSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send(parsed.error.format());
 
-    const { name, genericName, packCount, stripsPerPack, tabsPerStrip, looseTablets, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
+    const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
     const usageJson = JSON.stringify(slices.map((s) => s.usage));
     const everyJson = JSON.stringify(slices.map((s) => s.every));
     const startJson = JSON.stringify(slices.map((s) => s.start));
@@ -88,6 +92,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       .values({
         name,
         genericName: genericName || null,
+        takenBy: takenBy || null,
         count: derivedCount,
         strips: stripsPerPack,
         stripSize: tabsPerStrip,
@@ -95,6 +100,7 @@ export async function medicationRoutes(app: FastifyInstance) {
         stripsPerPack,
         tabsPerStrip,
         looseTablets,
+        pillWeightMg: pillWeightMg || null,
         expiryDate: expiryDate || null,
         notes: notes || null,
         intakeRemindersEnabled: intakeRemindersEnabled ?? false,
@@ -108,6 +114,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       id: inserted.id,
       name: inserted.name,
       genericName: inserted.genericName,
+      takenBy: inserted.takenBy,
       count: inserted.count,
       strips: inserted.strips,
       stripSize: inserted.stripSize,
@@ -115,6 +122,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       stripsPerPack: inserted.stripsPerPack,
       tabsPerStrip: inserted.tabsPerStrip,
       looseTablets: inserted.looseTablets,
+      pillWeightMg: inserted.pillWeightMg,
       slices,
       imageUrl: inserted.imageUrl,
       expiryDate: inserted.expiryDate,
@@ -130,7 +138,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const { name, genericName, packCount, stripsPerPack, tabsPerStrip, looseTablets, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
+    const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
     const usageJson = JSON.stringify(slices.map((s) => s.usage));
     const everyJson = JSON.stringify(slices.map((s) => s.every));
     const startJson = JSON.stringify(slices.map((s) => s.start));
@@ -142,6 +150,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       .set({
         name,
         genericName: genericName || null,
+        takenBy: takenBy || null,
         count: derivedCount,
         strips: stripsPerPack,
         stripSize: tabsPerStrip,
@@ -149,6 +158,7 @@ export async function medicationRoutes(app: FastifyInstance) {
         stripsPerPack,
         tabsPerStrip,
         looseTablets,
+        pillWeightMg: pillWeightMg || null,
         expiryDate: expiryDate || null,
         notes: notes || null,
         intakeRemindersEnabled: intakeRemindersEnabled ?? false,
@@ -166,6 +176,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       id: result[0].id,
       name: result[0].name,
       genericName: result[0].genericName,
+      takenBy: result[0].takenBy,
       count: result[0].count,
       strips: result[0].strips,
       stripSize: result[0].stripSize,
@@ -173,6 +184,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       stripsPerPack: result[0].stripsPerPack,
       tabsPerStrip: result[0].tabsPerStrip,
       looseTablets: result[0].looseTablets,
+      pillWeightMg: result[0].pillWeightMg,
       slices,
       imageUrl: result[0].imageUrl,
       expiryDate: result[0].expiryDate,

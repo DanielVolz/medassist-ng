@@ -543,6 +543,7 @@ textarea {
   border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 .status-chip.success {
   background: rgba(57, 217, 138, 0.15);
@@ -1548,6 +1549,16 @@ textarea {
   gap: 0.5rem;
 }
 
+.taken-by-inline {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.taken-by-name {
+  color: var(--accent-light);
+  font-weight: 600;
+}
+
 /* Medication list name row with avatar */
 .med-name-row {
   display: flex;
@@ -1690,6 +1701,21 @@ textarea {
   font-size: 0.95rem;
   color: rgba(255, 255, 255, 0.75);
   font-weight: 400;
+}
+
+.med-taken-by {
+  font-size: 1rem;
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.taken-by-badge {
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 500;
+  margin-left: 0.35rem;
+  opacity: 0.85;
 }
 
 .med-detail-header .med-avatar-lg {
@@ -1915,33 +1941,22 @@ textarea {
   }
 }
 
-/* Notes icon indicator */
-.notes-icon {
-  margin-left: 0.35rem;
-  font-size: 0.85em;
-  cursor: help;
-  opacity: 0.75;
-  transition: opacity 0.15s;
-}
-
-.notes-icon:hover {
-  opacity: 1;
-}
-
 /* Reminder icon indicator */
-.reminder-icon {
+.reminder-icon.info-tooltip,
+.notes-icon.info-tooltip {
+  width: auto;
+  height: auto;
   margin-left: 0.35rem;
   font-size: 0.85em;
-  cursor: help;
   opacity: 0.75;
-  transition: opacity 0.15s;
 }
 
-.reminder-icon:hover {
+.reminder-icon.info-tooltip:hover,
+.notes-icon.info-tooltip:hover {
   opacity: 1;
 }
 
-h3 .reminder-icon {
+h3 .reminder-icon.info-tooltip {
   font-size: 0.75em;
   vertical-align: middle;
 }

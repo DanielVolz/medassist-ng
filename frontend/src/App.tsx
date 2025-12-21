@@ -22,6 +22,7 @@ type Medication = {
 	imageUrl?: string | null;
 	expiryDate?: string | null;
 	notes?: string | null;
+	intakeRemindersEnabled?: boolean;
 	updatedAt: string | number | null;
 };
 
@@ -47,12 +48,13 @@ type FormState = {
 	looseTablets: string;
 	expiryDate: string;
 	notes: string;
+	intakeRemindersEnabled: boolean;
 	slices: FormSlice[];
 };
 
 const defaultSlice = (): FormSlice => ({ usage: "1", every: "1", start: toInputValue(new Date().toISOString()) });
 
-const defaultForm = (): FormState => ({ name: "", genericName: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", expiryDate: "", notes: "", slices: [defaultSlice()] });
+const defaultForm = (): FormState => ({ name: "", genericName: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", expiryDate: "", notes: "", intakeRemindersEnabled: false, slices: [defaultSlice()] });
 
 const todayIso = () => new Date().toISOString();
 const plusDaysIso = (days: number) => {
@@ -434,6 +436,7 @@ export default function App() {
 			looseTablets: String(med.looseTablets ?? 0),
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
+			intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
 			slices: med.slices.map((s) => ({ usage: String(s.usage), every: String(s.every), start: toInputValue(s.start) })),
 		});
 	}
@@ -461,6 +464,7 @@ export default function App() {
 			looseTablets: Math.max(0, Number(form.looseTablets) || 0),
 			expiryDate: form.expiryDate || null,
 			notes: form.notes.trim() || null,
+			intakeRemindersEnabled: form.intakeRemindersEnabled,
 			slices: form.slices.map((s) => ({ usage: Number(s.usage) || 0, every: Math.max(1, Number(s.every) || 1), start: toIsoString(s.start) })),
 		};
 
@@ -785,7 +789,17 @@ export default function App() {
 								<div className="full slices">
 									<div className="card-head">
 										<h3>Intake schedule</h3>
-										<button type="button" className="ghost" onClick={addSlice}>+ Intake</button>
+										<div className="slices-actions">
+											<label className="inline-checkbox" title="Receive a notification 15 minutes before each scheduled intake">
+												<input 
+													type="checkbox" 
+													checked={form.intakeRemindersEnabled} 
+													onChange={(e) => setForm(prev => ({ ...prev, intakeRemindersEnabled: e.target.checked }))}
+												/>
+												<span>🔔 Remind</span>
+											</label>
+											<button type="button" className="ghost" onClick={addSlice}>+ Intake</button>
+										</div>
 									</div>
 									{form.slices.map((s, idx) => (
 										<div key={idx} className="slice-row">
@@ -1273,15 +1287,31 @@ function deriveTotal(form: FormState) {
 
 function toIsoString(value: string) {
 	if (!value) return new Date().toISOString();
+	// datetime-local input gives us local time without timezone info
+	// We need to treat it as local time and convert to ISO
 	const date = new Date(value);
 	return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 
 function toInputValue(value: string) {
 	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 16);
-	const iso = date.toISOString();
-	return iso.slice(0, 16);
+	if (Number.isNaN(date.getTime())) {
+		// Return current local time in datetime-local format
+		const now = new Date();
+		const year = now.getFullYear();
+		const month = String(now.getMonth() + 1).padStart(2, '0');
+		const day = String(now.getDate()).padStart(2, '0');
+		const hours = String(now.getHours()).padStart(2, '0');
+		const minutes = String(now.getMinutes()).padStart(2, '0');
+		return `${year}-${month}-${day}T${hours}:${minutes}`;
+	}
+	// Convert to local time format for datetime-local input
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	const hours = String(date.getHours()).padStart(2, '0');
+	const minutes = String(date.getMinutes()).padStart(2, '0');
+	return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 function formatDateTime(value: string) {

@@ -16,6 +16,7 @@ async function runMigrations() {
     { name: "expiry_date", sql: "ALTER TABLE medications ADD COLUMN expiry_date TEXT" },
     { name: "notes", sql: "ALTER TABLE medications ADD COLUMN notes TEXT" },
     { name: "generic_name", sql: "ALTER TABLE medications ADD COLUMN generic_name TEXT" },
+    { name: "intake_reminders_enabled", sql: "ALTER TABLE medications ADD COLUMN intake_reminders_enabled INTEGER NOT NULL DEFAULT 0" },
   ];
 
   for (const migration of migrations) {

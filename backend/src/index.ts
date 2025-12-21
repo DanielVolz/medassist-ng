@@ -17,6 +17,7 @@ import { medicationRoutes } from "./routes/medications.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { plannerRoutes } from "./routes/planner.js";
 import { startReminderScheduler } from "./services/reminder-scheduler.js";
+import { startIntakeReminderScheduler } from "./services/intake-reminder-scheduler.js";
 
 // Wait for database migrations before anything else
 await migrationsReady;
@@ -90,6 +91,12 @@ const start = async () => {
     
     // Start the automatic reminder scheduler
     startReminderScheduler({
+      info: (msg) => app.log.info(msg),
+      error: (msg) => app.log.error(msg),
+    });
+    
+    // Start the intake reminder scheduler (checks every minute)
+    startIntakeReminderScheduler({
       info: (msg) => app.log.info(msg),
       error: (msg) => app.log.error(msg),
     });

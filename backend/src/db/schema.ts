@@ -27,6 +27,7 @@ export const medications = sqliteTable("medications", {
   imageUrl: text("image_url"),
   expiryDate: text("expiry_date"),
   notes: text("notes"),
+  intakeRemindersEnabled: integer("intake_reminders_enabled", { mode: "boolean" }).notNull().default(false),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

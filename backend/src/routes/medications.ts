@@ -24,6 +24,7 @@ const medicationSchema = z.object({
   looseTablets: z.number().int().min(0).default(0),
   expiryDate: z.string().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
+  intakeRemindersEnabled: z.boolean().default(false),
   // count will be derived on the backend
   slices: z.array(sliceSchema).min(1).max(12),
 });
@@ -66,6 +67,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       imageUrl: row.imageUrl,
       expiryDate: row.expiryDate,
       notes: row.notes,
+      intakeRemindersEnabled: row.intakeRemindersEnabled ?? false,
       updatedAt: row.updatedAt,
     }));
   });
@@ -74,7 +76,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const parsed = medicationSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send(parsed.error.format());
 
-    const { name, genericName, packCount, stripsPerPack, tabsPerStrip, looseTablets, expiryDate, notes, slices } = parsed.data;
+    const { name, genericName, packCount, stripsPerPack, tabsPerStrip, looseTablets, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
     const usageJson = JSON.stringify(slices.map((s) => s.usage));
     const everyJson = JSON.stringify(slices.map((s) => s.every));
     const startJson = JSON.stringify(slices.map((s) => s.start));
@@ -95,6 +97,7 @@ export async function medicationRoutes(app: FastifyInstance) {
         looseTablets,
         expiryDate: expiryDate || null,
         notes: notes || null,
+        intakeRemindersEnabled: intakeRemindersEnabled ?? false,
         usageJson,
         everyJson,
         startJson,
@@ -116,6 +119,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       imageUrl: inserted.imageUrl,
       expiryDate: inserted.expiryDate,
       notes: inserted.notes,
+      intakeRemindersEnabled: inserted.intakeRemindersEnabled,
       updatedAt: inserted.updatedAt,
     };
   });
@@ -126,7 +130,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const { name, genericName, packCount, stripsPerPack, tabsPerStrip, looseTablets, expiryDate, notes, slices } = parsed.data;
+    const { name, genericName, packCount, stripsPerPack, tabsPerStrip, looseTablets, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
     const usageJson = JSON.stringify(slices.map((s) => s.usage));
     const everyJson = JSON.stringify(slices.map((s) => s.every));
     const startJson = JSON.stringify(slices.map((s) => s.start));
@@ -147,6 +151,7 @@ export async function medicationRoutes(app: FastifyInstance) {
         looseTablets,
         expiryDate: expiryDate || null,
         notes: notes || null,
+        intakeRemindersEnabled: intakeRemindersEnabled ?? false,
         usageJson,
         everyJson,
         startJson,
@@ -172,6 +177,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       imageUrl: result[0].imageUrl,
       expiryDate: result[0].expiryDate,
       notes: result[0].notes,
+      intakeRemindersEnabled: result[0].intakeRemindersEnabled,
       updatedAt: result[0].updatedAt,
     };
   });

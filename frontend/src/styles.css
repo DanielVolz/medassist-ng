@@ -998,6 +998,265 @@ textarea {
   gap: 0.75rem;
 }
 
+/* Notification Matrix */
+.notification-matrix {
+  background: var(--bg-input);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-primary);
+}
+
+.matrix-header {
+  display: grid;
+  grid-template-columns: 1fr 80px 80px;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.matrix-header .matrix-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.matrix-channel {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.matrix-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 80px;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  align-items: center;
+}
+
+.matrix-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.matrix-row .matrix-label {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.matrix-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.matrix-cell .toggle-switch.small input:disabled + .toggle-slider {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hint-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--warning-bg);
+  border-radius: 6px;
+}
+
+/* Settings Grid - Two column layout */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Notification Channels Grid */
+.notification-channels-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.notification-channel {
+  background: var(--bg-input);
+  border: 2px solid var(--border-primary);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.notification-channel.enabled {
+  border-color: var(--accent);
+}
+
+.channel-header {
+  padding: 0;
+}
+
+.channel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.channel-toggle:hover {
+  background: var(--accent-bg);
+}
+
+.channel-toggle.active {
+  background: var(--accent-bg);
+}
+
+.channel-icon {
+  font-size: 1.5rem;
+}
+
+.channel-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  text-align: left;
+}
+
+.channel-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.channel-badge.on {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.channel-badge.off {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+}
+
+.channel-content {
+  padding: 0 1.25rem 1.25rem;
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.channel-config {
+  padding-top: 1rem;
+}
+
+.channel-config label {
+  display: block;
+}
+
+.channel-config .smtp-info {
+  margin-top: 0.5rem;
+}
+
+.channel-reminder-types {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-primary);
+  margin-top: 1rem;
+}
+
+.reminder-types-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  width: 100%;
+  margin-bottom: 0.25rem;
+}
+
+.reminder-type-option {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-input);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.9rem;
+}
+
+.reminder-type-option:hover {
+  background: var(--accent-bg);
+}
+
+.reminder-type-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.reminder-type-option span {
+  color: var(--text-primary);
+}
+
+.channel-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-primary);
+  margin-top: 1rem;
+}
+
+/* Schedule Overview */
+.schedule-overview {
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.schedule-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0;
+  font-size: 0.85rem;
+}
+
+.schedule-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-primary);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.schedule-label {
+  color: var(--text-secondary);
+}
+
+.schedule-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Legacy support for old channel-btn (can remove later) */
 .channel-btn {
   display: flex;
   flex-direction: column;
@@ -1020,18 +1279,6 @@ textarea {
 .channel-btn.active {
   border-color: var(--accent);
   background: var(--accent-bg);
-}
-
-.channel-icon {
-  font-size: 1.5rem;
-}
-
-.channel-name {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-secondary);
 }
 
 .channel-status {
@@ -1058,24 +1305,11 @@ textarea {
   font-size: 0.8rem;
 }
 
-.schedule-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.schedule-label {
-  color: var(--text-secondary);
-}
-
-.schedule-value {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
 /* Section Header with Tooltip */
 .section-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }

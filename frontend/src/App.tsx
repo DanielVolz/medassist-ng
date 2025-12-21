@@ -107,6 +107,11 @@ export default function App() {
 		// Shoutrrr/ntfy settings
 		shoutrrrEnabled: false,
 		shoutrrrUrl: "",
+		// Granular notification settings
+		emailStockReminders: true,
+		emailIntakeReminders: true,
+		shoutrrrStockReminders: true,
+		shoutrrrIntakeReminders: true,
 	});
 	const [savedSettings, setSavedSettings] = useState(settings);
 	const [settingsLoading, setSettingsLoading] = useState(false);
@@ -926,116 +931,210 @@ export default function App() {
 
 				<Route path="/settings" element={
 					<section className="grid">
-						<article className="card">
-							<div className="card-head">
-								<h2>Automatic Reminders</h2>
-								<span className="pill neutral">Daily at 6:00 AM</span>
-							</div>
-							{settingsLoading ? (
-								<p>Loading settings...</p>
-							) : (
-								<form className="settings-form" onSubmit={saveSettings}>
-									<div className="channels-overview">
-										<div className="channels-status">
-											<button
-												type="button"
-												className={`channel-btn ${settings.emailEnabled ? "active" : ""}`}
-												onClick={async () => {
-													const newSettings = { ...settings, emailEnabled: !settings.emailEnabled };
-													setSettings(newSettings);
-													try {
-														await fetch("/api/settings/notifications", {
-															method: "PUT",
-															headers: { "Content-Type": "application/json" },
-															body: JSON.stringify(newSettings),
-														});
-													} catch (e) { console.error(e); }
-												}}
-											>
-												<span className="channel-icon">📧</span>
-												<span className="channel-name">Email</span>
-												<span className={`channel-status ${settings.emailEnabled ? "on" : "off"}`}>
-													{settings.emailEnabled ? "ON" : "OFF"}
-												</span>
-											</button>
-											<button
-												type="button"
-												className={`channel-btn ${settings.shoutrrrEnabled ? "active" : ""}`}
-												onClick={async () => {
-													const newSettings = { ...settings, shoutrrrEnabled: !settings.shoutrrrEnabled };
-													setSettings(newSettings);
-													try {
-														await fetch("/api/settings/notifications", {
-															method: "PUT",
-															headers: { "Content-Type": "application/json" },
-															body: JSON.stringify(newSettings),
-														});
-													} catch (e) { console.error(e); }
-												}}
-											>
-												<span className="channel-icon">🔔</span>
-												<span className="channel-name">Push</span>
-												<span className={`channel-status ${settings.shoutrrrEnabled ? "on" : "off"}`}>
-													{settings.shoutrrrEnabled ? "ON" : "OFF"}
-												</span>
-											</button>
+						{settingsLoading ? (
+							<p>Loading settings...</p>
+						) : (
+							<form className="settings-form" onSubmit={saveSettings}>
+								{/* Notifications */}
+								<article className="card">
+									<div className="card-head">
+										<h2>Notifications</h2>
+									</div>
+									
+									<div className="setting-section">
+										<div className="section-header">
+											<h3>Channels</h3>
 										</div>
-										<div className="schedule-info">
-											<div className="schedule-row">
-												<span className="schedule-label">Next check</span>
-												<span className="schedule-value">{settings.nextScheduledCheck ? new Date(settings.nextScheduledCheck).toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+										<div className="notification-matrix">
+											<div className="matrix-header">
+												<div className="matrix-label"></div>
+												<div className="matrix-channel">Email</div>
+												<div className="matrix-channel">Push</div>
 											</div>
-											{settings.lastAutoEmailSent && (
-												<div className="schedule-row">
-													<span className="schedule-label">Last sent</span>
-													<span className="schedule-value">{new Date(settings.lastAutoEmailSent).toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+											<div className="matrix-row">
+												<div className="matrix-label">Stock Reminders</div>
+												<div className="matrix-cell">
+													<label className="toggle-switch small">
+														<input
+															type="checkbox"
+															checked={settings.emailStockReminders}
+															onChange={(e) => setSettings({ ...settings, emailStockReminders: e.target.checked })}
+															disabled={!settings.emailEnabled}
+														/>
+														<span className="toggle-slider"></span>
+													</label>
 												</div>
-											)}
+												<div className="matrix-cell">
+													<label className="toggle-switch small">
+														<input
+															type="checkbox"
+															checked={settings.shoutrrrStockReminders}
+															onChange={(e) => setSettings({ ...settings, shoutrrrStockReminders: e.target.checked })}
+															disabled={!settings.shoutrrrEnabled}
+														/>
+														<span className="toggle-slider"></span>
+													</label>
+												</div>
+											</div>
+											<div className="matrix-row">
+												<div className="matrix-label">Intake Reminders</div>
+												<div className="matrix-cell">
+													<label className="toggle-switch small">
+														<input
+															type="checkbox"
+															checked={settings.emailIntakeReminders}
+															onChange={(e) => setSettings({ ...settings, emailIntakeReminders: e.target.checked })}
+															disabled={!settings.emailEnabled}
+														/>
+														<span className="toggle-slider"></span>
+													</label>
+												</div>
+												<div className="matrix-cell">
+													<label className="toggle-switch small">
+														<input
+															type="checkbox"
+															checked={settings.shoutrrrIntakeReminders}
+															onChange={(e) => setSettings({ ...settings, shoutrrrIntakeReminders: e.target.checked })}
+															disabled={!settings.shoutrrrEnabled}
+														/>
+														<span className="toggle-slider"></span>
+													</label>
+												</div>
+											</div>
 										</div>
+										{!settings.emailEnabled && !settings.shoutrrrEnabled && (
+											<p className="hint-text">Enable at least one channel below to receive notifications.</p>
+										)}
 									</div>
 
 									<div className="setting-section">
 										<div className="section-header">
-											<h3>📊 Stock Display</h3>
-										</div>
-										<div className="setting-group">
-											<label>
-												<span className="field-label">Low Stock (days)</span>
-												<div className="input-with-tooltip">
-													<input
-														type="number"
-														min="1"
-														max="365"
-														value={settings.lowStockDays}
-														onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
-													/>
-													<span className="info-tooltip" data-tooltip="Yellow warning color when supply is below this threshold. Only affects display, not reminders.">ⓘ</span>
-												</div>
-											</label>
-											<label>
-												<span className="field-label">High Stock (days)</span>
-												<div className="input-with-tooltip">
-													<input
-														type="number"
-														min="1"
-														max="730"
-														value={settings.highStockDays}
-														onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
-													/>
-													<span className="info-tooltip" data-tooltip="Green with star when supply is above this threshold. Only affects display, not reminders.">ⓘ</span>
-												</div>
+											<h3>Email</h3>
+											<label className="toggle-switch small">
+												<input
+													type="checkbox"
+													checked={settings.emailEnabled}
+													onChange={(e) => setSettings({ ...settings, emailEnabled: e.target.checked })}
+												/>
+												<span className="toggle-slider"></span>
 											</label>
 										</div>
+										{settings.emailEnabled && (
+											<>
+												<div className="setting-group">
+													<label className="full">
+														<span className="field-label">Recipient</span>
+														<input
+															type="email"
+															value={settings.notificationEmail}
+															onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
+															placeholder="your@email.com"
+															pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$"
+															autoComplete="email"
+														/>
+													</label>
+												</div>
+												<div className="smtp-info">
+													<span className="smtp-summary">
+														SMTP: {settings.smtpHost || "Not configured"}:{settings.smtpPort}
+														{settings.hasSmtpPassword && " ✓"}
+													</span>
+												</div>
+												<div className="setting-actions">
+													<button type="button" className="ghost" onClick={testEmail} disabled={testingEmail || !settings.notificationEmail}>
+														{testingEmail ? "Sending..." : "Test"}
+													</button>
+													{testEmailResult && (
+														<span className={testEmailResult.success ? "success-text" : "danger-text"}>
+															{testEmailResult.message}
+														</span>
+													)}
+												</div>
+											</>
+										)}
 									</div>
 
 									<div className="setting-section">
 										<div className="section-header">
-											<h3>⚙️ Reminder Threshold</h3>
-											<span className="info-tooltip" data-tooltip="Applies to both Email and Push notifications. When a medication's remaining supply falls below this threshold, you'll receive a notification.">ⓘ</span>
+											<h3>Push</h3>
+											<label className="toggle-switch small">
+												<input
+													type="checkbox"
+													checked={settings.shoutrrrEnabled}
+													onChange={(e) => setSettings({ ...settings, shoutrrrEnabled: e.target.checked })}
+												/>
+												<span className="toggle-slider"></span>
+											</label>
+										</div>
+										{settings.shoutrrrEnabled && (
+											<>
+												<div className="setting-group">
+													<label className="full">
+														<span className="field-label">URL</span>
+														<input
+															type="url"
+															value={settings.shoutrrrUrl}
+															onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
+															placeholder="https://ntfy.sh/your-topic"
+														/>
+													</label>
+												</div>
+												<div className="smtp-info">
+													<span className="smtp-summary">
+														Supports ntfy, Discord, Telegram, Slack
+													</span>
+												</div>
+												<div className="setting-actions">
+													<button type="button" className="ghost" onClick={testShoutrrr} disabled={testingShoutrrr || !settings.shoutrrrUrl}>
+														{testingShoutrrr ? "Sending..." : "Test"}
+													</button>
+													{testShoutrrrResult && (
+														<span className={testShoutrrrResult.success ? "success-text" : "danger-text"}>
+															{testShoutrrrResult.message}
+														</span>
+													)}
+												</div>
+											</>
+										)}
+									</div>
+
+									<div className="schedule-overview">
+										<div className="schedule-row">
+											<span className="schedule-label">Stock check</span>
+											<span className="schedule-value">Daily at 6:00 AM</span>
+										</div>
+										<div className="schedule-row">
+											<span className="schedule-label">Intake check</span>
+											<span className="schedule-value">15 min before scheduled time</span>
+										</div>
+										{settings.nextScheduledCheck && (
+											<div className="schedule-row">
+												<span className="schedule-label">Next stock check</span>
+												<span className="schedule-value">{new Date(settings.nextScheduledCheck).toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+											</div>
+										)}
+										{settings.lastAutoEmailSent && (
+											<div className="schedule-row">
+												<span className="schedule-label">Last sent</span>
+												<span className="schedule-value">{new Date(settings.lastAutoEmailSent).toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+											</div>
+										)}
+									</div>
+								</article>
+
+								{/* Stock Settings */}
+								<article className="card">
+									<div className="card-head">
+										<h2>Stock</h2>
+									</div>
+									
+									<div className="setting-section">
+										<div className="section-header">
+											<h3>Reminder Threshold</h3>
 										</div>
 										<div className="threshold-input">
 											<label>
-												<span className="threshold-label">Send reminder when supply drops below</span>
+												<span className="threshold-label">Remind when supply drops below</span>
 												<div className="threshold-field">
 													<input
 														type="number"
@@ -1064,87 +1163,48 @@ export default function App() {
 										</div>
 									</div>
 
-									{settings.emailEnabled && (
-										<div className="setting-section">
-											<div className="section-header">
-												<h3>📧 Email Settings</h3>
-											</div>
-											<div className="setting-group">
-												<label className="full">
-													<span className="field-label">Recipient</span>
+									<div className="setting-section">
+										<div className="section-header">
+											<h3>Display</h3>
+										</div>
+										<div className="setting-group">
+											<label>
+												<span className="field-label">Low Stock (days)</span>
+												<div className="input-with-tooltip">
 													<input
-														type="email"
-														value={settings.notificationEmail}
-														onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
-														placeholder="your@email.com"
-														pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$"
-														required
-														autoComplete="email"
+														type="number"
+														min="1"
+														max="365"
+														value={settings.lowStockDays}
+														onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
 													/>
-												</label>
-											</div>
-											<div className="smtp-info">
-												<span className="smtp-summary">
-													SMTP: {settings.smtpHost || "Not configured"}:{settings.smtpPort}
-													{settings.hasSmtpPassword && " ✓"}
-												</span>
-												<span className="info-tooltip small" data-tooltip={`Host: ${settings.smtpHost || "—"}\nPort: ${settings.smtpPort}\nFrom: ${settings.smtpFrom || "—"}\n\nConfigured via .env file`}>ⓘ</span>
-											</div>
-											<div className="setting-actions">
-												<button type="button" className="ghost" onClick={testEmail} disabled={testingEmail || !settings.notificationEmail}>
-													{testingEmail ? "Sending..." : "Test Email"}
-												</button>
-												{testEmailResult && (
-													<span className={testEmailResult.success ? "success-text" : "danger-text"}>
-														{testEmailResult.message}
-													</span>
-												)}
-											</div>
+													<span className="info-tooltip" data-tooltip="Yellow warning color threshold">ⓘ</span>
+												</div>
+											</label>
+											<label>
+												<span className="field-label">High Stock (days)</span>
+												<div className="input-with-tooltip">
+													<input
+														type="number"
+														min="1"
+														max="730"
+														value={settings.highStockDays}
+														onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
+													/>
+													<span className="info-tooltip" data-tooltip="Green with star threshold">ⓘ</span>
+												</div>
+											</label>
 										</div>
-									)}
-
-									{settings.shoutrrrEnabled && (
-										<div className="setting-section">
-											<div className="section-header">
-												<h3>🔔 Push Settings</h3>
-												<span className="info-tooltip" title="Supports ntfy, Discord, Telegram, Slack and other Shoutrrr-compatible services.">ⓘ</span>
-											</div>
-											<div className="setting-group">
-												<label className="full">
-													<span className="field-label">Notification URL</span>
-													<div className="input-with-tooltip">
-														<input
-															type="url"
-															value={settings.shoutrrrUrl}
-															onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
-															placeholder="https://ntfy.sh/your-topic"
-															pattern="(https?|ntfy|discord|telegram|slack):\/\/.+"
-														/>
-														<span className="info-tooltip" data-tooltip="e.g. https://ntfy.sh/mytopic, discord://token@id">ⓘ</span>
-													</div>
-												</label>
-											</div>
-											<div className="setting-actions">
-												<button type="button" className="ghost" onClick={testShoutrrr} disabled={testingShoutrrr || !settings.shoutrrrUrl}>
-													{testingShoutrrr ? "Sending..." : "Test Push"}
-												</button>
-												{testShoutrrrResult && (
-													<span className={testShoutrrrResult.success ? "success-text" : "danger-text"}>
-														{testShoutrrrResult.message}
-													</span>
-												)}
-											</div>
-										</div>
-									)}
-
-									<div className="form-footer">
-										<button type="submit" disabled={settingsSaving || (!settingsChanged && settingsSaved)}>
-											{settingsSaving ? "Saving..." : settingsSaved && !settingsChanged ? "Saved ✓" : "Save Settings"}
-										</button>
 									</div>
-								</form>
-							)}
-						</article>
+								</article>
+
+								<div className="form-footer">
+									<button type="submit" disabled={settingsSaving || (!settingsChanged && settingsSaved)}>
+										{settingsSaving ? "Saving..." : settingsSaved && !settingsChanged ? "Saved ✓" : "Save Settings"}
+									</button>
+								</div>
+							</form>
+						)}
 					</section>
 				} />
 			</Routes>

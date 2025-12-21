@@ -17,6 +17,11 @@ type NotificationSettings = {
   highStockDays: number;
   shoutrrrEnabled: boolean;
   shoutrrrUrl: string;
+  // Granular notification settings
+  emailStockReminders: boolean;
+  emailIntakeReminders: boolean;
+  shoutrrrStockReminders: boolean;
+  shoutrrrIntakeReminders: boolean;
 };
 
 type ReminderState = {
@@ -340,12 +345,12 @@ Automatic reminder from MedAssist`;
 async function checkAndSendReminder(logger: { info: (msg: string) => void; error: (msg: string) => void }): Promise<void> {
   const settings = loadNotificationSettings();
   
-  // Check if any notifications are enabled
-  const emailEnabled = settings.emailEnabled && settings.notificationEmail;
-  const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl;
+  // Check if any stock reminder notifications are enabled (granular check)
+  const emailEnabled = settings.emailEnabled && settings.notificationEmail && settings.emailStockReminders;
+  const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl && settings.shoutrrrStockReminders;
   
   if (!emailEnabled && !shoutrrrEnabled) {
-    logger.info("[Reminder] No notifications enabled");
+    logger.info("[Reminder] No stock reminder notifications enabled");
     return;
   }
 

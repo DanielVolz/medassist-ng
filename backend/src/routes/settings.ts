@@ -14,6 +14,11 @@ type SettingsBody = {
   highStockDays: number;
   shoutrrrEnabled: boolean;
   shoutrrrUrl: string;
+  // Granular notification settings
+  emailStockReminders: boolean;
+  emailIntakeReminders: boolean;
+  shoutrrrStockReminders: boolean;
+  shoutrrrIntakeReminders: boolean;
 };
 
 type TestEmailBody = {
@@ -38,6 +43,11 @@ type NotificationSettings = {
   highStockDays: number;
   shoutrrrEnabled: boolean;
   shoutrrrUrl: string;
+  // Granular notification settings
+  emailStockReminders: boolean;
+  emailIntakeReminders: boolean;
+  shoutrrrStockReminders: boolean;
+  shoutrrrIntakeReminders: boolean;
 };
 
 function loadNotificationSettings(): NotificationSettings {
@@ -54,12 +64,31 @@ function loadNotificationSettings(): NotificationSettings {
         highStockDays: saved.highStockDays ?? 180,
         shoutrrrEnabled: saved.shoutrrrEnabled ?? false,
         shoutrrrUrl: saved.shoutrrrUrl ?? "",
+        // Granular notification settings (default to true for backwards compatibility)
+        emailStockReminders: saved.emailStockReminders ?? true,
+        emailIntakeReminders: saved.emailIntakeReminders ?? true,
+        shoutrrrStockReminders: saved.shoutrrrStockReminders ?? true,
+        shoutrrrIntakeReminders: saved.shoutrrrIntakeReminders ?? true,
       };
     }
   } catch {
     // ignore
   }
-  return { emailEnabled: false, notificationEmail: "", reminderDaysBefore: 7, repeatDailyReminders: false, lowStockDays: 30, normalStockDays: 90, highStockDays: 180, shoutrrrEnabled: false, shoutrrrUrl: "" };
+  return { 
+    emailEnabled: false, 
+    notificationEmail: "", 
+    reminderDaysBefore: 7, 
+    repeatDailyReminders: false, 
+    lowStockDays: 30, 
+    normalStockDays: 90, 
+    highStockDays: 180, 
+    shoutrrrEnabled: false, 
+    shoutrrrUrl: "",
+    emailStockReminders: true,
+    emailIntakeReminders: true,
+    shoutrrrStockReminders: true,
+    shoutrrrIntakeReminders: true,
+  };
 }
 
 function saveNotificationSettings(settings: NotificationSettings): void {
@@ -86,6 +115,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       highStockDays: notification.highStockDays,
       shoutrrrEnabled: notification.shoutrrrEnabled,
       shoutrrrUrl: notification.shoutrrrUrl,
+      // Granular notification settings
+      emailStockReminders: notification.emailStockReminders,
+      emailIntakeReminders: notification.emailIntakeReminders,
+      shoutrrrStockReminders: notification.shoutrrrStockReminders,
+      shoutrrrIntakeReminders: notification.shoutrrrIntakeReminders,
       // SMTP settings (admin-configured, from .env)
       smtpHost: process.env.SMTP_HOST ?? "",
       smtpPort: parseInt(process.env.SMTP_PORT ?? "587"),
@@ -114,6 +148,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       highStockDays: body.highStockDays ?? 180,
       shoutrrrEnabled: body.shoutrrrEnabled ?? false,
       shoutrrrUrl: body.shoutrrrUrl ?? "",
+      // Granular notification settings
+      emailStockReminders: body.emailStockReminders ?? true,
+      emailIntakeReminders: body.emailIntakeReminders ?? true,
+      shoutrrrStockReminders: body.shoutrrrStockReminders ?? true,
+      shoutrrrIntakeReminders: body.shoutrrrIntakeReminders ?? true,
     });
 
     return reply.send({ success: true });

@@ -202,12 +202,12 @@ MedAssist Medication Planner`;
 async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void; error: (msg: string) => void }): Promise<void> {
   const settings = loadNotificationSettings();
   
-  // Check if any notifications are enabled
-  const emailEnabled = settings.emailEnabled && settings.notificationEmail;
-  const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl;
+  // Check if any intake reminder notifications are enabled (granular check)
+  const emailEnabled = settings.emailEnabled && settings.notificationEmail && settings.emailIntakeReminders;
+  const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl && settings.shoutrrrIntakeReminders;
   
   if (!emailEnabled && !shoutrrrEnabled) {
-    return; // No notifications enabled, skip silently
+    return; // No intake reminder notifications enabled, skip silently
   }
 
   // Get all medications with intake reminders enabled
@@ -247,7 +247,7 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
   let emailSuccess = false;
   let shoutrrrSuccess = false;
   
-  // Send email if enabled
+  // Send email if enabled for intake reminders
   if (emailEnabled) {
     const result = await sendIntakeReminderEmail(settings.notificationEmail, newReminders);
     emailSuccess = result.success;
@@ -258,7 +258,7 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
     }
   }
   
-  // Send Shoutrrr notification if enabled
+  // Send Shoutrrr notification if enabled for intake reminders
   if (shoutrrrEnabled) {
     const title = `Medication Reminder in ${REMINDER_MINUTES_BEFORE} min`;
     const message = newReminders

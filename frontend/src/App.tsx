@@ -719,24 +719,20 @@ export default function App() {
 										<div key={day.dateStr} className="day-block">
 											<div className="day-divider">{day.dateStr}</div>
 											{day.meds.map((item) => {
-												const depletionTime = depletionByMed[item.medName];
-												const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
 												const medCoverage = coverageByMed[item.medName];
-												const isLowStock = medCoverage && medCoverage.daysLeft !== null && medCoverage.daysLeft <= settings.lowStockDays && !outOfStock;
 												const med = meds.find(m => m.name === item.medName);
+												const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 												const allTaken = item.doses.every((d) => takenDoses.has(d.id));
 												const takenCount = item.doses.filter((d) => takenDoses.has(d.id)).length;
-												const stockClass = outOfStock ? "danger" : isLowStock ? "warning" : "success";
-												const stockLabel = outOfStock ? t('status.noPillsLeft') : isLowStock ? t('status.lowStock') : t('status.stockOk');
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 														<div className="time-main">
 															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
 															<div className="tag-row">
 																<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
-																<span className={`tag ${stockClass}`}>
-																	{stockLabel}
-																</span>
+																{status && <span className={`tag ${status.className}`}>
+																	{t(status.label)}
+																</span>}
 															</div>
 														</div>
 														<div className="doses-col">
@@ -1326,23 +1322,19 @@ export default function App() {
 									<div key={day.dateStr} className="day-block">
 										<div className="day-divider">{day.dateStr}</div>
 										{day.meds.map((item) => {
-											const depletionTime = depletionByMed[item.medName];
-											const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
 											const medCoverage = coverageByMed[item.medName];
-											const isLowStock = medCoverage && medCoverage.daysLeft !== null && medCoverage.daysLeft <= settings.lowStockDays && !outOfStock;
 											const med = meds.find(m => m.name === item.medName);
+											const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 											const allTaken = item.doses.every((d) => takenDoses.has(d.id));
-											const stockClass = outOfStock ? "danger" : isLowStock ? "warning" : "success";
-											const stockLabel = outOfStock ? t('status.noPillsLeft') : isLowStock ? t('status.lowStock') : t('status.stockOk');
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 													<div className="time-main">
 														<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
 														<div className="tag-row">
 															<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
-															<span className={`tag ${stockClass}`}>
-																{stockLabel}
-															</span>
+															{status && <span className={`tag ${status.className}`}>
+																{t(status.label)}
+															</span>}
 														</div>
 													</div>
 													<div className="doses-col">

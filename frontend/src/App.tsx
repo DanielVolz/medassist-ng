@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 type Slice = {
 	usage: number;
@@ -77,6 +78,7 @@ type Coverage = {
 };
 
 export default function App() {
+	const { t, i18n } = useTranslation();
 	const [meds, setMeds] = useState<Medication[]>([]);
 	const [plannerRows, setPlannerRows] = useState<PlannerRow[]>(() => {
 		if (typeof window !== "undefined") {
@@ -218,10 +220,11 @@ export default function App() {
 		settings.shoutrrrEnabled !== savedSettings.shoutrrrEnabled ||
 		settings.shoutrrrUrl !== savedSettings.shoutrrrUrl;
 
-	const schedule = useMemo(() => buildSchedulePreview(meds), [meds]);
+	const schedule = useMemo(() => buildSchedulePreview(meds, i18n.language), [meds, i18n.language]);
 	const totalTablets = useMemo(() => deriveTotal(form), [form]);
-	const coverage = useMemo(() => calculateCoverage(meds, schedule.events), [meds, schedule.events]);
+	const coverage = useMemo(() => calculateCoverage(meds, schedule.events, i18n.language), [meds, schedule.events, i18n.language]);
 	const depletionByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c.depletionTime])), [coverage.all]);
+	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
 	const groupedSchedule = useMemo(() => {
 		type DoseInfo = { id: string; timeStr: string; when: number; usage: number };
 		const days = new Map<string, { dateStr: string; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
@@ -290,6 +293,14 @@ export default function App() {
 			highStockDays: settings.highStockDays,
 			shoutrrrEnabled: settings.shoutrrrEnabled,
 			shoutrrrUrl: settings.shoutrrrUrl,
+			// Granular notification settings
+			emailStockReminders: settings.emailStockReminders,
+			emailIntakeReminders: settings.emailIntakeReminders,
+			shoutrrrStockReminders: settings.shoutrrrStockReminders,
+			shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+			// Language setting (for backend notifications)
+			language: i18n.language,
+			// SMTP (legacy - not saved, read from .env)
 			smtpHost: settings.smtpHost,
 			smtpPort: settings.smtpPort,
 			smtpUser: settings.smtpUser,
@@ -553,12 +564,12 @@ export default function App() {
 
 	// Page titles based on current route
 	const pageInfo = {
-		"/dashboard": { eyebrow: "MedAssist · Overview", title: "Dashboard" },
-		"/medications": { eyebrow: "MedAssist · Inventory", title: "Manage Medications" },
-		"/planner": { eyebrow: "MedAssist · Planner", title: "Demand Calculator" },
-		"/settings": { eyebrow: "MedAssist · Configuration", title: "Settings" },
-		"/schedule": { eyebrow: "MedAssist · Schedule", title: "Upcoming Schedules" },
-	}[currentPath] || { eyebrow: "MedAssist · Overview", title: "Dashboard" };
+		"/dashboard": { eyebrow: t('header.eyebrow.overview'), title: t('nav.dashboard') },
+		"/medications": { eyebrow: t('header.eyebrow.inventory'), title: t('nav.medications') },
+		"/planner": { eyebrow: t('header.eyebrow.planner'), title: t('nav.planner') },
+		"/settings": { eyebrow: t('header.eyebrow.settings'), title: t('nav.settings') },
+		"/schedule": { eyebrow: t('header.eyebrow.schedule'), title: t('dashboard.schedules.title') },
+	}[currentPath] || { eyebrow: t('header.eyebrow.overview'), title: t('nav.dashboard') };
 
 	return (
 		<main className="page">
@@ -572,12 +583,12 @@ export default function App() {
 				</div>
 				<div className="header-actions">
 					<div className="tabs">
-						<button className={currentPath === "/dashboard" || currentPath === "/" ? "pill primary" : "pill"} onClick={() => navigate("/dashboard")}>Dashboard</button>
-						<button className={currentPath === "/medications" ? "pill primary" : "pill"} onClick={() => navigate("/medications")}>Medications</button>
-						<button className={currentPath === "/planner" ? "pill primary" : "pill"} onClick={() => navigate("/planner")}>Planner</button>
+						<button className={currentPath === "/dashboard" || currentPath === "/" ? "pill primary" : "pill"} onClick={() => navigate("/dashboard")}>{t('nav.dashboard')}</button>
+						<button className={currentPath === "/medications" ? "pill primary" : "pill"} onClick={() => navigate("/medications")}>{t('nav.medications')}</button>
+						<button className={currentPath === "/planner" ? "pill primary" : "pill"} onClick={() => navigate("/planner")}>{t('nav.planner')}</button>
 					</div>
-					<button className={`icon-btn ${currentPath === "/settings" ? "active" : ""}`} onClick={() => navigate("/settings")} title="Settings">⚙️</button>
-					<button className="icon-btn" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+					<button className={`icon-btn ${currentPath === "/settings" ? "active" : ""}`} onClick={() => navigate("/settings")} title={t('nav.settings')}>⚙️</button>
+					<button className="icon-btn" onClick={toggleTheme} title={theme === "dark" ? t('tooltips.lightMode') : t('tooltips.darkMode')}>
 						{theme === "dark" ? "☀️" : "🌙"}
 					</button>
 				</div>
@@ -591,7 +602,7 @@ export default function App() {
 							<section className="email-status-bar">
 								<span className="email-status-icon">{settings.emailEnabled && settings.shoutrrrEnabled ? "🔔" : settings.emailEnabled ? "📧" : "🔔"}</span>
 								<span className="email-status-text">
-									Automatic reminders active — {getReminderStatusText(settings.reminderDaysBefore, coverage.low, settings.lastAutoEmailSent)}
+									{t('dashboard.reminders.active')} — {getReminderStatusText(settings.reminderDaysBefore, coverage.low, settings.lastAutoEmailSent, t, i18n.language)}
 								</span>
 								{settings.emailEnabled && settings.notificationEmail && <span className="email-status-recipient">→ {settings.notificationEmail}</span>}
 							</section>
@@ -599,35 +610,36 @@ export default function App() {
 						<section className="grid">
 							<article className="card">
 								<div className="card-head">
-									<h2>Reorder Reminder</h2>
-									<span className="pill neutral">Stock watch</span>
+									<h2>{t('dashboard.reorder.title')}</h2>
+									<span className="pill neutral">{t('dashboard.reorder.badge')}</span>
 								</div>
 								{meds.length === 0 ? (
-									<p className="muted">No medications configured yet.</p>
+									<p className="muted">{t('dashboard.reorder.noMeds')}</p>
 								) : coverage.low.length === 0 ? (
-									<p className="success-text">All good, enough stock.</p>
+									<p className="success-text">{t('dashboard.reorder.allGood')}</p>
 								) : (
 									<>
 										<div className="table table-6">
 											<div className="table-head">
-												<span>Name</span>
-												<span>Current pills</span>
-												<span>Days left</span>
-												<span>Status</span>
-												<span>Runs out</span>
-												<span>Auto-remind</span>
+												<span>{t('table.name')}</span>
+												<span>{t('table.currentPills')}</span>
+												<span>{t('table.daysLeft')}</span>
+												<span>{t('table.status')}</span>
+												<span>{t('table.runsOut')}</span>
+												<span>{t('table.autoRemind')}</span>
 											</div>
 											{coverage.low.map((row) => {
 												const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 												const med = meds.find(m => m.name === row.name);
+												const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "";
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-														<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip="Has notes">📝</span>}</span>
-														<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
-														<span data-label="Days" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
-														<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
-														<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
-														<span data-label="Auto-remind" className="next-reminder-date">{getNextReminderForMed(row, settings.reminderDaysBefore)}</span>
+														<span data-label={t('table.name')} className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}</span>
+														<span data-label={t('table.pills')} className={textClass}>{formatNumber(row.medsLeft)}</span>
+														<span data-label={t('table.days')} className={textClass}>{formatNumber(row.daysLeft)}</span>
+														<span data-label={t('table.status')} className={`status-chip ${status.className}`}>{t(status.label)}</span>
+														<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
+														<span data-label={t('table.autoRemind')} className="next-reminder-date">{getNextReminderForMed(row, settings.reminderDaysBefore, i18n.language)}</span>
 													</div>
 												);
 											})}
@@ -635,7 +647,7 @@ export default function App() {
 										{(settings.emailEnabled || settings.shoutrrrEnabled) && (
 											<div className="email-send-action">
 												<button type="button" className="ghost" onClick={sendReminderEmail} disabled={sendingReminderEmail}>
-													{sendingReminderEmail ? "Sending..." : "🔔 Send Reminder Now"}
+													{sendingReminderEmail ? t('common.sending') : t('dashboard.reorder.sendReminder')}
 												</button>
 												{reminderEmailResult && (
 													<span className={reminderEmailResult.success ? "success-text" : "danger-text"}>
@@ -652,30 +664,31 @@ export default function App() {
 						<section className="grid">
 							<article className="card">
 								<div className="card-head">
-									<h2>Medication Overview</h2>
-									<span className="pill neutral">Stock</span>
+									<h2>{t('dashboard.overview.title')}</h2>
+									<span className="pill neutral">{t('dashboard.overview.badge')}</span>
 								</div>
 								<div className="table table-6">
 									<div className="table-head">
-										<span>Name</span>
-										<span>Current pills</span>
-										<span>Days left</span>
-										<span>Runs out</span>
-										<span>Expiry</span>
-										<span>Status</span>
+										<span>{t('table.name')}</span>
+										<span>{t('table.currentPills')}</span>
+										<span>{t('table.daysLeft')}</span>
+										<span>{t('table.runsOut')}</span>
+										<span>{t('table.expiry')}</span>
+										<span>{t('table.status')}</span>
 									</div>
 									{coverage.all.map((row) => {
 										const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 										const med = meds.find(m => m.name === row.name);
 										const expiryClass = getExpiryClass(med?.expiryDate);
+										const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "";
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-												<span data-label="Name" className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip="Has notes">📝</span>}</span>
-												<span data-label="Pills" className={row.medsLeft <= 0 ? "danger-text" : ""}>{formatNumber(row.medsLeft)}</span>
-												<span data-label="Days left" className={status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : ""}>{formatNumber(row.daysLeft)}</span>
-												<span data-label="Runs out">{row.depletionDate ?? "-"}</span>
-												<span data-label="Expiry" className={expiryClass}>{med?.expiryDate ? new Date(med.expiryDate).toLocaleDateString([], { day: "2-digit", month: "short", year: "2-digit" }) : "-"}</span>
-												<span data-label="Status" className={`status-chip ${status.className}`}>{status.label}</span>
+												<span data-label={t('table.name')} className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}</span>
+												<span data-label={t('table.pills')} className={textClass}>{formatNumber(row.medsLeft)}</span>
+												<span data-label={t('table.daysLeft')} className={textClass}>{formatNumber(row.daysLeft)}</span>
+												<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
+												<span data-label={t('table.expiry')} className={expiryClass}>{med?.expiryDate ? new Date(med.expiryDate).toLocaleDateString(i18n.language, { day: "2-digit", month: "short", year: "2-digit" }) : "-"}</span>
+												<span data-label={t('table.status')} className={`status-chip ${status.className}`}>{t(status.label)}</span>
 											</div>
 										);
 									})}
@@ -686,7 +699,7 @@ export default function App() {
 						<section className="grid">
 							<article className="card">
 								<div className="card-head">
-									<h2 className="clickable" onClick={() => navigate("/schedule")}>Upcoming Schedules</h2>
+									<h2 className="clickable" onClick={() => navigate("/schedule")}>{t('dashboard.schedules.title')}</h2>
 									<select 
 										className="schedule-days-select"
 										value={scheduleDays}
@@ -696,9 +709,9 @@ export default function App() {
 											localStorage.setItem("scheduleDays", String(val));
 										}}
 									>
-										<option value={30}>1 month</option>
-										<option value={90}>3 months</option>
-										<option value={180}>6 months</option>
+										<option value={30}>{t('dashboard.schedules.1month')}</option>
+										<option value={90}>{t('dashboard.schedules.3months')}</option>
+										<option value={180}>{t('dashboard.schedules.6months')}</option>
 									</select>
 								</div>
 								<div className="timeline">
@@ -708,17 +721,21 @@ export default function App() {
 											{day.meds.map((item) => {
 												const depletionTime = depletionByMed[item.medName];
 												const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+												const medCoverage = coverageByMed[item.medName];
+												const isLowStock = medCoverage && medCoverage.daysLeft !== null && medCoverage.daysLeft <= settings.lowStockDays && !outOfStock;
 												const med = meds.find(m => m.name === item.medName);
 												const allTaken = item.doses.every((d) => takenDoses.has(d.id));
 												const takenCount = item.doses.filter((d) => takenDoses.has(d.id)).length;
+												const stockClass = outOfStock ? "danger" : isLowStock ? "warning" : "success";
+												const stockLabel = outOfStock ? t('status.noPillsLeft') : isLowStock ? t('status.lowStock') : t('status.stockOk');
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 														<div className="time-main">
-															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}</div>
+															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
 															<div className="tag-row">
-																<span className="tag subtle">{item.total} pills total</span>
-																<span className={`tag ${outOfStock ? "danger" : "success"}`}>
-																	{outOfStock ? "⚠ No pills left" : "✓ Stock OK"}
+																<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+																<span className={`tag ${stockClass}`}>
+																	{stockLabel}
 																</span>
 															</div>
 														</div>
@@ -728,11 +745,11 @@ export default function App() {
 																return (
 																	<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""}`}>
 																		<span className="dose-time">{dose.timeStr}</span>
-																		<span className="dose-usage">{dose.usage} pill{dose.usage !== 1 ? "s" : ""}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> taken by <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																		<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
 																		{isTaken ? (
-																			<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title="Undo">↩</button>
+																			<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
 																		) : (
-																			<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title="Mark as taken">✓</button>
+																			<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
 																		)}
 																	</div>
 																);
@@ -753,8 +770,8 @@ export default function App() {
 					<section className="grid">
 						<article className="card meds">
 							<div className="card-head">
-								<h2>Medication list</h2>
-								<span className="pill neutral">{loading ? "Loading..." : `${meds.length} entries`}</span>
+								<h2>{t('medications.list.title')}</h2>
+								<span className="pill neutral">{loading ? t('common.loading') : t('medications.list.entries', { count: meds.length })}</span>
 							</div>
 							<div className="med-list">
 								{meds.map((med) => (
@@ -766,22 +783,22 @@ export default function App() {
 													<div className="med-name">{med.name}</div>
 												</div>
 												<div className="med-details">
-													<span>Packs: <strong>{med.packCount ?? 1}</strong></span>
-													<span>Blisters per pack: <strong>{med.stripsPerPack ?? med.strips ?? 1}</strong></span>
-													<span>Pills per blister: <strong>{med.tabsPerStrip ?? med.stripSize}</strong></span>
-													<span>Loose: <strong>{med.looseTablets ?? 0}</strong></span>
+													<span>{t('medications.details.packs')}: <strong>{med.packCount ?? 1}</strong></span>
+													<span>{t('medications.details.blisters')}: <strong>{med.stripsPerPack ?? med.strips ?? 1}</strong></span>
+													<span>{t('medications.details.pillsPerBlister')}: <strong>{med.tabsPerStrip ?? med.stripSize}</strong></span>
+													<span>{t('medications.details.loose')}: <strong>{med.looseTablets ?? 0}</strong></span>
 												</div>
-												<div className="med-total">Total: {med.count} pills</div>
+												<div className="med-total">{t('medications.details.total')}: {med.count} {t('common.pills')}</div>
 											</div>
 											<div className="med-actions">
-												<button className="ghost" onClick={() => startEdit(med)}>Edit</button>
-												<button className="ghost danger" onClick={() => deleteMed(med.id)}>Delete</button>
+												<button className="ghost" onClick={() => startEdit(med)}>{t('common.edit')}</button>
+												<button className="ghost danger" onClick={() => deleteMed(med.id)}>{t('common.delete')}</button>
 											</div>
 										</div>
 										<div className="slice-list">
 											{med.slices.map((s, idx) => (
 												<div key={`${med.id}-${idx}`} className="slice-row-simple">
-													{s.usage} {s.usage === 1 ? "pill" : "pills"} · every {s.every} {s.every === 1 ? "day" : "days"} · from {formatDateTime(s.start)}
+													{s.usage} {s.usage === 1 ? t('common.pill') : t('common.pills')} · {t('form.slices.every')} {s.every} {s.every === 1 ? t('common.day') : t('common.days')} · {t('form.slices.from')} {formatDateTime(s.start, i18n.language)}
 												</div>
 											))}
 										</div>
@@ -792,57 +809,57 @@ export default function App() {
 
 						<article className="card form">
 							<div className="card-head">
-								<h2>{editingId ? "Edit entry" : "New entry"}</h2>
-								<span className="pill">Packs + loose pills</span>
+								<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
+								<span className="pill">{t('form.badge')}</span>
 							</div>
 							<form className="form-grid" onSubmit={saveMedication}>
 								<label>
-									Commercial Name
-									<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Ozempic" required />
+									{t('form.commercialName')}
+									<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('form.placeholders.commercial')} required />
 								</label>
 								<label>
-									Generic Name
-									<input value={form.genericName} onChange={(e) => setForm({ ...form, genericName: e.target.value })} placeholder="e.g. Semaglutide (optional)" />
+									{t('form.genericName')}
+									<input value={form.genericName} onChange={(e) => setForm({ ...form, genericName: e.target.value })} placeholder={t('form.placeholders.generic')} />
 								</label>
 								<label>
-									Taken by
-									<input value={form.takenBy} onChange={(e) => setForm({ ...form, takenBy: e.target.value })} placeholder="e.g. John, Sarah (optional)" />
+									{t('form.takenBy')}
+									<input value={form.takenBy} onChange={(e) => setForm({ ...form, takenBy: e.target.value })} placeholder={t('form.placeholders.takenBy')} />
 								</label>
 								<label>
-									Packs
+									{t('form.packs')}
 									<input type="number" min="0" value={form.packCount} onChange={(e) => handleValueChange("packCount", e.target.value)} />
 								</label>
 								<label>
-									Blisters per pack
+									{t('form.blistersPerPack')}
 									<input type="number" min="1" value={form.stripsPerPack} onChange={(e) => handleValueChange("stripsPerPack", e.target.value)} />
 								</label>
 								<label>
-									Pills per blister
+									{t('form.pillsPerBlister')}
 									<input type="number" min="1" value={form.tabsPerStrip} onChange={(e) => handleValueChange("tabsPerStrip", e.target.value)} />
 								</label>
 								<label>
-									Loose pills
+									{t('form.loosePills')}
 									<input type="number" min="0" value={form.looseTablets} onChange={(e) => handleValueChange("looseTablets", e.target.value)} />
 								</label>
 								<label>
-									Pill weight (mg)
-									<input type="number" min="1" value={form.pillWeightMg} onChange={(e) => handleValueChange("pillWeightMg", e.target.value)} placeholder="e.g. 240" />
+									{t('form.pillWeight')}
+									<input type="number" min="1" value={form.pillWeightMg} onChange={(e) => handleValueChange("pillWeightMg", e.target.value)} placeholder={t('form.placeholders.weight')} />
 								</label>
 								<label>
-									Total (pills)
+									{t('form.total')}
 									<div className="static-value">{formatNumber(totalTablets)}</div>
 								</label>
 								<label>
-									Expiry Date
-									<input type="date" value={form.expiryDate} onChange={(e) => handleValueChange("expiryDate", e.target.value)} placeholder="optional" />
+									{t('form.expiryDate')}
+									<input type="date" value={form.expiryDate} onChange={(e) => handleValueChange("expiryDate", e.target.value)} placeholder={t('common.optional')} />
 								</label>
 
 								<label className="full">
-									Notes
+									{t('form.notes')}
 									<textarea 
 										value={form.notes} 
 										onChange={(e) => handleValueChange("notes", e.target.value)} 
-										placeholder="e.g. Take with food, avoid alcohol... (optional)"
+										placeholder={t('form.placeholders.notes')}
 										rows={2}
 										maxLength={500}
 									/>
@@ -850,37 +867,37 @@ export default function App() {
 
 								<div className="full slices">
 									<div className="card-head">
-										<h3>Intake schedule</h3>
+										<h3>{t('form.slices.title')}</h3>
 										<div className="slices-actions">
-											<label className="inline-checkbox" title="Receive a notification 15 minutes before each scheduled intake">
+											<label className="inline-checkbox" title={t('form.slices.remindTooltip')}>
 												<input 
 													type="checkbox" 
 													checked={form.intakeRemindersEnabled} 
 													onChange={(e) => setForm(prev => ({ ...prev, intakeRemindersEnabled: e.target.checked }))}
 												/>
-												<span>🔔 Remind</span>
+												<span>🔔 {t('form.slices.remind')}</span>
 											</label>
-											<button type="button" className="ghost" onClick={addSlice}>+ Intake</button>
+											<button type="button" className="ghost" onClick={addSlice}>+ {t('form.slices.addIntake')}</button>
 										</div>
 									</div>
 									{form.slices.map((s, idx) => (
 										<div key={idx} className="slice-row">
 											<div className="slice-inputs">
 												<label>
-													Usage (pills)
+													{t('form.slices.usage')}
 													<input type="number" min="0" step="0.1" value={s.usage} onChange={(e) => setSliceValue(idx, "usage", e.target.value)} />
 												</label>
 												<label>
-													Every (days)
+													{t('form.slices.everyDays')}
 													<input type="number" min="1" value={s.every} onChange={(e) => setSliceValue(idx, "every", e.target.value)} />
 												</label>
 												<label>
-													Start (date/time)
+													{t('form.slices.start')}
 													<input type="datetime-local" step="60" value={s.start} onChange={(e) => setSliceValue(idx, "start", e.target.value)} />
 												</label>
 											</div>
 											{form.slices.length > 1 && (
-												<button type="button" className="ghost" onClick={() => removeSlice(idx)}>Remove</button>
+												<button type="button" className="ghost" onClick={() => removeSlice(idx)}>{t('common.remove')}</button>
 											)}
 										</div>
 									))}
@@ -888,14 +905,14 @@ export default function App() {
 
 								{editingId && (
 									<div className="full image-upload-section">
-										<label className="setting-label">Medication Image</label>
+										<label className="setting-label">{t('form.medicationImage')}</label>
 										{(() => {
 											const currentMed = meds.find(m => m.id === editingId);
 											if (currentMed?.imageUrl) {
 												return (
 													<div className="image-preview">
 														<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
-														<button type="button" className="ghost danger" onClick={() => deleteMedImage(editingId)}>Remove Image</button>
+														<button type="button" className="ghost danger" onClick={() => deleteMedImage(editingId)}>{t('form.removeImage')}</button>
 													</div>
 												);
 											}
@@ -914,10 +931,10 @@ export default function App() {
 								<div className="full align-end gap">
 									{editingId && (
 										<button type="button" className="ghost" onClick={resetForm}>
-											Cancel
+											{t('common.cancel')}
 										</button>
 									)}
-									<button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+									<button type="submit" disabled={saving}>{saving ? t('common.saving') : t('common.save')}</button>
 								</div>
 							</form>
 						</article>
@@ -928,42 +945,42 @@ export default function App() {
 					<section className="grid">
 						<article className="card">
 							<div className="card-head">
-								<h2>Demand Calculator</h2>
-								<span className="pill neutral">Plan your supply</span>
+								<h2>{t('planner.title')}</h2>
+								<span className="pill neutral">{t('planner.badge')}</span>
 							</div>
 							<form className="planner" onSubmit={runPlanner}>
 								<label>
-									From
+									{t('planner.from')}
 									<input type="datetime-local" step="60" value={range.start} onChange={(e) => setRange({ ...range, start: e.target.value })} />
 								</label>
 								<label>
-									Until
+									{t('planner.until')}
 									<input type="datetime-local" step="60" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} />
 								</label>
 								<div className="planner-actions">
-									<button type="button" className="ghost" onClick={resetRange}>Reset</button>
-									<button type="submit" disabled={plannerLoading}>{plannerLoading ? "Calculating..." : "Calculate"}</button>
+									<button type="button" className="ghost" onClick={resetRange}>{t('common.reset')}</button>
+									<button type="submit" disabled={plannerLoading}>{plannerLoading ? t('planner.calculating') : t('planner.calculate')}</button>
 								</div>
 							</form>
 							{plannerRows.length > 0 && (
 								<>
 									<div className="table">
 										<div className="table-head">
-											<span>Medication</span>
-											<span>Usage</span>
-											<span>Blisters needed</span>
-											<span>Available</span>
-											<span>Status</span>
+											<span>{t('planner.table.medication')}</span>
+											<span>{t('planner.table.usage')}</span>
+											<span>{t('planner.table.blistersNeeded')}</span>
+											<span>{t('planner.table.available')}</span>
+											<span>{t('table.status')}</span>
 										</div>
 										{plannerRows.map((row) => {
 											const med = meds.find(m => m.name === row.medicationName);
 											return (
 												<div key={row.medicationId} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-													<span data-label="Medication" className="cell-with-avatar"><MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />{row.medicationName}</span>
-													<span data-label="Usage"><strong>{row.plannerUsage}</strong> pills</span>
-													<span data-label="Blisters">{row.stripsNeeded} × {row.stripSize}</span>
-													<span data-label="Available">{row.stripsAvailable} blisters</span>
-													<span data-label="Status" className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? "Enough" : "Out of Stock"}</span>
+													<span data-label={t('planner.table.medication')} className="cell-with-avatar"><MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />{row.medicationName}</span>
+													<span data-label={t('planner.table.usage')}><strong>{row.plannerUsage}</strong> {t('common.pills')}</span>
+													<span data-label={t('planner.table.blisters')}>{row.stripsNeeded} × {row.stripSize}</span>
+													<span data-label={t('planner.table.available')}>{row.stripsAvailable} {t('common.blisters')}</span>
+													<span data-label={t('table.status')} className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? t('status.enough') : t('status.outOfStock')}</span>
 												</div>
 											);
 										})}
@@ -971,7 +988,7 @@ export default function App() {
 									{settings.emailEnabled && settings.notificationEmail && (
 										<div className="planner-email-action">
 											<button type="button" className="ghost" onClick={sendPlannerEmail} disabled={sendingPlannerEmail}>
-												{sendingPlannerEmail ? "Sending..." : "📧 Send via Email"}
+												{sendingPlannerEmail ? t('common.sending') : t('planner.sendEmail')}
 											</button>
 											{plannerEmailResult && (
 												<span className={plannerEmailResult.success ? "success-text" : "danger-text"}>
@@ -989,27 +1006,47 @@ export default function App() {
 				<Route path="/settings" element={
 					<section className="grid">
 						{settingsLoading ? (
-							<p>Loading settings...</p>
+							<p>{t('settings.loading')}</p>
 						) : (
 							<form className="settings-form" onSubmit={saveSettings}>
+								{/* Language */}
+								<article className="card">
+									<div className="card-head">
+										<h2>{t('settings.language.title')}</h2>
+									</div>
+									<div className="setting-section">
+										<label className="setting-row language-row">
+											<span className="setting-label">{t('settings.language.select')}</span>
+											<select
+												value={i18n.language}
+												onChange={(e) => i18n.changeLanguage(e.target.value)}
+												className="language-select"
+											>
+												<option value="en">🇬🇧 English</option>
+												<option value="de">🇩🇪 Deutsch</option>
+											</select>
+										</label>
+									</div>
+								</article>
+
 								{/* Notifications */}
 								<article className="card">
 									<div className="card-head">
-										<h2>Notifications</h2>
+										<h2>{t('settings.notifications.title')}</h2>
 									</div>
 									
 									<div className="setting-section">
 										<div className="section-header">
-											<h3>Channels</h3>
+											<h3>{t('settings.notifications.channels')}</h3>
 										</div>
 										<div className="notification-matrix">
 											<div className="matrix-header">
 												<div className="matrix-label"></div>
-												<div className="matrix-channel">Email</div>
-												<div className="matrix-channel">Push</div>
+												<div className="matrix-channel">{t('settings.notifications.email')}</div>
+												<div className="matrix-channel">{t('settings.notifications.push')}</div>
 											</div>
 											<div className="matrix-row">
-												<div className="matrix-label">Stock Reminders</div>
+												<div className="matrix-label">{t('settings.notifications.stockReminders')}</div>
 												<div className="matrix-cell">
 													<label className="toggle-switch small">
 														<input
@@ -1034,7 +1071,7 @@ export default function App() {
 												</div>
 											</div>
 											<div className="matrix-row">
-												<div className="matrix-label">Intake Reminders</div>
+												<div className="matrix-label">{t('settings.notifications.intakeReminders')}</div>
 												<div className="matrix-cell">
 													<label className="toggle-switch small">
 														<input
@@ -1060,13 +1097,13 @@ export default function App() {
 											</div>
 										</div>
 										{!settings.emailEnabled && !settings.shoutrrrEnabled && (
-											<p className="hint-text">Enable at least one channel below to receive notifications.</p>
+											<p className="hint-text">{t('settings.notifications.enableHint')}</p>
 										)}
 									</div>
 
 									<div className="setting-section">
 										<div className="section-header">
-											<h3>Email</h3>
+											<h3>{t('settings.notifications.email')}</h3>
 											<label className="toggle-switch small">
 												<input
 													type="checkbox"
@@ -1080,7 +1117,7 @@ export default function App() {
 											<>
 												<div className="setting-group">
 													<label className="full">
-														<span className="field-label">Recipient</span>
+														<span className="field-label">{t('settings.email.recipient')}</span>
 														<input
 															type="email"
 															value={settings.notificationEmail}
@@ -1093,13 +1130,13 @@ export default function App() {
 												</div>
 												<div className="smtp-info">
 													<span className="smtp-summary">
-														SMTP: {settings.smtpHost || "Not configured"}:{settings.smtpPort}
+														SMTP: {settings.smtpHost || t('settings.email.notConfigured')}:{settings.smtpPort}
 														{settings.hasSmtpPassword && " ✓"}
 													</span>
 												</div>
 												<div className="setting-actions">
 													<button type="button" className="ghost" onClick={testEmail} disabled={testingEmail || !settings.notificationEmail}>
-														{testingEmail ? "Sending..." : "Test"}
+														{testingEmail ? t('common.sending') : t('common.test')}
 													</button>
 													{testEmailResult && (
 														<span className={testEmailResult.success ? "success-text" : "danger-text"}>
@@ -1113,7 +1150,7 @@ export default function App() {
 
 									<div className="setting-section">
 										<div className="section-header">
-											<h3>Push</h3>
+											<h3>{t('settings.notifications.push')}</h3>
 											<label className="toggle-switch small">
 												<input
 													type="checkbox"
@@ -1127,7 +1164,7 @@ export default function App() {
 											<>
 												<div className="setting-group">
 													<label className="full">
-														<span className="field-label">URL</span>
+														<span className="field-label">{t('settings.push.url')}</span>
 														<input
 															type="url"
 															value={settings.shoutrrrUrl}
@@ -1138,12 +1175,12 @@ export default function App() {
 												</div>
 												<div className="smtp-info">
 													<span className="smtp-summary">
-														Supports ntfy, Discord, Telegram, Slack
+														{t('settings.push.supports')}
 													</span>
 												</div>
 												<div className="setting-actions">
 													<button type="button" className="ghost" onClick={testShoutrrr} disabled={testingShoutrrr || !settings.shoutrrrUrl}>
-														{testingShoutrrr ? "Sending..." : "Test"}
+														{testingShoutrrr ? t('common.sending') : t('common.test')}
 													</button>
 													{testShoutrrrResult && (
 														<span className={testShoutrrrResult.success ? "success-text" : "danger-text"}>
@@ -1157,23 +1194,23 @@ export default function App() {
 
 									<div className="schedule-overview">
 										<div className="schedule-row">
-											<span className="schedule-label">Stock check</span>
-											<span className="schedule-value">Daily at 6:00 AM</span>
+											<span className="schedule-label">{t('settings.schedule.stockCheck')}</span>
+											<span className="schedule-value">{t('settings.schedule.dailyAt6')}</span>
 										</div>
 										<div className="schedule-row">
-											<span className="schedule-label">Intake check</span>
-											<span className="schedule-value">15 min before scheduled time</span>
+											<span className="schedule-label">{t('settings.schedule.intakeCheck')}</span>
+											<span className="schedule-value">{t('settings.schedule.15minBefore')}</span>
 										</div>
 										{settings.nextScheduledCheck && (
 											<div className="schedule-row">
-												<span className="schedule-label">Next stock check</span>
-												<span className="schedule-value">{new Date(settings.nextScheduledCheck).toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+												<span className="schedule-label">{t('settings.schedule.nextCheck')}</span>
+												<span className="schedule-value">{new Date(settings.nextScheduledCheck).toLocaleString(i18n.language, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
 											</div>
 										)}
 										{settings.lastAutoEmailSent && (
 											<div className="schedule-row">
-												<span className="schedule-label">Last sent</span>
-												<span className="schedule-value">{new Date(settings.lastAutoEmailSent).toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+												<span className="schedule-label">{t('settings.schedule.lastSent')}</span>
+												<span className="schedule-value">{new Date(settings.lastAutoEmailSent).toLocaleString(i18n.language, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
 											</div>
 										)}
 									</div>
@@ -1182,16 +1219,16 @@ export default function App() {
 								{/* Stock Settings */}
 								<article className="card">
 									<div className="card-head">
-										<h2>Stock</h2>
+										<h2>{t('settings.stock.title')}</h2>
 									</div>
 									
 									<div className="setting-section">
 										<div className="section-header">
-											<h3>Reminder Threshold</h3>
+											<h3>{t('settings.stock.threshold')}</h3>
 										</div>
 										<div className="threshold-input">
 											<label>
-												<span className="threshold-label">Remind when supply drops below</span>
+												<span className="threshold-label">{t('settings.stock.remindWhen')}</span>
 												<div className="threshold-field">
 													<input
 														type="number"
@@ -1200,14 +1237,14 @@ export default function App() {
 														value={settings.reminderDaysBefore}
 														onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
 													/>
-													<span className="threshold-unit">days</span>
+													<span className="threshold-unit">{t('common.days')}</span>
 												</div>
 											</label>
 										</div>
 										<div className="setting-row compact">
 											<label className="setting-label">
-												Repeat daily
-												<span className="info-tooltip small" data-tooltip="When enabled, sends reminders every day while stock is low. Otherwise, only notifies once per medication until restocked.">ⓘ</span>
+												{t('settings.stock.repeatDaily')}
+												<span className="info-tooltip small" data-tooltip={t('settings.stock.repeatTooltip')}>ⓘ</span>
 											</label>
 											<label className="toggle-switch small">
 												<input
@@ -1222,11 +1259,11 @@ export default function App() {
 
 									<div className="setting-section">
 										<div className="section-header">
-											<h3>Display</h3>
+											<h3>{t('settings.stock.display')}</h3>
 										</div>
 										<div className="setting-group">
 											<label>
-												<span className="field-label">Low Stock (days)</span>
+												<span className="field-label">{t('settings.stock.lowStockDays')}</span>
 												<div className="input-with-tooltip">
 													<input
 														type="number"
@@ -1235,11 +1272,11 @@ export default function App() {
 														value={settings.lowStockDays}
 														onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
 													/>
-													<span className="info-tooltip" data-tooltip="Yellow warning color threshold">ⓘ</span>
+													<span className="info-tooltip" data-tooltip={t('settings.stock.lowStockTooltip')}>ⓘ</span>
 												</div>
 											</label>
 											<label>
-												<span className="field-label">High Stock (days)</span>
+												<span className="field-label">{t('settings.stock.highStockDays')}</span>
 												<div className="input-with-tooltip">
 													<input
 														type="number"
@@ -1248,7 +1285,7 @@ export default function App() {
 														value={settings.highStockDays}
 														onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
 													/>
-													<span className="info-tooltip" data-tooltip="Green with star threshold">ⓘ</span>
+													<span className="info-tooltip" data-tooltip={t('settings.stock.highStockTooltip')}>ⓘ</span>
 												</div>
 											</label>
 										</div>
@@ -1257,7 +1294,7 @@ export default function App() {
 
 								<div className="form-footer">
 									<button type="submit" disabled={settingsSaving || (!settingsChanged && settingsSaved)}>
-										{settingsSaving ? "Saving..." : settingsSaved && !settingsChanged ? "Saved ✓" : "Save Settings"}
+										{settingsSaving ? t('common.saving') : settingsSaved && !settingsChanged ? t('common.saved') : t('settings.saveSettings')}
 									</button>
 								</div>
 							</form>
@@ -1269,7 +1306,7 @@ export default function App() {
 					<section className="grid">
 						<article className="card schedule-full">
 							<div className="card-head">
-								<h2>Upcoming Schedules</h2>
+								<h2>{t('dashboard.schedules.title')}</h2>
 								<select 
 									className="schedule-days-select"
 									value={scheduleDays}
@@ -1279,9 +1316,9 @@ export default function App() {
 										localStorage.setItem("scheduleDays", String(val));
 									}}
 								>
-									<option value={30}>1 month</option>
-									<option value={90}>3 months</option>
-									<option value={180}>6 months</option>
+									<option value={30}>{t('dashboard.schedules.1month')}</option>
+									<option value={90}>{t('dashboard.schedules.3months')}</option>
+									<option value={180}>{t('dashboard.schedules.6months')}</option>
 								</select>
 							</div>
 							<div className="timeline">
@@ -1291,16 +1328,20 @@ export default function App() {
 										{day.meds.map((item) => {
 											const depletionTime = depletionByMed[item.medName];
 											const outOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+											const medCoverage = coverageByMed[item.medName];
+											const isLowStock = medCoverage && medCoverage.daysLeft !== null && medCoverage.daysLeft <= settings.lowStockDays && !outOfStock;
 											const med = meds.find(m => m.name === item.medName);
 											const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+											const stockClass = outOfStock ? "danger" : isLowStock ? "warning" : "success";
+											const stockLabel = outOfStock ? t('status.noPillsLeft') : isLowStock ? t('status.lowStock') : t('status.stockOk');
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 													<div className="time-main">
-														<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}</div>
+														<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
 														<div className="tag-row">
-															<span className="tag subtle">{item.total} pills total</span>
-															<span className={`tag ${outOfStock ? "danger" : "success"}`}>
-																{outOfStock ? "⚠ No pills left" : "✓ Stock OK"}
+															<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+															<span className={`tag ${stockClass}`}>
+																{stockLabel}
 															</span>
 														</div>
 													</div>
@@ -1310,11 +1351,11 @@ export default function App() {
 															return (
 																<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""}`}>
 																	<span className="dose-time">{dose.timeStr}</span>
-																	<span className="dose-usage">{dose.usage} pill{dose.usage !== 1 ? "s" : ""}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> taken by <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																	<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
 																	{isTaken ? (
-																		<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title="Undo">↩</button>
+																		<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
 																	) : (
-																		<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title="Mark as taken">✓</button>
+																		<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
 																	)}
 																</div>
 															);
@@ -1348,44 +1389,44 @@ export default function App() {
 							<div className="med-detail-titles">
 								<h2>{selectedMed.name}</h2>
 								{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
-								{selectedMed.takenBy && <span className="med-taken-by">for {selectedMed.takenBy}</span>}
+								{selectedMed.takenBy && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy}</span>}
 							</div>
 						</div>
 
 						<div className="med-detail-body">
 							<div className="med-detail-section">
-								<h3>Stock Information</h3>
+								<h3>{t('modal.stockInfo')}</h3>
 								<div className="med-detail-grid">
 									<div className="med-detail-item">
-										<span className="med-detail-label">Total Pills</span>
+										<span className="med-detail-label">{t('modal.totalPills')}</span>
 										<span className="med-detail-value">{formatNumber(selectedMed.count)}</span>
 									</div>
 									<div className="med-detail-item">
-										<span className="med-detail-label">Packs</span>
+										<span className="med-detail-label">{t('modal.packs')}</span>
 										<span className="med-detail-value">{selectedMed.packCount ?? 0}</span>
 									</div>
 									<div className="med-detail-item">
-										<span className="med-detail-label">Blisters/Pack</span>
+										<span className="med-detail-label">{t('modal.blistersPerPack')}</span>
 										<span className="med-detail-value">{selectedMed.stripsPerPack ?? 0}</span>
 									</div>
 									<div className="med-detail-item">
-										<span className="med-detail-label">Pills/Blister</span>
+										<span className="med-detail-label">{t('modal.pillsPerBlister')}</span>
 										<span className="med-detail-value">{selectedMed.tabsPerStrip ?? 1}</span>
 									</div>
 									<div className="med-detail-item">
-										<span className="med-detail-label">Loose Pills</span>
+										<span className="med-detail-label">{t('modal.loosePills')}</span>
 										<span className="med-detail-value">{selectedMed.looseTablets ?? 0}</span>
 									</div>
 									{selectedMed.pillWeightMg && (
 										<div className="med-detail-item">
-											<span className="med-detail-label">Pill Weight</span>
+											<span className="med-detail-label">{t('modal.pillWeight')}</span>
 											<span className="med-detail-value">{selectedMed.pillWeightMg} mg</span>
 										</div>
 									)}
 									<div className="med-detail-item">
-										<span className="med-detail-label">Expiry Date</span>
+										<span className="med-detail-label">{t('modal.expiryDate')}</span>
 										<span className={`med-detail-value ${selectedMed.expiryDate && new Date(selectedMed.expiryDate) < new Date() ? 'danger-text' : ''}`}>
-											{selectedMed.expiryDate ? new Date(selectedMed.expiryDate).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+											{selectedMed.expiryDate ? new Date(selectedMed.expiryDate).toLocaleDateString(i18n.language, { day: "2-digit", month: "short", year: "numeric" }) : "—"}
 										</span>
 									</div>
 								</div>
@@ -1393,13 +1434,13 @@ export default function App() {
 
 							{selectedMed.slices.length > 0 && (
 								<div className="med-detail-section">
-									<h3>Intake Schedule {selectedMed.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip="Intake reminders enabled">🔔</span>}</h3>
+									<h3>{t('modal.intakeSchedule')} {selectedMed.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</h3>
 									<div className="med-detail-schedules">
 										{selectedMed.slices.map((slice, idx) => (
 											<div key={idx} className="med-schedule-item">
-												<span className="med-schedule-usage">{slice.usage} pill{slice.usage !== 1 ? "s" : ""}{selectedMed.pillWeightMg && ` (${slice.usage * selectedMed.pillWeightMg} mg)`}</span>
-												<span className="med-schedule-freq">every {slice.every} day{slice.every !== 1 ? "s" : ""}</span>
-												<span className="med-schedule-time">at {new Date(slice.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+												<span className="med-schedule-usage">{slice.usage} {slice.usage !== 1 ? t('common.pills') : t('common.pill')}{selectedMed.pillWeightMg && ` (${slice.usage * selectedMed.pillWeightMg} mg)`}</span>
+												<span className="med-schedule-freq">{t('form.slices.every')} {slice.every} {slice.every !== 1 ? t('common.days') : t('common.day')}</span>
+												<span className="med-schedule-time">{t('modal.at')} {new Date(slice.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
 											</div>
 										))}
 									</div>
@@ -1412,19 +1453,19 @@ export default function App() {
 								const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings);
 								return (
 									<div className="med-detail-section">
-										<h3>Coverage Status</h3>
+										<h3>{t('modal.coverageStatus')}</h3>
 										<div className="med-detail-grid">
 											<div className="med-detail-item">
-												<span className="med-detail-label">Days Left</span>
+												<span className="med-detail-label">{t('modal.daysLeft')}</span>
 												<span className="med-detail-value">{medCoverage.daysLeft !== null ? formatNumber(medCoverage.daysLeft) : "—"}</span>
 											</div>
 											<div className="med-detail-item">
-												<span className="med-detail-label">Runs Out</span>
+												<span className="med-detail-label">{t('modal.runsOut')}</span>
 												<span className="med-detail-value">{medCoverage.depletionDate ?? "—"}</span>
 											</div>
 											<div className="med-detail-item full-width">
-												<span className="med-detail-label">Status</span>
-												<span className={`status-chip ${status.className}`}>{status.label}</span>
+												<span className="med-detail-label">{t('table.status')}</span>
+												<span className={`status-chip ${status.className}`}>{t(status.label)}</span>
 											</div>
 										</div>
 									</div>
@@ -1433,7 +1474,7 @@ export default function App() {
 
 							{selectedMed.notes && (
 								<div className="med-detail-section">
-									<h3>📝 Notes</h3>
+									<h3>📝 {t('modal.notes')}</h3>
 									<div className="med-notes-content">
 										{selectedMed.notes}
 									</div>
@@ -1443,15 +1484,15 @@ export default function App() {
 
 						<div className="med-detail-footer">
 							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
-								Close
+								{t('common.close')}
 							</button>
 							{selectedMed.slices.length > 0 && (
-								<button className="ghost" onClick={() => generateICS(selectedMed)} title="Export schedule to calendar">
-									📅 Export to Calendar
+								<button className="ghost" onClick={() => generateICS(selectedMed)} title={t('modal.exportTooltip')}>
+									📅 {t('modal.exportCalendar')}
 								</button>
 							)}
 							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
-								Edit Medication
+								{t('modal.editMedication')}
 							</button>
 						</div>
 					</div>
@@ -1479,7 +1520,7 @@ export default function App() {
 						
 						<div className="user-meds-header">
 							<div className="user-avatar">{selectedUser.charAt(0).toUpperCase()}</div>
-							<h2>{selectedUser}'s Medications</h2>
+							<h2>{t('modal.userMedications', { name: selectedUser })}</h2>
 						</div>
 
 						<div className="user-meds-list">
@@ -1498,19 +1539,19 @@ export default function App() {
 											{med.genericName && <span className="user-med-generic">{med.genericName}</span>}
 										</div>
 										<div className="user-med-stats">
-											<span className="user-med-pills">{formatNumber(med.count)} pills</span>
-											{status && <span className={`status-chip ${status.className}`}>{status.label}</span>}
+											<span className="user-med-pills">{formatNumber(med.count)} {t('common.pills')}</span>
+											{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
 										</div>
 									</div>
 								);
 							})}
 							{meds.filter(m => m.takenBy === selectedUser).length === 0 && (
-								<div className="user-meds-empty">No medications found for {selectedUser}</div>
+								<div className="user-meds-empty">{t('modal.noMedsForUser', { name: selectedUser })}</div>
 							)}
 						</div>
 
 						<div className="user-meds-footer">
-							<button className="ghost" onClick={() => setSelectedUser(null)}>Close</button>
+							<button className="ghost" onClick={() => setSelectedUser(null)}>{t('common.close')}</button>
 						</div>
 					</div>
 				</div>
@@ -1556,10 +1597,10 @@ function toInputValue(value: string) {
 	return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string, locale: string) {
 	const d = new Date(value);
 	if (Number.isNaN(d.getTime())) return value;
-	return d.toLocaleString([], { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+	return d.toLocaleString(locale, { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function generateICS(med: Medication) {
@@ -1619,7 +1660,7 @@ END:VCALENDAR`;
 	URL.revokeObjectURL(url);
 }
 
-function buildSchedulePreview(meds: Medication[]) {
+function buildSchedulePreview(meds: Medication[], locale: string) {
 	const events: Array<{ id: string; medName: string; timeStr: string; dateStr: string; usage: number; when: number }> = [];
 	const now = new Date();
 	const end = new Date();
@@ -1637,8 +1678,8 @@ function buildSchedulePreview(meds: Medication[]) {
 					medName: med.name,
 					usage: slice.usage,
 					when: whenMs,
-					timeStr: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-					dateStr: d.toLocaleDateString([], { weekday: "short", day: "2-digit", month: "short" }),
+					timeStr: d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
+					dateStr: d.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" }),
 				});
 			}
 		});
@@ -1673,7 +1714,7 @@ function getExpiryClass(expiryDate: string | null | undefined): string {
 	return "success-text"; // more than 1 month
 }
 
-function calculateCoverage(meds: Medication[], events: Array<{ medName: string; when: number }>) {
+function calculateCoverage(meds: Medication[], events: Array<{ medName: string; when: number }>, locale: string) {
 	const MS_PER_DAY = 86_400_000;
 	const now = Date.now();
 
@@ -1693,7 +1734,7 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 		const rawDaysLeft = dailyRate > 0 ? medsLeft / dailyRate : null;
 		const daysLeft = rawDaysLeft !== null ? Math.max(0, Math.floor(rawDaysLeft)) : null; // conservative: round down
 		const depletionMs = daysLeft !== null ? now + daysLeft * MS_PER_DAY : null;
-		const depletionDate = depletionMs !== null ? new Date(depletionMs).toLocaleDateString([], { weekday: "short", day: "2-digit", month: "short" }) : null;
+		const depletionDate = depletionMs !== null ? new Date(depletionMs).toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" }) : null;
 		const nextEvent = events.find((e) => e.medName === m.name);
 
 		return {
@@ -1702,7 +1743,7 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 			daysLeft,
 			depletionDate,
 			depletionTime: depletionMs,
-			nextDose: nextEvent ? new Date(nextEvent.when).toLocaleString([], { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : null,
+			nextDose: nextEvent ? new Date(nextEvent.when).toLocaleString(locale, { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : null,
 		};
 	});
 
@@ -1710,7 +1751,7 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 	return { low, all: coverage };
 }
 
-function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[], lastSent: string | null): React.ReactNode {
+function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[], lastSent: string | null, t: (key: string, options?: Record<string, unknown>) => string, locale: string): React.ReactNode {
 	// Find the earliest medication that needs a reminder (based on reminderDaysBefore)
 	const medsNeedingReminder = lowStock
 		.filter((c) => c.depletionTime !== null && c.daysLeft !== null && c.daysLeft <= reminderDaysBefore)
@@ -1718,7 +1759,7 @@ function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[],
 
 	const formatLastSent = (iso: string) => {
 		const date = new Date(iso);
-		return date.toLocaleDateString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+		return date.toLocaleDateString(locale, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 	};
 
 	if (medsNeedingReminder.length > 0) {
@@ -1726,12 +1767,12 @@ function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[],
 		if (lastSent) {
 			return (
 				<>
-					<strong className="warning-text">⚠ {medsNeedingReminder.length} med{medsNeedingReminder.length > 1 ? "s" : ""} need reorder</strong>
-					{" · "}Last reminder: {formatLastSent(lastSent)}
+					<strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</strong>
+					{" · "}{t('dashboard.reminders.lastReminder')}: {formatLastSent(lastSent)}
 				</>
 			);
 		}
-		return <strong className="warning-text">⚠ {medsNeedingReminder.length} med{medsNeedingReminder.length > 1 ? "s" : ""} need reorder — waiting for first check</strong>;
+		return <strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })} — {t('dashboard.reminders.waitingFirstCheck')}</strong>;
 	}
 
 	// Calculate when next reminder would be triggered
@@ -1745,8 +1786,8 @@ function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[],
 		if (daysUntilReminder > 0) {
 			return (
 				<>
-					<span className="success-text">✓ All OK</span>
-					{" · "}Next: <strong>{nextMed.name}</strong> in {daysUntilReminder} days
+					<span className="success-text">✓ {t('dashboard.reminders.allOk')}</span>
+					{" · "}{t('dashboard.reminders.nextIn')}: <strong>{nextMed.name}</strong> {t('dashboard.reminders.inDays', { days: daysUntilReminder })}
 				</>
 			);
 		}
@@ -1756,15 +1797,15 @@ function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[],
 	if (lastSent) {
 		return (
 			<>
-				<span className="success-text">✓ All stock OK</span>
-				{" · "}Last reminder: {formatLastSent(lastSent)}
+				<span className="success-text">✓ {t('dashboard.reminders.allStockOk')}</span>
+				{" · "}{t('dashboard.reminders.lastReminder')}: {formatLastSent(lastSent)}
 			</>
 		);
 	}
-	return <span className="success-text">✓ All stock OK — no reminders needed</span>;
+	return <span className="success-text">✓ {t('dashboard.reminders.allStockOk')} — {t('dashboard.reminders.noRemindersNeeded')}</span>;
 }
 
-function getNextReminderForMed(med: Coverage, reminderDaysBefore: number): string {
+function getNextReminderForMed(med: Coverage, reminderDaysBefore: number, locale: string): string {
 	if (!med.depletionTime) return "—";
 	
 	const reminderTime = med.depletionTime - reminderDaysBefore * 86_400_000;
@@ -1774,7 +1815,7 @@ function getNextReminderForMed(med: Coverage, reminderDaysBefore: number): strin
 		return "Due now";
 	}
 	
-	return new Date(reminderTime).toLocaleDateString([], {
+	return new Date(reminderTime).toLocaleDateString(locale, {
 		day: "2-digit",
 		month: "short",
 	});
@@ -1795,26 +1836,26 @@ type StockThresholds = {
 function getStockStatus(daysLeft: number | null, medsLeft: number, thresholds: StockThresholds): StockStatus {
 	// Out of stock: 0 pills
 	if (medsLeft <= 0 || daysLeft === 0) {
-		return { level: "out-of-stock", className: "danger", label: "Out of Stock" };
+		return { level: "out-of-stock", className: "danger", label: "status.outOfStock" };
 	}
 	
 	// No schedule set (no daysLeft calculation possible)
 	if (daysLeft === null) {
-		return { level: "normal", className: "success", label: "No Schedule" };
+		return { level: "normal", className: "success", label: "status.noSchedule" };
 	}
 	
 	// High stock: > highStockDays (e.g. > 180 days)
 	if (daysLeft > thresholds.highStockDays) {
-		return { level: "high", className: "high", label: "High Stock" };
+		return { level: "high", className: "high", label: "status.highStock" };
 	}
 	
 	// Normal stock: between lowStockDays and highStockDays
 	if (daysLeft >= thresholds.lowStockDays) {
-		return { level: "normal", className: "success", label: "Normal" };
+		return { level: "normal", className: "success", label: "status.normal" };
 	}
 	
 	// Low stock: < lowStockDays (e.g. < 30 days)
-	return { level: "low", className: "warning", label: "Low Stock" };
+	return { level: "low", className: "warning", label: "status.lowStock" };
 }
 
 function MedicationAvatar({ name, imageUrl, size = "sm" }: { name: string; imageUrl?: string | null; size?: "sm" | "md" | "lg" }) {

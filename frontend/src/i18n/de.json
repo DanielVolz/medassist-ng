@@ -1,0 +1,236 @@
+{
+  "nav": {
+    "dashboard": "Übersicht",
+    "medications": "Medikamente",
+    "planner": "Planer",
+    "settings": "Einstellungen",
+    "schedule": "Zeitplan"
+  },
+  "header": {
+    "eyebrow": {
+      "overview": "MedAssist · Übersicht",
+      "inventory": "MedAssist · Inventar",
+      "planner": "MedAssist · Planer",
+      "settings": "MedAssist · Einstellungen",
+      "schedule": "MedAssist · Zeitplan"
+    }
+  },
+  "dashboard": {
+    "reorder": {
+      "title": "Nachbestell-Erinnerung",
+      "badge": "Bestandsüberwachung",
+      "noMeds": "Noch keine Medikamente konfiguriert.",
+      "allGood": "Alles in Ordnung, genug Vorrat.",
+      "sendReminder": "🔔 Erinnerung jetzt senden"
+    },
+    "overview": {
+      "title": "Medikamentenübersicht",
+      "badge": "Bestand"
+    },
+    "schedules": {
+      "title": "Kommende Einnahmen",
+      "1month": "1 Monat",
+      "3months": "3 Monate",
+      "6months": "6 Monate"
+    },
+    "reminders": {
+      "active": "Automatische Erinnerungen aktiv",
+      "allStockOk": "Bestand OK",
+      "allOk": "Alles OK",
+      "lastReminder": "Letzte Erinnerung",
+      "nextIn": "Nächste",
+      "inDays": "in {{days}} Tagen",
+      "noRemindersNeeded": "keine Erinnerungen nötig",
+      "needReorder": "{{count}} Medikament nachbestellen",
+      "needReorder_other": "{{count}} Medikamente nachbestellen",
+      "waitingFirstCheck": "warte auf erste Prüfung"
+    }
+  },
+  "table": {
+    "name": "Name",
+    "pills": "Tabletten",
+    "days": "Tage",
+    "currentPills": "Aktuelle Tabletten",
+    "daysLeft": "Tage übrig",
+    "status": "Bestand",
+    "runsOut": "Aufgebraucht",
+    "autoRemind": "Auto-Erinnerung",
+    "expiry": "Ablaufdatum"
+  },
+  "medications": {
+    "list": {
+      "title": "Medikamentenliste",
+      "entries": "{{count}} Einträge",
+      "entries_one": "{{count}} Eintrag",
+      "entries_other": "{{count}} Einträge"
+    },
+    "details": {
+      "packs": "Packungen",
+      "blisters": "Blister pro Packung",
+      "pillsPerBlister": "Tabletten pro Blister",
+      "loose": "Lose",
+      "total": "Gesamt"
+    }
+  },
+  "form": {
+    "editEntry": "Eintrag bearbeiten",
+    "newEntry": "Neuer Eintrag",
+    "badge": "Packungen + lose Tabletten",
+    "commercialName": "Handelsname",
+    "genericName": "Wirkstoff",
+    "takenBy": "Eingenommen von",
+    "packs": "Packungen",
+    "blistersPerPack": "Blister pro Packung",
+    "pillsPerBlister": "Tabletten pro Blister",
+    "loosePills": "Lose Tabletten",
+    "pillWeight": "Tablettengewicht (mg)",
+    "total": "Gesamt (Tabletten)",
+    "expiryDate": "Ablaufdatum",
+    "notes": "Notizen",
+    "medicationImage": "Medikamentenbild",
+    "removeImage": "Bild entfernen",
+    "placeholders": {
+      "commercial": "z.B. Ozempic",
+      "generic": "z.B. Semaglutid (optional)",
+      "takenBy": "z.B. Max, Anna (optional)",
+      "weight": "z.B. 240",
+      "notes": "z.B. Mit Essen einnehmen, Alkohol vermeiden... (optional)"
+    },
+    "slices": {
+      "title": "Einnahmeplan",
+      "remind": "Erinnern",
+      "remindTooltip": "Erhalte eine Benachrichtigung 15 Minuten vor jeder geplanten Einnahme",
+      "addIntake": "Einnahme",
+      "usage": "Dosis (Tabletten)",
+      "everyDays": "Alle (Tage)",
+      "every": "alle",
+      "from": "ab",
+      "start": "Start (Datum/Uhrzeit)"
+    }
+  },
+  "planner": {
+    "title": "Bedarfsrechner",
+    "badge": "Vorrat planen",
+    "from": "Von",
+    "until": "Bis",
+    "calculate": "Berechnen",
+    "calculating": "Wird berechnet...",
+    "sendEmail": "📧 Per E-Mail senden",
+    "table": {
+      "medication": "Medikament",
+      "usage": "Verbrauch",
+      "blistersNeeded": "Blister benötigt",
+      "blisters": "Blister",
+      "available": "Verfügbar"
+    }
+  },
+  "settings": {
+    "loading": "Einstellungen werden geladen...",
+    "language": {
+      "title": "Sprache",
+      "select": "Sprache auswählen"
+    },
+    "notifications": {
+      "title": "Benachrichtigungen",
+      "channels": "Kanäle",
+      "email": "E-Mail",
+      "push": "Push",
+      "stockReminders": "Bestands-Erinnerungen",
+      "intakeReminders": "Einnahme-Erinnerungen",
+      "enableHint": "Aktivieren Sie mindestens einen Kanal, um Benachrichtigungen zu erhalten."
+    },
+    "email": {
+      "recipient": "Empfänger",
+      "notConfigured": "Nicht konfiguriert"
+    },
+    "push": {
+      "url": "URL",
+      "supports": "Unterstützt ntfy, Discord, Telegram, Slack"
+    },
+    "schedule": {
+      "stockCheck": "Bestandsprüfung",
+      "dailyAt6": "Täglich um 6:00 Uhr",
+      "intakeCheck": "Einnahmeprüfung",
+      "15minBefore": "15 Min. vor geplanter Zeit",
+      "nextCheck": "Nächste Bestandsprüfung",
+      "lastSent": "Zuletzt gesendet"
+    },
+    "stock": {
+      "title": "Bestand",
+      "threshold": "Erinnerungsschwelle",
+      "remindWhen": "Erinnern wenn Vorrat unter",
+      "repeatDaily": "Täglich wiederholen",
+      "repeatTooltip": "Wenn aktiviert, wird täglich eine Erinnerung gesendet solange der Bestand niedrig ist. Andernfalls nur einmal pro Medikament bis zum Auffüllen.",
+      "display": "Anzeige",
+      "lowStockDays": "Niedriger Bestand (Tage)",
+      "lowStockTooltip": "Gelbe Warnung ab diesem Schwellenwert",
+      "highStockDays": "Hoher Bestand (Tage)",
+      "highStockTooltip": "Grün mit Stern ab diesem Schwellenwert"
+    },
+    "saveSettings": "Einstellungen speichern"
+  },
+  "modal": {
+    "for": "für",
+    "at": "um",
+    "stockInfo": "Bestandsinformationen",
+    "totalPills": "Tabletten gesamt",
+    "packs": "Packungen",
+    "blistersPerPack": "Blister/Packung",
+    "pillsPerBlister": "Tabletten/Blister",
+    "loosePills": "Lose Tabletten",
+    "pillWeight": "Tablettengewicht",
+    "expiryDate": "Ablaufdatum",
+    "intakeSchedule": "Einnahmeplan",
+    "coverageStatus": "Reichweite",
+    "daysLeft": "Tage übrig",
+    "runsOut": "Aufgebraucht",
+    "notes": "Notizen",
+    "exportCalendar": "In Kalender exportieren",
+    "exportTooltip": "Zeitplan in Kalender exportieren",
+    "editMedication": "Medikament bearbeiten",
+    "userMedications": "Medikamente von {{name}}",
+    "noMedsForUser": "Keine Medikamente für {{name}} gefunden"
+  },
+  "status": {
+    "outOfStock": "Leer",
+    "lowStock": "Niedrig",
+    "normal": "Normal",
+    "highStock": "Hoch",
+    "noSchedule": "Kein Zeitplan",
+    "enough": "Ausreichend",
+    "noPillsLeft": "⚠ Keine Tabletten mehr",
+    "stockOk": "✓ Bestand OK"
+  },
+  "tooltips": {
+    "intakeReminders": "Einnahme-Erinnerungen aktiviert",
+    "hasNotes": "Hat Notizen",
+    "lightMode": "Zum hellen Modus wechseln",
+    "darkMode": "Zum dunklen Modus wechseln"
+  },
+  "dose": {
+    "takenBy": "eingenommen von",
+    "markAsTaken": "Als eingenommen markieren"
+  },
+  "common": {
+    "loading": "Wird geladen...",
+    "sending": "Wird gesendet...",
+    "saving": "Wird gespeichert...",
+    "saved": "Gespeichert ✓",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "remove": "Entfernen",
+    "reset": "Zurücksetzen",
+    "test": "Test",
+    "undo": "Rückgängig",
+    "optional": "optional",
+    "pill": "Tablette",
+    "pills": "Tabletten",
+    "day": "Tag",
+    "days": "Tage",
+    "blisters": "Blister",
+    "total": "gesamt"
+  }
+}

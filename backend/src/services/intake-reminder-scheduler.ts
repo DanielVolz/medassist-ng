@@ -4,6 +4,7 @@ import { medications } from "../db/schema.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { loadNotificationSettings, sendShoutrrrNotification } from "../routes/settings.js";
+import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
 
 type Slice = { usage: number; every: number; start: string };
 
@@ -107,7 +108,7 @@ function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: num
   return upcoming;
 }
 
-async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[]): Promise<{ success: boolean; error?: string }> {
+async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[], language: Language): Promise<{ success: boolean; error?: string }> {
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
@@ -119,36 +120,41 @@ async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[])
     return { success: false, error: "SMTP not configured" };
   }
 
+  const tr = getTranslations(language);
   const tableRows = intakes
     .map(
       (intake) => `
       <tr>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">${intake.medName}</td>
-        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;"><strong>${intake.usage}</strong> pills</td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;"><strong>${intake.usage}</strong> ${tr.intakeReminder.pills}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${intake.intakeTimeStr}</td>
       </tr>
     `
     )
     .join("");
 
+  const alertText = intakes.length === 1 
+    ? tr.intakeReminder.alertSingle 
+    : t(tr.intakeReminder.alertMultiple, { count: intakes.length });
+
   const html = `
     <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
       <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">💊 MedAssist - Intake Reminder</h2>
-        <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">Time to take your medication in ${REMINDER_MINUTES_BEFORE} minutes:</p>
+        <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${tr.intakeReminder.title}</h2>
+        <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">${t(tr.intakeReminder.description, { minutes: REMINDER_MINUTES_BEFORE })}</p>
         
         <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #eff6ff; border: 1px solid #bfdbfe;">
           <p style="margin: 0; color: #1e40af; font-weight: 500; font-size: 13px;">
-            💊 ${intakes.length} medication${intakes.length > 1 ? "s" : ""} scheduled
+            ${alertText}
           </p>
         </div>
 
         <table style="width: 100%; border-collapse: collapse; background: white;">
           <thead>
             <tr style="background: #f3f4f6;">
-              <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280;">Medication</th>
-              <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280;">Dosage</th>
-              <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280;">Time</th>
+              <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280;">${tr.intakeReminder.tableHeaders.medication}</th>
+              <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280;">${tr.intakeReminder.tableHeaders.dosage}</th>
+              <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280;">${tr.intakeReminder.tableHeaders.time}</th>
             </tr>
           </thead>
           <tbody>
@@ -158,20 +164,22 @@ async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[])
 
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
         <p style="color: #9ca3af; font-size: 11px; margin: 0;">
-          MedAssist Medication Planner
+          ${tr.intakeReminder.footer}
         </p>
       </div>
     </div>
   `;
 
-  const plainText = `MedAssist - Intake Reminder
+  const plainText = `${tr.intakeReminder.title}
 
-Time to take your medication in ${REMINDER_MINUTES_BEFORE} minutes:
+${t(tr.intakeReminder.description, { minutes: REMINDER_MINUTES_BEFORE })}
 
-${intakes.map((i) => `${i.medName}: ${i.usage} pills at ${i.intakeTimeStr}`).join("\n")}
+${intakes.map((i) => `${i.medName}: ${i.usage} ${tr.intakeReminder.pills} ${tr.intakeReminder.tableHeaders.time.toLowerCase()}: ${i.intakeTimeStr}`).join("\n")}
 
 ---
-MedAssist Medication Planner`;
+${tr.intakeReminder.footer}`;
+
+  const subject = t(tr.intakeReminder.subject, { medications: intakes.map(i => i.medName).join(", ") });
 
   try {
     const transporter = nodemailer.createTransport({
@@ -187,7 +195,7 @@ MedAssist Medication Planner`;
     await transporter.sendMail({
       from: smtpFrom,
       to: email,
-      subject: `💊 MedAssist: Medication Reminder - ${intakes.map(i => i.medName).join(", ")}`,
+      subject: `💊 ${subject}`,
       text: plainText,
       html,
     });
@@ -201,6 +209,8 @@ MedAssist Medication Planner`;
 
 async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void; error: (msg: string) => void }): Promise<void> {
   const settings = loadNotificationSettings();
+  const language = settings.language;
+  const tr = getTranslations(language);
   
   // Check if any intake reminder notifications are enabled (granular check)
   const emailEnabled = settings.emailEnabled && settings.notificationEmail && settings.emailIntakeReminders;
@@ -249,7 +259,7 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
   
   // Send email if enabled for intake reminders
   if (emailEnabled) {
-    const result = await sendIntakeReminderEmail(settings.notificationEmail, newReminders);
+    const result = await sendIntakeReminderEmail(settings.notificationEmail, newReminders, language);
     emailSuccess = result.success;
     if (result.success) {
       logger.info(`[IntakeReminder] Email sent successfully`);
@@ -260,9 +270,9 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
   
   // Send Shoutrrr notification if enabled for intake reminders
   if (shoutrrrEnabled) {
-    const title = `Medication Reminder in ${REMINDER_MINUTES_BEFORE} min`;
+    const title = t(tr.push.intakeTitle, { minutes: REMINDER_MINUTES_BEFORE });
     const message = newReminders
-      .map((i) => `- ${i.medName}: ${i.usage} pills at ${i.intakeTimeStr}`)
+      .map((i) => `- ${i.medName}: ${t(tr.push.pillsAt, { count: i.usage, time: i.intakeTimeStr })}`)
       .join("\n");
     
     const result = await sendShoutrrrNotification(settings.shoutrrrUrl, title, message);

@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { getReminderState } from "../services/reminder-scheduler.js";
+import type { Language } from "../i18n/translations.js";
 
 type SettingsBody = {
   emailEnabled: boolean;
@@ -19,6 +20,8 @@ type SettingsBody = {
   emailIntakeReminders: boolean;
   shoutrrrStockReminders: boolean;
   shoutrrrIntakeReminders: boolean;
+  // Language setting
+  language: Language;
 };
 
 type TestEmailBody = {
@@ -48,6 +51,8 @@ type NotificationSettings = {
   emailIntakeReminders: boolean;
   shoutrrrStockReminders: boolean;
   shoutrrrIntakeReminders: boolean;
+  // Language setting
+  language: Language;
 };
 
 function loadNotificationSettings(): NotificationSettings {
@@ -69,6 +74,8 @@ function loadNotificationSettings(): NotificationSettings {
         emailIntakeReminders: saved.emailIntakeReminders ?? true,
         shoutrrrStockReminders: saved.shoutrrrStockReminders ?? true,
         shoutrrrIntakeReminders: saved.shoutrrrIntakeReminders ?? true,
+        // Language setting (default to English)
+        language: saved.language ?? "en",
       };
     }
   } catch {
@@ -88,6 +95,7 @@ function loadNotificationSettings(): NotificationSettings {
     emailIntakeReminders: true,
     shoutrrrStockReminders: true,
     shoutrrrIntakeReminders: true,
+    language: "en",
   };
 }
 
@@ -120,6 +128,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       emailIntakeReminders: notification.emailIntakeReminders,
       shoutrrrStockReminders: notification.shoutrrrStockReminders,
       shoutrrrIntakeReminders: notification.shoutrrrIntakeReminders,
+      // Language setting
+      language: notification.language,
       // SMTP settings (admin-configured, from .env)
       smtpHost: process.env.SMTP_HOST ?? "",
       smtpPort: parseInt(process.env.SMTP_PORT ?? "587"),
@@ -153,6 +163,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       emailIntakeReminders: body.emailIntakeReminders ?? true,
       shoutrrrStockReminders: body.shoutrrrStockReminders ?? true,
       shoutrrrIntakeReminders: body.shoutrrrIntakeReminders ?? true,
+      // Language setting
+      language: body.language ?? "en",
     });
 
     return reply.send({ success: true });
@@ -240,7 +252,8 @@ export async function sendShoutrrrNotification(urlStr: string, title: string, me
     let body: string | undefined;
 
     // Remove emojis from title for header compatibility (ntfy doesn't support unicode in headers)
-    const cleanTitle = title.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|⚠️/gu, "").trim();
+    // Match common emojis, pictographs, symbols, and variation selectors
+    const cleanTitle = title.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{2000}-\u{206F}]|⚠|️/gu, "").trim();
 
     // Handle different URL formats
     if (urlStr.startsWith("ntfy://")) {

@@ -4,6 +4,7 @@ import { medications } from "../db/schema.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { loadNotificationSettings, sendShoutrrrNotification } from "../routes/settings.js";
+import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
 
 type Slice = { usage: number; every: number; start: string };
 
@@ -22,6 +23,8 @@ type NotificationSettings = {
   emailIntakeReminders: boolean;
   shoutrrrStockReminders: boolean;
   shoutrrrIntakeReminders: boolean;
+  // Language setting
+  language: Language;
 };
 
 type ReminderState = {
@@ -201,13 +204,13 @@ function calculateDailyUsage(slices: Slice[]): number {
   return slices.reduce((sum, s) => sum + s.usage / s.every, 0);
 }
 
-function calculateDepletionInfo(med: { count: number; slices: Slice[] }): { daysLeft: number | null; depletionDate: string | null } {
+function calculateDepletionInfo(med: { count: number; slices: Slice[] }, language: Language): { daysLeft: number | null; depletionDate: string | null } {
   const dailyUsage = calculateDailyUsage(med.slices);
   if (dailyUsage <= 0) return { daysLeft: null, depletionDate: null };
   
   const daysLeft = Math.floor(med.count / dailyUsage);
   const depletionMs = Date.now() + daysLeft * 86_400_000;
-  const depletionDate = new Date(depletionMs).toLocaleDateString("en-US", {
+  const depletionDate = new Date(depletionMs).toLocaleDateString(getDateLocale(language), {
     weekday: "short",
     day: "2-digit",
     month: "short",
@@ -223,14 +226,14 @@ type LowStockItem = {
   depletionDate: string | null;
 };
 
-async function getMedicationsNeedingReminder(reminderDaysBefore: number): Promise<LowStockItem[]> {
+async function getMedicationsNeedingReminder(reminderDaysBefore: number, language: Language): Promise<LowStockItem[]> {
   const rows = await db.select().from(medications).orderBy(medications.id);
   
   const lowStock: LowStockItem[] = [];
   
   for (const row of rows) {
     const slices = parseSlices(row);
-    const { daysLeft, depletionDate } = calculateDepletionInfo({ count: row.count, slices });
+    const { daysLeft, depletionDate } = calculateDepletionInfo({ count: row.count, slices }, language);
     
     // Check if medication runs out within reminderDaysBefore days
     if (daysLeft !== null && daysLeft <= reminderDaysBefore) {
@@ -246,7 +249,7 @@ async function getMedicationsNeedingReminder(reminderDaysBefore: number): Promis
   return lowStock;
 }
 
-async function sendReminderEmail(email: string, lowStock: LowStockItem[]): Promise<{ success: boolean; error?: string }> {
+async function sendReminderEmail(email: string, lowStock: LowStockItem[], language: Language): Promise<{ success: boolean; error?: string }> {
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
@@ -258,6 +261,7 @@ async function sendReminderEmail(email: string, lowStock: LowStockItem[]): Promi
     return { success: false, error: "SMTP not configured" };
   }
 
+  const tr = getTranslations(language);
   const tableRows = lowStock
     .map(
       (row) => `
@@ -271,15 +275,19 @@ async function sendReminderEmail(email: string, lowStock: LowStockItem[]): Promi
     )
     .join("");
 
+  const alertText = lowStock.length === 1 
+    ? tr.stockReminder.alertSingle 
+    : t(tr.stockReminder.alertMultiple, { count: lowStock.length });
+
   const html = `
     <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
       <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">⚠️ MedAssist - Automatic Reorder Reminder</h2>
-        <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">The following medications are running low and need to be reordered:</p>
+        <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${tr.stockReminder.title}</h2>
+        <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">${tr.stockReminder.description}</p>
         
         <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #fef2f2; border: 1px solid #fecaca;">
           <p style="margin: 0; color: #991b1b; font-weight: 500; font-size: 13px;">
-            ⚠️ ${lowStock.length} medication${lowStock.length > 1 ? "s" : ""} running low!
+            ${alertText}
           </p>
         </div>
 
@@ -287,10 +295,10 @@ async function sendReminderEmail(email: string, lowStock: LowStockItem[]): Promi
           <table style="width: 100%; border-collapse: collapse; background: white; min-width: 400px;">
             <thead>
               <tr style="background: #f3f4f6;">
-                <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Medication</th>
-                <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Pills</th>
-                <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Days</th>
-                <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Runs Out</th>
+                <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.medication}</th>
+                <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.pills}</th>
+                <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.days}</th>
+                <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.runsOut}</th>
               </tr>
             </thead>
             <tbody>
@@ -301,20 +309,23 @@ async function sendReminderEmail(email: string, lowStock: LowStockItem[]): Promi
 
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
         <p style="color: #9ca3af; font-size: 11px; margin: 0;">
-          🤖 Automatic reminder from MedAssist
+          ${tr.stockReminder.footer}
         </p>
       </div>
     </div>
   `;
 
-  const plainText = `MedAssist - Automatic Reorder Reminder
+  const plainText = `${tr.stockReminder.title}
 
-The following medications are running low:
+${tr.stockReminder.description}
 
-${lowStock.map((r) => `${r.name}: ${r.medsLeft} pills left, ${r.daysLeft ?? 0} days remaining, runs out ${r.depletionDate ?? "soon"}`).join("\n")}
+${lowStock.map((r) => `${r.name}: ${r.medsLeft} ${tr.common.pills}, ${r.daysLeft ?? 0} ${tr.common.days}, ${tr.stockReminder.tableHeaders.runsOut}: ${r.depletionDate ?? tr.common.soon}`).join("\n")}
 
 ---
-Automatic reminder from MedAssist`;
+${tr.stockReminder.footer}`;
+
+  const subjectPlural = lowStock.length === 1 ? "" : (language === "de" ? "e" : "s");
+  const subject = t(tr.stockReminder.subject, { count: lowStock.length, s: subjectPlural, e: subjectPlural });
 
   try {
     const transporter = nodemailer.createTransport({
@@ -330,7 +341,7 @@ Automatic reminder from MedAssist`;
     await transporter.sendMail({
       from: smtpFrom,
       to: email,
-      subject: `⚠️ MedAssist Auto-Reminder: ${lowStock.length} Medication${lowStock.length > 1 ? "s" : ""} Running Low`,
+      subject: `⚠️ ${subject}`,
       text: plainText,
       html,
     });
@@ -344,6 +355,8 @@ Automatic reminder from MedAssist`;
 
 async function checkAndSendReminder(logger: { info: (msg: string) => void; error: (msg: string) => void }): Promise<void> {
   const settings = loadNotificationSettings();
+  const language = settings.language;
+  const tr = getTranslations(language);
   
   // Check if any stock reminder notifications are enabled (granular check)
   const emailEnabled = settings.emailEnabled && settings.notificationEmail && settings.emailStockReminders;
@@ -358,7 +371,7 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   const today = getTodayInTimezone(); // YYYY-MM-DD in configured timezone
 
   // Get all medications that need a reminder
-  const allLowStock = await getMedicationsNeedingReminder(settings.reminderDaysBefore);
+  const allLowStock = await getMedicationsNeedingReminder(settings.reminderDaysBefore, language);
   
   if (allLowStock.length === 0) {
     // No low stock - clear the notified list (medications have been restocked)
@@ -408,7 +421,7 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   
   // Send email if enabled
   if (emailEnabled) {
-    const result = await sendReminderEmail(settings.notificationEmail, medsToNotify);
+    const result = await sendReminderEmail(settings.notificationEmail, medsToNotify, language);
     emailSuccess = result.success;
     if (result.success) {
       logger.info(`[Reminder] Email sent successfully to ${settings.notificationEmail}`);
@@ -419,9 +432,11 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   
   // Send Shoutrrr notification if enabled
   if (shoutrrrEnabled) {
-    const title = `⚠️ MedAssist: ${medsToNotify.length} Medication${medsToNotify.length > 1 ? "s" : ""} Running Low`;
+    const title = medsToNotify.length === 1 
+      ? tr.push.stockTitle 
+      : t(tr.push.stockTitleMultiple, { count: medsToNotify.length });
     const message = medsToNotify
-      .map((m) => `• ${m.name}: ${m.medsLeft} pills, ${m.daysLeft ?? 0} days left`)
+      .map((m) => `• ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`)
       .join("\n");
     
     const result = await sendShoutrrrNotification(settings.shoutrrrUrl, title, message);

@@ -1,0 +1,236 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "medications": "Medications",
+    "planner": "Planner",
+    "settings": "Settings",
+    "schedule": "Schedule"
+  },
+  "header": {
+    "eyebrow": {
+      "overview": "MedAssist · Overview",
+      "inventory": "MedAssist · Inventory",
+      "planner": "MedAssist · Planner",
+      "settings": "MedAssist · Configuration",
+      "schedule": "MedAssist · Schedule"
+    }
+  },
+  "dashboard": {
+    "reorder": {
+      "title": "Reorder Reminder",
+      "badge": "Stock watch",
+      "noMeds": "No medications configured yet.",
+      "allGood": "All good, enough stock.",
+      "sendReminder": "🔔 Send Reminder Now"
+    },
+    "overview": {
+      "title": "Medication Overview",
+      "badge": "Stock"
+    },
+    "schedules": {
+      "title": "Upcoming Schedules",
+      "1month": "1 month",
+      "3months": "3 months",
+      "6months": "6 months"
+    },
+    "reminders": {
+      "active": "Automatic reminders active",
+      "allStockOk": "All stock OK",
+      "allOk": "All OK",
+      "lastReminder": "Last reminder",
+      "nextIn": "Next",
+      "inDays": "in {{days}} days",
+      "noRemindersNeeded": "no reminders needed",
+      "needReorder": "{{count}} med needs reorder",
+      "needReorder_other": "{{count}} meds need reorder",
+      "waitingFirstCheck": "waiting for first check"
+    }
+  },
+  "table": {
+    "name": "Name",
+    "pills": "Pills",
+    "days": "Days",
+    "currentPills": "Current pills",
+    "daysLeft": "Days left",
+    "status": "Stock",
+    "runsOut": "Runs out",
+    "autoRemind": "Auto-remind",
+    "expiry": "Expiry"
+  },
+  "medications": {
+    "list": {
+      "title": "Medication list",
+      "entries": "{{count}} entries",
+      "entries_one": "{{count}} entry",
+      "entries_other": "{{count}} entries"
+    },
+    "details": {
+      "packs": "Packs",
+      "blisters": "Blisters per pack",
+      "pillsPerBlister": "Pills per blister",
+      "loose": "Loose",
+      "total": "Total"
+    }
+  },
+  "form": {
+    "editEntry": "Edit entry",
+    "newEntry": "New entry",
+    "badge": "Packs + loose pills",
+    "commercialName": "Commercial Name",
+    "genericName": "Generic Name",
+    "takenBy": "Taken by",
+    "packs": "Packs",
+    "blistersPerPack": "Blisters per pack",
+    "pillsPerBlister": "Pills per blister",
+    "loosePills": "Loose pills",
+    "pillWeight": "Pill weight (mg)",
+    "total": "Total (pills)",
+    "expiryDate": "Expiry Date",
+    "notes": "Notes",
+    "medicationImage": "Medication Image",
+    "removeImage": "Remove Image",
+    "placeholders": {
+      "commercial": "e.g. Ozempic",
+      "generic": "e.g. Semaglutide (optional)",
+      "takenBy": "e.g. John, Sarah (optional)",
+      "weight": "e.g. 240",
+      "notes": "e.g. Take with food, avoid alcohol... (optional)"
+    },
+    "slices": {
+      "title": "Intake schedule",
+      "remind": "Remind",
+      "remindTooltip": "Receive a notification 15 minutes before each scheduled intake",
+      "addIntake": "Intake",
+      "usage": "Usage (pills)",
+      "everyDays": "Every (days)",
+      "every": "every",
+      "from": "from",
+      "start": "Start (date/time)"
+    }
+  },
+  "planner": {
+    "title": "Demand Calculator",
+    "badge": "Plan your supply",
+    "from": "From",
+    "until": "Until",
+    "calculate": "Calculate",
+    "calculating": "Calculating...",
+    "sendEmail": "📧 Send via Email",
+    "table": {
+      "medication": "Medication",
+      "usage": "Usage",
+      "blistersNeeded": "Blisters needed",
+      "blisters": "Blisters",
+      "available": "Available"
+    }
+  },
+  "settings": {
+    "loading": "Loading settings...",
+    "language": {
+      "title": "Language",
+      "select": "Select language"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "channels": "Channels",
+      "email": "Email",
+      "push": "Push",
+      "stockReminders": "Stock Reminders",
+      "intakeReminders": "Intake Reminders",
+      "enableHint": "Enable at least one channel below to receive notifications."
+    },
+    "email": {
+      "recipient": "Recipient",
+      "notConfigured": "Not configured"
+    },
+    "push": {
+      "url": "URL",
+      "supports": "Supports ntfy, Discord, Telegram, Slack"
+    },
+    "schedule": {
+      "stockCheck": "Stock check",
+      "dailyAt6": "Daily at 6:00 AM",
+      "intakeCheck": "Intake check",
+      "15minBefore": "15 min before scheduled time",
+      "nextCheck": "Next stock check",
+      "lastSent": "Last sent"
+    },
+    "stock": {
+      "title": "Stock",
+      "threshold": "Reminder Threshold",
+      "remindWhen": "Remind when supply drops below",
+      "repeatDaily": "Repeat daily",
+      "repeatTooltip": "When enabled, sends reminders every day while stock is low. Otherwise, only notifies once per medication until restocked.",
+      "display": "Display",
+      "lowStockDays": "Low Stock (days)",
+      "lowStockTooltip": "Yellow warning color threshold",
+      "highStockDays": "High Stock (days)",
+      "highStockTooltip": "Green with star threshold"
+    },
+    "saveSettings": "Save Settings"
+  },
+  "modal": {
+    "for": "for",
+    "at": "at",
+    "stockInfo": "Stock Information",
+    "totalPills": "Total Pills",
+    "packs": "Packs",
+    "blistersPerPack": "Blisters/Pack",
+    "pillsPerBlister": "Pills/Blister",
+    "loosePills": "Loose Pills",
+    "pillWeight": "Pill Weight",
+    "expiryDate": "Expiry Date",
+    "intakeSchedule": "Intake Schedule",
+    "coverageStatus": "Coverage Status",
+    "daysLeft": "Days Left",
+    "runsOut": "Runs Out",
+    "notes": "Notes",
+    "exportCalendar": "Export to Calendar",
+    "exportTooltip": "Export schedule to calendar",
+    "editMedication": "Edit Medication",
+    "userMedications": "{{name}}'s Medications",
+    "noMedsForUser": "No medications found for {{name}}"
+  },
+  "status": {
+    "outOfStock": "Empty",
+    "lowStock": "Low",
+    "normal": "Normal",
+    "highStock": "High",
+    "noSchedule": "No Schedule",
+    "enough": "Enough",
+    "noPillsLeft": "⚠ No pills left",
+    "stockOk": "✓ Stock OK"
+  },
+  "tooltips": {
+    "intakeReminders": "Intake reminders enabled",
+    "hasNotes": "Has notes",
+    "lightMode": "Switch to light mode",
+    "darkMode": "Switch to dark mode"
+  },
+  "dose": {
+    "takenBy": "taken by",
+    "markAsTaken": "Mark as taken"
+  },
+  "common": {
+    "loading": "Loading...",
+    "sending": "Sending...",
+    "saving": "Saving...",
+    "saved": "Saved ✓",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "edit": "Edit",
+    "delete": "Delete",
+    "remove": "Remove",
+    "reset": "Reset",
+    "test": "Test",
+    "undo": "Undo",
+    "optional": "optional",
+    "pill": "pill",
+    "pills": "pills",
+    "day": "day",
+    "days": "days",
+    "blisters": "blisters",
+    "total": "total"
+  }
+}

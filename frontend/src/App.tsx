@@ -721,7 +721,12 @@ export default function App() {
 											{day.meds.map((item) => {
 												const medCoverage = coverageByMed[item.medName];
 												const med = meds.find(m => m.name === item.medName);
-												const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
+												const depletionTime = depletionByMed[item.medName];
+												// Check if this dose is scheduled after medication runs out
+												const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+												const status = willBeOutOfStock 
+													? { className: "danger", label: "status.outOfStock" }
+													: medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 												const allTaken = item.doses.every((d) => takenDoses.has(d.id));
 												const takenCount = item.doses.filter((d) => takenDoses.has(d.id)).length;
 												return (
@@ -1324,7 +1329,12 @@ export default function App() {
 										{day.meds.map((item) => {
 											const medCoverage = coverageByMed[item.medName];
 											const med = meds.find(m => m.name === item.medName);
-											const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
+											const depletionTime = depletionByMed[item.medName];
+											// Check if this dose is scheduled after medication runs out
+											const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+											const status = willBeOutOfStock 
+												? { className: "danger", label: "status.outOfStock" }
+												: medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 											const allTaken = item.doses.every((d) => takenDoses.has(d.id));
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>

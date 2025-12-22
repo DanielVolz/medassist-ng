@@ -1396,10 +1396,16 @@ export default function App() {
 						<div className="med-detail-body">
 							<div className="med-detail-section">
 								<h3>{t('modal.stockInfo')}</h3>
+								{(() => {
+									const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
+									const currentStock = medCoverage ? medCoverage.medsLeft : selectedMed.count;
+									const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
+									const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "";
+									return (
 								<div className="med-detail-grid">
 									<div className="med-detail-item">
-										<span className="med-detail-label">{t('modal.totalPills')}</span>
-										<span className="med-detail-value">{formatNumber(selectedMed.count)}</span>
+										<span className="med-detail-label">{t('modal.currentStock')}</span>
+										<span className={`med-detail-value ${textClass}`}>{formatNumber(currentStock)}/{formatNumber(selectedMed.count)}</span>
 									</div>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t('modal.packs')}</span>
@@ -1430,6 +1436,8 @@ export default function App() {
 										</span>
 									</div>
 								</div>
+									);
+								})()}
 						</div>
 
 							{selectedMed.slices.length > 0 && (
@@ -1527,6 +1535,7 @@ export default function App() {
 							{meds.filter(m => m.takenBy === selectedUser).map((med) => {
 								const medCoverage = coverage.all.find(c => c.name === med.name);
 								const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
+								const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(med.count);
 								return (
 									<div 
 										key={med.id} 
@@ -1539,7 +1548,7 @@ export default function App() {
 											{med.genericName && <span className="user-med-generic">{med.genericName}</span>}
 										</div>
 										<div className="user-med-stats">
-											<span className="user-med-pills">{formatNumber(med.count)} {t('common.pills')}</span>
+											<span className="user-med-pills">{currentStock}/{formatNumber(med.count)} {t('common.pills')}</span>
 											{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
 										</div>
 									</div>

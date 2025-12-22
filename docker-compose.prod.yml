@@ -1,3 +1,7 @@
+# =============================================================================
+# PRODUCTION DOCKER COMPOSE - Security Hardened
+# =============================================================================
+
 services:
   backend:
     image: git.danielvolz.org/daniel/medassist/backend:0.0.1
@@ -7,8 +11,16 @@ services:
       - ./data:/app/data
     ports:
       - "4000:3000"
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "/nodejs/bin/node", "-e", "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -17,6 +29,17 @@ services:
   frontend:
     image: git.danielvolz.org/daniel/medassist/frontend:0.0.1
     ports:
-      - "4174:80"
+      - "4174:8080"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+      - /var/cache/nginx:noexec,nosuid,size=64m
+      - /var/run:noexec,nosuid,size=64m
+    cap_drop:
+      - ALL

@@ -1,15 +1,48 @@
-# Frontend build
-FROM node:25-slim AS builder
+# =============================================================================
+# FRONTEND DOCKERFILE - Security Hardened
+# =============================================================================
+# Security measures applied:
+# - Non-root user execution (nginx user)
+# - Multi-stage build (minimal runtime)
+# - Read-only filesystem compatible
+# - No unnecessary packages
+# - Specific image versions pinned
+# - Unprivileged nginx configuration
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Builder
+# -----------------------------------------------------------------------------
+FROM node:22-slim AS builder
+
 WORKDIR /app
-COPY package.json tsconfig.json tsconfig.node.json vite.config.ts index.html ./
+
+# Install dependencies first (better layer caching)
+COPY package.json package-lock.json* ./
+RUN npm ci --ignore-scripts
+
+# Copy source and build
+COPY tsconfig.json tsconfig.node.json vite.config.ts index.html ./
 COPY src ./src
 COPY public ./public
-RUN npm install
 RUN npm run build
 
-# Runtime
-FROM nginx:1.27-alpine AS runner
+# -----------------------------------------------------------------------------
+# Stage 2: Production Runtime (nginx unprivileged)
+# -----------------------------------------------------------------------------
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runner
+
+# Copy custom nginx config (must listen on 8080, not 80)
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
-EXPOSE 80
+
+# Copy built static files with correct ownership (nginx user = uid 101)
+COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html
+
+# nginx-unprivileged listens on 8080 by default
+EXPOSE 8080
+
+# Already runs as non-root (nginx user, uid 101)
+USER nginx
+
+# Start nginx
 CMD ["nginx", "-g", "daemon off;"]

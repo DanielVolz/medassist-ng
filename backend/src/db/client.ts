@@ -1,10 +1,23 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
+import { existsSync, mkdirSync } from "fs";
+import { dirname } from "path";
 import dotenv from "dotenv";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 
 const url = process.env.DATABASE_URL || "file:./data/medassist.db";
+
+// Ensure data directory exists before creating database
+if (url.startsWith("file:")) {
+  const dbPath = url.replace("file:", "");
+  const dataDir = dirname(dbPath);
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+    console.log(`[DB] Created data directory: ${dataDir}`);
+  }
+}
+
 const client = createClient({ url });
 
 export const db = drizzle(client);

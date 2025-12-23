@@ -65,7 +65,9 @@ type UpcomingIntake = {
 
 function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: number): UpcomingIntake[] {
   const now = Date.now();
-  const windowStart = now; // Now
+  // Window looks 2 minutes into past and (minutesBefore + 1) minutes into future
+  // This ensures we don't miss reminders due to timing jitter
+  const windowStart = now - 2 * 60 * 1000; // 2 minutes ago (catch slightly late checks)
   const windowEnd = now + (minutesBefore + 1) * 60 * 1000; // minutesBefore + 1 minute from now
   
   const upcoming: UpcomingIntake[] = [];
@@ -76,18 +78,30 @@ function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: num
     
     if (intervalMs <= 0) continue;
     
-    // Find the next scheduled time for this slice
+    // Find the next scheduled intake time (could be today or in the future)
     let nextTime = startTime;
     
-    // If start is in the past, calculate the next occurrence
+    // If start is in the past, calculate occurrences
     if (nextTime < now) {
       const elapsed = now - startTime;
       const intervals = Math.floor(elapsed / intervalMs);
-      nextTime = startTime + (intervals + 1) * intervalMs;
+      
+      // Check the current occurrence (today's scheduled time, even if past)
+      const currentOccurrence = startTime + intervals * intervalMs;
+      // And the next occurrence
+      const nextOccurrence = startTime + (intervals + 1) * intervalMs;
+      
+      // If today's occurrence is within the reminder window, use it
+      // (intake hasn't happened yet, we should remind)
+      const currentNotifyTime = currentOccurrence - minutesBefore * 60 * 1000;
+      if (currentNotifyTime >= windowStart && currentOccurrence > now) {
+        nextTime = currentOccurrence;
+      } else {
+        nextTime = nextOccurrence;
+      }
     }
     
-    // Check if this falls in our window (now to minutesBefore from now)
-    // We want to notify when the intake is minutesBefore minutes away
+    // Calculate when we should notify for this intake
     const notifyTime = nextTime - minutesBefore * 60 * 1000;
     
     if (notifyTime >= windowStart && notifyTime <= windowEnd) {

@@ -5,12 +5,15 @@
 services:
   backend:
     image: git.danielvolz.org/daniel/medassist/backend:0.0.1
+    container_name: medassist-backend
     env_file:
       - .env
     volumes:
       - ./data:/app/data
     ports:
       - "4000:3000"
+    networks:
+      - medassist-net
     # Security options
     security_opt:
       - no-new-privileges:true
@@ -28,8 +31,11 @@ services:
 
   frontend:
     image: git.danielvolz.org/daniel/medassist/frontend:0.0.1
+    container_name: medassist-frontend
     ports:
       - "4174:8080"
+    networks:
+      - medassist-net
     depends_on:
       backend:
         condition: service_healthy
@@ -43,3 +49,7 @@ services:
       - /var/run:noexec,nosuid,size=64m
     cap_drop:
       - ALL
+
+networks:
+  medassist-net:
+    driver: bridge

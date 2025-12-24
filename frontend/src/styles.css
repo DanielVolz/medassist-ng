@@ -448,6 +448,40 @@ textarea {
   color: var(--text-secondary);
 }
 
+/* Overdue (past, not taken) doses */
+.dose-item.overdue {
+  background: var(--warning-bg);
+  border-color: rgba(252, 211, 77, 0.4);
+}
+
+.dose-item.overdue .dose-time {
+  color: var(--warning);
+}
+
+.dose-item.overdue .dose-btn.take {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.dose-item.overdue .dose-btn.take:hover {
+  background: var(--warning);
+  color: #1a1a2e;
+}
+
+/* Overdue AND taken = show it was late */
+.dose-item.overdue.taken {
+  background: rgba(252, 211, 77, 0.08);
+  border-color: rgba(252, 211, 77, 0.2);
+  opacity: 0.6;
+}
+
+.dose-item.overdue.taken .dose-time,
+.dose-item.overdue.taken .dose-usage {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
 .dose-time {
   font-weight: 600;
   color: var(--accent-light);

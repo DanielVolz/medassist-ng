@@ -743,8 +743,9 @@ export default function App() {
 														<div className="doses-col">
 															{item.doses.map((dose) => {
 																const isTaken = takenDoses.has(dose.id);
+																const isOverdue = dose.when < Date.now();
 																return (
-																	<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""}`}>
+																	<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
 																		<span className="dose-time">{dose.timeStr}</span>
 																		<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
 																		{isTaken ? (
@@ -1350,8 +1351,9 @@ export default function App() {
 													<div className="doses-col">
 														{item.doses.map((dose) => {
 															const isTaken = takenDoses.has(dose.id);
+															const isOverdue = !isTaken && dose.when < Date.now();
 															return (
-																<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""}`}>
+																<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
 																	{isTaken ? (
@@ -1372,6 +1374,8 @@ export default function App() {
 						</article>
 					</section>
 				} />
+				{/* Catch-all: redirect unknown routes to dashboard */}
+				<Route path="*" element={<Navigate to="/dashboard" replace />} />
 			</Routes>
 
 			{/* Medication Detail Modal */}
@@ -1674,6 +1678,7 @@ END:VCALENDAR`;
 function buildSchedulePreview(meds: Medication[], locale: string) {
 	const events: Array<{ id: string; medName: string; timeStr: string; dateStr: string; usage: number; when: number }> = [];
 	const now = new Date();
+	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Midnight today
 	const end = new Date();
 	end.setDate(end.getDate() + 180); // 6 months horizon
 
@@ -1682,7 +1687,8 @@ function buildSchedulePreview(meds: Medication[], locale: string) {
 			const start = new Date(slice.start);
 			if (Number.isNaN(start.getTime())) return;
 			for (let d = new Date(start); d <= end; d.setDate(d.getDate() + slice.every)) {
-				if (d < now) continue;
+				// Include all doses from today onwards (even past ones from today)
+				if (d < todayStart) continue;
 				const whenMs = d.getTime();
 				events.push({
 					id: `${med.id}-${idx}-${whenMs}`,

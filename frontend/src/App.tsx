@@ -575,7 +575,7 @@ export default function App() {
 		<main className="page">
 			<header className="hero">
 				<div className="hero-title">
-					<img src="/favicon.svg" alt="MedAssist" className="hero-logo" />
+					<img src="/favicon.svg" alt="MedAssist-ng" className="hero-logo" />
 					<div>
 						<p className="eyebrow">{pageInfo.eyebrow}</p>
 						<h1>{pageInfo.title}</h1>
@@ -1640,7 +1640,7 @@ function generateICS(med: Medication) {
 		].filter(Boolean).join('\\n');
 		
 		return `BEGIN:VEVENT
-UID:medassist-${med.id}-${idx}@medassist
+UID:medassist-ng-${med.id}-${idx}@medassist-ng
 DTSTAMP:${formatICSDate(new Date())}
 DTSTART:${formatICSDate(start)}
 DTEND:${formatICSDate(end)}
@@ -1657,7 +1657,7 @@ END:VEVENT`;
 	
 	const ics = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//MedAssist//Medication Schedule//EN
+PRODID:-//MedAssist-ng//Medication Schedule//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:${med.name} Schedule

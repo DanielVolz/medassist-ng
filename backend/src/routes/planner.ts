@@ -97,7 +97,7 @@ export async function plannerRoutes(app: FastifyInstance) {
     const html = `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
         <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">MedAssist - Demand Calculator</h2>
+          <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">MedAssist-ng - Demand Calculator</h2>
           <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">Supply overview from <strong>${fromDate}</strong> to <strong>${untilDate}</strong></p>
           
           <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; ${
@@ -129,12 +129,12 @@ export async function plannerRoutes(app: FastifyInstance) {
           </div>
 
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-          <p style="color: #9ca3af; font-size: 11px; margin: 0;">Sent from MedAssist Medication Planner</p>
+          <p style="color: #9ca3af; font-size: 11px; margin: 0;">Sent from MedAssist-ng Medication Planner</p>
         </div>
       </div>
     `;
 
-    const plainText = `MedAssist - Demand Calculator
+    const plainText = `MedAssist-ng - Demand Calculator
 Supply overview from ${fromDate} to ${untilDate}
 
 ${summaryText}
@@ -142,7 +142,7 @@ ${summaryText}
 ${rows.map((r) => `${r.medicationName}: ${r.totalPills} pills in stock, ${r.plannerUsage} pills needed, ${r.stripsAvailable} blisters available (${r.stripsNeeded} needed) - ${r.enough ? "Enough" : "OUT OF STOCK"}`).join("\n")}
 
 ---
-Sent from MedAssist Medication Planner`;
+Sent from MedAssist-ng Medication Planner`;
 
     try {
       const transporter = nodemailer.createTransport({
@@ -158,7 +158,7 @@ Sent from MedAssist Medication Planner`;
       await transporter.sendMail({
         from: smtpFrom,
         to: email,
-        subject: `MedAssist - Supply Overview (${fromDate} - ${untilDate})`,
+        subject: `MedAssist-ng - Supply Overview (${fromDate} - ${untilDate})`,
         text: plainText,
         html,
       });
@@ -208,7 +208,7 @@ Sent from MedAssist Medication Planner`;
         const html = `
           <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
             <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">⚠️ MedAssist - Reorder Reminder</h2>
+              <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">⚠️ MedAssist-ng - Reorder Reminder</h2>
               <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">The following medications are running low and need to be reordered:</p>
               
               <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #fef2f2; border: 1px solid #fecaca;">
@@ -234,19 +234,19 @@ Sent from MedAssist Medication Planner`;
               </div>
 
               <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-              <p style="color: #9ca3af; font-size: 11px; margin: 0;">Sent from MedAssist Medication Planner</p>
+              <p style="color: #9ca3af; font-size: 11px; margin: 0;">Sent from MedAssist-ng Medication Planner</p>
             </div>
           </div>
         `;
 
-        const plainText = `MedAssist - Reorder Reminder
+        const plainText = `MedAssist-ng - Reorder Reminder
 
 The following medications are running low:
 
 ${lowStock.map((r) => `${r.name}: ${r.medsLeft} pills left, ${r.daysLeft ?? 0} days remaining, runs out ${r.depletionDate ?? "soon"}`).join("\n")}
 
 ---
-Sent from MedAssist Medication Planner`;
+Sent from MedAssist-ng Medication Planner`;
 
         try {
           const transporter = nodemailer.createTransport({
@@ -262,7 +262,7 @@ Sent from MedAssist Medication Planner`;
           await transporter.sendMail({
             from: smtpFrom,
             to: email,
-            subject: `⚠️ MedAssist - ${lowStock.length} Medication${lowStock.length > 1 ? "s" : ""} Running Low`,
+            subject: `⚠️ MedAssist-ng - ${lowStock.length} Medication${lowStock.length > 1 ? "s" : ""} Running Low`,
             text: plainText,
             html,
           });

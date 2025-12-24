@@ -8,11 +8,11 @@
   },
   "header": {
     "eyebrow": {
-      "overview": "MedAssist · Übersicht",
-      "inventory": "MedAssist · Inventar",
-      "planner": "MedAssist · Planer",
-      "settings": "MedAssist · Einstellungen",
-      "schedule": "MedAssist · Zeitplan"
+      "overview": "MedAssist-ng · Übersicht",
+      "inventory": "MedAssist-ng · Inventar",
+      "planner": "MedAssist-ng · Planer",
+      "settings": "MedAssist-ng · Einstellungen",
+      "schedule": "MedAssist-ng · Zeitplan"
     }
   },
   "dashboard": {

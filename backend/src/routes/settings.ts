@@ -199,15 +199,15 @@ export async function settingsRoutes(app: FastifyInstance) {
       await transporter.sendMail({
         from: smtpFrom,
         to: email,
-        subject: "MedAssist - Test Email",
-        text: "This is a test email from MedAssist. If you received this, your email configuration is working correctly!",
+        subject: "MedAssist-ng - Test Email",
+        text: "This is a test email from MedAssist-ng. If you received this, your email configuration is working correctly!",
         html: `
           <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #2563eb;">MedAssist - Test Email</h2>
-            <p>This is a test email from MedAssist.</p>
+            <h2 style="color: #2563eb;">MedAssist-ng - Test Email</h2>
+            <p>This is a test email from MedAssist-ng.</p>
             <p style="color: #10b981; font-weight: 600;">✓ If you received this, your email configuration is working correctly!</p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-            <p style="color: #6b7280; font-size: 14px;">Sent from MedAssist Medication Planner</p>
+            <p style="color: #6b7280; font-size: 14px;">Sent from MedAssist-ng Medication Planner</p>
           </div>
         `,
       });
@@ -228,7 +228,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     try {
-      const result = await sendShoutrrrNotification(url, "MedAssist Test", "This is a test notification from MedAssist. If you received this, your notification configuration is working correctly!");
+      const result = await sendShoutrrrNotification(url, "MedAssist-ng Test", "This is a test notification from MedAssist-ng. If you received this, your notification configuration is working correctly!");
       
       if (result.success) {
         return reply.send({ success: true, message: "Test notification sent successfully" });

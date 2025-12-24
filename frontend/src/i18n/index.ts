@@ -23,7 +23,7 @@ i18n
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
-      lookupLocalStorage: 'medassist-language',
+      lookupLocalStorage: 'medassist-ng-language',
     },
   });
 

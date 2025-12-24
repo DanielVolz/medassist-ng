@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 
-const url = process.env.DATABASE_URL || "file:./data/medassist.db";
+const url = process.env.DATABASE_URL || "file:./data/medassist-ng.db";
 
 async function main() {
   console.log("Starting database setup...");

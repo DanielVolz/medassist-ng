@@ -1,35 +1,94 @@
-# Medassist (Rebuild)
+# MedAssist-ng
 
-Sichere, schlanke Neuimplementierung mit Fastify + SQLite + React/Vite. Docker-first, Caddy übernimmt TLS.
+📊 Medication tracking and planning app with stock monitoring, intake reminders, and email notifications.
 
-## Architektur
-- Backend: Fastify, SQLite (Drizzle/Kysely/Prisma ready), Auth mit HttpOnly-Cookies (Browser) + Bearer (API). Helmet, CORS-Allowlist, Rate Limit, CSRF double-submit, Input-Validation (zod/ajv).
-- Frontend: React + Vite (TS). Geschützte Views, zentraler API-Client.
-- Tokens: Access ~15m, Refresh rotierend (sliding) mit Max-Age ~14d, Reuse-Detection.
-- Planner/Email: Server-escaped, Throttling, SMTP-Pass write-only.
-- Deployment: Docker Compose (app + sqlite volume). Caddy als vorgelagerter Proxy/TLS.
+## Quick Start (Production)
 
-## Entwicklung
-- Node-Version: siehe .nvmrc
-- Env: .env.example kopieren → .env
-- Workspaces: root package.json mit backend/frontend Workspaces
-- Scripts (nach npm install in beiden Paketen):
-  - Backend: `npm run dev` (backend), `npm run build`, `npm run start`
-  - Frontend: `npm run dev`, `npm run build`, `npm run preview`
-  - Compose: `docker-compose up --build`
+```bash
+# 1. Clone and configure
+git clone https://github.com/your-username/medassist-ng.git
+cd medassist-ng
+cp .env.example .env
 
-## Verzeichnisstruktur
-- backend/ … Fastify-App, Migrations, Dockerfile
-- frontend/ … React/Vite-App, Dockerfile
-- docker-compose.yml … lokale Orchestrierung
+# 2. Generate secure secrets (required!)
+# Edit .env and replace CHANGE_ME values with output of:
+openssl rand -hex 32
 
-## Security Defaults
-- Keine Secrets in Logs/Responses
-- CSRF nur für Cookie-Clients
-- CORS-Liste aus ENV
-- Non-root Container, Healthcheck
+# 3. Start
+docker compose up -d
 
-## Nächste Schritte
-- Dependencies installieren
-- DB-Migrationen ausführen
-- Frontend-Routen/Views ausbauen
+# App runs on http://localhost:4174 (frontend) and http://localhost:4000 (API)
+```
+
+## Development
+
+```bash
+# Start dev environment with hot-reload
+docker compose -f docker-compose.dev.yml up
+
+# Frontend: http://localhost:5173
+# Backend:  http://localhost:3000
+```
+
+## Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Frontend       │    │  Backend        │    │  SQLite             │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+- **Frontend**: React 18 + Vite + TypeScript, nginx-unprivileged (prod)
+- **Backend**: Fastify 5 + TypeScript + SQLite (Drizzle ORM)
+- **Security**: Non-root containers, read-only filesystem, no-new-privileges
+
+## Features
+
+- 📦 **Medication Inventory** - Track packs, blisters, loose pills
+- 📅 **Intake Scheduling** - Multiple daily schedules with reminders
+- 📊 **Stock Monitoring** - Automatic low-stock detection
+- 📧 **Notifications** - Email (SMTP) and Push (ntfy, Discord, Telegram)
+- 🌍 **i18n** - German and English
+- 🌙 **Dark/Light Mode**
+
+## Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JWT_SECRET` | ✅ | Access token signing (min 10 chars) |
+| `REFRESH_SECRET` | ✅ | Refresh token signing |
+| `COOKIE_SECional) |
+
+## File Structure
+
+```
+medassist-ng/
+├── backend/           # Fastify API
+│   ├── src/
+│   │   ├── db/       # Schema + migrations
+│   │   ├── routes/   # API endpoints
+│   │   └── services/ # Business logic
+│   └── Dockerfile
+├── frontend/          # React SPA
+│   ├── src/
+│   │   ├── App.tsx   # Main application
+│   │   └── i18n/     # Translations
+│   └── Dockerfile
+├── docker-compose.yml      # Production (default)
+├── docker-compose.dev.yml  # Development
+└── .env.example
+```
+
+## Reverse Proxy (Caddy example)
+
+```
+med.example.com {
+    reverse_proxy localhost:4174
+}
+```
+
+## License
+
+MIT

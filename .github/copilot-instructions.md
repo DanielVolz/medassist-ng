@@ -1,8 +1,8 @@
-# MedAssist - AI Coding Instructions
+# MedAssist-ng - AI Coding Instructions
 
 ## Architecture Overview
 
-MedAssist is a **medication tracking and planning app** with a monorepo structure:
+MedAssist-ng is a **medication tracking and planning app** with a monorepo structure:
 
 - **Backend**: Fastify 5 + TypeScript + SQLite (Drizzle ORM) at `backend/`
 - **Frontend**: React 18 + Vite + TypeScript at `frontend/`
@@ -21,11 +21,14 @@ The Vite proxy at `frontend/vite.config.ts` rewrites `/api/*` to `/` - so fronte
 
 ```bash
 # Start dev environment (preferred)
-docker compose up
+docker compose -f docker-compose.dev.yml up
 
 # Or run services separately:
 cd backend && npm run dev      # tsx watch on port 3000
 cd frontend && npm run dev     # Vite on port 5173
+
+# Production
+docker compose up -d
 
 # Database migrations
 cd backend && npm run migrate
@@ -90,5 +93,6 @@ Notifications:   data/notification-settings.json (editable via UI)
 | Migrations | `backend/src/db/migrations/*.sql` |
 | Frontend app | `frontend/src/App.tsx` |
 | Styles | `frontend/src/styles.css` |
-| Docker dev setup | `docker-compose.yml` |
+| Docker prod | `docker-compose.yml` |
+| Docker dev | `docker-compose.dev.yml` |
 | Env template | `.env.example` |

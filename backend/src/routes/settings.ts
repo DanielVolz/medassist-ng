@@ -149,12 +149,20 @@ export async function settingsRoutes(app: FastifyInstance) {
   app.put<{ Body: SettingsBody }>("/settings", async (request, reply) => {
     const body = request.body;
     
+    // Check if any stock reminders are configured
+    const hasEmailStock = body.emailEnabled && body.emailStockReminders && body.notificationEmail;
+    const hasShoutrrrStock = body.shoutrrrEnabled && body.shoutrrrStockReminders && body.shoutrrrUrl;
+    const hasAnyStockReminder = hasEmailStock || hasShoutrrrStock;
+    
+    // Disable repeatDailyReminders if no stock reminders are configured
+    const repeatDailyReminders = hasAnyStockReminder ? (body.repeatDailyReminders ?? false) : false;
+    
     // Save notification settings to JSON file
     saveNotificationSettings({
       emailEnabled: body.emailEnabled,
       notificationEmail: body.notificationEmail,
       reminderDaysBefore: body.reminderDaysBefore,
-      repeatDailyReminders: body.repeatDailyReminders ?? false,
+      repeatDailyReminders,
       lowStockDays: body.lowStockDays ?? 30,
       normalStockDays: body.normalStockDays ?? 90,
       highStockDays: body.highStockDays ?? 180,

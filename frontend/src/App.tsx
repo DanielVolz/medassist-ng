@@ -1250,11 +1250,12 @@ export default function App() {
 												{t('settings.stock.repeatDaily')}
 												<span className="info-tooltip small" data-tooltip={t('settings.stock.repeatTooltip')}>ⓘ</span>
 											</label>
-											<label className="toggle-switch small">
+											<label className={`toggle-switch small${!((settings.emailEnabled && settings.emailStockReminders && settings.notificationEmail) || (settings.shoutrrrEnabled && settings.shoutrrrStockReminders && settings.shoutrrrUrl)) ? ' disabled' : ''}`}>
 												<input
 													type="checkbox"
 													checked={settings.repeatDailyReminders}
 													onChange={(e) => setSettings({ ...settings, repeatDailyReminders: e.target.checked })}
+													disabled={!((settings.emailEnabled && settings.emailStockReminders && settings.notificationEmail) || (settings.shoutrrrEnabled && settings.shoutrrrStockReminders && settings.shoutrrrUrl))}
 												/>
 												<span className="toggle-slider"></span>
 											</label>

@@ -255,7 +255,7 @@ async function getMedicationsNeedingReminder(reminderDaysBefore: number, languag
   return lowStock;
 }
 
-async function sendReminderEmail(email: string, lowStock: LowStockItem[], language: Language): Promise<{ success: boolean; error?: string }> {
+async function sendReminderEmail(email: string, lowStock: LowStockItem[], language: Language, isRepeatDaily: boolean = false): Promise<{ success: boolean; error?: string }> {
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
@@ -317,6 +317,7 @@ async function sendReminderEmail(email: string, lowStock: LowStockItem[], langua
         <p style="color: #9ca3af; font-size: 11px; margin: 0;">
           ${tr.stockReminder.footer}
         </p>
+        ${isRepeatDaily ? `<p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0 0; font-style: italic;">${tr.stockReminder.repeatDailyNote}</p>` : ""}
       </div>
     </div>
   `;
@@ -328,7 +329,7 @@ ${tr.stockReminder.description}
 ${lowStock.map((r) => `${r.name}: ${r.medsLeft} ${tr.common.pills}, ${r.daysLeft ?? 0} ${tr.common.days}, ${tr.stockReminder.tableHeaders.runsOut}: ${r.depletionDate ?? tr.common.soon}`).join("\n")}
 
 ---
-${tr.stockReminder.footer}`;
+${tr.stockReminder.footer}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyNote}` : ""}`;
 
   const subjectPlural = lowStock.length === 1 ? "" : (language === "de" ? "e" : "s");
   const subject = t(tr.stockReminder.subject, { count: lowStock.length, s: subjectPlural, e: subjectPlural });
@@ -427,7 +428,7 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   
   // Send email if enabled
   if (emailEnabled) {
-    const result = await sendReminderEmail(settings.notificationEmail, medsToNotify, language);
+    const result = await sendReminderEmail(settings.notificationEmail, medsToNotify, language, settings.repeatDailyReminders);
     emailSuccess = result.success;
     if (result.success) {
       logger.info(`[Reminder] Email sent successfully to ${settings.notificationEmail}`);
@@ -441,9 +442,13 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
     const title = medsToNotify.length === 1 
       ? tr.push.stockTitle 
       : t(tr.push.stockTitleMultiple, { count: medsToNotify.length });
-    const message = medsToNotify
+    let message = medsToNotify
       .map((m) => `• ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`)
       .join("\n");
+    
+    if (settings.repeatDailyReminders) {
+      message += `\n\n${tr.push.repeatDailyNote}`;
+    }
     
     const result = await sendShoutrrrNotification(settings.shoutrrrUrl, title, message);
     shoutrrrSuccess = result.success;

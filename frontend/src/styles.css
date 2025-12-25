@@ -1605,6 +1605,15 @@ textarea {
   transform: translateX(20px);
 }
 
+.toggle-switch.disabled .toggle-slider {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toggle-switch.disabled input {
+  cursor: not-allowed;
+}
+
 @media (max-width: 600px) {
   .setting-group { grid-template-columns: 1fr; }
 }

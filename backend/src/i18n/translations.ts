@@ -16,6 +16,7 @@ type TranslationKeys = {
       runsOut: string;
     };
     footer: string;
+    repeatDailyNote: string;
   };
   // Intake reminder email
   intakeReminder: {
@@ -40,6 +41,7 @@ type TranslationKeys = {
     pillsLeft: string;
     daysLeft: string;
     pillsAt: string;
+    repeatDailyNote: string;
   };
   // Common
   common: {
@@ -66,6 +68,7 @@ const translations: Record<Language, TranslationKeys> = {
         runsOut: "Runs Out",
       },
       footer: "🤖 Automatic reminder from MedAssist-ng",
+      repeatDailyNote: "You are receiving this daily reminder because 'Repeat Daily' is enabled in settings.",
     },
     intakeReminder: {
       subject: "MedAssist-ng: Medication Reminder - {medications}",
@@ -88,6 +91,7 @@ const translations: Record<Language, TranslationKeys> = {
       pillsLeft: "{count} pills",
       daysLeft: "{count} days left",
       pillsAt: "{count} pills at {time}",
+      repeatDailyNote: "(Daily reminder enabled)",
     },
     common: {
       pill: "pill",
@@ -111,6 +115,7 @@ const translations: Record<Language, TranslationKeys> = {
         runsOut: "Aufgebraucht",
       },
       footer: "🤖 Automatische Erinnerung von MedAssist-ng",
+      repeatDailyNote: "Sie erhalten diese tägliche Erinnerung, weil 'Täglich wiederholen' in den Einstellungen aktiviert ist.",
     },
     intakeReminder: {
       subject: "MedAssist-ng: Einnahme-Erinnerung - {medications}",
@@ -133,6 +138,7 @@ const translations: Record<Language, TranslationKeys> = {
       pillsLeft: "{count} Tabletten",
       daysLeft: "{count} Tage übrig",
       pillsAt: "{count} Tabletten um {time}",
+      repeatDailyNote: "(Tägliche Erinnerung aktiviert)",
     },
     common: {
       pill: "Tablette",

@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 
-const url = process.env.DATABASE_URL || "file:./data/medassist-ng.db";
+const url = "file:./data/medassist-ng.db";
 
 // Ensure data directory exists before creating database
 if (url.startsWith("file:")) {

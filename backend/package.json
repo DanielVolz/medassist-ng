@@ -7,8 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "migrate": "tsx src/db/migrate.ts",
-    "lint": "echo 'add lint config'"
+    "migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^10.0.1",

@@ -43,7 +43,12 @@
       "noRemindersNeeded": "keine Erinnerungen nötig",
       "needReorder": "{{count}} Medikament nachbestellen",
       "needReorder_other": "{{count}} Medikamente nachbestellen",
-      "waitingFirstCheck": "warte auf erste Prüfung"
+      "waitingFirstCheck": "warte auf erste Prüfung",
+      "typeStock": "Bestand",
+      "typeIntake": "Einnahme",
+      "channelEmail": "E-Mail",
+      "channelPush": "Push",
+      "channelBoth": "E-Mail + Push"
     }
   },
   "table": {

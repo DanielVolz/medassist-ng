@@ -43,7 +43,12 @@
       "noRemindersNeeded": "no reminders needed",
       "needReorder": "{{count}} med needs reorder",
       "needReorder_other": "{{count}} meds need reorder",
-      "waitingFirstCheck": "waiting for first check"
+      "waitingFirstCheck": "waiting for first check",
+      "typeStock": "Stock",
+      "typeIntake": "Intake",
+      "channelEmail": "Email",
+      "channelPush": "Push",
+      "channelBoth": "Email + Push"
     }
   },
   "table": {

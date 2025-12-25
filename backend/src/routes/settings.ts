@@ -140,6 +140,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       // Reminder state
       lastAutoEmailSent: reminderState.lastAutoEmailSent,
       nextScheduledCheck: reminderState.nextScheduledCheck,
+      lastNotificationType: reminderState.lastNotificationType,
+      lastNotificationChannel: reminderState.lastNotificationChannel,
     });
   });
 

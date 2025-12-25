@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { loadNotificationSettings, sendShoutrrrNotification } from "../routes/settings.js";
 import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
+import { getReminderState, updateReminderSentTime } from "./reminder-scheduler.js";
 
 type Slice = { usage: number; every: number; start: string };
 
@@ -65,10 +66,10 @@ type UpcomingIntake = {
 
 function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: number): UpcomingIntake[] {
   const now = Date.now();
-  // Window looks 2 minutes into past and (minutesBefore + 1) minutes into future
-  // This ensures we don't miss reminders due to timing jitter
+  // Window to detect if "now" is the right time to send reminder
+  // We check if the notify time (intake - 15min) falls within current minute ±1
   const windowStart = now - 2 * 60 * 1000; // 2 minutes ago (catch slightly late checks)
-  const windowEnd = now + (minutesBefore + 1) * 60 * 1000; // minutesBefore + 1 minute from now
+  const windowEnd = now + 1 * 60 * 1000; // 1 minute from now
   
   const upcoming: UpcomingIntake[] = [];
   
@@ -312,6 +313,10 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
     saveIntakeReminderState({
       sentReminders: [...cleanedReminders, ...newKeys],
     });
+    
+    // Update global reminder state for UI display
+    const channel = emailSuccess && shoutrrrSuccess ? "both" : emailSuccess ? "email" : "push";
+    updateReminderSentTime("intake", channel);
   }
 }
 

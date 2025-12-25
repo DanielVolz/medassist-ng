@@ -32,6 +32,8 @@ type ReminderState = {
   lastAutoEmailDate: string | null; // YYYY-MM-DD - to track if we already sent today
   notifiedMedications: string[]; // List of medication names that have been notified (cleared when restocked)
   nextScheduledCheck: string | null; // ISO date string for when the next check is scheduled
+  lastNotificationType: "stock" | "intake" | null; // Type of last notification
+  lastNotificationChannel: "email" | "push" | "both" | null; // Channel used for last notification
 };
 
 const REMINDER_HOUR = 6; // 6:00 AM local time
@@ -158,12 +160,14 @@ function loadReminderState(): ReminderState {
         lastAutoEmailDate: saved.lastAutoEmailDate ?? null,
         notifiedMedications: saved.notifiedMedications ?? [],
         nextScheduledCheck: saved.nextScheduledCheck ?? null,
+        lastNotificationType: saved.lastNotificationType ?? null,
+        lastNotificationChannel: saved.lastNotificationChannel ?? null,
       };
     }
   } catch {
     // ignore
   }
-  return { lastAutoEmailSent: null, lastAutoEmailDate: null, notifiedMedications: [], nextScheduledCheck: null };
+  return { lastAutoEmailSent: null, lastAutoEmailDate: null, notifiedMedications: [], nextScheduledCheck: null, lastNotificationType: null, lastNotificationChannel: null };
 }
 
 function saveReminderState(state: ReminderState): void {
@@ -174,13 +178,15 @@ export function getReminderState(): ReminderState {
   return loadReminderState();
 }
 
-export function updateReminderSentTime(): void {
+export function updateReminderSentTime(type: "stock" | "intake" = "stock", channel: "email" | "push" | "both" = "email"): void {
   const state = loadReminderState();
   const today = getTodayInTimezone();
   saveReminderState({
     ...state,
     lastAutoEmailSent: new Date().toISOString(),
     lastAutoEmailDate: today,
+    lastNotificationType: type,
+    lastNotificationChannel: channel,
   });
 }
 
@@ -451,11 +457,14 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   // Update state if any notification was sent successfully
   if (emailSuccess || shoutrrrSuccess) {
     const currentState = loadReminderState();
+    const channel = emailSuccess && shoutrrrSuccess ? "both" : emailSuccess ? "email" : "push";
     saveReminderState({
       lastAutoEmailSent: new Date().toISOString(),
       lastAutoEmailDate: today,
       notifiedMedications: [...new Set([...stillLowStock, ...medsToNotify.map((m) => m.name)])],
       nextScheduledCheck: currentState.nextScheduledCheck,
+      lastNotificationType: "stock",
+      lastNotificationChannel: channel,
     });
   }
 }

@@ -126,6 +126,8 @@ export default function App() {
 		hasSmtpPassword: false,
 		lastAutoEmailSent: null as string | null,
 		nextScheduledCheck: null as string | null,
+		lastNotificationType: null as "stock" | "intake" | null,
+		lastNotificationChannel: null as "email" | "push" | "both" | null,
 		// Shoutrrr/ntfy settings
 		shoutrrrEnabled: false,
 		shoutrrrUrl: "",
@@ -602,7 +604,7 @@ export default function App() {
 							<section className="email-status-bar">
 								<span className="email-status-icon">{settings.emailEnabled && settings.shoutrrrEnabled ? "🔔" : settings.emailEnabled ? "📧" : "🔔"}</span>
 								<span className="email-status-text">
-									{t('dashboard.reminders.active')} — {getReminderStatusText(settings.reminderDaysBefore, coverage.low, settings.lastAutoEmailSent, t, i18n.language)}
+									{t('dashboard.reminders.active')} — {getReminderStatusText(settings.reminderDaysBefore, coverage.low, settings.lastAutoEmailSent, settings.lastNotificationType, settings.lastNotificationChannel, t, i18n.language)}
 								</span>
 								{settings.emailEnabled && settings.notificationEmail && <span className="email-status-recipient">→ {settings.notificationEmail}</span>}
 							</section>
@@ -1768,7 +1770,15 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 	return { low, all: coverage };
 }
 
-function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[], lastSent: string | null, t: (key: string, options?: Record<string, unknown>) => string, locale: string): React.ReactNode {
+function getReminderStatusText(
+	reminderDaysBefore: number, 
+	lowStock: Coverage[], 
+	lastSent: string | null, 
+	lastType: "stock" | "intake" | null,
+	lastChannel: "email" | "push" | "both" | null,
+	t: (key: string, options?: Record<string, unknown>) => string, 
+	locale: string
+): React.ReactNode {
 	// Find the earliest medication that needs a reminder (based on reminderDaysBefore)
 	const medsNeedingReminder = lowStock
 		.filter((c) => c.depletionTime !== null && c.daysLeft !== null && c.daysLeft <= reminderDaysBefore)
@@ -1779,13 +1789,28 @@ function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[],
 		return date.toLocaleDateString(locale, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 	};
 
+	const getTypeLabel = () => lastType === "intake" ? t('dashboard.reminders.typeIntake') : t('dashboard.reminders.typeStock');
+	const getChannelLabel = () => {
+		if (lastChannel === "both") return t('dashboard.reminders.channelBoth');
+		if (lastChannel === "push") return t('dashboard.reminders.channelPush');
+		return t('dashboard.reminders.channelEmail');
+	};
+
+	const formatLastInfo = (iso: string) => {
+		const dateStr = formatLastSent(iso);
+		if (lastType && lastChannel) {
+			return `${dateStr} (${getTypeLabel()}, ${getChannelLabel()})`;
+		}
+		return dateStr;
+	};
+
 	if (medsNeedingReminder.length > 0) {
 		// There are medications that need reminders
 		if (lastSent) {
 			return (
 				<>
 					<strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</strong>
-					{" · "}{t('dashboard.reminders.lastReminder')}: {formatLastSent(lastSent)}
+					{" · "}{t('dashboard.reminders.lastReminder')}: {formatLastInfo(lastSent)}
 				</>
 			);
 		}
@@ -1815,7 +1840,7 @@ function getReminderStatusText(reminderDaysBefore: number, lowStock: Coverage[],
 		return (
 			<>
 				<span className="success-text">✓ {t('dashboard.reminders.allStockOk')}</span>
-				{" · "}{t('dashboard.reminders.lastReminder')}: {formatLastSent(lastSent)}
+				{" · "}{t('dashboard.reminders.lastReminder')}: {formatLastInfo(lastSent)}
 			</>
 		);
 	}

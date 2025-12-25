@@ -36,7 +36,7 @@ type ReminderState = {
   lastNotificationChannel: "email" | "push" | "both" | null; // Channel used for last notification
 };
 
-const REMINDER_HOUR = 6; // 6:00 AM local time
+const REMINDER_HOUR = parseInt(process.env.REMINDER_HOUR ?? "6", 10); // Default 6:00 AM local time
 
 // Get current timezone from TZ env variable or default to UTC
 function getTimezone(): string {

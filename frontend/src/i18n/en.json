@@ -21,6 +21,8 @@
       "badge": "Stock watch",
       "noMeds": "No medications configured yet.",
       "allGood": "All good, enough stock.",
+      "lowWarning": "Enough stock for now, but {{count}} medication is running low.",
+      "lowWarning_other": "Enough stock for now, but {{count}} medications are running low.",
       "sendReminder": "🔔 Send Reminder Now"
     },
     "overview": {

@@ -20,8 +20,8 @@
       "title": "Nachbestell-Erinnerung",
       "badge": "Bestandsüberwachung",
       "noMeds": "Noch keine Medikamente konfiguriert.",
-      "allGood": "Alles in Ordnung, genug Vorrat.",
-      "sendReminder": "🔔 Erinnerung jetzt senden"
+      "allGood": "Alles in Ordnung, genug Vorrat.",      "lowWarning": "Genug Vorrat, aber {{count}} Medikament wird knapp.",
+      "lowWarning_other": "Genug Vorrat, aber {{count}} Medikamente werden knapp.",      "sendReminder": "🔔 Erinnerung jetzt senden"
     },
     "overview": {
       "title": "Medikamentenübersicht",

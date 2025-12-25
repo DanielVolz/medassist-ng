@@ -136,6 +136,8 @@ export default function App() {
 		emailIntakeReminders: true,
 		shoutrrrStockReminders: true,
 		shoutrrrIntakeReminders: true,
+		// Admin settings (from .env, read-only)
+		expiryWarningDays: 30,
 	});
 	const [savedSettings, setSavedSettings] = useState(settings);
 	const [settingsLoading, setSettingsLoading] = useState(false);
@@ -224,7 +226,7 @@ export default function App() {
 
 	const schedule = useMemo(() => buildSchedulePreview(meds, i18n.language), [meds, i18n.language]);
 	const totalTablets = useMemo(() => deriveTotal(form), [form]);
-	const coverage = useMemo(() => calculateCoverage(meds, schedule.events, i18n.language), [meds, schedule.events, i18n.language]);
+	const coverage = useMemo(() => calculateCoverage(meds, schedule.events, i18n.language, settings.reminderDaysBefore), [meds, schedule.events, i18n.language, settings.reminderDaysBefore]);
 	const depletionByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c.depletionTime])), [coverage.all]);
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
 	const groupedSchedule = useMemo(() => {
@@ -615,13 +617,32 @@ export default function App() {
 									<h2>{t('dashboard.reorder.title')}</h2>
 									<span className="pill neutral">{t('dashboard.reorder.badge')}</span>
 								</div>
-								{meds.length === 0 ? (
-									<p className="muted">{t('dashboard.reorder.noMeds')}</p>
-								) : coverage.low.length === 0 ? (
-									<p className="success-text">{t('dashboard.reorder.allGood')}</p>
-								) : (
-									<>
-										<div className="table table-6">
+								{(() => {
+									if (meds.length === 0) {
+										return <p className="muted">{t('dashboard.reorder.noMeds')}</p>;
+									}
+									
+									// Count medications with "Low" stock status (based on lowStockDays setting)
+									const lowStockCount = coverage.all.filter(c => {
+										if (c.medsLeft <= 0) return true; // out of stock
+										if (c.daysLeft === null) return false; // no schedule
+										return c.daysLeft < settings.lowStockDays;
+									}).length;
+									
+									if (coverage.low.length === 0) {
+										// No critical meds (≤3 days)
+										if (lowStockCount === 0) {
+											// All good - everything is Normal or High
+											return <p className="success-text">{t('dashboard.reorder.allGood')}</p>;
+										} else {
+											// Some meds are Low but not critical
+											return <p className="warning-text">{t('dashboard.reorder.lowWarning', { count: lowStockCount })}</p>;
+										}
+									}
+									
+									return (
+										<>
+											<div className="table table-6">
 											<div className="table-head">
 												<span>{t('table.name')}</span>
 												<span>{t('table.currentPills')}</span>
@@ -659,7 +680,8 @@ export default function App() {
 											</div>
 										)}
 									</>
-								)}
+									);
+								})()}
 							</article>
 						</section>
 
@@ -681,7 +703,7 @@ export default function App() {
 									{coverage.all.map((row) => {
 										const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 										const med = meds.find(m => m.name === row.name);
-										const expiryClass = getExpiryClass(med?.expiryDate);
+										const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
 										const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "";
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
@@ -1722,7 +1744,7 @@ function formatNumber(value: number | null) {
 	return value.toFixed(1);
 }
 
-function getExpiryClass(expiryDate: string | null | undefined): string {
+function getExpiryClass(expiryDate: string | null | undefined, expiryWarningDays: number = 30): string {
 	if (!expiryDate) return "";
 	const now = new Date();
 	const expiry = new Date(expiryDate);
@@ -1730,11 +1752,11 @@ function getExpiryClass(expiryDate: string | null | undefined): string {
 	const diffDays = diffMs / (1000 * 60 * 60 * 24);
 	
 	if (diffDays <= 7) return "danger-text"; // 1 week or less (or expired)
-	if (diffDays <= 30) return "warning-text"; // 1 month or less
-	return "success-text"; // more than 1 month
+	if (diffDays <= expiryWarningDays) return "warning-text"; // within warning period
+	return "success-text"; // outside warning period
 }
 
-function calculateCoverage(meds: Medication[], events: Array<{ medName: string; when: number }>, locale: string) {
+function calculateCoverage(meds: Medication[], events: Array<{ medName: string; when: number }>, locale: string, reminderDaysBefore: number) {
 	const MS_PER_DAY = 86_400_000;
 	const now = Date.now();
 
@@ -1767,7 +1789,7 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 		};
 	});
 
-	const low = coverage.filter((c) => c.medsLeft <= 0 || (c.daysLeft !== null && c.daysLeft <= 3));
+	const low = coverage.filter((c) => c.medsLeft <= 0 || (c.daysLeft !== null && c.daysLeft <= reminderDaysBefore));
 	return { low, all: coverage };
 }
 

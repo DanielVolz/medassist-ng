@@ -13,7 +13,7 @@ type IntakeReminderState = {
   sentReminders: string[]; // Array of "medName:timestamp" to track sent reminders
 };
 
-const REMINDER_MINUTES_BEFORE = 15;
+const REMINDER_MINUTES_BEFORE = parseInt(process.env.REMINDER_MINUTES_BEFORE ?? "15", 10);
 const CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute
 
 // Get current timezone from TZ env variable or default to UTC

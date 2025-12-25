@@ -142,6 +142,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       nextScheduledCheck: reminderState.nextScheduledCheck,
       lastNotificationType: reminderState.lastNotificationType,
       lastNotificationChannel: reminderState.lastNotificationChannel,
+      // Admin settings (from .env, read-only)
+      expiryWarningDays: parseInt(process.env.EXPIRY_WARNING_DAYS ?? "30", 10),
     });
   });
 

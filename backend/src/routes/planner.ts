@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import nodemailer from "nodemailer";
 import { updateReminderSentTime } from "../services/reminder-scheduler.js";
 import { loadNotificationSettings, sendShoutrrrNotification } from "./settings.js";
+import { getDateLocale } from "../i18n/translations.js";
 
 type PlannerRow = {
   medicationId: number;
@@ -52,13 +53,17 @@ export async function plannerRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "SMTP not configured" });
     }
 
+    // Get locale from settings
+    const settings = loadNotificationSettings();
+    const locale = getDateLocale(settings.language);
+
     // Format dates for display
-    const fromDate = new Date(from).toLocaleDateString("en-US", {
+    const fromDate = new Date(from).toLocaleDateString(locale, {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
-    const untilDate = new Date(until).toLocaleDateString("en-US", {
+    const untilDate = new Date(until).toLocaleDateString(locale, {
       year: "numeric",
       month: "long",
       day: "numeric",

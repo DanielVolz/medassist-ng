@@ -1479,7 +1479,7 @@ export default function App() {
 											<div key={idx} className="med-schedule-item">
 												<span className="med-schedule-usage">{slice.usage} {slice.usage !== 1 ? t('common.pills') : t('common.pill')}{selectedMed.pillWeightMg && ` (${slice.usage * selectedMed.pillWeightMg} mg)`}</span>
 												<span className="med-schedule-freq">{t('form.slices.every')} {slice.every} {slice.every !== 1 ? t('common.days') : t('common.day')}</span>
-												<span className="med-schedule-time">{t('modal.at')} {new Date(slice.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+												<span className="med-schedule-time">{t('modal.at')} {new Date(slice.start).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}</span>
 											</div>
 										))}
 									</div>

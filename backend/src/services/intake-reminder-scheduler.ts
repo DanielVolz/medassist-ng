@@ -66,7 +66,7 @@ type UpcomingIntake = {
   pillWeightMg: number | null;
 };
 
-function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: number, takenBy: string | null, pillWeightMg: number | null): UpcomingIntake[] {
+function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: number, takenBy: string | null, pillWeightMg: number | null, locale: string): UpcomingIntake[] {
   const now = Date.now();
   // Window to detect if "now" is the right time to send reminder
   // We check if the notify time (intake - 15min) falls within current minute ±1
@@ -113,7 +113,7 @@ function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: num
         medName,
         usage: slice.usage,
         intakeTime: intakeDate,
-        intakeTimeStr: intakeDate.toLocaleTimeString([], { 
+        intakeTimeStr: intakeDate.toLocaleTimeString(locale, { 
           hour: "2-digit", 
           minute: "2-digit",
           timeZone: getTimezone()
@@ -283,11 +283,12 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
 
   const state = loadIntakeReminderState();
   const allUpcoming: UpcomingIntake[] = [];
+  const locale = getDateLocale(language);
   
   // Find all upcoming intakes across all medications
   for (const med of medsWithReminders) {
     const slices = parseSlices(med);
-    const upcoming = getUpcomingIntakes(med.name, slices, REMINDER_MINUTES_BEFORE, med.takenBy, med.pillWeightMg);
+    const upcoming = getUpcomingIntakes(med.name, slices, REMINDER_MINUTES_BEFORE, med.takenBy, med.pillWeightMg, locale);
     allUpcoming.push(...upcoming);
   }
   

@@ -136,7 +136,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       smtpUser: process.env.SMTP_USER ?? "",
       smtpFrom: process.env.SMTP_FROM ?? "",
       smtpSecure: process.env.SMTP_SECURE === "true",
-      hasSmtpPassword: !!process.env.SMTP_PASS,
+      hasSmtpPassword: !!(process.env.SMTP_TOKEN || process.env.SMTP_PASS),
       // Reminder state
       lastAutoEmailSent: reminderState.lastAutoEmailSent,
       nextScheduledCheck: reminderState.nextScheduledCheck,
@@ -188,7 +188,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     
     const smtpHost = process.env.SMTP_HOST;
     const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
+    const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
     const smtpPort = parseInt(process.env.SMTP_PORT ?? "587");
     const smtpSecure = process.env.SMTP_SECURE === "true";
     const smtpFrom = process.env.SMTP_FROM ?? smtpUser;

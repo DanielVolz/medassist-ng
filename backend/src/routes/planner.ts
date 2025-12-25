@@ -44,7 +44,7 @@ export async function plannerRoutes(app: FastifyInstance) {
 
     const smtpHost = process.env.SMTP_HOST;
     const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
+    const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
     const smtpPort = parseInt(process.env.SMTP_PORT ?? "587");
     const smtpSecure = process.env.SMTP_SECURE === "true";
     const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
@@ -190,7 +190,7 @@ Sent from MedAssist-ng Medication Planner`;
     if (notificationSettings.emailEnabled && email) {
       const smtpHost = process.env.SMTP_HOST;
       const smtpUser = process.env.SMTP_USER;
-      const smtpPass = process.env.SMTP_PASS;
+      const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
       const smtpPort = parseInt(process.env.SMTP_PORT ?? "587");
       const smtpSecure = process.env.SMTP_SECURE === "true";
       const smtpFrom = process.env.SMTP_FROM ?? smtpUser;

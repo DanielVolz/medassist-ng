@@ -258,7 +258,7 @@ async function getMedicationsNeedingReminder(reminderDaysBefore: number, languag
 async function sendReminderEmail(email: string, lowStock: LowStockItem[], language: Language, isRepeatDaily: boolean = false): Promise<{ success: boolean; error?: string }> {
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+  const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
   const smtpPort = parseInt(process.env.SMTP_PORT ?? "587");
   const smtpSecure = process.env.SMTP_SECURE === "true";
   const smtpFrom = process.env.SMTP_FROM ?? smtpUser;

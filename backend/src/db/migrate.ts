@@ -58,7 +58,6 @@ async function main() {
       smtp_pass_encrypted text,
       smtp_from text,
       smtp_secure integer NOT NULL DEFAULT 0,
-      emails_per_day integer NOT NULL DEFAULT 3,
       email_enabled integer NOT NULL DEFAULT 0,
       notification_email text,
       reminder_days_before integer NOT NULL DEFAULT 7,

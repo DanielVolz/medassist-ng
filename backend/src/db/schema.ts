@@ -51,7 +51,6 @@ export const settings = sqliteTable("settings", {
   smtpPassEncrypted: text("smtp_pass_encrypted"),
   smtpFrom: text("smtp_from"),
   smtpSecure: integer("smtp_secure", { mode: "boolean" }).notNull().default(false),
-  emailsPerDay: integer("emails_per_day").notNull().default(3),
   // Email notification settings
   emailEnabled: integer("email_enabled", { mode: "boolean" }).notNull().default(false),
   notificationEmail: text("notification_email"),

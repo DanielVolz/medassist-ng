@@ -62,9 +62,11 @@ type UpcomingIntake = {
   usage: number;
   intakeTime: Date;
   intakeTimeStr: string;
+  takenBy: string | null;
+  pillWeightMg: number | null;
 };
 
-function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: number): UpcomingIntake[] {
+function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: number, takenBy: string | null, pillWeightMg: number | null): UpcomingIntake[] {
   const now = Date.now();
   // Window to detect if "now" is the right time to send reminder
   // We check if the notify time (intake - 15min) falls within current minute ±1
@@ -116,6 +118,8 @@ function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: num
           minute: "2-digit",
           timeZone: getTimezone()
         }),
+        takenBy,
+        pillWeightMg,
       });
     }
   }
@@ -136,12 +140,32 @@ async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[],
   }
 
   const tr = getTranslations(language);
+  
+  // Helper to format dosage with weight
+  const formatDosage = (intake: UpcomingIntake): string => {
+    const pillText = `<strong>${intake.usage}</strong> ${intake.usage === 1 ? tr.common.pill : tr.intakeReminder.pills}`;
+    if (intake.pillWeightMg) {
+      const totalMg = intake.usage * intake.pillWeightMg;
+      const weightStr = totalMg >= 1000 ? `${(totalMg / 1000).toFixed(1)} g` : `${totalMg} mg`;
+      return `${pillText} (${weightStr})`;
+    }
+    return pillText;
+  };
+  
+  // Helper to format medication name with takenBy
+  const formatMedName = (intake: UpcomingIntake): string => {
+    if (intake.takenBy) {
+      return `${intake.medName} <span style="color: #6b7280; font-size: 12px;">${t(tr.intakeReminder.takenBy, { name: intake.takenBy })}</span>`;
+    }
+    return intake.medName;
+  };
+  
   const tableRows = intakes
     .map(
       (intake) => `
       <tr>
-        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">${intake.medName}</td>
-        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;"><strong>${intake.usage}</strong> ${tr.intakeReminder.pills}</td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">${formatMedName(intake)}</td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${formatDosage(intake)}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${intake.intakeTimeStr}</td>
       </tr>
     `
@@ -185,11 +209,25 @@ async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[],
     </div>
   `;
 
+  // Helper for plain text dosage
+  const formatDosagePlain = (intake: UpcomingIntake): string => {
+    const pillText = `${intake.usage} ${intake.usage === 1 ? tr.common.pill : tr.intakeReminder.pills}`;
+    if (intake.pillWeightMg) {
+      const totalMg = intake.usage * intake.pillWeightMg;
+      const weightStr = totalMg >= 1000 ? `${(totalMg / 1000).toFixed(1)} g` : `${totalMg} mg`;
+      return `${pillText} (${weightStr})`;
+    }
+    return pillText;
+  };
+
   const plainText = `${tr.intakeReminder.title}
 
 ${t(tr.intakeReminder.description, { minutes: REMINDER_MINUTES_BEFORE })}
 
-${intakes.map((i) => `${i.medName}: ${i.usage} ${tr.intakeReminder.pills} ${tr.intakeReminder.tableHeaders.time.toLowerCase()}: ${i.intakeTimeStr}`).join("\n")}
+${intakes.map((i) => {
+    const takenByStr = i.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy })}` : "";
+    return `${i.medName}${takenByStr}: ${formatDosagePlain(i)} - ${i.intakeTimeStr}`;
+  }).join("\n")}
 
 ---
 ${tr.intakeReminder.footer}`;
@@ -249,7 +287,7 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
   // Find all upcoming intakes across all medications
   for (const med of medsWithReminders) {
     const slices = parseSlices(med);
-    const upcoming = getUpcomingIntakes(med.name, slices, REMINDER_MINUTES_BEFORE);
+    const upcoming = getUpcomingIntakes(med.name, slices, REMINDER_MINUTES_BEFORE, med.takenBy, med.pillWeightMg);
     allUpcoming.push(...upcoming);
   }
   
@@ -287,7 +325,15 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
   if (shoutrrrEnabled) {
     const title = t(tr.push.intakeTitle, { minutes: REMINDER_MINUTES_BEFORE });
     const message = newReminders
-      .map((i) => `- ${i.medName}: ${t(tr.push.pillsAt, { count: i.usage, time: i.intakeTimeStr })}`)
+      .map((i) => {
+        const takenByStr = i.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy })}` : "";
+        let dosage = `${i.usage} ${i.usage === 1 ? tr.common.pill : tr.common.pills}`;
+        if (i.pillWeightMg) {
+          const totalMg = i.usage * i.pillWeightMg;
+          dosage += totalMg >= 1000 ? ` (${(totalMg / 1000).toFixed(1)} g)` : ` (${totalMg} mg)`;
+        }
+        return `• ${i.medName}${takenByStr}: ${dosage} @ ${i.intakeTimeStr}`;
+      })
       .join("\n");
     
     const result = await sendShoutrrrNotification(settings.shoutrrrUrl, title, message);

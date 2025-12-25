@@ -257,6 +257,7 @@ body {
 .tag.success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(57, 217, 138, 0.25); }
 .tag.warning { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(252, 211, 77, 0.3); }
 .tag.danger { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(255, 94, 94, 0.3); }
+.tag.high { background: var(--success-bg); color: var(--success); border: 1px solid rgba(57, 217, 138, 0.25); }
 .tag-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.25rem; }
 .danger-text { color: var(--danger); font-weight: 700; }
 .warning-text { color: var(--warning); font-weight: 700; }

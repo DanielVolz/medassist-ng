@@ -31,6 +31,7 @@ type TranslationKeys = {
       time: string;
     };
     pills: string;
+    takenBy: string;
     footer: string;
   };
   // Push notifications
@@ -82,7 +83,8 @@ const translations: Record<Language, TranslationKeys> = {
         time: "Time",
       },
       pills: "pills",
-      footer: "MedAssist-ng Medication Planner",
+      takenBy: "for {name}",
+      footer: "🤖 Automatic reminder from MedAssist-ng",
     },
     push: {
       stockTitle: "MedAssist-ng: 1 Medication Running Low",
@@ -129,7 +131,8 @@ const translations: Record<Language, TranslationKeys> = {
         time: "Uhrzeit",
       },
       pills: "Tabletten",
-      footer: "MedAssist-ng Medikamentenplaner",
+      takenBy: "für {name}",
+      footer: "🤖 Automatische Erinnerung von MedAssist-ng",
     },
     push: {
       stockTitle: "MedAssist-ng: 1 Medikament wird knapp",

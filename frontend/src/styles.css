@@ -388,6 +388,8 @@ textarea {
 
 .timeline { display: flex; flex-direction: column; gap: 1rem; }
 .day-block { border: 1px solid var(--border-primary); border-radius: 16px; padding: 1rem 1.25rem; background: var(--bg-secondary); box-shadow: 0 8px 32px var(--shadow); transition: background 200ms ease, border-color 200ms ease; }
+.day-block.collapsed { padding-bottom: 0.75rem; }
+.day-block.all-taken { border-color: rgba(57, 217, 138, 0.3); }
 .day-divider {
   margin: 0 0 0.75rem;
   padding-bottom: 0.5rem;
@@ -396,6 +398,31 @@ textarea {
   font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.day-divider.clickable { cursor: pointer; user-select: none; }
+.day-divider.clickable:hover { color: var(--accent); }
+.day-collapse-icon { 
+  font-size: 0.7rem; 
+  opacity: 0.6; 
+  transition: transform 0.2s ease;
+  width: 1rem;
+  text-align: center;
+}
+.day-date { flex: 1; }
+.day-summary { 
+  font-size: 0.8rem; 
+  font-weight: 500; 
+  opacity: 0.7;
+}
+.day-complete { color: var(--success); }
+.day-progress { color: var(--text-secondary); }
+.day-block.collapsed .day-divider { 
+  margin-bottom: 0; 
+  padding-bottom: 0; 
+  border-bottom: none; 
 }
 .time-row { display: grid; grid-template-columns: minmax(200px, 280px) 1fr; align-items: start; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); transition: opacity 0.2s ease; }
 [data-theme=\"light\"] .time-row { border-bottom-color: rgba(0,0,0,0.06); }

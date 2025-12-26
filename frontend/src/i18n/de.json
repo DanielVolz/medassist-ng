@@ -31,7 +31,8 @@
       "title": "Kommende Einnahmen",
       "1month": "1 Monat",
       "3months": "3 Monate",
-      "6months": "6 Monate"
+      "6months": "6 Monate",
+      "allTaken": "Alle eingenommen"
     },
     "reminders": {
       "active": "Automatische Erinnerungen aktiv",
@@ -263,6 +264,8 @@
     "reset": "Zurücksetzen",
     "test": "Test",
     "undo": "Rückgängig",
+    "expand": "Klicken zum Aufklappen",
+    "collapse": "Klicken zum Einklappen",
     "optional": "optional",
     "pill": "Tablette",
     "pills": "Tabletten",

@@ -234,12 +234,26 @@ function AppContent() {
 	const [shareGenerating, setShareGenerating] = useState(false);
 	const [shareLink, setShareLink] = useState<string | null>(null);
 	const [shareCopied, setShareCopied] = useState(false);
+	// Collapsed days state (manually collapsed days are persisted)
+	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
+	const [manuallyExpandedDays, setManuallyExpandedDays] = useState<Set<string>>(new Set());
 
 	// Load user-specific scheduleDays and takenDoses when user changes
 	useEffect(() => {
 		if (typeof window !== "undefined" && user?.id) {
 			const storedDays = localStorage.getItem(userStorageKey(user.id, "scheduleDays"));
 			setScheduleDays(storedDays ? Number(storedDays) : 30);
+			
+			// Load manually collapsed/expanded days from localStorage
+			const storedCollapsed = localStorage.getItem(userStorageKey(user.id, "collapsedDays"));
+			const storedExpanded = localStorage.getItem(userStorageKey(user.id, "expandedDays"));
+			try {
+				setManuallyCollapsedDays(storedCollapsed ? new Set(JSON.parse(storedCollapsed)) : new Set());
+				setManuallyExpandedDays(storedExpanded ? new Set(JSON.parse(storedExpanded)) : new Set());
+			} catch {
+				setManuallyCollapsedDays(new Set());
+				setManuallyExpandedDays(new Set());
+			}
 			
 			// Load taken doses from server
 			async function loadTakenDoses() {
@@ -731,6 +745,35 @@ function AppContent() {
 		setShareCopied(false);
 	}
 
+	// Toggle day collapse/expand
+	function toggleDayCollapse(dateStr: string, isAutoCollapsed: boolean) {
+		if (isAutoCollapsed) {
+			// Day is auto-collapsed (all taken) - toggle the expanded override
+			setManuallyExpandedDays((prev) => {
+				const next = new Set(prev);
+				if (next.has(dateStr)) {
+					next.delete(dateStr);
+				} else {
+					next.add(dateStr);
+				}
+				if (user?.id) localStorage.setItem(userStorageKey(user.id, "expandedDays"), JSON.stringify([...next]));
+				return next;
+			});
+		} else {
+			// Day is not auto-collapsed - toggle manual collapse
+			setManuallyCollapsedDays((prev) => {
+				const next = new Set(prev);
+				if (next.has(dateStr)) {
+					next.delete(dateStr);
+				} else {
+					next.add(dateStr);
+				}
+				if (user?.id) localStorage.setItem(userStorageKey(user.id, "collapsedDays"), JSON.stringify([...next]));
+				return next;
+			});
+		}
+	}
+
 	const [theme, setTheme] = useState<"light" | "dark">(() => {
 		if (typeof window !== "undefined") {
 			return (localStorage.getItem("theme") as "light" | "dark") || "dark";
@@ -959,10 +1002,36 @@ function AppContent() {
 									</div>
 								</div>
 								<div className="timeline">
-									{groupedSchedule.map((day) => (
-										<div key={day.dateStr} className="day-block">
-											<div className="day-divider">{day.dateStr}</div>
-											{day.meds.map((item) => {
+									{groupedSchedule.map((day) => {
+										// Check if all doses in this day are taken (auto-collapse)
+										const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
+										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
+										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+										
+										// Determine if day should be collapsed
+										const isAutoCollapsed = allDayTaken;
+										const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
+										const isManuallyCollapsed = manuallyCollapsedDays.has(day.dateStr);
+										const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
+										
+										return (
+											<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+												<div 
+													className="day-divider clickable" 
+													onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+													title={isCollapsed ? t('common.expand') : t('common.collapse')}
+												>
+													<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
+													<span className="day-date">{day.dateStr}</span>
+													<span className="day-summary">
+														{allDayTaken ? (
+															<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
+														) : (
+															<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+														)}
+													</span>
+												</div>
+												{!isCollapsed && day.meds.map((item) => {
 												const medCoverage = coverageByMed[item.medName];
 												const med = meds.find(m => m.name === item.medName);
 												const depletionTime = depletionByMed[item.medName];
@@ -1005,7 +1074,8 @@ function AppContent() {
 												);
 											})}
 										</div>
-									))}
+									);
+									})}
 								</div>
 							</article>
 						</section>
@@ -2341,6 +2411,51 @@ function SharedSchedule() {
 	const [error, setError] = useState<string | null>(null);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
+	// Collapsed days state for SharedSchedule (token-specific localStorage)
+	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
+	const [manuallyExpandedDays, setManuallyExpandedDays] = useState<Set<string>>(new Set());
+
+	// Load collapsed/expanded state from localStorage
+	useEffect(() => {
+		if (token && typeof window !== "undefined") {
+			const storedCollapsed = localStorage.getItem(`share_${token}_collapsedDays`);
+			const storedExpanded = localStorage.getItem(`share_${token}_expandedDays`);
+			try {
+				setManuallyCollapsedDays(storedCollapsed ? new Set(JSON.parse(storedCollapsed)) : new Set());
+				setManuallyExpandedDays(storedExpanded ? new Set(JSON.parse(storedExpanded)) : new Set());
+			} catch {
+				setManuallyCollapsedDays(new Set());
+				setManuallyExpandedDays(new Set());
+			}
+		}
+	}, [token]);
+
+	// Toggle day collapse/expand for SharedSchedule
+	function toggleDayCollapse(dateStr: string, isAutoCollapsed: boolean) {
+		if (isAutoCollapsed) {
+			setManuallyExpandedDays((prev) => {
+				const next = new Set(prev);
+				if (next.has(dateStr)) {
+					next.delete(dateStr);
+				} else {
+					next.add(dateStr);
+				}
+				if (token) localStorage.setItem(`share_${token}_expandedDays`, JSON.stringify([...next]));
+				return next;
+			});
+		} else {
+			setManuallyCollapsedDays((prev) => {
+				const next = new Set(prev);
+				if (next.has(dateStr)) {
+					next.delete(dateStr);
+				} else {
+					next.add(dateStr);
+				}
+				if (token) localStorage.setItem(`share_${token}_collapsedDays`, JSON.stringify([...next]));
+				return next;
+			});
+		}
+	}
 
 	// Close lightbox on Escape key
 	useEffect(() => {
@@ -2560,54 +2675,81 @@ function SharedSchedule() {
 					{schedule.length === 0 ? (
 						<p className="shared-schedule-empty">{t('share.noSchedule')}</p>
 					) : (
-						schedule.map((day) => (
-							<div key={day.dateStr} className="day-block">
-								<div className="day-divider">{day.dateStr}</div>
-								{day.meds.map((item) => {
-									const med = data.medications.find(m => m.name === item.medName);
-									const allTaken = item.doses.every((d) => takenDoses.has(d.id));
-									return (
-										<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
-											<div className="time-main">
-												<div className="med-name">
-													<span 
-														className={med?.imageUrl ? 'clickable' : ''}
-														onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
-													>
-														<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
-													</span>
-													<span className="med-name-text">{item.medName}</span>
-													{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
+						schedule.map((day) => {
+							// Check if all doses in this day are taken (auto-collapse)
+							const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
+							const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
+							const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+							
+							// Determine if day should be collapsed
+							const isAutoCollapsed = allDayTaken;
+							const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
+							const isManuallyCollapsed = manuallyCollapsedDays.has(day.dateStr);
+							const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
+							
+							return (
+								<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+									<div 
+										className="day-divider clickable" 
+										onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+										title={isCollapsed ? t('common.expand') : t('common.collapse')}
+									>
+										<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
+										<span className="day-date">{day.dateStr}</span>
+										<span className="day-summary">
+											{allDayTaken ? (
+												<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
+											) : (
+												<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+											)}
+										</span>
+									</div>
+									{!isCollapsed && day.meds.map((item) => {
+										const med = data.medications.find(m => m.name === item.medName);
+										const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+										return (
+											<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+												<div className="time-main">
+													<div className="med-name">
+														<span 
+															className={med?.imageUrl ? 'clickable' : ''}
+															onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
+														>
+															<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+														</span>
+														<span className="med-name-text">{item.medName}</span>
+														{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
+													</div>
+													<div className="tag-row">
+														<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+													</div>
 												</div>
-												<div className="tag-row">
-													<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+												<div className="doses-col">
+													{item.doses.map((dose) => {
+														const isTaken = takenDoses.has(dose.id);
+														const isOverdue = dose.when < Date.now() && !isTaken;
+														return (
+															<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
+																<span className="dose-time">{dose.timeStr}</span>
+																<span className="dose-usage">
+																	{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}
+																	{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																</span>
+																{isTaken ? (
+																	<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
+																) : (
+																	<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
+																)}
+															</div>
+														);
+													})}
 												</div>
 											</div>
-											<div className="doses-col">
-												{item.doses.map((dose) => {
-													const isTaken = takenDoses.has(dose.id);
-													const isOverdue = dose.when < Date.now() && !isTaken;
-													return (
-														<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
-															<span className="dose-time">{dose.timeStr}</span>
-															<span className="dose-usage">
-																{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}
-																{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
-															</span>
-															{isTaken ? (
-																<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
-															) : (
-																<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
-															)}
-														</div>
-													);
-												})}
-											</div>
-										</div>
-									);
-								})}
-							</div>
-						))
+										);
+									})}
+								</div>
+							);
+						})
 					)}
 				</div>
 

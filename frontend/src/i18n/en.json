@@ -33,7 +33,8 @@
       "title": "Upcoming Schedules",
       "1month": "1 month",
       "3months": "3 months",
-      "6months": "6 months"
+      "6months": "6 months",
+      "allTaken": "All taken"
     },
     "reminders": {
       "active": "Automatic reminders active",
@@ -265,6 +266,8 @@
     "reset": "Reset",
     "test": "Test",
     "undo": "Undo",
+    "expand": "Click to expand",
+    "collapse": "Click to collapse",
     "optional": "optional",
     "pill": "pill",
     "pills": "pills",

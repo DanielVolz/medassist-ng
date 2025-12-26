@@ -28,15 +28,39 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 // Parse and validate
-const parsed = EnvSchema.parse(process.env);
+let parsed: z.infer<typeof EnvSchema>;
+try {
+  parsed = EnvSchema.parse(process.env);
+} catch (err) {
+  console.error("=".repeat(60));
+  console.error("ENVIRONMENT CONFIGURATION ERROR");
+  console.error("=".repeat(60));
+  console.error(err);
+  console.error("\nPlease check your .env file or environment variables.");
+  console.error("=".repeat(60));
+  process.exit(1);
+}
 
 // Validate that secrets are provided when auth is enabled
 if (parsed.AUTH_ENABLED) {
-  if (!parsed.JWT_SECRET || !parsed.REFRESH_SECRET || !parsed.COOKIE_SECRET) {
-    throw new Error(
-      "AUTH_ENABLED=true requires JWT_SECRET, REFRESH_SECRET, and COOKIE_SECRET to be set. " +
-      "Generate them with: openssl rand -hex 32"
-    );
+  const missing: string[] = [];
+  if (!parsed.JWT_SECRET) missing.push("JWT_SECRET");
+  if (!parsed.REFRESH_SECRET) missing.push("REFRESH_SECRET");
+  if (!parsed.COOKIE_SECRET) missing.push("COOKIE_SECRET");
+  
+  if (missing.length > 0) {
+    console.error("=".repeat(60));
+    console.error("AUTHENTICATION CONFIGURATION ERROR");
+    console.error("=".repeat(60));
+    console.error(`AUTH_ENABLED=true but missing required secrets: ${missing.join(", ")}`);
+    console.error("");
+    console.error("To fix this, either:");
+    console.error("  1. Set these environment variables with secure random values:");
+    console.error("     Generate with: openssl rand -hex 32");
+    console.error("");
+    console.error("  2. Or disable authentication by removing AUTH_ENABLED=true");
+    console.error("=".repeat(60));
+    process.exit(1);
   }
 }
 

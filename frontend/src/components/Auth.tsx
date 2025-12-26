@@ -21,6 +21,7 @@ interface AuthContextType {
   user: User | null;
   authState: AuthState | null;
   loading: boolean;
+  authError: string | null;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [authState, setAuthState] = useState<AuthState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Fetch auth state on mount
   useEffect(() => {
@@ -56,7 +58,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchAuthState() {
     try {
+      setAuthError(null);
       const res = await fetch("/api/auth/state");
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status}`);
+      }
       const state = await res.json();
       setAuthState(state);
 
@@ -66,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error("Failed to fetch auth state:", err);
+      setAuthError(err instanceof Error ? err.message : "Failed to connect to server");
     } finally {
       setLoading(false);
     }
@@ -147,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, authState, loading, login, register, logout, refreshUser, updateProfile }}>
+    <AuthContext.Provider value={{ user, authState, loading, authError, login, register, logout, refreshUser, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

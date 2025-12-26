@@ -78,7 +78,8 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 
   const token = request.cookies.access_token;
   if (!token) {
-    return reply.status(401).send({ error: "Authentication required", code: "AUTH_REQUIRED" });
+    reply.status(401).send({ error: "Authentication required", code: "AUTH_REQUIRED" });
+    throw new Error("AUTH_REQUIRED");
   }
 
   try {
@@ -86,19 +87,27 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     const [user] = await db.select().from(users).where(sql`${users.id} = ${decoded.sub}`);
     
     if (!user) {
-      return reply.status(401).send({ error: "User not found", code: "USER_NOT_FOUND" });
+      reply.status(401).send({ error: "User not found", code: "USER_NOT_FOUND" });
+      throw new Error("USER_NOT_FOUND");
     }
     
     if (!user.isActive) {
-      return reply.status(401).send({ error: "Account disabled", code: "ACCOUNT_DISABLED" });
+      reply.status(401).send({ error: "Account disabled", code: "ACCOUNT_DISABLED" });
+      throw new Error("ACCOUNT_DISABLED");
     }
 
     request.user = {
       id: user.id,
       username: user.username,
     };
-  } catch {
-    return reply.status(401).send({ error: "Invalid or expired token", code: "INVALID_TOKEN" });
+  } catch (err: any) {
+    // Re-throw our own errors
+    if (err?.message === "AUTH_REQUIRED" || err?.message === "USER_NOT_FOUND" || err?.message === "ACCOUNT_DISABLED") {
+      throw err;
+    }
+    // JWT verification failed
+    reply.status(401).send({ error: "Invalid or expired token", code: "INVALID_TOKEN" });
+    throw new Error("INVALID_TOKEN");
   }
 }
 

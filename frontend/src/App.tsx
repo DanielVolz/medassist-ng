@@ -96,7 +96,7 @@ export default function App() {
 }
 
 function AppRouter() {
-	const { user, authState, loading } = useAuth();
+	const { user, authState, loading, authError } = useAuth();
 	const location = useLocation();
 	const navigate = useNavigate();
 
@@ -112,8 +112,45 @@ function AppRouter() {
 		);
 	}
 
+	// Show error if we couldn't connect to the server
+	if (authError) {
+		return (
+			<div className="auth-container">
+				<div className="auth-card" style={{ textAlign: "center" }}>
+					<h1 className="auth-title">💊 MedAssist</h1>
+					<div className="auth-error" style={{ marginBottom: "1rem" }}>
+						<strong>Connection Error</strong><br />
+						{authError}
+					</div>
+					<p style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
+						Please check if the server is running and try again.
+					</p>
+					<button 
+						className="btn btn-primary" 
+						onClick={() => window.location.reload()}
+						style={{ marginTop: "1rem" }}
+					>
+						Retry
+					</button>
+				</div>
+			</div>
+		);
+	}
+
+	// If auth state is null (shouldn't happen after loading, but be safe)
+	if (!authState) {
+		return (
+			<div className="auth-container">
+				<div className="auth-card" style={{ textAlign: "center" }}>
+					<h1 className="auth-title">💊 MedAssist</h1>
+					<p>Initializing...</p>
+				</div>
+			</div>
+		);
+	}
+
 	// If auth is enabled
-	if (authState?.authEnabled) {
+	if (authState.authEnabled) {
 		// Need to register first user
 		if (authState.needsSetup) {
 			return <AuthPage />;

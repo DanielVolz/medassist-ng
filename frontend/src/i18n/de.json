@@ -275,5 +275,23 @@
     "fullBlisters": "volle Blister",
     "inBlister": "in 1 Blister",
     "total": "gesamt"
+  },
+  "share": {
+    "button": "Teilen",
+    "title": "Zeitplan teilen",
+    "description": "Generiere einen geheimen Link, um den Medikamentenplan für eine bestimmte Person zu teilen. Jeder mit diesem Link kann den Zeitplan sehen.",
+    "selectPerson": "Person auswählen",
+    "selectPeriod": "Zeitraum auswählen",
+    "generateLink": "Link generieren",
+    "generating": "Wird generiert...",
+    "generateAnother": "Weiteren Link generieren",
+    "linkGenerated": "Teilen-Link erstellt!",
+    "copyLink": "Link kopieren",
+    "copied": "In Zwischenablage kopiert!",
+    "noPeople": "Keine Medikamente mit 'Eingenommen von' zugewiesen. Füge zuerst eine Person zu einem Medikament hinzu.",
+    "scheduleFor": "Zeitplan für",
+    "period": "Zeitraum",
+    "noSchedule": "Keine geplanten Einnahmen gefunden.",
+    "generatedBy": "Erstellt von"
   }
 }

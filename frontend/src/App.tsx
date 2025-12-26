@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
+import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth, AuthPage, UserProfile } from "./components/Auth";
 
@@ -85,7 +85,12 @@ type Coverage = {
 export default function App() {
 	return (
 		<AuthProvider>
-			<AppRouter />
+			<Routes>
+				{/* Public share route - accessible without auth */}
+				<Route path="/share/:token" element={<SharedSchedule />} />
+				{/* All other routes go through AppRouter */}
+				<Route path="*" element={<AppRouter />} />
+			</Routes>
 		</AuthProvider>
 	);
 }
@@ -221,6 +226,14 @@ function AppContent() {
 	const [selectedUser, setSelectedUser] = useState<string | null>(null);
 	const [scheduleDays, setScheduleDays] = useState<number>(30);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
+	// Share dialog state
+	const [showShareDialog, setShowShareDialog] = useState(false);
+	const [sharePeople, setSharePeople] = useState<string[]>([]);
+	const [shareSelectedPerson, setShareSelectedPerson] = useState<string>("");
+	const [shareSelectedDays, setShareSelectedDays] = useState<number>(30);
+	const [shareGenerating, setShareGenerating] = useState(false);
+	const [shareLink, setShareLink] = useState<string | null>(null);
+	const [shareCopied, setShareCopied] = useState(false);
 
 	// Load user-specific scheduleDays and takenDoses when user changes
 	useEffect(() => {
@@ -627,6 +640,66 @@ function AppContent() {
 		}
 	}
 
+	// Share dialog functions
+	async function openShareDialog() {
+		setShowShareDialog(true);
+		setShareLink(null);
+		setShareCopied(false);
+		setShareSelectedPerson("");
+		setShareSelectedDays(30);
+		
+		// Get unique takenBy people from medications
+		const uniquePeople = [...new Set(meds.map(m => m.takenBy).filter(Boolean))] as string[];
+		setSharePeople(uniquePeople);
+		if (uniquePeople.length > 0) {
+			setShareSelectedPerson(uniquePeople[0]);
+		}
+	}
+
+	async function generateShareLink() {
+		if (!shareSelectedPerson) return;
+		setShareGenerating(true);
+		setShareCopied(false);
+		
+		try {
+			const res = await fetch("/api/share", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					takenBy: shareSelectedPerson,
+					scheduleDays: shareSelectedDays,
+				}),
+			});
+			
+			if (res.ok) {
+				const data = await res.json();
+				const fullUrl = `${window.location.origin}/share/${data.token}`;
+				setShareLink(fullUrl);
+			} else {
+				const err = await res.json();
+				alert(err.error || "Failed to generate share link");
+			}
+		} catch {
+			alert("Failed to generate share link");
+		} finally {
+			setShareGenerating(false);
+		}
+	}
+
+	function copyShareLink() {
+		if (shareLink) {
+			navigator.clipboard.writeText(shareLink);
+			setShareCopied(true);
+			setTimeout(() => setShareCopied(false), 2000);
+		}
+	}
+
+	function closeShareDialog() {
+		setShowShareDialog(false);
+		setShareLink(null);
+		setShareCopied(false);
+	}
+
 	const [theme, setTheme] = useState<"light" | "dark">(() => {
 		if (typeof window !== "undefined") {
 			return (localStorage.getItem("theme") as "light" | "dark") || "dark";
@@ -832,20 +905,27 @@ function AppContent() {
 						<section className="grid">
 							<article className="card">
 								<div className="card-head">
-									<h2 className="clickable" onClick={() => navigate("/schedule")}>{t('dashboard.schedules.title')}</h2>
-									<select 
-										className="schedule-days-select"
-										value={scheduleDays}
-										onChange={(e) => {
-											const val = Number(e.target.value);
-											setScheduleDays(val);
-											if (user?.id) localStorage.setItem(userStorageKey(user.id, "scheduleDays"), String(val));
-										}}
-									>
-										<option value={30}>{t('dashboard.schedules.1month')}</option>
-										<option value={90}>{t('dashboard.schedules.3months')}</option>
-										<option value={180}>{t('dashboard.schedules.6months')}</option>
-									</select>
+									<h2>{t('dashboard.schedules.title')}</h2>
+									<div className="card-head-actions">
+										{meds.some(m => m.takenBy) && (
+											<button className="ghost share-btn" onClick={openShareDialog} title={t('share.button')}>
+												🔗 {t('share.button')}
+											</button>
+										)}
+										<select 
+											className="schedule-days-select"
+											value={scheduleDays}
+											onChange={(e) => {
+												const val = Number(e.target.value);
+												setScheduleDays(val);
+												if (user?.id) localStorage.setItem(userStorageKey(user.id, "scheduleDays"), String(val));
+											}}
+										>
+											<option value={30}>{t('dashboard.schedules.1month')}</option>
+											<option value={90}>{t('dashboard.schedules.3months')}</option>
+											<option value={180}>{t('dashboard.schedules.6months')}</option>
+										</select>
+									</div>
 								</div>
 								<div className="timeline">
 									{groupedSchedule.map((day) => (
@@ -1713,6 +1793,82 @@ function AppContent() {
 					</div>
 				</div>
 			)}
+
+			{/* Share Dialog Modal */}
+			{showShareDialog && (
+				<div className="modal-overlay" onClick={closeShareDialog}>
+					<div className="modal-content share-dialog-modal" onClick={(e) => e.stopPropagation()}>
+						<button className="modal-close" onClick={closeShareDialog}>×</button>
+						
+						<div className="share-dialog-header">
+							<h2>🔗 {t('share.title')}</h2>
+							<p className="share-dialog-description">{t('share.description')}</p>
+						</div>
+
+						{sharePeople.length === 0 ? (
+							<div className="share-dialog-empty">
+								<p>{t('share.noPeople')}</p>
+							</div>
+						) : shareLink ? (
+							<div className="share-dialog-result">
+								<p className="share-success">{t('share.linkGenerated')}</p>
+								<div className="share-link-box">
+									<input
+										type="text"
+										value={shareLink}
+										readOnly
+										className="share-link-input"
+										onClick={(e) => (e.target as HTMLInputElement).select()}
+									/>
+									<button className="btn-copy" onClick={copyShareLink}>
+										{shareCopied ? "✓" : "📋"}
+									</button>
+								</div>
+								{shareCopied && <span className="share-copied-hint">{t('share.copied')}</span>}
+								<div className="share-dialog-footer">
+									<button className="ghost" onClick={() => { setShareLink(null); setShareCopied(false); }}>
+										{t('share.generateAnother')}
+									</button>
+									<button onClick={closeShareDialog}>{t('common.close')}</button>
+								</div>
+							</div>
+						) : (
+							<div className="share-dialog-form">
+								<div className="form-group">
+									<label>{t('share.selectPerson')}</label>
+									<select 
+										value={shareSelectedPerson} 
+										onChange={(e) => setShareSelectedPerson(e.target.value)}
+									>
+										{sharePeople.map((person) => (
+											<option key={person} value={person}>{person}</option>
+										))}
+									</select>
+								</div>
+								
+								<div className="form-group">
+									<label>{t('share.selectPeriod')}</label>
+									<select 
+										value={shareSelectedDays} 
+										onChange={(e) => setShareSelectedDays(Number(e.target.value))}
+									>
+										<option value={30}>{t('dashboard.schedules.1month')}</option>
+										<option value={90}>{t('dashboard.schedules.3months')}</option>
+										<option value={180}>{t('dashboard.schedules.6months')}</option>
+									</select>
+								</div>
+
+								<div className="share-dialog-footer">
+									<button className="ghost" onClick={closeShareDialog}>{t('common.cancel')}</button>
+									<button onClick={generateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
+										{shareGenerating ? t('share.generating') : t('share.generateLink')}
+									</button>
+								</div>
+							</div>
+						)}
+					</div>
+				</div>
+			)}
 		</main>
 	);
 }
@@ -2107,4 +2263,292 @@ function MedicationAvatar({ name, imageUrl, size = "sm" }: { name: string; image
 		return <img src={`/api/images/${imageUrl}`} alt={name} className={sizeClass} />;
 	}
 	return <div className={`${sizeClass} med-avatar-initials`}>{initials}</div>;
+}
+
+// =============================================================================
+// Shared Schedule Component - Public view for shared schedules
+// =============================================================================
+type SharedMedication = {
+	id: number;
+	name: string;
+	genericName?: string | null;
+	pillWeightMg?: number | null;
+	imageUrl?: string | null;
+	slices: Slice[];
+};
+
+type SharedScheduleData = {
+	takenBy: string;
+	scheduleDays: number;
+	medications: SharedMedication[];
+};
+
+function SharedSchedule() {
+	const { token } = useParams<{ token: string }>();
+	const { t, i18n } = useTranslation();
+	const [data, setData] = useState<SharedScheduleData | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
+	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
+
+	// Close lightbox on Escape key
+	useEffect(() => {
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key === "Escape" && lightboxImage) {
+				setLightboxImage(null);
+			}
+		}
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [lightboxImage]);
+
+	// Load taken doses from localStorage
+	useEffect(() => {
+		if (token) {
+			try {
+				const storedDoses = localStorage.getItem(`share_${token}_takenDoses`);
+				if (storedDoses) {
+					const parsed = JSON.parse(storedDoses);
+					// Clean up old doses (older than 7 days)
+					const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+					const filtered = parsed.filter((item: { id: string; timestamp: number }) => item.timestamp > weekAgo);
+					setTakenDoses(new Set(filtered.map((item: { id: string }) => item.id)));
+				}
+			} catch {
+				setTakenDoses(new Set());
+			}
+		}
+	}, [token]);
+
+	function markDoseTaken(doseId: string) {
+		setTakenDoses((prev) => {
+			const next = new Set(prev);
+			next.add(doseId);
+			// Persist with timestamp for cleanup
+			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
+			if (token) {
+				localStorage.setItem(`share_${token}_takenDoses`, JSON.stringify(items));
+			}
+			return next;
+		});
+	}
+
+	function undoDoseTaken(doseId: string) {
+		setTakenDoses((prev) => {
+			const next = new Set(prev);
+			next.delete(doseId);
+			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
+			if (token) {
+				localStorage.setItem(`share_${token}_takenDoses`, JSON.stringify(items));
+			}
+			return next;
+		});
+	}
+
+	useEffect(() => {
+		async function fetchData() {
+			if (!token) {
+				setError("Invalid link");
+				setLoading(false);
+				return;
+			}
+
+			try {
+				const res = await fetch(`/api/share/${token}`);
+				if (res.ok) {
+					const json = await res.json();
+					setData(json);
+				} else {
+					setError("Share link not found or expired");
+				}
+			} catch {
+				setError("Failed to load schedule");
+			} finally {
+				setLoading(false);
+			}
+		}
+		fetchData();
+	}, [token]);
+
+	// Build schedule from medications
+	const schedule = useMemo(() => {
+		if (!data) return [];
+
+		const now = Date.now();
+		// Start from 7 days ago to show past doses
+		const startTime = now - 7 * 24 * 60 * 60 * 1000;
+		const endTime = now + data.scheduleDays * 24 * 60 * 60 * 1000;
+		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string }[] = [];
+
+		for (const med of data.medications) {
+			for (const slice of med.slices) {
+				const startDate = new Date(slice.start);
+				const intervalMs = slice.every * 24 * 60 * 60 * 1000;
+				let t = startDate.getTime();
+
+				// Move to first occurrence >= startTime
+				if (t < startTime) {
+					const elapsed = startTime - t;
+					const periods = Math.floor(elapsed / intervalMs);
+					t += periods * intervalMs;
+					if (t < startTime) t += intervalMs;
+				}
+
+				while (t <= endTime) {
+					const d = new Date(t);
+					// Generate unique dose ID
+					const doseId = `share-${med.id}-${slice.usage}-${slice.every}-${t}`;
+					doses.push({
+						id: doseId,
+						when: t,
+						medName: med.name,
+						usage: slice.usage,
+						timeStr: d.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" }),
+					});
+					t += intervalMs;
+				}
+			}
+		}
+
+		doses.sort((a, b) => a.when - b.when);
+
+		// Group by date
+		const grouped: { dateStr: string; date: Date; meds: { medName: string; total: number; lastWhen: number; doses: typeof doses }[] }[] = [];
+		const byDate = new Map<string, typeof doses>();
+
+		for (const dose of doses) {
+			const dateKey = new Date(dose.when).toLocaleDateString(i18n.language, {
+				weekday: "long",
+				day: "2-digit",
+				month: "short",
+			});
+			if (!byDate.has(dateKey)) byDate.set(dateKey, []);
+			byDate.get(dateKey)!.push(dose);
+		}
+
+		for (const [dateStr, dayDoses] of byDate) {
+			const byMed = new Map<string, typeof doses>();
+			for (const dose of dayDoses) {
+				if (!byMed.has(dose.medName)) byMed.set(dose.medName, []);
+				byMed.get(dose.medName)!.push(dose);
+			}
+			const meds = Array.from(byMed.entries()).map(([medName, medDoses]) => ({
+				medName,
+				total: medDoses.reduce((sum, d) => sum + d.usage, 0),
+				lastWhen: Math.max(...medDoses.map(d => d.when)),
+				doses: medDoses,
+			}));
+			grouped.push({ dateStr, date: new Date(dayDoses[0].when), meds });
+		}
+
+		return grouped;
+	}, [data, i18n.language]);
+
+	if (loading) {
+		return (
+			<div className="shared-schedule-page">
+				<div className="shared-schedule-loading">
+					<h1>💊 MedAssist</h1>
+					<p>{t('common.loading')}</p>
+				</div>
+			</div>
+		);
+	}
+
+	if (error || !data) {
+		return (
+			<div className="shared-schedule-page">
+				<div className="shared-schedule-error">
+					<h1>💊 MedAssist</h1>
+					<p className="error-message">{error || "Unknown error"}</p>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="shared-schedule-page">
+			<div className="shared-schedule-container">
+				<header className="shared-schedule-header">
+					<h1>💊 {t('share.scheduleFor')} {data.takenBy}</h1>
+					<p className="shared-schedule-period">
+						{t('share.period')}: {data.scheduleDays === 30 ? t('dashboard.schedules.1month') : data.scheduleDays === 90 ? t('dashboard.schedules.3months') : t('dashboard.schedules.6months')}
+					</p>
+				</header>
+
+				<div className="timeline">
+					{schedule.length === 0 ? (
+						<p className="shared-schedule-empty">{t('share.noSchedule')}</p>
+					) : (
+						schedule.map((day) => (
+							<div key={day.dateStr} className="day-block">
+								<div className="day-divider">{day.dateStr}</div>
+								{day.meds.map((item) => {
+									const med = data.medications.find(m => m.name === item.medName);
+									const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+									return (
+										<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+											<div className="time-main">
+												<div className="med-name">
+													<span 
+														className={med?.imageUrl ? 'clickable' : ''}
+														onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
+													>
+														<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+													</span>
+													<span className="med-name-text">{item.medName}</span>
+													{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
+												</div>
+												<div className="tag-row">
+													<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+												</div>
+											</div>
+											<div className="doses-col">
+												{item.doses.map((dose) => {
+													const isTaken = takenDoses.has(dose.id);
+													const isOverdue = dose.when < Date.now() && !isTaken;
+													return (
+														<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
+															<span className="dose-time">{dose.timeStr}</span>
+															<span className="dose-usage">
+																{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}
+																{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+															</span>
+															{isTaken ? (
+																<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
+															) : (
+																<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
+															)}
+														</div>
+													);
+												})}
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						))
+					)}
+				</div>
+
+				<footer className="shared-schedule-footer">
+					<p>{t('share.generatedBy')} MedAssist</p>
+				</footer>
+			</div>
+
+			{/* Image Lightbox */}
+			{lightboxImage && (
+				<div className="lightbox-overlay" onClick={() => setLightboxImage(null)}>
+					<button className="lightbox-close" onClick={() => setLightboxImage(null)}>×</button>
+					<img 
+						src={`/api/images/${lightboxImage.url}`} 
+						alt={lightboxImage.name} 
+						className="lightbox-image"
+						onClick={(e) => e.stopPropagation()}
+					/>
+				</div>
+			)}
+		</div>
+	);
 }

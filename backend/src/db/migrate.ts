@@ -83,6 +83,16 @@ async function main() {
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS share_tokens (
+      id integer PRIMARY KEY AUTOINCREMENT,
+      user_id integer NOT NULL,
+      token text NOT NULL UNIQUE,
+      taken_by text NOT NULL,
+      schedule_days integer NOT NULL DEFAULT 30,
+      created_at integer NOT NULL DEFAULT (strftime('%s','now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `;
 
   // Execute each statement separately

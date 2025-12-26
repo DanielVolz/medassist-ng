@@ -87,3 +87,15 @@ export const refreshTokens = sqliteTable("refresh_tokens", {
   revoked: integer("revoked", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// =============================================================================
+// Share Tokens - For public schedule sharing by takenBy person
+// =============================================================================
+export const shareTokens = sqliteTable("share_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text("token", { length: 64 }).notNull().unique(),
+  takenBy: text("taken_by", { length: 100 }).notNull(),
+  scheduleDays: integer("schedule_days").notNull().default(30),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+});

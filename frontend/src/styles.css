@@ -402,6 +402,8 @@ textarea {
 .time-row:last-child { border-bottom: none; padding-bottom: 0; }
 .time-main { display: flex; flex-direction: column; gap: 0.4rem; }
 .time-main .med-name { font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0; }
+.time-main .med-name span.clickable { cursor: pointer; }
+.time-main .med-name span.clickable:hover .med-avatar { transform: scale(1.1); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
 .time-col { display: flex; align-items: center; justify-content: flex-start; }
 .time-chip { 
   display: inline-flex; 
@@ -2400,4 +2402,217 @@ h3 .reminder-icon.info-tooltip {
 .profile-modal {
   max-width: 480px;
   padding: 1.5rem;
+}
+
+/* =============================================================================
+   Share Dialog
+   ============================================================================= */
+.share-dialog-modal {
+  max-width: 480px;
+  padding: 1.5rem;
+}
+
+.share-dialog-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.share-dialog-header h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.share-dialog-description {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.share-dialog-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.share-dialog-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.share-dialog-form label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.share-dialog-form select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.share-dialog-footer {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  justify-content: flex-end;
+}
+
+.share-dialog-result {
+  text-align: center;
+}
+
+.share-success {
+  color: var(--success);
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.share-link-box {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.share-link-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: monospace;
+}
+
+.btn-copy {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-copy:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
+
+.share-copied-hint {
+  color: var(--success);
+  font-size: 0.875rem;
+}
+
+.share-btn {
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+}
+
+.card-head-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* =============================================================================
+   Shared Schedule Page (Public)
+   ============================================================================= */
+.shared-schedule-page {
+  min-height: 100vh;
+  background: var(--bg-gradient);
+  padding: 2rem;
+}
+
+.shared-schedule-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.shared-schedule-loading,
+.shared-schedule-error {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.shared-schedule-loading h1,
+.shared-schedule-error h1 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.shared-schedule-error .error-message {
+  color: var(--danger);
+  font-size: 1.125rem;
+}
+
+.shared-schedule-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.shared-schedule-header h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.shared-schedule-period {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.shared-timeline {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid var(--border-primary);
+}
+
+.shared-schedule-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.shared-dose {
+  background: transparent;
+  border: none;
+  padding: 0.5rem 0;
+}
+
+.med-generic-inline {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-left: 0.5rem;
+}
+
+.shared-schedule-footer {
+  text-align: center;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 600px) {
+  .shared-schedule-page {
+    padding: 1rem;
+  }
+  
+  .shared-schedule-header h1 {
+    font-size: 1.25rem;
+  }
+  
+  .shared-timeline {
+    padding: 1rem;
+  }
 }

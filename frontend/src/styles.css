@@ -179,7 +179,7 @@ body {
   border-radius: 14px;
   padding: 1.25rem;
   box-shadow: 0 14px 36px var(--shadow);
-  overflow-x: auto;
+  overflow: hidden;
   transition: background 200ms ease, border-color 200ms ease;
 }
 
@@ -575,7 +575,7 @@ textarea {
 
 .card p { margin: 0; }
 
-.table { width: 100%; display: flex; flex-direction: column; gap: 0; margin-top: 0.5rem; overflow-x: auto; }
+.table { width: 100%; display: flex; flex-direction: column; gap: 0; margin-top: 0.5rem; }
 .table-head, .table-row {
   display: grid;
   grid-template-columns: minmax(180px, 2fr) 100px 140px 140px 120px;
@@ -694,6 +694,33 @@ textarea {
     font-size: 0.75rem;
     text-transform: uppercase;
     margin-right: 1rem;
+    flex-shrink: 0;
+  }
+  /* First span (name cell) - centered horizontal layout */
+  .table-row span:first-child {
+    justify-content: center;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 0.25rem;
+  }
+  .table-row span:first-child::before {
+    display: none; /* Hide "NAME" label on mobile */
+  }
+  /* Avatar + name layout - horizontal centered */
+  .table-row .cell-with-avatar {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+  }
+  .table-row .cell-with-avatar .med-avatar {
+    flex-shrink: 0;
+  }
+  /* Badges and icons wrap to next line if needed but stay together */
+  .table-row .taken-by-badge,
+  .table-row .reminder-icon, 
+  .table-row .notes-icon {
     flex-shrink: 0;
   }
   .table-4 .table-head, .table-4 .table-row,

@@ -302,6 +302,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 
     const userId = getUserId(req);
     const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
+    const now = new Date();
+    
     const payload = rows.map((row) => {
       const slices = parseSlices(row);
       const usageTotal = calculateUsageInRange(slices, start, end);
@@ -309,17 +311,39 @@ export async function medicationRoutes(app: FastifyInstance) {
       const packCount = row.packCount ?? 1;
       const stripsPerPack = row.stripsPerPack ?? row.strips ?? 1;
       const looseTablets = row.looseTablets ?? 0;
-      const totalPills = row.count;
+      const originalTotalPills = packCount * stripsPerPack * tabsPerStrip + looseTablets;
 
+      // Calculate consumption up to now (same logic as frontend)
+      let consumedUntilNow = 0;
+      slices.forEach((slice) => {
+        const sliceStart = new Date(slice.start);
+        if (Number.isNaN(sliceStart.getTime()) || sliceStart > now) return;
+        const msPerDay = 86400000;
+        const period = Math.max(1, slice.every) * msPerDay;
+        const occurrences = Math.floor((now.getTime() - sliceStart.getTime()) / period) + 1;
+        consumedUntilNow += occurrences * slice.usage;
+      });
+      
+      const currentPills = Math.max(0, originalTotalPills - consumedUntilNow);
       const stripsNeeded = tabsPerStrip > 0 ? Math.ceil(usageTotal / tabsPerStrip) : 0;
-      const fullBlisters = packCount * stripsPerPack;
-      const loosePills = looseTablets;
-      const totalAvailablePills = fullBlisters * tabsPerStrip + loosePills;
-      const enough = totalAvailablePills >= usageTotal;
+      
+      // Calculate current stock using realistic consumption order (loose first, then blisters)
+      const consumed = originalTotalPills - currentPills;
+      const looseConsumed = Math.min(consumed, looseTablets);
+      const loosePillsRemaining = looseTablets - looseConsumed;
+      const blisterPillsConsumed = consumed - looseConsumed;
+      const originalBlisterPills = originalTotalPills - looseTablets;
+      const blisterPillsRemaining = Math.max(0, originalBlisterPills - blisterPillsConsumed);
+      
+      const fullBlisters = tabsPerStrip > 0 ? Math.floor(blisterPillsRemaining / tabsPerStrip) : 0;
+      const openBlisterPills = tabsPerStrip > 0 ? blisterPillsRemaining % tabsPerStrip : 0;
+      const loosePills = loosePillsRemaining + openBlisterPills; // Combine open blister + remaining loose
+      
+      const enough = currentPills >= usageTotal;
       return {
         medicationId: row.id,
         medicationName: row.name,
-        totalPills,
+        totalPills: currentPills,
         plannerUsage: usageTotal,
         stripSize: tabsPerStrip,
         stripsNeeded,

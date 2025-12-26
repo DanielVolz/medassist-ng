@@ -256,6 +256,10 @@ function AppContent() {
 				}
 			}
 			loadTakenDoses();
+			
+			// Poll for updates every 5 seconds (real-time sync with share links)
+			const interval = setInterval(loadTakenDoses, 5000);
+			return () => clearInterval(interval);
 		}
 	}, [user?.id]);
 
@@ -2349,7 +2353,7 @@ function SharedSchedule() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [lightboxImage]);
 
-	// Load taken doses from server
+	// Load taken doses from server with polling for real-time sync
 	useEffect(() => {
 		if (token) {
 			async function loadTakenDoses() {
@@ -2366,6 +2370,10 @@ function SharedSchedule() {
 				}
 			}
 			loadTakenDoses();
+			
+			// Poll for updates every 5 seconds (real-time sync with dashboard)
+			const interval = setInterval(loadTakenDoses, 5000);
+			return () => clearInterval(interval);
 		}
 	}, [token]);
 

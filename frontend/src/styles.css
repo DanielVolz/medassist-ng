@@ -543,10 +543,22 @@ textarea {
   color: var(--success);
 }
 
-.dose-btn.take:hover {
+.dose-btn.take:hover:not(:disabled) {
   background: var(--success);
   color: white;
   transform: scale(1.1);
+}
+
+.dose-btn.take:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  background: var(--bg-tertiary);
+  border-color: var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.dose-item.future {
+  opacity: 0.5;
 }
 
 .dose-btn.undo {

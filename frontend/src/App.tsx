@@ -362,9 +362,9 @@ function AppContent() {
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
 	const groupedSchedule = useMemo(() => {
 		type DoseInfo = { id: string; timeStr: string; when: number; usage: number };
-		const days = new Map<string, { dateStr: string; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
+		const days = new Map<string, { dateStr: string; date: Date; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
 		schedule.events.slice(0, 2000).forEach((event) => {
-			const day = days.get(event.dateStr) ?? { dateStr: event.dateStr, meds: new Map() };
+			const day = days.get(event.dateStr) ?? { dateStr: event.dateStr, date: new Date(event.when), meds: new Map() };
 			const medEntry = day.meds.get(event.medName) ?? { medName: event.medName, total: 0, doses: [], lastWhen: event.when };
 			medEntry.total += event.usage;
 			medEntry.doses.push({ id: event.id, timeStr: event.timeStr, when: event.when, usage: event.usage });
@@ -372,7 +372,7 @@ function AppContent() {
 			day.meds.set(event.medName, medEntry);
 			days.set(event.dateStr, day);
 		});
-		return Array.from(days.values()).map((d) => ({ dateStr: d.dateStr, meds: Array.from(d.meds.values()) })).slice(0, scheduleDays);
+		return Array.from(days.values()).map((d) => ({ dateStr: d.dateStr, date: d.date, meds: Array.from(d.meds.values()) })).slice(0, scheduleDays);
 	}, [schedule.events, scheduleDays]);
 
 	useEffect(() => {
@@ -1008,8 +1008,15 @@ function AppContent() {
 										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 										
-										// Determine if day should be collapsed
-										const isAutoCollapsed = allDayTaken;
+										// Check if this is today, past, or future
+										const today = new Date();
+										today.setHours(0, 0, 0, 0);
+										const dayDate = new Date(day.date);
+										dayDate.setHours(0, 0, 0, 0);
+										const isToday = dayDate.getTime() === today.getTime();
+										
+										// Determine if day should be collapsed: only today is expanded by default
+										const isAutoCollapsed = allDayTaken || !isToday;
 										const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 										const isManuallyCollapsed = manuallyCollapsedDays.has(day.dateStr);
 										const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
@@ -1032,49 +1039,49 @@ function AppContent() {
 													</span>
 												</div>
 												{!isCollapsed && day.meds.map((item) => {
-												const medCoverage = coverageByMed[item.medName];
-												const med = meds.find(m => m.name === item.medName);
-												const depletionTime = depletionByMed[item.medName];
-												// Check if this dose is scheduled after medication runs out
-												const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
-												const status = willBeOutOfStock 
-													? { className: "danger", label: "status.outOfStock" }
-													: medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-												const allTaken = item.doses.every((d) => takenDoses.has(d.id));
-												const takenCount = item.doses.filter((d) => takenDoses.has(d.id)).length;
-												return (
-													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
-														<div className="time-main">
-															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
-															<div className="tag-row">
-																<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
-																{status && <span className={`tag ${status.className}`}>
-																	{t(status.label)}
-																</span>}
+													const medCoverage = coverageByMed[item.medName];
+													const med = meds.find(m => m.name === item.medName);
+													const depletionTime = depletionByMed[item.medName];
+													// Check if this dose is scheduled after medication runs out
+													const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+													const status = willBeOutOfStock 
+														? { className: "danger", label: "status.outOfStock" }
+														: medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
+													const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+													return (
+														<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+															<div className="time-main">
+																<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
+																<div className="tag-row">
+																	<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+																	{status && <span className={`tag ${status.className}`}>
+																		{t(status.label)}
+																	</span>}
+																</div>
+															</div>
+															<div className="doses-col">
+																{item.doses.map((dose) => {
+																	const isTaken = takenDoses.has(dose.id);
+																	const isOverdue = dose.when < Date.now();
+																	const isFutureDose = dose.when > Date.now();
+																	return (
+																		<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
+																			<span className="dose-time">{dose.timeStr}</span>
+																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																			{isTaken ? (
+																				<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
+																			) : (
+																				<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')} disabled={isFutureDose}>✓</button>
+																			)}
+																		</div>
+																	);
+																})}
 															</div>
 														</div>
-														<div className="doses-col">
-															{item.doses.map((dose) => {
-																const isTaken = takenDoses.has(dose.id);
-																const isOverdue = dose.when < Date.now();
-																return (
-																	<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
-																		<span className="dose-time">{dose.timeStr}</span>
-																		<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
-																		{isTaken ? (
-																			<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
-																		) : (
-																			<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
-																		)}
-																	</div>
-																);
-															})}
-														</div>
-													</div>
-												);
-											})}
-										</div>
-									);
+													);
+												})}
+											</div>
+										);
 									})}
 								</div>
 							</article>
@@ -2681,8 +2688,15 @@ function SharedSchedule() {
 							const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 							const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 							
-							// Determine if day should be collapsed
-							const isAutoCollapsed = allDayTaken;
+							// Check if this is today, past, or future
+							const today = new Date();
+							today.setHours(0, 0, 0, 0);
+							const dayDate = new Date(day.date);
+							dayDate.setHours(0, 0, 0, 0);
+							const isToday = dayDate.getTime() === today.getTime();
+							
+							// Determine if day should be collapsed: only today is expanded by default
+							const isAutoCollapsed = allDayTaken || !isToday;
 							const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 							const isManuallyCollapsed = manuallyCollapsedDays.has(day.dateStr);
 							const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
@@ -2728,8 +2742,9 @@ function SharedSchedule() {
 													{item.doses.map((dose) => {
 														const isTaken = takenDoses.has(dose.id);
 														const isOverdue = dose.when < Date.now() && !isTaken;
+														const isFutureDose = dose.when > Date.now();
 														return (
-															<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
+															<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
 																<span className="dose-time">{dose.timeStr}</span>
 																<span className="dose-usage">
 																	{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}
@@ -2738,7 +2753,7 @@ function SharedSchedule() {
 																{isTaken ? (
 																	<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
 																) : (
-																	<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
+																	<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')} disabled={isFutureDose}>✓</button>
 																)}
 															</div>
 														);

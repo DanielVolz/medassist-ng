@@ -262,11 +262,10 @@ function AppContent() {
 					if (res.ok) {
 						const data = await res.json();
 						setTakenDoses(new Set(data.doses.map((d: { doseId: string }) => d.doseId)));
-					} else {
-						setTakenDoses(new Set());
 					}
+					// Don't reset on error - keep current state
 				} catch {
-					setTakenDoses(new Set());
+					// Don't reset on error - keep current state
 				}
 			}
 			loadTakenDoses();
@@ -1063,7 +1062,12 @@ function AppContent() {
 																{item.doses.map((dose) => {
 																	const isTaken = takenDoses.has(dose.id);
 																	const isOverdue = dose.when < Date.now();
-																	const isFutureDose = dose.when > Date.now();
+																	// Only disable doses on future DAYS, not later today
+																	const doseDate = new Date(dose.when);
+																	doseDate.setHours(0, 0, 0, 0);
+																	const todayMidnight = new Date();
+																	todayMidnight.setHours(0, 0, 0, 0);
+																	const isFutureDose = doseDate.getTime() > todayMidnight.getTime();
 																	return (
 																		<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
@@ -2742,7 +2746,12 @@ function SharedSchedule() {
 													{item.doses.map((dose) => {
 														const isTaken = takenDoses.has(dose.id);
 														const isOverdue = dose.when < Date.now() && !isTaken;
-														const isFutureDose = dose.when > Date.now();
+														// Only disable doses on future DAYS, not later today
+														const doseDate = new Date(dose.when);
+														doseDate.setHours(0, 0, 0, 0);
+														const todayMidnight = new Date();
+														todayMidnight.setHours(0, 0, 0, 0);
+														const isFutureDose = doseDate.getTime() > todayMidnight.getTime();
 														return (
 															<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
 																<span className="dose-time">{dose.timeStr}</span>

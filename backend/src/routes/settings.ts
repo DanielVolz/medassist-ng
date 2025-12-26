@@ -1,9 +1,34 @@
 import { FastifyInstance } from "fastify";
 import nodemailer from "nodemailer";
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { resolve } from "path";
-import { getReminderState } from "../services/reminder-scheduler.js";
+import { db } from "../db/client.js";
+import { userSettings } from "../db/schema.js";
+import { eq } from "drizzle-orm";
+import { requireAuth } from "../plugins/auth.js";
+import { env } from "../plugins/env.js";
+import type { AuthUser } from "../types/fastify.js";
 import type { Language } from "../i18n/translations.js";
+
+// Exported type for use in schedulers
+export type UserSettings = {
+  userId: number;
+  emailEnabled: boolean;
+  notificationEmail: string | null;
+  emailStockReminders: boolean;
+  emailIntakeReminders: boolean;
+  shoutrrrEnabled: boolean;
+  shoutrrrUrl: string | null;
+  shoutrrrStockReminders: boolean;
+  shoutrrrIntakeReminders: boolean;
+  reminderDaysBefore: number;
+  repeatDailyReminders: boolean;
+  lowStockDays: number;
+  normalStockDays: number;
+  highStockDays: number;
+  language: Language;
+  lastAutoEmailSent: string | null;
+  lastNotificationType: string | null;
+  lastNotificationChannel: string | null;
+};
 
 type SettingsBody = {
   emailEnabled: boolean;
@@ -15,13 +40,11 @@ type SettingsBody = {
   highStockDays: number;
   shoutrrrEnabled: boolean;
   shoutrrrUrl: string;
-  // Granular notification settings
   emailStockReminders: boolean;
   emailIntakeReminders: boolean;
   shoutrrrStockReminders: boolean;
   shoutrrrIntakeReminders: boolean;
-  // Language setting
-  language: Language;
+  language: string;
 };
 
 type TestEmailBody = {
@@ -32,123 +55,144 @@ type TestShoutrrrBody = {
   url: string;
 };
 
-// Notification settings are stored in a JSON file (user-configurable)
-// SMTP settings come from .env (admin-configured)
-const notificationSettingsFile = resolve(process.cwd(), "data", "notification-settings.json");
-
-type NotificationSettings = {
-  emailEnabled: boolean;
-  notificationEmail: string;
-  reminderDaysBefore: number;
-  repeatDailyReminders: boolean;
-  lowStockDays: number;
-  normalStockDays: number;
-  highStockDays: number;
-  shoutrrrEnabled: boolean;
-  shoutrrrUrl: string;
-  // Granular notification settings
-  emailStockReminders: boolean;
-  emailIntakeReminders: boolean;
-  shoutrrrStockReminders: boolean;
-  shoutrrrIntakeReminders: boolean;
-  // Language setting
-  language: Language;
+// Default settings for new users
+const defaultSettings = {
+  emailEnabled: false,
+  notificationEmail: null,
+  emailStockReminders: true,
+  emailIntakeReminders: true,
+  shoutrrrEnabled: false,
+  shoutrrrUrl: null,
+  shoutrrrStockReminders: true,
+  shoutrrrIntakeReminders: true,
+  reminderDaysBefore: 7,
+  repeatDailyReminders: false,
+  lowStockDays: 30,
+  normalStockDays: 90,
+  highStockDays: 180,
+  language: "en",
+  lastAutoEmailSent: null,
+  lastNotificationType: null,
+  lastNotificationChannel: null,
 };
 
-function loadNotificationSettings(): NotificationSettings {
-  try {
-    if (existsSync(notificationSettingsFile)) {
-      const saved = JSON.parse(readFileSync(notificationSettingsFile, "utf-8"));
-      return {
-        emailEnabled: saved.emailEnabled ?? false,
-        notificationEmail: saved.notificationEmail ?? "",
-        reminderDaysBefore: saved.reminderDaysBefore ?? 7,
-        repeatDailyReminders: saved.repeatDailyReminders ?? false,
-        lowStockDays: saved.lowStockDays ?? 30,
-        normalStockDays: saved.normalStockDays ?? 90,
-        highStockDays: saved.highStockDays ?? 180,
-        shoutrrrEnabled: saved.shoutrrrEnabled ?? false,
-        shoutrrrUrl: saved.shoutrrrUrl ?? "",
-        // Granular notification settings (default to true for backwards compatibility)
-        emailStockReminders: saved.emailStockReminders ?? true,
-        emailIntakeReminders: saved.emailIntakeReminders ?? true,
-        shoutrrrStockReminders: saved.shoutrrrStockReminders ?? true,
-        shoutrrrIntakeReminders: saved.shoutrrrIntakeReminders ?? true,
-        // Language setting (default to English)
-        language: saved.language ?? "en",
-      };
-    }
-  } catch {
-    // ignore
+// Helper to get or create user settings
+async function getOrCreateUserSettings(userId: number) {
+  let [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+  
+  if (!settings) {
+    // Create default settings for user
+    [settings] = await db.insert(userSettings).values({
+      userId,
+      ...defaultSettings,
+    }).returning();
   }
-  return { 
-    emailEnabled: false, 
-    notificationEmail: "", 
-    reminderDaysBefore: 7, 
-    repeatDailyReminders: false, 
-    lowStockDays: 30, 
-    normalStockDays: 90, 
-    highStockDays: 180, 
-    shoutrrrEnabled: false, 
-    shoutrrrUrl: "",
-    emailStockReminders: true,
-    emailIntakeReminders: true,
-    shoutrrrStockReminders: true,
-    shoutrrrIntakeReminders: true,
-    language: "en",
-  };
-}
-
-function saveNotificationSettings(settings: NotificationSettings): void {
-  writeFileSync(notificationSettingsFile, JSON.stringify(settings, null, 2));
+  
+  return settings;
 }
 
 // Export for use in reminder scheduler
-export { loadNotificationSettings };
+export async function loadUserSettings(userId: number): Promise<UserSettings> {
+  const settings = await getOrCreateUserSettings(userId);
+  return {
+    userId: settings.userId,
+    emailEnabled: settings.emailEnabled,
+    notificationEmail: settings.notificationEmail,
+    emailStockReminders: settings.emailStockReminders,
+    emailIntakeReminders: settings.emailIntakeReminders,
+    shoutrrrEnabled: settings.shoutrrrEnabled,
+    shoutrrrUrl: settings.shoutrrrUrl,
+    shoutrrrStockReminders: settings.shoutrrrStockReminders,
+    shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+    reminderDaysBefore: settings.reminderDaysBefore,
+    repeatDailyReminders: settings.repeatDailyReminders,
+    lowStockDays: settings.lowStockDays,
+    normalStockDays: settings.normalStockDays,
+    highStockDays: settings.highStockDays,
+    language: settings.language as Language,
+    lastAutoEmailSent: settings.lastAutoEmailSent,
+    lastNotificationType: settings.lastNotificationType,
+    lastNotificationChannel: settings.lastNotificationChannel,
+  };
+}
+
+// Get all users with settings for scheduler
+export async function getAllUserSettings(): Promise<UserSettings[]> {
+  const allSettings = await db.select().from(userSettings);
+  return allSettings.map(settings => ({
+    userId: settings.userId,
+    emailEnabled: settings.emailEnabled,
+    notificationEmail: settings.notificationEmail,
+    emailStockReminders: settings.emailStockReminders,
+    emailIntakeReminders: settings.emailIntakeReminders,
+    shoutrrrEnabled: settings.shoutrrrEnabled,
+    shoutrrrUrl: settings.shoutrrrUrl,
+    shoutrrrStockReminders: settings.shoutrrrStockReminders,
+    shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+    reminderDaysBefore: settings.reminderDaysBefore,
+    repeatDailyReminders: settings.repeatDailyReminders,
+    lowStockDays: settings.lowStockDays,
+    normalStockDays: settings.normalStockDays,
+    highStockDays: settings.highStockDays,
+    language: settings.language as Language,
+    lastAutoEmailSent: settings.lastAutoEmailSent,
+    lastNotificationType: settings.lastNotificationType,
+    lastNotificationChannel: settings.lastNotificationChannel,
+  }));
+}
 
 export async function settingsRoutes(app: FastifyInstance) {
-  // Get settings - notification from JSON file, SMTP from process.env
-  app.get("/settings", async (_request, reply) => {
-    const notification = loadNotificationSettings();
-    const reminderState = getReminderState();
+  // All settings routes require auth
+  app.addHook("preHandler", requireAuth);
+
+  // Get settings for current user
+  app.get("/settings", async (request, reply) => {
+    const authUser = request.user as unknown as AuthUser | null;
+    if (!authUser) {
+      return reply.status(401).send({ error: "Not authenticated" });
+    }
+
+    const settings = await getOrCreateUserSettings(authUser.id);
     
     return reply.send({
-      // Notification settings (user-configurable, stored in JSON)
-      emailEnabled: notification.emailEnabled,
-      notificationEmail: notification.notificationEmail,
-      reminderDaysBefore: notification.reminderDaysBefore,
-      repeatDailyReminders: notification.repeatDailyReminders,
-      lowStockDays: notification.lowStockDays,
-      normalStockDays: notification.normalStockDays,
-      highStockDays: notification.highStockDays,
-      shoutrrrEnabled: notification.shoutrrrEnabled,
-      shoutrrrUrl: notification.shoutrrrUrl,
-      // Granular notification settings
-      emailStockReminders: notification.emailStockReminders,
-      emailIntakeReminders: notification.emailIntakeReminders,
-      shoutrrrStockReminders: notification.shoutrrrStockReminders,
-      shoutrrrIntakeReminders: notification.shoutrrrIntakeReminders,
-      // Language setting
-      language: notification.language,
-      // SMTP settings (admin-configured, from .env)
+      // User notification settings (from DB)
+      emailEnabled: settings.emailEnabled,
+      notificationEmail: settings.notificationEmail ?? "",
+      reminderDaysBefore: settings.reminderDaysBefore,
+      repeatDailyReminders: settings.repeatDailyReminders,
+      lowStockDays: settings.lowStockDays,
+      normalStockDays: settings.normalStockDays,
+      highStockDays: settings.highStockDays,
+      shoutrrrEnabled: settings.shoutrrrEnabled,
+      shoutrrrUrl: settings.shoutrrrUrl ?? "",
+      emailStockReminders: settings.emailStockReminders,
+      emailIntakeReminders: settings.emailIntakeReminders,
+      shoutrrrStockReminders: settings.shoutrrrStockReminders,
+      shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+      language: settings.language,
+      // SMTP settings (from .env - shared/server-configured)
       smtpHost: process.env.SMTP_HOST ?? "",
       smtpPort: parseInt(process.env.SMTP_PORT ?? "587"),
       smtpUser: process.env.SMTP_USER ?? "",
       smtpFrom: process.env.SMTP_FROM ?? "",
       smtpSecure: process.env.SMTP_SECURE === "true",
       hasSmtpPassword: !!(process.env.SMTP_TOKEN || process.env.SMTP_PASS),
-      // Reminder state
-      lastAutoEmailSent: reminderState.lastAutoEmailSent,
-      nextScheduledCheck: reminderState.nextScheduledCheck,
-      lastNotificationType: reminderState.lastNotificationType,
-      lastNotificationChannel: reminderState.lastNotificationChannel,
-      // Admin settings (from .env, read-only)
+      // Reminder state for this user
+      lastAutoEmailSent: settings.lastAutoEmailSent,
+      lastNotificationType: settings.lastNotificationType,
+      lastNotificationChannel: settings.lastNotificationChannel,
+      // Server settings (from .env, read-only)
       expiryWarningDays: parseInt(process.env.EXPIRY_WARNING_DAYS ?? "30", 10),
     });
   });
 
-  // Update settings - only notification settings are saved (SMTP comes from .env)
+  // Update settings for current user
   app.put<{ Body: SettingsBody }>("/settings", async (request, reply) => {
+    const authUser = request.user as unknown as AuthUser | null;
+    if (!authUser) {
+      return reply.status(401).send({ error: "Not authenticated" });
+    }
+
     const body = request.body;
     
     // Check if any stock reminders are configured
@@ -158,26 +202,38 @@ export async function settingsRoutes(app: FastifyInstance) {
     
     // Disable repeatDailyReminders if no stock reminders are configured
     const repeatDailyReminders = hasAnyStockReminder ? (body.repeatDailyReminders ?? false) : false;
+
+    // Update or insert user settings
+    const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, authUser.id));
     
-    // Save notification settings to JSON file
-    saveNotificationSettings({
+    const settingsData = {
       emailEnabled: body.emailEnabled,
-      notificationEmail: body.notificationEmail,
+      notificationEmail: body.notificationEmail || null,
+      emailStockReminders: body.emailStockReminders ?? true,
+      emailIntakeReminders: body.emailIntakeReminders ?? true,
+      shoutrrrEnabled: body.shoutrrrEnabled ?? false,
+      shoutrrrUrl: body.shoutrrrUrl || null,
+      shoutrrrStockReminders: body.shoutrrrStockReminders ?? true,
+      shoutrrrIntakeReminders: body.shoutrrrIntakeReminders ?? true,
       reminderDaysBefore: body.reminderDaysBefore,
       repeatDailyReminders,
       lowStockDays: body.lowStockDays ?? 30,
       normalStockDays: body.normalStockDays ?? 90,
       highStockDays: body.highStockDays ?? 180,
-      shoutrrrEnabled: body.shoutrrrEnabled ?? false,
-      shoutrrrUrl: body.shoutrrrUrl ?? "",
-      // Granular notification settings
-      emailStockReminders: body.emailStockReminders ?? true,
-      emailIntakeReminders: body.emailIntakeReminders ?? true,
-      shoutrrrStockReminders: body.shoutrrrStockReminders ?? true,
-      shoutrrrIntakeReminders: body.shoutrrrIntakeReminders ?? true,
-      // Language setting
       language: body.language ?? "en",
-    });
+      updatedAt: new Date(),
+    };
+
+    if (existingSettings.length > 0) {
+      await db.update(userSettings)
+        .set(settingsData)
+        .where(eq(userSettings.userId, authUser.id));
+    } else {
+      await db.insert(userSettings).values({
+        userId: authUser.id,
+        ...settingsData,
+      });
+    }
 
     return reply.send({ success: true });
   });
@@ -188,7 +244,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     
     const smtpHost = process.env.SMTP_HOST;
     const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
+    const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
     const smtpPort = parseInt(process.env.SMTP_PORT ?? "587");
     const smtpSecure = process.env.SMTP_SECURE === "true";
     const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
@@ -257,35 +313,28 @@ export async function settingsRoutes(app: FastifyInstance) {
 // Send notification via Shoutrrr-compatible URL (supports ntfy, Discord, Telegram, etc.)
 export async function sendShoutrrrNotification(urlStr: string, title: string, message: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // Parse the URL to determine the service
     let targetUrl: string;
     let method = "POST";
     let headers: Record<string, string> = {};
     let body: string | undefined;
 
-    // Remove emojis from title for header compatibility (ntfy doesn't support unicode in headers)
-    // Match common emojis, pictographs, symbols, and variation selectors
+    // Remove emojis from title for header compatibility
     const cleanTitle = title.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{2000}-\u{206F}]|⚠|️/gu, "").trim();
 
-    // Handle different URL formats
     if (urlStr.startsWith("ntfy://")) {
-      // ntfy://[user:pass@]host/topic -> https://host/topic
       const parsed = new URL(urlStr.replace("ntfy://", "https://"));
       targetUrl = `https://${parsed.host}${parsed.pathname}`;
       headers = { "Title": cleanTitle, "Tags": "warning" };
       body = message;
       
-      // Handle basic auth if present
       if (parsed.username && parsed.password) {
         headers["Authorization"] = "Basic " + Buffer.from(`${parsed.username}:${parsed.password}`).toString("base64");
       }
     } else if (urlStr.startsWith("https://ntfy.") || urlStr.includes("ntfy.sh") || urlStr.includes("/ntfy/")) {
-      // Direct ntfy HTTPS URL
       targetUrl = urlStr;
       headers = { "Title": cleanTitle, "Tags": "warning" };
       body = message;
     } else if (urlStr.startsWith("http://") || urlStr.startsWith("https://")) {
-      // Generic webhook URL - send as JSON
       targetUrl = urlStr;
       headers = { "Content-Type": "application/json" };
       body = JSON.stringify({ title, message, text: `${title}\n\n${message}` });
@@ -310,3 +359,4 @@ export async function sendShoutrrrNotification(urlStr: string, title: string, me
     return { success: false, error: errorMessage };
   }
 }
+

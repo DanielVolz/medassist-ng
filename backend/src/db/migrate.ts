@@ -11,32 +11,66 @@ async function main() {
   
   const client = createClient({ url });
   
-  // Create tables directly
+  // Create tables - fresh schema without roles, with per-user settings
   const sql = `
     CREATE TABLE IF NOT EXISTS users (
       id integer PRIMARY KEY AUTOINCREMENT,
-      email text NOT NULL UNIQUE,
-      password_hash text NOT NULL,
-      role text NOT NULL DEFAULT 'user',
+      username text NOT NULL UNIQUE,
+      password_hash text,
+      auth_provider text NOT NULL DEFAULT 'local',
+      is_active integer NOT NULL DEFAULT 1,
+      last_login_at integer,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
     );
 
     CREATE TABLE IF NOT EXISTS medications (
       id integer PRIMARY KEY AUTOINCREMENT,
-      name text NOT NULL UNIQUE,
+      user_id integer NOT NULL,
+      name text NOT NULL,
+      generic_name text,
+      taken_by text,
       count integer NOT NULL DEFAULT 0,
       strips integer NOT NULL DEFAULT 0,
       pack_count integer NOT NULL DEFAULT 1,
       strips_per_pack integer NOT NULL DEFAULT 1,
       tabs_per_strip integer NOT NULL DEFAULT 1,
       loose_tablets integer NOT NULL DEFAULT 0,
+      pill_weight_mg integer,
       usage_json text NOT NULL DEFAULT '[]',
       every_json text NOT NULL DEFAULT '[]',
       start_json text NOT NULL DEFAULT '[]',
       strip_size integer NOT NULL DEFAULT 1,
       image_url text,
-      updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
+      expiry_date text,
+      notes text,
+      intake_reminders_enabled integer NOT NULL DEFAULT 0,
+      updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      id integer PRIMARY KEY AUTOINCREMENT,
+      user_id integer NOT NULL UNIQUE,
+      email_enabled integer NOT NULL DEFAULT 0,
+      notification_email text,
+      email_stock_reminders integer NOT NULL DEFAULT 1,
+      email_intake_reminders integer NOT NULL DEFAULT 1,
+      shoutrrr_enabled integer NOT NULL DEFAULT 0,
+      shoutrrr_url text,
+      shoutrrr_stock_reminders integer NOT NULL DEFAULT 1,
+      shoutrrr_intake_reminders integer NOT NULL DEFAULT 1,
+      reminder_days_before integer NOT NULL DEFAULT 7,
+      repeat_daily_reminders integer NOT NULL DEFAULT 0,
+      low_stock_days integer NOT NULL DEFAULT 30,
+      normal_stock_days integer NOT NULL DEFAULT 90,
+      high_stock_days integer NOT NULL DEFAULT 180,
+      language text NOT NULL DEFAULT 'en',
+      last_auto_email_sent text,
+      last_notification_type text,
+      last_notification_channel text,
+      updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS refresh_tokens (
@@ -49,20 +83,6 @@ async function main() {
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
-
-    CREATE TABLE IF NOT EXISTS settings (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      smtp_host text,
-      smtp_port integer,
-      smtp_user text,
-      smtp_pass_encrypted text,
-      smtp_from text,
-      smtp_secure integer NOT NULL DEFAULT 0,
-      email_enabled integer NOT NULL DEFAULT 0,
-      notification_email text,
-      reminder_days_before integer NOT NULL DEFAULT 7,
-      updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
-    );
   `;
 
   // Execute each statement separately
@@ -73,32 +93,6 @@ async function main() {
     await client.execute(stmt);
   }
 
-  // Run migrations for existing databases
-  console.log("Running migrations for existing databases...");
-  
-  const migrations = [
-    { column: "image_url", sql: "ALTER TABLE medications ADD COLUMN image_url TEXT" },
-    { column: "expiry_date", sql: "ALTER TABLE medications ADD COLUMN expiry_date TEXT" },
-    { column: "notes", sql: "ALTER TABLE medications ADD COLUMN notes TEXT" },
-    { column: "generic_name", sql: "ALTER TABLE medications ADD COLUMN generic_name TEXT" },
-    { column: "intake_reminders_enabled", sql: "ALTER TABLE medications ADD COLUMN intake_reminders_enabled INTEGER NOT NULL DEFAULT 0" },
-    { column: "pill_weight_mg", sql: "ALTER TABLE medications ADD COLUMN pill_weight_mg INTEGER" },
-    { column: "taken_by", sql: "ALTER TABLE medications ADD COLUMN taken_by TEXT" },
-  ];
-  
-  for (const migration of migrations) {
-    try {
-      await client.execute(migration.sql);
-      console.log(`Added ${migration.column} column`);
-    } catch (e: any) {
-      if (e.message?.includes("duplicate column") || e.message?.includes("already exists")) {
-        console.log(`${migration.column} column already exists, skipping`);
-      } else {
-        throw e;
-      }
-    }
-  }
-  
   console.log("Database setup complete!");
   process.exit(0);
 }

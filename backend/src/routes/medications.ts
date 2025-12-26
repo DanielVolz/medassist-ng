@@ -2,10 +2,13 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { medications } from "../db/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { createWriteStream, existsSync, unlinkSync } from "fs";
 import { resolve, extname } from "path";
 import { pipeline } from "stream/promises";
+import { requireAuth } from "../plugins/auth.js";
+import { env } from "../plugins/env.js";
+import type { AuthUser } from "../types/fastify.js";
 
 const IMAGES_DIR = resolve(process.cwd(), "data/images");
 
@@ -27,7 +30,6 @@ const medicationSchema = z.object({
   expiryDate: z.string().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
   intakeRemindersEnabled: z.boolean().default(false),
-  // count will be derived on the backend
   slices: z.array(sliceSchema).min(1).max(12),
 });
 
@@ -52,8 +54,21 @@ function parseSlices(row: typeof medications.$inferSelect) {
 }
 
 export async function medicationRoutes(app: FastifyInstance) {
-  app.get("/medications", async () => {
-    const rows = await db.select().from(medications).orderBy(medications.id);
+  // All medication routes require auth
+  app.addHook("preHandler", requireAuth);
+
+  // Helper to get user ID from request
+  function getUserId(request: any): number {
+    const authUser = request.user as unknown as AuthUser | null;
+    if (!authUser) {
+      throw new Error("User not authenticated");
+    }
+    return authUser.id;
+  }
+
+  app.get("/medications", async (request, reply) => {
+    const userId = getUserId(request);
+    const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -80,6 +95,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const parsed = medicationSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send(parsed.error.format());
 
+    const userId = getUserId(req);
     const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
     const usageJson = JSON.stringify(slices.map((s) => s.usage));
     const everyJson = JSON.stringify(slices.map((s) => s.every));
@@ -90,6 +106,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const [inserted] = await db
       .insert(medications)
       .values({
+        userId,
         name,
         genericName: genericName || null,
         takenBy: takenBy || null,
@@ -138,6 +155,12 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
+    const userId = getUserId(req);
+    
+    // Verify ownership
+    const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+    if (!existing) return reply.notFound();
+
     const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
     const usageJson = JSON.stringify(slices.map((s) => s.usage));
     const everyJson = JSON.stringify(slices.map((s) => s.every));
@@ -167,7 +190,7 @@ export async function medicationRoutes(app: FastifyInstance) {
         startJson,
         updatedAt: new Date(),
       })
-      .where(eq(medications.id, idNum))
+      .where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
       .returning();
 
     if (!result.length) return reply.notFound();
@@ -198,14 +221,18 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    // Delete associated image if exists
-    const [existing] = await db.select().from(medications).where(eq(medications.id, idNum));
-    if (existing?.imageUrl) {
+    const userId = getUserId(req);
+
+    // Delete associated image if exists (with ownership check)
+    const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+    if (!existing) return reply.notFound();
+    
+    if (existing.imageUrl) {
       const imagePath = resolve(IMAGES_DIR, existing.imageUrl);
       if (existsSync(imagePath)) unlinkSync(imagePath);
     }
 
-    const deleted = await db.delete(medications).where(eq(medications.id, idNum)).returning();
+    const deleted = await db.delete(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId))).returning();
     if (!deleted.length) return reply.notFound();
     return reply.status(204).send();
   });
@@ -215,7 +242,8 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const [existing] = await db.select().from(medications).where(eq(medications.id, idNum));
+    const userId = getUserId(req);
+    const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     if (!existing) return reply.notFound();
 
     const data = await req.file();
@@ -238,7 +266,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       if (existsSync(oldPath)) unlinkSync(oldPath);
     }
 
-    await db.update(medications).set({ imageUrl: filename, updatedAt: new Date() }).where(eq(medications.id, idNum));
+    await db.update(medications).set({ imageUrl: filename, updatedAt: new Date() }).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
 
     return { success: true, imageUrl: filename };
   });
@@ -248,7 +276,8 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const [existing] = await db.select().from(medications).where(eq(medications.id, idNum));
+    const userId = getUserId(req);
+    const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     if (!existing) return reply.notFound();
 
     if (existing.imageUrl) {
@@ -256,7 +285,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       if (existsSync(filepath)) unlinkSync(filepath);
     }
 
-    await db.update(medications).set({ imageUrl: null, updatedAt: new Date() }).where(eq(medications.id, idNum));
+    await db.update(medications).set({ imageUrl: null, updatedAt: new Date() }).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     return reply.status(204).send();
   });
 
@@ -271,7 +300,8 @@ export async function medicationRoutes(app: FastifyInstance) {
       return reply.badRequest("Invalid date range");
     }
 
-    const rows = await db.select().from(medications).orderBy(medications.id);
+    const userId = getUserId(req);
+    const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
     const payload = rows.map((row) => {
       const slices = parseSlices(row);
       const usageTotal = calculateUsageInRange(slices, start, end);
@@ -282,8 +312,10 @@ export async function medicationRoutes(app: FastifyInstance) {
       const totalPills = row.count;
 
       const stripsNeeded = tabsPerStrip > 0 ? Math.ceil(usageTotal / tabsPerStrip) : 0;
-      const stripsAvailable = packCount * stripsPerPack + (tabsPerStrip > 0 ? looseTablets / tabsPerStrip : 0);
-      const enough = stripsAvailable >= stripsNeeded;
+      const fullBlisters = packCount * stripsPerPack;
+      const loosePills = looseTablets;
+      const totalAvailablePills = fullBlisters * tabsPerStrip + loosePills;
+      const enough = totalAvailablePills >= usageTotal;
       return {
         medicationId: row.id,
         medicationName: row.name,
@@ -291,7 +323,8 @@ export async function medicationRoutes(app: FastifyInstance) {
         plannerUsage: usageTotal,
         stripSize: tabsPerStrip,
         stripsNeeded,
-        stripsAvailable,
+        fullBlisters,
+        loosePills,
         enough,
       };
     });

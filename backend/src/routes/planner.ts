@@ -1,8 +1,9 @@
 import { FastifyInstance } from "fastify";
 import nodemailer from "nodemailer";
 import { updateReminderSentTime } from "../services/reminder-scheduler.js";
-import { loadNotificationSettings, sendShoutrrrNotification } from "./settings.js";
-import { getDateLocale } from "../i18n/translations.js";
+import { loadUserSettings, sendShoutrrrNotification } from "./settings.js";
+import { getDateLocale, type Language } from "../i18n/translations.js";
+import type { AuthUser } from "../types/fastify.js";
 
 type PlannerRow = {
   medicationId: number;
@@ -20,6 +21,7 @@ type SendEmailBody = {
   from: string;
   until: string;
   rows: PlannerRow[];
+  language?: Language; // Optional: passed from frontend for unauthenticated requests
 };
 
 type LowStockItem = {
@@ -32,11 +34,12 @@ type LowStockItem = {
 type ReminderEmailBody = {
   email: string;
   lowStock: LowStockItem[];
+  language?: Language; // Optional: passed from frontend for unauthenticated requests
 };
 
 export async function plannerRoutes(app: FastifyInstance) {
   app.post<{ Body: SendEmailBody }>("/planner/send-email", async (request, reply) => {
-    const { email, from, until, rows } = request.body;
+    const { email, from, until, rows, language: bodyLanguage } = request.body;
 
     if (!email || !rows || rows.length === 0) {
       return reply.status(400).send({ error: "Missing email or planner data" });
@@ -53,9 +56,14 @@ export async function plannerRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "SMTP not configured" });
     }
 
-    // Get locale from settings
-    const settings = loadNotificationSettings();
-    const locale = getDateLocale(settings.language);
+    // Get locale from user settings or use the language passed in the body
+    let language: Language = bodyLanguage || "en";
+    const authUser = request.user as unknown as AuthUser | null;
+    if (authUser?.id) {
+      const userSettings = await loadUserSettings(authUser.id);
+      language = userSettings.language;
+    }
+    const locale = getDateLocale(language);
 
     // Format dates for display
     const fromDate = new Date(from).toLocaleDateString(locale, {
@@ -177,13 +185,28 @@ Sent from MedAssist-ng Medication Planner`;
 
   // Reminder notification for low stock medications (supports email and push)
   app.post<{ Body: ReminderEmailBody }>("/reminder/send-email", async (request, reply) => {
-    const { email, lowStock } = request.body;
+    const { email, lowStock, language: bodyLanguage } = request.body;
 
     if (!lowStock || lowStock.length === 0) {
       return reply.status(400).send({ error: "Missing low stock data" });
     }
 
-    const notificationSettings = loadNotificationSettings();
+    // Load user settings if authenticated, otherwise use defaults
+    let notificationSettings = {
+      emailEnabled: true,
+      shoutrrrEnabled: false,
+      shoutrrrUrl: "",
+    };
+    const reminderAuthUser = request.user as unknown as AuthUser | null;
+    if (reminderAuthUser?.id) {
+      const userSettings = await loadUserSettings(reminderAuthUser.id);
+      notificationSettings = {
+        emailEnabled: userSettings.emailEnabled,
+        shoutrrrEnabled: userSettings.shoutrrrEnabled,
+        shoutrrrUrl: userSettings.shoutrrrUrl || "",
+      };
+    }
+    
     const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
 
     // Send email if enabled

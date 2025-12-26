@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { AuthProvider, useAuth, AuthPage, UserProfile } from "./components/Auth";
 
 type Slice = {
 	usage: number;
@@ -36,7 +37,8 @@ type PlannerRow = {
 	plannerUsage: number;
 	stripSize: number;
 	stripsNeeded: number;
-	stripsAvailable: number;
+	fullBlisters: number;
+	loosePills: number;
 	enough: boolean;
 };
 
@@ -77,32 +79,94 @@ type Coverage = {
 	nextDose: string | null;
 };
 
+// =============================================================================
+// Main App Wrapper with Auth
+// =============================================================================
 export default function App() {
-	const { t, i18n } = useTranslation();
-	const [meds, setMeds] = useState<Medication[]>([]);
-	const [plannerRows, setPlannerRows] = useState<PlannerRow[]>(() => {
-		if (typeof window !== "undefined") {
-			const saved = localStorage.getItem("plannerRows");
-			if (saved) {
-				try { return JSON.parse(saved); } catch { return []; }
-			}
+	return (
+		<AuthProvider>
+			<AppRouter />
+		</AuthProvider>
+	);
+}
+
+function AppRouter() {
+	const { user, authState, loading } = useAuth();
+	const location = useLocation();
+	const navigate = useNavigate();
+
+	// Show loading while checking auth state
+	if (loading) {
+		return (
+			<div className="auth-container">
+				<div className="auth-card" style={{ textAlign: "center" }}>
+					<h1 className="auth-title">💊 MedAssist</h1>
+					<p>Loading...</p>
+				</div>
+			</div>
+		);
+	}
+
+	// If auth is enabled
+	if (authState?.authEnabled) {
+		// Need to register first user
+		if (authState.needsSetup) {
+			return <AuthPage />;
 		}
-		return [];
-	});
+		// Not logged in
+		if (!user) {
+			return <AuthPage />;
+		}
+	}
+
+	// Auth disabled or user is logged in - show main app
+	return <AppContent />;
+}
+
+// =============================================================================
+// Main App Content
+// =============================================================================
+
+// Helper for user-specific localStorage keys
+function userStorageKey(userId: number | undefined, key: string): string {
+	return userId ? `user_${userId}_${key}` : key;
+}
+
+function AppContent() {
+	const { t, i18n } = useTranslation();
+	const { user, authState } = useAuth();
+	const [showProfile, setShowProfile] = useState(false);
+	const [meds, setMeds] = useState<Medication[]>([]);
+	const [plannerRows, setPlannerRows] = useState<PlannerRow[]>([]);
 	const [plannerLoading, setPlannerLoading] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editingId, setEditingId] = useState<number | null>(null);
 	const [form, setForm] = useState<FormState>(defaultForm());
-	const [range, setRange] = useState<{ start: string; end: string }>(() => {
-		if (typeof window !== "undefined") {
-			const saved = localStorage.getItem("plannerRange");
-			if (saved) {
-				try { return JSON.parse(saved); } catch { /* ignore */ }
+	const [range, setRange] = useState<{ start: string; end: string }>({
+		start: toInputValue(todayIso()),
+		end: toInputValue(plusDaysIso(3))
+	});
+
+	// Load user-specific planner data when user changes
+	useEffect(() => {
+		if (typeof window !== "undefined" && user?.id) {
+			const savedRows = localStorage.getItem(userStorageKey(user.id, "plannerRows"));
+			const savedRange = localStorage.getItem(userStorageKey(user.id, "plannerRange"));
+			
+			if (savedRows) {
+				try { setPlannerRows(JSON.parse(savedRows)); } catch { setPlannerRows([]); }
+			} else {
+				setPlannerRows([]);
+			}
+			
+			if (savedRange) {
+				try { setRange(JSON.parse(savedRange)); } catch { /* keep default */ }
+			} else {
+				setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
 			}
 		}
-		return { start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) };
-	});
+	}, [user?.id]);
 
 	const navigate = useNavigate();
 	const location = useLocation();
@@ -155,25 +219,30 @@ export default function App() {
 	const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
 	const [showImageLightbox, setShowImageLightbox] = useState(false);
 	const [selectedUser, setSelectedUser] = useState<string | null>(null);
-	const [scheduleDays, setScheduleDays] = useState<number>(() => {
-		const stored = localStorage.getItem("scheduleDays");
-		return stored ? Number(stored) : 30;
-	});
+	const [scheduleDays, setScheduleDays] = useState<number>(30);
+	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 
-	// Track taken doses (stored in localStorage)
-	const [takenDoses, setTakenDoses] = useState<Set<string>>(() => {
-		try {
-			const stored = localStorage.getItem("takenDoses");
-			if (stored) {
-				const parsed = JSON.parse(stored);
-				// Clean up old entries (older than 7 days)
-				const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-				const filtered = parsed.filter((item: { id: string; timestamp: number }) => item.timestamp > weekAgo);
-				return new Set(filtered.map((item: { id: string }) => item.id));
+	// Load user-specific scheduleDays and takenDoses when user changes
+	useEffect(() => {
+		if (typeof window !== "undefined" && user?.id) {
+			const storedDays = localStorage.getItem(userStorageKey(user.id, "scheduleDays"));
+			setScheduleDays(storedDays ? Number(storedDays) : 30);
+			
+			try {
+				const storedDoses = localStorage.getItem(userStorageKey(user.id, "takenDoses"));
+				if (storedDoses) {
+					const parsed = JSON.parse(storedDoses);
+					const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+					const filtered = parsed.filter((item: { id: string; timestamp: number }) => item.timestamp > weekAgo);
+					setTakenDoses(new Set(filtered.map((item: { id: string }) => item.id)));
+				} else {
+					setTakenDoses(new Set());
+				}
+			} catch {
+				setTakenDoses(new Set());
 			}
-		} catch {}
-		return new Set();
-	});
+		}
+	}, [user?.id]);
 
 	function markDoseTaken(doseId: string) {
 		setTakenDoses((prev) => {
@@ -181,7 +250,9 @@ export default function App() {
 			next.add(doseId);
 			// Persist with timestamp for cleanup
 			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
-			localStorage.setItem("takenDoses", JSON.stringify(items));
+			if (user?.id) {
+				localStorage.setItem(userStorageKey(user.id, "takenDoses"), JSON.stringify(items));
+			}
 			return next;
 		});
 	}
@@ -191,7 +262,9 @@ export default function App() {
 			const next = new Set(prev);
 			next.delete(doseId);
 			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
-			localStorage.setItem("takenDoses", JSON.stringify(items));
+			if (user?.id) {
+				localStorage.setItem(userStorageKey(user.id, "takenDoses"), JSON.stringify(items));
+			}
 			return next;
 		});
 	}
@@ -538,16 +611,20 @@ export default function App() {
 			.catch(() => []) as PlannerRow[];
 		setPlannerRows(rows);
 		setPlannerLoading(false);
-		// Save to localStorage
-		localStorage.setItem("plannerRange", JSON.stringify(range));
-		localStorage.setItem("plannerRows", JSON.stringify(rows));
+		// Save to user-specific localStorage
+		if (user?.id) {
+			localStorage.setItem(userStorageKey(user.id, "plannerRange"), JSON.stringify(range));
+			localStorage.setItem(userStorageKey(user.id, "plannerRows"), JSON.stringify(rows));
+		}
 	}
 
 	function resetRange() {
 		setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
 		setPlannerRows([]);
-		localStorage.removeItem("plannerRange");
-		localStorage.removeItem("plannerRows");
+		if (user?.id) {
+			localStorage.removeItem(userStorageKey(user.id, "plannerRange"));
+			localStorage.removeItem(userStorageKey(user.id, "plannerRows"));
+		}
 	}
 
 	const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -595,8 +672,24 @@ export default function App() {
 					<button className="icon-btn" onClick={toggleTheme} title={theme === "dark" ? t('tooltips.lightMode') : t('tooltips.darkMode')}>
 						{theme === "dark" ? "☀️" : "🌙"}
 					</button>
+					{authState?.authEnabled && user && (
+						<button className="user-menu-btn" onClick={() => setShowProfile(true)} title={t('auth.profile', 'Profile')}>
+							<span className="user-avatar">{user.username.charAt(0).toUpperCase()}</span>
+							<span>{user.username}</span>
+						</button>
+					)}
 				</div>
 			</header>
+
+			{/* Profile Modal */}
+			{showProfile && (
+				<div className="modal-overlay" onClick={() => setShowProfile(false)}>
+					<div className="modal-content profile-modal" onClick={(e) => e.stopPropagation()}>
+						<button className="modal-close" onClick={() => setShowProfile(false)}>×</button>
+						<UserProfile onClose={() => setShowProfile(false)} />
+					</div>
+				</div>
+			)}
 
 			<Routes>
 				<Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -642,10 +735,11 @@ export default function App() {
 									
 									return (
 										<>
-											<div className="table table-6">
+											<div className="table table-7">
 											<div className="table-head">
 												<span>{t('table.name')}</span>
-												<span>{t('table.currentPills')}</span>
+												<span>{t('table.fullBlisters')}</span>
+												<span>{t('table.openBlister')}</span>
 												<span>{t('table.daysLeft')}</span>
 												<span>{t('table.status')}</span>
 												<span>{t('table.runsOut')}</span>
@@ -655,10 +749,17 @@ export default function App() {
 												const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 												const med = meds.find(m => m.name === row.name);
 												const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "";
+												const stock = getBlisterStock(
+													Math.round(row.medsLeft), 
+													med?.tabsPerStrip ?? 1,
+													med?.looseTablets ?? 0,
+													med?.count ?? Math.round(row.medsLeft)
+												);
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
 														<span data-label={t('table.name')} className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}</span>
-														<span data-label={t('table.pills')} className={textClass}>{formatNumber(row.medsLeft)}</span>
+														<span data-label={t('table.fullBlisters')} className={textClass}>{formatFullBlisters(stock.fullBlisters, t)}</span>
+														<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.tabsPerStrip ?? 1, t)}</span>
 														<span data-label={t('table.days')} className={textClass}>{formatNumber(row.daysLeft)}</span>
 														<span data-label={t('table.status')} className={`status-chip ${status.className}`}>{t(status.label)}</span>
 														<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
@@ -691,10 +792,11 @@ export default function App() {
 									<h2>{t('dashboard.overview.title')}</h2>
 									<span className="pill neutral">{t('dashboard.overview.badge')}</span>
 								</div>
-								<div className="table table-6">
+								<div className="table table-7">
 									<div className="table-head">
 										<span>{t('table.name')}</span>
-										<span>{t('table.currentPills')}</span>
+										<span>{t('table.fullBlisters')}</span>
+										<span>{t('table.openBlister')}</span>
 										<span>{t('table.daysLeft')}</span>
 										<span>{t('table.runsOut')}</span>
 										<span>{t('table.expiry')}</span>
@@ -705,10 +807,17 @@ export default function App() {
 										const med = meds.find(m => m.name === row.name);
 										const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
 										const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "";
+										const stock = getBlisterStock(
+											Math.round(row.medsLeft), 
+											med?.tabsPerStrip ?? 1,
+											med?.looseTablets ?? 0,
+											med?.count ?? Math.round(row.medsLeft)
+										);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
 												<span data-label={t('table.name')} className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}</span>
-												<span data-label={t('table.pills')} className={textClass}>{formatNumber(row.medsLeft)}</span>
+												<span data-label={t('table.fullBlisters')} className={textClass}>{formatFullBlisters(stock.fullBlisters, t)}</span>
+												<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.tabsPerStrip ?? 1, t)}</span>
 												<span data-label={t('table.daysLeft')} className={textClass}>{formatNumber(row.daysLeft)}</span>
 												<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
 												<span data-label={t('table.expiry')} className={expiryClass}>{med?.expiryDate ? new Date(med.expiryDate).toLocaleDateString(i18n.language, { day: "2-digit", month: "short", year: "2-digit" }) : "-"}</span>
@@ -730,7 +839,7 @@ export default function App() {
 										onChange={(e) => {
 											const val = Number(e.target.value);
 											setScheduleDays(val);
-											localStorage.setItem("scheduleDays", String(val));
+											if (user?.id) localStorage.setItem(userStorageKey(user.id, "scheduleDays"), String(val));
 										}}
 									>
 										<option value={30}>{t('dashboard.schedules.1month')}</option>
@@ -1005,7 +1114,9 @@ export default function App() {
 													<span data-label={t('planner.table.medication')} className="cell-with-avatar"><MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />{row.medicationName}</span>
 													<span data-label={t('planner.table.usage')}><strong>{row.plannerUsage}</strong> {t('common.pills')}</span>
 													<span data-label={t('planner.table.blisters')}>{row.stripsNeeded} × {row.stripSize}</span>
-													<span data-label={t('planner.table.available')}>{row.stripsAvailable} {t('common.blisters')}</span>
+													<span data-label={t('planner.table.available')}>
+														{row.fullBlisters} {t('common.blisters')}{row.loosePills > 0 && ` + ${row.loosePills} ${t('common.pills')}`}
+													</span>
 													<span data-label={t('table.status')} className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? t('status.enough') : t('status.outOfStock')}</span>
 												</div>
 											);
@@ -1340,7 +1451,7 @@ export default function App() {
 									onChange={(e) => {
 										const val = Number(e.target.value);
 										setScheduleDays(val);
-										localStorage.setItem("scheduleDays", String(val));
+										if (user?.id) localStorage.setItem(userStorageKey(user.id, "scheduleDays"), String(val));
 									}}
 								>
 									<option value={30}>{t('dashboard.schedules.1month')}</option>
@@ -1429,14 +1540,24 @@ export default function App() {
 								<h3>{t('modal.stockInfo')}</h3>
 								{(() => {
 									const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
-									const currentStock = medCoverage ? medCoverage.medsLeft : selectedMed.count;
+									const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : selectedMed.count;
 									const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 									const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "";
+									const stock = getBlisterStock(
+										currentStock, 
+										selectedMed.tabsPerStrip ?? 1,
+										selectedMed.looseTablets ?? 0,
+										selectedMed.count
+									);
 									return (
 								<div className="med-detail-grid">
 									<div className="med-detail-item">
-										<span className="med-detail-label">{t('modal.currentStock')}</span>
-										<span className={`med-detail-value ${textClass}`}>{formatNumber(currentStock)}/{formatNumber(selectedMed.count)}</span>
+										<span className="med-detail-label">{t('table.fullBlisters')}</span>
+										<span className={`med-detail-value ${textClass}`}>{formatFullBlisters(stock.fullBlisters, t)}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t('table.openBlister')}</span>
+										<span className={`med-detail-value ${textClass}`}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, selectedMed.tabsPerStrip ?? 1, t)}</span>
 									</div>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t('modal.packs')}</span>
@@ -1449,10 +1570,6 @@ export default function App() {
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t('modal.pillsPerBlister')}</span>
 										<span className="med-detail-value">{selectedMed.tabsPerStrip ?? 1}</span>
-									</div>
-									<div className="med-detail-item">
-										<span className="med-detail-label">{t('modal.loosePills')}</span>
-										<span className="med-detail-value">{selectedMed.looseTablets ?? 0}</span>
 									</div>
 									{selectedMed.pillWeightMg && (
 										<div className="med-detail-item">
@@ -1742,6 +1859,65 @@ function formatNumber(value: number | null) {
 	if (value === null || Number.isNaN(value)) return "-";
 	if (Math.abs(value % 1) < 0.05) return Math.round(value).toLocaleString();
 	return value.toFixed(1);
+}
+
+// Calculate blister stock with realistic consumption order:
+// Loose pills are consumed FIRST, then blisters are opened
+function getBlisterStock(
+	currentPills: number, 
+	tabsPerStrip: number, 
+	originalLooseTablets: number,
+	originalTotalPills: number
+): { fullBlisters: number; openBlisterPills: number; loosePills: number } {
+	if (tabsPerStrip <= 0 || tabsPerStrip === 1) {
+		return { fullBlisters: 0, openBlisterPills: 0, loosePills: currentPills };
+	}
+	
+	// Calculate how many pills have been consumed
+	const consumed = originalTotalPills - currentPills;
+	
+	// Loose pills are consumed first
+	const looseConsumed = Math.min(consumed, originalLooseTablets);
+	const loosePillsRemaining = originalLooseTablets - looseConsumed;
+	
+	// Remaining consumption comes from blisters
+	const blisterPillsConsumed = consumed - looseConsumed;
+	const originalBlisterPills = originalTotalPills - originalLooseTablets;
+	const blisterPillsRemaining = originalBlisterPills - blisterPillsConsumed;
+	
+	// Calculate full blisters and open blister
+	const fullBlisters = Math.floor(blisterPillsRemaining / tabsPerStrip);
+	const openBlisterPills = blisterPillsRemaining % tabsPerStrip;
+	
+	return { fullBlisters, openBlisterPills, loosePills: loosePillsRemaining };
+}
+
+// Format full blisters column
+function formatFullBlisters(fullBlisters: number, t: (key: string) => string): string {
+	if (fullBlisters === 0) return "—";
+	return `${fullBlisters} ${fullBlisters === 1 ? t('common.blister') : t('common.blisters')}`;
+}
+
+// Format open blister + loose pills column
+function formatOpenBlisterAndLoose(
+	openBlisterPills: number, 
+	loosePills: number, 
+	tabsPerStrip: number, 
+	t: (key: string) => string
+): string {
+	// Format open blister part
+	const openBlisterText = openBlisterPills > 0 
+		? `${openBlisterPills} ${t('common.of')} ${tabsPerStrip} ${t('common.pills')}`
+		: t('common.none');
+	
+	// Format loose pills part (if any)
+	if (loosePills > 0) {
+		return `${openBlisterText} + ${loosePills} ${t('common.loose')}`;
+	}
+	
+	// No loose pills
+	if (openBlisterPills === 0) return "—";
+	return openBlisterText;
 }
 
 function getExpiryClass(expiryDate: string | null | undefined, expiryWarningDays: number = 30): string {

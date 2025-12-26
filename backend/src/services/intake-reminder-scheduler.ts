@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
+import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { medications } from "../db/schema.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { loadNotificationSettings, sendShoutrrrNotification } from "../routes/settings.js";
+import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
 import { getReminderState, updateReminderSentTime } from "./reminder-scheduler.js";
 
@@ -261,7 +262,22 @@ ${tr.intakeReminder.footer}`;
 }
 
 async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void; error: (msg: string) => void }): Promise<void> {
-  const settings = loadNotificationSettings();
+  // Get all user settings to iterate over each user
+  const allUserSettings = await getAllUserSettings();
+  
+  if (allUserSettings.length === 0) {
+    return; // No users with settings
+  }
+
+  for (const userSettings of allUserSettings) {
+    await checkAndSendIntakeRemindersForUser(userSettings, logger);
+  }
+}
+
+async function checkAndSendIntakeRemindersForUser(
+  settings: UserSettings & { userId: number },
+  logger: { info: (msg: string) => void; error: (msg: string) => void }
+): Promise<void> {
   const language = settings.language;
   const tr = getTranslations(language);
   
@@ -270,22 +286,22 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
   const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl && settings.shoutrrrIntakeReminders;
   
   if (!emailEnabled && !shoutrrrEnabled) {
-    return; // No intake reminder notifications enabled, skip silently
+    return; // No intake reminder notifications enabled for this user
   }
 
-  // Get all medications with intake reminders enabled
-  const rows = await db.select().from(medications).orderBy(medications.id);
+  // Get all medications with intake reminders enabled for this user
+  const rows = await db.select().from(medications).where(eq(medications.userId, settings.userId)).orderBy(medications.id);
   const medsWithReminders = rows.filter(row => row.intakeRemindersEnabled);
   
   if (medsWithReminders.length === 0) {
-    return; // No medications have reminders enabled
+    return; // No medications have reminders enabled for this user
   }
 
   const state = loadIntakeReminderState();
   const allUpcoming: UpcomingIntake[] = [];
   const locale = getDateLocale(language);
   
-  // Find all upcoming intakes across all medications
+  // Find all upcoming intakes across all medications for this user
   for (const med of medsWithReminders) {
     const slices = parseSlices(med);
     const upcoming = getUpcomingIntakes(med.name, slices, REMINDER_MINUTES_BEFORE, med.takenBy, med.pillWeightMg, locale);
@@ -296,9 +312,9 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
     return; // No upcoming intakes in the window
   }
   
-  // Filter out already-sent reminders
+  // Filter out already-sent reminders (keyed by user)
   const newReminders = allUpcoming.filter(intake => {
-    const key = `${intake.medName}:${intake.intakeTime.getTime()}`;
+    const key = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
     return !state.sentReminders.includes(key);
   });
   
@@ -306,19 +322,19 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
     return; // All reminders already sent
   }
 
-  logger.info(`[IntakeReminder] Sending reminder for ${newReminders.length} upcoming intakes...`);
+  logger.info(`[IntakeReminder] User ${settings.userId}: Sending reminder for ${newReminders.length} upcoming intakes...`);
   
   let emailSuccess = false;
   let shoutrrrSuccess = false;
   
   // Send email if enabled for intake reminders
   if (emailEnabled) {
-    const result = await sendIntakeReminderEmail(settings.notificationEmail, newReminders, language);
+    const result = await sendIntakeReminderEmail(settings.notificationEmail!, newReminders, language);
     emailSuccess = result.success;
     if (result.success) {
-      logger.info(`[IntakeReminder] Email sent successfully`);
+      logger.info(`[IntakeReminder] User ${settings.userId}: Email sent successfully`);
     } else {
-      logger.error(`[IntakeReminder] Failed to send email: ${result.error}`);
+      logger.error(`[IntakeReminder] User ${settings.userId}: Failed to send email: ${result.error}`);
     }
   }
   
@@ -337,18 +353,18 @@ async function checkAndSendIntakeReminders(logger: { info: (msg: string) => void
       })
       .join("\n");
     
-    const result = await sendShoutrrrNotification(settings.shoutrrrUrl, title, message);
+    const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
     shoutrrrSuccess = result.success;
     if (result.success) {
-      logger.info(`[IntakeReminder] Push notification sent successfully`);
+      logger.info(`[IntakeReminder] User ${settings.userId}: Push notification sent successfully`);
     } else {
-      logger.error(`[IntakeReminder] Failed to send push: ${result.error}`);
+      logger.error(`[IntakeReminder] User ${settings.userId}: Failed to send push: ${result.error}`);
     }
   }
   
   // Update state if any notification was sent successfully
   if (emailSuccess || shoutrrrSuccess) {
-    const newKeys = newReminders.map(i => `${i.medName}:${i.intakeTime.getTime()}`);
+    const newKeys = newReminders.map(i => `user_${settings.userId}:${i.medName}:${i.intakeTime.getTime()}`);
     
     // Clean up old entries (older than 24 hours)
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;

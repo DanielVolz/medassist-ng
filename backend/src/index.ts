@@ -54,9 +54,10 @@ const refreshCookieOptions: CookieSerializeOptions = {
   maxAge: refreshTtlDays * 24 * 60 * 60,
 };
 
+// Config decorator - only include secrets if auth is enabled
 app.decorate("config", {
-  accessSecret: env.JWT_SECRET,
-  refreshSecret: env.REFRESH_SECRET,
+  accessSecret: env.JWT_SECRET ?? "",
+  refreshSecret: env.REFRESH_SECRET ?? "",
   accessTtl: accessTtlMinutes,
   refreshTtl: refreshTtlDays,
   cookieOptions: baseCookieOptions,
@@ -70,8 +71,22 @@ await app.register(rateLimit, {
   max: 100,
   timeWindow: "1 minute",
 });
-await app.register(cookie, { secret: env.COOKIE_SECRET });
-await app.register(jwt, { secret: env.JWT_SECRET, cookie: { cookieName: "access_token", signed: false } });
+await app.register(cookie, { secret: env.COOKIE_SECRET ?? "dev-cookie-secret" });
+
+// JWT plugin - only register with valid secret if auth is enabled
+if (env.AUTH_ENABLED && env.JWT_SECRET) {
+  await app.register(jwt, { 
+    secret: env.JWT_SECRET, 
+    cookie: { cookieName: "access_token", signed: false } 
+  });
+} else {
+  // Dummy JWT for when auth is disabled - prevents errors
+  await app.register(jwt, { 
+    secret: "auth-disabled-no-secret-needed", 
+    cookie: { cookieName: "access_token", signed: false } 
+  });
+}
+
 await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
 await app.register(fastifyStatic, {
   root: imagesDir,

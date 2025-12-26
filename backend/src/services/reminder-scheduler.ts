@@ -1,31 +1,13 @@
 import nodemailer from "nodemailer";
+import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { medications } from "../db/schema.js";
+import { medications, users } from "../db/schema.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { loadNotificationSettings, sendShoutrrrNotification } from "../routes/settings.js";
+import { loadUserSettings, getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
 
 type Slice = { usage: number; every: number; start: string };
-
-type NotificationSettings = {
-  emailEnabled: boolean;
-  notificationEmail: string;
-  reminderDaysBefore: number;
-  repeatDailyReminders: boolean;
-  lowStockDays: number;
-  normalStockDays: number;
-  highStockDays: number;
-  shoutrrrEnabled: boolean;
-  shoutrrrUrl: string;
-  // Granular notification settings
-  emailStockReminders: boolean;
-  emailIntakeReminders: boolean;
-  shoutrrrStockReminders: boolean;
-  shoutrrrIntakeReminders: boolean;
-  // Language setting
-  language: Language;
-};
 
 type ReminderState = {
   lastAutoEmailSent: string | null; // ISO date string
@@ -232,8 +214,8 @@ type LowStockItem = {
   depletionDate: string | null;
 };
 
-async function getMedicationsNeedingReminder(reminderDaysBefore: number, language: Language): Promise<LowStockItem[]> {
-  const rows = await db.select().from(medications).orderBy(medications.id);
+async function getMedicationsNeedingReminder(userId: number, reminderDaysBefore: number, language: Language): Promise<LowStockItem[]> {
+  const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
   
   const lowStock: LowStockItem[] = [];
   
@@ -361,7 +343,23 @@ ${tr.stockReminder.footer}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyN
 }
 
 async function checkAndSendReminder(logger: { info: (msg: string) => void; error: (msg: string) => void }): Promise<void> {
-  const settings = loadNotificationSettings();
+  // Get all user settings to iterate over each user
+  const allUserSettings = await getAllUserSettings();
+  
+  if (allUserSettings.length === 0) {
+    logger.info("[Reminder] No users with settings found");
+    return;
+  }
+
+  for (const userSettings of allUserSettings) {
+    await checkAndSendReminderForUser(userSettings, logger);
+  }
+}
+
+async function checkAndSendReminderForUser(
+  settings: UserSettings & { userId: number },
+  logger: { info: (msg: string) => void; error: (msg: string) => void }
+): Promise<void> {
   const language = settings.language;
   const tr = getTranslations(language);
   
@@ -370,79 +368,48 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
   const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl && settings.shoutrrrStockReminders;
   
   if (!emailEnabled && !shoutrrrEnabled) {
-    logger.info("[Reminder] No stock reminder notifications enabled");
-    return;
+    return; // No stock reminder notifications enabled for this user
   }
 
   const state = loadReminderState();
   const today = getTodayInTimezone(); // YYYY-MM-DD in configured timezone
+  const userStateKey = `user_${settings.userId}`;
 
-  // Get all medications that need a reminder
-  const allLowStock = await getMedicationsNeedingReminder(settings.reminderDaysBefore, language);
+  // Get all medications that need a reminder for this user
+  const allLowStock = await getMedicationsNeedingReminder(settings.userId, settings.reminderDaysBefore, language);
   
   if (allLowStock.length === 0) {
-    // No low stock - clear the notified list (medications have been restocked)
-    if (state.notifiedMedications.length > 0) {
-      saveReminderState({
-        ...state,
-        notifiedMedications: [],
-      });
-      logger.info("[Reminder] Cleared notified medications list (all restocked)");
-    }
-    logger.info("[Reminder] No medications need reminder");
-    return;
+    return; // No low stock for this user
   }
 
-  // Get names of currently low stock medications
-  const currentLowStockNames = allLowStock.map((m) => m.name);
-  
-  // Remove medications from notified list that are no longer low stock (restocked)
-  const stillLowStock = state.notifiedMedications.filter((name) => currentLowStockNames.includes(name));
-  
-  // Find NEW medications that haven't been notified yet
-  const newLowStock = allLowStock.filter((m) => !state.notifiedMedications.includes(m.name));
-
-  // Determine what to send
-  let medsToNotify: LowStockItem[] = [];
-  
-  if (settings.repeatDailyReminders) {
-    // Daily reminders enabled - send for ALL low stock, but only once per day
-    if (state.lastAutoEmailDate === today) {
-      logger.info("[Reminder] Daily reminder already sent today, skipping");
-      return;
-    }
-    medsToNotify = allLowStock;
-  } else {
-    // Only notify NEW medications (not previously notified)
-    if (newLowStock.length === 0) {
-      logger.info("[Reminder] No new medications to notify (already notified previously)");
-      return;
-    }
-    medsToNotify = newLowStock;
+  // Simple per-user tracking - check if we already sent today
+  const userNotifiedKey = `${userStateKey}_${today}`;
+  if (state.notifiedMedications.includes(userNotifiedKey) && !settings.repeatDailyReminders) {
+    return; // Already notified this user today
   }
 
-  logger.info(`[Reminder] Sending reminder for ${medsToNotify.length} medications...`);
+  logger.info(`[Reminder] User ${settings.userId}: Sending reminder for ${allLowStock.length} medications...`);
   
   let emailSuccess = false;
   let shoutrrrSuccess = false;
   
   // Send email if enabled
   if (emailEnabled) {
-    const result = await sendReminderEmail(settings.notificationEmail, medsToNotify, language, settings.repeatDailyReminders);
+    const result = await sendReminderEmail(settings.notificationEmail!, allLowStock, language, settings.repeatDailyReminders);
     emailSuccess = result.success;
     if (result.success) {
-      logger.info(`[Reminder] Email sent successfully to ${settings.notificationEmail}`);
+      logger.info(`[Reminder] User ${settings.userId}: Email sent successfully to ${settings.notificationEmail}`);
     } else {
-      logger.error(`[Reminder] Failed to send email: ${result.error}`);
+      logger.error(`[Reminder] User ${settings.userId}: Failed to send email: ${result.error}`);
     }
   }
   
   // Send Shoutrrr notification if enabled
   if (shoutrrrEnabled) {
-    const title = medsToNotify.length === 1 
+    const title = allLowStock.length === 1 
       ? tr.push.stockTitle 
-      : t(tr.push.stockTitleMultiple, { count: medsToNotify.length });
-    let message = medsToNotify
+      : t(tr.push.stockTitleMultiple, { count: allLowStock.length });
+    let message = allLowStock
       .map((m) => `• ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`)
       .join("\n");
     
@@ -450,12 +417,12 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
       message += `\n\n${tr.push.repeatDailyNote}`;
     }
     
-    const result = await sendShoutrrrNotification(settings.shoutrrrUrl, title, message);
+    const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
     shoutrrrSuccess = result.success;
     if (result.success) {
-      logger.info(`[Reminder] Push notification sent successfully`);
+      logger.info(`[Reminder] User ${settings.userId}: Push notification sent successfully`);
     } else {
-      logger.error(`[Reminder] Failed to send push notification: ${result.error}`);
+      logger.error(`[Reminder] User ${settings.userId}: Failed to send push notification: ${result.error}`);
     }
   }
   
@@ -466,7 +433,7 @@ async function checkAndSendReminder(logger: { info: (msg: string) => void; error
     saveReminderState({
       lastAutoEmailSent: new Date().toISOString(),
       lastAutoEmailDate: today,
-      notifiedMedications: [...new Set([...stillLowStock, ...medsToNotify.map((m) => m.name)])],
+      notifiedMedications: [...new Set([...currentState.notifiedMedications, userNotifiedKey])],
       nextScheduledCheck: currentState.nextScheduledCheck,
       lastNotificationType: "stock",
       lastNotificationChannel: channel,

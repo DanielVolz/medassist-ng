@@ -286,7 +286,7 @@
   "share": {
     "button": "Share",
     "title": "Share Schedule",
-    "description": "Generate a secret link to share the medication schedule for a specific person. Anyone with this link can view the schedule.",
+    "description": "Generate a secret link to share the medication schedule for a specific person. Anyone with this link can view the schedule. When the person marks a dose as taken, it will also be marked as taken in your app.",
     "selectPerson": "Select person",
     "selectPeriod": "Select time period",
     "generateLink": "Generate Link",

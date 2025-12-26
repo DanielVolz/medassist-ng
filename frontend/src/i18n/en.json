@@ -45,6 +45,8 @@
       "noRemindersNeeded": "no reminders needed",
       "needReorder": "{{count}} med needs reorder",
       "needReorder_other": "{{count}} meds need reorder",
+      "lowWarning": "{{count}} medication running low",
+      "lowWarning_other": "{{count}} medications running low",
       "waitingFirstCheck": "waiting for first check",
       "typeStock": "Stock",
       "typeIntake": "Intake",

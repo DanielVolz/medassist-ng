@@ -799,7 +799,7 @@ function AppContent() {
 							<section className="email-status-bar">
 								<span className="email-status-icon">{settings.emailEnabled && settings.shoutrrrEnabled ? "🔔" : settings.emailEnabled ? "📧" : "🔔"}</span>
 								<span className="email-status-text">
-									{t('dashboard.reminders.active')} — {getReminderStatusText(settings.reminderDaysBefore, coverage.low, settings.lastAutoEmailSent, settings.lastNotificationType, settings.lastNotificationChannel, t, i18n.language)}
+									{t('dashboard.reminders.active')} — {getReminderStatusText(settings.reminderDaysBefore, settings.lowStockDays, coverage.low, coverage.all, settings.lastAutoEmailSent, settings.lastNotificationType, settings.lastNotificationChannel, t, i18n.language)}
 								</span>
 								{settings.emailEnabled && settings.notificationEmail && <span className="email-status-recipient">→ {settings.notificationEmail}</span>}
 							</section>
@@ -2153,8 +2153,10 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 }
 
 function getReminderStatusText(
-	reminderDaysBefore: number, 
+	reminderDaysBefore: number,
+	lowStockDays: number,
 	lowStock: Coverage[], 
+	allCoverage: Coverage[],
 	lastSent: string | null, 
 	lastType: "stock" | "intake" | null,
 	lastChannel: "email" | "push" | "both" | null,
@@ -2197,6 +2199,23 @@ function getReminderStatusText(
 			);
 		}
 		return <strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })} — {t('dashboard.reminders.waitingFirstCheck')}</strong>;
+	}
+
+	// Check if there are low stock medications (not yet needing reminder but running low)
+	const lowStockNotYetCritical = allCoverage.filter(
+		(c) => c.daysLeft !== null && c.daysLeft > reminderDaysBefore && c.daysLeft < lowStockDays
+	);
+
+	if (lowStockNotYetCritical.length > 0) {
+		// There are low stock meds but not critical yet
+		const nextMed = lowStockNotYetCritical.sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
+		const daysUntilReminder = (nextMed.daysLeft ?? 0) - reminderDaysBefore;
+		return (
+			<>
+				<span className="warning-text">{t('dashboard.reminders.lowWarning', { count: lowStockNotYetCritical.length })}</span>
+				{" · "}{t('dashboard.reminders.nextIn')}: <strong>{nextMed.name}</strong> {t('dashboard.reminders.inDays', { days: daysUntilReminder })}
+			</>
+		);
 	}
 
 	// Calculate when next reminder would be triggered

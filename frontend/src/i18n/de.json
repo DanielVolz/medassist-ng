@@ -43,6 +43,8 @@
       "noRemindersNeeded": "keine Erinnerungen nötig",
       "needReorder": "{{count}} Medikament nachbestellen",
       "needReorder_other": "{{count}} Medikamente nachbestellen",
+      "lowWarning": "{{count}} Medikament wird knapp",
+      "lowWarning_other": "{{count}} Medikamente werden knapp",
       "waitingFirstCheck": "warte auf erste Prüfung",
       "typeStock": "Bestand",
       "typeIntake": "Einnahme",

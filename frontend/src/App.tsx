@@ -241,45 +241,72 @@ function AppContent() {
 			const storedDays = localStorage.getItem(userStorageKey(user.id, "scheduleDays"));
 			setScheduleDays(storedDays ? Number(storedDays) : 30);
 			
-			try {
-				const storedDoses = localStorage.getItem(userStorageKey(user.id, "takenDoses"));
-				if (storedDoses) {
-					const parsed = JSON.parse(storedDoses);
-					const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-					const filtered = parsed.filter((item: { id: string; timestamp: number }) => item.timestamp > weekAgo);
-					setTakenDoses(new Set(filtered.map((item: { id: string }) => item.id)));
-				} else {
+			// Load taken doses from server
+			async function loadTakenDoses() {
+				try {
+					const res = await fetch("/api/doses/taken", { credentials: "include" });
+					if (res.ok) {
+						const data = await res.json();
+						setTakenDoses(new Set(data.doses.map((d: { doseId: string }) => d.doseId)));
+					} else {
+						setTakenDoses(new Set());
+					}
+				} catch {
 					setTakenDoses(new Set());
 				}
-			} catch {
-				setTakenDoses(new Set());
 			}
+			loadTakenDoses();
 		}
 	}, [user?.id]);
 
-	function markDoseTaken(doseId: string) {
+	async function markDoseTaken(doseId: string) {
+		// Optimistic update
 		setTakenDoses((prev) => {
 			const next = new Set(prev);
 			next.add(doseId);
-			// Persist with timestamp for cleanup
-			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
-			if (user?.id) {
-				localStorage.setItem(userStorageKey(user.id, "takenDoses"), JSON.stringify(items));
-			}
 			return next;
 		});
+		
+		// Send to server
+		try {
+			await fetch("/api/doses/taken", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ doseId }),
+			});
+		} catch {
+			// Revert on error
+			setTakenDoses((prev) => {
+				const next = new Set(prev);
+				next.delete(doseId);
+				return next;
+			});
+		}
 	}
 
-	function undoDoseTaken(doseId: string) {
+	async function undoDoseTaken(doseId: string) {
+		// Optimistic update
 		setTakenDoses((prev) => {
 			const next = new Set(prev);
 			next.delete(doseId);
-			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
-			if (user?.id) {
-				localStorage.setItem(userStorageKey(user.id, "takenDoses"), JSON.stringify(items));
-			}
 			return next;
 		});
+		
+		// Send to server
+		try {
+			await fetch(`/api/doses/taken/${encodeURIComponent(doseId)}`, {
+				method: "DELETE",
+				credentials: "include",
+			});
+		} catch {
+			// Revert on error
+			setTakenDoses((prev) => {
+				const next = new Set(prev);
+				next.add(doseId);
+				return next;
+			});
+		}
 	}
 
 	// Close modal on Escape key
@@ -2303,47 +2330,72 @@ function SharedSchedule() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [lightboxImage]);
 
-	// Load taken doses from localStorage
+	// Load taken doses from server
 	useEffect(() => {
 		if (token) {
-			try {
-				const storedDoses = localStorage.getItem(`share_${token}_takenDoses`);
-				if (storedDoses) {
-					const parsed = JSON.parse(storedDoses);
-					// Clean up old doses (older than 7 days)
-					const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-					const filtered = parsed.filter((item: { id: string; timestamp: number }) => item.timestamp > weekAgo);
-					setTakenDoses(new Set(filtered.map((item: { id: string }) => item.id)));
+			async function loadTakenDoses() {
+				try {
+					const res = await fetch(`/api/share/${token}/doses`);
+					if (res.ok) {
+						const data = await res.json();
+						setTakenDoses(new Set(data.doses.map((d: { doseId: string }) => d.doseId)));
+					} else {
+						setTakenDoses(new Set());
+					}
+				} catch {
+					setTakenDoses(new Set());
 				}
-			} catch {
-				setTakenDoses(new Set());
 			}
+			loadTakenDoses();
 		}
 	}, [token]);
 
-	function markDoseTaken(doseId: string) {
+	async function markDoseTaken(doseId: string) {
+		// Optimistic update
 		setTakenDoses((prev) => {
 			const next = new Set(prev);
 			next.add(doseId);
-			// Persist with timestamp for cleanup
-			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
-			if (token) {
-				localStorage.setItem(`share_${token}_takenDoses`, JSON.stringify(items));
-			}
 			return next;
 		});
+		
+		// Send to server
+		try {
+			await fetch(`/api/share/${token}/doses`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ doseId }),
+			});
+		} catch {
+			// Revert on error
+			setTakenDoses((prev) => {
+				const next = new Set(prev);
+				next.delete(doseId);
+				return next;
+			});
+		}
 	}
 
-	function undoDoseTaken(doseId: string) {
+	async function undoDoseTaken(doseId: string) {
+		// Optimistic update
 		setTakenDoses((prev) => {
 			const next = new Set(prev);
 			next.delete(doseId);
-			const items = Array.from(next).map((id) => ({ id, timestamp: Date.now() }));
-			if (token) {
-				localStorage.setItem(`share_${token}_takenDoses`, JSON.stringify(items));
-			}
 			return next;
 		});
+		
+		// Send to server
+		try {
+			await fetch(`/api/share/${token}/doses/${encodeURIComponent(doseId)}`, {
+				method: "DELETE",
+			});
+		} catch {
+			// Revert on error
+			setTakenDoses((prev) => {
+				const next = new Set(prev);
+				next.add(doseId);
+				return next;
+			});
+		}
 	}
 
 	useEffect(() => {
@@ -2382,7 +2434,7 @@ function SharedSchedule() {
 		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string }[] = [];
 
 		for (const med of data.medications) {
-			for (const slice of med.slices) {
+			med.slices.forEach((slice, sliceIdx) => {
 				const startDate = new Date(slice.start);
 				const intervalMs = slice.every * 24 * 60 * 60 * 1000;
 				let t = startDate.getTime();
@@ -2397,8 +2449,8 @@ function SharedSchedule() {
 
 				while (t <= endTime) {
 					const d = new Date(t);
-					// Generate unique dose ID
-					const doseId = `share-${med.id}-${slice.usage}-${slice.every}-${t}`;
+					// Generate dose ID matching Dashboard format: ${med.id}-${sliceIdx}-${whenMs}
+					const doseId = `${med.id}-${sliceIdx}-${t}`;
 					doses.push({
 						id: doseId,
 						when: t,
@@ -2408,7 +2460,7 @@ function SharedSchedule() {
 					});
 					t += intervalMs;
 				}
-			}
+			});
 		}
 
 		doses.sort((a, b) => a.when - b.when);

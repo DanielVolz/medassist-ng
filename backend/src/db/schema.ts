@@ -99,3 +99,14 @@ export const shareTokens = sqliteTable("share_tokens", {
   scheduleDays: integer("schedule_days").notNull().default(30),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// =============================================================================
+// Dose Tracking - Tracks when doses are marked as taken
+// =============================================================================
+export const doseTracking = sqliteTable("dose_tracking", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  doseId: text("dose_id", { length: 255 }).notNull(), // e.g. "med-5-1-86400000-1735200000000"
+  takenAt: integer("taken_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  markedBy: text("marked_by", { length: 100 }), // null = user, "Daniel" = via share link
+});

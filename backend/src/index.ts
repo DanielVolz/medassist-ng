@@ -17,6 +17,7 @@ import { medicationRoutes } from "./routes/medications.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { plannerRoutes } from "./routes/planner.js";
 import { shareRoutes } from "./routes/share.js";
+import { doseRoutes } from "./routes/doses.js";
 import { startReminderScheduler } from "./services/reminder-scheduler.js";
 import { startIntakeReminderScheduler } from "./services/intake-reminder-scheduler.js";
 
@@ -101,6 +102,7 @@ await app.register(medicationRoutes);
 await app.register(settingsRoutes);
 await app.register(plannerRoutes);
 await app.register(shareRoutes);
+await app.register(doseRoutes);
 
 const start = async () => {
   try {

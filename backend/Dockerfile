@@ -36,7 +36,10 @@ FROM node:22-slim AS runner
 
 WORKDIR /app
 
-# node:22-slim already has user 'node' with UID 1000 - we'll use that
+# Install gosu for reliable privilege dropping
+RUN apt-get update && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/* \
+    && gosu nobody true
 
 # Copy built application
 COPY --from=builder /app/node_modules ./node_modules

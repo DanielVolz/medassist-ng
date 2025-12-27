@@ -20,13 +20,13 @@ services:
     # Security options
     security_opt:
       - no-new-privileges:true
-    read_only: true
+    # Note: read_only removed - entrypoint needs to fix permissions at startup
     tmpfs:
       - /tmp:noexec,nosuid,size=64m
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD", "/nodejs/bin/node", "-e", "fetch('http://localhost:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

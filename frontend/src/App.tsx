@@ -968,7 +968,7 @@ function AppContent() {
 											{coverage.low.map((row) => {
 												const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 												const med = meds.find(m => m.name === row.name);
-												const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "";
+												const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "success-text";
 												const stock = getBlisterStock(
 													Math.round(row.medsLeft), 
 													med?.tabsPerStrip ?? 1,
@@ -1026,7 +1026,7 @@ function AppContent() {
 										const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
 										const med = meds.find(m => m.name === row.name);
 										const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
-										const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "";
+										const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "success-text";
 										const stock = getBlisterStock(
 											Math.round(row.medsLeft), 
 											med?.tabsPerStrip ?? 1,
@@ -1154,6 +1154,18 @@ function AppContent() {
 										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 										
+										// Calculate worst stock status for this day
+										const dayStockStatuses = day.meds.map((item) => {
+											const medCoverage = coverageByMed[item.medName];
+											const depletionTime = depletionByMed[item.medName];
+											const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+											if (willBeOutOfStock) return "danger";
+											if (!medCoverage) return "success";
+											const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings);
+											return status.className;
+										});
+										const worstStatus = dayStockStatuses.includes("danger") ? "danger" : dayStockStatuses.includes("warning") ? "warning" : "success";
+										
 										// Check if this is today, past, or future
 										const today = new Date();
 										today.setHours(0, 0, 0, 0);
@@ -1168,7 +1180,7 @@ function AppContent() {
 										const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
 										
 										return (
-											<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} ${isToday ? "today" : ""}`}>
+											<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} ${isToday ? "today" : ""} ${worstStatus ? `stock-${worstStatus}` : ""}`}>
 												<div 
 													className="day-divider clickable" 
 													onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
@@ -1989,7 +2001,7 @@ function AppContent() {
 									const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : selectedMed.count;
 									const totalStock = (selectedMed.packCount ?? 1) * (selectedMed.stripsPerPack ?? 1) * (selectedMed.tabsPerStrip ?? 1) + (selectedMed.looseTablets ?? 0);
 									const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-									const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "";
+									const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "success-text";
 									const stock = getBlisterStock(
 										currentStock, 
 										selectedMed.tabsPerStrip ?? 1,
@@ -2696,6 +2708,8 @@ type SharedMedication = {
 	genericName?: string | null;
 	pillWeightMg?: number | null;
 	imageUrl?: string | null;
+	count?: number;
+	tabsPerStrip?: number;
 	blisters: Blister[];
 };
 
@@ -2703,6 +2717,9 @@ type SharedScheduleData = {
 	takenBy: string;
 	scheduleDays: number;
 	medications: SharedMedication[];
+	stockThresholds?: {
+		lowStockDays: number;
+	};
 };
 
 function SharedSchedule() {
@@ -2941,6 +2958,72 @@ function SharedSchedule() {
 	const pastDays = useMemo(() => schedule.filter(d => d.isPast), [schedule]);
 	const futureDays = useMemo(() => schedule.filter(d => !d.isPast), [schedule]);
 
+	// Calculate coverage for stock status colors (matches main app logic)
+	// This needs to account for taken doses and calculate depletion time
+	const { coverageByMed, depletionByMed } = useMemo(() => {
+		if (!data) return { coverageByMed: {}, depletionByMed: {} };
+		const coverage: Record<string, { daysLeft: number | null; medsLeft: number; dailyUsage: number }> = {};
+		const depletion: Record<string, number | null> = {};
+		
+		// Calculate total pills taken per medication from takenDoses
+		const takenByMed: Record<string, number> = {};
+		for (const dose of schedule.flatMap(d => d.meds.flatMap(m => m.doses))) {
+			if (takenDoses.has(dose.id)) {
+				takenByMed[dose.medName] = (takenByMed[dose.medName] || 0) + dose.usage;
+			}
+		}
+		
+		for (const med of data.medications) {
+			const totalCount = med.count ?? 0;
+			const taken = takenByMed[med.name] || 0;
+			const currentCount = Math.max(0, totalCount - taken);
+			// Calculate daily usage from blisters
+			const dailyUsage = med.blisters.reduce((sum, b) => sum + (b.usage / b.every), 0);
+			const daysLeft = dailyUsage > 0 ? currentCount / dailyUsage : null;
+			coverage[med.name] = { daysLeft, medsLeft: currentCount, dailyUsage };
+			
+			// Calculate depletion time (when medication will run out)
+			if (dailyUsage > 0 && currentCount > 0) {
+				const daysUntilEmpty = currentCount / dailyUsage;
+				depletion[med.name] = Date.now() + daysUntilEmpty * 24 * 60 * 60 * 1000;
+			} else if (currentCount <= 0) {
+				depletion[med.name] = Date.now(); // Already empty
+			} else {
+				depletion[med.name] = null; // No usage schedule
+			}
+		}
+		return { coverageByMed: coverage, depletionByMed: depletion };
+	}, [data, schedule, takenDoses]);
+
+	// Stock thresholds from user settings (provided by API) or defaults
+	const lowStockDays = data?.stockThresholds?.lowStockDays ?? 30;
+
+	// Get worst stock status for a day's medications (matches main app logic with depletion)
+	const getDayStockStatus = (meds: { medName: string; lastWhen: number }[]) => {
+		const statuses = meds.map((item) => {
+			const coverage = coverageByMed[item.medName];
+			const depletionTime = depletionByMed[item.medName];
+			
+			// Will be out of stock by this day?
+			if (typeof depletionTime === "number" && item.lastWhen > depletionTime) {
+				return "danger";
+			}
+			
+			if (!coverage) return "success";
+			const { daysLeft, medsLeft } = coverage;
+			
+			// Currently out of stock
+			if (medsLeft <= 0 || daysLeft === 0) return "danger";
+			// No schedule (can't calculate)
+			if (daysLeft === null) return "success";
+			// Low stock: < lowStockDays (warning)
+			if (daysLeft < lowStockDays) return "warning";
+			// Normal/High stock
+			return "success";
+		});
+		return statuses.includes("danger") ? "danger" : statuses.includes("warning") ? "warning" : "success";
+	};
+
 	if (loading) {
 		return (
 			<div className="shared-schedule-page">
@@ -2999,8 +3082,11 @@ function SharedSchedule() {
 								const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 								const isCollapsed = !isManuallyExpanded;
 								
+								// Calculate stock status for this day
+								const worstStatus = getDayStockStatus(day.meds);
+								
 								return (
-									<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+									<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} stock-${worstStatus}`}>
 										<div 
 											className="day-divider clickable" 
 											onClick={() => toggleDayCollapse(day.dateStr, true)}
@@ -3018,6 +3104,25 @@ function SharedSchedule() {
 										</div>
 										{!isCollapsed && day.meds.map((item) => {
 											const med = data.medications.find(m => m.name === item.medName);
+											const medCoverage = coverageByMed[item.medName];
+											const depletionTime = depletionByMed[item.medName];
+											const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+											
+											// Calculate status for this medication on this day
+											let status: { className: string; label: string } | null = null;
+											if (willBeOutOfStock) {
+												status = { className: "danger", label: "status.outOfStock" };
+											} else if (medCoverage) {
+												const { daysLeft, medsLeft } = medCoverage;
+												if (medsLeft <= 0 || daysLeft === 0) {
+													status = { className: "danger", label: "status.outOfStock" };
+												} else if (daysLeft !== null && daysLeft < lowStockDays) {
+													status = { className: "warning", label: "status.lowStock" };
+												} else {
+													status = { className: "success", label: "status.normal" };
+												}
+											}
+											
 											const allTaken = item.doses.every((d) => takenDoses.has(d.id));
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -3034,6 +3139,7 @@ function SharedSchedule() {
 														</div>
 														<div className="tag-row">
 															<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+															{status && <span className={`tag ${status.className}`}>{t(status.label)}</span>}
 														</div>
 													</div>
 													<div className="doses-col">
@@ -3068,6 +3174,9 @@ function SharedSchedule() {
 								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 								
+								// Calculate stock status for this day
+								const worstStatus = getDayStockStatus(day.meds);
+								
 								// Check if this is today
 								const today = new Date();
 								today.setHours(0, 0, 0, 0);
@@ -3082,7 +3191,7 @@ function SharedSchedule() {
 								const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
 								
 								return (
-									<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} ${isToday ? "today" : ""}`}>
+									<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} ${isToday ? "today" : ""} stock-${worstStatus}`}>
 										<div 
 											className="day-divider clickable" 
 											onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
@@ -3100,6 +3209,25 @@ function SharedSchedule() {
 										</div>
 										{!isCollapsed && day.meds.map((item) => {
 											const med = data.medications.find(m => m.name === item.medName);
+											const medCoverage = coverageByMed[item.medName];
+											const depletionTime = depletionByMed[item.medName];
+											const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
+											
+											// Calculate status for this medication on this day
+											let status: { className: string; label: string } | null = null;
+											if (willBeOutOfStock) {
+												status = { className: "danger", label: "status.outOfStock" };
+											} else if (medCoverage) {
+												const { daysLeft, medsLeft } = medCoverage;
+												if (medsLeft <= 0 || daysLeft === 0) {
+													status = { className: "danger", label: "status.outOfStock" };
+												} else if (daysLeft !== null && daysLeft < lowStockDays) {
+													status = { className: "warning", label: "status.lowStock" };
+												} else {
+													status = { className: "success", label: "status.normal" };
+												}
+											}
+											
 											const allTaken = item.doses.every((d) => takenDoses.has(d.id));
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -3116,6 +3244,7 @@ function SharedSchedule() {
 														</div>
 														<div className="tag-row">
 															<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+															{status && <span className={`tag ${status.className}`}>{t(status.label)}</span>}
 														</div>
 													</div>
 													<div className="doses-col">

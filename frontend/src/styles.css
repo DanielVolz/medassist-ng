@@ -451,6 +451,15 @@ textarea {
 .day-block.today .day-divider { color: var(--accent); }
 .day-block.all-taken { border-color: rgba(57, 217, 138, 0.3); }
 .day-block.today.all-taken { border-color: var(--success); background: linear-gradient(135deg, rgba(57, 217, 138, 0.08) 0%, rgba(57, 217, 138, 0.02) 100%); }
+
+/* Stock status colors for day blocks */
+.day-block.stock-success { border-color: rgba(57, 217, 138, 0.3); }
+.day-block.stock-success .day-divider { color: var(--success); opacity: 0.8; }
+.day-block.stock-warning { border-color: rgba(252, 211, 77, 0.35); }
+.day-block.stock-warning .day-divider { color: var(--warning); opacity: 0.8; }
+.day-block.stock-danger { border-color: rgba(255, 94, 94, 0.35); }
+.day-block.stock-danger .day-divider { color: var(--danger); opacity: 0.8; }
+
 .day-divider {
   margin: 0 0 0.75rem;
   padding-bottom: 0.5rem;
@@ -2181,6 +2190,10 @@ textarea {
   font-weight: 600;
   color: var(--text-primary);
 }
+
+.med-detail-value.success-text { color: var(--success); }
+.med-detail-value.warning-text { color: var(--warning); }
+.med-detail-value.danger-text { color: var(--danger); }
 
 .med-detail-schedules {
   display: flex;

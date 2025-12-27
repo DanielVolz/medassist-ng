@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { db } from "../db/client.js";
-import { medications, shareTokens } from "../db/schema.js";
+import { medications, shareTokens, userSettings } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
@@ -48,6 +48,9 @@ export async function shareRoutes(app: FastifyInstance) {
       return reply.notFound("Share link not found");
     }
 
+    // Get user settings for stock thresholds
+    const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
+
     // Get medications for this user filtered by takenBy
     const meds = await db.select().from(medications).where(
       and(
@@ -78,6 +81,8 @@ export async function shareRoutes(app: FastifyInstance) {
         genericName: med.genericName,
         pillWeightMg: med.pillWeightMg,
         imageUrl: med.imageUrl,
+        count: med.count,
+        tabsPerStrip: med.tabsPerStrip,
         blisters,
       };
     });
@@ -86,6 +91,9 @@ export async function shareRoutes(app: FastifyInstance) {
       takenBy: share.takenBy,
       scheduleDays: share.scheduleDays,
       medications: medicationsWithBlisters,
+      stockThresholds: {
+        lowStockDays: settings?.lowStockDays ?? 30,
+      },
     };
   });
 

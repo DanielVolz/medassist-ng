@@ -432,6 +432,25 @@ textarea {
   opacity: 0.6;
   font-size: 0.85rem;
 }
+.past-days-warning {
+  margin-left: auto;
+  color: var(--warning);
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.past-days-complete {
+  margin-left: auto;
+  color: var(--success);
+  font-size: 1rem;
+  font-weight: 700;
+}
+.past-days-toggle.has-missed {
+  border-color: var(--warning);
+  background: rgba(234, 179, 8, 0.08);
+}
 
 /* Past day blocks styling */
 .day-block.past {
@@ -489,6 +508,7 @@ textarea {
 }
 .day-complete { color: var(--success); }
 .day-progress { color: var(--text-secondary); }
+.day-warning { margin-right: 0.35rem; }
 .day-block.collapsed .day-divider { 
   margin-bottom: 0; 
   padding-bottom: 0; 

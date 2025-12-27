@@ -1076,18 +1076,27 @@ function AppContent() {
 								</div>
 								<div className="timeline">
 									{/* Past days toggle */}
-									{pastDays.length > 0 && (
-										<div 
-											className={`past-days-toggle ${showPastDays ? 'expanded' : ''}`}
-											onClick={() => setShowPastDays(!showPastDays)}
-										>
-											<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
-											<span className="past-days-label">
-												{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
-											</span>
-											<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
-										</div>
-									)}
+									{pastDays.length > 0 && (() => {
+										const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.map(dose => dose.id)));
+										const missedPastDoses = totalPastDoses.filter(id => !takenDoses.has(id)).length;
+										return (
+											<div 
+												className={`past-days-toggle ${showPastDays ? 'expanded' : ''} ${missedPastDoses > 0 ? 'has-missed' : ''}`}
+												onClick={() => setShowPastDays(!showPastDays)}
+											>
+												<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
+												<span className="past-days-label">
+													{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
+												</span>
+												<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
+												{missedPastDoses > 0 ? (
+													<span className="past-days-warning" title={t('dashboard.schedules.missedDoses', { count: missedPastDoses })}>⚠️ {missedPastDoses}</span>
+												) : totalPastDoses.length > 0 ? (
+													<span className="past-days-complete" title={t('dashboard.schedules.allTaken')}>✓</span>
+												) : null}
+											</div>
+										);
+									})()}
 									{/* Past days (when expanded) */}
 									{showPastDays && pastDays.map((day) => {
 										const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
@@ -1110,7 +1119,7 @@ function AppContent() {
 														{allDayTaken ? (
 															<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
 														) : (
-															<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+															<><span className="day-warning" title={t('dashboard.schedules.missedDoses', { count: allDoseIds.length - takenCount })}>⚠️</span><span className="day-progress">{takenCount}/{allDoseIds.length}</span></>
 														)}
 													</span>
 												</div>
@@ -1841,18 +1850,23 @@ function AppContent() {
 							</div>
 							<div className="timeline">
 								{/* Past days toggle */}
-								{pastDays.length > 0 && (
-									<div 
-										className={`past-days-toggle ${showPastDays ? 'expanded' : ''}`}
-										onClick={() => setShowPastDays(!showPastDays)}
-									>
-										<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
-										<span className="past-days-label">
-											{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
-										</span>
-										<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
-									</div>
-								)}
+								{pastDays.length > 0 && (() => {
+									const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.map(dose => dose.id)));
+									const missedPastDoses = totalPastDoses.filter(id => !takenDoses.has(id)).length;
+									return (
+										<div 
+											className={`past-days-toggle ${showPastDays ? 'expanded' : ''} ${missedPastDoses > 0 ? 'has-missed' : ''}`}
+											onClick={() => setShowPastDays(!showPastDays)}
+										>
+											<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
+											<span className="past-days-label">
+												{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
+											</span>
+											<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
+											{missedPastDoses > 0 && <span className="past-days-warning" title={t('dashboard.schedules.missedDoses', { count: missedPastDoses })}>⚠️ {missedPastDoses}</span>}
+										</div>
+									);
+								})()}
 								{/* Past days (when expanded) */}
 								{showPastDays && pastDays.map((day) => {
 									const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
@@ -1874,7 +1888,7 @@ function AppContent() {
 													{allDayTaken ? (
 														<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
 													) : (
-														<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+														<><span className="day-warning" title={t('dashboard.schedules.missedDoses', { count: allDoseIds.length - takenCount })}>⚠️</span><span className="day-progress">{takenCount}/{allDoseIds.length}</span></>
 													)}
 												</span>
 											</div>
@@ -3062,18 +3076,27 @@ function SharedSchedule() {
 					) : (
 						<>
 							{/* Past days toggle */}
-							{pastDays.length > 0 && (
-								<div 
-									className={`past-days-toggle ${showPastDays ? 'expanded' : ''}`}
-									onClick={() => setShowPastDays(!showPastDays)}
-								>
-									<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
-									<span className="past-days-label">
-										{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
-									</span>
-									<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
-								</div>
-							)}
+							{pastDays.length > 0 && (() => {
+								const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.map(dose => dose.id)));
+								const missedPastDoses = totalPastDoses.filter(id => !takenDoses.has(id)).length;
+								return (
+									<div 
+										className={`past-days-toggle ${showPastDays ? 'expanded' : ''} ${missedPastDoses > 0 ? 'has-missed' : ''}`}
+										onClick={() => setShowPastDays(!showPastDays)}
+									>
+										<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
+										<span className="past-days-label">
+											{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
+										</span>
+										<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
+										{missedPastDoses > 0 ? (
+											<span className="past-days-warning" title={t('dashboard.schedules.missedDoses', { count: missedPastDoses })}>⚠️ {missedPastDoses}</span>
+										) : totalPastDoses.length > 0 ? (
+											<span className="past-days-complete" title={t('dashboard.schedules.allTaken')}>✓</span>
+										) : null}
+									</div>
+								);
+							})()}
 							{/* Past days (when expanded) */}
 							{showPastDays && pastDays.map((day) => {
 								const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
@@ -3098,7 +3121,7 @@ function SharedSchedule() {
 												{allDayTaken ? (
 													<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
 												) : (
-													<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+													<><span className="day-warning" title={t('dashboard.schedules.missedDoses', { count: allDoseIds.length - takenCount })}>⚠️</span><span className="day-progress">{takenCount}/{allDoseIds.length}</span></>
 												)}
 											</span>
 										</div>

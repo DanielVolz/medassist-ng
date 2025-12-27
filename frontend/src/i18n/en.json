@@ -38,7 +38,9 @@
       "showPastDays": "Show past days",
       "hidePastDays": "Hide past days",
       "pastDaysCount": "{{count}} past day",
-      "pastDaysCount_other": "{{count}} past days"
+      "pastDaysCount_other": "{{count}} past days",
+      "missedDoses": "{{count}} missed dose",
+      "missedDoses_other": "{{count}} missed doses"
     },
     "reminders": {
       "active": "Automatic reminders active",

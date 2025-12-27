@@ -1921,10 +1921,11 @@ textarea {
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: 2rem 1rem;
+  overflow-y: auto;
   animation: fadeIn 0.2s ease;
 }
 
@@ -2661,6 +2662,8 @@ h3 .reminder-icon.info-tooltip {
 .share-dialog-modal {
   max-width: 480px;
   padding: 1.5rem;
+  margin-top: 0;
+  align-self: flex-start;
 }
 
 .share-dialog-header {
@@ -2866,4 +2869,128 @@ h3 .reminder-icon.info-tooltip {
   .shared-timeline {
     padding: 1rem;
   }
+}
+
+/* Desktop only - hide on mobile */
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* Mobile Edit Modal */
+.edit-modal {
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.edit-modal-header {
+  margin-bottom: 1rem;
+}
+
+.edit-modal-header h2 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.mobile-edit-form {
+  gap: 0.75rem;
+}
+
+.mobile-edit-form label {
+  font-size: 0.9rem;
+}
+
+.mobile-edit-form input,
+.mobile-edit-form textarea,
+.mobile-edit-form select {
+  font-size: 16px; /* Prevents zoom on iOS */
+}
+
+/* Mobile Blister/Intake Schedule Section */
+.mobile-edit-form .blister-section {
+  padding: 1rem;
+  margin-top: 0.5rem;
+}
+
+.mobile-edit-form .blister-section legend {
+  font-size: 0.95rem;
+  padding: 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.mobile-edit-form .blister-section legend .toggle-switch {
+  margin-left: auto;
+}
+
+.mobile-edit-form .blister-section legend .legend-hint {
+  margin-left: 0;
+}
+
+.mobile-edit-form .blister-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  align-items: end;
+}
+
+.mobile-edit-form .blister-row label.compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mobile-edit-form .blister-row label.compact span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.mobile-edit-form .blister-row label.compact:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.mobile-edit-form .blister-row .datetime-inputs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mobile-edit-form .blister-row .datetime-inputs input[type="date"] {
+  flex: 2;
+  min-width: 0;
+}
+
+.mobile-edit-form .blister-row .datetime-inputs input[type="time"] {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Remove blister button */
+.remove-blister-btn {
+  padding: 0.25rem 0.5rem !important;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: 6px !important;
+  min-width: auto;
+  align-self: center;
+  opacity: 0.7;
+}
+
+.remove-blister-btn:hover {
+  opacity: 1;
+}
+
+.mobile-edit-form .add-blister {
+  margin-top: 0.5rem;
+  width: 100%;
 }

@@ -192,6 +192,7 @@ function AppContent() {
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editingId, setEditingId] = useState<number | null>(null);
+	const [showEditModal, setShowEditModal] = useState(false);
 	const [form, setForm] = useState<FormState>(defaultForm());
 	const [range, setRange] = useState<{ start: string; end: string }>({
 		start: toInputValue(todayIso()),
@@ -686,10 +687,15 @@ function AppContent() {
 				startTime: toTimeValue(s.start)
 			})),
 		});
+		// Show modal on mobile
+		if (window.innerWidth <= 768) {
+			setShowEditModal(true);
+		}
 	}
 
 	function resetForm() {
 		setEditingId(null);
+		setShowEditModal(false);
 		setPendingImage(null);
 		setPendingImagePreview(null);
 		setForm(defaultForm());
@@ -1314,7 +1320,7 @@ function AppContent() {
 							</div>
 						</article>
 
-						<article className="card form">
+						<article className="card form desktop-only">
 							<div className="card-head">
 								<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
 								<span className="pill">{t('form.badge')}</span>
@@ -2148,8 +2154,8 @@ function AppContent() {
 
 					{/* Image Lightbox */}
 					{showImageLightbox && selectedMed.imageUrl && (
-						<div className="lightbox-overlay" onClick={() => setShowImageLightbox(false)}>
-							<button className="lightbox-close" onClick={() => setShowImageLightbox(false)}>×</button>
+						<div className="lightbox-overlay" onClick={(e) => { e.stopPropagation(); setShowImageLightbox(false); }}>
+							<button className="lightbox-close" onClick={(e) => { e.stopPropagation(); setShowImageLightbox(false); }}>×</button>
 							<img 
 								src={`/api/images/${selectedMed.imageUrl}`} 
 								alt={selectedMed.name} 
@@ -2279,6 +2285,123 @@ function AppContent() {
 								</div>
 							</div>
 						)}
+					</div>
+				</div>
+			)}
+
+			{/* Mobile Edit Modal */}
+			{showEditModal && (
+				<div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+					<div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
+						<button className="modal-close" onClick={() => { setShowEditModal(false); resetForm(); }}>×</button>
+						<div className="edit-modal-header">
+							<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
+						</div>
+						<form className="form-grid mobile-edit-form" onSubmit={(e) => { saveMedication(e); setShowEditModal(false); }}>
+							<label>
+								{t('form.commercialName')}
+								<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('form.placeholders.commercial')} required />
+							</label>
+							<label>
+								{t('form.genericName')}
+								<input value={form.genericName} onChange={(e) => setForm({ ...form, genericName: e.target.value })} placeholder={t('form.placeholders.generic')} />
+							</label>
+							<label>
+								{t('form.takenBy')}
+								<input value={form.takenBy} onChange={(e) => setForm({ ...form, takenBy: e.target.value })} placeholder={t('form.placeholders.takenBy')} />
+							</label>
+							<label>
+								{t('form.packs')}
+								<input type="number" min="0" value={form.packCount} onChange={(e) => handleValueChange("packCount", e.target.value)} />
+							</label>
+							<label>
+								{t('form.blistersPerPack')}
+								<input type="number" min="0" value={form.stripsPerPack} onChange={(e) => handleValueChange("stripsPerPack", e.target.value)} />
+							</label>
+							<label>
+								{t('form.pillsPerBlister')}
+								<input type="number" min="1" value={form.tabsPerStrip} onChange={(e) => handleValueChange("tabsPerStrip", e.target.value)} />
+							</label>
+							<label>
+								{t('form.loosePills')}
+								<input type="number" min="0" value={form.looseTablets} onChange={(e) => handleValueChange("looseTablets", e.target.value)} />
+							</label>
+							<label>
+								{t('form.pillWeight')}
+								<input type="number" min="0" step="0.1" value={form.pillWeightMg} onChange={(e) => setForm({ ...form, pillWeightMg: e.target.value })} placeholder={t('form.placeholders.pillWeight')} />
+							</label>
+							<label>
+								{t('form.expiry')}
+								<input type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} />
+							</label>
+							<label className="full">
+								{t('form.notes')}
+								<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t('form.placeholders.notes')} rows={2} />
+							</label>
+							<div className="full">
+								<p className="sub"><strong>{t('form.total')}:</strong> {deriveTotal(form)} {t('common.pills')}</p>
+							</div>
+
+							{editingId && (() => {
+								const currentMed = meds.find(m => m.id === editingId);
+								if (currentMed?.imageUrl) {
+									return (
+										<div className="full image-field">
+											<span className="field-label">{t('form.medicationImage')}</span>
+											<div className="image-preview">
+												<img src={currentMed.imageUrl} alt={currentMed.name} />
+												<button type="button" className="ghost danger" onClick={() => deleteMedImage(editingId)}>{t('form.removeImage')}</button>
+											</div>
+										</div>
+									);
+								}
+								return (
+									<label className="full">
+										{t('form.medicationImage')}
+										<input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && uploadMedImage(editingId, e.target.files[0])} />
+									</label>
+								);
+							})()}
+
+							<fieldset className="full blister-section">
+								<legend>
+									{t('form.blisters.title')}
+									<label className="toggle-switch small" title={t('form.blisters.remindTooltip')}>
+										<input type="checkbox" checked={form.intakeRemindersEnabled} onChange={(e) => setForm({ ...form, intakeRemindersEnabled: e.target.checked })} />
+										<span className="toggle-slider"></span>
+									</label>
+									<span className="legend-hint">{t('form.blisters.remind')}</span>
+								</legend>
+								{form.blisters.map((b, idx) => (
+									<div key={idx} className="blister-row">
+										<label className="compact">
+											<span>{t('form.blisters.usage')}</span>
+											<input type="number" min="0.5" step="0.5" value={b.usage} onChange={(e) => setBlisterValue(idx, "usage", e.target.value)} />
+										</label>
+										<label className="compact">
+											<span>{t('form.blisters.everyDays')}</span>
+											<input type="number" min="1" value={b.every} onChange={(e) => setBlisterValue(idx, "every", e.target.value)} />
+										</label>
+										<label className="compact">
+											<span>{t('form.blisters.startDate')}</span>
+											<div className="datetime-inputs">
+												<input type="date" value={b.startDate} onChange={(e) => setBlisterValue(idx, "startDate", e.target.value)} />
+												<input type="time" value={b.startTime} onChange={(e) => setBlisterValue(idx, "startTime", e.target.value)} />
+											</div>
+										</label>
+										{form.blisters.length > 1 && <button type="button" className="ghost danger remove-blister-btn" onClick={() => removeBlister(idx)} title={t('common.delete')}>🗑</button>}
+									</div>
+								))}
+								<button type="button" className="ghost add-blister" onClick={addBlister}>+ {t('form.blisters.addIntake')}</button>
+							</fieldset>
+
+							<div className="full align-end gap">
+								<button type="button" className="ghost" onClick={() => { setShowEditModal(false); resetForm(); }}>
+									{t('common.cancel')}
+								</button>
+								<button type="submit" disabled={saving}>{saving ? t('common.saving') : t('common.save')}</button>
+							</div>
+						</form>
 					</div>
 				</div>
 			)}

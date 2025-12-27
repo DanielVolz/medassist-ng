@@ -2130,17 +2130,19 @@ function AppContent() {
 						</div>
 
 						<div className="med-detail-footer">
-							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
+							<button className="danger" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
 								{t('common.close')}
 							</button>
-							{selectedMed.blisters.length > 0 && (
-								<button className="ghost" onClick={() => generateICS(selectedMed)} title={t('modal.exportTooltip')}>
-									📅 {t('modal.exportCalendar')}
+							<div className="footer-actions">
+								<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
+									{t('common.edit')}
 								</button>
-							)}
-							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
-								{t('modal.editMedication')}
-							</button>
+								{selectedMed.blisters.length > 0 && (
+									<button className="ghost icon-only" onClick={() => generateICS(selectedMed)} title={t('modal.exportTooltip')}>
+										📅
+									</button>
+								)}
+							</div>
 						</div>
 					</div>
 

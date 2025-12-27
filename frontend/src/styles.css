@@ -2248,10 +2248,21 @@ textarea {
 .med-detail-footer {
   padding: 1rem 2rem 1.5rem;
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: center;
   border-top: 1px solid var(--border-primary);
   background: var(--bg-primary);
   border-radius: 0 0 12px 12px;
+}
+
+.med-detail-footer .footer-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.med-detail-footer button.icon-only {
+  padding: 0.5rem 0.75rem;
+  min-width: auto;
 }
 
 /* Clickable avatar wrapper */

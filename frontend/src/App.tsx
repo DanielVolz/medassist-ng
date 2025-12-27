@@ -456,8 +456,13 @@ function AppContent() {
 	async function saveSettings(e: React.FormEvent) {
 		e.preventDefault();
 		
+		// Auto-disable email if no recipient is set
+		const effectiveEmailEnabled = settings.emailEnabled && !!settings.notificationEmail?.trim();
+		// Auto-disable push if no URL is set
+		const effectiveShoutrrrEnabled = settings.shoutrrrEnabled && !!settings.shoutrrrUrl?.trim();
+		
 		// Validate email if email notifications are enabled
-		if (settings.emailEnabled && settings.notificationEmail) {
+		if (effectiveEmailEnabled && settings.notificationEmail) {
 			const emailRegex = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/i;
 			if (!emailRegex.test(settings.notificationEmail)) {
 				setTestEmailResult({ success: false, message: "Invalid email address" });
@@ -469,14 +474,14 @@ function AppContent() {
 		setTestEmailResult(null);
 		
 		const payload = {
-			emailEnabled: settings.emailEnabled,
+			emailEnabled: effectiveEmailEnabled,
 			notificationEmail: settings.notificationEmail,
 			reminderDaysBefore: settings.reminderDaysBefore,
 			repeatDailyReminders: settings.repeatDailyReminders,
 			lowStockDays: settings.lowStockDays,
 			normalStockDays: settings.normalStockDays,
 			highStockDays: settings.highStockDays,
-			shoutrrrEnabled: settings.shoutrrrEnabled,
+			shoutrrrEnabled: effectiveShoutrrrEnabled,
 			shoutrrrUrl: settings.shoutrrrUrl,
 			// Granular notification settings
 			emailStockReminders: settings.emailStockReminders,
@@ -500,8 +505,15 @@ function AppContent() {
 			body: JSON.stringify(payload),
 		}).catch(() => null);
 
+		// Update local state with effective values
+		const updatedSettings = { 
+			...settings, 
+			emailEnabled: effectiveEmailEnabled,
+			shoutrrrEnabled: effectiveShoutrrrEnabled 
+		};
+		setSettings(updatedSettings);
 		setSettingsSaving(false);
-		setSavedSettings(settings);
+		setSavedSettings(updatedSettings);
 		setSettingsSaved(true);
 	}
 
@@ -1574,7 +1586,7 @@ function AppContent() {
 											<div className="matrix-row">
 												<div className="matrix-label">{t('settings.notifications.stockReminders')}</div>
 												<div className="matrix-cell">
-													<label className="toggle-switch small">
+													<label className={`toggle-switch small${!settings.emailEnabled ? ' disabled' : ''}`}>
 														<input
 															type="checkbox"
 															checked={settings.emailStockReminders}
@@ -1585,7 +1597,7 @@ function AppContent() {
 													</label>
 												</div>
 												<div className="matrix-cell">
-													<label className="toggle-switch small">
+													<label className={`toggle-switch small${!settings.shoutrrrEnabled ? ' disabled' : ''}`}>
 														<input
 															type="checkbox"
 															checked={settings.shoutrrrStockReminders}
@@ -1599,7 +1611,7 @@ function AppContent() {
 											<div className="matrix-row">
 												<div className="matrix-label">{t('settings.notifications.intakeReminders')}</div>
 												<div className="matrix-cell">
-													<label className="toggle-switch small">
+													<label className={`toggle-switch small${!settings.emailEnabled ? ' disabled' : ''}`}>
 														<input
 															type="checkbox"
 															checked={settings.emailIntakeReminders}
@@ -1610,7 +1622,7 @@ function AppContent() {
 													</label>
 												</div>
 												<div className="matrix-cell">
-													<label className="toggle-switch small">
+													<label className={`toggle-switch small${!settings.shoutrrrEnabled ? ' disabled' : ''}`}>
 														<input
 															type="checkbox"
 															checked={settings.shoutrrrIntakeReminders}
@@ -1644,21 +1656,18 @@ function AppContent() {
 												<div className="setting-group">
 													<label className="full">
 														<span className="field-label">{t('settings.email.recipient')}</span>
-														<input
-															type="email"
-															value={settings.notificationEmail}
-															onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
-															placeholder="your@email.com"
-															pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$"
-															autoComplete="email"
-														/>
+														<div className="input-with-tooltip">
+															<input
+																type="email"
+																value={settings.notificationEmail}
+																onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
+																placeholder="your@email.com"
+																pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$"
+																autoComplete="email"
+															/>
+															<span className="info-tooltip" data-tooltip={`SMTP: ${settings.smtpHost || t('settings.email.notConfigured')}:${settings.smtpPort}${settings.hasSmtpPassword ? '\nPassword: ✓' : ''}`}>ⓘ</span>
+														</div>
 													</label>
-												</div>
-												<div className="smtp-info">
-													<span className="smtp-summary">
-														SMTP: {settings.smtpHost || t('settings.email.notConfigured')}:{settings.smtpPort}
-														{settings.hasSmtpPassword && " ✓"}
-													</span>
 												</div>
 												<div className="setting-actions">
 													<button type="button" className="ghost" onClick={testEmail} disabled={testingEmail || !settings.notificationEmail}>
@@ -1691,18 +1700,16 @@ function AppContent() {
 												<div className="setting-group">
 													<label className="full">
 														<span className="field-label">{t('settings.push.url')}</span>
-														<input
-															type="url"
-															value={settings.shoutrrrUrl}
-															onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
-															placeholder="https://ntfy.sh/your-topic"
-														/>
+														<div className="input-with-tooltip">
+															<input
+																type="url"
+																value={settings.shoutrrrUrl}
+																onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
+																placeholder="https://ntfy.sh/your-topic"
+															/>
+															<span className="info-tooltip" data-tooltip={t('settings.push.supports')}>ⓘ</span>
+														</div>
 													</label>
-												</div>
-												<div className="smtp-info">
-													<span className="smtp-summary">
-														{t('settings.push.supports')}
-													</span>
 												</div>
 												<div className="setting-actions">
 													<button type="button" className="ghost" onClick={testShoutrrr} disabled={testingShoutrrr || !settings.shoutrrrUrl}>

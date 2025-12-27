@@ -1213,8 +1213,8 @@ textarea {
   white-space: pre-line;
   text-transform: none;
   letter-spacing: normal;
-  min-width: 200px;
-  max-width: 280px;
+  width: max-content;
+  max-width: 300px;
   text-align: left;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border-primary);

@@ -8,7 +8,7 @@ import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from 
 import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
 import { getReminderState, updateReminderSentTime } from "./reminder-scheduler.js";
 
-type Slice = { usage: number; every: number; start: string };
+type Blister = { usage: number; every: number; start: string };
 
 type IntakeReminderState = {
   sentReminders: string[]; // Array of "medName:timestamp" to track sent reminders
@@ -42,17 +42,17 @@ function saveIntakeReminderState(state: IntakeReminderState): void {
   writeFileSync(intakeReminderStateFile, JSON.stringify(state, null, 2));
 }
 
-function parseSlices(row: { usageJson: string; everyJson: string; startJson: string }): Slice[] {
+function parseBlisters(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
   try {
     const usage = JSON.parse(row.usageJson) as number[];
     const every = JSON.parse(row.everyJson) as number[];
     const start = JSON.parse(row.startJson) as string[];
     const len = Math.min(usage.length, every.length, start.length);
-    const slices: Slice[] = [];
+    const blisters: Blister[] = [];
     for (let i = 0; i < len; i++) {
-      slices.push({ usage: usage[i], every: every[i], start: start[i] });
+      blisters.push({ usage: usage[i], every: every[i], start: start[i] });
     }
-    return slices;
+    return blisters;
   } catch {
     return [];
   }
@@ -67,7 +67,7 @@ type UpcomingIntake = {
   pillWeightMg: number | null;
 };
 
-function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: number, takenBy: string | null, pillWeightMg: number | null, locale: string): UpcomingIntake[] {
+function getUpcomingIntakes(medName: string, blisters: Blister[], minutesBefore: number, takenBy: string | null, pillWeightMg: number | null, locale: string): UpcomingIntake[] {
   const now = Date.now();
   // Window to detect if "now" is the right time to send reminder
   // We check if the notify time (intake - 15min) falls within current minute ±1
@@ -76,9 +76,9 @@ function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: num
   
   const upcoming: UpcomingIntake[] = [];
   
-  for (const slice of slices) {
-    const startTime = new Date(slice.start).getTime();
-    const intervalMs = slice.every * 24 * 60 * 60 * 1000;
+  for (const blister of blisters) {
+    const startTime = new Date(blister.start).getTime();
+    const intervalMs = blister.every * 24 * 60 * 60 * 1000;
     
     if (intervalMs <= 0) continue;
     
@@ -112,7 +112,7 @@ function getUpcomingIntakes(medName: string, slices: Slice[], minutesBefore: num
       const intakeDate = new Date(nextTime);
       upcoming.push({
         medName,
-        usage: slice.usage,
+        usage: blister.usage,
         intakeTime: intakeDate,
         intakeTimeStr: intakeDate.toLocaleTimeString(locale, { 
           hour: "2-digit", 
@@ -303,8 +303,8 @@ async function checkAndSendIntakeRemindersForUser(
   
   // Find all upcoming intakes across all medications for this user
   for (const med of medsWithReminders) {
-    const slices = parseSlices(med);
-    const upcoming = getUpcomingIntakes(med.name, slices, REMINDER_MINUTES_BEFORE, med.takenBy, med.pillWeightMg, locale);
+    const blisters = parseBlisters(med);
+    const upcoming = getUpcomingIntakes(med.name, blisters, REMINDER_MINUTES_BEFORE, med.takenBy, med.pillWeightMg, locale);
     allUpcoming.push(...upcoming);
   }
   

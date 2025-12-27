@@ -7,7 +7,7 @@ import { resolve } from "path";
 import { loadUserSettings, getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
 
-type Slice = { usage: number; every: number; start: string };
+type Blister = { usage: number; every: number; start: string };
 
 type ReminderState = {
   lastAutoEmailSent: string | null; // ISO date string
@@ -172,28 +172,28 @@ export function updateReminderSentTime(type: "stock" | "intake" = "stock", chann
   });
 }
 
-function parseSlices(row: { usageJson: string; everyJson: string; startJson: string }): Slice[] {
+function parseBlisters(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
   try {
     const usage = JSON.parse(row.usageJson) as number[];
     const every = JSON.parse(row.everyJson) as number[];
     const start = JSON.parse(row.startJson) as string[];
     const len = Math.min(usage.length, every.length, start.length);
-    const slices: Slice[] = [];
+    const blisters: Blister[] = [];
     for (let i = 0; i < len; i++) {
-      slices.push({ usage: usage[i], every: every[i], start: start[i] });
+      blisters.push({ usage: usage[i], every: every[i], start: start[i] });
     }
-    return slices;
+    return blisters;
   } catch {
     return [];
   }
 }
 
-function calculateDailyUsage(slices: Slice[]): number {
-  return slices.reduce((sum, s) => sum + s.usage / s.every, 0);
+function calculateDailyUsage(blisters: Blister[]): number {
+  return blisters.reduce((sum, s) => sum + s.usage / s.every, 0);
 }
 
-function calculateDepletionInfo(med: { count: number; slices: Slice[] }, language: Language): { daysLeft: number | null; depletionDate: string | null } {
-  const dailyUsage = calculateDailyUsage(med.slices);
+function calculateDepletionInfo(med: { count: number; blisters: Blister[] }, language: Language): { daysLeft: number | null; depletionDate: string | null } {
+  const dailyUsage = calculateDailyUsage(med.blisters);
   if (dailyUsage <= 0) return { daysLeft: null, depletionDate: null };
   
   const daysLeft = Math.floor(med.count / dailyUsage);
@@ -220,8 +220,8 @@ async function getMedicationsNeedingReminder(userId: number, reminderDaysBefore:
   const lowStock: LowStockItem[] = [];
   
   for (const row of rows) {
-    const slices = parseSlices(row);
-    const { daysLeft, depletionDate } = calculateDepletionInfo({ count: row.count, slices }, language);
+    const blisters = parseBlisters(row);
+    const { daysLeft, depletionDate } = calculateDepletionInfo({ count: row.count, blisters }, language);
     
     // Check if medication runs out within reminderDaysBefore days
     if (daysLeft !== null && daysLeft <= reminderDaysBefore) {

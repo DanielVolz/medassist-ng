@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from "re
 import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth, AuthPage, UserProfile } from "./components/Auth";
 
-type Slice = {
+type Blister = {
 	usage: number;
 	every: number;
 	start: string;
@@ -22,7 +22,7 @@ type Medication = {
 	tabsPerStrip?: number;
 	looseTablets?: number;
 	pillWeightMg?: number | null;
-	slices: Slice[];
+	blisters: Blister[];
 	imageUrl?: string | null;
 	expiryDate?: string | null;
 	notes?: string | null;
@@ -42,7 +42,7 @@ type PlannerRow = {
 	enough: boolean;
 };
 
-type FormSlice = { usage: string; every: string; start: string };
+type FormBlister = { usage: string; every: string; start: string };
 
 type FormState = {
 	name: string;
@@ -56,12 +56,12 @@ type FormState = {
 	expiryDate: string;
 	notes: string;
 	intakeRemindersEnabled: boolean;
-	slices: FormSlice[];
+	blisters: FormBlister[];
 };
 
-const defaultSlice = (): FormSlice => ({ usage: "1", every: "1", start: toInputValue(new Date().toISOString()) });
+const defaultBlister = (): FormBlister => ({ usage: "1", every: "1", start: toInputValue(new Date().toISOString()) });
 
-const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, slices: [defaultSlice()] });
+const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, blisters: [defaultBlister()] });
 
 const todayIso = () => new Date().toISOString();
 const plusDaysIso = (days: number) => {
@@ -264,6 +264,7 @@ function AppContent() {
 	const [showImageLightbox, setShowImageLightbox] = useState(false);
 	const [selectedUser, setSelectedUser] = useState<string | null>(null);
 	const [scheduleDays, setScheduleDays] = useState<number>(30);
+	const [showPastDays, setShowPastDays] = useState(false);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	// Share dialog state
 	const [showShareDialog, setShowShareDialog] = useState(false);
@@ -393,16 +394,16 @@ function AppContent() {
 		settings.shoutrrrEnabled !== savedSettings.shoutrrrEnabled ||
 		settings.shoutrrrUrl !== savedSettings.shoutrrrUrl;
 
-	const schedule = useMemo(() => buildSchedulePreview(meds, i18n.language), [meds, i18n.language]);
+	const schedule = useMemo(() => buildSchedulePreview(meds, i18n.language, true), [meds, i18n.language]);
 	const totalTablets = useMemo(() => deriveTotal(form), [form]);
 	const coverage = useMemo(() => calculateCoverage(meds, schedule.events, i18n.language, settings.reminderDaysBefore), [meds, schedule.events, i18n.language, settings.reminderDaysBefore]);
 	const depletionByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c.depletionTime])), [coverage.all]);
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
 	const groupedSchedule = useMemo(() => {
 		type DoseInfo = { id: string; timeStr: string; when: number; usage: number };
-		const days = new Map<string, { dateStr: string; date: Date; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
+		const days = new Map<string, { dateStr: string; date: Date; isPast: boolean; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
 		schedule.events.slice(0, 2000).forEach((event) => {
-			const day = days.get(event.dateStr) ?? { dateStr: event.dateStr, date: new Date(event.when), meds: new Map() };
+			const day = days.get(event.dateStr) ?? { dateStr: event.dateStr, date: new Date(event.when), isPast: event.isPast, meds: new Map() };
 			const medEntry = day.meds.get(event.medName) ?? { medName: event.medName, total: 0, doses: [], lastWhen: event.when };
 			medEntry.total += event.usage;
 			medEntry.doses.push({ id: event.id, timeStr: event.timeStr, when: event.when, usage: event.usage });
@@ -410,8 +411,11 @@ function AppContent() {
 			day.meds.set(event.medName, medEntry);
 			days.set(event.dateStr, day);
 		});
-		return Array.from(days.values()).map((d) => ({ dateStr: d.dateStr, date: d.date, meds: Array.from(d.meds.values()) })).slice(0, scheduleDays);
-	}, [schedule.events, scheduleDays]);
+		return Array.from(days.values()).map((d) => ({ dateStr: d.dateStr, date: d.date, isPast: d.isPast, meds: Array.from(d.meds.values()) }));
+	}, [schedule.events]);
+
+	const pastDays = useMemo(() => groupedSchedule.filter(d => d.isPast), [groupedSchedule]);
+	const futureDays = useMemo(() => groupedSchedule.filter(d => !d.isPast).slice(0, scheduleDays), [groupedSchedule, scheduleDays]);
 
 	useEffect(() => {
 		loadMeds();
@@ -625,20 +629,20 @@ function AppContent() {
 		loadMeds();
 	}
 
-	function setSliceValue(idx: number, field: keyof FormSlice, value: string) {
+	function setBlisterValue(idx: number, field: keyof FormBlister, value: string) {
 		setForm((prev) => {
-			const next = [...prev.slices];
+			const next = [...prev.blisters];
 			next[idx] = { ...next[idx], [field]: value };
-			return { ...prev, slices: next };
+			return { ...prev, blisters: next };
 		});
 	}
 
-	function addSlice() {
-		setForm((prev) => ({ ...prev, slices: [...prev.slices, defaultSlice()] }));
+	function addBlister() {
+		setForm((prev) => ({ ...prev, blisters: [...prev.blisters, defaultBlister()] }));
 	}
 
-	function removeSlice(idx: number) {
-		setForm((prev) => ({ ...prev, slices: prev.slices.filter((_, i) => i !== idx) }));
+	function removeBlister(idx: number) {
+		setForm((prev) => ({ ...prev, blisters: prev.blisters.filter((_, i) => i !== idx) }));
 	}
 
 	function startEdit(med: Medication) {
@@ -655,7 +659,7 @@ function AppContent() {
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
 			intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
-			slices: med.slices.map((s) => ({ usage: String(s.usage), every: String(s.every), start: toInputValue(s.start) })),
+			blisters: med.blisters.map((s) => ({ usage: String(s.usage), every: String(s.every), start: toInputValue(s.start) })),
 		});
 	}
 
@@ -687,7 +691,7 @@ function AppContent() {
 			expiryDate: form.expiryDate || null,
 			notes: form.notes.trim() || null,
 			intakeRemindersEnabled: form.intakeRemindersEnabled,
-			slices: form.slices.map((s) => ({ usage: Number(s.usage) || 0, every: Math.max(1, Number(s.every) || 1), start: toIsoString(s.start) })),
+			blisters: form.blisters.map((s) => ({ usage: Number(s.usage) || 0, every: Math.max(1, Number(s.every) || 1), start: toIsoString(s.start) })),
 		};
 
 		const method = editingId ? "PUT" : "POST";
@@ -1054,7 +1058,80 @@ function AppContent() {
 									</div>
 								</div>
 								<div className="timeline">
-									{groupedSchedule.map((day) => {
+									{/* Past days toggle */}
+									{pastDays.length > 0 && (
+										<div 
+											className={`past-days-toggle ${showPastDays ? 'expanded' : ''}`}
+											onClick={() => setShowPastDays(!showPastDays)}
+										>
+											<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
+											<span className="past-days-label">
+												{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
+											</span>
+											<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
+										</div>
+									)}
+									{/* Past days (when expanded) */}
+									{showPastDays && pastDays.map((day) => {
+										const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
+										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
+										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+										const isAutoCollapsed = true; // Past days are always auto-collapsed
+										const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
+										const isCollapsed = !isManuallyExpanded;
+										
+										return (
+											<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+												<div 
+													className="day-divider clickable" 
+													onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+													title={isCollapsed ? t('common.expand') : t('common.collapse')}
+												>
+													<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
+													<span className="day-date">{day.dateStr}</span>
+													<span className="day-summary">
+														{allDayTaken ? (
+															<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
+														) : (
+															<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+														)}
+													</span>
+												</div>
+												{!isCollapsed && day.meds.map((item) => {
+													const med = meds.find(m => m.name === item.medName);
+													const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+													return (
+														<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+															<div className="time-main">
+																<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
+																<div className="tag-row">
+																	<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+																</div>
+															</div>
+															<div className="doses-col">
+																{item.doses.map((dose) => {
+																	const isTaken = takenDoses.has(dose.id);
+																	return (
+																		<div key={dose.id} className={`dose-item past ${isTaken ? "taken" : ""}`}>
+																			<span className="dose-time">{dose.timeStr}</span>
+																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																			{isTaken ? (
+																				<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
+																			) : (
+																				<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
+																			)}
+																		</div>
+																	);
+																})}
+															</div>
+														</div>
+													);
+												})}
+											</div>
+										);
+									})}
+									{/* Current and future days */}
+									{futureDays.map((day) => {
 										// Check if all doses in this day are taken (auto-collapse)
 										const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
 										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
@@ -1074,7 +1151,7 @@ function AppContent() {
 										const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
 										
 										return (
-											<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+											<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} ${isToday ? "today" : ""}`}>
 												<div 
 													className="day-divider clickable" 
 													onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
@@ -1175,10 +1252,10 @@ function AppContent() {
 												<button className="ghost danger" onClick={() => deleteMed(med.id)}>{t('common.delete')}</button>
 											</div>
 										</div>
-										<div className="slice-list">
-											{med.slices.map((s, idx) => (
-												<div key={`${med.id}-${idx}`} className="slice-row-simple">
-													{s.usage} {s.usage === 1 ? t('common.pill') : t('common.pills')} · {t('form.slices.every')} {s.every} {s.every === 1 ? t('common.day') : t('common.days')} · {t('form.slices.from')} {formatDateTime(s.start, i18n.language)}
+										<div className="blister-list">
+											{med.blisters.map((s, idx) => (
+												<div key={`${med.id}-${idx}`} className="blister-row-simple">
+													{s.usage} {s.usage === 1 ? t('common.pill') : t('common.pills')} · {t('form.blisters.every')} {s.every} {s.every === 1 ? t('common.day') : t('common.days')} · {t('form.blisters.from')} {formatDateTime(s.start, i18n.language)}
 												</div>
 											))}
 										</div>
@@ -1245,39 +1322,39 @@ function AppContent() {
 									/>
 								</label>
 
-								<div className="full slices">
+<div className="full blisters">
 									<div className="card-head">
-										<h3>{t('form.slices.title')}</h3>
-										<div className="slices-actions">
-											<label className="inline-checkbox" title={t('form.slices.remindTooltip')}>
-												<input 
-													type="checkbox" 
-													checked={form.intakeRemindersEnabled} 
-													onChange={(e) => setForm(prev => ({ ...prev, intakeRemindersEnabled: e.target.checked }))}
-												/>
-												<span>🔔 {t('form.slices.remind')}</span>
-											</label>
-											<button type="button" className="ghost" onClick={addSlice}>+ {t('form.slices.addIntake')}</button>
-										</div>
+											<h3>{t('form.blisters.title')}</h3>
+											<div className="blisters-actions">
+												<label className="inline-checkbox" title={t('form.blisters.remindTooltip')}>
+													<input 
+														type="checkbox" 
+														checked={form.intakeRemindersEnabled} 
+														onChange={(e) => setForm(prev => ({ ...prev, intakeRemindersEnabled: e.target.checked }))}
+													/>
+													<span>🔔 {t('form.blisters.remind')}</span>
+												</label>
+												<button type="button" className="ghost" onClick={addBlister}>+ {t('form.blisters.addIntake')}</button>
+											</div>
 									</div>
-									{form.slices.map((s, idx) => (
-										<div key={idx} className="slice-row">
-											<div className="slice-inputs">
+									{form.blisters.map((s, idx) => (
+										<div key={idx} className="blister-row">
+											<div className="blister-inputs">
 												<label>
-													{t('form.slices.usage')}
-													<input type="number" min="0" step="0.1" value={s.usage} onChange={(e) => setSliceValue(idx, "usage", e.target.value)} />
+													{t('form.blisters.usage')}
+													<input type="number" min="0" step="0.1" value={s.usage} onChange={(e) => setBlisterValue(idx, "usage", e.target.value)} />
 												</label>
 												<label>
-													{t('form.slices.everyDays')}
-													<input type="number" min="1" value={s.every} onChange={(e) => setSliceValue(idx, "every", e.target.value)} />
+													{t('form.blisters.everyDays')}
+													<input type="number" min="1" value={s.every} onChange={(e) => setBlisterValue(idx, "every", e.target.value)} />
 												</label>
 												<label>
-													{t('form.slices.start')}
-													<input type="datetime-local" step="60" value={s.start} onChange={(e) => setSliceValue(idx, "start", e.target.value)} />
+													{t('form.blisters.start')}
+													<input type="datetime-local" step="60" value={s.start} onChange={(e) => setBlisterValue(idx, "start", e.target.value)} />
 												</label>
 											</div>
-											{form.slices.length > 1 && (
-												<button type="button" className="ghost" onClick={() => removeSlice(idx)}>{t('common.remove')}</button>
+											{form.blisters.length > 1 && (
+												<button type="button" className="ghost" onClick={() => removeBlister(idx)}>{t('common.remove')}</button>
 											)}
 										</div>
 									))}
@@ -1730,8 +1807,86 @@ function AppContent() {
 								</select>
 							</div>
 							<div className="timeline">
-								{groupedSchedule.map((day) => (
-									<div key={day.dateStr} className="day-block">
+								{/* Past days toggle */}
+								{pastDays.length > 0 && (
+									<div 
+										className={`past-days-toggle ${showPastDays ? 'expanded' : ''}`}
+										onClick={() => setShowPastDays(!showPastDays)}
+									>
+										<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
+										<span className="past-days-label">
+											{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
+										</span>
+										<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
+									</div>
+								)}
+								{/* Past days (when expanded) */}
+								{showPastDays && pastDays.map((day) => {
+									const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
+									const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
+									const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+									const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
+									const isCollapsed = !isManuallyExpanded;
+									
+									return (
+										<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+											<div 
+												className="day-divider clickable" 
+												onClick={() => toggleDayCollapse(day.dateStr, true)}
+												title={isCollapsed ? t('common.expand') : t('common.collapse')}
+											>
+												<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
+												<span className="day-date">{day.dateStr}</span>
+												<span className="day-summary">
+													{allDayTaken ? (
+														<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
+													) : (
+														<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+													)}
+												</span>
+											</div>
+											{!isCollapsed && day.meds.map((item) => {
+												const med = meds.find(m => m.name === item.medName);
+												const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+												return (
+													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+														<div className="time-main">
+															<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
+															<div className="tag-row">
+																<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+															</div>
+														</div>
+														<div className="doses-col">
+															{item.doses.map((dose) => {
+																const isTaken = takenDoses.has(dose.id);
+																return (
+																	<div key={dose.id} className={`dose-item past ${isTaken ? "taken" : ""}`}>
+																		<span className="dose-time">{dose.timeStr}</span>
+																		<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																		{isTaken ? (
+																			<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
+																		) : (
+																			<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
+																		)}
+																	</div>
+																);
+															})}
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									);
+								})}
+								{/* Current and future days */}
+								{futureDays.map((day) => {
+									const today = new Date();
+									today.setHours(0, 0, 0, 0);
+									const dayDate = new Date(day.date);
+									dayDate.setHours(0, 0, 0, 0);
+									const isToday = dayDate.getTime() === today.getTime();
+									return (
+									<div key={day.dateStr} className={`day-block ${isToday ? "today" : ""}`}>
 										<div className="day-divider">{day.dateStr}</div>
 										{day.meds.map((item) => {
 											const medCoverage = coverageByMed[item.medName];
@@ -1775,7 +1930,7 @@ function AppContent() {
 											);
 										})}
 									</div>
-								))}
+								);})}
 							</div>
 						</article>
 					</section>
@@ -1858,15 +2013,15 @@ function AppContent() {
 								})()}
 						</div>
 
-							{selectedMed.slices.length > 0 && (
+							{selectedMed.blisters.length > 0 && (
 								<div className="med-detail-section">
 									<h3>{t('modal.intakeSchedule')} {selectedMed.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</h3>
 									<div className="med-detail-schedules">
-										{selectedMed.slices.map((slice, idx) => (
+										{selectedMed.blisters.map((blister, idx) => (
 											<div key={idx} className="med-schedule-item">
-												<span className="med-schedule-usage">{slice.usage} {slice.usage !== 1 ? t('common.pills') : t('common.pill')}{selectedMed.pillWeightMg && ` (${slice.usage * selectedMed.pillWeightMg} mg)`}</span>
-												<span className="med-schedule-freq">{t('form.slices.every')} {slice.every} {slice.every !== 1 ? t('common.days') : t('common.day')}</span>
-												<span className="med-schedule-time">{t('modal.at')} {new Date(slice.start).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}</span>
+												<span className="med-schedule-usage">{blister.usage} {blister.usage !== 1 ? t('common.pills') : t('common.pill')}{selectedMed.pillWeightMg && ` (${blister.usage * selectedMed.pillWeightMg} mg)`}</span>
+												<span className="med-schedule-freq">{t('form.blisters.every')} {blister.every} {blister.every !== 1 ? t('common.days') : t('common.day')}</span>
+												<span className="med-schedule-time">{t('modal.at')} {new Date(blister.start).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}</span>
 											</div>
 										))}
 									</div>
@@ -1912,7 +2067,7 @@ function AppContent() {
 							<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
 								{t('common.close')}
 							</button>
-							{selectedMed.slices.length > 0 && (
+							{selectedMed.blisters.length > 0 && (
 								<button className="ghost" onClick={() => generateICS(selectedMed)} title={t('modal.exportTooltip')}>
 									📅 {t('modal.exportCalendar')}
 								</button>
@@ -2111,12 +2266,12 @@ function generateICS(med: Medication) {
 		return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 	};
 	
-	const events = med.slices.map((slice, idx) => {
-		const start = new Date(slice.start);
+	const events = med.blisters.map((blister, idx) => {
+		const start = new Date(blister.start);
 		const end = new Date(start.getTime() + 15 * 60 * 1000); // 15 min duration
-		const interval = slice.every;
+		const interval = blister.every;
 		
-		const pillInfo = `${slice.usage} pill${slice.usage !== 1 ? 's' : ''}${med.pillWeightMg ? ` (${slice.usage * med.pillWeightMg} mg)` : ''}`;
+		const pillInfo = `${blister.usage} pill${blister.usage !== 1 ? 's' : ''}${med.pillWeightMg ? ` (${blister.usage * med.pillWeightMg} mg)` : ''}`;
 		const summary = `💊 ${med.name} - ${pillInfo}`;
 		const description = [
 			`Medication: ${med.name}`,
@@ -2163,26 +2318,28 @@ END:VCALENDAR`;
 	URL.revokeObjectURL(url);
 }
 
-function buildSchedulePreview(meds: Medication[], locale: string) {
-	const events: Array<{ id: string; medName: string; timeStr: string; dateStr: string; usage: number; when: number }> = [];
+function buildSchedulePreview(meds: Medication[], locale: string, includePast: boolean = false) {
+	const events: Array<{ id: string; medName: string; timeStr: string; dateStr: string; usage: number; when: number; isPast: boolean }> = [];
 	const now = new Date();
 	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Midnight today
 	const end = new Date();
 	end.setDate(end.getDate() + 180); // 6 months horizon
 
 	meds.forEach((med) => {
-		med.slices.forEach((slice, idx) => {
-			const start = new Date(slice.start);
+		med.blisters.forEach((blister, idx) => {
+			const start = new Date(blister.start);
 			if (Number.isNaN(start.getTime())) return;
-			for (let d = new Date(start); d <= end; d.setDate(d.getDate() + slice.every)) {
-				// Include all doses from today onwards (even past ones from today)
-				if (d < todayStart) continue;
+			for (let d = new Date(start); d <= end; d.setDate(d.getDate() + blister.every)) {
+				const isPast = d < todayStart;
+				// Skip past events unless includePast is true
+				if (isPast && !includePast) continue;
 				const whenMs = d.getTime();
 				events.push({
 					id: `${med.id}-${idx}-${whenMs}`,
 					medName: med.name,
-					usage: slice.usage,
+					usage: blister.usage,
 					when: whenMs,
+					isPast,
 					timeStr: d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
 					dateStr: d.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" }),
 				});
@@ -2198,7 +2355,7 @@ function buildSchedulePreview(meds: Medication[], locale: string) {
 		return t.getFullYear() === n.getFullYear() && t.getMonth() === n.getMonth() && t.getDate() === n.getDate();
 	}).length;
 
-	return { events, today: todayCount, nextThree: events.length, totalSlices: meds.reduce((acc, m) => acc + m.slices.length, 0) };
+	return { events, today: todayCount, nextThree: events.length, totalBlisters: meds.reduce((acc, m) => acc + m.blisters.length, 0) };
 }
 
 function formatNumber(value: number | null) {
@@ -2283,10 +2440,10 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 	const now = Date.now();
 
 	const coverage: Coverage[] = meds.map((m) => {
-		const dailyRate = m.slices.reduce((sum, s) => sum + (s.every > 0 ? s.usage / s.every : 0), 0);
+		const dailyRate = m.blisters.reduce((sum, s) => sum + (s.every > 0 ? s.usage / s.every : 0), 0);
 
 		let consumed = 0;
-		m.slices.forEach((s) => {
+		m.blisters.forEach((s) => {
 			const start = new Date(s.start).getTime();
 			if (Number.isNaN(start) || start > now) return;
 			const period = Math.max(1, s.every) * MS_PER_DAY;
@@ -2483,7 +2640,7 @@ type SharedMedication = {
 	genericName?: string | null;
 	pillWeightMg?: number | null;
 	imageUrl?: string | null;
-	slices: Slice[];
+	blisters: Blister[];
 };
 
 type SharedScheduleData = {
@@ -2500,6 +2657,7 @@ function SharedSchedule() {
 	const [error, setError] = useState<string | null>(null);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
+	const [showPastDays, setShowPastDays] = useState(false);
 	// Collapsed days state for SharedSchedule (token-specific localStorage)
 	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
 	const [manuallyExpandedDays, setManuallyExpandedDays] = useState<Set<string>>(new Set());
@@ -2659,34 +2817,30 @@ function SharedSchedule() {
 		if (!data) return [];
 
 		const now = Date.now();
-		// Start from 7 days ago to show past doses
-		const startTime = now - 7 * 24 * 60 * 60 * 1000;
+		const todayStart = new Date();
+		todayStart.setHours(0, 0, 0, 0);
+		const todayStartTime = todayStart.getTime();
 		const endTime = now + data.scheduleDays * 24 * 60 * 60 * 1000;
-		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string }[] = [];
+		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string; isPast: boolean }[] = [];
 
 		for (const med of data.medications) {
-			med.slices.forEach((slice, sliceIdx) => {
-				const startDate = new Date(slice.start);
-				const intervalMs = slice.every * 24 * 60 * 60 * 1000;
+			med.blisters.forEach((blister, blisterIdx) => {
+				const startDate = new Date(blister.start);
+				const intervalMs = blister.every * 24 * 60 * 60 * 1000;
 				let t = startDate.getTime();
 
-				// Move to first occurrence >= startTime
-				if (t < startTime) {
-					const elapsed = startTime - t;
-					const periods = Math.floor(elapsed / intervalMs);
-					t += periods * intervalMs;
-					if (t < startTime) t += intervalMs;
-				}
-
+				// Start from the very first dose (blister start)
 				while (t <= endTime) {
 					const d = new Date(t);
-					// Generate dose ID matching Dashboard format: ${med.id}-${sliceIdx}-${whenMs}
-					const doseId = `${med.id}-${sliceIdx}-${t}`;
+					const isPast = t < todayStartTime;
+					// Generate dose ID matching Dashboard format: ${med.id}-${blisterIdx}-${whenMs}
+					const doseId = `${med.id}-${blisterIdx}-${t}`;
 					doses.push({
 						id: doseId,
 						when: t,
 						medName: med.name,
-						usage: slice.usage,
+						usage: blister.usage,
+						isPast,
 						timeStr: d.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" }),
 					});
 					t += intervalMs;
@@ -2697,7 +2851,7 @@ function SharedSchedule() {
 		doses.sort((a, b) => a.when - b.when);
 
 		// Group by date
-		const grouped: { dateStr: string; date: Date; meds: { medName: string; total: number; lastWhen: number; doses: typeof doses }[] }[] = [];
+		const grouped: { dateStr: string; date: Date; isPast: boolean; meds: { medName: string; total: number; lastWhen: number; doses: typeof doses }[] }[] = [];
 		const byDate = new Map<string, typeof doses>();
 
 		for (const dose of doses) {
@@ -2722,11 +2876,14 @@ function SharedSchedule() {
 				lastWhen: Math.max(...medDoses.map(d => d.when)),
 				doses: medDoses,
 			}));
-			grouped.push({ dateStr, date: new Date(dayDoses[0].when), meds });
+			grouped.push({ dateStr, date: new Date(dayDoses[0].when), isPast: dayDoses[0].isPast, meds });
 		}
 
 		return grouped;
 	}, [data, i18n.language]);
+
+	const pastDays = useMemo(() => schedule.filter(d => d.isPast), [schedule]);
+	const futureDays = useMemo(() => schedule.filter(d => !d.isPast), [schedule]);
 
 	if (loading) {
 		return (
@@ -2764,94 +2921,180 @@ function SharedSchedule() {
 					{schedule.length === 0 ? (
 						<p className="shared-schedule-empty">{t('share.noSchedule')}</p>
 					) : (
-						schedule.map((day) => {
-							// Check if all doses in this day are taken (auto-collapse)
-							const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
-							const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
-							const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
-							
-							// Check if this is today, past, or future
-							const today = new Date();
-							today.setHours(0, 0, 0, 0);
-							const dayDate = new Date(day.date);
-							dayDate.setHours(0, 0, 0, 0);
-							const isToday = dayDate.getTime() === today.getTime();
-							
-							// Determine if day should be collapsed: only today is expanded by default
-							const isAutoCollapsed = allDayTaken || !isToday;
-							const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
-							const isManuallyCollapsed = manuallyCollapsedDays.has(day.dateStr);
-							const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
-							
-							return (
-								<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
-									<div 
-										className="day-divider clickable" 
-										onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
-										title={isCollapsed ? t('common.expand') : t('common.collapse')}
-									>
-										<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
-										<span className="day-date">{day.dateStr}</span>
-										<span className="day-summary">
-											{allDayTaken ? (
-												<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
-											) : (
-												<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
-											)}
-										</span>
-									</div>
-									{!isCollapsed && day.meds.map((item) => {
-										const med = data.medications.find(m => m.name === item.medName);
-										const allTaken = item.doses.every((d) => takenDoses.has(d.id));
-										return (
-											<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
-												<div className="time-main">
-													<div className="med-name">
-														<span 
-															className={med?.imageUrl ? 'clickable' : ''}
-															onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
-														>
-															<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
-														</span>
-														<span className="med-name-text">{item.medName}</span>
-														{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
-													</div>
-													<div className="tag-row">
-														<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
-													</div>
-												</div>
-												<div className="doses-col">
-													{item.doses.map((dose) => {
-														const isTaken = takenDoses.has(dose.id);
-														const isOverdue = dose.when < Date.now() && !isTaken;
-														// Only disable doses on future DAYS, not later today
-														const doseDate = new Date(dose.when);
-														doseDate.setHours(0, 0, 0, 0);
-														const todayMidnight = new Date();
-														todayMidnight.setHours(0, 0, 0, 0);
-														const isFutureDose = doseDate.getTime() > todayMidnight.getTime();
-														return (
-															<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
-																<span className="dose-time">{dose.timeStr}</span>
-																<span className="dose-usage">
-																	{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}
-																	{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
-																</span>
-																{isTaken ? (
-																	<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
-																) : (
-																	<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')} disabled={isFutureDose}>✓</button>
-																)}
-															</div>
-														);
-													})}
-												</div>
-											</div>
-										);
-									})}
+						<>
+							{/* Past days toggle */}
+							{pastDays.length > 0 && (
+								<div 
+									className={`past-days-toggle ${showPastDays ? 'expanded' : ''}`}
+									onClick={() => setShowPastDays(!showPastDays)}
+								>
+									<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
+									<span className="past-days-label">
+										{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
+									</span>
+									<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
 								</div>
-							);
-						})
+							)}
+							{/* Past days (when expanded) */}
+							{showPastDays && pastDays.map((day) => {
+								const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
+								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
+								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+								const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
+								const isCollapsed = !isManuallyExpanded;
+								
+								return (
+									<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+										<div 
+											className="day-divider clickable" 
+											onClick={() => toggleDayCollapse(day.dateStr, true)}
+											title={isCollapsed ? t('common.expand') : t('common.collapse')}
+										>
+											<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
+											<span className="day-date">{day.dateStr}</span>
+											<span className="day-summary">
+												{allDayTaken ? (
+													<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
+												) : (
+													<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+												)}
+											</span>
+										</div>
+										{!isCollapsed && day.meds.map((item) => {
+											const med = data.medications.find(m => m.name === item.medName);
+											const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+											return (
+												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+													<div className="time-main">
+														<div className="med-name">
+															<span 
+																className={med?.imageUrl ? 'clickable' : ''}
+																onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
+															>
+																<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+															</span>
+															<span className="med-name-text">{item.medName}</span>
+															{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
+														</div>
+														<div className="tag-row">
+															<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+														</div>
+													</div>
+													<div className="doses-col">
+														{item.doses.map((dose) => {
+															const isTaken = takenDoses.has(dose.id);
+															return (
+																<div key={dose.id} className={`dose-item past ${isTaken ? "taken" : ""}`}>
+																	<span className="dose-time">{dose.timeStr}</span>
+																	<span className="dose-usage">
+																		{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}
+																		{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																	</span>
+																	{isTaken ? (
+																		<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
+																	) : (
+																		<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')}>✓</button>
+																	)}
+																</div>
+															);
+														})}
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								);
+							})}
+							{/* Current and future days */}
+							{futureDays.map((day) => {
+								// Check if all doses in this day are taken (auto-collapse)
+								const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
+								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
+								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+								
+								// Check if this is today
+								const today = new Date();
+								today.setHours(0, 0, 0, 0);
+								const dayDate = new Date(day.date);
+								dayDate.setHours(0, 0, 0, 0);
+								const isToday = dayDate.getTime() === today.getTime();
+								
+								// Determine if day should be collapsed: only today is expanded by default
+								const isAutoCollapsed = allDayTaken || !isToday;
+								const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
+								const isManuallyCollapsed = manuallyCollapsedDays.has(day.dateStr);
+								const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
+								
+								return (
+									<div key={day.dateStr} className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} ${isToday ? "today" : ""}`}>
+										<div 
+											className="day-divider clickable" 
+											onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+											title={isCollapsed ? t('common.expand') : t('common.collapse')}
+										>
+											<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
+											<span className="day-date">{day.dateStr}</span>
+											<span className="day-summary">
+												{allDayTaken ? (
+													<span className="day-complete">✓ {t('dashboard.schedules.allTaken')}</span>
+												) : (
+													<span className="day-progress">{takenCount}/{allDoseIds.length}</span>
+												)}
+											</span>
+										</div>
+										{!isCollapsed && day.meds.map((item) => {
+											const med = data.medications.find(m => m.name === item.medName);
+											const allTaken = item.doses.every((d) => takenDoses.has(d.id));
+											return (
+												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+													<div className="time-main">
+														<div className="med-name">
+															<span 
+																className={med?.imageUrl ? 'clickable' : ''}
+																onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
+															>
+																<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+															</span>
+															<span className="med-name-text">{item.medName}</span>
+															{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
+														</div>
+														<div className="tag-row">
+															<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
+														</div>
+													</div>
+													<div className="doses-col">
+														{item.doses.map((dose) => {
+															const isTaken = takenDoses.has(dose.id);
+															const isOverdue = dose.when < Date.now() && !isTaken;
+															// Only disable doses on future DAYS, not later today
+															const doseDate = new Date(dose.when);
+															doseDate.setHours(0, 0, 0, 0);
+															const todayMidnight = new Date();
+															todayMidnight.setHours(0, 0, 0, 0);
+															const isFutureDose = doseDate.getTime() > todayMidnight.getTime();
+															return (
+																<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
+																	<span className="dose-time">{dose.timeStr}</span>
+																	<span className="dose-usage">
+																		{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}
+																		{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																	</span>
+																	{isTaken ? (
+																		<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
+																	) : (
+																		<button className="dose-btn take" onClick={() => markDoseTaken(dose.id)} title={t('dose.markAsTaken')} disabled={isFutureDose}>✓</button>
+																	)}
+																</div>
+															);
+														})}
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								);
+							})}
+						</>
 					)}
 				</div>
 

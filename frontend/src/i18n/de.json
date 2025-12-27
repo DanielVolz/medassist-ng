@@ -32,7 +32,11 @@
       "1month": "1 Monat",
       "3months": "3 Monate",
       "6months": "6 Monate",
-      "allTaken": "Alle eingenommen"
+      "allTaken": "Alle eingenommen",
+      "showPastDays": "Vergangene Tage anzeigen",
+      "hidePastDays": "Vergangene Tage ausblenden",
+      "pastDaysCount": "{{count}} vergangener Tag",
+      "pastDaysCount_other": "{{count}} vergangene Tage"
     },
     "reminders": {
       "active": "Automatische Erinnerungen aktiv",
@@ -106,7 +110,7 @@
       "weight": "z.B. 240",
       "notes": "z.B. Mit Essen einnehmen, Alkohol vermeiden... (optional)"
     },
-    "slices": {
+    "blisters": {
       "title": "Einnahmeplan",
       "remind": "Erinnern",
       "remindTooltip": "Erhalte eine Benachrichtigung 15 Minuten vor jeder geplanten Einnahme",

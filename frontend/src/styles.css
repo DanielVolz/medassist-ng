@@ -231,8 +231,8 @@ body {
 .muted { color: var(--text-secondary); font-size: 0.95rem; }
 .small { font-size: 0.9rem; }
 
-.slice-list { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem; width: 100%; }
-.slice-row-simple { 
+.blister-list { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem; width: 100%; }
+.blister-row-simple { 
   color: var(--text-muted); 
   font-size: 0.9rem; 
   padding: 0.6rem 0.75rem 0.6rem 1rem; 
@@ -243,7 +243,7 @@ body {
   width: 100%; 
   transition: background 200ms ease, border-color 200ms ease;
 }
-.slice-row-simple:hover {
+.blister-row-simple:hover {
   background: linear-gradient(90deg, rgba(47, 134, 246, 0.18) 0%, var(--bg-input) 100%);
   border-left-color: var(--accent-light);
 }
@@ -276,18 +276,18 @@ body {
   .med-header { flex-direction: column; }
   .med-actions { align-self: flex-start; }
 }
-.slice-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
-.slice-pill { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.slice-row { display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-primary); padding: 1rem; border-radius: 8px; margin-bottom: 0.65rem; transition: background 200ms ease; }
-[data-theme=\"light\"] .slice-row { background: var(--bg-tertiary); }
-.slice-row .slice-inputs { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 1rem; align-items: end; }
-.slice-row button { align-self: flex-end; width: auto; }
-.slice-row:last-child { margin-bottom: 0; }
-.slices h3 { margin: 0; }
+.blister-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
+.blister-pill { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.blister-row { display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-primary); padding: 1rem; border-radius: 8px; margin-bottom: 0.65rem; transition: background 200ms ease; }
+[data-theme=\"light\"] .blister-row { background: var(--bg-tertiary); }
+.blister-row .blister-inputs { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 1rem; align-items: end; }
+.blister-row button { align-self: flex-end; width: auto; }
+.blister-row:last-child { margin-bottom: 0; }
+.blisters h3 { margin: 0; }
 .gap { gap: 0.6rem; }
 
-/* Slices header actions */
-.slices-actions {
+/* Blisters header actions */
+.blisters-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -387,9 +387,62 @@ textarea {
 .align-end { display: flex; justify-content: flex-end; gap: 0.75rem; }
 
 .timeline { display: flex; flex-direction: column; gap: 1rem; }
+
+/* Past days toggle button */
+.past-days-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border: 1px dashed var(--border-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+.past-days-toggle:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+.past-days-toggle.expanded {
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(47, 134, 246, 0.05);
+}
+.past-days-icon {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+.past-days-label {
+  font-weight: 500;
+}
+.past-days-count {
+  opacity: 0.6;
+  font-size: 0.85rem;
+}
+
+/* Past day blocks styling */
+.day-block.past {
+  opacity: 0.7;
+  border-style: dashed;
+}
+.day-block.past .day-divider {
+  color: var(--text-secondary);
+}
+.dose-item.past {
+  opacity: 0.8;
+}
+
 .day-block { border: 1px solid var(--border-primary); border-radius: 16px; padding: 1rem 1.25rem; background: var(--bg-secondary); box-shadow: 0 8px 32px var(--shadow); transition: background 200ms ease, border-color 200ms ease; }
 .day-block.collapsed { padding-bottom: 0.75rem; }
+.day-block.today { border-color: var(--accent); border-width: 2px; background: linear-gradient(135deg, rgba(47, 134, 246, 0.08) 0%, rgba(47, 134, 246, 0.02) 100%); box-shadow: 0 8px 32px var(--shadow), 0 0 0 1px rgba(47, 134, 246, 0.1); }
+.day-block.today .day-divider { color: var(--accent); }
 .day-block.all-taken { border-color: rgba(57, 217, 138, 0.3); }
+.day-block.today.all-taken { border-color: var(--success); background: linear-gradient(135deg, rgba(57, 217, 138, 0.08) 0%, rgba(57, 217, 138, 0.02) 100%); }
 .day-divider {
   margin: 0 0 0.75rem;
   padding-bottom: 0.5rem;

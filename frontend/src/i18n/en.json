@@ -34,7 +34,11 @@
       "1month": "1 month",
       "3months": "3 months",
       "6months": "6 months",
-      "allTaken": "All taken"
+      "allTaken": "All taken",
+      "showPastDays": "Show past days",
+      "hidePastDays": "Hide past days",
+      "pastDaysCount": "{{count}} past day",
+      "pastDaysCount_other": "{{count}} past days"
     },
     "reminders": {
       "active": "Automatic reminders active",
@@ -108,7 +112,7 @@
       "weight": "e.g. 240",
       "notes": "e.g. Take with food, avoid alcohol... (optional)"
     },
-    "slices": {
+    "blisters": {
       "title": "Intake schedule",
       "remind": "Remind",
       "remindTooltip": "Receive a notification 15 minutes before each scheduled intake",

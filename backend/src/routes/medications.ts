@@ -12,7 +12,7 @@ import type { AuthUser } from "../types/fastify.js";
 
 const IMAGES_DIR = resolve(process.cwd(), "data/images");
 
-const sliceSchema = z.object({
+const blisterSchema = z.object({
   usage: z.number().nonnegative(),
   every: z.number().int().min(1),
   start: z.string().datetime(),
@@ -30,24 +30,24 @@ const medicationSchema = z.object({
   expiryDate: z.string().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
   intakeRemindersEnabled: z.boolean().default(false),
-  slices: z.array(sliceSchema).min(1).max(12),
+  blisters: z.array(blisterSchema).min(1).max(12),
 });
 
-function zipSlices(usage: number[], every: number[], start: string[]) {
+function zipBlisters(usage: number[], every: number[], start: string[]) {
   const len = Math.min(usage.length, every.length, start.length);
-  const slices: Array<{ usage: number; every: number; start: string }> = [];
+  const blisters: Array<{ usage: number; every: number; start: string }> = [];
   for (let i = 0; i < len; i++) {
-    slices.push({ usage: usage[i], every: every[i], start: start[i] });
+    blisters.push({ usage: usage[i], every: every[i], start: start[i] });
   }
-  return slices;
+  return blisters;
 }
 
-function parseSlices(row: typeof medications.$inferSelect) {
+function parseBlisters(row: typeof medications.$inferSelect) {
   try {
     const usage = JSON.parse(row.usageJson) as number[];
     const every = JSON.parse(row.everyJson) as number[];
     const start = JSON.parse(row.startJson) as string[];
-    return zipSlices(usage, every, start);
+    return zipBlisters(usage, every, start);
   } catch (err) {
     return [];
   }
@@ -90,7 +90,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       tabsPerStrip: row.tabsPerStrip ?? row.stripSize ?? 1,
       looseTablets: row.looseTablets ?? 0,
       pillWeightMg: row.pillWeightMg,
-      slices: parseSlices(row),
+      blisters: parseBlisters(row),
       imageUrl: row.imageUrl,
       expiryDate: row.expiryDate,
       notes: row.notes,
@@ -104,10 +104,10 @@ export async function medicationRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.status(400).send(parsed.error.format());
 
     const userId = getUserId(req, reply);
-    const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
-    const usageJson = JSON.stringify(slices.map((s) => s.usage));
-    const everyJson = JSON.stringify(slices.map((s) => s.every));
-    const startJson = JSON.stringify(slices.map((s) => s.start));
+    const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, blisters } = parsed.data;
+    const usageJson = JSON.stringify(blisters.map((s) => s.usage));
+    const everyJson = JSON.stringify(blisters.map((s) => s.every));
+    const startJson = JSON.stringify(blisters.map((s) => s.start));
 
     const derivedCount = deriveTotalTablets(packCount, stripsPerPack, tabsPerStrip, looseTablets);
 
@@ -148,7 +148,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       tabsPerStrip: inserted.tabsPerStrip,
       looseTablets: inserted.looseTablets,
       pillWeightMg: inserted.pillWeightMg,
-      slices,
+      blisters,
       imageUrl: inserted.imageUrl,
       expiryDate: inserted.expiryDate,
       notes: inserted.notes,
@@ -169,10 +169,10 @@ export async function medicationRoutes(app: FastifyInstance) {
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     if (!existing) return reply.notFound();
 
-    const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
-    const usageJson = JSON.stringify(slices.map((s) => s.usage));
-    const everyJson = JSON.stringify(slices.map((s) => s.every));
-    const startJson = JSON.stringify(slices.map((s) => s.start));
+    const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, blisters } = parsed.data;
+    const usageJson = JSON.stringify(blisters.map((s) => s.usage));
+    const everyJson = JSON.stringify(blisters.map((s) => s.every));
+    const startJson = JSON.stringify(blisters.map((s) => s.start));
 
     const derivedCount = deriveTotalTablets(packCount, stripsPerPack, tabsPerStrip, looseTablets);
 
@@ -216,7 +216,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       tabsPerStrip: result[0].tabsPerStrip,
       looseTablets: result[0].looseTablets,
       pillWeightMg: result[0].pillWeightMg,
-      slices,
+      blisters,
       imageUrl: result[0].imageUrl,
       expiryDate: result[0].expiryDate,
       notes: result[0].notes,
@@ -313,8 +313,8 @@ export async function medicationRoutes(app: FastifyInstance) {
     const now = new Date();
     
     const payload = rows.map((row) => {
-      const slices = parseSlices(row);
-      const usageTotal = calculateUsageInRange(slices, start, end);
+      const blisters = parseBlisters(row);
+      const usageTotal = calculateUsageInRange(blisters, start, end);
       const tabsPerStrip = row.tabsPerStrip ?? row.stripSize ?? 1;
       const packCount = row.packCount ?? 1;
       const stripsPerPack = row.stripsPerPack ?? row.strips ?? 1;
@@ -323,13 +323,13 @@ export async function medicationRoutes(app: FastifyInstance) {
 
       // Calculate consumption up to now (same logic as frontend)
       let consumedUntilNow = 0;
-      slices.forEach((slice) => {
-        const sliceStart = new Date(slice.start);
-        if (Number.isNaN(sliceStart.getTime()) || sliceStart > now) return;
+      blisters.forEach((blister) => {
+        const blisterStart = new Date(blister.start);
+        if (Number.isNaN(blisterStart.getTime()) || blisterStart > now) return;
         const msPerDay = 86400000;
-        const period = Math.max(1, slice.every) * msPerDay;
-        const occurrences = Math.floor((now.getTime() - sliceStart.getTime()) / period) + 1;
-        consumedUntilNow += occurrences * slice.usage;
+        const period = Math.max(1, blister.every) * msPerDay;
+        const occurrences = Math.floor((now.getTime() - blisterStart.getTime()) / period) + 1;
+        consumedUntilNow += occurrences * blister.usage;
       });
       
       const currentPills = Math.max(0, originalTotalPills - consumedUntilNow);
@@ -365,14 +365,14 @@ export async function medicationRoutes(app: FastifyInstance) {
   });
 }
 
-function calculateUsageInRange(slices: Array<{ usage: number; every: number; start: string }>, start: Date, end: Date) {
+function calculateUsageInRange(blisters: Array<{ usage: number; every: number; start: string }>, start: Date, end: Date) {
   let total = 0;
-  slices.forEach((slice) => {
-    const sliceStart = new Date(slice.start);
-    if (Number.isNaN(sliceStart.getTime())) return;
-    // iterate occurrences from sliceStart up to end
-    for (let dt = new Date(sliceStart); dt < end; dt.setDate(dt.getDate() + slice.every)) {
-      if (dt >= start && dt < end) total += slice.usage;
+  blisters.forEach((blister) => {
+    const blisterStart = new Date(blister.start);
+    if (Number.isNaN(blisterStart.getTime())) return;
+    // iterate occurrences from blisterStart up to end
+    for (let dt = new Date(blisterStart); dt < end; dt.setDate(dt.getDate() + blister.every)) {
+      if (dt >= start && dt < end) total += blister.usage;
     }
   });
   return Number(total.toFixed(2));

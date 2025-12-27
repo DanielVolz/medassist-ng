@@ -56,20 +56,20 @@ export async function shareRoutes(app: FastifyInstance) {
       )
     );
 
-    // Parse slices and build schedule data
-    const medicationsWithSlices = meds.map((med) => {
-      let slices: { usage: number; every: number; start: string }[] = [];
+    // Parse blisters and build schedule data
+    const medicationsWithBlisters = meds.map((med) => {
+      let blisters: { usage: number; every: number; start: string }[] = [];
       try {
         const usageArr = JSON.parse(med.usageJson || "[]");
         const everyArr = JSON.parse(med.everyJson || "[]");
         const startArr = JSON.parse(med.startJson || "[]");
-        slices = usageArr.map((usage: number, i: number) => ({
+        blisters = usageArr.map((usage: number, i: number) => ({
           usage,
           every: everyArr[i] ?? 1,
           start: startArr[i] ?? new Date().toISOString(),
         }));
       } catch {
-        slices = [];
+        blisters = [];
       }
 
       return {
@@ -78,14 +78,14 @@ export async function shareRoutes(app: FastifyInstance) {
         genericName: med.genericName,
         pillWeightMg: med.pillWeightMg,
         imageUrl: med.imageUrl,
-        slices,
+        blisters,
       };
     });
 
     return {
       takenBy: share.takenBy,
       scheduleDays: share.scheduleDays,
-      medications: medicationsWithSlices,
+      medications: medicationsWithBlisters,
     };
   });
 

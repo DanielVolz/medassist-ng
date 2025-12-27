@@ -119,7 +119,8 @@
       "everyDays": "Alle (Tage)",
       "every": "alle",
       "from": "ab",
-      "start": "Start (Datum/Uhrzeit)"
+      "startDate": "Datum",
+      "startTime": "Uhrzeit"
     }
   },
   "planner": {

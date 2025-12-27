@@ -42,7 +42,7 @@ type PlannerRow = {
 	enough: boolean;
 };
 
-type FormBlister = { usage: string; every: string; start: string };
+type FormBlister = { usage: string; every: string; startDate: string; startTime: string };
 
 type FormState = {
 	name: string;
@@ -59,7 +59,15 @@ type FormState = {
 	blisters: FormBlister[];
 };
 
-const defaultBlister = (): FormBlister => ({ usage: "1", every: "1", start: toInputValue(new Date().toISOString()) });
+const defaultBlister = (): FormBlister => {
+	const now = new Date();
+	return {
+		usage: "1",
+		every: "1",
+		startDate: toDateValue(now),
+		startTime: toTimeValue(now)
+	};
+};
 
 const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, blisters: [defaultBlister()] });
 
@@ -659,7 +667,12 @@ function AppContent() {
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
 			intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
-			blisters: med.blisters.map((s) => ({ usage: String(s.usage), every: String(s.every), start: toInputValue(s.start) })),
+			blisters: med.blisters.map((s) => ({ 
+				usage: String(s.usage), 
+				every: String(s.every), 
+				startDate: toDateValue(s.start),
+				startTime: toTimeValue(s.start)
+			})),
 		});
 	}
 
@@ -691,7 +704,11 @@ function AppContent() {
 			expiryDate: form.expiryDate || null,
 			notes: form.notes.trim() || null,
 			intakeRemindersEnabled: form.intakeRemindersEnabled,
-			blisters: form.blisters.map((s) => ({ usage: Number(s.usage) || 0, every: Math.max(1, Number(s.every) || 1), start: toIsoString(s.start) })),
+			blisters: form.blisters.map((s) => ({ 
+				usage: Number(s.usage) || 0, 
+				every: Math.max(1, Number(s.every) || 1), 
+				start: toIsoString(combineDateAndTime(s.startDate, s.startTime))
+			})),
 		};
 
 		const method = editingId ? "PUT" : "POST";
@@ -1349,8 +1366,12 @@ function AppContent() {
 													<input type="number" min="1" value={s.every} onChange={(e) => setBlisterValue(idx, "every", e.target.value)} />
 												</label>
 												<label>
-													{t('form.blisters.start')}
-													<input type="datetime-local" step="60" value={s.start} onChange={(e) => setBlisterValue(idx, "start", e.target.value)} />
+													{t('form.blisters.startDate')}
+													<input type="date" value={s.startDate} onChange={(e) => setBlisterValue(idx, "startDate", e.target.value)} />
+												</label>
+												<label>
+													{t('form.blisters.startTime')}
+													<input type="time" value={s.startTime} onChange={(e) => setBlisterValue(idx, "startTime", e.target.value)} />
 												</label>
 											</div>
 											{form.blisters.length > 1 && (
@@ -2244,6 +2265,29 @@ function toIsoString(value: string) {
 	// We need to treat it as local time and convert to ISO
 	const date = new Date(value);
 	return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
+function toDateValue(date: Date | string): string {
+	const d = typeof date === 'string' ? new Date(date) : date;
+	if (Number.isNaN(d.getTime())) {
+		const now = new Date();
+		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+	}
+	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function toTimeValue(date: Date | string): string {
+	const d = typeof date === 'string' ? new Date(date) : date;
+	if (Number.isNaN(d.getTime())) {
+		const now = new Date();
+		return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+	}
+	return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function combineDateAndTime(dateStr: string, timeStr: string): string {
+	// Combine separate date and time strings into ISO format
+	return `${dateStr}T${timeStr}`;
 }
 
 function toInputValue(value: string) {

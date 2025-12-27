@@ -121,7 +121,8 @@
       "everyDays": "Every (days)",
       "every": "every",
       "from": "from",
-      "start": "Start (date/time)"
+      "startDate": "Date",
+      "startTime": "Time"
     }
   },
   "planner": {

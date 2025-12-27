@@ -280,9 +280,17 @@ body {
 .blister-pill { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .blister-row { display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-primary); padding: 1rem; border-radius: 8px; margin-bottom: 0.65rem; transition: background 200ms ease; }
 [data-theme=\"light\"] .blister-row { background: var(--bg-tertiary); }
-.blister-row .blister-inputs { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 1rem; align-items: end; }
+.blister-row .blister-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.75rem; align-items: end; }
 .blister-row button { align-self: flex-end; width: auto; }
 .blister-row:last-child { margin-bottom: 0; }
+
+@media (max-width: 600px) {
+  .blister-row .blister-inputs {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+}
+
 .blisters h3 { margin: 0; }
 .gap { gap: 0.6rem; }
 
@@ -960,6 +968,8 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .setting-row {
@@ -971,6 +981,13 @@ textarea {
   border: 1px solid var(--border-primary);
   border-radius: 12px;
   gap: 1rem;
+}
+
+@media (max-width: 480px) {
+  .setting-row {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
 }
 
 .setting-row.inline {
@@ -1282,6 +1299,30 @@ textarea {
   border-radius: 6px;
 }
 
+/* Notification Matrix Mobile */
+@media (max-width: 480px) {
+  .notification-matrix {
+    margin: 0 -0.5rem;
+    border-radius: 8px;
+  }
+  
+  .matrix-header,
+  .matrix-row {
+    grid-template-columns: 1fr 60px 60px;
+    padding: 0.6rem 0.75rem;
+    gap: 0.25rem;
+  }
+  
+  .matrix-channel,
+  .matrix-header .matrix-label {
+    font-size: 0.7rem;
+  }
+  
+  .matrix-row .matrix-label {
+    font-size: 0.8rem;
+  }
+}
+
 /* Settings Grid - Two column layout */
 .settings-grid {
   display: grid;
@@ -1374,6 +1415,16 @@ textarea {
   padding: 0 1.25rem 1.25rem;
   border-top: 1px solid var(--border-primary);
   background: var(--bg-secondary);
+}
+
+@media (max-width: 480px) {
+  .channel-content {
+    padding: 0 0.75rem 1rem;
+  }
+  
+  .channel-toggle {
+    padding: 0.75rem 1rem;
+  }
 }
 
 .channel-config {

@@ -2071,10 +2071,14 @@ textarea {
 
 .med-detail-section {
   margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .med-detail-section:last-child {
   margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .med-detail-section h3 {
@@ -2083,6 +2087,19 @@ textarea {
   letter-spacing: 0.05em;
   color: var(--text-secondary);
   margin: 0 0 0.75rem;
+}
+
+.med-detail-section h3.section-header-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.med-detail-section h3 .status-chip.small {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .med-detail-grid {

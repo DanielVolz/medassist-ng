@@ -1966,6 +1966,7 @@ function AppContent() {
 								{(() => {
 									const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
 									const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : selectedMed.count;
+									const totalStock = (selectedMed.packCount ?? 1) * (selectedMed.stripsPerPack ?? 1) * (selectedMed.tabsPerStrip ?? 1) + (selectedMed.looseTablets ?? 0);
 									const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 									const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "";
 									const stock = getBlisterStock(
@@ -1984,6 +1985,18 @@ function AppContent() {
 										<span className="med-detail-label">{t('table.openBlister')}</span>
 										<span className={`med-detail-value ${textClass}`}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, selectedMed.tabsPerStrip ?? 1, t)}</span>
 									</div>
+									<div className="med-detail-item full-width">
+										<span className="med-detail-label">{t('modal.currentStock')}</span>
+										<span className={`med-detail-value ${textClass}`}>{currentStock} / {totalStock}</span>
+									</div>
+								</div>
+									);
+								})()}
+							</div>
+
+							<div className="med-detail-section">
+								<h3>{t('modal.packageDetails')}</h3>
+								<div className="med-detail-grid">
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t('modal.packs')}</span>
 										<span className="med-detail-value">{selectedMed.packCount ?? 0}</span>
@@ -2002,15 +2015,15 @@ function AppContent() {
 											<span className="med-detail-value">{selectedMed.pillWeightMg} mg</span>
 										</div>
 									)}
-									<div className="med-detail-item">
-										<span className="med-detail-label">{t('modal.expiryDate')}</span>
-										<span className={`med-detail-value ${selectedMed.expiryDate && new Date(selectedMed.expiryDate) < new Date() ? 'danger-text' : ''}`}>
-											{selectedMed.expiryDate ? new Date(selectedMed.expiryDate).toLocaleDateString(i18n.language, { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-										</span>
-									</div>
+									{selectedMed.expiryDate && (
+										<div className="med-detail-item">
+											<span className="med-detail-label">{t('modal.expiryDate')}</span>
+											<span className={`med-detail-value ${new Date(selectedMed.expiryDate) < new Date() ? 'danger-text' : ''}`}>
+												{new Date(selectedMed.expiryDate).toLocaleDateString(i18n.language, { day: "2-digit", month: "short", year: "numeric" })}
+											</span>
+										</div>
+									)}
 								</div>
-									);
-								})()}
 						</div>
 
 							{selectedMed.blisters.length > 0 && (
@@ -2034,7 +2047,10 @@ function AppContent() {
 								const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings);
 								return (
 									<div className="med-detail-section">
-										<h3>{t('modal.coverageStatus')}</h3>
+										<h3 className="section-header-with-badge">
+											{t('modal.coverageStatus')}
+											<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+										</h3>
 										<div className="med-detail-grid">
 											<div className="med-detail-item">
 												<span className="med-detail-label">{t('modal.daysLeft')}</span>
@@ -2043,10 +2059,6 @@ function AppContent() {
 											<div className="med-detail-item">
 												<span className="med-detail-label">{t('modal.runsOut')}</span>
 												<span className="med-detail-value">{medCoverage.depletionDate ?? "—"}</span>
-											</div>
-											<div className="med-detail-item full-width">
-												<span className="med-detail-label">{t('table.status')}</span>
-												<span className={`status-chip ${status.className}`}>{t(status.label)}</span>
 											</div>
 										</div>
 									</div>

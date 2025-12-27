@@ -188,8 +188,9 @@
   "modal": {
     "for": "for",
     "at": "at",
-    "stockInfo": "Stock Information",
-    "currentStock": "Current Stock",
+    "stockInfo": "Current Stock",
+    "packageDetails": "Package Details",
+    "currentStock": "Pills",
     "packs": "Packs",
     "blistersPerPack": "Blisters/Pack",
     "pillsPerBlister": "Pills/Blister",

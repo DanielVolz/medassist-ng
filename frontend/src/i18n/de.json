@@ -186,8 +186,9 @@
   "modal": {
     "for": "für",
     "at": "um",
-    "stockInfo": "Bestandsinformationen",
-    "currentStock": "Aktueller Bestand",
+    "stockInfo": "Aktueller Bestand",
+    "packageDetails": "Packungsdetails",
+    "currentStock": "Tabletten",
     "packs": "Packungen",
     "blistersPerPack": "Blister/Packung",
     "pillsPerBlister": "Tabletten/Blister",

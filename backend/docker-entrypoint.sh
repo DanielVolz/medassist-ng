@@ -1,10 +1,13 @@
 #!/bin/sh
 set -e
 
-# Ensure data directory exists and has correct ownership
-# This script runs as root, fixes permissions, then node runs as appuser via USER directive
-mkdir -p /app/data
-chown -R 1000:1000 /app/data
+# Use PUID/PGID from environment, default to 1000
+PUID=${PUID:-1000}
+PGID=${PGID:-1000}
 
-# Execute the main command as appuser (UID 1000)
-exec runuser -u appuser -- "$@"
+# Ensure data directory exists and has correct ownership
+mkdir -p /app/data
+chown -R "$PUID:$PGID" /app/data
+
+# Execute the main command as the specified user
+exec runuser -u "#$PUID" -- "$@"

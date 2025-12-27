@@ -8,6 +8,9 @@ services:
     container_name: medassist-ng-backend
     env_file:
       - .env
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
     volumes:
       - ./data:/app/data
     ports:

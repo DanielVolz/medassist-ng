@@ -36,17 +36,15 @@ FROM node:22-slim AS runner
 
 WORKDIR /app
 
-# Create non-root user with specific UID for consistent bind mount permissions
-RUN groupadd --gid 1000 appgroup && \
-    useradd --uid 1000 --gid appgroup --shell /bin/sh --create-home appuser
+# node:22-slim already has user 'node' with UID 1000 - we'll use that
 
 # Copy built application
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
 
-# Create data directory and set ownership
-RUN mkdir -p /app/data && chown -R appuser:appgroup /app
+# Create data directory and set ownership to node user (UID 1000)
+RUN mkdir -p /app/data && chown -R node:node /app
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
@@ -59,7 +57,7 @@ ENV PORT=3000
 # Expose application port
 EXPOSE 3000
 
-# Entrypoint runs as root to fix permissions, then drops to appuser
+# Entrypoint runs as root to fix permissions, then drops to node user
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # Start application

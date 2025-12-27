@@ -58,16 +58,24 @@ export async function medicationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
   // Helper to get user ID from request
-  function getUserId(request: any): number {
+  // Returns a default user ID when auth is disabled
+  function getUserId(request: any, reply: any): number {
+    // If auth is disabled, use a default user ID (1)
+    if (!env.AUTH_ENABLED) {
+      return 1;
+    }
+    
     const authUser = request.user as unknown as AuthUser | null;
     if (!authUser) {
-      throw new Error("User not authenticated");
+      // This should never happen if requireAuth worked, but be safe
+      reply.status(401).send({ error: "User not authenticated", code: "AUTH_REQUIRED" });
+      throw new Error("AUTH_REQUIRED");
     }
     return authUser.id;
   }
 
   app.get("/medications", async (request, reply) => {
-    const userId = getUserId(request);
+    const userId = getUserId(request, reply);
     const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
     return rows.map((row) => ({
       id: row.id,
@@ -95,7 +103,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const parsed = medicationSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send(parsed.error.format());
 
-    const userId = getUserId(req);
+    const userId = getUserId(req, reply);
     const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, slices } = parsed.data;
     const usageJson = JSON.stringify(slices.map((s) => s.usage));
     const everyJson = JSON.stringify(slices.map((s) => s.every));
@@ -155,7 +163,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const userId = getUserId(req);
+    const userId = getUserId(req, reply);
     
     // Verify ownership
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
@@ -221,7 +229,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const userId = getUserId(req);
+    const userId = getUserId(req, reply);
 
     // Delete associated image if exists (with ownership check)
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
@@ -242,7 +250,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const userId = getUserId(req);
+    const userId = getUserId(req, reply);
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     if (!existing) return reply.notFound();
 
@@ -276,7 +284,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const userId = getUserId(req);
+    const userId = getUserId(req, reply);
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     if (!existing) return reply.notFound();
 
@@ -300,7 +308,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       return reply.badRequest("Invalid date range");
     }
 
-    const userId = getUserId(req);
+    const userId = getUserId(req, reply);
     const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
     const now = new Date();
     

@@ -4,6 +4,7 @@ import { db } from "../db/client.js";
 import { doseTracking, shareTokens } from "../db/schema.js";
 import { eq, and, gte } from "drizzle-orm";
 import { requireAuth } from "../plugins/auth.js";
+import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
 
 // =============================================================================
@@ -17,6 +18,22 @@ const shareDoseSchema = z.object({
   doseId: z.string().min(1, "doseId is required"),
 });
 
+// Helper to get user ID from request
+// Returns a default user ID when auth is disabled
+function getUserId(request: any, reply: any): number {
+  // If auth is disabled, use a default user ID (1)
+  if (!env.AUTH_ENABLED) {
+    return 1;
+  }
+  
+  const authUser = request.user as unknown as AuthUser | null;
+  if (!authUser) {
+    reply.status(401).send({ error: "Not authenticated" });
+    throw new Error("AUTH_REQUIRED");
+  }
+  return authUser.id;
+}
+
 // =============================================================================
 // Dose Tracking Routes
 // =============================================================================
@@ -28,10 +45,7 @@ export async function doseRoutes(app: FastifyInstance) {
     "/doses/taken",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const authUser = request.user as unknown as AuthUser | null;
-      if (!authUser) {
-        return reply.status(401).send({ error: "Not authenticated" });
-      }
+      const userId = getUserId(request, reply);
 
       // Get doses from last 30 days (to avoid loading too much data)
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -40,7 +54,7 @@ export async function doseRoutes(app: FastifyInstance) {
         .from(doseTracking)
         .where(
           and(
-            eq(doseTracking.userId, authUser.id),
+            eq(doseTracking.userId, userId),
             gte(doseTracking.takenAt, thirtyDaysAgo)
           )
         );
@@ -62,10 +76,7 @@ export async function doseRoutes(app: FastifyInstance) {
     "/doses/taken",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const authUser = request.user as unknown as AuthUser | null;
-      if (!authUser) {
-        return reply.status(401).send({ error: "Not authenticated" });
-      }
+      const userId = getUserId(request, reply);
 
       const parsed = markDoseSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -81,7 +92,7 @@ export async function doseRoutes(app: FastifyInstance) {
         .from(doseTracking)
         .where(
           and(
-            eq(doseTracking.userId, authUser.id),
+            eq(doseTracking.userId, userId),
             eq(doseTracking.doseId, doseId)
           )
         );
@@ -92,7 +103,7 @@ export async function doseRoutes(app: FastifyInstance) {
 
       // Insert new record
       await db.insert(doseTracking).values({
-        userId: authUser.id,
+        userId,
         doseId,
         markedBy: null, // Marked by the user themselves
       });
@@ -108,16 +119,13 @@ export async function doseRoutes(app: FastifyInstance) {
     "/doses/taken/:doseId",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const authUser = request.user as unknown as AuthUser | null;
-      if (!authUser) {
-        return reply.status(401).send({ error: "Not authenticated" });
-      }
+      const userId = getUserId(request, reply);
 
       const { doseId } = request.params;
 
       await db.delete(doseTracking).where(
         and(
-          eq(doseTracking.userId, authUser.id),
+          eq(doseTracking.userId, userId),
           eq(doseTracking.doseId, doseId)
         )
       );

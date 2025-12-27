@@ -5,6 +5,7 @@ import { db } from "../db/client.js";
 import { medications, shareTokens } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../plugins/auth.js";
+import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
 
 // =============================================================================
@@ -14,6 +15,22 @@ const createShareSchema = z.object({
   takenBy: z.string().min(1, "takenBy is required"),
   scheduleDays: z.number().int().min(1).max(365).default(30),
 });
+
+// Helper to get user ID from request
+// Returns a default user ID when auth is disabled
+function getUserId(request: any, reply: any): number {
+  // If auth is disabled, use a default user ID (1)
+  if (!env.AUTH_ENABLED) {
+    return 1;
+  }
+  
+  const authUser = request.user as unknown as AuthUser | null;
+  if (!authUser) {
+    reply.status(401).send({ error: "Not authenticated" });
+    throw new Error("AUTH_REQUIRED");
+  }
+  return authUser.id;
+}
 
 // =============================================================================
 // Share Routes
@@ -79,10 +96,7 @@ export async function shareRoutes(app: FastifyInstance) {
     "/share",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const authUser = request.user as unknown as AuthUser | null;
-      if (!authUser) {
-        return reply.status(401).send({ error: "Not authenticated" });
-      }
+      const userId = getUserId(request, reply);
 
       const parsed = createShareSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -97,7 +111,7 @@ export async function shareRoutes(app: FastifyInstance) {
       // Check if user has medications for this takenBy
       const [existingMed] = await db.select().from(medications).where(
         and(
-          eq(medications.userId, authUser.id),
+          eq(medications.userId, userId),
           eq(medications.takenBy, takenBy)
         )
       );
@@ -114,7 +128,7 @@ export async function shareRoutes(app: FastifyInstance) {
 
       // Create share token
       await db.insert(shareTokens).values({
-        userId: authUser.id,
+        userId: userId,
         token,
         takenBy,
         scheduleDays,
@@ -134,15 +148,12 @@ export async function shareRoutes(app: FastifyInstance) {
     "/share/people",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const authUser = request.user as unknown as AuthUser | null;
-      if (!authUser) {
-        return reply.status(401).send({ error: "Not authenticated" });
-      }
+      const userId = getUserId(request, reply);
 
       // Get all unique takenBy values for this user
       const meds = await db.select({ takenBy: medications.takenBy })
         .from(medications)
-        .where(eq(medications.userId, authUser.id));
+        .where(eq(medications.userId, userId));
 
       const uniquePeople = [...new Set(meds.map((m) => m.takenBy).filter(Boolean))] as string[];
 

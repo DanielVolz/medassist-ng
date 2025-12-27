@@ -1,21 +1,20 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { existsSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { dirname, resolve } from "path";
 import dotenv from "dotenv";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 
-const url = "file:./data/medassist-ng.db";
+// Use absolute path to ensure it works in Docker
+const dataDir = resolve(process.cwd(), "data");
+const dbPath = resolve(dataDir, "medassist-ng.db");
+const url = `file:${dbPath}`;
 
 // Ensure data directory exists before creating database
-if (url.startsWith("file:")) {
-  const dbPath = url.replace("file:", "");
-  const dataDir = dirname(dbPath);
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
-    console.log(`[DB] Created data directory: ${dataDir}`);
-  }
+if (!existsSync(dataDir)) {
+  mkdirSync(dataDir, { recursive: true });
+  console.log(`[DB] Created data directory: ${dataDir}`);
 }
 
 const client = createClient({ url });
@@ -143,6 +142,23 @@ async function runMigrations() {
       if (!e.message?.includes("duplicate column")) {
         console.error(`[DB] Migration error (${migration.name}):`, e.message);
       }
+    }
+  }
+
+  // If auth is disabled, ensure a default user exists (ID=1)
+  const authEnabled = process.env.AUTH_ENABLED === "true";
+  if (!authEnabled) {
+    try {
+      // Check if default user exists
+      const result = await client.execute("SELECT id FROM users WHERE id = 1");
+      if (result.rows.length === 0) {
+        await client.execute(
+          "INSERT INTO users (id, username, auth_provider) VALUES (1, 'default', 'local')"
+        );
+        console.log(`[DB] Created default user for auth-disabled mode`);
+      }
+    } catch (e: any) {
+      console.error(`[DB] Error creating default user:`, e.message);
     }
   }
 }

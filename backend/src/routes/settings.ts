@@ -145,14 +145,27 @@ export async function settingsRoutes(app: FastifyInstance) {
   // All settings routes require auth
   app.addHook("preHandler", requireAuth);
 
-  // Get settings for current user
-  app.get("/settings", async (request, reply) => {
+  // Helper to get user ID from request
+  // Returns a default user ID when auth is disabled
+  function getUserId(request: any, reply: any): number {
+    // If auth is disabled, use a default user ID (1)
+    if (!env.AUTH_ENABLED) {
+      return 1;
+    }
+    
     const authUser = request.user as unknown as AuthUser | null;
     if (!authUser) {
-      return reply.status(401).send({ error: "Not authenticated" });
+      reply.status(401).send({ error: "Not authenticated" });
+      throw new Error("AUTH_REQUIRED");
     }
+    return authUser.id;
+  }
 
-    const settings = await getOrCreateUserSettings(authUser.id);
+  // Get settings for current user
+  app.get("/settings", async (request, reply) => {
+    const userId = getUserId(request, reply);
+
+    const settings = await getOrCreateUserSettings(userId);
     
     return reply.send({
       // User notification settings (from DB)
@@ -188,10 +201,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   // Update settings for current user
   app.put<{ Body: SettingsBody }>("/settings", async (request, reply) => {
-    const authUser = request.user as unknown as AuthUser | null;
-    if (!authUser) {
-      return reply.status(401).send({ error: "Not authenticated" });
-    }
+    const userId = getUserId(request, reply);
 
     const body = request.body;
     
@@ -204,7 +214,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const repeatDailyReminders = hasAnyStockReminder ? (body.repeatDailyReminders ?? false) : false;
 
     // Update or insert user settings
-    const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, authUser.id));
+    const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
     
     const settingsData = {
       emailEnabled: body.emailEnabled,
@@ -227,10 +237,10 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (existingSettings.length > 0) {
       await db.update(userSettings)
         .set(settingsData)
-        .where(eq(userSettings.userId, authUser.id));
+        .where(eq(userSettings.userId, userId));
     } else {
       await db.insert(userSettings).values({
-        userId: authUser.id,
+        userId: userId,
         ...settingsData,
       });
     }

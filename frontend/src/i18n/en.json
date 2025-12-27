@@ -167,12 +167,14 @@
       "supports": "Supports ntfy, Discord, Telegram, Slack"
     },
     "schedule": {
+      "title": "Reminder Schedule",
       "stockCheck": "Stock check",
       "dailyAt6": "Daily at 6:00 AM",
       "intakeCheck": "Intake check",
       "15minBefore": "15 min before scheduled time",
       "nextCheck": "Next stock check",
-      "lastSent": "Last sent"
+      "lastSent": "Last sent",
+      "envHint": "These values can be configured via REMINDER_HOUR and REMINDER_MINUTES_BEFORE in .env"
     },
     "stock": {
       "title": "Stock",

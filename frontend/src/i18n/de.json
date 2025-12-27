@@ -165,12 +165,14 @@
       "supports": "Unterstützt ntfy, Discord, Telegram, Slack"
     },
     "schedule": {
+      "title": "Erinnerungsplan",
       "stockCheck": "Bestandsprüfung",
       "dailyAt6": "Täglich um 6:00 Uhr",
       "intakeCheck": "Einnahmeprüfung",
       "15minBefore": "15 Min. vor geplanter Zeit",
       "nextCheck": "Nächste Bestandsprüfung",
-      "lastSent": "Zuletzt gesendet"
+      "lastSent": "Zuletzt gesendet",
+      "envHint": "Diese Werte können über REMINDER_HOUR und REMINDER_MINUTES_BEFORE in .env konfiguriert werden"
     },
     "stock": {
       "title": "Bestand",

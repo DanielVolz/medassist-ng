@@ -1732,6 +1732,10 @@ function AppContent() {
 									</div>
 
 									<div className="schedule-overview">
+										<div className="schedule-header">
+											<span className="schedule-title">{t('settings.schedule.title')}</span>
+											<span className="info-tooltip" data-tooltip={t('settings.schedule.envHint')}>ⓘ</span>
+										</div>
 										<div className="schedule-row">
 											<span className="schedule-label">{t('settings.schedule.stockCheck')}</span>
 											<span className="schedule-value">{t('settings.schedule.dailyAt6')}</span>

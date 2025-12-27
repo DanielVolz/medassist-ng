@@ -23,6 +23,10 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(10).optional(),
   REFRESH_SECRET: z.string().min(10).optional(),
   COOKIE_SECRET: z.string().min(10).optional(),
+  
+  // Token TTL settings
+  ACCESS_TOKEN_TTL_MINUTES: z.string().transform((v) => parseInt(v, 10)).default("15"),
+  REFRESH_TOKEN_TTL_DAYS: z.string().transform((v) => parseInt(v, 10)).default("7"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

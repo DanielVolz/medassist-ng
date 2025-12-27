@@ -40,8 +40,8 @@ const app = Fastify({
 const origins = env.CORS_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
 
 // Auth token TTLs (hardcoded - no need for user configuration)
-const accessTtlMinutes = 15;      // Access token: 15 minutes
-const refreshTtlDays = 14;        // Refresh token: 14 days
+const accessTtlMinutes = env.ACCESS_TOKEN_TTL_MINUTES;  // Access token TTL
+const refreshTtlDays = env.REFRESH_TOKEN_TTL_DAYS;      // Refresh token TTL
 
 const baseCookieOptions: CookieSerializeOptions = {
   httpOnly: true,

@@ -2460,6 +2460,26 @@ h3 .reminder-icon.info-tooltip {
   font-weight: 600;
 }
 
+.auth-form .checkbox-group {
+  margin-bottom: 0.5rem;
+}
+
+.auth-form .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.auth-form .checkbox-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .auth-links {
   display: flex;
   flex-direction: column;

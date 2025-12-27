@@ -254,7 +254,8 @@
     "resetEmailSent": "Falls ein Konto mit dieser E-Mail existiert, haben wir einen Link zum Zurücksetzen gesendet.",
     "passwordReset": "Passwort zurückgesetzt",
     "passwordResetSuccess": "Ihr Passwort wurde zurückgesetzt. Weiterleitung zur Anmeldung...",
-    "profileUpdated": "Profil erfolgreich aktualisiert"
+    "profileUpdated": "Profil erfolgreich aktualisiert",
+    "rememberMe": "Angemeldet bleiben"
   },
   "common": {
     "loading": "Wird geladen...",

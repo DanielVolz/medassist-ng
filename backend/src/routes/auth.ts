@@ -36,6 +36,7 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
+  rememberMe: z.boolean().optional().default(false),
 });
 
 const updateProfileSchema = z.object({
@@ -141,7 +142,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
     }
 
-    const { username, password } = parsed.data;
+    const { username, password, rememberMe } = parsed.data;
 
     // Find user by username
     const [user] = await db.select().from(users).where(eq(users.username, username));
@@ -196,11 +197,19 @@ export async function authRoutes(app: FastifyInstance) {
       { expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
     );
 
-    app.log.info(`User logged in: ${username}`);
+    app.log.info(`User logged in: ${username} (rememberMe: ${rememberMe})`);
+
+    // Cookie options: with maxAge for "remember me", without for session cookie
+    const accessCookieOptions = rememberMe 
+      ? app.config.cookieOptions 
+      : { ...app.config.cookieOptions, maxAge: undefined };
+    const refreshCookieOptions = rememberMe 
+      ? app.config.refreshCookieOptions 
+      : { ...app.config.refreshCookieOptions, maxAge: undefined };
 
     return reply
-      .setCookie("access_token", accessToken, app.config.cookieOptions)
-      .setCookie("refresh_token", refreshToken, app.config.refreshCookieOptions)
+      .setCookie("access_token", accessToken, accessCookieOptions)
+      .setCookie("refresh_token", refreshToken, refreshCookieOptions)
       .send({
         ok: true,
         user: {

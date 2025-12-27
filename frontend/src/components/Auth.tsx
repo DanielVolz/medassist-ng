@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 // =============================================================================
@@ -22,11 +22,12 @@ interface AuthContextType {
   authState: AuthState | null;
   loading: boolean;
   authError: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (data: { currentPassword?: string; newPassword?: string }) => Promise<void>;
+  authFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
 // =============================================================================
@@ -56,6 +57,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchAuthState();
   }, []);
 
+  // Proactively refresh token every 10 minutes to prevent expiration
+  useEffect(() => {
+    if (!user || !authState?.authEnabled) return;
+    
+    const refreshInterval = setInterval(async () => {
+      const success = await tryRefreshToken();
+      if (!success) {
+        // Refresh failed - check if user is still valid
+        await refreshUser();
+      }
+    }, 10 * 60 * 1000); // 10 minutes (before 15 min access token expires)
+    
+    return () => clearInterval(refreshInterval);
+  }, [user, authState?.authEnabled]);
+
   async function fetchAuthState() {
     try {
       setAuthError(null);
@@ -84,6 +100,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
+      } else if (res.status === 401) {
+        // Access token expired - try to refresh it
+        const refreshed = await tryRefreshToken();
+        if (refreshed) {
+          // Retry /auth/me with new token
+          const retryRes = await fetch("/api/auth/me", { credentials: "include" });
+          if (retryRes.ok) {
+            const userData = await retryRes.json();
+            setUser(userData);
+            return;
+          }
+        }
+        setUser(null);
       } else {
         setUser(null);
       }
@@ -92,12 +121,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(username: string, password: string) {
+  // Try to refresh the access token using the refresh token
+  async function tryRefreshToken(): Promise<boolean> {
+    try {
+      const res = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async function login(username: string, password: string, rememberMe: boolean = false) {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, rememberMe }),
     });
 
     if (!res.ok) {
@@ -153,8 +195,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refreshUser();
   }
 
+  // Fetch wrapper that automatically refreshes token on 401
+  const authFetch = useCallback(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const options: RequestInit = {
+      ...init,
+      credentials: "include",
+    };
+    
+    let res = await fetch(input, options);
+    
+    // If 401 and not already a refresh/login request, try to refresh token
+    if (res.status === 401 && !String(input).includes("/auth/")) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) {
+        // Retry the original request with new token
+        res = await fetch(input, options);
+      } else {
+        // Refresh failed - user needs to login again
+        setUser(null);
+      }
+    }
+    
+    return res;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, authState, loading, authError, login, register, logout, refreshUser, updateProfile }}>
+    <AuthContext.Provider value={{ user, authState, loading, authError, login, register, logout, refreshUser, updateProfile, authFetch }}>
       {children}
     </AuthContext.Provider>
   );
@@ -168,6 +234,7 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: { onSuccess?: () =>
   const { login, authState } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -177,7 +244,7 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: { onSuccess?: () =>
     setLoading(true);
 
     try {
-      await login(username, password);
+      await login(username, password, rememberMe);
       onSuccess?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -218,6 +285,17 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: { onSuccess?: () =>
               required
               autoComplete="current-password"
             />
+          </div>
+
+          <div className="form-group checkbox-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>{t("auth.rememberMe", "Remember me")}</span>
+            </label>
           </div>
 
           <button type="submit" className="btn btn-primary auth-submit" disabled={loading}>

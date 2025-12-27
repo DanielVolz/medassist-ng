@@ -256,7 +256,8 @@
     "resetEmailSent": "If an account with this email exists, we've sent a password reset link.",
     "passwordReset": "Password Reset",
     "passwordResetSuccess": "Your password has been reset. Redirecting to login...",
-    "profileUpdated": "Profile updated successfully"
+    "profileUpdated": "Profile updated successfully",
+    "rememberMe": "Remember me"
   },
   "common": {
     "loading": "Loading...",

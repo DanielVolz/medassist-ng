@@ -6,13 +6,31 @@ PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
 echo "[entrypoint] Starting with PUID=$PUID, PGID=$PGID"
-echo "[entrypoint] Running as user: $(id)"
-echo "[entrypoint] Mount info for /app/data:"
-mount | grep -E "/app|data" || echo "[entrypoint] No specific mount found"
+echo "[entrypoint] Running as: $(id)"
 
-# Ensure data directory exists and has correct ownership
+# Show mount info
+echo "[entrypoint] Mounts:"
+cat /proc/mounts | grep -E "app|data" || echo "no app/data mounts found"
+
+# Ensure data directory exists
 mkdir -p /app/data
-echo "[entrypoint] Created /app/data"
+echo "[entrypoint] /app/data exists"
+
+# Show what we have
+echo "[entrypoint] ls -la /app/data:"
+ls -la /app/data/
+
+# Try writing directly and show the error
+echo "[entrypoint] Attempting write test..."
+touch /app/data/.write-test && echo "[entrypoint] Write OK" && rm -f /app/data/.write-test || {
+    echo "[entrypoint] Write FAILED. Error:"
+    touch /app/data/.write-test 2>&1 || true
+}
+
+# If we can't write, try to understand why
+if [ ! -w /app/data ]; then
+    echo "[entrypoint] /app/data is not writable by $(id)"
+fi
 
 # Show current ownership before chown
 echo "[entrypoint] Before chown:"

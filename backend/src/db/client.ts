@@ -1,7 +1,7 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { existsSync, mkdirSync } from "fs";
-import { dirname, resolve } from "path";
+import { existsSync, mkdirSync, accessSync, constants, statSync, writeFileSync } from "fs";
+import { resolve } from "path";
 import dotenv from "dotenv";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
@@ -11,13 +11,49 @@ const dataDir = resolve(process.cwd(), "data");
 const dbPath = resolve(dataDir, "medassist-ng.db");
 const url = `file:${dbPath}`;
 
-// Ensure data directory exists before creating database
-if (!existsSync(dataDir)) {
-  mkdirSync(dataDir, { recursive: true });
-  console.log(`[DB] Created data directory: ${dataDir}`);
+console.log(`[DB] Data directory: ${dataDir}`);
+console.log(`[DB] Database path: ${dbPath}`);
+console.log(`[DB] Database URL: ${url}`);
+
+// Ensure data directory exists and is writable
+try {
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+    console.log(`[DB] Created data directory: ${dataDir}`);
+  } else {
+    console.log(`[DB] Data directory exists: ${dataDir}`);
+  }
+  
+  // Check if directory is writable
+  accessSync(dataDir, constants.W_OK);
+  console.log(`[DB] Data directory is writable`);
+  
+  // Log directory stats
+  const stats = statSync(dataDir);
+  console.log(`[DB] Directory permissions: ${stats.mode.toString(8)}`);
+  console.log(`[DB] Directory UID: ${stats.uid}, GID: ${stats.gid}`);
+  
+  // Try to create a test file to verify write access
+  const testFile = resolve(dataDir, ".write-test");
+  writeFileSync(testFile, "test");
+  console.log(`[DB] Write test successful`);
+  
+} catch (err: any) {
+  console.error(`[DB] ERROR: Cannot access data directory: ${err.message}`);
+  console.error(`[DB] Please ensure the volume mount has correct permissions.`);
+  console.error(`[DB] Try running on host: sudo chown -R 1000:1000 ${dataDir}`);
+  process.exit(1);
 }
 
-const client = createClient({ url });
+let client;
+try {
+  client = createClient({ url });
+  console.log(`[DB] Database client created successfully`);
+} catch (err: any) {
+  console.error(`[DB] ERROR: Failed to create database client: ${err.message}`);
+  console.error(`[DB] Database path: ${dbPath}`);
+  process.exit(1);
+}
 
 export const db = drizzle(client);
 

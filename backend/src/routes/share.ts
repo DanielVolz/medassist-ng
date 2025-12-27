@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { db } from "../db/client.js";
 import { medications, shareTokens, userSettings } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
-import { requireAuth, optionalAuth } from "../plugins/auth.js";
+import { requireAuth, optionalAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
 
@@ -17,11 +17,11 @@ const createShareSchema = z.object({
 });
 
 // Helper to get user ID from request
-// Returns a default user ID when auth is disabled
-function getUserId(request: any, reply: any): number {
-  // If auth is disabled, use a default user ID (1)
+// Returns anonymous user ID when auth is disabled
+async function getUserId(request: any, reply: any): Promise<number> {
+  // If auth is disabled, use the anonymous user
   if (!env.AUTH_ENABLED) {
-    return 1;
+    return getAnonymousUserId();
   }
   
   const authUser = request.user as unknown as AuthUser | null;
@@ -104,7 +104,7 @@ export async function shareRoutes(app: FastifyInstance) {
     "/share",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const userId = getUserId(request, reply);
+      const userId = await getUserId(request, reply);
 
       const parsed = createShareSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -156,7 +156,7 @@ export async function shareRoutes(app: FastifyInstance) {
     "/share/people",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const userId = getUserId(request, reply);
+      const userId = await getUserId(request, reply);
 
       // Get all unique takenBy values for this user
       const meds = await db.select({ takenBy: medications.takenBy })

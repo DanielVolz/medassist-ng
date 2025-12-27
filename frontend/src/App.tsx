@@ -184,7 +184,7 @@ function userStorageKey(userId: number | undefined, key: string): string {
 
 function AppContent() {
 	const { t, i18n } = useTranslation();
-	const { user, authState } = useAuth();
+	const { user, authState, logout } = useAuth();
 	const [showProfile, setShowProfile] = useState(false);
 	const [meds, setMeds] = useState<Medication[]>([]);
 	const [plannerRows, setPlannerRows] = useState<PlannerRow[]>([]);
@@ -408,6 +408,33 @@ function AppContent() {
 	const coverage = useMemo(() => calculateCoverage(meds, schedule.events, i18n.language, settings.reminderDaysBefore), [meds, schedule.events, i18n.language, settings.reminderDaysBefore]);
 	const depletionByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c.depletionTime])), [coverage.all]);
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
+
+	// Get worst stock status for a day's medications (for coloring day blocks)
+	const getDayStockStatus = (dayMeds: { medName: string; lastWhen: number }[]) => {
+		const statuses = dayMeds.map((item) => {
+			const cov = coverageByMed[item.medName];
+			const depletionTime = depletionByMed[item.medName];
+			
+			// Will be out of stock by this day?
+			if (typeof depletionTime === "number" && item.lastWhen > depletionTime) {
+				return "danger";
+			}
+			
+			if (!cov) return "success";
+			const { daysLeft, medsLeft } = cov;
+			
+			// Currently out of stock
+			if (medsLeft <= 0 || daysLeft === 0) return "danger";
+			// No schedule (can't calculate)
+			if (daysLeft === null) return "success";
+			// Low stock: < lowStockDays (warning)
+			if (daysLeft < settings.lowStockDays) return "warning";
+			// Normal/High stock
+			return "success";
+		});
+		return statuses.includes("danger") ? "danger" : statuses.includes("warning") ? "warning" : "success";
+	};
+
 	const groupedSchedule = useMemo(() => {
 		type DoseInfo = { id: string; timeStr: string; when: number; usage: number };
 		const days = new Map<string, { dateStr: string; date: Date; isPast: boolean; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
@@ -906,15 +933,47 @@ function AppContent() {
 						<button className={currentPath === "/medications" ? "pill primary" : "pill"} onClick={() => navigate("/medications")}>{t('nav.medications')}</button>
 						<button className={currentPath === "/planner" ? "pill primary" : "pill"} onClick={() => navigate("/planner")}>{t('nav.planner')}</button>
 					</div>
-					<button className={`icon-btn ${currentPath === "/settings" ? "active" : ""}`} onClick={() => navigate("/settings")} title={t('nav.settings')}>⚙️</button>
+					{/* Settings button only shown when auth is disabled (no user dropdown available) */}
+					{!authState?.authEnabled && (
+						<button className={`icon-btn ${currentPath === "/settings" ? "active" : ""}`} onClick={() => navigate("/settings")} title={t('nav.settings')}>⚙️</button>
+					)}
 					<button className="icon-btn" onClick={toggleTheme} title={theme === "dark" ? t('tooltips.lightMode') : t('tooltips.darkMode')}>
 						{theme === "dark" ? "☀️" : "🌙"}
 					</button>
 					{authState?.authEnabled && user && (
-						<button className="user-menu-btn" onClick={() => setShowProfile(true)} title={t('auth.profile', 'Profile')}>
-							<span className="user-avatar">{user.username.charAt(0).toUpperCase()}</span>
-							<span>{user.username}</span>
-						</button>
+						<div className="user-menu">
+							<button className="user-menu-btn">
+								{user.avatarUrl ? (
+									<img src={`/api/images/${user.avatarUrl}`} alt={user.username} className="user-avatar-img" />
+								) : (
+									<span className="user-avatar">{user.username.charAt(0).toUpperCase()}</span>
+								)}
+							</button>
+							<div className="user-dropdown">
+								<div className="dropdown-header">
+									{user.avatarUrl ? (
+										<img src={`/api/images/${user.avatarUrl}`} alt={user.username} className="dropdown-avatar-img" />
+									) : (
+										<div className="dropdown-avatar">{user.username.charAt(0).toUpperCase()}</div>
+									)}
+									<span className="dropdown-username">{user.username}</span>
+								</div>
+								<div className="dropdown-menu">
+									<button className="dropdown-item" onClick={() => setShowProfile(true)}>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+										{t('auth.profile', 'Profile')}
+									</button>
+									<button className="dropdown-item" onClick={() => navigate('/settings')}>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+										{t('nav.settings', 'Settings')}
+									</button>
+									<button className="dropdown-item danger" onClick={() => logout()}>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+										{t('auth.signOut', 'Sign Out')}
+									</button>
+								</div>
+							</div>
+						</div>
 					)}
 				</div>
 			</header>
@@ -1123,9 +1182,10 @@ function AppContent() {
 										const isAutoCollapsed = true; // Past days are always auto-collapsed
 										const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 										const isCollapsed = !isManuallyExpanded;
+										const worstStatus = getDayStockStatus(day.meds);
 										
 										return (
-											<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+											<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} stock-${worstStatus}`}>
 												<div 
 													className="day-divider clickable" 
 													onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
@@ -1891,9 +1951,10 @@ function AppContent() {
 									const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 									const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 									const isCollapsed = !isManuallyExpanded;
+									const worstStatus = getDayStockStatus(day.meds);
 									
 									return (
-										<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}>
+										<div key={day.dateStr} className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} stock-${worstStatus}`}>
 											<div 
 												className="day-divider clickable" 
 												onClick={() => toggleDayCollapse(day.dateStr, true)}

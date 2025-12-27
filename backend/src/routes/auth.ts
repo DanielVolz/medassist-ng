@@ -329,6 +329,7 @@ export async function authRoutes(app: FastifyInstance) {
     return {
       id: user.id,
       username: user.username,
+      avatarUrl: user.avatarUrl,
       authProvider: user.authProvider,
       createdAt: user.createdAt,
       lastLoginAt: user.lastLoginAt,
@@ -384,5 +385,83 @@ export async function authRoutes(app: FastifyInstance) {
     await db.update(users).set(updates).where(eq(users.id, user.id));
 
     return { ok: true, message: "Profile updated" };
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /auth/avatar - Upload user avatar
+  // ---------------------------------------------------------------------------
+  app.post("/auth/avatar", { preHandler: requireAuth }, async (request, reply) => {
+    const authUser = request.user as unknown as AuthUser | null;
+    if (!authUser) {
+      return reply.status(401).send({ error: "Not authenticated" });
+    }
+
+    const data = await request.file();
+    if (!data) {
+      return reply.status(400).send({ error: "No file uploaded" });
+    }
+
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowedTypes.includes(data.mimetype)) {
+      return reply.status(400).send({ error: "Invalid file type. Allowed: JPEG, PNG, WebP, GIF" });
+    }
+
+    // Generate unique filename
+    const ext = data.filename.split(".").pop() || "jpg";
+    const filename = `avatar_${authUser.id}_${Date.now()}.${ext}`;
+    
+    // Save file
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    const imagesDir = path.join(process.cwd(), "data", "images");
+    await fs.mkdir(imagesDir, { recursive: true });
+    
+    const buffer = await data.toBuffer();
+    await fs.writeFile(path.join(imagesDir, filename), buffer);
+
+    // Delete old avatar if exists
+    const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
+    if (user?.avatarUrl) {
+      try {
+        await fs.unlink(path.join(imagesDir, user.avatarUrl));
+      } catch {
+        // Ignore if file doesn't exist
+      }
+    }
+
+    // Update user
+    await db.update(users).set({ avatarUrl: filename, updatedAt: new Date() }).where(eq(users.id, authUser.id));
+
+    return { ok: true, avatarUrl: filename };
+  });
+
+  // ---------------------------------------------------------------------------
+  // DELETE /auth/avatar - Delete user avatar
+  // ---------------------------------------------------------------------------
+  app.delete("/auth/avatar", { preHandler: requireAuth }, async (request, reply) => {
+    const authUser = request.user as unknown as AuthUser | null;
+    if (!authUser) {
+      return reply.status(401).send({ error: "Not authenticated" });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
+    if (!user?.avatarUrl) {
+      return reply.status(404).send({ error: "No avatar to delete" });
+    }
+
+    // Delete file
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    try {
+      await fs.unlink(path.join(process.cwd(), "data", "images", user.avatarUrl));
+    } catch {
+      // Ignore if file doesn't exist
+    }
+
+    // Update user
+    await db.update(users).set({ avatarUrl: null, updatedAt: new Date() }).where(eq(users.id, authUser.id));
+
+    return { ok: true };
   });
 }

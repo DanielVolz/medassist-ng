@@ -2,7 +2,45 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { env } from "./env.js";
 import { db } from "../db/client.js";
 import { users } from "../db/schema.js";
-import { sql, count } from "drizzle-orm";
+import { sql, count, eq } from "drizzle-orm";
+
+// =============================================================================
+// Anonymous User - Used when AUTH_ENABLED=false
+// Uses a fixed high ID (999999999) to never collide with regular users
+// =============================================================================
+const ANONYMOUS_USER_ID = 999999999;
+const ANONYMOUS_USERNAME = "__anonymous__";
+let anonymousUserVerified = false;
+
+/**
+ * Get or create the anonymous user for no-auth mode.
+ * Uses a fixed ID (999999999) that will never collide with auto-increment IDs.
+ */
+export async function getAnonymousUserId(): Promise<number> {
+  // Return cached if already verified
+  if (anonymousUserVerified) {
+    return ANONYMOUS_USER_ID;
+  }
+
+  // Check if anonymous user exists
+  const [existing] = await db.select().from(users).where(eq(users.id, ANONYMOUS_USER_ID));
+  
+  if (existing) {
+    anonymousUserVerified = true;
+    return ANONYMOUS_USER_ID;
+  }
+
+  // Create anonymous user with fixed ID (SQLite allows explicit ID)
+  await db.run(sql`
+    INSERT INTO users (id, username, password_hash, auth_provider, is_active, created_at, updated_at)
+    VALUES (${ANONYMOUS_USER_ID}, ${ANONYMOUS_USERNAME}, NULL, 'anonymous', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `);
+
+  anonymousUserVerified = true;
+  console.log(`Created anonymous user with fixed ID ${ANONYMOUS_USER_ID} for no-auth mode`);
+  
+  return ANONYMOUS_USER_ID;
+}
 
 // =============================================================================
 // Auth State - Computed at runtime
@@ -16,7 +54,8 @@ export interface AuthState {
 }
 
 export async function getAuthState(): Promise<AuthState> {
-  const [result] = await db.select({ count: count() }).from(users);
+  // Count only real users (not the anonymous user with fixed ID)
+  const [result] = await db.select({ count: count() }).from(users).where(sql`${users.id} != ${ANONYMOUS_USER_ID}`);
   const hasUsers = result.count > 0;
   
   return {

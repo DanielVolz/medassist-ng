@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 // =============================================================================
@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 export interface User {
   id: number;
   username: string;
+  avatarUrl?: string | null;
 }
 
 export interface AuthState {
@@ -27,6 +28,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (data: { currentPassword?: string; newPassword?: string }) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
+  deleteAvatar: () => Promise<void>;
   authFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
@@ -195,6 +198,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refreshUser();
   }
 
+  // Upload avatar
+  async function uploadAvatar(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    const res = await fetch("/api/auth/avatar", {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Upload failed" }));
+      throw new Error(err.error || "Upload failed");
+    }
+
+    await refreshUser();
+  }
+
+  // Delete avatar
+  async function deleteAvatar() {
+    const res = await fetch("/api/auth/avatar", {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Delete failed" }));
+      throw new Error(err.error || "Delete failed");
+    }
+
+    await refreshUser();
+  }
+
   // Fetch wrapper that automatically refreshes token on 401
   const authFetch = useCallback(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const options: RequestInit = {
@@ -220,7 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, authState, loading, authError, login, register, logout, refreshUser, updateProfile, authFetch }}>
+    <AuthContext.Provider value={{ user, authState, loading, authError, login, register, logout, refreshUser, updateProfile, uploadAvatar, deleteAvatar, authFetch }}>
       {children}
     </AuthContext.Provider>
   );
@@ -424,13 +461,45 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 // =============================================================================
 export function UserProfile({ onClose }: { onClose?: () => void }) {
   const { t } = useTranslation();
-  const { user, logout, updateProfile } = useAuth();
+  const { user, updateProfile, uploadAvatar, deleteAvatar } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarLoading(true);
+    setError("");
+    try {
+      await uploadAvatar(file);
+      setSuccess(t("auth.avatarUpdated", "Avatar updated"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setAvatarLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleAvatarDelete() {
+    setAvatarLoading(true);
+    setError("");
+    try {
+      await deleteAvatar();
+      setSuccess(t("auth.avatarRemoved", "Avatar removed"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setAvatarLoading(false);
+    }
+  }
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
@@ -439,6 +508,11 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
     if (newPassword && newPassword !== confirmPassword) {
       setError(t("auth.passwordMismatch", "Passwords do not match"));
+      return;
+    }
+
+    if (!currentPassword || !newPassword) {
+      setError(t("auth.fillAllFields", "Please fill in all password fields"));
       return;
     }
 
@@ -460,69 +534,105 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
     }
   }
 
-  async function handleLogout() {
-    await logout();
-    onClose?.();
-  }
-
   if (!user) return null;
+
+  const hasChanges = currentPassword || newPassword || confirmPassword;
 
   return (
     <div className="profile-container">
-      <div className="profile-header">
-        <h2>{t("auth.profile", "Profile")}</h2>
-      </div>
-
-      <div className="profile-info">
-        <p><strong>{t("auth.username", "Username")}:</strong> {user.username}</p>
+      <div className="profile-user-section">
+        <div className="profile-avatar-wrapper">
+          {user.avatarUrl ? (
+            <img src={`/api/images/${user.avatarUrl}`} alt={user.username} className="profile-avatar-img" />
+          ) : (
+            <div className="profile-avatar">
+              {user.username.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleAvatarUpload}
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            style={{ display: "none" }}
+          />
+          <div className="profile-avatar-actions">
+            <button
+              type="button"
+              className="avatar-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarLoading}
+              title={t("auth.uploadAvatar", "Upload avatar")}
+            >
+              📷
+            </button>
+            {user.avatarUrl && (
+              <button
+                type="button"
+                className="avatar-btn danger"
+                onClick={handleAvatarDelete}
+                disabled={avatarLoading}
+                title={t("auth.removeAvatar", "Remove avatar")}
+              >
+                🗑
+              </button>
+            )}
+          </div>
+        </div>
+        <span className="profile-username">{user.username}</span>
       </div>
 
       <form onSubmit={handleUpdate} className="profile-form">
-        {error && <div className="auth-error">{error}</div>}
-        {success && <div className="auth-success">{success}</div>}
+        <div className="profile-section">
+          <h3 className="profile-section-title">{t("auth.changePassword", "Change Password")}</h3>
+          
+          {error && <div className="auth-error">{error}</div>}
+          {success && <div className="auth-success">{success}</div>}
 
-        <h3>{t("auth.changePassword", "Change Password")}</h3>
+          <div className="form-group">
+            <label htmlFor="current-password">{t("auth.currentPassword", "Current Password")}</label>
+            <input
+              id="current-password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              placeholder="••••••••"
+            />
+          </div>
 
-        <div className="form-group">
-          <label htmlFor="current-password">{t("auth.currentPassword", "Current Password")}</label>
-          <input
-            id="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </div>
+          <div className="form-group">
+            <label htmlFor="new-password">{t("auth.newPassword", "New Password")}</label>
+            <input
+              id="new-password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              minLength={8}
+              placeholder="••••••••"
+            />
+          </div>
 
-        <div className="form-group">
-          <label htmlFor="new-password">{t("auth.newPassword", "New Password")}</label>
-          <input
-            id="new-password"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            autoComplete="new-password"
-            minLength={8}
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="confirm-new-password">{t("auth.confirmPassword", "Confirm Password")}</label>
-          <input
-            id="confirm-new-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            autoComplete="new-password"
-          />
+          <div className="form-group">
+            <label htmlFor="confirm-new-password">{t("auth.confirmPassword", "Confirm Password")}</label>
+            <input
+              id="confirm-new-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              placeholder="••••••••"
+            />
+          </div>
         </div>
 
         <div className="profile-actions">
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? t("common.loading", "Loading...") : t("common.save", "Save")}
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            {t("common.cancel", "Cancel")}
           </button>
-          <button type="button" className="btn btn-danger" onClick={handleLogout}>
-            {t("auth.logout", "Logout")}
+          <button type="submit" className="btn btn-primary" disabled={loading || !hasChanges}>
+            {loading ? t("common.saving", "Saving...") : t("auth.updatePassword", "Update Password")}
           </button>
         </div>
       </form>

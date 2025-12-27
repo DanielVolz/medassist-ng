@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { requireAuth } from "../plugins/auth.js";
+import { requireAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
 import type { Language } from "../i18n/translations.js";
@@ -146,11 +146,11 @@ export async function settingsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
   // Helper to get user ID from request
-  // Returns a default user ID when auth is disabled
-  function getUserId(request: any, reply: any): number {
-    // If auth is disabled, use a default user ID (1)
+  // Returns anonymous user ID when auth is disabled
+  async function getUserId(request: any, reply: any): Promise<number> {
+    // If auth is disabled, use the anonymous user
     if (!env.AUTH_ENABLED) {
-      return 1;
+      return getAnonymousUserId();
     }
     
     const authUser = request.user as unknown as AuthUser | null;
@@ -163,7 +163,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   // Get settings for current user
   app.get("/settings", async (request, reply) => {
-    const userId = getUserId(request, reply);
+    const userId = await getUserId(request, reply);
 
     const settings = await getOrCreateUserSettings(userId);
     
@@ -201,7 +201,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   // Update settings for current user
   app.put<{ Body: SettingsBody }>("/settings", async (request, reply) => {
-    const userId = getUserId(request, reply);
+    const userId = await getUserId(request, reply);
 
     const body = request.body;
     

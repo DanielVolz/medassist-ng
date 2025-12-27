@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "../db/client.js";
 import { doseTracking, shareTokens } from "../db/schema.js";
 import { eq, and, gte } from "drizzle-orm";
-import { requireAuth } from "../plugins/auth.js";
+import { requireAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
 
@@ -19,11 +19,11 @@ const shareDoseSchema = z.object({
 });
 
 // Helper to get user ID from request
-// Returns a default user ID when auth is disabled
-function getUserId(request: any, reply: any): number {
-  // If auth is disabled, use a default user ID (1)
+// Returns anonymous user ID when auth is disabled
+async function getUserId(request: any, reply: any): Promise<number> {
+  // If auth is disabled, use the anonymous user
   if (!env.AUTH_ENABLED) {
-    return 1;
+    return getAnonymousUserId();
   }
   
   const authUser = request.user as unknown as AuthUser | null;
@@ -45,7 +45,7 @@ export async function doseRoutes(app: FastifyInstance) {
     "/doses/taken",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const userId = getUserId(request, reply);
+      const userId = await getUserId(request, reply);
 
       // Get doses from last 30 days (to avoid loading too much data)
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -76,7 +76,7 @@ export async function doseRoutes(app: FastifyInstance) {
     "/doses/taken",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const userId = getUserId(request, reply);
+      const userId = await getUserId(request, reply);
 
       const parsed = markDoseSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -119,7 +119,7 @@ export async function doseRoutes(app: FastifyInstance) {
     "/doses/taken/:doseId",
     { preHandler: requireAuth },
     async (request, reply) => {
-      const userId = getUserId(request, reply);
+      const userId = await getUserId(request, reply);
 
       const { doseId } = request.params;
 

@@ -6,7 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { createWriteStream, existsSync, unlinkSync } from "fs";
 import { resolve, extname } from "path";
 import { pipeline } from "stream/promises";
-import { requireAuth } from "../plugins/auth.js";
+import { requireAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
 
@@ -58,11 +58,11 @@ export async function medicationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
   // Helper to get user ID from request
-  // Returns a default user ID when auth is disabled
-  function getUserId(request: any, reply: any): number {
-    // If auth is disabled, use a default user ID (1)
+  // Returns anonymous user ID when auth is disabled
+  async function getUserId(request: any, reply: any): Promise<number> {
+    // If auth is disabled, use the anonymous user
     if (!env.AUTH_ENABLED) {
-      return 1;
+      return getAnonymousUserId();
     }
     
     const authUser = request.user as unknown as AuthUser | null;
@@ -75,7 +75,7 @@ export async function medicationRoutes(app: FastifyInstance) {
   }
 
   app.get("/medications", async (request, reply) => {
-    const userId = getUserId(request, reply);
+    const userId = await getUserId(request, reply);
     const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
     return rows.map((row) => ({
       id: row.id,
@@ -103,7 +103,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const parsed = medicationSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send(parsed.error.format());
 
-    const userId = getUserId(req, reply);
+    const userId = await getUserId(req, reply);
     const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, blisters } = parsed.data;
     const usageJson = JSON.stringify(blisters.map((s) => s.usage));
     const everyJson = JSON.stringify(blisters.map((s) => s.every));
@@ -163,7 +163,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const userId = getUserId(req, reply);
+    const userId = await getUserId(req, reply);
     
     // Verify ownership
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
@@ -229,7 +229,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const userId = getUserId(req, reply);
+    const userId = await getUserId(req, reply);
 
     // Delete associated image if exists (with ownership check)
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
@@ -250,7 +250,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const userId = getUserId(req, reply);
+    const userId = await getUserId(req, reply);
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     if (!existing) return reply.notFound();
 
@@ -284,7 +284,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const idNum = Number(req.params.id);
     if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-    const userId = getUserId(req, reply);
+    const userId = await getUserId(req, reply);
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     if (!existing) return reply.notFound();
 
@@ -308,7 +308,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       return reply.badRequest("Invalid date range");
     }
 
-    const userId = getUserId(req, reply);
+    const userId = await getUserId(req, reply);
     const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
     const now = new Date();
     

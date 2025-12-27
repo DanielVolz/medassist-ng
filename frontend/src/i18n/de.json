@@ -259,7 +259,15 @@
     "passwordReset": "Passwort zurückgesetzt",
     "passwordResetSuccess": "Ihr Passwort wurde zurückgesetzt. Weiterleitung zur Anmeldung...",
     "profileUpdated": "Profil erfolgreich aktualisiert",
-    "rememberMe": "Angemeldet bleiben"
+    "rememberMe": "Angemeldet bleiben",
+    "localAccount": "Lokales Konto",
+    "updatePassword": "Passwort ändern",
+    "fillAllFields": "Bitte alle Passwortfelder ausfüllen",
+    "signOut": "Abmelden",
+    "uploadAvatar": "Avatar hochladen",
+    "removeAvatar": "Avatar entfernen",
+    "avatarUpdated": "Avatar aktualisiert",
+    "avatarRemoved": "Avatar entfernt"
   },
   "common": {
     "loading": "Wird geladen...",

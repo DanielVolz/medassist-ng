@@ -261,7 +261,15 @@
     "passwordReset": "Password Reset",
     "passwordResetSuccess": "Your password has been reset. Redirecting to login...",
     "profileUpdated": "Profile updated successfully",
-    "rememberMe": "Remember me"
+    "rememberMe": "Remember me",
+    "localAccount": "Local Account",
+    "updatePassword": "Update Password",
+    "fillAllFields": "Please fill in all password fields",
+    "signOut": "Sign Out",
+    "uploadAvatar": "Upload avatar",
+    "removeAvatar": "Remove avatar",
+    "avatarUpdated": "Avatar updated",
+    "avatarRemoved": "Avatar removed"
   },
   "common": {
     "loading": "Loading...",

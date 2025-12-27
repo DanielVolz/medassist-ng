@@ -493,6 +493,9 @@ textarea {
 }
 .day-divider.clickable { cursor: pointer; user-select: none; }
 .day-divider.clickable:hover { color: var(--accent); }
+/* Keep warning/danger colors on hover */
+.day-block.stock-warning .day-divider.clickable:hover { color: var(--warning); }
+.day-block.stock-danger .day-divider.clickable:hover { color: var(--danger); }
 .day-collapse-icon { 
   font-size: 0.7rem; 
   opacity: 0.6; 
@@ -2624,29 +2627,29 @@ h3 .reminder-icon.info-tooltip {
   flex: 1;
 }
 
-/* User Menu Button in Header */
+/* User Menu Dropdown in Header */
+.user-menu {
+  position: relative;
+}
+
 .user-menu-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
-  border-radius: 100px;
-  padding: 0.375rem 0.75rem;
-  color: var(--text-primary);
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
   cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
 .user-menu-btn:hover {
-  background: var(--accent-bg);
-  border-color: var(--accent);
+  transform: scale(1.05);
 }
 
 .user-menu-btn .user-avatar {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   background: var(--accent);
   color: white;
   border-radius: 50%;
@@ -2654,7 +2657,148 @@ h3 .reminder-icon.info-tooltip {
   align-items: center;
   justify-content: center;
   font-weight: 600;
+  font-size: 0.9rem;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.user-menu-btn .user-avatar-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.user-menu:hover .user-menu-btn .user-avatar,
+.user-menu:hover .user-menu-btn .user-avatar-img {
+  border-color: var(--accent);
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 0.75rem);
+  right: 0;
+  width: 260px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px) scale(0.95);
+  transition: all 0.2s ease;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+[data-theme="light"] .user-dropdown {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.15);
+}
+
+.user-menu:hover .user-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.dropdown-avatar {
+  width: 48px;
+  height: 48px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.dropdown-avatar-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.dropdown-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.dropdown-username {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-role {
   font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.dropdown-menu {
+  padding: 0.5rem;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s ease, color 0.15s ease;
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--text-primary);
+}
+
+.dropdown-item:hover svg {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.dropdown-item.danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.dropdown-item svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
 @media (max-width: 600px) {
@@ -2669,8 +2813,187 @@ h3 .reminder-icon.info-tooltip {
 
 /* Profile Modal */
 .profile-modal {
-  max-width: 480px;
+  max-width: 420px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.profile-container {
+  padding: 0;
+}
+
+.profile-user-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   padding: 1.5rem;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.profile-avatar-wrapper {
+  position: relative;
+}
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  background: var(--text-tertiary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.75rem;
+  flex-shrink: 0;
+}
+
+.profile-avatar-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-avatar-actions {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.avatar-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-secondary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.avatar-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.avatar-btn.danger:hover {
+  background: var(--danger);
+}
+
+.avatar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-username {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-form {
+  padding: 1.5rem;
+}
+
+.profile-section {
+  margin-bottom: 1.5rem;
+}
+
+.profile-section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.profile-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.profile-form .form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.375rem;
+  color: var(--text-primary);
+}
+
+.profile-form .form-group input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  transition: border-color 0.2s ease;
+}
+
+.profile-form .form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.profile-form .form-group input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.profile-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-primary);
+  margin-top: 1rem;
+}
+
+.profile-actions .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-actions .btn-ghost {
+  background: none;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.profile-actions .btn-ghost:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.profile-actions .btn-primary {
+  background: var(--accent);
+  border: none;
+  color: white;
+}
+
+.profile-actions .btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.profile-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* =============================================================================

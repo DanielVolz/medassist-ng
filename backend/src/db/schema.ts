@@ -8,6 +8,7 @@ export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username", { length: 100 }).notNull().unique(),
   passwordHash: text("password_hash", { length: 255 }),
+  avatarUrl: text("avatar_url", { length: 255 }),
   authProvider: text("auth_provider", { length: 50 }).notNull().default("local"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   lastLoginAt: integer("last_login_at", { mode: "timestamp" }),

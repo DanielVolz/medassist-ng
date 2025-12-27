@@ -258,6 +258,8 @@ function AppContent() {
 	const [sendingReminderEmail, setSendingReminderEmail] = useState(false);
 	const [reminderEmailResult, setReminderEmailResult] = useState<{ success: boolean; message: string } | null>(null);
 	const [uploadingImage, setUploadingImage] = useState(false);
+	const [pendingImage, setPendingImage] = useState<File | null>(null);
+	const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
 	const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
 	const [showImageLightbox, setShowImageLightbox] = useState(false);
 	const [selectedUser, setSelectedUser] = useState<string | null>(null);
@@ -659,6 +661,8 @@ function AppContent() {
 
 	function resetForm() {
 		setEditingId(null);
+		setPendingImage(null);
+		setPendingImagePreview(null);
 		setForm(defaultForm());
 	}
 
@@ -689,7 +693,19 @@ function AppContent() {
 		const method = editingId ? "PUT" : "POST";
 		const url = editingId ? `/api/medications/${editingId}` : "/api/medications";
 
-		await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => null);
+		try {
+			const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+			
+			// If creating new medication and we have a pending image, upload it
+			if (!editingId && pendingImage && res.ok) {
+				const newMed = await res.json();
+				if (newMed?.id) {
+					await uploadMedImage(newMed.id, pendingImage);
+				}
+			}
+		} catch {
+			// ignore
+		}
 
 		setSaving(false);
 		resetForm();
@@ -1267,10 +1283,11 @@ function AppContent() {
 									))}
 								</div>
 
-								{editingId && (
-									<div className="full image-upload-section">
-										<label className="setting-label">{t('form.medicationImage')}</label>
-										{(() => {
+								<div className="full image-upload-section">
+									<label className="setting-label">{t('form.medicationImage')}</label>
+									{(() => {
+										// When editing an existing medication
+										if (editingId) {
 											const currentMed = meds.find(m => m.id === editingId);
 											if (currentMed?.imageUrl) {
 												return (
@@ -1288,9 +1305,33 @@ function AppContent() {
 													disabled={uploadingImage}
 												/>
 											);
-										})()}
-									</div>
-								)}
+										}
+										// When creating a new medication
+										if (pendingImagePreview) {
+											return (
+												<div className="image-preview">
+													<img src={pendingImagePreview} alt="Preview" />
+													<button type="button" className="ghost danger" onClick={() => { setPendingImage(null); setPendingImagePreview(null); }}>{t('form.removeImage')}</button>
+												</div>
+											);
+										}
+										return (
+											<input 
+												type="file" 
+												accept="image/jpeg,image/png,image/webp,image/gif"
+												onChange={(e) => {
+													const file = e.target.files?.[0];
+													if (file) {
+														setPendingImage(file);
+														const reader = new FileReader();
+														reader.onload = (ev) => setPendingImagePreview(ev.target?.result as string);
+														reader.readAsDataURL(file);
+													}
+												}}
+											/>
+										);
+									})()}
+								</div>
 
 								<div className="full align-end gap">
 									{editingId && (

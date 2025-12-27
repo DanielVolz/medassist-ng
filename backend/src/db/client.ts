@@ -1,4 +1,4 @@
-import { createClient } from "@libsql/client";
+import { createClient, Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { existsSync, mkdirSync, accessSync, constants, statSync, writeFileSync } from "fs";
 import { resolve } from "path";
@@ -45,7 +45,7 @@ try {
   process.exit(1);
 }
 
-let client;
+let client: Client;
 try {
   client = createClient({ url });
   console.log(`[DB] Database client created successfully`);

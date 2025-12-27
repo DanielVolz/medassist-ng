@@ -6,13 +6,28 @@ PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
 echo "[entrypoint] Starting with PUID=$PUID, PGID=$PGID"
+echo "[entrypoint] Running as user: $(id)"
+echo "[entrypoint] Mount info for /app/data:"
+mount | grep -E "/app|data" || echo "[entrypoint] No specific mount found"
 
 # Ensure data directory exists and has correct ownership
 mkdir -p /app/data
 echo "[entrypoint] Created /app/data"
 
-chown -R "$PUID:$PGID" /app/data
-echo "[entrypoint] Set ownership of /app/data to $PUID:$PGID"
+# Show current ownership before chown
+echo "[entrypoint] Before chown:"
+ls -la /app/data/
+
+# Try to chown - this may fail on bind mounts owned by different host user
+if chown -R "$PUID:$PGID" /app/data 2>&1; then
+    echo "[entrypoint] Set ownership of /app/data to $PUID:$PGID"
+else
+    echo "[entrypoint] WARNING: chown failed (bind mount may have different host ownership)"
+fi
+
+# Show ownership after chown attempt
+echo "[entrypoint] After chown:"
+ls -la /app/data/
 
 # Check if we can write to data directory
 if touch /app/data/.write-test 2>/dev/null; then
@@ -20,6 +35,7 @@ if touch /app/data/.write-test 2>/dev/null; then
     echo "[entrypoint] Write test passed"
 else
     echo "[entrypoint] ERROR: Cannot write to /app/data"
+    echo "[entrypoint] FIX: Run on host: sudo chown -R $PUID:$PGID <your-data-path>"
     ls -la /app/
     exit 1
 fi

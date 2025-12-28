@@ -3146,11 +3146,15 @@ function SharedSchedule() {
 	const schedule = useMemo(() => {
 		if (!data) return [];
 
-		const now = Date.now();
 		const todayStart = new Date();
 		todayStart.setHours(0, 0, 0, 0);
 		const todayStartTime = todayStart.getTime();
-		const endTime = now + data.scheduleDays * 24 * 60 * 60 * 1000;
+		
+		// Calculate end time: today midnight + scheduleDays days
+		const endDate = new Date(todayStart);
+		endDate.setDate(endDate.getDate() + data.scheduleDays);
+		const endTime = endDate.getTime();
+		
 		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string; isPast: boolean }[] = [];
 
 		for (const med of data.medications) {

@@ -2526,17 +2526,21 @@ textarea {
   right: 1rem;
   background: rgba(255, 255, 255, 0.1);
   border: none;
-  font-size: 2rem;
+  font-size: 1.5rem;
   color: white;
   cursor: pointer;
   width: 3rem;
   height: 3rem;
+  min-width: 3rem;
+  min-height: 3rem;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--btn-radius-round);
   transition: background 150ms ease;
   box-shadow: none;
+  padding: 0;
+  line-height: 1;
 }
 
 .lightbox-close:hover {
@@ -3031,15 +3035,17 @@ h3 .reminder-icon.info-tooltip {
 }
 
 /* Override danger button styles for dropdown items */
-.dropdown-item.danger {
-  background: none;
+.dropdown-item.danger,
+[data-theme="light"] .dropdown-item.danger {
+  background: none !important;
   color: var(--text-primary);
   border: none;
   box-shadow: none;
 }
 
-.dropdown-item.danger:hover {
-  background: rgba(239, 68, 68, 0.15);
+.dropdown-item.danger:hover,
+[data-theme="light"] .dropdown-item.danger:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
   color: var(--danger);
 }
 

@@ -1289,6 +1289,69 @@ textarea.auto-resize {
   letter-spacing: 0.03em;
 }
 
+/* Stock calculation mode radio cards */
+.calculation-mode-group {
+  grid-template-columns: 1fr 1fr;
+}
+
+.calculation-mode-group label {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.radio-card {
+  cursor: pointer;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-primary);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.radio-card:hover {
+  border-color: var(--accent-light);
+  background: var(--bg-tertiary);
+}
+
+.radio-card.selected {
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.radio-card input[type="radio"] {
+  display: none;
+}
+
+.radio-card-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.radio-card-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.radio-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.radio-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.radio-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .setting-section {
   padding: 1.25rem;
   background: var(--bg-tertiary);

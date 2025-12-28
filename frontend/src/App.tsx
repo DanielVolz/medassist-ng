@@ -294,6 +294,8 @@ function AppContent() {
 		emailIntakeReminders: true,
 		shoutrrrStockReminders: true,
 		shoutrrrIntakeReminders: true,
+		// Stock calculation mode: "automatic" or "manual"
+		stockCalculationMode: "automatic" as "automatic" | "manual",
 		// Admin settings (from .env, read-only)
 		expiryWarningDays: 30,
 	});
@@ -477,7 +479,7 @@ function AppContent() {
 
 	const schedule = useMemo(() => buildSchedulePreview(meds, i18n.language, true), [meds, i18n.language]);
 	const totalTablets = useMemo(() => deriveTotal(form), [form]);
-	const coverage = useMemo(() => calculateCoverage(meds, schedule.events, i18n.language, settings.reminderDaysBefore), [meds, schedule.events, i18n.language, settings.reminderDaysBefore]);
+	const coverage = useMemo(() => calculateCoverage(meds, schedule.events, i18n.language, settings.reminderDaysBefore, settings.stockCalculationMode, takenDoses), [meds, schedule.events, i18n.language, settings.reminderDaysBefore, settings.stockCalculationMode, takenDoses]);
 	const depletionByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c.depletionTime])), [coverage.all]);
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
 
@@ -588,6 +590,8 @@ function AppContent() {
 			emailIntakeReminders: settings.emailIntakeReminders,
 			shoutrrrStockReminders: settings.shoutrrrStockReminders,
 			shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+			// Stock calculation mode
+			stockCalculationMode: settings.stockCalculationMode,
 			// Language setting (for backend notifications)
 			language: i18n.language,
 			// SMTP (legacy - not saved, read from .env)
@@ -1980,6 +1984,46 @@ function AppContent() {
 
 									<div className="setting-section">
 										<div className="section-header">
+											<h3>{t('settings.stock.calculationMode')}</h3>
+										</div>
+										<div className="setting-group calculation-mode-group">
+											<label className={`radio-card ${settings.stockCalculationMode === 'automatic' ? 'selected' : ''}`}>
+												<input
+													type="radio"
+													name="stockCalculationMode"
+													value="automatic"
+													checked={settings.stockCalculationMode === 'automatic'}
+													onChange={(e) => setSettings({ ...settings, stockCalculationMode: e.target.value as 'automatic' | 'manual' })}
+												/>
+												<div className="radio-card-content">
+													<span className="radio-card-icon">🔄</span>
+													<div className="radio-card-text">
+														<span className="radio-card-title">{t('settings.stock.automatic')}</span>
+														<span className="radio-card-desc">{t('settings.stock.automaticDesc')}</span>
+													</div>
+												</div>
+											</label>
+											<label className={`radio-card ${settings.stockCalculationMode === 'manual' ? 'selected' : ''}`}>
+												<input
+													type="radio"
+													name="stockCalculationMode"
+													value="manual"
+													checked={settings.stockCalculationMode === 'manual'}
+													onChange={(e) => setSettings({ ...settings, stockCalculationMode: e.target.value as 'automatic' | 'manual' })}
+												/>
+												<div className="radio-card-content">
+													<span className="radio-card-icon">✋</span>
+													<div className="radio-card-text">
+														<span className="radio-card-title">{t('settings.stock.manual')}</span>
+														<span className="radio-card-desc">{t('settings.stock.manualDesc')}</span>
+													</div>
+												</div>
+											</label>
+										</div>
+									</div>
+
+									<div className="setting-section">
+										<div className="section-header">
 											<h3>{t('settings.stock.display')}</h3>
 										</div>
 										<div className="setting-group">
@@ -2864,7 +2908,14 @@ function getExpiryClass(expiryDate: string | null | undefined, expiryWarningDays
 	return "success-text"; // outside warning period
 }
 
-function calculateCoverage(meds: Medication[], events: Array<{ medName: string; when: number }>, locale: string, reminderDaysBefore: number) {
+function calculateCoverage(
+	meds: Medication[], 
+	events: Array<{ medName: string; when: number }>, 
+	locale: string, 
+	reminderDaysBefore: number,
+	stockCalculationMode: "automatic" | "manual",
+	takenDoses: Set<string>
+) {
 	const MS_PER_DAY = 86_400_000;
 	const now = Date.now();
 
@@ -2872,13 +2923,30 @@ function calculateCoverage(meds: Medication[], events: Array<{ medName: string; 
 		const dailyRate = m.blisters.reduce((sum, s) => sum + (s.every > 0 ? s.usage / s.every : 0), 0);
 
 		let consumed = 0;
-		m.blisters.forEach((s) => {
-			const start = new Date(s.start).getTime();
-			if (Number.isNaN(start) || start > now) return;
-			const period = Math.max(1, s.every) * MS_PER_DAY;
-			const occurrences = Math.floor((now - start) / period) + 1; // include today if started
-			consumed += occurrences * s.usage;
-		});
+		
+		if (stockCalculationMode === "automatic") {
+			// Automatic mode: calculate consumed based on schedule since start date
+			m.blisters.forEach((s) => {
+				const start = new Date(s.start).getTime();
+				if (Number.isNaN(start) || start > now) return;
+				const period = Math.max(1, s.every) * MS_PER_DAY;
+				const occurrences = Math.floor((now - start) / period) + 1; // include today if started
+				consumed += occurrences * s.usage;
+			});
+		} else {
+			// Manual mode: count only doses marked as taken for this medication
+			// Dose IDs follow pattern: "{medicationId}-{blisterIndex}-{timestampMs}"
+			takenDoses.forEach((doseId) => {
+				const parts = doseId.split("-");
+				if (parts.length >= 3) {
+					const medId = parseInt(parts[0], 10);
+					const blisterIdx = parseInt(parts[1], 10);
+					if (medId === m.id && m.blisters[blisterIdx]) {
+						consumed += m.blisters[blisterIdx].usage;
+					}
+				}
+			});
+		}
 
 		const medsLeft = Math.max(0, m.count - consumed);
 		const rawDaysLeft = dailyRate > 0 ? medsLeft / dailyRate : null;

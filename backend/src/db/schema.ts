@@ -69,6 +69,8 @@ export const userSettings = sqliteTable("user_settings", {
   highStockDays: integer("high_stock_days").notNull().default(180),
   // UI preferences
   language: text("language", { length: 10 }).notNull().default("en"),
+  // Stock calculation mode: "automatic" (schedule-based) or "manual" (only marked doses)
+  stockCalculationMode: text("stock_calculation_mode", { length: 20 }).notNull().default("automatic"),
   // Last notification tracking
   lastAutoEmailSent: text("last_auto_email_sent"),
   lastNotificationType: text("last_notification_type"),

@@ -25,6 +25,7 @@ export type UserSettings = {
   normalStockDays: number;
   highStockDays: number;
   language: Language;
+  stockCalculationMode: "automatic" | "manual";
   lastAutoEmailSent: string | null;
   lastNotificationType: string | null;
   lastNotificationChannel: string | null;
@@ -45,6 +46,7 @@ type SettingsBody = {
   shoutrrrStockReminders: boolean;
   shoutrrrIntakeReminders: boolean;
   language: string;
+  stockCalculationMode: "automatic" | "manual";
 };
 
 type TestEmailBody = {
@@ -71,6 +73,7 @@ const defaultSettings = {
   normalStockDays: 90,
   highStockDays: 180,
   language: "en",
+  stockCalculationMode: "automatic" as const,
   lastAutoEmailSent: null,
   lastNotificationType: null,
   lastNotificationChannel: null,
@@ -110,6 +113,7 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
     normalStockDays: settings.normalStockDays,
     highStockDays: settings.highStockDays,
     language: settings.language as Language,
+    stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
     lastAutoEmailSent: settings.lastAutoEmailSent,
     lastNotificationType: settings.lastNotificationType,
     lastNotificationChannel: settings.lastNotificationChannel,
@@ -135,6 +139,7 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
     normalStockDays: settings.normalStockDays,
     highStockDays: settings.highStockDays,
     language: settings.language as Language,
+    stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
     lastAutoEmailSent: settings.lastAutoEmailSent,
     lastNotificationType: settings.lastNotificationType,
     lastNotificationChannel: settings.lastNotificationChannel,
@@ -183,6 +188,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       shoutrrrStockReminders: settings.shoutrrrStockReminders,
       shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
       language: settings.language,
+      stockCalculationMode: settings.stockCalculationMode ?? "automatic",
       // SMTP settings (from .env - shared/server-configured)
       smtpHost: process.env.SMTP_HOST ?? "",
       smtpPort: parseInt(process.env.SMTP_PORT ?? "587"),
@@ -231,6 +237,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       normalStockDays: body.normalStockDays ?? 90,
       highStockDays: body.highStockDays ?? 180,
       language: body.language ?? "en",
+      stockCalculationMode: body.stockCalculationMode ?? "automatic",
       updatedAt: new Date(),
     };
 

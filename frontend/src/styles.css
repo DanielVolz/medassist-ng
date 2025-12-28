@@ -2866,11 +2866,12 @@ h3 .reminder-icon.info-tooltip {
   border: none;
   padding: 0;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  border-radius: 50%;
+  box-shadow: none;
 }
 
 .user-menu-btn:hover {
-  transform: scale(1.05);
+  background: transparent;
 }
 
 .user-menu-btn .user-avatar {
@@ -2885,7 +2886,7 @@ h3 .reminder-icon.info-tooltip {
   font-weight: 600;
   font-size: 0.9rem;
   border: 2px solid transparent;
-  transition: border-color 0.2s ease;
+  transition: border-color 150ms ease;
 }
 
 .user-menu-btn .user-avatar-img {
@@ -2894,7 +2895,7 @@ h3 .reminder-icon.info-tooltip {
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid transparent;
-  transition: border-color 0.2s ease;
+  transition: border-color 150ms ease;
 }
 
 .user-menu:hover .user-menu-btn .user-avatar,
@@ -3013,6 +3014,14 @@ h3 .reminder-icon.info-tooltip {
 .dropdown-item:hover svg {
   opacity: 1;
   color: var(--accent);
+}
+
+/* Override danger button styles for dropdown items */
+.dropdown-item.danger {
+  background: none;
+  color: var(--text-primary);
+  border: none;
+  box-shadow: none;
 }
 
 .dropdown-item.danger:hover {

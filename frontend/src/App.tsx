@@ -1025,7 +1025,8 @@ function AppContent() {
 							<section className="email-status-bar">
 								<span className="email-status-icon">{settings.emailEnabled && settings.shoutrrrEnabled ? "🔔" : settings.emailEnabled ? "📧" : "🔔"}</span>
 								<span className="email-status-text">
-									{t('dashboard.reminders.active')} — {getReminderStatusText(settings.reminderDaysBefore, settings.lowStockDays, coverage.low, coverage.all, settings.lastAutoEmailSent, settings.lastNotificationType, settings.lastNotificationChannel, t, i18n.language)}
+									<span className="email-status-line">{t('dashboard.reminders.active')}</span>
+									{getReminderStatusText(settings.reminderDaysBefore, settings.lowStockDays, coverage.low, coverage.all, settings.lastAutoEmailSent, settings.lastNotificationType, settings.lastNotificationChannel, t, i18n.language)}
 								</span>
 								{settings.emailEnabled && settings.notificationEmail && <span className="email-status-recipient">→ {settings.notificationEmail}</span>}
 							</section>
@@ -2838,12 +2839,17 @@ function getReminderStatusText(
 		if (lastSent) {
 			return (
 				<>
-					<strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</strong>
-					{" · "}{t('dashboard.reminders.lastReminder')}: {formatLastInfo(lastSent)}
+					<span className="email-status-line"><strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</strong></span>
+					<span className="email-status-line">{t('dashboard.reminders.lastReminder')}: {formatLastInfo(lastSent)}</span>
 				</>
 			);
 		}
-		return <strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })} — {t('dashboard.reminders.waitingFirstCheck')}</strong>;
+		return (
+			<>
+				<span className="email-status-line"><strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</strong></span>
+				<span className="email-status-line">{t('dashboard.reminders.waitingFirstCheck')}</span>
+			</>
+		);
 	}
 
 	// Check if there are low stock medications (not yet needing reminder but running low)
@@ -2857,8 +2863,8 @@ function getReminderStatusText(
 		const daysUntilReminder = (nextMed.daysLeft ?? 0) - reminderDaysBefore;
 		return (
 			<>
-				<span className="warning-text">{t('dashboard.reminders.lowWarning', { count: lowStockNotYetCritical.length })}</span>
-				{" · "}{t('dashboard.reminders.nextIn')}: <strong>{nextMed.name}</strong> {t('dashboard.reminders.inDays', { days: daysUntilReminder })}
+				<span className="email-status-line"><span className="warning-text">{t('dashboard.reminders.lowWarning', { count: lowStockNotYetCritical.length })}</span></span>
+				<span className="email-status-line">{t('dashboard.reminders.nextIn')}: <strong>{nextMed.name}</strong> {t('dashboard.reminders.inDays', { days: daysUntilReminder })}</span>
 			</>
 		);
 	}
@@ -2874,8 +2880,8 @@ function getReminderStatusText(
 		if (daysUntilReminder > 0) {
 			return (
 				<>
-					<span className="success-text">✓ {t('dashboard.reminders.allOk')}</span>
-					{" · "}{t('dashboard.reminders.nextIn')}: <strong>{nextMed.name}</strong> {t('dashboard.reminders.inDays', { days: daysUntilReminder })}
+					<span className="email-status-line"><span className="success-text">✓ {t('dashboard.reminders.allOk')}</span></span>
+					<span className="email-status-line">{t('dashboard.reminders.nextIn')}: <strong>{nextMed.name}</strong> {t('dashboard.reminders.inDays', { days: daysUntilReminder })}</span>
 				</>
 			);
 		}
@@ -2885,12 +2891,17 @@ function getReminderStatusText(
 	if (lastSent) {
 		return (
 			<>
-				<span className="success-text">✓ {t('dashboard.reminders.allStockOk')}</span>
-				{" · "}{t('dashboard.reminders.lastReminder')}: {formatLastInfo(lastSent)}
+				<span className="email-status-line"><span className="success-text">✓ {t('dashboard.reminders.allStockOk')}</span></span>
+				<span className="email-status-line">{t('dashboard.reminders.lastReminder')}: {formatLastInfo(lastSent)}</span>
 			</>
 		);
 	}
-	return <span className="success-text">✓ {t('dashboard.reminders.allStockOk')} — {t('dashboard.reminders.noRemindersNeeded')}</span>;
+	return (
+		<>
+			<span className="email-status-line"><span className="success-text">✓ {t('dashboard.reminders.allStockOk')}</span></span>
+			<span className="email-status-line">{t('dashboard.reminders.noRemindersNeeded')}</span>
+		</>
+	);
 }
 
 function getNextReminderForMed(med: Coverage, reminderDaysBefore: number, locale: string): string {

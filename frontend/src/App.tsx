@@ -1013,7 +1013,6 @@ function AppContent() {
 							<article className="card">
 								<div className="card-head">
 									<h2>{t('dashboard.reorder.title')}</h2>
-									<span className="pill neutral">{t('dashboard.reorder.badge')}</span>
 								</div>
 								{(() => {
 									if (meds.length === 0) {
@@ -1105,7 +1104,6 @@ function AppContent() {
 							<article className="card">
 								<div className="card-head">
 									<h2>{t('dashboard.overview.title')}</h2>
-									<span className="pill neutral">{t('dashboard.overview.badge')}</span>
 								</div>
 								<div className="table table-7">
 									<div className="table-head">
@@ -1374,7 +1372,6 @@ function AppContent() {
 						<article className="card meds">
 							<div className="card-head">
 								<h2>{t('medications.list.title')}</h2>
-								<span className="pill neutral">{loading ? t('common.loading') : t('medications.list.entries', { count: meds.length })}</span>
 							</div>
 							<div className="med-list">
 								{meds.map((med) => (
@@ -1413,7 +1410,6 @@ function AppContent() {
 						<article className="card form desktop-only">
 							<div className="card-head">
 								<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
-								<span className="pill">{t('form.badge')}</span>
 							</div>
 							<form className="form-grid" onSubmit={saveMedication}>
 								<label>
@@ -1578,7 +1574,6 @@ function AppContent() {
 						<article className="card">
 							<div className="card-head">
 								<h2>{t('planner.title')}</h2>
-								<span className="pill neutral">{t('planner.badge')}</span>
 							</div>
 							<form className="planner" onSubmit={runPlanner}>
 								<label>

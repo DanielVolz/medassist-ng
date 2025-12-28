@@ -35,8 +35,8 @@
       "allTaken": "Alle eingenommen",
       "showPastDays": "Vergangene Tage anzeigen",
       "hidePastDays": "Vergangene Tage ausblenden",
-      "pastDaysCount": "{{count}} vergangener Tag",
-      "pastDaysCount_other": "{{count}} vergangene Tage",
+      "pastDaysCount": "{{count}} Tag",
+      "pastDaysCount_other": "{{count}} Tage",
       "missedDoses": "{{count}} verpasste Dosis",
       "missedDoses_other": "{{count}} verpasste Dosen"
     },

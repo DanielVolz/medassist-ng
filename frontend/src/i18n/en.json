@@ -37,8 +37,8 @@
       "allTaken": "All taken",
       "showPastDays": "Show past days",
       "hidePastDays": "Hide past days",
-      "pastDaysCount": "{{count}} past day",
-      "pastDaysCount_other": "{{count}} past days",
+      "pastDaysCount": "{{count}} day",
+      "pastDaysCount_other": "{{count}} days",
       "missedDoses": "{{count}} missed dose",
       "missedDoses_other": "{{count}} missed doses"
     },

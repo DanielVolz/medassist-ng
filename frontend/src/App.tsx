@@ -1062,7 +1062,17 @@ function AppContent() {
 												);
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-														<span data-label={t('table.name')} className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}</span>
+														<span data-label={t('table.name')} className="cell-with-avatar">
+															<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
+															<span className="med-name-text">{row.name}</span>
+															{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}
+															{(med?.intakeRemindersEnabled || med?.notes) && (
+																<span className="med-icons">
+																	{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}
+																	{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}
+																</span>
+															)}
+														</span>
 														<span data-label={t('table.fullBlisters')} className={textClass}>{formatFullBlisters(stock.fullBlisters, t)}</span>
 														<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.tabsPerStrip ?? 1, t)}</span>
 														<span data-label={t('table.days')} className={textClass}>{formatNumber(row.daysLeft)}</span>
@@ -1120,7 +1130,19 @@ function AppContent() {
 										);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
-												<span data-label={t('table.name')} className="cell-with-avatar"><MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />{row.name}{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}</span>
+												<span data-label={t('table.name')} className="cell-with-avatar">
+													<span className="med-name-line">
+														<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
+														<span className="med-name-text">{row.name}</span>
+														{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}
+													</span>
+													{(med?.intakeRemindersEnabled || med?.notes) && (
+														<span className="med-icons">
+															{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}
+															{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}
+														</span>
+													)}
+												</span>
 												<span data-label={t('table.fullBlisters')} className={textClass}>{formatFullBlisters(stock.fullBlisters, t)}</span>
 												<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.tabsPerStrip ?? 1, t)}</span>
 												<span data-label={t('table.daysLeft')} className={textClass}>{formatNumber(row.daysLeft)}</span>

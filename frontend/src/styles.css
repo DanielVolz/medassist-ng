@@ -619,7 +619,9 @@ textarea {
 .dose-btn {
   margin-left: auto;
   width: 28px;
+  min-width: 28px;
   height: 28px;
+  min-height: 28px;
   padding: 0;
   border-radius: 50%;
   display: flex;
@@ -628,6 +630,7 @@ textarea {
   font-size: 0.9rem;
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .dose-btn.take {
@@ -805,22 +808,32 @@ textarea {
   .table-row span:first-child {
     justify-content: center;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-primary);
     margin-bottom: 0.25rem;
   }
   .table-row span:first-child::before {
     display: none; /* Hide "NAME" label on mobile */
   }
-  /* Avatar + name layout - horizontal centered */
+  /* Avatar + name layout - centered */
   .table-row .cell-with-avatar {
-    display: inline-flex;
-    flex-wrap: wrap;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .table-row .cell-with-avatar .med-name-line {
+    display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
   }
   .table-row .cell-with-avatar .med-avatar {
     flex-shrink: 0;
+  }
+  /* Icons on separate line on mobile - aligned left under med name */
+  .table-row .cell-with-avatar .med-icons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
   /* Badges and icons wrap to next line if needed but stay together */
   .table-row .taken-by-badge,
@@ -1865,8 +1878,37 @@ textarea {
 /* Table/Timeline cells with avatar */
 .cell-with-avatar {
   display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cell-with-avatar .med-name-line {
+  display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.cell-with-avatar .med-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  width: 100%;
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+.cell-with-avatar .med-icons span {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 1.2em !important;
+  height: 1.2em !important;
+  line-height: 1 !important;
+  font-size: 1rem !important;
+  vertical-align: middle !important;
 }
 
 .time-main .med-name {
@@ -1941,7 +1983,7 @@ textarea {
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 2rem 1rem;
@@ -1977,23 +2019,28 @@ textarea {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: transparent;
-  border: none;
-  font-size: 1.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-secondary);
+  font-size: 1.2rem;
   color: var(--text-secondary);
   cursor: pointer;
   width: 2rem;
   height: 2rem;
+  min-width: 2rem;
+  min-height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  transition: background 0.2s, color 0.2s;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .modal-close:hover {
-  background: var(--border-primary);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: var(--text-secondary);
   color: var(--text-primary);
+  transform: scale(1.1);
 }
 
 /* Medication Detail Modal */
@@ -2075,7 +2122,9 @@ textarea {
 
 .user-meds-header .user-avatar {
   width: 50px;
+  min-width: 50px;
   height: 50px;
+  min-height: 50px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
   display: flex;
@@ -2084,6 +2133,7 @@ textarea {
   font-size: 1.5rem;
   font-weight: 700;
   color: white;
+  flex-shrink: 0;
 }
 
 .user-meds-header h2 {
@@ -2105,6 +2155,7 @@ textarea {
   padding: 0.75rem;
   border-radius: 8px;
   transition: background 0.15s;
+  flex-wrap: wrap;
 }
 
 .user-med-item.clickable {
@@ -2117,13 +2168,14 @@ textarea {
 
 .user-med-info {
   flex: 1;
-  min-width: 0;
+  min-width: 120px;
 }
 
 .user-med-name {
   display: block;
   font-weight: 600;
   color: var(--text-primary);
+  word-break: break-word;
 }
 
 .user-med-generic {
@@ -2135,8 +2187,9 @@ textarea {
 .user-med-stats {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .user-med-pills {
@@ -2417,9 +2470,15 @@ textarea {
 .notes-icon.info-tooltip {
   width: auto;
   height: auto;
-  margin-left: 0.35rem;
-  font-size: 0.85em;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 1em;
   opacity: 0.75;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  vertical-align: baseline;
 }
 
 .reminder-icon.info-tooltip:hover,

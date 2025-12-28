@@ -1304,7 +1304,7 @@ function AppContent() {
 								<div className="card-head">
 									<h2>{t('dashboard.schedules.title')}</h2>
 									<div className="card-head-actions">
-										{meds.some(m => m.takenBy) && (
+										{meds.some(m => m.takenBy && m.takenBy.length > 0) && (
 											<button className="ghost share-btn" onClick={openShareDialog} title={t('share.button')}>
 												🔗 {t('share.button')}
 											</button>
@@ -1327,7 +1327,7 @@ function AppContent() {
 								<div className="timeline">
 									{/* Past days toggle */}
 									{pastDays.length > 0 && (() => {
-										const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.flatMap(dose => dose.takenBy.length > 0 ? dose.takenBy.map(p => `${dose.id}-${p}`) : [dose.id])));
+										const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.flatMap(dose => (dose.takenBy || []).length > 0 ? dose.takenBy.map(p => `${dose.id}-${p}`) : [dose.id])));
 										const missedPastDoses = totalPastDoses.filter(id => !takenDoses.has(id)).length;
 										return (
 											<div 
@@ -1349,7 +1349,7 @@ function AppContent() {
 									})()}
 									{/* Past days (when expanded) */}
 									{showPastDays && pastDays.map((day) => {
-										const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
+										const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
 										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 										const isAutoCollapsed = true; // Past days are always auto-collapsed
@@ -1378,7 +1378,7 @@ function AppContent() {
 													const med = meds.find(m => m.name === item.medName);
 													const medCov = coverageByMed[item.medName];
 													const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
-													const itemDoseIds = item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
+													const itemDoseIds = item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 													return (
 														<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -1391,7 +1391,7 @@ function AppContent() {
 															<div className="doses-col">
 																{item.doses.map((dose) => {
 																	// If no takenBy, show single checkbox; otherwise show one per person
-																	const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+																	const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
 																	return (
 																		<div key={dose.id} className="dose-item past">
 																			<span className="dose-time">{dose.timeStr}</span>
@@ -1425,7 +1425,7 @@ function AppContent() {
 									{/* Current and future days */}
 									{futureDays.map((day) => {
 										// Check if all doses in this day are taken (auto-collapse)
-										const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
+										const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
 										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 										
@@ -1481,7 +1481,7 @@ function AppContent() {
 													const status = willBeOutOfStock 
 														? { className: "danger", label: "status.outOfStock" }
 														: medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-													const itemDoseIds = item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
+													const itemDoseIds = item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 													return (
 														<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -1504,7 +1504,7 @@ function AppContent() {
 																	todayMidnight.setHours(0, 0, 0, 0);
 																	const isFutureDose = doseDate.getTime() > todayMidnight.getTime();
 																	// If no takenBy, show single checkbox; otherwise show one per person
-																	const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+																	const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
 																	return (
 																		<div key={dose.id} className={`dose-item ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
@@ -2215,7 +2215,7 @@ function AppContent() {
 							<div className="timeline">
 								{/* Past days toggle */}
 								{pastDays.length > 0 && (() => {
-									const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.flatMap(dose => dose.takenBy.length > 0 ? dose.takenBy.map(p => `${dose.id}-${p}`) : [dose.id])));
+									const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.flatMap(dose => (dose.takenBy || []).length > 0 ? dose.takenBy.map(p => `${dose.id}-${p}`) : [dose.id])));
 									const missedPastDoses = totalPastDoses.filter(id => !takenDoses.has(id)).length;
 									return (
 										<div 
@@ -2233,7 +2233,7 @@ function AppContent() {
 								})()}
 								{/* Past days (when expanded) */}
 								{showPastDays && pastDays.map((day) => {
-									const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
+									const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
 									const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 									const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 									const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
@@ -2261,7 +2261,7 @@ function AppContent() {
 												const med = meds.find(m => m.name === item.medName);
 												const medCov = coverageByMed[item.medName];
 												const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
-												const itemDoseIds = item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
+												const itemDoseIds = item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
 												const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -2274,7 +2274,7 @@ function AppContent() {
 														<div className="doses-col">
 															{item.doses.map((dose) => {
 																// If no takenBy, show single checkbox; otherwise show one per person
-																const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+																const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
 																return (
 																	<div key={dose.id} className="dose-item past">
 																		<span className="dose-time">{dose.timeStr}</span>
@@ -2325,7 +2325,7 @@ function AppContent() {
 											const status = willBeOutOfStock 
 												? { className: "danger", label: "status.outOfStock" }
 												: medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-											const itemDoseIds = item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
+											const itemDoseIds = item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
 											const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -2340,7 +2340,7 @@ function AppContent() {
 													</div>
 													<div className="doses-col">
 														{item.doses.map((dose) => {
-															const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+															const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
 															const now = Date.now();
 															const dayStart = new Date(day.date).setHours(0, 0, 0, 0);
 															const isPastDay = dayStart < new Date().setHours(0, 0, 0, 0);
@@ -2400,7 +2400,7 @@ function AppContent() {
 								<div className="med-detail-titles">
 									<h2>{selectedMed.name}</h2>
 									{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
-									{selectedMed.takenBy && selectedMed.takenBy.length > 0 && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy.join(", ")}</span>}
+									{selectedMed.takenBy && selectedMe(d.takenBy || []).length > 0 && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy.join(", ")}</span>}
 								</div>
 							</div>
 							<div className="med-detail-section">
@@ -2561,7 +2561,7 @@ function AppContent() {
 						</div>
 
 						<div className="user-meds-list">
-							{meds.filter(m => m.takenBy.includes(selectedUser)).map((med) => {
+							{meds.filter(m => (m.takenBy || []).includes(selectedUser)).map((med) => {
 								const medCoverage = coverage.all.find(c => c.name === med.name);
 								const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 								const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(med.count);
@@ -2583,7 +2583,7 @@ function AppContent() {
 									</div>
 								);
 							})}
-							{meds.filter(m => m.takenBy.includes(selectedUser)).length === 0 && (
+							{meds.filter(m => (m.takenBy || []).includes(selectedUser)).length === 0 && (
 								<div className="user-meds-empty">{t('modal.noMedsForUser', { name: selectedUser })}</div>
 							)}
 						</div>
@@ -2929,7 +2929,7 @@ function generateICS(med: Medication) {
 		const description = [
 			`Medication: ${med.name}`,
 			med.genericName ? `Generic: ${med.genericName}` : '',
-			med.takenBy && med.takenBy.length > 0 ? `For: ${med.takenBy.join(', ')}` : '',
+			med.takenBy && me(d.takenBy || []).length > 0 ? `For: ${med.takenBy.join(', ')}` : '',
 			`Dosage: ${pillInfo}`,
 			`Frequency: every ${interval} day${interval !== 1 ? 's' : ''}`,
 			med.notes ? `Notes: ${med.notes}` : '',
@@ -3577,7 +3577,7 @@ function SharedSchedule() {
 		endDate.setDate(endDate.getDate() + data.scheduleDays);
 		const endTime = endDate.getTime();
 		
-		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string; isPast: boolean }[] = [];
+		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string; isPast: boolean; takenBy: string[] }[] = [];
 
 		for (const med of data.medications) {
 			med.blisters.forEach((blister, blisterIdx) => {
@@ -3597,6 +3597,7 @@ function SharedSchedule() {
 						medName: med.name,
 						usage: blister.usage,
 						isPast,
+						takenBy: med.takenBy || [],
 						timeStr: d.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" }),
 					});
 					t += intervalMs;
@@ -3653,7 +3654,7 @@ function SharedSchedule() {
 		const takenByMed: Record<string, number> = {};
 		for (const dose of schedule.flatMap(d => d.meds.flatMap(m => m.doses))) {
 			// Check all person-specific dose IDs for this dose
-			const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+			const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
 			for (const person of people) {
 				const doseId = person ? `${dose.id}-${person}` : dose.id;
 				if (takenDoses.has(doseId)) {
@@ -3779,7 +3780,7 @@ function SharedSchedule() {
 						<>
 							{/* Past days toggle */}
 							{pastDays.length > 0 && (() => {
-								const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.flatMap(dose => dose.takenBy.length > 0 ? dose.takenBy.map(p => `${dose.id}-${p}`) : [dose.id])));
+								const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.flatMap(dose => (dose.takenBy || []).length > 0 ? dose.takenBy.map(p => `${dose.id}-${p}`) : [dose.id])));
 								const missedPastDoses = totalPastDoses.filter(id => !takenDoses.has(id)).length;
 								return (
 									<div 
@@ -3801,7 +3802,7 @@ function SharedSchedule() {
 							})()}
 							{/* Past days (when expanded) */}
 							{showPastDays && pastDays.map((day) => {
-								const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
+								const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
 								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 								const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
@@ -3849,7 +3850,7 @@ function SharedSchedule() {
 												}
 											}
 											
-											const itemDoseIds = item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
+											const itemDoseIds = item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
 											const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -3871,7 +3872,7 @@ function SharedSchedule() {
 													</div>
 													<div className="doses-col">
 														{item.doses.map((dose) => {
-															const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+															const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
 															return (
 																<div key={dose.id} className="dose-item past">
 																	<span className="dose-time">{dose.timeStr}</span>
@@ -3908,7 +3909,7 @@ function SharedSchedule() {
 							{/* Current and future days */}
 							{futureDays.map((day) => {
 								// Check if all doses in this day are taken (auto-collapse)
-								const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
+								const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
 								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 								
@@ -3967,7 +3968,7 @@ function SharedSchedule() {
 												}
 											}
 											
-											const itemDoseIds = item.doses.flatMap((d) => d.takenBy.length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
+											const itemDoseIds = item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]);
 											const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -3989,7 +3990,7 @@ function SharedSchedule() {
 													</div>
 													<div className="doses-col">
 														{item.doses.map((dose) => {
-															const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+															const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
 															// Only disable doses on future DAYS, not later today
 															const doseDate = new Date(dose.when);
 															doseDate.setHours(0, 0, 0, 0);

@@ -206,6 +206,8 @@ function AppContent() {
 	const [plannerLoading, setPlannerLoading] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [formSaved, setFormSaved] = useState(false);
+	const [originalForm, setOriginalForm] = useState<FormState>(defaultForm());
 	const [editingId, setEditingId] = useState<number | null>(null);
 	const [showEditModal, setShowEditModal] = useState(false);
 	const [form, setForm] = useState<FormState>(defaultForm());
@@ -234,6 +236,18 @@ function AppContent() {
 	const hasValidationErrors = useMemo(() => {
 		return Object.values(fieldErrors).some(error => error !== undefined);
 	}, [fieldErrors]);
+
+	// Check if form has been modified from original state
+	const formChanged = useMemo(() => {
+		return JSON.stringify(form) !== JSON.stringify(originalForm);
+	}, [form, originalForm]);
+
+	// Reset formSaved when form changes
+	useEffect(() => {
+		if (formChanged) {
+			setFormSaved(false);
+		}
+	}, [formChanged]);
 
 	// Validate all fields when form changes
 	useEffect(() => {
@@ -783,7 +797,8 @@ function AppContent() {
 	function startEdit(med: Medication) {
 		setEditingId(med.id);
 		setTakenByInput(""); // Clear tag input when starting edit
-		setForm({
+		setFormSaved(false);
+		const editForm: FormState = {
 			name: med.name,
 			genericName: med.genericName ?? "",
 			takenBy: med.takenBy || [], // Already an array from API
@@ -801,7 +816,9 @@ function AppContent() {
 				startDate: toDateValue(s.start),
 				startTime: toTimeValue(s.start)
 			})),
-		});
+		};
+		setForm(editForm);
+		setOriginalForm(editForm);
 		// Show modal on mobile
 		if (window.innerWidth <= 768) {
 			setShowEditModal(true);
@@ -814,7 +831,10 @@ function AppContent() {
 		setPendingImage(null);
 		setPendingImagePreview(null);
 		setTakenByInput("");
-		setForm(defaultForm());
+		setFormSaved(false);
+		const newForm = defaultForm();
+		setForm(newForm);
+		setOriginalForm(newForm);
 	}
 
 	function handleValueChange<K extends keyof FormState>(key: K, value: string) {
@@ -870,23 +890,38 @@ function AppContent() {
 
 		const method = editingId ? "PUT" : "POST";
 		const url = editingId ? `/api/medications/${editingId}` : "/api/medications";
+		const wasEditing = editingId;
 
 		try {
 			const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
 			
 			// If creating new medication and we have a pending image, upload it
-			if (!editingId && pendingImage && res.ok) {
+			if (!wasEditing && pendingImage && res.ok) {
 				const newMed = await res.json();
 				if (newMed?.id) {
 					await uploadMedImage(newMed.id, pendingImage);
 				}
+			}
+			
+			// Mark as saved and update original form to current state
+			if (res.ok) {
+				setFormSaved(true);
+				setOriginalForm(form);
 			}
 		} catch {
 			// ignore
 		}
 
 		setSaving(false);
-		resetForm();
+		
+		// Only reset form if creating new medication, not when editing
+		if (!wasEditing) {
+			resetForm();
+		} else {
+			// Close modal on mobile after edit
+			setShowEditModal(false);
+		}
+		
 		loadMeds();
 	}
 
@@ -1520,6 +1555,11 @@ function AppContent() {
 						<article className="card form desktop-only">
 							<div className="card-head">
 								<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
+								{editingId && (
+									<button type="button" className="btn secondary small" onClick={resetForm}>
+										+ {t('form.newEntry')}
+									</button>
+								)}
 							</div>
 							<form className="form-grid" onSubmit={saveMedication}>
 								<label className={fieldErrors.name ? 'has-error' : ''}>
@@ -1715,7 +1755,9 @@ function AppContent() {
 											{t('common.cancel')}
 										</button>
 									)}
-									<button type="submit" disabled={saving || hasValidationErrors}>{saving ? t('common.saving') : t('common.save')}</button>
+									<button type="submit" disabled={saving || hasValidationErrors || (!formChanged && (formSaved || editingId))}>
+										{saving ? t('common.saving') : formSaved && !formChanged ? t('common.saved') : t('common.save')}
+									</button>
 								</div>
 							</form>
 						</article>
@@ -2578,6 +2620,11 @@ function AppContent() {
 						<button className="modal-close" onClick={() => { setShowEditModal(false); resetForm(); }}>×</button>
 						<div className="edit-modal-header">
 							<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
+							{editingId && (
+								<button type="button" className="btn secondary small" onClick={resetForm}>
+									+ {t('form.newEntry')}
+								</button>
+							)}
 						</div>
 						<form className="form-grid mobile-edit-form" onSubmit={(e) => { saveMedication(e); setShowEditModal(false); }}>
 							<label className={`full ${fieldErrors.name ? 'has-error' : ''}`}>
@@ -2731,7 +2778,9 @@ function AppContent() {
 								<button type="button" className="ghost" onClick={() => { setShowEditModal(false); resetForm(); }}>
 									{t('common.cancel')}
 								</button>
-								<button type="submit" disabled={saving || hasValidationErrors}>{saving ? t('common.saving') : t('common.save')}</button>
+								<button type="submit" disabled={saving || hasValidationErrors || (!formChanged && (formSaved || editingId))}>
+									{saving ? t('common.saving') : formSaved && !formChanged ? t('common.saved') : t('common.save')}
+								</button>
 							</div>
 						</form>
 					</div>

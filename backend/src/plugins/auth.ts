@@ -49,6 +49,8 @@ export interface AuthState {
   authEnabled: boolean;
   registrationEnabled: boolean;
   localAuthEnabled: boolean;
+  oidcEnabled: boolean;
+  oidcProviderName: string;
   hasUsers: boolean;
   needsSetup: boolean;
 }
@@ -62,7 +64,9 @@ export async function getAuthState(): Promise<AuthState> {
     authEnabled: env.AUTH_ENABLED,
     // Registration: enabled via ENV OR no users exist (first-time setup)
     registrationEnabled: env.REGISTRATION_ENABLED || !hasUsers,
-    localAuthEnabled: !env.DISABLE_LOCAL_AUTH,
+    localAuthEnabled: env.AUTH_ENABLED,  // Password auth available when auth is enabled
+    oidcEnabled: env.OIDC_ENABLED,
+    oidcProviderName: env.OIDC_PROVIDER_NAME,
     hasUsers,
     needsSetup: env.AUTH_ENABLED && !hasUsers,
   };

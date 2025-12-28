@@ -16,8 +16,8 @@ const EnvSchema = z.object({
   AUTH_ENABLED: z.string().transform((v) => v === "true").default("false"),
   // Allow new user registrations (auto-enabled if no users exist)
   REGISTRATION_ENABLED: z.string().transform((v) => v === "true").default("false"),
-  // Disable local auth when using SSO only (Phase 2)
-  DISABLE_LOCAL_AUTH: z.string().transform((v) => v === "true").default("false"),
+  // Disable local auth when using SSO only
+
   
   // JWT Secrets - only required when AUTH_ENABLED=true
   JWT_SECRET: z.string().min(10).optional(),
@@ -27,6 +27,19 @@ const EnvSchema = z.object({
   // Token TTL settings
   ACCESS_TOKEN_TTL_MINUTES: z.string().transform((v) => parseInt(v, 10)).default("15"),
   REFRESH_TOKEN_TTL_DAYS: z.string().transform((v) => parseInt(v, 10)).default("7"),
+
+  // ==========================================================================
+  // OIDC SSO Configuration (Pocket ID, Authelia, etc.)
+  // ==========================================================================
+  OIDC_ENABLED: z.string().transform((v) => v === "true").default("false"),
+  OIDC_ISSUER_URL: z.string().url().optional(),  // e.g., https://auth.example.com
+  OIDC_CLIENT_ID: z.string().optional(),
+  OIDC_CLIENT_SECRET: z.string().optional(),
+  OIDC_REDIRECT_URI: z.string().url().optional(),  // e.g., https://medassist.example.com/api/auth/oidc/callback
+  OIDC_SCOPES: z.string().default("openid profile email"),
+  OIDC_AUTO_CREATE_USERS: z.string().transform((v) => v === "true").default("true"),
+  OIDC_USERNAME_CLAIM: z.string().default("preferred_username"),  // or 'email', 'sub'
+  OIDC_PROVIDER_NAME: z.string().default("SSO"),  // Display name for UI button
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -63,6 +76,30 @@ if (parsed.AUTH_ENABLED) {
     console.error("     Generate with: openssl rand -hex 32");
     console.error("");
     console.error("  2. Or disable authentication by removing AUTH_ENABLED=true");
+    console.error("=".repeat(60));
+    process.exit(1);
+  }
+}
+
+// Validate OIDC configuration when enabled
+if (parsed.OIDC_ENABLED) {
+  const missing: string[] = [];
+  if (!parsed.OIDC_ISSUER_URL) missing.push("OIDC_ISSUER_URL");
+  if (!parsed.OIDC_CLIENT_ID) missing.push("OIDC_CLIENT_ID");
+  if (!parsed.OIDC_CLIENT_SECRET) missing.push("OIDC_CLIENT_SECRET");
+  if (!parsed.OIDC_REDIRECT_URI) missing.push("OIDC_REDIRECT_URI");
+  
+  if (missing.length > 0) {
+    console.error("=".repeat(60));
+    console.error("OIDC CONFIGURATION ERROR");
+    console.error("=".repeat(60));
+    console.error(`OIDC_ENABLED=true but missing required settings: ${missing.join(", ")}`);
+    console.error("");
+    console.error("Required OIDC settings:");
+    console.error("  OIDC_ISSUER_URL=https://your-oidc-provider.com");
+    console.error("  OIDC_CLIENT_ID=your-client-id");
+    console.error("  OIDC_CLIENT_SECRET=your-client-secret");
+    console.error("  OIDC_REDIRECT_URI=https://your-app.com/api/auth/oidc/callback");
     console.error("=".repeat(60));
     process.exit(1);
   }

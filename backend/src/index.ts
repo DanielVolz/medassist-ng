@@ -13,6 +13,7 @@ import { env } from "./plugins/env.js";
 import { migrationsReady } from "./db/client.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
+import { oidcRoutes } from "./routes/oidc.js";
 import { medicationRoutes } from "./routes/medications.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { plannerRoutes } from "./routes/planner.js";
@@ -98,6 +99,7 @@ await app.register(fastifyStatic, {
 
 await app.register(healthRoutes);
 await app.register(authRoutes);
+await app.register(oidcRoutes);
 await app.register(medicationRoutes);
 await app.register(settingsRoutes);
 await app.register(plannerRoutes);

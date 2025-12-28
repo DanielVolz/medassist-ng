@@ -14,6 +14,8 @@ export interface AuthState {
   authEnabled: boolean;
   registrationEnabled: boolean;
   localAuthEnabled: boolean;
+  oidcEnabled: boolean;
+  oidcProviderName: string;
   hasUsers: boolean;
   needsSetup: boolean;
 }
@@ -296,51 +298,77 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: { onSuccess?: () =>
         <h1 className="auth-title">💊 MedAssist</h1>
         <h2 className="auth-subtitle">{t("auth.login", "Login")}</h2>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          {error && <div className="auth-error">{error}</div>}
-
-          <div className="form-group">
-            <label htmlFor="username">{t("auth.username", "Username")}</label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoComplete="username"
-              autoFocus
-            />
+        {/* SSO Login Button */}
+        {authState?.oidcEnabled && (
+          <div className="auth-sso">
+            <button
+              type="button"
+              className="btn btn-secondary auth-submit sso-btn"
+              onClick={() => window.location.href = "/api/auth/oidc/login"}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sso-icon">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                <polyline points="10 17 15 12 10 7"/>
+                <line x1="15" y1="12" x2="3" y2="12"/>
+              </svg>
+              {t("auth.loginWithSSO", "Login with {{provider}}", { provider: authState.oidcProviderName || "SSO" })}
+            </button>
+            {authState?.localAuthEnabled && (
+              <div className="auth-divider">
+                <span>{t("auth.or", "or")}</span>
+              </div>
+            )}
           </div>
+        )}
 
-          <div className="form-group">
-            <label htmlFor="password">{t("auth.password", "Password")}</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
+        {/* Local Login Form - only show if local auth is enabled */}
+        {authState?.localAuthEnabled && (
+          <form onSubmit={handleSubmit} className="auth-form">
+            {error && <div className="auth-error">{error}</div>}
 
-          <div className="form-group checkbox-group">
-            <label className="checkbox-label">
+            <div className="form-group">
+              <label htmlFor="username">{t("auth.username", "Username")}</label>
               <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                autoComplete="username"
+                autoFocus={!authState?.oidcEnabled}
               />
-              <span>{t("auth.rememberMe", "Remember me")}</span>
-            </label>
-          </div>
+            </div>
 
-          <button type="submit" className="btn btn-primary auth-submit" disabled={loading}>
-            {loading ? t("common.loading", "Loading...") : t("auth.login", "Login")}
-          </button>
-        </form>
+            <div className="form-group">
+              <label htmlFor="password">{t("auth.password", "Password")}</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </div>
 
-        {authState?.registrationEnabled && onSwitchToRegister && (
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>{t("auth.rememberMe", "Remember me")}</span>
+              </label>
+            </div>
+
+            <button type="submit" className="btn btn-primary auth-submit" disabled={loading}>
+              {loading ? t("common.loading", "Loading...") : t("auth.login", "Login")}
+            </button>
+          </form>
+        )}
+
+        {authState?.registrationEnabled && authState?.localAuthEnabled && onSwitchToRegister && (
           <div className="auth-links">
             <button type="button" className="auth-link-btn" onClick={onSwitchToRegister}>
               {t("auth.createAccount", "Create account")}

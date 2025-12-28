@@ -10,6 +10,7 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash", { length: 255 }),
   avatarUrl: text("avatar_url", { length: 255 }),
   authProvider: text("auth_provider", { length: 50 }).notNull().default("local"),
+  oidcSubject: text("oidc_subject", { length: 255 }),  // OIDC provider's unique user ID (sub claim)
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),

@@ -2512,6 +2512,54 @@ h3 .reminder-icon.info-tooltip {
   font-weight: 600;
 }
 
+/* SSO Login Button */
+.auth-sso {
+  margin-bottom: 1rem;
+}
+
+.sso-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  background: var(--card-bg);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.sso-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sso-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.25rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-primary);
+}
+
 .auth-form .checkbox-group {
   margin-bottom: 0.5rem;
 }

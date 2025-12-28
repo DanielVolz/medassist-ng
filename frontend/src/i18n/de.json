@@ -267,7 +267,9 @@
     "uploadAvatar": "Avatar hochladen",
     "removeAvatar": "Avatar entfernen",
     "avatarUpdated": "Avatar aktualisiert",
-    "avatarRemoved": "Avatar entfernt"
+    "avatarRemoved": "Avatar entfernt",
+    "loginWithSSO": "Mit {{provider}} anmelden",
+    "or": "oder"
   },
   "common": {
     "loading": "Wird geladen...",

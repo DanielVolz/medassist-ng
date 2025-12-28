@@ -269,7 +269,9 @@
     "uploadAvatar": "Upload avatar",
     "removeAvatar": "Remove avatar",
     "avatarUpdated": "Avatar updated",
-    "avatarRemoved": "Avatar removed"
+    "avatarRemoved": "Avatar removed",
+    "loginWithSSO": "Login with {{provider}}",
+    "or": "or"
   },
   "common": {
     "loading": "Loading...",

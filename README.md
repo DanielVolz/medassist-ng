@@ -23,9 +23,7 @@
 
 ### ⚠️ Disclaimer
 
-> **Your health is your responsibility.** Take it seriously and don't rely on any app, especially not this one! I don't have a medical or programming degree. This app is made with more love than knowledge, and it may have serious flaws.
->
-> Follow your doctor's instructions closely, keep track of your medication supply, and plan ahead for reordering.
+> **Your health is your responsibility.** This app may contain bugs. Follow your doctor's instructions closely, keep track of your medication supply, and plan ahead for reordering.
 >
 > **Think of this app as a helpful tool, but make all health decisions independently!**
 

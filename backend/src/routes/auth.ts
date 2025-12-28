@@ -215,6 +215,7 @@ export async function authRoutes(app: FastifyInstance) {
         user: {
           id: user.id,
           username: user.username,
+          avatarUrl: user.avatarUrl,
         },
       });
   });

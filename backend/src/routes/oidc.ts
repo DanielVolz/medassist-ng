@@ -43,6 +43,13 @@ function generateState(): string {
 }
 
 // =============================================================================
+// Helpers
+// =============================================================================
+function getFrontendUrl(): string {
+  return env.CORS_ORIGINS.split(",")[0] || "http://localhost:5173";
+}
+
+// =============================================================================
 // OIDC Routes
 // =============================================================================
 export async function oidcRoutes(app: FastifyInstance) {
@@ -103,7 +110,7 @@ export async function oidcRoutes(app: FastifyInstance) {
       return reply.redirect(authUrl.href);
     } catch (err: any) {
       console.error("[OIDC] Login error:", err);
-      return reply.redirect("/?error=oidc_init_failed");
+      return reply.redirect(`${getFrontendUrl()}/?error=oidc_init_failed`);
     }
   });
 
@@ -118,25 +125,25 @@ export async function oidcRoutes(app: FastifyInstance) {
       // Handle OIDC provider errors
       if (error) {
         console.error(`[OIDC] Provider error: ${error} - ${error_description}`);
-        return reply.redirect(`/?error=oidc_${error}`);
+        return reply.redirect(`${getFrontendUrl()}/?error=oidc_${error}`);
       }
       
       if (!code || !state) {
-        return reply.redirect("/?error=oidc_missing_params");
+        return reply.redirect(`${getFrontendUrl()}/?error=oidc_missing_params`);
       }
       
       // Verify state
       const storedState = request.unsignCookie(request.cookies.oidc_state || "");
       if (!storedState.valid || storedState.value !== state) {
         console.error("[OIDC] State mismatch");
-        return reply.redirect("/?error=oidc_state_mismatch");
+        return reply.redirect(`${getFrontendUrl()}/?error=oidc_state_mismatch`);
       }
       
       // Get code verifier
       const storedVerifier = request.unsignCookie(request.cookies.oidc_code_verifier || "");
       if (!storedVerifier.valid || !storedVerifier.value) {
         console.error("[OIDC] Missing code verifier");
-        return reply.redirect("/?error=oidc_missing_verifier");
+        return reply.redirect(`${getFrontendUrl()}/?error=oidc_missing_verifier`);
       }
       
       try {
@@ -159,7 +166,7 @@ export async function oidcRoutes(app: FastifyInstance) {
         
         if (!username || !oidcSubject) {
           console.error("[OIDC] Missing required user info:", { username, oidcSubject });
-          return reply.redirect("/?error=oidc_missing_user_info");
+          return reply.redirect(`${getFrontendUrl()}/?error=oidc_missing_user_info`);
         }
         
         // Clean cookies
@@ -170,7 +177,7 @@ export async function oidcRoutes(app: FastifyInstance) {
         let user = await findOrCreateOIDCUser(username, oidcSubject, reply);
         
         if (!user) {
-          return reply.redirect("/?error=oidc_user_creation_failed");
+          return reply.redirect(`${getFrontendUrl()}/?error=oidc_user_creation_failed`);
         }
         
         // Update last login
@@ -192,12 +199,14 @@ export async function oidcRoutes(app: FastifyInstance) {
         // Set cookies
         setAuthCookies(reply, accessToken, refreshToken);
         
-        // Redirect to dashboard
-        return reply.redirect("/dashboard");
+        // Redirect to frontend dashboard
+        // In dev: CORS_ORIGINS contains the frontend URL
+        const frontendUrl = env.CORS_ORIGINS.split(",")[0] || "http://localhost:5173";
+        return reply.redirect(`${frontendUrl}/dashboard`);
         
       } catch (err: any) {
         console.error("[OIDC] Callback error:", err);
-        return reply.redirect("/?error=oidc_callback_failed");
+        return reply.redirect(`${getFrontendUrl()}/?error=oidc_callback_failed`);
       }
     }
   );
@@ -227,11 +236,18 @@ async function findOrCreateOIDCUser(
     .where(eq(users.username, username));
   
   if (existingByUsername) {
-    // Username collision! Check if it's a local user
-    if (existingByUsername.authProvider === "local" && existingByUsername.passwordHash) {
-      // Local user exists with this username - add suffix
+    // Username collision! Check if it's a local user without OIDC linked
+    if (existingByUsername.authProvider === "local" && !existingByUsername.oidcSubject) {
+      // Local user exists without SSO - link this OIDC account to existing user
+      await db.update(users)
+        .set({ oidcSubject: oidcSubject })
+        .where(eq(users.id, existingByUsername.id));
+      console.log(`[OIDC] Linked OIDC to existing local user: ${username}`);
+      return { id: existingByUsername.id, username: existingByUsername.username };
+    } else if (existingByUsername.oidcSubject && existingByUsername.oidcSubject !== oidcSubject) {
+      // User already has a DIFFERENT OIDC subject - create new user with suffix
       username = `${username}_sso`;
-      console.log(`[OIDC] Username collision, using: ${username}`);
+      console.log(`[OIDC] Username collision (different OIDC subject), using: ${username}`);
     } else if (existingByUsername.authProvider === "oidc" && !existingByUsername.oidcSubject) {
       // Legacy OIDC user without subject - update it
       await db.update(users)

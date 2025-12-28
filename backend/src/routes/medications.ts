@@ -28,7 +28,7 @@ const medicationSchema = z.object({
   looseTablets: z.number().int().min(0).default(0),
   pillWeightMg: z.number().int().min(1).nullable().optional(),
   expiryDate: z.string().nullable().optional(),
-  notes: z.string().max(500).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
   intakeRemindersEnabled: z.boolean().default(false),
   blisters: z.array(blisterSchema).min(1).max(12),
 });

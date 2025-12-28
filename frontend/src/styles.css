@@ -488,6 +488,23 @@ textarea {
   min-height: 60px;
 }
 
+/* Auto-resize textarea */
+textarea.auto-resize {
+  resize: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 100px;
+  max-height: 400px;
+}
+
+/* Mobile textarea improvements */
+@media (max-width: 600px) {
+  textarea.auto-resize {
+    min-height: 120px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+}
+
 .static-value {
   padding: 0.7rem 0.85rem;
   border-radius: var(--btn-radius);
@@ -2389,6 +2406,31 @@ textarea {
   margin-bottom: 0;
   padding-bottom: 0;
   border-bottom: none;
+}
+
+/* Notes content in modal - auto-sizing box */
+.med-notes-content {
+  background: var(--bg-secondary);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.6;
+  max-height: 300px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  font-size: 1rem;
+}
+
+/* Mobile: larger notes box with better touch scrolling */
+@media (max-width: 600px) {
+  .med-notes-content {
+    min-height: 80px;
+    max-height: 200px;
+    font-size: 1rem;
+    padding: 1rem;
+    touch-action: pan-y; /* Enable vertical touch scrolling */
+  }
 }
 
 .med-detail-section h3 {

@@ -1482,7 +1482,9 @@ function AppContent() {
 										onChange={(e) => handleValueChange("notes", e.target.value)} 
 										placeholder={t('form.placeholders.notes')}
 										rows={2}
-										maxLength={500}
+										maxLength={2000}
+										className="auto-resize"
+										onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
 									/>
 								</label>
 
@@ -2450,7 +2452,15 @@ function AppContent() {
 							</label>
 							<label className="full">
 								{t('form.notes')}
-								<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t('form.placeholders.notes')} rows={2} />
+								<textarea 
+									value={form.notes} 
+									onChange={(e) => setForm({ ...form, notes: e.target.value })} 
+									placeholder={t('form.placeholders.notes')} 
+									rows={2} 
+									maxLength={2000}
+									className="auto-resize"
+									onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+								/>
 							</label>
 
 							{editingId && (() => {

@@ -183,9 +183,23 @@ body.modal-open {
 }
 
 .tabs { display: flex; gap: 0.5rem; }
-.tabs .pill { cursor: pointer; transition: all 150ms ease; }
-.tabs .pill:hover { background: rgba(47, 134, 246, 0.15); }
-.tabs .pill.primary { background: rgba(47, 134, 246, 0.25); border-color: #2f86f6; }
+.tabs .pill {
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+  background: transparent;
+  border: 1px solid var(--border-secondary);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+.tabs .pill:hover {
+  background: var(--btn-ghost-hover);
+  border-color: var(--accent);
+}
+.tabs .pill.primary {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
 
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; align-items: center; }
 .stat { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 0.9rem; }

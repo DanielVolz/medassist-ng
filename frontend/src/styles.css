@@ -900,11 +900,13 @@ textarea {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    align-items: stretch;
   }
   .table-row span {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    text-align: left;
   }
   .table-row span::before {
     content: attr(data-label);
@@ -914,6 +916,7 @@ textarea {
     text-transform: uppercase;
     margin-right: 1rem;
     flex-shrink: 0;
+    text-align: left;
   }
   /* First span (name cell) - centered horizontal layout */
   .table-row span:first-child {
@@ -923,6 +926,10 @@ textarea {
   }
   .table-row span:first-child::before {
     display: none; /* Hide "NAME" label on mobile */
+  }
+  /* Status chip in table row - left aligned */
+  .table-row span.status-chip {
+    align-self: flex-start;
   }
   /* Avatar + name layout - centered */
   .table-row .cell-with-avatar {

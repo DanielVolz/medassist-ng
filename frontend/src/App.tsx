@@ -2501,7 +2501,7 @@ function AppContent() {
 											<span>{t('form.blisters.startTime')}</span>
 											<input type="time" value={b.startTime} onChange={(e) => setBlisterValue(idx, "startTime", e.target.value)} />
 										</label>
-										{form.blisters.length > 1 && <button type="button" className="danger remove-blister-btn" onClick={() => removeBlister(idx)} title={t('common.delete')}>🗑</button>}
+										{form.blisters.length > 1 && <button type="button" className="danger remove-blister-btn" onClick={() => removeBlister(idx)}>{t('common.remove')}</button>}
 									</div>
 								))}
 								<button type="button" className="ghost add-blister" onClick={addBlister}>+ {t('form.blisters.addIntake')}</button>

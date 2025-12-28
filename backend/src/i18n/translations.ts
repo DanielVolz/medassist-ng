@@ -43,6 +43,11 @@ type TranslationKeys = {
     daysLeft: string;
     pillsAt: string;
     repeatDailyNote: string;
+    empty: string;
+    low: string;
+    reorderNow: string;
+    emptySection: string;
+    lowSection: string;
   };
   // Common
   common: {
@@ -94,6 +99,11 @@ const translations: Record<Language, TranslationKeys> = {
       daysLeft: "{count} days left",
       pillsAt: "{count} pills at {time}",
       repeatDailyNote: "(Daily reminder enabled)",
+      empty: "Empty",
+      low: "Low",
+      reorderNow: "Reorder Now!",
+      emptySection: "EMPTY (reorder immediately)",
+      lowSection: "RUNNING LOW (reorder soon)",
     },
     common: {
       pill: "pill",
@@ -142,6 +152,11 @@ const translations: Record<Language, TranslationKeys> = {
       daysLeft: "{count} Tage übrig",
       pillsAt: "{count} Tabletten um {time}",
       repeatDailyNote: "(Tägliche Erinnerung aktiviert)",
+      empty: "Leer",
+      low: "Knapp",
+      reorderNow: "Jetzt nachbestellen!",
+      emptySection: "LEER (sofort nachbestellen)",
+      lowSection: "WIRD KNAPP (bald nachbestellen)",
     },
     common: {
       pill: "Tablette",

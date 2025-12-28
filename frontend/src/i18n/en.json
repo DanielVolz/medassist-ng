@@ -52,6 +52,8 @@
       "noRemindersNeeded": "no reminders needed",
       "needReorder": "{{count}} med needs reorder",
       "needReorder_other": "{{count}} meds need reorder",
+      "emptyStock": "{{count}} med is empty",
+      "emptyStock_other": "{{count}} meds are empty",
       "lowWarning": "{{count}} medication running low",
       "lowWarning_other": "{{count}} medications running low",
       "waitingFirstCheck": "waiting for first check",
@@ -277,6 +279,11 @@
     "loading": "Loading...",
     "sending": "Sending...",
     "saving": "Saving...",
+    "validation": {
+      "required": "This field is required",
+      "maxLength": "Maximum {{max}} characters ({{current}}/{{max}})",
+      "tooLong": "{{current}}/{{max}} characters"
+    },
     "saved": "Saved ✓",
     "save": "Save",
     "cancel": "Cancel",

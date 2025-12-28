@@ -20,6 +20,7 @@
   --danger-bg: rgba(255, 94, 94, 0.12);
   --warning: #fcd34d;
   --warning-bg: rgba(252, 211, 77, 0.12);
+  --info: #93c5fd;
   --shadow: rgba(0, 0, 0, 0.25);
   /* Button Design System */
   --btn-radius: 10px;
@@ -51,6 +52,7 @@
   --danger-bg: rgba(239, 68, 68, 0.1);
   --warning: #f59e0b;
   --warning-bg: rgba(245, 158, 11, 0.1);
+  --info: #3b82f6;
   --shadow: rgba(0, 0, 0, 0.08);
   /* Button Design System */
   --btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -168,9 +170,11 @@ body.modal-open {
   word-break: break-word;
 }
 
-.email-status-text strong {
-  color: var(--accent-light);
-}
+/* Allow color classes to override default strong color */
+.email-status-text .danger-text { color: var(--danger) !important; }
+.email-status-text .warning-text { color: var(--warning) !important; }
+.email-status-text .info-text { color: var(--info) !important; }
+.email-status-text .success-text { color: var(--success) !important; }
 
 .email-status-recipient {
   color: var(--text-muted);
@@ -314,6 +318,7 @@ body.modal-open {
 .tag-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.25rem; }
 .danger-text { color: var(--danger); font-weight: 700; }
 .warning-text { color: var(--warning); font-weight: 700; }
+.info-text { color: var(--info, #60a5fa); font-weight: 500; }
 .success-text { color: var(--success); font-weight: 700; }
 
 .optional-label { 
@@ -521,6 +526,41 @@ textarea.auto-resize {
 .form-grid .full { grid-column: 1 / -1; }
 .form-grid .optional-label { text-transform: none; font-weight: 400; font-size: 0.75rem; }
 .align-end { display: flex; justify-content: flex-end; gap: 0.75rem; }
+
+/* Form field validation */
+.form-grid label.has-error input,
+.form-grid label.has-error textarea {
+  border-color: var(--danger) !important;
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+.form-grid label.has-error input:focus,
+.form-grid label.has-error textarea:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-top: 0.25rem;
+}
+
+.char-count {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: right;
+  margin-top: 0.25rem;
+}
+
+.char-count.warning {
+  color: var(--warning);
+}
 
 .timeline { display: flex; flex-direction: column; gap: 1rem; }
 

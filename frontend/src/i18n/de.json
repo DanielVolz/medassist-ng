@@ -50,6 +50,8 @@
       "noRemindersNeeded": "keine Erinnerungen nötig",
       "needReorder": "{{count}} Medikament nachbestellen",
       "needReorder_other": "{{count}} Medikamente nachbestellen",
+      "emptyStock": "{{count}} Medikament leer",
+      "emptyStock_other": "{{count}} Medikamente leer",
       "lowWarning": "{{count}} Medikament wird knapp",
       "lowWarning_other": "{{count}} Medikamente werden knapp",
       "waitingFirstCheck": "warte auf erste Prüfung",
@@ -275,6 +277,11 @@
     "loading": "Wird geladen...",
     "sending": "Wird gesendet...",
     "saving": "Wird gespeichert...",
+    "validation": {
+      "required": "Dieses Feld ist erforderlich",
+      "maxLength": "Maximal {{max}} Zeichen ({{current}}/{{max}})",
+      "tooLong": "{{current}}/{{max}} Zeichen"
+    },
     "saved": "Gespeichert ✓",
     "save": "Speichern",
     "cancel": "Abbrechen",

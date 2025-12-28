@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { medications, users } from "../db/schema.js";
+import { medications, users, userSettings } from "../db/schema.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { loadUserSettings, getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
@@ -170,6 +170,22 @@ export function updateReminderSentTime(type: "stock" | "intake" = "stock", chann
     lastNotificationType: type,
     lastNotificationChannel: channel,
   });
+}
+
+// Update user settings in database when reminder is sent
+export async function updateUserReminderSentTime(
+  userId: number, 
+  type: "stock" | "intake" = "stock", 
+  channel: "email" | "push" | "both" = "email"
+): Promise<void> {
+  const now = new Date().toISOString();
+  await db.update(userSettings)
+    .set({
+      lastAutoEmailSent: now,
+      lastNotificationType: type,
+      lastNotificationChannel: channel,
+    })
+    .where(eq(userSettings.userId, userId));
 }
 
 function parseBlisters(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
@@ -406,16 +422,38 @@ async function checkAndSendReminderForUser(
   
   // Send Shoutrrr notification if enabled
   if (shoutrrrEnabled) {
-    const title = allLowStock.length === 1 
-      ? tr.push.stockTitle 
-      : t(tr.push.stockTitleMultiple, { count: allLowStock.length });
-    let message = allLowStock
-      .map((m) => `• ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`)
-      .join("\n");
+    // Separate empty from low stock medications
+    const emptyMeds = allLowStock.filter(m => m.medsLeft <= 0);
+    const lowMeds = allLowStock.filter(m => m.medsLeft > 0);
+    
+    // Build clear title
+    const titleParts: string[] = [];
+    if (emptyMeds.length > 0) {
+      titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty || "Empty"}`);
+    }
+    if (lowMeds.length > 0) {
+      titleParts.push(`⚠️ ${lowMeds.length} ${tr.push.low || "Low"}`);
+    }
+    const title = `MedAssist: ${titleParts.join(", ")} - ${tr.push.reorderNow || "Reorder Now!"}`;
+    
+    // Build clear message with sections
+    const messageParts: string[] = [];
+    if (emptyMeds.length > 0) {
+      messageParts.push(`🚨 ${tr.push.emptySection || "EMPTY (reorder immediately)"}:`);
+      emptyMeds.forEach(m => messageParts.push(`  • ${m.name}`));
+    }
+    if (lowMeds.length > 0) {
+      if (emptyMeds.length > 0) messageParts.push("");
+      messageParts.push(`⚠️ ${tr.push.lowSection || "RUNNING LOW (reorder soon)"}:`);
+      lowMeds.forEach(m => messageParts.push(`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`));
+    }
     
     if (settings.repeatDailyReminders) {
-      message += `\n\n${tr.push.repeatDailyNote}`;
+      messageParts.push("");
+      messageParts.push(tr.push.repeatDailyNote);
     }
+    
+    const message = messageParts.join("\n");
     
     const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
     shoutrrrSuccess = result.success;
@@ -438,6 +476,9 @@ async function checkAndSendReminderForUser(
       lastNotificationType: "stock",
       lastNotificationChannel: channel,
     });
+    
+    // Also update user settings in database so frontend can display the info
+    await updateUserReminderSentTime(settings.userId, "stock", channel);
   }
 }
 

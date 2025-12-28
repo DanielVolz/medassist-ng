@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
-import { getReminderState, updateReminderSentTime } from "./reminder-scheduler.js";
+import { getReminderState, updateReminderSentTime, updateUserReminderSentTime } from "./reminder-scheduler.js";
 
 type Blister = { usage: number; every: number; start: string };
 
@@ -380,6 +380,9 @@ async function checkAndSendIntakeRemindersForUser(
     // Update global reminder state for UI display
     const channel = emailSuccess && shoutrrrSuccess ? "both" : emailSuccess ? "email" : "push";
     updateReminderSentTime("intake", channel);
+    
+    // Also update user settings in database so frontend can display the info
+    await updateUserReminderSentTime(settings.userId, "intake", channel);
   }
 }
 

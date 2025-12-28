@@ -71,6 +71,21 @@ const defaultBlister = (): FormBlister => {
 
 const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, blisters: [defaultBlister()] });
 
+// Field validation limits (must match backend)
+const FIELD_LIMITS = {
+	name: { min: 1, max: 100 },
+	genericName: { max: 100 },
+	takenBy: { max: 100 },
+	notes: { max: 2000 }
+} as const;
+
+type FieldErrors = {
+	name?: string;
+	genericName?: string;
+	takenBy?: string;
+	notes?: string;
+};
+
 const todayIso = () => new Date().toISOString();
 const plusDaysIso = (days: number) => {
 	const d = new Date();
@@ -194,10 +209,38 @@ function AppContent() {
 	const [editingId, setEditingId] = useState<number | null>(null);
 	const [showEditModal, setShowEditModal] = useState(false);
 	const [form, setForm] = useState<FormState>(defaultForm());
+	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 	const [range, setRange] = useState<{ start: string; end: string }>({
 		start: toInputValue(todayIso()),
 		end: toInputValue(plusDaysIso(3))
 	});
+
+	// Validate form fields
+	const validateField = (field: keyof FieldErrors, value: string): string | undefined => {
+		const limits = FIELD_LIMITS[field];
+		if (field === 'name' && (!value || value.trim().length === 0)) {
+			return t('common.validation.required');
+		}
+		if ('max' in limits && value.length > limits.max) {
+			return t('common.validation.maxLength', { max: limits.max, current: value.length });
+		}
+		return undefined;
+	};
+
+	// Check if form has any errors
+	const hasValidationErrors = useMemo(() => {
+		return Object.values(fieldErrors).some(error => error !== undefined);
+	}, [fieldErrors]);
+
+	// Validate all fields when form changes
+	useEffect(() => {
+		const errors: FieldErrors = {};
+		(['name', 'genericName', 'takenBy', 'notes'] as const).forEach(field => {
+			const error = validateField(field, form[field]);
+			if (error) errors[field] = error;
+		});
+		setFieldErrors(errors);
+	}, [form.name, form.genericName, form.takenBy, form.notes, t]);
 
 	// Load user-specific planner data when user changes
 	useEffect(() => {
@@ -1434,17 +1477,36 @@ function AppContent() {
 								<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
 							</div>
 							<form className="form-grid" onSubmit={saveMedication}>
-								<label>
+								<label className={fieldErrors.name ? 'has-error' : ''}>
 									{t('form.commercialName')}
-									<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('form.placeholders.commercial')} required />
+									<input 
+										value={form.name} 
+										onChange={(e) => setForm({ ...form, name: e.target.value })} 
+										placeholder={t('form.placeholders.commercial')} 
+										maxLength={FIELD_LIMITS.name.max}
+										required 
+									/>
+									{fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
 								</label>
-								<label>
+								<label className={fieldErrors.genericName ? 'has-error' : ''}>
 									{t('form.genericName')}
-									<input value={form.genericName} onChange={(e) => setForm({ ...form, genericName: e.target.value })} placeholder={t('form.placeholders.generic')} />
+									<input 
+										value={form.genericName} 
+										onChange={(e) => setForm({ ...form, genericName: e.target.value })} 
+										placeholder={t('form.placeholders.generic')} 
+										maxLength={FIELD_LIMITS.genericName.max}
+									/>
+									{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
 								</label>
-								<label>
+								<label className={fieldErrors.takenBy ? 'has-error' : ''}>
 									{t('form.takenBy')}
-									<input value={form.takenBy} onChange={(e) => setForm({ ...form, takenBy: e.target.value })} placeholder={t('form.placeholders.takenBy')} />
+									<input 
+										value={form.takenBy} 
+										onChange={(e) => setForm({ ...form, takenBy: e.target.value })} 
+										placeholder={t('form.placeholders.takenBy')} 
+										maxLength={FIELD_LIMITS.takenBy.max}
+									/>
+									{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 								</label>
 								<label>
 									{t('form.packs')}
@@ -1475,17 +1537,23 @@ function AppContent() {
 									<input type="date" value={form.expiryDate} onChange={(e) => handleValueChange("expiryDate", e.target.value)} placeholder={t('common.optional')} />
 								</label>
 
-								<label className="full">
+								<label className={`full ${fieldErrors.notes ? 'has-error' : ''}`}>
 									{t('form.notes')}
 									<textarea 
 										value={form.notes} 
 										onChange={(e) => handleValueChange("notes", e.target.value)} 
 										placeholder={t('form.placeholders.notes')}
 										rows={2}
-										maxLength={2000}
+										maxLength={FIELD_LIMITS.notes.max}
 										className="auto-resize"
 										onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
 									/>
+									{form.notes.length > 0 && (
+										<span className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? 'warning' : ''}`}>
+											{t('common.validation.tooLong', { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
+										</span>
+									)}
+									{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
 								</label>
 
 <div className="full blisters">
@@ -1574,7 +1642,7 @@ function AppContent() {
 														reader.onload = (ev) => setPendingImagePreview(ev.target?.result as string);
 														reader.readAsDataURL(file);
 													}
-												}}
+								}}
 											/>
 										);
 									})()}
@@ -1586,7 +1654,7 @@ function AppContent() {
 											{t('common.cancel')}
 										</button>
 									)}
-									<button type="submit" disabled={saving}>{saving ? t('common.saving') : t('common.save')}</button>
+									<button type="submit" disabled={saving || hasValidationErrors}>{saving ? t('common.saving') : t('common.save')}</button>
 								</div>
 							</form>
 						</article>
@@ -2411,17 +2479,36 @@ function AppContent() {
 							<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
 						</div>
 						<form className="form-grid mobile-edit-form" onSubmit={(e) => { saveMedication(e); setShowEditModal(false); }}>
-							<label className="full">
+							<label className={`full ${fieldErrors.name ? 'has-error' : ''}`}>
 								{t('form.commercialName')}
-								<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('form.placeholders.commercial')} required />
+								<input 
+									value={form.name} 
+									onChange={(e) => setForm({ ...form, name: e.target.value })} 
+									placeholder={t('form.placeholders.commercial')} 
+									maxLength={FIELD_LIMITS.name.max}
+									required 
+								/>
+								{fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
 							</label>
-							<label className="full">
+							<label className={`full ${fieldErrors.genericName ? 'has-error' : ''}`}>
 								{t('form.genericName')}
-								<input value={form.genericName} onChange={(e) => setForm({ ...form, genericName: e.target.value })} placeholder={t('form.placeholders.generic')} />
+								<input 
+									value={form.genericName} 
+									onChange={(e) => setForm({ ...form, genericName: e.target.value })} 
+									placeholder={t('form.placeholders.generic')} 
+									maxLength={FIELD_LIMITS.genericName.max}
+								/>
+								{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
 							</label>
-							<label className="full">
+							<label className={`full ${fieldErrors.takenBy ? 'has-error' : ''}`}>
 								{t('form.takenBy')}
-								<input value={form.takenBy} onChange={(e) => setForm({ ...form, takenBy: e.target.value })} placeholder={t('form.placeholders.takenBy')} />
+								<input 
+									value={form.takenBy} 
+									onChange={(e) => setForm({ ...form, takenBy: e.target.value })} 
+									placeholder={t('form.placeholders.takenBy')} 
+									maxLength={FIELD_LIMITS.takenBy.max}
+								/>
+								{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 							</label>
 							<label>
 								{t('form.packs')}
@@ -2450,17 +2537,23 @@ function AppContent() {
 								{t('form.expiryDate')}
 								<input type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} />
 							</label>
-							<label className="full">
+							<label className={`full ${fieldErrors.notes ? 'has-error' : ''}`}>
 								{t('form.notes')}
 								<textarea 
 									value={form.notes} 
 									onChange={(e) => setForm({ ...form, notes: e.target.value })} 
 									placeholder={t('form.placeholders.notes')} 
 									rows={2} 
-									maxLength={2000}
+									maxLength={FIELD_LIMITS.notes.max}
 									className="auto-resize"
 									onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
 								/>
+								{form.notes.length > 0 && (
+									<span className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? 'warning' : ''}`}>
+										{t('common.validation.tooLong', { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
+									</span>
+								)}
+								{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
 							</label>
 
 							{editingId && (() => {
@@ -2521,7 +2614,7 @@ function AppContent() {
 								<button type="button" className="ghost" onClick={() => { setShowEditModal(false); resetForm(); }}>
 									{t('common.cancel')}
 								</button>
-								<button type="submit" disabled={saving}>{saving ? t('common.saving') : t('common.save')}</button>
+								<button type="submit" disabled={saving || hasValidationErrors}>{saving ? t('common.saving') : t('common.save')}</button>
 							</div>
 						</form>
 					</div>
@@ -2819,10 +2912,18 @@ function getReminderStatusText(
 	t: (key: string, options?: Record<string, unknown>) => string, 
 	locale: string
 ): React.ReactNode {
-	// Find the earliest medication that needs a reminder (based on reminderDaysBefore)
-	const medsNeedingReminder = lowStock
-		.filter((c) => c.depletionTime !== null && c.daysLeft !== null && c.daysLeft <= reminderDaysBefore)
+	// Find empty medications (medsLeft <= 0)
+	const emptyMeds = allCoverage.filter((c) => c.medsLeft <= 0);
+	
+	// Find medications that need reminder (daysLeft <= reminderDaysBefore but not empty)
+	const medsNeedingReminder = allCoverage
+		.filter((c) => c.medsLeft > 0 && c.daysLeft !== null && c.daysLeft <= reminderDaysBefore)
 		.sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
+	
+	// Find low stock medications (not yet critical but running low)
+	const lowStockNotYetCritical = allCoverage.filter(
+		(c) => c.medsLeft > 0 && c.daysLeft !== null && c.daysLeft > reminderDaysBefore && c.daysLeft < lowStockDays
+	);
 
 	const formatLastSent = (iso: string) => {
 		const date = new Date(iso);
@@ -2844,33 +2945,45 @@ function getReminderStatusText(
 		return dateStr;
 	};
 
-	if (medsNeedingReminder.length > 0) {
-		// There are medications that need reminders
-		if (lastSent) {
-			return (
-				<>
-					<span className="email-status-line"><strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</strong></span>
-					<span className="email-status-line">{t('dashboard.reminders.lastReminder')}: {formatLastInfo(lastSent)}</span>
-				</>
-			);
+	// Priority 1: Empty medications (critical - red)
+	if (emptyMeds.length > 0) {
+		const parts: React.ReactNode[] = [
+			<strong key="empty" className="danger-text">🚨 {t('dashboard.reminders.emptyStock', { count: emptyMeds.length })}</strong>
+		];
+		if (medsNeedingReminder.length > 0) {
+			parts.push(<span key="reorder" className="danger-text"> · ⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</span>);
+		}
+		if (lowStockNotYetCritical.length > 0) {
+			parts.push(<span key="low" className="warning-text"> · {t('dashboard.reminders.lowWarning', { count: lowStockNotYetCritical.length })}</span>);
 		}
 		return (
 			<>
-				<span className="email-status-line"><strong className="warning-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</strong></span>
-				<span className="email-status-line">{t('dashboard.reminders.waitingFirstCheck')}</span>
+				<span className="email-status-line">{parts}</span>
+				<span className="email-status-line">{lastSent ? `${t('dashboard.reminders.lastReminder')}: ${formatLastInfo(lastSent)}` : ''}</span>
 			</>
 		);
 	}
 
-	// Check if there are low stock medications (not yet needing reminder but running low)
-	const lowStockNotYetCritical = allCoverage.filter(
-		(c) => c.daysLeft !== null && c.daysLeft > reminderDaysBefore && c.daysLeft < lowStockDays
-	);
+	// Priority 2: Medications needing reminder soon (critical - red)
+	if (medsNeedingReminder.length > 0) {
+		const parts: React.ReactNode[] = [
+			<strong key="reorder" className="danger-text">⚠ {t('dashboard.reminders.needReorder', { count: medsNeedingReminder.length })}</strong>
+		];
+		if (lowStockNotYetCritical.length > 0) {
+			parts.push(<span key="low" className="warning-text"> · {t('dashboard.reminders.lowWarning', { count: lowStockNotYetCritical.length })}</span>);
+		}
+		return (
+			<>
+				<span className="email-status-line">{parts}</span>
+				<span className="email-status-line">{lastSent ? `${t('dashboard.reminders.lastReminder')}: ${formatLastInfo(lastSent)}` : ''}</span>
+			</>
+		);
+	}
 
+	// Priority 3: Low stock but not yet critical (warning - yellow)
 	if (lowStockNotYetCritical.length > 0) {
-		// There are low stock meds but not critical yet
 		const nextMed = lowStockNotYetCritical.sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
-		const daysUntilReminder = (nextMed.daysLeft ?? 0) - reminderDaysBefore;
+		const daysUntilReminder = Math.max(0, (nextMed.daysLeft ?? 0) - reminderDaysBefore);
 		return (
 			<>
 				<span className="email-status-line"><span className="warning-text">{t('dashboard.reminders.lowWarning', { count: lowStockNotYetCritical.length })}</span></span>
@@ -2880,8 +2993,8 @@ function getReminderStatusText(
 	}
 
 	// Calculate when next reminder would be triggered
-	const allWithDepletion = lowStock
-		.filter((c) => c.depletionTime !== null && c.daysLeft !== null)
+	const allWithDepletion = allCoverage
+		.filter((c) => c.depletionTime !== null && c.daysLeft !== null && c.medsLeft > 0)
 		.sort((a, b) => (a.daysLeft ?? Infinity) - (b.daysLeft ?? Infinity));
 
 	if (allWithDepletion.length > 0) {

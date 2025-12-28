@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="frontend/public/web-app-manifest-512x512.png" alt="MedAssist Logo" width="120" />
+  <img src="frontend/public/web-app-manifest-512x512.png" alt="MedAssist-ng Logo" width="120" />
 </p>
 
-<h1 align="center">MedAssist</h1>
+<h1 align="center">MedAssist-ng</h1>
 
 <p align="center">
   <strong>Never run out of your medications again.</strong><br>
@@ -23,7 +23,7 @@
 
 ### ⚠️ Disclaimer
 
-> **Your health is your responsibility.** Take it seriously and don't rely on any app, especially not this one! I don't have a medical or programming degree—this app is made with more love than knowledge, and it may have serious flaws.
+> **Your health is your responsibility.** Take it seriously and don't rely on any app, especially not this one! I don't have a medical or programming degree. This app is made with more love than knowledge, and it may have serious flaws.
 >
 > Follow your doctor's instructions closely, keep track of your medication supply, and plan ahead for reordering.
 >
@@ -37,7 +37,7 @@
 # Features
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="MedAssist Dashboard" width="100%" />
+  <img src="docs/screenshots/dashboard.png" alt="MedAssist-ng Dashboard" width="100%" />
 </p>
 
 ### Smart Inventory
@@ -54,9 +54,13 @@
 - Configurable warning thresholds
 - Intake reminders via push notifications
 
+### Trip Planner
+- Calculate how many pills you need for a trip or date range
+- Plan ahead for vacations, business trips, or hospital stays
+
 ### Multi-Person Support
 - Manage medications for multiple people
-- Share links allow caregivers to mark doses as taken
+- Share schedules via link. Recipients can mark doses as taken, you see it live
 
 ### Notifications
 - Email via SMTP
@@ -66,11 +70,12 @@
 ### Privacy & Security
 - Fully self-hosted
 - SSO via OIDC (Authelia, Authentik, Pocket ID, Keycloak)
+- Non-root containers
 - Dark mode included 😎
 
 # Getting Started
 
-The easiest way to deploy MedAssist is with Docker Compose:
+The easiest way to deploy MedAssist-ng is with Docker Compose:
 
 ```bash
 git clone https://github.com/DanielVolz/medassist-ng.git

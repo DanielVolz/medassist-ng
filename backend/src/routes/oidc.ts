@@ -157,7 +157,12 @@ export async function oidcRoutes(app: FastifyInstance) {
         });
         
         // Get user info
-        const userInfo = await client.fetchUserInfo(config, tokens.access_token, tokens.claims()?.sub);
+        const sub = tokens.claims()?.sub;
+        if (!sub) {
+          console.error("[OIDC] Missing sub claim in token");
+          return reply.redirect(`${getFrontendUrl()}/?error=oidc_missing_sub`);
+        }
+        const userInfo = await client.fetchUserInfo(config, tokens.access_token, sub);
         
         // Extract username from configured claim
         const usernameClaim = env.OIDC_USERNAME_CLAIM;

@@ -379,8 +379,16 @@ function AppContent() {
 	useEffect(() => {
 		const handleEscape = (e: KeyboardEvent) => {
 			if (e.key === "Escape") {
+				// Close modals in order of priority (topmost first)
 				if (showImageLightbox) {
 					setShowImageLightbox(false);
+				} else if (showEditModal) {
+					setShowEditModal(false);
+					resetForm();
+				} else if (showShareDialog) {
+					setShowShareDialog(false);
+				} else if (showProfile) {
+					setShowProfile(false);
 				} else if (selectedUser) {
 					setSelectedUser(null);
 				} else if (selectedMed) {
@@ -390,7 +398,7 @@ function AppContent() {
 		};
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
-	}, [selectedMed, showImageLightbox, selectedUser]);
+	}, [selectedMed, showImageLightbox, selectedUser, showProfile, showShareDialog, showEditModal]);
 
 	// Check if settings have changed
 	const settingsChanged = settings.emailEnabled !== savedSettings.emailEnabled ||

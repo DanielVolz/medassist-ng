@@ -499,6 +499,17 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
   const [avatarLoading, setAvatarLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && onClose) {
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;

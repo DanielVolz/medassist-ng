@@ -158,3 +158,7 @@ docker compose -f docker-compose.dev.yml up
 
 - Frontend: `http://localhost:5173` (hot reload)
 - Backend: `http://localhost:3000`
+
+# Acknowledgements
+
+This project was inspired by [MedAssist](https://github.com/njic/medassist) by njic.

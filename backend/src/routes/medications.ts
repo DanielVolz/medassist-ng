@@ -21,7 +21,7 @@ const blisterSchema = z.object({
 const medicationSchema = z.object({
   name: z.string().trim().min(1).max(100),
   genericName: z.string().trim().max(100).nullable().optional(),
-  takenBy: z.string().trim().max(100).nullable().optional(),
+  takenBy: z.array(z.string().trim().max(100)).default([]), // Array of person names
   packCount: z.number().int().min(0).default(1),
   stripsPerPack: z.number().int().min(1).default(1),
   tabsPerStrip: z.number().int().min(1).default(1),
@@ -49,6 +49,16 @@ function parseBlisters(row: typeof medications.$inferSelect) {
     const start = JSON.parse(row.startJson) as string[];
     return zipBlisters(usage, every, start);
   } catch (err) {
+    return [];
+  }
+}
+
+function parseTakenByJson(takenByJson: string | null | undefined): string[] {
+  if (!takenByJson) return [];
+  try {
+    const parsed = JSON.parse(takenByJson);
+    return Array.isArray(parsed) ? parsed.filter((s: unknown) => typeof s === "string" && s.trim()) : [];
+  } catch {
     return [];
   }
 }
@@ -81,7 +91,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       id: row.id,
       name: row.name,
       genericName: row.genericName,
-      takenBy: row.takenBy,
+      takenBy: parseTakenByJson(row.takenByJson),
       count: row.count,
       strips: row.strips,
       stripSize: row.stripSize,
@@ -108,6 +118,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const usageJson = JSON.stringify(blisters.map((s) => s.usage));
     const everyJson = JSON.stringify(blisters.map((s) => s.every));
     const startJson = JSON.stringify(blisters.map((s) => s.start));
+    const takenByJson = JSON.stringify(takenBy || []);
 
     const derivedCount = deriveTotalTablets(packCount, stripsPerPack, tabsPerStrip, looseTablets);
 
@@ -117,7 +128,8 @@ export async function medicationRoutes(app: FastifyInstance) {
         userId,
         name,
         genericName: genericName || null,
-        takenBy: takenBy || null,
+        takenBy: (takenBy && takenBy.length > 0) ? takenBy[0] : null, // Backwards compat
+        takenByJson,
         count: derivedCount,
         strips: stripsPerPack,
         stripSize: tabsPerStrip,
@@ -139,7 +151,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       id: inserted.id,
       name: inserted.name,
       genericName: inserted.genericName,
-      takenBy: inserted.takenBy,
+      takenBy: parseTakenByJson(inserted.takenByJson),
       count: inserted.count,
       strips: inserted.strips,
       stripSize: inserted.stripSize,
@@ -173,6 +185,7 @@ export async function medicationRoutes(app: FastifyInstance) {
     const usageJson = JSON.stringify(blisters.map((s) => s.usage));
     const everyJson = JSON.stringify(blisters.map((s) => s.every));
     const startJson = JSON.stringify(blisters.map((s) => s.start));
+    const takenByJson = JSON.stringify(takenBy || []);
 
     const derivedCount = deriveTotalTablets(packCount, stripsPerPack, tabsPerStrip, looseTablets);
 
@@ -181,7 +194,8 @@ export async function medicationRoutes(app: FastifyInstance) {
       .set({
         name,
         genericName: genericName || null,
-        takenBy: takenBy || null,
+        takenBy: (takenBy && takenBy.length > 0) ? takenBy[0] : null, // Backwards compat
+        takenByJson,
         count: derivedCount,
         strips: stripsPerPack,
         stripSize: tabsPerStrip,
@@ -207,7 +221,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       id: result[0].id,
       name: result[0].name,
       genericName: result[0].genericName,
-      takenBy: result[0].takenBy,
+      takenBy: parseTakenByJson(result[0].takenByJson),
       count: result[0].count,
       strips: result[0].strips,
       stripSize: result[0].stripSize,

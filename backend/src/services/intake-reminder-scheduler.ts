@@ -22,6 +22,17 @@ function getTimezone(): string {
   return process.env.TZ || "UTC";
 }
 
+// Parse takenByJson to array of strings
+function parseTakenByJson(takenByJson: string | null | undefined): string[] {
+  if (!takenByJson) return [];
+  try {
+    const parsed = JSON.parse(takenByJson);
+    return Array.isArray(parsed) ? parsed.filter((s: unknown) => typeof s === "string" && s.trim()) : [];
+  } catch {
+    return [];
+  }
+}
+
 const intakeReminderStateFile = resolve(process.cwd(), "data", "intake-reminder-state.json");
 
 function loadIntakeReminderState(): IntakeReminderState {
@@ -63,11 +74,11 @@ type UpcomingIntake = {
   usage: number;
   intakeTime: Date;
   intakeTimeStr: string;
-  takenBy: string | null;
+  takenBy: string[]; // Changed to array
   pillWeightMg: number | null;
 };
 
-function getUpcomingIntakes(medName: string, blisters: Blister[], minutesBefore: number, takenBy: string | null, pillWeightMg: number | null, locale: string): UpcomingIntake[] {
+function getUpcomingIntakes(medName: string, blisters: Blister[], minutesBefore: number, takenBy: string[], pillWeightMg: number | null, locale: string): UpcomingIntake[] {
   const now = Date.now();
   // Window to detect if "now" is the right time to send reminder
   // We check if the notify time (intake - 15min) falls within current minute ±1
@@ -153,10 +164,11 @@ async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[],
     return pillText;
   };
   
-  // Helper to format medication name with takenBy
+  // Helper to format medication name with takenBy (array of names)
   const formatMedName = (intake: UpcomingIntake): string => {
-    if (intake.takenBy) {
-      return `${intake.medName} <span style="color: #6b7280; font-size: 12px;">${t(tr.intakeReminder.takenBy, { name: intake.takenBy })}</span>`;
+    if (intake.takenBy.length > 0) {
+      const namesStr = intake.takenBy.join(", ");
+      return `${intake.medName} <span style="color: #6b7280; font-size: 12px;">${t(tr.intakeReminder.takenBy, { name: namesStr })}</span>`;
     }
     return intake.medName;
   };
@@ -226,7 +238,7 @@ async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[],
 ${t(tr.intakeReminder.description, { minutes: REMINDER_MINUTES_BEFORE })}
 
 ${intakes.map((i) => {
-    const takenByStr = i.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy })}` : "";
+    const takenByStr = i.takenBy.length > 0 ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy.join(", ") })}` : "";
     return `${i.medName}${takenByStr}: ${formatDosagePlain(i)} - ${i.intakeTimeStr}`;
   }).join("\n")}
 
@@ -304,7 +316,8 @@ async function checkAndSendIntakeRemindersForUser(
   // Find all upcoming intakes across all medications for this user
   for (const med of medsWithReminders) {
     const blisters = parseBlisters(med);
-    const upcoming = getUpcomingIntakes(med.name, blisters, REMINDER_MINUTES_BEFORE, med.takenBy, med.pillWeightMg, locale);
+    const takenByArray = parseTakenByJson(med.takenByJson);
+    const upcoming = getUpcomingIntakes(med.name, blisters, REMINDER_MINUTES_BEFORE, takenByArray, med.pillWeightMg, locale);
     allUpcoming.push(...upcoming);
   }
   
@@ -343,7 +356,7 @@ async function checkAndSendIntakeRemindersForUser(
     const title = t(tr.push.intakeTitle, { minutes: REMINDER_MINUTES_BEFORE });
     const message = newReminders
       .map((i) => {
-        const takenByStr = i.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy })}` : "";
+        const takenByStr = i.takenBy.length > 0 ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy.join(", ") })}` : "";
         let dosage = `${i.usage} ${i.usage === 1 ? tr.common.pill : tr.common.pills}`;
         if (i.pillWeightMg) {
           const totalMg = i.usage * i.pillWeightMg;

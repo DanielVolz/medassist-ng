@@ -3,7 +3,7 @@ import { z } from "zod";
 import { randomBytes } from "crypto";
 import { db } from "../db/client.js";
 import { medications, shareTokens, userSettings, users } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -33,6 +33,17 @@ async function getUserId(request: any, reply: any): Promise<number> {
     throw new Error("AUTH_REQUIRED");
   }
   return authUser.id;
+}
+
+// Helper to parse takenByJson
+function parseTakenByJson(takenByJson: string | null | undefined): string[] {
+  if (!takenByJson) return [];
+  try {
+    const parsed = JSON.parse(takenByJson);
+    return Array.isArray(parsed) ? parsed.filter((s: unknown) => typeof s === "string" && s.trim()) : [];
+  } catch {
+    return [];
+  }
 }
 
 // =============================================================================
@@ -70,13 +81,15 @@ export async function shareRoutes(app: FastifyInstance) {
     // Get user settings for stock thresholds
     const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
 
-    // Get medications for this user filtered by takenBy
-    const meds = await db.select().from(medications).where(
-      and(
-        eq(medications.userId, share.userId),
-        eq(medications.takenBy, share.takenBy)
-      )
-    );
+    // Get medications for this user filtered by takenBy (search in JSON array)
+    // Use SQLite JSON function to check if takenBy is in the array
+    const allMeds = await db.select().from(medications).where(eq(medications.userId, share.userId));
+    
+    // Filter medications where takenByJson array contains the share.takenBy value
+    const meds = allMeds.filter((med) => {
+      const takenByArray = parseTakenByJson(med.takenByJson);
+      return takenByArray.includes(share.takenBy);
+    });
 
     // Parse blisters and build schedule data
     const medicationsWithBlisters = meds.map((med) => {
@@ -135,15 +148,14 @@ export async function shareRoutes(app: FastifyInstance) {
 
       const { takenBy, scheduleDays } = parsed.data;
 
-      // Check if user has medications for this takenBy
-      const [existingMed] = await db.select().from(medications).where(
-        and(
-          eq(medications.userId, userId),
-          eq(medications.takenBy, takenBy)
-        )
-      );
+      // Check if user has medications for this takenBy (search in JSON array)
+      const allMeds = await db.select().from(medications).where(eq(medications.userId, userId));
+      const medsForPerson = allMeds.filter((med) => {
+        const takenByArray = parseTakenByJson(med.takenByJson);
+        return takenByArray.includes(takenBy);
+      });
 
-      if (!existingMed) {
+      if (medsForPerson.length === 0) {
         return reply.status(400).send({
           error: "No medications found for this person",
           code: "NO_MEDICATIONS",
@@ -182,14 +194,21 @@ export async function shareRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const userId = await getUserId(request, reply);
 
-      // Get all unique takenBy values for this user
-      const meds = await db.select({ takenBy: medications.takenBy })
+      // Get all unique takenBy values for this user (from JSON arrays)
+      const meds = await db.select({ takenByJson: medications.takenByJson })
         .from(medications)
         .where(eq(medications.userId, userId));
 
-      const uniquePeople = [...new Set(meds.map((m) => m.takenBy).filter(Boolean))] as string[];
+      // Collect all unique person names from all takenByJson arrays
+      const allPeople = new Set<string>();
+      for (const med of meds) {
+        const takenByArray = parseTakenByJson(med.takenByJson);
+        for (const person of takenByArray) {
+          if (person) allPeople.add(person);
+        }
+      }
 
-      return { people: uniquePeople };
+      return { people: [...allPeople].sort() };
     }
   );
 }

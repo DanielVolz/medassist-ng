@@ -25,7 +25,8 @@ export const medications = sqliteTable("medications", {
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name", { length: 100 }).notNull(),
   genericName: text("generic_name", { length: 100 }),
-  takenBy: text("taken_by", { length: 100 }),
+  takenBy: text("taken_by", { length: 100 }), // Deprecated: use takenByJson
+  takenByJson: text("taken_by_json").notNull().default("[]"), // JSON array of person names
   count: integer("count").notNull().default(0),
   strips: integer("strips").notNull().default(0),
   packCount: integer("pack_count").notNull().default(1),

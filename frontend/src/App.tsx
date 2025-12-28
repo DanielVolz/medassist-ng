@@ -13,7 +13,7 @@ type Medication = {
 	id: number;
 	name: string;
 	genericName?: string | null;
-	takenBy?: string | null;
+	takenBy: string[]; // Changed from string | null to array
 	count: number;
 	strips: number;
 	stripSize: number;
@@ -47,7 +47,7 @@ type FormBlister = { usage: string; every: string; startDate: string; startTime:
 type FormState = {
 	name: string;
 	genericName: string;
-	takenBy: string;
+	takenBy: string[]; // Changed from string to array
 	packCount: string;
 	stripsPerPack: string;
 	tabsPerStrip: string;
@@ -69,7 +69,7 @@ const defaultBlister = (): FormBlister => {
 	};
 };
 
-const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: "", packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, blisters: [defaultBlister()] });
+const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: [], packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, blisters: [defaultBlister()] });
 
 // Field validation limits (must match backend)
 const FIELD_LIMITS = {
@@ -216,13 +216,16 @@ function AppContent() {
 	});
 
 	// Validate form fields
-	const validateField = (field: keyof FieldErrors, value: string): string | undefined => {
+	const validateField = (field: keyof FieldErrors, value: string | string[]): string | undefined => {
 		const limits = FIELD_LIMITS[field];
-		if (field === 'name' && (!value || value.trim().length === 0)) {
+		// Skip validation for takenBy array (individual items validated on add)
+		if (field === 'takenBy') return undefined;
+		const strValue = typeof value === 'string' ? value : '';
+		if (field === 'name' && (!strValue || strValue.trim().length === 0)) {
 			return t('common.validation.required');
 		}
-		if ('max' in limits && value.length > limits.max) {
-			return t('common.validation.maxLength', { max: limits.max, current: value.length });
+		if ('max' in limits && strValue.length > limits.max) {
+			return t('common.validation.maxLength', { max: limits.max, current: strValue.length });
 		}
 		return undefined;
 	};
@@ -235,12 +238,12 @@ function AppContent() {
 	// Validate all fields when form changes
 	useEffect(() => {
 		const errors: FieldErrors = {};
-		(['name', 'genericName', 'takenBy', 'notes'] as const).forEach(field => {
+		(['name', 'genericName', 'notes'] as const).forEach(field => {
 			const error = validateField(field, form[field]);
 			if (error) errors[field] = error;
 		});
 		setFieldErrors(errors);
-	}, [form.name, form.genericName, form.takenBy, form.notes, t]);
+	}, [form.name, form.genericName, form.notes, t]);
 
 	// Load user-specific planner data when user changes
 	useEffect(() => {
@@ -320,6 +323,8 @@ function AppContent() {
 	const [scheduleDays, setScheduleDays] = useState<number>(30);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
+	// Tag input state for "Taken By" field
+	const [takenByInput, setTakenByInput] = useState("");
 	// Share dialog state
 	const [showShareDialog, setShowShareDialog] = useState(false);
 	const [sharePeople, setSharePeople] = useState<string[]>([]);
@@ -482,6 +487,12 @@ function AppContent() {
 	const coverage = useMemo(() => calculateCoverage(meds, schedule.events, i18n.language, settings.reminderDaysBefore, settings.stockCalculationMode, takenDoses), [meds, schedule.events, i18n.language, settings.reminderDaysBefore, settings.stockCalculationMode, takenDoses]);
 	const depletionByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c.depletionTime])), [coverage.all]);
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
+	
+	// Get all unique people from medications for autocomplete suggestions
+	const existingPeople = useMemo(() => {
+		const allPeople = meds.flatMap(m => m.takenBy || []);
+		return [...new Set(allPeople)].filter(Boolean).sort();
+	}, [meds]);
 
 	// Get worst stock status for a day's medications (for coloring day blocks)
 	const getDayStockStatus = (dayMeds: { medName: string; lastWhen: number }[]) => {
@@ -536,7 +547,7 @@ function AppContent() {
 		setLoading(true);
 		fetch("/api/medications")
 			.then((res) => res.json())
-			.then((data: Medication[]) => setMeds(data))
+			.then((data) => setMeds(Array.isArray(data) ? data : []))
 			.catch(() => setMeds([]))
 			.finally(() => setLoading(false));
 	}
@@ -771,10 +782,11 @@ function AppContent() {
 
 	function startEdit(med: Medication) {
 		setEditingId(med.id);
+		setTakenByInput(""); // Clear tag input when starting edit
 		setForm({
 			name: med.name,
 			genericName: med.genericName ?? "",
-			takenBy: med.takenBy ?? "",
+			takenBy: med.takenBy || [], // Already an array from API
 			packCount: String(med.packCount ?? 1),
 			stripsPerPack: String(med.stripsPerPack ?? med.strips ?? 1),
 			tabsPerStrip: String(med.tabsPerStrip ?? med.stripSize ?? 1),
@@ -801,11 +813,35 @@ function AppContent() {
 		setShowEditModal(false);
 		setPendingImage(null);
 		setPendingImagePreview(null);
+		setTakenByInput("");
 		setForm(defaultForm());
 	}
 
 	function handleValueChange<K extends keyof FormState>(key: K, value: string) {
 		setForm((prev) => ({ ...prev, [key]: value }));
+	}
+
+	// Tag input helpers for "Taken By" field
+	function addTakenByPerson(name: string) {
+		const trimmed = name.trim();
+		if (trimmed && trimmed.length <= FIELD_LIMITS.takenBy.max && !form.takenBy.includes(trimmed)) {
+			setForm(prev => ({ ...prev, takenBy: [...prev.takenBy, trimmed] }));
+		}
+		setTakenByInput("");
+	}
+
+	function removeTakenByPerson(name: string) {
+		setForm(prev => ({ ...prev, takenBy: prev.takenBy.filter(p => p !== name) }));
+	}
+
+	function handleTakenByKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+		if (e.key === 'Enter' || e.key === ',') {
+			e.preventDefault();
+			addTakenByPerson(takenByInput);
+		} else if (e.key === 'Backspace' && !takenByInput && form.takenBy.length > 0) {
+			// Remove last tag on backspace when input is empty
+			removeTakenByPerson(form.takenBy[form.takenBy.length - 1]);
+		}
 	}
 
 	async function saveMedication(e: React.FormEvent) {
@@ -816,7 +852,7 @@ function AppContent() {
 		const payload = {
 			name: form.name.trim(),
 			genericName: form.genericName.trim() || null,
-			takenBy: form.takenBy.trim() || null,
+			takenBy: form.takenBy.filter(name => name.trim()), // Send array, filter empty strings
 			packCount: Number(form.packCount) || 0,
 			stripsPerPack: Math.max(1, Number(form.stripsPerPack) || 1),
 			tabsPerStrip: Math.max(1, Number(form.tabsPerStrip) || 1),
@@ -887,8 +923,9 @@ function AppContent() {
 		setShareSelectedPerson("");
 		setShareSelectedDays(30);
 		
-		// Get unique takenBy people from medications
-		const uniquePeople = [...new Set(meds.map(m => m.takenBy).filter(Boolean))] as string[];
+		// Get unique takenBy people from all medications (flatten arrays)
+		const allPeople = meds.flatMap(m => m.takenBy || []);
+		const uniquePeople = [...new Set(allPeople)].filter(Boolean).sort();
 		setSharePeople(uniquePeople);
 		if (uniquePeople.length > 0) {
 			setShareSelectedPerson(uniquePeople[0]);
@@ -1133,7 +1170,9 @@ function AppContent() {
 														<span data-label={t('table.name')} className="cell-with-avatar">
 															<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
 															<span className="med-name-text">{row.name}</span>
-															{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}
+															{med?.takenBy && med.takenBy.length > 0 && med.takenBy.map((person) => (
+																<span key={person} className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(person); }}>{person}</span>
+															))}
 															{(med?.intakeRemindersEnabled || med?.notes) && (
 																<span className="med-icons">
 																	{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}
@@ -1201,7 +1240,9 @@ function AppContent() {
 													<span className="med-name-line">
 														<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
 														<span className="med-name-text">{row.name}</span>
-														{med?.takenBy && <span className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(med.takenBy!); }}>{med.takenBy}</span>}
+														{med?.takenBy && med.takenBy.length > 0 && med.takenBy.map((person) => (
+															<span key={person} className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(person); }}>{person}</span>
+														))}
 													</span>
 													{(med?.intakeRemindersEnabled || med?.notes) && (
 														<span className="med-icons">
@@ -1315,7 +1356,7 @@ function AppContent() {
 																	return (
 																		<div key={dose.id} className={`dose-item past ${isTaken ? "taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
-																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && med.takenBy.length > 0 && <span className="taken-by-inline"> {t('dose.takenBy')} {med.takenBy.map((person, i) => (<span key={person}>{i > 0 && ", "}<span className="taken-by-name clickable" onClick={() => setSelectedUser(person)}>{person}</span></span>))}</span>}</span>
 																			{isTaken ? (
 																				<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
 																			) : (
@@ -1414,7 +1455,7 @@ function AppContent() {
 																	return (
 																		<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
-																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && med.takenBy.length > 0 && <span className="taken-by-inline"> {t('dose.takenBy')} {med.takenBy.map((person, i) => (<span key={person}>{i > 0 && ", "}<span className="taken-by-name clickable" onClick={() => setSelectedUser(person)}>{person}</span></span>))}</span>}</span>
 																			{isTaken ? (
 																				<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
 																			) : (
@@ -1504,12 +1545,28 @@ function AppContent() {
 								</label>
 								<label className={fieldErrors.takenBy ? 'has-error' : ''}>
 									{t('form.takenBy')}
-									<input 
-										value={form.takenBy} 
-										onChange={(e) => setForm({ ...form, takenBy: e.target.value })} 
-										placeholder={t('form.placeholders.takenBy')} 
-										maxLength={FIELD_LIMITS.takenBy.max}
-									/>
+									<div className="tag-input-container">
+										{form.takenBy.map((person) => (
+											<span key={person} className="tag">
+												{person}
+												<button type="button" className="tag-remove" onClick={() => removeTakenByPerson(person)}>×</button>
+											</span>
+										))}
+										<input 
+											value={takenByInput} 
+											onChange={(e) => setTakenByInput(e.target.value)} 
+											onKeyDown={handleTakenByKeyDown}
+											onBlur={() => { if (takenByInput.trim()) addTakenByPerson(takenByInput); }}
+											placeholder={form.takenBy.length === 0 ? t('form.placeholders.takenBy') : t('form.placeholders.addPerson')}
+											maxLength={FIELD_LIMITS.takenBy.max}
+											list="takenby-suggestions"
+										/>
+										<datalist id="takenby-suggestions">
+											{existingPeople.filter(p => !form.takenBy.includes(p)).map(person => (
+												<option key={person} value={person} />
+											))}
+										</datalist>
+									</div>
 									{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 								</label>
 								<label>
@@ -2148,7 +2205,7 @@ function AppContent() {
 																return (
 																	<div key={dose.id} className={`dose-item past ${isTaken ? "taken" : ""}`}>
 																		<span className="dose-time">{dose.timeStr}</span>
-																		<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																		<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && med.takenBy.length > 0 && <span className="taken-by-inline"> {t('dose.takenBy')} {med.takenBy.map((person, i) => (<span key={person}>{i > 0 && ", "}<span className="taken-by-name clickable" onClick={() => setSelectedUser(person)}>{person}</span></span>))}</span>}</span>
 																		{isTaken ? (
 																			<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
 																		) : (
@@ -2202,7 +2259,7 @@ function AppContent() {
 															return (
 																<div key={dose.id} className={`dose-item ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
 																	<span className="dose-time">{dose.timeStr}</span>
-																	<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && <span className="taken-by-inline"> {t('dose.takenBy')} <span className="taken-by-name clickable" onClick={() => setSelectedUser(med.takenBy!)}>{med.takenBy}</span></span>}</span>
+																	<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}{med?.takenBy && med.takenBy.length > 0 && <span className="taken-by-inline"> {t('dose.takenBy')} {med.takenBy.map((person, i) => (<span key={person}>{i > 0 && ", "}<span className="taken-by-name clickable" onClick={() => setSelectedUser(person)}>{person}</span></span>))}</span>}</span>
 																	{isTaken ? (
 																		<button className="dose-btn undo" onClick={() => undoDoseTaken(dose.id)} title={t('common.undo')}>↩</button>
 																	) : (
@@ -2243,7 +2300,7 @@ function AppContent() {
 								<div className="med-detail-titles">
 									<h2>{selectedMed.name}</h2>
 									{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
-									{selectedMed.takenBy && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy}</span>}
+									{selectedMed.takenBy && selectedMed.takenBy.length > 0 && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy.join(", ")}</span>}
 								</div>
 							</div>
 							<div className="med-detail-section">
@@ -2404,7 +2461,7 @@ function AppContent() {
 						</div>
 
 						<div className="user-meds-list">
-							{meds.filter(m => m.takenBy === selectedUser).map((med) => {
+							{meds.filter(m => m.takenBy.includes(selectedUser)).map((med) => {
 								const medCoverage = coverage.all.find(c => c.name === med.name);
 								const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 								const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(med.count);
@@ -2426,7 +2483,7 @@ function AppContent() {
 									</div>
 								);
 							})}
-							{meds.filter(m => m.takenBy === selectedUser).length === 0 && (
+							{meds.filter(m => m.takenBy.includes(selectedUser)).length === 0 && (
 								<div className="user-meds-empty">{t('modal.noMedsForUser', { name: selectedUser })}</div>
 							)}
 						</div>
@@ -2546,12 +2603,28 @@ function AppContent() {
 							</label>
 							<label className={`full ${fieldErrors.takenBy ? 'has-error' : ''}`}>
 								{t('form.takenBy')}
-								<input 
-									value={form.takenBy} 
-									onChange={(e) => setForm({ ...form, takenBy: e.target.value })} 
-									placeholder={t('form.placeholders.takenBy')} 
-									maxLength={FIELD_LIMITS.takenBy.max}
-								/>
+								<div className="tag-input-container">
+									{form.takenBy.map((person) => (
+										<span key={person} className="tag">
+											{person}
+											<button type="button" className="tag-remove" onClick={() => removeTakenByPerson(person)}>×</button>
+										</span>
+									))}
+									<input 
+										value={takenByInput} 
+										onChange={(e) => setTakenByInput(e.target.value)} 
+										onKeyDown={handleTakenByKeyDown}
+										onBlur={() => { if (takenByInput.trim()) addTakenByPerson(takenByInput); }}
+										placeholder={form.takenBy.length === 0 ? t('form.placeholders.takenBy') : t('form.placeholders.addPerson')}
+										maxLength={FIELD_LIMITS.takenBy.max}
+										list="takenby-suggestions-modal"
+									/>
+									<datalist id="takenby-suggestions-modal">
+										{existingPeople.filter(p => !form.takenBy.includes(p)).map(person => (
+											<option key={person} value={person} />
+										))}
+									</datalist>
+								</div>
 								{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 							</label>
 							<label>
@@ -2749,7 +2822,7 @@ function generateICS(med: Medication) {
 		const description = [
 			`Medication: ${med.name}`,
 			med.genericName ? `Generic: ${med.genericName}` : '',
-			med.takenBy ? `For: ${med.takenBy}` : '',
+			med.takenBy && med.takenBy.length > 0 ? `For: ${med.takenBy.join(', ')}` : '',
 			`Dosage: ${pillInfo}`,
 			`Frequency: every ${interval} day${interval !== 1 ? 's' : ''}`,
 			med.notes ? `Notes: ${med.notes}` : '',
@@ -2793,6 +2866,8 @@ END:VCALENDAR`;
 
 function buildSchedulePreview(meds: Medication[], locale: string, includePast: boolean = false) {
 	const events: Array<{ id: string; medName: string; timeStr: string; dateStr: string; usage: number; when: number; isPast: boolean }> = [];
+	if (!Array.isArray(meds)) return { events, groups: [] };
+	
 	const now = new Date();
 	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Midnight today
 	const end = new Date();
@@ -2920,7 +2995,9 @@ function calculateCoverage(
 	const now = Date.now();
 
 	const coverage: Coverage[] = meds.map((m) => {
-		const dailyRate = m.blisters.reduce((sum, s) => sum + (s.every > 0 ? s.usage / s.every : 0), 0);
+		// Multiply daily rate by number of people taking this medication
+		const personCount = Math.max(1, m.takenBy?.length || 1);
+		const dailyRate = m.blisters.reduce((sum, s) => sum + (s.every > 0 ? s.usage / s.every : 0), 0) * personCount;
 
 		let consumed = 0;
 		
@@ -3473,8 +3550,9 @@ function SharedSchedule() {
 			const totalCount = med.count ?? 0;
 			const taken = takenByMed[med.name] || 0;
 			const currentCount = Math.max(0, totalCount - taken);
-			// Calculate daily usage from blisters
-			const dailyUsage = med.blisters.reduce((sum, b) => sum + (b.usage / b.every), 0);
+			// Calculate daily usage from blisters, multiplied by number of people
+			const personCount = Math.max(1, med.takenBy?.length || 1);
+			const dailyUsage = med.blisters.reduce((sum, b) => sum + (b.usage / b.every), 0) * personCount;
 			const daysLeft = dailyUsage > 0 ? currentCount / dailyUsage : null;
 			coverage[med.name] = { daysLeft, medsLeft: currentCount, dailyUsage };
 			

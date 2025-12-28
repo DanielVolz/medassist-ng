@@ -32,6 +32,7 @@ async function main() {
       name text NOT NULL,
       generic_name text,
       taken_by text,
+      taken_by_json text NOT NULL DEFAULT '[]',
       count integer NOT NULL DEFAULT 0,
       strips integer NOT NULL DEFAULT 0,
       pack_count integer NOT NULL DEFAULT 1,

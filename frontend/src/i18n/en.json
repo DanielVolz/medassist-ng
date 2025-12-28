@@ -112,7 +112,8 @@
     "placeholders": {
       "commercial": "e.g. Ozempic",
       "generic": "e.g. Semaglutide (optional)",
-      "takenBy": "e.g. John, Sarah (optional)",
+      "takenBy": "Type name and press Enter",
+      "addPerson": "Add another person...",
       "weight": "e.g. 240",
       "notes": "e.g. Take with food, avoid alcohol... (optional)"
     },

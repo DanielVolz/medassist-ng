@@ -165,7 +165,11 @@ async function runMigrations() {
     { name: "notes", sql: "ALTER TABLE medications ADD COLUMN notes TEXT" },
     { name: "generic_name", sql: "ALTER TABLE medications ADD COLUMN generic_name TEXT" },
     { name: "intake_reminders_enabled", sql: "ALTER TABLE medications ADD COLUMN intake_reminders_enabled INTEGER NOT NULL DEFAULT 0" },
+    { name: "pill_weight_mg", sql: "ALTER TABLE medications ADD COLUMN pill_weight_mg REAL" },
+    { name: "taken_by", sql: "ALTER TABLE medications ADD COLUMN taken_by TEXT" },
     { name: "users_email", sql: "ALTER TABLE users ADD COLUMN email TEXT" },
+    { name: "users_avatar_url", sql: "ALTER TABLE users ADD COLUMN avatar_url TEXT" },
+    { name: "users_oidc_subject", sql: "ALTER TABLE users ADD COLUMN oidc_subject TEXT" },
     { name: "user_settings_expiry_warning_days", sql: "ALTER TABLE user_settings ADD COLUMN expiry_warning_days INTEGER NOT NULL DEFAULT 90" },
   ];
 

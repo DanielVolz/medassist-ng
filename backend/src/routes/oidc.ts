@@ -201,8 +201,9 @@ export async function oidcRoutes(app: FastifyInstance) {
           expiresAt,
         });
         
-        // Set cookies
-        setAuthCookies(reply, accessToken, refreshToken);
+        // Set cookies (use app's centralized cookie options)
+        console.log(`[OIDC] Setting cookies for user ${user.username}, NODE_ENV=${env.NODE_ENV}, secure=${app.config.cookieOptions.secure}`);
+        setAuthCookies(app, reply, accessToken, refreshToken);
         
         // Redirect to frontend dashboard
         // In dev: CORS_ORIGINS contains the frontend URL
@@ -308,22 +309,8 @@ async function generateRefreshToken(
   return { refreshToken, tokenId, expiresAt };
 }
 
-function setAuthCookies(reply: FastifyReply, accessToken: string, refreshToken: string) {
-  const isProduction = env.NODE_ENV === "production";
-  
-  reply.setCookie("access_token", accessToken, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: "lax",
-    path: "/",
-    maxAge: env.ACCESS_TOKEN_TTL_MINUTES * 60,
-  });
-  
-  reply.setCookie("refresh_token", refreshToken, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: "lax",
-    path: "/",
-    maxAge: env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60,
-  });
+function setAuthCookies(app: FastifyInstance, reply: FastifyReply, accessToken: string, refreshToken: string) {
+  // Use the same cookie options as regular auth for consistency
+  reply.setCookie("access_token", accessToken, app.config.cookieOptions);
+  reply.setCookie("refresh_token", refreshToken, app.config.refreshCookieOptions);
 }

@@ -282,6 +282,67 @@ Before pushing changes:
 1. Test with fresh database: Delete `backend/data/medassist-ng.db` and restart
 2. Test with existing database: Keep old DB and restart - new columns should be added automatically
 
+## ⚠️ Defensive Coding (CRITICAL for Production)
+
+**ALL new optional fields MUST be handled defensively in both Backend AND Frontend!**
+
+When a user updates their app, old data in the database may not have new fields. The frontend receives this data and crashes with `TypeError: Cannot read property 'length' of undefined`.
+
+### Rules for New Optional/Array Fields:
+
+#### Backend (routes/*.ts):
+Always provide default values when returning data:
+```typescript
+// ✅ CORRECT - Always return array, even if DB value is null/undefined
+takenBy: parseTakenByJson(row.takenByJson),  // Returns [] if null/undefined
+
+// Parser function example:
+function parseTakenByJson(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try { return JSON.parse(value) || []; }
+  catch { return []; }
+}
+```
+
+#### Frontend (App.tsx):
+Always use defensive checks when accessing optional properties:
+```typescript
+// ✅ CORRECT - Defensive checks
+med?.takenBy && med.takenBy.length > 0
+(m.takenBy || []).includes(selectedUser)
+(d.takenBy || []).length > 0 ? d.takenBy : [null]
+const personCount = Math.max(1, m.takenBy?.length || 1);
+
+// ❌ WRONG - Will crash if takenBy is undefined
+m.takenBy.includes(selectedUser)  // TypeError!
+m.takenBy.length > 0              // TypeError!
+```
+
+### Checklist for New Optional Fields:
+
+| Location | Action |
+|----------|--------|
+| Backend route | Return default value (`[]`, `null`, `0`, etc.) |
+| Frontend type | Mark as optional: `takenBy?: string[]` |
+| Frontend access | ALWAYS use `?.`, `|| []`, or null-check before `.length`, `.map()`, `.includes()` |
+| Schedule builders | Pass default: `takenBy: med.takenBy || []` |
+
+### Common Patterns:
+```typescript
+// Arrays - always default to []
+const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+meds.flatMap(m => m.takenBy || []);
+
+// Optional chaining for nested access
+med?.takenBy?.length > 0
+
+// Filter with optional check
+meds.filter(m => (m.takenBy || []).includes(name))
+
+// Conditional rendering
+{med?.takenBy && med.takenBy.length > 0 && med.takenBy.map(...)}
+```
+
 ## File Locations
 
 | Purpose | Location |

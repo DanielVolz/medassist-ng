@@ -2400,7 +2400,7 @@ function AppContent() {
 								<div className="med-detail-titles">
 									<h2>{selectedMed.name}</h2>
 									{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
-									{selectedMed.takenBy && selectedMe(d.takenBy || []).length > 0 && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy.join(", ")}</span>}
+									{selectedMed.takenBy && (selectedMed.takenBy || []).length > 0 && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy.join(", ")}</span>}
 								</div>
 							</div>
 							<div className="med-detail-section">

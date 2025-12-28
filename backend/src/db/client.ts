@@ -78,6 +78,7 @@ async function runMigrations() {
       name text NOT NULL,
       generic_name text,
       taken_by text,
+      taken_by_json text NOT NULL DEFAULT '[]',
       count integer NOT NULL DEFAULT 0,
       strips integer NOT NULL DEFAULT 0,
       pack_count integer NOT NULL DEFAULT 1,
@@ -114,6 +115,7 @@ async function runMigrations() {
       high_stock_days integer NOT NULL DEFAULT 180,
       expiry_warning_days integer NOT NULL DEFAULT 90,
       language text NOT NULL DEFAULT 'en',
+      stock_calculation_mode text NOT NULL DEFAULT 'automatic',
       last_auto_email_sent text,
       last_notification_type text,
       last_notification_channel text,
@@ -137,6 +139,7 @@ async function runMigrations() {
       taken_by text NOT NULL,
       schedule_days integer NOT NULL DEFAULT 30,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
+      expires_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
     `CREATE TABLE IF NOT EXISTS dose_tracking (
@@ -167,10 +170,13 @@ async function runMigrations() {
     { name: "intake_reminders_enabled", sql: "ALTER TABLE medications ADD COLUMN intake_reminders_enabled INTEGER NOT NULL DEFAULT 0" },
     { name: "pill_weight_mg", sql: "ALTER TABLE medications ADD COLUMN pill_weight_mg REAL" },
     { name: "taken_by", sql: "ALTER TABLE medications ADD COLUMN taken_by TEXT" },
+    { name: "taken_by_json", sql: "ALTER TABLE medications ADD COLUMN taken_by_json TEXT NOT NULL DEFAULT '[]'" },
     { name: "users_email", sql: "ALTER TABLE users ADD COLUMN email TEXT" },
     { name: "users_avatar_url", sql: "ALTER TABLE users ADD COLUMN avatar_url TEXT" },
     { name: "users_oidc_subject", sql: "ALTER TABLE users ADD COLUMN oidc_subject TEXT" },
     { name: "user_settings_expiry_warning_days", sql: "ALTER TABLE user_settings ADD COLUMN expiry_warning_days INTEGER NOT NULL DEFAULT 90" },
+    { name: "user_settings_stock_calculation_mode", sql: "ALTER TABLE user_settings ADD COLUMN stock_calculation_mode TEXT NOT NULL DEFAULT 'automatic'" },
+    { name: "share_tokens_expires_at", sql: "ALTER TABLE share_tokens ADD COLUMN expires_at INTEGER" },
   ];
 
   for (const migration of migrations) {

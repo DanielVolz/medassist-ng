@@ -1,5 +1,7 @@
 import { createClient } from "@libsql/client";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 
@@ -115,6 +117,52 @@ async function main() {
   for (const stmt of statements) {
     console.log("Executing:", stmt.trim().substring(0, 50) + "...");
     await client.execute(stmt);
+  }
+
+  console.log("Base tables created. Running migrations for existing databases...");
+  
+  // Run incremental migrations for existing databases
+  // These ALTER TABLE statements are safe to run multiple times (they'll fail silently if column exists)
+  const migrations = [
+    // 0003: Add image_url to medications
+    { name: "0003_add_image_url", sql: "ALTER TABLE medications ADD COLUMN image_url text" },
+    // 0004: Add expiry_date to medications
+    { name: "0004_add_expiry_date", sql: "ALTER TABLE medications ADD COLUMN expiry_date text" },
+    // 0005: Add notes to medications
+    { name: "0005_add_notes", sql: "ALTER TABLE medications ADD COLUMN notes text" },
+    // 0006: Add generic_name to medications
+    { name: "0006_add_generic_name", sql: "ALTER TABLE medications ADD COLUMN generic_name text" },
+    // 0007: Add intake_reminders_enabled to medications
+    { name: "0007_add_intake_reminders", sql: "ALTER TABLE medications ADD COLUMN intake_reminders_enabled integer NOT NULL DEFAULT 0" },
+    // 0008: Add pill_weight_mg to medications
+    { name: "0008_add_pill_weight", sql: "ALTER TABLE medications ADD COLUMN pill_weight_mg integer" },
+    // 0009: Add taken_by to medications
+    { name: "0009_add_taken_by", sql: "ALTER TABLE medications ADD COLUMN taken_by text" },
+    // 0012: Add avatar_url to users
+    { name: "0012_add_user_avatar", sql: "ALTER TABLE users ADD COLUMN avatar_url text" },
+    // 0013: Add oidc_subject to users
+    { name: "0013_add_oidc_subject", sql: "ALTER TABLE users ADD COLUMN oidc_subject text" },
+    // 0014: Add stock_calculation_mode to user_settings
+    { name: "0014_add_stock_calculation_mode", sql: "ALTER TABLE user_settings ADD COLUMN stock_calculation_mode text NOT NULL DEFAULT 'automatic'" },
+    // 0015: Add expires_at to share_tokens
+    { name: "0015_add_share_token_expiry", sql: "ALTER TABLE share_tokens ADD COLUMN expires_at integer" },
+    // 0016: Add taken_by_json to medications
+    { name: "0016_taken_by_json_array", sql: "ALTER TABLE medications ADD COLUMN taken_by_json text NOT NULL DEFAULT '[]'" },
+  ];
+
+  for (const migration of migrations) {
+    try {
+      await client.execute(migration.sql);
+      console.log(`Migration ${migration.name}: applied`);
+    } catch (err: unknown) {
+      // Ignore "duplicate column" errors - means migration was already applied
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (errorMessage.includes("duplicate column") || errorMessage.includes("already exists")) {
+        console.log(`Migration ${migration.name}: already applied (skipped)`);
+      } else {
+        console.error(`Migration ${migration.name}: failed - ${errorMessage}`);
+      }
+    }
   }
 
   console.log("Database setup complete!");

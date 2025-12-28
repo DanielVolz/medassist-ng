@@ -207,29 +207,80 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
 - **Environment**: Copy `.env.example` → `.env`, secrets must be 10+ chars
 - **i18n**: All UI text via `t('key')` function, translations in `frontend/src/i18n/*.json`
 
-## ⚠️ Database Migrations (CRITICAL)
+## ⚠️⚠️⚠️ Database Migrations (ABSOLUTELY CRITICAL) ⚠️⚠️⚠️
 
-**When adding/modifying database columns or tables, ALWAYS do ALL of the following:**
+**THIS IS NON-NEGOTIABLE: ALL database changes MUST work for EXISTING production databases!**
 
-1. **Update schema**: `backend/src/db/schema.ts`
-2. **Create migration file**: `backend/src/db/migrations/XXXX_description.sql`
-   ```sql
-   -- Example: Adding a new column
-   ALTER TABLE medications ADD COLUMN new_column TEXT;
-   ```
-3. **Update journal**: `backend/src/db/migrations/meta/_journal.json`
-   ```json
-   { "idx": X, "version": 1, "when": TIMESTAMP, "tag": "XXXX_description", "breakpoint": false }
-   ```
-4. **Update migrate.ts**: `backend/src/db/migrate.ts`
-   - This file contains `CREATE TABLE IF NOT EXISTS` statements for fresh database starts
-   - Add new columns to the relevant table or add new tables
-   - Without this, fresh installs will be missing the new columns/tables!
+Users update their Docker containers and expect the app to work with their existing data. If migrations don't run automatically, the app crashes with `SQLITE_ERROR: no such column` errors.
 
-**Why this matters**: 
-- Migration SQL files: Required for upgrading existing databases
-- migrate.ts: Required for fresh database starts (creates tables with all columns)
-- Forgetting either causes `SQLITE_ERROR: no such column` errors
+### The Migration System
+
+The app uses **auto-migrations at startup** in `backend/src/db/client.ts`. This file:
+1. Creates tables if they don't exist (fresh install)
+2. Runs `ALTER TABLE ADD COLUMN` for each new column (existing databases)
+3. Ignores "duplicate column" errors (migration already applied)
+
+### When adding/modifying database columns or tables, ALWAYS do ALL of the following:
+
+#### 1. Update schema: `backend/src/db/schema.ts`
+```typescript
+// Add the new column to the Drizzle schema
+stockCalculationMode: text("stock_calculation_mode").notNull().default("automatic"),
+```
+
+#### 2. Update client.ts TABLE CREATION: `backend/src/db/client.ts`
+Find the `CREATE TABLE IF NOT EXISTS` statement and add the new column:
+```sql
+CREATE TABLE IF NOT EXISTS user_settings (
+  ...
+  stock_calculation_mode text NOT NULL DEFAULT 'automatic',  -- ADD THIS LINE
+  ...
+)
+```
+**This is for FRESH installs** - new databases get all columns from the start.
+
+#### 3. Update client.ts MIGRATIONS ARRAY: `backend/src/db/client.ts`
+Add an entry to the `migrations` array:
+```typescript
+const migrations = [
+  ...existing migrations...
+  { name: "user_settings_stock_calculation_mode", sql: "ALTER TABLE user_settings ADD COLUMN stock_calculation_mode TEXT NOT NULL DEFAULT 'automatic'" },
+];
+```
+**This is for EXISTING databases** - the ALTER TABLE adds the column to old databases.
+
+#### 4. Create migration SQL file (for documentation): `backend/src/db/migrations/XXXX_description.sql`
+```sql
+-- Add stock calculation mode setting
+ALTER TABLE user_settings ADD COLUMN stock_calculation_mode TEXT NOT NULL DEFAULT 'automatic';
+```
+
+#### 5. Update journal: `backend/src/db/migrations/meta/_journal.json`
+```json
+{ "idx": X, "version": 1, "when": TIMESTAMP, "tag": "XXXX_description", "breakpoint": false }
+```
+
+#### 6. Update migrate.ts: `backend/src/db/migrate.ts`
+Add the column to the `CREATE TABLE` statement AND to the `migrations` array.
+
+### ⚠️ CRITICAL CHECKLIST - DO NOT SKIP ANY STEP:
+
+| Step | File | Purpose | If Missing |
+|------|------|---------|------------|
+| 1 | `schema.ts` | Drizzle ORM knows about column | TypeScript errors |
+| 2 | `client.ts` (CREATE TABLE) | Fresh installs have column | Fresh installs crash |
+| 3 | `client.ts` (migrations array) | Existing DBs get column | **PRODUCTION CRASHES** |
+| 4 | `migrations/*.sql` | Documentation | None (but keep for history) |
+| 5 | `_journal.json` | Migration tracking | None (but keep for history) |
+| 6 | `migrate.ts` | CLI migration tool | CLI tool fails |
+
+**Step 3 is the most critical!** Without it, users who update their Docker container will get `SQLITE_ERROR: no such column` and the app will not start.
+
+### Testing Migrations
+
+Before pushing changes:
+1. Test with fresh database: Delete `backend/data/medassist-ng.db` and restart
+2. Test with existing database: Keep old DB and restart - new columns should be added automatically
 
 ## File Locations
 

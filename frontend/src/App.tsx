@@ -1399,7 +1399,8 @@ function AppContent() {
 																			<div className="dose-checks">
 																				{people.map((person) => {
 																					const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																					const isTaken = takenDoses.has(personDoseId);
+																					// Check both new format (with person) and legacy format (without person suffix)
+																					const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
 																					return (
 																						<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																							{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
@@ -1512,7 +1513,8 @@ function AppContent() {
 																			<div className="dose-checks">
 																				{people.map((person) => {
 																					const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																					const isTaken = takenDoses.has(personDoseId);
+																					// Check both new format (with person) and legacy format (without person suffix)
+																					const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
 																					return (
 																						<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																							{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
@@ -2282,7 +2284,8 @@ function AppContent() {
 																		<div className="dose-checks">
 																			{people.map((person) => {
 																				const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																				const isTaken = takenDoses.has(personDoseId);
+																				// Check both new format (with person) and legacy format (without person suffix)
+																				const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
 																				return (
 																					<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																						{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
@@ -2351,7 +2354,8 @@ function AppContent() {
 																	<div className="dose-checks">
 																		{people.map((person) => {
 																			const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																			const isTaken = takenDoses.has(personDoseId);
+																			// Check both new format (with person) and legacy format (without person suffix)
+																			const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
 																			const isOverdue = !isTaken && dose.when < now && !isPastDay;
 																			return (
 																				<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
@@ -3883,7 +3887,8 @@ function SharedSchedule() {
 																	<div className="dose-checks">
 																		{people.map((person) => {
 																			const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																			const isTaken = takenDoses.has(personDoseId);
+																			// Check both new format (with person) and legacy format (without person suffix)
+																			const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
 																			return (
 																				<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																					{person && <span className="person-name">{person}</span>}
@@ -4007,7 +4012,8 @@ function SharedSchedule() {
 																	<div className="dose-checks">
 																		{people.map((person) => {
 																			const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																			const isTaken = takenDoses.has(personDoseId);
+																			// Check both new format (with person) and legacy format (without person suffix)
+																			const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
 																			const isOverdue = dose.when < Date.now() && !isTaken && !isFutureDose;
 																			return (
 																				<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>

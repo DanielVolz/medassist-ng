@@ -2095,7 +2095,6 @@ function AppContent() {
 													onChange={(e) => setSettings({ ...settings, stockCalculationMode: e.target.value as 'automatic' | 'manual' })}
 												/>
 												<div className="radio-card-content">
-													<span className="radio-card-icon">🔄</span>
 													<div className="radio-card-text">
 														<span className="radio-card-title">{t('settings.stock.automatic')}</span>
 														<span className="radio-card-desc">{t('settings.stock.automaticDesc')}</span>
@@ -2111,7 +2110,6 @@ function AppContent() {
 													onChange={(e) => setSettings({ ...settings, stockCalculationMode: e.target.value as 'automatic' | 'manual' })}
 												/>
 												<div className="radio-card-content">
-													<span className="radio-card-icon">✋</span>
 													<div className="radio-card-text">
 														<span className="radio-card-title">{t('settings.stock.manual')}</span>
 														<span className="radio-card-desc">{t('settings.stock.manualDesc')}</span>

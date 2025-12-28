@@ -2025,12 +2025,14 @@ textarea {
   height: 2rem;
   min-width: 2rem;
   min-height: 2rem;
+  aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   transition: all 0.2s ease;
   flex-shrink: 0;
+  padding: 0;
 }
 
 .modal-close:hover {
@@ -2038,6 +2040,28 @@ textarea {
   border-color: var(--text-secondary);
   color: var(--text-primary);
   transform: scale(1.1);
+}
+
+/* Universal Modal Footer */
+.modal-footer {
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-primary);
+  gap: 0.75rem;
+}
+
+.modal-footer .footer-left,
+.modal-footer .footer-right {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.modal-footer button.icon-only {
+  padding: 0.5rem 0.75rem;
+  min-width: auto;
 }
 
 /* Medication Detail Modal */
@@ -2204,7 +2228,7 @@ textarea {
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--border-primary);
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .med-detail-header .med-avatar-lg {
@@ -3156,7 +3180,18 @@ h3 .reminder-icon.info-tooltip {
   display: flex;
   gap: 0.75rem;
   margin-top: 1.5rem;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.share-dialog-footer .footer-left {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.share-dialog-footer .footer-right {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .share-dialog-result {
@@ -3337,18 +3372,23 @@ h3 .reminder-icon.info-tooltip {
   margin: 0;
 }
 
-.mobile-edit-form {
-  gap: 0.75rem;
+.mobile-edit-form.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem 1rem;
 }
 
-.mobile-edit-form label {
-  font-size: 0.9rem;
+.mobile-edit-form.form-grid > label {
+  font-size: 0.8rem;
+  min-width: 0 !important;
+  width: 100%;
 }
 
-.mobile-edit-form input,
-.mobile-edit-form textarea,
-.mobile-edit-form select {
-  font-size: 16px; /* Prevents zoom on iOS */
+.mobile-edit-form.form-grid input,
+.mobile-edit-form.form-grid textarea,
+.mobile-edit-form.form-grid select {
+  font-size: 16px !important;
+  width: 100%;
 }
 
 /* Mobile Blister/Intake Schedule Section */
@@ -3377,7 +3417,7 @@ h3 .reminder-icon.info-tooltip {
 
 .mobile-edit-form .blister-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
   padding: 0.75rem;
   background: var(--bg-secondary);
@@ -3398,8 +3438,21 @@ h3 .reminder-icon.info-tooltip {
   font-weight: 500;
 }
 
-.mobile-edit-form .blister-row label.compact:nth-child(3) {
+.mobile-edit-form .blister-row label.compact.full-row {
   grid-column: 1 / -1;
+}
+
+.mobile-edit-form .blister-row label.compact.time-label {
+  width: fit-content;
+}
+
+.mobile-edit-form .blister-row label.compact.time-label input[type="time"] {
+  width: auto;
+}
+
+.mobile-edit-form .blister-row .remove-blister-btn {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .mobile-edit-form .blister-row .datetime-inputs {

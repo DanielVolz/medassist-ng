@@ -2226,7 +2226,7 @@ function AppContent() {
 						</div>
 
 						<div className="med-detail-footer">
-							<button className="danger" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
+							<button onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
 								{t('common.close')}
 							</button>
 							<div className="footer-actions">
@@ -2297,7 +2297,7 @@ function AppContent() {
 						</div>
 
 						<div className="user-meds-footer">
-							<button className="ghost" onClick={() => setSelectedUser(null)}>{t('common.close')}</button>
+							<button onClick={() => setSelectedUser(null)}>{t('common.close')}</button>
 						</div>
 					</div>
 				</div>
@@ -2388,15 +2388,15 @@ function AppContent() {
 							<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
 						</div>
 						<form className="form-grid mobile-edit-form" onSubmit={(e) => { saveMedication(e); setShowEditModal(false); }}>
-							<label>
+							<label className="full">
 								{t('form.commercialName')}
 								<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('form.placeholders.commercial')} required />
 							</label>
-							<label>
+							<label className="full">
 								{t('form.genericName')}
 								<input value={form.genericName} onChange={(e) => setForm({ ...form, genericName: e.target.value })} placeholder={t('form.placeholders.generic')} />
 							</label>
-							<label>
+							<label className="full">
 								{t('form.takenBy')}
 								<input value={form.takenBy} onChange={(e) => setForm({ ...form, takenBy: e.target.value })} placeholder={t('form.placeholders.takenBy')} />
 							</label>
@@ -2416,21 +2416,21 @@ function AppContent() {
 								{t('form.loosePills')}
 								<input type="number" min="0" value={form.looseTablets} onChange={(e) => handleValueChange("looseTablets", e.target.value)} />
 							</label>
-							<label>
+							<div className="full">
+								<p className="sub"><strong>{t('form.total')}:</strong> {deriveTotal(form)} {t('common.pills')}</p>
+							</div>
+							<label className="full">
 								{t('form.pillWeight')}
-								<input type="number" min="0" step="0.1" value={form.pillWeightMg} onChange={(e) => setForm({ ...form, pillWeightMg: e.target.value })} placeholder={t('form.placeholders.pillWeight')} />
+								<input type="number" min="0" step="0.1" value={form.pillWeightMg} onChange={(e) => setForm({ ...form, pillWeightMg: e.target.value })} placeholder={t('form.placeholders.weight')} />
 							</label>
-							<label>
-								{t('form.expiry')}
+							<label className="full">
+								{t('form.expiryDate')}
 								<input type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} />
 							</label>
 							<label className="full">
 								{t('form.notes')}
 								<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t('form.placeholders.notes')} rows={2} />
 							</label>
-							<div className="full">
-								<p className="sub"><strong>{t('form.total')}:</strong> {deriveTotal(form)} {t('common.pills')}</p>
-							</div>
 
 							{editingId && (() => {
 								const currentMed = meds.find(m => m.id === editingId);
@@ -2472,12 +2472,13 @@ function AppContent() {
 											<span>{t('form.blisters.everyDays')}</span>
 											<input type="number" min="1" value={b.every} onChange={(e) => setBlisterValue(idx, "every", e.target.value)} />
 										</label>
-										<label className="compact">
+										<label className="compact full-row">
 											<span>{t('form.blisters.startDate')}</span>
-											<div className="datetime-inputs">
-												<input type="date" value={b.startDate} onChange={(e) => setBlisterValue(idx, "startDate", e.target.value)} />
-												<input type="time" value={b.startTime} onChange={(e) => setBlisterValue(idx, "startTime", e.target.value)} />
-											</div>
+											<input type="date" value={b.startDate} onChange={(e) => setBlisterValue(idx, "startDate", e.target.value)} />
+										</label>
+										<label className="compact time-label">
+											<span>{t('form.blisters.startTime')}</span>
+											<input type="time" value={b.startTime} onChange={(e) => setBlisterValue(idx, "startTime", e.target.value)} />
 										</label>
 										{form.blisters.length > 1 && <button type="button" className="ghost danger remove-blister-btn" onClick={() => removeBlister(idx)} title={t('common.delete')}>🗑</button>}
 									</div>
@@ -2485,7 +2486,7 @@ function AppContent() {
 								<button type="button" className="ghost add-blister" onClick={addBlister}>+ {t('form.blisters.addIntake')}</button>
 							</fieldset>
 
-							<div className="full align-end gap">
+							<div className="modal-footer">
 								<button type="button" className="ghost" onClick={() => { setShowEditModal(false); resetForm(); }}>
 									{t('common.cancel')}
 								</button>

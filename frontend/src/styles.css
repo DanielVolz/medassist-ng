@@ -21,6 +21,14 @@
   --warning: #fcd34d;
   --warning-bg: rgba(252, 211, 77, 0.12);
   --shadow: rgba(0, 0, 0, 0.25);
+  /* Button Design System */
+  --btn-radius: 10px;
+  --btn-radius-round: 50%;
+  --btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --btn-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --btn-primary-bg: var(--accent);
+  --btn-primary-hover: #3d94ff;
+  --btn-ghost-hover: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="light"] {
@@ -44,6 +52,12 @@
   --warning: #f59e0b;
   --warning-bg: rgba(245, 158, 11, 0.1);
   --shadow: rgba(0, 0, 0, 0.08);
+  /* Button Design System */
+  --btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --btn-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --btn-primary-bg: var(--accent);
+  --btn-primary-hover: #1d4ed8;
+  --btn-ghost-hover: rgba(0, 0, 0, 0.06);
 }
 
 * { box-sizing: border-box; }
@@ -56,6 +70,13 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   transition: background 200ms ease, color 200ms ease;
+}
+
+body.modal-open {
+  overflow: hidden !important;
+  position: fixed;
+  width: 100%;
+  height: 100%;
 }
 
 .page {
@@ -87,7 +108,7 @@ body {
 .icon-btn {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
+  border-radius: var(--btn-radius-round);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -95,20 +116,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 150ms ease, background 150ms ease;
+  transition: background 150ms ease, opacity 150ms ease;
   padding: 0;
   opacity: 0.7;
+  box-shadow: none;
 }
 .icon-btn:hover {
-  transform: scale(1.1);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--btn-ghost-hover);
   opacity: 1;
 }
 .icon-btn.active {
   opacity: 1;
   background: rgba(47, 134, 246, 0.15);
 }
-[data-theme="light"] .icon-btn:hover { background: rgba(0, 0, 0, 0.08); }
+[data-theme="light"] .icon-btn:hover { background: var(--btn-ghost-hover); }
 [data-theme="light"] .icon-btn.active { background: rgba(47, 134, 246, 0.12); }
 
 .hero-title { display: flex; align-items: center; gap: 1rem; }
@@ -211,9 +232,9 @@ body {
   border-color: var(--accent-light);
 }
 
-.pill { border: 1px solid var(--accent); color: var(--text-muted); background: var(--accent-bg); padding: 0.35rem 0.7rem; border-radius: 999px; font-size: 0.85rem; transition: all 150ms ease; }
+.pill { border: 1px solid var(--accent); color: var(--text-muted); background: var(--accent-bg); padding: 0.35rem 0.7rem; border-radius: 999px; font-size: 0.85rem; transition: background 150ms ease, border-color 150ms ease; }
 .pill.clickable { cursor: pointer; }
-.pill.clickable:hover { filter: brightness(1.15); transform: scale(1.02); }
+.pill.clickable:hover { filter: brightness(1.1); }
 .pill.success { border-color: var(--success); background: var(--success-bg); color: var(--success); }
 .pill.neutral { border-color: var(--border-secondary); background: rgba(255, 255, 255, 0.04); color: var(--text-muted); }
 [data-theme=\"light\"] .pill.neutral { background: rgba(0, 0, 0, 0.04); }
@@ -339,27 +360,85 @@ body {
 
 button {
   padding: 0.7rem 1.25rem;
-  border-radius: 8px;
+  border-radius: var(--btn-radius);
   border: none;
-  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  background: var(--btn-primary-bg);
   color: white;
   cursor: pointer;
   font-weight: 600;
   font-size: 0.9rem;
-  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+  box-shadow: var(--btn-shadow);
+  transition: background 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
 }
-button:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(47, 134, 246, 0.35); }
-button:active { transform: translateY(0); }
-button.ghost { background: transparent; border: 1px solid var(--border-secondary); color: var(--text-muted); box-shadow: none; }
-button.ghost:hover { background: rgba(255, 255, 255, 0.06); transform: none; }
-[data-theme=\"light\"] button.ghost:hover { background: rgba(0, 0, 0, 0.04); }
-button.ghost.danger { border-color: rgba(239, 68, 68, 0.4); color: var(--danger); }
-button.ghost.danger:hover { background: var(--danger-bg); }
+button:hover {
+  background: var(--btn-primary-hover);
+}
+button:active {
+  box-shadow: var(--btn-shadow);
+}
+
+/* Secondary button (Edit, etc.) */
+button.secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-secondary);
+}
+button.secondary:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+}
+[data-theme="light"] button.secondary {
+  background: var(--bg-tertiary);
+}
+[data-theme="light"] button.secondary:hover {
+  background: var(--bg-secondary);
+}
+
+/* Ghost button (Cancel, etc.) */
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--border-secondary);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+button.ghost:hover {
+  background: var(--btn-ghost-hover);
+}
+[data-theme="light"] button.ghost:hover {
+  background: var(--btn-ghost-hover);
+}
+
+/* Danger button (Delete, etc.) */
+button.danger {
+  background: var(--danger);
+  color: white;
+  border: none;
+}
+button.danger:hover {
+  background: #dc2626;
+}
+[data-theme="light"] button.danger {
+  background: var(--danger);
+}
+[data-theme="light"] button.danger:hover {
+  background: #dc2626;
+}
+
+/* Legacy ghost danger (keep for compatibility) */
+button.ghost.danger {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: var(--danger);
+  box-shadow: none;
+}
+button.ghost.danger:hover {
+  background: var(--danger-bg);
+}
 
 input, select, textarea {
   width: 100%;
   padding: 0.7rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--btn-radius);
   border: 1px solid var(--border-secondary);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -379,7 +458,7 @@ textarea {
 
 .static-value {
   padding: 0.7rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--btn-radius);
   background: var(--accent-bg);
   border: 1px solid var(--accent);
   color: var(--text-primary);
@@ -404,12 +483,13 @@ textarea {
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
   border: 1px dashed var(--border-primary);
-  border-radius: 12px;
+  border-radius: var(--btn-radius);
   cursor: pointer;
   user-select: none;
   color: var(--text-secondary);
   font-size: 0.9rem;
-  transition: all 0.2s ease;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  box-shadow: none;
 }
 .past-days-toggle:hover {
   background: var(--bg-secondary);
@@ -623,14 +703,15 @@ textarea {
   height: 28px;
   min-height: 28px;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--btn-radius-round);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
   flex-shrink: 0;
+  box-shadow: none;
 }
 
 .dose-btn.take {
@@ -642,7 +723,6 @@ textarea {
 .dose-btn.take:hover:not(:disabled) {
   background: var(--success);
   color: white;
-  transform: scale(1.1);
 }
 
 .dose-btn.take:disabled {
@@ -667,7 +747,6 @@ textarea {
   background: var(--warning-bg);
   border-color: var(--warning);
   color: var(--warning);
-  transform: scale(1.1);
 }
 
 .time-row.taken {
@@ -1417,7 +1496,9 @@ textarea {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 150ms ease;
+  border-radius: var(--btn-radius);
+  box-shadow: none;
 }
 
 .channel-toggle:hover {
@@ -1986,6 +2067,8 @@ textarea {
   z-index: 1000;
   padding: 2rem 1rem;
   animation: fadeIn 0.2s ease;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes fadeIn {
@@ -2016,7 +2099,7 @@ textarea {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--btn-ghost-hover);
   border: 1px solid var(--border-secondary);
   font-size: 1.2rem;
   color: var(--text-secondary);
@@ -2029,17 +2112,21 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s ease;
+  border-radius: var(--btn-radius-round);
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
   flex-shrink: 0;
   padding: 0;
+  box-shadow: none;
 }
 
 .modal-close:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
   border-color: var(--text-secondary);
   color: var(--text-primary);
-  transform: scale(1.1);
+}
+
+[data-theme="light"] .modal-close:hover {
+  background: rgba(0, 0, 0, 0.1);
 }
 
 /* Universal Modal Footer */
@@ -2433,12 +2520,13 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: background 0.2s;
+  border-radius: var(--btn-radius-round);
+  transition: background 150ms ease;
+  box-shadow: none;
 }
 
 .lightbox-close:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .lightbox-image {
@@ -3007,7 +3095,7 @@ h3 .reminder-icon.info-tooltip {
   height: 28px;
   min-width: 28px;
   min-height: 28px;
-  border-radius: 50%;
+  border-radius: var(--btn-radius-round);
   border: 2px solid var(--bg-secondary);
   background: var(--bg-tertiary);
   color: var(--text-primary);
@@ -3017,7 +3105,8 @@ h3 .reminder-icon.info-tooltip {
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: all 0.15s ease;
+  transition: background 150ms ease, color 150ms ease;
+  box-shadow: none;
 }
 
 .avatar-btn:hover {

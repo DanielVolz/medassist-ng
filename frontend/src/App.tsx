@@ -400,6 +400,27 @@ function AppContent() {
 		return () => document.removeEventListener("keydown", handleEscape);
 	}, [selectedMed, showImageLightbox, selectedUser, showProfile, showShareDialog, showEditModal]);
 
+	// Prevent background scroll when modal is open
+	useEffect(() => {
+		const isModalOpen = selectedMed || selectedUser || showProfile || showShareDialog || showEditModal;
+		if (isModalOpen) {
+			const scrollY = window.scrollY;
+			document.body.classList.add('modal-open');
+			document.body.style.top = `-${scrollY}px`;
+		} else {
+			const scrollY = document.body.style.top;
+			document.body.classList.remove('modal-open');
+			document.body.style.top = '';
+			if (scrollY) {
+				window.scrollTo(0, parseInt(scrollY || '0', 10) * -1);
+			}
+		}
+		return () => {
+			document.body.classList.remove('modal-open');
+			document.body.style.top = '';
+		};
+	}, [selectedMed, selectedUser, showProfile, showShareDialog, showEditModal]);
+
 	// Check if settings have changed
 	const settingsChanged = settings.emailEnabled !== savedSettings.emailEnabled ||
 		settings.notificationEmail !== savedSettings.notificationEmail ||
@@ -1391,8 +1412,8 @@ function AppContent() {
 												<div className="med-total">{t('medications.details.total')}: {med.count} {t('common.pills')}</div>
 											</div>
 											<div className="med-actions">
-												<button className="ghost" onClick={() => startEdit(med)}>{t('common.edit')}</button>
-												<button className="ghost danger" onClick={() => deleteMed(med.id)}>{t('common.delete')}</button>
+												<button className="secondary" onClick={() => startEdit(med)}>{t('common.edit')}</button>
+												<button className="danger" onClick={() => deleteMed(med.id)}>{t('common.delete')}</button>
 											</div>
 										</div>
 										<div className="blister-list">
@@ -1500,7 +1521,7 @@ function AppContent() {
 												</label>
 											</div>
 											{form.blisters.length > 1 && (
-												<button type="button" className="ghost" onClick={() => removeBlister(idx)}>{t('common.remove')}</button>
+												<button type="button" className="danger" onClick={() => removeBlister(idx)}>{t('common.remove')}</button>
 											)}
 										</div>
 									))}
@@ -1516,7 +1537,7 @@ function AppContent() {
 												return (
 													<div className="image-preview">
 														<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
-														<button type="button" className="ghost danger" onClick={() => deleteMedImage(editingId)}>{t('form.removeImage')}</button>
+														<button type="button" className="danger" onClick={() => deleteMedImage(editingId)}>{t('form.removeImage')}</button>
 													</div>
 												);
 											}
@@ -1534,7 +1555,7 @@ function AppContent() {
 											return (
 												<div className="image-preview">
 													<img src={pendingImagePreview} alt="Preview" />
-													<button type="button" className="ghost danger" onClick={() => { setPendingImage(null); setPendingImagePreview(null); }}>{t('form.removeImage')}</button>
+													<button type="button" className="danger" onClick={() => { setPendingImage(null); setPendingImagePreview(null); }}>{t('form.removeImage')}</button>
 												</div>
 											);
 										}
@@ -2229,11 +2250,11 @@ function AppContent() {
 								{t('common.close')}
 							</button>
 							<div className="footer-actions">
-								<button className="ghost" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
+								<button className="secondary" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
 									{t('common.edit')}
 								</button>
 								{selectedMed.blisters.length > 0 && (
-									<button className="ghost icon-only" onClick={() => generateICS(selectedMed)} title={t('modal.exportTooltip')}>
+									<button className="secondary icon-only" onClick={() => generateICS(selectedMed)} title={t('modal.exportTooltip')}>
 										📅
 									</button>
 								)}
@@ -2439,7 +2460,7 @@ function AppContent() {
 											<span className="field-label">{t('form.medicationImage')}</span>
 											<div className="image-preview">
 												<img src={currentMed.imageUrl} alt={currentMed.name} />
-												<button type="button" className="ghost danger" onClick={() => deleteMedImage(editingId)}>{t('form.removeImage')}</button>
+												<button type="button" className="danger" onClick={() => deleteMedImage(editingId)}>{t('form.removeImage')}</button>
 											</div>
 										</div>
 									);
@@ -2479,7 +2500,7 @@ function AppContent() {
 											<span>{t('form.blisters.startTime')}</span>
 											<input type="time" value={b.startTime} onChange={(e) => setBlisterValue(idx, "startTime", e.target.value)} />
 										</label>
-										{form.blisters.length > 1 && <button type="button" className="ghost danger remove-blister-btn" onClick={() => removeBlister(idx)} title={t('common.delete')}>🗑</button>}
+										{form.blisters.length > 1 && <button type="button" className="danger remove-blister-btn" onClick={() => removeBlister(idx)} title={t('common.delete')}>🗑</button>}
 									</div>
 								))}
 								<button type="button" className="ghost add-blister" onClick={addBlister}>+ {t('form.blisters.addIntake')}</button>

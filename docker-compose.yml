@@ -1,6 +1,6 @@
 services:
   backend:
-    image: git.danielvolz.org/daniel/medassist-ng/backend:0.0.1
+    image: ghcr.io/danielvolz/medassist-ng-backend:latest
     container_name: medassist-ng-backend
     env_file:
       - .env
@@ -32,7 +32,7 @@ services:
       start_period: 30s
 
   frontend:
-    image: git.danielvolz.org/daniel/medassist-ng/frontend:0.0.1
+    image: ghcr.io/danielvolz/medassist-ng-frontend:latest
     container_name: medassist-ng-frontend
     ports:
       - "4174:8080"

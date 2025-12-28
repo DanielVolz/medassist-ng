@@ -2095,22 +2095,21 @@ function AppContent() {
 					<div className="modal-content med-detail-modal" onClick={(e) => e.stopPropagation()}>
 						<button className="modal-close" onClick={() => setSelectedMed(null)}>×</button>
 						
-						<div className="med-detail-header">
-							<div 
-								className={`med-detail-avatar-wrapper ${selectedMed.imageUrl ? 'clickable' : ''}`}
-								onClick={() => selectedMed.imageUrl && setShowImageLightbox(true)}
-							>
-								<MedicationAvatar name={selectedMed.name} imageUrl={selectedMed.imageUrl} size="lg" />
-								{selectedMed.imageUrl && <span className="expand-icon">🔍</span>}
-							</div>
-							<div className="med-detail-titles">
-								<h2>{selectedMed.name}</h2>
-								{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
-								{selectedMed.takenBy && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy}</span>}
-							</div>
-						</div>
-
 						<div className="med-detail-body">
+							<div className="med-detail-header">
+								<div 
+									className={`med-detail-avatar-wrapper ${selectedMed.imageUrl ? 'clickable' : ''}`}
+									onClick={() => selectedMed.imageUrl && setShowImageLightbox(true)}
+								>
+									<MedicationAvatar name={selectedMed.name} imageUrl={selectedMed.imageUrl} size="lg" />
+									{selectedMed.imageUrl && <span className="expand-icon">🔍</span>}
+								</div>
+								<div className="med-detail-titles">
+									<h2>{selectedMed.name}</h2>
+									{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
+									{selectedMed.takenBy && <span className="med-taken-by">{t('modal.for')} {selectedMed.takenBy}</span>}
+								</div>
+							</div>
 							<div className="med-detail-section">
 								<h3>{t('modal.stockInfo')}</h3>
 								{(() => {

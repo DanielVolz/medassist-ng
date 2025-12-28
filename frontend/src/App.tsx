@@ -3181,15 +3181,38 @@ type SharedScheduleData = {
 	};
 };
 
+type ExpiredLinkData = {
+	ownerUsername: string;
+	takenBy: string;
+	expiredAt: string;
+};
+
 function SharedSchedule() {
 	const { token } = useParams<{ token: string }>();
 	const { t, i18n } = useTranslation();
 	const [data, setData] = useState<SharedScheduleData | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [expiredData, setExpiredData] = useState<ExpiredLinkData | null>(null);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
 	const [showPastDays, setShowPastDays] = useState(false);
+	const [theme, setTheme] = useState<"light" | "dark">(() => {
+		if (typeof window !== "undefined") {
+			return (localStorage.getItem("theme") as "light" | "dark") || "dark";
+		}
+		return "dark";
+	});
+
+	// Apply theme to document
+	useEffect(() => {
+		document.documentElement.setAttribute("data-theme", theme);
+		localStorage.setItem("theme", theme);
+	}, [theme]);
+
+	function toggleTheme() {
+		setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+	}
 	// Collapsed days state for SharedSchedule (token-specific localStorage)
 	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
 	const [manuallyExpandedDays, setManuallyExpandedDays] = useState<Set<string>>(new Set());
@@ -3332,17 +3355,27 @@ function SharedSchedule() {
 				if (res.ok) {
 					const json = await res.json();
 					setData(json);
+				} else if (res.status === 410) {
+					// Link expired - get owner info
+					const json = await res.json();
+					setExpiredData({
+						ownerUsername: json.ownerUsername,
+						takenBy: json.takenBy,
+						expiredAt: json.expiredAt,
+					});
+				} else if (res.status === 404) {
+					setError(t('share.notFound'));
 				} else {
-					setError("Share link not found or expired");
+					setError(t('share.error'));
 				}
 			} catch {
-				setError("Failed to load schedule");
+				setError(t('share.error'));
 			} finally {
 				setLoading(false);
 			}
 		}
 		fetchData();
-	}, [token]);
+	}, [token, t]);
 
 	// Build schedule from medications
 	const schedule = useMemo(() => {
@@ -3498,6 +3531,27 @@ function SharedSchedule() {
 		);
 	}
 
+	if (expiredData) {
+		return (
+			<div className="shared-schedule-page">
+				<div className="shared-schedule-error expired">
+					<h1>💊 MedAssist</h1>
+					<div className="expired-icon">⏰</div>
+					<h2>{t('share.expired.title')}</h2>
+					<p className="expired-message">
+						{t('share.expired.message', { takenBy: expiredData.takenBy })}
+					</p>
+					<p className="expired-contact">
+						{t('share.expired.contact', { username: expiredData.ownerUsername })}
+					</p>
+					<p className="expired-date">
+						{t('share.expired.expiredOn', { date: new Date(expiredData.expiredAt).toLocaleDateString(i18n.language) })}
+					</p>
+				</div>
+			</div>
+		);
+	}
+
 	if (error || !data) {
 		return (
 			<div className="shared-schedule-page">
@@ -3514,6 +3568,11 @@ function SharedSchedule() {
 			<div className="shared-schedule-container">
 				<header className="shared-schedule-header">
 					<h1>💊 {t('share.scheduleFor')} {data.takenBy}</h1>
+					<div className="shared-schedule-header-actions">
+						<button className="icon-btn" onClick={toggleTheme} title={theme === "dark" ? t('tooltips.lightMode') : t('tooltips.darkMode')}>
+							{theme === "dark" ? "☀️" : "🌙"}
+						</button>
+					</div>
 					<p className="shared-schedule-period">
 						{t('share.period')}: {data.scheduleDays === 30 ? t('dashboard.schedules.1month') : data.scheduleDays === 90 ? t('dashboard.schedules.3months') : t('dashboard.schedules.6months')}
 					</p>

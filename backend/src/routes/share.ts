@@ -2,11 +2,14 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { db } from "../db/client.js";
-import { medications, shareTokens, userSettings } from "../db/schema.js";
+import { medications, shareTokens, userSettings, users } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, optionalAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+
+// Share token validity: 1 year in milliseconds
+const SHARE_TOKEN_VALIDITY_MS = 365 * 24 * 60 * 60 * 1000;
 
 // =============================================================================
 // Validation Schemas
@@ -45,7 +48,23 @@ export async function shareRoutes(app: FastifyInstance) {
     // Find share token
     const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
     if (!share) {
-      return reply.notFound("Share link not found");
+      return reply.status(404).send({ 
+        error: "Share link not found",
+        code: "NOT_FOUND"
+      });
+    }
+
+    // Check if token has expired
+    if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
+      // Get the username of the owner to show in the expired message
+      const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
+      return reply.status(410).send({
+        error: "Share link has expired",
+        code: "EXPIRED",
+        ownerUsername: owner?.username ?? "the owner",
+        takenBy: share.takenBy,
+        expiredAt: share.expiresAt.toISOString(),
+      });
     }
 
     // Get user settings for stock thresholds
@@ -133,6 +152,9 @@ export async function shareRoutes(app: FastifyInstance) {
 
       // Generate unique token (8 bytes = 16 hex chars)
       const token = randomBytes(8).toString("hex");
+      
+      // Set expiration date (1 year from now)
+      const expiresAt = new Date(Date.now() + SHARE_TOKEN_VALIDITY_MS);
 
       // Create share token
       await db.insert(shareTokens).values({
@@ -140,11 +162,13 @@ export async function shareRoutes(app: FastifyInstance) {
         token,
         takenBy,
         scheduleDays,
+        expiresAt,
       });
 
       return {
         token,
         shareUrl: `/share/${token}`,
+        expiresAt: expiresAt.toISOString(),
       };
     }
   );

@@ -14,6 +14,7 @@
     { "idx": 11, "version": 1, "when": 1735700000, "tag": "0011_add_dose_tracking", "breakpoint": false },
     { "idx": 12, "version": 1, "when": 1735800000, "tag": "0012_add_user_avatar", "breakpoint": false },
     { "idx": 13, "version": 1, "when": 1735900000, "tag": "0013_add_oidc_subject", "breakpoint": false },
-    { "idx": 14, "version": 1, "when": 1735400000, "tag": "0014_add_stock_calculation_mode", "breakpoint": false }
+    { "idx": 14, "version": 1, "when": 1735400000, "tag": "0014_add_stock_calculation_mode", "breakpoint": false },
+    { "idx": 15, "version": 1, "when": 1735400001, "tag": "0015_add_share_token_expiry", "breakpoint": false }
   ]
 }

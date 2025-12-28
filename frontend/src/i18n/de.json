@@ -330,6 +330,14 @@
     "scheduleFor": "Zeitplan für",
     "period": "Zeitraum",
     "noSchedule": "Keine geplanten Einnahmen gefunden.",
-    "generatedBy": "Erstellt von"
+    "generatedBy": "Erstellt von",
+    "notFound": "Teilen-Link nicht gefunden",
+    "error": "Zeitplan konnte nicht geladen werden",
+    "expired": {
+      "title": "Link abgelaufen",
+      "message": "Dieser Teilen-Link für den Medikamentenplan von {{takenBy}} ist abgelaufen.",
+      "contact": "Bitte kontaktiere {{username}} um einen neuen Link anzufordern.",
+      "expiredOn": "Abgelaufen am: {{date}}"
+    }
   }
 }

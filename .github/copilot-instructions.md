@@ -209,7 +209,7 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
 
 ## ⚠️ Database Migrations (CRITICAL)
 
-**When adding/modifying database columns, ALWAYS:**
+**When adding/modifying database columns or tables, ALWAYS do ALL of the following:**
 
 1. **Update schema**: `backend/src/db/schema.ts`
 2. **Create migration file**: `backend/src/db/migrations/XXXX_description.sql`
@@ -221,8 +221,15 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
    ```json
    { "idx": X, "version": 1, "when": TIMESTAMP, "tag": "XXXX_description", "breakpoint": false }
    ```
+4. **Update migrate.ts**: `backend/src/db/migrate.ts`
+   - This file contains `CREATE TABLE IF NOT EXISTS` statements for fresh database starts
+   - Add new columns to the relevant table or add new tables
+   - Without this, fresh installs will be missing the new columns/tables!
 
-**Why this matters**: The dev database might get updated manually, but production will break without proper migration files. This causes `SQLITE_ERROR: no such column` errors in prod.
+**Why this matters**: 
+- Migration SQL files: Required for upgrading existing databases
+- migrate.ts: Required for fresh database starts (creates tables with all columns)
+- Forgetting either causes `SQLITE_ERROR: no such column` errors
 
 ## File Locations
 

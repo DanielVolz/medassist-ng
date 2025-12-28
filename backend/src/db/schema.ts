@@ -102,6 +102,7 @@ export const shareTokens = sqliteTable("share_tokens", {
   takenBy: text("taken_by", { length: 100 }).notNull(),
   scheduleDays: integer("schedule_days").notNull().default(30),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  expiresAt: integer("expires_at", { mode: "timestamp" }), // NULL = never expires
 });
 
 // =============================================================================

@@ -17,7 +17,9 @@ async function main() {
       id integer PRIMARY KEY AUTOINCREMENT,
       username text NOT NULL UNIQUE,
       password_hash text,
+      avatar_url text,
       auth_provider text NOT NULL DEFAULT 'local',
+      oidc_subject text,
       is_active integer NOT NULL DEFAULT 1,
       last_login_at integer,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
@@ -66,6 +68,7 @@ async function main() {
       normal_stock_days integer NOT NULL DEFAULT 90,
       high_stock_days integer NOT NULL DEFAULT 180,
       language text NOT NULL DEFAULT 'en',
+      stock_calculation_mode text NOT NULL DEFAULT 'automatic',
       last_auto_email_sent text,
       last_notification_type text,
       last_notification_channel text,
@@ -91,6 +94,16 @@ async function main() {
       taken_by text NOT NULL,
       schedule_days integer NOT NULL DEFAULT 30,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
+      expires_at integer,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS dose_tracking (
+      id integer PRIMARY KEY AUTOINCREMENT,
+      user_id integer NOT NULL,
+      dose_id text NOT NULL,
+      taken_at integer NOT NULL DEFAULT (strftime('%s','now')),
+      marked_by text,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `;

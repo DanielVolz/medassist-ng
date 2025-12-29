@@ -107,6 +107,9 @@ export async function shareRoutes(app: FastifyInstance) {
         blisters = [];
       }
 
+      // Parse takenBy JSON array
+      const takenByArray = parseTakenByJson(med.takenByJson);
+
       const totalPills = med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;
       return {
         id: med.id,
@@ -115,7 +118,11 @@ export async function shareRoutes(app: FastifyInstance) {
         pillWeightMg: med.pillWeightMg,
         imageUrl: med.imageUrl,
         totalPills,
+        packCount: med.packCount,
+        blistersPerPack: med.blistersPerPack,
+        looseTablets: med.looseTablets,
         pillsPerBlister: med.pillsPerBlister,
+        takenBy: takenByArray,
         blisters,
       };
     });

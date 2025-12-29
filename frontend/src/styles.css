@@ -809,6 +809,19 @@ textarea.auto-resize {
   color: var(--text-secondary);
 }
 
+/* All persons have taken this dose */
+.dose-item.all-taken {
+  background: var(--success-bg);
+  border-color: rgba(57, 217, 138, 0.3);
+  opacity: 0.7;
+}
+
+.dose-item.all-taken .dose-time,
+.dose-item.all-taken .dose-usage {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
 /* Overdue (past, not taken) doses */
 .dose-item.overdue {
   background: var(--warning-bg);

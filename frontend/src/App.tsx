@@ -348,7 +348,7 @@ function AppContent() {
 	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
 	const [manuallyExpandedDays, setManuallyExpandedDays] = useState<Set<string>>(new Set());
 
-	// Load user-specific scheduleDays and takenDoses when user changes
+	// Load user-specific scheduleDays when user changes
 	useEffect(() => {
 		if (typeof window !== "undefined" && user?.id) {
 			const storedDays = localStorage.getItem(userStorageKey(user.id, "scheduleDays"));
@@ -364,27 +364,29 @@ function AppContent() {
 				setManuallyCollapsedDays(new Set());
 				setManuallyExpandedDays(new Set());
 			}
-			
-			// Load taken doses from server
-			async function loadTakenDoses() {
-				try {
-					const res = await fetch("/api/doses/taken", { credentials: "include" });
-					if (res.ok) {
-						const data = await res.json();
-						setTakenDoses(new Set(data.doses.map((d: { doseId: string }) => d.doseId)));
-					}
-					// Don't reset on error - keep current state
-				} catch {
-					// Don't reset on error - keep current state
-				}
-			}
-			loadTakenDoses();
-			
-			// Poll for updates every 5 seconds (real-time sync with share links)
-			const interval = setInterval(loadTakenDoses, 5000);
-			return () => clearInterval(interval);
 		}
 	}, [user?.id]);
+
+	// Poll for taken doses from server (works with or without auth)
+	useEffect(() => {
+		async function loadTakenDoses() {
+			try {
+				const res = await fetch("/api/doses/taken", { credentials: "include" });
+				if (res.ok) {
+					const data = await res.json();
+					setTakenDoses(new Set(data.doses.map((d: { doseId: string }) => d.doseId)));
+				}
+				// Don't reset on error - keep current state
+			} catch {
+				// Don't reset on error - keep current state
+			}
+		}
+		loadTakenDoses();
+		
+		// Poll for updates every 5 seconds (real-time sync with share links)
+		const interval = setInterval(loadTakenDoses, 5000);
+		return () => clearInterval(interval);
+	}, []);
 
 	// Get dose ID with optional person suffix
 	function getDoseId(baseDoseId: string, person: string | null): string {
@@ -1521,8 +1523,9 @@ function AppContent() {
 																	const isFutureDose = doseDate.getTime() > todayMidnight.getTime();
 																	// If no takenBy, show single checkbox; otherwise show one per person
 																	const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+																	const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
 																	return (
-																		<div key={dose.id} className={`dose-item ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""}`}>
+																		<div key={dose.id} className={`dose-item ${isOverdue ? "overdue" : ""} ${isFutureDose ? "future" : ""} ${allTaken ? "all-taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}</span>
 																			<div className="dose-checks">
@@ -2488,13 +2491,17 @@ function AppContent() {
 								<div className="med-detail-section">
 									<h3>{t('modal.intakeSchedule')} {selectedMed.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</h3>
 									<div className="med-detail-schedules">
-										{selectedMed.blisters.map((blister, idx) => (
+										{selectedMed.blisters.map((blister, idx) => {
+											const personCount = Math.max(1, selectedMed.takenBy?.length || 1);
+											const totalUsage = blister.usage * personCount;
+											return (
 											<div key={idx} className="med-schedule-item">
-												<span className="med-schedule-usage">{blister.usage} {blister.usage !== 1 ? t('common.pills') : t('common.pill')}{selectedMed.pillWeightMg && ` (${blister.usage * selectedMed.pillWeightMg} mg)`}</span>
+												<span className="med-schedule-usage">{totalUsage} {totalUsage !== 1 ? t('common.pills') : t('common.pill')}{selectedMed.pillWeightMg && ` (${totalUsage * selectedMed.pillWeightMg} mg)`}</span>
 												<span className="med-schedule-freq">{t('form.blisters.every')} {blister.every} {blister.every !== 1 ? t('common.days') : t('common.day')}</span>
 												<span className="med-schedule-time">{t('modal.at')} {new Date(blister.start).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}</span>
 											</div>
-										))}
+											);
+										})}
 									</div>
 								</div>
 							)}
@@ -3372,8 +3379,12 @@ type SharedMedication = {
 	genericName?: string | null;
 	pillWeightMg?: number | null;
 	imageUrl?: string | null;
-	count?: number;
-	pillsPerBlister?: number;
+	totalPills: number;
+	packCount: number;
+	blistersPerPack: number;
+	looseTablets: number;
+	pillsPerBlister: number;
+	takenBy: string[];
 	blisters: Blister[];
 };
 
@@ -3910,8 +3921,9 @@ function SharedSchedule() {
 													<div className="doses-col">
 														{item.doses.map((dose) => {
 															const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+															const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
 															return (
-																<div key={dose.id} className="dose-item past">
+																<div key={dose.id} className={`dose-item past ${allTaken ? "all-taken" : ""}`}>
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">
 																		{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}
@@ -4028,6 +4040,7 @@ function SharedSchedule() {
 													<div className="doses-col">
 														{item.doses.map((dose) => {
 															const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+															const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
 															// Only disable doses on future DAYS, not later today
 															const doseDate = new Date(dose.when);
 															doseDate.setHours(0, 0, 0, 0);
@@ -4035,7 +4048,7 @@ function SharedSchedule() {
 															todayMidnight.setHours(0, 0, 0, 0);
 															const isFutureDose = doseDate.getTime() > todayMidnight.getTime();
 															return (
-																<div key={dose.id} className={`dose-item ${isFutureDose ? "future" : ""}`}>
+																<div key={dose.id} className={`dose-item ${isFutureDose ? "future" : ""} ${allTaken ? "all-taken" : ""}`}>
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">
 																		{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}

@@ -65,8 +65,9 @@ async function runMigrations() {
       id integer PRIMARY KEY AUTOINCREMENT,
       username text NOT NULL UNIQUE,
       password_hash text,
-      email text,
+      avatar_url text,
       auth_provider text NOT NULL DEFAULT 'local',
+      oidc_subject text,
       is_active integer NOT NULL DEFAULT 1,
       last_login_at integer,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
@@ -77,19 +78,15 @@ async function runMigrations() {
       user_id integer NOT NULL,
       name text NOT NULL,
       generic_name text,
-      taken_by text,
       taken_by_json text NOT NULL DEFAULT '[]',
-      count integer NOT NULL DEFAULT 0,
-      strips integer NOT NULL DEFAULT 0,
       pack_count integer NOT NULL DEFAULT 1,
-      strips_per_pack integer NOT NULL DEFAULT 1,
-      tabs_per_strip integer NOT NULL DEFAULT 1,
+      blisters_per_pack integer NOT NULL DEFAULT 1,
+      pills_per_blister integer NOT NULL DEFAULT 1,
       loose_tablets integer NOT NULL DEFAULT 0,
       pill_weight_mg integer,
       usage_json text NOT NULL DEFAULT '[]',
       every_json text NOT NULL DEFAULT '[]',
       start_json text NOT NULL DEFAULT '[]',
-      strip_size integer NOT NULL DEFAULT 1,
       image_url text,
       expiry_date text,
       notes text,
@@ -160,36 +157,6 @@ async function runMigrations() {
     }
   }
   console.log(`[DB] Tables verified/created`);
-
-  // Then run column migrations for existing databases
-  const migrations = [
-    { name: "image_url", sql: "ALTER TABLE medications ADD COLUMN image_url TEXT" },
-    { name: "expiry_date", sql: "ALTER TABLE medications ADD COLUMN expiry_date TEXT" },
-    { name: "notes", sql: "ALTER TABLE medications ADD COLUMN notes TEXT" },
-    { name: "generic_name", sql: "ALTER TABLE medications ADD COLUMN generic_name TEXT" },
-    { name: "intake_reminders_enabled", sql: "ALTER TABLE medications ADD COLUMN intake_reminders_enabled INTEGER NOT NULL DEFAULT 0" },
-    { name: "pill_weight_mg", sql: "ALTER TABLE medications ADD COLUMN pill_weight_mg REAL" },
-    { name: "taken_by", sql: "ALTER TABLE medications ADD COLUMN taken_by TEXT" },
-    { name: "taken_by_json", sql: "ALTER TABLE medications ADD COLUMN taken_by_json TEXT NOT NULL DEFAULT '[]'" },
-    { name: "users_email", sql: "ALTER TABLE users ADD COLUMN email TEXT" },
-    { name: "users_avatar_url", sql: "ALTER TABLE users ADD COLUMN avatar_url TEXT" },
-    { name: "users_oidc_subject", sql: "ALTER TABLE users ADD COLUMN oidc_subject TEXT" },
-    { name: "user_settings_expiry_warning_days", sql: "ALTER TABLE user_settings ADD COLUMN expiry_warning_days INTEGER NOT NULL DEFAULT 90" },
-    { name: "user_settings_stock_calculation_mode", sql: "ALTER TABLE user_settings ADD COLUMN stock_calculation_mode TEXT NOT NULL DEFAULT 'automatic'" },
-    { name: "share_tokens_expires_at", sql: "ALTER TABLE share_tokens ADD COLUMN expires_at INTEGER" },
-  ];
-
-  for (const migration of migrations) {
-    try {
-      await client.execute(migration.sql);
-      console.log(`[DB] Migration applied: ${migration.name}`);
-    } catch (e: any) {
-      // Ignore "duplicate column" errors - column already exists
-      if (!e.message?.includes("duplicate column")) {
-        console.error(`[DB] Migration error (${migration.name}):`, e.message);
-      }
-    }
-  }
 
   // If auth is disabled, ensure a default user exists (ID=1)
   const authEnabled = process.env.AUTH_ENABLED === "true";

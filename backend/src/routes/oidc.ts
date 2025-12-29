@@ -254,12 +254,6 @@ async function findOrCreateOIDCUser(
       // User already has a DIFFERENT OIDC subject - create new user with suffix
       username = `${username}_sso`;
       console.log(`[OIDC] Username collision (different OIDC subject), using: ${username}`);
-    } else if (existingByUsername.authProvider === "oidc" && !existingByUsername.oidcSubject) {
-      // Legacy OIDC user without subject - update it
-      await db.update(users)
-        .set({ oidcSubject: oidcSubject })
-        .where(eq(users.id, existingByUsername.id));
-      return { id: existingByUsername.id, username: existingByUsername.username };
     }
   }
   

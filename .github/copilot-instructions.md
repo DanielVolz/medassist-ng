@@ -159,9 +159,8 @@ Each blister defines a recurring intake:
 ### Key Medication Fields
 ```typescript
 {
-  name, genericName, takenBy,           // Identity
-  packCount, stripsPerPack, tabsPerStrip, looseTablets,  // Inventory
-  count, strips, stripSize,              // Derived/legacy
+  name, genericName, takenByJson,        // Identity (takenByJson is JSON array)
+  packCount, blistersPerPack, pillsPerBlister, looseTablets,  // Inventory
   pillWeightMg,                          // For mg display
   usageJson, everyJson, startJson,       // Intake schedules as JSON arrays
   imageUrl, expiryDate, notes,           // Optional metadata
@@ -207,141 +206,14 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
 - **Environment**: Copy `.env.example` → `.env`, secrets must be 10+ chars
 - **i18n**: All UI text via `t('key')` function, translations in `frontend/src/i18n/*.json`
 
-## ⚠️⚠️⚠️ Database Migrations (ABSOLUTELY CRITICAL) ⚠️⚠️⚠️
+## Database Schema Changes
 
-**THIS IS NON-NEGOTIABLE: ALL database changes MUST work for EXISTING production databases!**
+When adding new database columns:
 
-Users update their Docker containers and expect the app to work with their existing data. If migrations don't run automatically, the app crashes with `SQLITE_ERROR: no such column` errors.
-
-### The Migration System
-
-The app uses **auto-migrations at startup** in `backend/src/db/client.ts`. This file:
-1. Creates tables if they don't exist (fresh install)
-2. Runs `ALTER TABLE ADD COLUMN` for each new column (existing databases)
-3. Ignores "duplicate column" errors (migration already applied)
-
-### When adding/modifying database columns or tables, ALWAYS do ALL of the following:
-
-#### 1. Update schema: `backend/src/db/schema.ts`
-```typescript
-// Add the new column to the Drizzle schema
-stockCalculationMode: text("stock_calculation_mode").notNull().default("automatic"),
-```
-
-#### 2. Update client.ts TABLE CREATION: `backend/src/db/client.ts`
-Find the `CREATE TABLE IF NOT EXISTS` statement and add the new column:
-```sql
-CREATE TABLE IF NOT EXISTS user_settings (
-  ...
-  stock_calculation_mode text NOT NULL DEFAULT 'automatic',  -- ADD THIS LINE
-  ...
-)
-```
-**This is for FRESH installs** - new databases get all columns from the start.
-
-#### 3. Update client.ts MIGRATIONS ARRAY: `backend/src/db/client.ts`
-Add an entry to the `migrations` array:
-```typescript
-const migrations = [
-  ...existing migrations...
-  { name: "user_settings_stock_calculation_mode", sql: "ALTER TABLE user_settings ADD COLUMN stock_calculation_mode TEXT NOT NULL DEFAULT 'automatic'" },
-];
-```
-**This is for EXISTING databases** - the ALTER TABLE adds the column to old databases.
-
-#### 4. Create migration SQL file (for documentation): `backend/src/db/migrations/XXXX_description.sql`
-```sql
--- Add stock calculation mode setting
-ALTER TABLE user_settings ADD COLUMN stock_calculation_mode TEXT NOT NULL DEFAULT 'automatic';
-```
-
-#### 5. Update journal: `backend/src/db/migrations/meta/_journal.json`
-```json
-{ "idx": X, "version": 1, "when": TIMESTAMP, "tag": "XXXX_description", "breakpoint": false }
-```
-
-#### 6. Update migrate.ts: `backend/src/db/migrate.ts`
-Add the column to the `CREATE TABLE` statement AND to the `migrations` array.
-
-### ⚠️ CRITICAL CHECKLIST - DO NOT SKIP ANY STEP:
-
-| Step | File | Purpose | If Missing |
-|------|------|---------|------------|
-| 1 | `schema.ts` | Drizzle ORM knows about column | TypeScript errors |
-| 2 | `client.ts` (CREATE TABLE) | Fresh installs have column | Fresh installs crash |
-| 3 | `client.ts` (migrations array) | Existing DBs get column | **PRODUCTION CRASHES** |
-| 4 | `migrations/*.sql` | Documentation | None (but keep for history) |
-| 5 | `_journal.json` | Migration tracking | None (but keep for history) |
-| 6 | `migrate.ts` | CLI migration tool | CLI tool fails |
-
-**Step 3 is the most critical!** Without it, users who update their Docker container will get `SQLITE_ERROR: no such column` and the app will not start.
-
-### Testing Migrations
-
-Before pushing changes:
-1. Test with fresh database: Delete `backend/data/medassist-ng.db` and restart
-2. Test with existing database: Keep old DB and restart - new columns should be added automatically
-
-## ⚠️ Defensive Coding (CRITICAL for Production)
-
-**ALL new optional fields MUST be handled defensively in both Backend AND Frontend!**
-
-When a user updates their app, old data in the database may not have new fields. The frontend receives this data and crashes with `TypeError: Cannot read property 'length' of undefined`.
-
-### Rules for New Optional/Array Fields:
-
-#### Backend (routes/*.ts):
-Always provide default values when returning data:
-```typescript
-// ✅ CORRECT - Always return array, even if DB value is null/undefined
-takenBy: parseTakenByJson(row.takenByJson),  // Returns [] if null/undefined
-
-// Parser function example:
-function parseTakenByJson(value: string | null | undefined): string[] {
-  if (!value) return [];
-  try { return JSON.parse(value) || []; }
-  catch { return []; }
-}
-```
-
-#### Frontend (App.tsx):
-Always use defensive checks when accessing optional properties:
-```typescript
-// ✅ CORRECT - Defensive checks
-med?.takenBy && med.takenBy.length > 0
-(m.takenBy || []).includes(selectedUser)
-(d.takenBy || []).length > 0 ? d.takenBy : [null]
-const personCount = Math.max(1, m.takenBy?.length || 1);
-
-// ❌ WRONG - Will crash if takenBy is undefined
-m.takenBy.includes(selectedUser)  // TypeError!
-m.takenBy.length > 0              // TypeError!
-```
-
-### Checklist for New Optional Fields:
-
-| Location | Action |
-|----------|--------|
-| Backend route | Return default value (`[]`, `null`, `0`, etc.) |
-| Frontend type | Mark as optional: `takenBy?: string[]` |
-| Frontend access | ALWAYS use `?.`, `|| []`, or null-check before `.length`, `.map()`, `.includes()` |
-| Schedule builders | Pass default: `takenBy: med.takenBy || []` |
-
-### Common Patterns:
-```typescript
-// Arrays - always default to []
-const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
-meds.flatMap(m => m.takenBy || []);
-
-// Optional chaining for nested access
-med?.takenBy?.length > 0
-
-// Filter with optional check
-meds.filter(m => (m.takenBy || []).includes(name))
-
-// Conditional rendering
-{med?.takenBy && med.takenBy.length > 0 && med.takenBy.map(...)}
-```
+1. **Update schema**: `backend/src/db/schema.ts` - Add the Drizzle column definition
+2. **Update client.ts**: `backend/src/db/client.ts` - Add column to `CREATE TABLE IF NOT EXISTS`
+3. **Update migrate.ts**: `backend/src/db/migrate.ts` - Same as client.ts
+4. **Delete old DB**: `rm backend/data/medassist-ng.db` and restart
 
 ## File Locations
 
@@ -349,8 +221,6 @@ meds.filter(m => (m.takenBy || []).includes(name))
 |---------|----------|
 | Backend entry | `backend/src/index.ts` |
 | Database schema | `backend/src/db/schema.ts` |
-| Migrations | `backend/src/db/migrations/*.sql` |
-| Migration journal | `backend/src/db/migrations/meta/_journal.json` |
 | Backend routes | `backend/src/routes/*.ts` |
 | Backend services | `backend/src/services/*.ts` |
 | Frontend app | `frontend/src/App.tsx` |

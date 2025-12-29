@@ -2,7 +2,7 @@ services:
   backend-dev:
     image: node:22-slim
     working_dir: /app
-    command: sh -c "npm install && npm run dev"
+    command: sh -c "chown -R node:node /app/node_modules /app/data && su node -c 'npm install && npm run dev'"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
@@ -23,7 +23,7 @@ services:
   frontend-dev:
     image: node:22-slim
     working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host --port 5173"
+    command: sh -c "chown -R node:node /app/node_modules && su node -c 'npm install && npm run dev -- --host --port 5173'"
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules

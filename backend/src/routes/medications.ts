@@ -23,8 +23,8 @@ const medicationSchema = z.object({
   genericName: z.string().trim().max(100).nullable().optional(),
   takenBy: z.array(z.string().trim().max(100)).default([]), // Array of person names
   packCount: z.number().int().min(0).default(1),
-  stripsPerPack: z.number().int().min(1).default(1),
-  tabsPerStrip: z.number().int().min(1).default(1),
+  blistersPerPack: z.number().int().min(1).default(1),
+  pillsPerBlister: z.number().int().min(1).default(1),
   looseTablets: z.number().int().min(0).default(0),
   pillWeightMg: z.number().int().min(1).nullable().optional(),
   expiryDate: z.string().nullable().optional(),
@@ -92,12 +92,9 @@ export async function medicationRoutes(app: FastifyInstance) {
       name: row.name,
       genericName: row.genericName,
       takenBy: parseTakenByJson(row.takenByJson),
-      count: row.count,
-      strips: row.strips,
-      stripSize: row.stripSize,
       packCount: row.packCount ?? 1,
-      stripsPerPack: row.stripsPerPack ?? row.strips ?? 1,
-      tabsPerStrip: row.tabsPerStrip ?? row.stripSize ?? 1,
+      blistersPerPack: row.blistersPerPack ?? 1,
+      pillsPerBlister: row.pillsPerBlister ?? 1,
       looseTablets: row.looseTablets ?? 0,
       pillWeightMg: row.pillWeightMg,
       blisters: parseBlisters(row),
@@ -114,13 +111,11 @@ export async function medicationRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.status(400).send(parsed.error.format());
 
     const userId = await getUserId(req, reply);
-    const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, blisters } = parsed.data;
+    const { name, genericName, takenBy, packCount, blistersPerPack, pillsPerBlister, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, blisters } = parsed.data;
     const usageJson = JSON.stringify(blisters.map((s) => s.usage));
     const everyJson = JSON.stringify(blisters.map((s) => s.every));
     const startJson = JSON.stringify(blisters.map((s) => s.start));
     const takenByJson = JSON.stringify(takenBy || []);
-
-    const derivedCount = deriveTotalTablets(packCount, stripsPerPack, tabsPerStrip, looseTablets);
 
     const [inserted] = await db
       .insert(medications)
@@ -128,14 +123,10 @@ export async function medicationRoutes(app: FastifyInstance) {
         userId,
         name,
         genericName: genericName || null,
-        takenBy: (takenBy && takenBy.length > 0) ? takenBy[0] : null, // Backwards compat
         takenByJson,
-        count: derivedCount,
-        strips: stripsPerPack,
-        stripSize: tabsPerStrip,
         packCount,
-        stripsPerPack,
-        tabsPerStrip,
+        blistersPerPack,
+        pillsPerBlister,
         looseTablets,
         pillWeightMg: pillWeightMg || null,
         expiryDate: expiryDate || null,
@@ -152,12 +143,9 @@ export async function medicationRoutes(app: FastifyInstance) {
       name: inserted.name,
       genericName: inserted.genericName,
       takenBy: parseTakenByJson(inserted.takenByJson),
-      count: inserted.count,
-      strips: inserted.strips,
-      stripSize: inserted.stripSize,
       packCount: inserted.packCount,
-      stripsPerPack: inserted.stripsPerPack,
-      tabsPerStrip: inserted.tabsPerStrip,
+      blistersPerPack: inserted.blistersPerPack,
+      pillsPerBlister: inserted.pillsPerBlister,
       looseTablets: inserted.looseTablets,
       pillWeightMg: inserted.pillWeightMg,
       blisters,
@@ -181,27 +169,21 @@ export async function medicationRoutes(app: FastifyInstance) {
     const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
     if (!existing) return reply.notFound();
 
-    const { name, genericName, takenBy, packCount, stripsPerPack, tabsPerStrip, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, blisters } = parsed.data;
+    const { name, genericName, takenBy, packCount, blistersPerPack, pillsPerBlister, looseTablets, pillWeightMg, expiryDate, notes, intakeRemindersEnabled, blisters } = parsed.data;
     const usageJson = JSON.stringify(blisters.map((s) => s.usage));
     const everyJson = JSON.stringify(blisters.map((s) => s.every));
     const startJson = JSON.stringify(blisters.map((s) => s.start));
     const takenByJson = JSON.stringify(takenBy || []);
-
-    const derivedCount = deriveTotalTablets(packCount, stripsPerPack, tabsPerStrip, looseTablets);
 
     const result = await db
       .update(medications)
       .set({
         name,
         genericName: genericName || null,
-        takenBy: (takenBy && takenBy.length > 0) ? takenBy[0] : null, // Backwards compat
         takenByJson,
-        count: derivedCount,
-        strips: stripsPerPack,
-        stripSize: tabsPerStrip,
         packCount,
-        stripsPerPack,
-        tabsPerStrip,
+        blistersPerPack,
+        pillsPerBlister,
         looseTablets,
         pillWeightMg: pillWeightMg || null,
         expiryDate: expiryDate || null,
@@ -222,12 +204,9 @@ export async function medicationRoutes(app: FastifyInstance) {
       name: result[0].name,
       genericName: result[0].genericName,
       takenBy: parseTakenByJson(result[0].takenByJson),
-      count: result[0].count,
-      strips: result[0].strips,
-      stripSize: result[0].stripSize,
       packCount: result[0].packCount,
-      stripsPerPack: result[0].stripsPerPack,
-      tabsPerStrip: result[0].tabsPerStrip,
+      blistersPerPack: result[0].blistersPerPack,
+      pillsPerBlister: result[0].pillsPerBlister,
       looseTablets: result[0].looseTablets,
       pillWeightMg: result[0].pillWeightMg,
       blisters,
@@ -329,11 +308,11 @@ export async function medicationRoutes(app: FastifyInstance) {
     const payload = rows.map((row) => {
       const blisters = parseBlisters(row);
       const usageTotal = calculateUsageInRange(blisters, start, end);
-      const tabsPerStrip = row.tabsPerStrip ?? row.stripSize ?? 1;
+      const pillsPerBlister = row.pillsPerBlister ?? 1;
       const packCount = row.packCount ?? 1;
-      const stripsPerPack = row.stripsPerPack ?? row.strips ?? 1;
+      const blistersPerPack = row.blistersPerPack ?? 1;
       const looseTablets = row.looseTablets ?? 0;
-      const originalTotalPills = packCount * stripsPerPack * tabsPerStrip + looseTablets;
+      const originalTotalPills = packCount * blistersPerPack * pillsPerBlister + looseTablets;
 
       // Calculate consumption up to now (same logic as frontend)
       let consumedUntilNow = 0;
@@ -347,7 +326,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       });
       
       const currentPills = Math.max(0, originalTotalPills - consumedUntilNow);
-      const stripsNeeded = tabsPerStrip > 0 ? Math.ceil(usageTotal / tabsPerStrip) : 0;
+      const stripsNeeded = pillsPerBlister > 0 ? Math.ceil(usageTotal / pillsPerBlister) : 0;
       
       // Calculate current stock using realistic consumption order (loose first, then blisters)
       const consumed = originalTotalPills - currentPills;
@@ -357,8 +336,8 @@ export async function medicationRoutes(app: FastifyInstance) {
       const originalBlisterPills = originalTotalPills - looseTablets;
       const blisterPillsRemaining = Math.max(0, originalBlisterPills - blisterPillsConsumed);
       
-      const fullBlisters = tabsPerStrip > 0 ? Math.floor(blisterPillsRemaining / tabsPerStrip) : 0;
-      const openBlisterPills = tabsPerStrip > 0 ? blisterPillsRemaining % tabsPerStrip : 0;
+      const fullBlisters = pillsPerBlister > 0 ? Math.floor(blisterPillsRemaining / pillsPerBlister) : 0;
+      const openBlisterPills = pillsPerBlister > 0 ? blisterPillsRemaining % pillsPerBlister : 0;
       const loosePills = loosePillsRemaining + openBlisterPills; // Combine open blister + remaining loose
       
       const enough = currentPills >= usageTotal;
@@ -367,7 +346,7 @@ export async function medicationRoutes(app: FastifyInstance) {
         medicationName: row.name,
         totalPills: currentPills,
         plannerUsage: usageTotal,
-        stripSize: tabsPerStrip,
+        stripSize: pillsPerBlister,
         stripsNeeded,
         fullBlisters,
         loosePills,
@@ -390,13 +369,4 @@ function calculateUsageInRange(blisters: Array<{ usage: number; every: number; s
     }
   });
   return Number(total.toFixed(2));
-}
-
-function deriveTotalTablets(packCount: number, stripsPerPack: number, tabsPerStrip: number, looseTablets: number) {
-  const packs = packCount || 0;
-  const strips = stripsPerPack || 0;
-  const tabs = tabsPerStrip || 1;
-  const loose = looseTablets || 0;
-  const packed = packs * strips * tabs;
-  return packed + loose;
 }

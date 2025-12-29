@@ -107,14 +107,15 @@ export async function shareRoutes(app: FastifyInstance) {
         blisters = [];
       }
 
+      const totalPills = med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;
       return {
         id: med.id,
         name: med.name,
         genericName: med.genericName,
         pillWeightMg: med.pillWeightMg,
         imageUrl: med.imageUrl,
-        count: med.count,
-        tabsPerStrip: med.tabsPerStrip,
+        totalPills,
+        pillsPerBlister: med.pillsPerBlister,
         blisters,
       };
     });

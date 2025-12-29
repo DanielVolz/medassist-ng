@@ -13,14 +13,11 @@ type Medication = {
 	id: number;
 	name: string;
 	genericName?: string | null;
-	takenBy: string[]; // Changed from string | null to array
-	count: number;
-	strips: number;
-	stripSize: number;
-	packCount?: number;
-	stripsPerPack?: number;
-	tabsPerStrip?: number;
-	looseTablets?: number;
+	takenBy: string[];
+	packCount: number;
+	blistersPerPack: number;
+	pillsPerBlister: number;
+	looseTablets: number;
 	pillWeightMg?: number | null;
 	blisters: Blister[];
 	imageUrl?: string | null;
@@ -49,8 +46,8 @@ type FormState = {
 	genericName: string;
 	takenBy: string[]; // Changed from string to array
 	packCount: string;
-	stripsPerPack: string;
-	tabsPerStrip: string;
+	blistersPerPack: string;
+	pillsPerBlister: string;
 	looseTablets: string;
 	pillWeightMg: string;
 	expiryDate: string;
@@ -69,7 +66,7 @@ const defaultBlister = (): FormBlister => {
 	};
 };
 
-const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: [], packCount: "1", stripsPerPack: "1", tabsPerStrip: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, blisters: [defaultBlister()] });
+const defaultForm = (): FormState => ({ name: "", genericName: "", takenBy: [], packCount: "1", blistersPerPack: "1", pillsPerBlister: "1", looseTablets: "0", pillWeightMg: "", expiryDate: "", notes: "", intakeRemindersEnabled: false, blisters: [defaultBlister()] });
 
 // Field validation limits (must match backend)
 const FIELD_LIMITS = {
@@ -388,6 +385,25 @@ function AppContent() {
 			return () => clearInterval(interval);
 		}
 	}, [user?.id]);
+
+	// Get dose ID with optional person suffix
+	function getDoseId(baseDoseId: string, person: string | null): string {
+		return person ? `${baseDoseId}-${person}` : baseDoseId;
+	}
+
+	// Count taken doses for a day/item
+	function countTakenDoses(doses: Array<{ id: string; takenBy: string[] }>): { total: number; taken: number } {
+		let total = 0;
+		let taken = 0;
+		for (const d of doses) {
+			const people = (d.takenBy || []).length > 0 ? d.takenBy : [null];
+			for (const person of people) {
+				total++;
+				if (takenDoses.has(getDoseId(d.id, person))) taken++;
+			}
+		}
+		return { total, taken };
+	}
 
 	async function markDoseTaken(doseId: string) {
 		// Optimistic update
@@ -802,10 +818,10 @@ function AppContent() {
 			name: med.name,
 			genericName: med.genericName ?? "",
 			takenBy: med.takenBy || [], // Already an array from API
-			packCount: String(med.packCount ?? 1),
-			stripsPerPack: String(med.stripsPerPack ?? med.strips ?? 1),
-			tabsPerStrip: String(med.tabsPerStrip ?? med.stripSize ?? 1),
-			looseTablets: String(med.looseTablets ?? 0),
+			packCount: String(med.packCount),
+			blistersPerPack: String(med.blistersPerPack),
+			pillsPerBlister: String(med.pillsPerBlister),
+			looseTablets: String(med.looseTablets),
 			pillWeightMg: med.pillWeightMg ? String(med.pillWeightMg) : "",
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
@@ -874,8 +890,8 @@ function AppContent() {
 			genericName: form.genericName.trim() || null,
 			takenBy: form.takenBy.filter(name => name.trim()), // Send array, filter empty strings
 			packCount: Number(form.packCount) || 0,
-			stripsPerPack: Math.max(1, Number(form.stripsPerPack) || 1),
-			tabsPerStrip: Math.max(1, Number(form.tabsPerStrip) || 1),
+			blistersPerPack: Math.max(1, Number(form.blistersPerPack) || 1),
+			pillsPerBlister: Math.max(1, Number(form.pillsPerBlister) || 1),
 			looseTablets: Math.max(0, Number(form.looseTablets) || 0),
 			pillWeightMg: form.pillWeightMg ? Number(form.pillWeightMg) : null,
 			expiryDate: form.expiryDate || null,
@@ -1196,9 +1212,9 @@ function AppContent() {
 												const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "success-text";
 												const stock = getBlisterStock(
 													Math.round(row.medsLeft), 
-													med?.tabsPerStrip ?? 1,
+													med?.pillsPerBlister ?? 1,
 													med?.looseTablets ?? 0,
-													med?.count ?? Math.round(row.medsLeft)
+													med ? med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets : Math.round(row.medsLeft)
 												);
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
@@ -1216,7 +1232,7 @@ function AppContent() {
 															)}
 														</span>
 														<span data-label={t('table.fullBlisters')} className={textClass}>{formatFullBlisters(stock.fullBlisters, t)}</span>
-														<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.tabsPerStrip ?? 1, t)}</span>
+														<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.pillsPerBlister ?? 1, t)}</span>
 														<span data-label={t('table.days')} className={textClass}>{formatNumber(row.daysLeft)}</span>
 														<span data-label={t('table.status')} className={`status-chip ${status.className}`}>{t(status.label)}</span>
 														<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
@@ -1265,9 +1281,9 @@ function AppContent() {
 										const textClass = status.className === "danger" ? "danger-text" : status.className === "warning" ? "warning-text" : "success-text";
 										const stock = getBlisterStock(
 											Math.round(row.medsLeft), 
-											med?.tabsPerStrip ?? 1,
+											med?.pillsPerBlister ?? 1,
 											med?.looseTablets ?? 0,
-											med?.count ?? Math.round(row.medsLeft)
+											med ? med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets : Math.round(row.medsLeft)
 										);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
@@ -1287,7 +1303,7 @@ function AppContent() {
 													)}
 												</span>
 												<span data-label={t('table.fullBlisters')} className={textClass}>{formatFullBlisters(stock.fullBlisters, t)}</span>
-												<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.tabsPerStrip ?? 1, t)}</span>
+												<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.pillsPerBlister ?? 1, t)}</span>
 												<span data-label={t('table.daysLeft')} className={textClass}>{formatNumber(row.daysLeft)}</span>
 												<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
 												<span data-label={t('table.expiry')} className={expiryClass}>{med?.expiryDate ? new Date(med.expiryDate).toLocaleDateString(i18n.language, { day: "2-digit", month: "short", year: "2-digit" }) : "-"}</span>
@@ -1398,16 +1414,15 @@ function AppContent() {
 																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}</span>
 																			<div className="dose-checks">
 																				{people.map((person) => {
-																					const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																					// Check both new format (with person) and legacy format (without person suffix)
-																					const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
+																					const doseId = getDoseId(dose.id, person);
+																					const isTaken = takenDoses.has(doseId);
 																					return (
-																						<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
+																						<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																							{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
 																							{isTaken ? (
-																								<button className="dose-btn undo" onClick={() => undoDoseTaken(personDoseId)} title={t('common.undo')}>↩</button>
+																								<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																							) : (
-																								<button className="dose-btn take" onClick={() => markDoseTaken(personDoseId)} title={t('dose.markAsTaken')} disabled={isEmpty}>✓</button>
+																								<button className="dose-btn take" onClick={() => markDoseTaken(doseId)} title={t('dose.markAsTaken')} disabled={isEmpty}>✓</button>
 																							)}
 																						</div>
 																					);
@@ -1512,16 +1527,15 @@ function AppContent() {
 																			<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}</span>
 																			<div className="dose-checks">
 																				{people.map((person) => {
-																					const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																					// Check both new format (with person) and legacy format (without person suffix)
-																					const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
+																					const doseId = getDoseId(dose.id, person);
+																					const isTaken = takenDoses.has(doseId);
 																					return (
-																						<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
+																						<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																							{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
 																							{isTaken ? (
-																								<button className="dose-btn undo" onClick={() => undoDoseTaken(personDoseId)} title={t('common.undo')}>↩</button>
+																								<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																							) : (
-																								<button className="dose-btn take" onClick={() => markDoseTaken(personDoseId)} title={t('dose.markAsTaken')} disabled={isFutureDose || isEmpty}>✓</button>
+																								<button className="dose-btn take" onClick={() => markDoseTaken(doseId)} title={t('dose.markAsTaken')} disabled={isFutureDose || isEmpty}>✓</button>
 																							)}
 																						</div>
 																					);
@@ -1559,12 +1573,12 @@ function AppContent() {
 													<div className="med-name">{med.name}</div>
 												</div>
 												<div className="med-details">
-													<span>{t('medications.details.packs')}: <strong>{med.packCount ?? 1}</strong></span>
-													<span>{t('medications.details.blisters')}: <strong>{med.stripsPerPack ?? med.strips ?? 1}</strong></span>
-													<span>{t('medications.details.pillsPerBlister')}: <strong>{med.tabsPerStrip ?? med.stripSize}</strong></span>
-													<span>{t('medications.details.loose')}: <strong>{med.looseTablets ?? 0}</strong></span>
+													<span>{t('medications.details.packs')}: <strong>{med.packCount}</strong></span>
+													<span>{t('medications.details.blisters')}: <strong>{med.blistersPerPack}</strong></span>
+													<span>{t('medications.details.pillsPerBlister')}: <strong>{med.pillsPerBlister}</strong></span>
+													<span>{t('medications.details.loose')}: <strong>{med.looseTablets}</strong></span>
 												</div>
-												<div className="med-total">{t('medications.details.total')}: {med.count} {t('common.pills')}</div>
+												<div className="med-total">{t('medications.details.total')}: {med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets} {t('common.pills')}</div>
 											</div>
 											<div className="med-actions">
 												<button className="secondary" onClick={() => startEdit(med)}>{t('common.edit')}</button>
@@ -1646,11 +1660,11 @@ function AppContent() {
 								</label>
 								<label>
 									{t('form.blistersPerPack')}
-									<input type="number" min="1" value={form.stripsPerPack} onChange={(e) => handleValueChange("stripsPerPack", e.target.value)} />
+									<input type="number" min="1" value={form.blistersPerPack} onChange={(e) => handleValueChange("blistersPerPack", e.target.value)} />
 								</label>
 								<label>
 									{t('form.pillsPerBlister')}
-									<input type="number" min="1" value={form.tabsPerStrip} onChange={(e) => handleValueChange("tabsPerStrip", e.target.value)} />
+									<input type="number" min="1" value={form.pillsPerBlister} onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)} />
 								</label>
 								<label>
 									{t('form.loosePills')}
@@ -2283,16 +2297,15 @@ function AppContent() {
 																		<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}</span>
 																		<div className="dose-checks">
 																			{people.map((person) => {
-																				const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																				// Check both new format (with person) and legacy format (without person suffix)
-																				const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
+																				const doseId = getDoseId(dose.id, person);
+																				const isTaken = takenDoses.has(doseId);
 																				return (
-																					<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
+																					<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																						{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
 																						{isTaken ? (
-																							<button className="dose-btn undo" onClick={() => undoDoseTaken(personDoseId)} title={t('common.undo')}>↩</button>
+																							<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																						) : (
-																							<button className="dose-btn take" onClick={() => markDoseTaken(personDoseId)} disabled={isEmpty} title={t('dose.markAsTaken')}>✓</button>
+																							<button className="dose-btn take" onClick={() => markDoseTaken(doseId)} disabled={isEmpty} title={t('dose.markAsTaken')}>✓</button>
 																						)}
 																					</div>
 																				);
@@ -2353,17 +2366,16 @@ function AppContent() {
 																	<span className="dose-usage">{dose.usage} {dose.usage !== 1 ? t('common.pills') : t('common.pill')}{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}</span>
 																	<div className="dose-checks">
 																		{people.map((person) => {
-																			const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																			// Check both new format (with person) and legacy format (without person suffix)
-																			const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
+																			const doseId = getDoseId(dose.id, person);
+																			const isTaken = takenDoses.has(doseId);
 																			const isOverdue = !isTaken && dose.when < now && !isPastDay;
 																			return (
-																				<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
+																				<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
 																					{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
 																					{isTaken ? (
-																						<button className="dose-btn undo" onClick={() => undoDoseTaken(personDoseId)} title={t('common.undo')}>↩</button>
+																						<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																					) : (
-																						<button className="dose-btn take" onClick={() => markDoseTaken(personDoseId)} disabled={isEmpty} title={t('dose.markAsTaken')}>✓</button>
+																						<button className="dose-btn take" onClick={() => markDoseTaken(doseId)} disabled={isEmpty} title={t('dose.markAsTaken')}>✓</button>
 																					)}
 																				</div>
 																			);
@@ -2411,15 +2423,15 @@ function AppContent() {
 								<h3>{t('modal.stockInfo')}</h3>
 								{(() => {
 									const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
-									const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : selectedMed.count;
-									const totalStock = (selectedMed.packCount ?? 1) * (selectedMed.stripsPerPack ?? 1) * (selectedMed.tabsPerStrip ?? 1) + (selectedMed.looseTablets ?? 0);
+									const totalStock = selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + selectedMed.looseTablets;
+									const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : totalStock;
 									const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 									const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "success-text";
 									const stock = getBlisterStock(
 										currentStock, 
-										selectedMed.tabsPerStrip ?? 1,
-										selectedMed.looseTablets ?? 0,
-										selectedMed.count
+										selectedMed.pillsPerBlister,
+										selectedMed.looseTablets,
+										totalStock
 									);
 									return (
 								<div className="med-detail-grid">
@@ -2429,7 +2441,7 @@ function AppContent() {
 									</div>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t('table.openBlister')}</span>
-										<span className={`med-detail-value ${textClass}`}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, selectedMed.tabsPerStrip ?? 1, t)}</span>
+										<span className={`med-detail-value ${textClass}`}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, selectedMed.pillsPerBlister ?? 1, t)}</span>
 									</div>
 									<div className="med-detail-item full-width">
 										<span className="med-detail-label">{t('modal.currentStock')}</span>
@@ -2445,15 +2457,15 @@ function AppContent() {
 								<div className="med-detail-grid">
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t('modal.packs')}</span>
-										<span className="med-detail-value">{selectedMed.packCount ?? 0}</span>
+										<span className="med-detail-value">{selectedMed.packCount}</span>
 									</div>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t('modal.blistersPerPack')}</span>
-										<span className="med-detail-value">{selectedMed.stripsPerPack ?? 0}</span>
+										<span className="med-detail-value">{selectedMed.blistersPerPack}</span>
 									</div>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t('modal.pillsPerBlister')}</span>
-										<span className="med-detail-value">{selectedMed.tabsPerStrip ?? 1}</span>
+										<span className="med-detail-value">{selectedMed.pillsPerBlister}</span>
 									</div>
 									{selectedMed.pillWeightMg && (
 										<div className="med-detail-item">
@@ -2568,7 +2580,8 @@ function AppContent() {
 							{meds.filter(m => (m.takenBy || []).includes(selectedUser)).map((med) => {
 								const medCoverage = coverage.all.find(c => c.name === med.name);
 								const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-								const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(med.count);
+								const totalPills = med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;
+								const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(totalPills);
 								return (
 									<div 
 										key={med.id} 
@@ -2581,7 +2594,7 @@ function AppContent() {
 											{med.genericName && <span className="user-med-generic">{med.genericName}</span>}
 										</div>
 										<div className="user-med-stats">
-											<span className="user-med-pills">{currentStock}/{formatNumber(med.count)} {t('common.pills')}</span>
+											<span className="user-med-pills">{currentStock}/{formatNumber(totalPills)} {t('common.pills')}</span>
 											{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
 										</div>
 									</div>
@@ -2742,11 +2755,11 @@ function AppContent() {
 							</label>
 							<label>
 								{t('form.blistersPerPack')}
-								<input type="number" min="0" value={form.stripsPerPack} onChange={(e) => handleValueChange("stripsPerPack", e.target.value)} />
+								<input type="number" min="0" value={form.blistersPerPack} onChange={(e) => handleValueChange("blistersPerPack", e.target.value)} />
 							</label>
 							<label>
 								{t('form.pillsPerBlister')}
-								<input type="number" min="1" value={form.tabsPerStrip} onChange={(e) => handleValueChange("tabsPerStrip", e.target.value)} />
+								<input type="number" min="1" value={form.pillsPerBlister} onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)} />
 							</label>
 							<label>
 								{t('form.loosePills')}
@@ -2854,10 +2867,10 @@ function AppContent() {
 
 function deriveTotal(form: FormState) {
 	const packCount = Number(form.packCount) || 0;
-	const stripsPerPack = Number(form.stripsPerPack) || 0;
-	const tabsPerStrip = Number(form.tabsPerStrip) || 1;
+	const blistersPerPack = Number(form.blistersPerPack) || 0;
+	const pillsPerBlister = Number(form.pillsPerBlister) || 1;
 	const looseTablets = Number(form.looseTablets) || 0;
-	return packCount * stripsPerPack * tabsPerStrip + looseTablets;
+	return packCount * blistersPerPack * pillsPerBlister + looseTablets;
 }
 
 function toIsoString(value: string) {
@@ -3028,11 +3041,11 @@ function formatNumber(value: number | null) {
 // Loose pills are consumed FIRST, then blisters are opened
 function getBlisterStock(
 	currentPills: number, 
-	tabsPerStrip: number, 
+	pillsPerBlister: number, 
 	originalLooseTablets: number,
 	originalTotalPills: number
 ): { fullBlisters: number; openBlisterPills: number; loosePills: number } {
-	if (tabsPerStrip <= 0 || tabsPerStrip === 1) {
+	if (pillsPerBlister <= 0 || pillsPerBlister === 1) {
 		return { fullBlisters: 0, openBlisterPills: 0, loosePills: currentPills };
 	}
 	
@@ -3049,8 +3062,8 @@ function getBlisterStock(
 	const blisterPillsRemaining = originalBlisterPills - blisterPillsConsumed;
 	
 	// Calculate full blisters and open blister
-	const fullBlisters = Math.floor(blisterPillsRemaining / tabsPerStrip);
-	const openBlisterPills = blisterPillsRemaining % tabsPerStrip;
+	const fullBlisters = Math.floor(blisterPillsRemaining / pillsPerBlister);
+	const openBlisterPills = blisterPillsRemaining % pillsPerBlister;
 	
 	return { fullBlisters, openBlisterPills, loosePills: loosePillsRemaining };
 }
@@ -3065,12 +3078,12 @@ function formatFullBlisters(fullBlisters: number, t: (key: string) => string): s
 function formatOpenBlisterAndLoose(
 	openBlisterPills: number, 
 	loosePills: number, 
-	tabsPerStrip: number, 
+	pillsPerBlister: number, 
 	t: (key: string) => string
 ): string {
 	// Format open blister part
 	const openBlisterText = openBlisterPills > 0 
-		? `${openBlisterPills} ${t('common.of')} ${tabsPerStrip} ${t('common.pills')}`
+		? `${openBlisterPills} ${t('common.of')} ${pillsPerBlister} ${t('common.pills')}`
 		: t('common.none');
 	
 	// Format loose pills part (if any)
@@ -3136,10 +3149,11 @@ function calculateCoverage(
 						consumed += m.blisters[blisterIdx].usage;
 					}
 				}
-			});
-		}
+		});
+	}
 
-		const medsLeft = Math.max(0, m.count - consumed);
+		const totalPills = m.packCount * m.blistersPerPack * m.pillsPerBlister + m.looseTablets;
+		const medsLeft = Math.max(0, totalPills - consumed);
 		const rawDaysLeft = dailyRate > 0 ? medsLeft / dailyRate : null;
 		const daysLeft = rawDaysLeft !== null ? Math.max(0, Math.floor(rawDaysLeft)) : null; // conservative: round down
 		const depletionMs = daysLeft !== null ? now + daysLeft * MS_PER_DAY : null;
@@ -3359,7 +3373,7 @@ type SharedMedication = {
 	pillWeightMg?: number | null;
 	imageUrl?: string | null;
 	count?: number;
-	tabsPerStrip?: number;
+	pillsPerBlister?: number;
 	blisters: Blister[];
 };
 
@@ -3484,6 +3498,25 @@ function SharedSchedule() {
 			return () => clearInterval(interval);
 		}
 	}, [token]);
+
+	// Get dose ID with optional person suffix
+	function getDoseId(baseDoseId: string, person: string | null): string {
+		return person ? `${baseDoseId}-${person}` : baseDoseId;
+	}
+
+	// Count taken doses for a day/item
+	function countTakenDoses(doses: Array<{ id: string; takenBy: string[] }>): { total: number; taken: number } {
+		let total = 0;
+		let taken = 0;
+		for (const d of doses) {
+			const people = (d.takenBy || []).length > 0 ? d.takenBy : [null];
+			for (const person of people) {
+				total++;
+				if (takenDoses.has(getDoseId(d.id, person))) taken++;
+			}
+		}
+		return { total, taken };
+	}
 
 	async function markDoseTaken(doseId: string) {
 		// Optimistic update
@@ -3668,7 +3701,7 @@ function SharedSchedule() {
 		}
 		
 		for (const med of data.medications) {
-			const totalCount = med.count ?? 0;
+			const totalCount = med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;
 			const taken = takenByMed[med.name] || 0;
 			const currentCount = Math.max(0, totalCount - taken);
 			// Calculate daily usage from blisters, multiplied by number of people
@@ -3886,16 +3919,15 @@ function SharedSchedule() {
 																	</span>
 																	<div className="dose-checks">
 																		{people.map((person) => {
-																			const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																			// Check both new format (with person) and legacy format (without person suffix)
-																			const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
+																			const doseId = getDoseId(dose.id, person);
+																			const isTaken = takenDoses.has(doseId);
 																			return (
-																				<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
+																				<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																					{person && <span className="person-name">{person}</span>}
 																					{isTaken ? (
-																						<button className="dose-btn undo" onClick={() => undoDoseTaken(personDoseId)} title={t('common.undo')}>↩</button>
+																						<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																					) : (
-																						<button className="dose-btn take" onClick={() => markDoseTaken(personDoseId)} disabled={isEmpty} title={t('dose.markAsTaken')}>✓</button>
+																						<button className="dose-btn take" onClick={() => markDoseTaken(doseId)} disabled={isEmpty} title={t('dose.markAsTaken')}>✓</button>
 																					)}
 																				</div>
 																			);
@@ -4011,17 +4043,16 @@ function SharedSchedule() {
 																	</span>
 																	<div className="dose-checks">
 																		{people.map((person) => {
-																			const personDoseId = person ? `${dose.id}-${person}` : dose.id;
-																			// Check both new format (with person) and legacy format (without person suffix)
-																			const isTaken = takenDoses.has(personDoseId) || (person && takenDoses.has(dose.id));
+																			const doseId = getDoseId(dose.id, person);
+																			const isTaken = takenDoses.has(doseId);
 																			const isOverdue = dose.when < Date.now() && !isTaken && !isFutureDose;
 																			return (
-																				<div key={personDoseId} className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
+																				<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
 																					{person && <span className="person-name">{person}</span>}
 																					{isTaken ? (
-																						<button className="dose-btn undo" onClick={() => undoDoseTaken(personDoseId)} title={t('common.undo')}>↩</button>
+																						<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																					) : (
-																						<button className="dose-btn take" onClick={() => markDoseTaken(personDoseId)} title={t('dose.markAsTaken')} disabled={isFutureDose || isEmpty}>✓</button>
+																						<button className="dose-btn take" onClick={() => markDoseTaken(doseId)} title={t('dose.markAsTaken')} disabled={isFutureDose || isEmpty}>✓</button>
 																					)}
 																				</div>
 																			);

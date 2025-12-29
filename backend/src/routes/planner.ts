@@ -12,9 +12,10 @@ type PlannerRow = {
   medicationName: string;
   totalPills: number;
   plannerUsage: number;
-  stripSize: number;
-  stripsNeeded: number;
-  stripsAvailable: number;
+  blisterSize: number;
+  blistersNeeded: number;
+  fullBlisters: number;
+  loosePills: number;
   enough: boolean;
 };
 
@@ -102,8 +103,8 @@ export async function plannerRoutes(app: FastifyInstance) {
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${row.medicationName}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.totalPills}</strong></td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.plannerUsage}</strong></td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.stripsNeeded} × ${row.stripSize}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.stripsAvailable}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.blistersNeeded} × ${row.blisterSize}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.fullBlisters}${row.loosePills > 0 ? ` (+${row.loosePills})` : ""}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">
             <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; ${
               row.enough
@@ -169,7 +170,7 @@ Supply overview from ${fromDate} to ${untilDate}
 
 ${summaryText}
 
-${rows.map((r) => `${r.medicationName}: ${r.totalPills} pills in stock, ${r.plannerUsage} pills needed, ${r.stripsAvailable} blisters available (${r.stripsNeeded} needed) - ${r.enough ? "Enough" : "OUT OF STOCK"}`).join("\n")}
+${rows.map((r) => `${r.medicationName}: ${r.totalPills} pills in stock, ${r.plannerUsage} pills needed, ${r.fullBlisters} blisters available${r.loosePills > 0 ? ` (+${r.loosePills} loose)` : ""} (${r.blistersNeeded} needed) - ${r.enough ? "Enough" : "OUT OF STOCK"}`).join("\n")}
 
 ---
 Sent from MedAssist-ng Medication Planner`;

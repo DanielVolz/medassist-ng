@@ -32,8 +32,8 @@ type PlannerRow = {
 	medicationName: string;
 	totalPills: number;
 	plannerUsage: number;
-	stripSize: number;
-	stripsNeeded: number;
+	blisterSize: number;
+	blistersNeeded: number;
 	fullBlisters: number;
 	loosePills: number;
 	enough: boolean;
@@ -1855,7 +1855,7 @@ function AppContent() {
 												<div key={row.medicationId} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
 													<span data-label={t('planner.table.medication')} className="cell-with-avatar"><MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />{row.medicationName}</span>
 													<span data-label={t('planner.table.usage')}><strong>{row.plannerUsage}</strong>&nbsp;{t('common.pills')}</span>
-													<span data-label={t('planner.table.blisters')}>{row.stripsNeeded} × {row.stripSize}</span>
+													<span data-label={t('planner.table.blisters')}>{row.blistersNeeded} × {row.blisterSize}</span>
 													<span data-label={t('planner.table.available')}>
 														{row.fullBlisters} {t('common.blisters')}{row.loosePills > 0 && ` + ${row.loosePills} ${t('common.pills')}`}
 													</span>

@@ -353,7 +353,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       });
       
       const currentPills = Math.max(0, originalTotalPills - consumedUntilNow);
-      const stripsNeeded = pillsPerBlister > 0 ? Math.ceil(usageTotal / pillsPerBlister) : 0;
+      const blistersNeeded = pillsPerBlister > 0 ? Math.ceil(usageTotal / pillsPerBlister) : 0;
       
       // Calculate current stock using realistic consumption order (loose first, then blisters)
       const consumed = originalTotalPills - currentPills;
@@ -373,8 +373,8 @@ export async function medicationRoutes(app: FastifyInstance) {
         medicationName: row.name,
         totalPills: currentPills,
         plannerUsage: usageTotal,
-        stripSize: pillsPerBlister,
-        stripsNeeded,
+        blisterSize: pillsPerBlister,
+        blistersNeeded,
         fullBlisters,
         loosePills,
         enough,

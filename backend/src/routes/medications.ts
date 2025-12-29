@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { medications } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { medications, doseTracking } from "../db/schema.js";
+import { eq, and, like, sql } from "drizzle-orm";
 import { createWriteStream, existsSync, unlinkSync } from "fs";
 import { resolve, extname } from "path";
 import { pipeline } from "stream/promises";
@@ -198,6 +198,33 @@ export async function medicationRoutes(app: FastifyInstance) {
       .returning();
 
     if (!result.length) return reply.notFound();
+
+    // Clean up dose tracking entries that are before the earliest start date
+    // This ensures consistency when the user changes the start date
+    const earliestStart = Math.min(...blisters.map(b => new Date(b.start).getTime()));
+    if (!Number.isNaN(earliestStart)) {
+      // Get all dose tracking entries for this medication and filter out invalid ones
+      const allDoses = await db.select().from(doseTracking)
+        .where(and(
+          eq(doseTracking.userId, userId),
+          like(doseTracking.doseId, `${idNum}-%`)
+        ));
+      
+      // Find doses with timestamps before the earliest start date
+      const dosesToDelete = allDoses.filter(dose => {
+        const parts = dose.doseId.split("-");
+        if (parts.length >= 3) {
+          const timestamp = parseInt(parts[2], 10);
+          return !Number.isNaN(timestamp) && timestamp < earliestStart;
+        }
+        return false;
+      });
+      
+      // Delete invalid doses
+      for (const dose of dosesToDelete) {
+        await db.delete(doseTracking).where(eq(doseTracking.id, dose.id));
+      }
+    }
 
     return {
       id: result[0].id,

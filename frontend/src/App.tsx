@@ -3158,9 +3158,14 @@ function calculateCoverage(
 				if (parts.length >= 3) {
 					const medId = parseInt(parts[0], 10);
 					const blisterIdx = parseInt(parts[1], 10);
+					const doseTimestamp = parseInt(parts[2], 10);
 					if (medId === m.id && m.blisters[blisterIdx]) {
-						// Each taken dose (regardless of person) consumes the usage amount
-						consumed += m.blisters[blisterIdx].usage;
+						// Only count doses that are on or after the blister's start date
+						const blisterStart = new Date(m.blisters[blisterIdx].start).getTime();
+						if (!Number.isNaN(blisterStart) && doseTimestamp >= blisterStart) {
+							// Each taken dose (regardless of person) consumes the usage amount
+							consumed += m.blisters[blisterIdx].usage;
+						}
 					}
 				}
 		});

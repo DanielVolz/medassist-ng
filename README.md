@@ -35,7 +35,7 @@
 # Features
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="MedAssist-ng Dashboard" width="100%" />
+  <img src="docs/gifs/MedAssist-demo.gif" alt="MedAssist-ng Dashboard" width="100%" />
 </p>
 
 ### Smart Inventory

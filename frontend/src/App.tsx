@@ -273,6 +273,9 @@ function AppContent() {
 			} else {
 				setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
 			}
+		} else {
+			setPlannerRows([]);
+			setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
 		}
 	}, [user?.id]);
 
@@ -570,10 +573,14 @@ function AppContent() {
 	const pastDays = useMemo(() => groupedSchedule.filter(d => d.isPast), [groupedSchedule]);
 	const futureDays = useMemo(() => groupedSchedule.filter(d => !d.isPast).slice(0, scheduleDays), [groupedSchedule, scheduleDays]);
 
+	// Load medications and settings when user changes (or on initial mount)
 	useEffect(() => {
 		loadMeds();
 		loadSettings();
-	}, []);
+		// Reset planner when user changes
+		setPlannerRows([]);
+		setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
+	}, [user?.id]);
 
 	function loadMeds() {
 		setLoading(true);

@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { doseTracking, shareTokens } from "../db/schema.js";
-import { eq, and, gte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { requireAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -47,17 +47,10 @@ export async function doseRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const userId = await getUserId(request, reply);
 
-      // Get doses from last 30 days (to avoid loading too much data)
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      
+      // Get all taken doses for this user (no time limit)
       const doses = await db.select()
         .from(doseTracking)
-        .where(
-          and(
-            eq(doseTracking.userId, userId),
-            gte(doseTracking.takenAt, thirtyDaysAgo)
-          )
-        );
+        .where(eq(doseTracking.userId, userId));
 
       return {
         doses: doses.map((d) => ({
@@ -148,17 +141,10 @@ export async function doseRoutes(app: FastifyInstance) {
         return reply.notFound("Share link not found");
       }
 
-      // Get doses from last 30 days
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      
+      // Get all taken doses for this user (no time limit)
       const doses = await db.select()
         .from(doseTracking)
-        .where(
-          and(
-            eq(doseTracking.userId, share.userId),
-            gte(doseTracking.takenAt, thirtyDaysAgo)
-          )
-        );
+        .where(eq(doseTracking.userId, share.userId));
 
       return {
         doses: doses.map((d) => ({

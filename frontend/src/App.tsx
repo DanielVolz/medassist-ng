@@ -3390,6 +3390,7 @@ type SharedMedication = {
 
 type SharedScheduleData = {
 	takenBy: string;
+	sharedBy: string | null;
 	scheduleDays: number;
 	medications: SharedMedication[];
 	stockThresholds?: {
@@ -4086,7 +4087,7 @@ function SharedSchedule() {
 				</div>
 
 				<footer className="shared-schedule-footer">
-					<p>{t('share.generatedBy')} MedAssist</p>
+					<p>{t('share.generatedBy')} {data?.sharedBy && <><strong>{data.sharedBy}</strong> · </>}<a href="/">MedAssist</a></p>
 				</footer>
 			</div>
 

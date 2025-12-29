@@ -341,7 +341,7 @@ export async function sendShoutrrrNotification(urlStr: string, title: string, me
     if (urlStr.startsWith("ntfy://")) {
       const parsed = new URL(urlStr.replace("ntfy://", "https://"));
       targetUrl = `https://${parsed.host}${parsed.pathname}`;
-      headers = { "Title": cleanTitle, "Tags": "warning" };
+      headers = { "Title": cleanTitle, "Tags": "pill" };
       body = message;
       
       if (parsed.username && parsed.password) {
@@ -349,7 +349,7 @@ export async function sendShoutrrrNotification(urlStr: string, title: string, me
       }
     } else if (urlStr.startsWith("https://ntfy.") || urlStr.includes("ntfy.sh") || urlStr.includes("/ntfy/")) {
       targetUrl = urlStr;
-      headers = { "Title": cleanTitle, "Tags": "warning" };
+      headers = { "Title": cleanTitle, "Tags": "pill" };
       body = message;
     } else if (urlStr.startsWith("http://") || urlStr.startsWith("https://")) {
       targetUrl = urlStr;

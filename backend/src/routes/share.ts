@@ -81,6 +81,9 @@ export async function shareRoutes(app: FastifyInstance) {
     // Get user settings for stock thresholds
     const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
 
+    // Get the username of the owner who created this share link
+    const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
+
     // Get medications for this user filtered by takenBy (search in JSON array)
     // Use SQLite JSON function to check if takenBy is in the array
     const allMeds = await db.select().from(medications).where(eq(medications.userId, share.userId));
@@ -129,6 +132,7 @@ export async function shareRoutes(app: FastifyInstance) {
 
     return {
       takenBy: share.takenBy,
+      sharedBy: owner?.username ?? null,
       scheduleDays: share.scheduleDays,
       medications: medicationsWithBlisters,
       stockThresholds: {

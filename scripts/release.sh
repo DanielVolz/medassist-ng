@@ -95,8 +95,8 @@ if git rev-parse "v${NEW_VERSION}" >/dev/null 2>&1; then
 fi
 
 # Create and push tag
-echo -e "${BLUE}Creating tag v${NEW_VERSION}...${NC}"
-git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
+echo -e "${BLUE}Creating signed tag v${NEW_VERSION}...${NC}"
+git tag -s "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
 
 # Push
 echo -e "${BLUE}Pushing to origin (GitHub)...${NC}"

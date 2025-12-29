@@ -3625,31 +3625,32 @@ function SharedSchedule() {
 		fetchData();
 	}, [token, t]);
 
-	// Build schedule from medications
+	// Build schedule from medications - matches buildSchedulePreview logic exactly
 	const schedule = useMemo(() => {
 		if (!data) return [];
 
-		const todayStart = new Date();
-		todayStart.setHours(0, 0, 0, 0);
+		// Use same logic as buildSchedulePreview in main app
+		const now = new Date();
+		const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Midnight today
 		const todayStartTime = todayStart.getTime();
 		
-		// Calculate end time: today midnight + scheduleDays days
-		const endDate = new Date(todayStart);
-		endDate.setDate(endDate.getDate() + data.scheduleDays);
-		const endTime = endDate.getTime();
+		// Use 180 days horizon like main app (scheduleDays only limits futureDays display)
+		const end = new Date();
+		end.setDate(end.getDate() + 180);
+		const endTime = end.getTime();
 		
-		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string; isPast: boolean; takenBy: string[] }[] = [];
+		const doses: { id: string; when: number; medName: string; usage: number; timeStr: string; isPast: boolean; takenBy: string[]; dateStr: string }[] = [];
 
 		for (const med of data.medications) {
 			med.blisters.forEach((blister, blisterIdx) => {
 				const startDate = new Date(blister.start);
-				const intervalMs = blister.every * 24 * 60 * 60 * 1000;
-				let t = startDate.getTime();
-
-				// Start from the very first dose (blister start)
-				while (t <= endTime) {
-					const d = new Date(t);
-					const isPast = t < todayStartTime;
+				if (Number.isNaN(startDate.getTime())) return;
+				
+				// Use the same iteration method as buildSchedulePreview (setDate instead of adding ms)
+				// This ensures identical timestamps even across DST changes
+				for (let d = new Date(startDate); d <= end; d.setDate(d.getDate() + blister.every)) {
+					const t = d.getTime();
+					const isPast = d < todayStart;
 					// Generate dose ID matching Dashboard format: ${med.id}-${blisterIdx}-${whenMs}
 					const doseId = `${med.id}-${blisterIdx}-${t}`;
 					doses.push({
@@ -3660,48 +3661,40 @@ function SharedSchedule() {
 						isPast,
 						takenBy: med.takenBy || [],
 						timeStr: d.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" }),
+						dateStr: d.toLocaleDateString(i18n.language, { weekday: "short", day: "2-digit", month: "short" }),
 					});
-					t += intervalMs;
 				}
 			});
 		}
 
 		doses.sort((a, b) => a.when - b.when);
 
-		// Group by date
-		const grouped: { dateStr: string; date: Date; isPast: boolean; meds: { medName: string; total: number; lastWhen: number; doses: typeof doses }[] }[] = [];
-		const byDate = new Map<string, typeof doses>();
-
-		for (const dose of doses) {
-			const dateKey = new Date(dose.when).toLocaleDateString(i18n.language, {
-				weekday: "long",
-				day: "2-digit",
-				month: "short",
-			});
-			if (!byDate.has(dateKey)) byDate.set(dateKey, []);
-			byDate.get(dateKey)!.push(dose);
+		// Group by date - matches groupedSchedule logic in main app
+		type DoseInfo = typeof doses[number];
+		const days = new Map<string, { dateStr: string; date: Date; isPast: boolean; meds: Map<string, { medName: string; total: number; doses: DoseInfo[]; lastWhen: number }> }>();
+		
+		for (const dose of doses.slice(0, 2000)) {
+			const day = days.get(dose.dateStr) ?? { dateStr: dose.dateStr, date: new Date(dose.when), isPast: dose.isPast, meds: new Map() };
+			const medEntry = day.meds.get(dose.medName) ?? { medName: dose.medName, total: 0, doses: [], lastWhen: dose.when };
+			medEntry.total += dose.usage;
+			medEntry.doses.push(dose);
+			medEntry.lastWhen = Math.max(medEntry.lastWhen, dose.when);
+			day.meds.set(dose.medName, medEntry);
+			days.set(dose.dateStr, day);
 		}
-
-		for (const [dateStr, dayDoses] of byDate) {
-			const byMed = new Map<string, typeof doses>();
-			for (const dose of dayDoses) {
-				if (!byMed.has(dose.medName)) byMed.set(dose.medName, []);
-				byMed.get(dose.medName)!.push(dose);
-			}
-			const meds = Array.from(byMed.entries()).map(([medName, medDoses]) => ({
-				medName,
-				total: medDoses.reduce((sum, d) => sum + d.usage, 0),
-				lastWhen: Math.max(...medDoses.map(d => d.when)),
-				doses: medDoses,
-			}));
-			grouped.push({ dateStr, date: new Date(dayDoses[0].when), isPast: dayDoses[0].isPast, meds });
-		}
-
-		return grouped;
+		
+		return Array.from(days.values()).map((d) => ({ 
+			dateStr: d.dateStr, 
+			date: d.date, 
+			isPast: d.isPast, 
+			meds: Array.from(d.meds.values()) 
+		}));
 	}, [data, i18n.language]);
 
+	// Split into past and future - matches main app logic
 	const pastDays = useMemo(() => schedule.filter(d => d.isPast), [schedule]);
-	const futureDays = useMemo(() => schedule.filter(d => !d.isPast), [schedule]);
+	// Limit future days by scheduleDays setting (same as main app)
+	const futureDays = useMemo(() => schedule.filter(d => !d.isPast).slice(0, data?.scheduleDays ?? 30), [schedule, data?.scheduleDays]);
 
 	// Calculate coverage for stock status colors (matches main app logic)
 	// This needs to account for taken doses and calculate depletion time

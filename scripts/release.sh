@@ -18,9 +18,6 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Secondary remote (self-hosted git)
-SECONDARY_REMOTE="git@git.danielvolz.org:daniel/medassist-ng.git"
-
 # Get script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -102,17 +99,6 @@ git tag -s "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
 echo -e "${BLUE}Pushing to origin (GitHub)...${NC}"
 git push origin main
 git push origin "v${NEW_VERSION}"
-
-# Ask about secondary remote
-echo ""
-read -p "Also push to git.danielvolz.org? (y/N) " -n 1 -r
-echo ""
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${BLUE}Pushing to git.danielvolz.org...${NC}"
-    git push "$SECONDARY_REMOTE" main
-    git push "$SECONDARY_REMOTE" "v${NEW_VERSION}"
-    echo -e "${GREEN}✓ Pushed to git.danielvolz.org${NC}"
-fi
 
 echo ""
 echo -e "${GREEN}✓ Released v${NEW_VERSION}${NC}"

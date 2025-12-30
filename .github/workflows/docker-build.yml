@@ -11,6 +11,10 @@ on:
         required: false
         default: ''
 
+# Default minimal permissions
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
 

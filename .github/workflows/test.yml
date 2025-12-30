@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [main]
 
+# Minimal permissions for security
+permissions:
+  contents: read
+
 jobs:
   # =============================================================================
   # Backend Tests

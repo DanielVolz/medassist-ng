@@ -24,6 +24,10 @@ const ARGON2_OPTIONS: argon2.Options = {
 // Rate Limiting Configuration for Auth Routes
 // =============================================================================
 // Stricter rate limits for authentication endpoints to prevent brute-force attacks
+// Note: Rate limiting is implemented via @fastify/rate-limit plugin registered in index.ts
+// and route-specific limits are applied via the 'config.rateLimit' option below.
+// CodeQL may not recognize this pattern - see: https://github.com/github/codeql/issues
+// lgtm[js/missing-rate-limiting]
 const authRateLimitConfig = {
   max: 10,                     // 10 requests
   timeWindow: "1 minute",      // per minute
@@ -33,6 +37,7 @@ const authRateLimitConfig = {
   }),
 };
 
+// lgtm[js/missing-rate-limiting]
 const sensitiveRateLimitConfig = {
   max: 5,                      // 5 requests  
   timeWindow: "15 minutes",    // per 15 minutes (for login/register)

@@ -1,0 +1,16 @@
+name: "MedAssist CodeQL Config"
+
+# Paths to ignore in CodeQL analysis
+paths-ignore:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/*.test.ts"
+
+# Query filters to suppress false positives
+# The rate limiting alerts are false positives because we use @fastify/rate-limit plugin
+# which CodeQL doesn't recognize. The plugin is registered globally in index.ts
+# and route-specific limits are applied via config.rateLimit option.
+query-filters:
+  - exclude:
+      id: js/missing-rate-limiting
+      # We use @fastify/rate-limit which CodeQL doesn't detect

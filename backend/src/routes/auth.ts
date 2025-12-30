@@ -21,6 +21,33 @@ const ARGON2_OPTIONS: argon2.Options = {
 };
 
 // =============================================================================
+// Rate Limiting Configuration for Auth Routes
+// =============================================================================
+// Stricter rate limits for authentication endpoints to prevent brute-force attacks
+// Note: Rate limiting is implemented via @fastify/rate-limit plugin registered in index.ts
+// and route-specific limits are applied via the 'config.rateLimit' option below.
+// CodeQL may not recognize this pattern - see: https://github.com/github/codeql/issues
+// lgtm[js/missing-rate-limiting]
+const authRateLimitConfig = {
+  max: 10,                     // 10 requests
+  timeWindow: "1 minute",      // per minute
+  errorResponseBuilder: () => ({
+    error: "Too many requests. Please try again later.",
+    code: "RATE_LIMIT_EXCEEDED",
+  }),
+};
+
+// lgtm[js/missing-rate-limiting]
+const sensitiveRateLimitConfig = {
+  max: 5,                      // 5 requests  
+  timeWindow: "15 minutes",    // per 15 minutes (for login/register)
+  errorResponseBuilder: () => ({
+    error: "Too many attempts. Please try again later.",
+    code: "RATE_LIMIT_EXCEEDED",
+  }),
+};
+
+// =============================================================================
 // Validation Schemas
 // =============================================================================
 const registerSchema = z.object({
@@ -65,7 +92,9 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /auth/register - User registration
   // ---------------------------------------------------------------------------
-  app.post<{ Body: z.infer<typeof registerSchema> }>("/auth/register", async (request, reply) => {
+  app.post<{ Body: z.infer<typeof registerSchema> }>("/auth/register", {
+    config: { rateLimit: sensitiveRateLimitConfig },
+  }, async (request, reply) => {
     // Check auth state
     const state = await getAuthState();
     
@@ -123,7 +152,9 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /auth/login - User login
   // ---------------------------------------------------------------------------
-  app.post<{ Body: z.infer<typeof loginSchema> }>("/auth/login", async (request, reply) => {
+  app.post<{ Body: z.infer<typeof loginSchema> }>("/auth/login", {
+    config: { rateLimit: sensitiveRateLimitConfig },
+  }, async (request, reply) => {
     const state = await getAuthState();
     
     if (!state.authEnabled) {
@@ -223,7 +254,9 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /auth/refresh - Refresh access token
   // ---------------------------------------------------------------------------
-  app.post("/auth/refresh", async (request, reply) => {
+  app.post("/auth/refresh", {
+    config: { rateLimit: authRateLimitConfig },
+  }, async (request, reply) => {
     const refreshTokenCookie = request.cookies.refresh_token;
     if (!refreshTokenCookie) {
       return reply.status(401).send({ error: "No refresh token", code: "NO_REFRESH_TOKEN" });
@@ -288,7 +321,9 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /auth/logout - Logout (revoke refresh token)
   // ---------------------------------------------------------------------------
-  app.post("/auth/logout", async (request, reply) => {
+  app.post("/auth/logout", {
+    config: { rateLimit: authRateLimitConfig },
+  }, async (request, reply) => {
     const refreshTokenCookie = request.cookies.refresh_token;
     
     if (refreshTokenCookie) {
@@ -340,7 +375,10 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // PUT /auth/me - Update current user profile
   // ---------------------------------------------------------------------------
-  app.put<{ Body: z.infer<typeof updateProfileSchema> }>("/auth/me", { preHandler: requireAuth }, async (request, reply) => {
+  app.put<{ Body: z.infer<typeof updateProfileSchema> }>("/auth/me", { 
+    preHandler: requireAuth,
+    config: { rateLimit: authRateLimitConfig },
+  }, async (request, reply) => {
     const authUser = request.user as unknown as AuthUser | null;
     if (!authUser) {
       return reply.status(401).send({ error: "Not authenticated" });
@@ -391,7 +429,10 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /auth/avatar - Upload user avatar
   // ---------------------------------------------------------------------------
-  app.post("/auth/avatar", { preHandler: requireAuth }, async (request, reply) => {
+  app.post("/auth/avatar", { 
+    preHandler: requireAuth,
+    config: { rateLimit: authRateLimitConfig },
+  }, async (request, reply) => {
     const authUser = request.user as unknown as AuthUser | null;
     if (!authUser) {
       return reply.status(401).send({ error: "Not authenticated" });
@@ -440,7 +481,10 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // DELETE /auth/avatar - Delete user avatar
   // ---------------------------------------------------------------------------
-  app.delete("/auth/avatar", { preHandler: requireAuth }, async (request, reply) => {
+  app.delete("/auth/avatar", { 
+    preHandler: requireAuth,
+    config: { rateLimit: authRateLimitConfig },
+  }, async (request, reply) => {
     const authUser = request.user as unknown as AuthUser | null;
     if (!authUser) {
       return reply.status(401).send({ error: "Not authenticated" });

@@ -33,7 +33,126 @@ docker compose up -d
 
 # Database migrations
 cd backend && npm run migrate
+
+# Run tests
+cd backend && npm test              # Run all tests
+cd backend && npm run test:coverage # Run with coverage report
 ```
+
+## Testing (MANDATORY)
+
+> ⚠️ **WICHTIG**: Jede neue Funktionalität MUSS mit Tests abgedeckt werden!
+> Pull Requests ohne Tests für neue Features werden nicht akzeptiert.
+
+### Test-Framework
+- **Vitest 2.1** mit v8 Coverage
+- Tests in `backend/src/test/*.test.ts`
+- Coverage-Ziel: Mindestens gleiche oder bessere Coverage nach Änderungen
+
+### Test-Struktur
+| Datei | Testet |
+|-------|--------|
+| `routes.test.ts` | API-Endpunkte (Auth, Medications, Doses, Settings, Share, Planner) |
+| `services.test.ts` | Scheduler-Utilities (Timezone, Blisters, Usage-Berechnung) |
+| `db.test.ts` | Datenbank-Schema und Operationen |
+
+### Tests schreiben
+
+```typescript
+// Backend Test Beispiel (backend/src/test/example.test.ts)
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createTestApp, createTestUser } from './routes.test'; // Test-Utilities
+
+describe('Feature Name', () => {
+  let app: FastifyInstance;
+  let authToken: string;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    const user = await createTestUser(app);
+    authToken = user.token;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('should do something specific', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/endpoint',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toHaveProperty('expectedField');
+  });
+});
+```
+
+### Test-Commands
+```bash
+cd backend
+npm test                    # Alle Tests ausführen
+npm run test:coverage       # Mit Coverage-Report
+npm test -- --watch         # Watch-Mode für Entwicklung
+npm test -- -t "test name"  # Einzelnen Test ausführen
+```
+
+## CI/CD Pipeline (GitHub Actions)
+
+### Workflow-Übersicht
+
+```
+Pull Request erstellt
+        ↓
+┌─────────────────────────────────────┐
+│  test.yml                           │
+│  ├─ backend-test (parallel)         │
+│  │   ├─ npm ci                      │
+│  │   ├─ tsc --noEmit (Type-Check)   │
+│  │   └─ npm run test:coverage       │
+│  └─ frontend-build (parallel)       │
+│      ├─ npm ci                      │
+│      └─ npm run build               │
+└─────────────────────────────────────┘
+        ↓ Tests müssen bestehen
+    PR kann gemerged werden
+        ↓
+Push to main / Tag erstellt
+        ↓
+┌─────────────────────────────────────┐
+│  docker-build.yml                   │
+│  ├─ backend-test (parallel)         │
+│  ├─ frontend-build (parallel)       │
+│  └─ build-and-push (nach Tests)     │
+│      ├─ Docker Images bauen         │
+│      └─ Push zu GHCR                │
+└─────────────────────────────────────┘
+```
+
+### Branch Protection
+- **main** Branch ist geschützt
+- Direktes Pushen ist nicht erlaubt
+- PRs benötigen:
+  - ✅ `backend-test` Status Check
+  - ✅ `frontend-build` Status Check
+
+### Workflow-Dateien
+| Datei | Trigger | Zweck |
+|-------|---------|-------|
+| `.github/workflows/test.yml` | Pull Requests | Tests ausführen, PR blockieren bei Fehlern |
+| `.github/workflows/docker-build.yml` | Push to main, Tags | Tests + Docker Images bauen und pushen |
+
+### Neuen Code hinzufügen - Checkliste
+1. ✅ Feature implementieren
+2. ✅ Tests für das Feature schreiben
+3. ✅ Lokal `npm run test:coverage` ausführen
+4. ✅ Coverage darf nicht sinken
+5. ✅ Feature Branch erstellen und pushen
+6. ✅ Pull Request erstellen
+7. ✅ Warten bis CI grün ist
+8. ✅ PR mergen (Branch wird automatisch gelöscht)
 
 ## Key Patterns
 

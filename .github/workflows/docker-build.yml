@@ -27,7 +27,18 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # =============================================================================
+  # Run Tests First (reuse test workflow)
+  # =============================================================================
+  test:
+    name: Run Tests
+    uses: ./.github/workflows/test.yml
+
+  # =============================================================================
+  # Build and Push Docker Images (only after tests pass)
+  # =============================================================================
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -1,20 +1,17 @@
-import { createClient } from "@libsql/client";
+import { createClient, Client } from "@libsql/client";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 
-const url = "file:./data/medassist-ng.db";
+// =============================================================================
+// Exported utility functions for testing
+// =============================================================================
 
-async function main() {
-  console.log("Starting database setup...");
-  console.log("Database URL:", url);
-  
-  const client = createClient({ url });
-  
-  // Create tables - fresh schema without roles, with per-user settings
-  const sql = `
+/** Get the full migration SQL string */
+export function getMigrationSQL(): string {
+  return `
     CREATE TABLE IF NOT EXISTS users (
       id integer PRIMARY KEY AUTOINCREMENT,
       username text NOT NULL UNIQUE,
@@ -106,12 +103,58 @@ async function main() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `;
+}
 
-  // Execute each statement separately
-  const statements = sql.split(';').filter(s => s.trim().length > 0);
+/** Split SQL string into individual statements */
+export function splitSQLStatements(sql: string): string[] {
+  return sql.split(';').filter(s => s.trim().length > 0);
+}
+
+/** Execute migration statements on a client */
+export async function executeMigration(client: Client): Promise<{ success: boolean; executed: number; errors: string[] }> {
+  const sql = getMigrationSQL();
+  const statements = splitSQLStatements(sql);
+  const errors: string[] = [];
+  let executed = 0;
+
+  for (const stmt of statements) {
+    try {
+      await client.execute(stmt);
+      executed++;
+    } catch (err: any) {
+      errors.push(err.message);
+    }
+  }
+
+  return { success: errors.length === 0, executed, errors };
+}
+
+/** Get a preview of statement (first N characters) */
+export function getStatementPreview(stmt: string, maxLength: number = 50): string {
+  const trimmed = stmt.trim();
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+  return trimmed.substring(0, maxLength) + "...";
+}
+
+// =============================================================================
+// CLI execution (only runs when called directly)
+// =============================================================================
+
+const url = "file:./data/medassist-ng.db";
+
+async function main() {
+  console.log("Starting database setup...");
+  console.log("Database URL:", url);
+  
+  const client = createClient({ url });
+  
+  const sql = getMigrationSQL();
+  const statements = splitSQLStatements(sql);
   
   for (const stmt of statements) {
-    console.log("Executing:", stmt.trim().substring(0, 50) + "...");
+    console.log("Executing:", getStatementPreview(stmt));
     await client.execute(stmt);
   }
 
@@ -119,7 +162,11 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error("Migration failed:", err);
-  process.exit(1);
-});
+// Only run main() if this file is executed directly (not imported)
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  main().catch((err) => {
+    console.error("Migration failed:", err);
+    process.exit(1);
+  });
+}

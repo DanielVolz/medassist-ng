@@ -8,135 +8,42 @@ import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from 
 import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
 import { getReminderState, updateReminderSentTime, updateUserReminderSentTime } from "./reminder-scheduler.js";
 
-type Blister = { usage: number; every: number; start: string };
-
-type IntakeReminderState = {
-  sentReminders: string[]; // Array of "medName:timestamp" to track sent reminders
-};
+// Import shared utilities
+import {
+  getTimezone,
+  parseBlisters,
+  parseTakenByJson,
+  getUpcomingIntakes,
+  parseIntakeReminderState,
+  createDefaultIntakeReminderState,
+  cleanOldIntakeReminders,
+  type Blister,
+  type IntakeReminderState,
+  type UpcomingIntake,
+} from "../utils/scheduler-utils.js";
 
 const REMINDER_MINUTES_BEFORE = parseInt(process.env.REMINDER_MINUTES_BEFORE ?? "15", 10);
 const CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute
-
-// Get current timezone from TZ env variable or default to UTC
-function getTimezone(): string {
-  return process.env.TZ || "UTC";
-}
-
-// Parse takenByJson to array of strings
-function parseTakenByJson(takenByJson: string | null | undefined): string[] {
-  if (!takenByJson) return [];
-  try {
-    const parsed = JSON.parse(takenByJson);
-    return Array.isArray(parsed) ? parsed.filter((s: unknown) => typeof s === "string" && s.trim()) : [];
-  } catch {
-    return [];
-  }
-}
 
 const intakeReminderStateFile = resolve(process.cwd(), "data", "intake-reminder-state.json");
 
 function loadIntakeReminderState(): IntakeReminderState {
   try {
     if (existsSync(intakeReminderStateFile)) {
-      const saved = JSON.parse(readFileSync(intakeReminderStateFile, "utf-8"));
-      return {
-        sentReminders: saved.sentReminders ?? [],
-      };
+      return parseIntakeReminderState(readFileSync(intakeReminderStateFile, "utf-8"));
     }
   } catch {
     // ignore
   }
-  return { sentReminders: [] };
+  return createDefaultIntakeReminderState();
 }
 
 function saveIntakeReminderState(state: IntakeReminderState): void {
   writeFileSync(intakeReminderStateFile, JSON.stringify(state, null, 2));
 }
 
-function parseBlisters(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
-  try {
-    const usage = JSON.parse(row.usageJson) as number[];
-    const every = JSON.parse(row.everyJson) as number[];
-    const start = JSON.parse(row.startJson) as string[];
-    const len = Math.min(usage.length, every.length, start.length);
-    const blisters: Blister[] = [];
-    for (let i = 0; i < len; i++) {
-      blisters.push({ usage: usage[i], every: every[i], start: start[i] });
-    }
-    return blisters;
-  } catch {
-    return [];
-  }
-}
-
-type UpcomingIntake = {
-  medName: string;
-  usage: number;
-  intakeTime: Date;
-  intakeTimeStr: string;
-  takenBy: string[]; // Changed to array
-  pillWeightMg: number | null;
-};
-
-function getUpcomingIntakes(medName: string, blisters: Blister[], minutesBefore: number, takenBy: string[], pillWeightMg: number | null, locale: string): UpcomingIntake[] {
-  const now = Date.now();
-  // Window to detect if "now" is the right time to send reminder
-  // We check if the notify time (intake - 15min) falls within current minute ±1
-  const windowStart = now - 2 * 60 * 1000; // 2 minutes ago (catch slightly late checks)
-  const windowEnd = now + 1 * 60 * 1000; // 1 minute from now
-  
-  const upcoming: UpcomingIntake[] = [];
-  
-  for (const blister of blisters) {
-    const startTime = new Date(blister.start).getTime();
-    const intervalMs = blister.every * 24 * 60 * 60 * 1000;
-    
-    if (intervalMs <= 0) continue;
-    
-    // Find the next scheduled intake time (could be today or in the future)
-    let nextTime = startTime;
-    
-    // If start is in the past, calculate occurrences
-    if (nextTime < now) {
-      const elapsed = now - startTime;
-      const intervals = Math.floor(elapsed / intervalMs);
-      
-      // Check the current occurrence (today's scheduled time, even if past)
-      const currentOccurrence = startTime + intervals * intervalMs;
-      // And the next occurrence
-      const nextOccurrence = startTime + (intervals + 1) * intervalMs;
-      
-      // If today's occurrence is within the reminder window, use it
-      // (intake hasn't happened yet, we should remind)
-      const currentNotifyTime = currentOccurrence - minutesBefore * 60 * 1000;
-      if (currentNotifyTime >= windowStart && currentOccurrence > now) {
-        nextTime = currentOccurrence;
-      } else {
-        nextTime = nextOccurrence;
-      }
-    }
-    
-    // Calculate when we should notify for this intake
-    const notifyTime = nextTime - minutesBefore * 60 * 1000;
-    
-    if (notifyTime >= windowStart && notifyTime <= windowEnd) {
-      const intakeDate = new Date(nextTime);
-      upcoming.push({
-        medName,
-        usage: blister.usage,
-        intakeTime: intakeDate,
-        intakeTimeStr: intakeDate.toLocaleTimeString(locale, { 
-          hour: "2-digit", 
-          minute: "2-digit",
-          timeZone: getTimezone()
-        }),
-        takenBy,
-        pillWeightMg,
-      });
-    }
-  }
-  
-  return upcoming;
+function parseBlistersFromRow(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
+  return parseBlisters(row);
 }
 
 async function sendIntakeReminderEmail(email: string, intakes: UpcomingIntake[], language: Language): Promise<{ success: boolean; error?: string }> {
@@ -315,7 +222,7 @@ async function checkAndSendIntakeRemindersForUser(
   
   // Find all upcoming intakes across all medications for this user
   for (const med of medsWithReminders) {
-    const blisters = parseBlisters(med);
+    const blisters = parseBlistersFromRow(med);
     const takenByArray = parseTakenByJson(med.takenByJson);
     const upcoming = getUpcomingIntakes(med.name, blisters, REMINDER_MINUTES_BEFORE, takenByArray, med.pillWeightMg, locale);
     allUpcoming.push(...upcoming);
@@ -380,11 +287,7 @@ async function checkAndSendIntakeRemindersForUser(
     const newKeys = newReminders.map(i => `user_${settings.userId}:${i.medName}:${i.intakeTime.getTime()}`);
     
     // Clean up old entries (older than 24 hours)
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const cleanedReminders = state.sentReminders.filter(key => {
-      const timestamp = parseInt(key.split(":").pop() || "0", 10);
-      return timestamp > oneDayAgo;
-    });
+    const cleanedReminders = cleanOldIntakeReminders(state.sentReminders);
     
     saveIntakeReminderState({
       sentReminders: [...cleanedReminders, ...newKeys],

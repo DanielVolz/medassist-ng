@@ -1,155 +1,42 @@
 import nodemailer from "nodemailer";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { medications, users, userSettings } from "../db/schema.js";
+import { medications, userSettings } from "../db/schema.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { loadUserSettings, getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
-import { getTranslations, t, getDateLocale, type Language } from "../i18n/translations.js";
+import { getTranslations, t, type Language } from "../i18n/translations.js";
 
-type Blister = { usage: number; every: number; start: string };
-
-type ReminderState = {
-  lastAutoEmailSent: string | null; // ISO date string
-  lastAutoEmailDate: string | null; // YYYY-MM-DD - to track if we already sent today
-  notifiedMedications: string[]; // List of medication names that have been notified (cleared when restocked)
-  nextScheduledCheck: string | null; // ISO date string for when the next check is scheduled
-  lastNotificationType: "stock" | "intake" | null; // Type of last notification
-  lastNotificationChannel: "email" | "push" | "both" | null; // Channel used for last notification
-};
+// Import shared utilities
+import {
+  getTimezone,
+  formatInTimezone,
+  getCurrentHourInTimezone,
+  getTodayInTimezone,
+  getNextScheduledTime,
+  getMsUntilNextCheck,
+  parseBlisters,
+  calculateDailyUsage,
+  calculateDepletionInfo,
+  parseReminderState,
+  createDefaultReminderState,
+  type Blister,
+  type ReminderState,
+} from "../utils/scheduler-utils.js";
 
 const REMINDER_HOUR = parseInt(process.env.REMINDER_HOUR ?? "6", 10); // Default 6:00 AM local time
-
-// Get current timezone from TZ env variable or default to UTC
-function getTimezone(): string {
-  return process.env.TZ || "UTC";
-}
-
-// Format a date in the configured timezone
-function formatInTimezone(date: Date): string {
-  return date.toLocaleString("de-DE", { 
-    timeZone: getTimezone(),
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-// Get current hour in the configured timezone
-function getCurrentHourInTimezone(): number {
-  const now = new Date();
-  const timeStr = now.toLocaleString("en-US", { 
-    timeZone: getTimezone(), 
-    hour: "numeric", 
-    hour12: false 
-  });
-  return parseInt(timeStr, 10);
-}
-
-// Get today's date string in the configured timezone (YYYY-MM-DD)
-function getTodayInTimezone(): string {
-  const now = new Date();
-  const parts = now.toLocaleDateString("en-CA", { timeZone: getTimezone() }).split("-");
-  return parts.join("-"); // YYYY-MM-DD format
-}
-
-function getNextScheduledTime(): Date {
-  const now = new Date();
-  const tz = getTimezone();
-  
-  // Get current time components in the target timezone
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  });
-  
-  const parts = formatter.formatToParts(now);
-  const getPart = (type: string) => parts.find(p => p.type === type)?.value || "0";
-  
-  const currentHour = parseInt(getPart("hour"), 10);
-  const currentMinute = parseInt(getPart("minute"), 10);
-  
-  // Calculate if we need tomorrow
-  const needTomorrow = currentHour > REMINDER_HOUR || (currentHour === REMINDER_HOUR && currentMinute > 0);
-  
-  // Get the date we want to schedule for
-  const year = parseInt(getPart("year"), 10);
-  const month = parseInt(getPart("month"), 10);
-  let day = parseInt(getPart("day"), 10);
-  
-  if (needTomorrow) {
-    day += 1;
-  }
-  
-  // Handle month overflow simply by adding a day to now if needed
-  let targetDate: Date;
-  if (needTomorrow) {
-    targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  } else {
-    targetDate = new Date(now);
-  }
-  
-  // Get the target date's date string in the timezone
-  const targetFormatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
-  const [targetYear, targetMonth, targetDay] = targetFormatter.format(targetDate).split("-").map(Number);
-  
-  // Now we need to find the UTC time that corresponds to REMINDER_HOUR:00 on targetDate in the target timezone
-  // Use a search approach: start with a guess and adjust
-  const guessUtc = new Date(Date.UTC(targetYear, targetMonth - 1, targetDay, REMINDER_HOUR, 0, 0, 0));
-  
-  // Check what hour this UTC time corresponds to in the target timezone
-  const checkFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour: "2-digit",
-    hour12: false
-  });
-  
-  // Adjust based on the difference
-  const guessHour = parseInt(checkFormatter.format(guessUtc), 10);
-  const hourDiff = guessHour - REMINDER_HOUR;
-  
-  // Apply correction (if guessHour is higher, we need to subtract time)
-  const correctedUtc = new Date(guessUtc.getTime() - hourDiff * 60 * 60 * 1000);
-  
-  return correctedUtc;
-}
-
-function getMsUntilNextCheck(): number {
-  const next = getNextScheduledTime();
-  return next.getTime() - Date.now();
-}
 
 const reminderStateFile = resolve(process.cwd(), "data", "reminder-state.json");
 
 function loadReminderState(): ReminderState {
   try {
     if (existsSync(reminderStateFile)) {
-      const saved = JSON.parse(readFileSync(reminderStateFile, "utf-8"));
-      return {
-        lastAutoEmailSent: saved.lastAutoEmailSent ?? null,
-        lastAutoEmailDate: saved.lastAutoEmailDate ?? null,
-        notifiedMedications: saved.notifiedMedications ?? [],
-        nextScheduledCheck: saved.nextScheduledCheck ?? null,
-        lastNotificationType: saved.lastNotificationType ?? null,
-        lastNotificationChannel: saved.lastNotificationChannel ?? null,
-      };
+      return parseReminderState(readFileSync(reminderStateFile, "utf-8"));
     }
   } catch {
     // ignore
   }
-  return { lastAutoEmailSent: null, lastAutoEmailDate: null, notifiedMedications: [], nextScheduledCheck: null, lastNotificationType: null, lastNotificationChannel: null };
+  return createDefaultReminderState();
 }
 
 function saveReminderState(state: ReminderState): void {
@@ -188,39 +75,8 @@ export async function updateUserReminderSentTime(
     .where(eq(userSettings.userId, userId));
 }
 
-function parseBlisters(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
-  try {
-    const usage = JSON.parse(row.usageJson) as number[];
-    const every = JSON.parse(row.everyJson) as number[];
-    const start = JSON.parse(row.startJson) as string[];
-    const len = Math.min(usage.length, every.length, start.length);
-    const blisters: Blister[] = [];
-    for (let i = 0; i < len; i++) {
-      blisters.push({ usage: usage[i], every: every[i], start: start[i] });
-    }
-    return blisters;
-  } catch {
-    return [];
-  }
-}
-
-function calculateDailyUsage(blisters: Blister[]): number {
-  return blisters.reduce((sum, s) => sum + s.usage / s.every, 0);
-}
-
-function calculateDepletionInfo(med: { count: number; blisters: Blister[] }, language: Language): { daysLeft: number | null; depletionDate: string | null } {
-  const dailyUsage = calculateDailyUsage(med.blisters);
-  if (dailyUsage <= 0) return { daysLeft: null, depletionDate: null };
-  
-  const daysLeft = Math.floor(med.count / dailyUsage);
-  const depletionMs = Date.now() + daysLeft * 86_400_000;
-  const depletionDate = new Date(depletionMs).toLocaleDateString(getDateLocale(language), {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-  });
-  
-  return { daysLeft, depletionDate };
+function parseBlistersFromRow(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
+  return parseBlisters(row);
 }
 
 type LowStockItem = {
@@ -236,7 +92,7 @@ async function getMedicationsNeedingReminder(userId: number, reminderDaysBefore:
   const lowStock: LowStockItem[] = [];
   
   for (const row of rows) {
-    const blisters = parseBlisters(row);
+    const blisters = parseBlistersFromRow(row);
     const totalPills = row.packCount * row.blistersPerPack * row.pillsPerBlister + row.looseTablets;
     const { daysLeft, depletionDate } = calculateDepletionInfo({ count: totalPills, blisters }, language);
     
@@ -486,8 +342,8 @@ async function checkAndSendReminderForUser(
 let schedulerTimeout: NodeJS.Timeout | null = null;
 
 function scheduleNextCheck(logger: { info: (msg: string) => void; error: (msg: string) => void }): void {
-  const msUntilNext = getMsUntilNextCheck();
-  const nextTime = getNextScheduledTime();
+  const msUntilNext = getMsUntilNextCheck(REMINDER_HOUR);
+  const nextTime = getNextScheduledTime(REMINDER_HOUR);
   
   // Save next scheduled time to state
   const state = loadReminderState();

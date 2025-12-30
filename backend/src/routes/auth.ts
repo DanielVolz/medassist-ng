@@ -316,7 +316,9 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /auth/logout - Logout (revoke refresh token)
   // ---------------------------------------------------------------------------
-  app.post("/auth/logout", async (request, reply) => {
+  app.post("/auth/logout", {
+    config: { rateLimit: authRateLimitConfig },
+  }, async (request, reply) => {
     const refreshTokenCookie = request.cookies.refresh_token;
     
     if (refreshTokenCookie) {
@@ -422,7 +424,10 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /auth/avatar - Upload user avatar
   // ---------------------------------------------------------------------------
-  app.post("/auth/avatar", { preHandler: requireAuth }, async (request, reply) => {
+  app.post("/auth/avatar", { 
+    preHandler: requireAuth,
+    config: { rateLimit: authRateLimitConfig },
+  }, async (request, reply) => {
     const authUser = request.user as unknown as AuthUser | null;
     if (!authUser) {
       return reply.status(401).send({ error: "Not authenticated" });
@@ -471,7 +476,10 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // DELETE /auth/avatar - Delete user avatar
   // ---------------------------------------------------------------------------
-  app.delete("/auth/avatar", { preHandler: requireAuth }, async (request, reply) => {
+  app.delete("/auth/avatar", { 
+    preHandler: requireAuth,
+    config: { rateLimit: authRateLimitConfig },
+  }, async (request, reply) => {
     const authUser = request.user as unknown as AuthUser | null;
     if (!authUser) {
       return reply.status(401).send({ error: "Not authenticated" });

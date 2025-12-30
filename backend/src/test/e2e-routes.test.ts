@@ -1023,7 +1023,41 @@ describe("E2E Tests with Real Routes", () => {
       });
 
       expect(response.statusCode).toBe(500);
-      expect(response.json().error).toContain("Unsupported URL format");
+      // SSRF protection returns more specific error message
+      expect(response.json().error).toContain("HTTP/HTTPS protocols");
+    });
+
+    it("should reject test-shoutrrr with localhost URL (SSRF protection)", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/settings/test-shoutrrr",
+        payload: { url: "https://localhost/topic" },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json().error).toContain("Localhost URLs are not allowed");
+    });
+
+    it("should reject test-shoutrrr with private IP (SSRF protection)", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/settings/test-shoutrrr",
+        payload: { url: "https://192.168.1.1/topic" },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json().error).toContain("Private IP addresses are not allowed");
+    });
+
+    it("should reject test-shoutrrr with internal hostname (SSRF protection)", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/settings/test-shoutrrr",
+        payload: { url: "https://server.internal/topic" },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json().error).toContain("Internal hostnames are not allowed");
     });
   });
 

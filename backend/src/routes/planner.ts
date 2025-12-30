@@ -7,6 +7,18 @@ import type { AuthUser } from "../types/fastify.js";
 import { requireAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 
+// Escape HTML to prevent XSS in email templates
+function escapeHtml(text: string): string {
+  const htmlEscapes: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return text.replace(/[&<>"']/g, char => htmlEscapes[char] || char);
+}
+
 type PlannerRow = {
   medicationId: number;
   medicationName: string;
@@ -100,7 +112,7 @@ export async function plannerRoutes(app: FastifyInstance) {
       .map(
         (row) => `
         <tr>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${row.medicationName}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${escapeHtml(row.medicationName)}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.totalPills}</strong></td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.plannerUsage}</strong></td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.blistersNeeded} × ${row.blisterSize}</td>
@@ -281,7 +293,7 @@ Sent from MedAssist-ng Medication Planner`;
           const rowBg = isEmpty ? "#fef2f2" : "white";
           return `
           <tr style="background: ${rowBg};">
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${row.name}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${escapeHtml(row.name)}</td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${row.medsLeft}</strong></td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.daysLeft ?? 0}</td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? "<strong>NOW</strong>" : (row.depletionDate ?? "-")}</td>

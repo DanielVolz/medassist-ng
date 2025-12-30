@@ -327,9 +327,61 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 }
 
+// Validate URL to prevent SSRF attacks
+function isAllowedNotificationUrl(urlStr: string): { allowed: boolean; error?: string } {
+  try {
+    // Convert ntfy:// to https:// for parsing
+    const normalizedUrl = urlStr.startsWith("ntfy://") 
+      ? urlStr.replace("ntfy://", "https://") 
+      : urlStr;
+    
+    const parsed = new URL(normalizedUrl);
+    
+    // Only allow http and https protocols
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { allowed: false, error: "Only HTTP/HTTPS protocols are allowed" };
+    }
+    
+    // Block private/internal IP addresses
+    const hostname = parsed.hostname.toLowerCase();
+    
+    // Block localhost
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return { allowed: false, error: "Localhost URLs are not allowed" };
+    }
+    
+    // Block private IP ranges (basic check)
+    const ipMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (ipMatch) {
+      const [, a, b] = ipMatch.map(Number);
+      // 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x (link-local)
+      if (a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || 
+          (a === 192 && b === 168) || (a === 169 && b === 254)) {
+        return { allowed: false, error: "Private IP addresses are not allowed" };
+      }
+    }
+    
+    // Block common internal hostnames
+    if (hostname.endsWith('.local') || hostname.endsWith('.internal') || 
+        hostname.endsWith('.lan') || hostname === 'metadata.google.internal') {
+      return { allowed: false, error: "Internal hostnames are not allowed" };
+    }
+    
+    return { allowed: true };
+  } catch {
+    return { allowed: false, error: "Invalid URL format" };
+  }
+}
+
 // Send notification via Shoutrrr-compatible URL (supports ntfy, Discord, Telegram, etc.)
 export async function sendShoutrrrNotification(urlStr: string, title: string, message: string): Promise<{ success: boolean; error?: string }> {
   try {
+    // Validate URL to prevent SSRF
+    const validation = isAllowedNotificationUrl(urlStr);
+    if (!validation.allowed) {
+      return { success: false, error: validation.error };
+    }
+    
     let targetUrl: string;
     let method = "POST";
     let headers: Record<string, string> = {};

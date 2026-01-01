@@ -132,11 +132,33 @@ Push to main / Tag erstellt
 ```
 
 ### Branch Protection
-- **main** Branch ist geschützt
-- Direktes Pushen ist nicht erlaubt
+
+> ⚠️ **WICHTIG**: Der `main` Branch ist geschützt!  
+> Direktes Pushen nach `main` ist **nicht möglich** - GitHub lehnt den Push ab.  
+> Alle Änderungen müssen über Pull Requests erfolgen.
+
+- **main** Branch ist geschützt (Repository Rules)
+- Direktes Pushen wird von GitHub abgelehnt mit: `GH013: Repository rule violations`
 - PRs benötigen:
-  - ✅ `backend-test` Status Check
-  - ✅ `frontend-build` Status Check
+  - ✅ `backend-test` Status Check bestanden
+  - ✅ `frontend-build` Status Check bestanden
+- Nach erfolgreichem Merge wird der Feature-Branch automatisch gelöscht
+
+**Workflow für Änderungen:**
+```bash
+# 1. Feature Branch erstellen
+git checkout -b feat/mein-feature
+
+# 2. Änderungen committen und pushen
+git add . && git commit -m "feat: Beschreibung"
+git push -u origin feat/mein-feature
+
+# 3. PR erstellen (via GitHub CLI oder Web)
+gh pr create --title "Mein Feature" --body "Beschreibung"
+
+# 4. Warten bis CI grün ist, dann mergen
+gh pr merge --squash --delete-branch
+```
 
 ### Workflow-Dateien
 | Datei | Trigger | Zweck |

@@ -17,28 +17,29 @@ import {
 
 // Import the exported utility functions from migrate.ts
 import {
-  getMigrationSQL,
+  getTableCreationSQL as getTableCreationSQLFromMigrate,
   splitSQLStatements,
   executeMigration,
   getStatementPreview,
 } from "../db/migrate.js";
 
 describe("Migration Script Utilities", () => {
-  describe("getMigrationSQL", () => {
-    it("should return a non-empty SQL string", () => {
-      const sql = getMigrationSQL();
-      expect(typeof sql).toBe("string");
-      expect(sql.length).toBeGreaterThan(100);
+  describe("getTableCreationSQL", () => {
+    it("should return a non-empty array of SQL statements", () => {
+      const statements = getTableCreationSQL();
+      expect(Array.isArray(statements)).toBe(true);
+      expect(statements.length).toBeGreaterThan(0);
     });
 
     it("should contain all table definitions", () => {
-      const sql = getMigrationSQL();
-      expect(sql).toContain("CREATE TABLE IF NOT EXISTS users");
-      expect(sql).toContain("CREATE TABLE IF NOT EXISTS medications");
-      expect(sql).toContain("CREATE TABLE IF NOT EXISTS user_settings");
-      expect(sql).toContain("CREATE TABLE IF NOT EXISTS refresh_tokens");
-      expect(sql).toContain("CREATE TABLE IF NOT EXISTS share_tokens");
-      expect(sql).toContain("CREATE TABLE IF NOT EXISTS dose_tracking");
+      const statements = getTableCreationSQL();
+      const allSQL = statements.join(" ");
+      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS users");
+      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS medications");
+      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS user_settings");
+      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS refresh_tokens");
+      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS share_tokens");
+      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS dose_tracking");
     });
   });
 
@@ -61,9 +62,8 @@ describe("Migration Script Utilities", () => {
       expect(statements).toHaveLength(2);
     });
 
-    it("should split migration SQL into 6 statements", () => {
-      const sql = getMigrationSQL();
-      const statements = splitSQLStatements(sql);
+    it("should handle getTableCreationSQL output correctly", () => {
+      const statements = getTableCreationSQL();
       expect(statements).toHaveLength(6);
     });
 

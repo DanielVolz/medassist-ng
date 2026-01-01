@@ -358,15 +358,12 @@ function AppContent() {
 			setScheduleDays(storedDays ? Number(storedDays) : 30);
 			
 			// Load manually collapsed/expanded days from localStorage
-			const storedCollapsed = localStorage.getItem(userStorageKey(user.id, "collapsedDays"));
-			const storedExpanded = localStorage.getItem(userStorageKey(user.id, "expandedDays"));
-			try {
-				setManuallyCollapsedDays(storedCollapsed ? new Set(JSON.parse(storedCollapsed)) : new Set());
-				setManuallyExpandedDays(storedExpanded ? new Set(JSON.parse(storedExpanded)) : new Set());
-			} catch {
-				setManuallyCollapsedDays(new Set());
-				setManuallyExpandedDays(new Set());
-			}
+			const { collapsed, expanded } = loadCollapsedDaysFromStorage(
+				userStorageKey(user.id, "collapsedDays"),
+				userStorageKey(user.id, "expandedDays")
+			);
+			setManuallyCollapsedDays(collapsed);
+			setManuallyExpandedDays(expanded);
 		}
 	}, [user?.id]);
 
@@ -2895,22 +2892,36 @@ function toIsoString(value: string) {
 	return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 
+function pad2(n: number): string {
+	return String(n).padStart(2, '0');
+}
+
+function loadCollapsedDaysFromStorage(collapsedKey: string, expandedKey: string): { collapsed: Set<string>; expanded: Set<string> } {
+	const storedCollapsed = localStorage.getItem(collapsedKey);
+	const storedExpanded = localStorage.getItem(expandedKey);
+	try {
+		return {
+			collapsed: storedCollapsed ? new Set(JSON.parse(storedCollapsed)) : new Set(),
+			expanded: storedExpanded ? new Set(JSON.parse(storedExpanded)) : new Set()
+		};
+	} catch {
+		return {
+			collapsed: new Set(),
+			expanded: new Set()
+		};
+	}
+}
+
 function toDateValue(date: Date | string): string {
 	const d = typeof date === 'string' ? new Date(date) : date;
-	if (Number.isNaN(d.getTime())) {
-		const now = new Date();
-		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-	}
-	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+	const fallback = Number.isNaN(d.getTime()) ? new Date() : d;
+	return `${fallback.getFullYear()}-${pad2(fallback.getMonth() + 1)}-${pad2(fallback.getDate())}`;
 }
 
 function toTimeValue(date: Date | string): string {
 	const d = typeof date === 'string' ? new Date(date) : date;
-	if (Number.isNaN(d.getTime())) {
-		const now = new Date();
-		return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-	}
-	return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+	const fallback = Number.isNaN(d.getTime()) ? new Date() : d;
+	return `${pad2(fallback.getHours())}:${pad2(fallback.getMinutes())}`;
 }
 
 function combineDateAndTime(dateStr: string, timeStr: string): string {
@@ -2920,23 +2931,9 @@ function combineDateAndTime(dateStr: string, timeStr: string): string {
 
 function toInputValue(value: string) {
 	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) {
-		// Return current local time in datetime-local format
-		const now = new Date();
-		const year = now.getFullYear();
-		const month = String(now.getMonth() + 1).padStart(2, '0');
-		const day = String(now.getDate()).padStart(2, '0');
-		const hours = String(now.getHours()).padStart(2, '0');
-		const minutes = String(now.getMinutes()).padStart(2, '0');
-		return `${year}-${month}-${day}T${hours}:${minutes}`;
-	}
-	// Convert to local time format for datetime-local input
-	const year = date.getFullYear();
-	const month = String(date.getMonth() + 1).padStart(2, '0');
-	const day = String(date.getDate()).padStart(2, '0');
-	const hours = String(date.getHours()).padStart(2, '0');
-	const minutes = String(date.getMinutes()).padStart(2, '0');
-	return `${year}-${month}-${day}T${hours}:${minutes}`;
+	const d = Number.isNaN(date.getTime()) ? new Date() : date;
+	// Use existing helper functions to avoid duplication
+	return `${toDateValue(d)}T${toTimeValue(d)}`;
 }
 
 function formatDateTime(value: string, locale: string) {
@@ -3449,15 +3446,12 @@ function SharedSchedule() {
 	// Load collapsed/expanded state from localStorage
 	useEffect(() => {
 		if (token && typeof window !== "undefined") {
-			const storedCollapsed = localStorage.getItem(`share_${token}_collapsedDays`);
-			const storedExpanded = localStorage.getItem(`share_${token}_expandedDays`);
-			try {
-				setManuallyCollapsedDays(storedCollapsed ? new Set(JSON.parse(storedCollapsed)) : new Set());
-				setManuallyExpandedDays(storedExpanded ? new Set(JSON.parse(storedExpanded)) : new Set());
-			} catch {
-				setManuallyCollapsedDays(new Set());
-				setManuallyExpandedDays(new Set());
-			}
+			const { collapsed, expanded } = loadCollapsedDaysFromStorage(
+				`share_${token}_collapsedDays`,
+				`share_${token}_expandedDays`
+			);
+			setManuallyCollapsedDays(collapsed);
+			setManuallyExpandedDays(expanded);
 		}
 	}, [token]);
 

@@ -10,7 +10,7 @@ import fastifyMultipart from "@fastify/multipart";
 import { createClient, Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { beforeAll, afterAll, beforeEach } from "vitest";
-import { getTableCreationSQL } from "../db/schema-sql";
+import { getTableCreationSQL } from "../db/schema-sql.js";
 
 // Type for our test database
 export type TestDb = ReturnType<typeof drizzle>;

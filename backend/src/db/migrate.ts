@@ -2,7 +2,7 @@ import { createClient, Client } from "@libsql/client";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
-import { getTableCreationSQL } from "./schema-sql";
+import { getTableCreationSQL } from "./schema-sql.js";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 

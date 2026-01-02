@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { existsSync, mkdirSync, accessSync, constants, statSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import dotenv from "dotenv";
-import { getTableCreationSQL } from "./schema-sql";
+import { getTableCreationSQL } from "./schema-sql.js";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 
@@ -45,7 +45,7 @@ export function ensureDataDirectory(dataDir: string): { success: boolean; error?
 }
 
 /** Get the SQL statements for creating all tables (re-exported from schema-sql) */
-export { getTableCreationSQL } from "./schema-sql";
+export { getTableCreationSQL } from "./schema-sql.js";
 
 /** Run table creation migrations on a client */
 export async function runTableMigrations(client: Client): Promise<{ success: boolean; errors: string[] }> {

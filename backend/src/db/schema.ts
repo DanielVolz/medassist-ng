@@ -60,6 +60,7 @@ export const userSettings = sqliteTable("user_settings", {
   // Reminder settings
   reminderDaysBefore: integer("reminder_days_before").notNull().default(7),
   repeatDailyReminders: integer("repeat_daily_reminders", { mode: "boolean" }).notNull().default(false),
+  skipRemindersForTakenDoses: integer("skip_reminders_for_taken_doses", { mode: "boolean" }).notNull().default(false),
   // Stock thresholds (days)
   lowStockDays: integer("low_stock_days").notNull().default(30),
   normalStockDays: integer("normal_stock_days").notNull().default(90),

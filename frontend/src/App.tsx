@@ -289,6 +289,7 @@ function AppContent() {
 		notificationEmail: "",
 		reminderDaysBefore: 7,
 		repeatDailyReminders: false,
+		skipRemindersForTakenDoses: false,
 		lowStockDays: 30,
 		normalStockDays: 90,
 		highStockDays: 180,
@@ -627,6 +628,7 @@ function AppContent() {
 			notificationEmail: settings.notificationEmail,
 			reminderDaysBefore: settings.reminderDaysBefore,
 			repeatDailyReminders: settings.repeatDailyReminders,
+			skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
 			lowStockDays: settings.lowStockDays,
 			normalStockDays: settings.normalStockDays,
 			highStockDays: settings.highStockDays,
@@ -1975,6 +1977,22 @@ function AppContent() {
 										{!settings.emailEnabled && !settings.shoutrrrEnabled && (
 											<p className="hint-text">{t('settings.notifications.enableHint')}</p>
 										)}
+										
+										{/* Skip reminders for taken doses */}
+										<div className="setting-row compact" style={{marginTop: "16px", paddingTop: "16px", borderTop: "1px solid var(--border-color)"}}>
+											<label className="setting-label">
+												{t('settings.notifications.skipTakenDoses')}
+												<span className="info-tooltip small" data-tooltip={t('settings.notifications.skipTakenDosesTooltip')}>ⓘ</span>
+											</label>
+											<label className="toggle-switch small">
+												<input
+													type="checkbox"
+													checked={settings.skipRemindersForTakenDoses}
+													onChange={(e) => setSettings({ ...settings, skipRemindersForTakenDoses: e.target.checked })}
+												/>
+												<span className="toggle-slider"></span>
+											</label>
+										</div>
 									</div>
 
 									<div className="setting-section">

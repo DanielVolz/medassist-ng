@@ -94,6 +94,7 @@ async function createSchema(client: Client) {
       shoutrrr_intake_reminders integer NOT NULL DEFAULT 1,
       reminder_days_before integer NOT NULL DEFAULT 7,
       repeat_daily_reminders integer NOT NULL DEFAULT 0,
+      skip_reminders_for_taken_doses integer NOT NULL DEFAULT 0,
       low_stock_days integer NOT NULL DEFAULT 30,
       normal_stock_days integer NOT NULL DEFAULT 90,
       high_stock_days integer NOT NULL DEFAULT 180,

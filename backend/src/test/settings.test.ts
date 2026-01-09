@@ -41,6 +41,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
         shoutrrrIntakeReminders: true,
         reminderDaysBefore: 7,
         repeatDailyReminders: false,
+        skipRemindersForTakenDoses: false,
         lowStockDays: 30,
         normalStockDays: 90,
         highStockDays: 180,
@@ -62,6 +63,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
       shoutrrrIntakeReminders: Boolean(s.shoutrrr_intake_reminders),
       reminderDaysBefore: s.reminder_days_before,
       repeatDailyReminders: Boolean(s.repeat_daily_reminders),
+      skipRemindersForTakenDoses: Boolean(s.skip_reminders_for_taken_doses ?? false),
       lowStockDays: s.low_stock_days,
       normalStockDays: s.normal_stock_days,
       highStockDays: s.high_stock_days,
@@ -84,6 +86,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
       shoutrrrIntakeReminders?: boolean;
       reminderDaysBefore?: number;
       repeatDailyReminders?: boolean;
+      skipRemindersForTakenDoses?: boolean;
       lowStockDays?: number;
       normalStockDays?: number;
       highStockDays?: number;
@@ -126,10 +129,10 @@ async function registerSettingsRoutes(ctx: TestContext) {
           email_stock_reminders, email_intake_reminders,
           shoutrrr_enabled, shoutrrr_url,
           shoutrrr_stock_reminders, shoutrrr_intake_reminders,
-          reminder_days_before, repeat_daily_reminders,
+          reminder_days_before, repeat_daily_reminders, skip_reminders_for_taken_doses,
           low_stock_days, normal_stock_days, high_stock_days,
           expiry_warning_days, language, stock_calculation_mode
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           userId,
           body.emailEnabled ? 1 : 0,
@@ -142,6 +145,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
           body.shoutrrrIntakeReminders !== false ? 1 : 0,
           body.reminderDaysBefore ?? 7,
           body.repeatDailyReminders ? 1 : 0,
+          body.skipRemindersForTakenDoses ? 1 : 0,
           body.lowStockDays ?? 30,
           body.normalStockDays ?? 90,
           body.highStockDays ?? 180,
@@ -164,6 +168,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
           shoutrrr_intake_reminders = ?,
           reminder_days_before = ?,
           repeat_daily_reminders = ?,
+          skip_reminders_for_taken_doses = ?,
           low_stock_days = ?,
           normal_stock_days = ?,
           high_stock_days = ?,
@@ -183,6 +188,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
           body.shoutrrrIntakeReminders !== false ? 1 : 0,
           body.reminderDaysBefore ?? 7,
           body.repeatDailyReminders ? 1 : 0,
+          body.skipRemindersForTakenDoses ? 1 : 0,
           body.lowStockDays ?? 30,
           body.normalStockDays ?? 90,
           body.highStockDays ?? 180,

@@ -21,6 +21,7 @@ export type UserSettings = {
   shoutrrrIntakeReminders: boolean;
   reminderDaysBefore: number;
   repeatDailyReminders: boolean;
+  skipRemindersForTakenDoses: boolean;
   lowStockDays: number;
   normalStockDays: number;
   highStockDays: number;
@@ -45,6 +46,7 @@ type SettingsBody = {
   emailIntakeReminders: boolean;
   shoutrrrStockReminders: boolean;
   shoutrrrIntakeReminders: boolean;
+  skipRemindersForTakenDoses: boolean;
   language: string;
   stockCalculationMode: "automatic" | "manual";
 };
@@ -69,6 +71,7 @@ const defaultSettings = {
   shoutrrrIntakeReminders: true,
   reminderDaysBefore: 7,
   repeatDailyReminders: false,
+  skipRemindersForTakenDoses: false,
   lowStockDays: 30,
   normalStockDays: 90,
   highStockDays: 180,
@@ -109,6 +112,7 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
     shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
     reminderDaysBefore: settings.reminderDaysBefore,
     repeatDailyReminders: settings.repeatDailyReminders,
+    skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
     lowStockDays: settings.lowStockDays,
     normalStockDays: settings.normalStockDays,
     highStockDays: settings.highStockDays,
@@ -135,6 +139,7 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
     shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
     reminderDaysBefore: settings.reminderDaysBefore,
     repeatDailyReminders: settings.repeatDailyReminders,
+    skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
     lowStockDays: settings.lowStockDays,
     normalStockDays: settings.normalStockDays,
     highStockDays: settings.highStockDays,
@@ -187,6 +192,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       emailIntakeReminders: settings.emailIntakeReminders,
       shoutrrrStockReminders: settings.shoutrrrStockReminders,
       shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+      skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
       language: settings.language,
       stockCalculationMode: settings.stockCalculationMode ?? "automatic",
       // SMTP settings (from .env - shared/server-configured)
@@ -233,6 +239,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       shoutrrrIntakeReminders: body.shoutrrrIntakeReminders ?? true,
       reminderDaysBefore: body.reminderDaysBefore,
       repeatDailyReminders,
+      skipRemindersForTakenDoses: body.skipRemindersForTakenDoses ?? false,
       lowStockDays: body.lowStockDays ?? 30,
       normalStockDays: body.normalStockDays ?? 90,
       highStockDays: body.highStockDays ?? 180,

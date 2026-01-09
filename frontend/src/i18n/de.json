@@ -157,7 +157,9 @@
       "push": "Push",
       "stockReminders": "Bestands-Erinnerungen",
       "intakeReminders": "Einnahme-Erinnerungen",
-      "enableHint": "Aktivieren Sie mindestens einen Kanal, um Benachrichtigungen zu erhalten."
+      "enableHint": "Aktivieren Sie mindestens einen Kanal, um Benachrichtigungen zu erhalten.",
+      "skipTakenDoses": "Keine Erinnerungen für genommene Dosen",
+      "skipTakenDosesTooltip": "Sende keine Einnahme-Erinnerungen für Dosen, die heute bereits als genommen markiert wurden"
     },
     "email": {
       "recipient": "Empfänger",

@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
-import { eq } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { medications } from "../db/schema.js";
+import { medications, doseTracking } from "../db/schema.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
@@ -217,15 +217,26 @@ async function checkAndSendIntakeRemindersForUser(
   }
 
   const state = loadIntakeReminderState();
-  const allUpcoming: UpcomingIntake[] = [];
+  const allUpcoming: (UpcomingIntake & { medicationId: number; blisterIndex: number })[] = [];
   const locale = getDateLocale(language);
+  const tz = getTimezone();
   
   // Find all upcoming intakes across all medications for this user
   for (const med of medsWithReminders) {
     const blisters = parseBlistersFromRow(med);
     const takenByArray = parseTakenByJson(med.takenByJson);
-    const upcoming = getUpcomingIntakes(med.name, blisters, REMINDER_MINUTES_BEFORE, takenByArray, med.pillWeightMg, locale);
-    allUpcoming.push(...upcoming);
+    
+    // Process each blister separately to track blisterIndex
+    blisters.forEach((blister, blisterIndex) => {
+      const upcoming = getUpcomingIntakes(med.name, [blister], REMINDER_MINUTES_BEFORE, takenByArray, med.pillWeightMg, locale);
+      
+      // Add medicationId and blisterIndex to each intake for dose ID generation
+      allUpcoming.push(...upcoming.map(intake => ({
+        ...intake,
+        medicationId: med.id,
+        blisterIndex,
+      })));
+    });
   }
   
   if (allUpcoming.length === 0) {
@@ -233,13 +244,59 @@ async function checkAndSendIntakeRemindersForUser(
   }
   
   // Filter out already-sent reminders (keyed by user)
-  const newReminders = allUpcoming.filter(intake => {
+  let newReminders = allUpcoming.filter(intake => {
     const key = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
     return !state.sentReminders.includes(key);
   });
   
   if (newReminders.length === 0) {
     return; // All reminders already sent
+  }
+
+  // If skipRemindersForTakenDoses is enabled, filter out doses that were already taken today
+  if (settings.skipRemindersForTakenDoses) {
+    // Get start and end of today in user's timezone
+    const now = new Date();
+    const todayStart = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+    todayStart.setHours(0, 0, 0, 0);
+    
+    const todayEnd = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    // Query doses marked as taken today (takenAt is timestamp, stored as seconds since epoch)
+    const takenToday = await db.select().from(doseTracking).where(
+      and(
+        eq(doseTracking.userId, settings.userId),
+        gte(doseTracking.takenAt, todayStart),
+        lte(doseTracking.takenAt, todayEnd)
+      )
+    );
+    
+    const takenDoseIds = new Set(takenToday.map(d => d.doseId));
+    
+    // Filter out reminders for doses that were already taken
+    newReminders = newReminders.filter(intake => {
+      const timestamp = intake.intakeTime.getTime();
+      
+      // Check both with and without person suffix
+      if (intake.takenBy.length > 0) {
+        // For multi-person medications, check if any person has taken it
+        const anyTaken = intake.takenBy.some(person => {
+          const doseId = `${intake.medicationId}-${intake.blisterIndex}-${timestamp}-${person}`;
+          return takenDoseIds.has(doseId);
+        });
+        return !anyTaken; // Skip if any person has taken it
+      } else {
+        // For non-person-specific medications
+        const doseId = `${intake.medicationId}-${intake.blisterIndex}-${timestamp}`;
+        return !takenDoseIds.has(doseId);
+      }
+    });
+    
+    if (newReminders.length === 0) {
+      logger.info(`[IntakeReminder] User ${settings.userId}: All upcoming doses already taken, skipping reminders`);
+      return;
+    }
   }
 
   logger.info(`[IntakeReminder] User ${settings.userId}: Sending reminder for ${newReminders.length} upcoming intakes...`);

@@ -290,6 +290,8 @@ function AppContent() {
 		reminderDaysBefore: 7,
 		repeatDailyReminders: false,
 		skipRemindersForTakenDoses: false,
+		repeatRemindersEnabled: false,
+		reminderRepeatIntervalMinutes: 30,
 		lowStockDays: 30,
 		normalStockDays: 90,
 		highStockDays: 180,
@@ -629,6 +631,8 @@ function AppContent() {
 			reminderDaysBefore: settings.reminderDaysBefore,
 			repeatDailyReminders: settings.repeatDailyReminders,
 			skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
+			repeatRemindersEnabled: settings.repeatRemindersEnabled,
+			reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes,
 			lowStockDays: settings.lowStockDays,
 			normalStockDays: settings.normalStockDays,
 			highStockDays: settings.highStockDays,
@@ -1993,6 +1997,41 @@ function AppContent() {
 												<span className="toggle-slider"></span>
 											</label>
 										</div>
+										
+										{/* Repeat reminders for missed doses */}
+										<div className="setting-row compact" style={{marginTop: "12px"}}>
+											<label className="setting-label">
+												{t('settings.notifications.repeatReminders')}
+												<span className="info-tooltip small" data-tooltip={t('settings.notifications.repeatRemindersTooltip')}>ⓘ</span>
+											</label>
+											<label className="toggle-switch small">
+												<input
+													type="checkbox"
+													checked={settings.repeatRemindersEnabled}
+													onChange={(e) => setSettings({ ...settings, repeatRemindersEnabled: e.target.checked })}
+												/>
+												<span className="toggle-slider"></span>
+											</label>
+										</div>
+										
+										{/* Reminder interval (only shown when repeat is enabled) */}
+										{settings.repeatRemindersEnabled && (
+											<div className="setting-row compact" style={{marginTop: "12px", marginLeft: "24px"}}>
+												<label className="setting-label">
+													{t('settings.notifications.reminderInterval')}
+													<span className="info-tooltip small" data-tooltip={t('settings.notifications.reminderIntervalTooltip')}>ⓘ</span>
+												</label>
+												<input
+													type="number"
+													min="5"
+													max="480"
+													step="5"
+													value={settings.reminderRepeatIntervalMinutes}
+													onChange={(e) => setSettings({ ...settings, reminderRepeatIntervalMinutes: parseInt(e.target.value) || 30 })}
+													style={{width: "80px", textAlign: "center"}}
+												/>
+											</div>
+										)}
 									</div>
 
 									<div className="setting-section">

@@ -22,6 +22,8 @@ export type UserSettings = {
   reminderDaysBefore: number;
   repeatDailyReminders: boolean;
   skipRemindersForTakenDoses: boolean;
+  repeatRemindersEnabled: boolean;
+  reminderRepeatIntervalMinutes: number;
   lowStockDays: number;
   normalStockDays: number;
   highStockDays: number;
@@ -47,6 +49,8 @@ type SettingsBody = {
   shoutrrrStockReminders: boolean;
   shoutrrrIntakeReminders: boolean;
   skipRemindersForTakenDoses: boolean;
+  repeatRemindersEnabled: boolean;
+  reminderRepeatIntervalMinutes: number;
   language: string;
   stockCalculationMode: "automatic" | "manual";
 };
@@ -72,6 +76,8 @@ const defaultSettings = {
   reminderDaysBefore: 7,
   repeatDailyReminders: false,
   skipRemindersForTakenDoses: false,
+  repeatRemindersEnabled: false,
+  reminderRepeatIntervalMinutes: 30,
   lowStockDays: 30,
   normalStockDays: 90,
   highStockDays: 180,
@@ -113,6 +119,8 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
     reminderDaysBefore: settings.reminderDaysBefore,
     repeatDailyReminders: settings.repeatDailyReminders,
     skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
+    repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
+    reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
     lowStockDays: settings.lowStockDays,
     normalStockDays: settings.normalStockDays,
     highStockDays: settings.highStockDays,
@@ -140,6 +148,8 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
     reminderDaysBefore: settings.reminderDaysBefore,
     repeatDailyReminders: settings.repeatDailyReminders,
     skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
+    repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
+    reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
     lowStockDays: settings.lowStockDays,
     normalStockDays: settings.normalStockDays,
     highStockDays: settings.highStockDays,
@@ -240,6 +250,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       reminderDaysBefore: body.reminderDaysBefore,
       repeatDailyReminders,
       skipRemindersForTakenDoses: body.skipRemindersForTakenDoses ?? false,
+      repeatRemindersEnabled: body.repeatRemindersEnabled ?? false,
+      reminderRepeatIntervalMinutes: body.reminderRepeatIntervalMinutes ?? 30,
       lowStockDays: body.lowStockDays ?? 30,
       normalStockDays: body.normalStockDays ?? 90,
       highStockDays: body.highStockDays ?? 180,

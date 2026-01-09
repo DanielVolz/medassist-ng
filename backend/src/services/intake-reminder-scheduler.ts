@@ -221,6 +221,14 @@ async function checkAndSendIntakeRemindersForUser(
   const locale = getDateLocale(language);
   const tz = getTimezone();
   
+  // Get start and end of today in user's timezone (for filtering today's doses only)
+  const now = new Date();
+  const todayStart = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+  todayStart.setHours(0, 0, 0, 0);
+  
+  const todayEnd = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+  todayEnd.setHours(23, 59, 59, 999);
+  
   // Find all upcoming intakes across all medications for this user
   for (const med of medsWithReminders) {
     const blisters = parseBlistersFromRow(med);
@@ -231,38 +239,51 @@ async function checkAndSendIntakeRemindersForUser(
       const upcoming = getUpcomingIntakes(med.name, [blister], REMINDER_MINUTES_BEFORE, takenByArray, med.pillWeightMg, locale);
       
       // Add medicationId and blisterIndex to each intake for dose ID generation
-      allUpcoming.push(...upcoming.map(intake => ({
-        ...intake,
-        medicationId: med.id,
-        blisterIndex,
-      })));
+      // Also filter to only today's doses (don't send reminders for past days)
+      allUpcoming.push(...upcoming
+        .filter(intake => intake.intakeTime >= todayStart && intake.intakeTime <= todayEnd)
+        .map(intake => ({
+          ...intake,
+          medicationId: med.id,
+          blisterIndex,
+        })));
     });
   }
   
   if (allUpcoming.length === 0) {
-    return; // No upcoming intakes in the window
+    return; // No upcoming intakes for today
   }
   
-  // Filter out already-sent reminders (keyed by user)
-  let newReminders = allUpcoming.filter(intake => {
-    const key = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
-    return !state.sentReminders.includes(key);
-  });
+  // Determine which doses need reminders (new or repeated)
+  const nowMs = Date.now();
+  let remindersToSend: typeof allUpcoming = [];
   
-  if (newReminders.length === 0) {
-    return; // All reminders already sent
+  for (const intake of allUpcoming) {
+    const key = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
+    const existingEntry = state.reminders[key];
+    
+    if (!existingEntry) {
+      // New dose - always send first reminder
+      remindersToSend.push(intake);
+    } else if (settings.repeatRemindersEnabled) {
+      // Check if repeat interval has elapsed
+      const intervalMs = settings.reminderRepeatIntervalMinutes * 60 * 1000;
+      const timeSinceLastReminder = nowMs - existingEntry.lastSentAt;
+      
+      if (timeSinceLastReminder >= intervalMs) {
+        // Time to send repeat reminder
+        remindersToSend.push(intake);
+      }
+    }
+    // Else: Already sent and repeats disabled - skip
+  }
+  
+  if (remindersToSend.length === 0) {
+    return; // All reminders already sent and no repeats needed
   }
 
   // If skipRemindersForTakenDoses is enabled, filter out doses that were already taken today
   if (settings.skipRemindersForTakenDoses) {
-    // Get start and end of today in user's timezone
-    const now = new Date();
-    const todayStart = new Date(now.toLocaleString("en-US", { timeZone: tz }));
-    todayStart.setHours(0, 0, 0, 0);
-    
-    const todayEnd = new Date(now.toLocaleString("en-US", { timeZone: tz }));
-    todayEnd.setHours(23, 59, 59, 999);
-    
     // Query doses marked as taken today (takenAt is timestamp, stored as seconds since epoch)
     const takenToday = await db.select().from(doseTracking).where(
       and(
@@ -275,7 +296,7 @@ async function checkAndSendIntakeRemindersForUser(
     const takenDoseIds = new Set(takenToday.map(d => d.doseId));
     
     // Filter out reminders for doses that were already taken
-    newReminders = newReminders.filter(intake => {
+    remindersToSend = remindersToSend.filter(intake => {
       const timestamp = intake.intakeTime.getTime();
       
       // Check both with and without person suffix
@@ -293,20 +314,20 @@ async function checkAndSendIntakeRemindersForUser(
       }
     });
     
-    if (newReminders.length === 0) {
-      logger.info(`[IntakeReminder] User ${settings.userId}: All upcoming doses already taken, skipping reminders`);
+    if (remindersToSend.length === 0) {
+      logger.info(`[IntakeReminder] User ${settings.userId}: All doses taken, skipping reminders`);
       return;
     }
   }
 
-  logger.info(`[IntakeReminder] User ${settings.userId}: Sending reminder for ${newReminders.length} upcoming intakes...`);
+  logger.info(`[IntakeReminder] User ${settings.userId}: Sending reminder for ${remindersToSend.length} intakes...`);
   
   let emailSuccess = false;
   let shoutrrrSuccess = false;
   
   // Send email if enabled for intake reminders
   if (emailEnabled) {
-    const result = await sendIntakeReminderEmail(settings.notificationEmail!, newReminders, language);
+    const result = await sendIntakeReminderEmail(settings.notificationEmail!, remindersToSend, language);
     emailSuccess = result.success;
     if (result.success) {
       logger.info(`[IntakeReminder] User ${settings.userId}: Email sent successfully`);
@@ -318,7 +339,7 @@ async function checkAndSendIntakeRemindersForUser(
   // Send Shoutrrr notification if enabled for intake reminders
   if (shoutrrrEnabled) {
     const title = t(tr.push.intakeTitle, { minutes: REMINDER_MINUTES_BEFORE });
-    const message = newReminders
+    const message = remindersToSend
       .map((i) => {
         const takenByStr = i.takenBy.length > 0 ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy.join(", ") })}` : "";
         let dosage = `${i.usage} ${i.usage === 1 ? tr.common.pill : tr.common.pills}`;
@@ -341,14 +362,32 @@ async function checkAndSendIntakeRemindersForUser(
   
   // Update state if any notification was sent successfully
   if (emailSuccess || shoutrrrSuccess) {
-    const newKeys = newReminders.map(i => `user_${settings.userId}:${i.medName}:${i.intakeTime.getTime()}`);
+    // Update or create entries for sent reminders
+    for (const intake of remindersToSend) {
+      const key = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
+      const existing = state.reminders[key];
+      
+      if (existing) {
+        // Update existing entry (repeat)
+        state.reminders[key] = {
+          firstSentAt: existing.firstSentAt,
+          lastSentAt: nowMs,
+          sendCount: existing.sendCount + 1,
+        };
+      } else {
+        // Create new entry (first send)
+        state.reminders[key] = {
+          firstSentAt: nowMs,
+          lastSentAt: nowMs,
+          sendCount: 1,
+        };
+      }
+    }
     
-    // Clean up old entries (older than 24 hours)
-    const cleanedReminders = cleanOldIntakeReminders(state.sentReminders);
+    // Clean up old entries (remove doses from past days)
+    state.reminders = cleanOldIntakeReminders(state.reminders, tz);
     
-    saveIntakeReminderState({
-      sentReminders: [...cleanedReminders, ...newKeys],
-    });
+    saveIntakeReminderState(state);
     
     // Update global reminder state for UI display
     const channel = emailSuccess && shoutrrrSuccess ? "both" : emailSuccess ? "email" : "push";

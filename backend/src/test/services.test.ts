@@ -399,7 +399,7 @@ describe("Scheduler Utils - State Management", () => {
   describe("createDefaultIntakeReminderState", () => {
     it("should create default intake reminder state", () => {
       const state = createDefaultIntakeReminderState();
-      expect(state.sentReminders).toEqual([]);
+      expect(state.reminders).toEqual({});
     });
   });
 
@@ -439,62 +439,91 @@ describe("Scheduler Utils - State Management", () => {
   });
 
   describe("parseIntakeReminderState", () => {
-    it("should parse valid JSON", () => {
+    it("should parse valid new format JSON", () => {
+      const json = JSON.stringify({ 
+        reminders: { 
+          "med1:123": { firstSentAt: 1000, lastSentAt: 2000, sendCount: 2 },
+          "med2:456": { firstSentAt: 3000, lastSentAt: 3000, sendCount: 1 }
+        } 
+      });
+      
+      const state = parseIntakeReminderState(json);
+      expect(Object.keys(state.reminders)).toHaveLength(2);
+      expect(state.reminders["med1:123"].sendCount).toBe(2);
+    });
+    
+    it("should convert old array format to new format", () => {
       const json = JSON.stringify({ sentReminders: ["med1:123", "med2:456"] });
       
       const state = parseIntakeReminderState(json);
-      expect(state.sentReminders).toEqual(["med1:123", "med2:456"]);
+      expect(Object.keys(state.reminders)).toHaveLength(2);
+      expect(state.reminders["med1:123"]).toBeDefined();
+      expect(state.reminders["med1:123"].sendCount).toBe(1);
     });
 
     it("should return defaults for invalid JSON", () => {
       const state = parseIntakeReminderState("invalid");
-      expect(state.sentReminders).toEqual([]);
+      expect(state.reminders).toEqual({});
     });
 
-    it("should handle missing sentReminders", () => {
+    it("should handle missing reminders field", () => {
       const state = parseIntakeReminderState("{}");
-      expect(state.sentReminders).toEqual([]);
+      expect(state.reminders).toEqual({});
     });
   });
 
   describe("cleanOldIntakeReminders", () => {
-    it("should remove entries older than maxAgeMs", () => {
-      const now = Date.now();
-      const oldTimestamp = now - 25 * 60 * 60 * 1000; // 25 hours ago
-      const recentTimestamp = now - 1 * 60 * 60 * 1000; // 1 hour ago
+    it("should remove entries from past days (timezone-aware)", () => {
+      const tz = "Europe/Berlin";
+      const now = new Date();
+      const today = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+      today.setHours(12, 0, 0, 0);
       
-      const reminders = [
-        `med1:${oldTimestamp}`,
-        `med2:${recentTimestamp}`,
-      ];
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
       
-      const cleaned = cleanOldIntakeReminders(reminders, 24 * 60 * 60 * 1000);
+      const reminders = {
+        [`med1:${yesterday.getTime()}`]: { firstSentAt: yesterday.getTime(), lastSentAt: yesterday.getTime(), sendCount: 1 },
+        [`med2:${today.getTime()}`]: { firstSentAt: today.getTime(), lastSentAt: today.getTime(), sendCount: 1 },
+      };
       
-      expect(cleaned).toHaveLength(1);
-      expect(cleaned[0]).toContain("med2");
+      const cleaned = cleanOldIntakeReminders(reminders, tz);
+      
+      expect(Object.keys(cleaned)).toHaveLength(1);
+      expect(cleaned[`med2:${today.getTime()}`]).toBeDefined();
     });
 
-    it("should keep all entries if none are old", () => {
-      const now = Date.now();
-      const reminders = [
-        `med1:${now - 1000}`,
-        `med2:${now - 2000}`,
-      ];
+    it("should keep all entries from today", () => {
+      const tz = "Europe/Berlin";
+      const now = new Date();
+      const morning = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+      morning.setHours(8, 0, 0, 0);
       
-      const cleaned = cleanOldIntakeReminders(reminders);
-      expect(cleaned).toHaveLength(2);
+      const evening = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+      evening.setHours(20, 0, 0, 0);
+      
+      const reminders = {
+        [`med1:${morning.getTime()}`]: { firstSentAt: morning.getTime(), lastSentAt: morning.getTime(), sendCount: 1 },
+        [`med2:${evening.getTime()}`]: { firstSentAt: evening.getTime(), lastSentAt: evening.getTime(), sendCount: 1 },
+      };
+      
+      const cleaned = cleanOldIntakeReminders(reminders, tz);
+      expect(Object.keys(cleaned)).toHaveLength(2);
     });
 
-    it("should handle empty array", () => {
-      const cleaned = cleanOldIntakeReminders([]);
-      expect(cleaned).toEqual([]);
+    it("should handle empty reminders", () => {
+      const cleaned = cleanOldIntakeReminders({}, "Europe/Berlin");
+      expect(cleaned).toEqual({});
     });
 
-    it("should handle malformed entries (invalid timestamp)", () => {
-      const reminders = ["med1:invalid", "med2:notanumber"];
-      const cleaned = cleanOldIntakeReminders(reminders);
-      // NaN from parseInt will cause these to be filtered out (0 < cutoff)
-      expect(cleaned).toEqual([]);
+    it("should handle malformed entries (invalid timestamp in key)", () => {
+      const reminders = {
+        "med1:invalid": { firstSentAt: 1000, lastSentAt: 1000, sendCount: 1 },
+        "med2:notanumber": { firstSentAt: 2000, lastSentAt: 2000, sendCount: 1 }
+      };
+      const cleaned = cleanOldIntakeReminders(reminders, "Europe/Berlin");
+      // NaN from parseInt will cause these to be filtered out (invalid < todayStart)
+      expect(Object.keys(cleaned)).toHaveLength(0);
     });
   });
 });

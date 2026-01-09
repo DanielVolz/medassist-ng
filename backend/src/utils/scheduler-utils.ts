@@ -277,8 +277,14 @@ export type ReminderState = {
   lastNotificationChannel: "email" | "push" | "both" | null;
 };
 
+export type IntakeReminderEntry = {
+  firstSentAt: number;   // Timestamp when first reminder was sent
+  lastSentAt: number;    // Timestamp when last reminder was sent  
+  sendCount: number;     // How many times reminder was sent
+};
+
 export type IntakeReminderState = {
-  sentReminders: string[];
+  reminders: Record<string, IntakeReminderEntry>;  // key -> entry
 };
 
 /** Create default reminder state */
@@ -295,7 +301,7 @@ export function createDefaultReminderState(): ReminderState {
 
 /** Create default intake reminder state */
 export function createDefaultIntakeReminderState(): IntakeReminderState {
-  return { sentReminders: [] };
+  return { reminders: {} };
 }
 
 /** Parse reminder state from JSON string */
@@ -315,12 +321,28 @@ export function parseReminderState(json: string): ReminderState {
   }
 }
 
-/** Parse intake reminder state from JSON string */
+/** Parse intake reminder state from JSON string (backward compatible) */
 export function parseIntakeReminderState(json: string): IntakeReminderState {
   try {
     const saved = JSON.parse(json);
+    
+    // Backward compatibility: convert old array format to new map format
+    if (Array.isArray(saved.sentReminders)) {
+      const reminders: Record<string, IntakeReminderEntry> = {};
+      const now = Date.now();
+      for (const key of saved.sentReminders) {
+        reminders[key] = {
+          firstSentAt: now,
+          lastSentAt: now,
+          sendCount: 1,
+        };
+      }
+      return { reminders };
+    }
+    
+    // New format
     return {
-      sentReminders: saved.sentReminders ?? [],
+      reminders: saved.reminders ?? {},
     };
   } catch {
     return createDefaultIntakeReminderState();
@@ -328,10 +350,21 @@ export function parseIntakeReminderState(json: string): IntakeReminderState {
 }
 
 /** Clean up old intake reminder entries (older than given milliseconds) */
-export function cleanOldIntakeReminders(sentReminders: string[], maxAgeMs: number = 24 * 60 * 60 * 1000): string[] {
-  const cutoff = Date.now() - maxAgeMs;
-  return sentReminders.filter(key => {
+/** Clean up old intake reminder entries (using timezone-aware day check) */
+export function cleanOldIntakeReminders(reminders: Record<string, IntakeReminderEntry>, tz: string): Record<string, IntakeReminderEntry> {
+  // Get start of today in user's timezone
+  const now = new Date();
+  const todayStart = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStartMs = todayStart.getTime();
+  
+  // Keep only reminders from today onwards (based on dose timestamp in key)
+  const cleaned: Record<string, IntakeReminderEntry> = {};
+  for (const [key, entry] of Object.entries(reminders)) {
     const timestamp = parseInt(key.split(":").pop() || "0", 10);
-    return timestamp > cutoff;
-  });
+    if (timestamp >= todayStartMs) {
+      cleaned[key] = entry;
+    }
+  }
+  return cleaned;
 }

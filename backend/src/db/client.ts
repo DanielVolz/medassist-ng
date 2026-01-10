@@ -60,6 +60,27 @@ export async function runTableMigrations(client: Client): Promise<{ success: boo
     }
   }
 
+  // Run ALTER TABLE migrations for backward compatibility with older databases
+  // These add new columns to existing tables (silently fail if column already exists)
+  const alterMigrations = [
+    // Added in v1.x - repeat reminders and nagging settings
+    `ALTER TABLE user_settings ADD COLUMN skip_reminders_for_taken_doses integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE user_settings ADD COLUMN repeat_reminders_enabled integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE user_settings ADD COLUMN reminder_repeat_interval_minutes integer NOT NULL DEFAULT 30`,
+    `ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`,
+  ];
+
+  for (const sql of alterMigrations) {
+    try {
+      await client.execute(sql);
+    } catch (e: any) {
+      // Silently ignore "duplicate column" errors - column already exists
+      if (!e.message?.includes("duplicate column")) {
+        errors.push(e.message);
+      }
+    }
+  }
+
   return { success: errors.length === 0, errors };
 }
 

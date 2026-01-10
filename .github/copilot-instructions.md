@@ -1,5 +1,10 @@
 # MedAssist-ng - AI Coding Instructions
 
+## General Rules
+
+- **No temporary files**: Delete temporary scripts/files immediately after use. Do not commit temporary debug scripts, test files, or one-off utilities to the repository.
+- **Clean workspace**: Always clean up after yourself. If you create a file for a specific task, delete it once done.
+
 ## Architecture Overview
 
 MedAssist-ng is a **medication tracking and planning app** with a monorepo structure:
@@ -93,11 +98,14 @@ describe('Feature Name', () => {
 ### Test-Commands
 ```bash
 cd backend
-npm test                    # Alle Tests ausführen
-npm run test:coverage       # Mit Coverage-Report
-npm test -- --watch         # Watch-Mode für Entwicklung
+CI=true npm test            # Tests einmal ausführen (IMMER so ausführen!)
+CI=true npm run test:coverage  # Mit Coverage-Report
+npm test -- --watch         # Watch-Mode für manuelle Entwicklung
 npm test -- -t "test name"  # Einzelnen Test ausführen
 ```
+
+> ⚠️ **WICHTIG für AI-Agenten**: Tests IMMER mit `CI=true` ausführen!
+> Ohne `CI=true` läuft Vitest im Watch-Mode und wartet auf Eingaben.
 
 ## CI/CD Pipeline (GitHub Actions)
 
@@ -283,8 +291,24 @@ Each blister defines a recurring intake:
 | Stock Thresholds | Warning days, critical days, expiry warning days |
 | Email Notifications | Enable, email address, stock/intake toggles |
 | Push Notifications (Shoutrrr) | Enable, URL (ntfy/gotify/etc), stock/intake toggles |
-| Reminder Settings | Days before, repeat daily |
+| Reminder Settings | Days before, repeat daily, skip for taken, repeat/nagging |
 | SMTP | Email config (read-only from .env) |
+
+### Settings ENV Defaults
+All user settings can be pre-configured via ENV variables (see `.env.example`).
+These are only used as **defaults when a new user is created**.
+Once a user saves settings in the app, their saved values take precedence over ENV.
+
+| ENV Variable | Setting | Default |
+|--------------|---------|---------|
+| `DEFAULT_EMAIL_ENABLED` | Email notifications | false |
+| `DEFAULT_SHOUTRRR_ENABLED` | Push notifications | false |
+| `DEFAULT_SHOUTRRR_URL` | ntfy/gotify URL | (empty) |
+| `DEFAULT_REPEAT_REMINDERS_ENABLED` | Nagging reminders | false |
+| `DEFAULT_REMINDER_REPEAT_INTERVAL_MINUTES` | Nag interval | 30 |
+| `DEFAULT_MAX_NAGGING_REMINDERS` | Max nags | 5 |
+| `DEFAULT_LOW_STOCK_DAYS` | Low stock threshold | 30 |
+| `DEFAULT_LANGUAGE` | UI language | en |
 
 ## Database Schema (`backend/src/db/schema.ts`)
 
@@ -347,14 +371,54 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
 - **Environment**: Copy `.env.example` → `.env`, secrets must be 10+ chars
 - **i18n**: All UI text via `t('key')` function, translations in `frontend/src/i18n/*.json`
 
-## Database Schema Changes
+## Database Schema Changes (WICHTIG: Abwärtskompatibilität!)
 
-When adding new database columns:
+> ⚠️ **KRITISCH**: Die App MUSS abwärtskompatibel mit älteren Datenbanken bleiben!
+> Nutzer upgraden ihre Docker-Container, aber behalten ihre bestehende DB.
+> Die App darf NICHT abstürzen wenn alte Spalten fehlen.
 
-1. **Update schema**: `backend/src/db/schema.ts` - Add the Drizzle column definition
-2. **Update client.ts**: `backend/src/db/client.ts` - Add column to `CREATE TABLE IF NOT EXISTS`
-3. **Update migrate.ts**: `backend/src/db/migrate.ts` - Same as client.ts
-4. **Delete old DB**: `rm backend/data/medassist-ng.db` and restart
+### Regeln für neue Spalten
+
+1. **IMMER mit DEFAULT-Wert**: Neue Spalten müssen `NOT NULL DEFAULT <wert>` haben
+2. **NULL-sicher im Code**: Alle Abfragen müssen `?? defaultValue` oder `?? false` verwenden
+3. **Schema-SQL aktualisieren**: In diesen Dateien hinzufügen:
+   - `backend/src/db/schema.ts` - Drizzle Schema
+   - `backend/src/db/schema-sql.ts` - `getTableCreationSQL()` für neue DBs
+   - `backend/src/db/client.ts` - `ALTER TABLE ADD COLUMN IF NOT EXISTS` Migration
+4. **Test-Schemas updaten**: Alle Test-Dateien mit eigenem Schema:
+   - `backend/src/test/e2e-routes.test.ts`
+   - `backend/src/test/integration.test.ts`
+   - `backend/src/test/planner.test.ts`
+
+### Beispiel: Neue Spalte hinzufügen
+
+```typescript
+// 1. schema.ts - Drizzle Definition
+maxNaggingReminders: integer("max_nagging_reminders").notNull().default(5),
+
+// 2. schema-sql.ts - Für neue Datenbanken
+"max_nagging_reminders integer NOT NULL DEFAULT 5,"
+
+// 3. client.ts - Migration für bestehende DBs (IN ensureTablesExist())
+await client.execute(`ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`).catch(() => {});
+
+// 4. Routes - NULL-sicher lesen
+maxNaggingReminders: settings.maxNaggingReminders ?? 5,
+```
+
+### Was NICHT erlaubt ist
+
+- ❌ Spalten löschen oder umbenennen (bricht alte DBs)
+- ❌ `NOT NULL` ohne `DEFAULT` (INSERT schlägt fehl)
+- ❌ Spalten ohne Fallback im Code lesen
+- ❌ DB löschen als "Lösung" dokumentieren
+
+### Wann Abwärtskompatibilität NICHT möglich ist
+
+Wenn eine Breaking Change unvermeidbar ist:
+1. **Explizit kommunizieren**: In Release Notes dokumentieren
+2. **Migration-Script**: Automatisches Upgrade-Script bereitstellen
+3. **Versionsprüfung**: App sollte DB-Version prüfen und warnen
 
 ## File Locations
 

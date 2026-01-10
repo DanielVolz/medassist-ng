@@ -107,6 +107,10 @@ async function createSchema(client: Client) {
       shoutrrr_intake_reminders integer NOT NULL DEFAULT 1,
       reminder_days_before integer NOT NULL DEFAULT 7,
       repeat_daily_reminders integer NOT NULL DEFAULT 0,
+      skip_reminders_for_taken_doses integer NOT NULL DEFAULT 0,
+      repeat_reminders_enabled integer NOT NULL DEFAULT 0,
+      reminder_repeat_interval_minutes integer NOT NULL DEFAULT 30,
+      max_nagging_reminders integer NOT NULL DEFAULT 5,
       low_stock_days integer NOT NULL DEFAULT 30,
       normal_stock_days integer NOT NULL DEFAULT 90,
       high_stock_days integer NOT NULL DEFAULT 180,
@@ -556,6 +560,9 @@ describe("E2E Tests with Real Routes", () => {
         url: "/settings",
       });
 
+      if (response.statusCode !== 200) {
+        console.error("GET /settings error:", response.body);
+      }
       expect(response.statusCode).toBe(200);
       const data = response.json();
       // Check default values
@@ -720,7 +727,10 @@ describe("E2E Tests with Real Routes", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ status: "ok" });
+      const json = response.json();
+      expect(json.status).toBe("ok");
+      expect(typeof json.smtpConfigured).toBe("boolean");
+      expect(typeof json.shoutrrrConfigured).toBe("boolean");
     });
   });
 
@@ -1138,7 +1148,10 @@ describe("E2E Tests with Real Routes", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ status: "ok" });
+      const json = response.json();
+      expect(json.status).toBe("ok");
+      expect(typeof json.smtpConfigured).toBe("boolean");
+      expect(typeof json.shoutrrrConfigured).toBe("boolean");
     });
   });
 

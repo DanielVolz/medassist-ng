@@ -157,7 +157,15 @@
       "push": "Push",
       "stockReminders": "Bestands-Erinnerungen",
       "intakeReminders": "Einnahme-Erinnerungen",
-      "enableHint": "Aktivieren Sie mindestens einen Kanal, um Benachrichtigungen zu erhalten."
+      "enableHint": "Aktivieren Sie mindestens einen Kanal, um Benachrichtigungen zu erhalten.",
+      "skipTakenDoses": "Keine Erinnerungen für genommene Dosen",
+      "skipTakenDosesTooltip": "Sende keine Einnahme-Erinnerungen für Dosen, die heute bereits als genommen markiert wurden",
+      "repeatReminders": "Wiederholte Erinnerungen für verpasste Dosen",
+      "repeatRemindersTooltip": "Sende automatisch wiederholte Erinnerungen für Dosen, die noch nicht als genommen markiert wurden",
+      "reminderInterval": "Erinnerungsintervall (Minuten)",
+      "reminderIntervalTooltip": "Wie oft wiederholte Erinnerungen für verpasste Dosen gesendet werden sollen",
+      "maxNaggingReminders": "Max. Erinnerungen pro Dosis",
+      "maxNaggingRemindersTooltip": "Wiederholungserinnerungen nach dieser Anzahl Versuchen stoppen (1-20)"
     },
     "email": {
       "recipient": "Empfänger",

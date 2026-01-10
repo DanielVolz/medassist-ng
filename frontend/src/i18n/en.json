@@ -159,7 +159,15 @@
       "push": "Push",
       "stockReminders": "Stock Reminders",
       "intakeReminders": "Intake Reminders",
-      "enableHint": "Enable at least one channel below to receive notifications."
+      "enableHint": "Enable at least one channel below to receive notifications.",
+      "skipTakenDoses": "Skip reminders for taken doses",
+      "skipTakenDosesTooltip": "Don't send intake reminders for doses that have already been marked as taken today",
+      "repeatReminders": "Repeat reminders for missed doses",
+      "repeatRemindersTooltip": "Automatically send repeated reminders for doses that haven't been marked as taken",
+      "reminderInterval": "Reminder interval (minutes)",
+      "reminderIntervalTooltip": "How often to send repeated reminders for missed doses",
+      "maxNaggingReminders": "Max reminders per dose",
+      "maxNaggingRemindersTooltip": "Stop sending repeat reminders after this many attempts (1-20)"
     },
     "email": {
       "recipient": "Recipient",

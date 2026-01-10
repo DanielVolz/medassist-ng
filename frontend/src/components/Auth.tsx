@@ -421,7 +421,32 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
           {t("auth.register", "Create Account")}
         </h2>
 
-        <form onSubmit={handleSubmit} className="auth-form">
+        {/* SSO Login Button - also show on registration */}
+        {authState?.oidcEnabled && (
+          <div className="auth-sso">
+            <button
+              type="button"
+              className="btn btn-secondary auth-submit sso-btn"
+              onClick={() => window.location.href = "/api/auth/oidc/login"}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sso-icon">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                <polyline points="10 17 15 12 10 7"/>
+                <line x1="15" y1="12" x2="3" y2="12"/>
+              </svg>
+              {t("auth.loginWithSSO", "Login with {{provider}}", { provider: authState.oidcProviderName || "SSO" })}
+            </button>
+            {authState?.localAuthEnabled && (
+              <div className="auth-divider">
+                <span>{t("auth.or", "or")}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Local Registration Form - only show if local auth is enabled */}
+        {authState?.localAuthEnabled && (
+          <form onSubmit={handleSubmit} className="auth-form">
           {error && <div className="auth-error">{error}</div>}
 
           <div className="form-group">
@@ -471,6 +496,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
             {loading ? t("common.loading", "Loading...") : t("auth.register", "Create Account")}
           </button>
         </form>
+        )}
 
         {onSwitchToLogin && (
           <div className="auth-links">

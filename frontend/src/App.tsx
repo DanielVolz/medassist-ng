@@ -292,6 +292,7 @@ function AppContent() {
 		skipRemindersForTakenDoses: false,
 		repeatRemindersEnabled: false,
 		reminderRepeatIntervalMinutes: 30,
+		maxNaggingReminders: 5,
 		lowStockDays: 30,
 		normalStockDays: 90,
 		highStockDays: 180,
@@ -633,6 +634,7 @@ function AppContent() {
 			skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
 			repeatRemindersEnabled: settings.repeatRemindersEnabled,
 			reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes,
+			maxNaggingReminders: settings.maxNaggingReminders ?? 5,
 			lowStockDays: settings.lowStockDays,
 			normalStockDays: settings.normalStockDays,
 			highStockDays: settings.highStockDays,
@@ -1933,7 +1935,7 @@ function AppContent() {
 													<label className={`toggle-switch small${!settings.emailEnabled ? ' disabled' : ''}`}>
 														<input
 															type="checkbox"
-															checked={settings.emailStockReminders}
+															checked={settings.smtpHost && settings.emailEnabled ? settings.emailStockReminders : false}
 															onChange={(e) => setSettings({ ...settings, emailStockReminders: e.target.checked })}
 															disabled={!settings.emailEnabled}
 														/>
@@ -1944,7 +1946,7 @@ function AppContent() {
 													<label className={`toggle-switch small${!settings.shoutrrrEnabled ? ' disabled' : ''}`}>
 														<input
 															type="checkbox"
-															checked={settings.shoutrrrStockReminders}
+															checked={settings.shoutrrrUrl && settings.shoutrrrEnabled ? settings.shoutrrrStockReminders : false}
 															onChange={(e) => setSettings({ ...settings, shoutrrrStockReminders: e.target.checked })}
 															disabled={!settings.shoutrrrEnabled}
 														/>
@@ -1958,7 +1960,7 @@ function AppContent() {
 													<label className={`toggle-switch small${!settings.emailEnabled ? ' disabled' : ''}`}>
 														<input
 															type="checkbox"
-															checked={settings.emailIntakeReminders}
+															checked={settings.smtpHost && settings.emailEnabled ? settings.emailIntakeReminders : false}
 															onChange={(e) => setSettings({ ...settings, emailIntakeReminders: e.target.checked })}
 															disabled={!settings.emailEnabled}
 														/>
@@ -1969,7 +1971,7 @@ function AppContent() {
 													<label className={`toggle-switch small${!settings.shoutrrrEnabled ? ' disabled' : ''}`}>
 														<input
 															type="checkbox"
-															checked={settings.shoutrrrIntakeReminders}
+															checked={settings.shoutrrrUrl && settings.shoutrrrEnabled ? settings.shoutrrrIntakeReminders : false}
 															onChange={(e) => setSettings({ ...settings, shoutrrrIntakeReminders: e.target.checked })}
 															disabled={!settings.shoutrrrEnabled}
 														/>
@@ -1988,11 +1990,12 @@ function AppContent() {
 												{t('settings.notifications.skipTakenDoses')}
 												<span className="info-tooltip small" data-tooltip={t('settings.notifications.skipTakenDosesTooltip')}>ⓘ</span>
 											</label>
-											<label className="toggle-switch small">
+											<label className={`toggle-switch small${!settings.emailEnabled && !settings.shoutrrrEnabled ? ' disabled' : ''}`}>
 												<input
 													type="checkbox"
 													checked={settings.skipRemindersForTakenDoses}
 													onChange={(e) => setSettings({ ...settings, skipRemindersForTakenDoses: e.target.checked })}
+													disabled={!settings.emailEnabled && !settings.shoutrrrEnabled}
 												/>
 												<span className="toggle-slider"></span>
 											</label>
@@ -2004,11 +2007,12 @@ function AppContent() {
 												{t('settings.notifications.repeatReminders')}
 												<span className="info-tooltip small" data-tooltip={t('settings.notifications.repeatRemindersTooltip')}>ⓘ</span>
 											</label>
-											<label className="toggle-switch small">
+											<label className={`toggle-switch small${!settings.emailEnabled && !settings.shoutrrrEnabled ? ' disabled' : ''}`}>
 												<input
 													type="checkbox"
 													checked={settings.repeatRemindersEnabled}
 													onChange={(e) => setSettings({ ...settings, repeatRemindersEnabled: e.target.checked })}
+													disabled={!settings.emailEnabled && !settings.shoutrrrEnabled}
 												/>
 												<span className="toggle-slider"></span>
 											</label>
@@ -2016,32 +2020,57 @@ function AppContent() {
 										
 										{/* Reminder interval (only shown when repeat is enabled) */}
 										{settings.repeatRemindersEnabled && (
-											<div className="setting-row compact" style={{marginTop: "12px", marginLeft: "24px"}}>
-												<label className="setting-label">
-													{t('settings.notifications.reminderInterval')}
-													<span className="info-tooltip small" data-tooltip={t('settings.notifications.reminderIntervalTooltip')}>ⓘ</span>
-												</label>
-												<input
-													type="number"
-													min="5"
-													max="480"
-													step="5"
-													value={settings.reminderRepeatIntervalMinutes}
-													onChange={(e) => setSettings({ ...settings, reminderRepeatIntervalMinutes: parseInt(e.target.value) || 30 })}
-													style={{width: "80px", textAlign: "center"}}
-												/>
-											</div>
+											<>
+												<div className="setting-row compact" style={{marginTop: "12px", marginLeft: "24px"}}>
+													<label className="setting-label">
+														{t('settings.notifications.reminderInterval')}
+														<span className="info-tooltip small" data-tooltip={t('settings.notifications.reminderIntervalTooltip')}>ⓘ</span>
+													</label>
+													<input
+														type="number"
+														min="5"
+														max="480"
+														step="5"
+														value={settings.reminderRepeatIntervalMinutes}
+														onChange={(e) => setSettings({ ...settings, reminderRepeatIntervalMinutes: parseInt(e.target.value) || 30 })}
+														style={{width: "80px", textAlign: "center"}}
+													/>
+												</div>
+												<div className="setting-row compact" style={{marginTop: "8px", marginLeft: "24px"}}>
+													<label className="setting-label">
+														{t('settings.notifications.maxNaggingReminders')}
+														<span className="info-tooltip small" data-tooltip={t('settings.notifications.maxNaggingRemindersTooltip')}>ⓘ</span>
+													</label>
+													<input
+														type="number"
+														min="1"
+														max="20"
+														step="1"
+														value={settings.maxNaggingReminders ?? 5}
+														onChange={(e) => setSettings({ ...settings, maxNaggingReminders: parseInt(e.target.value) || 5 })}
+														style={{width: "80px", textAlign: "center"}}
+													/>
+												</div>
+											</>
 										)}
 									</div>
 
 									<div className="setting-section">
 										<div className="section-header">
 											<h3>{t('settings.notifications.email')}</h3>
-											<label className="toggle-switch small">
+											<label className={`toggle-switch small${!settings.smtpHost ? ' disabled' : ''}`}>
 												<input
 													type="checkbox"
-													checked={settings.emailEnabled}
-													onChange={(e) => setSettings({ ...settings, emailEnabled: e.target.checked })}
+													checked={settings.smtpHost ? settings.emailEnabled : false}
+													onChange={(e) => {
+														const newVal = e.target.checked;
+														if (!newVal && !settings.shoutrrrEnabled) {
+															setSettings({ ...settings, emailEnabled: false, emailStockReminders: false, emailIntakeReminders: false, skipRemindersForTakenDoses: false, repeatRemindersEnabled: false });
+														} else {
+															setSettings({ ...settings, emailEnabled: newVal });
+														}
+													}}
+													disabled={!settings.smtpHost}
 												/>
 												<span className="toggle-slider"></span>
 											</label>
@@ -2085,7 +2114,14 @@ function AppContent() {
 												<input
 													type="checkbox"
 													checked={settings.shoutrrrEnabled}
-													onChange={(e) => setSettings({ ...settings, shoutrrrEnabled: e.target.checked })}
+													onChange={(e) => {
+														const newVal = e.target.checked;
+														if (!newVal && !settings.emailEnabled) {
+															setSettings({ ...settings, shoutrrrEnabled: false, shoutrrrStockReminders: false, shoutrrrIntakeReminders: false, skipRemindersForTakenDoses: false, repeatRemindersEnabled: false });
+														} else {
+															setSettings({ ...settings, shoutrrrEnabled: newVal });
+														}
+													}}
 												/>
 												<span className="toggle-slider"></span>
 											</label>

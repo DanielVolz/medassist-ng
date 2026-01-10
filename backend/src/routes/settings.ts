@@ -24,6 +24,7 @@ export type UserSettings = {
   skipRemindersForTakenDoses: boolean;
   repeatRemindersEnabled: boolean;
   reminderRepeatIntervalMinutes: number;
+  maxNaggingReminders: number;
   lowStockDays: number;
   normalStockDays: number;
   highStockDays: number;
@@ -51,6 +52,7 @@ type SettingsBody = {
   skipRemindersForTakenDoses: boolean;
   repeatRemindersEnabled: boolean;
   reminderRepeatIntervalMinutes: number;
+  maxNaggingReminders: number;
   language: string;
   stockCalculationMode: "automatic" | "manual";
 };
@@ -63,40 +65,58 @@ type TestShoutrrrBody = {
   url: string;
 };
 
-// Default settings for new users
-const defaultSettings = {
-  emailEnabled: false,
-  notificationEmail: null,
-  emailStockReminders: true,
-  emailIntakeReminders: true,
-  shoutrrrEnabled: false,
-  shoutrrrUrl: null,
-  shoutrrrStockReminders: true,
-  shoutrrrIntakeReminders: true,
-  reminderDaysBefore: 7,
-  repeatDailyReminders: false,
-  skipRemindersForTakenDoses: false,
-  repeatRemindersEnabled: false,
-  reminderRepeatIntervalMinutes: 30,
-  lowStockDays: 30,
-  normalStockDays: 90,
-  highStockDays: 180,
-  language: "en",
-  stockCalculationMode: "automatic" as const,
-  lastAutoEmailSent: null,
-  lastNotificationType: null,
-  lastNotificationChannel: null,
-};
+// Helper to parse boolean env vars
+function envBool(key: string, defaultVal: boolean): boolean {
+  const val = process.env[key];
+  if (val === undefined) return defaultVal;
+  return val === "true" || val === "1";
+}
+
+// Helper to parse integer env vars
+function envInt(key: string, defaultVal: number): number {
+  const val = process.env[key];
+  if (val === undefined) return defaultVal;
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? defaultVal : parsed;
+}
+
+// Default settings for new users - read from ENV with fallbacks
+function getDefaultSettings() {
+  return {
+    emailEnabled: envBool("DEFAULT_EMAIL_ENABLED", false),
+    notificationEmail: process.env.DEFAULT_NOTIFICATION_EMAIL || null,
+    emailStockReminders: envBool("DEFAULT_EMAIL_STOCK_REMINDERS", true),
+    emailIntakeReminders: envBool("DEFAULT_EMAIL_INTAKE_REMINDERS", true),
+    shoutrrrEnabled: envBool("DEFAULT_SHOUTRRR_ENABLED", false),
+    shoutrrrUrl: process.env.DEFAULT_SHOUTRRR_URL || null,
+    shoutrrrStockReminders: envBool("DEFAULT_SHOUTRRR_STOCK_REMINDERS", true),
+    shoutrrrIntakeReminders: envBool("DEFAULT_SHOUTRRR_INTAKE_REMINDERS", true),
+    reminderDaysBefore: envInt("REMINDER_DAYS_BEFORE", 7),
+    repeatDailyReminders: envBool("DEFAULT_REPEAT_DAILY_REMINDERS", false),
+    skipRemindersForTakenDoses: envBool("DEFAULT_SKIP_REMINDERS_FOR_TAKEN_DOSES", false),
+    repeatRemindersEnabled: envBool("DEFAULT_REPEAT_REMINDERS_ENABLED", false),
+    reminderRepeatIntervalMinutes: envInt("DEFAULT_REMINDER_REPEAT_INTERVAL_MINUTES", 30),
+    maxNaggingReminders: envInt("DEFAULT_MAX_NAGGING_REMINDERS", 5),
+    lowStockDays: envInt("DEFAULT_LOW_STOCK_DAYS", 30),
+    normalStockDays: envInt("DEFAULT_NORMAL_STOCK_DAYS", 90),
+    highStockDays: envInt("DEFAULT_HIGH_STOCK_DAYS", 180),
+    language: (process.env.DEFAULT_LANGUAGE as "en" | "de") || "en",
+    stockCalculationMode: (process.env.DEFAULT_STOCK_CALCULATION_MODE as "automatic" | "manual") || "automatic",
+    lastAutoEmailSent: null,
+    lastNotificationType: null,
+    lastNotificationChannel: null,
+  };
+}
 
 // Helper to get or create user settings
 async function getOrCreateUserSettings(userId: number) {
   let [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
   
   if (!settings) {
-    // Create default settings for user
+    // Create default settings for user (using ENV defaults)
     [settings] = await db.insert(userSettings).values({
       userId,
-      ...defaultSettings,
+      ...getDefaultSettings(),
     }).returning();
   }
   
@@ -121,6 +141,7 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
     skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
     repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
     reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
+    maxNaggingReminders: settings.maxNaggingReminders ?? 5,
     lowStockDays: settings.lowStockDays,
     normalStockDays: settings.normalStockDays,
     highStockDays: settings.highStockDays,
@@ -150,6 +171,7 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
     skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
     repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
     reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
+    maxNaggingReminders: settings.maxNaggingReminders ?? 5,
     lowStockDays: settings.lowStockDays,
     normalStockDays: settings.normalStockDays,
     highStockDays: settings.highStockDays,
@@ -203,6 +225,9 @@ export async function settingsRoutes(app: FastifyInstance) {
       shoutrrrStockReminders: settings.shoutrrrStockReminders,
       shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
       skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
+      repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
+      reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
+      maxNaggingReminders: settings.maxNaggingReminders ?? 5,
       language: settings.language,
       stockCalculationMode: settings.stockCalculationMode ?? "automatic",
       // SMTP settings (from .env - shared/server-configured)
@@ -252,6 +277,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       skipRemindersForTakenDoses: body.skipRemindersForTakenDoses ?? false,
       repeatRemindersEnabled: body.repeatRemindersEnabled ?? false,
       reminderRepeatIntervalMinutes: body.reminderRepeatIntervalMinutes ?? 30,
+      maxNaggingReminders: body.maxNaggingReminders ?? 5,
       lowStockDays: body.lowStockDays ?? 30,
       normalStockDays: body.normalStockDays ?? 90,
       highStockDays: body.highStockDays ?? 180,

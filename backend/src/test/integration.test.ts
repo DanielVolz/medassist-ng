@@ -107,6 +107,7 @@ async function createSchema(client: Client) {
       skip_reminders_for_taken_doses integer NOT NULL DEFAULT 0,
       repeat_reminders_enabled integer NOT NULL DEFAULT 0,
       reminder_repeat_interval_minutes integer NOT NULL DEFAULT 30,
+      max_nagging_reminders integer NOT NULL DEFAULT 5,
       low_stock_days integer NOT NULL DEFAULT 30,
       normal_stock_days integer NOT NULL DEFAULT 90,
       high_stock_days integer NOT NULL DEFAULT 180,

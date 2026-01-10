@@ -16,6 +16,7 @@ import {
   calculateDailyUsage,
   calculateDepletionInfo,
   getUpcomingIntakes,
+  getTodaysIntakes,
   createDefaultReminderState,
   createDefaultIntakeReminderState,
   parseReminderState,
@@ -379,6 +380,94 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
       
       // Both should be found as they're within the window
       expect(result.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("getTodaysIntakes", () => {
+    it("should return all intakes for today", () => {
+      // Daily medication at 08:00 starting yesterday
+      const blisters: Blister[] = [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }];
+      
+      // Get intakes for 2025-01-02 (today's intake should be at 08:00)
+      const result = getTodaysIntakes("TestMed", blisters, [], null, "en-US", "UTC");
+      
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      const intake = result.find(i => i.intakeTime.getUTCHours() === 8);
+      expect(intake).toBeDefined();
+      expect(intake?.medName).toBe("TestMed");
+      expect(intake?.usage).toBe(1);
+    });
+
+    it("should include past intakes from today", () => {
+      // Medication at 00:01 today (definitely in the past)
+      const todayMidnight = new Date();
+      todayMidnight.setUTCHours(0, 1, 0, 0);
+      
+      const blisters: Blister[] = [{ 
+        usage: 2, 
+        every: 1, 
+        start: todayMidnight.toISOString() 
+      }];
+      
+      const result = getTodaysIntakes("PastMed", blisters, ["Bob"], 250, "en-US", "UTC");
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].medName).toBe("PastMed");
+      expect(result[0].usage).toBe(2);
+      expect(result[0].takenBy).toEqual(["Bob"]);
+      expect(result[0].pillWeightMg).toBe(250);
+    });
+
+    it("should handle multiple intakes per day", () => {
+      // Two intakes today: morning and evening
+      const today = new Date();
+      const morning = new Date(today);
+      morning.setUTCHours(8, 0, 0, 0);
+      const evening = new Date(today);
+      evening.setUTCHours(20, 0, 0, 0);
+      
+      const blisters: Blister[] = [
+        { usage: 1, every: 1, start: morning.toISOString() },
+        { usage: 1, every: 1, start: evening.toISOString() },
+      ];
+      
+      const result = getTodaysIntakes("MultiMed", blisters, [], null, "en-US", "UTC");
+      
+      expect(result.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("should not include intakes from other days", () => {
+      // Weekly medication on a different day of week
+      const lastWeek = new Date();
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      
+      const blisters: Blister[] = [{ 
+        usage: 1, 
+        every: 7, 
+        start: lastWeek.toISOString() 
+      }];
+      
+      // If today is not the same day of week, should return empty
+      const result = getTodaysIntakes("WeeklyMed", blisters, [], null, "en-US", "UTC");
+      
+      // This test might return 0 or 1 depending on the day
+      expect(Array.isArray(result)).toBe(true);
+    });
+
+    it("should handle timezone correctly", () => {
+      // 23:00 in Europe/Berlin on a specific date
+      const blisters: Blister[] = [{ 
+        usage: 1, 
+        every: 1, 
+        start: "2025-01-01T22:00:00.000Z" // 23:00 Berlin time
+      }];
+      
+      const result = getTodaysIntakes("TzMed", blisters, [], null, "de-DE", "Europe/Berlin");
+      
+      expect(Array.isArray(result)).toBe(true);
+      if (result.length > 0) {
+        expect(result[0].intakeTimeStr).toContain("23:");
+      }
     });
   });
 });

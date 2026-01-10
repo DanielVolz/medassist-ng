@@ -42,6 +42,9 @@ async function registerSettingsRoutes(ctx: TestContext) {
         reminderDaysBefore: 7,
         repeatDailyReminders: false,
         skipRemindersForTakenDoses: false,
+        repeatRemindersEnabled: false,
+        reminderRepeatIntervalMinutes: 30,
+        maxNaggingReminders: 5,
         lowStockDays: 30,
         normalStockDays: 90,
         highStockDays: 180,
@@ -64,6 +67,9 @@ async function registerSettingsRoutes(ctx: TestContext) {
       reminderDaysBefore: s.reminder_days_before,
       repeatDailyReminders: Boolean(s.repeat_daily_reminders),
       skipRemindersForTakenDoses: Boolean(s.skip_reminders_for_taken_doses ?? false),
+      repeatRemindersEnabled: Boolean(s.repeat_reminders_enabled ?? false),
+      reminderRepeatIntervalMinutes: s.reminder_repeat_interval_minutes ?? 30,
+      maxNaggingReminders: s.max_nagging_reminders ?? 5,
       lowStockDays: s.low_stock_days,
       normalStockDays: s.normal_stock_days,
       highStockDays: s.high_stock_days,
@@ -87,6 +93,9 @@ async function registerSettingsRoutes(ctx: TestContext) {
       reminderDaysBefore?: number;
       repeatDailyReminders?: boolean;
       skipRemindersForTakenDoses?: boolean;
+      repeatRemindersEnabled?: boolean;
+      reminderRepeatIntervalMinutes?: number;
+      maxNaggingReminders?: number;
       lowStockDays?: number;
       normalStockDays?: number;
       highStockDays?: number;
@@ -114,6 +123,12 @@ async function registerSettingsRoutes(ctx: TestContext) {
     if (body.stockCalculationMode && !["automatic", "manual"].includes(body.stockCalculationMode)) {
       return reply.status(400).send({ error: "stockCalculationMode must be 'automatic' or 'manual'" });
     }
+    if (body.reminderRepeatIntervalMinutes !== undefined && (body.reminderRepeatIntervalMinutes < 5 || body.reminderRepeatIntervalMinutes > 480)) {
+      return reply.status(400).send({ error: "reminderRepeatIntervalMinutes must be between 5 and 480" });
+    }
+    if (body.maxNaggingReminders !== undefined && (body.maxNaggingReminders < 1 || body.maxNaggingReminders > 20)) {
+      return reply.status(400).send({ error: "maxNaggingReminders must be between 1 and 20" });
+    }
 
     // Check if settings exist
     const existing = await client.execute({
@@ -130,9 +145,10 @@ async function registerSettingsRoutes(ctx: TestContext) {
           shoutrrr_enabled, shoutrrr_url,
           shoutrrr_stock_reminders, shoutrrr_intake_reminders,
           reminder_days_before, repeat_daily_reminders, skip_reminders_for_taken_doses,
+          repeat_reminders_enabled, reminder_repeat_interval_minutes, max_nagging_reminders,
           low_stock_days, normal_stock_days, high_stock_days,
           expiry_warning_days, language, stock_calculation_mode
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           userId,
           body.emailEnabled ? 1 : 0,
@@ -146,6 +162,9 @@ async function registerSettingsRoutes(ctx: TestContext) {
           body.reminderDaysBefore ?? 7,
           body.repeatDailyReminders ? 1 : 0,
           body.skipRemindersForTakenDoses ? 1 : 0,
+          body.repeatRemindersEnabled ? 1 : 0,
+          body.reminderRepeatIntervalMinutes ?? 30,
+          body.maxNaggingReminders ?? 5,
           body.lowStockDays ?? 30,
           body.normalStockDays ?? 90,
           body.highStockDays ?? 180,
@@ -169,6 +188,9 @@ async function registerSettingsRoutes(ctx: TestContext) {
           reminder_days_before = ?,
           repeat_daily_reminders = ?,
           skip_reminders_for_taken_doses = ?,
+          repeat_reminders_enabled = ?,
+          reminder_repeat_interval_minutes = ?,
+          max_nagging_reminders = ?,
           low_stock_days = ?,
           normal_stock_days = ?,
           high_stock_days = ?,
@@ -189,6 +211,9 @@ async function registerSettingsRoutes(ctx: TestContext) {
           body.reminderDaysBefore ?? 7,
           body.repeatDailyReminders ? 1 : 0,
           body.skipRemindersForTakenDoses ? 1 : 0,
+          body.repeatRemindersEnabled ? 1 : 0,
+          body.reminderRepeatIntervalMinutes ?? 30,
+          body.maxNaggingReminders ?? 5,
           body.lowStockDays ?? 30,
           body.normalStockDays ?? 90,
           body.highStockDays ?? 180,
@@ -511,6 +536,139 @@ describe("Settings API", () => {
       });
 
       expect(getResponse.json().stockCalculationMode).toBe("automatic");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Repeat Reminders & Skip Reminders Settings
+  // ---------------------------------------------------------------------------
+
+  describe("Repeat Reminders Settings", () => {
+    it("should enable repeat reminders with interval", async () => {
+      const response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          repeatRemindersEnabled: true,
+          reminderRepeatIntervalMinutes: 10,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      const getResponse = await ctx.app.inject({
+        method: "GET",
+        url: "/settings",
+      });
+
+      const settings = getResponse.json();
+      expect(settings.repeatRemindersEnabled).toBe(true);
+      expect(settings.reminderRepeatIntervalMinutes).toBe(10);
+    });
+
+    it("should validate repeat interval range", async () => {
+      let response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          repeatRemindersEnabled: true,
+          reminderRepeatIntervalMinutes: 2,
+        },
+      });
+      expect(response.statusCode).toBe(400);
+
+      response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          repeatRemindersEnabled: true,
+          reminderRepeatIntervalMinutes: 500,
+        },
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("should validate max nagging reminders range", async () => {
+      let response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          maxNaggingReminders: 0,
+        },
+      });
+      expect(response.statusCode).toBe(400);
+
+      response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          maxNaggingReminders: 25,
+        },
+      });
+      expect(response.statusCode).toBe(400);
+
+      // Valid values should work
+      response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          maxNaggingReminders: 10,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+
+      const getResponse = await ctx.app.inject({
+        method: "GET",
+        url: "/settings",
+      });
+
+      const settings = getResponse.json();
+      expect(settings.maxNaggingReminders).toBe(10);
+    });
+  });
+
+  describe("Skip Reminders for Taken Doses", () => {
+    it("should enable and disable skip reminders setting", async () => {
+      let response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          skipRemindersForTakenDoses: true,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+
+      response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          skipRemindersForTakenDoses: false,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it("should work with repeat reminders enabled", async () => {
+      const response = await ctx.app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: {
+          repeatRemindersEnabled: true,
+          reminderRepeatIntervalMinutes: 5,
+          skipRemindersForTakenDoses: true,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+
+      const getResponse = await ctx.app.inject({
+        method: "GET",
+        url: "/settings",
+      });
+
+      const settings = getResponse.json();
+      expect(settings.repeatRemindersEnabled).toBe(true);
+      expect(settings.reminderRepeatIntervalMinutes).toBe(5);
+      expect(settings.skipRemindersForTakenDoses).toBe(true);
     });
   });
 });

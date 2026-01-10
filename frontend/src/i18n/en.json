@@ -165,7 +165,9 @@
       "repeatReminders": "Repeat reminders for missed doses",
       "repeatRemindersTooltip": "Automatically send repeated reminders for doses that haven't been marked as taken",
       "reminderInterval": "Reminder interval (minutes)",
-      "reminderIntervalTooltip": "How often to send repeated reminders for missed doses"
+      "reminderIntervalTooltip": "How often to send repeated reminders for missed doses",
+      "maxNaggingReminders": "Max reminders per dose",
+      "maxNaggingRemindersTooltip": "Stop sending repeat reminders after this many attempts (1-20)"
     },
     "email": {
       "recipient": "Recipient",

@@ -195,31 +195,31 @@ gh pr merge --squash --delete-branch
 > ⚠️ **MANDATORY**: GitHub Releases MUST contain a written message!
 > Not just auto-generated commit lists, but a brief descriptive text.
 
+**Keep it short!** Less is more. Users want to know what changed, not implementation details.
+
 **Structure of a release text:**
 
-1. **Intro** (1-2 sentences): What's new, what was improved?
-2. **Features & Changes**: Brief list of key changes
+1. **Intro** (1-2 sentences): What's new in plain language
+2. **Features** (if needed): Very brief bullet points
 3. **Breaking Changes Warning** (if applicable): See below
-4. **Optional**: Acknowledgements, documentation links
+
+**DO NOT include:**
+- ❌ Technical implementation details (new columns, endpoints, etc.)
+- ❌ "How it works" step-by-step explanations
+- ❌ Number of tests added
+- ❌ Internal API changes (unless breaking)
 
 **Example of good release notes:**
 
 ```markdown
 ## What's New
 
-This release adds intake reminder notifications and improves medication stock tracking. Users can now configure nagging reminders for missed doses and receive alerts when medication stock runs low.
+Added the ability to clear missed dose warnings without affecting medication stock. 
+A "Clear missed" button now appears next to the "Show past days" toggle.
 
-### New Features
-- 🔔 Intake reminder notifications with configurable nagging intervals
-- 📊 Enhanced stock calculation with blister tracking
-- 🌐 German translation improvements
-
-### Bug Fixes
-- Fixed timezone handling in dose scheduling
-- Improved image upload validation
-
-### Full Changelog
-[All commits since v1.2.0](link)
+### Features
+- 🧹 Clear missed doses with one click
+- ✅ Confirmation dialog to prevent accidents
 ```
 
 ### Breaking Changes Warning (CRITICAL!)

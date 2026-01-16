@@ -107,6 +107,9 @@ export interface CreateMedicationOptions {
   pillsPerBlister?: number;
   looseTablets?: number;
   pillWeightMg?: number;
+  expiryDate?: string | null;
+  notes?: string | null;
+  intakeRemindersEnabled?: boolean;
   /** Array of { usage, every, start } for each blister schedule */
   blisters?: Array<{ usage: number; every: number; start: string }>;
 }
@@ -128,6 +131,9 @@ export async function createTestMedication(
     pillsPerBlister = 10,
     looseTablets = 0,
     pillWeightMg = null,
+    expiryDate = null,
+    notes = null,
+    intakeRemindersEnabled = false,
     blisters = [{ usage: 1, every: 1, start: new Date().toISOString() }],
   } = options;
 
@@ -141,8 +147,8 @@ export async function createTestMedication(
     sql: `INSERT INTO medications (
       user_id, name, generic_name, taken_by_json,
       pack_count, blisters_per_pack, pills_per_blister, loose_tablets,
-      pill_weight_mg, usage_json, every_json, start_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      pill_weight_mg, usage_json, every_json, start_json, expiry_date, notes, intake_reminders_enabled
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     args: [
       userId,
       name,
@@ -156,6 +162,9 @@ export async function createTestMedication(
       usageJson,
       everyJson,
       startJson,
+      expiryDate,
+      notes,
+      intakeRemindersEnabled ? 1 : 0,
     ],
   });
 

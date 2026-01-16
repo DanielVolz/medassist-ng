@@ -351,6 +351,12 @@ function AppContent() {
 	const [shareGenerating, setShareGenerating] = useState(false);
 	const [shareLink, setShareLink] = useState<string | null>(null);
 	const [shareCopied, setShareCopied] = useState(false);
+	// Export/Import state
+	const [exporting, setExporting] = useState(false);
+	const [importing, setImporting] = useState(false);
+	const [includeSensitiveData, setIncludeSensitiveData] = useState(false);
+	const [showImportConfirm, setShowImportConfirm] = useState(false);
+	const [pendingImportData, setPendingImportData] = useState<any>(null);
 	// Collapsed days state (manually collapsed days are persisted)
 	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
 	const [manuallyExpandedDays, setManuallyExpandedDays] = useState<Set<string>>(new Set());
@@ -776,6 +782,110 @@ function AppContent() {
 			setReminderEmailResult({ success: false, message: "Network error" });
 		}
 		setSendingReminderEmail(false);
+	}
+
+	// Export data to JSON file
+	async function handleExport() {
+		setExporting(true);
+		try {
+			const res = await fetch(`/api/export?includeSensitive=${includeSensitiveData}`, {
+				credentials: "include",
+			});
+			if (!res.ok) throw new Error("Export failed");
+			const data = await res.json();
+			
+			// Create download
+			const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			const dateStr = new Date().toISOString().split("T")[0];
+			a.href = url;
+			a.download = `${t('exportImport.downloadFilename')}-${dateStr}.json`;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			console.error("Export error:", err);
+		}
+		setExporting(false);
+	}
+
+	// Handle file selection for import
+	function handleImportFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+		const file = e.target.files?.[0];
+		if (!file) return;
+		
+		const reader = new FileReader();
+		reader.onload = (event) => {
+			try {
+				const data = JSON.parse(event.target?.result as string);
+				if (!data.version || !data.exportedAt) {
+					alert(t('exportImport.invalidFile'));
+					return;
+				}
+				setPendingImportData(data);
+				setShowImportConfirm(true);
+			} catch {
+				alert(t('exportImport.invalidFile'));
+			}
+		};
+		reader.readAsText(file);
+		// Reset file input
+		e.target.value = "";
+	}
+
+	// Confirm and execute import
+	async function handleImportConfirm() {
+		if (!pendingImportData) return;
+		setImporting(true);
+		setShowImportConfirm(false);
+		
+		try {
+			const res = await fetch("/api/import", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify(pendingImportData),
+			});
+			
+			if (!res.ok) {
+				const err = await res.json();
+				alert(t('exportImport.importError') + ": " + (err.error || "Unknown error"));
+				return;
+			}
+			
+			const result = await res.json();
+			alert(t('exportImport.importSuccess') + "\n" + t('exportImport.importSuccessDetails', {
+				medications: result.imported.medications,
+				doses: result.imported.doseHistory,
+				shares: result.imported.shareLinks,
+			}));
+			
+			// Reload all data
+			loadMeds();
+			loadSettings();
+			loadTakenDoses();
+		} catch (err) {
+			console.error("Import error:", err);
+			alert(t('exportImport.importError'));
+		}
+		
+		setPendingImportData(null);
+		setImporting(false);
+	}
+
+	// Helper function to load taken doses (extracted from useEffect)
+	async function loadTakenDoses() {
+		try {
+			const res = await fetch("/api/doses/taken", { credentials: "include" });
+			if (res.ok) {
+				const data = await res.json();
+				setTakenDoses(new Set(data.doses.map((d: { doseId: string }) => d.doseId)));
+			}
+		} catch {
+			// Silently fail
+		}
 	}
 
 	async function deleteMed(id: number) {
@@ -2299,12 +2409,109 @@ function AppContent() {
 									</div>
 								</article>
 
+								{/* Export/Import Section */}
+								<article className="card">
+									<div className="card-head">
+										<h2>{t('exportImport.title')}</h2>
+									</div>
+									<div className="setting-section">
+										<p className="hint-text" style={{marginBottom: "16px"}}>{t('exportImport.description')}</p>
+										
+										{/* Export */}
+										<div className="setting-group" style={{marginBottom: "24px"}}>
+											<div className="export-controls">
+												<label className="checkbox-label" style={{marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px"}}>
+													<input
+														type="checkbox"
+														checked={includeSensitiveData}
+														onChange={(e) => setIncludeSensitiveData(e.target.checked)}
+													/>
+													<span>{t('exportImport.includeSensitive')}</span>
+												</label>
+												{includeSensitiveData && (
+													<p className="hint-text warning-text" style={{marginBottom: "12px", color: "var(--warning)", fontSize: "0.85rem"}}>
+														⚠️ {t('exportImport.sensitiveWarning')}
+													</p>
+												)}
+												<button
+													type="button"
+													className="secondary"
+													onClick={handleExport}
+													disabled={exporting}
+													style={{marginRight: "12px"}}
+												>
+													{exporting ? t('exportImport.exporting') : t('exportImport.export')}
+												</button>
+											</div>
+										</div>
+										
+										{/* Import */}
+										<div className="setting-group">
+											<div className="import-controls">
+												<label className="secondary" style={{
+													cursor: "pointer",
+													display: "inline-block",
+													padding: "0.7rem 1.25rem",
+													borderRadius: "var(--btn-radius)",
+													background: "var(--bg-tertiary)",
+													color: "var(--text-primary)",
+													border: "1px solid var(--border-secondary)",
+													fontWeight: 600,
+													fontSize: "0.9rem"
+												}}>
+													{importing ? t('exportImport.importing') : t('exportImport.import')}
+													<input
+														type="file"
+														accept=".json,application/json"
+														onChange={handleImportFileSelect}
+														disabled={importing}
+														style={{display: "none"}}
+													/>
+												</label>
+											</div>
+										</div>
+									</div>
+								</article>
+
 								<div className="form-footer">
 									<button type="submit" disabled={settingsSaving || (!settingsChanged && settingsSaved)}>
 										{settingsSaving ? t('common.saving') : settingsSaved && !settingsChanged ? t('common.saved') : t('settings.saveSettings')}
 									</button>
 								</div>
 							</form>
+						)}
+
+						{/* Import Confirmation Modal */}
+						{showImportConfirm && (
+							<div className="modal-overlay" onClick={() => setShowImportConfirm(false)}>
+								<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: "450px"}}>
+									<button className="modal-close" onClick={() => { setShowImportConfirm(false); setPendingImportData(null); }}>×</button>
+									<h2 style={{marginBottom: "16px", paddingRight: "2rem"}}>{t('exportImport.confirmImport')}</h2>
+									<p style={{marginBottom: "12px"}}>{t('exportImport.confirmImportMessage')}</p>
+									<p className="warning-text" style={{marginBottom: "24px"}}>
+										⚠️ {t('exportImport.confirmImportWarning')}
+									</p>
+									<div className="modal-footer" style={{padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end"}}>
+										<button
+											type="button"
+											className="ghost"
+											onClick={() => {
+												setShowImportConfirm(false);
+												setPendingImportData(null);
+											}}
+										>
+											{t('exportImport.cancelButton')}
+										</button>
+										<button
+											type="button"
+											className="danger"
+											onClick={handleImportConfirm}
+										>
+											{t('exportImport.confirmButton')}
+										</button>
+									</div>
+								</div>
+							</div>
 						)}
 					</section>
 				} />

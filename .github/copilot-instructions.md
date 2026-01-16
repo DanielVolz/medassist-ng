@@ -2,6 +2,7 @@
 
 ## General Rules
 
+- **English is the primary language**: All code, comments, documentation, commit messages, PR descriptions, and GitHub releases MUST be written in English. The user may communicate in German, but all project artifacts must be in English.
 - **No temporary files**: Delete temporary scripts/files immediately after use. Do not commit temporary debug scripts, test files, or one-off utilities to the repository.
 - **Clean workspace**: Always clean up after yourself. If you create a file for a specific task, delete it once done.
 
@@ -46,25 +47,25 @@ cd backend && npm run test:coverage # Run with coverage report
 
 ## Testing (MANDATORY)
 
-> ⚠️ **WICHTIG**: Jede neue Funktionalität MUSS mit Tests abgedeckt werden!
-> Pull Requests ohne Tests für neue Features werden nicht akzeptiert.
+> ⚠️ **IMPORTANT**: Every new feature MUST be covered by tests!
+> Pull Requests without tests for new features will not be accepted.
 
-### Test-Framework
-- **Vitest 2.1** mit v8 Coverage
+### Test Framework
+- **Vitest 2.1** with v8 Coverage
 - Tests in `backend/src/test/*.test.ts`
-- Coverage-Ziel: Mindestens gleiche oder bessere Coverage nach Änderungen
+- Coverage goal: At least equal or better coverage after changes
 
-### Test-Struktur
-| Datei | Testet |
-|-------|--------|
-| `routes.test.ts` | API-Endpunkte (Auth, Medications, Doses, Settings, Share, Planner) |
-| `services.test.ts` | Scheduler-Utilities (Timezone, Blisters, Usage-Berechnung) |
-| `db.test.ts` | Datenbank-Schema und Operationen |
+### Test Structure
+| File | Tests |
+|------|-------|
+| `routes.test.ts` | API endpoints (Auth, Medications, Doses, Settings, Share, Planner) |
+| `services.test.ts` | Scheduler utilities (Timezone, Blisters, Usage calculation) |
+| `db.test.ts` | Database schema and operations |
 
-### Tests schreiben
+### Writing Tests
 
 ```typescript
-// Backend Test Beispiel (backend/src/test/example.test.ts)
+// Backend Test Example (backend/src/test/example.test.ts)
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestApp, createTestUser } from './routes.test'; // Test-Utilities
 
@@ -95,24 +96,24 @@ describe('Feature Name', () => {
 });
 ```
 
-### Test-Commands
+### Test Commands
 ```bash
 cd backend
-CI=true npm test            # Tests einmal ausführen (IMMER so ausführen!)
-CI=true npm run test:coverage  # Mit Coverage-Report
-npm test -- --watch         # Watch-Mode für manuelle Entwicklung
-npm test -- -t "test name"  # Einzelnen Test ausführen
+CI=true npm test            # Run tests once (ALWAYS run this way!)
+CI=true npm run test:coverage  # With coverage report
+npm test -- --watch         # Watch mode for manual development
+npm test -- -t "test name"  # Run single test
 ```
 
-> ⚠️ **WICHTIG für AI-Agenten**: Tests IMMER mit `CI=true` ausführen!
-> Ohne `CI=true` läuft Vitest im Watch-Mode und wartet auf Eingaben.
+> ⚠️ **IMPORTANT for AI agents**: ALWAYS run tests with `CI=true`!
+> Without `CI=true`, Vitest runs in watch mode and waits for input.
 
 ## CI/CD Pipeline (GitHub Actions)
 
-### Workflow-Übersicht
+### Workflow Overview
 
 ```
-Pull Request erstellt
+Pull Request created
         ↓
 ┌─────────────────────────────────────┐
 │  test.yml                           │
@@ -124,65 +125,141 @@ Pull Request erstellt
 │      ├─ npm ci                      │
 │      └─ npm run build               │
 └─────────────────────────────────────┘
-        ↓ Tests müssen bestehen
-    PR kann gemerged werden
+        ↓ Tests must pass
+    PR can be merged
         ↓
-Push to main / Tag erstellt
+Push to main / Tag created
         ↓
 ┌─────────────────────────────────────┐
 │  docker-build.yml                   │
 │  ├─ backend-test (parallel)         │
 │  ├─ frontend-build (parallel)       │
-│  └─ build-and-push (nach Tests)     │
-│      ├─ Docker Images bauen         │
-│      └─ Push zu GHCR                │
+│  └─ build-and-push (after tests)    │
+│      ├─ Build Docker images         │
+│      └─ Push to GHCR                │
 └─────────────────────────────────────┘
 ```
 
 ### Branch Protection
 
-> ⚠️ **WICHTIG**: Der `main` Branch ist geschützt!  
-> Direktes Pushen nach `main` ist **nicht möglich** - GitHub lehnt den Push ab.  
-> Alle Änderungen müssen über Pull Requests erfolgen.
+> ⚠️ **IMPORTANT**: The `main` branch is protected!  
+> Direct pushing to `main` is **not possible** - GitHub will reject the push.  
+> All changes must go through Pull Requests.
 
-- **main** Branch ist geschützt (Repository Rules)
-- Direktes Pushen wird von GitHub abgelehnt mit: `GH013: Repository rule violations`
-- PRs benötigen:
-  - ✅ `backend-test` Status Check bestanden
-  - ✅ `frontend-build` Status Check bestanden
-- Nach erfolgreichem Merge wird der Feature-Branch automatisch gelöscht
+- **main** branch is protected (Repository Rules)
+- Direct pushing is rejected by GitHub with: `GH013: Repository rule violations`
+- PRs require:
+  - ✅ `backend-test` Status Check passed
+  - ✅ `frontend-build` Status Check passed
+- After successful merge, the feature branch is automatically deleted
 
-**Workflow für Änderungen:**
+**Workflow for changes:**
 ```bash
-# 1. Feature Branch erstellen
-git checkout -b feat/mein-feature
+# 1. Create feature branch
+git checkout -b feat/my-feature
 
-# 2. Änderungen committen und pushen
-git add . && git commit -m "feat: Beschreibung"
-git push -u origin feat/mein-feature
+# 2. Commit and push changes
+git add . && git commit -m "feat: Description"
+git push -u origin feat/my-feature
 
-# 3. PR erstellen (via GitHub CLI oder Web)
-gh pr create --title "Mein Feature" --body "Beschreibung"
+# 3. Create PR (via GitHub CLI or Web)
+gh pr create --title "My Feature" --body "Description"
 
-# 4. Warten bis CI grün ist, dann mergen
+# 4. Wait until CI is green, then merge
 gh pr merge --squash --delete-branch
 ```
 
-### Workflow-Dateien
-| Datei | Trigger | Zweck |
-|-------|---------|-------|
-| `.github/workflows/test.yml` | Pull Requests | Tests ausführen, PR blockieren bei Fehlern |
-| `.github/workflows/docker-build.yml` | Push to main, Tags | Tests + Docker Images bauen und pushen |
+### Workflow Files
+| File | Trigger | Purpose |
+|------|---------|--------|
+| `.github/workflows/test.yml` | Pull Requests | Run tests, block PR on failures |
+| `.github/workflows/docker-build.yml` | Push to main, Tags | Tests + Build and push Docker images |
 
-### Neuen Code hinzufügen - Checkliste
-1. ✅ Feature implementieren
-2. ✅ Tests für das Feature schreiben
-3. ✅ Lokal `npm run test:coverage` ausführen
-4. ✅ Coverage darf nicht sinken
-5. ✅ Feature Branch erstellen und pushen
-6. ✅ Pull Request erstellen
-7. ✅ Warten bis CI grün ist
-8. ✅ PR mergen (Branch wird automatisch gelöscht)
+### Adding New Code - Checklist
+1. ✅ Implement feature
+2. ✅ Write tests for the feature
+3. ✅ Run `npm run test:coverage` locally
+4. ✅ Coverage must not decrease
+5. ✅ Create and push feature branch
+6. ✅ Create Pull Request
+7. ✅ Wait until CI is green
+8. ✅ Merge PR (branch is automatically deleted)
+
+## GitHub Releases
+
+> ⚠️ **IMPORTANT**: All GitHub Releases must be written in **English**!
+
+### Creating Release Notes
+
+> ⚠️ **MANDATORY**: GitHub Releases MUST contain a written message!
+> Not just auto-generated commit lists, but a brief descriptive text.
+
+**Structure of a release text:**
+
+1. **Intro** (1-2 sentences): What's new, what was improved?
+2. **Features & Changes**: Brief list of key changes
+3. **Breaking Changes Warning** (if applicable): See below
+4. **Optional**: Acknowledgements, documentation links
+
+**Example of good release notes:**
+
+```markdown
+## What's New
+
+This release adds intake reminder notifications and improves medication stock tracking. Users can now configure nagging reminders for missed doses and receive alerts when medication stock runs low.
+
+### New Features
+- 🔔 Intake reminder notifications with configurable nagging intervals
+- 📊 Enhanced stock calculation with blister tracking
+- 🌐 German translation improvements
+
+### Bug Fixes
+- Fixed timezone handling in dose scheduling
+- Improved image upload validation
+
+### Full Changelog
+[All commits since v1.2.0](link)
+```
+
+### Breaking Changes Warning (CRITICAL!)
+
+> ⚠️ **MANDATORY**: If an update breaks existing configurations or stored data, it MUST be prominently warned about in the release notes!
+
+**Breaking Changes include:**
+- Database schema changes without automatic migration
+- Removed or renamed ENV variables
+- Changed API endpoints
+- Incompatible `.env` format changes
+- Loss of stored data after update
+
+**Format for Breaking Changes:**
+
+```markdown
+## ⚠️ BREAKING CHANGES - Please read before updating!
+
+**Database migration required**: This update changes the database schema. 
+Existing installations need to:
+1. Create backup of `data/` folder
+2. Stop containers
+3. Perform update
+4. If issues occur: Rollback using backup
+
+**ENV variables changed**: 
+- `OLD_VAR` was renamed to `NEW_VAR`
+- `REMOVED_VAR` is no longer supported
+
+**Medication data**: Intake schedules with only one time entry will be automatically 
+migrated. Please verify all times are correct after update.
+```
+
+**What is NOT a Breaking Change:**
+- ✅ New optional columns with DEFAULT values
+- ✅ New ENV variables (with sensible defaults)
+- ✅ New features that don't affect existing data
+- ✅ Bug fixes that correct behavior
+
+**Rule of thumb**: If a user can simply run `docker compose pull && docker compose up -d` 
+without adjusting anything → Not a Breaking Change.
 
 ## Key Patterns
 
@@ -371,54 +448,54 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
 - **Environment**: Copy `.env.example` → `.env`, secrets must be 10+ chars
 - **i18n**: All UI text via `t('key')` function, translations in `frontend/src/i18n/*.json`
 
-## Database Schema Changes (WICHTIG: Abwärtskompatibilität!)
+## Database Schema Changes (IMPORTANT: Backward Compatibility!)
 
-> ⚠️ **KRITISCH**: Die App MUSS abwärtskompatibel mit älteren Datenbanken bleiben!
-> Nutzer upgraden ihre Docker-Container, aber behalten ihre bestehende DB.
-> Die App darf NICHT abstürzen wenn alte Spalten fehlen.
+> ⚠️ **CRITICAL**: The app MUST remain backward compatible with older databases!
+> Users upgrade their Docker containers but keep their existing DB.
+> The app must NOT crash if old columns are missing.
 
-### Regeln für neue Spalten
+### Rules for New Columns
 
-1. **IMMER mit DEFAULT-Wert**: Neue Spalten müssen `NOT NULL DEFAULT <wert>` haben
-2. **NULL-sicher im Code**: Alle Abfragen müssen `?? defaultValue` oder `?? false` verwenden
-3. **Schema-SQL aktualisieren**: In diesen Dateien hinzufügen:
+1. **ALWAYS with DEFAULT value**: New columns must have `NOT NULL DEFAULT <value>`
+2. **NULL-safe in code**: All queries must use `?? defaultValue` or `?? false`
+3. **Update schema SQL**: Add to these files:
    - `backend/src/db/schema.ts` - Drizzle Schema
-   - `backend/src/db/schema-sql.ts` - `getTableCreationSQL()` für neue DBs
-   - `backend/src/db/client.ts` - `ALTER TABLE ADD COLUMN IF NOT EXISTS` Migration
-4. **Test-Schemas updaten**: Alle Test-Dateien mit eigenem Schema:
+   - `backend/src/db/schema-sql.ts` - `getTableCreationSQL()` for new DBs
+   - `backend/src/db/client.ts` - `ALTER TABLE ADD COLUMN IF NOT EXISTS` migration
+4. **Update test schemas**: All test files with their own schema:
    - `backend/src/test/e2e-routes.test.ts`
    - `backend/src/test/integration.test.ts`
    - `backend/src/test/planner.test.ts`
 
-### Beispiel: Neue Spalte hinzufügen
+### Example: Adding a New Column
 
 ```typescript
-// 1. schema.ts - Drizzle Definition
+// 1. schema.ts - Drizzle definition
 maxNaggingReminders: integer("max_nagging_reminders").notNull().default(5),
 
-// 2. schema-sql.ts - Für neue Datenbanken
+// 2. schema-sql.ts - For new databases
 "max_nagging_reminders integer NOT NULL DEFAULT 5,"
 
-// 3. client.ts - Migration für bestehende DBs (IN ensureTablesExist())
+// 3. client.ts - Migration for existing DBs (IN ensureTablesExist())
 await client.execute(`ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`).catch(() => {});
 
-// 4. Routes - NULL-sicher lesen
+// 4. Routes - NULL-safe reading
 maxNaggingReminders: settings.maxNaggingReminders ?? 5,
 ```
 
-### Was NICHT erlaubt ist
+### What is NOT Allowed
 
-- ❌ Spalten löschen oder umbenennen (bricht alte DBs)
-- ❌ `NOT NULL` ohne `DEFAULT` (INSERT schlägt fehl)
-- ❌ Spalten ohne Fallback im Code lesen
-- ❌ DB löschen als "Lösung" dokumentieren
+- ❌ Deleting or renaming columns (breaks old DBs)
+- ❌ `NOT NULL` without `DEFAULT` (INSERT fails)
+- ❌ Reading columns without fallback in code
+- ❌ Documenting "delete DB" as a solution
 
-### Wann Abwärtskompatibilität NICHT möglich ist
+### When Backward Compatibility is NOT Possible
 
-Wenn eine Breaking Change unvermeidbar ist:
-1. **Explizit kommunizieren**: In Release Notes dokumentieren
-2. **Migration-Script**: Automatisches Upgrade-Script bereitstellen
-3. **Versionsprüfung**: App sollte DB-Version prüfen und warnen
+If a breaking change is unavoidable:
+1. **Explicitly communicate**: Document in release notes
+2. **Migration script**: Provide automatic upgrade script
+3. **Version check**: App should check DB version and warn
 
 ## File Locations
 

@@ -348,5 +348,27 @@
       "contact": "Bitte kontaktiere {{username}} um einen neuen Link anzufordern.",
       "expiredOn": "Abgelaufen am: {{date}}"
     }
+  },
+  "exportImport": {
+    "title": "Daten Export / Import",
+    "description": "Exportiere deine Daten zur Sicherung oder Übertragung auf ein anderes Gerät. Import ersetzt ALLE deine bestehenden Daten.",
+    "export": "Daten exportieren",
+    "exporting": "Exportiere...",
+    "import": "Daten importieren",
+    "importing": "Importiere...",
+    "selectFile": "Datei auswählen",
+    "includeSensitive": "Sensible Daten einschließen",
+    "sensitiveWarning": "Warnung: Dies fügt Benachrichtigungs-URLs (können Passwörter enthalten) im Klartext in die Exportdatei ein.",
+    "confirmImport": "Alle Daten ersetzen?",
+    "confirmImportMessage": "Dies löscht dauerhaft alle deine aktuellen Medikamente, Einnahmehistorie, Einstellungen und Teilen-Links und ersetzt sie durch die importierten Daten.",
+    "confirmImportWarning": "Diese Aktion kann nicht rückgängig gemacht werden!",
+    "confirmButton": "Ja, alles ersetzen",
+    "cancelButton": "Abbrechen",
+    "exportSuccess": "Daten erfolgreich exportiert",
+    "importSuccess": "Daten erfolgreich importiert",
+    "importSuccessDetails": "Importiert: {{medications}} Medikamente, {{doses}} Dosen, {{shares}} Teilen-Links",
+    "importError": "Daten konnten nicht importiert werden",
+    "invalidFile": "Ungültiges Dateiformat. Bitte wähle eine gültige MedAssist-Exportdatei.",
+    "downloadFilename": "medassist-export"
   }
 }

@@ -4003,13 +4003,11 @@ h3 .reminder-icon.info-tooltip {
 
 .export-import-card h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--text-primary);
-}
-
-.export-import-icon {
-  font-size: 2rem;
-  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .export-import-desc {

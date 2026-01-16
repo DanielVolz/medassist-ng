@@ -2412,15 +2412,15 @@ function AppContent() {
 								{/* Export/Import Section */}
 								<article className="card">
 									<div className="card-head">
-										<h2>{t('exportImport.title')}</h2>
+										<h2>
+											{t('exportImport.title')}
+											<span className="info-tooltip" data-tooltip={t('exportImport.description')}>ⓘ</span>
+										</h2>
 									</div>
 									<div className="setting-section">
-										<p className="hint-text" style={{marginBottom: "20px"}}>{t('exportImport.description')}</p>
-										
 										<div className="export-import-grid">
 											{/* Export */}
 											<div className="export-import-card">
-												<div className="export-import-icon">📤</div>
 												<h3>{t('exportImport.exportTitle')}</h3>
 												<p className="export-import-desc">{t('exportImport.exportDesc')}</p>
 												<label className="export-import-checkbox">
@@ -2448,7 +2448,6 @@ function AppContent() {
 											
 											{/* Import */}
 											<div className="export-import-card">
-												<div className="export-import-icon">📥</div>
 												<h3>{t('exportImport.importTitle')}</h3>
 												<p className="export-import-desc">{t('exportImport.importDesc')}</p>
 												<label className="export-import-file-btn">

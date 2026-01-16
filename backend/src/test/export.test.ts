@@ -150,7 +150,7 @@ async function registerExportRoutes(ctx: TestContext) {
 
   // POST /import
   app.post<{ Body: any }>("/import", async (request, reply) => {
-    const importData = request.body;
+    const importData = request.body as any;
 
     // Basic validation
     if (!importData.version) {

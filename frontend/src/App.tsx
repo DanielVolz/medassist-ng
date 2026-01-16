@@ -2479,39 +2479,39 @@ function AppContent() {
 									</button>
 								</div>
 							</form>
+						)}
 
-							{/* Import Confirmation Modal */}
-							{showImportConfirm && (
-								<div className="modal-overlay" onClick={() => setShowImportConfirm(false)}>
-									<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: "450px"}}>
-										<button className="modal-close" onClick={() => { setShowImportConfirm(false); setPendingImportData(null); }}>×</button>
-										<h2 style={{marginBottom: "16px", paddingRight: "2rem"}}>{t('exportImport.confirmImport')}</h2>
-										<p style={{marginBottom: "12px"}}>{t('exportImport.confirmImportMessage')}</p>
-										<p className="warning-text" style={{marginBottom: "24px"}}>
-											⚠️ {t('exportImport.confirmImportWarning')}
-										</p>
-										<div className="modal-footer" style={{padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end"}}>
-											<button
-												type="button"
-												className="ghost"
-												onClick={() => {
-													setShowImportConfirm(false);
-													setPendingImportData(null);
-												}}
-											>
-												{t('exportImport.cancelButton')}
-											</button>
-											<button
-												type="button"
-												className="danger"
-												onClick={handleImportConfirm}
-											>
-												{t('exportImport.confirmButton')}
-											</button>
-										</div>
+						{/* Import Confirmation Modal */}
+						{showImportConfirm && (
+							<div className="modal-overlay" onClick={() => setShowImportConfirm(false)}>
+								<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: "450px"}}>
+									<button className="modal-close" onClick={() => { setShowImportConfirm(false); setPendingImportData(null); }}>×</button>
+									<h2 style={{marginBottom: "16px", paddingRight: "2rem"}}>{t('exportImport.confirmImport')}</h2>
+									<p style={{marginBottom: "12px"}}>{t('exportImport.confirmImportMessage')}</p>
+									<p className="warning-text" style={{marginBottom: "24px"}}>
+										⚠️ {t('exportImport.confirmImportWarning')}
+									</p>
+									<div className="modal-footer" style={{padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end"}}>
+										<button
+											type="button"
+											className="ghost"
+											onClick={() => {
+												setShowImportConfirm(false);
+												setPendingImportData(null);
+											}}
+										>
+											{t('exportImport.cancelButton')}
+										</button>
+										<button
+											type="button"
+											className="danger"
+											onClick={handleImportConfirm}
+										>
+											{t('exportImport.confirmButton')}
+										</button>
 									</div>
 								</div>
-							)}
+							</div>
 						)}
 					</section>
 				} />

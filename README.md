@@ -62,7 +62,7 @@
 
 ### Notifications
 - Email via SMTP
-- Push notifications via ntfy, Gotify, Telegram, Discord (Shoutrrr)
+- Push notifications via ntfy, Pushover, Gotify, Telegram, Discord & more ([Shoutrrr](https://containrrr.dev/shoutrrr/))
 - Supports both stock warnings and intake reminders
 
 ### Privacy & Security
@@ -147,6 +147,54 @@ Generate secrets with: `openssl rand -hex 32`
 | `REMINDER_HOUR` | `6` | Hour to send daily reminders (24h format) |
 | `REMINDER_MINUTES_BEFORE` | `15` | Minutes before intake to send reminder |
 | `EXPIRY_WARNING_DAYS` | `30` | Days before expiry to show warning |
+
+### Push Notifications (Shoutrrr)
+
+MedAssist uses [Shoutrrr](https://containrrr.dev/shoutrrr/) for push notifications, supporting many services with a single URL format.
+
+**Supported services:** ntfy, Pushover, Gotify, Discord, Telegram, Slack, Matrix, and [many more](https://containrrr.dev/shoutrrr/v0.8/services/overview/).
+
+Configure push notifications in Settings → Push, or set defaults via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEFAULT_SHOUTRRR_ENABLED` | `false` | Enable push notifications by default |
+| `DEFAULT_SHOUTRRR_URL` | — | Shoutrrr URL (see examples below) |
+| `DEFAULT_SHOUTRRR_STOCK_REMINDERS` | `true` | Send stock warnings via push |
+| `DEFAULT_SHOUTRRR_INTAKE_REMINDERS` | `true` | Send intake reminders via push |
+
+#### URL Examples
+
+**ntfy** (free, self-hostable):
+```
+ntfy://ntfy.sh/your-topic
+ntfy://user:password@your-server.com/topic
+```
+
+**Pushover** (free app for iOS/Android):
+```
+pushover://shoutrrr:API_TOKEN@USER_KEY/
+```
+Get your keys at [pushover.net](https://pushover.net/):
+- **User Key**: Shown on your dashboard (top right)
+- **API Token**: Create an application → copy the API Token
+
+**Gotify** (self-hosted):
+```
+gotify://your-server.com/TOKEN
+```
+
+**Discord**:
+```
+discord://TOKEN@WEBHOOK_ID
+```
+
+**Telegram**:
+```
+telegram://TOKEN@telegram?chats=CHAT_ID
+```
+
+For all services and options, see the [Shoutrrr documentation](https://containrrr.dev/shoutrrr/v0.8/services/overview/).
 
 # Development
 

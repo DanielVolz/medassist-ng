@@ -173,7 +173,9 @@
     },
     "push": {
       "url": "URL",
-      "supports": "Unterstützt ntfy, Discord, Telegram, Slack"
+      "urlPlaceholder": "ntfy://topic oder pushover://:token@userkey/",
+      "supports": "Unterstützt ntfy, Pushover, Gotify, Discord, Telegram, Slack & mehr",
+      "docsLink": "Siehe shoutrrr.dev für alle Services"
     },
     "schedule": {
       "title": "Erinnerungsplan",

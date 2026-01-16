@@ -2243,12 +2243,12 @@ function AppContent() {
 														<span className="field-label">{t('settings.push.url')}</span>
 														<div className="input-with-tooltip">
 															<input
-																type="url"
+																type="text"
 																value={settings.shoutrrrUrl}
 																onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
-																placeholder="https://ntfy.sh/your-topic"
+																placeholder={t('settings.push.urlPlaceholder')}
 															/>
-															<span className="info-tooltip" data-tooltip={t('settings.push.supports')}>ⓘ</span>
+															<span className="info-tooltip" data-tooltip={`${t('settings.push.supports')}\n\n${t('settings.push.docsLink')}`}>ⓘ</span>
 														</div>
 													</label>
 												</div>

@@ -80,6 +80,45 @@ async function registerDoseRoutes(ctx: TestContext) {
 
     return { success: true };
   });
+
+  // POST /doses/dismiss - Dismiss missed doses without deducting stock
+  app.post<{ Body: { doseIds: string[] } }>("/doses/dismiss", async (request, reply) => {
+    const userId = 1;
+    const { doseIds } = request.body || {};
+
+    if (!doseIds || !Array.isArray(doseIds) || doseIds.length === 0) {
+      return reply.status(400).send({ error: "doseIds array is required" });
+    }
+
+    let dismissedCount = 0;
+    for (const doseId of doseIds) {
+      // Check if already exists
+      const existing = await client.execute({
+        sql: `SELECT id, dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
+        args: [userId, doseId],
+      });
+
+      if (existing.rows.length > 0) {
+        // Update to dismissed if not already
+        if (!existing.rows[0].dismissed) {
+          await client.execute({
+            sql: `UPDATE dose_tracking SET dismissed = 1 WHERE id = ?`,
+            args: [existing.rows[0].id],
+          });
+          dismissedCount++;
+        }
+      } else {
+        // Insert new dismissed record
+        await client.execute({
+          sql: `INSERT INTO dose_tracking (user_id, dose_id, dismissed) VALUES (?, ?, 1)`,
+          args: [userId, doseId],
+        });
+        dismissedCount++;
+      }
+    }
+
+    return { success: true, dismissedCount };
+  });
 }
 
 // =============================================================================
@@ -359,6 +398,103 @@ describe("Dose Tracking API", () => {
       });
 
       expect(getResponse.json().doses[0].doseId).toBe(doseId);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Dismiss Doses Tests (POST /doses/dismiss)
+  // ---------------------------------------------------------------------------
+
+  describe("POST /doses/dismiss", () => {
+    it("should dismiss multiple doses", async () => {
+      const doseIds = ["1-0-1735344000000", "1-0-1735430400000"];
+
+      const response = await ctx.app.inject({
+        method: "POST",
+        url: "/doses/dismiss",
+        payload: { doseIds },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: true, dismissedCount: 2 });
+
+      // Verify in database
+      const result = await ctx.client.execute({
+        sql: `SELECT dose_id, dismissed FROM dose_tracking WHERE user_id = ? AND dismissed = 1`,
+        args: [userId],
+      });
+      expect(result.rows.length).toBe(2);
+    });
+
+    it("should not double-count already dismissed doses", async () => {
+      const doseId = "1-0-1735344000000";
+
+      // Dismiss once
+      await ctx.app.inject({
+        method: "POST",
+        url: "/doses/dismiss",
+        payload: { doseIds: [doseId] },
+      });
+
+      // Dismiss again
+      const response = await ctx.app.inject({
+        method: "POST",
+        url: "/doses/dismiss",
+        payload: { doseIds: [doseId] },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: true, dismissedCount: 0 });
+    });
+
+    it("should reject empty doseIds array", async () => {
+      const response = await ctx.app.inject({
+        method: "POST",
+        url: "/doses/dismiss",
+        payload: { doseIds: [] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ error: "doseIds array is required" });
+    });
+
+    it("should reject missing doseIds", async () => {
+      const response = await ctx.app.inject({
+        method: "POST",
+        url: "/doses/dismiss",
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ error: "doseIds array is required" });
+    });
+
+    it("should dismiss a dose that was already taken (convert to dismissed)", async () => {
+      const doseId = "1-0-1735344000000";
+
+      // First mark as taken
+      await ctx.app.inject({
+        method: "POST",
+        url: "/doses/taken",
+        payload: { doseId },
+      });
+
+      // Then dismiss it
+      const response = await ctx.app.inject({
+        method: "POST",
+        url: "/doses/dismiss",
+        payload: { doseIds: [doseId] },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: true, dismissedCount: 1 });
+
+      // Verify it's now dismissed
+      const result = await ctx.client.execute({
+        sql: `SELECT dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
+        args: [userId, doseId],
+      });
+      expect(result.rows[0].dismissed).toBe(1);
     });
   });
 });

@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { doseTracking, shareTokens } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -16,6 +16,10 @@ const markDoseSchema = z.object({
 
 const shareDoseSchema = z.object({
   doseId: z.string().min(1, "doseId is required"),
+});
+
+const dismissDosesSchema = z.object({
+  doseIds: z.array(z.string().min(1)).min(1, "At least one doseId is required"),
 });
 
 // Helper to get user ID from request
@@ -57,6 +61,7 @@ export async function doseRoutes(app: FastifyInstance) {
           doseId: d.doseId,
           takenAt: d.takenAt?.getTime() ?? Date.now(),
           markedBy: d.markedBy,
+          dismissed: d.dismissed ?? false,
         })),
       };
     }
@@ -128,6 +133,103 @@ export async function doseRoutes(app: FastifyInstance) {
   );
 
   // ---------------------------------------------------------------------------
+  // POST /doses/dismiss - PROTECTED: Dismiss missed doses without deducting stock
+  // ---------------------------------------------------------------------------
+  app.post<{ Body: z.infer<typeof dismissDosesSchema> }>(
+    "/doses/dismiss",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const userId = await getUserId(request, reply);
+
+      const parsed = dismissDosesSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: parsed.error.errors[0]?.message ?? "Invalid input",
+        });
+      }
+
+      const { doseIds } = parsed.data;
+
+      // Insert dismissed records for each dose that doesn't exist yet
+      let dismissedCount = 0;
+      for (const doseId of doseIds) {
+        // Check if already exists (taken or dismissed)
+        const [existing] = await db.select()
+          .from(doseTracking)
+          .where(
+            and(
+              eq(doseTracking.userId, userId),
+              eq(doseTracking.doseId, doseId)
+            )
+          );
+
+        if (existing) {
+          // Already exists - update to dismissed if not already
+          if (!existing.dismissed) {
+            await db.update(doseTracking)
+              .set({ dismissed: true })
+              .where(
+                and(
+                  eq(doseTracking.userId, userId),
+                  eq(doseTracking.doseId, doseId)
+                )
+              );
+            dismissedCount++;
+          }
+        } else {
+          // Create new dismissed record
+          await db.insert(doseTracking).values({
+            userId,
+            doseId,
+            markedBy: null,
+            dismissed: true,
+          });
+          dismissedCount++;
+        }
+      }
+
+      return { success: true, dismissedCount };
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // DELETE /doses/dismiss - PROTECTED: Clear all dismissed doses (un-dismiss)
+  // ---------------------------------------------------------------------------
+  app.delete(
+    "/doses/dismiss",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const userId = await getUserId(request, reply);
+
+      // Delete all dismissed-only records (not taken ones)
+      // For taken+dismissed, just remove the dismissed flag
+      const dismissed = await db.select()
+        .from(doseTracking)
+        .where(
+          and(
+            eq(doseTracking.userId, userId),
+            eq(doseTracking.dismissed, true)
+          )
+        );
+
+      for (const d of dismissed) {
+        if (d.markedBy !== null || d.takenAt) {
+          // This was also marked as taken - just remove dismissed flag
+          await db.update(doseTracking)
+            .set({ dismissed: false })
+            .where(eq(doseTracking.id, d.id));
+        } else {
+          // This was only dismissed - delete it
+          await db.delete(doseTracking)
+            .where(eq(doseTracking.id, d.id));
+        }
+      }
+
+      return { success: true, clearedCount: dismissed.length };
+    }
+  );
+
+  // ---------------------------------------------------------------------------
   // GET /share/:token/doses - PUBLIC: Get taken doses for a share link
   // ---------------------------------------------------------------------------
   app.get<{ Params: { token: string } }>(
@@ -151,6 +253,7 @@ export async function doseRoutes(app: FastifyInstance) {
           doseId: d.doseId,
           takenAt: d.takenAt?.getTime() ?? Date.now(),
           markedBy: d.markedBy,
+          dismissed: d.dismissed ?? false,
         })),
       };
     }

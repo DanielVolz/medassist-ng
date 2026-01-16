@@ -68,6 +68,8 @@ export async function runTableMigrations(client: Client): Promise<{ success: boo
     `ALTER TABLE user_settings ADD COLUMN repeat_reminders_enabled integer NOT NULL DEFAULT 0`,
     `ALTER TABLE user_settings ADD COLUMN reminder_repeat_interval_minutes integer NOT NULL DEFAULT 30`,
     `ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`,
+    // Added in v1.2.3 - dismiss missed doses without deducting stock
+    `ALTER TABLE dose_tracking ADD COLUMN dismissed integer NOT NULL DEFAULT 0`,
   ];
 
   for (const sql of alterMigrations) {

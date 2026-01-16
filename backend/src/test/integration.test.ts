@@ -136,6 +136,7 @@ async function createSchema(client: Client) {
       dose_id text NOT NULL,
       taken_at integer NOT NULL DEFAULT (strftime('%s','now')),
       marked_by text,
+      dismissed integer NOT NULL DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
   ];

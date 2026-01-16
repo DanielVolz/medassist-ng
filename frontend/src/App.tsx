@@ -341,6 +341,10 @@ function AppContent() {
 	const [scheduleDays, setScheduleDays] = useState<number>(30);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
+	const [dismissedDoses, setDismissedDoses] = useState<Set<string>>(new Set());
+	// Clear missed doses confirmation dialog
+	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
+	const [clearingMissed, setClearingMissed] = useState(false);
 	// Tag input state for "Taken By" field
 	const [takenByInput, setTakenByInput] = useState("");
 	// Share dialog state
@@ -384,7 +388,17 @@ function AppContent() {
 				const res = await fetch("/api/doses/taken", { credentials: "include" });
 				if (res.ok) {
 					const data = await res.json();
-					setTakenDoses(new Set(data.doses.map((d: { doseId: string }) => d.doseId)));
+					const taken = new Set<string>();
+					const dismissed = new Set<string>();
+					for (const d of data.doses) {
+						if (d.dismissed) {
+							dismissed.add(d.doseId);
+						} else {
+							taken.add(d.doseId);
+						}
+					}
+					setTakenDoses(taken);
+					setDismissedDoses(dismissed);
 				}
 				// Don't reset on error - keep current state
 			} catch {
@@ -464,6 +478,35 @@ function AppContent() {
 				next.add(doseId);
 				return next;
 			});
+		}
+	}
+
+	// Dismiss missed doses without deducting from stock
+	async function dismissMissedDoses(doseIds: string[]) {
+		if (doseIds.length === 0) return;
+		
+		setClearingMissed(true);
+		try {
+			const res = await fetch("/api/doses/dismiss", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ doseIds }),
+			});
+			
+			if (res.ok) {
+				// Update local state - move these from neither set to dismissed set
+				setDismissedDoses((prev) => {
+					const next = new Set(prev);
+					for (const id of doseIds) next.add(id);
+					return next;
+				});
+				setShowClearMissedConfirm(false);
+			}
+		} catch {
+			// Error - dialog stays open
+		} finally {
+			setClearingMissed(false);
 		}
 	}
 
@@ -579,6 +622,20 @@ function AppContent() {
 
 	const pastDays = useMemo(() => groupedSchedule.filter(d => d.isPast), [groupedSchedule]);
 	const futureDays = useMemo(() => groupedSchedule.filter(d => !d.isPast).slice(0, scheduleDays), [groupedSchedule, scheduleDays]);
+
+	// Calculate missed past dose IDs for the "Clear missed" feature
+	const missedPastDoseIds = useMemo(() => {
+		const totalPastDoses = pastDays.flatMap(d => 
+			d.meds.flatMap(m => 
+				m.doses.flatMap(dose => 
+					(dose.takenBy || []).length > 0 
+						? dose.takenBy.map((p: string) => `${dose.id}-${p}`) 
+						: [dose.id]
+				)
+			)
+		);
+		return totalPastDoses.filter(id => !takenDoses.has(id) && !dismissedDoses.has(id));
+	}, [pastDays, takenDoses, dismissedDoses]);
 
 	// Load medications and settings when user changes (or on initial mount)
 	useEffect(() => {
@@ -1467,31 +1524,46 @@ function AppContent() {
 								<div className="timeline">
 									{/* Past days toggle */}
 									{pastDays.length > 0 && (() => {
+										const missedCount = missedPastDoseIds.length;
 										const totalPastDoses = pastDays.flatMap(d => d.meds.flatMap(m => m.doses.flatMap(dose => (dose.takenBy || []).length > 0 ? dose.takenBy.map(p => `${dose.id}-${p}`) : [dose.id])));
-										const missedPastDoses = totalPastDoses.filter(id => !takenDoses.has(id)).length;
 										return (
-											<div 
-												className={`past-days-toggle ${showPastDays ? 'expanded' : ''} ${missedPastDoses > 0 ? 'has-missed' : ''}`}
-												onClick={() => setShowPastDays(!showPastDays)}
-											>
-												<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
-												<span className="past-days-label">
-													{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
-												</span>
-												<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
-												{missedPastDoses > 0 ? (
-													<span className="past-days-warning" title={t('dashboard.schedules.missedDoses', { count: missedPastDoses })}>⚠️ {missedPastDoses}</span>
-												) : totalPastDoses.length > 0 ? (
-													<span className="past-days-complete" title={t('dashboard.schedules.allTaken')}>✓</span>
-												) : null}
+											<div className="past-days-header">
+												<div 
+													className={`past-days-toggle ${showPastDays ? 'expanded' : ''} ${missedCount > 0 ? 'has-missed' : ''}`}
+													onClick={() => setShowPastDays(!showPastDays)}
+												>
+													<span className="past-days-icon">{showPastDays ? '▼' : '▶'}</span>
+													<span className="past-days-label">
+														{showPastDays ? t('dashboard.schedules.hidePastDays') : t('dashboard.schedules.showPastDays')}
+													</span>
+													<span className="past-days-count">({t('dashboard.schedules.pastDaysCount', { count: pastDays.length })})</span>
+													{missedCount > 0 ? (
+														<span className="past-days-warning" title={t('dashboard.schedules.missedDoses', { count: missedCount })}>⚠️ {missedCount}</span>
+													) : totalPastDoses.length > 0 ? (
+														<span className="past-days-complete" title={t('dashboard.schedules.allTaken')}>✓</span>
+													) : null}
+												</div>
+												{missedCount > 0 && (
+													<button 
+														type="button" 
+														className="clear-missed-btn"
+														onClick={(e) => {
+															e.stopPropagation();
+															setShowClearMissedConfirm(true);
+														}}
+														title={t('dashboard.schedules.clearMissed')}
+													>
+														{t('dashboard.schedules.clearMissed')}
+													</button>
+												)}
 											</div>
 										);
 									})()}
 									{/* Past days (when expanded) */}
 									{showPastDays && pastDays.map((day) => {
 										const allDoseIds = day.meds.flatMap((item) => item.doses.flatMap((d) => (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]));
-										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
-										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id) || dismissedDoses.has(id));
+										const takenCount = allDoseIds.filter((id) => takenDoses.has(id) || dismissedDoses.has(id)).length;
 										const isAutoCollapsed = true; // Past days are always auto-collapsed
 										const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 										const isCollapsed = !isManuallyExpanded;
@@ -1679,6 +1751,35 @@ function AppContent() {
 								</div>
 							</article>
 						</section>
+
+						{/* Clear Missed Doses Confirmation Modal */}
+						{showClearMissedConfirm && (
+							<div className="modal-overlay" onClick={() => setShowClearMissedConfirm(false)}>
+								<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: "450px"}}>
+									<button className="modal-close" onClick={() => setShowClearMissedConfirm(false)}>×</button>
+									<h2 style={{marginBottom: "16px", paddingRight: "2rem"}}>{t('dashboard.schedules.clearMissedConfirmTitle')}</h2>
+									<p style={{marginBottom: "24px"}}>{t('dashboard.schedules.clearMissedConfirmMessage', { count: missedPastDoseIds.length })}</p>
+									<div className="modal-footer" style={{padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end"}}>
+										<button
+											type="button"
+											className="ghost"
+											onClick={() => setShowClearMissedConfirm(false)}
+											disabled={clearingMissed}
+										>
+											{t('dashboard.schedules.clearMissedCancel')}
+										</button>
+										<button
+											type="button"
+											className="primary"
+											onClick={() => dismissMissedDoses(missedPastDoseIds)}
+											disabled={clearingMissed}
+										>
+											{clearingMissed ? t('common.loading') : t('dashboard.schedules.clearMissedConfirm')}
+										</button>
+									</div>
+								</div>
+							</div>
+						)}
 					</>
 				} />
 

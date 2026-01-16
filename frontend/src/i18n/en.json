@@ -40,7 +40,14 @@
       "pastDaysCount": "{{count}} day",
       "pastDaysCount_other": "{{count}} days",
       "missedDoses": "{{count}} missed dose",
-      "missedDoses_other": "{{count}} missed doses"
+      "missedDoses_other": "{{count}} missed doses",
+      "clearMissed": "Clear missed",
+      "clearMissedConfirmTitle": "Clear Missed Doses?",
+      "clearMissedConfirmMessage": "This will mark {{count}} missed dose as acknowledged without deducting from your stock.",
+      "clearMissedConfirmMessage_other": "This will mark {{count}} missed doses as acknowledged without deducting from your stock.",
+      "clearMissedConfirm": "Yes, Clear",
+      "clearMissedCancel": "Cancel",
+      "clearMissedSuccess": "Cleared {{count}} missed doses"
     },
     "reminders": {
       "active": "Automatic reminders active",

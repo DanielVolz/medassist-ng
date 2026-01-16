@@ -38,7 +38,14 @@
       "pastDaysCount": "{{count}} Tag",
       "pastDaysCount_other": "{{count}} Tage",
       "missedDoses": "{{count}} verpasste Dosis",
-      "missedDoses_other": "{{count}} verpasste Dosen"
+      "missedDoses_other": "{{count}} verpasste Dosen",
+      "clearMissed": "Verpasste löschen",
+      "clearMissedConfirmTitle": "Verpasste Dosen löschen?",
+      "clearMissedConfirmMessage": "{{count}} verpasste Dosis wird als bestätigt markiert, ohne vom Bestand abgezogen zu werden.",
+      "clearMissedConfirmMessage_other": "{{count}} verpasste Dosen werden als bestätigt markiert, ohne vom Bestand abgezogen zu werden.",
+      "clearMissedConfirm": "Ja, löschen",
+      "clearMissedCancel": "Abbrechen",
+      "clearMissedSuccess": "{{count}} verpasste Dosen gelöscht"
     },
     "reminders": {
       "active": "Automatische Erinnerungen aktiv",

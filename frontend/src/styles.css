@@ -690,6 +690,35 @@ textarea.auto-resize {
   background: rgba(234, 179, 8, 0.08);
 }
 
+/* Past days header container - toggle + clear button */
+.past-days-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.past-days-header .past-days-toggle {
+  flex: 1;
+}
+.clear-missed-btn {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: rgba(234, 179, 8, 0.15);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms ease, transform 100ms ease;
+}
+.clear-missed-btn:hover {
+  background: rgba(234, 179, 8, 0.25);
+  transform: translateY(-1px);
+}
+.clear-missed-btn:active {
+  transform: translateY(0);
+}
+
 /* Past day blocks styling */
 .day-block.past {
   opacity: 0.7;

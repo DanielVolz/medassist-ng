@@ -184,6 +184,82 @@ gh pr merge --squash --delete-branch
 7. ✅ Warten bis CI grün ist
 8. ✅ PR mergen (Branch wird automatisch gelöscht)
 
+## GitHub Releases
+
+> ⚠️ **WICHTIG**: Alle GitHub Releases werden auf **Englisch** verfasst!
+
+### Release Notes erstellen
+
+> ⚠️ **PFLICHT**: GitHub Releases MÜSSEN eine geschriebene Nachricht enthalten!
+> Nicht nur automatisch generierte Commit-Listen, sondern einen kurzen Fließtext.
+
+**Struktur eines Release-Texts:**
+
+1. **Intro** (1-2 sentences): What's new, what was improved?
+2. **Features & Changes**: Brief list of key changes
+3. **Breaking Changes Warning** (if applicable): See below
+4. **Optional**: Acknowledgements, documentation links
+
+**Beispiel für gute Release Notes:**
+
+```markdown
+## What's New
+
+This release adds intake reminder notifications and improves medication stock tracking. Users can now configure nagging reminders for missed doses and receive alerts when medication stock runs low.
+
+### New Features
+- 🔔 Intake reminder notifications with configurable nagging intervals
+- 📊 Enhanced stock calculation with blister tracking
+- 🌐 German translation improvements
+
+### Bug Fixes
+- Fixed timezone handling in dose scheduling
+- Improved image upload validation
+
+### Full Changelog
+[All commits since v1.2.0](link)
+```
+
+### Breaking Changes Warning (CRITICAL!)
+
+> ⚠️ **MANDATORY**: If an update breaks existing configurations or stored data, it MUST be prominently warned about in the release notes!
+
+**Breaking Changes include:**
+- Database schema changes without automatic migration
+- Removed or renamed ENV variables
+- Changed API endpoints
+- Incompatible `.env` format changes
+- Loss of stored data after update
+
+**Format for Breaking Changes:**
+
+```markdown
+## ⚠️ BREAKING CHANGES - Please read before updating!
+
+**Database migration required**: This update changes the database schema. 
+Existing installations need to:
+1. Create backup of `data/` folder
+2. Stop containers
+3. Perform update
+4. If issues occur: Rollback using backup
+
+**ENV variables changed**: 
+- `OLD_VAR` was renamed to `NEW_VAR`
+- `REMOVED_VAR` is no longer supported
+
+**Medication data**: Intake schedules with only one time entry will be automatically 
+migrated. Please verify all times are correct after update.
+```
+
+**What is NOT a Breaking Change:**
+- ✅ New optional columns with DEFAULT values
+- ✅ New ENV variables (with sensible defaults)
+- ✅ New features that don't affect existing data
+- ✅ Bug fixes that correct behavior
+
+**Rule of thumb**: If a user can simply run `docker compose pull && docker compose up -d` 
+without adjusting anything → Not a Breaking Change.
+
 ## Key Patterns
 
 ### Backend Routes (`backend/src/routes/`)

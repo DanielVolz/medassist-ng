@@ -16,11 +16,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          # Get all tags sorted by version, find the one before current
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          PREV_TAG=$(git tag --sort=-v:refname | grep -A1 "^${CURRENT_TAG}$" | tail -1)
+          
+          # If no previous tag found (first release), use empty
+          if [ "$PREV_TAG" = "$CURRENT_TAG" ]; then
+            PREV_TAG=""
+          fi
+          
+          echo "previous_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          echo "Current tag: $CURRENT_TAG, Previous tag: $PREV_TAG"
+
       - name: Generate changelog
         id: changelog
         run: |
-          # Get previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          PREV_TAG="${{ steps.prev_tag.outputs.previous_tag }}"
           
           if [ -z "$PREV_TAG" ]; then
             # First release - get all commits
@@ -37,6 +51,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           body_path: changelog.txt
-          generate_release_notes: true
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

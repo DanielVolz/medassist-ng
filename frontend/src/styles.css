@@ -3977,3 +3977,99 @@ h3 .reminder-icon.info-tooltip {
   margin-top: 0.5rem;
   width: 100%;
 }
+
+/* Export/Import Section */
+.export-import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .export-import-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.export-import-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--card-radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.export-import-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.export-import-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.export-import-desc {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: 0;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.export-import-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-transform: none !important;
+}
+
+.export-import-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.export-import-warning {
+  font-size: 0.8rem;
+  color: var(--warning);
+  margin: 0;
+  padding: 0.5rem;
+  background: rgba(234, 179, 8, 0.1);
+  border-radius: 4px;
+  line-height: 1.4;
+}
+
+.export-import-card button,
+.export-import-file-btn {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+.export-import-file-btn {
+  cursor: pointer;
+  display: inline-block;
+  padding: 0.7rem 1.25rem;
+  border-radius: var(--btn-radius);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.export-import-file-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-primary);
+}
+
+.export-import-file-btn input {
+  display: none;
+}

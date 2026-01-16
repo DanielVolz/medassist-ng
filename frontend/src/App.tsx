@@ -2412,15 +2412,18 @@ function AppContent() {
 								{/* Export/Import Section */}
 								<article className="card">
 									<div className="card-head">
-										<h2>{t('exportImport.title')}</h2>
+										<h2>
+											{t('exportImport.title')}
+											<span className="info-tooltip" data-tooltip={t('exportImport.description')}>ⓘ</span>
+										</h2>
 									</div>
 									<div className="setting-section">
-										<p className="hint-text" style={{marginBottom: "16px"}}>{t('exportImport.description')}</p>
-										
-										{/* Export */}
-										<div className="setting-group" style={{marginBottom: "24px"}}>
-											<div className="export-controls">
-												<label className="checkbox-label" style={{marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px"}}>
+										<div className="export-import-grid">
+											{/* Export */}
+											<div className="export-import-card">
+												<h3>{t('exportImport.exportTitle')}</h3>
+												<p className="export-import-desc">{t('exportImport.exportDesc')}</p>
+												<label className="export-import-checkbox">
 													<input
 														type="checkbox"
 														checked={includeSensitiveData}
@@ -2429,7 +2432,7 @@ function AppContent() {
 													<span>{t('exportImport.includeSensitive')}</span>
 												</label>
 												{includeSensitiveData && (
-													<p className="hint-text warning-text" style={{marginBottom: "12px", color: "var(--warning)", fontSize: "0.85rem"}}>
+													<p className="export-import-warning">
 														⚠️ {t('exportImport.sensitiveWarning')}
 													</p>
 												)}
@@ -2438,34 +2441,22 @@ function AppContent() {
 													className="secondary"
 													onClick={handleExport}
 													disabled={exporting}
-													style={{marginRight: "12px"}}
 												>
 													{exporting ? t('exportImport.exporting') : t('exportImport.export')}
 												</button>
 											</div>
-										</div>
-										
-										{/* Import */}
-										<div className="setting-group">
-											<div className="import-controls">
-												<label className="secondary" style={{
-													cursor: "pointer",
-													display: "inline-block",
-													padding: "0.7rem 1.25rem",
-													borderRadius: "var(--btn-radius)",
-													background: "var(--bg-tertiary)",
-													color: "var(--text-primary)",
-													border: "1px solid var(--border-secondary)",
-													fontWeight: 600,
-													fontSize: "0.9rem"
-												}}>
+											
+											{/* Import */}
+											<div className="export-import-card">
+												<h3>{t('exportImport.importTitle')}</h3>
+												<p className="export-import-desc">{t('exportImport.importDesc')}</p>
+												<label className="export-import-file-btn">
 													{importing ? t('exportImport.importing') : t('exportImport.import')}
 													<input
 														type="file"
 														accept=".json,application/json"
 														onChange={handleImportFileSelect}
 														disabled={importing}
-														style={{display: "none"}}
 													/>
 												</label>
 											</div>

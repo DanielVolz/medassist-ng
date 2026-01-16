@@ -354,7 +354,7 @@ function AppContent() {
 	// Export/Import state
 	const [exporting, setExporting] = useState(false);
 	const [importing, setImporting] = useState(false);
-	const [includeSensitiveData, setIncludeSensitiveData] = useState(false);
+
 	const [showImportConfirm, setShowImportConfirm] = useState(false);
 	const [pendingImportData, setPendingImportData] = useState<any>(null);
 	// Collapsed days state (manually collapsed days are persisted)
@@ -788,7 +788,7 @@ function AppContent() {
 	async function handleExport() {
 		setExporting(true);
 		try {
-			const res = await fetch(`/api/export?includeSensitive=${includeSensitiveData}`, {
+			const res = await fetch('/api/export?includeSensitive=true', {
 				credentials: "include",
 			});
 			if (!res.ok) throw new Error("Export failed");
@@ -2423,19 +2423,6 @@ function AppContent() {
 											<div className="export-import-card">
 												<h3>{t('exportImport.exportTitle')}</h3>
 												<p className="export-import-desc">{t('exportImport.exportDesc')}</p>
-												<label className="export-import-checkbox">
-													<input
-														type="checkbox"
-														checked={includeSensitiveData}
-														onChange={(e) => setIncludeSensitiveData(e.target.checked)}
-													/>
-													<span>{t('exportImport.includeSensitive')}</span>
-												</label>
-												{includeSensitiveData && (
-													<p className="export-import-warning">
-														⚠️ {t('exportImport.sensitiveWarning')}
-													</p>
-												)}
 												<button
 													type="button"
 													className="secondary"

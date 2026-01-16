@@ -3979,6 +3979,14 @@ h3 .reminder-icon.info-tooltip {
 }
 
 /* Export/Import Section */
+.card:has(.export-import-grid) {
+  overflow: visible;
+}
+
+.card:has(.export-import-grid) .card-head {
+  overflow: visible;
+}
+
 .export-import-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -4016,32 +4024,6 @@ h3 .reminder-icon.info-tooltip {
   margin: 0;
   line-height: 1.5;
   flex: 1;
-}
-
-.export-import-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  text-transform: none !important;
-}
-
-.export-import-checkbox input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.export-import-warning {
-  font-size: 0.8rem;
-  color: var(--warning);
-  margin: 0;
-  padding: 0.5rem;
-  background: rgba(234, 179, 8, 0.1);
-  border-radius: 4px;
-  line-height: 1.4;
 }
 
 .export-import-card button,

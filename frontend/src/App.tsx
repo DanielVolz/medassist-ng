@@ -548,13 +548,26 @@ function AppContent() {
 				} else if (selectedUser) {
 					setSelectedUser(null);
 				} else if (selectedMed) {
-					setSelectedMed(null);
+					// Go back in history to close modal (this will trigger popstate)
+					window.history.back();
 				}
 			}
 		};
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
 	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, userDropdownOpen]);
+
+	// Handle browser back button to close modals
+	useEffect(() => {
+		const handlePopState = (e: PopStateEvent) => {
+			// If modal is open and user pressed back, close modal
+			if (selectedMed) {
+				setSelectedMed(null);
+			}
+		};
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
+	}, [selectedMed]);
 
 	// Close user dropdown when clicking outside
 	useEffect(() => {
@@ -878,6 +891,15 @@ function AppContent() {
 		setRefillHistory([]);
 		setRefillHistoryExpanded(false);
 		loadRefillHistory(med.id);
+		// Push history state so browser back closes modal instead of navigating
+		window.history.pushState({ modal: 'medDetail', medId: med.id }, '');
+	}
+
+	// Helper to close medication detail modal via history back
+	function closeMedDetail() {
+		if (selectedMed) {
+			window.history.back();
+		}
 	}
 
 	async function testEmail() {
@@ -2999,9 +3021,9 @@ function AppContent() {
 
 			{/* Medication Detail Modal */}
 			{selectedMed && (
-				<div className="modal-overlay" onClick={() => setSelectedMed(null)}>
+				<div className="modal-overlay" onClick={closeMedDetail}>
 					<div className="modal-content med-detail-modal" onClick={(e) => e.stopPropagation()}>
-						<button className="modal-close" onClick={() => setSelectedMed(null)}>×</button>
+						<button className="modal-close" onClick={closeMedDetail}>×</button>
 						
 						<div className="med-detail-body">
 							<div className="med-detail-header">
@@ -3164,14 +3186,14 @@ function AppContent() {
 						</div>
 
 						<div className="med-detail-footer">
-							<button onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
+							<button onClick={() => { closeMedDetail(); setShowImageLightbox(false); }}>
 								{t('common.close')}
 							</button>
 							<div className="footer-actions">
 								<button className="success" onClick={() => setShowRefillModal(true)}>
 									{t('refill.button')}
 								</button>
-								<button className="info" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
+								<button className="info" onClick={() => { closeMedDetail(); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
 									{t('common.edit')}
 								</button>
 								{selectedMed.blisters.length > 0 && (

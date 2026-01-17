@@ -3,6 +3,11 @@ name: Build and Push Docker Images
 on:
   push:
     branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose*.yml'
+      - '.github/workflows/docker-build.yml'
     tags: ['v*']
   workflow_dispatch:
     inputs:

@@ -1,39 +1,45 @@
 import { createClient, Client } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import dotenv from "dotenv";
-import fs from "fs";
-import path from "path";
-import { getTableCreationSQL } from "./schema-sql.js";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
+
+// Get migrations folder path (relative to this file's location)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 // =============================================================================
 // Exported utility functions for testing
 // =============================================================================
 
-/** Get the full migration SQL string (re-exported from schema-sql) */
-export { getTableCreationSQL };
-
-/** Split SQL string into individual statements */
+/** Split SQL string into individual statements (for backwards compatibility with tests) */
 export function splitSQLStatements(sql: string): string[] {
   return sql.split(';').filter(s => s.trim().length > 0);
 }
 
-/** Execute migration statements on a client */
+/** Execute drizzle migrations on a database */
 export async function executeMigration(client: Client): Promise<{ success: boolean; executed: number; errors: string[] }> {
-  const statements = getTableCreationSQL();
   const errors: string[] = [];
-  let executed = 0;
+  const db = drizzle(client);
 
-  for (const stmt of statements) {
-    try {
-      await client.execute(stmt);
-      executed++;
-    } catch (err: any) {
-      errors.push(err.message);
-    }
+  try {
+    await migrate(db, { migrationsFolder });
+    
+    // Count tables as a proxy for "executed" statements
+    const tables = await client.execute(
+      "SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%'"
+    );
+    const executed = Number(tables.rows[0].count) || 0;
+    
+    return { success: true, executed, errors };
+  } catch (err: any) {
+    errors.push(err.message);
+    return { success: false, executed: 0, errors };
   }
-
-  return { success: errors.length === 0, executed, errors };
 }
 
 /** Get a preview of statement (first N characters) */
@@ -54,15 +60,13 @@ const url = "file:./data/medassist-ng.db";
 async function main() {
   console.log("Starting database setup...");
   console.log("Database URL:", url);
+  console.log("Migrations folder:", migrationsFolder);
   
   const client = createClient({ url });
+  const db = drizzle(client);
   
-  const statements = getTableCreationSQL();
-  
-  for (const stmt of statements) {
-    console.log("Executing:", getStatementPreview(stmt));
-    await client.execute(stmt);
-  }
+  console.log("Running drizzle migrations...");
+  await migrate(db, { migrationsFolder });
 
   console.log("Database setup complete!");
   process.exit(0);

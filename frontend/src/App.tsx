@@ -39,6 +39,13 @@ type PlannerRow = {
 	enough: boolean;
 };
 
+type RefillEntry = {
+	id: number;
+	packsAdded: number;
+	loosePillsAdded: number;
+	refillDate: string;
+};
+
 type FormBlister = { usage: string; every: string; startDate: string; startTime: string };
 
 type FormState = {
@@ -337,6 +344,7 @@ function AppContent() {
 	const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
 	const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
 	const [showImageLightbox, setShowImageLightbox] = useState(false);
+	const [scheduleLightboxImage, setScheduleLightboxImage] = useState<string | null>(null);
 	const [selectedUser, setSelectedUser] = useState<string | null>(null);
 	const [scheduleDays, setScheduleDays] = useState<number>(30);
 	const [showPastDays, setShowPastDays] = useState(false);
@@ -358,9 +366,18 @@ function AppContent() {
 	// Export/Import state
 	const [exporting, setExporting] = useState(false);
 	const [importing, setImporting] = useState(false);
+	// User dropdown state (for mobile click-based behavior)
+	const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
 	const [showImportConfirm, setShowImportConfirm] = useState(false);
 	const [pendingImportData, setPendingImportData] = useState<any>(null);
+	// Refill state
+	const [showRefillModal, setShowRefillModal] = useState(false);
+	const [refillPacks, setRefillPacks] = useState(1);
+	const [refillLoose, setRefillLoose] = useState(0);
+	const [refillSaving, setRefillSaving] = useState(false);
+	const [refillHistory, setRefillHistory] = useState<RefillEntry[]>([]);
+	const [refillHistoryExpanded, setRefillHistoryExpanded] = useState(false);
 	// Collapsed days state (manually collapsed days are persisted)
 	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
 	const [manuallyExpandedDays, setManuallyExpandedDays] = useState<Set<string>>(new Set());
@@ -515,7 +532,11 @@ function AppContent() {
 		const handleEscape = (e: KeyboardEvent) => {
 			if (e.key === "Escape") {
 				// Close modals in order of priority (topmost first)
-				if (showImageLightbox) {
+				if (userDropdownOpen) {
+					setUserDropdownOpen(false);
+				} else if (scheduleLightboxImage) {
+					setScheduleLightboxImage(null);
+				} else if (showImageLightbox) {
 					setShowImageLightbox(false);
 				} else if (showEditModal) {
 					setShowEditModal(false);
@@ -533,7 +554,20 @@ function AppContent() {
 		};
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
-	}, [selectedMed, showImageLightbox, selectedUser, showProfile, showShareDialog, showEditModal]);
+	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, userDropdownOpen]);
+
+	// Close user dropdown when clicking outside
+	useEffect(() => {
+		if (!userDropdownOpen) return;
+		const handleClickOutside = (e: MouseEvent) => {
+			const target = e.target as HTMLElement;
+			if (!target.closest('.user-menu')) {
+				setUserDropdownOpen(false);
+			}
+		};
+		document.addEventListener("click", handleClickOutside);
+		return () => document.removeEventListener("click", handleClickOutside);
+	}, [userDropdownOpen]);
 
 	// Prevent background scroll when modal is open
 	useEffect(() => {
@@ -555,6 +589,20 @@ function AppContent() {
 			document.body.style.top = '';
 		};
 	}, [selectedMed, selectedUser, showProfile, showShareDialog, showEditModal]);
+
+	// Update selectedMed when meds change (e.g., after refill)
+	useEffect(() => {
+		if (selectedMed) {
+			const updated = meds.find(m => m.id === selectedMed.id);
+			if (updated && (
+				updated.packCount !== selectedMed.packCount ||
+				updated.looseTablets !== selectedMed.looseTablets ||
+				updated.updatedAt !== selectedMed.updatedAt
+			)) {
+				setSelectedMed(updated);
+			}
+		}
+	}, [meds, selectedMed]);
 
 	// Check if settings have changed
 	const settingsChanged = settings.emailEnabled !== savedSettings.emailEnabled ||
@@ -737,6 +785,65 @@ function AppContent() {
 		setSettingsSaving(false);
 		setSavedSettings(updatedSettings);
 		setSettingsSaved(true);
+	}
+
+	// Load refill history for a medication
+	async function loadRefillHistory(medId: number) {
+		try {
+			const res = await fetch(`/api/medications/${medId}/refills`, { credentials: "include" });
+			if (res.ok) {
+				const data = await res.json();
+				setRefillHistory(Array.isArray(data) ? data : (data.refills || []));
+			} else {
+				setRefillHistory([]);
+			}
+		} catch {
+			setRefillHistory([]);
+		}
+	}
+
+	// Submit a refill
+	async function submitRefill(medId: number) {
+		if (refillPacks < 1 && refillLoose < 1) return;
+		setRefillSaving(true);
+		try {
+			const res = await fetch(`/api/medications/${medId}/refill`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ packsAdded: refillPacks, loosePillsAdded: refillLoose }),
+			});
+			if (res.ok) {
+				const data = await res.json();
+				// Update form values if we're in edit mode
+				if (editingId === medId && data.newStock) {
+					setForm(f => ({
+						...f,
+						packCount: String(data.newStock.packCount),
+						looseTablets: String(data.newStock.looseTablets),
+					}));
+				}
+				// Reset refill form
+				setRefillPacks(1);
+				setRefillLoose(0);
+				setShowRefillModal(false);
+				// Reload medications to get updated stock
+				loadMeds();
+				// Reload refill history
+				await loadRefillHistory(medId);
+			}
+		} catch {
+			// ignore
+		}
+		setRefillSaving(false);
+	}
+
+	// Helper to open medication detail modal with refill history
+	function openMedDetail(med: Medication) {
+		setSelectedMed(med);
+		setRefillHistory([]);
+		setRefillHistoryExpanded(false);
+		loadRefillHistory(med.id);
 	}
 
 	async function testEmail() {
@@ -1286,8 +1393,8 @@ function AppContent() {
 						{theme === "dark" ? "☀️" : "🌙"}
 					</button>
 					{authState?.authEnabled && user && (
-						<div className="user-menu">
-							<button className="user-menu-btn">
+						<div className={`user-menu ${userDropdownOpen ? 'open' : ''}`}>
+							<button className="user-menu-btn" onClick={() => setUserDropdownOpen(!userDropdownOpen)}>
 								{user.avatarUrl ? (
 									<img src={`/api/images/${user.avatarUrl}`} alt={user.username} className="user-avatar-img" />
 								) : (
@@ -1304,15 +1411,15 @@ function AppContent() {
 									<span className="dropdown-username">{user.username}</span>
 								</div>
 								<div className="dropdown-menu">
-									<button className="dropdown-item" onClick={() => setShowProfile(true)}>
+									<button className="dropdown-item" onClick={() => { setShowProfile(true); setUserDropdownOpen(false); }}>
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
 										{t('auth.profile', 'Profile')}
 									</button>
-									<button className="dropdown-item" onClick={() => navigate('/settings')}>
+									<button className="dropdown-item" onClick={() => { navigate('/settings'); setUserDropdownOpen(false); }}>
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 										{t('nav.settings', 'Settings')}
 									</button>
-									<button className="dropdown-item danger" onClick={() => logout()}>
+									<button className="dropdown-item danger" onClick={() => { logout(); setUserDropdownOpen(false); }}>
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
 										{t('auth.signOut', 'Sign Out')}
 									</button>
@@ -1398,7 +1505,7 @@ function AppContent() {
 													med ? med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets : Math.round(row.medsLeft)
 												);
 												return (
-													<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
+													<div key={row.name} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
 														<span data-label={t('table.name')} className="cell-with-avatar">
 															<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
 															<span className="med-name-text">{row.name}</span>
@@ -1467,7 +1574,7 @@ function AppContent() {
 											med ? med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets : Math.round(row.medsLeft)
 										);
 										return (
-											<div key={row.name} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
+											<div key={row.name} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
 												<span data-label={t('table.name')} className="cell-with-avatar">
 													<span className="med-name-line">
 														<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
@@ -1595,7 +1702,15 @@ function AppContent() {
 													return (
 														<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 															<div className="time-main">
-																<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
+																<div className="med-name">
+																	<div 
+																		className={med?.imageUrl ? "med-avatar clickable" : ""}
+																		onClick={() => med?.imageUrl && setScheduleLightboxImage(`/api/images/${med.imageUrl}`)}
+																	>
+																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+																	</div>
+																	<span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}
+																</div>
 																<div className="tag-row">
 																	<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
 																</div>
@@ -1698,7 +1813,15 @@ function AppContent() {
 													return (
 														<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
 															<div className="time-main">
-																<div className="med-name"><MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" /><span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}</div>
+																<div className="med-name">
+																	<div 
+																		className={med?.imageUrl ? "med-avatar clickable" : ""}
+																		onClick={() => med?.imageUrl && setScheduleLightboxImage(`/api/images/${med.imageUrl}`)}
+																	>
+																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+																	</div>
+																	<span className="med-name-text">{item.medName}</span>{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}
+																</div>
 																<div className="tag-row">
 																	<span className="tag subtle">{item.total} {t('common.pills')} {t('common.total')}</span>
 																	{status && <span className={`tag ${status.className}`}>
@@ -1788,6 +1911,19 @@ function AppContent() {
 						<article className="card meds">
 							<div className="card-head">
 								<h2>{t('medications.list.title')}</h2>
+								<button 
+									type="button" 
+									className="btn primary small" 
+									onClick={() => {
+										resetForm();
+										// On mobile, open the edit modal
+										if (window.innerWidth <= 768) {
+											setShowEditModal(true);
+										}
+									}}
+								>
+									+ {t('form.newEntry')}
+								</button>
 							</div>
 							<div className="med-list">
 								{meds.map((med) => (
@@ -1807,7 +1943,7 @@ function AppContent() {
 												<div className="med-total">{t('medications.details.total')}: {med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets} {t('common.pills')}</div>
 											</div>
 											<div className="med-actions">
-												<button className="secondary" onClick={() => startEdit(med)}>{t('common.edit')}</button>
+												<button className="info" onClick={() => startEdit(med)}>{t('common.edit')}</button>
 												<button className="danger" onClick={() => deleteMed(med.id)}>{t('common.delete')}</button>
 											</div>
 										</div>
@@ -1909,6 +2045,44 @@ function AppContent() {
 									<input type="date" value={form.expiryDate} onChange={(e) => handleValueChange("expiryDate", e.target.value)} placeholder={t('common.optional')} />
 								</label>
 
+								{/* Refill section - only shown when editing */}
+								{editingId && (
+									<div className="full refill-section">
+										<h4 className="refill-title">{t('refill.title')}</h4>
+										<div className="refill-form-inline">
+											<label>
+												{t('refill.packs')}
+												<input
+													type="number"
+													min="0"
+													value={refillPacks}
+													onChange={(e) => setRefillPacks(parseInt(e.target.value) || 0)}
+												/>
+											</label>
+											<label>
+												{t('refill.loosePills')}
+												<input
+													type="number"
+													min="0"
+													value={refillLoose}
+													onChange={(e) => setRefillLoose(parseInt(e.target.value) || 0)}
+												/>
+											</label>
+											<button
+												type="button"
+												className="success"
+												onClick={() => submitRefill(editingId)}
+												disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
+											>
+												{refillSaving ? t('refill.adding') : t('refill.button')}
+											</button>
+											{(refillPacks > 0 || refillLoose > 0) && (
+												<span className="refill-preview">+{refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) + refillLoose} {t('common.pills')}</span>
+											)}
+										</div>
+									</div>
+								)}
+
 								<label className={`full ${fieldErrors.notes ? 'has-error' : ''}`}>
 									{t('form.notes')}
 									<textarea 
@@ -1940,7 +2114,7 @@ function AppContent() {
 													/>
 													<span>🔔 {t('form.blisters.remind')}</span>
 												</label>
-												<button type="button" className="ghost" onClick={addBlister}>+ {t('form.blisters.addIntake')}</button>
+												<button type="button" className="primary" onClick={addBlister}>+ {t('form.blisters.addIntake')}</button>
 											</div>
 									</div>
 									{form.blisters.map((s, idx) => (
@@ -2068,7 +2242,7 @@ function AppContent() {
 										{plannerRows.map((row) => {
 											const med = meds.find(m => m.name === row.medicationName);
 											return (
-												<div key={row.medicationId} className="table-row clickable" onClick={() => med && setSelectedMed(med)}>
+												<div key={row.medicationId} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
 													<span data-label={t('planner.table.medication')} className="cell-with-avatar"><MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />{row.medicationName}</span>
 													<span data-label={t('planner.table.usage')}><strong>{row.plannerUsage}</strong>&nbsp;{t('common.pills')}</span>
 													<span data-label={t('planner.table.blisters')}>{row.blistersNeeded} × {row.blisterSize}</span>
@@ -2196,7 +2370,7 @@ function AppContent() {
 										)}
 										
 										{/* Skip reminders for taken doses */}
-										<div className="setting-row compact" style={{marginTop: "16px", paddingTop: "16px", borderTop: "1px solid var(--border-color)"}}>
+										<div className="setting-row compact" style={{marginTop: "16px"}}>
 											<label className="setting-label">
 												{t('settings.notifications.skipTakenDoses')}
 												<span className="info-tooltip small" data-tooltip={t('settings.notifications.skipTakenDosesTooltip')}>ⓘ</span>
@@ -2519,11 +2693,13 @@ function AppContent() {
 										</h2>
 									</div>
 									<div className="setting-section">
-										<div className="export-import-grid">
+										<div className="setting-group">
 											{/* Export */}
-											<div className="export-import-card">
-												<h3>{t('exportImport.exportTitle')}</h3>
-												<p className="export-import-desc">{t('exportImport.exportDesc')}</p>
+											<div className="action-card">
+												<div className="action-card-content">
+													<span className="action-card-title">{t('exportImport.exportTitle')}</span>
+													<span className="action-card-desc">{t('exportImport.exportDesc')}</span>
+												</div>
 												<button
 													type="button"
 													className="secondary"
@@ -2535,16 +2711,19 @@ function AppContent() {
 											</div>
 											
 											{/* Import */}
-											<div className="export-import-card">
-												<h3>{t('exportImport.importTitle')}</h3>
-												<p className="export-import-desc">{t('exportImport.importDesc')}</p>
-												<label className="export-import-file-btn">
+											<div className="action-card">
+												<div className="action-card-content">
+													<span className="action-card-title">{t('exportImport.importTitle')}</span>
+													<span className="action-card-desc">{t('exportImport.importDesc')}</span>
+												</div>
+												<label className="btn secondary">
 													{importing ? t('exportImport.importing') : t('exportImport.import')}
 													<input
 														type="file"
 														accept=".json,application/json"
 														onChange={handleImportFileSelect}
 														disabled={importing}
+														style={{display: 'none'}}
 													/>
 												</label>
 											</div>
@@ -2921,6 +3100,33 @@ function AppContent() {
 									</div>
 								</div>
 							)}
+
+							{/* Refill History */}
+							{refillHistory.length > 0 && (
+								<div className="med-detail-section">
+									<h3 
+										className="section-header-clickable"
+										onClick={() => setRefillHistoryExpanded(!refillHistoryExpanded)}
+									>
+										{t('refill.history')} ({refillHistory.length})
+										<span className="expand-arrow">{refillHistoryExpanded ? '▼' : '▶'}</span>
+									</h3>
+									{refillHistoryExpanded && (
+										<div className="refill-history-list">
+											{refillHistory.map((entry) => (
+												<div key={entry.id} className="refill-history-item">
+													<span className="refill-date">
+														{new Date(entry.refillDate).toLocaleDateString(i18n.language, { day: "2-digit", month: "short", year: "numeric" })}, {new Date(entry.refillDate).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}
+													</span>
+													<span className="refill-amount">
+														+{entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + entry.loosePillsAdded} {t('common.pills')}
+													</span>
+												</div>
+											))}
+										</div>
+									)}
+								</div>
+							)}
 						</div>
 
 						<div className="med-detail-footer">
@@ -2928,7 +3134,10 @@ function AppContent() {
 								{t('common.close')}
 							</button>
 							<div className="footer-actions">
-								<button className="secondary" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
+								<button className="success" onClick={() => setShowRefillModal(true)}>
+									{t('refill.button')}
+								</button>
+								<button className="info" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
 									{t('common.edit')}
 								</button>
 								{selectedMed.blisters.length > 0 && (
@@ -2950,6 +3159,56 @@ function AppContent() {
 								className="lightbox-image"
 								onClick={(e) => e.stopPropagation()}
 							/>
+						</div>
+					)}
+
+					{/* Refill Modal */}
+					{showRefillModal && (
+						<div className="modal-overlay" onClick={(e) => { e.stopPropagation(); setShowRefillModal(false); }}>
+							<div className="modal-content refill-modal" onClick={(e) => e.stopPropagation()}>
+								<button className="modal-close" onClick={() => setShowRefillModal(false)}>×</button>
+								<h2>{t('refill.title')}</h2>
+								<p className="refill-med-name">{selectedMed.name}</p>
+								
+								<div className="refill-form">
+									<label>
+										{t('refill.packs')}
+										<input
+											type="number"
+											min="0"
+											value={refillPacks}
+											onChange={(e) => setRefillPacks(parseInt(e.target.value) || 0)}
+										/>
+									</label>
+									<label>
+										{t('refill.loosePills')}
+										<input
+											type="number"
+											min="0"
+											value={refillLoose}
+											onChange={(e) => setRefillLoose(parseInt(e.target.value) || 0)}
+										/>
+									</label>
+								</div>
+
+								<div className="modal-footer">
+									<button className="ghost" onClick={() => setShowRefillModal(false)}>
+										{t('common.cancel')}
+									</button>
+									<div className="refill-footer-right">
+										<button
+											className="success"
+											onClick={() => submitRefill(selectedMed.id)}
+											disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
+										>
+											{refillSaving ? t('common.saving') : t('refill.button')}
+										</button>
+										{(refillPacks > 0 || refillLoose > 0) && (
+											<span className="refill-preview">+{refillPacks * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + refillLoose} {t('common.pills')}</span>
+										)}
+									</div>
+								</div>
+							</div>
 						</div>
 					)}
 				</div>
@@ -2976,7 +3235,7 @@ function AppContent() {
 									<div 
 										key={med.id} 
 										className="user-med-item clickable"
-										onClick={() => { setSelectedUser(null); setSelectedMed(med); }}
+										onClick={() => { setSelectedUser(null); openMedDetail(med); }}
 									>
 										<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="sm" />
 										<div className="user-med-info">
@@ -3078,6 +3337,19 @@ function AppContent() {
 				</div>
 			)}
 
+			{/* Schedule Lightbox - for clicking medication images in schedule */}
+			{scheduleLightboxImage && (
+				<div className="lightbox-overlay" onClick={() => setScheduleLightboxImage(null)}>
+					<button className="lightbox-close" onClick={() => setScheduleLightboxImage(null)}>×</button>
+					<img 
+						src={scheduleLightboxImage} 
+						alt="Medication" 
+						className="lightbox-image"
+						onClick={(e) => e.stopPropagation()}
+					/>
+				</div>
+			)}
+
 			{/* Mobile Edit Modal */}
 			{showEditModal && (
 				<div className="modal-overlay" onClick={() => setShowEditModal(false)}>
@@ -3085,11 +3357,6 @@ function AppContent() {
 						<button className="modal-close" onClick={() => { setShowEditModal(false); resetForm(); }}>×</button>
 						<div className="edit-modal-header">
 							<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
-							{editingId && (
-								<button type="button" className="btn secondary small" onClick={resetForm}>
-									+ {t('form.newEntry')}
-								</button>
-							)}
 						</div>
 						<form className="form-grid mobile-edit-form" onSubmit={(e) => { saveMedication(e); setShowEditModal(false); }}>
 							<label className={`full ${fieldErrors.name ? 'has-error' : ''}`}>
@@ -3166,6 +3433,45 @@ function AppContent() {
 								{t('form.expiryDate')}
 								<input type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} />
 							</label>
+
+							{/* Refill section - only shown when editing (mobile) */}
+							{editingId && (
+								<div className="full refill-section">
+									<h4 className="refill-title">{t('refill.title')}</h4>
+									<div className="refill-form-inline">
+										<label>
+											{t('refill.packs')}
+											<input
+												type="number"
+												min="0"
+												value={refillPacks}
+												onChange={(e) => setRefillPacks(parseInt(e.target.value) || 0)}
+											/>
+										</label>
+										<label>
+											{t('refill.loosePills')}
+											<input
+												type="number"
+												min="0"
+												value={refillLoose}
+												onChange={(e) => setRefillLoose(parseInt(e.target.value) || 0)}
+											/>
+										</label>
+										<button
+											type="button"
+											className="success"
+											onClick={() => submitRefill(editingId)}
+											disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
+										>
+											{refillSaving ? t('common.saving') : t('refill.button')}
+										</button>
+										{(refillPacks > 0 || refillLoose > 0) && (
+											<span className="refill-preview">+{refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) + refillLoose} {t('common.pills')}</span>
+										)}
+									</div>
+								</div>
+							)}
+
 							<label className={`full ${fieldErrors.notes ? 'has-error' : ''}`}>
 								{t('form.notes')}
 								<textarea 

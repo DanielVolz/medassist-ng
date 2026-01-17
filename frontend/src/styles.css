@@ -431,6 +431,46 @@ button.secondary:hover {
   background: var(--bg-secondary);
 }
 
+/* Success button (Refill, etc.) */
+button.success {
+  background: var(--success);
+  color: white;
+  border: none;
+}
+button.success:hover {
+  filter: brightness(1.1);
+}
+button.success:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Primary/Accent button (New entry, Add intake, etc.) */
+button.primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+}
+button.primary:hover {
+  background: var(--accent-light);
+}
+button.primary:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Info button (Edit, secondary actions) */
+button.info {
+  background: #3b82f6;
+  color: white;
+  border: none;
+}
+button.info:hover {
+  background: #60a5fa;
+}
+
 /* Ghost button (Cancel, etc.) */
 button.ghost {
   background: transparent;
@@ -1388,13 +1428,21 @@ textarea.auto-resize {
 }
 
 .setting-row.language-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-start;
-  gap: 1.5rem;
+  gap: 1rem;
+}
+
+.setting-row.language-row .setting-label {
+  flex: 0 0 auto;
+  min-width: 100px;
 }
 
 .language-select {
-  width: auto;
-  min-width: 160px;
+  flex: 1 1 auto;
+  min-width: 140px;
   max-width: 200px;
   padding: 0.6rem 2rem 0.6rem 0.75rem;
   font-size: 1rem;
@@ -1666,6 +1714,16 @@ textarea.auto-resize {
 .info-tooltip:hover::before {
   opacity: 1;
   visibility: visible;
+}
+
+/* Mobile tooltip positioning - centered, narrower (more square-like) */
+@media (max-width: 640px) {
+  .info-tooltip::after {
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 200px;
+    width: max-content;
+  }
 }
 
 /* Channels Overview */
@@ -2090,10 +2148,13 @@ textarea.auto-resize {
   font-size: 0.9rem;
 }
 
-/* Compact Setting Row */
+/* Compact Setting Row - for inline toggles without card styling */
 .setting-row.compact {
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 0;
   margin-top: 0.5rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .setting-row.compact .setting-label {
@@ -2283,6 +2344,9 @@ textarea.auto-resize {
 }
 .med-avatar-sm.med-avatar-initials { font-size: 0.65em; }
 .med-avatar-lg.med-avatar-initials { font-size: 1.1em; }
+
+.med-avatar.clickable { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+.med-avatar.clickable:hover { transform: scale(1.1); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
 
 /* Table/Timeline cells with avatar */
 .cell-with-avatar {
@@ -2885,12 +2949,20 @@ textarea.auto-resize {
 }
 
 .lightbox-image {
-  max-width: 90vw;
-  max-height: 85vh;
+  max-width: 50vw;
+  max-height: 50vh;
   object-fit: contain;
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   animation: zoomIn 0.3s ease;
+}
+
+/* Mobile: larger lightbox image */
+@media (max-width: 768px) {
+  .lightbox-image {
+    max-width: 90vw;
+    max-height: 70vh;
+  }
 }
 
 @keyframes zoomIn {
@@ -2932,6 +3004,22 @@ textarea.auto-resize {
 
   .med-detail-footer {
     padding: 1rem 1.5rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .med-detail-footer > button {
+    flex: 1 1 auto;
+  }
+
+  .med-detail-footer .footer-actions {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .med-detail-footer button {
+    padding: 0.6rem 0.8rem;
+    font-size: 0.9rem;
   }
 
   .med-detail-grid {
@@ -3283,7 +3371,17 @@ h3 .reminder-icon.info-tooltip {
   box-shadow: 0 16px 48px rgba(0,0,0,0.15);
 }
 
-.user-menu:hover .user-dropdown {
+/* Only use hover on devices that support it (not touch) */
+@media (hover: hover) and (pointer: fine) {
+  .user-menu:hover .user-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Click-based open for all devices */
+.user-menu.open .user-dropdown {
   opacity: 1;
   visibility: visible;
   transform: translateY(0) scale(1);
@@ -3718,6 +3816,194 @@ h3 .reminder-icon.info-tooltip {
 }
 
 /* =============================================================================
+   Refill Modal & History
+   ============================================================================= */
+.refill-modal {
+  max-width: 500px;
+  padding: 1.5rem;
+}
+
+.refill-modal h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.refill-med-name {
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.refill-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.refill-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-weight: 500;
+}
+
+.refill-form input {
+  padding: 0.75rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.refill-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.refill-footer-right .refill-preview {
+  height: 42px;
+}
+
+/* Inline refill form in edit modal */
+.refill-form-inline {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.refill-form-inline label {
+  flex: 1;
+  min-width: 100px;
+}
+
+.refill-form-inline label input {
+  width: 100%;
+}
+
+.refill-form-inline button {
+  flex-shrink: 0;
+  margin-bottom: 0;
+  align-self: flex-end;
+  height: 42px;
+  padding: 0 1rem;
+  min-width: 110px;
+}
+
+.refill-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  padding: 0 0.75rem;
+  background: transparent;
+  border: 1px dashed var(--success);
+  border-radius: 6px;
+  color: var(--success);
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  align-self: flex-end;
+  box-sizing: border-box;
+}
+
+.refill-section {
+  border-left: 3px solid var(--success);
+  background: var(--bg-secondary);
+  margin-top: 1.5rem;
+  padding: 1rem 1rem 1rem 1.25rem;
+  border-radius: 0 8px 8px 0;
+}
+
+.refill-section .refill-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.75rem 0;
+}
+
+.refill-section .refill-form-inline button {
+  background: var(--success);
+  color: white;
+  border: none;
+}
+
+.refill-section .refill-form-inline button:hover:not(:disabled) {
+  background: var(--success-hover, #3aa865);
+  filter: brightness(1.1);
+}
+
+.refill-section .refill-form-inline button:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Clickable section header (for expand/collapse) */
+.section-header-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header-clickable:hover {
+  color: var(--accent);
+}
+
+/* Refill history in detail modal */
+.refill-history-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.refill-history-header .collapse-icon {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.refill-history-header .refill-count {
+  font-weight: normal;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.refill-history-list {
+  margin-top: 0.75rem;
+}
+
+.refill-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.refill-history-item:last-child {
+  border-bottom: none;
+}
+
+.refill-date {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.refill-details {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--success);
+}
+
+/* Nested modal overlay */
+.modal-overlay.nested {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* =============================================================================
    Shared Schedule Page (Public)
    ============================================================================= */
 .shared-schedule-page {
@@ -4007,78 +4293,59 @@ h3 .reminder-icon.info-tooltip {
   width: 100%;
 }
 
-/* Export/Import Section */
-.card:has(.export-import-grid) {
-  overflow: visible;
-}
-
-.card:has(.export-import-grid) .card-head {
-  overflow: visible;
-}
-
-.export-import-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-}
-
-@media (max-width: 640px) {
-  .export-import-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.export-import-card {
+/* Action Cards (for Export/Import etc.) - similar to radio-card */
+.action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: var(--card-radius);
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.export-import-card h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.export-import-desc {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  margin: 0;
-  line-height: 1.5;
-  flex: 1;
-}
-
-.export-import-card button,
-.export-import-file-btn {
-  margin-top: auto;
-  align-self: flex-start;
-}
-
-.export-import-file-btn {
-  cursor: pointer;
-  display: inline-block;
-  padding: 0.7rem 1.25rem;
-  border-radius: var(--btn-radius);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-secondary);
-  font-weight: 600;
-  font-size: 0.9rem;
+  border-radius: 12px;
   transition: all 0.2s ease;
 }
 
-.export-import-file-btn:hover {
-  background: var(--bg-hover);
+.action-card:hover {
   border-color: var(--border-primary);
 }
 
-.export-import-file-btn input {
-  display: none;
+.action-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.action-card-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.action-card-desc {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.action-card button,
+.action-card .btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .action-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .action-card button,
+  .action-card .btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
 }

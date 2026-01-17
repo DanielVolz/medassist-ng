@@ -68,6 +68,7 @@ export const userSettings = sqliteTable("user_settings", {
   lowStockDays: integer("low_stock_days").notNull().default(30),
   normalStockDays: integer("normal_stock_days").notNull().default(90),
   highStockDays: integer("high_stock_days").notNull().default(180),
+  expiryWarningDays: integer("expiry_warning_days").notNull().default(90),
   // UI preferences
   language: text("language", { length: 10 }).notNull().default("en"),
   // Stock calculation mode: "automatic" (schedule-based) or "manual" (only marked doses)
@@ -116,4 +117,16 @@ export const doseTracking = sqliteTable("dose_tracking", {
   takenAt: integer("taken_at", { mode: "timestamp" }).notNull().default(sql`(strftime('%s','now'))`),
   markedBy: text("marked_by", { length: 100 }), // null = user, "Daniel" = via share link
   dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false), // true = missed dose acknowledged without taking
+});
+
+// =============================================================================
+// Refill History - Tracks when medication stock was refilled
+// =============================================================================
+export const refillHistory = sqliteTable("refill_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  medicationId: integer("medication_id").notNull().references(() => medications.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  packsAdded: integer("packs_added").notNull().default(0),
+  loosePillsAdded: integer("loose_pills_added").notNull().default(0),
+  refillDate: integer("refill_date", { mode: "timestamp" }).notNull().default(sql`(strftime('%s','now'))`),
 });

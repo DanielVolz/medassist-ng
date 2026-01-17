@@ -9,8 +9,15 @@ import sensible from "@fastify/sensible";
 import fastifyMultipart from "@fastify/multipart";
 import { createClient, Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import { beforeAll, afterAll, beforeEach } from "vitest";
-import { getTableCreationSQL } from "../db/schema-sql.js";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+
+// Get migrations folder path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 // Type for our test database
 export type TestDb = ReturnType<typeof drizzle>;
@@ -61,14 +68,11 @@ export async function buildTestApp(): Promise<TestContext> {
 }
 
 /**
- * Create test database schema
+ * Create test database schema using drizzle-kit migrations
  */
 async function runTestMigrations(client: Client): Promise<void> {
-  const tableCreations = getTableCreationSQL();
-
-  for (const sql of tableCreations) {
-    await client.execute(sql);
-  }
+  const db = drizzle(client);
+  await migrate(db, { migrationsFolder });
 }
 
 // =============================================================================
@@ -282,6 +286,7 @@ export async function closeTestApp(ctx: TestContext): Promise<void> {
  */
 export async function clearTestData(client: Client): Promise<void> {
   // Order matters due to foreign keys
+  await client.execute("DELETE FROM refill_history");
   await client.execute("DELETE FROM dose_tracking");
   await client.execute("DELETE FROM share_tokens");
   await client.execute("DELETE FROM refresh_tokens");

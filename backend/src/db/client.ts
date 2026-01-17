@@ -1,11 +1,17 @@
 import { createClient, Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import { existsSync, mkdirSync, accessSync, constants, statSync, writeFileSync } from "fs";
-import { resolve } from "path";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { getTableCreationSQL } from "./schema-sql.js";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
+
+// Get migrations folder path (relative to this file's location)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 // =============================================================================
 // Exported utility functions for testing
@@ -44,23 +50,20 @@ export function ensureDataDirectory(dataDir: string): { success: boolean; error?
   }
 }
 
-/** Get the SQL statements for creating all tables (re-exported from schema-sql) */
-export { getTableCreationSQL } from "./schema-sql.js";
+/** Run drizzle-kit migrations on the database */
+export async function runDrizzleMigrations(database: ReturnType<typeof drizzle>): Promise<{ success: boolean; error?: string }> {
+  try {
+    await migrate(database, { migrationsFolder });
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
 
-/** Run table creation migrations on a client */
-export async function runTableMigrations(client: Client): Promise<{ success: boolean; errors: string[] }> {
-  const tableCreations = getTableCreationSQL();
+/** Run ALTER TABLE migrations for backward compatibility with older databases */
+export async function runAlterMigrations(client: Client): Promise<{ success: boolean; errors: string[] }> {
   const errors: string[] = [];
 
-  for (const sql of tableCreations) {
-    try {
-      await client.execute(sql);
-    } catch (e: any) {
-      errors.push(e.message);
-    }
-  }
-
-  // Run ALTER TABLE migrations for backward compatibility with older databases
   // These add new columns to existing tables (silently fail if column already exists)
   const alterMigrations = [
     // Added in v1.x - repeat reminders and nagging settings
@@ -149,9 +152,19 @@ export const db = drizzle(client);
 
 // Auto-run migrations (self-healing database)
 async function runMigrations() {
-  const result = await runTableMigrations(client);
-  if (result.errors.length > 0) {
-    result.errors.forEach(err => console.error(`[DB] Table creation error:`, err));
+  // Run drizzle-kit generated migrations
+  console.log(`[DB] Running drizzle migrations from: ${migrationsFolder}`);
+  const migrateResult = await runDrizzleMigrations(db);
+  if (!migrateResult.success) {
+    console.error(`[DB] Migration error:`, migrateResult.error);
+  } else {
+    console.log(`[DB] Drizzle migrations completed`);
+  }
+
+  // Run ALTER TABLE migrations for backward compatibility
+  const alterResult = await runAlterMigrations(client);
+  if (alterResult.errors.length > 0) {
+    alterResult.errors.forEach(err => console.error(`[DB] ALTER migration error:`, err));
   }
   console.log(`[DB] Tables verified/created`);
 

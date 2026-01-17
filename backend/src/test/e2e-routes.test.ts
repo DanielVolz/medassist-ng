@@ -54,6 +54,8 @@ const { shareRoutes } = await import("../routes/share.js");
 const { medicationRoutes } = await import("../routes/medications.js");
 const { settingsRoutes } = await import("../routes/settings.js");
 const { healthRoutes } = await import("../routes/health.js");
+const { refillRoutes } = await import("../routes/refills.js");
+const { exportRoutes } = await import("../routes/export.js");
 
 // =============================================================================
 // Test Setup
@@ -142,6 +144,16 @@ async function createSchema(client: Client) {
       dismissed integer NOT NULL DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
+    `CREATE TABLE IF NOT EXISTS refill_history (
+      id integer PRIMARY KEY AUTOINCREMENT,
+      medication_id integer NOT NULL,
+      user_id integer NOT NULL,
+      packs_added integer NOT NULL DEFAULT 0,
+      loose_pills_added integer NOT NULL DEFAULT 0,
+      refill_date integer NOT NULL DEFAULT (strftime('%s','now')),
+      FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
   ];
 
   for (const sql of tableCreations) {
@@ -150,6 +162,7 @@ async function createSchema(client: Client) {
 }
 
 async function clearData(client: Client) {
+  await client.execute("DELETE FROM refill_history");
   await client.execute("DELETE FROM dose_tracking");
   await client.execute("DELETE FROM share_tokens");
   await client.execute("DELETE FROM user_settings");
@@ -230,6 +243,8 @@ describe("E2E Tests with Real Routes", () => {
     await app.register(medicationRoutes);
     await app.register(settingsRoutes);
     await app.register(healthRoutes);
+    await app.register(refillRoutes);
+    await app.register(exportRoutes);
 
     await app.ready();
   });
@@ -1566,6 +1581,344 @@ describe("E2E Tests with Real Routes", () => {
 
       // Returns 204 No Content
       expect(response.statusCode).toBe(204);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Real Refill Routes Tests
+  // ---------------------------------------------------------------------------
+
+  describe("Real /medications/:id/refill routes", () => {
+    it("should add refill to medication stock", async () => {
+      // Create medication first
+      const createResponse = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: { 
+          name: "Refill Test Med",
+          packCount: 2,
+          blistersPerPack: 3,
+          pillsPerBlister: 10,
+          looseTablets: 5,
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      expect(createResponse.statusCode).toBe(200);
+      const medId = createResponse.json().id;
+
+      // Add refill
+      const refillResponse = await app.inject({
+        method: "POST",
+        url: `/medications/${medId}/refill`,
+        payload: { packsAdded: 1, loosePillsAdded: 10 },
+      });
+
+      expect(refillResponse.statusCode).toBe(200);
+      const data = refillResponse.json();
+      expect(data.success).toBe(true);
+      expect(data.newStock.packCount).toBe(3); // 2 + 1
+      expect(data.newStock.looseTablets).toBe(15); // 5 + 10
+    });
+
+    it("should return 400 when no packs or pills added", async () => {
+      const createResponse = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: { 
+          name: "Refill Test Med 2",
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      const medId = createResponse.json().id;
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/medications/${medId}/refill`,
+        payload: { packsAdded: 0, loosePillsAdded: 0 },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("should return 404 for non-existent medication", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/medications/99999/refill",
+        payload: { packsAdded: 1 },
+      });
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    it("should return 400 for invalid medication id", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/medications/invalid/refill",
+        payload: { packsAdded: 1 },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+  });
+
+  describe("Real /medications/:id/refills routes (history)", () => {
+    it("should return empty array when no refills", async () => {
+      const createResponse = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: { 
+          name: "No Refill Med",
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      const medId = createResponse.json().id;
+
+      const response = await app.inject({
+        method: "GET",
+        url: `/medications/${medId}/refills`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual([]);
+    });
+
+    it("should return refill history after adding refills", async () => {
+      const createResponse = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: { 
+          name: "With Refills Med",
+          packCount: 1,
+          blistersPerPack: 2,
+          pillsPerBlister: 10,
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      const medId = createResponse.json().id;
+
+      // Add two refills
+      await app.inject({
+        method: "POST",
+        url: `/medications/${medId}/refill`,
+        payload: { packsAdded: 1, loosePillsAdded: 0 },
+      });
+      await app.inject({
+        method: "POST",
+        url: `/medications/${medId}/refill`,
+        payload: { packsAdded: 0, loosePillsAdded: 5 },
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: `/medications/${medId}/refills`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const refills = response.json();
+      expect(refills).toHaveLength(2);
+      // Check both refills exist (order may vary)
+      const hasPackRefill = refills.some((r: any) => r.packsAdded === 1 && r.loosePillsAdded === 0);
+      const hasLooseRefill = refills.some((r: any) => r.packsAdded === 0 && r.loosePillsAdded === 5);
+      expect(hasPackRefill).toBe(true);
+      expect(hasLooseRefill).toBe(true);
+    });
+
+    it("should return 404 for non-existent medication", async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/medications/99999/refills",
+      });
+
+      expect(response.statusCode).toBe(404);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Real Export/Import Routes Tests
+  // ---------------------------------------------------------------------------
+
+  describe("Real /export routes", () => {
+    it("should export empty data when no medications", async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/export",
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.version).toBeDefined();
+      expect(data.exportedAt).toBeDefined();
+      expect(data.medications).toEqual([]);
+    });
+
+    it("should export medications with correct structure", async () => {
+      // Create a medication
+      await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: { 
+          name: "Export Test Med",
+          genericName: "Test Generic",
+          packCount: 2,
+          blistersPerPack: 3,
+          pillsPerBlister: 10,
+          looseTablets: 5,
+          pillWeightMg: 500,
+          notes: "Test notes",
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/export",
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.medications).toHaveLength(1);
+      
+      const med = data.medications[0];
+      expect(med.name).toBe("Export Test Med");
+      expect(med.genericName).toBe("Test Generic");
+      expect(med.inventory.packCount).toBe(2);
+      expect(med.inventory.blistersPerPack).toBe(3);
+      expect(med.inventory.pillsPerBlister).toBe(10);
+      expect(med.inventory.looseTablets).toBe(5);
+      expect(med.pillWeightMg).toBe(500);
+      expect(med.notes).toBe("Test notes");
+      expect(med.schedules).toHaveLength(1);
+    });
+
+    it("should include settings when user has settings", async () => {
+      // Create settings first
+      await app.inject({
+        method: "PUT",
+        url: "/settings",
+        payload: { 
+          emailEnabled: true,
+          notificationEmail: "test@example.com",
+        },
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/export",
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.settings).toBeDefined();
+      expect(data.settings.emailEnabled).toBe(true);
+    });
+  });
+
+  describe("Real /import routes", () => {
+    it("should import medications from export format", async () => {
+      const importData = {
+        version: "1.0",
+        exportedAt: new Date().toISOString(),
+        medications: [
+          {
+            _exportId: "med-1",
+            name: "Imported Med",
+            genericName: "Imported Generic",
+            takenBy: ["Person A"],
+            inventory: {
+              packCount: 3,
+              blistersPerPack: 2,
+              pillsPerBlister: 14,
+              looseTablets: 7,
+            },
+            pillWeightMg: 250,
+            schedules: [
+              { usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z", remind: true }
+            ],
+            notes: "Imported notes",
+            intakeRemindersEnabled: true,
+          }
+        ],
+      };
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: importData,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const result = response.json();
+      expect(result.success).toBe(true);
+      expect(result.imported.medications).toBe(1);
+
+      // Verify medication was created
+      const medsResponse = await app.inject({
+        method: "GET",
+        url: "/medications",
+      });
+      const meds = medsResponse.json();
+      expect(meds).toHaveLength(1);
+      expect(meds[0].name).toBe("Imported Med");
+    });
+
+    it("should return 400 for invalid import data", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: { invalid: "data" },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("should replace existing medications on import", async () => {
+      // First create a medication
+      await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: { 
+          name: "Existing Med",
+          packCount: 5,
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+
+      // Verify it exists
+      let medsResponse = await app.inject({ method: "GET", url: "/medications" });
+      expect(medsResponse.json()).toHaveLength(1);
+      expect(medsResponse.json()[0].name).toBe("Existing Med");
+      expect(medsResponse.json()[0].packCount).toBe(5);
+
+      // Import will REPLACE all data
+      const importData = {
+        version: "1.0",
+        exportedAt: new Date().toISOString(),
+        medications: [
+          {
+            _exportId: "med-1",
+            name: "Imported Med",
+            inventory: { packCount: 10, blistersPerPack: 2, pillsPerBlister: 14, looseTablets: 0 },
+            schedules: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+          }
+        ],
+      };
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: importData,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const result = response.json();
+      expect(result.success).toBe(true);
+      expect(result.imported.medications).toBe(1);
+
+      // Verify: old med is gone, new med exists
+      medsResponse = await app.inject({ method: "GET", url: "/medications" });
+      expect(medsResponse.json()).toHaveLength(1);
+      expect(medsResponse.json()[0].name).toBe("Imported Med");
+      expect(medsResponse.json()[0].packCount).toBe(10);
     });
   });
 });

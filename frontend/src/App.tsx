@@ -3285,7 +3285,7 @@ function AppContent() {
 								<button className="success" onClick={openRefillModal}>
 									{t('refill.button')}
 								</button>
-								<button className="info" onClick={() => { closeMedDetail(); navigate("/medications"); startEdit(selectedMed); }}>
+								<button className="info" onClick={() => { setSelectedMed(null); navigate("/medications"); startEdit(selectedMed); }}>
 									{t('common.edit')}
 								</button>
 								{selectedMed.blisters.length > 0 && (

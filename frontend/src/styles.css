@@ -1711,18 +1711,39 @@ textarea.auto-resize {
 }
 
 .info-tooltip:hover::after,
-.info-tooltip:hover::before {
+.info-tooltip:hover::before,
+.info-tooltip:focus::after,
+.info-tooltip:focus::before,
+.info-tooltip.tooltip-active::after,
+.info-tooltip.tooltip-active::before {
   opacity: 1;
   visibility: visible;
 }
 
-/* Mobile tooltip positioning - centered, narrower (more square-like) */
+/* Mobile tooltip - disable hover, use click only */
 @media (max-width: 640px) {
-  .info-tooltip::after {
+  .info-tooltip:hover::after,
+  .info-tooltip:hover::before {
+    opacity: 0;
+    visibility: hidden;
+  }
+  
+  .info-tooltip.tooltip-active::after {
+    opacity: 1;
+    visibility: visible;
+    position: fixed;
+    top: 50%;
     left: 50%;
-    transform: translateX(-50%);
-    max-width: 200px;
+    bottom: auto;
+    right: auto;
+    transform: translate(-50%, -50%);
+    max-width: calc(100vw - 32px);
     width: max-content;
+    z-index: 9999;
+  }
+  
+  .info-tooltip::before {
+    display: none;
   }
 }
 
@@ -3864,6 +3885,27 @@ h3 .reminder-icon.info-tooltip {
 
 .refill-footer-right .refill-preview {
   height: 42px;
+}
+
+/* Refill modal footer mobile */
+@media (max-width: 640px) {
+  .refill-modal .modal-footer {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .refill-modal .modal-footer > button,
+  .refill-modal .modal-footer .refill-footer-right {
+    width: 100%;
+  }
+  
+  .refill-modal .modal-footer .refill-footer-right {
+    justify-content: space-between;
+  }
+  
+  .refill-modal .modal-footer .refill-footer-right button {
+    flex: 1;
+  }
 }
 
 /* Inline refill form in edit modal */

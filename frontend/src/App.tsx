@@ -569,6 +569,40 @@ function AppContent() {
 		return () => document.removeEventListener("click", handleClickOutside);
 	}, [userDropdownOpen]);
 
+	// Close tooltips on scroll/touch (for mobile)
+	useEffect(() => {
+		const closeAllTooltips = () => {
+			document.querySelectorAll('.info-tooltip.tooltip-active').forEach(el => {
+				el.classList.remove('tooltip-active');
+			});
+		};
+		
+		const handleTooltipClick = (e: Event) => {
+			const target = e.target as HTMLElement;
+			if (target.classList.contains('info-tooltip')) {
+				// Close other tooltips first
+				closeAllTooltips();
+				// Toggle this one
+				target.classList.add('tooltip-active');
+			} else {
+				closeAllTooltips();
+			}
+		};
+		
+		const handleTouchMove = () => {
+			closeAllTooltips();
+		};
+		
+		document.addEventListener('click', handleTooltipClick, { capture: true });
+		document.addEventListener('touchmove', handleTouchMove, { passive: true });
+		document.addEventListener('scroll', handleTouchMove, { passive: true });
+		return () => {
+			document.removeEventListener('click', handleTooltipClick, { capture: true });
+			document.removeEventListener('touchmove', handleTouchMove);
+			document.removeEventListener('scroll', handleTouchMove);
+		};
+	}, []);
+
 	// Prevent background scroll when modal is open
 	useEffect(() => {
 		const isModalOpen = selectedMed || selectedUser || showProfile || showShareDialog || showEditModal;

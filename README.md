@@ -28,6 +28,7 @@
 > **Think of this app as a helpful tool, but make all health decisions independently!**
 
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
 - [Development](#development)
@@ -42,6 +43,11 @@
 - Track exact stock: packs, blisters, and loose pills
 - Display remaining days of supply
 - Automatic calculation based on intake schedule
+
+### Medication Refill
+- One-click refill with pack or loose pill options
+- Complete refill history per medication
+- Automatic stock updates after each refill
 
 ### Flexible Schedules
 - Daily, weekly, or custom intervals per medication
@@ -60,6 +66,11 @@
 - Manage medications for multiple people
 - Share schedules via link. Recipients can mark doses as taken, you see it live
 
+### Data Export & Import
+- Export all your data (medications, dose history, settings) as JSON
+- Import previously exported data with automatic ID remapping
+- Choose whether to include sensitive data in exports
+
 ### Notifications
 - Email via SMTP
 - Push notifications via ntfy, Pushover, Gotify, Telegram, Discord & more ([Shoutrrr](https://containrrr.dev/shoutrrr/))
@@ -70,6 +81,80 @@
 - SSO via OIDC (Authelia, Authentik, Pocket ID, Keycloak)
 - Non-root containers
 - Dark mode included 😎
+
+# Screenshots
+
+<details>
+<summary><strong>Screenshots</strong></summary>
+
+<details>
+<summary>Dashboard</summary>
+
+Overview with stock status, reorder reminders, and upcoming schedules.
+
+<img src="docs/screenshots/dashboard-desktop.png" alt="Dashboard" width="100%" />
+
+</details>
+
+<details>
+<summary>Medication Detail</summary>
+
+View medication details, stock information, and intake schedule.
+
+<img src="docs/screenshots/medication-detail-modal.png" alt="Medication Detail Modal" width="100%" />
+
+</details>
+
+<details>
+<summary>Medications & Edit Form</summary>
+
+Manage your medications with the edit form and refill feature.
+
+<img src="docs/screenshots/medications-edit-desktop.png" alt="Medications Edit Form" width="100%" />
+
+</details>
+
+<details>
+<summary>Demand Calculator (Planner)</summary>
+
+Calculate how many pills you need for a specific date range.
+
+<img src="docs/screenshots/planner-desktop.png" alt="Planner - Demand Calculator" width="100%" />
+
+</details>
+
+<details>
+<summary>Shared Schedule</summary>
+
+Share your medication schedule with others via a public link.
+
+<img src="docs/screenshots/share-schedule-desktop.png" alt="Shared Schedule" width="100%" />
+
+</details>
+
+<details>
+<summary>Mobile Views</summary>
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <strong>Dashboard</strong><br>
+      <img src="docs/screenshots/dashboard-mobile.png" alt="Mobile Dashboard" width="100%" />
+    </td>
+    <td align="center" width="33%">
+      <strong>Medications</strong><br>
+      <img src="docs/screenshots/medications-mobile.png" alt="Mobile Medications" width="100%" />
+    </td>
+    <td align="center" width="33%">
+      <strong>Schedule</strong><br>
+      <img src="docs/screenshots/schedule-mobile.png" alt="Mobile Schedule" width="100%" />
+    </td>
+  </tr>
+</table>
+
+</details>
+
+</details>
 
 # Getting Started
 

@@ -39,53 +39,10 @@
   <img src="docs/gifs/MedAssist-demo.gif" alt="MedAssist-ng Dashboard" width="100%" />
 </p>
 
-### Smart Inventory
-- Track exact stock: packs, blisters, and loose pills
-- Display remaining days of supply
-- Automatic calculation based on intake schedule
-
-### Medication Refill
-- One-click refill with pack or loose pill options
-- Complete refill history per medication
-- Automatic stock updates after each refill
-
-### Flexible Schedules
-- Daily, weekly, or custom intervals per medication
-- Independent schedules for each medication
-
-### Stock Alerts & Reminders
-- Notifications before stock runs out
-- Configurable warning thresholds
-- Intake reminders via push notifications
-
-### Trip Planner
-- Calculate how many pills you need for a trip or date range
-- Plan ahead for vacations, business trips, or hospital stays
-
-### Multi-Person Support
-- Manage medications for multiple people
-- Share schedules via link. Recipients can mark doses as taken, you see it live
-
-### Data Export & Import
-- Export all your data (medications, dose history, settings) as JSON
-- Import previously exported data with automatic ID remapping
-- Choose whether to include sensitive data in exports
-
-### Notifications
-- Email via SMTP
-- Push notifications via ntfy, Pushover, Gotify, Telegram, Discord & more ([Shoutrrr](https://containrrr.dev/shoutrrr/))
-- Supports both stock warnings and intake reminders
-
-### Privacy & Security
-- Fully self-hosted
-- SSO via OIDC (Authelia, Authentik, Pocket ID, Keycloak)
-- Non-root containers
-- Dark mode included 😎
-
-# Screenshots
-
+<a id="screenshots"></a>
 <details>
 <summary><strong>Screenshots</strong></summary>
+<blockquote>
 
 <details>
 <summary>Dashboard</summary>
@@ -154,7 +111,51 @@ Share your medication schedule with others via a public link.
 
 </details>
 
+</blockquote>
 </details>
+
+### Smart Inventory
+- Track exact stock: packs, blisters, and loose pills
+- Display remaining days of supply
+- Automatic calculation based on intake schedule
+
+### Medication Refill
+- One-click refill with pack or loose pill options
+- Complete refill history per medication
+- Automatic stock updates after each refill
+
+### Flexible Schedules
+- Daily, weekly, or custom intervals per medication
+- Independent schedules for each medication
+
+### Stock Alerts & Reminders
+- Notifications before stock runs out
+- Configurable warning thresholds
+- Intake reminders via push notifications
+
+### Trip Planner
+- Calculate how many pills you need for a trip or date range
+- Plan ahead for vacations, business trips, or hospital stays
+
+### Multi-Person Support
+- Manage medications for multiple people
+- Share schedules via link. Recipients can mark doses as taken, you see it live
+
+### Data Export & Import
+- Export all your data (medications, dose history, settings) as JSON
+- Import previously exported data with automatic ID remapping
+- Choose whether to include sensitive data in exports
+
+### Notifications
+- Email via SMTP
+- Push notifications via ntfy, Pushover, Gotify, Telegram, Discord & more ([Shoutrrr](https://containrrr.dev/shoutrrr/))
+- Supports both stock warnings and intake reminders
+
+### Privacy & Security
+- Fully self-hosted
+- SSO via OIDC (Authelia, Authentik, Pocket ID, Keycloak)
+- Non-root containers
+- Dark mode included 😎
 
 # Getting Started
 

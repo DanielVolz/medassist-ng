@@ -2110,11 +2110,6 @@ function AppContent() {
 						<article className="card form desktop-only">
 							<div className="card-head">
 								<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
-								{editingId && (
-									<button type="button" className="btn secondary small" onClick={resetForm}>
-										+ {t('form.newEntry')}
-									</button>
-								)}
 							</div>
 							<form className="form-grid" onSubmit={saveMedication}>
 								<label className={fieldErrors.name ? 'has-error' : ''}>

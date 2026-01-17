@@ -4315,15 +4315,37 @@ function SharedSchedule() {
 		}
 	}
 
+	// Helper functions for lightbox with history support (mobile back swipe)
+	function openLightbox(url: string, name: string) {
+		setLightboxImage({ url, name });
+		window.history.pushState({ modal: 'lightbox' }, '');
+	}
+	function closeLightbox() {
+		if (lightboxImage) {
+			window.history.back();
+		}
+	}
+
 	// Close lightbox on Escape key
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.key === "Escape" && lightboxImage) {
-				setLightboxImage(null);
+				closeLightbox();
 			}
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [lightboxImage]);
+
+	// Handle browser back button to close lightbox
+	useEffect(() => {
+		function handlePopState() {
+			if (lightboxImage) {
+				setLightboxImage(null);
+			}
+		}
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
 	}, [lightboxImage]);
 
 	// Load taken doses from server with polling for real-time sync
@@ -4739,7 +4761,7 @@ function SharedSchedule() {
 														<div className="med-name">
 															<span 
 																className={med?.imageUrl ? 'clickable' : ''}
-																onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
+																onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
 															>
 																<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 															</span>
@@ -4858,7 +4880,7 @@ function SharedSchedule() {
 														<div className="med-name">
 															<span 
 																className={med?.imageUrl ? 'clickable' : ''}
-																onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
+																onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
 															>
 																<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 															</span>
@@ -4925,8 +4947,8 @@ function SharedSchedule() {
 
 			{/* Image Lightbox */}
 			{lightboxImage && (
-				<div className="lightbox-overlay" onClick={() => setLightboxImage(null)}>
-					<button className="lightbox-close" onClick={() => setLightboxImage(null)}>×</button>
+				<div className="lightbox-overlay" onClick={closeLightbox}>
+					<button className="lightbox-close" onClick={closeLightbox}>×</button>
 					<img 
 						src={`/api/images/${lightboxImage.url}`} 
 						alt={lightboxImage.name} 

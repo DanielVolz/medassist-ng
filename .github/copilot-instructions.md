@@ -455,40 +455,50 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
 > Users upgrade their Docker containers but keep their existing DB.
 > The app must NOT crash if old columns are missing.
 
+### Schema Management with Drizzle Kit
+
+The database schema uses **Drizzle Kit** for migrations. There is a **single source of truth**:
+
+- **`backend/src/db/schema.ts`** - Drizzle ORM schema definitions (TypeScript)
+- **`backend/drizzle/`** - Generated SQL migrations (auto-generated from schema.ts)
+
+**DO NOT manually edit migration files!** They are generated from schema.ts.
+
+### Adding New Columns
+
+1. **Add to schema.ts** with DEFAULT value:
+   ```typescript
+   maxNaggingReminders: integer("max_nagging_reminders").notNull().default(5),
+   ```
+
+2. **Generate migration**:
+   ```bash
+   cd backend && npx drizzle-kit generate --name add_column_name
+   ```
+
+3. **Add backward-compatible ALTER migration** in `client.ts` `runAlterMigrations()`:
+   ```typescript
+   `ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`,
+   ```
+
+4. **NULL-safe reading** in routes:
+   ```typescript
+   maxNaggingReminders: settings.maxNaggingReminders ?? 5,
+   ```
+
 ### Rules for New Columns
 
 1. **ALWAYS with DEFAULT value**: New columns must have `NOT NULL DEFAULT <value>`
 2. **NULL-safe in code**: All queries must use `?? defaultValue` or `?? false`
-3. **Update schema SQL**: Add to these files:
-   - `backend/src/db/schema.ts` - Drizzle Schema
-   - `backend/src/db/schema-sql.ts` - `getTableCreationSQL()` for new DBs
-   - `backend/src/db/client.ts` - `ALTER TABLE ADD COLUMN IF NOT EXISTS` migration
-4. **Update test schemas**: All test files with their own schema:
-   - `backend/src/test/e2e-routes.test.ts`
-   - `backend/src/test/integration.test.ts`
-   - `backend/src/test/planner.test.ts`
-
-### Example: Adding a New Column
-
-```typescript
-// 1. schema.ts - Drizzle definition
-maxNaggingReminders: integer("max_nagging_reminders").notNull().default(5),
-
-// 2. schema-sql.ts - For new databases
-"max_nagging_reminders integer NOT NULL DEFAULT 5,"
-
-// 3. client.ts - Migration for existing DBs (IN ensureTablesExist())
-await client.execute(`ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`).catch(() => {});
-
-// 4. Routes - NULL-safe reading
-maxNaggingReminders: settings.maxNaggingReminders ?? 5,
-```
+3. **Generate migration**: Run `npx drizzle-kit generate` after schema changes
+4. **Add ALTER migration**: For backward compatibility with existing DBs
 
 ### What is NOT Allowed
 
 - ❌ Deleting or renaming columns (breaks old DBs)
 - ❌ `NOT NULL` without `DEFAULT` (INSERT fails)
 - ❌ Reading columns without fallback in code
+- ❌ Manually editing migration SQL files
 - ❌ Documenting "delete DB" as a solution
 
 ### When Backward Compatibility is NOT Possible
@@ -504,6 +514,8 @@ If a breaking change is unavoidable:
 |---------|----------|
 | Backend entry | `backend/src/index.ts` |
 | Database schema | `backend/src/db/schema.ts` |
+| Drizzle migrations | `backend/drizzle/*.sql` |
+| Drizzle config | `backend/drizzle.config.ts` |
 | Backend routes | `backend/src/routes/*.ts` |
 | Backend services | `backend/src/services/*.ts` |
 | Frontend app | `frontend/src/App.tsx` |

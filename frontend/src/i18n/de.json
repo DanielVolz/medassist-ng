@@ -98,8 +98,8 @@
     }
   },
   "form": {
-    "editEntry": "Eintrag bearbeiten",
-    "newEntry": "Neuer Eintrag",
+    "editEntry": "Medikament bearbeiten",
+    "newEntry": "Neues Medikament",
     "badge": "Packungen + lose Tabletten",
     "commercialName": "Handelsname",
     "genericName": "Wirkstoff",
@@ -226,7 +226,7 @@
     "pillWeight": "Tablettengewicht",
     "expiryDate": "Ablaufdatum",
     "intakeSchedule": "Einnahmeplan",
-    "coverageStatus": "Reichweite",
+    "coverageStatus": "Bestand",
     "daysLeft": "Tage übrig",
     "runsOut": "Aufgebraucht",
     "notes": "Notizen",
@@ -383,5 +383,21 @@
     "importError": "Daten konnten nicht importiert werden",
     "invalidFile": "Ungültiges Dateiformat. Bitte wähle eine gültige MedAssist-Exportdatei.",
     "downloadFilename": "medassist-export"
+  },
+  "refill": {
+    "title": "Nachfüllen",
+    "packs": "Packungen hinzufügen",
+    "loosePills": "Lose Tabletten hinzufügen",
+    "pillsPerPack": "1 Packung = {{count}} Tabletten",
+    "addToStock": "Zum Bestand hinzufügen",
+    "adding": "Wird hinzugefügt...",
+    "success": "{{pills}} Tabletten zum Bestand hinzugefügt",
+    "history": "Nachfüll-Verlauf",
+    "noHistory": "Noch keine Nachfüllungen erfasst",
+    "packsAdded": "{{count}} Packung",
+    "packsAdded_other": "{{count}} Packungen",
+    "pillsAdded": "{{count}} Tablette",
+    "pillsAdded_other": "{{count}} Tabletten",
+    "button": "Nachfüllen"
   }
 }

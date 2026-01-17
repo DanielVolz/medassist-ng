@@ -20,6 +20,7 @@ import { plannerRoutes } from "./routes/planner.js";
 import { shareRoutes } from "./routes/share.js";
 import { doseRoutes } from "./routes/doses.js";
 import { exportRoutes } from "./routes/export.js";
+import { refillRoutes } from "./routes/refills.js";
 import { startReminderScheduler } from "./services/reminder-scheduler.js";
 import { startIntakeReminderScheduler } from "./services/intake-reminder-scheduler.js";
 
@@ -115,6 +116,7 @@ export async function createApp(options?: {
   await app.register(shareRoutes);
   await app.register(doseRoutes);
   await app.register(exportRoutes);
+  await app.register(refillRoutes);
 
   return app;
 }
@@ -184,6 +186,7 @@ await app.register(plannerRoutes);
 await app.register(shareRoutes);
 await app.register(doseRoutes);
 await app.register(exportRoutes);
+await app.register(refillRoutes);
 
 const start = async () => {
   try {

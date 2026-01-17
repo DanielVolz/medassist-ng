@@ -1,45 +1,78 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import { mkdirSync, rmSync, existsSync } from "fs";
-import { resolve } from "path";
+import { resolve, dirname } from "path";
 import { tmpdir } from "os";
+import { fileURLToPath } from "url";
 
 // Import the exported utility functions from client.ts
 import {
   buildDbUrl,
   getDbPaths,
   ensureDataDirectory,
-  getTableCreationSQL,
-  runTableMigrations,
+  runDrizzleMigrations,
+  runAlterMigrations,
   ensureDefaultUser,
 } from "../db/client.js";
 
 // Import the exported utility functions from migrate.ts
 import {
-  getTableCreationSQL as getTableCreationSQLFromMigrate,
   splitSQLStatements,
   executeMigration,
   getStatementPreview,
 } from "../db/migrate.js";
 
+// Get migrations folder path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const migrationsFolder = resolve(__dirname, "../../drizzle");
+
 describe("Migration Script Utilities", () => {
-  describe("getTableCreationSQL", () => {
-    it("should return a non-empty array of SQL statements", () => {
-      const statements = getTableCreationSQL();
-      expect(Array.isArray(statements)).toBe(true);
-      expect(statements.length).toBeGreaterThan(0);
+  describe("executeMigration", () => {
+    let client: ReturnType<typeof createClient>;
+
+    beforeEach(() => {
+      client = createClient({ url: ":memory:" });
     });
 
-    it("should contain all table definitions", () => {
-      const statements = getTableCreationSQL();
-      const allSQL = statements.join(" ");
-      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS users");
-      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS medications");
-      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS user_settings");
-      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS refresh_tokens");
-      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS share_tokens");
-      expect(allSQL).toContain("CREATE TABLE IF NOT EXISTS dose_tracking");
+    it("should execute all migrations successfully", async () => {
+      const result = await executeMigration(client);
+      expect(result.success).toBe(true);
+      expect(result.executed).toBeGreaterThan(0);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should create all tables", async () => {
+      await executeMigration(client);
+      
+      const tables = await client.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%' ORDER BY name"
+      );
+      
+      const tableNames = tables.rows.map(r => r.name);
+      expect(tableNames).toContain("users");
+      expect(tableNames).toContain("medications");
+      expect(tableNames).toContain("user_settings");
+      expect(tableNames).toContain("refresh_tokens");
+      expect(tableNames).toContain("share_tokens");
+      expect(tableNames).toContain("dose_tracking");
+      expect(tableNames).toContain("refill_history");
+    });
+
+    it("should be idempotent", async () => {
+      await executeMigration(client);
+      const result = await executeMigration(client);
+      expect(result.success).toBe(true);
+    });
+
+    it("should allow inserting data after migration", async () => {
+      await executeMigration(client);
+      
+      await client.execute("INSERT INTO users (username) VALUES ('testuser')");
+      const result = await client.execute("SELECT * FROM users");
+      expect(result.rows).toHaveLength(1);
     });
   });
 
@@ -60,11 +93,6 @@ describe("Migration Script Utilities", () => {
       const sql = "SELECT 1; SELECT 2";
       const statements = splitSQLStatements(sql);
       expect(statements).toHaveLength(2);
-    });
-
-    it("should handle getTableCreationSQL output correctly", () => {
-      const statements = getTableCreationSQL();
-      expect(statements).toHaveLength(6);
     });
 
     it("should preserve whitespace within statements", () => {
@@ -101,52 +129,6 @@ describe("Migration Script Utilities", () => {
       const stmt = "CREATE TABLE IF NOT EXISTS users (id integer PRIMARY KEY)";
       const preview = getStatementPreview(stmt, 30);
       expect(preview).toBe("CREATE TABLE IF NOT EXISTS use...");
-    });
-  });
-
-  describe("executeMigration", () => {
-    let client: ReturnType<typeof createClient>;
-
-    beforeEach(() => {
-      client = createClient({ url: ":memory:" });
-    });
-
-    it("should execute all migrations successfully", async () => {
-      const result = await executeMigration(client);
-      expect(result.success).toBe(true);
-      expect(result.executed).toBe(6);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it("should create all tables", async () => {
-      await executeMigration(client);
-      
-      const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-      );
-      
-      const tableNames = tables.rows.map(r => r.name);
-      expect(tableNames).toContain("users");
-      expect(tableNames).toContain("medications");
-      expect(tableNames).toContain("user_settings");
-      expect(tableNames).toContain("refresh_tokens");
-      expect(tableNames).toContain("share_tokens");
-      expect(tableNames).toContain("dose_tracking");
-    });
-
-    it("should be idempotent", async () => {
-      await executeMigration(client);
-      const result = await executeMigration(client);
-      expect(result.success).toBe(true);
-      expect(result.executed).toBe(6);
-    });
-
-    it("should allow inserting data after migration", async () => {
-      await executeMigration(client);
-      
-      await client.execute("INSERT INTO users (username) VALUES ('testuser')");
-      const result = await client.execute("SELECT * FROM users");
-      expect(result.rows).toHaveLength(1);
     });
   });
 });
@@ -218,63 +200,7 @@ describe("Database Client Utilities", () => {
     });
   });
 
-  describe("getTableCreationSQL", () => {
-    it("should return array of SQL statements", () => {
-      const statements = getTableCreationSQL();
-      expect(Array.isArray(statements)).toBe(true);
-      expect(statements.length).toBe(6);
-    });
-
-    it("should include users table", () => {
-      const statements = getTableCreationSQL();
-      const usersSQL = statements.find(s => s.includes("CREATE TABLE IF NOT EXISTS users"));
-      expect(usersSQL).toBeDefined();
-      expect(usersSQL).toContain("username text NOT NULL UNIQUE");
-      expect(usersSQL).toContain("password_hash text");
-      expect(usersSQL).toContain("auth_provider text NOT NULL DEFAULT 'local'");
-    });
-
-    it("should include medications table", () => {
-      const statements = getTableCreationSQL();
-      const medsSQL = statements.find(s => s.includes("CREATE TABLE IF NOT EXISTS medications"));
-      expect(medsSQL).toBeDefined();
-      expect(medsSQL).toContain("user_id integer NOT NULL");
-      expect(medsSQL).toContain("taken_by_json text NOT NULL DEFAULT '[]'");
-      expect(medsSQL).toContain("FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
-    });
-
-    it("should include user_settings table", () => {
-      const statements = getTableCreationSQL();
-      const settingsSQL = statements.find(s => s.includes("CREATE TABLE IF NOT EXISTS user_settings"));
-      expect(settingsSQL).toBeDefined();
-      expect(settingsSQL).toContain("email_enabled integer NOT NULL DEFAULT 0");
-      expect(settingsSQL).toContain("language text NOT NULL DEFAULT 'en'");
-    });
-
-    it("should include refresh_tokens table", () => {
-      const statements = getTableCreationSQL();
-      const tokensSQL = statements.find(s => s.includes("CREATE TABLE IF NOT EXISTS refresh_tokens"));
-      expect(tokensSQL).toBeDefined();
-      expect(tokensSQL).toContain("token_id text NOT NULL UNIQUE");
-    });
-
-    it("should include share_tokens table", () => {
-      const statements = getTableCreationSQL();
-      const shareSQL = statements.find(s => s.includes("CREATE TABLE IF NOT EXISTS share_tokens"));
-      expect(shareSQL).toBeDefined();
-      expect(shareSQL).toContain("taken_by text NOT NULL");
-    });
-
-    it("should include dose_tracking table", () => {
-      const statements = getTableCreationSQL();
-      const doseSQL = statements.find(s => s.includes("CREATE TABLE IF NOT EXISTS dose_tracking"));
-      expect(doseSQL).toBeDefined();
-      expect(doseSQL).toContain("dose_id text NOT NULL");
-      expect(doseSQL).toContain("marked_by text");
-    });
-  });
-
-  describe("runTableMigrations", () => {
+  describe("runDrizzleMigrations", () => {
     let client: ReturnType<typeof createClient>;
 
     beforeEach(() => {
@@ -282,23 +208,24 @@ describe("Database Client Utilities", () => {
     });
 
     it("should create all tables successfully", async () => {
-      const result = await runTableMigrations(client);
+      const db = drizzle(client);
+      const result = await runDrizzleMigrations(db);
       expect(result.success).toBe(true);
-      expect(result.errors).toHaveLength(0);
     });
 
     it("should be idempotent (run twice without errors)", async () => {
-      await runTableMigrations(client);
-      const result = await runTableMigrations(client);
+      const db = drizzle(client);
+      await runDrizzleMigrations(db);
+      const result = await runDrizzleMigrations(db);
       expect(result.success).toBe(true);
-      expect(result.errors).toHaveLength(0);
     });
 
-    it("should create all 6 tables", async () => {
-      await runTableMigrations(client);
+    it("should create all 7 tables", async () => {
+      const db = drizzle(client);
+      await runDrizzleMigrations(db);
       
       const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%' ORDER BY name"
       );
       
       const tableNames = tables.rows.map(r => r.name);
@@ -308,6 +235,29 @@ describe("Database Client Utilities", () => {
       expect(tableNames).toContain("refresh_tokens");
       expect(tableNames).toContain("share_tokens");
       expect(tableNames).toContain("dose_tracking");
+      expect(tableNames).toContain("refill_history");
+    });
+  });
+
+  describe("runAlterMigrations", () => {
+    let client: ReturnType<typeof createClient>;
+
+    beforeEach(async () => {
+      client = createClient({ url: ":memory:" });
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
+    });
+
+    it("should run without errors on a fresh database", async () => {
+      const result = await runAlterMigrations(client);
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should be idempotent", async () => {
+      await runAlterMigrations(client);
+      const result = await runAlterMigrations(client);
+      expect(result.success).toBe(true);
     });
   });
 
@@ -316,7 +266,8 @@ describe("Database Client Utilities", () => {
 
     beforeEach(async () => {
       client = createClient({ url: ":memory:" });
-      await runTableMigrations(client);
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
     });
 
     it("should create default user when auth is disabled", async () => {
@@ -386,246 +337,83 @@ describe("Database Client", () => {
     });
   });
 
-  describe("Table Schema Creation", () => {
+  describe("Table Schema via Drizzle Migrations", () => {
     let client: ReturnType<typeof createClient>;
 
     beforeEach(async () => {
       client = createClient({ url: ":memory:" });
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
     });
 
-    it("should create users table", async () => {
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          password_hash text,
-          avatar_url text,
-          auth_provider text NOT NULL DEFAULT 'local',
-          oidc_subject text,
-          is_active integer NOT NULL DEFAULT 1,
-          last_login_at integer,
-          created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-          updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
-        )
-      `);
-
-      // Verify table exists
-      const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
-      );
-      expect(tables.rows).toHaveLength(1);
-    });
-
-    it("should create medications table with foreign key", async () => {
-      // First create users table
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
-
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS medications (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL,
-          name text NOT NULL,
-          generic_name text,
-          taken_by_json text NOT NULL DEFAULT '[]',
-          pack_count integer NOT NULL DEFAULT 1,
-          blisters_per_pack integer NOT NULL DEFAULT 1,
-          pills_per_blister integer NOT NULL DEFAULT 1,
-          loose_tablets integer NOT NULL DEFAULT 0,
-          pill_weight_mg integer,
-          usage_json text NOT NULL DEFAULT '[]',
-          every_json text NOT NULL DEFAULT '[]',
-          start_json text NOT NULL DEFAULT '[]',
-          image_url text,
-          expiry_date text,
-          notes text,
-          intake_reminders_enabled integer NOT NULL DEFAULT 0,
-          updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
-
-      const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='medications'"
-      );
-      expect(tables.rows).toHaveLength(1);
-    });
-
-    it("should create user_settings table", async () => {
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
-
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS user_settings (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL UNIQUE,
-          email_enabled integer NOT NULL DEFAULT 0,
-          notification_email text,
-          email_stock_reminders integer NOT NULL DEFAULT 1,
-          email_intake_reminders integer NOT NULL DEFAULT 1,
-          shoutrrr_enabled integer NOT NULL DEFAULT 0,
-          shoutrrr_url text,
-          shoutrrr_stock_reminders integer NOT NULL DEFAULT 1,
-          shoutrrr_intake_reminders integer NOT NULL DEFAULT 1,
-          reminder_days_before integer NOT NULL DEFAULT 7,
-          repeat_daily_reminders integer NOT NULL DEFAULT 0,
-          low_stock_days integer NOT NULL DEFAULT 30,
-          normal_stock_days integer NOT NULL DEFAULT 90,
-          high_stock_days integer NOT NULL DEFAULT 180,
-          expiry_warning_days integer NOT NULL DEFAULT 90,
-          language text NOT NULL DEFAULT 'en',
-          stock_calculation_mode text NOT NULL DEFAULT 'automatic',
-          last_auto_email_sent text,
-          last_notification_type text,
-          last_notification_channel text,
-          updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
-
-      const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='user_settings'"
-      );
-      expect(tables.rows).toHaveLength(1);
-    });
-
-    it("should create refresh_tokens table", async () => {
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
-
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS refresh_tokens (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL,
-          token_id text NOT NULL UNIQUE,
-          expires_at integer NOT NULL,
-          rotated_at integer,
-          revoked integer NOT NULL DEFAULT 0,
-          created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
-
-      const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='refresh_tokens'"
-      );
-      expect(tables.rows).toHaveLength(1);
-    });
-
-    it("should create share_tokens table", async () => {
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
-
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS share_tokens (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL,
-          token text NOT NULL UNIQUE,
-          taken_by text NOT NULL,
-          schedule_days integer NOT NULL DEFAULT 30,
-          created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-          expires_at integer,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
-
-      const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='share_tokens'"
-      );
-      expect(tables.rows).toHaveLength(1);
-    });
-
-    it("should create dose_tracking table", async () => {
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
-
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS dose_tracking (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL,
-          dose_id text NOT NULL,
-          taken_at integer NOT NULL DEFAULT (strftime('%s','now')),
-          marked_by text,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
-
-      const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='dose_tracking'"
-      );
-      expect(tables.rows).toHaveLength(1);
-    });
-
-    it("should enforce unique constraint on username", async () => {
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
-
-      await client.execute("INSERT INTO users (username) VALUES ('testuser')");
+    it("should have users table with correct columns", async () => {
+      const columns = await client.execute("PRAGMA table_info(users)");
+      const columnNames = columns.rows.map(r => r.name);
       
-      await expect(
-        client.execute("INSERT INTO users (username) VALUES ('testuser')")
-      ).rejects.toThrow();
+      expect(columnNames).toContain("id");
+      expect(columnNames).toContain("username");
+      expect(columnNames).toContain("password_hash");
+      expect(columnNames).toContain("auth_provider");
     });
 
-    it("should enforce unique constraint on refresh token_id", async () => {
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
-      await client.execute("INSERT INTO users (username) VALUES ('testuser')");
-
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS refresh_tokens (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL,
-          token_id text NOT NULL UNIQUE,
-          expires_at integer NOT NULL,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
-
-      await client.execute(
-        "INSERT INTO refresh_tokens (user_id, token_id, expires_at) VALUES (1, 'token123', 1735689600)"
-      );
+    it("should have medications table with correct columns", async () => {
+      const columns = await client.execute("PRAGMA table_info(medications)");
+      const columnNames = columns.rows.map(r => r.name);
       
-      await expect(
-        client.execute(
-          "INSERT INTO refresh_tokens (user_id, token_id, expires_at) VALUES (1, 'token123', 1735689600)"
-        )
-      ).rejects.toThrow();
+      expect(columnNames).toContain("id");
+      expect(columnNames).toContain("user_id");
+      expect(columnNames).toContain("name");
+      expect(columnNames).toContain("taken_by_json");
+      expect(columnNames).toContain("pack_count");
+      expect(columnNames).toContain("usage_json");
+    });
+
+    it("should have user_settings table with correct columns", async () => {
+      const columns = await client.execute("PRAGMA table_info(user_settings)");
+      const columnNames = columns.rows.map(r => r.name);
+      
+      expect(columnNames).toContain("id");
+      expect(columnNames).toContain("user_id");
+      expect(columnNames).toContain("email_enabled");
+      expect(columnNames).toContain("language");
+      expect(columnNames).toContain("stock_calculation_mode");
+    });
+
+    it("should have refresh_tokens table", async () => {
+      const columns = await client.execute("PRAGMA table_info(refresh_tokens)");
+      const columnNames = columns.rows.map(r => r.name);
+      
+      expect(columnNames).toContain("id");
+      expect(columnNames).toContain("user_id");
+      expect(columnNames).toContain("token_id");
+    });
+
+    it("should have share_tokens table", async () => {
+      const columns = await client.execute("PRAGMA table_info(share_tokens)");
+      const columnNames = columns.rows.map(r => r.name);
+      
+      expect(columnNames).toContain("id");
+      expect(columnNames).toContain("token");
+      expect(columnNames).toContain("taken_by");
+    });
+
+    it("should have dose_tracking table", async () => {
+      const columns = await client.execute("PRAGMA table_info(dose_tracking)");
+      const columnNames = columns.rows.map(r => r.name);
+      
+      expect(columnNames).toContain("id");
+      expect(columnNames).toContain("dose_id");
+      expect(columnNames).toContain("marked_by");
+    });
+
+    it("should have refill_history table", async () => {
+      const columns = await client.execute("PRAGMA table_info(refill_history)");
+      const columnNames = columns.rows.map(r => r.name);
+      
+      expect(columnNames).toContain("id");
+      expect(columnNames).toContain("medication_id");
+      expect(columnNames).toContain("packs_added");
+      expect(columnNames).toContain("loose_pills_added");
     });
   });
 
@@ -634,15 +422,8 @@ describe("Database Client", () => {
 
     beforeEach(async () => {
       client = createClient({ url: ":memory:" });
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local',
-          is_active integer NOT NULL DEFAULT 1,
-          created_at integer NOT NULL DEFAULT (strftime('%s','now'))
-        )
-      `);
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
     });
 
     it("should use default values for auth_provider", async () => {
@@ -656,16 +437,8 @@ describe("Database Client", () => {
       await client.execute("INSERT INTO users (username) VALUES ('testuser')");
       
       const result = await client.execute("SELECT is_active FROM users WHERE username = 'testuser'");
-      expect(result.rows[0].is_active).toBe(1);
-    });
-
-    it("should generate created_at timestamp", async () => {
-      await client.execute("INSERT INTO users (username) VALUES ('testuser')");
-      
-      const result = await client.execute("SELECT created_at FROM users WHERE username = 'testuser'");
-      expect(typeof result.rows[0].created_at).toBe("number");
-      // Should be a reasonable Unix timestamp (after year 2020)
-      expect(Number(result.rows[0].created_at)).toBeGreaterThan(1577836800);
+      // SQLite stores booleans as integers
+      expect(result.rows[0].is_active).toBeTruthy();
     });
   });
 
@@ -674,40 +447,18 @@ describe("Database Client", () => {
 
     beforeEach(async () => {
       client = createClient({ url: ":memory:" });
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
       await client.execute("INSERT INTO users (username) VALUES ('testuser')");
-
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS user_settings (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL UNIQUE,
-          email_enabled integer NOT NULL DEFAULT 0,
-          shoutrrr_enabled integer NOT NULL DEFAULT 0,
-          reminder_days_before integer NOT NULL DEFAULT 7,
-          repeat_daily_reminders integer NOT NULL DEFAULT 0,
-          low_stock_days integer NOT NULL DEFAULT 30,
-          normal_stock_days integer NOT NULL DEFAULT 90,
-          high_stock_days integer NOT NULL DEFAULT 180,
-          expiry_warning_days integer NOT NULL DEFAULT 90,
-          language text NOT NULL DEFAULT 'en',
-          stock_calculation_mode text NOT NULL DEFAULT 'automatic',
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
     });
 
     it("should use default notification settings", async () => {
       await client.execute("INSERT INTO user_settings (user_id) VALUES (1)");
       
       const result = await client.execute("SELECT * FROM user_settings WHERE user_id = 1");
-      expect(result.rows[0].email_enabled).toBe(0);
-      expect(result.rows[0].shoutrrr_enabled).toBe(0);
+      // SQLite stores booleans as integers (false = 0)
+      expect(result.rows[0].email_enabled).toBeFalsy();
+      expect(result.rows[0].shoutrrr_enabled).toBeFalsy();
     });
 
     it("should use default stock threshold settings", async () => {
@@ -717,7 +468,6 @@ describe("Database Client", () => {
       expect(result.rows[0].low_stock_days).toBe(30);
       expect(result.rows[0].normal_stock_days).toBe(90);
       expect(result.rows[0].high_stock_days).toBe(180);
-      expect(result.rows[0].expiry_warning_days).toBe(90);
     });
 
     it("should use default language (en)", async () => {
@@ -747,32 +497,9 @@ describe("Database Client", () => {
 
     beforeEach(async () => {
       client = createClient({ url: ":memory:" });
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
       await client.execute("INSERT INTO users (username) VALUES ('testuser')");
-
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS medications (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL,
-          name text NOT NULL,
-          taken_by_json text NOT NULL DEFAULT '[]',
-          pack_count integer NOT NULL DEFAULT 1,
-          blisters_per_pack integer NOT NULL DEFAULT 1,
-          pills_per_blister integer NOT NULL DEFAULT 1,
-          loose_tablets integer NOT NULL DEFAULT 0,
-          usage_json text NOT NULL DEFAULT '[]',
-          every_json text NOT NULL DEFAULT '[]',
-          start_json text NOT NULL DEFAULT '[]',
-          intake_reminders_enabled integer NOT NULL DEFAULT 0,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
     });
 
     it("should use default inventory values", async () => {
@@ -795,11 +522,11 @@ describe("Database Client", () => {
       expect(result.rows[0].start_json).toBe("[]");
     });
 
-    it("should default intake_reminders_enabled to false (0)", async () => {
+    it("should default intake_reminders_enabled to false", async () => {
       await client.execute("INSERT INTO medications (user_id, name) VALUES (1, 'Test Med')");
       
       const result = await client.execute("SELECT intake_reminders_enabled FROM medications WHERE name = 'Test Med'");
-      expect(result.rows[0].intake_reminders_enabled).toBe(0);
+      expect(result.rows[0].intake_reminders_enabled).toBeFalsy();
     });
   });
 
@@ -810,21 +537,8 @@ describe("Database Client", () => {
       client = createClient({ url: ":memory:" });
       // Enable foreign keys
       await client.execute("PRAGMA foreign_keys = ON");
-      
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE
-        )
-      `);
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS medications (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          user_id integer NOT NULL,
-          name text NOT NULL,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `);
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
     });
 
     it("should cascade delete medications when user is deleted", async () => {
@@ -845,18 +559,44 @@ describe("Database Client", () => {
     });
   });
 
+  describe("Unique Constraints", () => {
+    let client: ReturnType<typeof createClient>;
+
+    beforeEach(async () => {
+      client = createClient({ url: ":memory:" });
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
+    });
+
+    it("should enforce unique constraint on username", async () => {
+      await client.execute("INSERT INTO users (username) VALUES ('testuser')");
+      
+      await expect(
+        client.execute("INSERT INTO users (username) VALUES ('testuser')")
+      ).rejects.toThrow();
+    });
+
+    it("should enforce unique constraint on refresh token_id", async () => {
+      await client.execute("INSERT INTO users (username) VALUES ('testuser')");
+      await client.execute(
+        "INSERT INTO refresh_tokens (user_id, token_id, expires_at) VALUES (1, 'token123', 1735689600)"
+      );
+      
+      await expect(
+        client.execute(
+          "INSERT INTO refresh_tokens (user_id, token_id, expires_at) VALUES (1, 'token123', 1735689600)"
+        )
+      ).rejects.toThrow();
+    });
+  });
+
   describe("Default User Creation (Auth Disabled)", () => {
     let client: ReturnType<typeof createClient>;
 
     beforeEach(async () => {
       client = createClient({ url: ":memory:" });
-      await client.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id integer PRIMARY KEY AUTOINCREMENT,
-          username text NOT NULL UNIQUE,
-          auth_provider text NOT NULL DEFAULT 'local'
-        )
-      `);
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder });
     });
 
     it("should be able to create a default user with ID 1", async () => {

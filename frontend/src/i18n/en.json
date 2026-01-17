@@ -100,8 +100,8 @@
     }
   },
   "form": {
-    "editEntry": "Edit entry",
-    "newEntry": "New entry",
+    "editEntry": "Edit medication",
+    "newEntry": "New medication",
     "badge": "Packs + loose pills",
     "commercialName": "Commercial Name",
     "genericName": "Generic Name",
@@ -385,5 +385,21 @@
     "importError": "Failed to import data",
     "invalidFile": "Invalid file format. Please select a valid MedAssist export file.",
     "downloadFilename": "medassist-export"
+  },
+  "refill": {
+    "title": "Refill",
+    "packs": "Packs to add",
+    "loosePills": "Loose pills to add",
+    "pillsPerPack": "1 pack = {{count}} pills",
+    "addToStock": "Add to Stock",
+    "adding": "Adding...",
+    "success": "Added {{pills}} pills to stock",
+    "history": "Refill History",
+    "noHistory": "No refills recorded yet",
+    "packsAdded": "{{count}} pack",
+    "packsAdded_other": "{{count}} packs",
+    "pillsAdded": "{{count}} pill",
+    "pillsAdded_other": "{{count}} pills",
+    "button": "Refill"
   }
 }

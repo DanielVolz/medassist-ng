@@ -100,5 +100,15 @@ export function getTableCreationSQL(): string[] {
       dismissed integer NOT NULL DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
+    `CREATE TABLE IF NOT EXISTS refill_history (
+      id integer PRIMARY KEY AUTOINCREMENT,
+      medication_id integer NOT NULL,
+      user_id integer NOT NULL,
+      packs_added integer NOT NULL DEFAULT 0,
+      loose_pills_added integer NOT NULL DEFAULT 0,
+      refill_date integer NOT NULL DEFAULT (strftime('%s','now')),
+      FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
   ];
 }

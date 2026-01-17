@@ -195,31 +195,51 @@ gh pr merge --squash --delete-branch
 > ⚠️ **MANDATORY**: GitHub Releases MUST contain a written message!
 > Not just auto-generated commit lists, but a brief descriptive text.
 
-**Keep it short!** Less is more. Users want to know what changed, not implementation details.
+**Keep it informative but concise.** Users want to know what changed and where to find it.
 
-**Structure of a release text:**
+**Required structure of release notes:**
 
-1. **Intro** (1-2 sentences): What's new in plain language
-2. **Features** (if needed): Very brief bullet points
-3. **Breaking Changes Warning** (if applicable): See below
+1. **"What's New"** (1-2 sentences): Brief intro explaining the main change
+2. **"New Features" / "Improvements"**: Grouped bullet points with **bold feature names** and descriptions
+3. **"Where to Find It"**: Tell users where they can access the new feature
+4. **Breaking Changes Warning** (if applicable): See below
+
+**Style guidelines:**
+- Use `### Heading` for sections (New Features, Improvements, Security, etc.)
+- Use **bold** for feature names in bullet points
+- Keep descriptions on the same line as the feature name
+- Minimal emoji usage (sparingly, not on every line)
+- Always end with "Where to Find It" section
 
 **DO NOT include:**
-- ❌ Technical implementation details (new columns, endpoints, etc.)
-- ❌ "How it works" step-by-step explanations
+- ❌ Technical implementation details (new columns, endpoints, database changes)
 - ❌ Number of tests added
 - ❌ Internal API changes (unless breaking)
+- ❌ Excessive emoji on every bullet point
 
 **Example of good release notes:**
 
 ```markdown
 ## What's New
 
-Added the ability to clear missed dose warnings without affecting medication stock. 
-A "Clear missed" button now appears next to the "Show past days" toggle.
+This release introduces a medication refill tracking feature and improves the mobile user experience.
 
-### Features
-- 🧹 Clear missed doses with one click
-- ✅ Confirmation dialog to prevent accidents
+### New Features
+
+- **Medication Refill**: Track when you refill your medications with a single click. Add full packs or individual pills and view complete refill history.
+- **Automatic Stock Updates**: Stock levels are automatically recalculated after each refill.
+- **Refill History**: Each medication shows a complete history of all refills with timestamps.
+
+### Mobile Improvements
+
+- **Centered Tooltips**: Info tooltips now display centered on screen for better readability.
+- **Touch-friendly**: Tooltips close automatically when scrolling on touch devices.
+
+### Where to Find It
+
+The refill button appears in the medication detail modal and in the edit form for each medication.
+
+**Full Changelog**: https://github.com/DanielVolz/medassist-ng/compare/v1.2.3...v1.3.0
 ```
 
 ### Breaking Changes Warning (CRITICAL!)

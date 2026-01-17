@@ -535,26 +535,57 @@ function AppContent() {
 				if (userDropdownOpen) {
 					setUserDropdownOpen(false);
 				} else if (scheduleLightboxImage) {
-					setScheduleLightboxImage(null);
+					closeScheduleLightbox();
 				} else if (showImageLightbox) {
-					setShowImageLightbox(false);
+					closeImageLightbox();
+				} else if (showRefillModal) {
+					closeRefillModal();
 				} else if (showEditModal) {
-					setShowEditModal(false);
+					closeEditModal();
 					resetForm();
 				} else if (showShareDialog) {
-					setShowShareDialog(false);
+					closeShareDialog();
 				} else if (showProfile) {
-					setShowProfile(false);
+					closeProfile();
 				} else if (selectedUser) {
-					setSelectedUser(null);
+					closeUserFilter();
 				} else if (selectedMed) {
-					setSelectedMed(null);
+					closeMedDetail();
 				}
 			}
 		};
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
-	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, userDropdownOpen]);
+	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, showRefillModal, userDropdownOpen]);
+
+	// Handle browser back button to close modals (in priority order)
+	useEffect(() => {
+		const handlePopState = () => {
+			// Close modals in order of priority (topmost first)
+			// NOTE: This handler MUST NOT call history.back() or it will cause infinite loops
+			// Only use direct state setters here
+			if (showImageLightbox) {
+				setShowImageLightbox(false);
+			} else if (scheduleLightboxImage) {
+				setScheduleLightboxImage(null);
+			} else if (showRefillModal) {
+				setShowRefillModal(false);
+			} else if (showEditModal) {
+				setShowEditModal(false);
+				resetForm();
+			} else if (showShareDialog) {
+				resetShareDialogState();
+			} else if (showProfile) {
+				setShowProfile(false);
+			} else if (selectedUser) {
+				setSelectedUser(null);
+			} else if (selectedMed) {
+				setSelectedMed(null);
+			}
+		};
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
+	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, showRefillModal]);
 
 	// Close user dropdown when clicking outside
 	useEffect(() => {
@@ -860,7 +891,10 @@ function AppContent() {
 				// Reset refill form
 				setRefillPacks(1);
 				setRefillLoose(0);
-				setShowRefillModal(false);
+				// Close refill modal via history back for proper back-button support
+				if (showRefillModal) {
+					window.history.back();
+				}
 				// Reload medications to get updated stock
 				loadMeds();
 				// Reload refill history
@@ -878,6 +912,76 @@ function AppContent() {
 		setRefillHistory([]);
 		setRefillHistoryExpanded(false);
 		loadRefillHistory(med.id);
+		// Push history state so browser back closes modal instead of navigating
+		window.history.pushState({ modal: 'medDetail', medId: med.id }, '');
+	}
+
+	// Helper to close medication detail modal via history back
+	function closeMedDetail() {
+		if (selectedMed) {
+			window.history.back();
+		}
+	}
+
+	// Modal helper functions for browser back button support
+	function openImageLightbox() {
+		setShowImageLightbox(true);
+		window.history.pushState({ modal: 'imageLightbox' }, '');
+	}
+	function closeImageLightbox() {
+		if (showImageLightbox) {
+			window.history.back();
+		}
+	}
+
+	function openScheduleLightbox(imageUrl: string) {
+		setScheduleLightboxImage(imageUrl);
+		window.history.pushState({ modal: 'scheduleLightbox' }, '');
+	}
+	function closeScheduleLightbox() {
+		if (scheduleLightboxImage) {
+			window.history.back();
+		}
+	}
+
+	function openRefillModal() {
+		setShowRefillModal(true);
+		window.history.pushState({ modal: 'refill' }, '');
+	}
+	function closeRefillModal() {
+		if (showRefillModal) {
+			window.history.back();
+		}
+	}
+
+	function openEditModal() {
+		setShowEditModal(true);
+		window.history.pushState({ modal: 'edit' }, '');
+	}
+	function closeEditModal() {
+		if (showEditModal) {
+			window.history.back();
+		}
+	}
+
+	function openProfile() {
+		setShowProfile(true);
+		window.history.pushState({ modal: 'profile' }, '');
+	}
+	function closeProfile() {
+		if (showProfile) {
+			window.history.back();
+		}
+	}
+
+	function openUserFilter(person: string) {
+		setSelectedUser(person);
+		window.history.pushState({ modal: 'userFilter', person }, '');
+	}
+	function closeUserFilter() {
+		if (selectedUser) {
+			window.history.back();
+		}
 	}
 
 	async function testEmail() {
@@ -1159,7 +1263,7 @@ function AppContent() {
 		setOriginalForm(editForm);
 		// Show modal on mobile
 		if (window.innerWidth <= 768) {
-			setShowEditModal(true);
+			openEditModal();
 		}
 	}
 
@@ -1256,8 +1360,10 @@ function AppContent() {
 		if (!wasEditing) {
 			resetForm();
 		} else {
-			// Close modal on mobile after edit
-			setShowEditModal(false);
+			// Close modal on mobile after edit (via history back for proper back-button support)
+			if (showEditModal) {
+				window.history.back();
+			}
 		}
 		
 		loadMeds();
@@ -1291,6 +1397,7 @@ function AppContent() {
 	// Share dialog functions
 	async function openShareDialog() {
 		setShowShareDialog(true);
+		window.history.pushState({ modal: 'share' }, '');
 		setShareLink(null);
 		setShareCopied(false);
 		setShareSelectedPerson("");
@@ -1344,6 +1451,13 @@ function AppContent() {
 	}
 
 	function closeShareDialog() {
+		if (showShareDialog) {
+			window.history.back();
+		}
+	}
+	
+	// Internal function to reset share dialog state (called by popstate handler)
+	function resetShareDialogState() {
 		setShowShareDialog(false);
 		setShareLink(null);
 		setShareCopied(false);
@@ -1445,7 +1559,7 @@ function AppContent() {
 									<span className="dropdown-username">{user.username}</span>
 								</div>
 								<div className="dropdown-menu">
-									<button className="dropdown-item" onClick={() => { setShowProfile(true); setUserDropdownOpen(false); }}>
+									<button className="dropdown-item" onClick={() => { openProfile(); setUserDropdownOpen(false); }}>
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
 										{t('auth.profile', 'Profile')}
 									</button>
@@ -1466,10 +1580,10 @@ function AppContent() {
 
 			{/* Profile Modal */}
 			{showProfile && (
-				<div className="modal-overlay" onClick={() => setShowProfile(false)}>
+				<div className="modal-overlay" onClick={() => closeProfile()}>
 					<div className="modal-content profile-modal" onClick={(e) => e.stopPropagation()}>
-						<button className="modal-close" onClick={() => setShowProfile(false)}>×</button>
-						<UserProfile onClose={() => setShowProfile(false)} />
+						<button className="modal-close" onClick={() => closeProfile()}>×</button>
+						<UserProfile onClose={() => closeProfile()} />
 					</div>
 				</div>
 			)}
@@ -1544,7 +1658,7 @@ function AppContent() {
 															<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
 															<span className="med-name-text">{row.name}</span>
 															{med?.takenBy && med.takenBy.length > 0 && med.takenBy.map((person) => (
-																<span key={person} className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(person); }}>{person}</span>
+																<span key={person} className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); openUserFilter(person); }}>{person}</span>
 															))}
 															{(med?.intakeRemindersEnabled || med?.notes) && (
 																<span className="med-icons">
@@ -1614,7 +1728,7 @@ function AppContent() {
 														<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
 														<span className="med-name-text">{row.name}</span>
 														{med?.takenBy && med.takenBy.length > 0 && med.takenBy.map((person) => (
-															<span key={person} className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); setSelectedUser(person); }}>{person}</span>
+															<span key={person} className="taken-by-badge clickable" onClick={(e) => { e.stopPropagation(); openUserFilter(person); }}>{person}</span>
 														))}
 													</span>
 													{(med?.intakeRemindersEnabled || med?.notes) && (
@@ -1739,7 +1853,7 @@ function AppContent() {
 																<div className="med-name">
 																	<div 
 																		className={med?.imageUrl ? "med-avatar clickable" : ""}
-																		onClick={() => med?.imageUrl && setScheduleLightboxImage(`/api/images/${med.imageUrl}`)}
+																		onClick={() => med?.imageUrl && openScheduleLightbox(`/api/images/${med.imageUrl}`)}
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
@@ -1763,7 +1877,7 @@ function AppContent() {
 																					const isTaken = takenDoses.has(doseId);
 																					return (
 																						<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
-																							{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
+																							{person && <span className="person-name clickable" onClick={() => openUserFilter(person)}>{person}</span>}
 																							{isTaken ? (
 																								<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																							) : (
@@ -1850,7 +1964,7 @@ function AppContent() {
 																<div className="med-name">
 																	<div 
 																		className={med?.imageUrl ? "med-avatar clickable" : ""}
-																		onClick={() => med?.imageUrl && setScheduleLightboxImage(`/api/images/${med.imageUrl}`)}
+																		onClick={() => med?.imageUrl && openScheduleLightbox(`/api/images/${med.imageUrl}`)}
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
@@ -1885,7 +1999,7 @@ function AppContent() {
 																					const isTaken = takenDoses.has(doseId);
 																					return (
 																						<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
-																							{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
+																							{person && <span className="person-name clickable" onClick={() => openUserFilter(person)}>{person}</span>}
 																							{isTaken ? (
 																								<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																							) : (
@@ -1952,7 +2066,7 @@ function AppContent() {
 										resetForm();
 										// On mobile, open the edit modal
 										if (window.innerWidth <= 768) {
-											setShowEditModal(true);
+											openEditModal();
 										}
 									}}
 								>
@@ -2900,7 +3014,7 @@ function AppContent() {
 																				const isTaken = takenDoses.has(doseId);
 																				return (
 																					<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
-																						{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
+																						{person && <span className="person-name clickable" onClick={() => openUserFilter(person)}>{person}</span>}
 																						{isTaken ? (
 																							<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																						) : (
@@ -2970,7 +3084,7 @@ function AppContent() {
 																			const isOverdue = !isTaken && dose.when < now && !isPastDay;
 																			return (
 																				<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}>
-																					{person && <span className="person-name clickable" onClick={() => setSelectedUser(person)}>{person}</span>}
+																					{person && <span className="person-name clickable" onClick={() => openUserFilter(person)}>{person}</span>}
 																					{isTaken ? (
 																						<button className="dose-btn undo" onClick={() => undoDoseTaken(doseId)} title={t('common.undo')}>↩</button>
 																					) : (
@@ -2999,15 +3113,15 @@ function AppContent() {
 
 			{/* Medication Detail Modal */}
 			{selectedMed && (
-				<div className="modal-overlay" onClick={() => setSelectedMed(null)}>
+				<div className="modal-overlay" onClick={closeMedDetail}>
 					<div className="modal-content med-detail-modal" onClick={(e) => e.stopPropagation()}>
-						<button className="modal-close" onClick={() => setSelectedMed(null)}>×</button>
+						<button className="modal-close" onClick={closeMedDetail}>×</button>
 						
 						<div className="med-detail-body">
 							<div className="med-detail-header">
 								<div 
 									className={`med-detail-avatar-wrapper ${selectedMed.imageUrl ? 'clickable' : ''}`}
-									onClick={() => selectedMed.imageUrl && setShowImageLightbox(true)}
+									onClick={() => selectedMed.imageUrl && openImageLightbox()}
 								>
 									<MedicationAvatar name={selectedMed.name} imageUrl={selectedMed.imageUrl} size="lg" />
 									{selectedMed.imageUrl && <span className="expand-icon">🔍</span>}
@@ -3164,14 +3278,14 @@ function AppContent() {
 						</div>
 
 						<div className="med-detail-footer">
-							<button onClick={() => { setSelectedMed(null); setShowImageLightbox(false); }}>
+							<button onClick={closeMedDetail}>
 								{t('common.close')}
 							</button>
 							<div className="footer-actions">
-								<button className="success" onClick={() => setShowRefillModal(true)}>
+								<button className="success" onClick={openRefillModal}>
 									{t('refill.button')}
 								</button>
-								<button className="info" onClick={() => { setSelectedMed(null); setShowImageLightbox(false); navigate("/medications"); startEdit(selectedMed); }}>
+								<button className="info" onClick={() => { closeMedDetail(); navigate("/medications"); startEdit(selectedMed); }}>
 									{t('common.edit')}
 								</button>
 								{selectedMed.blisters.length > 0 && (
@@ -3185,8 +3299,8 @@ function AppContent() {
 
 					{/* Image Lightbox */}
 					{showImageLightbox && selectedMed.imageUrl && (
-						<div className="lightbox-overlay" onClick={(e) => { e.stopPropagation(); setShowImageLightbox(false); }}>
-							<button className="lightbox-close" onClick={(e) => { e.stopPropagation(); setShowImageLightbox(false); }}>×</button>
+						<div className="lightbox-overlay" onClick={(e) => { e.stopPropagation(); closeImageLightbox(); }}>
+							<button className="lightbox-close" onClick={(e) => { e.stopPropagation(); closeImageLightbox(); }}>×</button>
 							<img 
 								src={`/api/images/${selectedMed.imageUrl}`} 
 								alt={selectedMed.name} 
@@ -3198,9 +3312,9 @@ function AppContent() {
 
 					{/* Refill Modal */}
 					{showRefillModal && (
-						<div className="modal-overlay" onClick={(e) => { e.stopPropagation(); setShowRefillModal(false); }}>
+						<div className="modal-overlay" onClick={(e) => { e.stopPropagation(); closeRefillModal(); }}>
 							<div className="modal-content refill-modal" onClick={(e) => e.stopPropagation()}>
-								<button className="modal-close" onClick={() => setShowRefillModal(false)}>×</button>
+								<button className="modal-close" onClick={closeRefillModal}>×</button>
 								<h2>{t('refill.title')}</h2>
 								<p className="refill-med-name">{selectedMed.name}</p>
 								
@@ -3226,7 +3340,7 @@ function AppContent() {
 								</div>
 
 								<div className="modal-footer">
-									<button className="ghost" onClick={() => setShowRefillModal(false)}>
+									<button className="ghost" onClick={closeRefillModal}>
 										{t('common.cancel')}
 									</button>
 									<div className="refill-footer-right">
@@ -3250,9 +3364,9 @@ function AppContent() {
 
 			{/* User Medications Modal */}
 			{selectedUser && (
-				<div className="modal-overlay" onClick={() => setSelectedUser(null)}>
+				<div className="modal-overlay" onClick={() => closeUserFilter()}>
 					<div className="modal-content user-meds-modal" onClick={(e) => e.stopPropagation()}>
-						<button className="modal-close" onClick={() => setSelectedUser(null)}>×</button>
+						<button className="modal-close" onClick={() => closeUserFilter()}>×</button>
 						
 						<div className="user-meds-header">
 							<div className="user-avatar">{selectedUser.charAt(0).toUpperCase()}</div>
@@ -3269,7 +3383,7 @@ function AppContent() {
 									<div 
 										key={med.id} 
 										className="user-med-item clickable"
-										onClick={() => { setSelectedUser(null); openMedDetail(med); }}
+										onClick={() => { closeUserFilter(); openMedDetail(med); }}
 									>
 										<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="sm" />
 										<div className="user-med-info">
@@ -3289,7 +3403,7 @@ function AppContent() {
 						</div>
 
 						<div className="user-meds-footer">
-							<button onClick={() => setSelectedUser(null)}>{t('common.close')}</button>
+							<button onClick={() => closeUserFilter()}>{t('common.close')}</button>
 						</div>
 					</div>
 				</div>
@@ -3373,8 +3487,8 @@ function AppContent() {
 
 			{/* Schedule Lightbox - for clicking medication images in schedule */}
 			{scheduleLightboxImage && (
-				<div className="lightbox-overlay" onClick={() => setScheduleLightboxImage(null)}>
-					<button className="lightbox-close" onClick={() => setScheduleLightboxImage(null)}>×</button>
+				<div className="lightbox-overlay" onClick={closeScheduleLightbox}>
+					<button className="lightbox-close" onClick={closeScheduleLightbox}>×</button>
 					<img 
 						src={scheduleLightboxImage} 
 						alt="Medication" 
@@ -3386,13 +3500,13 @@ function AppContent() {
 
 			{/* Mobile Edit Modal */}
 			{showEditModal && (
-				<div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+				<div className="modal-overlay" onClick={() => closeEditModal()}>
 					<div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
-						<button className="modal-close" onClick={() => { setShowEditModal(false); resetForm(); }}>×</button>
+						<button className="modal-close" onClick={() => { closeEditModal(); resetForm(); }}>×</button>
 						<div className="edit-modal-header">
 							<h2>{editingId ? t('form.editEntry') : t('form.newEntry')}</h2>
 						</div>
-						<form className="form-grid mobile-edit-form" onSubmit={(e) => { saveMedication(e); setShowEditModal(false); }}>
+						<form className="form-grid mobile-edit-form" onSubmit={(e) => { saveMedication(e); }}>
 							<label className={`full ${fieldErrors.name ? 'has-error' : ''}`}>
 								{t('form.commercialName')}
 								<input 
@@ -3580,7 +3694,7 @@ function AppContent() {
 							</fieldset>
 
 							<div className="modal-footer">
-								<button type="button" className="ghost" onClick={() => { setShowEditModal(false); resetForm(); }}>
+								<button type="button" className="ghost" onClick={() => { closeEditModal(); resetForm(); }}>
 									{t('common.cancel')}
 								</button>
 								<button type="submit" disabled={saving || hasValidationErrors || (!formChanged && (formSaved || editingId))}>
@@ -4201,15 +4315,37 @@ function SharedSchedule() {
 		}
 	}
 
+	// Helper functions for lightbox with history support (mobile back swipe)
+	function openLightbox(url: string, name: string) {
+		setLightboxImage({ url, name });
+		window.history.pushState({ modal: 'lightbox' }, '');
+	}
+	function closeLightbox() {
+		if (lightboxImage) {
+			window.history.back();
+		}
+	}
+
 	// Close lightbox on Escape key
 	useEffect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.key === "Escape" && lightboxImage) {
-				setLightboxImage(null);
+				closeLightbox();
 			}
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [lightboxImage]);
+
+	// Handle browser back button to close lightbox
+	useEffect(() => {
+		function handlePopState() {
+			if (lightboxImage) {
+				setLightboxImage(null);
+			}
+		}
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
 	}, [lightboxImage]);
 
 	// Load taken doses from server with polling for real-time sync
@@ -4625,7 +4761,7 @@ function SharedSchedule() {
 														<div className="med-name">
 															<span 
 																className={med?.imageUrl ? 'clickable' : ''}
-																onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
+																onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
 															>
 																<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 															</span>
@@ -4744,7 +4880,7 @@ function SharedSchedule() {
 														<div className="med-name">
 															<span 
 																className={med?.imageUrl ? 'clickable' : ''}
-																onClick={() => med?.imageUrl && setLightboxImage({ url: med.imageUrl, name: med.name })}
+																onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
 															>
 																<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 															</span>
@@ -4811,8 +4947,8 @@ function SharedSchedule() {
 
 			{/* Image Lightbox */}
 			{lightboxImage && (
-				<div className="lightbox-overlay" onClick={() => setLightboxImage(null)}>
-					<button className="lightbox-close" onClick={() => setLightboxImage(null)}>×</button>
+				<div className="lightbox-overlay" onClick={closeLightbox}>
+					<button className="lightbox-close" onClick={closeLightbox}>×</button>
 					<img 
 						src={`/api/images/${lightboxImage.url}`} 
 						alt={lightboxImage.name} 

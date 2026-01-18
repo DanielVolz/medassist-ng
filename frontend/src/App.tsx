@@ -367,6 +367,8 @@ function AppContent() {
 	const [exporting, setExporting] = useState(false);
 	const [importing, setImporting] = useState(false);
 	const [exportIncludeImages, setExportIncludeImages] = useState(true);
+	const [showExportModal, setShowExportModal] = useState(false);
+	const [importResult, setImportResult] = useState<{medications: number, doses: number, shares: number} | null>(null);
 	// User dropdown state (for mobile click-based behavior)
 	const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
@@ -1168,11 +1170,12 @@ function AppContent() {
 				return;
 			}
 			
-			alert(t('exportImport.importSuccess') + "\n" + t('exportImport.importSuccessDetails', {
+			// Show success message in UI instead of browser alert
+			setImportResult({
 				medications: data.imported?.medications || 0,
 				doses: data.imported?.doseHistory || 0,
 				shares: data.imported?.shareLinks || 0,
-			}));
+			});
 			
 			// Reload all data
 			loadMeds();
@@ -2847,33 +2850,42 @@ function AppContent() {
 									</div>
 									<div className="setting-section">
 										<div className="setting-group">
+											{/* Import Success Message */}
+											{importResult && (
+												<div className="success-banner" style={{marginBottom: '16px', padding: '12px 16px', borderRadius: '8px', backgroundColor: 'var(--success-bg)', border: '1px solid var(--success)', color: 'var(--text-primary)'}}>
+													<div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+														<div>
+															<strong style={{display: 'block', marginBottom: '4px', color: 'var(--success)'}}>✓ {t('exportImport.importSuccess')}</strong>
+															<span style={{fontSize: '0.9em'}}>{t('exportImport.importSuccessDetails', {
+																medications: importResult.medications,
+																doses: importResult.doses,
+																shares: importResult.shares
+															})}</span>
+														</div>
+														<button 
+															type="button"
+															onClick={() => setImportResult(null)} 
+															style={{background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2em', padding: '0', lineHeight: '1', color: 'inherit', opacity: 0.7}}
+															aria-label="Close"
+														>×</button>
+													</div>
+												</div>
+											)}
 											{/* Export */}
-										<div className="action-card" style={{flexDirection: 'column', alignItems: 'stretch'}}>
-											<div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+											<div className="action-card">
 												<div className="action-card-content">
 													<span className="action-card-title">{t('exportImport.exportTitle')}</span>
 													<span className="action-card-desc">{t('exportImport.exportDesc')}</span>
 												</div>
+												<button
+													type="button"
+													className="secondary"
+													onClick={() => setShowExportModal(true)}
+													disabled={exporting}
+												>
+													{exporting ? t('exportImport.exporting') : t('exportImport.export')}
+												</button>
 											</div>
-											<label className="toggle-label" style={{marginBottom: '12px'}}>
-												<input
-													type="checkbox"
-													checked={exportIncludeImages}
-													onChange={(e) => setExportIncludeImages(e.target.checked)}
-												/>
-												<span>{t('exportImport.includeImages')}</span>
-												<span className="info-tooltip" data-tooltip={t('exportImport.includeImagesHint')}>ⓘ</span>
-											</label>
-											<button
-												type="button"
-												className="secondary"
-												onClick={() => handleExport(exportIncludeImages)}
-												disabled={exporting}
-												style={{alignSelf: 'flex-end'}}
-											>
-												{exporting ? t('exportImport.exporting') : t('exportImport.export')}
-											</button>
-										</div>
 											
 											{/* Import */}
 											<div className="action-card">
@@ -2881,16 +2893,22 @@ function AppContent() {
 													<span className="action-card-title">{t('exportImport.importTitle')}</span>
 													<span className="action-card-desc">{t('exportImport.importDesc')}</span>
 												</div>
-												<label className="btn secondary">
+												<input
+													type="file"
+													id="import-file-input"
+													accept=".json,application/json"
+													onChange={handleImportFileSelect}
+													disabled={importing}
+													style={{display: 'none'}}
+												/>
+												<button
+													type="button"
+													className="secondary"
+													onClick={() => document.getElementById('import-file-input')?.click()}
+													disabled={importing}
+												>
 													{importing ? t('exportImport.importing') : t('exportImport.import')}
-													<input
-														type="file"
-														accept=".json,application/json"
-														onChange={handleImportFileSelect}
-														disabled={importing}
-														style={{display: 'none'}}
-													/>
-												</label>
+												</button>
 											</div>
 										</div>
 									</div>
@@ -2931,6 +2949,57 @@ function AppContent() {
 											onClick={handleImportConfirm}
 										>
 											{t('exportImport.confirmButton')}
+										</button>
+									</div>
+								</div>
+							</div>
+						)}
+
+						{/* Export Options Modal */}
+						{showExportModal && (
+							<div className="modal-overlay" onClick={() => setShowExportModal(false)}>
+								<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: "450px"}}>
+									<button className="modal-close" onClick={() => setShowExportModal(false)}>×</button>
+									<h2 style={{marginBottom: "16px", paddingRight: "2rem"}}>{t('exportImport.exportOptions')}</h2>
+									<div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+										<button
+											type="button"
+											className="action-card"
+											onClick={() => {
+												setShowExportModal(false);
+												handleExport(true);
+											}}
+											disabled={exporting}
+											style={{textAlign: 'left', cursor: 'pointer', border: '1px solid var(--border)', borderRadius: '8px'}}
+										>
+											<div className="action-card-content" style={{flex: 1}}>
+												<span className="action-card-title">📦 {t('exportImport.exportWithImages')}</span>
+												<span className="action-card-desc">{t('exportImport.exportWithImagesDesc')}</span>
+											</div>
+										</button>
+										<button
+											type="button"
+											className="action-card"
+											onClick={() => {
+												setShowExportModal(false);
+												handleExport(false);
+											}}
+											disabled={exporting}
+											style={{textAlign: 'left', cursor: 'pointer', border: '1px solid var(--border)', borderRadius: '8px'}}
+										>
+											<div className="action-card-content" style={{flex: 1}}>
+												<span className="action-card-title">📄 {t('exportImport.exportDataOnly')}</span>
+												<span className="action-card-desc">{t('exportImport.exportDataOnlyDesc')}</span>
+											</div>
+										</button>
+									</div>
+									<div className="modal-footer" style={{padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end"}}>
+										<button
+											type="button"
+											className="ghost"
+											onClick={() => setShowExportModal(false)}
+										>
+											{t('exportImport.cancelButton')}
 										</button>
 									</div>
 								</div>

@@ -433,15 +433,14 @@
     "checkForUpdates": "Check for Updates",
     "checking": "Checking...",
     "upToDate": "You're up to date!",
-    "updateAvailable": "Update available: v{{version}}",
+    "updateAvailable": "Update available",
     "viewOnGitHub": "View on GitHub",
     "downloadUpdate": "Download Update",
     "checkFailed": "Could not check for updates",
     "lastChecked": "Last checked",
     "github": "GitHub",
-    "license": "License",
-    "mit": "MIT License",
-    "copyright": "© 2025-{{year}} Daniel Volz",
+    "license": "GPL-3.0 License",
+    "copyright": "© {{year}} Daniel Volz",
     "madeWith": "Made with ❤️ for better health management",
     "techStack": "Built with React, Fastify & SQLite"
   }

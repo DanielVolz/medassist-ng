@@ -1851,6 +1851,9 @@ function AppContent() {
 									{updateCheckResult.status === 'update-available' && (
 										<span className="update-status-text">
 											⬆ {t('about.updateAvailable', 'Update available')}: <strong>v{updateCheckResult.latestVersion}</strong>
+											<a href={`${GITHUB_URL}/releases/latest`} target="_blank" rel="noopener noreferrer" className="update-download-link">
+												{t('about.downloadUpdate', 'Download')}
+											</a>
 										</span>
 									)}
 									{updateCheckResult.status === 'error' && (
@@ -1873,8 +1876,8 @@ function AppContent() {
 							</a>
 						</div>
 						<div className="about-footer">
-							<p className="about-copyright">{t('about.copyright', '© 2024-2025 MedAssist Contributors')}</p>
-							<p className="about-license">{t('about.license', 'Licensed under GPL-3.0')}</p>
+							<p className="about-copyright">{t('about.copyright', '© {{year}} Daniel Volz', { year: new Date().getFullYear() })}</p>
+							<p className="about-license">{t('about.license', 'GPL-3.0 License')}</p>
 						</div>
 					</div>
 				</div>

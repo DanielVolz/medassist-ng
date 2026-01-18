@@ -431,15 +431,14 @@
     "checkForUpdates": "Nach Updates suchen",
     "checking": "Prüfe...",
     "upToDate": "Du bist auf dem neuesten Stand!",
-    "updateAvailable": "Update verfügbar: v{{version}}",
+    "updateAvailable": "Update verfügbar",
     "viewOnGitHub": "Auf GitHub ansehen",
     "downloadUpdate": "Update herunterladen",
     "checkFailed": "Update-Prüfung fehlgeschlagen",
     "lastChecked": "Zuletzt geprüft",
     "github": "GitHub",
-    "license": "Lizenz",
-    "mit": "MIT-Lizenz",
-    "copyright": "© 2025-{{year}} Daniel Volz",
+    "license": "GPL-3.0-Lizenz",
+    "copyright": "© {{year}} Daniel Volz",
     "madeWith": "Mit ❤️ erstellt für besseres Gesundheitsmanagement",
     "techStack": "Entwickelt mit React, Fastify & SQLite"
   }

@@ -3890,6 +3890,23 @@ h3 .reminder-icon.info-tooltip {
   font-weight: 700;
 }
 
+.update-download-link {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: white;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.update-download-link:hover {
+  background: var(--accent-hover);
+}
+
 .update-last-checked {
   display: block;
   margin-top: 0.5rem;

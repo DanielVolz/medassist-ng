@@ -439,7 +439,7 @@
     "checkFailed": "Could not check for updates",
     "lastChecked": "Last checked",
     "github": "GitHub",
-    "license": "GPL-3.0 License",
+    "license": "MIT License",
     "copyright": "© {{year}} Daniel Volz",
     "madeWith": "Made with ❤️ for better health management",
     "techStack": "Built with React, Fastify & SQLite"

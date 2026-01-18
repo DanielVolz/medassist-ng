@@ -437,7 +437,7 @@
     "checkFailed": "Update-Prüfung fehlgeschlagen",
     "lastChecked": "Zuletzt geprüft",
     "github": "GitHub",
-    "license": "GPL-3.0-Lizenz",
+    "license": "MIT-Lizenz",
     "copyright": "© {{year}} Daniel Volz",
     "madeWith": "Mit ❤️ erstellt für besseres Gesundheitsmanagement",
     "techStack": "Entwickelt mit React, Fastify & SQLite"

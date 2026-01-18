@@ -29,7 +29,9 @@ export const medications = sqliteTable("medications", {
   packCount: integer("pack_count").notNull().default(1),
   blistersPerPack: integer("blisters_per_pack").notNull().default(1),
   pillsPerBlister: integer("pills_per_blister").notNull().default(1),
-  looseTablets: integer("loose_tablets").notNull().default(0),
+  looseTablets: integer("loose_tablets").notNull().default(0), // TRUE loose pills (user-entered)
+  stockAdjustment: integer("stock_adjustment").notNull().default(0), // Hidden offset from stock corrections
+  lastStockCorrectionAt: integer("last_stock_correction_at", { mode: "timestamp" }), // When stock was last corrected - consumed doses before this don't count
   pillWeightMg: integer("pill_weight_mg"),
   usageJson: text("usage_json").notNull().default("[]"),
   everyJson: text("every_json").notNull().default("[]"),

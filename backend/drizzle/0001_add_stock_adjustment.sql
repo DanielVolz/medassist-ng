@@ -1,0 +1,1 @@
+ALTER TABLE `medications` ADD `stock_adjustment` integer DEFAULT 0 NOT NULL;

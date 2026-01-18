@@ -93,7 +93,7 @@ async function getMedicationsNeedingReminder(userId: number, reminderDaysBefore:
   
   for (const row of rows) {
     const blisters = parseBlistersFromRow(row);
-    const totalPills = row.packCount * row.blistersPerPack * row.pillsPerBlister + row.looseTablets;
+    const totalPills = row.packCount * row.blistersPerPack * row.pillsPerBlister + row.looseTablets + (row.stockAdjustment ?? 0);
     const { daysLeft, depletionDate } = calculateDepletionInfo({ count: totalPills, blisters }, language);
     
     // Check if medication runs out within reminderDaysBefore days

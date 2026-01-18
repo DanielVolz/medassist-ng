@@ -1,0 +1,1 @@
+ALTER TABLE `medications` ADD `last_stock_correction_at` integer;

@@ -18,6 +18,8 @@ type Medication = {
 	blistersPerPack: number;
 	pillsPerBlister: number;
 	looseTablets: number;
+	stockAdjustment?: number;
+	lastStockCorrectionAt?: string | null; // When stock was last corrected - consumed doses before this don't count
 	pillWeightMg?: number | null;
 	blisters: Blister[];
 	imageUrl?: string | null;
@@ -26,6 +28,11 @@ type Medication = {
 	intakeRemindersEnabled?: boolean;
 	updatedAt: string | number | null;
 };
+
+// Helper to calculate total pills including stockAdjustment
+function getMedTotal(med: Medication): number {
+	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
+}
 
 type PlannerRow = {
 	medicationId: number;
@@ -381,6 +388,11 @@ function AppContent() {
 	const [refillSaving, setRefillSaving] = useState(false);
 	const [refillHistory, setRefillHistory] = useState<RefillEntry[]>([]);
 	const [refillHistoryExpanded, setRefillHistoryExpanded] = useState(false);
+	// Edit stock (correction) state
+	const [showEditStockModal, setShowEditStockModal] = useState(false);
+	const [editStockFullBlisters, setEditStockFullBlisters] = useState(0);
+	const [editStockPartialBlisterPills, setEditStockPartialBlisterPills] = useState(0);
+	const [editStockSaving, setEditStockSaving] = useState(false);
 	// Collapsed days state (manually collapsed days are persisted)
 	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
 	const [manuallyExpandedDays, setManuallyExpandedDays] = useState<Set<string>>(new Set());
@@ -541,6 +553,8 @@ function AppContent() {
 					closeScheduleLightbox();
 				} else if (showImageLightbox) {
 					closeImageLightbox();
+				} else if (showEditStockModal) {
+					closeEditStockModal();
 				} else if (showRefillModal) {
 					closeRefillModal();
 				} else if (showEditModal) {
@@ -559,7 +573,7 @@ function AppContent() {
 		};
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
-	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, showRefillModal, userDropdownOpen]);
+	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, showRefillModal, showEditStockModal, userDropdownOpen]);
 
 	// Handle browser back button to close modals (in priority order)
 	useEffect(() => {
@@ -571,6 +585,8 @@ function AppContent() {
 				setShowImageLightbox(false);
 			} else if (scheduleLightboxImage) {
 				setScheduleLightboxImage(null);
+			} else if (showEditStockModal) {
+				setShowEditStockModal(false);
 			} else if (showRefillModal) {
 				setShowRefillModal(false);
 			} else if (showEditModal) {
@@ -588,7 +604,7 @@ function AppContent() {
 		};
 		window.addEventListener('popstate', handlePopState);
 		return () => window.removeEventListener('popstate', handlePopState);
-	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, showRefillModal]);
+	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, showRefillModal, showEditStockModal]);
 
 	// Close user dropdown when clicking outside
 	useEffect(() => {
@@ -909,6 +925,72 @@ function AppContent() {
 		setRefillSaving(false);
 	}
 
+	// Submit a stock correction - user says how many pills they have RIGHT NOW
+	// The server sets lastStockCorrectionAt, so consumed doses before now won't count anymore
+	async function submitStockCorrection(medId: number) {
+		if (!selectedMed) return;
+		setEditStockSaving(true);
+		try {
+			// Auto-convert: handle full blister and negative partial blister
+			let finalFullBlisters = editStockFullBlisters;
+			let finalPartialPills = editStockPartialBlisterPills;
+			
+			// Handle full blister: e.g. 9 pills in a 9-pill blister = +1 full blister, 0 partial
+			if (finalPartialPills >= selectedMed.pillsPerBlister) {
+				finalFullBlisters += 1;
+				finalPartialPills = 0;
+			}
+			
+			// Handle negative partial: e.g. -3 with 136 full = 135 full, 6 partial (for 9-pill blister)
+			if (finalPartialPills < 0 && finalFullBlisters > 0) {
+				finalFullBlisters -= 1;
+				finalPartialPills = selectedMed.pillsPerBlister + finalPartialPills;
+			}
+			
+			// Ensure we don't go negative
+			if (finalPartialPills < 0) finalPartialPills = 0;
+			if (finalFullBlisters < 0) finalFullBlisters = 0;
+			
+			// What the user says they have RIGHT NOW = the new DB total
+			// The server will set lastStockCorrectionAt, so all previous consumed doses are ignored
+			const desiredTotal = finalFullBlisters * selectedMed.pillsPerBlister + finalPartialPills;
+			
+			// The "base" from DB structure (without any stockAdjustment)
+			const baseTotal = selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + selectedMed.looseTablets;
+			
+			// stockAdjustment = what we need to make getMedTotal() return desiredTotal
+			const newStockAdjustment = desiredTotal - baseTotal;
+			
+			console.log('submitStockCorrection:', {
+				input: { fullBlisters: editStockFullBlisters, partial: editStockPartialBlisterPills },
+				final: { fullBlisters: finalFullBlisters, partial: finalPartialPills },
+				desiredTotal,
+				baseTotal,
+				newStockAdjustment
+			});
+			
+			// Use the PATCH endpoint - it sets stockAdjustment AND lastStockCorrectionAt
+			const res = await fetch(`/api/medications/${medId}/stock-adjustment`, {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ stockAdjustment: newStockAdjustment }),
+			});
+			console.log('PATCH response:', res.status, res.ok);
+			if (res.ok) {
+				// Close edit stock modal via history back
+				if (showEditStockModal) {
+					window.history.back();
+				}
+				// Reload medications to get updated stock
+				loadMeds();
+			}
+		} catch {
+			// ignore
+		}
+		setEditStockSaving(false);
+	}
+
 	// Helper to open medication detail modal with refill history
 	function openMedDetail(med: Medication) {
 		setSelectedMed(med);
@@ -953,6 +1035,29 @@ function AppContent() {
 	}
 	function closeRefillModal() {
 		if (showRefillModal) {
+			window.history.back();
+		}
+	}
+
+	function openEditStockModal() {
+		if (!selectedMed) return;
+		// Get current stock from coverage (after consumption)
+		const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
+		const dbTotal = getMedTotal(selectedMed);
+		const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : dbTotal;
+		
+		// Simply divide into full blisters and partial
+		const fullBlisters = Math.floor(currentStock / selectedMed.pillsPerBlister);
+		const partialPills = currentStock % selectedMed.pillsPerBlister;
+		
+		// Pre-fill with current values
+		setEditStockFullBlisters(fullBlisters);
+		setEditStockPartialBlisterPills(partialPills);
+		setShowEditStockModal(true);
+		window.history.pushState({ modal: 'editStock' }, '');
+	}
+	function closeEditStockModal() {
+		if (showEditStockModal) {
 			window.history.back();
 		}
 	}
@@ -1663,7 +1768,7 @@ function AppContent() {
 													Math.round(row.medsLeft), 
 													med?.pillsPerBlister ?? 1,
 													med?.looseTablets ?? 0,
-													med ? med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets : Math.round(row.medsLeft)
+													med ? getMedTotal(med) : Math.round(row.medsLeft)
 												);
 												return (
 													<div key={row.name} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
@@ -1732,7 +1837,7 @@ function AppContent() {
 											Math.round(row.medsLeft), 
 											med?.pillsPerBlister ?? 1,
 											med?.looseTablets ?? 0,
-											med ? med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets : Math.round(row.medsLeft)
+											med ? getMedTotal(med) : Math.round(row.medsLeft)
 										);
 										return (
 											<div key={row.name} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
@@ -2101,7 +2206,7 @@ function AppContent() {
 													<span>{t('medications.details.pillsPerBlister')}: <strong>{med.pillsPerBlister}</strong></span>
 													<span>{t('medications.details.loose')}: <strong>{med.looseTablets}</strong></span>
 												</div>
-												<div className="med-total">{t('medications.details.total')}: {med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets} {t('common.pills')}</div>
+												<div className="med-total">{t('medications.details.total')}: {getMedTotal(med)} {t('common.pills')}</div>
 											</div>
 											<div className="med-actions">
 												<button className="info" onClick={() => startEdit(med)}>{t('common.edit')}</button>
@@ -2973,7 +3078,7 @@ function AppContent() {
 											style={{textAlign: 'left', cursor: 'pointer', border: '1px solid var(--border)', borderRadius: '8px'}}
 										>
 											<div className="action-card-content" style={{flex: 1}}>
-												<span className="action-card-title">📦 {t('exportImport.exportWithImages')}</span>
+												<span className="action-card-title">{t('exportImport.exportWithImages')}</span>
 												<span className="action-card-desc">{t('exportImport.exportWithImagesDesc')}</span>
 											</div>
 										</button>
@@ -2988,7 +3093,7 @@ function AppContent() {
 											style={{textAlign: 'left', cursor: 'pointer', border: '1px solid var(--border)', borderRadius: '8px'}}
 										>
 											<div className="action-card-content" style={{flex: 1}}>
-												<span className="action-card-title">📄 {t('exportImport.exportDataOnly')}</span>
+												<span className="action-card-title">{t('exportImport.exportDataOnly')}</span>
 												<span className="action-card-desc">{t('exportImport.exportDataOnlyDesc')}</span>
 											</div>
 										</button>
@@ -3222,7 +3327,7 @@ function AppContent() {
 								<h3>{t('modal.stockInfo')}</h3>
 								{(() => {
 									const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
-									const totalStock = selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + selectedMed.looseTablets;
+									const totalStock = getMedTotal(selectedMed);
 									const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : totalStock;
 									const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 									const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "success-text";
@@ -3371,7 +3476,7 @@ function AppContent() {
 								<button className="success" onClick={openRefillModal}>
 									{t('refill.button')}
 								</button>
-								<button className="info" onClick={() => { setSelectedMed(null); navigate("/medications"); startEdit(selectedMed); }}>
+								<button className="info" onClick={openEditStockModal}>
 									{t('common.edit')}
 								</button>
 								{selectedMed.blisters.length > 0 && (
@@ -3445,6 +3550,88 @@ function AppContent() {
 							</div>
 						</div>
 					)}
+
+					{/* Edit Stock Modal */}
+					{showEditStockModal && (
+						<div className="modal-overlay" onClick={(e) => { e.stopPropagation(); closeEditStockModal(); }}>
+							<div className="modal-content edit-stock-modal" onClick={(e) => e.stopPropagation()}>
+								<button className="modal-close" onClick={closeEditStockModal}>×</button>
+								<h2>{t('editStock.title')}</h2>
+								<p className="edit-stock-med-name">{selectedMed.name}</p>
+								<p className="edit-stock-hint">{t('editStock.hint')}</p>
+								
+								{(() => {
+									// Get current stock from coverage
+									const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
+									const dbTotal = getMedTotal(selectedMed);
+									const currentTotal = medCoverage ? Math.round(medCoverage.medsLeft) : dbTotal;
+									
+									// New total from user input
+									const newTotal = editStockFullBlisters * selectedMed.pillsPerBlister + editStockPartialBlisterPills;
+									const difference = newTotal - currentTotal;
+									
+									return (
+										<>
+											<div className="edit-stock-form">
+												<label>
+													{t('editStock.fullBlisters')} {t('editStock.pillsPerBlister', { count: selectedMed.pillsPerBlister })}
+													<input
+														type="number"
+														min="0"
+														value={editStockFullBlisters}
+														onChange={(e) => setEditStockFullBlisters(parseInt(e.target.value) || 0)}
+													/>
+												</label>
+												<label>
+													{t('editStock.partialBlisterPills')}
+													<input
+														type="number"
+														min={editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0}
+														max={selectedMed.pillsPerBlister}
+														value={editStockPartialBlisterPills}
+														onChange={(e) => {
+															const val = parseInt(e.target.value) || 0;
+															const min = editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0;
+															const max = selectedMed.pillsPerBlister;
+															setEditStockPartialBlisterPills(Math.max(min, Math.min(val, max)));
+														}}
+													/>
+												</label>
+											</div>
+											
+											<div className="edit-stock-summary">
+												<div className="summary-row">
+													<span>{t('editStock.currentTotal')}:</span>
+													<span>{currentTotal} {t('common.pills')}</span>
+												</div>
+												<div className="summary-row">
+													<span>{t('editStock.newTotal')}:</span>
+													<span>{newTotal} {t('common.pills')}</span>
+												</div>
+												<div className={`summary-row difference ${difference > 0 ? 'positive' : difference < 0 ? 'negative' : ''}`}>
+													<span>{t('editStock.difference')}:</span>
+													<span>{difference > 0 ? '+' : ''}{difference} {t('common.pills')}</span>
+												</div>
+											</div>
+										</>
+									);
+								})()}
+
+								<div className="modal-footer">
+									<button className="ghost" onClick={closeEditStockModal}>
+										{t('common.cancel')}
+									</button>
+									<button
+										className="info"
+										onClick={() => submitStockCorrection(selectedMed.id)}
+										disabled={editStockSaving}
+									>
+										{editStockSaving ? t('editStock.saving') : t('editStock.save')}
+									</button>
+								</div>
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -3463,7 +3650,7 @@ function AppContent() {
 							{meds.filter(m => (m.takenBy || []).includes(selectedUser)).map((med) => {
 								const medCoverage = coverage.all.find(c => c.name === med.name);
 								const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-								const totalPills = med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;
+								const totalPills = getMedTotal(med);
 								const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(totalPills);
 								return (
 									<div 
@@ -3967,35 +4154,23 @@ function formatNumber(value: number | null) {
 	return value.toFixed(1);
 }
 
-// Calculate blister stock with realistic consumption order:
-// Loose pills are consumed FIRST, then blisters are opened
+// Calculate blister stock - simply divides current pills into full blisters and partial
+// No separate "loose pills" tracking - everything is displayed as blisters
 function getBlisterStock(
 	currentPills: number, 
 	pillsPerBlister: number, 
-	originalLooseTablets: number,
-	originalTotalPills: number
+	_originalLooseTablets: number,
+	_originalTotalPills: number
 ): { fullBlisters: number; openBlisterPills: number; loosePills: number } {
 	if (pillsPerBlister <= 0 || pillsPerBlister === 1) {
 		return { fullBlisters: 0, openBlisterPills: 0, loosePills: currentPills };
 	}
 	
-	// Calculate how many pills have been consumed
-	const consumed = originalTotalPills - currentPills;
+	// Simply divide current pills into full blisters and partial
+	const fullBlisters = Math.floor(currentPills / pillsPerBlister);
+	const openBlisterPills = currentPills % pillsPerBlister;
 	
-	// Loose pills are consumed first
-	const looseConsumed = Math.min(consumed, originalLooseTablets);
-	const loosePillsRemaining = originalLooseTablets - looseConsumed;
-	
-	// Remaining consumption comes from blisters
-	const blisterPillsConsumed = consumed - looseConsumed;
-	const originalBlisterPills = originalTotalPills - originalLooseTablets;
-	const blisterPillsRemaining = originalBlisterPills - blisterPillsConsumed;
-	
-	// Calculate full blisters and open blister
-	const fullBlisters = Math.floor(blisterPillsRemaining / pillsPerBlister);
-	const openBlisterPills = blisterPillsRemaining % pillsPerBlister;
-	
-	return { fullBlisters, openBlisterPills, loosePills: loosePillsRemaining };
+	return { fullBlisters, openBlisterPills, loosePills: 0 };
 }
 
 // Format full blisters column
@@ -4004,26 +4179,17 @@ function formatFullBlisters(fullBlisters: number, t: (key: string) => string): s
 	return `${fullBlisters} ${fullBlisters === 1 ? t('common.blister') : t('common.blisters')}`;
 }
 
-// Format open blister + loose pills column
+// Format open blister column (no separate loose pills display)
 function formatOpenBlisterAndLoose(
 	openBlisterPills: number, 
-	loosePills: number, 
+	_loosePills: number, 
 	pillsPerBlister: number, 
 	t: (key: string) => string
 ): string {
-	// Format open blister part
-	const openBlisterText = openBlisterPills > 0 
-		? `${openBlisterPills} ${t('common.of')} ${pillsPerBlister} ${t('common.pills')}`
-		: t('common.none');
-	
-	// Format loose pills part (if any)
-	if (loosePills > 0) {
-		return `${openBlisterText} + ${loosePills} ${t('common.loose')}`;
+	if (openBlisterPills > 0) {
+		return `${openBlisterPills} ${t('common.of')} ${pillsPerBlister} ${t('common.pills')}`;
 	}
-	
-	// No loose pills
-	if (openBlisterPills === 0) return "—";
-	return openBlisterText;
+	return "—";
 }
 
 function getExpiryClass(expiryDate: string | null | undefined, expiryWarningDays: number = 30): string {
@@ -4056,14 +4222,19 @@ function calculateCoverage(
 
 		let consumed = 0;
 		
+		// Get the cutoff time - only count doses taken AFTER the last stock correction
+		const stockCorrectionCutoff = m.lastStockCorrectionAt ? new Date(m.lastStockCorrectionAt).getTime() : 0;
+		
 		if (stockCalculationMode === "automatic") {
-			// Automatic mode: calculate consumed based on schedule since start date
+			// Automatic mode: calculate consumed based on schedule since start date (or last correction)
 			// Multiply by personCount since each person takes the medication
 			m.blisters.forEach((s) => {
-				const start = new Date(s.start).getTime();
-				if (Number.isNaN(start) || start > now) return;
+				const blisterStart = new Date(s.start).getTime();
+				// Use the LATER of blister start or stock correction time
+				const effectiveStart = Math.max(blisterStart, stockCorrectionCutoff);
+				if (Number.isNaN(effectiveStart) || effectiveStart > now) return;
 				const period = Math.max(1, s.every) * MS_PER_DAY;
-				const occurrences = Math.floor((now - start) / period) + 1; // include today if started
+				const occurrences = Math.floor((now - effectiveStart) / period) + 1; // include today if started
 				consumed += occurrences * s.usage * personCount;
 			});
 		} else {
@@ -4076,9 +4247,11 @@ function calculateCoverage(
 					const blisterIdx = parseInt(parts[1], 10);
 					const doseTimestamp = parseInt(parts[2], 10);
 					if (medId === m.id && m.blisters[blisterIdx]) {
-						// Only count doses that are on or after the blister's start date
+						// Only count doses that are:
+						// 1. On or after the blister's start date
+						// 2. AFTER the last stock correction (if any)
 						const blisterStart = new Date(m.blisters[blisterIdx].start).getTime();
-						if (!Number.isNaN(blisterStart) && doseTimestamp >= blisterStart) {
+						if (!Number.isNaN(blisterStart) && doseTimestamp >= blisterStart && doseTimestamp > stockCorrectionCutoff) {
 							// Each taken dose (regardless of person) consumes the usage amount
 							consumed += m.blisters[blisterIdx].usage;
 						}
@@ -4087,7 +4260,7 @@ function calculateCoverage(
 		});
 	}
 
-		const totalPills = m.packCount * m.blistersPerPack * m.pillsPerBlister + m.looseTablets;
+		const totalPills = getMedTotal(m);
 		const medsLeft = Math.max(0, totalPills - consumed);
 		const rawDaysLeft = dailyRate > 0 ? medsLeft / dailyRate : null;
 		const daysLeft = rawDaysLeft !== null ? Math.max(0, Math.floor(rawDaysLeft)) : null; // conservative: round down
@@ -4653,7 +4826,7 @@ function SharedSchedule() {
 		}
 		
 		for (const med of data.medications) {
-			const totalCount = med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;
+			const totalCount = getMedTotal(med);
 			const taken = takenByMed[med.name] || 0;
 			const currentCount = Math.max(0, totalCount - taken);
 			// Calculate daily usage from blisters, multiplied by number of people

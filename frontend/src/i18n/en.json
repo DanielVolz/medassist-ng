@@ -332,7 +332,8 @@
     "fullBlister": "full blister",
     "fullBlisters": "full blisters",
     "inBlister": "in 1 blister",
-    "total": "total"
+    "total": "total",
+    "max": "max"
   },
   "share": {
     "button": "Share",
@@ -408,5 +409,18 @@
     "pillsAdded": "{{count}} pill",
     "pillsAdded_other": "{{count}} pills",
     "button": "Refill"
+  },
+  "editStock": {
+    "title": "Correct Stock",
+    "hint": "This is for correcting stock discrepancies. For regular stock changes, use 'Refill'.",
+    "fullBlisters": "Full blisters",
+    "partialBlisterPills": "Partial blister",
+    "pillsPerBlister": "({{count}} pills each)",
+    "currentTotal": "Current total",
+    "newTotal": "New total",
+    "difference": "Difference",
+    "save": "Save Correction",
+    "saving": "Saving...",
+    "success": "Stock corrected successfully"
   }
 }

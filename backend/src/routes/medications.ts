@@ -96,6 +96,8 @@ export async function medicationRoutes(app: FastifyInstance) {
       blistersPerPack: row.blistersPerPack ?? 1,
       pillsPerBlister: row.pillsPerBlister ?? 1,
       looseTablets: row.looseTablets ?? 0,
+      stockAdjustment: row.stockAdjustment ?? 0,
+      lastStockCorrectionAt: row.lastStockCorrectionAt?.toISOString() ?? null,
       pillWeightMg: row.pillWeightMg,
       blisters: parseBlisters(row),
       imageUrl: row.imageUrl,
@@ -147,6 +149,8 @@ export async function medicationRoutes(app: FastifyInstance) {
       blistersPerPack: inserted.blistersPerPack,
       pillsPerBlister: inserted.pillsPerBlister,
       looseTablets: inserted.looseTablets,
+      stockAdjustment: inserted.stockAdjustment ?? 0,
+      lastStockCorrectionAt: inserted.lastStockCorrectionAt?.toISOString() ?? null,
       pillWeightMg: inserted.pillWeightMg,
       blisters,
       imageUrl: inserted.imageUrl,
@@ -235,12 +239,49 @@ export async function medicationRoutes(app: FastifyInstance) {
       blistersPerPack: result[0].blistersPerPack,
       pillsPerBlister: result[0].pillsPerBlister,
       looseTablets: result[0].looseTablets,
+      stockAdjustment: result[0].stockAdjustment ?? 0,
+      lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
       pillWeightMg: result[0].pillWeightMg,
       blisters,
       imageUrl: result[0].imageUrl,
       expiryDate: result[0].expiryDate,
       notes: result[0].notes,
       intakeRemindersEnabled: result[0].intakeRemindersEnabled,
+      updatedAt: result[0].updatedAt,
+    };
+  });
+
+  // Stock correction endpoint - only updates stockAdjustment, preserves looseTablets
+  // Also sets lastStockCorrectionAt so consumed doses before this point don't count
+  app.patch<{ Params: { id: string }; Body: { stockAdjustment: number } }>("/medications/:id/stock-adjustment", async (req, reply) => {
+    const idNum = Number(req.params.id);
+    if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
+
+    const userId = await getUserId(req, reply);
+    
+    // Verify ownership
+    const [existing] = await db.select().from(medications).where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+    if (!existing) return reply.notFound();
+
+    const { stockAdjustment } = req.body as { stockAdjustment: number };
+    if (typeof stockAdjustment !== "number") return reply.badRequest("stockAdjustment must be a number");
+
+    const result = await db
+      .update(medications)
+      .set({
+        stockAdjustment,
+        lastStockCorrectionAt: new Date(), // Mark when correction was made
+        updatedAt: new Date(),
+      })
+      .where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
+      .returning();
+
+    if (!result.length) return reply.notFound();
+
+    return {
+      id: result[0].id,
+      stockAdjustment: result[0].stockAdjustment ?? 0,
+      lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
       updatedAt: result[0].updatedAt,
     };
   });
@@ -339,7 +380,8 @@ export async function medicationRoutes(app: FastifyInstance) {
       const packCount = row.packCount ?? 1;
       const blistersPerPack = row.blistersPerPack ?? 1;
       const looseTablets = row.looseTablets ?? 0;
-      const originalTotalPills = packCount * blistersPerPack * pillsPerBlister + looseTablets;
+      const stockAdjustment = row.stockAdjustment ?? 0;
+      const originalTotalPills = packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
 
       // Calculate consumption up to now (same logic as frontend)
       let consumedUntilNow = 0;

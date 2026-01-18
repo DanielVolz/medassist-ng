@@ -330,7 +330,8 @@
     "fullBlister": "voller Blister",
     "fullBlisters": "volle Blister",
     "inBlister": "in 1 Blister",
-    "total": "gesamt"
+    "total": "gesamt",
+    "max": "max"
   },
   "share": {
     "button": "Teilen",
@@ -406,5 +407,18 @@
     "pillsAdded": "{{count}} Tablette",
     "pillsAdded_other": "{{count}} Tabletten",
     "button": "Nachfüllen"
+  },
+  "editStock": {
+    "title": "Bestand korrigieren",
+    "hint": "Dies ist für die Korrektur von Bestandsabweichungen. Für normale Bestandsänderungen nutze 'Nachfüllen'.",
+    "fullBlisters": "Volle Blister",
+    "partialBlisterPills": "Angebrochener Blister",
+    "pillsPerBlister": "(je {{count}} Tabletten)",
+    "currentTotal": "Aktueller Bestand",
+    "newTotal": "Neuer Bestand",
+    "difference": "Differenz",
+    "save": "Korrektur speichern",
+    "saving": "Speichern...",
+    "success": "Bestand erfolgreich korrigiert"
   }
 }

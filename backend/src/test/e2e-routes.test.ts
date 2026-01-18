@@ -85,6 +85,8 @@ async function createSchema(client: Client) {
       blisters_per_pack integer NOT NULL DEFAULT 1,
       pills_per_blister integer NOT NULL DEFAULT 1,
       loose_tablets integer NOT NULL DEFAULT 0,
+      stock_adjustment integer NOT NULL DEFAULT 0,
+      last_stock_correction_at integer,
       pill_weight_mg integer,
       usage_json text NOT NULL DEFAULT '[]',
       every_json text NOT NULL DEFAULT '[]',

@@ -4004,6 +4004,90 @@ h3 .reminder-icon.info-tooltip {
   cursor: not-allowed;
 }
 
+/* =============================================================================
+   Edit Stock Modal (Correction)
+   ============================================================================= */
+.edit-stock-modal {
+  max-width: 500px;
+  padding: 1.5rem;
+}
+
+.edit-stock-modal h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.edit-stock-med-name {
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.edit-stock-hint {
+  font-size: 0.85rem;
+  color: var(--warning);
+  background: var(--warning-bg);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(252, 211, 77, 0.2);
+}
+
+.edit-stock-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.edit-stock-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-weight: 500;
+}
+
+.edit-stock-form label .hint-text {
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.edit-stock-form input {
+  padding: 0.75rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.edit-stock-summary {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.edit-stock-summary .summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.edit-stock-summary .summary-row:last-child {
+  border-bottom: none;
+  font-weight: 600;
+}
+
+.edit-stock-summary .summary-row.difference.positive span:last-child {
+  color: var(--success);
+}
+
+.edit-stock-summary .summary-row.difference.negative span:last-child {
+  color: var(--danger);
+}
+
 /* Clickable section header (for expand/collapse) */
 .section-header-clickable {
   cursor: pointer;

@@ -8,6 +8,20 @@
       "when": 1768600500759,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1768734577830,
+      "tag": "0001_add_stock_adjustment",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1768736677092,
+      "tag": "0002_add_last_stock_correction_at",
+      "breakpoints": true
     }
   ]
 }

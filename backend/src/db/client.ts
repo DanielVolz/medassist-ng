@@ -75,6 +75,10 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
     `ALTER TABLE dose_tracking ADD COLUMN dismissed integer NOT NULL DEFAULT 0`,
     // Added in v1.3.x - stock calculation mode (automatic/manual)
     `ALTER TABLE user_settings ADD COLUMN stock_calculation_mode text NOT NULL DEFAULT 'automatic'`,
+    // Added for stock correction - hidden offset that doesn't affect looseTablets
+    `ALTER TABLE medications ADD COLUMN stock_adjustment integer NOT NULL DEFAULT 0`,
+    // Added for stock correction - timestamp to ignore consumed doses before correction
+    `ALTER TABLE medications ADD COLUMN last_stock_correction_at integer`,
   ];
 
   for (const sql of alterMigrations) {

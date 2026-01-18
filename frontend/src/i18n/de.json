@@ -420,5 +420,27 @@
     "save": "Korrektur speichern",
     "saving": "Speichern...",
     "success": "Bestand erfolgreich korrigiert"
+  },
+  "about": {
+    "title": "Über",
+    "appName": "MedAssist-ng",
+    "description": "Open-Source Medikamentenverwaltung und Planungsanwendung für selbst gehostete Umgebungen.",
+    "version": "Version",
+    "frontend": "Frontend",
+    "backend": "Backend",
+    "checkForUpdates": "Nach Updates suchen",
+    "checking": "Prüfe...",
+    "upToDate": "Du bist auf dem neuesten Stand!",
+    "updateAvailable": "Update verfügbar: v{{version}}",
+    "viewOnGitHub": "Auf GitHub ansehen",
+    "downloadUpdate": "Update herunterladen",
+    "checkFailed": "Update-Prüfung fehlgeschlagen",
+    "lastChecked": "Zuletzt geprüft",
+    "github": "GitHub",
+    "license": "Lizenz",
+    "mit": "MIT-Lizenz",
+    "copyright": "© 2025-{{year}} Daniel Volz",
+    "madeWith": "Mit ❤️ erstellt für besseres Gesundheitsmanagement",
+    "techStack": "Entwickelt mit React, Fastify & SQLite"
   }
 }

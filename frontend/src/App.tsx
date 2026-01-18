@@ -3,6 +3,26 @@ import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from "re
 import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth, AuthPage, UserProfile } from "./components/Auth";
 
+// Vite injects this at build time from package.json
+declare const __APP_VERSION__: string;
+const FRONTEND_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
+const GITHUB_REPO = 'DanielVolz/medassist-ng';
+const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
+
+// Simple semver comparison: returns -1 if a < b, 0 if equal, 1 if a > b
+function compareSemver(a: string, b: string): number {
+	const parseVersion = (v: string) => v.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+	const pa = parseVersion(a);
+	const pb = parseVersion(b);
+	for (let i = 0; i < 3; i++) {
+		const va = pa[i] || 0;
+		const vb = pb[i] || 0;
+		if (va < vb) return -1;
+		if (va > vb) return 1;
+	}
+	return 0;
+}
+
 type Blister = {
 	usage: number;
 	every: number;
@@ -217,6 +237,13 @@ function AppContent() {
 	const { t, i18n } = useTranslation();
 	const { user, authState, logout } = useAuth();
 	const [showProfile, setShowProfile] = useState(false);
+	const [showAbout, setShowAbout] = useState(false);
+	const [backendVersion, setBackendVersion] = useState<string | null>(null);
+	const [updateCheckResult, setUpdateCheckResult] = useState<{
+		status: 'idle' | 'checking' | 'up-to-date' | 'update-available' | 'error';
+		latestVersion?: string;
+		lastChecked?: string;
+	}>({ status: 'idle' });
 	const [meds, setMeds] = useState<Medication[]>([]);
 	const [plannerRows, setPlannerRows] = useState<PlannerRow[]>([]);
 	const [plannerLoading, setPlannerLoading] = useState(false);
@@ -567,6 +594,8 @@ function AppContent() {
 					resetForm();
 				} else if (showShareDialog) {
 					closeShareDialog();
+				} else if (showAbout) {
+					closeAbout();
 				} else if (showProfile) {
 					closeProfile();
 				} else if (selectedUser) {
@@ -578,7 +607,7 @@ function AppContent() {
 		};
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
-	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, showRefillModal, showEditStockModal, userDropdownOpen]);
+	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showAbout, showShareDialog, showEditModal, showRefillModal, showEditStockModal, userDropdownOpen]);
 
 	// Handle browser back button to close modals (in priority order)
 	useEffect(() => {
@@ -599,6 +628,8 @@ function AppContent() {
 				resetForm();
 			} else if (showShareDialog) {
 				resetShareDialogState();
+			} else if (showAbout) {
+				setShowAbout(false);
 			} else if (showProfile) {
 				setShowProfile(false);
 			} else if (selectedUser) {
@@ -609,7 +640,7 @@ function AppContent() {
 		};
 		window.addEventListener('popstate', handlePopState);
 		return () => window.removeEventListener('popstate', handlePopState);
-	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showShareDialog, showEditModal, showRefillModal, showEditStockModal]);
+	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showAbout, showShareDialog, showEditModal, showRefillModal, showEditStockModal]);
 
 	// Close user dropdown when clicking outside
 	useEffect(() => {
@@ -660,7 +691,7 @@ function AppContent() {
 
 	// Prevent background scroll when modal is open
 	useEffect(() => {
-		const isModalOpen = selectedMed || selectedUser || showProfile || showShareDialog || showEditModal;
+		const isModalOpen = selectedMed || selectedUser || showProfile || showAbout || showShareDialog || showEditModal;
 		if (isModalOpen) {
 			const scrollY = window.scrollY;
 			document.body.classList.add('modal-open');
@@ -677,7 +708,7 @@ function AppContent() {
 			document.body.classList.remove('modal-open');
 			document.body.style.top = '';
 		};
-	}, [selectedMed, selectedUser, showProfile, showShareDialog, showEditModal]);
+	}, [selectedMed, selectedUser, showProfile, showAbout, showShareDialog, showEditModal]);
 
 	// Update selectedMed when meds change (e.g., after refill)
 	useEffect(() => {
@@ -1084,6 +1115,58 @@ function AppContent() {
 	function closeProfile() {
 		if (showProfile) {
 			window.history.back();
+		}
+	}
+
+	function openAbout() {
+		setShowAbout(true);
+		window.history.pushState({ modal: 'about' }, '');
+		// Fetch backend version when opening
+		fetch('/api/health')
+			.then(res => res.json())
+			.then(data => setBackendVersion(data.version || 'unknown'))
+			.catch(() => setBackendVersion('unknown'));
+		// Restore cached update check result from sessionStorage
+		const cached = sessionStorage.getItem('updateCheckResult');
+		if (cached) {
+			try {
+				const parsed = JSON.parse(cached);
+				// Only use cache if less than 1 hour old
+				if (parsed.lastChecked && Date.now() - new Date(parsed.lastChecked).getTime() < 60 * 60 * 1000) {
+					setUpdateCheckResult(parsed);
+				}
+			} catch { /* ignore */ }
+		}
+	}
+	function closeAbout() {
+		if (showAbout) {
+			window.history.back();
+		}
+	}
+
+	async function checkForUpdates() {
+		setUpdateCheckResult({ status: 'checking' });
+		try {
+			const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+			if (!res.ok) throw new Error('Failed to fetch');
+			const data = await res.json();
+			const latestVersion = data.tag_name?.replace(/^v/, '') || data.name?.replace(/^v/, '');
+			const lastChecked = new Date().toISOString();
+			
+			// Compare with current version (use frontend version as reference)
+			const currentVersion = FRONTEND_VERSION;
+			const needsUpdate = compareSemver(currentVersion, latestVersion) < 0;
+			
+			const result = {
+				status: needsUpdate ? 'update-available' as const : 'up-to-date' as const,
+				latestVersion,
+				lastChecked,
+			};
+			setUpdateCheckResult(result);
+			// Cache result in sessionStorage
+			sessionStorage.setItem('updateCheckResult', JSON.stringify(result));
+		} catch {
+			setUpdateCheckResult({ status: 'error' });
 		}
 	}
 
@@ -1690,6 +1773,10 @@ function AppContent() {
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 										{t('nav.settings', 'Settings')}
 									</button>
+									<button className="dropdown-item" onClick={() => { openAbout(); setUserDropdownOpen(false); }}>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+										{t('about.title', 'About')}
+									</button>
 									<button className="dropdown-item danger" onClick={() => { logout(); setUserDropdownOpen(false); }}>
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
 										{t('auth.signOut', 'Sign Out')}
@@ -1707,6 +1794,88 @@ function AppContent() {
 					<div className="modal-content profile-modal" onClick={(e) => e.stopPropagation()}>
 						<button className="modal-close" onClick={() => closeProfile()}>×</button>
 						<UserProfile onClose={() => closeProfile()} />
+					</div>
+				</div>
+			)}
+
+			{/* About Modal */}
+			{showAbout && (
+				<div className="modal-overlay" onClick={() => closeAbout()}>
+					<div className="modal-content about-modal" onClick={(e) => e.stopPropagation()}>
+						<button className="modal-close" onClick={() => closeAbout()}>×</button>
+						<div className="about-header">
+							<div className="about-logo">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+									<path d="M19.5 12c0 4.14-3.36 7.5-7.5 7.5S4.5 16.14 4.5 12 7.86 4.5 12 4.5s7.5 3.36 7.5 7.5z"/>
+									<path d="M12 8v4l2.5 2.5"/>
+									<path d="M9 2h6M12 2v2"/>
+								</svg>
+							</div>
+							<h2>{t('about.appName', 'MedAssist')}</h2>
+							<p className="about-tagline">{t('about.description', 'Personal medication tracking and reminder app')}</p>
+						</div>
+						<div className="about-versions">
+							<div className="about-version-row">
+								<span className="about-version-label">{t('about.frontendVersion', 'Frontend')}</span>
+								<span className="about-version-value">{FRONTEND_VERSION}</span>
+							</div>
+							<div className="about-version-row">
+								<span className="about-version-label">{t('about.backendVersion', 'Backend')}</span>
+								<span className="about-version-value">{backendVersion || '...'}</span>
+							</div>
+						</div>
+						<div className="about-update-section">
+							<button className="about-update-btn" onClick={checkForUpdates} disabled={updateCheckResult?.status === 'checking'}>
+								{updateCheckResult?.status === 'checking' ? (
+									<>
+										<span className="spinner-small"></span>
+										{t('about.checking', 'Checking...')}
+									</>
+								) : (
+									<>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+											<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+											<path d="M3 3v5h5"/>
+											<path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+											<path d="M16 16h5v5"/>
+										</svg>
+										{t('about.checkForUpdates', 'Check for Updates')}
+									</>
+								)}
+							</button>
+							{updateCheckResult && updateCheckResult.status !== 'checking' && (
+								<div className={`about-update-result ${updateCheckResult.status}`}>
+									{updateCheckResult.status === 'up-to-date' && (
+										<span className="update-status-text">✓ {t('about.upToDate', 'You are up to date!')}</span>
+									)}
+									{updateCheckResult.status === 'update-available' && (
+										<span className="update-status-text">
+											⬆ {t('about.updateAvailable', 'Update available')}: <strong>v{updateCheckResult.latestVersion}</strong>
+										</span>
+									)}
+									{updateCheckResult.status === 'error' && (
+										<span className="update-status-text">⚠ {t('about.checkFailed', 'Could not check for updates')}</span>
+									)}
+									{updateCheckResult.lastChecked && (
+										<span className="update-last-checked">
+											{t('about.lastChecked', 'Last checked')}: {new Date(updateCheckResult.lastChecked).toLocaleString()}
+										</span>
+									)}
+								</div>
+							)}
+						</div>
+						<div className="about-links">
+							<a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="about-link">
+								<svg viewBox="0 0 24 24" fill="currentColor">
+									<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+								</svg>
+								{t('about.viewOnGitHub', 'View on GitHub')}
+							</a>
+						</div>
+						<div className="about-footer">
+							<p className="about-copyright">{t('about.copyright', '© 2024-2025 MedAssist Contributors')}</p>
+							<p className="about-license">{t('about.license', 'Licensed under GPL-3.0')}</p>
+						</div>
 					</div>
 				</div>
 			)}

@@ -3827,8 +3827,8 @@ function AppContent() {
 							{meds.filter(m => (m.takenBy || []).includes(selectedUser)).map((med) => {
 								const medCoverage = coverage.all.find(c => c.name === med.name);
 								const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-								const totalPills = getMedTotal(med);
-								const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(totalPills);
+								const packageSize = getPackageSize(med);
+								const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(getMedTotal(med));
 								return (
 									<div 
 										key={med.id} 
@@ -3841,7 +3841,7 @@ function AppContent() {
 											{med.genericName && <span className="user-med-generic">{med.genericName}</span>}
 										</div>
 										<div className="user-med-stats">
-											<span className="user-med-pills">{currentStock}/{formatNumber(totalPills)} {t('common.pills')}</span>
+											<span className="user-med-pills">{currentStock}/{formatNumber(packageSize)} {t('common.pills')}</span>
 											{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
 										</div>
 									</div>

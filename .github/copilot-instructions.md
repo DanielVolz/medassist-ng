@@ -475,6 +475,17 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
 > Users upgrade their Docker containers but keep their existing DB.
 > The app must NOT crash if old columns are missing.
 
+### ⚠️ MANDATORY for EVERY New Feature
+
+**Before implementing ANY feature that touches user data or settings:**
+
+1. **Check if new DB columns are needed** - Does the feature require storing new data?
+2. **If YES → Follow ALL steps below** - Schema.ts + Drizzle migration + ALTER migration + NULL-safe code
+3. **NEVER skip the ALTER migration** - This is the #1 cause of production 500 errors!
+
+**Common mistake:** Adding a column to `schema.ts` and forgetting the ALTER migration in `client.ts`.
+The Drizzle migration only works for NEW databases. Existing production databases need the ALTER migration!
+
 ### Schema Management with Drizzle Kit
 
 The database schema uses **Drizzle Kit** for migrations. There is a **single source of truth**:

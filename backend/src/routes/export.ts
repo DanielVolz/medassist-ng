@@ -278,11 +278,35 @@ export async function exportRoutes(app: FastifyInstance) {
         const exportId = medIdToExportId.get(parsed.medicationId);
         if (!exportId) return null; // Orphaned dose, skip
         
+        // Safely convert takenAt to ISO string
+        let takenAtIso: string;
+        try {
+          if (dose.takenAt instanceof Date && !isNaN(dose.takenAt.getTime())) {
+            takenAtIso = dose.takenAt.toISOString();
+          } else if (typeof dose.takenAt === "number" || typeof dose.takenAt === "string") {
+            const d = new Date(dose.takenAt);
+            takenAtIso = !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+          } else {
+            takenAtIso = new Date().toISOString();
+          }
+        } catch {
+          takenAtIso = new Date().toISOString();
+        }
+
+        // Safely convert scheduled time
+        let scheduledTimeIso: string;
+        try {
+          const d = new Date(parsed.timestampMs);
+          scheduledTimeIso = !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+        } catch {
+          scheduledTimeIso = new Date().toISOString();
+        }
+
         return {
           medicationRef: exportId,
           scheduleIndex: parsed.blisterIndex,
-          scheduledTime: new Date(parsed.timestampMs).toISOString(),
-          takenAt: dose.takenAt?.toISOString() ?? new Date().toISOString(),
+          scheduledTime: scheduledTimeIso,
+          takenAt: takenAtIso,
           markedBy: dose.markedBy,
         };
       }).filter((d): d is NonNullable<typeof d> => d !== null);
@@ -316,12 +340,29 @@ export async function exportRoutes(app: FastifyInstance) {
       // 4. Load share links
       const shares = await db.select().from(shareTokens).where(eq(shareTokens.userId, userId));
       
-      const exportShareLinks = shares.map((share) => ({
-        takenBy: share.takenBy,
-        scheduleDays: share.scheduleDays,
-        expiresAt: share.expiresAt?.toISOString() ?? null,
-        regenerateToken: true, // Always regenerate tokens on import for security
-      }));
+      const exportShareLinks = shares.map((share) => {
+        // Safely convert expiresAt to ISO string
+        let expiresAtIso: string | null = null;
+        if (share.expiresAt) {
+          try {
+            if (share.expiresAt instanceof Date && !isNaN(share.expiresAt.getTime())) {
+              expiresAtIso = share.expiresAt.toISOString();
+            } else if (typeof share.expiresAt === "number" || typeof share.expiresAt === "string") {
+              const d = new Date(share.expiresAt);
+              expiresAtIso = !isNaN(d.getTime()) ? d.toISOString() : null;
+            }
+          } catch {
+            expiresAtIso = null;
+          }
+        }
+
+        return {
+          takenBy: share.takenBy,
+          scheduleDays: share.scheduleDays,
+          expiresAt: expiresAtIso,
+          regenerateToken: true, // Always regenerate tokens on import for security
+        };
+      });
 
       // Build export object
       const exportData = {

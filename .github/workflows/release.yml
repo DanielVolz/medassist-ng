@@ -16,41 +16,63 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get previous tag
-        id: prev_tag
+      - name: Get version info
+        id: version
         run: |
-          # Get all tags sorted by version, find the one before current
           CURRENT_TAG=${GITHUB_REF#refs/tags/}
-          PREV_TAG=$(git tag --sort=-v:refname | grep -A1 "^${CURRENT_TAG}$" | tail -1)
+          VERSION=${CURRENT_TAG#v}
+          echo "tag=$CURRENT_TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           
-          # If no previous tag found (first release), use empty
+          # Get previous tag
+          PREV_TAG=$(git tag --sort=-v:refname | grep -A1 "^${CURRENT_TAG}$" | tail -1)
           if [ "$PREV_TAG" = "$CURRENT_TAG" ]; then
             PREV_TAG=""
           fi
-          
           echo "previous_tag=$PREV_TAG" >> $GITHUB_OUTPUT
-          echo "Current tag: $CURRENT_TAG, Previous tag: $PREV_TAG"
 
-      - name: Generate changelog
-        id: changelog
+      - name: Generate release template
         run: |
-          PREV_TAG="${{ steps.prev_tag.outputs.previous_tag }}"
+          cat > release_notes.md << 'EOF'
+          ## What's New
           
-          if [ -z "$PREV_TAG" ]; then
-            # First release - get all commits
-            CHANGES=$(git log --pretty=format:"- %s" HEAD)
-          else
-            # Get commits since last tag
-            CHANGES=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
-          fi
+          <!-- 
+          Write 1-2 sentences describing the main changes in this release.
+          Example: This release introduces a medication refill tracking feature and improves the mobile user experience.
+          -->
           
-          # Write to file for multiline support
-          echo "$CHANGES" > changelog.txt
+          ### New Features
+          
+          <!-- List new features with **bold** names and descriptions -->
+          - **Feature Name**: Description of the feature
+          
+          ### Improvements
+          
+          <!-- List improvements and fixes -->
+          - **Improvement**: Description
+          
+          ### Where to Find It
+          
+          <!-- Tell users where they can access new features -->
+          
+          ---
+          
+          ## Docker Images
+          
+          ```bash
+          docker pull ghcr.io/danielvolz/medassist-ng-backend:${{ steps.version.outputs.version }}
+          docker pull ghcr.io/danielvolz/medassist-ng-frontend:${{ steps.version.outputs.version }}
+          ```
+          
+          **Full Changelog**: https://github.com/DanielVolz/medassist-ng/compare/${{ steps.version.outputs.previous_tag }}...${{ steps.version.outputs.tag }}
+          EOF
 
-      - name: Create Release
+      - name: Create Draft Release
         uses: softprops/action-gh-release@v1
         with:
-          body_path: changelog.txt
+          body_path: release_notes.md
+          draft: true
           generate_release_notes: false
+          name: "Release ${{ steps.version.outputs.tag }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

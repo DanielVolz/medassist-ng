@@ -33,6 +33,7 @@ const inventorySchema = z.object({
   blistersPerPack: z.number().int().min(1).default(1),
   pillsPerBlister: z.number().int().min(1).default(1),
   looseTablets: z.number().int().min(0).default(0),
+  stockAdjustment: z.number().int().default(0), // Manual stock correction
 });
 
 const medicationExportSchema = z.object({
@@ -47,6 +48,7 @@ const medicationExportSchema = z.object({
   notes: z.string().nullable().optional(),
   intakeRemindersEnabled: z.boolean().default(false),
   image: z.string().nullable().optional(), // base64 data URL or null
+  lastStockCorrectionAt: z.string().nullable().optional(), // ISO datetime of last stock correction
 });
 
 const doseHistorySchema = z.object({
@@ -255,6 +257,21 @@ export async function exportRoutes(app: FastifyInstance) {
         const exportId = `med-${index + 1}`;
         medIdToExportId.set(med.id, exportId);
         
+        // Safely convert lastStockCorrectionAt to ISO string
+        let lastStockCorrectionAtIso: string | null = null;
+        if (med.lastStockCorrectionAt) {
+          try {
+            if (med.lastStockCorrectionAt instanceof Date && !isNaN(med.lastStockCorrectionAt.getTime())) {
+              lastStockCorrectionAtIso = med.lastStockCorrectionAt.toISOString();
+            } else if (typeof med.lastStockCorrectionAt === "number" || typeof med.lastStockCorrectionAt === "string") {
+              const d = new Date(med.lastStockCorrectionAt);
+              lastStockCorrectionAtIso = !isNaN(d.getTime()) ? d.toISOString() : null;
+            }
+          } catch {
+            lastStockCorrectionAtIso = null;
+          }
+        }
+
         return {
           _exportId: exportId,
           name: med.name,
@@ -265,6 +282,7 @@ export async function exportRoutes(app: FastifyInstance) {
             blistersPerPack: med.blistersPerPack ?? 1,
             pillsPerBlister: med.pillsPerBlister ?? 1,
             looseTablets: med.looseTablets ?? 0,
+            stockAdjustment: med.stockAdjustment ?? 0,
           },
           pillWeightMg: med.pillWeightMg,
           schedules: parseBlistersForExport(med),
@@ -272,6 +290,7 @@ export async function exportRoutes(app: FastifyInstance) {
           notes: med.notes,
           intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
           image: includeImages ? imageToBase64(med.imageUrl) : null,
+          lastStockCorrectionAt: lastStockCorrectionAtIso,
         };
       });
 
@@ -461,6 +480,8 @@ export async function exportRoutes(app: FastifyInstance) {
           blistersPerPack: med.inventory.blistersPerPack,
           pillsPerBlister: med.inventory.pillsPerBlister,
           looseTablets: med.inventory.looseTablets,
+          stockAdjustment: med.inventory.stockAdjustment ?? 0,
+          lastStockCorrectionAt: med.lastStockCorrectionAt ? new Date(med.lastStockCorrectionAt) : null,
           pillWeightMg: med.pillWeightMg || null,
           usageJson,
           everyJson,

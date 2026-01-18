@@ -34,6 +34,11 @@ function getMedTotal(med: Medication): number {
 	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
 }
 
+// Helper to get the base package size (without stockAdjustment)
+function getPackageSize(med: Medication): number {
+	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;
+}
+
 type PlannerRow = {
 	medicationId: number;
 	medicationName: string;
@@ -2206,7 +2211,7 @@ function AppContent() {
 													<span>{t('medications.details.pillsPerBlister')}: <strong>{med.pillsPerBlister}</strong></span>
 													<span>{t('medications.details.loose')}: <strong>{med.looseTablets}</strong></span>
 												</div>
-												<div className="med-total">{t('medications.details.total')}: {getMedTotal(med)} {t('common.pills')}</div>
+												<div className="med-total">{t('medications.details.total')}: {getPackageSize(med)} {t('common.pills')}</div>
 											</div>
 											<div className="med-actions">
 												<button className="info" onClick={() => startEdit(med)}>{t('common.edit')}</button>
@@ -3327,15 +3332,15 @@ function AppContent() {
 								<h3>{t('modal.stockInfo')}</h3>
 								{(() => {
 									const medCoverage = coverage.all.find(c => c.name === selectedMed.name);
-									const totalStock = getMedTotal(selectedMed);
-									const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : totalStock;
+									const packageSize = getPackageSize(selectedMed);
+									const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
 									const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 									const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "success-text";
 									const stock = getBlisterStock(
 										currentStock, 
 										selectedMed.pillsPerBlister,
 										selectedMed.looseTablets,
-										totalStock
+										packageSize
 									);
 									return (
 								<div className="med-detail-grid">
@@ -3349,7 +3354,7 @@ function AppContent() {
 									</div>
 									<div className="med-detail-item full-width">
 										<span className="med-detail-label">{t('modal.currentStock')}</span>
-										<span className={`med-detail-value ${textClass}`}>{currentStock} / {totalStock}</span>
+										<span className={`med-detail-value ${textClass}`}>{currentStock} / {packageSize}</span>
 									</div>
 								</div>
 									);

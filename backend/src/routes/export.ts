@@ -55,6 +55,8 @@ const doseHistorySchema = z.object({
   scheduledTime: z.string(), // ISO datetime
   takenAt: z.string(), // ISO datetime
   markedBy: z.string().nullable().optional(),
+  dismissed: z.boolean().default(false),
+  takenByPerson: z.string().nullable().optional(), // Person suffix from dose ID (e.g., "Daniel")
 });
 
 const shareLinkSchema = z.object({
@@ -204,8 +206,8 @@ function base64ToImage(base64: string, medicationId: number): string | null {
 }
 
 // Parse dose ID to extract medication ID and timestamp
-// Format: "{medicationId}-{blisterIndex}-{timestampMs}"
-function parseDoseId(doseId: string): { medicationId: number; blisterIndex: number; timestampMs: number } | null {
+// Format: "{medicationId}-{blisterIndex}-{timestampMs}" or "{medicationId}-{blisterIndex}-{timestampMs}-{person}"
+function parseDoseId(doseId: string): { medicationId: number; blisterIndex: number; timestampMs: number; person: string | null } | null {
   const parts = doseId.split("-");
   if (parts.length < 3) return null;
   
@@ -215,12 +217,16 @@ function parseDoseId(doseId: string): { medicationId: number; blisterIndex: numb
   
   if (isNaN(medicationId) || isNaN(blisterIndex) || isNaN(timestampMs)) return null;
   
-  return { medicationId, blisterIndex, timestampMs };
+  // Check if there's a person suffix (4th part onwards, could be multi-part name)
+  const person = parts.length > 3 ? parts.slice(3).join("-") : null;
+  
+  return { medicationId, blisterIndex, timestampMs, person };
 }
 
-// Build dose ID from parts
-function buildDoseId(medicationId: number, blisterIndex: number, timestampMs: number): string {
-  return `${medicationId}-${blisterIndex}-${timestampMs}`;
+// Build dose ID from parts (with optional person suffix)
+function buildDoseId(medicationId: number, blisterIndex: number, timestampMs: number, person?: string | null): string {
+  const base = `${medicationId}-${blisterIndex}-${timestampMs}`;
+  return person ? `${base}-${person}` : base;
 }
 
 // =============================================================================
@@ -309,6 +315,8 @@ export async function exportRoutes(app: FastifyInstance) {
           scheduledTime: scheduledTimeIso,
           takenAt: takenAtIso,
           markedBy: dose.markedBy,
+          dismissed: dose.dismissed ?? false,
+          takenByPerson: parsed.person,
         };
       }).filter((d): d is NonNullable<typeof d> => d !== null);
 
@@ -484,13 +492,15 @@ export async function exportRoutes(app: FastifyInstance) {
         
         // Convert ISO timestamp back to milliseconds for dose ID
         const timestampMs = new Date(dose.scheduledTime).getTime();
-        const doseId = buildDoseId(newMedId, dose.scheduleIndex, timestampMs);
+        // Rebuild dose ID with optional person suffix
+        const doseId = buildDoseId(newMedId, dose.scheduleIndex, timestampMs, dose.takenByPerson);
         
         await db.insert(doseTracking).values({
           userId,
           doseId,
           takenAt: new Date(dose.takenAt),
           markedBy: dose.markedBy || null,
+          dismissed: dose.dismissed ?? false,
         });
       }
 

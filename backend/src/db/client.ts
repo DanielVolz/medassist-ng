@@ -88,6 +88,30 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
     }
   }
 
+  // Create tables that might be missing (silently fail if already exists)
+  const createTableMigrations = [
+    // Added in v1.3.x - refill history tracking
+    `CREATE TABLE IF NOT EXISTS refill_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      medication_id INTEGER NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      packs_added INTEGER NOT NULL DEFAULT 0,
+      loose_pills_added INTEGER NOT NULL DEFAULT 0,
+      refill_date INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    )`,
+  ];
+
+  for (const sql of createTableMigrations) {
+    try {
+      await client.execute(sql);
+    } catch (e: any) {
+      // Silently ignore "table already exists" errors
+      if (!e.message?.includes("already exists")) {
+        errors.push(e.message);
+      }
+    }
+  }
+
   return { success: errors.length === 0, errors };
 }
 

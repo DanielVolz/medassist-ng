@@ -389,6 +389,13 @@ export async function exportRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   app.post(
     "/import",
+    {
+      config: {
+        // Increase body limit to 50MB to handle exports with base64 images
+        rawBody: true,
+      },
+      bodyLimit: 50 * 1024 * 1024, // 50 MB
+    },
     async (request, reply) => {
       const userId = await getUserId(request, reply);
 

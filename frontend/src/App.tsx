@@ -1151,17 +1151,26 @@ function AppContent() {
 				body: JSON.stringify(pendingImportData),
 			});
 			
-			if (!res.ok) {
-				const err = await res.json();
-				alert(t('exportImport.importError') + ": " + (err.error || "Unknown error"));
+			// Get the response text first to handle non-JSON responses
+			const text = await res.text();
+			let data;
+			try {
+				data = text ? JSON.parse(text) : {};
+			} catch {
+				console.error("Import response parse error:", text);
+				alert(t('exportImport.importError') + ": Server returned invalid response");
 				return;
 			}
 			
-			const result = await res.json();
+			if (!res.ok) {
+				alert(t('exportImport.importError') + ": " + (data.error || `HTTP ${res.status}`));
+				return;
+			}
+			
 			alert(t('exportImport.importSuccess') + "\n" + t('exportImport.importSuccessDetails', {
-				medications: result.imported.medications,
-				doses: result.imported.doseHistory,
-				shares: result.imported.shareLinks,
+				medications: data.imported?.medications || 0,
+				doses: data.imported?.doseHistory || 0,
+				shares: data.imported?.shareLinks || 0,
 			}));
 			
 			// Reload all data

@@ -366,6 +366,7 @@ function AppContent() {
 	// Export/Import state
 	const [exporting, setExporting] = useState(false);
 	const [importing, setImporting] = useState(false);
+	const [exportIncludeImages, setExportIncludeImages] = useState(true);
 	// User dropdown state (for mobile click-based behavior)
 	const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
@@ -1087,10 +1088,10 @@ function AppContent() {
 	}
 
 	// Export data to JSON file
-	async function handleExport() {
+	async function handleExport(includeImages: boolean = true) {
 		setExporting(true);
 		try {
-			const res = await fetch('/api/export?includeSensitive=true', {
+			const res = await fetch(`/api/export?includeSensitive=true&includeImages=${includeImages}`, {
 				credentials: "include",
 			});
 			if (!res.ok) throw new Error("Export failed");
@@ -2847,20 +2848,32 @@ function AppContent() {
 									<div className="setting-section">
 										<div className="setting-group">
 											{/* Export */}
-											<div className="action-card">
+										<div className="action-card" style={{flexDirection: 'column', alignItems: 'stretch'}}>
+											<div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
 												<div className="action-card-content">
 													<span className="action-card-title">{t('exportImport.exportTitle')}</span>
 													<span className="action-card-desc">{t('exportImport.exportDesc')}</span>
 												</div>
-												<button
-													type="button"
-													className="secondary"
-													onClick={handleExport}
-													disabled={exporting}
-												>
-													{exporting ? t('exportImport.exporting') : t('exportImport.export')}
-												</button>
 											</div>
+											<label className="toggle-label" style={{marginBottom: '12px'}}>
+												<input
+													type="checkbox"
+													checked={exportIncludeImages}
+													onChange={(e) => setExportIncludeImages(e.target.checked)}
+												/>
+												<span>{t('exportImport.includeImages')}</span>
+												<span className="info-tooltip" data-tooltip={t('exportImport.includeImagesHint')}>ⓘ</span>
+											</label>
+											<button
+												type="button"
+												className="secondary"
+												onClick={() => handleExport(exportIncludeImages)}
+												disabled={exporting}
+												style={{alignSelf: 'flex-end'}}
+											>
+												{exporting ? t('exportImport.exporting') : t('exportImport.export')}
+											</button>
+										</div>
 											
 											{/* Import */}
 											<div className="action-card">

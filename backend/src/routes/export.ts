@@ -233,11 +233,12 @@ export async function exportRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // GET /export - Export all user data
   // ---------------------------------------------------------------------------
-  app.get<{ Querystring: { includeSensitive?: string } }>(
+  app.get<{ Querystring: { includeSensitive?: string; includeImages?: string } }>(
     "/export",
     async (request, reply) => {
       const userId = await getUserId(request, reply);
       const includeSensitive = request.query.includeSensitive === "true";
+      const includeImages = request.query.includeImages !== "false"; // Default to true
 
       // 1. Load all medications
       const meds = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
@@ -264,7 +265,7 @@ export async function exportRoutes(app: FastifyInstance) {
           expiryDate: med.expiryDate,
           notes: med.notes,
           intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
-          image: imageToBase64(med.imageUrl),
+          image: includeImages ? imageToBase64(med.imageUrl) : null,
         };
       });
 

@@ -374,6 +374,8 @@
     "selectFile": "Select File",
     "includeSensitive": "Include sensitive data (notification URLs)",
     "sensitiveWarning": "Notification URLs may contain passwords and will be stored in plain text.",
+    "includeImages": "Include medication images",
+    "includeImagesHint": "Images significantly increase file size. Uncheck for smaller exports (~50 KB instead of several MB).",
     "confirmImport": "Replace All Data?",
     "confirmImportMessage": "This will permanently delete all your current medications, dose history, settings, and share links, then replace them with the imported data.",
     "confirmImportWarning": "This action cannot be undone!",

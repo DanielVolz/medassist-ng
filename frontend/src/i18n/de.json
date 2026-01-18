@@ -372,6 +372,8 @@
     "selectFile": "Datei auswählen",
     "includeSensitive": "Sensible Daten einschließen (Benachrichtigungs-URLs)",
     "sensitiveWarning": "Benachrichtigungs-URLs können Passwörter enthalten und werden im Klartext gespeichert.",
+    "includeImages": "Medikamentenbilder einschließen",
+    "includeImagesHint": "Bilder vergrößern die Datei erheblich. Deaktivieren für kleinere Exports (~50 KB statt mehrere MB).",
     "confirmImport": "Alle Daten ersetzen?",
     "confirmImportMessage": "Dies löscht dauerhaft alle deine aktuellen Medikamente, Einnahmehistorie, Einstellungen und Teilen-Links und ersetzt sie durch die importierten Daten.",
     "confirmImportWarning": "Diese Aktion kann nicht rückgängig gemacht werden!",

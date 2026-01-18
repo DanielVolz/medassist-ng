@@ -73,6 +73,8 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
     `ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`,
     // Added in v1.2.3 - dismiss missed doses without deducting stock
     `ALTER TABLE dose_tracking ADD COLUMN dismissed integer NOT NULL DEFAULT 0`,
+    // Added in v1.3.x - stock calculation mode (automatic/manual)
+    `ALTER TABLE user_settings ADD COLUMN stock_calculation_mode text NOT NULL DEFAULT 'automatic'`,
   ];
 
   for (const sql of alterMigrations) {

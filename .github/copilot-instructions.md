@@ -190,6 +190,32 @@ gh pr merge --squash --delete-branch
 
 > ⚠️ **IMPORTANT**: All GitHub Releases must be written in **English**!
 
+### Release Workflow (MANDATORY for minor/major releases)
+
+The `main` branch is protected - releases must go through the automated release script.
+
+**Release Process:**
+```bash
+# 1. Run release script (creates PR, waits for CI, merges, creates tag)
+./scripts/release.sh [patch|minor|major]
+
+# 2. GitHub Actions creates a DRAFT release automatically
+# 3. User asks AI to write release notes:
+#    "Write the release notes for vX.Y.Z"
+# 4. AI writes descriptive release notes following the style guide below
+# 5. User publishes the draft release with the written notes
+```
+
+> ⚠️ **MANDATORY for minor and major releases**: The AI assistant MUST write proper descriptive release notes!
+> Do NOT just publish the auto-generated commit list. Follow the process above.
+
+**AI Assistant Release Notes Workflow:**
+1. When user asks to write release notes for a version:
+   - Check commits since previous tag: `git log vPREV..vNEW --oneline`
+   - Read through the changes to understand what was added/fixed
+   - Write release notes following the style guide below
+   - Present the notes to the user for copying to GitHub
+
 ### Creating Release Notes
 
 > ⚠️ **MANDATORY**: GitHub Releases MUST contain a written message!

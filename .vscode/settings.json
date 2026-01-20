@@ -1,0 +1,5 @@
+{
+  "vitest.root": "backend",
+  "vitest.enable": true,
+  "vitest.commandLine": "npm test --"
+}

@@ -46,6 +46,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
 
+# Copy drizzle migrations folder (required for database setup)
+COPY drizzle ./drizzle
+
 # Create data directory and set ownership to node user (UID 1000)
 RUN mkdir -p /app/data && chown -R node:node /app
 

@@ -34,7 +34,6 @@ coverage/
 *.db-journal
 *.db-wal
 *.db-shm
-backend/data/
 data/
 
 # ===================

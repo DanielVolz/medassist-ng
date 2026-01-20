@@ -6,7 +6,7 @@ services:
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
-      - ./backend/data:/app/data
+      - ./data:/app/data
     env_file:
       - .env
     ports:

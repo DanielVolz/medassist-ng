@@ -4,6 +4,7 @@
 
 - **English is the primary language**: All code, comments, documentation, commit messages, PR descriptions, and GitHub releases MUST be written in English. The user may communicate in German, but all project artifacts must be in English.
 - **NEVER release without explicit permission**: Do NOT create tags, releases, or version bumps unless the user explicitly asks for it. Always wait for explicit confirmation before any release action.
+- **NEVER create PRs without explicit permission**: Do NOT create Pull Requests, push branches, or merge code unless the user explicitly asks for it. Always present changes and wait for the user to confirm before any git operations that affect the remote repository.
 - **No temporary files**: Delete temporary scripts/files immediately after use. Do not commit temporary debug scripts, test files, or one-off utilities to the repository.
 - **Clean workspace**: Always clean up after yourself. If you create a file for a specific task, delete it once done.
 

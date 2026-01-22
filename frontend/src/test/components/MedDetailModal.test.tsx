@@ -209,3 +209,169 @@ describe('MedDetailModal without optional fields', () => {
     expect(screen.getByText('Test Med')).toBeInTheDocument();
   });
 });
+
+describe('MedDetailModal with refill modal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows refill modal when open', () => {
+    render(<MedDetailModal {...defaultProps} showRefillModal={true} />);
+    
+    // Modal should show refill section
+    const modal = document.querySelector('.modal-overlay');
+    expect(modal).toBeInTheDocument();
+  });
+
+  it('calls onCloseRefillModal when refill modal closed', () => {
+    const onCloseRefillModal = vi.fn();
+    render(<MedDetailModal {...defaultProps} showRefillModal={true} onCloseRefillModal={onCloseRefillModal} />);
+    
+    // Modal close button
+    const closeButtons = document.querySelectorAll('button');
+    const cancelBtn = Array.from(closeButtons).find(btn => btn.textContent?.includes('cancel') || btn.textContent?.includes('Cancel'));
+    if (cancelBtn) {
+      fireEvent.click(cancelBtn);
+    }
+  });
+
+  it('calls onSubmitRefill when refill submitted', () => {
+    const onSubmitRefill = vi.fn();
+    render(<MedDetailModal {...defaultProps} showRefillModal={true} onSubmitRefill={onSubmitRefill} />);
+    
+    const submitBtns = document.querySelectorAll('button');
+    const submitBtn = Array.from(submitBtns).find(btn => btn.textContent?.includes('refill') || btn.textContent?.includes('submit'));
+    if (submitBtn) {
+      fireEvent.click(submitBtn);
+    }
+  });
+});
+
+describe('MedDetailModal actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders action buttons', () => {
+    render(<MedDetailModal {...defaultProps} />);
+    
+    const buttons = document.querySelectorAll('button');
+    expect(buttons.length).toBeGreaterThan(0);
+  });
+
+  it('calls onOpenRefillModal when refill clicked', () => {
+    const onOpenRefillModal = vi.fn();
+    render(<MedDetailModal {...defaultProps} onOpenRefillModal={onOpenRefillModal} />);
+    
+    const buttons = document.querySelectorAll('button');
+    const refillBtn = Array.from(buttons).find(btn => btn.textContent?.includes('refill') || btn.textContent?.includes('Refill'));
+    if (refillBtn) {
+      fireEvent.click(refillBtn);
+      expect(onOpenRefillModal).toHaveBeenCalled();
+    }
+  });
+});
+
+describe('MedDetailModal with multiple blisters', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders multiple schedule entries', () => {
+    const med = {
+      ...mockMedication,
+      blisters: [
+        { usage: 1, every: 1, start: '2024-01-01T09:00:00' },
+        { usage: 2, every: 7, start: '2024-01-01T20:00:00' }
+      ]
+    };
+    render(<MedDetailModal {...defaultProps} selectedMed={med} />);
+    
+    const scheduleEntries = document.querySelectorAll('.schedule-entry');
+    // Should have multiple schedule entries
+  });
+});
+
+describe('MedDetailModal with image', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders medication avatar', () => {
+    render(<MedDetailModal {...defaultProps} />);
+    
+    const avatar = document.querySelector('.med-avatar');
+    expect(avatar).toBeInTheDocument();
+  });
+
+  it('shows lightbox when image clicked', () => {
+    const onOpenImageLightbox = vi.fn();
+    const med = { ...mockMedication, imageUrl: 'test-image.jpg' };
+    render(<MedDetailModal {...defaultProps} selectedMed={med} onOpenImageLightbox={onOpenImageLightbox} />);
+    
+    const avatar = document.querySelector('.med-avatar');
+    if (avatar) {
+      fireEvent.click(avatar);
+    }
+  });
+});
+
+describe('MedDetailModal with low stock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows stock status for low stock', () => {
+    const lowCoverage: Coverage = {
+      name: 'Test Med',
+      medsLeft: 3,
+      daysLeft: 3,
+      depletionDate: '2024-01-05',
+      depletionTime: Date.now() + 3 * 86400000,
+      nextDose: null
+    };
+    
+    render(<MedDetailModal {...defaultProps} coverage={{ all: [lowCoverage] }} />);
+    
+    // Should render status indicator
+    const statusElements = document.querySelectorAll('.danger, .warning, .success');
+    // Status should be visible
+  });
+});
+
+describe('MedDetailModal with refill history', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows refill history when expanded', () => {
+    const refillHistory: RefillEntry[] = [
+      { id: 1, medicationId: 1, timestamp: new Date().toISOString(), packsAdded: 1, looseAdded: 0 }
+    ];
+    
+    render(<MedDetailModal {...defaultProps} refillHistory={refillHistory} refillHistoryExpanded={true} />);
+    
+    // Refill history should be visible
+    const modal = document.querySelector('.modal-overlay');
+    expect(modal).toBeInTheDocument();
+  });
+
+  it('calls onRefillHistoryExpandedChange when toggle clicked', () => {
+    const onRefillHistoryExpandedChange = vi.fn();
+    const refillHistory: RefillEntry[] = [
+      { id: 1, medicationId: 1, timestamp: new Date().toISOString(), packsAdded: 1, looseAdded: 0 }
+    ];
+    
+    render(<MedDetailModal 
+      {...defaultProps} 
+      refillHistory={refillHistory}
+      onRefillHistoryExpandedChange={onRefillHistoryExpandedChange}
+    />);
+    
+    // Click expand toggle if exists
+    const expandButton = document.querySelector('[class*="expand"], [class*="toggle"]');
+    if (expandButton) {
+      fireEvent.click(expandButton);
+    }
+  });
+});

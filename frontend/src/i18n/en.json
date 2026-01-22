@@ -52,8 +52,9 @@
     "reminders": {
       "active": "Automatic reminders active",
       "allStockOk": "All stock OK",
-      "allOk": "All OK",
+      "allOk": "✓ All OK",
       "lastReminder": "Last reminder",
+      "next": "Next",
       "nextIn": "Next",
       "inDays": "in {{days}} days",
       "noRemindersNeeded": "no reminders needed",
@@ -245,8 +246,8 @@
     "highStock": "High",
     "noSchedule": "No Schedule",
     "enough": "Enough",
-    "noPillsLeft": "⚠ No pills left",
-    "stockOk": "✓ Stock OK"
+    "noPillsLeft": "No pills left",
+    "stockOk": "Stock OK"
   },
   "tooltips": {
     "intakeReminders": "Intake reminders enabled",

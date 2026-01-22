@@ -71,3 +71,4 @@ Thumbs.db
 *.local
 .cache/
 .turbo/
+docs/TECH_STACK.md

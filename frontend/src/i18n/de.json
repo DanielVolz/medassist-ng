@@ -50,8 +50,9 @@
     "reminders": {
       "active": "Automatische Erinnerungen aktiv",
       "allStockOk": "Bestand OK",
-      "allOk": "Alles OK",
+      "allOk": "✓ Alles OK",
       "lastReminder": "Letzte Erinnerung",
+      "next": "Nächste",
       "nextIn": "Nächste",
       "inDays": "in {{days}} Tagen",
       "noRemindersNeeded": "keine Erinnerungen nötig",
@@ -243,8 +244,8 @@
     "highStock": "Hoch",
     "noSchedule": "Kein Zeitplan",
     "enough": "Ausreichend",
-    "noPillsLeft": "⚠ Keine Tabletten mehr",
-    "stockOk": "✓ Bestand OK"
+    "noPillsLeft": "Keine Tabletten mehr",
+    "stockOk": "Bestand OK"
   },
   "tooltips": {
     "intakeReminders": "Einnahme-Erinnerungen aktiviert",

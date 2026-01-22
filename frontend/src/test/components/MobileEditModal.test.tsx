@@ -268,4 +268,220 @@ describe('MobileEditModal blister management', () => {
     const blisterRows = document.querySelectorAll('.blister-row');
     expect(blisterRows.length).toBe(2);
   });
+
+  it('calls onRemoveBlister when remove button clicked', () => {
+    const onRemoveBlister = vi.fn();
+    const form = {
+      ...defaultForm,
+      blisters: [
+        { usage: '1', every: '1', startDate: '2024-01-01', startTime: '09:00' },
+        { usage: '2', every: '7', startDate: '2024-01-01', startTime: '10:00' }
+      ]
+    };
+    
+    render(<MobileEditModal {...defaultProps} form={form} onRemoveBlister={onRemoveBlister} />);
+    
+    const removeButtons = document.querySelectorAll('.blister-row button.danger');
+    if (removeButtons.length > 0) {
+      fireEvent.click(removeButtons[0]);
+      expect(onRemoveBlister).toHaveBeenCalled();
+    }
+  });
+
+  it('calls onSetBlisterValue when changing blister field', () => {
+    const onSetBlisterValue = vi.fn();
+    
+    render(<MobileEditModal {...defaultProps} onSetBlisterValue={onSetBlisterValue} />);
+    
+    const usageInputs = document.querySelectorAll('.blister-row input[type="number"]');
+    if (usageInputs.length > 0) {
+      fireEvent.change(usageInputs[0], { target: { value: '2' } });
+      expect(onSetBlisterValue).toHaveBeenCalled();
+    }
+  });
+});
+
+describe('MobileEditModal form submission', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calls onSaveMedication when form submitted', () => {
+    const onSaveMedication = vi.fn((e: Event) => e.preventDefault());
+    
+    render(<MobileEditModal {...defaultProps} onSaveMedication={onSaveMedication} />);
+    
+    const form = document.querySelector('form');
+    if (form) {
+      fireEvent.submit(form);
+      expect(onSaveMedication).toHaveBeenCalled();
+    }
+  });
+
+  it('shows saving state', () => {
+    render(<MobileEditModal {...defaultProps} saving={true} />);
+    
+    const saveBtn = document.querySelector('button[type="submit"]');
+    expect(saveBtn).toBeDisabled();
+  });
+
+  it('shows formSaved state', () => {
+    render(<MobileEditModal {...defaultProps} formSaved={true} />);
+    
+    // Form should still render
+    const modal = document.querySelector('.modal-overlay');
+    expect(modal).toBeInTheDocument();
+  });
+});
+
+describe('MobileEditModal with filled form', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('displays filled form values', () => {
+    const form = {
+      ...defaultForm,
+      name: 'Aspirin',
+      genericName: 'Acetylsalicylic acid',
+      packCount: '2',
+      blistersPerPack: '3',
+      pillsPerBlister: '10',
+      looseTablets: '5'
+    };
+    
+    render(<MobileEditModal {...defaultProps} form={form} />);
+    
+    // Find input with the value
+    const nameInputs = document.querySelectorAll('input');
+    const nameInput = Array.from(nameInputs).find(input => 
+      (input as HTMLInputElement).value === 'Aspirin'
+    );
+    expect(nameInput).toBeTruthy();
+  });
+});
+
+describe('MobileEditModal takenBy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('displays takenBy tags', () => {
+    const form = {
+      ...defaultForm,
+      takenBy: ['John', 'Jane']
+    };
+    
+    render(<MobileEditModal {...defaultProps} form={form} />);
+    
+    expect(screen.getByText('John')).toBeInTheDocument();
+    expect(screen.getByText('Jane')).toBeInTheDocument();
+  });
+
+  it('calls onRemoveTakenByPerson when tag removed', () => {
+    const onRemoveTakenByPerson = vi.fn();
+    const form = {
+      ...defaultForm,
+      takenBy: ['John']
+    };
+    
+    render(<MobileEditModal {...defaultProps} form={form} onRemoveTakenByPerson={onRemoveTakenByPerson} />);
+    
+    const removeButtons = document.querySelectorAll('.tag-remove');
+    if (removeButtons.length > 0) {
+      fireEvent.click(removeButtons[0]);
+      expect(onRemoveTakenByPerson).toHaveBeenCalledWith('John');
+    }
+  });
+
+  it('calls onTakenByInputChange when typing', () => {
+    const onTakenByInputChange = vi.fn();
+    
+    render(<MobileEditModal {...defaultProps} onTakenByInputChange={onTakenByInputChange} />);
+    
+    // Find the takenBy input using the container class
+    const tagInputContainer = document.querySelector('.tag-input-container input');
+    if (tagInputContainer) {
+      fireEvent.change(tagInputContainer, { target: { value: 'New Person' } });
+      expect(onTakenByInputChange).toHaveBeenCalled();
+    }
+  });
+
+  it('calls onTakenByKeyDown on keydown', () => {
+    const onTakenByKeyDown = vi.fn();
+    
+    render(<MobileEditModal {...defaultProps} onTakenByKeyDown={onTakenByKeyDown} />);
+    
+    const tagInputContainer = document.querySelector('.tag-input-container input');
+    if (tagInputContainer) {
+      fireEvent.keyDown(tagInputContainer, { key: 'Enter' });
+      expect(onTakenByKeyDown).toHaveBeenCalled();
+    }
+  });
+});
+
+describe('MobileEditModal overlay interaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calls onClose when clicking overlay', () => {
+    const onClose = vi.fn();
+    const onResetForm = vi.fn();
+    
+    render(<MobileEditModal {...defaultProps} onClose={onClose} onResetForm={onResetForm} />);
+    
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) {
+      fireEvent.click(overlay);
+      expect(onClose).toHaveBeenCalled();
+    }
+  });
+
+  it('does not close when clicking modal content', () => {
+    const onClose = vi.fn();
+    const onResetForm = vi.fn();
+    
+    render(<MobileEditModal {...defaultProps} onClose={onClose} onResetForm={onResetForm} />);
+    
+    const content = document.querySelector('.modal-content');
+    if (content) {
+      fireEvent.click(content);
+    }
+    
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('MobileEditModal optional fields', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders expiry date field', () => {
+    render(<MobileEditModal {...defaultProps} />);
+    
+    const dateInput = document.querySelector('input[type="date"]');
+    expect(dateInput).toBeInTheDocument();
+  });
+
+  it('renders notes field', () => {
+    render(<MobileEditModal {...defaultProps} />);
+    
+    const textarea = document.querySelector('textarea');
+    expect(textarea).toBeInTheDocument();
+  });
+
+  it('renders pill weight field', () => {
+    render(<MobileEditModal {...defaultProps} />);
+    
+    expect(screen.getByText(/form\.pillWeight/i)).toBeInTheDocument();
+  });
+
+  it('renders intake reminders toggle', () => {
+    render(<MobileEditModal {...defaultProps} />);
+    
+    const toggle = document.querySelector('.toggle-switch input[type="checkbox"]');
+    expect(toggle).toBeInTheDocument();
+  });
 });

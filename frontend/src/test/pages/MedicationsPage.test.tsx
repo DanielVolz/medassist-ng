@@ -14,7 +14,7 @@ vi.mock('../../hooks', () => ({
       pillsPerBlister: '1',
       looseTablets: '0',
       takenBy: [],
-      blisters: [{ usage: '1', every: '1', startDate: new Date().toISOString().slice(0, 10), startTime: '09:00', remindEnabled: false }],
+      blisters: [{ usage: '1', every: '1', startDate: new Date().toISOString().slice(0, 10), startTime: '09:00' }],
       expiryDate: '',
       notes: '',
       pillWeightMg: '',

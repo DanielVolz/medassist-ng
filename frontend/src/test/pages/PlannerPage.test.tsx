@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PlannerPage } from '../../pages/PlannerPage';
-import React from 'react';
 
 // Mock the hooks and context
 vi.mock('../../context', () => ({
@@ -49,9 +48,9 @@ describe('PlannerPage', () => {
       </MemoryRouter>
     );
     
-    // Should have start and end date inputs
-    expect(screen.getByText(/planner\.startDate/i)).toBeInTheDocument();
-    expect(screen.getByText(/planner\.endDate/i)).toBeInTheDocument();
+    // Should have start and end date inputs (actual keys are planner.from and planner.until)
+    expect(screen.getByText(/planner\.from/i)).toBeInTheDocument();
+    expect(screen.getByText(/planner\.until/i)).toBeInTheDocument();
   });
 
   it('renders calculate button', () => {
@@ -66,6 +65,18 @@ describe('PlannerPage', () => {
     expect(calculateBtn).toBeInTheDocument();
   });
 
+  it('renders reset button', () => {
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    const buttons = screen.getAllByRole('button');
+    const resetBtn = buttons.find(btn => btn.textContent?.includes('common.reset'));
+    expect(resetBtn).toBeInTheDocument();
+  });
+
   it('shows empty state when no medications', () => {
     render(
       <MemoryRouter>
@@ -73,19 +84,30 @@ describe('PlannerPage', () => {
       </MemoryRouter>
     );
     
-    // When no meds, should show empty or prompt to add
+    // When no meds, should render the form at least
     const content = document.body.textContent;
     expect(content).toBeTruthy();
   });
 
-  it('renders planner instructions', () => {
+  it('renders datetime-local inputs', () => {
     render(
       <MemoryRouter>
         <PlannerPage />
       </MemoryRouter>
     );
     
-    // Should have some instructional text
-    expect(screen.getByText(/planner\.description/i)).toBeInTheDocument();
+    // Datetime-local inputs should be present
+    expect(document.querySelectorAll('input[type="datetime-local"]').length).toBe(2);
+  });
+
+  it('has form element', () => {
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    const form = document.querySelector('form.planner');
+    expect(form).toBeInTheDocument();
   });
 });

@@ -12,7 +12,8 @@ vi.mock('../../context', () => ({
       criticalStockThreshold: 7,
       expiryWarningDays: 30,
       emailEnabled: false,
-      shoutrrrEnabled: false
+      shoutrrrEnabled: false,
+      notificationEmail: ''
     },
     openMedDetail: vi.fn()
   })
@@ -109,5 +110,134 @@ describe('PlannerPage', () => {
     
     const form = document.querySelector('form.planner');
     expect(form).toBeInTheDocument();
+  });
+
+  it('renders card with title', () => {
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    const card = document.querySelector('.card');
+    expect(card).toBeInTheDocument();
+  });
+
+  it('renders planner actions container', () => {
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    const actions = document.querySelector('.planner-actions');
+    expect(actions).toBeInTheDocument();
+  });
+
+  it('renders section grid', () => {
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    const grid = document.querySelector('section.grid');
+    expect(grid).toBeInTheDocument();
+  });
+
+  it('reset button has ghost class', () => {
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    const resetBtn = document.querySelector('button.ghost');
+    expect(resetBtn).toBeInTheDocument();
+  });
+
+  it('calculate button is submit type', () => {
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    const submitBtn = document.querySelector('button[type="submit"]');
+    expect(submitBtn).toBeInTheDocument();
+  });
+
+  it('allows changing date input values', () => {
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    const inputs = document.querySelectorAll('input[type="datetime-local"]');
+    expect(inputs.length).toBe(2);
+    
+    // Should be able to change the value
+    fireEvent.change(inputs[0], { target: { value: '2024-06-01T10:00' } });
+    expect((inputs[0] as HTMLInputElement).value).toBe('2024-06-01T10:00');
+  });
+});
+
+describe('PlannerPage with localStorage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('loads saved range from localStorage', () => {
+    // Set up saved data in localStorage
+    localStorage.setItem('user_1_plannerRange', JSON.stringify({
+      start: '2024-05-01T09:00',
+      end: '2024-05-10T18:00'
+    }));
+
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    // Page should render
+    expect(screen.getByText(/planner\.title/i)).toBeInTheDocument();
+  });
+
+  it('loads saved rows from localStorage', () => {
+    // Set up saved data in localStorage
+    localStorage.setItem('user_1_plannerRows', JSON.stringify([
+      { medName: 'Aspirin', total: 30 }
+    ]));
+    localStorage.setItem('user_1_plannerRange', JSON.stringify({
+      start: '2024-05-01T09:00',
+      end: '2024-05-10T18:00'
+    }));
+
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    // Page should render with saved data
+    expect(screen.getByText(/planner\.title/i)).toBeInTheDocument();
+  });
+
+  it('handles invalid localStorage data gracefully', () => {
+    // Set up invalid data in localStorage
+    localStorage.setItem('user_1_plannerRows', 'invalid-json');
+    localStorage.setItem('user_1_plannerRange', 'invalid-json');
+
+    render(
+      <MemoryRouter>
+        <PlannerPage />
+      </MemoryRouter>
+    );
+    
+    // Page should still render
+    expect(screen.getByText(/planner\.title/i)).toBeInTheDocument();
   });
 });

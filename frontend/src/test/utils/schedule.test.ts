@@ -430,4 +430,126 @@ describe('getReminderStatusText', () => {
     const result = getReminderStatusText(7, 30, [], [lowMed], null, null, null, mockT, 'en');
     expect(result.lines.some(l => l.text.includes('lowWarning') || l.text.includes('needReorder'))).toBe(true);
   });
+
+  it('handles intake reminder type with push channel', () => {
+    const emptyMed: Coverage = {
+      name: 'Empty',
+      medsLeft: 0,
+      daysLeft: 0,
+      depletionDate: null,
+      depletionTime: null,
+      nextDose: null
+    };
+
+    const result = getReminderStatusText(
+      7, 30, [], [emptyMed], 
+      '2024-03-10T10:00:00Z', 
+      'intake', 
+      'push', 
+      mockT, 
+      'en'
+    );
+    expect(result.lines[0].className).toBe('danger-text');
+  });
+
+  it('handles both channel type', () => {
+    const emptyMed: Coverage = {
+      name: 'Empty',
+      medsLeft: 0,
+      daysLeft: 0,
+      depletionDate: null,
+      depletionTime: null,
+      nextDose: null
+    };
+
+    const result = getReminderStatusText(
+      7, 30, [], [emptyMed], 
+      '2024-03-10T10:00:00Z', 
+      'stock', 
+      'both', 
+      mockT, 
+      'en'
+    );
+    expect(result.lines[0].className).toBe('danger-text');
+  });
+
+  it('shows needReorder when below critical threshold', () => {
+    const criticalMed: Coverage = {
+      name: 'Critical',
+      medsLeft: 5,
+      daysLeft: 5,
+      depletionDate: null,
+      depletionTime: Date.now() + 5 * 86400000,
+      nextDose: null
+    };
+
+    const result = getReminderStatusText(
+      7, 30, [criticalMed], [criticalMed],
+      null, null, null, mockT, 'en'
+    );
+    expect(result.lines.some(l => l.text.includes('needReorder'))).toBe(true);
+  });
+
+  it('shows low warning when below low threshold but above critical', () => {
+    const lowMed: Coverage = {
+      name: 'Low',
+      medsLeft: 20,
+      daysLeft: 20,
+      depletionDate: null,
+      depletionTime: Date.now() + 20 * 86400000,
+      nextDose: null
+    };
+
+    const result = getReminderStatusText(
+      7, 30, [], [lowMed],
+      null, null, null, mockT, 'en'
+    );
+    expect(result.lines.some(l => l.text.includes('lowWarning'))).toBe(true);
+  });
+
+  it('returns noRemindersNeeded when all ok and no last sent', () => {
+    const result = getReminderStatusText(
+      7, 30, [], [],
+      null, null, null, mockT, 'en'
+    );
+    expect(result.lines.some(l => 
+      l.text.includes('noRemindersNeeded') || l.text.includes('allStockOk')
+    )).toBe(true);
+  });
+
+  it('handles empty and critical meds together', () => {
+    const emptyMed: Coverage = {
+      name: 'Empty',
+      medsLeft: 0,
+      daysLeft: 0,
+      depletionDate: null,
+      depletionTime: null,
+      nextDose: null
+    };
+    
+    const criticalMed: Coverage = {
+      name: 'Critical',
+      medsLeft: 5,
+      daysLeft: 5,
+      depletionDate: null,
+      depletionTime: Date.now() + 5 * 86400000,
+      nextDose: null
+    };
+
+    const lowMed: Coverage = {
+      name: 'Low',
+      medsLeft: 20,
+      daysLeft: 20,
+      depletionDate: null,
+      depletionTime: Date.now() + 20 * 86400000,
+      nextDose: null
+    };
+
+    const result = getReminderStatusText(
+      7, 30, [criticalMed], [emptyMed, criticalMed, lowMed],
+      null, null, null, mockT, 'en'
+    );
+    expect(result.lines[0].text).toContain('emptyStock');
+    expect(result.lines.length).toBeGreaterThan(1);
+  });
 });

@@ -222,6 +222,8 @@ The `main` branch is protected - releases must go through the automated release 
 > ⚠️ **MANDATORY**: GitHub Releases MUST contain a written message!
 > Not just auto-generated commit lists, but a brief descriptive text.
 
+**Release title:** Use just `vX.Y.Z` (e.g., `v1.4.1`), NOT "Release vX.Y.Z".
+
 **Keep it informative but concise.** Users want to know what changed and where to find it.
 
 **Required structure of release notes:**
@@ -243,6 +245,12 @@ The `main` branch is protected - releases must go through the automated release 
 - ❌ Number of tests added
 - ❌ Internal API changes (unless breaking)
 - ❌ Excessive emoji on every bullet point
+- ❌ .gitignore changes or other developer-only file changes
+- ❌ AI/Copilot instruction updates
+- ❌ CI/CD workflow changes (unless affecting users)
+- ❌ Code refactoring without user-visible changes
+
+**Only include user-relevant changes** - things that affect what users see or experience in the app.
 
 **Example of good release notes:**
 

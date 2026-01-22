@@ -1,0 +1,124 @@
+/**
+ * ShareDialog - Modal for generating share links for medication schedules
+ * Allows sharing schedule view for a specific person
+ */
+import { useTranslation } from "react-i18next";
+
+export interface ShareDialogProps {
+	show: boolean;
+	sharePeople: string[];
+	shareSelectedPerson: string;
+	onShareSelectedPersonChange: (person: string) => void;
+	shareSelectedDays: number;
+	onShareSelectedDaysChange: (days: number) => void;
+	shareGenerating: boolean;
+	shareLink: string | null;
+	onShareLinkChange: (link: string | null) => void;
+	shareCopied: boolean;
+	onShareCopiedChange: (copied: boolean) => void;
+	onClose: () => void;
+	onGenerateShareLink: () => Promise<void>;
+	onCopyShareLink: () => void;
+}
+
+export function ShareDialog({
+	show,
+	sharePeople,
+	shareSelectedPerson,
+	onShareSelectedPersonChange,
+	shareSelectedDays,
+	onShareSelectedDaysChange,
+	shareGenerating,
+	shareLink,
+	onShareLinkChange,
+	shareCopied,
+	onShareCopiedChange,
+	onClose,
+	onGenerateShareLink,
+	onCopyShareLink,
+}: ShareDialogProps) {
+	const { t } = useTranslation();
+
+	if (!show) return null;
+
+	return (
+		<div className="modal-overlay" onClick={onClose}>
+			<div className="modal-content share-dialog-modal" onClick={(e) => e.stopPropagation()}>
+				<button className="modal-close" onClick={onClose}>
+					×
+				</button>
+
+				<div className="share-dialog-header">
+					<h2>🔗 {t("share.title")}</h2>
+					<p className="share-dialog-description">{t("share.description")}</p>
+				</div>
+
+				{sharePeople.length === 0 ? (
+					<div className="share-dialog-empty">
+						<p>{t("share.noPeople")}</p>
+					</div>
+				) : shareLink ? (
+					<div className="share-dialog-result">
+						<p className="share-success">{t("share.linkGenerated")}</p>
+						<div className="share-link-box">
+							<input
+								type="text"
+								value={shareLink}
+								readOnly
+								className="share-link-input"
+								onClick={(e) => (e.target as HTMLInputElement).select()}
+							/>
+							<button className="btn-copy" onClick={onCopyShareLink}>
+								{shareCopied ? "✓" : "📋"}
+							</button>
+						</div>
+						{shareCopied && <span className="share-copied-hint">{t("share.copied")}</span>}
+						<div className="share-dialog-footer">
+							<button
+								className="ghost"
+								onClick={() => {
+									onShareLinkChange(null);
+									onShareCopiedChange(false);
+								}}
+							>
+								{t("share.generateAnother")}
+							</button>
+							<button onClick={onClose}>{t("common.close")}</button>
+						</div>
+					</div>
+				) : (
+					<div className="share-dialog-form">
+						<div className="form-group">
+							<label>{t("share.selectPerson")}</label>
+							<select value={shareSelectedPerson} onChange={(e) => onShareSelectedPersonChange(e.target.value)}>
+								{sharePeople.map((person) => (
+									<option key={person} value={person}>
+										{person}
+									</option>
+								))}
+							</select>
+						</div>
+
+						<div className="form-group">
+							<label>{t("share.selectPeriod")}</label>
+							<select value={shareSelectedDays} onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}>
+								<option value={30}>{t("dashboard.schedules.1month")}</option>
+								<option value={90}>{t("dashboard.schedules.3months")}</option>
+								<option value={180}>{t("dashboard.schedules.6months")}</option>
+							</select>
+						</div>
+
+						<div className="share-dialog-footer">
+							<button className="ghost" onClick={onClose}>
+								{t("common.cancel")}
+							</button>
+							<button onClick={onGenerateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
+								{shareGenerating ? t("share.generating") : t("share.generateLink")}
+							</button>
+						</div>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { DashboardPage } from '../../pages/DashboardPage';
 
@@ -145,6 +145,146 @@ describe('DashboardPage', () => {
     // Should have table headers
     expect(screen.getByText(/table\.name/i)).toBeInTheDocument();
     expect(screen.getByText(/table\.daysLeft/i)).toBeInTheDocument();
+  });
+
+  it('renders multiple cards', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    // Dashboard has multiple cards
+    const cards = document.querySelectorAll('.card');
+    expect(cards.length).toBeGreaterThan(2);
+  });
+
+  it('renders card heads', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    // Should have card heads for each section
+    const cardHeads = document.querySelectorAll('.card-head');
+    expect(cardHeads.length).toBeGreaterThan(0);
+  });
+
+  it('renders table headers', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    // Should have table head
+    const tableHead = document.querySelector('.table-head');
+    expect(tableHead).toBeInTheDocument();
+  });
+
+  it('renders table structure', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    // Should have table class
+    const table = document.querySelector('.table');
+    expect(table).toBeInTheDocument();
+  });
+
+  it('renders no meds message for reorder section', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    // When no meds, should show empty state
+    expect(screen.getByText(/dashboard\.reorder\.noMeds/i)).toBeInTheDocument();
+  });
+});
+
+describe('DashboardPage interactions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('has schedule days options', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    // Should have 30, 90, 180 day options
+    const select = document.querySelector('.schedule-days-select');
+    expect(select).toBeInTheDocument();
+    
+    const options = select?.querySelectorAll('option');
+    expect(options?.length).toBe(3);
+  });
+
+  it('can change schedule days', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    const select = document.querySelector('.schedule-days-select') as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    
+    fireEvent.change(select, { target: { value: '90' } });
+  });
+});
+
+describe('DashboardPage structure', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('renders multiple section grids', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    const sections = document.querySelectorAll('section.grid');
+    expect(sections.length).toBeGreaterThan(0);
+  });
+
+  it('renders card head actions', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    const cardHeadActions = document.querySelector('.card-head-actions');
+    expect(cardHeadActions).toBeInTheDocument();
+  });
+
+  it('renders all table columns', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    
+    // Should have all expected table columns
+    expect(screen.getByText(/table\.name/i)).toBeInTheDocument();
+    expect(screen.getByText(/table\.fullBlisters/i)).toBeInTheDocument();
+    expect(screen.getByText(/table\.openBlister/i)).toBeInTheDocument();
+    expect(screen.getByText(/table\.daysLeft/i)).toBeInTheDocument();
+    expect(screen.getByText(/table\.runsOut/i)).toBeInTheDocument();
+    expect(screen.getByText(/table\.expiry/i)).toBeInTheDocument();
+    expect(screen.getByText(/table\.status/i)).toBeInTheDocument();
   });
 });
 

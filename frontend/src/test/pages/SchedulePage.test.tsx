@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SchedulePage } from '../../pages/SchedulePage';
 
@@ -98,6 +98,105 @@ describe('SchedulePage', () => {
     );
     
     // With no meds, should show the schedule card but with empty timeline
+    const card = document.querySelector('.card.schedule-full');
+    expect(card).toBeInTheDocument();
+  });
+
+  it('renders card head', () => {
+    render(
+      <MemoryRouter>
+        <SchedulePage />
+      </MemoryRouter>
+    );
+    
+    const cardHead = document.querySelector('.card-head');
+    expect(cardHead).toBeInTheDocument();
+  });
+
+  it('renders schedule days options', () => {
+    render(
+      <MemoryRouter>
+        <SchedulePage />
+      </MemoryRouter>
+    );
+    
+    const select = document.querySelector('.schedule-days-select');
+    const options = select?.querySelectorAll('option');
+    expect(options?.length).toBe(3);
+  });
+
+  it('has 30, 90, 180 day options', () => {
+    render(
+      <MemoryRouter>
+        <SchedulePage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/dashboard\.schedules\.1month/i)).toBeInTheDocument();
+    expect(screen.getByText(/dashboard\.schedules\.3months/i)).toBeInTheDocument();
+    expect(screen.getByText(/dashboard\.schedules\.6months/i)).toBeInTheDocument();
+  });
+
+  it('can change schedule days', () => {
+    render(
+      <MemoryRouter>
+        <SchedulePage />
+      </MemoryRouter>
+    );
+    
+    const select = document.querySelector('.schedule-days-select') as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    
+    fireEvent.change(select, { target: { value: '90' } });
+  });
+});
+
+describe('SchedulePage structure', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('has heading element', () => {
+    render(
+      <MemoryRouter>
+        <SchedulePage />
+      </MemoryRouter>
+    );
+    
+    const heading = document.querySelector('h2');
+    expect(heading).toBeInTheDocument();
+  });
+
+  it('renders article element', () => {
+    render(
+      <MemoryRouter>
+        <SchedulePage />
+      </MemoryRouter>
+    );
+    
+    const article = document.querySelector('article');
+    expect(article).toBeInTheDocument();
+  });
+
+  it('renders section element', () => {
+    render(
+      <MemoryRouter>
+        <SchedulePage />
+      </MemoryRouter>
+    );
+    
+    const section = document.querySelector('section');
+    expect(section).toBeInTheDocument();
+  });
+
+  it('renders card with correct class', () => {
+    render(
+      <MemoryRouter>
+        <SchedulePage />
+      </MemoryRouter>
+    );
+    
     const card = document.querySelector('.card.schedule-full');
     expect(card).toBeInTheDocument();
   });

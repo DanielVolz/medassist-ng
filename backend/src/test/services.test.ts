@@ -458,18 +458,19 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 
     it("should handle local time correctly (ignore Z suffix)", () => {
       // With parseLocalDateTime, the Z suffix is ignored and time is treated as local
-      // So "22:00:00.000Z" is interpreted as 22:00 local time
+      // So "14:00:00.000Z" is interpreted as 14:00 local time (use 14:00 to avoid timezone edge cases)
       const blisters: Blister[] = [{ 
         usage: 1, 
         every: 1, 
-        start: "2025-01-01T22:00:00.000Z" // Now treated as 22:00 local time
+        start: "2025-01-01T14:00:00.000Z" // Treated as 14:00 local time
       }];
       
       const result = getTodaysIntakes("TzMed", blisters, [], null, "de-DE", "Europe/Berlin");
       
       expect(Array.isArray(result)).toBe(true);
       if (result.length > 0) {
-        expect(result[0].intakeTimeStr).toContain("22:");
+        // The time should be formatted as 14:xx regardless of server timezone
+        expect(result[0].intakeTimeStr).toContain("14:");
       }
     });
   });

@@ -1,0 +1,97 @@
+name: Update Test Badges
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/**'
+      - 'frontend/src/**'
+      - 'backend/package.json'
+      - 'frontend/package.json'
+
+permissions:
+  contents: write
+
+jobs:
+  update-badges:
+    name: Update Test Count Badges
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run backend tests and capture count
+        id: backend-tests
+        working-directory: backend
+        run: |
+          OUTPUT=$(npm run test:run 2>&1) || true
+          echo "$OUTPUT"
+          # Extract "Tests  X passed" from output
+          PASSED=$(echo "$OUTPUT" | grep -oP 'Tests\s+\K\d+(?=\s+passed)' | tail -1)
+          echo "count=$PASSED" >> $GITHUB_OUTPUT
+
+      - name: Run frontend tests and capture count
+        id: frontend-tests
+        working-directory: frontend
+        run: |
+          OUTPUT=$(npm run test -- --run 2>&1) || true
+          echo "$OUTPUT"
+          # Extract "Tests  X passed" from output
+          PASSED=$(echo "$OUTPUT" | grep -oP 'Tests\s+\K\d+(?=\s+passed)' | tail -1)
+          echo "count=$PASSED" >> $GITHUB_OUTPUT
+
+      - name: Update README badges
+        run: |
+          BACKEND_COUNT="${{ steps.backend-tests.outputs.count }}"
+          FRONTEND_COUNT="${{ steps.frontend-tests.outputs.count }}"
+          
+          echo "Backend tests: $BACKEND_COUNT"
+          echo "Frontend tests: $FRONTEND_COUNT"
+          
+          # Only update if we got valid counts
+          if [[ -n "$BACKEND_COUNT" && -n "$FRONTEND_COUNT" ]]; then
+            # URL encode the slash for shields.io
+            BACKEND_BADGE="https://img.shields.io/badge/Backend_Tests-${BACKEND_COUNT}%2F${BACKEND_COUNT}-brightgreen?logo=vitest"
+            FRONTEND_BADGE="https://img.shields.io/badge/Frontend_Tests-${FRONTEND_COUNT}%2F${FRONTEND_COUNT}-brightgreen?logo=vitest"
+            
+            # Update README using sed
+            sed -i "s|https://img.shields.io/badge/Backend_Tests-[^\"]*|$BACKEND_BADGE|g" README.md
+            sed -i "s|https://img.shields.io/badge/Frontend_Tests-[^\"]*|$FRONTEND_BADGE|g" README.md
+            
+            echo "Updated badges in README.md"
+          else
+            echo "Could not extract test counts, skipping update"
+            exit 0
+          fi
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          git diff --quiet README.md || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push if changed
+        if: steps.git-check.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add README.md
+          git commit -m "chore: update test count badges [skip ci]"
+          git push

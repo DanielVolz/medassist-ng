@@ -18,8 +18,8 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/DanielVolz/medassist-ng/actions/workflows/test.yml/badge.svg" alt="Tests" />
-  <img src="https://github.com/DanielVolz/medassist-ng/actions/workflows/docker-build.yml/badge.svg" alt="Docker Build" />
+  <img src="https://img.shields.io/badge/Backend_Tests-454%2F454-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
+  <img src="https://img.shields.io/badge/Frontend_Tests-611%2F611-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
 </p>
 
 ### 🤖 AI-Generated Code

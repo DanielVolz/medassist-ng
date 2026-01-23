@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import { MedicationAvatar, ConfirmModal } from "../components";
-import { formatNumber, getExpiryClass } from "../utils/formatters";
+import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
 import type { Coverage } from "../types";
 
 // Helper for user-specific localStorage keys
@@ -32,9 +32,9 @@ function formatFullBlisters(count: number, t: (key: string) => string): string {
 }
 
 // Helper to format open blister and loose pills
-function formatOpenBlisterAndLoose(openBlisterPills: number, loosePills: number, _pillsPerBlister: number, t: (key: string) => string): string {
+function formatOpenBlisterAndLoose(openBlisterPills: number, loosePills: number, pillsPerBlister: number, t: (key: string) => string): string {
 	if (openBlisterPills === 0 && loosePills === 0) return "-";
-	return `${openBlisterPills} ${t('common.pills')}`;
+	return `${openBlisterPills} ${t('common.of')} ${pillsPerBlister} ${t('common.pills')}`;
 }
 
 // Get total pills for a medication
@@ -184,7 +184,7 @@ export function DashboardPage() {
 					<span className="email-status-icon">{settings.emailEnabled && settings.shoutrrrEnabled ? "🔔" : settings.emailEnabled ? "📧" : "🔔"}</span>
 					<span className="email-status-text">
 						<span className="email-status-line">{t('dashboard.reminders.active')}</span>
-						{getReminderStatusContent(settings.reminderDaysBefore, settings.lowStockDays, coverage.low, coverage.all, settings.lastAutoEmailSent, settings.lastNotificationType, settings.lastNotificationChannel, t, i18n.language)}
+						{getReminderStatusContent(settings.reminderDaysBefore, settings.lowStockDays, coverage.low, coverage.all, settings.lastAutoEmailSent, settings.lastNotificationType, settings.lastNotificationChannel, t, getSystemLocale(i18n.language))}
 					</span>
 					{settings.emailEnabled && settings.notificationEmail && <span className="email-status-recipient">→ {settings.notificationEmail}</span>}
 				</section>
@@ -259,7 +259,7 @@ export function DashboardPage() {
 											<span data-label={t('table.days')} className={textClass}>{formatNumber(row.daysLeft)}</span>
 											<span data-label={t('table.status')} className={`status-chip ${status.className}`}>{t(status.label)}</span>
 											<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
-											<span data-label={t('table.autoRemind')} className="next-reminder-date">{getNextReminderForMed(row, settings.reminderDaysBefore, i18n.language)}</span>
+											<span data-label={t('table.autoRemind')} className="next-reminder-date">{getNextReminderForMed(row, settings.reminderDaysBefore, getSystemLocale(i18n.language))}</span>
 										</div>
 									);
 								})}
@@ -322,18 +322,18 @@ export function DashboardPage() {
 											<span className="med-icons">
 												{med?.intakeRemindersEnabled && <span className="reminder-icon info-tooltip" data-tooltip={t('tooltips.intakeReminders')}>🔔</span>}
 												{med?.notes && <span className="notes-icon info-tooltip" data-tooltip={t('tooltips.hasNotes')}>📝</span>}
-											</span>
-										)}
-									</span>
-									<span data-label={t('table.fullBlisters')} className={textClass}>{formatFullBlisters(stock.fullBlisters, t)}</span>
-									<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.pillsPerBlister ?? 1, t)}</span>
-									<span data-label={t('table.daysLeft')} className={textClass}>{formatNumber(row.daysLeft)}</span>
-									<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
-									<span data-label={t('table.expiry')} className={expiryClass}>{med?.expiryDate ? new Date(med.expiryDate).toLocaleDateString(i18n.language, { day: "2-digit", month: "short", year: "2-digit" }) : "-"}</span>
-									<span data-label={t('table.status')} className={`status-chip ${status.className}`}>{t(status.label)}</span>
-								</div>
-							);
-						})}
+										</span>
+									)}
+								</span>
+								<span data-label={t('table.fullBlisters')} className={textClass}>{formatFullBlisters(stock.fullBlisters, t)}</span>
+								<span data-label={t('table.openBlister')} className={textClass}>{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.pillsPerBlister ?? 1, t)}</span>
+								<span data-label={t('table.daysLeft')} className={textClass}>{formatNumber(row.daysLeft)}</span>
+								<span data-label={t('table.runsOut')}>{row.depletionDate ?? "-"}</span>
+								<span data-label={t('table.expiry')} className={expiryClass}>{med?.expiryDate ? new Date(med.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), { day: "2-digit", month: "short", year: "2-digit" }) : "-"}</span>
+								<span data-label={t('table.status')} className={`status-chip ${status.className}`}>{t(status.label)}</span>
+							</div>
+						);
+					})}
 					</div>
 				</article>
 			</section>

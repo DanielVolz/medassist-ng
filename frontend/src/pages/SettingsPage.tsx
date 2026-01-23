@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useAppContext } from "../context";
 import { ConfirmModal, ExportModal } from "../components";
+import { getSystemLocale } from "../utils/formatters";
 
 export function SettingsPage() {
 	const { t, i18n } = useTranslation();
@@ -321,13 +322,13 @@ export function SettingsPage() {
 							{settings.nextScheduledCheck && (
 								<div className="schedule-row">
 									<span className="schedule-label">{t('settings.schedule.nextCheck')}</span>
-									<span className="schedule-value">{new Date(settings.nextScheduledCheck).toLocaleString(i18n.language, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+									<span className="schedule-value">{new Date(settings.nextScheduledCheck).toLocaleString(getSystemLocale(i18n.language), { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
 								</div>
 							)}
 							{settings.lastAutoEmailSent && (
 								<div className="schedule-row">
 									<span className="schedule-label">{t('settings.schedule.lastSent')}</span>
-									<span className="schedule-value">{new Date(settings.lastAutoEmailSent).toLocaleString(i18n.language, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+									<span className="schedule-value">{new Date(settings.lastAutoEmailSent).toLocaleString(getSystemLocale(i18n.language), { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
 								</div>
 							)}
 						</div>

@@ -33,6 +33,7 @@ export interface UseMedicationFormReturn {
 	form: FormState;
 	setForm: React.Dispatch<React.SetStateAction<FormState>>;
 	originalForm: FormState;
+	setOriginalForm: React.Dispatch<React.SetStateAction<FormState>>;
 	editingId: number | null;
 	setEditingId: React.Dispatch<React.SetStateAction<number | null>>;
 	showEditModal: boolean;
@@ -133,7 +134,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 	const startEdit = useCallback((med: Medication, openEditModal: () => void) => {
 		setEditingId(med.id);
 		setTakenByInput(""); // Clear tag input when starting edit
-		setFormSaved(false);
+		setFormSaved(true); // Existing medication is already saved
 		const editForm: FormState = {
 			name: med.name,
 			genericName: med.genericName ?? "",
@@ -204,6 +205,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		form,
 		setForm,
 		originalForm,
+		setOriginalForm,
 		editingId,
 		setEditingId,
 		showEditModal,

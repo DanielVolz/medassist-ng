@@ -8,6 +8,7 @@ import { resolve, extname } from "path";
 import { pipeline } from "stream/promises";
 import { requireAuth, getAnonymousUserId } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { parseLocalDateTime } from "../utils/scheduler-utils.js";
 import type { AuthUser } from "../types/fastify.js";
 
 const IMAGES_DIR = resolve(process.cwd(), "data/images");
@@ -15,7 +16,7 @@ const IMAGES_DIR = resolve(process.cwd(), "data/images");
 const blisterSchema = z.object({
   usage: z.number().nonnegative(),
   every: z.number().int().min(1),
-  start: z.string().datetime(),
+  start: z.string().datetime({ local: true }),
 });
 
 const medicationSchema = z.object({
@@ -205,7 +206,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 
     // Clean up dose tracking entries that are before the earliest start date
     // This ensures consistency when the user changes the start date
-    const earliestStart = Math.min(...blisters.map(b => new Date(b.start).getTime()));
+    const earliestStart = Math.min(...blisters.map(b => parseLocalDateTime(b.start).getTime()));
     if (!Number.isNaN(earliestStart)) {
       // Get all dose tracking entries for this medication and filter out invalid ones
       const allDoses = await db.select().from(doseTracking)
@@ -386,7 +387,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       // Calculate consumption up to now (same logic as frontend)
       let consumedUntilNow = 0;
       blisters.forEach((blister) => {
-        const blisterStart = new Date(blister.start);
+        const blisterStart = parseLocalDateTime(blister.start);
         if (Number.isNaN(blisterStart.getTime()) || blisterStart > now) return;
         const msPerDay = 86400000;
         const period = Math.max(1, blister.every) * msPerDay;
@@ -430,7 +431,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 function calculateUsageInRange(blisters: Array<{ usage: number; every: number; start: string }>, start: Date, end: Date) {
   let total = 0;
   blisters.forEach((blister) => {
-    const blisterStart = new Date(blister.start);
+    const blisterStart = parseLocalDateTime(blister.start);
     if (Number.isNaN(blisterStart.getTime())) return;
     // iterate occurrences from blisterStart up to end
     for (let dt = new Date(blisterStart); dt < end; dt.setDate(dt.getDate() + blister.every)) {

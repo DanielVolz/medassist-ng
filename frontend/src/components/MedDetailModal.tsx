@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import type { Medication, Coverage, RefillEntry, StockThresholds } from "../types";
 import { MedicationAvatar, Lightbox } from "../components";
 import { getMedTotal, getPackageSize } from "../types";
-import { formatNumber, generateICS } from "../utils";
+import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
 import { getStockStatus } from "../utils/schedule";
 
 // =============================================================================
@@ -214,8 +214,8 @@ export function MedDetailModal({
 							{selectedMed.expiryDate && (
 								<div className="med-detail-item">
 									<span className="med-detail-label">{t("modal.expiryDate")}</span>
-									<span className={`med-detail-value ${new Date(selectedMed.expiryDate) < new Date() ? "danger-text" : ""}`}>
-										{new Date(selectedMed.expiryDate).toLocaleDateString(i18n.language, {
+									<span className={`med-detail-value ${getExpiryClass(selectedMed.expiryDate, settings.expiryWarningDays)}`}>
+										{new Date(selectedMed.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), {
 											day: "2-digit",
 											month: "short",
 											year: "numeric",
@@ -252,7 +252,7 @@ export function MedDetailModal({
 											</span>
 											<span className="med-schedule-time">
 												{t("modal.at")}{" "}
-												{new Date(blister.start).toLocaleTimeString(i18n.language, {
+												{new Date(blister.start).toLocaleTimeString(getSystemLocale(i18n.language), {
 													hour: "2-digit",
 													minute: "2-digit",
 												})}
@@ -304,13 +304,13 @@ export function MedDetailModal({
 									{refillHistory.map((entry) => (
 										<div key={entry.id} className="refill-history-item">
 											<span className="refill-date">
-												{new Date(entry.refillDate).toLocaleDateString(i18n.language, {
+												{new Date(entry.refillDate).toLocaleDateString(getSystemLocale(i18n.language), {
 													day: "2-digit",
 													month: "short",
 													year: "numeric",
 												})}
 												,{" "}
-												{new Date(entry.refillDate).toLocaleTimeString(i18n.language, {
+												{new Date(entry.refillDate).toLocaleTimeString(getSystemLocale(i18n.language), {
 													hour: "2-digit",
 													minute: "2-digit",
 												})}

@@ -5,6 +5,91 @@
 import type { Medication, BlisterStock } from "../types";
 
 /**
+ * Map timezone to region code (ISO 3166-1 alpha-2).
+ * This allows combining app language with regional formatting.
+ */
+const TIMEZONE_TO_REGION: Record<string, string> = {
+	// Europe
+	"Europe/Berlin": "DE",
+	"Europe/Vienna": "AT",
+	"Europe/Zurich": "CH",
+	"Europe/London": "GB",
+	"Europe/Dublin": "IE",
+	"Europe/Paris": "FR",
+	"Europe/Madrid": "ES",
+	"Europe/Rome": "IT",
+	"Europe/Amsterdam": "NL",
+	"Europe/Brussels": "BE",
+	"Europe/Warsaw": "PL",
+	"Europe/Prague": "CZ",
+	"Europe/Stockholm": "SE",
+	"Europe/Oslo": "NO",
+	"Europe/Copenhagen": "DK",
+	"Europe/Helsinki": "FI",
+	"Europe/Athens": "GR",
+	"Europe/Lisbon": "PT",
+	"Europe/Moscow": "RU",
+	"Europe/Kiev": "UA",
+	"Europe/Kyiv": "UA",
+	"Europe/Budapest": "HU",
+	"Europe/Bucharest": "RO",
+	// Americas
+	"America/New_York": "US",
+	"America/Chicago": "US",
+	"America/Denver": "US",
+	"America/Los_Angeles": "US",
+	"America/Phoenix": "US",
+	"America/Toronto": "CA",
+	"America/Vancouver": "CA",
+	"America/Mexico_City": "MX",
+	"America/Sao_Paulo": "BR",
+	"America/Buenos_Aires": "AR",
+	// Asia/Pacific
+	"Asia/Tokyo": "JP",
+	"Asia/Shanghai": "CN",
+	"Asia/Hong_Kong": "HK",
+	"Asia/Singapore": "SG",
+	"Asia/Seoul": "KR",
+	"Asia/Dubai": "AE",
+	"Asia/Kolkata": "IN",
+	"Australia/Sydney": "AU",
+	"Australia/Melbourne": "AU",
+	"Pacific/Auckland": "NZ",
+};
+
+/**
+ * Get region code from timezone.
+ * Returns undefined if timezone is not mapped.
+ */
+export function getRegionFromTimezone(): string | undefined {
+	try {
+		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		return TIMEZONE_TO_REGION[timezone];
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Get locale for formatting based on app language and timezone region.
+ * Combines app language (en/de) with region from timezone (DE/US/etc.)
+ * Example: app=en + timezone=Europe/Berlin → en-DE (English text, German format)
+ * 
+ * @param appLanguage - The app's UI language (e.g., 'en', 'de')
+ */
+export function getSystemLocale(appLanguage?: string): string {
+	const region = getRegionFromTimezone();
+	const lang = appLanguage || navigator.language?.split('-')[0] || 'en';
+	
+	if (region) {
+		return `${lang}-${region}`;
+	}
+	
+	// Fallback: use browser language, or en-US as last resort
+	return navigator.language || 'en-US';
+}
+
+/**
  * Format a number using the current locale with optional decimal places
  */
 export function formatNumber(n: number | null | undefined, decimals = 0): string {
@@ -17,11 +102,26 @@ export function formatNumber(n: number | null | undefined, decimals = 0): string
 
 /**
  * Format a date/time string for display
+ * Extracts date and time directly from string to avoid timezone conversion
+ * Uses system locale by default for consistent regional formatting
  */
 export function formatDateTime(iso: string | null | undefined, locale?: string): string {
 	if (!iso) return "-";
-	const d = new Date(iso);
+	
+	// Extract date and time components directly from ISO string
+	// Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SS.sssZ
+	const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+	if (!match) return "-";
+	
+	const [, year, month, day, hour, minute] = match;
+	const effectiveLocale = locale ?? getSystemLocale();
+	
+	// Create a date object for formatting, but use local timezone interpretation
+	// by creating the date without the Z suffix
+	const localDateStr = `${year}-${month}-${day}T${hour}:${minute}:00`;
+	const d = new Date(localDateStr);
 	if (isNaN(d.getTime())) return "-";
+	
 	const dateOpts: Intl.DateTimeFormatOptions = {
 		year: "numeric",
 		month: "2-digit",
@@ -31,8 +131,8 @@ export function formatDateTime(iso: string | null | undefined, locale?: string):
 		hour: "2-digit",
 		minute: "2-digit"
 	};
-	const dateStr = d.toLocaleDateString(locale, dateOpts);
-	const timeStr = d.toLocaleTimeString(locale, timeOpts);
+	const dateStr = d.toLocaleDateString(effectiveLocale, dateOpts);
+	const timeStr = d.toLocaleTimeString(effectiveLocale, timeOpts);
 	return `${dateStr} ${timeStr}`;
 }
 
@@ -62,9 +162,20 @@ export function toDateValue(input: string | Date): string {
 
 /**
  * Get the time portion (HH:MM) from an ISO datetime string or Date
+ * For strings, extracts HH:MM directly without timezone conversion
  */
 export function toTimeValue(input: string | Date): string {
-	const d = input instanceof Date ? input : new Date(input);
+	if (input instanceof Date) {
+		return `${pad2(input.getHours())}:${pad2(input.getMinutes())}`;
+	}
+	// Extract HH:MM directly from string (position 11-16 in YYYY-MM-DDTHH:MM...)
+	// This avoids timezone conversion issues with Z suffix
+	const timeMatch = input.match(/T(\d{2}):(\d{2})/);
+	if (timeMatch) {
+		return `${timeMatch[1]}:${timeMatch[2]}`;
+	}
+	// Fallback to Date parsing if format doesn't match
+	const d = new Date(input);
 	return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
@@ -97,15 +208,16 @@ export function deriveTotal(
 
 /**
  * Get CSS class for expiry date status
+ * Returns: danger-text (expired), warning-text (within threshold), success-text (OK)
  */
 export function getExpiryClass(expiryDate: string | null | undefined, thresholdDays: number): string {
 	if (!expiryDate) return "";
 	const exp = new Date(expiryDate);
 	const now = new Date();
 	const diff = (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-	if (diff < 0) return "expired";
-	if (diff <= thresholdDays) return "expiring-soon";
-	return "";
+	if (diff < 0) return "danger-text";
+	if (diff <= thresholdDays) return "warning-text";
+	return "success-text";
 }
 
 /**

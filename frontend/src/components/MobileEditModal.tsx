@@ -331,7 +331,7 @@ export function MobileEditModal({
 							{t("common.cancel")}
 						</button>
 						<button type="submit" disabled={saving || hasValidationErrors || (!formChanged && (formSaved || !!editingId))}>
-							{saving ? t("common.saving") : formSaved && !formChanged ? t("common.saved") : t("common.save")}
+							{formSaved && !formChanged ? t("common.saved") : t("common.save")}
 						</button>
 					</div>
 				</form>

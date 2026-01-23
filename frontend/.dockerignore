@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs (rebuilt in Docker)
+dist/
+coverage/
+
+# Development files
+*.log
+npm-debug.log*
+
+# Test files
+src/test/
+*.test.ts
+*.test.tsx
+vitest.config.ts
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml

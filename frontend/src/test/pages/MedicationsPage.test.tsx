@@ -578,3 +578,785 @@ describe('MedicationsPage blister management', () => {
     }
   });
 });
+
+describe('MedicationsPage add blister', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook();
+  });
+
+  it('calls addBlister when clicking add intake button', () => {
+    const addBlister = vi.fn();
+    mockFormHookValue = createMockFormHook({ addBlister });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const addIntakeBtn = screen.getByRole('button', { name: /form\.blisters\.addIntake/i });
+    fireEvent.click(addIntakeBtn);
+    expect(addBlister).toHaveBeenCalled();
+  });
+});
+
+describe('MedicationsPage remove blister', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook({
+      form: {
+        ...createMockFormHook().form,
+        blisters: [
+          { usage: '1', every: '1', startDate: '2024-01-01', startTime: '09:00' },
+          { usage: '2', every: '7', startDate: '2024-01-01', startTime: '20:00' }
+        ]
+      }
+    });
+  });
+
+  it('shows remove button when multiple blisters exist', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    // With multiple blisters, remove button should be visible
+    const removeButtons = document.querySelectorAll('.blister-row .danger');
+    expect(removeButtons.length).toBeGreaterThan(0);
+  });
+
+  it('calls removeBlister when clicking remove button', () => {
+    const removeBlister = vi.fn();
+    mockFormHookValue = createMockFormHook({
+      form: {
+        ...createMockFormHook().form,
+        blisters: [
+          { usage: '1', every: '1', startDate: '2024-01-01', startTime: '09:00' },
+          { usage: '2', every: '7', startDate: '2024-01-01', startTime: '20:00' }
+        ]
+      },
+      removeBlister
+    });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const removeButtons = document.querySelectorAll('.blister-row .danger');
+    if (removeButtons.length > 0) {
+      fireEvent.click(removeButtons[0]);
+      expect(removeBlister).toHaveBeenCalled();
+    }
+  });
+});
+
+describe('MedicationsPage intake reminders toggle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook();
+  });
+
+  it('renders intake reminders checkbox', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/form\.blisters\.remind/i)).toBeInTheDocument();
+  });
+
+  it('can toggle intake reminders', () => {
+    const setForm = vi.fn();
+    mockFormHookValue = createMockFormHook({ setForm });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const checkbox = document.querySelector('.inline-checkbox input[type="checkbox"]');
+    if (checkbox) {
+      fireEvent.click(checkbox);
+      expect(setForm).toHaveBeenCalled();
+    }
+  });
+});
+
+describe('MedicationsPage image upload for new medication', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook();
+  });
+
+  it('renders image upload section', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/form\.medicationImage/i)).toBeInTheDocument();
+  });
+
+  it('renders file input for image', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).toBeInTheDocument();
+  });
+});
+
+describe('MedicationsPage image upload for existing medication', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext({ meds: mockMeds });
+    mockFormHookValue = createMockFormHook({ editingId: 1 });
+  });
+
+  it('renders image upload when editing medication without image', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).toBeInTheDocument();
+  });
+});
+
+describe('MedicationsPage with medication image', () => {
+  const medsWithImage = [
+    {
+      ...mockMeds[0],
+      imageUrl: 'test-image.jpg'
+    }
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext({ meds: medsWithImage });
+    mockFormHookValue = createMockFormHook({ editingId: 1 });
+  });
+
+  it('shows image preview when medication has image', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const imagePreview = document.querySelector('.image-preview');
+    expect(imagePreview).toBeInTheDocument();
+  });
+
+  it('shows remove image button when medication has image', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/form\.removeImage/i)).toBeInTheDocument();
+  });
+
+  it('calls deleteMedImage when clicking remove button', () => {
+    const deleteMedImage = vi.fn();
+    mockContextValue = createMockContext({ meds: medsWithImage, deleteMedImage });
+    mockFormHookValue = createMockFormHook({ editingId: 1 });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const removeImageBtn = screen.getByText(/form\.removeImage/i);
+    fireEvent.click(removeImageBtn);
+    expect(deleteMedImage).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('MedicationsPage refill section', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext({ meds: mockMeds });
+    mockFormHookValue = createMockFormHook({
+      editingId: 1,
+      form: {
+        ...createMockFormHook().form,
+        blistersPerPack: '2',
+        pillsPerBlister: '10'
+      }
+    });
+  });
+
+  it('shows refill section when editing', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/refill\.title/i)).toBeInTheDocument();
+  });
+
+  it('allows entering refill packs', () => {
+    const setRefillPacks = vi.fn();
+    mockContextValue = createMockContext({ meds: mockMeds, setRefillPacks });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const refillPacksInput = document.querySelector('.refill-form-inline input[type="number"]');
+    if (refillPacksInput) {
+      fireEvent.change(refillPacksInput, { target: { value: '2' } });
+      expect(setRefillPacks).toHaveBeenCalledWith(2);
+    }
+  });
+
+  it('shows refill preview when values entered', () => {
+    mockContextValue = createMockContext({ 
+      meds: mockMeds, 
+      refillPacks: 1,
+      refillLoose: 0 
+    });
+    mockFormHookValue = createMockFormHook({
+      editingId: 1,
+      form: {
+        ...createMockFormHook().form,
+        blistersPerPack: '2',
+        pillsPerBlister: '10'
+      }
+    });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    // Should show preview like "+20 pills"
+    const preview = document.querySelector('.refill-preview');
+    expect(preview).toBeInTheDocument();
+  });
+
+  it('calls submitRefill when clicking refill button', () => {
+    const submitRefill = vi.fn();
+    mockContextValue = createMockContext({ 
+      meds: mockMeds, 
+      refillPacks: 1,
+      refillLoose: 5,
+      submitRefill
+    });
+    mockFormHookValue = createMockFormHook({ editingId: 1 });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const refillBtn = screen.getByText(/refill\.button/i);
+    fireEvent.click(refillBtn);
+    expect(submitRefill).toHaveBeenCalled();
+  });
+
+  it('disables refill button when no values', () => {
+    mockContextValue = createMockContext({ 
+      meds: mockMeds, 
+      refillPacks: 0,
+      refillLoose: 0
+    });
+    mockFormHookValue = createMockFormHook({ editingId: 1 });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const refillBtn = screen.getByText(/refill\.button/i);
+    expect(refillBtn).toBeDisabled();
+  });
+});
+
+describe('MedicationsPage taken by suggestions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext({ existingPeople: ['John', 'Jane', 'Alice'] });
+    mockFormHookValue = createMockFormHook();
+  });
+
+  it('renders datalist with suggestions', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const datalist = document.getElementById('takenby-suggestions');
+    expect(datalist).toBeInTheDocument();
+  });
+
+  it('shows suggestions from existing people', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const options = document.querySelectorAll('#takenby-suggestions option');
+    expect(options.length).toBe(3);
+  });
+
+  it('filters out already selected people', () => {
+    mockFormHookValue = createMockFormHook({
+      form: {
+        ...createMockFormHook().form,
+        takenBy: ['John']
+      }
+    });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const options = document.querySelectorAll('#takenby-suggestions option');
+    expect(options.length).toBe(2); // Jane and Alice only
+  });
+});
+
+describe('MedicationsPage new entry button', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext({ meds: mockMeds });
+    mockFormHookValue = createMockFormHook({ editingId: 1 });
+  });
+
+  it('renders new entry button', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/form\.newEntry/i)).toBeInTheDocument();
+  });
+
+  it('calls resetForm when clicking new entry', () => {
+    const resetForm = vi.fn();
+    mockFormHookValue = createMockFormHook({ editingId: 1, resetForm });
+    
+    // Mock desktop view
+    Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const newEntryBtn = screen.getByRole('button', { name: /form\.newEntry/i });
+    fireEvent.click(newEntryBtn);
+    expect(resetForm).toHaveBeenCalled();
+  });
+});
+
+describe('MedicationsPage cancel edit button', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext({ meds: mockMeds });
+    mockFormHookValue = createMockFormHook({ editingId: 1 });
+  });
+
+  it('shows cancel button when editing', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/common\.cancel/i)).toBeInTheDocument();
+  });
+
+  it('calls resetForm when clicking cancel', () => {
+    const resetForm = vi.fn();
+    mockFormHookValue = createMockFormHook({ editingId: 1, resetForm });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const cancelBtn = screen.getByRole('button', { name: /common\.cancel/i });
+    fireEvent.click(cancelBtn);
+    expect(resetForm).toHaveBeenCalled();
+  });
+});
+
+describe('MedicationsPage notes field', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook({
+      form: {
+        ...createMockFormHook().form,
+        notes: 'Test notes content'
+      }
+    });
+  });
+
+  it('renders notes textarea', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const textarea = document.querySelector('textarea');
+    expect(textarea).toBeInTheDocument();
+  });
+
+  it('shows character count for notes', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const charCount = document.querySelector('.char-count');
+    expect(charCount).toBeInTheDocument();
+  });
+});
+
+describe('MedicationsPage expiry date', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook();
+  });
+
+  it('renders expiry date input', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/form\.expiryDate/i)).toBeInTheDocument();
+  });
+
+  it('allows changing expiry date', () => {
+    const handleValueChange = vi.fn();
+    mockFormHookValue = createMockFormHook({ handleValueChange });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const dateInputs = document.querySelectorAll('input[type="date"]');
+    // Find the expiry date input (not blister start date)
+    const expiryInput = Array.from(dateInputs).find(
+      input => !input.closest('.blister-inputs')
+    );
+    if (expiryInput) {
+      fireEvent.change(expiryInput, { target: { value: '2025-12-31' } });
+      expect(handleValueChange).toHaveBeenCalledWith('expiryDate', '2025-12-31');
+    }
+  });
+});
+
+describe('MedicationsPage pill weight', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook();
+  });
+
+  it('renders pill weight input', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/form\.pillWeight/i)).toBeInTheDocument();
+  });
+
+  it('allows changing pill weight', () => {
+    const handleValueChange = vi.fn();
+    mockFormHookValue = createMockFormHook({ handleValueChange });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    // Pill weight has placeholder for mg
+    const pillWeightInput = document.querySelector('input[placeholder*="form.placeholders.weight"]');
+    if (pillWeightInput) {
+      fireEvent.change(pillWeightInput, { target: { value: '500' } });
+      expect(handleValueChange).toHaveBeenCalledWith('pillWeightMg', '500');
+    }
+  });
+});
+
+describe('MedicationsPage total tablets display', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook({
+      form: {
+        ...createMockFormHook().form,
+        packCount: '2',
+        blistersPerPack: '3',
+        pillsPerBlister: '10',
+        looseTablets: '5'
+      }
+    });
+  });
+
+  it('renders total tablets field', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/form\.total/i)).toBeInTheDocument();
+  });
+
+  it('shows calculated total as static value', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const staticValue = document.querySelector('.static-value');
+    expect(staticValue).toBeInTheDocument();
+  });
+});
+
+describe('MedicationsPage delete medication', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext({ meds: mockMeds });
+    mockFormHookValue = createMockFormHook();
+    // Mock confirm
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  });
+
+  it('shows delete button for each medication', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const deleteButtons = document.querySelectorAll('.med-actions .danger');
+    expect(deleteButtons.length).toBeGreaterThan(0);
+  });
+
+  it('calls deleteMed when clicking delete and confirming', () => {
+    const deleteMed = vi.fn();
+    mockContextValue = createMockContext({ meds: mockMeds, deleteMed });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const deleteButtons = document.querySelectorAll('.med-actions .danger');
+    if (deleteButtons.length > 0) {
+      fireEvent.click(deleteButtons[0]);
+      expect(deleteMed).toHaveBeenCalled();
+    }
+  });
+
+  it('does not call deleteMed when canceling', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const deleteMed = vi.fn();
+    mockContextValue = createMockContext({ meds: mockMeds, deleteMed });
+    
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const deleteButtons = document.querySelectorAll('.med-actions .danger');
+    if (deleteButtons.length > 0) {
+      fireEvent.click(deleteButtons[0]);
+      expect(deleteMed).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe('MedicationsPage blister display in list', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext({ meds: mockMeds });
+    mockFormHookValue = createMockFormHook();
+  });
+
+  it('shows blister info for each medication', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const blisterLists = document.querySelectorAll('.blister-list');
+    expect(blisterLists.length).toBeGreaterThan(0);
+  });
+
+  it('shows blister row with usage details', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const blisterRows = document.querySelectorAll('.blister-row-simple');
+    expect(blisterRows.length).toBeGreaterThan(0);
+  });
+});
+
+describe('MedicationsPage field errors', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook({
+      fieldErrors: {
+        name: 'Name is required',
+        genericName: undefined,
+        notes: 'Notes too long'
+      },
+      hasValidationErrors: true
+    });
+  });
+
+  it('shows field error for name', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const errorLabels = document.querySelectorAll('label.has-error');
+    expect(errorLabels.length).toBeGreaterThan(0);
+  });
+
+  it('displays error message', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const errorMessages = document.querySelectorAll('.field-error');
+    expect(errorMessages.length).toBeGreaterThan(0);
+  });
+
+  it('disables submit when validation errors exist', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const submitBtn = document.querySelector('button[type="submit"]');
+    expect(submitBtn).toBeDisabled();
+  });
+});
+
+describe('MedicationsPage form changed state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook({
+      formChanged: true,
+      form: {
+        ...createMockFormHook().form,
+        name: 'New Med'
+      }
+    });
+  });
+
+  it('enables submit button when form changed', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    const submitBtn = document.querySelector('button[type="submit"]');
+    expect(submitBtn).not.toBeDisabled();
+  });
+});
+
+describe('MedicationsPage form saved state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockContextValue = createMockContext();
+    mockFormHookValue = createMockFormHook({
+      formSaved: true,
+      formChanged: false
+    });
+  });
+
+  it('shows saved text in button', () => {
+    render(
+      <MemoryRouter>
+        <MedicationsPage />
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText(/common\.saved/i)).toBeInTheDocument();
+  });
+});

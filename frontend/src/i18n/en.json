@@ -54,6 +54,7 @@
       "allStockOk": "All stock OK",
       "allOk": "✓ All OK",
       "lastReminder": "Last reminder",
+      "lastSent": "Last sent",
       "next": "Next",
       "nextIn": "Next",
       "inDays": "in {{days}} days",

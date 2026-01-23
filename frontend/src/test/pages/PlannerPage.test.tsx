@@ -397,6 +397,11 @@ describe('PlannerPage form interactions', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mockContextValue = createMockContext({ meds: mockMeds });
+    // Mock fetch to avoid actual API calls
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([])
+    });
   });
 
   it('can submit the form', () => {

@@ -15,7 +15,6 @@ describe('defaultBlister', () => {
     const blister = defaultBlister();
     const after = new Date();
     
-    // Date should be between before and after
     const blisterDate = new Date(blister.startDate);
     expect(blisterDate >= new Date(before.toISOString().slice(0, 10))).toBe(true);
     expect(blisterDate <= new Date(after.toISOString().slice(0, 10) + 'T23:59:59')).toBe(true);

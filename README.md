@@ -17,6 +17,11 @@
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker" alt="Docker" />
 </p>
 
+<p align="center">
+  <img src="https://github.com/DanielVolz/medassist-ng/actions/workflows/test.yml/badge.svg" alt="Tests" />
+  <img src="https://github.com/DanielVolz/medassist-ng/actions/workflows/docker-build.yml/badge.svg" alt="Docker Build" />
+</p>
+
 ### 🤖 AI-Generated Code
 
 > This app was 100% coded with Claude Opus 4.5. Use at your own risk.

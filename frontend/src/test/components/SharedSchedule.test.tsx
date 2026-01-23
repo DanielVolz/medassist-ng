@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { SharedSchedule } from '../../components/SharedSchedule';
 
@@ -7,10 +7,6 @@ describe('SharedSchedule', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
   });
 
   it('shows loading state initially', () => {
@@ -172,5 +168,26 @@ describe('SharedSchedule theme persistence', () => {
     );
     
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+  });
+});
+
+describe('SharedSchedule keyboard handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('handles Escape key without error', () => {
+    render(
+      <MemoryRouter initialEntries={['/share/test-token']}>
+        <Routes>
+          <Route path="/share/:token" element={<SharedSchedule />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    // No error should occur
+    expect(document.querySelector('.shared-schedule-page')).toBeInTheDocument();
   });
 });

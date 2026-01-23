@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAppContext } from "../context";
 import { MedicationAvatar, MobileEditModal } from "../components";
 import { useMedicationForm } from "../hooks";
-import { formatNumber, formatDateTime } from "../utils/formatters";
+import { formatNumber, formatDateTime, combineDateAndTime } from "../utils/formatters";
 import { getPackageSize, FIELD_LIMITS } from "../types";
 import type { Medication } from "../types";
 
@@ -32,6 +32,7 @@ export function MedicationsPage() {
 	const {
 		form,
 		setForm,
+		setOriginalForm,
 		editingId,
 		setEditingId,
 		formSaved,
@@ -153,6 +154,9 @@ export function MedicationsPage() {
 			// Reset form after successful save
 			if (!editingId) {
 				resetForm();
+			} else {
+				// Update originalForm so formChanged becomes false
+				setOriginalForm(form);
 			}
 		} catch (err) {
 			console.error("Save error:", err);
@@ -234,7 +238,7 @@ export function MedicationsPage() {
 							<div className="blister-list">
 								{med.blisters.map((s, idx) => (
 									<div key={`${med.id}-${idx}`} className="blister-row-simple">
-										{s.usage} {s.usage === 1 ? t('common.pill') : t('common.pills')} · {t('form.blisters.every')} {s.every} {s.every === 1 ? t('common.day') : t('common.days')} · {t('form.blisters.from')} {formatDateTime(s.start, i18n.language)}
+										{s.usage} {s.usage === 1 ? t('common.pill') : t('common.pills')} · {t('form.blisters.every')} {s.every} {s.every === 1 ? t('common.day') : t('common.days')} · {t('form.blisters.from')} {formatDateTime(s.start)}
 									</div>
 								))}
 							</div>
@@ -480,7 +484,7 @@ export function MedicationsPage() {
 							</button>
 						)}  
 						<button type="submit" disabled={saving || hasValidationErrors || (!formChanged && (formSaved || !!editingId))}>
-							{saving ? t('common.saving') : formSaved && !formChanged ? t('common.saved') : t('common.save')}
+							{formSaved && !formChanged ? t('common.saved') : t('common.save')}
 						</button>
 					</div>
 				</form>
@@ -524,7 +528,4 @@ export function MedicationsPage() {
 	);
 }
 
-// Helper function to combine date and time into ISO datetime with Z suffix
-function combineDateAndTime(date: string, time: string): string {
-	return `${date}T${time}:00.000Z`;
-}
+

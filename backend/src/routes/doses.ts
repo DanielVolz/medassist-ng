@@ -121,12 +121,28 @@ export async function doseRoutes(app: FastifyInstance) {
 
       const { doseId } = request.params;
 
-      await db.delete(doseTracking).where(
-        and(
-          eq(doseTracking.userId, userId),
-          eq(doseTracking.doseId, doseId)
-        )
-      );
+      // Check if this dose was dismissed
+      const [existing] = await db.select()
+        .from(doseTracking)
+        .where(
+          and(
+            eq(doseTracking.userId, userId),
+            eq(doseTracking.doseId, doseId)
+          )
+        );
+
+      if (existing?.dismissed) {
+        // Already dismissed - keep the record as-is
+        // The dose stays dismissed, we just acknowledge the undo request
+      } else {
+        // Not dismissed - delete the record entirely
+        await db.delete(doseTracking).where(
+          and(
+            eq(doseTracking.userId, userId),
+            eq(doseTracking.doseId, doseId)
+          )
+        );
+      }
 
       return { success: true };
     }
@@ -321,12 +337,27 @@ export async function doseRoutes(app: FastifyInstance) {
         return reply.notFound("Share link not found");
       }
 
-      await db.delete(doseTracking).where(
-        and(
-          eq(doseTracking.userId, share.userId),
-          eq(doseTracking.doseId, doseId)
-        )
-      );
+      // Check if this dose was dismissed
+      const [existing] = await db.select()
+        .from(doseTracking)
+        .where(
+          and(
+            eq(doseTracking.userId, share.userId),
+            eq(doseTracking.doseId, doseId)
+          )
+        );
+
+      if (existing?.dismissed) {
+        // Already dismissed - keep the record as-is
+      } else {
+        // Not dismissed - delete the record entirely
+        await db.delete(doseTracking).where(
+          and(
+            eq(doseTracking.userId, share.userId),
+            eq(doseTracking.doseId, doseId)
+          )
+        );
+      }
 
       return { success: true };
     }

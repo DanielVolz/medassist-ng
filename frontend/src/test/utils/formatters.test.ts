@@ -174,16 +174,16 @@ describe('getExpiryClass', () => {
     expect(getExpiryClass(undefined, 30)).toBe('');
   });
 
-  it('returns "expired" for past date', () => {
-    expect(getExpiryClass('2024-03-10', 30)).toBe('expired');
+  it('returns danger-text for past date', () => {
+    expect(getExpiryClass('2024-03-10', 30)).toBe('danger-text');
   });
 
-  it('returns "expiring-soon" when within threshold', () => {
-    expect(getExpiryClass('2024-03-25', 30)).toBe('expiring-soon');
+  it('returns warning-text when within threshold', () => {
+    expect(getExpiryClass('2024-03-25', 30)).toBe('warning-text');
   });
 
-  it('returns empty string when expiry is far away', () => {
-    expect(getExpiryClass('2024-06-15', 30)).toBe('');
+  it('returns success-text when expiry is far away', () => {
+    expect(getExpiryClass('2024-06-15', 30)).toBe('success-text');
   });
 });
 

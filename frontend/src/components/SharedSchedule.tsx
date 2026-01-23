@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import type { SharedScheduleData, ExpiredLinkData } from "../types";
 import { getMedTotal } from "../types";
 import { loadCollapsedDaysFromStorage } from "../utils/storage";
+import { getSystemLocale } from "../utils/formatters";
 import { MedicationAvatar } from "./MedicationAvatar";
 
 export function SharedSchedule() {
@@ -281,8 +282,8 @@ export function SharedSchedule() {
 						usage: blister.usage,
 						isPast,
 						takenBy: med.takenBy || [],
-						timeStr: d.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" }),
-						dateStr: d.toLocaleDateString(i18n.language, { weekday: "short", day: "2-digit", month: "short" })
+						timeStr: d.toLocaleTimeString(getSystemLocale(i18n.language), { hour: "2-digit", minute: "2-digit" }),
+						dateStr: d.toLocaleDateString(getSystemLocale(i18n.language), { weekday: "short", day: "2-digit", month: "short" })
 					});
 				}
 			});
@@ -418,7 +419,7 @@ export function SharedSchedule() {
 					<h2>{t("share.expired.title")}</h2>
 					<p className="expired-message">{t("share.expired.message", { takenBy: expiredData.takenBy })}</p>
 					<p className="expired-contact">{t("share.expired.contact", { username: expiredData.ownerUsername })}</p>
-					<p className="expired-date">{t("share.expired.expiredOn", { date: new Date(expiredData.expiredAt).toLocaleDateString(i18n.language) })}</p>
+					<p className="expired-date">{t("share.expired.expiredOn", { date: new Date(expiredData.expiredAt).toLocaleDateString(getSystemLocale(i18n.language)) })}</p>
 				</div>
 			</div>
 		);

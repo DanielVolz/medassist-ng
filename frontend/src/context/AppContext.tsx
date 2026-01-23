@@ -15,6 +15,7 @@ import type {
 	ScheduleEvent,
 } from "../types";
 import { buildSchedulePreview, calculateCoverage } from "../utils/schedule";
+import { getSystemLocale } from "../utils/formatters";
 
 // =============================================================================
 // Types
@@ -261,22 +262,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [medications.meds, selectedMed]);
 
-	// Computed values
+	// Computed values - combine app language with timezone region for locale
+	const systemLocale = getSystemLocale(i18n.language);
 	const schedule = useMemo(
-		() => buildSchedulePreview(medications.meds, i18n.language, true),
-		[medications.meds, i18n.language]
+		() => buildSchedulePreview(medications.meds, systemLocale, true),
+		[medications.meds, systemLocale]
 	);
 
 	const coverage = useMemo(
 		() => calculateCoverage(
 			medications.meds,
 			schedule.events,
-			i18n.language,
+			systemLocale,
 			settingsHook.settings.reminderDaysBefore,
 			settingsHook.settings.stockCalculationMode,
 			doses.takenDoses
 		),
-		[medications.meds, schedule.events, i18n.language, settingsHook.settings.reminderDaysBefore, settingsHook.settings.stockCalculationMode, doses.takenDoses]
+		[medications.meds, schedule.events, systemLocale, settingsHook.settings.reminderDaysBefore, settingsHook.settings.stockCalculationMode, doses.takenDoses]
 	);
 
 	const depletionByMed = useMemo(
@@ -337,18 +339,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const pastDays = useMemo(() => groupedSchedule.filter(d => d.isPast), [groupedSchedule]);
 	const futureDays = useMemo(() => groupedSchedule.filter(d => !d.isPast).slice(0, scheduleDays), [groupedSchedule, scheduleDays]);
 
+	// Build a map of medId -> end-of-day timestamp of last dismissed dose
+	// When user dismisses doses and then changes the schedule, old dismissed IDs no longer match
+	// Compare by DAY (end of day) so time changes within a day don't cause doses to reappear
+	const dismissedUntilByMed = useMemo(() => {
+		const map = new Map<string, number>();
+		for (const doseId of doses.dismissedDoses) {
+			// Format: medId-blisterIdx-timestamp or medId-blisterIdx-timestamp-person
+			const parts = doseId.split("-");
+			if (parts.length >= 3) {
+				const medId = parts[0];
+				const timestamp = parseInt(parts[2], 10);
+				if (!isNaN(timestamp)) {
+					// Convert to end of that day (23:59:59.999) for day-level comparison
+					const date = new Date(timestamp);
+					date.setHours(23, 59, 59, 999);
+					const endOfDay = date.getTime();
+					const current = map.get(medId) ?? 0;
+					if (endOfDay > current) map.set(medId, endOfDay);
+				}
+			}
+		}
+		return map;
+	}, [doses.dismissedDoses]);
+
 	const missedPastDoseIds = useMemo(() => {
 		const totalPastDoses = pastDays.flatMap(d =>
 			d.meds.flatMap(m =>
-				m.doses.flatMap(dose =>
-					(dose.takenBy || []).length > 0
+				m.doses.flatMap(dose => {
+					// Check if this dose is before the dismissed threshold for this medication
+					const parts = dose.id.split("-");
+					const medId = parts[0];
+					const timestamp = parts.length >= 3 ? parseInt(parts[2], 10) : 0;
+					const dismissedUntil = dismissedUntilByMed.get(medId) ?? 0;
+					
+					// If this dose's day is at or before the dismissed day, treat as dismissed
+					if (timestamp > 0 && timestamp <= dismissedUntil) {
+						return [];
+					}
+					
+					return (dose.takenBy || []).length > 0
 						? dose.takenBy.map((p: string) => `${dose.id}-${p}`)
-						: [dose.id]
-				)
+						: [dose.id];
+				})
 			)
 		);
 		return totalPastDoses.filter(id => !doses.takenDoses.has(id) && !doses.dismissedDoses.has(id));
-	}, [pastDays, doses.takenDoses, doses.dismissedDoses]);
+	}, [pastDays, doses.takenDoses, doses.dismissedDoses, dismissedUntilByMed]);
 
 	// Modal helpers with browser history support
 	const openMedDetail = useCallback((med: Medication) => {

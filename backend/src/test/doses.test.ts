@@ -73,10 +73,22 @@ async function registerDoseRoutes(ctx: TestContext) {
     const userId = 1;
     const { doseId } = request.params;
 
-    await client.execute({
-      sql: `DELETE FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
+    // Check if this dose was also dismissed
+    const existing = await client.execute({
+      sql: `SELECT id, dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
       args: [userId, doseId],
     });
+
+    if (existing.rows.length > 0 && existing.rows[0].dismissed) {
+      // Already dismissed - keep the record as-is (don't delete)
+      // The dose stays dismissed, we just ignore the undo request
+    } else {
+      // Not dismissed - delete the record entirely
+      await client.execute({
+        sql: `DELETE FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
+        args: [userId, doseId],
+      });
+    }
 
     return { success: true };
   });
@@ -345,6 +357,43 @@ describe("Dose Tracking API", () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({ success: true });
+    });
+
+    it("should preserve dismissed status when unmarking a dose", async () => {
+      const doseId = "1-0-1735344000000";
+
+      // First dismiss the dose
+      await ctx.app.inject({
+        method: "POST",
+        url: "/doses/dismiss",
+        payload: { doseIds: [doseId] },
+      });
+
+      // Verify it's dismissed
+      let result = await ctx.client.execute({
+        sql: `SELECT dismissed, taken_at FROM dose_tracking WHERE dose_id = ?`,
+        args: [doseId],
+      });
+      expect(result.rows[0].dismissed).toBe(1);
+      const originalTakenAt = result.rows[0].taken_at;
+
+      // Now try to unmark it (undo) - should keep the dismissed record
+      const response = await ctx.app.inject({
+        method: "DELETE",
+        url: `/doses/taken/${encodeURIComponent(doseId)}`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: true });
+
+      // Verify the record still exists and is still dismissed
+      result = await ctx.client.execute({
+        sql: `SELECT dose_id, dismissed, taken_at FROM dose_tracking WHERE dose_id = ?`,
+        args: [doseId],
+      });
+      expect(result.rows.length).toBe(1);
+      expect(result.rows[0].dismissed).toBe(1);
+      expect(result.rows[0].taken_at).toBe(originalTakenAt); // unchanged
     });
   });
 

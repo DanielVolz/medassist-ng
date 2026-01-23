@@ -119,6 +119,34 @@ export function getMsUntilNextCheck(reminderHour: number, tz?: string): number {
 // Blister/medication parsing utilities
 // =============================================================================
 
+/**
+ * Parse an ISO datetime string to local timestamp.
+ * Extracts date/time components directly from the string to avoid
+ * timezone conversion issues with Z suffix.
+ * 
+ * "2026-01-23T20:55:00" → treated as local time 20:55
+ * "2026-01-23T20:55:00.000Z" → also treated as local time 20:55 (Z ignored)
+ */
+export function parseLocalDateTime(isoString: string): Date {
+  // Extract components: YYYY-MM-DDTHH:MM:SS (ignore Z and milliseconds)
+  const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):?(\d{2})?/);
+  if (!match) {
+    // Fallback to Date parsing if format doesn't match
+    return new Date(isoString);
+  }
+  
+  const [, year, month, day, hour, minute, second] = match;
+  // Create date using local time interpretation (no UTC conversion)
+  return new Date(
+    parseInt(year, 10),
+    parseInt(month, 10) - 1, // Month is 0-indexed
+    parseInt(day, 10),
+    parseInt(hour, 10),
+    parseInt(minute, 10),
+    parseInt(second ?? "0", 10)
+  );
+}
+
 /** Parse blister schedules from JSON columns */
 export function parseBlisters(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
   try {
@@ -213,7 +241,7 @@ export function getTodaysIntakes(
   const intakes: UpcomingIntake[] = [];
   
   for (const blister of blisters) {
-    const startTime = new Date(blister.start).getTime();
+    const startTime = parseLocalDateTime(blister.start).getTime();
     const intervalMs = blister.every * 24 * 60 * 60 * 1000;
     
     if (intervalMs <= 0) continue;
@@ -277,7 +305,7 @@ export function getUpcomingIntakes(
   const upcoming: UpcomingIntake[] = [];
   
   for (const blister of blisters) {
-    const startTime = new Date(blister.start).getTime();
+    const startTime = parseLocalDateTime(blister.start).getTime();
     const intervalMs = blister.every * 24 * 60 * 60 * 1000;
     
     if (intervalMs <= 0) continue;

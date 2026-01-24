@@ -79,6 +79,8 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
     `ALTER TABLE medications ADD COLUMN stock_adjustment integer NOT NULL DEFAULT 0`,
     // Added for stock correction - timestamp to ignore consumed doses before correction
     `ALTER TABLE medications ADD COLUMN last_stock_correction_at integer`,
+    // Added in v1.5.1 - dismiss past doses until date (robust against timestamp changes)
+    `ALTER TABLE medications ADD COLUMN dismissed_until text`,
   ];
 
   for (const sql of alterMigrations) {

@@ -90,6 +90,7 @@ async function createSchema(client: Client) {
       expiry_date text,
       notes text,
       intake_reminders_enabled integer NOT NULL DEFAULT 0,
+      dismissed_until text,
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
@@ -934,6 +935,171 @@ describe("Integration Tests", () => {
       expect(data[0].totalPills).toBe(45);
       expect(data[0].plannerUsage).toBe(10);
       expect(data[0].enough).toBe(true); // 45 > 10
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Dismiss Until (Clear Missed Doses)
+  // ---------------------------------------------------------------------------
+
+  describe("Dismiss Until functionality", () => {
+    it("should set dismissedUntil for multiple medications", async () => {
+      // Create two medications
+      const med1Res = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: {
+          name: "Med 1",
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      const med1Id = med1Res.json().id;
+
+      const med2Res = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: {
+          name: "Med 2",
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      const med2Id = med2Res.json().id;
+
+      // Set dismissedUntil for both
+      const dismissRes = await app.inject({
+        method: "POST",
+        url: "/medications/dismiss-until",
+        payload: {
+          medicationIds: [med1Id, med2Id],
+          until: "2025-01-15",
+        },
+      });
+
+      expect(dismissRes.statusCode).toBe(200);
+      expect(dismissRes.json().success).toBe(true);
+      expect(dismissRes.json().updatedCount).toBe(2);
+
+      // Verify dismissedUntil is set via GET
+      const medsRes = await app.inject({
+        method: "GET",
+        url: "/medications",
+      });
+      const meds = medsRes.json();
+      const med1 = meds.find((m: any) => m.id === med1Id);
+      const med2 = meds.find((m: any) => m.id === med2Id);
+
+      expect(med1.dismissedUntil).toBe("2025-01-15");
+      expect(med2.dismissedUntil).toBe("2025-01-15");
+    });
+
+    it("should clear dismissedUntil for a medication", async () => {
+      // Create medication
+      const createRes = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: {
+          name: "Med to Clear",
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      const medId = createRes.json().id;
+
+      // Set dismissedUntil
+      await app.inject({
+        method: "POST",
+        url: "/medications/dismiss-until",
+        payload: {
+          medicationIds: [medId],
+          until: "2025-01-20",
+        },
+      });
+
+      // Clear it
+      const clearRes = await app.inject({
+        method: "DELETE",
+        url: `/medications/${medId}/dismiss-until`,
+      });
+
+      expect(clearRes.statusCode).toBe(200);
+      expect(clearRes.json().success).toBe(true);
+
+      // Verify it's cleared
+      const medsRes = await app.inject({
+        method: "GET",
+        url: "/medications",
+      });
+      const med = medsRes.json().find((m: any) => m.id === medId);
+      expect(med.dismissedUntil).toBeNull();
+    });
+
+    it("should reject invalid date format", async () => {
+      const createRes = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: {
+          name: "Med",
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      const medId = createRes.json().id;
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/medications/dismiss-until",
+        payload: {
+          medicationIds: [medId],
+          until: "01-15-2025", // Wrong format
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("should reject empty medicationIds array", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/medications/dismiss-until",
+        payload: {
+          medicationIds: [],
+          until: "2025-01-15",
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("should not update medications belonging to other users", async () => {
+      // Create medication for user 999999999
+      const createRes = await app.inject({
+        method: "POST",
+        url: "/medications",
+        payload: {
+          name: "My Med",
+          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+        },
+      });
+      const medId = createRes.json().id;
+
+      // Try to dismiss a medication that doesn't exist (ID 99999)
+      const dismissRes = await app.inject({
+        method: "POST",
+        url: "/medications/dismiss-until",
+        payload: {
+          medicationIds: [99999],
+          until: "2025-01-15",
+        },
+      });
+
+      expect(dismissRes.statusCode).toBe(200);
+      expect(dismissRes.json().updatedCount).toBe(0); // Nothing updated
+
+      // Our med should still have no dismissedUntil
+      const medsRes = await app.inject({
+        method: "GET",
+        url: "/medications",
+      });
+      const med = medsRes.json().find((m: any) => m.id === medId);
+      expect(med.dismissedUntil).toBeNull();
     });
   });
 });

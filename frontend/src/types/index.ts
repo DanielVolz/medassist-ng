@@ -25,6 +25,7 @@ export type Medication = {
 	expiryDate?: string | null;
 	notes?: string | null;
 	intakeRemindersEnabled?: boolean;
+	dismissedUntil?: string | null; // ISO date string (YYYY-MM-DD) - all past doses until this date are dismissed
 	updatedAt: string | number | null;
 };
 

@@ -105,6 +105,7 @@ export async function medicationRoutes(app: FastifyInstance) {
       expiryDate: row.expiryDate,
       notes: row.notes,
       intakeRemindersEnabled: row.intakeRemindersEnabled ?? false,
+      dismissedUntil: row.dismissedUntil ?? null,
       updatedAt: row.updatedAt,
     }));
   });
@@ -426,6 +427,68 @@ export async function medicationRoutes(app: FastifyInstance) {
 
     return payload;
   });
+
+  // ---------------------------------------------------------------------------
+  // POST /medications/dismiss-until - Set dismissedUntil date for multiple medications
+  // This is more robust than storing individual dose IDs (which can change with schedule updates)
+  // ---------------------------------------------------------------------------
+  const dismissUntilSchema = z.object({
+    medicationIds: z.array(z.number().int().positive()).min(1),
+    until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+  });
+
+  app.post<{ Body: z.infer<typeof dismissUntilSchema> }>(
+    "/medications/dismiss-until",
+    async (req, reply) => {
+      const parsed = dismissUntilSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      }
+
+      const userId = await getUserId(req, reply);
+      const { medicationIds, until } = parsed.data;
+
+      // Update dismissedUntil for all specified medications owned by this user
+      let updatedCount = 0;
+      for (const medId of medicationIds) {
+        const result = await db.update(medications)
+          .set({ dismissedUntil: until })
+          .where(and(
+            eq(medications.id, medId),
+            eq(medications.userId, userId)
+          ));
+        if (result.rowsAffected > 0) {
+          updatedCount++;
+        }
+      }
+
+      return { success: true, updatedCount };
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // DELETE /medications/:id/dismiss-until - Clear dismissedUntil for a medication
+  // ---------------------------------------------------------------------------
+  app.delete<{ Params: { id: string } }>(
+    "/medications/:id/dismiss-until",
+    async (req, reply) => {
+      const medId = parseInt(req.params.id, 10);
+      if (isNaN(medId)) {
+        return reply.status(400).send({ error: "Invalid medication ID" });
+      }
+
+      const userId = await getUserId(req, reply);
+
+      await db.update(medications)
+        .set({ dismissedUntil: null })
+        .where(and(
+          eq(medications.id, medId),
+          eq(medications.userId, userId)
+        ));
+
+      return { success: true };
+    }
+  );
 }
 
 function calculateUsageInRange(blisters: Array<{ usage: number; every: number; start: string }>, start: Date, end: Date) {

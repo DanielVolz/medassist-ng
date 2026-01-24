@@ -7,6 +7,8 @@
 - **NEVER create PRs without explicit permission**: Do NOT create Pull Requests, push branches, or merge code unless the user explicitly asks for it. Always present changes and wait for the user to confirm before any git operations that affect the remote repository.
 - **No temporary files**: Delete temporary scripts/files immediately after use. Do not commit temporary debug scripts, test files, or one-off utilities to the repository.
 - **Clean workspace**: Always clean up after yourself. If you create a file for a specific task, delete it once done.
+- **Remove old code when re-implementing**: When fixing a bug or re-implementing a feature that didn't work, ALWAYS remove the old/broken code completely. Never leave dead code, unused functions, or obsolete implementations in the codebase.
+- **Tests are mandatory**: Every new feature and every bug fix MUST have corresponding tests. When modifying existing features, update or add tests accordingly. If old tests become obsolete due to code changes, remove or update them.
 
 ## Architecture Overview
 

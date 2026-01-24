@@ -95,6 +95,7 @@ async function createSchema(client: Client) {
       expiry_date text,
       notes text,
       intake_reminders_enabled integer NOT NULL DEFAULT 0,
+      dismissed_until text,
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,

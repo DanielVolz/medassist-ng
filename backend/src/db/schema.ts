@@ -40,6 +40,7 @@ export const medications = sqliteTable("medications", {
   expiryDate: text("expiry_date"),
   notes: text("notes"),
   intakeRemindersEnabled: integer("intake_reminders_enabled", { mode: "boolean" }).notNull().default(false),
+  dismissedUntil: text("dismissed_until"), // ISO date string (e.g. "2026-01-23") - all past doses until this date are dismissed
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

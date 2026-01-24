@@ -20,7 +20,6 @@ describe('useDoses', () => {
     
     expect(result.current.takenDoses.size).toBe(0);
     expect(result.current.dismissedDoses.size).toBe(0);
-    expect(result.current.clearingMissed).toBe(false);
     expect(result.current.showClearMissedConfirm).toBe(false);
   });
 
@@ -178,44 +177,6 @@ describe('useDoses', () => {
     );
   });
 
-  it('dismisses missed doses', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-      .mockResolvedValueOnce({ ok: true });
-
-    const { result } = renderHook(() => useDoses());
-
-    await waitFor(() => {
-      expect(result.current.clearingMissed).toBe(false);
-    });
-
-    await act(async () => {
-      await result.current.dismissMissedDoses(['missed-1', 'missed-2']);
-    });
-
-    expect(result.current.dismissedDoses.has('missed-1')).toBe(true);
-    expect(result.current.dismissedDoses.has('missed-2')).toBe(true);
-  });
-
-  it('does nothing when dismissing empty array', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ doses: [] })
-    });
-
-    const { result } = renderHook(() => useDoses());
-
-    await act(async () => {
-      await result.current.dismissMissedDoses([]);
-    });
-
-    // Should not make a POST call for dismiss
-    expect(fetch).not.toHaveBeenCalledWith(
-      '/api/doses/dismiss',
-      expect.anything()
-    );
-  });
-
   it('setShowClearMissedConfirm works', () => {
     const { result } = renderHook(() => useDoses());
     
@@ -224,23 +185,5 @@ describe('useDoses', () => {
     });
     
     expect(result.current.showClearMissedConfirm).toBe(true);
-  });
-
-  it('handles API error on dismiss gracefully', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-      .mockRejectedValueOnce(new Error('Network error'));
-
-    const { result } = renderHook(() => useDoses());
-
-    await waitFor(() => {
-      expect(result.current.clearingMissed).toBe(false);
-    });
-
-    await act(async () => {
-      await result.current.dismissMissedDoses(['missed-1']);
-    });
-
-    expect(result.current.clearingMissed).toBe(false);
   });
 });

@@ -339,53 +339,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const pastDays = useMemo(() => groupedSchedule.filter(d => d.isPast), [groupedSchedule]);
 	const futureDays = useMemo(() => groupedSchedule.filter(d => !d.isPast).slice(0, scheduleDays), [groupedSchedule, scheduleDays]);
 
-	// Build a map of medId -> end-of-day timestamp of last dismissed dose
-	// When user dismisses doses and then changes the schedule, old dismissed IDs no longer match
-	// Compare by DAY (end of day) so time changes within a day don't cause doses to reappear
+	// Build a map of medId -> dismissedUntil date string from medication records
+	// This is robust against timestamp changes from schedule updates or timezone fixes
 	const dismissedUntilByMed = useMemo(() => {
-		const map = new Map<string, number>();
-		for (const doseId of doses.dismissedDoses) {
-			// Format: medId-blisterIdx-timestamp or medId-blisterIdx-timestamp-person
-			const parts = doseId.split("-");
-			if (parts.length >= 3) {
-				const medId = parts[0];
-				const timestamp = parseInt(parts[2], 10);
-				if (!isNaN(timestamp)) {
-					// Convert to end of that day (23:59:59.999) for day-level comparison
-					const date = new Date(timestamp);
-					date.setHours(23, 59, 59, 999);
-					const endOfDay = date.getTime();
-					const current = map.get(medId) ?? 0;
-					if (endOfDay > current) map.set(medId, endOfDay);
-				}
+		const map = new Map<string, string>();
+		for (const med of medications.meds) {
+			if (med.dismissedUntil) {
+				map.set(String(med.id), med.dismissedUntil);
 			}
 		}
 		return map;
-	}, [doses.dismissedDoses]);
+	}, [medications.meds]);
+
+	// Helper to check if a dose date is on or before the dismissedUntil date
+	const isDoseDismissed = useCallback((doseId: string, dismissedUntilDate: string | undefined): boolean => {
+		if (!dismissedUntilDate) return false;
+		// Extract timestamp from dose ID (format: medId-blisterIdx-timestamp or medId-blisterIdx-timestamp-person)
+		const parts = doseId.split("-");
+		if (parts.length < 3) return false;
+		const timestamp = parseInt(parts[2], 10);
+		if (isNaN(timestamp)) return false;
+		// Compare date strings (YYYY-MM-DD format sorts correctly)
+		const doseDate = new Date(timestamp);
+		const doseDateStr = `${doseDate.getFullYear()}-${String(doseDate.getMonth() + 1).padStart(2, '0')}-${String(doseDate.getDate()).padStart(2, '0')}`;
+		return doseDateStr <= dismissedUntilDate;
+	}, []);
 
 	const missedPastDoseIds = useMemo(() => {
 		const totalPastDoses = pastDays.flatMap(d =>
-			d.meds.flatMap(m =>
-				m.doses.flatMap(dose => {
-					// Check if this dose is before the dismissed threshold for this medication
-					const parts = dose.id.split("-");
-					const medId = parts[0];
-					const timestamp = parts.length >= 3 ? parseInt(parts[2], 10) : 0;
-					const dismissedUntil = dismissedUntilByMed.get(medId) ?? 0;
-					
-					// If this dose's day is at or before the dismissed day, treat as dismissed
-					if (timestamp > 0 && timestamp <= dismissedUntil) {
+			d.meds.flatMap(m => {
+				// Find the medication to get its dismissedUntil
+				const med = medications.meds.find(med => med.name === m.medName);
+				const dismissedUntilDate = med?.dismissedUntil ?? undefined;
+				
+				return m.doses.flatMap(dose => {
+					// Check if this dose is on or before the dismissed date for this medication
+					if (isDoseDismissed(dose.id, dismissedUntilDate)) {
 						return [];
 					}
 					
 					return (dose.takenBy || []).length > 0
 						? dose.takenBy.map((p: string) => `${dose.id}-${p}`)
 						: [dose.id];
-				})
-			)
+				});
+			})
 		);
+		// Also filter out doses that are marked as taken or individually dismissed (legacy)
 		return totalPastDoses.filter(id => !doses.takenDoses.has(id) && !doses.dismissedDoses.has(id));
-	}, [pastDays, doses.takenDoses, doses.dismissedDoses, dismissedUntilByMed]);
+	}, [pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses, isDoseDismissed]);
 
 	// Modal helpers with browser history support
 	const openMedDetail = useCallback((med: Medication) => {
@@ -567,6 +568,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settings.stockCalculationMode !== savedSettings.stockCalculationMode;
 	}, [settingsHook.settings, settingsHook.savedSettings]);
 
+	// New dismissMissedDoses that uses medication-level dismissedUntil dates
+	// This is robust against timestamp changes from schedule updates or timezone fixes
+	const [clearingMissedState, setClearingMissedState] = useState(false);
+	
+	const dismissMissedDoses = useCallback(async (doseIds: string[]) => {
+		if (doseIds.length === 0) return;
+
+		// Extract unique medication IDs from dose IDs (format: medId-blisterIdx-timestamp[-person])
+		const medIds = new Set<number>();
+		for (const doseId of doseIds) {
+			const parts = doseId.split("-");
+			if (parts.length >= 1) {
+				const medId = parseInt(parts[0], 10);
+				if (!isNaN(medId)) {
+					medIds.add(medId);
+				}
+			}
+		}
+
+		if (medIds.size === 0) return;
+
+		// Get today's date in YYYY-MM-DD format
+		const today = new Date();
+		const until = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+		setClearingMissedState(true);
+		try {
+			const res = await fetch("/api/medications/dismiss-until", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ medicationIds: Array.from(medIds), until })
+			});
+
+			if (res.ok) {
+				// Reload medications to get updated dismissedUntil values
+				await medications.loadMeds();
+				doses.setShowClearMissedConfirm(false);
+			}
+		} catch {
+			// Error - dialog stays open
+		} finally {
+			setClearingMissedState(false);
+		}
+	}, [medications, doses]);
+
 	// Build context value
 	const value: AppContextValue = useMemo(() => ({
 		// From useMedications
@@ -592,14 +639,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		takenDoses: doses.takenDoses,
 		setTakenDoses: doses.setTakenDoses,
 		dismissedDoses: doses.dismissedDoses,
-		clearingMissed: doses.clearingMissed,
+		clearingMissed: clearingMissedState,
 		showClearMissedConfirm: doses.showClearMissedConfirm,
 		setShowClearMissedConfirm: doses.setShowClearMissedConfirm,
 		getDoseId: doses.getDoseId,
 		countTakenDoses: doses.countTakenDoses,
 		markDoseTaken: doses.markDoseTaken,
 		undoDoseTaken: doses.undoDoseTaken,
-		dismissMissedDoses: doses.dismissMissedDoses,
+		dismissMissedDoses,
 
 		// From useCollapsedDays
 		manuallyCollapsedDays: collapsed.manuallyCollapsedDays,

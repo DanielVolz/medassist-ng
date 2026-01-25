@@ -195,19 +195,14 @@ gh pr merge --squash --delete-branch
 
 ### Release Workflow (MANDATORY for minor/major releases)
 
-The `main` branch is protected - releases must go through the automated release script.
+The `main` branch is protected - releases are created via GitHub's release UI or API.
 
 **Release Process:**
-```bash
-# 1. Run release script (creates PR, waits for CI, merges, creates tag)
-./scripts/release.sh [patch|minor|major]
-
-# 2. GitHub Actions creates a DRAFT release automatically
-# 3. User asks AI to write release notes:
-#    "Write the release notes for vX.Y.Z"
-# 4. AI writes descriptive release notes following the style guide below
-# 5. User publishes the draft release with the written notes
-```
+1. Create a new release on GitHub with tag `vX.Y.Z`
+2. **Automatic Version Bump**: A GitHub Action (`version-bump.yml`) automatically updates `package.json` versions to match the release tag
+3. User asks AI to write release notes: "Write the release notes for vX.Y.Z"
+4. AI writes descriptive release notes following the style guide below
+5. User publishes the release with the written notes
 
 > ⚠️ **MANDATORY for minor and major releases**: The AI assistant MUST write proper descriptive release notes!
 > Do NOT just publish the auto-generated commit list. Follow the process above.

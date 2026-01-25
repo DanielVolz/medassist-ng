@@ -44,7 +44,7 @@ function AppRouter() {
 		return (
 			<div className="auth-container">
 				<div className="auth-card" style={{ textAlign: "center" }}>
-					<h1 className="auth-title">💊 MedAssist</h1>
+					<h1 className="auth-title">💊 MedAssist-ng</h1>
 					<p>Loading...</p>
 				</div>
 			</div>
@@ -56,7 +56,7 @@ function AppRouter() {
 		return (
 			<div className="auth-container">
 				<div className="auth-card" style={{ textAlign: "center" }}>
-					<h1 className="auth-title">💊 MedAssist</h1>
+					<h1 className="auth-title">💊 MedAssist-ng</h1>
 					<div className="auth-error" style={{ marginBottom: "1rem" }}>
 						<strong>Connection Error</strong>
 						<br />
@@ -78,7 +78,7 @@ function AppRouter() {
 		return (
 			<div className="auth-container">
 				<div className="auth-card" style={{ textAlign: "center" }}>
-					<h1 className="auth-title">💊 MedAssist</h1>
+					<h1 className="auth-title">💊 MedAssist-ng</h1>
 					<p>Initializing...</p>
 				</div>
 			</div>

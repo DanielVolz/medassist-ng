@@ -339,7 +339,7 @@ export function LoginForm({
 	return (
 		<div className="auth-container">
 			<div className="auth-card">
-				<h1 className="auth-title">💊 MedAssist</h1>
+				<h1 className="auth-title">💊 MedAssist-ng</h1>
 				<h2 className="auth-subtitle">{t("auth.login", "Login")}</h2>
 
 				{/* SSO Login Button */}
@@ -455,7 +455,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 	return (
 		<div className="auth-container">
 			<div className="auth-card">
-				<h1 className="auth-title">💊 MedAssist</h1>
+				<h1 className="auth-title">💊 MedAssist-ng</h1>
 				<h2 className="auth-subtitle">{t("auth.register", "Create Account")}</h2>
 
 				{/* SSO Login Button - also show on registration */}

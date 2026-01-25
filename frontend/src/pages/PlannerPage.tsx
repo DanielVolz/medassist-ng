@@ -82,6 +82,7 @@ export function PlannerPage() {
 		const rows = (await fetch("/api/medications/usage", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
+			credentials: "include",
 			body: JSON.stringify(body),
 		})
 			.then((res) => res.json())
@@ -113,6 +114,7 @@ export function PlannerPage() {
 			const res = await fetch("/api/planner/send-email", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
+				credentials: "include",
 				body: JSON.stringify({
 					email: settings.notificationEmail,
 					from: range.start,

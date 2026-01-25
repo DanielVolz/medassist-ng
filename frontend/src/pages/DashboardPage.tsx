@@ -217,6 +217,7 @@ export function DashboardPage() {
 			const res = await fetch("/api/reminder/send-email", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
+				credentials: "include",
 				body: JSON.stringify({
 					email: settings.notificationEmail,
 					lowStock: coverage.low,

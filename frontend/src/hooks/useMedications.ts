@@ -22,7 +22,7 @@ export function useMedications(): UseMedicationsReturn {
 
 	const loadMeds = useCallback(() => {
 		setLoading(true);
-		fetch("/api/medications")
+		fetch("/api/medications", { credentials: "include" })
 			.then((res) => res.json())
 			.then((data) => setMeds(Array.isArray(data) ? data : []))
 			.catch(() => setMeds([]))
@@ -31,7 +31,7 @@ export function useMedications(): UseMedicationsReturn {
 
 	const deleteMed = useCallback(
 		async (id: number, editingId: number | null, resetForm: () => void) => {
-			await fetch(`/api/medications/${id}`, { method: "DELETE" }).catch(() => null);
+			await fetch(`/api/medications/${id}`, { method: "DELETE", credentials: "include" }).catch(() => null);
 			if (editingId === id) resetForm();
 			loadMeds();
 		},
@@ -48,6 +48,7 @@ export function useMedications(): UseMedicationsReturn {
 				const res = await fetch(`/api/medications/${medId}/image`, {
 					method: "POST",
 					body: formData,
+					credentials: "include",
 				});
 				if (res.ok) {
 					loadMeds();
@@ -62,7 +63,7 @@ export function useMedications(): UseMedicationsReturn {
 
 	const deleteMedImage = useCallback(
 		async (medId: number) => {
-			await fetch(`/api/medications/${medId}/image`, { method: "DELETE" }).catch(() => null);
+			await fetch(`/api/medications/${medId}/image`, { method: "DELETE", credentials: "include" }).catch(() => null);
 			loadMeds();
 		},
 		[loadMeds]

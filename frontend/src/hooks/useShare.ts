@@ -59,6 +59,7 @@ export function useShare(): UseShareReturn {
 			const res = await fetch("/api/share", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
+				credentials: "include",
 				body: JSON.stringify({
 					takenBy: shareSelectedPerson,
 					scheduleDays: shareSelectedDays,

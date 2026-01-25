@@ -210,6 +210,7 @@ export function useSettings(): UseSettingsReturn {
 			await fetch("/api/settings", {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
+				credentials: "include",
 				body: JSON.stringify(payload),
 			}).catch(() => null);
 
@@ -233,6 +234,7 @@ export function useSettings(): UseSettingsReturn {
 			const res = await fetch("/api/settings/test-email", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
+				credentials: "include",
 				body: JSON.stringify({ email: settings.notificationEmail }),
 			});
 			const data = await res.json();
@@ -254,6 +256,7 @@ export function useSettings(): UseSettingsReturn {
 			const res = await fetch("/api/settings/test-shoutrrr", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
+				credentials: "include",
 				body: JSON.stringify({ url: settings.shoutrrrUrl }),
 			});
 			const data = await res.json();

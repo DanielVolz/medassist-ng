@@ -137,13 +137,28 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for changelog generation
 
+      - name: Check if release exists
+        id: check_release
+        run: |
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          if gh release view "$CURRENT_TAG" &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release $CURRENT_TAG already exists, skipping creation"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Get previous tag
+        if: steps.check_release.outputs.exists == 'false'
         id: prev_tag
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           echo "tag=${PREV_TAG}" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
+        if: steps.check_release.outputs.exists == 'false'
         id: changelog
         run: |
           CURRENT_TAG=${GITHUB_REF#refs/tags/}
@@ -172,6 +187,7 @@ jobs:
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}" >> changelog.md
 
       - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           body_path: changelog.md

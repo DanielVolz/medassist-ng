@@ -87,7 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [user, authState?.authEnabled]);
 
-	async function fetchAuthState() {
+	async function fetchAuthState(retryCount = 0) {
+		const maxRetries = 3;
+		const retryDelay = 1000; // 1 second
+
 		try {
 			setAuthError(null);
 			const res = await fetch("/api/auth/state");
@@ -101,10 +104,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			if (state.authEnabled) {
 				await refreshUser();
 			}
+			setLoading(false);
 		} catch (err) {
-			console.error("Failed to fetch auth state:", err);
+			console.error(`Failed to fetch auth state (attempt ${retryCount + 1}/${maxRetries + 1}):`, err);
+
+			// Retry on connection errors or 5xx errors (server might be restarting)
+			if (retryCount < maxRetries) {
+				await new Promise((resolve) => setTimeout(resolve, retryDelay));
+				return fetchAuthState(retryCount + 1);
+			}
+
 			setAuthError(err instanceof Error ? err.message : "Failed to connect to server");
-		} finally {
 			setLoading(false);
 		}
 	}

@@ -1,7 +1,11 @@
 #!/bin/sh
 
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+
 echo "Running backend tests before push..."
-cd backend && CI=true npm test
+cd "$ROOT_DIR/backend" && CI=true npm test
 
 if [ $? -ne 0 ]; then
   echo "❌ Backend tests failed. Push aborted."
@@ -10,3 +14,18 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "✅ Backend tests passed!"
+
+echo ""
+echo "Running frontend tests before push..."
+cd "$ROOT_DIR/frontend" && CI=true npm test
+
+if [ $? -ne 0 ]; then
+  echo "❌ Frontend tests failed. Push aborted."
+  echo "Use 'git push --no-verify' to skip tests if needed."
+  exit 1
+fi
+
+echo "✅ Frontend tests passed!"
+
+echo ""
+echo "✅ All tests passed! Pushing..."

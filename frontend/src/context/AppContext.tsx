@@ -419,16 +419,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		return doseDateStr <= dismissedUntilDate;
 	}, []);
 
+	// Helper to check if a dose was scheduled BEFORE the medication was last updated
+	// If so, it's from a previous schedule configuration and shouldn't count as "missed"
+	const isDoseFromPreviousSchedule = useCallback(
+		(doseId: string, medUpdatedAt: string | number | null | undefined): boolean => {
+			if (!medUpdatedAt) return false; // No updatedAt means it was never changed, all doses are valid
+
+			// Extract timestamp from dose ID (format: medId-blisterIdx-timestamp or medId-blisterIdx-timestamp-person)
+			const parts = doseId.split("-");
+			if (parts.length < 3) return false;
+			const doseTimestamp = parseInt(parts[2], 10);
+			if (Number.isNaN(doseTimestamp)) return false;
+
+			// Convert updatedAt to timestamp
+			const updatedAtTimestamp = typeof medUpdatedAt === "number" ? medUpdatedAt : new Date(medUpdatedAt).getTime();
+			if (Number.isNaN(updatedAtTimestamp)) return false;
+
+			// If the dose was scheduled before the medication was updated, it's from a previous schedule
+			return doseTimestamp < updatedAtTimestamp;
+		},
+		[]
+	);
+
 	const missedPastDoseIds = useMemo(() => {
 		const totalPastDoses = pastDays.flatMap((d) =>
 			d.meds.flatMap((m) => {
-				// Find the medication to get its dismissedUntil
+				// Find the medication to get its dismissedUntil and updatedAt
 				const med = medications.meds.find((med) => med.name === m.medName);
 				const dismissedUntilDate = med?.dismissedUntil ?? undefined;
+				const medUpdatedAt = med?.updatedAt;
 
 				return m.doses.flatMap((dose) => {
 					// Check if this dose is on or before the dismissed date for this medication
 					if (isDoseDismissed(dose.id, dismissedUntilDate)) {
+						return [];
+					}
+
+					// Check if this dose is from a previous schedule configuration
+					// (scheduled before the medication was last updated)
+					if (isDoseFromPreviousSchedule(dose.id, medUpdatedAt)) {
 						return [];
 					}
 
@@ -438,7 +467,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		);
 		// Also filter out doses that are marked as taken or individually dismissed (legacy)
 		return totalPastDoses.filter((id) => !doses.takenDoses.has(id) && !doses.dismissedDoses.has(id));
-	}, [pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses, isDoseDismissed]);
+	}, [pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses, isDoseDismissed, isDoseFromPreviousSchedule]);
 
 	// Modal helpers with browser history support
 	const openMedDetail = useCallback(

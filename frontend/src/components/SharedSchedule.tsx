@@ -535,6 +535,7 @@ export function SharedSchedule() {
 										)
 									);
 									// Count missed doses (not taken AND not dismissed)
+									// Note: SharedSchedule doesn't have updatedAt info, so we only check dismissed status
 									const missedPastDoses = totalPastDoses.filter((id) => {
 										if (takenDoses.has(id)) return false;
 										// Check if this dose is dismissed

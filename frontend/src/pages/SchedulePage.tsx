@@ -63,6 +63,7 @@ export function SchedulePage() {
 		manuallyExpandedDays,
 		toggleDayCollapse,
 		openUserFilter,
+		missedPastDoseIds,
 	} = useAppContext();
 
 	return (
@@ -88,17 +89,11 @@ export function SchedulePage() {
 					{/* Past days toggle */}
 					{pastDays.length > 0 &&
 						(() => {
-							const totalPastDoses = pastDays.flatMap((d) =>
-								d.meds.flatMap((m) =>
-									m.doses.flatMap((dose) =>
-										(dose.takenBy || []).length > 0 ? dose.takenBy.map((p) => `${dose.id}-${p}`) : [dose.id]
-									)
-								)
-							);
-							const missedPastDoses = totalPastDoses.filter((id) => !takenDoses.has(id)).length;
+							// Use context's missedPastDoseIds which handles dismissed doses and previous schedule detection
+							const missedCount = missedPastDoseIds.length;
 							return (
 								<div
-									className={`past-days-toggle ${showPastDays ? "expanded" : ""} ${missedPastDoses > 0 ? "has-missed" : ""}`}
+									className={`past-days-toggle ${showPastDays ? "expanded" : ""} ${missedCount > 0 ? "has-missed" : ""}`}
 									onClick={() => setShowPastDays(!showPastDays)}
 								>
 									<span className="past-days-icon">{showPastDays ? "▼" : "▶"}</span>
@@ -108,12 +103,12 @@ export function SchedulePage() {
 									<span className="past-days-count">
 										({t("dashboard.schedules.pastDaysCount", { count: pastDays.length })})
 									</span>
-									{missedPastDoses > 0 && (
+									{missedCount > 0 && (
 										<span
 											className="past-days-warning"
-											title={t("dashboard.schedules.missedDoses", { count: missedPastDoses })}
+											title={t("dashboard.schedules.missedDoses", { count: missedCount })}
 										>
-											⚠️ {missedPastDoses}
+											⚠️ {missedCount}
 										</span>
 									)}
 								</div>

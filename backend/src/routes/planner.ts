@@ -61,7 +61,7 @@ export async function plannerRoutes(app: FastifyInstance) {
 		if (!env.AUTH_ENABLED) {
 			return getAnonymousUserId();
 		}
-		const authUser = request.user as AuthUser | null;
+		const authUser = request.user as unknown as AuthUser | null;
 		if (!authUser?.id) {
 			throw new Error("User not authenticated");
 		}

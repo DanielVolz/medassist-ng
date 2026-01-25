@@ -1,6 +1,9 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.3.12/schema.json",
 	"assist": { "actions": { "source": { "organizeImports": "on" } } },
+	"files": {
+		"includes": ["backend/src/**/*.ts", "frontend/src/**/*.ts", "frontend/src/**/*.tsx", "frontend/src/**/*.css"]
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {
@@ -11,7 +14,9 @@
 			"suspicious": {
 				"noExplicitAny": "warn",
 				"useIterableCallbackReturn": "off",
-				"noImplicitAnyLet": "warn"
+				"noImplicitAnyLet": "warn",
+				"noArrayIndexKey": "warn",
+				"noAssignInExpressions": "off"
 			},
 			"style": {
 				"noNonNullAssertion": "off",
@@ -20,7 +25,16 @@
 			},
 			"correctness": {
 				"noUnusedVariables": "warn",
-				"noUnusedImports": "error"
+				"noUnusedImports": "warn",
+				"noUnusedFunctionParameters": "warn",
+				"useExhaustiveDependencies": "warn"
+			},
+			"a11y": {
+				"useKeyWithClickEvents": "warn",
+				"noSvgWithoutTitle": "off",
+				"noStaticElementInteractions": "off",
+				"useButtonType": "off",
+				"noLabelWithoutControl": "warn"
 			}
 		}
 	},
@@ -36,8 +50,5 @@
 			"semicolons": "always",
 			"trailingCommas": "es5"
 		}
-	},
-	"files": {
-		"includes": ["src/**/*.ts"]
 	}
 }

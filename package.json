@@ -13,10 +13,10 @@
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
-      "npx @biomejs/biome check --write --config-path backend --no-errors-on-unmatched"
+      "npx @biomejs/biome check --write --no-errors-on-unmatched"
     ],
     "frontend/src/**/*.{ts,tsx,css}": [
-      "npx @biomejs/biome check --write --config-path frontend --no-errors-on-unmatched"
+      "npx @biomejs/biome check --write --no-errors-on-unmatched"
     ]
   }
 }

@@ -95,28 +95,40 @@ export async function plannerRoutes(app: FastifyInstance) {
 		}
 		const locale = getDateLocale(language);
 
-		// Format dates for display
-		const fromDate = new Date(from).toLocaleDateString(locale, {
-			year: "numeric",
-			month: "long",
-			day: "numeric",
-		});
-		const untilDate = new Date(until).toLocaleDateString(locale, {
-			year: "numeric",
-			month: "long",
-			day: "numeric",
-		});
+		// Format dates for display - escape to prevent XSS even though toLocaleDateString should be safe
+		const fromDate = escapeHtml(
+			new Date(from).toLocaleDateString(locale, {
+				year: "numeric",
+				month: "long",
+				day: "numeric",
+			})
+		);
+		const untilDate = escapeHtml(
+			new Date(until).toLocaleDateString(locale, {
+				year: "numeric",
+				month: "long",
+				day: "numeric",
+			})
+		);
 
 		// Build HTML table with horizontal scroll for mobile
+		// Escape/coerce all user-provided values to prevent XSS
 		const tableRows = rows
-			.map(
-				(row) => `
+			.map((row) => {
+				const safeName = escapeHtml(row.medicationName);
+				const safeTotalPills = Number(row.totalPills) || 0;
+				const safePlannerUsage = Number(row.plannerUsage) || 0;
+				const safeBlistersNeeded = Number(row.blistersNeeded) || 0;
+				const safeBlisterSize = Number(row.blisterSize) || 0;
+				const safeFullBlisters = Number(row.fullBlisters) || 0;
+				const safeLoosePills = Number(row.loosePills) || 0;
+				return `
         <tr>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${escapeHtml(row.medicationName)}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.totalPills}</strong></td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${row.plannerUsage}</strong></td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.blistersNeeded} × ${row.blisterSize}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.fullBlisters}${row.loosePills > 0 ? ` (+${row.loosePills})` : ""}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${safeName}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safeTotalPills}</strong></td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safePlannerUsage}</strong></td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeBlistersNeeded} × ${safeBlisterSize}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeFullBlisters}${safeLoosePills > 0 ? ` (+${safeLoosePills})` : ""}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">
             <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; ${
 							row.enough ? "background: #d1fae5; color: #065f46;" : "background: #fee2e2; color: #991b1b;"
@@ -125,8 +137,8 @@ export async function plannerRoutes(app: FastifyInstance) {
             </span>
           </td>
         </tr>
-      `
-			)
+      `;
+			})
 			.join("");
 
 		const outOfStockCount = rows.filter((r) => !r.enough).length;
@@ -289,12 +301,17 @@ Sent from MedAssist-ng Medication Planner`;
 					const isEmpty = row.medsLeft <= 0;
 					const statusIcon = isEmpty ? "🚨" : "⚠️";
 					const rowBg = isEmpty ? "#fef2f2" : "white";
+					// Escape user-provided strings and coerce numbers to prevent XSS
+					const safeName = escapeHtml(row.name);
+					const safeMedsLeft = Number(row.medsLeft) || 0;
+					const safeDaysLeft = Number(row.daysLeft) || 0;
+					const safeDepletionDate = row.depletionDate ? escapeHtml(String(row.depletionDate)) : "-";
 					return `
           <tr style="background: ${rowBg};">
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${escapeHtml(row.name)}</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${row.medsLeft}</strong></td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.daysLeft ?? 0}</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? "<strong>NOW</strong>" : (row.depletionDate ?? "-")}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${safeName}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${safeMedsLeft}</strong></td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeDaysLeft}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? "<strong>NOW</strong>" : safeDepletionDate}</td>
           </tr>`;
 				};
 

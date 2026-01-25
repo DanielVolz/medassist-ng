@@ -487,10 +487,15 @@ export async function sendShoutrrrNotification(
 			return { success: false, error: "Unsupported URL format. Use ntfy:// or https:// URL" };
 		}
 
+		// SSRF protection: targetUrl has been validated by isAllowedNotificationUrl() above
+		// which blocks localhost, private IPs (10.x, 172.16-31.x, 192.168.x, 169.254.x),
+		// and internal hostnames (.local, .internal, .lan, metadata.google.internal)
 		const response = await fetch(targetUrl, {
 			method,
 			headers,
 			body,
+			// Additional SSRF mitigations
+			redirect: "error", // Don't follow redirects that could bypass validation
 		});
 
 		if (response.ok) {

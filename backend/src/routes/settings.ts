@@ -482,15 +482,29 @@ export async function sendShoutrrrNotification(
 			)
 			.trim();
 
-		// Determine notification type based on URL pattern
+		// Determine notification type based on URL hostname
 		// Use JSON format only for known webhook services that require it
-		const lowerUrl = sanitizedUrl.toLowerCase();
-		const isJsonWebhook =
-			lowerUrl.includes("discord.com/api/webhooks") ||
-			lowerUrl.includes("discordapp.com/api/webhooks") ||
-			lowerUrl.includes("hooks.slack.com") ||
-			lowerUrl.includes("api.telegram.org") ||
-			lowerUrl.includes("gotify");
+		// Use proper URL parsing to prevent bypass attacks (e.g., evil.com?hooks.slack.com)
+		let isJsonWebhook = false;
+		try {
+			const parsedUrl = new URL(sanitizedUrl);
+			const hostname = parsedUrl.hostname.toLowerCase();
+			const pathname = parsedUrl.pathname.toLowerCase();
+
+			isJsonWebhook =
+				// Discord webhooks
+				((hostname === "discord.com" || hostname === "discordapp.com") && pathname.startsWith("/api/webhooks")) ||
+				// Slack webhooks
+				hostname === "hooks.slack.com" ||
+				hostname.endsWith(".hooks.slack.com") ||
+				// Telegram API
+				hostname === "api.telegram.org" ||
+				// Gotify (can be self-hosted, so check if "gotify" is in hostname)
+				hostname.includes("gotify");
+		} catch {
+			// If URL parsing fails, default to ntfy-style
+			isJsonWebhook = false;
+		}
 
 		// Default to ntfy-style (plain text with Title header) for all other HTTP URLs
 		// This works for ntfy, Apprise, and most simple push services

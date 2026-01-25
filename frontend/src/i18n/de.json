@@ -410,7 +410,7 @@
     "importSuccess": "Daten erfolgreich importiert",
     "importSuccessDetails": "Importiert: {{medications}} Medikamente, {{doses}} Dosen, {{shares}} Teilen-Links",
     "importError": "Daten konnten nicht importiert werden",
-    "invalidFile": "Ungültiges Dateiformat. Bitte wähle eine gültige MedAssist-Exportdatei.",
+    "invalidFile": "Ungültiges Dateiformat. Bitte wähle eine gültige MedAssist-ng-Exportdatei.",
     "downloadFilename": "medassist-export"
   },
   "refill": {

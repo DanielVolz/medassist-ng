@@ -80,7 +80,7 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 							<path d="M9 2h6M12 2v2" />
 						</svg>
 					</div>
-					<h2>{t("about.appName", "MedAssist")}</h2>
+					<h2>{t("about.appName", "MedAssist-ng")}</h2>
 					<p className="about-tagline">{t("about.description", "Personal medication tracking and reminder app")}</p>
 				</div>
 				<div className="about-versions">

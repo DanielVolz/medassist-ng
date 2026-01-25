@@ -412,7 +412,7 @@
     "importSuccess": "Data imported successfully",
     "importSuccessDetails": "Imported: {{medications}} medications, {{doses}} doses, {{shares}} share links",
     "importError": "Failed to import data",
-    "invalidFile": "Invalid file format. Please select a valid MedAssist export file.",
+    "invalidFile": "Invalid file format. Please select a valid MedAssist-ng export file.",
     "downloadFilename": "medassist-export"
   },
   "refill": {

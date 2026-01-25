@@ -455,7 +455,7 @@ export function SharedSchedule() {
 		return (
 			<div className="shared-schedule-page">
 				<div className="shared-schedule-loading">
-					<h1>💊 MedAssist</h1>
+					<h1>💊 MedAssist-ng</h1>
 					<p>{t("common.loading")}</p>
 				</div>
 			</div>
@@ -466,7 +466,7 @@ export function SharedSchedule() {
 		return (
 			<div className="shared-schedule-page">
 				<div className="shared-schedule-error expired">
-					<h1>💊 MedAssist</h1>
+					<h1>💊 MedAssist-ng</h1>
 					<div className="expired-icon">⏰</div>
 					<h2>{t("share.expired.title")}</h2>
 					<p className="expired-message">{t("share.expired.message", { takenBy: expiredData.takenBy })}</p>
@@ -485,7 +485,7 @@ export function SharedSchedule() {
 		return (
 			<div className="shared-schedule-page">
 				<div className="shared-schedule-error">
-					<h1>💊 MedAssist</h1>
+					<h1>💊 MedAssist-ng</h1>
 					<p className="error-message">{error || "Unknown error"}</p>
 				</div>
 			</div>

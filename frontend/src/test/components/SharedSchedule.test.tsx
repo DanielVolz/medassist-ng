@@ -1369,7 +1369,7 @@ describe("SharedSchedule footer and branding", () => {
 
 		const link = footer?.querySelector('a[href="/"]');
 		expect(link).toBeInTheDocument();
-		expect(link?.textContent).toBe("MedAssist");
+		expect(link?.textContent).toBe("MedAssist-ng");
 	});
 
 	it("displays sharedBy username in footer", async () => {

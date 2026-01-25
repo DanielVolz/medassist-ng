@@ -101,6 +101,7 @@ const createMockContext = (overrides = {}) => ({
 	manuallyExpandedDays: new Set(),
 	toggleDayCollapse: vi.fn(),
 	openUserFilter: vi.fn(),
+	missedPastDoseIds: [],
 	...overrides,
 });
 
@@ -436,6 +437,7 @@ describe("SchedulePage with past days", () => {
 			futureDays: mockFutureDays,
 			coverageByMed: mockCoverageByMed,
 			showPastDays: false,
+			missedPastDoseIds: [`1-0-${Date.now() - 86400000}-John`], // One missed dose
 		});
 	});
 
@@ -467,6 +469,7 @@ describe("SchedulePage with past days", () => {
 			pastDays: mockPastDays,
 			showPastDays: false,
 			setShowPastDays,
+			missedPastDoseIds: [],
 		});
 
 		render(

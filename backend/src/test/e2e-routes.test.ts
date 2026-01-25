@@ -125,6 +125,8 @@ async function createSchema(client: Client) {
       last_auto_email_sent text,
       last_notification_type text,
       last_notification_channel text,
+      last_reminder_med_name text,
+      last_reminder_taken_by text,
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,

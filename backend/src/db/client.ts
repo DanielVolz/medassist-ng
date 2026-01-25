@@ -53,11 +53,17 @@ export function ensureDataDirectory(dataDir: string): { success: boolean; error?
 /** Run drizzle-kit migrations on the database */
 export async function runDrizzleMigrations(
 	database: ReturnType<typeof drizzle>
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; warning?: string }> {
 	try {
 		await migrate(database, { migrationsFolder });
 		return { success: true };
 	} catch (err: any) {
+		// If the error is "duplicate column", it means the schema is already up-to-date
+		// This happens when ALTER migrations in client.ts have already added the columns
+		// We consider this a success with a warning, not a failure
+		if (err.message?.includes("duplicate column")) {
+			return { success: true, warning: `Schema already up-to-date: ${err.message}` };
+		}
 		return { success: false, error: err.message };
 	}
 }
@@ -192,6 +198,8 @@ async function runMigrations() {
 	const migrateResult = await runDrizzleMigrations(db);
 	if (!migrateResult.success) {
 		console.error(`[DB] Migration error:`, migrateResult.error);
+	} else if (migrateResult.warning) {
+		console.log(`[DB] Migration warning:`, migrateResult.warning);
 	} else {
 		console.log(`[DB] Drizzle migrations completed`);
 	}

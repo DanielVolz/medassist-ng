@@ -309,7 +309,7 @@ export function MedicationsPage() {
 				</div>
 				<div className="med-list">
 					{meds.map((med) => (
-						<div key={med.id} className="med-row">
+						<div key={med.id} className={`med-row${editingId === med.id ? " editing" : ""}`}>
 							<div className="med-header">
 								<div className="med-info">
 									<div className="med-name-row">
@@ -359,7 +359,20 @@ export function MedicationsPage() {
 
 			<article className="card form desktop-only">
 				<div className="card-head">
-					<h2>{editingId ? t("form.editEntry") : t("form.newEntry")}</h2>
+					{editingId ? (
+						<div className="edit-header">
+							<MedicationAvatar
+								name={meds.find((m) => m.id === editingId)?.name || ""}
+								imageUrl={meds.find((m) => m.id === editingId)?.imageUrl}
+								size="md"
+							/>
+							<h2>
+								{t("form.editEntry")}: {meds.find((m) => m.id === editingId)?.name}
+							</h2>
+						</div>
+					) : (
+						<h2>{t("form.newEntry")}</h2>
+					)}
 				</div>
 				<form className="form-grid" onSubmit={saveMedication}>
 					<label className={fieldErrors.name ? "has-error" : ""}>

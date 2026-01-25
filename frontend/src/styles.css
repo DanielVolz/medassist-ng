@@ -387,6 +387,19 @@ body.modal-open {
 	color: var(--accent-light);
 }
 
+.edit-header {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+.edit-header h2 {
+	margin: 0;
+	font-size: 1.1rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .schedule-full {
 	max-width: 100%;
 }
@@ -467,6 +480,11 @@ body.modal-open {
 	transition:
 		background 200ms ease,
 		border-color 200ms ease;
+}
+.med-row.editing {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 8%, var(--bg-tertiary));
+	box-shadow: 0 0 0 1px var(--accent);
 }
 .med-header {
 	display: flex;

@@ -482,10 +482,19 @@ export async function sendShoutrrrNotification(
 			)
 			.trim();
 
-		// Determine notification type based on validation result and URL pattern
-		const isNtfyUrl = isNtfy || sanitizedUrl.includes("ntfy.sh") || sanitizedUrl.includes("/ntfy/");
+		// Determine notification type based on URL pattern
+		// Use JSON format only for known webhook services that require it
+		const lowerUrl = sanitizedUrl.toLowerCase();
+		const isJsonWebhook =
+			lowerUrl.includes("discord.com/api/webhooks") ||
+			lowerUrl.includes("discordapp.com/api/webhooks") ||
+			lowerUrl.includes("hooks.slack.com") ||
+			lowerUrl.includes("api.telegram.org") ||
+			lowerUrl.includes("gotify");
 
-		if (isNtfyUrl) {
+		// Default to ntfy-style (plain text with Title header) for all other HTTP URLs
+		// This works for ntfy, Apprise, and most simple push services
+		if (!isJsonWebhook) {
 			targetUrl = sanitizedUrl;
 			headers = { Title: cleanTitle, Tags: "pill" };
 			body = message;

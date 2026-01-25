@@ -1,15 +1,23 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth, AuthPage } from "./components/Auth";
+import { Navigate, Route, Routes } from "react-router-dom";
+import {
+	AboutModal,
+	Lightbox,
+	MedDetailModal,
+	ProfileModal,
+	ShareDialog,
+	SharedSchedule,
+	UserFilterModal,
+} from "./components";
 import { AppHeader } from "./components/AppHeader";
-import { SharedSchedule, Lightbox, MedDetailModal, UserFilterModal, ShareDialog, ProfileModal, AboutModal } from "./components";
-import { AppProvider, useAppContext } from "./context";
-import { PlannerPage, SchedulePage, SettingsPage, DashboardPage, MedicationsPage } from "./pages";
+import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
+import { AppProvider, UnsavedChangesProvider, useAppContext } from "./context";
+import { DashboardPage, MedicationsPage, PlannerPage, SchedulePage, SettingsPage } from "./pages";
 
 // Vite injects this at build time from package.json
 declare const __APP_VERSION__: string;
-export const FRONTEND_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
-const GITHUB_REPO = 'DanielVolz/medassist-ng';
+export const FRONTEND_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
+const GITHUB_REPO = "DanielVolz/medassist-ng";
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 
 // =============================================================================
@@ -50,17 +58,14 @@ function AppRouter() {
 				<div className="auth-card" style={{ textAlign: "center" }}>
 					<h1 className="auth-title">💊 MedAssist</h1>
 					<div className="auth-error" style={{ marginBottom: "1rem" }}>
-						<strong>Connection Error</strong><br />
+						<strong>Connection Error</strong>
+						<br />
 						{authError}
 					</div>
 					<p style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
 						Please check if the server is running and try again.
 					</p>
-					<button 
-						className="btn btn-primary" 
-						onClick={() => window.location.reload()}
-						style={{ marginTop: "1rem" }}
-					>
+					<button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: "1rem" }}>
 						Retry
 					</button>
 				</div>
@@ -94,9 +99,11 @@ function AppRouter() {
 
 	// Auth disabled or user is logged in - show main app
 	return (
-		<AppProvider>
-			<AppContent />
-		</AppProvider>
+		<UnsavedChangesProvider>
+			<AppProvider>
+				<AppContent />
+			</AppProvider>
+		</UnsavedChangesProvider>
 	);
 }
 
@@ -109,32 +116,71 @@ function AppContent() {
 	const ctx = useAppContext();
 	const {
 		// Medications
-		meds, loadMeds,
+		meds,
+		loadMeds,
 		// Settings
 		settings,
 		// Refill
-		showRefillModal, setShowRefillModal, refillPacks, setRefillPacks, refillLoose, setRefillLoose,
-		refillSaving, refillHistory, refillHistoryExpanded, setRefillHistoryExpanded,
-		showEditStockModal, setShowEditStockModal, editStockFullBlisters, setEditStockFullBlisters,
-		editStockPartialBlisterPills, setEditStockPartialBlisterPills, editStockSaving,
-		openRefillModal, closeRefillModal, openEditStockModal, closeEditStockModal,
+		showRefillModal,
+		setShowRefillModal,
+		refillPacks,
+		setRefillPacks,
+		refillLoose,
+		setRefillLoose,
+		refillSaving,
+		refillHistory,
+		refillHistoryExpanded,
+		setRefillHistoryExpanded,
+		showEditStockModal,
+		setShowEditStockModal,
+		editStockFullBlisters,
+		setEditStockFullBlisters,
+		editStockPartialBlisterPills,
+		setEditStockPartialBlisterPills,
+		editStockSaving,
+		openRefillModal,
+		closeRefillModal,
+		openEditStockModal,
+		closeEditStockModal,
 		// Share
-		showShareDialog, sharePeople, shareSelectedPerson, setShareSelectedPerson,
-		shareSelectedDays, setShareSelectedDays, shareGenerating, shareLink, setShareLink,
-		shareCopied, setShareCopied, generateShareLink, copyShareLink, closeShareDialog, resetShareDialogState,
+		showShareDialog,
+		sharePeople,
+		shareSelectedPerson,
+		setShareSelectedPerson,
+		shareSelectedDays,
+		setShareSelectedDays,
+		shareGenerating,
+		shareLink,
+		setShareLink,
+		shareCopied,
+		setShareCopied,
+		generateShareLink,
+		copyShareLink,
+		closeShareDialog,
+		resetShareDialogState,
 		// Computed
 		coverage,
 		// Modal state
-		selectedMed, setSelectedMed, showImageLightbox, setShowImageLightbox,
-		scheduleLightboxImage, setScheduleLightboxImage, selectedUser, setSelectedUser,
+		selectedMed,
+		setSelectedMed,
+		showImageLightbox,
+		setShowImageLightbox,
+		scheduleLightboxImage,
+		setScheduleLightboxImage,
+		selectedUser,
+		setSelectedUser,
 		// Modal helpers
-		openMedDetail, closeMedDetail, openImageLightbox, closeImageLightbox,
-		openScheduleLightbox, closeScheduleLightbox, closeUserFilter,
+		openMedDetail,
+		closeMedDetail,
+		openImageLightbox,
+		closeImageLightbox,
+		closeScheduleLightbox,
+		closeUserFilter,
 	} = ctx;
-	
+
 	// Wrapper to pass meds to openShareDialog
-	const openShareDialog = () => ctx.openShareDialog();
-	
+	const _openShareDialog = () => ctx.openShareDialog();
+
 	// Local-only state (not shared across components)
 	const [showProfile, setShowProfile] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
@@ -167,7 +213,26 @@ function AppContent() {
 		};
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
-	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showAbout, showShareDialog, showRefillModal, showEditStockModal]);
+	}, [
+		selectedMed,
+		showImageLightbox,
+		scheduleLightboxImage,
+		selectedUser,
+		showProfile,
+		showAbout,
+		showShareDialog,
+		showRefillModal,
+		showEditStockModal,
+		closeAbout,
+		closeEditStockModal,
+		closeImageLightbox,
+		closeMedDetail,
+		closeProfile,
+		closeRefillModal,
+		closeScheduleLightbox,
+		closeShareDialog,
+		closeUserFilter,
+	]);
 
 	// Handle browser back button to close modals (in priority order)
 	useEffect(() => {
@@ -195,41 +260,58 @@ function AppContent() {
 				setSelectedMed(null);
 			}
 		};
-		window.addEventListener('popstate', handlePopState);
-		return () => window.removeEventListener('popstate', handlePopState);
-	}, [selectedMed, showImageLightbox, scheduleLightboxImage, selectedUser, showProfile, showAbout, showShareDialog, showRefillModal, showEditStockModal]);
+		window.addEventListener("popstate", handlePopState);
+		return () => window.removeEventListener("popstate", handlePopState);
+	}, [
+		selectedMed,
+		showImageLightbox,
+		scheduleLightboxImage,
+		selectedUser,
+		showProfile,
+		showAbout,
+		showShareDialog,
+		showRefillModal,
+		showEditStockModal,
+		resetShareDialogState,
+		setScheduleLightboxImage,
+		setSelectedMed,
+		setSelectedUser,
+		setShowEditStockModal,
+		setShowImageLightbox,
+		setShowRefillModal,
+	]);
 
 	// Close tooltips on scroll/touch (for mobile)
 	useEffect(() => {
 		const closeAllTooltips = () => {
-			document.querySelectorAll('.info-tooltip.tooltip-active').forEach(el => {
-				el.classList.remove('tooltip-active');
+			document.querySelectorAll(".info-tooltip.tooltip-active").forEach((el) => {
+				el.classList.remove("tooltip-active");
 			});
 		};
-		
+
 		const handleTooltipClick = (e: Event) => {
 			const target = e.target as HTMLElement;
-			if (target.classList.contains('info-tooltip')) {
+			if (target.classList.contains("info-tooltip")) {
 				// Close other tooltips first
 				closeAllTooltips();
 				// Toggle this one
-				target.classList.add('tooltip-active');
+				target.classList.add("tooltip-active");
 			} else {
 				closeAllTooltips();
 			}
 		};
-		
+
 		const handleTouchMove = () => {
 			closeAllTooltips();
 		};
-		
-		document.addEventListener('click', handleTooltipClick, { capture: true });
-		document.addEventListener('touchmove', handleTouchMove, { passive: true });
-		document.addEventListener('scroll', handleTouchMove, { passive: true });
+
+		document.addEventListener("click", handleTooltipClick, { capture: true });
+		document.addEventListener("touchmove", handleTouchMove, { passive: true });
+		document.addEventListener("scroll", handleTouchMove, { passive: true });
 		return () => {
-			document.removeEventListener('click', handleTooltipClick, { capture: true });
-			document.removeEventListener('touchmove', handleTouchMove);
-			document.removeEventListener('scroll', handleTouchMove);
+			document.removeEventListener("click", handleTooltipClick, { capture: true });
+			document.removeEventListener("touchmove", handleTouchMove);
+			document.removeEventListener("scroll", handleTouchMove);
 		};
 	}, []);
 
@@ -238,35 +320,36 @@ function AppContent() {
 		const isModalOpen = selectedMed || selectedUser || showProfile || showAbout || showShareDialog;
 		if (isModalOpen) {
 			const scrollY = window.scrollY;
-			document.body.classList.add('modal-open');
+			document.body.classList.add("modal-open");
 			document.body.style.top = `-${scrollY}px`;
 		} else {
 			const scrollY = document.body.style.top;
-			document.body.classList.remove('modal-open');
-			document.body.style.top = '';
+			document.body.classList.remove("modal-open");
+			document.body.style.top = "";
 			if (scrollY) {
-				window.scrollTo(0, parseInt(scrollY || '0', 10) * -1);
+				window.scrollTo(0, parseInt(scrollY || "0", 10) * -1);
 			}
 		}
 		return () => {
-			document.body.classList.remove('modal-open');
-			document.body.style.top = '';
+			document.body.classList.remove("modal-open");
+			document.body.style.top = "";
 		};
 	}, [selectedMed, selectedUser, showProfile, showAbout, showShareDialog]);
 
 	// Update selectedMed when meds change (e.g., after refill)
 	useEffect(() => {
 		if (selectedMed) {
-			const updated = meds.find(m => m.id === selectedMed.id);
-			if (updated && (
-				updated.packCount !== selectedMed.packCount ||
-				updated.looseTablets !== selectedMed.looseTablets ||
-				updated.updatedAt !== selectedMed.updatedAt
-			)) {
+			const updated = meds.find((m) => m.id === selectedMed.id);
+			if (
+				updated &&
+				(updated.packCount !== selectedMed.packCount ||
+					updated.looseTablets !== selectedMed.looseTablets ||
+					updated.updatedAt !== selectedMed.updatedAt)
+			) {
 				setSelectedMed(updated);
 			}
 		}
-	}, [meds, selectedMed]);
+	}, [meds, selectedMed, setSelectedMed]);
 
 	const handleSubmitStockCorrection = async (medId: number) => {
 		if (!selectedMed) return;
@@ -277,7 +360,7 @@ function AppContent() {
 	const handleSubmitRefill = async (medId: number) => {
 		await ctx.submitRefill(medId, null, () => {}, loadMeds);
 	};
-	
+
 	// Wrapper for openEditStockModal (provides selectedMed and coverage)
 	const handleOpenEditStockModal = () => {
 		if (selectedMed) {
@@ -287,7 +370,7 @@ function AppContent() {
 
 	function openProfile() {
 		setShowProfile(true);
-		window.history.pushState({ modal: 'profile' }, '');
+		window.history.pushState({ modal: "profile" }, "");
 	}
 	function closeProfile() {
 		if (showProfile) {
@@ -297,7 +380,7 @@ function AppContent() {
 
 	function openAbout() {
 		setShowAbout(true);
-		window.history.pushState({ modal: 'about' }, '');
+		window.history.pushState({ modal: "about" }, "");
 	}
 	function closeAbout() {
 		if (showAbout) {
@@ -392,13 +475,8 @@ function AppContent() {
 
 			{/* Schedule Lightbox - for clicking medication images in schedule */}
 			{scheduleLightboxImage && (
-				<Lightbox
-					src={scheduleLightboxImage}
-					alt="Medication"
-					onClose={closeScheduleLightbox}
-				/>
+				<Lightbox src={scheduleLightboxImage} alt="Medication" onClose={closeScheduleLightbox} />
 			)}
-
 		</main>
 	);
 }

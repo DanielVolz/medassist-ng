@@ -1,0 +1,22 @@
+{
+  "name": "medassist-ng",
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "lint": "cd backend && npm run lint && cd ../frontend && npm run lint",
+    "lint:fix": "cd backend && npm run lint:fix && cd ../frontend && npm run lint:fix"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.12",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0"
+  },
+  "lint-staged": {
+    "backend/src/**/*.ts": [
+      "npx @biomejs/biome check --write --config-path backend --no-errors-on-unmatched"
+    ],
+    "frontend/src/**/*.{ts,tsx,css}": [
+      "npx @biomejs/biome check --write --config-path frontend --no-errors-on-unmatched"
+    ]
+  }
+}

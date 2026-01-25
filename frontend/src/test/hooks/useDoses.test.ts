@@ -1,246 +1,186 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useDoses } from '../../hooks/useDoses';
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useDoses } from "../../hooks/useDoses";
 
-describe('useDoses', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ doses: [] })
-    });
-  });
+describe("useDoses", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ doses: [] }),
+		});
+	});
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
 
-  it('initializes with empty state', () => {
-    const { result } = renderHook(() => useDoses());
-    
-    expect(result.current.takenDoses.size).toBe(0);
-    expect(result.current.dismissedDoses.size).toBe(0);
-    expect(result.current.clearingMissed).toBe(false);
-    expect(result.current.showClearMissedConfirm).toBe(false);
-  });
+	it("initializes with empty state", () => {
+		const { result } = renderHook(() => useDoses());
 
-  it('loads taken doses from API on mount', async () => {
-    const mockDoses = {
-      doses: [
-        { doseId: 'dose-1', dismissed: false },
-        { doseId: 'dose-2', dismissed: true }
-      ]
-    };
-    
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockDoses)
-    });
+		expect(result.current.takenDoses.size).toBe(0);
+		expect(result.current.dismissedDoses.size).toBe(0);
+		expect(result.current.showClearMissedConfirm).toBe(false);
+	});
 
-    const { result } = renderHook(() => useDoses());
+	it("loads taken doses from API on mount", async () => {
+		const mockDoses = {
+			doses: [
+				{ doseId: "dose-1", dismissed: false },
+				{ doseId: "dose-2", dismissed: true },
+			],
+		};
 
-    await waitFor(() => {
-      expect(result.current.takenDoses.has('dose-1')).toBe(true);
-      expect(result.current.dismissedDoses.has('dose-2')).toBe(true);
-    });
-  });
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(mockDoses),
+		});
 
-  it('getDoseId returns correct ID format', () => {
-    const { result } = renderHook(() => useDoses());
-    
-    expect(result.current.getDoseId('dose-1', null)).toBe('dose-1');
-    expect(result.current.getDoseId('dose-1', 'John')).toBe('dose-1-John');
-  });
+		const { result } = renderHook(() => useDoses());
 
-  it('countTakenDoses calculates correctly', async () => {
-    const mockDoses = {
-      doses: [{ doseId: 'dose-1', dismissed: false }]
-    };
-    
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockDoses)
-    });
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("dose-1")).toBe(true);
+			expect(result.current.dismissedDoses.has("dose-2")).toBe(true);
+		});
+	});
 
-    const { result } = renderHook(() => useDoses());
+	it("getDoseId returns correct ID format", () => {
+		const { result } = renderHook(() => useDoses());
 
-    await waitFor(() => {
-      expect(result.current.takenDoses.has('dose-1')).toBe(true);
-    });
+		expect(result.current.getDoseId("dose-1", null)).toBe("dose-1");
+		expect(result.current.getDoseId("dose-1", "John")).toBe("dose-1-John");
+	});
 
-    const doses = [
-      { id: 'dose-1', takenBy: [] },
-      { id: 'dose-2', takenBy: [] }
-    ];
+	it("countTakenDoses calculates correctly", async () => {
+		const mockDoses = {
+			doses: [{ doseId: "dose-1", dismissed: false }],
+		};
 
-    const count = result.current.countTakenDoses(doses);
-    expect(count.total).toBe(2);
-    expect(count.taken).toBe(1);
-  });
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(mockDoses),
+		});
 
-  it('countTakenDoses handles multiple people', async () => {
-    const mockDoses = {
-      doses: [
-        { doseId: 'dose-1-Alice', dismissed: false },
-        { doseId: 'dose-1-Bob', dismissed: false }
-      ]
-    };
-    
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockDoses)
-    });
+		const { result } = renderHook(() => useDoses());
 
-    const { result } = renderHook(() => useDoses());
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("dose-1")).toBe(true);
+		});
 
-    await waitFor(() => {
-      expect(result.current.takenDoses.size).toBe(2);
-    });
+		const doses = [
+			{ id: "dose-1", takenBy: [] },
+			{ id: "dose-2", takenBy: [] },
+		];
 
-    const doses = [{ id: 'dose-1', takenBy: ['Alice', 'Bob', 'Charlie'] }];
-    const count = result.current.countTakenDoses(doses);
-    expect(count.total).toBe(3);
-    expect(count.taken).toBe(2);
-  });
+		const count = result.current.countTakenDoses(doses);
+		expect(count.total).toBe(2);
+		expect(count.taken).toBe(1);
+	});
 
-  it('marks dose as taken optimistically', async () => {
-    // First call for initial load, subsequent calls for marking dose
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-      .mockResolvedValueOnce({ ok: true });
+	it("countTakenDoses handles multiple people", async () => {
+		const mockDoses = {
+			doses: [
+				{ doseId: "dose-1-Alice", dismissed: false },
+				{ doseId: "dose-1-Bob", dismissed: false },
+			],
+		};
 
-    const { result } = renderHook(() => useDoses());
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(mockDoses),
+		});
 
-    // Wait for initial load to complete
-    await waitFor(() => {
-      expect(result.current.takenDoses.size).toBe(0);
-    });
+		const { result } = renderHook(() => useDoses());
 
-    await act(async () => {
-      await result.current.markDoseTaken('new-dose');
-    });
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(2);
+		});
 
-    expect(result.current.takenDoses.has('new-dose')).toBe(true);
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/doses/taken',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ doseId: 'new-dose' })
-      })
-    );
-  });
+		const doses = [{ id: "dose-1", takenBy: ["Alice", "Bob", "Charlie"] }];
+		const count = result.current.countTakenDoses(doses);
+		expect(count.total).toBe(3);
+		expect(count.taken).toBe(2);
+	});
 
-  it('reverts optimistic update on error', async () => {
-    // First call for initial load, second for marking dose fails
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-      .mockRejectedValueOnce(new Error('Network error'));
+	it("marks dose as taken optimistically", async () => {
+		// First call for initial load, subsequent calls for marking dose
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
+			.mockResolvedValueOnce({ ok: true });
 
-    const { result } = renderHook(() => useDoses());
-    
-    await waitFor(() => {
-      expect(result.current.takenDoses.size).toBe(0);
-    });
+		const { result } = renderHook(() => useDoses());
 
-    await act(async () => {
-      await result.current.markDoseTaken('new-dose');
-    });
+		// Wait for initial load to complete
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(0);
+		});
 
-    // After error, the dose should be removed
-    await waitFor(() => {
-      expect(result.current.takenDoses.has('new-dose')).toBe(false);
-    });
-  });
+		await act(async () => {
+			await result.current.markDoseTaken("new-dose");
+		});
 
-  it('undoes dose taken optimistically', async () => {
-    const mockDoses = {
-      doses: [{ doseId: 'taken-dose', dismissed: false }]
-    };
-    
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDoses) })
-      .mockResolvedValueOnce({ ok: true });
+		expect(result.current.takenDoses.has("new-dose")).toBe(true);
+		expect(fetch).toHaveBeenCalledWith(
+			"/api/doses/taken",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ doseId: "new-dose" }),
+			})
+		);
+	});
 
-    const { result } = renderHook(() => useDoses());
+	it("reverts optimistic update on error", async () => {
+		// First call for initial load, second for marking dose fails
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
+			.mockRejectedValueOnce(new Error("Network error"));
 
-    await waitFor(() => {
-      expect(result.current.takenDoses.has('taken-dose')).toBe(true);
-    });
+		const { result } = renderHook(() => useDoses());
 
-    await act(async () => {
-      await result.current.undoDoseTaken('taken-dose');
-    });
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(0);
+		});
 
-    expect(result.current.takenDoses.has('taken-dose')).toBe(false);
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/doses/taken/taken-dose',
-      expect.objectContaining({ method: 'DELETE' })
-    );
-  });
+		await act(async () => {
+			await result.current.markDoseTaken("new-dose");
+		});
 
-  it('dismisses missed doses', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-      .mockResolvedValueOnce({ ok: true });
+		// After error, the dose should be removed
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("new-dose")).toBe(false);
+		});
+	});
 
-    const { result } = renderHook(() => useDoses());
+	it("undoes dose taken optimistically", async () => {
+		const mockDoses = {
+			doses: [{ doseId: "taken-dose", dismissed: false }],
+		};
 
-    await waitFor(() => {
-      expect(result.current.clearingMissed).toBe(false);
-    });
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDoses) })
+			.mockResolvedValueOnce({ ok: true });
 
-    await act(async () => {
-      await result.current.dismissMissedDoses(['missed-1', 'missed-2']);
-    });
+		const { result } = renderHook(() => useDoses());
 
-    expect(result.current.dismissedDoses.has('missed-1')).toBe(true);
-    expect(result.current.dismissedDoses.has('missed-2')).toBe(true);
-  });
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("taken-dose")).toBe(true);
+		});
 
-  it('does nothing when dismissing empty array', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ doses: [] })
-    });
+		await act(async () => {
+			await result.current.undoDoseTaken("taken-dose");
+		});
 
-    const { result } = renderHook(() => useDoses());
+		expect(result.current.takenDoses.has("taken-dose")).toBe(false);
+		expect(fetch).toHaveBeenCalledWith("/api/doses/taken/taken-dose", expect.objectContaining({ method: "DELETE" }));
+	});
 
-    await act(async () => {
-      await result.current.dismissMissedDoses([]);
-    });
+	it("setShowClearMissedConfirm works", () => {
+		const { result } = renderHook(() => useDoses());
 
-    // Should not make a POST call for dismiss
-    expect(fetch).not.toHaveBeenCalledWith(
-      '/api/doses/dismiss',
-      expect.anything()
-    );
-  });
+		act(() => {
+			result.current.setShowClearMissedConfirm(true);
+		});
 
-  it('setShowClearMissedConfirm works', () => {
-    const { result } = renderHook(() => useDoses());
-    
-    act(() => {
-      result.current.setShowClearMissedConfirm(true);
-    });
-    
-    expect(result.current.showClearMissedConfirm).toBe(true);
-  });
-
-  it('handles API error on dismiss gracefully', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-      .mockRejectedValueOnce(new Error('Network error'));
-
-    const { result } = renderHook(() => useDoses());
-
-    await waitFor(() => {
-      expect(result.current.clearingMissed).toBe(false);
-    });
-
-    await act(async () => {
-      await result.current.dismissMissedDoses(['missed-1']);
-    });
-
-    expect(result.current.clearingMissed).toBe(false);
-  });
+		expect(result.current.showClearMissedConfirm).toBe(true);
+	});
 });

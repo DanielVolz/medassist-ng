@@ -62,6 +62,6 @@ export function useCollapsedDays(userId: number | undefined): UseCollapsedDaysRe
 	return {
 		manuallyCollapsedDays,
 		manuallyExpandedDays,
-		toggleDayCollapse
+		toggleDayCollapse,
 	};
 }

@@ -1,11 +1,10 @@
-import { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import argon2 from "argon2";
-import { randomBytes } from "crypto";
-import { db } from "../db/client.js";
-import { users, refreshTokens } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { env } from "../plugins/env.js";
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { db } from "../db/client.js";
+import { refreshTokens, users } from "../db/schema.js";
 import { getAuthState, requireAuth } from "../plugins/auth.js";
 import type { AuthUser } from "../types/fastify.js";
 
@@ -13,11 +12,11 @@ import type { AuthUser } from "../types/fastify.js";
 // Argon2id Configuration - State of the Art Password Hashing
 // =============================================================================
 const ARGON2_OPTIONS: argon2.Options = {
-  type: argon2.argon2id,       // Argon2id - best for password hashing
-  memoryCost: 65536,           // 64 MB memory
-  timeCost: 3,                 // 3 iterations
-  parallelism: 4,              // 4 parallel threads
-  hashLength: 32,              // 256-bit hash
+	type: argon2.argon2id, // Argon2id - best for password hashing
+	memoryCost: 65536, // 64 MB memory
+	timeCost: 3, // 3 iterations
+	parallelism: 4, // 4 parallel threads
+	hashLength: 32, // 256-bit hash
 };
 
 // =============================================================================
@@ -29,484 +28,510 @@ const ARGON2_OPTIONS: argon2.Options = {
 // CodeQL may not recognize this pattern - see: https://github.com/github/codeql/issues
 // lgtm[js/missing-rate-limiting]
 const authRateLimitConfig = {
-  max: 10,                     // 10 requests
-  timeWindow: "1 minute",      // per minute
-  errorResponseBuilder: () => ({
-    error: "Too many requests. Please try again later.",
-    code: "RATE_LIMIT_EXCEEDED",
-  }),
+	max: 10, // 10 requests
+	timeWindow: "1 minute", // per minute
+	errorResponseBuilder: () => ({
+		error: "Too many requests. Please try again later.",
+		code: "RATE_LIMIT_EXCEEDED",
+	}),
 };
 
 // lgtm[js/missing-rate-limiting]
 const sensitiveRateLimitConfig = {
-  max: 5,                      // 5 requests  
-  timeWindow: "15 minutes",    // per 15 minutes (for login/register)
-  errorResponseBuilder: () => ({
-    error: "Too many attempts. Please try again later.",
-    code: "RATE_LIMIT_EXCEEDED",
-  }),
+	max: 5, // 5 requests
+	timeWindow: "15 minutes", // per 15 minutes (for login/register)
+	errorResponseBuilder: () => ({
+		error: "Too many attempts. Please try again later.",
+		code: "RATE_LIMIT_EXCEEDED",
+	}),
 };
 
 // =============================================================================
 // Validation Schemas
 // =============================================================================
 const registerSchema = z.object({
-  username: z.string()
-    .min(3, "Username must be at least 3 characters")
-    .max(50, "Username must be at most 50 characters")
-    .regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, underscores, and hyphens"),
-  password: z.string()
-    .min(8, "Password must be at least 8 characters")
-    .max(128, "Password must be at most 128 characters"),
+	username: z
+		.string()
+		.min(3, "Username must be at least 3 characters")
+		.max(50, "Username must be at most 50 characters")
+		.regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, underscores, and hyphens"),
+	password: z
+		.string()
+		.min(8, "Password must be at least 8 characters")
+		.max(128, "Password must be at most 128 characters"),
 });
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-  rememberMe: z.boolean().optional().default(false),
+	username: z.string().min(1, "Username is required"),
+	password: z.string().min(1, "Password is required"),
+	rememberMe: z.boolean().optional().default(false),
 });
 
 const updateProfileSchema = z.object({
-  currentPassword: z.string().optional(),
-  newPassword: z.string()
-    .min(8, "Password must be at least 8 characters")
-    .max(128, "Password must be at most 128 characters")
-    .optional(),
+	currentPassword: z.string().optional(),
+	newPassword: z
+		.string()
+		.min(8, "Password must be at least 8 characters")
+		.max(128, "Password must be at most 128 characters")
+		.optional(),
 });
 
 // =============================================================================
 // Auth Routes
 // =============================================================================
 export async function authRoutes(app: FastifyInstance) {
-  // Token TTLs
-  const accessTtlMinutes = 15;
-  const refreshTtlDays = 14;
+	// Token TTLs
+	const accessTtlMinutes = 15;
+	const refreshTtlDays = 14;
 
-  // ---------------------------------------------------------------------------
-  // GET /auth/state - Public auth state (needed before login)
-  // ---------------------------------------------------------------------------
-  app.get("/auth/state", async () => {
-    return getAuthState();
-  });
+	// ---------------------------------------------------------------------------
+	// GET /auth/state - Public auth state (needed before login)
+	// Exempt from rate limit - lightweight state check called frequently
+	// ---------------------------------------------------------------------------
+	app.get("/auth/state", { config: { rateLimit: false } }, async () => {
+		return getAuthState();
+	});
 
-  // ---------------------------------------------------------------------------
-  // POST /auth/register - User registration
-  // ---------------------------------------------------------------------------
-  app.post<{ Body: z.infer<typeof registerSchema> }>("/auth/register", {
-    config: { rateLimit: sensitiveRateLimitConfig },
-  }, async (request, reply) => {
-    // Check auth state
-    const state = await getAuthState();
-    
-    if (!state.authEnabled) {
-      return reply.status(400).send({ error: "Authentication is disabled", code: "AUTH_DISABLED" });
-    }
-    
-    if (!state.registrationEnabled) {
-      return reply.status(400).send({ error: "Registration is disabled", code: "REGISTRATION_DISABLED" });
-    }
-    
-    if (!state.localAuthEnabled) {
-      return reply.status(400).send({ error: "Local authentication is disabled", code: "LOCAL_AUTH_DISABLED" });
-    }
+	// ---------------------------------------------------------------------------
+	// POST /auth/register - User registration
+	// ---------------------------------------------------------------------------
+	app.post<{ Body: z.infer<typeof registerSchema> }>(
+		"/auth/register",
+		{
+			config: { rateLimit: sensitiveRateLimitConfig },
+		},
+		async (request, reply) => {
+			// Check auth state
+			const state = await getAuthState();
 
-    // Validate input
-    const parsed = registerSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ 
-        error: parsed.error.errors[0]?.message ?? "Invalid input",
-        code: "VALIDATION_ERROR" 
-      });
-    }
+			if (!state.authEnabled) {
+				return reply.status(400).send({ error: "Authentication is disabled", code: "AUTH_DISABLED" });
+			}
 
-    const { username, password } = parsed.data;
+			if (!state.registrationEnabled) {
+				return reply.status(400).send({ error: "Registration is disabled", code: "REGISTRATION_DISABLED" });
+			}
 
-    // Check if username already exists
-    const [existingUser] = await db.select().from(users).where(eq(users.username, username));
-    if (existingUser) {
-      return reply.status(409).send({ error: "Username already taken", code: "USERNAME_EXISTS" });
-    }
+			if (!state.localAuthEnabled) {
+				return reply.status(400).send({ error: "Local authentication is disabled", code: "LOCAL_AUTH_DISABLED" });
+			}
 
-    // Hash password with Argon2id
-    const passwordHash = await argon2.hash(password, ARGON2_OPTIONS);
+			// Validate input
+			const parsed = registerSchema.safeParse(request.body);
+			if (!parsed.success) {
+				return reply.status(400).send({
+					error: parsed.error.errors[0]?.message ?? "Invalid input",
+					code: "VALIDATION_ERROR",
+				});
+			}
 
-    // Create user
-    const [newUser] = await db.insert(users).values({
-      username,
-      passwordHash,
-      authProvider: "local",
-    }).returning();
+			const { username, password } = parsed.data;
 
-    app.log.info(`User registered: ${username}`);
+			// Check if username already exists
+			const [existingUser] = await db.select().from(users).where(eq(users.username, username));
+			if (existingUser) {
+				return reply.status(409).send({ error: "Username already taken", code: "USERNAME_EXISTS" });
+			}
 
-    return reply.status(201).send({
-      ok: true,
-      user: {
-        id: newUser.id,
-        username: newUser.username,
-      },
-      message: "Account created",
-    });
-  });
+			// Hash password with Argon2id
+			const passwordHash = await argon2.hash(password, ARGON2_OPTIONS);
 
-  // ---------------------------------------------------------------------------
-  // POST /auth/login - User login
-  // ---------------------------------------------------------------------------
-  app.post<{ Body: z.infer<typeof loginSchema> }>("/auth/login", {
-    config: { rateLimit: sensitiveRateLimitConfig },
-  }, async (request, reply) => {
-    const state = await getAuthState();
-    
-    if (!state.authEnabled) {
-      return reply.status(400).send({ error: "Authentication is disabled", code: "AUTH_DISABLED" });
-    }
-    
-    if (!state.localAuthEnabled) {
-      return reply.status(400).send({ error: "Local authentication is disabled", code: "LOCAL_AUTH_DISABLED" });
-    }
+			// Create user
+			const [newUser] = await db
+				.insert(users)
+				.values({
+					username,
+					passwordHash,
+					authProvider: "local",
+				})
+				.returning();
 
-    const parsed = loginSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ 
-        error: "Invalid credentials",
-        code: "VALIDATION_ERROR" 
-      });
-    }
+			app.log.info(`User registered: ${username}`);
 
-    const { username, password, rememberMe } = parsed.data;
+			return reply.status(201).send({
+				ok: true,
+				user: {
+					id: newUser.id,
+					username: newUser.username,
+				},
+				message: "Account created",
+			});
+		}
+	);
 
-    // Find user by username
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    
-    // Generic error to prevent user enumeration
-    const invalidCredentialsError = () => 
-      reply.status(401).send({ error: "Invalid username or password", code: "INVALID_CREDENTIALS" });
+	// ---------------------------------------------------------------------------
+	// POST /auth/login - User login
+	// ---------------------------------------------------------------------------
+	app.post<{ Body: z.infer<typeof loginSchema> }>(
+		"/auth/login",
+		{
+			config: { rateLimit: sensitiveRateLimitConfig },
+		},
+		async (request, reply) => {
+			const state = await getAuthState();
 
-    if (!user) {
-      // Perform dummy hash to prevent timing attacks
-      await argon2.hash("dummy", ARGON2_OPTIONS);
-      return invalidCredentialsError();
-    }
+			if (!state.authEnabled) {
+				return reply.status(400).send({ error: "Authentication is disabled", code: "AUTH_DISABLED" });
+			}
 
-    if (!user.isActive) {
-      return reply.status(401).send({ error: "Account disabled", code: "ACCOUNT_DISABLED" });
-    }
+			if (!state.localAuthEnabled) {
+				return reply.status(400).send({ error: "Local authentication is disabled", code: "LOCAL_AUTH_DISABLED" });
+			}
 
-    if (!user.passwordHash) {
-      // SSO-only user trying local login
-      return reply.status(401).send({ error: "Please use SSO to login", code: "SSO_ONLY" });
-    }
+			const parsed = loginSchema.safeParse(request.body);
+			if (!parsed.success) {
+				return reply.status(400).send({
+					error: "Invalid credentials",
+					code: "VALIDATION_ERROR",
+				});
+			}
 
-    // Verify password
-    const valid = await argon2.verify(user.passwordHash, password, ARGON2_OPTIONS);
-    if (!valid) {
-      return invalidCredentialsError();
-    }
+			const { username, password, rememberMe } = parsed.data;
 
-    // Update last login
-    await db.update(users)
-      .set({ lastLoginAt: new Date(), updatedAt: new Date() })
-      .where(eq(users.id, user.id));
+			// Find user by username
+			const [user] = await db.select().from(users).where(eq(users.username, username));
 
-    // Generate tokens
-    const accessToken = app.jwt.sign(
-      { sub: user.id, username: user.username },
-      { expiresIn: `${accessTtlMinutes}m` }
-    );
+			// Generic error to prevent user enumeration
+			const invalidCredentialsError = () =>
+				reply.status(401).send({ error: "Invalid username or password", code: "INVALID_CREDENTIALS" });
 
-    const tokenId = randomBytes(32).toString("hex");
-    const refreshExp = new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000);
-    
-    await db.insert(refreshTokens).values({
-      userId: user.id,
-      tokenId,
-      expiresAt: refreshExp,
-    });
+			if (!user) {
+				// Perform dummy hash to prevent timing attacks
+				await argon2.hash("dummy", ARGON2_OPTIONS);
+				return invalidCredentialsError();
+			}
 
-    const refreshToken = app.jwt.sign(
-      { sub: user.id, jti: tokenId },
-      { expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
-    );
+			if (!user.isActive) {
+				return reply.status(401).send({ error: "Account disabled", code: "ACCOUNT_DISABLED" });
+			}
 
-    app.log.info(`User logged in: ${username} (rememberMe: ${rememberMe})`);
+			if (!user.passwordHash) {
+				// SSO-only user trying local login
+				return reply.status(401).send({ error: "Please use SSO to login", code: "SSO_ONLY" });
+			}
 
-    // Cookie options: with maxAge for "remember me", without for session cookie
-    const accessCookieOptions = rememberMe 
-      ? app.config.cookieOptions 
-      : { ...app.config.cookieOptions, maxAge: undefined };
-    const refreshCookieOptions = rememberMe 
-      ? app.config.refreshCookieOptions 
-      : { ...app.config.refreshCookieOptions, maxAge: undefined };
+			// Verify password
+			const valid = await argon2.verify(user.passwordHash, password, ARGON2_OPTIONS);
+			if (!valid) {
+				return invalidCredentialsError();
+			}
 
-    return reply
-      .setCookie("access_token", accessToken, accessCookieOptions)
-      .setCookie("refresh_token", refreshToken, refreshCookieOptions)
-      .send({
-        ok: true,
-        user: {
-          id: user.id,
-          username: user.username,
-          avatarUrl: user.avatarUrl,
-        },
-      });
-  });
+			// Update last login
+			await db.update(users).set({ lastLoginAt: new Date(), updatedAt: new Date() }).where(eq(users.id, user.id));
 
-  // ---------------------------------------------------------------------------
-  // POST /auth/refresh - Refresh access token
-  // ---------------------------------------------------------------------------
-  app.post("/auth/refresh", {
-    config: { rateLimit: authRateLimitConfig },
-  }, async (request, reply) => {
-    const refreshTokenCookie = request.cookies.refresh_token;
-    if (!refreshTokenCookie) {
-      return reply.status(401).send({ error: "No refresh token", code: "NO_REFRESH_TOKEN" });
-    }
+			// Generate tokens
+			const accessToken = app.jwt.sign(
+				{ sub: user.id, username: user.username },
+				{ expiresIn: `${accessTtlMinutes}m` }
+			);
 
-    try {
-      // Verify refresh token
-      const decoded = app.jwt.verify<{ sub: number; jti: string }>(
-        refreshTokenCookie,
-        { key: app.config.refreshSecret }
-      );
+			const tokenId = randomBytes(32).toString("hex");
+			const refreshExp = new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000);
 
-      // Check if token exists and is valid
-      const [token] = await db.select().from(refreshTokens)
-        .where(eq(refreshTokens.tokenId, decoded.jti));
+			await db.insert(refreshTokens).values({
+				userId: user.id,
+				tokenId,
+				expiresAt: refreshExp,
+			});
 
-      if (!token || token.revoked || token.expiresAt < new Date()) {
-        return reply.status(401).send({ error: "Invalid refresh token", code: "INVALID_REFRESH_TOKEN" });
-      }
+			const refreshToken = app.jwt.sign(
+				{ sub: user.id, jti: tokenId },
+				{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
+			);
 
-      // Get user
-      const [user] = await db.select().from(users).where(eq(users.id, decoded.sub));
-      if (!user || !user.isActive) {
-        return reply.status(401).send({ error: "User not found or disabled", code: "USER_INVALID" });
-      }
+			app.log.info(`User logged in: ${username} (rememberMe: ${rememberMe})`);
 
-      // Rotate refresh token (revoke old, create new)
-      await db.update(refreshTokens)
-        .set({ revoked: true, rotatedAt: new Date() })
-        .where(eq(refreshTokens.id, token.id));
+			// Cookie options: with maxAge for "remember me", without for session cookie
+			const accessCookieOptions = rememberMe
+				? app.config.cookieOptions
+				: { ...app.config.cookieOptions, maxAge: undefined };
+			const refreshCookieOptions = rememberMe
+				? app.config.refreshCookieOptions
+				: { ...app.config.refreshCookieOptions, maxAge: undefined };
 
-      const newTokenId = randomBytes(32).toString("hex");
-      const refreshExp = new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000);
-      
-      await db.insert(refreshTokens).values({
-        userId: user.id,
-        tokenId: newTokenId,
-        expiresAt: refreshExp,
-      });
+			return reply
+				.setCookie("access_token", accessToken, accessCookieOptions)
+				.setCookie("refresh_token", refreshToken, refreshCookieOptions)
+				.send({
+					ok: true,
+					user: {
+						id: user.id,
+						username: user.username,
+						avatarUrl: user.avatarUrl,
+					},
+				});
+		}
+	);
 
-      // Generate new tokens
-      const newAccessToken = app.jwt.sign(
-        { sub: user.id, username: user.username },
-        { expiresIn: `${accessTtlMinutes}m` }
-      );
+	// ---------------------------------------------------------------------------
+	// POST /auth/refresh - Refresh access token
+	// ---------------------------------------------------------------------------
+	app.post(
+		"/auth/refresh",
+		{
+			config: { rateLimit: authRateLimitConfig },
+		},
+		async (request, reply) => {
+			const refreshTokenCookie = request.cookies.refresh_token;
+			if (!refreshTokenCookie) {
+				return reply.status(401).send({ error: "No refresh token", code: "NO_REFRESH_TOKEN" });
+			}
 
-      const newRefreshToken = app.jwt.sign(
-        { sub: user.id, jti: newTokenId },
-        { expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
-      );
+			try {
+				// Verify refresh token
+				const decoded = app.jwt.verify<{ sub: number; jti: string }>(refreshTokenCookie, {
+					key: app.config.refreshSecret,
+				});
 
-      return reply
-        .setCookie("access_token", newAccessToken, app.config.cookieOptions)
-        .setCookie("refresh_token", newRefreshToken, app.config.refreshCookieOptions)
-        .send({ ok: true });
+				// Check if token exists and is valid
+				const [token] = await db.select().from(refreshTokens).where(eq(refreshTokens.tokenId, decoded.jti));
 
-    } catch {
-      return reply.status(401).send({ error: "Invalid refresh token", code: "INVALID_REFRESH_TOKEN" });
-    }
-  });
+				if (!token || token.revoked || token.expiresAt < new Date()) {
+					return reply.status(401).send({ error: "Invalid refresh token", code: "INVALID_REFRESH_TOKEN" });
+				}
 
-  // ---------------------------------------------------------------------------
-  // POST /auth/logout - Logout (revoke refresh token)
-  // ---------------------------------------------------------------------------
-  app.post("/auth/logout", {
-    config: { rateLimit: authRateLimitConfig },
-  }, async (request, reply) => {
-    const refreshTokenCookie = request.cookies.refresh_token;
-    
-    if (refreshTokenCookie) {
-      try {
-        const decoded = app.jwt.verify<{ jti: string }>(
-          refreshTokenCookie,
-          { key: app.config.refreshSecret }
-        );
-        
-        // Revoke the refresh token
-        await db.update(refreshTokens)
-          .set({ revoked: true })
-          .where(eq(refreshTokens.tokenId, decoded.jti));
-      } catch {
-        // Invalid token, ignore
-      }
-    }
+				// Get user
+				const [user] = await db.select().from(users).where(eq(users.id, decoded.sub));
+				if (!user || !user.isActive) {
+					return reply.status(401).send({ error: "User not found or disabled", code: "USER_INVALID" });
+				}
 
-    return reply
-      .clearCookie("access_token", app.config.cookieOptions)
-      .clearCookie("refresh_token", app.config.refreshCookieOptions)
-      .send({ ok: true });
-  });
+				// Rotate refresh token (revoke old, create new)
+				await db
+					.update(refreshTokens)
+					.set({ revoked: true, rotatedAt: new Date() })
+					.where(eq(refreshTokens.id, token.id));
 
-  // ---------------------------------------------------------------------------
-  // GET /auth/me - Get current user profile
-  // ---------------------------------------------------------------------------
-  app.get("/auth/me", { preHandler: requireAuth }, async (request, reply) => {
-    const authUser = request.user as unknown as AuthUser | null;
-    if (!authUser) {
-      return reply.status(401).send({ error: "Not authenticated" });
-    }
+				const newTokenId = randomBytes(32).toString("hex");
+				const refreshExp = new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000);
 
-    const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
-    if (!user) {
-      return reply.status(404).send({ error: "User not found" });
-    }
+				await db.insert(refreshTokens).values({
+					userId: user.id,
+					tokenId: newTokenId,
+					expiresAt: refreshExp,
+				});
 
-    return {
-      id: user.id,
-      username: user.username,
-      avatarUrl: user.avatarUrl,
-      authProvider: user.authProvider,
-      createdAt: user.createdAt,
-      lastLoginAt: user.lastLoginAt,
-    };
-  });
+				// Generate new tokens
+				const newAccessToken = app.jwt.sign(
+					{ sub: user.id, username: user.username },
+					{ expiresIn: `${accessTtlMinutes}m` }
+				);
 
-  // ---------------------------------------------------------------------------
-  // PUT /auth/me - Update current user profile
-  // ---------------------------------------------------------------------------
-  app.put<{ Body: z.infer<typeof updateProfileSchema> }>("/auth/me", { 
-    preHandler: requireAuth,
-    config: { rateLimit: authRateLimitConfig },
-  }, async (request, reply) => {
-    const authUser = request.user as unknown as AuthUser | null;
-    if (!authUser) {
-      return reply.status(401).send({ error: "Not authenticated" });
-    }
+				const newRefreshToken = app.jwt.sign(
+					{ sub: user.id, jti: newTokenId },
+					{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
+				);
 
-    const parsed = updateProfileSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ 
-        error: parsed.error.errors[0]?.message ?? "Invalid input",
-        code: "VALIDATION_ERROR" 
-      });
-    }
+				return reply
+					.setCookie("access_token", newAccessToken, app.config.cookieOptions)
+					.setCookie("refresh_token", newRefreshToken, app.config.refreshCookieOptions)
+					.send({ ok: true });
+			} catch {
+				return reply.status(401).send({ error: "Invalid refresh token", code: "INVALID_REFRESH_TOKEN" });
+			}
+		}
+	);
 
-    const { currentPassword, newPassword } = parsed.data;
-    const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
+	// ---------------------------------------------------------------------------
+	// POST /auth/logout - Logout (revoke refresh token)
+	// ---------------------------------------------------------------------------
+	app.post(
+		"/auth/logout",
+		{
+			config: { rateLimit: authRateLimitConfig },
+		},
+		async (request, reply) => {
+			const refreshTokenCookie = request.cookies.refresh_token;
 
-    if (!user) {
-      return reply.status(404).send({ error: "User not found" });
-    }
+			if (refreshTokenCookie) {
+				try {
+					const decoded = app.jwt.verify<{ jti: string }>(refreshTokenCookie, { key: app.config.refreshSecret });
 
-    const updates: Partial<typeof users.$inferInsert> = {
-      updatedAt: new Date(),
-    };
+					// Revoke the refresh token
+					await db.update(refreshTokens).set({ revoked: true }).where(eq(refreshTokens.tokenId, decoded.jti));
+				} catch {
+					// Invalid token, ignore
+				}
+			}
 
-    // Update password if provided
-    if (newPassword) {
-      if (!currentPassword) {
-        return reply.status(400).send({ error: "Current password required", code: "CURRENT_PASSWORD_REQUIRED" });
-      }
+			return reply
+				.clearCookie("access_token", app.config.cookieOptions)
+				.clearCookie("refresh_token", app.config.refreshCookieOptions)
+				.send({ ok: true });
+		}
+	);
 
-      if (!user.passwordHash) {
-        return reply.status(400).send({ error: "Cannot change password for SSO account", code: "SSO_ACCOUNT" });
-      }
+	// ---------------------------------------------------------------------------
+	// GET /auth/me - Get current user profile
+	// ---------------------------------------------------------------------------
+	app.get("/auth/me", { preHandler: requireAuth }, async (request, reply) => {
+		const authUser = request.user as unknown as AuthUser | null;
+		if (!authUser) {
+			return reply.status(401).send({ error: "Not authenticated" });
+		}
 
-      const valid = await argon2.verify(user.passwordHash, currentPassword, ARGON2_OPTIONS);
-      if (!valid) {
-        return reply.status(401).send({ error: "Current password is incorrect", code: "INVALID_PASSWORD" });
-      }
+		const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
+		if (!user) {
+			return reply.status(404).send({ error: "User not found" });
+		}
 
-      updates.passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
-    }
+		return {
+			id: user.id,
+			username: user.username,
+			avatarUrl: user.avatarUrl,
+			authProvider: user.authProvider,
+			createdAt: user.createdAt,
+			lastLoginAt: user.lastLoginAt,
+		};
+	});
 
-    await db.update(users).set(updates).where(eq(users.id, user.id));
+	// ---------------------------------------------------------------------------
+	// PUT /auth/me - Update current user profile
+	// ---------------------------------------------------------------------------
+	app.put<{ Body: z.infer<typeof updateProfileSchema> }>(
+		"/auth/me",
+		{
+			preHandler: requireAuth,
+			config: { rateLimit: authRateLimitConfig },
+		},
+		async (request, reply) => {
+			const authUser = request.user as unknown as AuthUser | null;
+			if (!authUser) {
+				return reply.status(401).send({ error: "Not authenticated" });
+			}
 
-    return { ok: true, message: "Profile updated" };
-  });
+			const parsed = updateProfileSchema.safeParse(request.body);
+			if (!parsed.success) {
+				return reply.status(400).send({
+					error: parsed.error.errors[0]?.message ?? "Invalid input",
+					code: "VALIDATION_ERROR",
+				});
+			}
 
-  // ---------------------------------------------------------------------------
-  // POST /auth/avatar - Upload user avatar
-  // ---------------------------------------------------------------------------
-  app.post("/auth/avatar", { 
-    preHandler: requireAuth,
-    config: { rateLimit: authRateLimitConfig },
-  }, async (request, reply) => {
-    const authUser = request.user as unknown as AuthUser | null;
-    if (!authUser) {
-      return reply.status(401).send({ error: "Not authenticated" });
-    }
+			const { currentPassword, newPassword } = parsed.data;
+			const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
 
-    const data = await request.file();
-    if (!data) {
-      return reply.status(400).send({ error: "No file uploaded" });
-    }
+			if (!user) {
+				return reply.status(404).send({ error: "User not found" });
+			}
 
-    // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-    if (!allowedTypes.includes(data.mimetype)) {
-      return reply.status(400).send({ error: "Invalid file type. Allowed: JPEG, PNG, WebP, GIF" });
-    }
+			const updates: Partial<typeof users.$inferInsert> = {
+				updatedAt: new Date(),
+			};
 
-    // Generate unique filename
-    const ext = data.filename.split(".").pop() || "jpg";
-    const filename = `avatar_${authUser.id}_${Date.now()}.${ext}`;
-    
-    // Save file
-    const fs = await import("fs/promises");
-    const path = await import("path");
-    const imagesDir = path.join(process.cwd(), "data", "images");
-    await fs.mkdir(imagesDir, { recursive: true });
-    
-    const buffer = await data.toBuffer();
-    await fs.writeFile(path.join(imagesDir, filename), buffer);
+			// Update password if provided
+			if (newPassword) {
+				if (!currentPassword) {
+					return reply.status(400).send({ error: "Current password required", code: "CURRENT_PASSWORD_REQUIRED" });
+				}
 
-    // Delete old avatar if exists
-    const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
-    if (user?.avatarUrl) {
-      try {
-        await fs.unlink(path.join(imagesDir, user.avatarUrl));
-      } catch {
-        // Ignore if file doesn't exist
-      }
-    }
+				if (!user.passwordHash) {
+					return reply.status(400).send({ error: "Cannot change password for SSO account", code: "SSO_ACCOUNT" });
+				}
 
-    // Update user
-    await db.update(users).set({ avatarUrl: filename, updatedAt: new Date() }).where(eq(users.id, authUser.id));
+				const valid = await argon2.verify(user.passwordHash, currentPassword, ARGON2_OPTIONS);
+				if (!valid) {
+					return reply.status(401).send({ error: "Current password is incorrect", code: "INVALID_PASSWORD" });
+				}
 
-    return { ok: true, avatarUrl: filename };
-  });
+				updates.passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
+			}
 
-  // ---------------------------------------------------------------------------
-  // DELETE /auth/avatar - Delete user avatar
-  // ---------------------------------------------------------------------------
-  app.delete("/auth/avatar", { 
-    preHandler: requireAuth,
-    config: { rateLimit: authRateLimitConfig },
-  }, async (request, reply) => {
-    const authUser = request.user as unknown as AuthUser | null;
-    if (!authUser) {
-      return reply.status(401).send({ error: "Not authenticated" });
-    }
+			await db.update(users).set(updates).where(eq(users.id, user.id));
 
-    const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
-    if (!user?.avatarUrl) {
-      return reply.status(404).send({ error: "No avatar to delete" });
-    }
+			return { ok: true, message: "Profile updated" };
+		}
+	);
 
-    // Delete file
-    const fs = await import("fs/promises");
-    const path = await import("path");
-    try {
-      await fs.unlink(path.join(process.cwd(), "data", "images", user.avatarUrl));
-    } catch {
-      // Ignore if file doesn't exist
-    }
+	// ---------------------------------------------------------------------------
+	// POST /auth/avatar - Upload user avatar
+	// ---------------------------------------------------------------------------
+	app.post(
+		"/auth/avatar",
+		{
+			preHandler: requireAuth,
+			config: { rateLimit: authRateLimitConfig },
+		},
+		async (request, reply) => {
+			const authUser = request.user as unknown as AuthUser | null;
+			if (!authUser) {
+				return reply.status(401).send({ error: "Not authenticated" });
+			}
 
-    // Update user
-    await db.update(users).set({ avatarUrl: null, updatedAt: new Date() }).where(eq(users.id, authUser.id));
+			const data = await request.file();
+			if (!data) {
+				return reply.status(400).send({ error: "No file uploaded" });
+			}
 
-    return { ok: true };
-  });
+			// Validate file type
+			const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+			if (!allowedTypes.includes(data.mimetype)) {
+				return reply.status(400).send({ error: "Invalid file type. Allowed: JPEG, PNG, WebP, GIF" });
+			}
+
+			// Generate unique filename
+			const ext = data.filename.split(".").pop() || "jpg";
+			const filename = `avatar_${authUser.id}_${Date.now()}.${ext}`;
+
+			// Save file
+			const fs = await import("node:fs/promises");
+			const path = await import("node:path");
+			const imagesDir = path.join(process.cwd(), "data", "images");
+			await fs.mkdir(imagesDir, { recursive: true });
+
+			const buffer = await data.toBuffer();
+			await fs.writeFile(path.join(imagesDir, filename), buffer);
+
+			// Delete old avatar if exists
+			const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
+			if (user?.avatarUrl) {
+				try {
+					await fs.unlink(path.join(imagesDir, user.avatarUrl));
+				} catch {
+					// Ignore if file doesn't exist
+				}
+			}
+
+			// Update user
+			await db.update(users).set({ avatarUrl: filename, updatedAt: new Date() }).where(eq(users.id, authUser.id));
+
+			return { ok: true, avatarUrl: filename };
+		}
+	);
+
+	// ---------------------------------------------------------------------------
+	// DELETE /auth/avatar - Delete user avatar
+	// ---------------------------------------------------------------------------
+	app.delete(
+		"/auth/avatar",
+		{
+			preHandler: requireAuth,
+			config: { rateLimit: authRateLimitConfig },
+		},
+		async (request, reply) => {
+			const authUser = request.user as unknown as AuthUser | null;
+			if (!authUser) {
+				return reply.status(401).send({ error: "Not authenticated" });
+			}
+
+			const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
+			if (!user?.avatarUrl) {
+				return reply.status(404).send({ error: "No avatar to delete" });
+			}
+
+			// Delete file
+			const fs = await import("node:fs/promises");
+			const path = await import("node:path");
+			try {
+				await fs.unlink(path.join(process.cwd(), "data", "images", user.avatarUrl));
+			} catch {
+				// Ignore if file doesn't exist
+			}
+
+			// Update user
+			await db.update(users).set({ avatarUrl: null, updatedAt: new Date() }).where(eq(users.id, authUser.id));
+
+			return { ok: true };
+		}
+	);
 }

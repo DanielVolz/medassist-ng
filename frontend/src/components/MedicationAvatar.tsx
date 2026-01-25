@@ -9,9 +9,15 @@ export type MedicationAvatarProps = {
 };
 
 export function MedicationAvatar({ name, imageUrl, size = "sm" }: MedicationAvatarProps) {
-	const initials = name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "?";
+	const initials =
+		name
+			.split(" ")
+			.map((w) => w[0])
+			.join("")
+			.toUpperCase()
+			.slice(0, 2) || "?";
 	const sizeClass = `med-avatar med-avatar-${size}`;
-	
+
 	if (imageUrl) {
 		return <img src={`/api/images/${imageUrl}`} alt={name} className={sizeClass} />;
 	}

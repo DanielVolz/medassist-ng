@@ -3,8 +3,8 @@
  * Allows clicking through to medication details
  */
 import { useTranslation } from "react-i18next";
-import type { Medication, Coverage, StockThresholds } from "../types";
 import { MedicationAvatar } from "../components";
+import type { Coverage, Medication, StockThresholds } from "../types";
 import { getMedTotal, getPackageSize } from "../types";
 import { formatNumber } from "../utils";
 import { getStockStatus } from "../utils/schedule";

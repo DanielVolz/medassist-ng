@@ -1,197 +1,195 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useMedications } from '../../hooks/useMedications';
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useMedications } from "../../hooks/useMedications";
 
-describe('useMedications', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([])
-    });
-  });
+describe("useMedications", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve([]),
+		});
+	});
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
 
-  it('initializes with empty state', () => {
-    const { result } = renderHook(() => useMedications());
-    
-    expect(result.current.meds).toEqual([]);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.saving).toBe(false);
-    expect(result.current.uploadingImage).toBe(false);
-  });
+	it("initializes with empty state", () => {
+		const { result } = renderHook(() => useMedications());
 
-  it('loads medications from API', async () => {
-    const mockMeds = [
-      { id: 1, name: 'TestMed', packCount: 1 }
-    ];
-    
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockMeds)
-    });
+		expect(result.current.meds).toEqual([]);
+		expect(result.current.loading).toBe(false);
+		expect(result.current.saving).toBe(false);
+		expect(result.current.uploadingImage).toBe(false);
+	});
 
-    const { result } = renderHook(() => useMedications());
+	it("loads medications from API", async () => {
+		const mockMeds = [{ id: 1, name: "TestMed", packCount: 1 }];
 
-    act(() => {
-      result.current.loadMeds();
-    });
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(mockMeds),
+		});
 
-    await waitFor(() => {
-      expect(result.current.meds).toEqual(mockMeds);
-    });
-    
-    expect(fetch).toHaveBeenCalledWith('/api/medications');
-  });
+		const { result } = renderHook(() => useMedications());
 
-  it('handles API error gracefully', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
+		act(() => {
+			result.current.loadMeds();
+		});
 
-    const { result } = renderHook(() => useMedications());
+		await waitFor(() => {
+			expect(result.current.meds).toEqual(mockMeds);
+		});
 
-    act(() => {
-      result.current.loadMeds();
-    });
+		expect(fetch).toHaveBeenCalledWith("/api/medications");
+	});
 
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-    
-    expect(result.current.meds).toEqual([]);
-  });
+	it("handles API error gracefully", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Network error"));
 
-  it('handles non-array response', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ not: 'array' })
-    });
+		const { result } = renderHook(() => useMedications());
 
-    const { result } = renderHook(() => useMedications());
+		act(() => {
+			result.current.loadMeds();
+		});
 
-    act(() => {
-      result.current.loadMeds();
-    });
+		await waitFor(() => {
+			expect(result.current.loading).toBe(false);
+		});
 
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-    
-    expect(result.current.meds).toEqual([]);
-  });
+		expect(result.current.meds).toEqual([]);
+	});
 
-  it('deletes medication', async () => {
-    const mockMeds = [{ id: 1, name: 'TestMed' }];
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockMeds) })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+	it("handles non-array response", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ not: "array" }),
+		});
 
-    const mockResetForm = vi.fn();
-    const { result } = renderHook(() => useMedications());
+		const { result } = renderHook(() => useMedications());
 
-    // First load meds
-    act(() => {
-      result.current.loadMeds();
-    });
-    
-    await waitFor(() => {
-      expect(result.current.meds).toEqual(mockMeds);
-    });
+		act(() => {
+			result.current.loadMeds();
+		});
 
-    // Then delete
-    await act(async () => {
-      await result.current.deleteMed(1, 1, mockResetForm);
-    });
+		await waitFor(() => {
+			expect(result.current.loading).toBe(false);
+		});
 
-    expect(fetch).toHaveBeenCalledWith('/api/medications/1', { method: 'DELETE' });
-    expect(mockResetForm).toHaveBeenCalled();
-  });
+		expect(result.current.meds).toEqual([]);
+	});
 
-  it('does not call resetForm if editingId does not match', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+	it("deletes medication", async () => {
+		const mockMeds = [{ id: 1, name: "TestMed" }];
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockMeds) })
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
 
-    const mockResetForm = vi.fn();
-    const { result } = renderHook(() => useMedications());
+		const mockResetForm = vi.fn();
+		const { result } = renderHook(() => useMedications());
 
-    await act(async () => {
-      await result.current.deleteMed(1, 2, mockResetForm);
-    });
+		// First load meds
+		act(() => {
+			result.current.loadMeds();
+		});
 
-    expect(mockResetForm).not.toHaveBeenCalled();
-  });
+		await waitFor(() => {
+			expect(result.current.meds).toEqual(mockMeds);
+		});
 
-  it('uploads medication image', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+		// Then delete
+		await act(async () => {
+			await result.current.deleteMed(1, 1, mockResetForm);
+		});
 
-    const { result } = renderHook(() => useMedications());
-    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+		expect(fetch).toHaveBeenCalledWith("/api/medications/1", { method: "DELETE" });
+		expect(mockResetForm).toHaveBeenCalled();
+	});
 
-    await act(async () => {
-      await result.current.uploadMedImage(1, file);
-    });
+	it("does not call resetForm if editingId does not match", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
 
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/medications/1/image',
-      expect.objectContaining({
-        method: 'POST',
-        body: expect.any(FormData)
-      })
-    );
-  });
+		const mockResetForm = vi.fn();
+		const { result } = renderHook(() => useMedications());
 
-  it('handles image upload error', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Upload failed'));
+		await act(async () => {
+			await result.current.deleteMed(1, 2, mockResetForm);
+		});
 
-    const { result } = renderHook(() => useMedications());
-    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+		expect(mockResetForm).not.toHaveBeenCalled();
+	});
 
-    await act(async () => {
-      await result.current.uploadMedImage(1, file);
-    });
+	it("uploads medication image", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
 
-    expect(result.current.uploadingImage).toBe(false);
-  });
+		const { result } = renderHook(() => useMedications());
+		const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
 
-  it('deletes medication image', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+		await act(async () => {
+			await result.current.uploadMedImage(1, file);
+		});
 
-    const { result } = renderHook(() => useMedications());
+		expect(fetch).toHaveBeenCalledWith(
+			"/api/medications/1/image",
+			expect.objectContaining({
+				method: "POST",
+				body: expect.any(FormData),
+			})
+		);
+	});
 
-    await act(async () => {
-      await result.current.deleteMedImage(1);
-    });
+	it("handles image upload error", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Upload failed"));
 
-    expect(fetch).toHaveBeenCalledWith('/api/medications/1/image', { method: 'DELETE' });
-  });
+		const { result } = renderHook(() => useMedications());
+		const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
 
-  it('allows setting meds directly', () => {
-    const { result } = renderHook(() => useMedications());
-    
-    const newMeds = [{ id: 1, name: 'NewMed' }] as any;
-    
-    act(() => {
-      result.current.setMeds(newMeds);
-    });
-    
-    expect(result.current.meds).toEqual(newMeds);
-  });
+		await act(async () => {
+			await result.current.uploadMedImage(1, file);
+		});
 
-  it('allows setting saving state', () => {
-    const { result } = renderHook(() => useMedications());
-    
-    act(() => {
-      result.current.setSaving(true);
-    });
-    
-    expect(result.current.saving).toBe(true);
-  });
+		expect(result.current.uploadingImage).toBe(false);
+	});
+
+	it("deletes medication image", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+
+		const { result } = renderHook(() => useMedications());
+
+		await act(async () => {
+			await result.current.deleteMedImage(1);
+		});
+
+		expect(fetch).toHaveBeenCalledWith("/api/medications/1/image", { method: "DELETE" });
+	});
+
+	it("allows setting meds directly", () => {
+		const { result } = renderHook(() => useMedications());
+
+		const newMeds = [{ id: 1, name: "NewMed" }] as any;
+
+		act(() => {
+			result.current.setMeds(newMeds);
+		});
+
+		expect(result.current.meds).toEqual(newMeds);
+	});
+
+	it("allows setting saving state", () => {
+		const { result } = renderHook(() => useMedications());
+
+		act(() => {
+			result.current.setSaving(true);
+		});
+
+		expect(result.current.saving).toBe(true);
+	});
 });

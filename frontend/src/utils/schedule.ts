@@ -2,7 +2,7 @@
 // Schedule Building and Coverage Calculations
 // =============================================================================
 
-import type { Medication, Coverage, StockStatus, StockThresholds, ScheduleEvent } from "../types";
+import type { Coverage, Medication, ScheduleEvent, StockStatus, StockThresholds } from "../types";
 import { getMedTotal } from "../types";
 
 /**
@@ -37,7 +37,7 @@ export function buildSchedulePreview(
 					when: whenMs,
 					isPast,
 					timeStr: d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
-					dateStr: d.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" })
+					dateStr: d.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" }),
 				});
 			}
 		});
@@ -55,7 +55,7 @@ export function buildSchedulePreview(
 		events,
 		today: todayCount,
 		nextThree: events.length,
-		totalBlisters: meds.reduce((acc, m) => acc + m.blisters.length, 0)
+		totalBlisters: meds.reduce((acc, m) => acc + m.blisters.length, 0),
 	};
 }
 
@@ -111,9 +111,10 @@ export function calculateCoverage(
 		const rawDaysLeft = dailyRate > 0 ? medsLeft / dailyRate : null;
 		const daysLeft = rawDaysLeft !== null ? Math.max(0, Math.floor(rawDaysLeft)) : null;
 		const depletionMs = daysLeft !== null ? now + daysLeft * MS_PER_DAY : null;
-		const depletionDate = depletionMs !== null
-			? new Date(depletionMs).toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" })
-			: null;
+		const depletionDate =
+			depletionMs !== null
+				? new Date(depletionMs).toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" })
+				: null;
 		const nextEvent = events.find((e) => e.medName === m.name);
 
 		return {
@@ -123,8 +124,14 @@ export function calculateCoverage(
 			depletionDate,
 			depletionTime: depletionMs,
 			nextDose: nextEvent
-				? new Date(nextEvent.when).toLocaleString(locale, { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
-				: null
+				? new Date(nextEvent.when).toLocaleString(locale, {
+						weekday: "short",
+						day: "2-digit",
+						month: "short",
+						hour: "2-digit",
+						minute: "2-digit",
+					})
+				: null,
 		};
 	});
 
@@ -170,7 +177,7 @@ export function getNextReminderForMed(med: Coverage, reminderDaysBefore: number,
 
 	return new Date(reminderTime).toLocaleDateString(locale, {
 		day: "2-digit",
-		month: "short"
+		month: "short",
 	});
 }
 
@@ -201,7 +208,8 @@ export function getReminderStatusText(
 		return date.toLocaleDateString(locale, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 	};
 
-	const getTypeLabel = () => (lastType === "intake" ? t("dashboard.reminders.typeIntake") : t("dashboard.reminders.typeStock"));
+	const getTypeLabel = () =>
+		lastType === "intake" ? t("dashboard.reminders.typeIntake") : t("dashboard.reminders.typeStock");
 	const getChannelLabel = () => {
 		if (lastChannel === "both") return t("dashboard.reminders.channelBoth");
 		if (lastChannel === "push") return t("dashboard.reminders.channelPush");
@@ -219,12 +227,22 @@ export function getReminderStatusText(
 	const lines: Array<{ text: string; className?: string; strong?: boolean }> = [];
 
 	if (emptyMeds.length > 0) {
-		lines.push({ text: `🚨 ${t("dashboard.reminders.emptyStock", { count: emptyMeds.length })}`, className: "danger-text", strong: true });
+		lines.push({
+			text: `🚨 ${t("dashboard.reminders.emptyStock", { count: emptyMeds.length })}`,
+			className: "danger-text",
+			strong: true,
+		});
 		if (medsNeedingReminder.length > 0) {
-			lines.push({ text: `⚠ ${t("dashboard.reminders.needReorder", { count: medsNeedingReminder.length })}`, className: "danger-text" });
+			lines.push({
+				text: `⚠ ${t("dashboard.reminders.needReorder", { count: medsNeedingReminder.length })}`,
+				className: "danger-text",
+			});
 		}
 		if (lowStockNotYetCritical.length > 0) {
-			lines.push({ text: t("dashboard.reminders.lowWarning", { count: lowStockNotYetCritical.length }), className: "warning-text" });
+			lines.push({
+				text: t("dashboard.reminders.lowWarning", { count: lowStockNotYetCritical.length }),
+				className: "warning-text",
+			});
 		}
 		if (lastSent) {
 			lines.push({ text: `${t("dashboard.reminders.lastReminder")}: ${formatLastInfo(lastSent)}` });
@@ -233,9 +251,16 @@ export function getReminderStatusText(
 	}
 
 	if (medsNeedingReminder.length > 0) {
-		lines.push({ text: `⚠ ${t("dashboard.reminders.needReorder", { count: medsNeedingReminder.length })}`, className: "danger-text", strong: true });
+		lines.push({
+			text: `⚠ ${t("dashboard.reminders.needReorder", { count: medsNeedingReminder.length })}`,
+			className: "danger-text",
+			strong: true,
+		});
 		if (lowStockNotYetCritical.length > 0) {
-			lines.push({ text: t("dashboard.reminders.lowWarning", { count: lowStockNotYetCritical.length }), className: "warning-text" });
+			lines.push({
+				text: t("dashboard.reminders.lowWarning", { count: lowStockNotYetCritical.length }),
+				className: "warning-text",
+			});
 		}
 		if (lastSent) {
 			lines.push({ text: `${t("dashboard.reminders.lastReminder")}: ${formatLastInfo(lastSent)}` });
@@ -246,8 +271,13 @@ export function getReminderStatusText(
 	if (lowStockNotYetCritical.length > 0) {
 		const nextMed = lowStockNotYetCritical.sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
 		const daysUntilReminder = Math.max(0, (nextMed.daysLeft ?? 0) - reminderDaysBefore);
-		lines.push({ text: t("dashboard.reminders.lowWarning", { count: lowStockNotYetCritical.length }), className: "warning-text" });
-		lines.push({ text: `${t("dashboard.reminders.nextIn")}: ${nextMed.name} ${t("dashboard.reminders.inDays", { days: daysUntilReminder })}` });
+		lines.push({
+			text: t("dashboard.reminders.lowWarning", { count: lowStockNotYetCritical.length }),
+			className: "warning-text",
+		});
+		lines.push({
+			text: `${t("dashboard.reminders.nextIn")}: ${nextMed.name} ${t("dashboard.reminders.inDays", { days: daysUntilReminder })}`,
+		});
 		return { lines };
 	}
 
@@ -260,7 +290,9 @@ export function getReminderStatusText(
 		const daysUntilReminder = (nextMed.daysLeft ?? 0) - reminderDaysBefore;
 		if (daysUntilReminder > 0) {
 			lines.push({ text: `✓ ${t("dashboard.reminders.allOk")}`, className: "success-text" });
-			lines.push({ text: `${t("dashboard.reminders.nextIn")}: ${nextMed.name} ${t("dashboard.reminders.inDays", { days: daysUntilReminder })}` });
+			lines.push({
+				text: `${t("dashboard.reminders.nextIn")}: ${nextMed.name} ${t("dashboard.reminders.inDays", { days: daysUntilReminder })}`,
+			});
 			return { lines };
 		}
 	}

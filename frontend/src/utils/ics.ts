@@ -8,7 +8,10 @@ import type { Medication } from "../types";
  * Format a Date for ICS format (YYYYMMDDTHHMMSSZ)
  */
 function formatICSDate(date: Date): string {
-	return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+	return date
+		.toISOString()
+		.replace(/[-:]/g, "")
+		.replace(/\.\d{3}/, "");
 }
 
 /**
@@ -29,7 +32,7 @@ export function generateICS(med: Medication): void {
 				med.takenBy && med.takenBy.length > 0 ? `For: ${med.takenBy.join(", ")}` : "",
 				`Dosage: ${pillInfo}`,
 				`Frequency: every ${interval} day${interval !== 1 ? "s" : ""}`,
-				med.notes ? `Notes: ${med.notes}` : ""
+				med.notes ? `Notes: ${med.notes}` : "",
 			]
 				.filter(Boolean)
 				.join("\\n");

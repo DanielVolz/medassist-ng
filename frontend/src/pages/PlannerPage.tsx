@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
-import { MedicationAvatar } from "../components";
 import type { PlannerRow } from "../types";
 import { toInputValue } from "../utils/formatters";
 
@@ -39,7 +39,7 @@ export function PlannerPage() {
 	const [plannerLoading, setPlannerLoading] = useState(false);
 	const [range, setRange] = useState<{ start: string; end: string }>({
 		start: toInputValue(todayIso()),
-		end: toInputValue(plusDaysIso(3))
+		end: toInputValue(plusDaysIso(3)),
 	});
 	const [sendingPlannerEmail, setSendingPlannerEmail] = useState(false);
 	const [plannerEmailResult, setPlannerEmailResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -49,15 +49,23 @@ export function PlannerPage() {
 		if (typeof window !== "undefined" && user?.id) {
 			const savedRows = localStorage.getItem(userStorageKey(user.id, "plannerRows"));
 			const savedRange = localStorage.getItem(userStorageKey(user.id, "plannerRange"));
-			
+
 			if (savedRows) {
-				try { setPlannerRows(JSON.parse(savedRows)); } catch { setPlannerRows([]); }
+				try {
+					setPlannerRows(JSON.parse(savedRows));
+				} catch {
+					setPlannerRows([]);
+				}
 			} else {
 				setPlannerRows([]);
 			}
-			
+
 			if (savedRange) {
-				try { setRange(JSON.parse(savedRange)); } catch { /* keep default */ }
+				try {
+					setRange(JSON.parse(savedRange));
+				} catch {
+					/* keep default */
+				}
 			} else {
 				setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
 			}
@@ -71,9 +79,13 @@ export function PlannerPage() {
 		e.preventDefault();
 		setPlannerLoading(true);
 		const body = { startDate: toIsoString(range.start), endDate: toIsoString(range.end) };
-		const rows = await fetch("/api/medications/usage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+		const rows = (await fetch("/api/medications/usage", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		})
 			.then((res) => res.json())
-			.catch(() => []) as PlannerRow[];
+			.catch(() => [])) as PlannerRow[];
 		setPlannerRows(rows);
 		setPlannerLoading(false);
 		// Save to user-specific localStorage
@@ -124,43 +136,70 @@ export function PlannerPage() {
 		<section className="grid">
 			<article className="card">
 				<div className="card-head">
-					<h2>{t('planner.title')}</h2>
+					<h2>{t("planner.title")}</h2>
 				</div>
 				<form className="planner" onSubmit={runPlanner}>
 					<label>
-						{t('planner.from')}
-						<input type="datetime-local" step="60" value={range.start} onChange={(e) => setRange({ ...range, start: e.target.value })} />
+						{t("planner.from")}
+						<input
+							type="datetime-local"
+							step="60"
+							value={range.start}
+							onChange={(e) => setRange({ ...range, start: e.target.value })}
+						/>
 					</label>
 					<label>
-						{t('planner.until')}
-						<input type="datetime-local" step="60" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} />
+						{t("planner.until")}
+						<input
+							type="datetime-local"
+							step="60"
+							value={range.end}
+							onChange={(e) => setRange({ ...range, end: e.target.value })}
+						/>
 					</label>
 					<div className="planner-actions">
-						<button type="button" className="ghost" onClick={resetRange}>{t('common.reset')}</button>
-						<button type="submit" disabled={plannerLoading}>{plannerLoading ? t('planner.calculating') : t('planner.calculate')}</button>
+						<button type="button" className="ghost" onClick={resetRange}>
+							{t("common.reset")}
+						</button>
+						<button type="submit" disabled={plannerLoading}>
+							{plannerLoading ? t("planner.calculating") : t("planner.calculate")}
+						</button>
 					</div>
 				</form>
 				{plannerRows.length > 0 && (
 					<>
 						<div className="table">
 							<div className="table-head">
-								<span>{t('planner.table.medication')}</span>
-								<span>{t('planner.table.usage')}</span>
-								<span>{t('planner.table.blistersNeeded')}</span>
-								<span>{t('planner.table.available')}</span>
-								<span>{t('table.status')}</span>
+								<span>{t("planner.table.medication")}</span>
+								<span>{t("planner.table.usage")}</span>
+								<span>{t("planner.table.blistersNeeded")}</span>
+								<span>{t("planner.table.available")}</span>
+								<span>{t("table.status")}</span>
 							</div>
 							{plannerRows.map((row) => {
-								const med = meds.find(m => m.name === row.medicationName);
+								const med = meds.find((m) => m.name === row.medicationName);
 								return (
 									<div key={row.medicationId} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
-										<span data-label={t('planner.table.medication')} className="cell-with-avatar"><MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />{row.medicationName}</span>
-										<span data-label={t('planner.table.usage')}><strong>{row.plannerUsage}</strong>&nbsp;{t('common.pills')}</span>
-										<span data-label={t('planner.table.blisters')}>{row.blistersNeeded} × {row.blisterSize}</span>
-										<span data-label={t('planner.table.available')}>
-											{row.fullBlisters} {t('common.blisters')}{row.loosePills > 0 && ` + ${row.loosePills} ${t('common.pills')}`}
+										<span data-label={t("planner.table.medication")} className="cell-with-avatar">
+											<MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />
+											{row.medicationName}
 										</span>
-										<span data-label={t('table.status')} className={row.enough ? "status-chip success" : "status-chip danger"}>{row.enough ? t('status.enough') : t('status.outOfStock')}</span>
+										<span data-label={t("planner.table.usage")}>
+											<strong>{row.plannerUsage}</strong>&nbsp;{t("common.pills")}
+										</span>
+										<span data-label={t("planner.table.blisters")}>
+											{row.blistersNeeded} × {row.blisterSize}
+										</span>
+										<span data-label={t("planner.table.available")}>
+											{row.fullBlisters} {t("common.blisters")}
+											{row.loosePills > 0 && ` + ${Math.round(row.loosePills * 10) / 10} ${t("common.pills")}`}
+										</span>
+										<span
+											data-label={t("table.status")}
+											className={row.enough ? "status-chip success" : "status-chip danger"}
+										>
+											{row.enough ? t("status.enough") : t("status.outOfStock")}
+										</span>
 									</div>
 								);
 							})}
@@ -168,7 +207,7 @@ export function PlannerPage() {
 						{settings.emailEnabled && settings.notificationEmail && (
 							<div className="planner-email-action">
 								<button type="button" className="ghost" onClick={sendPlannerEmail} disabled={sendingPlannerEmail}>
-									{sendingPlannerEmail ? t('common.sending') : t('planner.sendEmail')}
+									{sendingPlannerEmail ? t("common.sending") : t("planner.sendEmail")}
 								</button>
 								{plannerEmailResult && (
 									<span className={plannerEmailResult.success ? "success-text" : "danger-text"}>

@@ -1,14 +1,14 @@
 /**
  * MedDetailModal - Medication detail view with nested modals
  * Displays medication information, stock, schedules, and provides refill/edit functionality
- * 
+ *
  * Can work in two modes:
  * 1. Context mode: Uses useAppContext() for all state (when no props provided)
  * 2. Props mode: Accepts all required data as props (for gradual adoption)
  */
 import { useTranslation } from "react-i18next";
-import type { Medication, Coverage, RefillEntry, StockThresholds } from "../types";
-import { MedicationAvatar, Lightbox } from "../components";
+import { Lightbox, MedicationAvatar } from "../components";
+import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
 import { getMedTotal, getPackageSize } from "../types";
 import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
 import { getStockStatus } from "../utils/schedule";
@@ -135,7 +135,8 @@ export function MedDetailModal({
 	const packageSize = getPackageSize(selectedMed);
 	const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
 	const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-	const textClass = status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "success-text";
+	const textClass =
+		status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "success-text";
 	const stock = getBlisterStock(currentStock, selectedMed.pillsPerBlister, selectedMed.looseTablets, packageSize);
 
 	return (
@@ -177,7 +178,12 @@ export function MedDetailModal({
 							<div className="med-detail-item">
 								<span className="med-detail-label">{t("table.openBlister")}</span>
 								<span className={`med-detail-value ${textClass}`}>
-									{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, selectedMed.pillsPerBlister ?? 1, t)}
+									{formatOpenBlisterAndLoose(
+										stock.openBlisterPills,
+										stock.loosePills,
+										selectedMed.pillsPerBlister ?? 1,
+										t
+									)}
 								</span>
 							</div>
 							<div className="med-detail-item full-width">
@@ -214,7 +220,9 @@ export function MedDetailModal({
 							{selectedMed.expiryDate && (
 								<div className="med-detail-item">
 									<span className="med-detail-label">{t("modal.expiryDate")}</span>
-									<span className={`med-detail-value ${getExpiryClass(selectedMed.expiryDate, settings.expiryWarningDays)}`}>
+									<span
+										className={`med-detail-value ${getExpiryClass(selectedMed.expiryDate, settings.expiryWarningDays)}`}
+									>
 										{new Date(selectedMed.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), {
 											day: "2-digit",
 											month: "short",
@@ -248,7 +256,8 @@ export function MedDetailModal({
 												{selectedMed.pillWeightMg && ` (${totalUsage * selectedMed.pillWeightMg} mg)`}
 											</span>
 											<span className="med-schedule-freq">
-												{t("form.blisters.every")} {blister.every} {blister.every !== 1 ? t("common.days") : t("common.day")}
+												{t("form.blisters.every")} {blister.every}{" "}
+												{blister.every !== 1 ? t("common.days") : t("common.day")}
 											</span>
 											<span className="med-schedule-time">
 												{t("modal.at")}{" "}
@@ -274,7 +283,9 @@ export function MedDetailModal({
 							<div className="med-detail-grid">
 								<div className="med-detail-item">
 									<span className="med-detail-label">{t("modal.daysLeft")}</span>
-									<span className="med-detail-value">{medCoverage.daysLeft !== null ? formatNumber(medCoverage.daysLeft) : "—"}</span>
+									<span className="med-detail-value">
+										{medCoverage.daysLeft !== null ? formatNumber(medCoverage.daysLeft) : "—"}
+									</span>
 								</div>
 								<div className="med-detail-item">
 									<span className="med-detail-label">{t("modal.runsOut")}</span>
@@ -295,7 +306,10 @@ export function MedDetailModal({
 					{/* Refill History Section */}
 					{refillHistory.length > 0 && (
 						<div className="med-detail-section">
-							<h3 className="section-header-clickable" onClick={() => onRefillHistoryExpandedChange(!refillHistoryExpanded)}>
+							<h3
+								className="section-header-clickable"
+								onClick={() => onRefillHistoryExpandedChange(!refillHistoryExpanded)}
+							>
 								{t("refill.history")} ({refillHistory.length})
 								<span className="expand-arrow">{refillHistoryExpanded ? "▼" : "▶"}</span>
 							</h3>
@@ -316,7 +330,9 @@ export function MedDetailModal({
 												})}
 											</span>
 											<span className="refill-amount">
-												+{entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + entry.loosePillsAdded}{" "}
+												+
+												{entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister +
+													entry.loosePillsAdded}{" "}
 												{t("common.pills")}
 											</span>
 										</div>
@@ -338,7 +354,11 @@ export function MedDetailModal({
 							{t("common.edit")}
 						</button>
 						{selectedMed.blisters.length > 0 && (
-							<button className="secondary icon-only" onClick={() => generateICS(selectedMed)} title={t("modal.exportTooltip")}>
+							<button
+								className="secondary icon-only"
+								onClick={() => generateICS(selectedMed)}
+								title={t("modal.exportTooltip")}
+							>
 								📅
 							</button>
 						)}
@@ -370,11 +390,21 @@ export function MedDetailModal({
 						<div className="refill-form">
 							<label>
 								{t("refill.packs")}
-								<input type="number" min="0" value={refillPacks} onChange={(e) => onRefillPacksChange(parseInt(e.target.value) || 0)} />
+								<input
+									type="number"
+									min="0"
+									value={refillPacks}
+									onChange={(e) => onRefillPacksChange(parseInt(e.target.value, 10) || 0)}
+								/>
 							</label>
 							<label>
 								{t("refill.loosePills")}
-								<input type="number" min="0" value={refillLoose} onChange={(e) => onRefillLooseChange(parseInt(e.target.value) || 0)} />
+								<input
+									type="number"
+									min="0"
+									value={refillLoose}
+									onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
+								/>
 							</label>
 						</div>
 
@@ -392,7 +422,8 @@ export function MedDetailModal({
 								</button>
 								{(refillPacks > 0 || refillLoose > 0) && (
 									<span className="refill-preview">
-										+{refillPacks * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + refillLoose} {t("common.pills")}
+										+{refillPacks * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + refillLoose}{" "}
+										{t("common.pills")}
 									</span>
 								)}
 							</div>
@@ -428,12 +459,13 @@ export function MedDetailModal({
 								<>
 									<div className="edit-stock-form">
 										<label>
-											{t("editStock.fullBlisters")} {t("editStock.pillsPerBlister", { count: selectedMed.pillsPerBlister })}
+											{t("editStock.fullBlisters")}{" "}
+											{t("editStock.pillsPerBlister", { count: selectedMed.pillsPerBlister })}
 											<input
 												type="number"
 												min="0"
 												value={editStockFullBlisters}
-												onChange={(e) => onEditStockFullBlistersChange(parseInt(e.target.value) || 0)}
+												onChange={(e) => onEditStockFullBlistersChange(parseInt(e.target.value, 10) || 0)}
 											/>
 										</label>
 										<label>
@@ -444,7 +476,7 @@ export function MedDetailModal({
 												max={selectedMed.pillsPerBlister}
 												value={editStockPartialBlisterPills}
 												onChange={(e) => {
-													const val = parseInt(e.target.value) || 0;
+													const val = parseInt(e.target.value, 10) || 0;
 													const min = editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0;
 													const max = selectedMed.pillsPerBlister;
 													onEditStockPartialBlisterPillsChange(Math.max(min, Math.min(val, max)));
@@ -466,7 +498,9 @@ export function MedDetailModal({
 												{newTotal} {t("common.pills")}
 											</span>
 										</div>
-										<div className={`summary-row difference ${difference > 0 ? "positive" : difference < 0 ? "negative" : ""}`}>
+										<div
+											className={`summary-row difference ${difference > 0 ? "positive" : difference < 0 ? "negative" : ""}`}
+										>
 											<span>{t("editStock.difference")}:</span>
 											<span>
 												{difference > 0 ? "+" : ""}

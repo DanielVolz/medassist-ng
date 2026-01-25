@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { Medication, FormState, FormBlister, FieldErrors } from "../types";
+import type { FieldErrors, FormBlister, FormState, Medication } from "../types";
 import { FIELD_LIMITS } from "../types";
 import { toDateValue, toTimeValue } from "../utils/formatters";
 
@@ -10,7 +10,7 @@ export const defaultBlister = (): FormBlister => {
 		usage: "1",
 		every: "1",
 		startDate: toDateValue(now),
-		startTime: toTimeValue(now)
+		startTime: toTimeValue(now),
 	};
 };
 
@@ -26,7 +26,7 @@ export const defaultForm = (): FormState => ({
 	expiryDate: "",
 	notes: "",
 	intakeRemindersEnabled: false,
-	blisters: [defaultBlister()]
+	blisters: [defaultBlister()],
 });
 
 export interface UseMedicationFormReturn {
@@ -74,23 +74,26 @@ export function useMedicationForm(): UseMedicationFormReturn {
 	const [takenByInput, setTakenByInput] = useState("");
 
 	// Validate form fields
-	const validateField = useCallback((field: keyof FieldErrors, value: string | string[]): string | undefined => {
-		const limits = FIELD_LIMITS[field];
-		// Skip validation for takenBy array (individual items validated on add)
-		if (field === 'takenBy') return undefined;
-		const strValue = typeof value === 'string' ? value : '';
-		if (field === 'name' && (!strValue || strValue.trim().length === 0)) {
-			return t('common.validation.required');
-		}
-		if ('max' in limits && strValue.length > limits.max) {
-			return t('common.validation.maxLength', { max: limits.max, current: strValue.length });
-		}
-		return undefined;
-	}, [t]);
+	const validateField = useCallback(
+		(field: keyof FieldErrors, value: string | string[]): string | undefined => {
+			const limits = FIELD_LIMITS[field];
+			// Skip validation for takenBy array (individual items validated on add)
+			if (field === "takenBy") return undefined;
+			const strValue = typeof value === "string" ? value : "";
+			if (field === "name" && (!strValue || strValue.trim().length === 0)) {
+				return t("common.validation.required");
+			}
+			if ("max" in limits && strValue.length > limits.max) {
+				return t("common.validation.maxLength", { max: limits.max, current: strValue.length });
+			}
+			return undefined;
+		},
+		[t]
+	);
 
 	// Check if form has any errors
 	const hasValidationErrors = useMemo(() => {
-		return Object.values(fieldErrors).some(error => error !== undefined);
+		return Object.values(fieldErrors).some((error) => error !== undefined);
 	}, [fieldErrors]);
 
 	// Check if form has been modified from original state
@@ -108,9 +111,9 @@ export function useMedicationForm(): UseMedicationFormReturn {
 	// Validate all fields when form changes
 	useEffect(() => {
 		const errors: FieldErrors = {};
-		(['name', 'genericName', 'notes'] as const).forEach(field => {
-			const error = validateField(field, form[field]);
-			if (error) errors[field] = error;
+		(["name", "genericName", "notes"] as const).forEach((f) => {
+			const error = validateField(f, form[f]);
+			if (error) errors[f] = error;
 		});
 		setFieldErrors(errors);
 	}, [form.name, form.genericName, form.notes, validateField]);
@@ -147,11 +150,11 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
 			intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
-			blisters: med.blisters.map((s) => ({ 
-				usage: String(s.usage), 
-				every: String(s.every), 
+			blisters: med.blisters.map((s) => ({
+				usage: String(s.usage),
+				every: String(s.every),
 				startDate: toDateValue(s.start),
-				startTime: toTimeValue(s.start)
+				startTime: toTimeValue(s.start),
 			})),
 		};
 		setForm(editForm);
@@ -179,27 +182,33 @@ export function useMedicationForm(): UseMedicationFormReturn {
 	}, []);
 
 	// Tag input helpers for "Taken By" field
-	const addTakenByPerson = useCallback((name: string) => {
-		const trimmed = name.trim();
-		if (trimmed && trimmed.length <= FIELD_LIMITS.takenBy.max && !form.takenBy.includes(trimmed)) {
-			setForm(prev => ({ ...prev, takenBy: [...prev.takenBy, trimmed] }));
-		}
-		setTakenByInput("");
-	}, [form.takenBy]);
+	const addTakenByPerson = useCallback(
+		(name: string) => {
+			const trimmed = name.trim();
+			if (trimmed && trimmed.length <= FIELD_LIMITS.takenBy.max && !form.takenBy.includes(trimmed)) {
+				setForm((prev) => ({ ...prev, takenBy: [...prev.takenBy, trimmed] }));
+			}
+			setTakenByInput("");
+		},
+		[form.takenBy]
+	);
 
 	const removeTakenByPerson = useCallback((name: string) => {
-		setForm(prev => ({ ...prev, takenBy: prev.takenBy.filter(p => p !== name) }));
+		setForm((prev) => ({ ...prev, takenBy: prev.takenBy.filter((p) => p !== name) }));
 	}, []);
 
-	const handleTakenByKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-		if (e.key === 'Enter' || e.key === ',') {
-			e.preventDefault();
-			addTakenByPerson(takenByInput);
-		} else if (e.key === 'Backspace' && !takenByInput && form.takenBy.length > 0) {
-			// Remove last tag on backspace when input is empty
-			removeTakenByPerson(form.takenBy[form.takenBy.length - 1]);
-		}
-	}, [takenByInput, form.takenBy, addTakenByPerson, removeTakenByPerson]);
+	const handleTakenByKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLInputElement>) => {
+			if (e.key === "Enter" || e.key === ",") {
+				e.preventDefault();
+				addTakenByPerson(takenByInput);
+			} else if (e.key === "Backspace" && !takenByInput && form.takenBy.length > 0) {
+				// Remove last tag on backspace when input is empty
+				removeTakenByPerson(form.takenBy[form.takenBy.length - 1]);
+			}
+		},
+		[takenByInput, form.takenBy, addTakenByPerson, removeTakenByPerson]
+	);
 
 	return {
 		form,

@@ -3,7 +3,7 @@
  * Handles new medication creation and editing existing medications
  */
 import { useTranslation } from "react-i18next";
-import type { Medication, FormState, FormBlister, FieldErrors } from "../types";
+import type { FieldErrors, FormBlister, FormState, Medication } from "../types";
 
 // Field limits for validation
 const FIELD_LIMITS = {
@@ -91,7 +91,7 @@ export function MobileEditModal({
 	onUploadMedImage,
 	onDeleteMedImage,
 	onClose,
-	onResetForm,
+	_onResetForm,
 	onSaveMedication,
 }: MobileEditModalProps) {
 	const { t } = useTranslation();
@@ -103,19 +103,26 @@ export function MobileEditModal({
 	return (
 		<div className="modal-overlay" onClick={onClose}>
 			<div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
-				<button
-					className="modal-close"
-					onClick={() => {
-						onClose();
-						onResetForm();
-					}}
-				>
+				<button className="modal-close" onClick={onClose}>
 					×
 				</button>
 				<div className="edit-modal-header">
 					<h2>{editingId ? t("form.editEntry") : t("form.newEntry")}</h2>
 				</div>
-				<form className="form-grid mobile-edit-form" onSubmit={onSaveMedication}>
+				<form
+					className="form-grid mobile-edit-form"
+					onSubmit={(e) => {
+						// Check native HTML5 validation first
+						const formElement = e.currentTarget;
+						if (!formElement.checkValidity()) {
+							// Let browser show native validation messages
+							formElement.reportValidity();
+							e.preventDefault();
+							return;
+						}
+						onSaveMedication(e);
+					}}
+				>
 					<label className={`full ${fieldErrors.name ? "has-error" : ""}`}>
 						{t("form.commercialName")}
 						<input
@@ -155,7 +162,9 @@ export function MobileEditModal({
 								onBlur={() => {
 									if (takenByInput.trim()) onAddTakenByPerson(takenByInput);
 								}}
-								placeholder={form.takenBy.length === 0 ? t("form.placeholders.takenBy") : t("form.placeholders.addPerson")}
+								placeholder={
+									form.takenBy.length === 0 ? t("form.placeholders.takenBy") : t("form.placeholders.addPerson")
+								}
 								maxLength={FIELD_LIMITS.takenBy.max}
 								list="takenby-suggestions-modal"
 							/>
@@ -171,19 +180,39 @@ export function MobileEditModal({
 					</label>
 					<label>
 						{t("form.packs")}
-						<input type="number" min="0" value={form.packCount} onChange={(e) => onHandleValueChange("packCount", e.target.value)} />
+						<input
+							type="number"
+							min="0"
+							value={form.packCount}
+							onChange={(e) => onHandleValueChange("packCount", e.target.value)}
+						/>
 					</label>
 					<label>
 						{t("form.blistersPerPack")}
-						<input type="number" min="0" value={form.blistersPerPack} onChange={(e) => onHandleValueChange("blistersPerPack", e.target.value)} />
+						<input
+							type="number"
+							min="0"
+							value={form.blistersPerPack}
+							onChange={(e) => onHandleValueChange("blistersPerPack", e.target.value)}
+						/>
 					</label>
 					<label>
 						{t("form.pillsPerBlister")}
-						<input type="number" min="1" value={form.pillsPerBlister} onChange={(e) => onHandleValueChange("pillsPerBlister", e.target.value)} />
+						<input
+							type="number"
+							min="1"
+							value={form.pillsPerBlister}
+							onChange={(e) => onHandleValueChange("pillsPerBlister", e.target.value)}
+						/>
 					</label>
 					<label>
 						{t("form.loosePills")}
-						<input type="number" min="0" value={form.looseTablets} onChange={(e) => onHandleValueChange("looseTablets", e.target.value)} />
+						<input
+							type="number"
+							min="0"
+							value={form.looseTablets}
+							onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
+						/>
 					</label>
 					<div className="full">
 						<p className="sub">
@@ -203,7 +232,11 @@ export function MobileEditModal({
 					</label>
 					<label className="full">
 						{t("form.expiryDate")}
-						<input type="date" value={form.expiryDate} onChange={(e) => onFormChange({ ...form, expiryDate: e.target.value })} />
+						<input
+							type="date"
+							value={form.expiryDate}
+							onChange={(e) => onFormChange({ ...form, expiryDate: e.target.value })}
+						/>
 					</label>
 
 					{/* Refill section - only shown when editing (mobile) */}
@@ -213,11 +246,21 @@ export function MobileEditModal({
 							<div className="refill-form-inline">
 								<label>
 									{t("refill.packs")}
-									<input type="number" min="0" value={refillPacks} onChange={(e) => onRefillPacksChange(parseInt(e.target.value) || 0)} />
+									<input
+										type="number"
+										min="0"
+										value={refillPacks}
+										onChange={(e) => onRefillPacksChange(parseInt(e.target.value, 10) || 0)}
+									/>
 								</label>
 								<label>
 									{t("refill.loosePills")}
-									<input type="number" min="0" value={refillLoose} onChange={(e) => onRefillLooseChange(parseInt(e.target.value) || 0)} />
+									<input
+										type="number"
+										min="0"
+										value={refillLoose}
+										onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
+									/>
 								</label>
 								<button
 									type="button"
@@ -229,7 +272,8 @@ export function MobileEditModal({
 								</button>
 								{(refillPacks > 0 || refillLoose > 0) && (
 									<span className="refill-preview">
-										+{refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) + refillLoose} {t("common.pills")}
+										+{refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) + refillLoose}{" "}
+										{t("common.pills")}
 									</span>
 								)}
 							</div>
@@ -248,7 +292,7 @@ export function MobileEditModal({
 							onInput={(e) => {
 								const target = e.target as HTMLTextAreaElement;
 								target.style.height = "auto";
-								target.style.height = target.scrollHeight + "px";
+								target.style.height = `${target.scrollHeight}px`;
 							}}
 						/>
 						{form.notes.length > 0 && (
@@ -263,7 +307,7 @@ export function MobileEditModal({
 						<div className="full image-field">
 							<span className="field-label">{t("form.medicationImage")}</span>
 							<div className="image-preview">
-								<img src={currentMed.imageUrl} alt={currentMed.name} />
+								<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
 								<button type="button" className="danger" onClick={() => onDeleteMedImage(editingId)}>
 									{t("form.removeImage")}
 								</button>
@@ -272,7 +316,11 @@ export function MobileEditModal({
 					) : editingId ? (
 						<label className="full">
 							{t("form.medicationImage")}
-							<input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onUploadMedImage(editingId, e.target.files[0])} />
+							<input
+								type="file"
+								accept="image/*"
+								onChange={(e) => e.target.files?.[0] && onUploadMedImage(editingId, e.target.files[0])}
+							/>
 						</label>
 					) : null}
 
@@ -293,19 +341,38 @@ export function MobileEditModal({
 							<div key={idx} className="blister-row">
 								<label className="compact">
 									<span>{t("form.blisters.usage")}</span>
-									<input type="number" min="0.5" step="0.5" value={b.usage} onChange={(e) => onSetBlisterValue(idx, "usage", e.target.value)} />
+									<input
+										type="number"
+										min="0"
+										step="0.1"
+										value={b.usage}
+										onChange={(e) => onSetBlisterValue(idx, "usage", e.target.value)}
+									/>
 								</label>
 								<label className="compact">
 									<span>{t("form.blisters.everyDays")}</span>
-									<input type="number" min="1" value={b.every} onChange={(e) => onSetBlisterValue(idx, "every", e.target.value)} />
+									<input
+										type="number"
+										min="1"
+										value={b.every}
+										onChange={(e) => onSetBlisterValue(idx, "every", e.target.value)}
+									/>
 								</label>
 								<label className="compact full-row">
 									<span>{t("form.blisters.startDate")}</span>
-									<input type="date" value={b.startDate} onChange={(e) => onSetBlisterValue(idx, "startDate", e.target.value)} />
+									<input
+										type="date"
+										value={b.startDate}
+										onChange={(e) => onSetBlisterValue(idx, "startDate", e.target.value)}
+									/>
 								</label>
 								<label className="compact time-label">
 									<span>{t("form.blisters.startTime")}</span>
-									<input type="time" value={b.startTime} onChange={(e) => onSetBlisterValue(idx, "startTime", e.target.value)} />
+									<input
+										type="time"
+										value={b.startTime}
+										onChange={(e) => onSetBlisterValue(idx, "startTime", e.target.value)}
+									/>
 								</label>
 								{form.blisters.length > 1 && (
 									<button type="button" className="danger remove-blister-btn" onClick={() => onRemoveBlister(idx)}>
@@ -320,17 +387,13 @@ export function MobileEditModal({
 					</fieldset>
 
 					<div className="modal-footer">
-						<button
-							type="button"
-							className="ghost"
-							onClick={() => {
-								onClose();
-								onResetForm();
-							}}
-						>
+						<button type="button" className="ghost" onClick={onClose}>
 							{t("common.cancel")}
 						</button>
-						<button type="submit" disabled={saving || hasValidationErrors || (!formChanged && (formSaved || !!editingId))}>
+						<button
+							type="submit"
+							disabled={saving || hasValidationErrors || (!formChanged && (formSaved || !!editingId))}
+						>
 							{formSaved && !formChanged ? t("common.saved") : t("common.save")}
 						</button>
 					</div>

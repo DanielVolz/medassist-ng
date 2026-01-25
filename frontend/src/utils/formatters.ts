@@ -2,7 +2,7 @@
 // Formatting Utilities
 // =============================================================================
 
-import type { Medication, BlisterStock } from "../types";
+import type { BlisterStock, Medication } from "../types";
 
 /**
  * Map timezone to region code (ISO 3166-1 alpha-2).
@@ -74,19 +74,19 @@ export function getRegionFromTimezone(): string | undefined {
  * Get locale for formatting based on app language and timezone region.
  * Combines app language (en/de) with region from timezone (DE/US/etc.)
  * Example: app=en + timezone=Europe/Berlin → en-DE (English text, German format)
- * 
+ *
  * @param appLanguage - The app's UI language (e.g., 'en', 'de')
  */
 export function getSystemLocale(appLanguage?: string): string {
 	const region = getRegionFromTimezone();
-	const lang = appLanguage || navigator.language?.split('-')[0] || 'en';
-	
+	const lang = appLanguage || navigator.language?.split("-")[0] || "en";
+
 	if (region) {
 		return `${lang}-${region}`;
 	}
-	
+
 	// Fallback: use browser language, or en-US as last resort
-	return navigator.language || 'en-US';
+	return navigator.language || "en-US";
 }
 
 /**
@@ -96,7 +96,7 @@ export function formatNumber(n: number | null | undefined, decimals = 0): string
 	if (n === null || n === undefined) return "—";
 	return n.toLocaleString(undefined, {
 		minimumFractionDigits: decimals,
-		maximumFractionDigits: decimals
+		maximumFractionDigits: decimals,
 	});
 }
 
@@ -107,29 +107,29 @@ export function formatNumber(n: number | null | undefined, decimals = 0): string
  */
 export function formatDateTime(iso: string | null | undefined, locale?: string): string {
 	if (!iso) return "-";
-	
+
 	// Extract date and time components directly from ISO string
 	// Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SS.sssZ
 	const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
 	if (!match) return "-";
-	
+
 	const [, year, month, day, hour, minute] = match;
 	const effectiveLocale = locale ?? getSystemLocale();
-	
+
 	// Create a date object for formatting, but use local timezone interpretation
 	// by creating the date without the Z suffix
 	const localDateStr = `${year}-${month}-${day}T${hour}:${minute}:00`;
 	const d = new Date(localDateStr);
-	if (isNaN(d.getTime())) return "-";
-	
+	if (Number.isNaN(d.getTime())) return "-";
+
 	const dateOpts: Intl.DateTimeFormatOptions = {
 		year: "numeric",
 		month: "2-digit",
-		day: "2-digit"
+		day: "2-digit",
 	};
 	const timeOpts: Intl.DateTimeFormatOptions = {
 		hour: "2-digit",
-		minute: "2-digit"
+		minute: "2-digit",
 	};
 	const dateStr = d.toLocaleDateString(effectiveLocale, dateOpts);
 	const timeStr = d.toLocaleTimeString(effectiveLocale, timeOpts);
@@ -224,7 +224,8 @@ export function getExpiryClass(expiryDate: string | null | undefined, thresholdD
  * Calculate blister stock breakdown for a medication
  */
 export function getBlisterStock(med: Medication): BlisterStock {
-	const total = med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
+	const total =
+		med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
 	const bSize = med.pillsPerBlister;
 	const fullBlisters = Math.floor(total / bSize);
 	const openBlisterPills = total % bSize;

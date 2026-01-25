@@ -28,6 +28,8 @@ export interface Settings {
 	nextScheduledCheck: string | null;
 	lastNotificationType: "stock" | "intake" | null;
 	lastNotificationChannel: "email" | "push" | "both" | null;
+	lastReminderMedName: string | null;
+	lastReminderTakenBy: string | null;
 	shoutrrrEnabled: boolean;
 	shoutrrrUrl: string;
 	emailStockReminders: boolean;
@@ -61,6 +63,8 @@ const defaultSettings: Settings = {
 	nextScheduledCheck: null,
 	lastNotificationType: null,
 	lastNotificationChannel: null,
+	lastReminderMedName: null,
+	lastReminderTakenBy: null,
 	shoutrrrEnabled: false,
 	shoutrrrUrl: "",
 	emailStockReminders: true,
@@ -68,7 +72,7 @@ const defaultSettings: Settings = {
 	shoutrrrStockReminders: true,
 	shoutrrrIntakeReminders: true,
 	stockCalculationMode: "automatic",
-	expiryWarningDays: 30
+	expiryWarningDays: 30,
 };
 
 export interface UseSettingsReturn {
@@ -123,6 +127,37 @@ export function useSettings(): UseSettingsReturn {
 		loadSettings();
 	}, [loadSettings]);
 
+	// Auto-refresh reminder status (last sent timestamp) every 30 seconds
+	useEffect(() => {
+		const refreshReminderStatus = () => {
+			fetch("/api/settings", { credentials: "include" })
+				.then((res) => (res.ok ? res.json() : Promise.reject()))
+				.then((data) => {
+					// Only update the reminder-related fields without triggering unsaved changes
+					setSettings((prev) => ({
+						...prev,
+						lastAutoEmailSent: data.lastAutoEmailSent ?? prev.lastAutoEmailSent,
+						lastNotificationType: data.lastNotificationType ?? prev.lastNotificationType,
+						lastNotificationChannel: data.lastNotificationChannel ?? prev.lastNotificationChannel,
+						lastReminderMedName: data.lastReminderMedName ?? prev.lastReminderMedName,
+						lastReminderTakenBy: data.lastReminderTakenBy ?? prev.lastReminderTakenBy,
+					}));
+					setSavedSettings((prev) => ({
+						...prev,
+						lastAutoEmailSent: data.lastAutoEmailSent ?? prev.lastAutoEmailSent,
+						lastNotificationType: data.lastNotificationType ?? prev.lastNotificationType,
+						lastNotificationChannel: data.lastNotificationChannel ?? prev.lastNotificationChannel,
+						lastReminderMedName: data.lastReminderMedName ?? prev.lastReminderMedName,
+						lastReminderTakenBy: data.lastReminderTakenBy ?? prev.lastReminderTakenBy,
+					}));
+				})
+				.catch(() => {});
+		};
+
+		const interval = setInterval(refreshReminderStatus, 30000);
+		return () => clearInterval(interval);
+	}, []);
+
 	const saveSettings = useCallback(
 		async (e: React.FormEvent) => {
 			e.preventDefault();
@@ -134,7 +169,7 @@ export function useSettings(): UseSettingsReturn {
 
 			// Validate email if email notifications are enabled
 			if (effectiveEmailEnabled && settings.notificationEmail) {
-				const emailRegex = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/i;
+				const emailRegex = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
 				if (!emailRegex.test(settings.notificationEmail)) {
 					setTestEmailResult({ success: false, message: "Invalid email address" });
 					return;
@@ -169,19 +204,19 @@ export function useSettings(): UseSettingsReturn {
 				smtpUser: settings.smtpUser,
 				smtpPass: settings.smtpPass || undefined,
 				smtpFrom: settings.smtpFrom,
-				smtpSecure: settings.smtpSecure
+				smtpSecure: settings.smtpSecure,
 			};
 
 			await fetch("/api/settings", {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(payload)
+				body: JSON.stringify(payload),
 			}).catch(() => null);
 
 			const updatedSettings = {
 				...settings,
 				emailEnabled: effectiveEmailEnabled,
-				shoutrrrEnabled: effectiveShoutrrrEnabled
+				shoutrrrEnabled: effectiveShoutrrrEnabled,
 			};
 			setSettings(updatedSettings);
 			setSettingsSaving(false);
@@ -198,10 +233,13 @@ export function useSettings(): UseSettingsReturn {
 			const res = await fetch("/api/settings/test-email", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ email: settings.notificationEmail })
+				body: JSON.stringify({ email: settings.notificationEmail }),
 			});
 			const data = await res.json();
-			setTestEmailResult({ success: res.ok, message: data.message || (res.ok ? "Email sent!" : "Failed to send email") });
+			setTestEmailResult({
+				success: res.ok,
+				message: data.message || (res.ok ? "Email sent!" : "Failed to send email"),
+			});
 		} catch {
 			setTestEmailResult({ success: false, message: "Failed to send test email" });
 		} finally {
@@ -216,12 +254,12 @@ export function useSettings(): UseSettingsReturn {
 			const res = await fetch("/api/settings/test-shoutrrr", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ url: settings.shoutrrrUrl })
+				body: JSON.stringify({ url: settings.shoutrrrUrl }),
 			});
 			const data = await res.json();
 			setTestShoutrrrResult({
 				success: res.ok,
-				message: data.message || (res.ok ? "Notification sent!" : "Failed to send notification")
+				message: data.message || (res.ok ? "Notification sent!" : "Failed to send notification"),
 			});
 		} catch {
 			setTestShoutrrrResult({ success: false, message: "Failed to send test notification" });
@@ -250,6 +288,6 @@ export function useSettings(): UseSettingsReturn {
 		saveSettings,
 		testEmail,
 		testShoutrrr,
-		hasUnsavedChanges
+		hasUnsavedChanges,
 	};
 }

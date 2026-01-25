@@ -1,0 +1,12 @@
+#!/bin/sh
+
+echo "Running backend tests before push..."
+cd backend && CI=true npm test
+
+if [ $? -ne 0 ]; then
+  echo "❌ Backend tests failed. Push aborted."
+  echo "Use 'git push --no-verify' to skip tests if needed."
+  exit 1
+fi
+
+echo "✅ Backend tests passed!"

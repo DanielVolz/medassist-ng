@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { Medication } from "../types";
 
 export interface UseMedicationsReturn {
@@ -29,35 +29,44 @@ export function useMedications(): UseMedicationsReturn {
 			.finally(() => setLoading(false));
 	}, []);
 
-	const deleteMed = useCallback(async (id: number, editingId: number | null, resetForm: () => void) => {
-		await fetch(`/api/medications/${id}`, { method: "DELETE" }).catch(() => null);
-		if (editingId === id) resetForm();
-		loadMeds();
-	}, [loadMeds]);
+	const deleteMed = useCallback(
+		async (id: number, editingId: number | null, resetForm: () => void) => {
+			await fetch(`/api/medications/${id}`, { method: "DELETE" }).catch(() => null);
+			if (editingId === id) resetForm();
+			loadMeds();
+		},
+		[loadMeds]
+	);
 
-	const uploadMedImage = useCallback(async (medId: number, file: File) => {
-		setUploadingImage(true);
-		const formData = new FormData();
-		formData.append("file", file);
-		
-		try {
-			const res = await fetch(`/api/medications/${medId}/image`, {
-				method: "POST",
-				body: formData,
-			});
-			if (res.ok) {
-				loadMeds();
+	const uploadMedImage = useCallback(
+		async (medId: number, file: File) => {
+			setUploadingImage(true);
+			const formData = new FormData();
+			formData.append("file", file);
+
+			try {
+				const res = await fetch(`/api/medications/${medId}/image`, {
+					method: "POST",
+					body: formData,
+				});
+				if (res.ok) {
+					loadMeds();
+				}
+			} catch {
+				// ignore
 			}
-		} catch {
-			// ignore
-		}
-		setUploadingImage(false);
-	}, [loadMeds]);
+			setUploadingImage(false);
+		},
+		[loadMeds]
+	);
 
-	const deleteMedImage = useCallback(async (medId: number) => {
-		await fetch(`/api/medications/${medId}/image`, { method: "DELETE" }).catch(() => null);
-		loadMeds();
-	}, [loadMeds]);
+	const deleteMedImage = useCallback(
+		async (medId: number) => {
+			await fetch(`/api/medications/${medId}/image`, { method: "DELETE" }).catch(() => null);
+			loadMeds();
+		},
+		[loadMeds]
+	);
 
 	return {
 		meds,

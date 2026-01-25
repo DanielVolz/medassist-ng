@@ -8,14 +8,12 @@ export interface UseDosesReturn {
 	takenDoses: Set<string>;
 	setTakenDoses: React.Dispatch<React.SetStateAction<Set<string>>>;
 	dismissedDoses: Set<string>;
-	clearingMissed: boolean;
 	showClearMissedConfirm: boolean;
 	setShowClearMissedConfirm: (show: boolean) => void;
 	getDoseId: (baseDoseId: string, person: string | null) => string;
 	countTakenDoses: (doses: Array<{ id: string; takenBy: string[] }>) => { total: number; taken: number };
 	markDoseTaken: (doseId: string) => Promise<void>;
 	undoDoseTaken: (doseId: string) => Promise<void>;
-	dismissMissedDoses: (doseIds: string[]) => Promise<void>;
 	loadTakenDoses: () => Promise<void>;
 }
 
@@ -23,7 +21,6 @@ export function useDoses(): UseDosesReturn {
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [dismissedDoses, setDismissedDoses] = useState<Set<string>>(new Set());
 	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
-	const [clearingMissed, setClearingMissed] = useState(false);
 
 	// Load taken doses from server
 	const loadTakenDoses = useCallback(async () => {
@@ -94,7 +91,7 @@ export function useDoses(): UseDosesReturn {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				credentials: "include",
-				body: JSON.stringify({ doseId })
+				body: JSON.stringify({ doseId }),
 			});
 		} catch {
 			// Revert on error
@@ -118,7 +115,7 @@ export function useDoses(): UseDosesReturn {
 		try {
 			await fetch(`/api/doses/taken/${encodeURIComponent(doseId)}`, {
 				method: "DELETE",
-				credentials: "include"
+				credentials: "include",
 			});
 		} catch {
 			// Revert on error
@@ -130,47 +127,16 @@ export function useDoses(): UseDosesReturn {
 		}
 	}, []);
 
-	// Dismiss missed doses without deducting from stock
-	const dismissMissedDoses = useCallback(async (doseIds: string[]) => {
-		if (doseIds.length === 0) return;
-
-		setClearingMissed(true);
-		try {
-			const res = await fetch("/api/doses/dismiss", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify({ doseIds })
-			});
-
-			if (res.ok) {
-				// Update local state - move these from neither set to dismissed set
-				setDismissedDoses((prev) => {
-					const next = new Set(prev);
-					for (const id of doseIds) next.add(id);
-					return next;
-				});
-				setShowClearMissedConfirm(false);
-			}
-		} catch {
-			// Error - dialog stays open
-		} finally {
-			setClearingMissed(false);
-		}
-	}, []);
-
 	return {
 		takenDoses,
 		setTakenDoses,
 		dismissedDoses,
-		clearingMissed,
 		showClearMissedConfirm,
 		setShowClearMissedConfirm,
 		getDoseId,
 		countTakenDoses,
 		markDoseTaken,
 		undoDoseTaken,
-		dismissMissedDoses,
-		loadTakenDoses
+		loadTakenDoses,
 	};
 }

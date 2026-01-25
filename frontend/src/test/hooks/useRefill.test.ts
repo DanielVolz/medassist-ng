@@ -1,313 +1,311 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useRefill } from '../../hooks/useRefill';
-import type { Medication, Coverage } from '../../types';
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useRefill } from "../../hooks/useRefill";
+import type { Coverage, Medication } from "../../types";
 
-describe('useRefill', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({})
-    });
-    vi.spyOn(window.history, 'pushState').mockImplementation(() => {});
-    vi.spyOn(window.history, 'back').mockImplementation(() => {});
-  });
+describe("useRefill", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({}),
+		});
+		vi.spyOn(window.history, "pushState").mockImplementation(() => {});
+		vi.spyOn(window.history, "back").mockImplementation(() => {});
+	});
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
 
-  it('initializes with default state', () => {
-    const { result } = renderHook(() => useRefill());
-    
-    expect(result.current.showRefillModal).toBe(false);
-    expect(result.current.refillPacks).toBe(1);
-    expect(result.current.refillLoose).toBe(0);
-    expect(result.current.refillSaving).toBe(false);
-    expect(result.current.refillHistory).toEqual([]);
-    expect(result.current.refillHistoryExpanded).toBe(false);
-    expect(result.current.showEditStockModal).toBe(false);
-  });
+	it("initializes with default state", () => {
+		const { result } = renderHook(() => useRefill());
 
-  it('loads refill history', async () => {
-    const mockHistory = [
-      { id: 1, packsAdded: 2, loosePillsAdded: 0, createdAt: '2024-03-15T10:00:00Z' }
-    ];
-    
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockHistory)
-    });
+		expect(result.current.showRefillModal).toBe(false);
+		expect(result.current.refillPacks).toBe(1);
+		expect(result.current.refillLoose).toBe(0);
+		expect(result.current.refillSaving).toBe(false);
+		expect(result.current.refillHistory).toEqual([]);
+		expect(result.current.refillHistoryExpanded).toBe(false);
+		expect(result.current.showEditStockModal).toBe(false);
+	});
 
-    const { result } = renderHook(() => useRefill());
+	it("loads refill history", async () => {
+		const mockHistory = [{ id: 1, packsAdded: 2, loosePillsAdded: 0, createdAt: "2024-03-15T10:00:00Z" }];
 
-    await act(async () => {
-      await result.current.loadRefillHistory(1);
-    });
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(mockHistory),
+		});
 
-    expect(result.current.refillHistory).toEqual(mockHistory);
-  });
+		const { result } = renderHook(() => useRefill());
 
-  it('handles refill history with refills wrapper', async () => {
-    const mockHistory = {
-      refills: [{ id: 1, packsAdded: 2, createdAt: '2024-03-15T10:00:00Z' }]
-    };
-    
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockHistory)
-    });
+		await act(async () => {
+			await result.current.loadRefillHistory(1);
+		});
 
-    const { result } = renderHook(() => useRefill());
+		expect(result.current.refillHistory).toEqual(mockHistory);
+	});
 
-    await act(async () => {
-      await result.current.loadRefillHistory(1);
-    });
+	it("handles refill history with refills wrapper", async () => {
+		const mockHistory = {
+			refills: [{ id: 1, packsAdded: 2, createdAt: "2024-03-15T10:00:00Z" }],
+		};
 
-    expect(result.current.refillHistory).toEqual(mockHistory.refills);
-  });
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(mockHistory),
+		});
 
-  it('handles refill history error', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
+		const { result } = renderHook(() => useRefill());
 
-    const { result } = renderHook(() => useRefill());
+		await act(async () => {
+			await result.current.loadRefillHistory(1);
+		});
 
-    await act(async () => {
-      await result.current.loadRefillHistory(1);
-    });
+		expect(result.current.refillHistory).toEqual(mockHistory.refills);
+	});
 
-    expect(result.current.refillHistory).toEqual([]);
-  });
+	it("handles refill history error", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Network error"));
 
-  it('opens refill modal and pushes history', () => {
-    const { result } = renderHook(() => useRefill());
-    
-    act(() => {
-      result.current.openRefillModal();
-    });
+		const { result } = renderHook(() => useRefill());
 
-    expect(result.current.showRefillModal).toBe(true);
-    expect(window.history.pushState).toHaveBeenCalledWith({ modal: 'refill' }, '');
-  });
+		await act(async () => {
+			await result.current.loadRefillHistory(1);
+		});
 
-  it('closes refill modal using history back', () => {
-    const { result } = renderHook(() => useRefill());
-    
-    act(() => {
-      result.current.openRefillModal();
-    });
+		expect(result.current.refillHistory).toEqual([]);
+	});
 
-    act(() => {
-      result.current.closeRefillModal();
-    });
+	it("opens refill modal and pushes history", () => {
+		const { result } = renderHook(() => useRefill());
 
-    expect(window.history.back).toHaveBeenCalled();
-  });
+		act(() => {
+			result.current.openRefillModal();
+		});
 
-  it('does not call history back when refill modal not open', () => {
-    const { result } = renderHook(() => useRefill());
-    
-    act(() => {
-      result.current.closeRefillModal();
-    });
+		expect(result.current.showRefillModal).toBe(true);
+		expect(window.history.pushState).toHaveBeenCalledWith({ modal: "refill" }, "");
+	});
 
-    expect(window.history.back).not.toHaveBeenCalled();
-  });
+	it("closes refill modal using history back", () => {
+		const { result } = renderHook(() => useRefill());
 
-  it('submits refill successfully', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ newStock: { packCount: 3, looseTablets: 5 } })
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([])
-      });
+		act(() => {
+			result.current.openRefillModal();
+		});
 
-    const mockSetForm = vi.fn();
-    const mockLoadMeds = vi.fn();
-    
-    const { result } = renderHook(() => useRefill());
+		act(() => {
+			result.current.closeRefillModal();
+		});
 
-    // Open modal first
-    act(() => {
-      result.current.openRefillModal();
-    });
+		expect(window.history.back).toHaveBeenCalled();
+	});
 
-    await act(async () => {
-      await result.current.submitRefill(1, 1, mockSetForm, mockLoadMeds);
-    });
+	it("does not call history back when refill modal not open", () => {
+		const { result } = renderHook(() => useRefill());
 
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/medications/1/refill',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ packsAdded: 1, loosePillsAdded: 0 })
-      })
-    );
-    expect(mockSetForm).toHaveBeenCalled();
-    expect(mockLoadMeds).toHaveBeenCalled();
-  });
+		act(() => {
+			result.current.closeRefillModal();
+		});
 
-  it('does not submit refill if both values are 0', async () => {
-    const { result } = renderHook(() => useRefill());
-    
-    act(() => {
-      result.current.setRefillPacks(0);
-      result.current.setRefillLoose(0);
-    });
+		expect(window.history.back).not.toHaveBeenCalled();
+	});
 
-    const mockSetForm = vi.fn();
-    const mockLoadMeds = vi.fn();
+	it("submits refill successfully", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ newStock: { packCount: 3, looseTablets: 5 } }),
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve([]),
+			});
 
-    await act(async () => {
-      await result.current.submitRefill(1, 1, mockSetForm, mockLoadMeds);
-    });
+		const mockSetForm = vi.fn();
+		const mockLoadMeds = vi.fn();
 
-    expect(fetch).not.toHaveBeenCalled();
-  });
+		const { result } = renderHook(() => useRefill());
 
-  it('opens edit stock modal', () => {
-    const { result } = renderHook(() => useRefill());
-    
-    const mockMed: Medication = {
-      id: 1,
-      name: 'Test Med',
-      packCount: 1,
-      blistersPerPack: 2,
-      pillsPerBlister: 10,
-      looseTablets: 5,
-      takenBy: [],
-      blisters: [],
-      updatedAt: null
-    };
+		// Open modal first
+		act(() => {
+			result.current.openRefillModal();
+		});
 
-    const mockCoverage = {
-      all: [{ name: 'Test Med', medsLeft: 20, daysLeft: 10 }] as Coverage[]
-    };
+		await act(async () => {
+			await result.current.submitRefill(1, 1, mockSetForm, mockLoadMeds);
+		});
 
-    act(() => {
-      result.current.openEditStockModal(mockMed, mockCoverage);
-    });
+		expect(fetch).toHaveBeenCalledWith(
+			"/api/medications/1/refill",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ packsAdded: 1, loosePillsAdded: 0 }),
+			})
+		);
+		expect(mockSetForm).toHaveBeenCalled();
+		expect(mockLoadMeds).toHaveBeenCalled();
+	});
 
-    expect(result.current.showEditStockModal).toBe(true);
-    expect(window.history.pushState).toHaveBeenCalledWith({ modal: 'editStock' }, '');
-    expect(result.current.editStockFullBlisters).toBe(2); // 20 / 10 = 2
-    expect(result.current.editStockPartialBlisterPills).toBe(0); // 20 % 10 = 0
-  });
+	it("does not submit refill if both values are 0", async () => {
+		const { result } = renderHook(() => useRefill());
 
-  it('closes edit stock modal using history back', () => {
-    const { result } = renderHook(() => useRefill());
-    
-    const mockMed: Medication = {
-      id: 1,
-      name: 'Test Med',
-      packCount: 1,
-      blistersPerPack: 2,
-      pillsPerBlister: 10,
-      looseTablets: 5,
-      takenBy: [],
-      blisters: [],
-      updatedAt: null
-    };
+		act(() => {
+			result.current.setRefillPacks(0);
+			result.current.setRefillLoose(0);
+		});
 
-    act(() => {
-      result.current.openEditStockModal(mockMed, { all: [] });
-    });
+		const mockSetForm = vi.fn();
+		const mockLoadMeds = vi.fn();
 
-    act(() => {
-      result.current.closeEditStockModal();
-    });
+		await act(async () => {
+			await result.current.submitRefill(1, 1, mockSetForm, mockLoadMeds);
+		});
 
-    expect(window.history.back).toHaveBeenCalled();
-  });
+		expect(fetch).not.toHaveBeenCalled();
+	});
 
-  it('submits stock correction', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+	it("opens edit stock modal", () => {
+		const { result } = renderHook(() => useRefill());
 
-    const mockMed: Medication = {
-      id: 1,
-      name: 'Test Med',
-      packCount: 1,
-      blistersPerPack: 2,
-      pillsPerBlister: 10,
-      looseTablets: 5,
-      takenBy: [],
-      blisters: [],
-      updatedAt: null
-    };
+		const mockMed: Medication = {
+			id: 1,
+			name: "Test Med",
+			packCount: 1,
+			blistersPerPack: 2,
+			pillsPerBlister: 10,
+			looseTablets: 5,
+			takenBy: [],
+			blisters: [],
+			updatedAt: null,
+		};
 
-    const mockLoadMeds = vi.fn();
-    const { result } = renderHook(() => useRefill());
+		const mockCoverage = {
+			all: [{ name: "Test Med", medsLeft: 20, daysLeft: 10 }] as Coverage[],
+		};
 
-    act(() => {
-      result.current.openEditStockModal(mockMed, { all: [] });
-    });
+		act(() => {
+			result.current.openEditStockModal(mockMed, mockCoverage);
+		});
 
-    await act(async () => {
-      await result.current.submitStockCorrection(1, mockMed, mockLoadMeds);
-    });
+		expect(result.current.showEditStockModal).toBe(true);
+		expect(window.history.pushState).toHaveBeenCalledWith({ modal: "editStock" }, "");
+		expect(result.current.editStockFullBlisters).toBe(2); // 20 / 10 = 2
+		expect(result.current.editStockPartialBlisterPills).toBe(0); // 20 % 10 = 0
+	});
 
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/medications/1/stock-adjustment',
-      expect.objectContaining({ method: 'PATCH' })
-    );
-    expect(mockLoadMeds).toHaveBeenCalled();
-  });
+	it("closes edit stock modal using history back", () => {
+		const { result } = renderHook(() => useRefill());
 
-  it('handles full blister conversion in stock correction', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+		const mockMed: Medication = {
+			id: 1,
+			name: "Test Med",
+			packCount: 1,
+			blistersPerPack: 2,
+			pillsPerBlister: 10,
+			looseTablets: 5,
+			takenBy: [],
+			blisters: [],
+			updatedAt: null,
+		};
 
-    const mockMed: Medication = {
-      id: 1,
-      name: 'Test Med',
-      packCount: 1,
-      blistersPerPack: 2,
-      pillsPerBlister: 10,
-      looseTablets: 5,
-      takenBy: [],
-      blisters: [],
-      updatedAt: null
-    };
+		act(() => {
+			result.current.openEditStockModal(mockMed, { all: [] });
+		});
 
-    const mockLoadMeds = vi.fn();
-    const { result } = renderHook(() => useRefill());
+		act(() => {
+			result.current.closeEditStockModal();
+		});
 
-    act(() => {
-      result.current.openEditStockModal(mockMed, { all: [] });
-      // Set partial pills to equal a full blister
-      result.current.setEditStockPartialBlisterPills(10);
-    });
+		expect(window.history.back).toHaveBeenCalled();
+	});
 
-    await act(async () => {
-      await result.current.submitStockCorrection(1, mockMed, mockLoadMeds);
-    });
+	it("submits stock correction", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
-    expect(fetch).toHaveBeenCalled();
-    expect(mockLoadMeds).toHaveBeenCalled();
-  });
+		const mockMed: Medication = {
+			id: 1,
+			name: "Test Med",
+			packCount: 1,
+			blistersPerPack: 2,
+			pillsPerBlister: 10,
+			looseTablets: 5,
+			takenBy: [],
+			blisters: [],
+			updatedAt: null,
+		};
 
-  it('allows setting state directly', () => {
-    const { result } = renderHook(() => useRefill());
-    
-    act(() => {
-      result.current.setRefillPacks(5);
-      result.current.setRefillLoose(3);
-      result.current.setRefillHistoryExpanded(true);
-      result.current.setShowRefillModal(true);
-      result.current.setShowEditStockModal(true);
-      result.current.setEditStockFullBlisters(10);
-      result.current.setEditStockPartialBlisterPills(5);
-    });
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
 
-    expect(result.current.refillPacks).toBe(5);
-    expect(result.current.refillLoose).toBe(3);
-    expect(result.current.refillHistoryExpanded).toBe(true);
-    expect(result.current.showRefillModal).toBe(true);
-    expect(result.current.showEditStockModal).toBe(true);
-    expect(result.current.editStockFullBlisters).toBe(10);
-    expect(result.current.editStockPartialBlisterPills).toBe(5);
-  });
+		act(() => {
+			result.current.openEditStockModal(mockMed, { all: [] });
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(1, mockMed, mockLoadMeds);
+		});
+
+		expect(fetch).toHaveBeenCalledWith(
+			"/api/medications/1/stock-adjustment",
+			expect.objectContaining({ method: "PATCH" })
+		);
+		expect(mockLoadMeds).toHaveBeenCalled();
+	});
+
+	it("handles full blister conversion in stock correction", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const mockMed: Medication = {
+			id: 1,
+			name: "Test Med",
+			packCount: 1,
+			blistersPerPack: 2,
+			pillsPerBlister: 10,
+			looseTablets: 5,
+			takenBy: [],
+			blisters: [],
+			updatedAt: null,
+		};
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(mockMed, { all: [] });
+			// Set partial pills to equal a full blister
+			result.current.setEditStockPartialBlisterPills(10);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(1, mockMed, mockLoadMeds);
+		});
+
+		expect(fetch).toHaveBeenCalled();
+		expect(mockLoadMeds).toHaveBeenCalled();
+	});
+
+	it("allows setting state directly", () => {
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.setRefillPacks(5);
+			result.current.setRefillLoose(3);
+			result.current.setRefillHistoryExpanded(true);
+			result.current.setShowRefillModal(true);
+			result.current.setShowEditStockModal(true);
+			result.current.setEditStockFullBlisters(10);
+			result.current.setEditStockPartialBlisterPills(5);
+		});
+
+		expect(result.current.refillPacks).toBe(5);
+		expect(result.current.refillLoose).toBe(3);
+		expect(result.current.refillHistoryExpanded).toBe(true);
+		expect(result.current.showRefillModal).toBe(true);
+		expect(result.current.showEditStockModal).toBe(true);
+		expect(result.current.editStockFullBlisters).toBe(10);
+		expect(result.current.editStockPartialBlisterPills).toBe(5);
+	});
 });

@@ -2,7 +2,7 @@
 // Lightbox Component - Full-screen image viewer
 // =============================================================================
 
-import { MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
 export interface LightboxProps {
 	src: string;

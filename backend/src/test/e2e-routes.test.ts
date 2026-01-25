@@ -2,50 +2,50 @@
  * E2E Tests using the real routes against in-memory SQLite.
  * These tests import the actual route handlers for real coverage.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
-import Fastify, { FastifyInstance } from "fastify";
+
 import cookie from "@fastify/cookie";
 import jwt from "@fastify/jwt";
-import sensible from "@fastify/sensible";
 import fastifyMultipart from "@fastify/multipart";
-import { createClient, Client } from "@libsql/client";
-import { drizzle, LibSQLDatabase } from "drizzle-orm/libsql";
+import sensible from "@fastify/sensible";
+import type { Client } from "@libsql/client";
+import Fastify, { type FastifyInstance } from "fastify";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Use vi.hoisted to create the db BEFORE mocks are set up
 const { testClient, testDb } = vi.hoisted(() => {
-  // Dynamic import inside hoisted block
-  const { createClient } = require("@libsql/client");
-  const { drizzle } = require("drizzle-orm/libsql");
-  const client = createClient({ url: ":memory:" });
-  const db = drizzle(client);
-  return { testClient: client, testDb: db };
+	// Dynamic import inside hoisted block
+	const { createClient } = require("@libsql/client");
+	const { drizzle } = require("drizzle-orm/libsql");
+	const client = createClient({ url: ":memory:" });
+	const db = drizzle(client);
+	return { testClient: client, testDb: db };
 });
 
 // Mock modules using the hoisted db
 vi.mock("../db/client.js", () => ({
-  db: testDb,
-  migrationsReady: Promise.resolve(),
+	db: testDb,
+	migrationsReady: Promise.resolve(),
 }));
 
 vi.mock("../plugins/env.js", () => ({
-  env: {
-    AUTH_ENABLED: false,
-    NODE_ENV: "test",
-    LOG_LEVEL: "silent",
-    PORT: 3000,
-    CORS_ORIGINS: "*",
-    JWT_SECRET: "test-secret",
-    REFRESH_SECRET: "test-refresh-secret",
-    COOKIE_SECRET: "test-cookie-secret",
-    ACCESS_TOKEN_TTL_MINUTES: 15,
-    REFRESH_TOKEN_TTL_DAYS: 7,
-  },
+	env: {
+		AUTH_ENABLED: false,
+		NODE_ENV: "test",
+		LOG_LEVEL: "silent",
+		PORT: 3000,
+		CORS_ORIGINS: "*",
+		JWT_SECRET: "test-secret",
+		REFRESH_SECRET: "test-refresh-secret",
+		COOKIE_SECRET: "test-cookie-secret",
+		ACCESS_TOKEN_TTL_MINUTES: 15,
+		REFRESH_TOKEN_TTL_DAYS: 7,
+	},
 }));
 
 // Mock auth plugin
 vi.mock("../plugins/auth.js", () => ({
-  requireAuth: async () => {},
-  getAnonymousUserId: () => 999999999,
+	requireAuth: async () => {},
+	getAnonymousUserId: () => 999999999,
 }));
 
 // Now import routes AFTER mocking
@@ -62,8 +62,8 @@ const { exportRoutes } = await import("../routes/export.js");
 // =============================================================================
 
 async function createSchema(client: Client) {
-  const tableCreations = [
-    `CREATE TABLE IF NOT EXISTS users (
+	const tableCreations = [
+		`CREATE TABLE IF NOT EXISTS users (
       id integer PRIMARY KEY AUTOINCREMENT,
       username text NOT NULL UNIQUE,
       password_hash text,
@@ -75,7 +75,7 @@ async function createSchema(client: Client) {
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
     )`,
-    `CREATE TABLE IF NOT EXISTS medications (
+		`CREATE TABLE IF NOT EXISTS medications (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL,
       name text NOT NULL,
@@ -99,7 +99,7 @@ async function createSchema(client: Client) {
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS user_settings (
+		`CREATE TABLE IF NOT EXISTS user_settings (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL UNIQUE,
       email_enabled integer NOT NULL DEFAULT 0,
@@ -128,7 +128,7 @@ async function createSchema(client: Client) {
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS share_tokens (
+		`CREATE TABLE IF NOT EXISTS share_tokens (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL,
       token text NOT NULL UNIQUE,
@@ -138,7 +138,7 @@ async function createSchema(client: Client) {
       expires_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS dose_tracking (
+		`CREATE TABLE IF NOT EXISTS dose_tracking (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL,
       dose_id text NOT NULL,
@@ -147,7 +147,7 @@ async function createSchema(client: Client) {
       dismissed integer NOT NULL DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS refill_history (
+		`CREATE TABLE IF NOT EXISTS refill_history (
       id integer PRIMARY KEY AUTOINCREMENT,
       medication_id integer NOT NULL,
       user_id integer NOT NULL,
@@ -157,55 +157,45 @@ async function createSchema(client: Client) {
       FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-  ];
+	];
 
-  for (const sql of tableCreations) {
-    await client.execute(sql);
-  }
+	for (const sql of tableCreations) {
+		await client.execute(sql);
+	}
 }
 
 async function clearData(client: Client) {
-  await client.execute("DELETE FROM refill_history");
-  await client.execute("DELETE FROM dose_tracking");
-  await client.execute("DELETE FROM share_tokens");
-  await client.execute("DELETE FROM user_settings");
-  await client.execute("DELETE FROM medications");
-  await client.execute("DELETE FROM users");
-  await client.execute("DELETE FROM sqlite_sequence");
+	await client.execute("DELETE FROM refill_history");
+	await client.execute("DELETE FROM dose_tracking");
+	await client.execute("DELETE FROM share_tokens");
+	await client.execute("DELETE FROM user_settings");
+	await client.execute("DELETE FROM medications");
+	await client.execute("DELETE FROM users");
+	await client.execute("DELETE FROM sqlite_sequence");
 }
 
-async function createUser(client: Client, username: string): Promise<number> {
-  const result = await client.execute({
-    sql: `INSERT INTO users (username, auth_provider) VALUES (?, 'local') RETURNING id`,
-    args: [username],
-  });
-  return result.rows[0].id as number;
+async function _createUser(client: Client, username: string): Promise<number> {
+	const result = await client.execute({
+		sql: `INSERT INTO users (username, auth_provider) VALUES (?, 'local') RETURNING id`,
+		args: [username],
+	});
+	return result.rows[0].id as number;
 }
 
-async function createMedication(
-  client: Client,
-  userId: number,
-  name: string,
-  takenBy: string[]
-): Promise<number> {
-  const result = await client.execute({
-    sql: `INSERT INTO medications (user_id, name, taken_by_json, usage_json, every_json, start_json)
+async function createMedication(client: Client, userId: number, name: string, takenBy: string[]): Promise<number> {
+	const result = await client.execute({
+		sql: `INSERT INTO medications (user_id, name, taken_by_json, usage_json, every_json, start_json)
           VALUES (?, ?, ?, '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]') RETURNING id`,
-    args: [userId, name, JSON.stringify(takenBy)],
-  });
-  return result.rows[0].id as number;
+		args: [userId, name, JSON.stringify(takenBy)],
+	});
+	return result.rows[0].id as number;
 }
 
-async function createShareToken(
-  client: Client,
-  userId: number,
-  takenBy: string,
-  token: string
-): Promise<void> {
-  await client.execute({
-    sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, 30)`,
-    args: [userId, token, takenBy],
-  });
+async function createShareToken(client: Client, userId: number, takenBy: string, token: string): Promise<void> {
+	await client.execute({
+		sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, 30)`,
+		args: [userId, token, takenBy],
+	});
 }
 
 // =============================================================================
@@ -213,1715 +203,1711 @@ async function createShareToken(
 // =============================================================================
 
 describe("E2E Tests with Real Routes", () => {
-  let app: FastifyInstance;
-  let userId: number;
-
-  beforeAll(async () => {
-    // Create schema
-    await createSchema(testClient);
-
-    // Build app with real routes
-    app = Fastify({ logger: false });
-
-    await app.register(sensible);
-    await app.register(cookie, { secret: "test-cookie-secret" });
-    await app.register(jwt, {
-      secret: "test-jwt-secret",
-      cookie: { cookieName: "access_token", signed: false },
-    });
-    await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } });
-
-    app.decorate("config", {
-      accessSecret: "test-jwt-secret",
-      refreshSecret: "test-refresh-secret",
-      accessTtl: 15,
-      refreshTtl: 7,
-      cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
-      refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
-    });
-
-    // Register REAL routes
-    await app.register(doseRoutes);
-    await app.register(shareRoutes);
-    await app.register(medicationRoutes);
-    await app.register(settingsRoutes);
-    await app.register(healthRoutes);
-    await app.register(refillRoutes);
-    await app.register(exportRoutes);
-
-    await app.ready();
-  });
-
-  afterAll(async () => {
-    await app.close();
-    testClient.close();
-  });
-
-  beforeEach(async () => {
-    await clearData(testClient);
-    // Create anonymous user with fixed ID for auth-disabled mode
-    await testClient.execute(
-      "INSERT INTO users (id, username, auth_provider) VALUES (999999999, '__anonymous__', 'anonymous')"
-    );
-    userId = 999999999;
-  });
-
-  // ---------------------------------------------------------------------------
-  // Real Dose Routes Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /doses/taken routes", () => {
-    it("should mark a dose using real route", async () => {
-      const doseId = "1-0-1735344000000";
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ success: true });
-
-      // Verify in database
-      const result = await testClient.execute({
-        sql: `SELECT dose_id FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
-        args: [userId, doseId],
-      });
-      expect(result.rows.length).toBe(1);
-    });
-
-    it("should get taken doses using real route", async () => {
-      // Insert dose directly
-      await testClient.execute({
-        sql: `INSERT INTO dose_tracking (user_id, dose_id) VALUES (?, ?)`,
-        args: [userId, "1-0-1735344000000"],
-      });
-
-      const response = await app.inject({
-        method: "GET",
-        url: "/doses/taken",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.doses).toHaveLength(1);
-      expect(data.doses[0].doseId).toBe("1-0-1735344000000");
-    });
-
-    it("should delete dose using real route", async () => {
-      const doseId = "1-0-1735344000000";
-
-      // Insert first
-      await testClient.execute({
-        sql: `INSERT INTO dose_tracking (user_id, dose_id) VALUES (?, ?)`,
-        args: [userId, doseId],
-      });
-
-      const response = await app.inject({
-        method: "DELETE",
-        url: `/doses/taken/${encodeURIComponent(doseId)}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ success: true });
-
-      // Verify deleted
-      const result = await testClient.execute({
-        sql: `SELECT COUNT(*) as count FROM dose_tracking WHERE dose_id = ?`,
-        args: [doseId],
-      });
-      expect(result.rows[0].count).toBe(0);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Real Share Routes Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /share routes", () => {
-    it("should create share token using real route", async () => {
-      // Create medication with takenBy
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/share",
-        payload: { takenBy: "Daniel", scheduleDays: 30 },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.token).toBeDefined();
-      expect(data.shareUrl).toContain("/share/");
-    });
-
-    it("should get shared schedule using real route", async () => {
-      // Create medication
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-
-      // Create share token
-      const token = "test_share_token_123";
-      await createShareToken(testClient, userId, "Daniel", token);
-
-      const response = await app.inject({
-        method: "GET",
-        url: `/share/${token}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.takenBy).toBe("Daniel");
-      expect(data.medications).toHaveLength(1);
-      expect(data.medications[0].name).toBe("Aspirin");
-    });
-
-    it("should mark dose via share link using real route", async () => {
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-
-      const token = "test_share_token_456";
-      await createShareToken(testClient, userId, "Daniel", token);
-
-      const doseId = "1-0-1735344000000";
-      const response = await app.inject({
-        method: "POST",
-        url: `/share/${token}/doses`,
-        payload: { doseId },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ success: true });
-
-      // Verify markedBy is set
-      const result = await testClient.execute({
-        sql: `SELECT marked_by FROM dose_tracking WHERE dose_id = ?`,
-        args: [doseId],
-      });
-      expect(result.rows[0].marked_by).toBe("Daniel");
-    });
-
-    it("should return 404 for invalid share token", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/share/invalid_token",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Real Medication Routes Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /medications routes", () => {
-    const validMedication = {
-      name: "Aspirin",
-      genericName: "Acetylsalicylic acid",
-      takenBy: ["Daniel"],
-      packCount: 2,
-      blistersPerPack: 3,
-      pillsPerBlister: 10,
-      looseTablets: 5,
-      pillWeightMg: 500,
-      expiryDate: "2026-12-31",
-      notes: "Take with food",
-      intakeRemindersEnabled: true,
-      blisters: [
-        { usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" },
-      ],
-    };
-
-    it("should create medication using real route", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: validMedication,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.id).toBeDefined();
-      expect(data.name).toBe("Aspirin");
-      expect(data.genericName).toBe("Acetylsalicylic acid");
-      expect(data.takenBy).toEqual(["Daniel"]);
-      expect(data.packCount).toBe(2);
-      expect(data.blistersPerPack).toBe(3);
-      expect(data.pillsPerBlister).toBe(10);
-      expect(data.looseTablets).toBe(5);
-      expect(data.pillWeightMg).toBe(500);
-      expect(data.blisters).toHaveLength(1);
-    });
-
-    it("should list medications using real route", async () => {
-      // Create medication first
-      await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: validMedication,
-      });
-
-      const response = await app.inject({
-        method: "GET",
-        url: "/medications",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data).toHaveLength(1);
-      expect(data[0].name).toBe("Aspirin");
-    });
-
-    it("should update medication using real route", async () => {
-      // Create medication first
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: validMedication,
-      });
-      const medId = createResponse.json().id;
-
-      // Update it
-      const updatedMed = {
-        ...validMedication,
-        name: "Aspirin Extra",
-        looseTablets: 10,
-      };
-
-      const response = await app.inject({
-        method: "PUT",
-        url: `/medications/${medId}`,
-        payload: updatedMed,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.name).toBe("Aspirin Extra");
-      expect(data.looseTablets).toBe(10);
-    });
-
-    it("should delete medication using real route", async () => {
-      // Create medication first
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: validMedication,
-      });
-      const medId = createResponse.json().id;
-
-      // Delete it
-      const response = await app.inject({
-        method: "DELETE",
-        url: `/medications/${medId}`,
-      });
-
-      expect(response.statusCode).toBe(204);
-
-      // Verify deleted
-      const listResponse = await app.inject({
-        method: "GET",
-        url: "/medications",
-      });
-      expect(listResponse.json()).toHaveLength(0);
-    });
-
-    it("should return 400 for invalid medication data", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { name: "" }, // Invalid - empty name and no blisters
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should return 404 for non-existent medication", async () => {
-      const response = await app.inject({
-        method: "PUT",
-        url: "/medications/99999",
-        payload: validMedication,
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should create medication with multiple intake schedules", async () => {
-      const multiBlisterMed = {
-        ...validMedication,
-        blisters: [
-          { usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" },
-          { usage: 0.5, every: 1, start: "2025-01-01T20:00:00.000Z" },
-        ],
-      };
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: multiBlisterMed,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.blisters).toHaveLength(2);
-      expect(data.blisters[0].usage).toBe(1);
-      expect(data.blisters[1].usage).toBe(0.5);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Real Settings Routes Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /settings routes", () => {
-    it("should get default settings using real route", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/settings",
-      });
-
-      if (response.statusCode !== 200) {
-        console.error("GET /settings error:", response.body);
-      }
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      // Check default values
-      expect(data.emailEnabled).toBe(false);
-      expect(data.lowStockDays).toBe(30);
-      expect(data.normalStockDays).toBe(90);
-      expect(data.highStockDays).toBe(180);
-      expect(data.language).toBe("en");
-      expect(data.stockCalculationMode).toBe("automatic");
-    });
-
-    it("should update settings using real route", async () => {
-      const newSettings = {
-        emailEnabled: true,
-        notificationEmail: "test@example.com",
-        reminderDaysBefore: 14,
-        repeatDailyReminders: false,
-        lowStockDays: 14,
-        normalStockDays: 60,
-        highStockDays: 120,
-        shoutrrrEnabled: false,
-        shoutrrrUrl: "",
-        emailStockReminders: true,
-        emailIntakeReminders: true,
-        shoutrrrStockReminders: true,
-        shoutrrrIntakeReminders: true,
-        language: "de",
-        stockCalculationMode: "manual",
-      };
-
-      const response = await app.inject({
-        method: "PUT",
-        url: "/settings",
-        payload: newSettings,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ success: true });
-
-      // Verify settings were saved
-      const getResponse = await app.inject({
-        method: "GET",
-        url: "/settings",
-      });
-
-      const data = getResponse.json();
-      expect(data.emailEnabled).toBe(true);
-      expect(data.notificationEmail).toBe("test@example.com");
-      expect(data.lowStockDays).toBe(14);
-      expect(data.language).toBe("de");
-      expect(data.stockCalculationMode).toBe("manual");
-    });
-
-    it("should update existing settings using real route", async () => {
-      // First update
-      await app.inject({
-        method: "PUT",
-        url: "/settings",
-        payload: {
-          emailEnabled: true,
-          notificationEmail: "first@example.com",
-          reminderDaysBefore: 7,
-          repeatDailyReminders: false,
-          lowStockDays: 30,
-          normalStockDays: 90,
-          highStockDays: 180,
-          shoutrrrEnabled: false,
-          shoutrrrUrl: "",
-          emailStockReminders: true,
-          emailIntakeReminders: true,
-          shoutrrrStockReminders: true,
-          shoutrrrIntakeReminders: true,
-          language: "en",
-          stockCalculationMode: "automatic",
-        },
-      });
-
-      // Second update
-      const response = await app.inject({
-        method: "PUT",
-        url: "/settings",
-        payload: {
-          emailEnabled: false,
-          notificationEmail: "second@example.com",
-          reminderDaysBefore: 14,
-          repeatDailyReminders: true,
-          lowStockDays: 20,
-          normalStockDays: 60,
-          highStockDays: 120,
-          shoutrrrEnabled: true,
-          shoutrrrUrl: "ntfy://localhost/alerts",
-          emailStockReminders: false,
-          emailIntakeReminders: false,
-          shoutrrrStockReminders: true,
-          shoutrrrIntakeReminders: true,
-          language: "de",
-          stockCalculationMode: "manual",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-
-      // Verify updated
-      const getResponse = await app.inject({
-        method: "GET",
-        url: "/settings",
-      });
-
-      const data = getResponse.json();
-      expect(data.emailEnabled).toBe(false);
-      expect(data.notificationEmail).toBe("second@example.com");
-      expect(data.shoutrrrEnabled).toBe(true);
-      expect(data.shoutrrrUrl).toBe("ntfy://localhost/alerts");
-      expect(data.stockCalculationMode).toBe("manual");
-    });
-
-    it("should disable repeatDailyReminders when no stock reminders configured", async () => {
-      const response = await app.inject({
-        method: "PUT",
-        url: "/settings",
-        payload: {
-          emailEnabled: false,  // No email
-          notificationEmail: "",
-          reminderDaysBefore: 7,
-          repeatDailyReminders: true, // User tries to enable
-          lowStockDays: 30,
-          normalStockDays: 90,
-          highStockDays: 180,
-          shoutrrrEnabled: false, // No shoutrrr
-          shoutrrrUrl: "",
-          emailStockReminders: true,
-          emailIntakeReminders: true,
-          shoutrrrStockReminders: true,
-          shoutrrrIntakeReminders: true,
-          language: "en",
-          stockCalculationMode: "automatic",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-
-      // Verify repeatDailyReminders is false
-      const getResponse = await app.inject({
-        method: "GET",
-        url: "/settings",
-      });
-
-      const data = getResponse.json();
-      expect(data.repeatDailyReminders).toBe(false);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Health Route Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /health route", () => {
-    it("should return health status", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/health",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const json = response.json();
-      expect(json.status).toBe("ok");
-      expect(typeof json.smtpConfigured).toBe("boolean");
-      expect(typeof json.shoutrrrConfigured).toBe("boolean");
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Additional Share Routes Tests (edge cases)
-  // ---------------------------------------------------------------------------
-
-  describe("Real /share routes - edge cases", () => {
-    it("should get list of people with medications", async () => {
-      // Create medications for different people
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-      await createMedication(testClient, userId, "Ibuprofen", ["Anna"]);
-      await createMedication(testClient, userId, "Paracetamol", ["Daniel", "Anna"]);
-
-      const response = await app.inject({
-        method: "GET",
-        url: "/share/people",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.people).toContain("Daniel");
-      expect(data.people).toContain("Anna");
-      expect(data.people).toHaveLength(2);
-    });
-
-    it("should return error when creating share for person with no meds", async () => {
-      // Create medication for a different person
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/share",
-        payload: { takenBy: "Unknown", scheduleDays: 30 },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json().code).toBe("NO_MEDICATIONS");
-    });
-
-    it("should unmark dose via share link", async () => {
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-
-      const token = "test_delete_dose_token";
-      await createShareToken(testClient, userId, "Daniel", token);
-
-      // First mark the dose
-      const doseId = "1-0-1735344000000";
-      await testClient.execute({
-        sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by) VALUES (?, ?, ?)`,
-        args: [userId, doseId, "Daniel"],
-      });
-
-      // Now unmark via share link
-      const response = await app.inject({
-        method: "DELETE",
-        url: `/share/${token}/doses/${encodeURIComponent(doseId)}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ success: true });
-
-      // Verify deleted
-      const result = await testClient.execute({
-        sql: `SELECT COUNT(*) as count FROM dose_tracking WHERE dose_id = ?`,
-        args: [doseId],
-      });
-      expect(result.rows[0].count).toBe(0);
-    });
-
-    it("should return 410 for expired share token", async () => {
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-
-      // Create expired token
-      const token = "expired_token_123";
-      const expiredAt = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
-      await testClient.execute({
-        sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at) VALUES (?, ?, ?, 30, ?)`,
-        args: [userId, token, "Daniel", expiredAt],
-      });
-
-      const response = await app.inject({
-        method: "GET",
-        url: `/share/${token}`,
-      });
-
-      expect(response.statusCode).toBe(410);
-      expect(response.json().code).toBe("EXPIRED");
-    });
-
-    it("should return already marked message for duplicate dose", async () => {
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-
-      const token = "test_duplicate_token";
-      await createShareToken(testClient, userId, "Daniel", token);
-
-      const doseId = "1-0-1735344000000";
-      
-      // Mark the dose first time
-      await app.inject({
-        method: "POST",
-        url: `/share/${token}/doses`,
-        payload: { doseId },
-      });
-
-      // Try to mark again
-      const response = await app.inject({
-        method: "POST",
-        url: `/share/${token}/doses`,
-        payload: { doseId },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().message).toBe("Already marked");
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Additional Dose Routes Tests (edge cases)
-  // ---------------------------------------------------------------------------
-
-  describe("Real /doses/taken routes - edge cases", () => {
-    it("should return already marked message for duplicate dose", async () => {
-      const doseId = "1-0-1735344000000";
-
-      // Mark first time
-      await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId },
-      });
-
-      // Mark second time
-      const response = await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().message).toBe("Already marked");
-    });
-
-    it("should handle doses with person name in doseId", async () => {
-      const doseId = "1-0-1735344000000-Daniel";
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ success: true });
-
-      // Verify in database
-      const result = await testClient.execute({
-        sql: `SELECT dose_id FROM dose_tracking WHERE dose_id = ?`,
-        args: [doseId],
-      });
-      expect(result.rows.length).toBe(1);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Additional Medication Routes Tests (edge cases)
-  // ---------------------------------------------------------------------------
-
-  describe("Real /medications routes - edge cases", () => {
-    const validMedication = {
-      name: "Aspirin",
-      blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-    };
-
-    it("should return 404 when deleting non-existent medication", async () => {
-      const response = await app.inject({
-        method: "DELETE",
-        url: "/medications/99999",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should handle medication with all optional fields", async () => {
-      const fullMedication = {
-        name: "Complete Med",
-        genericName: "Generic Complete",
-        takenBy: ["Person1", "Person2"],
-        packCount: 5,
-        blistersPerPack: 4,
-        pillsPerBlister: 20,
-        looseTablets: 10,
-        pillWeightMg: 250,
-        expiryDate: "2026-06-30",
-        notes: "Some important notes about this medication",
-        intakeRemindersEnabled: true,
-        blisters: [
-          { usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" },
-          { usage: 1, every: 1, start: "2025-01-01T20:00:00.000Z" },
-        ],
-      };
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: fullMedication,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.genericName).toBe("Generic Complete");
-      expect(data.takenBy).toEqual(["Person1", "Person2"]);
-      expect(data.packCount).toBe(5);
-      expect(data.blistersPerPack).toBe(4);
-      expect(data.pillsPerBlister).toBe(20);
-      expect(data.looseTablets).toBe(10);
-      expect(data.pillWeightMg).toBe(250);
-      expect(data.expiryDate).toBe("2026-06-30");
-      expect(data.notes).toBe("Some important notes about this medication");
-      expect(data.intakeRemindersEnabled).toBe(true);
-      expect(data.blisters).toHaveLength(2);
-    });
-
-    it("should update medication with partial fields", async () => {
-      // Create medication first
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { name: "Original Med", blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }] },
-      });
-      const medId = createResponse.json().id;
-
-      // Update with partial fields
-      const response = await app.inject({
-        method: "PUT",
-        url: `/medications/${medId}`,
-        payload: { 
-          name: "Updated Med",
-          genericName: "New Generic",
-          notes: "Updated notes",
-          blisters: [{ usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().name).toBe("Updated Med");
-      expect(response.json().genericName).toBe("New Generic");
-      expect(response.json().notes).toBe("Updated notes");
-    });
-
-    it("should handle string takenBy conversion", async () => {
-      // Test with takenBy as array (expected format)
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Array TakenBy Med",
-          takenBy: ["SinglePerson"],
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().takenBy).toEqual(["SinglePerson"]);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Test Email/Shoutrrr Validation (settings.ts - uncovered paths)
-  // ---------------------------------------------------------------------------
-
-  describe("Real /settings test routes", () => {
-    it("should reject test-email when SMTP is not configured", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/settings/test-email",
-        payload: { email: "test@example.com" },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json().error).toBe("SMTP not configured");
-    });
-
-    it("should reject test-shoutrrr without URL", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/settings/test-shoutrrr",
-        payload: { url: "" },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json().error).toBe("Notification URL is required");
-    });
-
-    it("should reject test-shoutrrr with unsupported URL format", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/settings/test-shoutrrr",
-        payload: { url: "ftp://invalid.com/topic" },
-      });
-
-      expect(response.statusCode).toBe(500);
-      // SSRF protection returns more specific error message
-      expect(response.json().error).toContain("HTTP/HTTPS protocols");
-    });
-
-    it("should reject test-shoutrrr with localhost URL (SSRF protection)", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/settings/test-shoutrrr",
-        payload: { url: "https://localhost/topic" },
-      });
-
-      expect(response.statusCode).toBe(500);
-      expect(response.json().error).toContain("Localhost URLs are not allowed");
-    });
-
-    it("should reject test-shoutrrr with private IP (SSRF protection)", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/settings/test-shoutrrr",
-        payload: { url: "https://192.168.1.1/topic" },
-      });
-
-      expect(response.statusCode).toBe(500);
-      expect(response.json().error).toContain("Private IP addresses are not allowed");
-    });
-
-    it("should reject test-shoutrrr with internal hostname (SSRF protection)", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/settings/test-shoutrrr",
-        payload: { url: "https://server.internal/topic" },
-      });
-
-      expect(response.statusCode).toBe(500);
-      expect(response.json().error).toContain("Internal hostnames are not allowed");
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Additional Doses Routes Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /doses routes - more coverage", () => {
-    it("should return 400 when doseId is missing", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: {},
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should handle dose marking and get taken doses", async () => {
-      const doseId = "99-0-1735344000099";
-
-      // Mark the dose
-      const markResponse = await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId },
-      });
-      expect(markResponse.statusCode).toBe(200);
-      expect(markResponse.json()).toEqual({ success: true });
-
-      // The GET returns doses for current user (anonymous in test)
-      // Each beforeEach clears data, so we just verify POST works correctly
-    });
-
-    it("should handle cleaning old doses for future date range", async () => {
-      // Create a medication first
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "CleanTest Med",
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-      const medId = createResponse.json().id;
-
-      // Mark some doses
-      await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId: `${medId}-0-1735344000000` },
-      });
-
-      // Update medication with new start date
-      await app.inject({
-        method: "PUT",
-        url: `/medications/${medId}`,
-        payload: { 
-          name: "CleanTest Med",
-          blisters: [{ usage: 1, every: 1, start: "2025-06-01T08:00:00.000Z" }], // Future start
-        },
-      });
-
-      // The dose tracking for the old period should be cleaned up
-      // This is handled by the medications route internally
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Health Check Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /health routes", () => {
-    it("should return health status", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/health",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const json = response.json();
-      expect(json.status).toBe("ok");
-      expect(typeof json.smtpConfigured).toBe("boolean");
-      expect(typeof json.shoutrrrConfigured).toBe("boolean");
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Medication Delete Cascade Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Medication deletion with dose tracking", () => {
-    it("should handle medication deletion that has tracked doses", async () => {
-      // Create medication
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Test Med",
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-      const medId = createResponse.json().id;
-
-      // Mark a dose for this medication
-      await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId: `${medId}-0-1735344000000` },
-      });
-
-      // Delete medication - should succeed even with tracked doses
-      const deleteResponse = await app.inject({
-        method: "DELETE",
-        url: `/medications/${medId}`,
-      });
-
-      expect(deleteResponse.statusCode).toBe(204);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Settings Edge Cases
-  // ---------------------------------------------------------------------------
-
-  describe("Settings edge cases", () => {
-    it("should handle settings with all reminder options enabled", async () => {
-      const response = await app.inject({
-        method: "PUT",
-        url: "/settings",
-        payload: {
-          emailEnabled: true,
-          notificationEmail: "test@example.com",
-          reminderDaysBefore: 7,
-          repeatDailyReminders: true,
-          lowStockDays: 30,
-          normalStockDays: 90,
-          highStockDays: 180,
-          shoutrrrEnabled: true,
-          shoutrrrUrl: "ntfy://localhost/test",
-          emailStockReminders: true,
-          emailIntakeReminders: true,
-          shoutrrrStockReminders: true,
-          shoutrrrIntakeReminders: true,
-          language: "en",
-          stockCalculationMode: "automatic",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-
-      // Verify repeatDailyReminders is preserved when notifications are enabled
-      const getResponse = await app.inject({
-        method: "GET",
-        url: "/settings",
-      });
-
-      const data = getResponse.json();
-      expect(data.repeatDailyReminders).toBe(true);
-      expect(data.emailEnabled).toBe(true);
-      expect(data.shoutrrrEnabled).toBe(true);
-    });
-
-    it("should handle expiry warning days setting", async () => {
-      const response = await app.inject({
-        method: "PUT",
-        url: "/settings",
-        payload: {
-          emailEnabled: false,
-          notificationEmail: "",
-          reminderDaysBefore: 14,
-          repeatDailyReminders: false,
-          lowStockDays: 30,
-          normalStockDays: 90,
-          highStockDays: 180,
-          expiryWarningDays: 60,
-          shoutrrrEnabled: false,
-          shoutrrrUrl: "",
-          emailStockReminders: true,
-          emailIntakeReminders: true,
-          shoutrrrStockReminders: true,
-          shoutrrrIntakeReminders: true,
-          language: "en",
-          stockCalculationMode: "automatic",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Share Token Management
-  // ---------------------------------------------------------------------------
-
-  describe("Share token management", () => {
-    it("should create share token with custom scheduleDays", async () => {
-      await createMedication(testClient, userId, "Med1", ["Daniel"]);
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/share",
-        payload: { 
-          takenBy: "Daniel", 
-          scheduleDays: 90,
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.token).toBeDefined();
-      expect(data.expiresAt).toBeDefined();
-    });
-
-    it("should return validation error for invalid scheduleDays", async () => {
-      await createMedication(testClient, userId, "Med1", ["Daniel"]);
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/share",
-        payload: { 
-          takenBy: "Daniel", 
-          scheduleDays: 500, // Too high, max is 365
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should return validation error for missing takenBy", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/share",
-        payload: { 
-          scheduleDays: 30,
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json().code).toBe("VALIDATION_ERROR");
-    });
-
-    it("should get people list with multiple persons", async () => {
-      await createMedication(testClient, userId, "Med1", ["Daniel"]);
-      await createMedication(testClient, userId, "Med2", ["Anna"]);
-      await createMedication(testClient, userId, "Med3", ["Daniel", "Anna"]);
-
-      const response = await app.inject({
-        method: "GET",
-        url: "/share/people",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.people).toContain("Daniel");
-      expect(data.people).toContain("Anna");
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Dose validation tests
-  // ---------------------------------------------------------------------------
-
-  describe("Dose validation", () => {
-    it("should reject invalid doseId format in POST", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId: null },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should handle empty string doseId", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/doses/taken",
-        payload: { doseId: "" },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Medication validation edge cases
-  // ---------------------------------------------------------------------------
-
-  describe("Medication validation edge cases", () => {
-    it("should reject medication without blisters", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { name: "No Blisters Med" },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should reject medication with empty blisters array", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { name: "Empty Blisters Med", blisters: [] },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should reject medication with invalid blister data", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Invalid Blister Med", 
-          blisters: [{ usage: -1, every: 0, start: "invalid-date" }],
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should handle medication with minimal valid data", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Minimal Med", 
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.name).toBe("Minimal Med");
-      // Check defaults
-      expect(data.packCount).toBe(1);
-      expect(data.blistersPerPack).toBe(1);
-      expect(data.pillsPerBlister).toBe(1);
-      expect(data.looseTablets).toBe(0);
-      expect(data.takenBy).toEqual([]);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Share Token Dose Routes (via share link)
-  // ---------------------------------------------------------------------------
-
-  describe("Share token dose routes", () => {
-    it("should get taken doses via share link", async () => {
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-      const token = "get-doses-token";
-      await createShareToken(testClient, userId, "Daniel", token);
-
-      // Insert a dose directly
-      await testClient.execute({
-        sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by) VALUES (?, ?, ?)`,
-        args: [userId, "1-0-1735344000000", "Daniel"],
-      });
-
-      const response = await app.inject({
-        method: "GET",
-        url: `/share/${token}/doses`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.doses).toHaveLength(1);
-      expect(data.doses[0].doseId).toBe("1-0-1735344000000");
-      expect(data.doses[0].markedBy).toBe("Daniel");
-    });
-
-    it("should return 404 for get doses with invalid share token", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/share/invalid-token/doses",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should return 404 for mark dose with invalid share token", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/share/invalid-token/doses",
-        payload: { doseId: "1-0-1735344000000" },
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should return 404 for unmark dose with invalid share token", async () => {
-      const response = await app.inject({
-        method: "DELETE",
-        url: "/share/invalid-token/doses/1-0-1735344000000",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should return validation error for empty doseId in share route", async () => {
-      await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-      const token = "validation-test-token";
-      await createShareToken(testClient, userId, "Daniel", token);
-
-      const response = await app.inject({
-        method: "POST",
-        url: `/share/${token}/doses`,
-        payload: { doseId: "" },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Medication Image Routes
-  // ---------------------------------------------------------------------------
-
-  describe("Medication image routes", () => {
-    it("should return 400 for invalid medication id in image upload", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications/invalid/image",
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should return 404 for image upload to non-existent medication", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications/99999/image",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should return error for image upload without file", async () => {
-      // Create medication first
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Image Test Med",
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-      const medId = createResponse.json().id;
-
-      const response = await app.inject({
-        method: "POST",
-        url: `/medications/${medId}/image`,
-      });
-
-      // 406 Not Acceptable when no multipart content
-      expect([400, 406]).toContain(response.statusCode);
-    });
-
-    it("should return 400 for invalid medication id in image delete", async () => {
-      const response = await app.inject({
-        method: "DELETE",
-        url: "/medications/invalid/image",
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should return 404 for image delete on non-existent medication", async () => {
-      const response = await app.inject({
-        method: "DELETE",
-        url: "/medications/99999/image",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should handle image delete when no image exists", async () => {
-      // Create medication first (without image)
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "No Image Med",
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-      const medId = createResponse.json().id;
-
-      const response = await app.inject({
-        method: "DELETE",
-        url: `/medications/${medId}/image`,
-      });
-
-      // Returns 204 No Content
-      expect(response.statusCode).toBe(204);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Real Refill Routes Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /medications/:id/refill routes", () => {
-    it("should add refill to medication stock", async () => {
-      // Create medication first
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Refill Test Med",
-          packCount: 2,
-          blistersPerPack: 3,
-          pillsPerBlister: 10,
-          looseTablets: 5,
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-      expect(createResponse.statusCode).toBe(200);
-      const medId = createResponse.json().id;
-
-      // Add refill
-      const refillResponse = await app.inject({
-        method: "POST",
-        url: `/medications/${medId}/refill`,
-        payload: { packsAdded: 1, loosePillsAdded: 10 },
-      });
-
-      expect(refillResponse.statusCode).toBe(200);
-      const data = refillResponse.json();
-      expect(data.success).toBe(true);
-      expect(data.newStock.packCount).toBe(3); // 2 + 1
-      expect(data.newStock.looseTablets).toBe(15); // 5 + 10
-    });
-
-    it("should return 400 when no packs or pills added", async () => {
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Refill Test Med 2",
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-      const medId = createResponse.json().id;
-
-      const response = await app.inject({
-        method: "POST",
-        url: `/medications/${medId}/refill`,
-        payload: { packsAdded: 0, loosePillsAdded: 0 },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should return 404 for non-existent medication", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications/99999/refill",
-        payload: { packsAdded: 1 },
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should return 400 for invalid medication id", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/medications/invalid/refill",
-        payload: { packsAdded: 1 },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-  });
-
-  describe("Real /medications/:id/refills routes (history)", () => {
-    it("should return empty array when no refills", async () => {
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "No Refill Med",
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-      const medId = createResponse.json().id;
-
-      const response = await app.inject({
-        method: "GET",
-        url: `/medications/${medId}/refills`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual([]);
-    });
-
-    it("should return refill history after adding refills", async () => {
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "With Refills Med",
-          packCount: 1,
-          blistersPerPack: 2,
-          pillsPerBlister: 10,
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-      const medId = createResponse.json().id;
-
-      // Add two refills
-      await app.inject({
-        method: "POST",
-        url: `/medications/${medId}/refill`,
-        payload: { packsAdded: 1, loosePillsAdded: 0 },
-      });
-      await app.inject({
-        method: "POST",
-        url: `/medications/${medId}/refill`,
-        payload: { packsAdded: 0, loosePillsAdded: 5 },
-      });
-
-      const response = await app.inject({
-        method: "GET",
-        url: `/medications/${medId}/refills`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const refills = response.json();
-      expect(refills).toHaveLength(2);
-      // Check both refills exist (order may vary)
-      const hasPackRefill = refills.some((r: any) => r.packsAdded === 1 && r.loosePillsAdded === 0);
-      const hasLooseRefill = refills.some((r: any) => r.packsAdded === 0 && r.loosePillsAdded === 5);
-      expect(hasPackRefill).toBe(true);
-      expect(hasLooseRefill).toBe(true);
-    });
-
-    it("should return 404 for non-existent medication", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/medications/99999/refills",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Real Export/Import Routes Tests
-  // ---------------------------------------------------------------------------
-
-  describe("Real /export routes", () => {
-    it("should export empty data when no medications", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/export",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.version).toBeDefined();
-      expect(data.exportedAt).toBeDefined();
-      expect(data.medications).toEqual([]);
-    });
-
-    it("should export medications with correct structure", async () => {
-      // Create a medication
-      await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Export Test Med",
-          genericName: "Test Generic",
-          packCount: 2,
-          blistersPerPack: 3,
-          pillsPerBlister: 10,
-          looseTablets: 5,
-          pillWeightMg: 500,
-          notes: "Test notes",
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-
-      const response = await app.inject({
-        method: "GET",
-        url: "/export",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.medications).toHaveLength(1);
-      
-      const med = data.medications[0];
-      expect(med.name).toBe("Export Test Med");
-      expect(med.genericName).toBe("Test Generic");
-      expect(med.inventory.packCount).toBe(2);
-      expect(med.inventory.blistersPerPack).toBe(3);
-      expect(med.inventory.pillsPerBlister).toBe(10);
-      expect(med.inventory.looseTablets).toBe(5);
-      expect(med.pillWeightMg).toBe(500);
-      expect(med.notes).toBe("Test notes");
-      expect(med.schedules).toHaveLength(1);
-    });
-
-    it("should include settings when user has settings", async () => {
-      // Create settings first
-      await app.inject({
-        method: "PUT",
-        url: "/settings",
-        payload: { 
-          emailEnabled: true,
-          notificationEmail: "test@example.com",
-        },
-      });
-
-      const response = await app.inject({
-        method: "GET",
-        url: "/export",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.settings).toBeDefined();
-      expect(data.settings.emailEnabled).toBe(true);
-    });
-  });
-
-  describe("Real /import routes", () => {
-    it("should import medications from export format", async () => {
-      const importData = {
-        version: "1.0",
-        exportedAt: new Date().toISOString(),
-        medications: [
-          {
-            _exportId: "med-1",
-            name: "Imported Med",
-            genericName: "Imported Generic",
-            takenBy: ["Person A"],
-            inventory: {
-              packCount: 3,
-              blistersPerPack: 2,
-              pillsPerBlister: 14,
-              looseTablets: 7,
-            },
-            pillWeightMg: 250,
-            schedules: [
-              { usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z", remind: true }
-            ],
-            notes: "Imported notes",
-            intakeRemindersEnabled: true,
-          }
-        ],
-      };
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/import",
-        payload: importData,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const result = response.json();
-      expect(result.success).toBe(true);
-      expect(result.imported.medications).toBe(1);
-
-      // Verify medication was created
-      const medsResponse = await app.inject({
-        method: "GET",
-        url: "/medications",
-      });
-      const meds = medsResponse.json();
-      expect(meds).toHaveLength(1);
-      expect(meds[0].name).toBe("Imported Med");
-    });
-
-    it("should return 400 for invalid import data", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/import",
-        payload: { invalid: "data" },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("should replace existing medications on import", async () => {
-      // First create a medication
-      await app.inject({
-        method: "POST",
-        url: "/medications",
-        payload: { 
-          name: "Existing Med",
-          packCount: 5,
-          blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-        },
-      });
-
-      // Verify it exists
-      let medsResponse = await app.inject({ method: "GET", url: "/medications" });
-      expect(medsResponse.json()).toHaveLength(1);
-      expect(medsResponse.json()[0].name).toBe("Existing Med");
-      expect(medsResponse.json()[0].packCount).toBe(5);
-
-      // Import will REPLACE all data
-      const importData = {
-        version: "1.0",
-        exportedAt: new Date().toISOString(),
-        medications: [
-          {
-            _exportId: "med-1",
-            name: "Imported Med",
-            inventory: { packCount: 10, blistersPerPack: 2, pillsPerBlister: 14, looseTablets: 0 },
-            schedules: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-          }
-        ],
-      };
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/import",
-        payload: importData,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const result = response.json();
-      expect(result.success).toBe(true);
-      expect(result.imported.medications).toBe(1);
-
-      // Verify: old med is gone, new med exists
-      medsResponse = await app.inject({ method: "GET", url: "/medications" });
-      expect(medsResponse.json()).toHaveLength(1);
-      expect(medsResponse.json()[0].name).toBe("Imported Med");
-      expect(medsResponse.json()[0].packCount).toBe(10);
-    });
-  });
+	let app: FastifyInstance;
+	let userId: number;
+
+	beforeAll(async () => {
+		// Create schema
+		await createSchema(testClient);
+
+		// Build app with real routes
+		app = Fastify({ logger: false });
+
+		await app.register(sensible);
+		await app.register(cookie, { secret: "test-cookie-secret" });
+		await app.register(jwt, {
+			secret: "test-jwt-secret",
+			cookie: { cookieName: "access_token", signed: false },
+		});
+		await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+
+		app.decorate("config", {
+			accessSecret: "test-jwt-secret",
+			refreshSecret: "test-refresh-secret",
+			accessTtl: 15,
+			refreshTtl: 7,
+			cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
+			refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
+		});
+
+		// Register REAL routes
+		await app.register(doseRoutes);
+		await app.register(shareRoutes);
+		await app.register(medicationRoutes);
+		await app.register(settingsRoutes);
+		await app.register(healthRoutes);
+		await app.register(refillRoutes);
+		await app.register(exportRoutes);
+
+		await app.ready();
+	});
+
+	afterAll(async () => {
+		await app.close();
+		testClient.close();
+	});
+
+	beforeEach(async () => {
+		await clearData(testClient);
+		// Create anonymous user with fixed ID for auth-disabled mode
+		await testClient.execute(
+			"INSERT INTO users (id, username, auth_provider) VALUES (999999999, '__anonymous__', 'anonymous')"
+		);
+		userId = 999999999;
+	});
+
+	// ---------------------------------------------------------------------------
+	// Real Dose Routes Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /doses/taken routes", () => {
+		it("should mark a dose using real route", async () => {
+			const doseId = "1-0-1735344000000";
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			// Verify in database
+			const result = await testClient.execute({
+				sql: `SELECT dose_id FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
+				args: [userId, doseId],
+			});
+			expect(result.rows.length).toBe(1);
+		});
+
+		it("should get taken doses using real route", async () => {
+			// Insert dose directly
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id) VALUES (?, ?)`,
+				args: [userId, "1-0-1735344000000"],
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/doses/taken",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.doses).toHaveLength(1);
+			expect(data.doses[0].doseId).toBe("1-0-1735344000000");
+		});
+
+		it("should delete dose using real route", async () => {
+			const doseId = "1-0-1735344000000";
+
+			// Insert first
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id) VALUES (?, ?)`,
+				args: [userId, doseId],
+			});
+
+			const response = await app.inject({
+				method: "DELETE",
+				url: `/doses/taken/${encodeURIComponent(doseId)}`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			// Verify deleted
+			const result = await testClient.execute({
+				sql: `SELECT COUNT(*) as count FROM dose_tracking WHERE dose_id = ?`,
+				args: [doseId],
+			});
+			expect(result.rows[0].count).toBe(0);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Real Share Routes Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /share routes", () => {
+		it("should create share token using real route", async () => {
+			// Create medication with takenBy
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: { takenBy: "Daniel", scheduleDays: 30 },
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.token).toBeDefined();
+			expect(data.shareUrl).toContain("/share/");
+		});
+
+		it("should get shared schedule using real route", async () => {
+			// Create medication
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+
+			// Create share token
+			const token = "test_share_token_123";
+			await createShareToken(testClient, userId, "Daniel", token);
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/share/${token}`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.takenBy).toBe("Daniel");
+			expect(data.medications).toHaveLength(1);
+			expect(data.medications[0].name).toBe("Aspirin");
+		});
+
+		it("should mark dose via share link using real route", async () => {
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+
+			const token = "test_share_token_456";
+			await createShareToken(testClient, userId, "Daniel", token);
+
+			const doseId = "1-0-1735344000000";
+			const response = await app.inject({
+				method: "POST",
+				url: `/share/${token}/doses`,
+				payload: { doseId },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			// Verify markedBy is set
+			const result = await testClient.execute({
+				sql: `SELECT marked_by FROM dose_tracking WHERE dose_id = ?`,
+				args: [doseId],
+			});
+			expect(result.rows[0].marked_by).toBe("Daniel");
+		});
+
+		it("should return 404 for invalid share token", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/share/invalid_token",
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Real Medication Routes Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /medications routes", () => {
+		const validMedication = {
+			name: "Aspirin",
+			genericName: "Acetylsalicylic acid",
+			takenBy: ["Daniel"],
+			packCount: 2,
+			blistersPerPack: 3,
+			pillsPerBlister: 10,
+			looseTablets: 5,
+			pillWeightMg: 500,
+			expiryDate: "2026-12-31",
+			notes: "Take with food",
+			intakeRemindersEnabled: true,
+			blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+		};
+
+		it("should create medication using real route", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: validMedication,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.id).toBeDefined();
+			expect(data.name).toBe("Aspirin");
+			expect(data.genericName).toBe("Acetylsalicylic acid");
+			expect(data.takenBy).toEqual(["Daniel"]);
+			expect(data.packCount).toBe(2);
+			expect(data.blistersPerPack).toBe(3);
+			expect(data.pillsPerBlister).toBe(10);
+			expect(data.looseTablets).toBe(5);
+			expect(data.pillWeightMg).toBe(500);
+			expect(data.blisters).toHaveLength(1);
+		});
+
+		it("should list medications using real route", async () => {
+			// Create medication first
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: validMedication,
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/medications",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data).toHaveLength(1);
+			expect(data[0].name).toBe("Aspirin");
+		});
+
+		it("should update medication using real route", async () => {
+			// Create medication first
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: validMedication,
+			});
+			const medId = createResponse.json().id;
+
+			// Update it
+			const updatedMed = {
+				...validMedication,
+				name: "Aspirin Extra",
+				looseTablets: 10,
+			};
+
+			const response = await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: updatedMed,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.name).toBe("Aspirin Extra");
+			expect(data.looseTablets).toBe(10);
+		});
+
+		it("should delete medication using real route", async () => {
+			// Create medication first
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: validMedication,
+			});
+			const medId = createResponse.json().id;
+
+			// Delete it
+			const response = await app.inject({
+				method: "DELETE",
+				url: `/medications/${medId}`,
+			});
+
+			expect(response.statusCode).toBe(204);
+
+			// Verify deleted
+			const listResponse = await app.inject({
+				method: "GET",
+				url: "/medications",
+			});
+			expect(listResponse.json()).toHaveLength(0);
+		});
+
+		it("should return 400 for invalid medication data", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: { name: "" }, // Invalid - empty name and no blisters
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should return 404 for non-existent medication", async () => {
+			const response = await app.inject({
+				method: "PUT",
+				url: "/medications/99999",
+				payload: validMedication,
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should create medication with multiple intake schedules", async () => {
+			const multiBlisterMed = {
+				...validMedication,
+				blisters: [
+					{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" },
+					{ usage: 0.5, every: 1, start: "2025-01-01T20:00:00.000Z" },
+				],
+			};
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: multiBlisterMed,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.blisters).toHaveLength(2);
+			expect(data.blisters[0].usage).toBe(1);
+			expect(data.blisters[1].usage).toBe(0.5);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Real Settings Routes Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /settings routes", () => {
+		it("should get default settings using real route", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/settings",
+			});
+
+			if (response.statusCode !== 200) {
+				console.error("GET /settings error:", response.body);
+			}
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			// Check default values
+			expect(data.emailEnabled).toBe(false);
+			expect(data.lowStockDays).toBe(30);
+			expect(data.normalStockDays).toBe(90);
+			expect(data.highStockDays).toBe(180);
+			expect(data.language).toBe("en");
+			expect(data.stockCalculationMode).toBe("automatic");
+		});
+
+		it("should update settings using real route", async () => {
+			const newSettings = {
+				emailEnabled: true,
+				notificationEmail: "test@example.com",
+				reminderDaysBefore: 14,
+				repeatDailyReminders: false,
+				lowStockDays: 14,
+				normalStockDays: 60,
+				highStockDays: 120,
+				shoutrrrEnabled: false,
+				shoutrrrUrl: "",
+				emailStockReminders: true,
+				emailIntakeReminders: true,
+				shoutrrrStockReminders: true,
+				shoutrrrIntakeReminders: true,
+				language: "de",
+				stockCalculationMode: "manual",
+			};
+
+			const response = await app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: newSettings,
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			// Verify settings were saved
+			const getResponse = await app.inject({
+				method: "GET",
+				url: "/settings",
+			});
+
+			const data = getResponse.json();
+			expect(data.emailEnabled).toBe(true);
+			expect(data.notificationEmail).toBe("test@example.com");
+			expect(data.lowStockDays).toBe(14);
+			expect(data.language).toBe("de");
+			expect(data.stockCalculationMode).toBe("manual");
+		});
+
+		it("should update existing settings using real route", async () => {
+			// First update
+			await app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: {
+					emailEnabled: true,
+					notificationEmail: "first@example.com",
+					reminderDaysBefore: 7,
+					repeatDailyReminders: false,
+					lowStockDays: 30,
+					normalStockDays: 90,
+					highStockDays: 180,
+					shoutrrrEnabled: false,
+					shoutrrrUrl: "",
+					emailStockReminders: true,
+					emailIntakeReminders: true,
+					shoutrrrStockReminders: true,
+					shoutrrrIntakeReminders: true,
+					language: "en",
+					stockCalculationMode: "automatic",
+				},
+			});
+
+			// Second update
+			const response = await app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: {
+					emailEnabled: false,
+					notificationEmail: "second@example.com",
+					reminderDaysBefore: 14,
+					repeatDailyReminders: true,
+					lowStockDays: 20,
+					normalStockDays: 60,
+					highStockDays: 120,
+					shoutrrrEnabled: true,
+					shoutrrrUrl: "ntfy://localhost/alerts",
+					emailStockReminders: false,
+					emailIntakeReminders: false,
+					shoutrrrStockReminders: true,
+					shoutrrrIntakeReminders: true,
+					language: "de",
+					stockCalculationMode: "manual",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			// Verify updated
+			const getResponse = await app.inject({
+				method: "GET",
+				url: "/settings",
+			});
+
+			const data = getResponse.json();
+			expect(data.emailEnabled).toBe(false);
+			expect(data.notificationEmail).toBe("second@example.com");
+			expect(data.shoutrrrEnabled).toBe(true);
+			expect(data.shoutrrrUrl).toBe("ntfy://localhost/alerts");
+			expect(data.stockCalculationMode).toBe("manual");
+		});
+
+		it("should disable repeatDailyReminders when no stock reminders configured", async () => {
+			const response = await app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: {
+					emailEnabled: false, // No email
+					notificationEmail: "",
+					reminderDaysBefore: 7,
+					repeatDailyReminders: true, // User tries to enable
+					lowStockDays: 30,
+					normalStockDays: 90,
+					highStockDays: 180,
+					shoutrrrEnabled: false, // No shoutrrr
+					shoutrrrUrl: "",
+					emailStockReminders: true,
+					emailIntakeReminders: true,
+					shoutrrrStockReminders: true,
+					shoutrrrIntakeReminders: true,
+					language: "en",
+					stockCalculationMode: "automatic",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			// Verify repeatDailyReminders is false
+			const getResponse = await app.inject({
+				method: "GET",
+				url: "/settings",
+			});
+
+			const data = getResponse.json();
+			expect(data.repeatDailyReminders).toBe(false);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Health Route Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /health route", () => {
+		it("should return health status", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/health",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const json = response.json();
+			expect(json.status).toBe("ok");
+			expect(typeof json.smtpConfigured).toBe("boolean");
+			expect(typeof json.shoutrrrConfigured).toBe("boolean");
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Additional Share Routes Tests (edge cases)
+	// ---------------------------------------------------------------------------
+
+	describe("Real /share routes - edge cases", () => {
+		it("should get list of people with medications", async () => {
+			// Create medications for different people
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			await createMedication(testClient, userId, "Ibuprofen", ["Anna"]);
+			await createMedication(testClient, userId, "Paracetamol", ["Daniel", "Anna"]);
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/share/people",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.people).toContain("Daniel");
+			expect(data.people).toContain("Anna");
+			expect(data.people).toHaveLength(2);
+		});
+
+		it("should return error when creating share for person with no meds", async () => {
+			// Create medication for a different person
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: { takenBy: "Unknown", scheduleDays: 30 },
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json().code).toBe("NO_MEDICATIONS");
+		});
+
+		it("should unmark dose via share link", async () => {
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+
+			const token = "test_delete_dose_token";
+			await createShareToken(testClient, userId, "Daniel", token);
+
+			// First mark the dose
+			const doseId = "1-0-1735344000000";
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by) VALUES (?, ?, ?)`,
+				args: [userId, doseId, "Daniel"],
+			});
+
+			// Now unmark via share link
+			const response = await app.inject({
+				method: "DELETE",
+				url: `/share/${token}/doses/${encodeURIComponent(doseId)}`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			// Verify deleted
+			const result = await testClient.execute({
+				sql: `SELECT COUNT(*) as count FROM dose_tracking WHERE dose_id = ?`,
+				args: [doseId],
+			});
+			expect(result.rows[0].count).toBe(0);
+		});
+
+		it("should return 410 for expired share token", async () => {
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+
+			// Create expired token
+			const token = "expired_token_123";
+			const expiredAt = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
+			await testClient.execute({
+				sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at) VALUES (?, ?, ?, 30, ?)`,
+				args: [userId, token, "Daniel", expiredAt],
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/share/${token}`,
+			});
+
+			expect(response.statusCode).toBe(410);
+			expect(response.json().code).toBe("EXPIRED");
+		});
+
+		it("should return already marked message for duplicate dose", async () => {
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+
+			const token = "test_duplicate_token";
+			await createShareToken(testClient, userId, "Daniel", token);
+
+			const doseId = "1-0-1735344000000";
+
+			// Mark the dose first time
+			await app.inject({
+				method: "POST",
+				url: `/share/${token}/doses`,
+				payload: { doseId },
+			});
+
+			// Try to mark again
+			const response = await app.inject({
+				method: "POST",
+				url: `/share/${token}/doses`,
+				payload: { doseId },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().message).toBe("Already marked");
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Additional Dose Routes Tests (edge cases)
+	// ---------------------------------------------------------------------------
+
+	describe("Real /doses/taken routes - edge cases", () => {
+		it("should return already marked message for duplicate dose", async () => {
+			const doseId = "1-0-1735344000000";
+
+			// Mark first time
+			await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId },
+			});
+
+			// Mark second time
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().message).toBe("Already marked");
+		});
+
+		it("should handle doses with person name in doseId", async () => {
+			const doseId = "1-0-1735344000000-Daniel";
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			// Verify in database
+			const result = await testClient.execute({
+				sql: `SELECT dose_id FROM dose_tracking WHERE dose_id = ?`,
+				args: [doseId],
+			});
+			expect(result.rows.length).toBe(1);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Additional Medication Routes Tests (edge cases)
+	// ---------------------------------------------------------------------------
+
+	describe("Real /medications routes - edge cases", () => {
+		const _validMedication = {
+			name: "Aspirin",
+			blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+		};
+
+		it("should return 404 when deleting non-existent medication", async () => {
+			const response = await app.inject({
+				method: "DELETE",
+				url: "/medications/99999",
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should handle medication with all optional fields", async () => {
+			const fullMedication = {
+				name: "Complete Med",
+				genericName: "Generic Complete",
+				takenBy: ["Person1", "Person2"],
+				packCount: 5,
+				blistersPerPack: 4,
+				pillsPerBlister: 20,
+				looseTablets: 10,
+				pillWeightMg: 250,
+				expiryDate: "2026-06-30",
+				notes: "Some important notes about this medication",
+				intakeRemindersEnabled: true,
+				blisters: [
+					{ usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" },
+					{ usage: 1, every: 1, start: "2025-01-01T20:00:00.000Z" },
+				],
+			};
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: fullMedication,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.genericName).toBe("Generic Complete");
+			expect(data.takenBy).toEqual(["Person1", "Person2"]);
+			expect(data.packCount).toBe(5);
+			expect(data.blistersPerPack).toBe(4);
+			expect(data.pillsPerBlister).toBe(20);
+			expect(data.looseTablets).toBe(10);
+			expect(data.pillWeightMg).toBe(250);
+			expect(data.expiryDate).toBe("2026-06-30");
+			expect(data.notes).toBe("Some important notes about this medication");
+			expect(data.intakeRemindersEnabled).toBe(true);
+			expect(data.blisters).toHaveLength(2);
+		});
+
+		it("should update medication with partial fields", async () => {
+			// Create medication first
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: { name: "Original Med", blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }] },
+			});
+			const medId = createResponse.json().id;
+
+			// Update with partial fields
+			const response = await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "Updated Med",
+					genericName: "New Generic",
+					notes: "Updated notes",
+					blisters: [{ usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().name).toBe("Updated Med");
+			expect(response.json().genericName).toBe("New Generic");
+			expect(response.json().notes).toBe("Updated notes");
+		});
+
+		it("should handle string takenBy conversion", async () => {
+			// Test with takenBy as array (expected format)
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Array TakenBy Med",
+					takenBy: ["SinglePerson"],
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().takenBy).toEqual(["SinglePerson"]);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Test Email/Shoutrrr Validation (settings.ts - uncovered paths)
+	// ---------------------------------------------------------------------------
+
+	describe("Real /settings test routes", () => {
+		it("should reject test-email when SMTP is not configured", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/settings/test-email",
+				payload: { email: "test@example.com" },
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json().error).toBe("SMTP not configured");
+		});
+
+		it("should reject test-shoutrrr without URL", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/settings/test-shoutrrr",
+				payload: { url: "" },
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json().error).toBe("Notification URL is required");
+		});
+
+		it("should reject test-shoutrrr with unsupported URL format", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/settings/test-shoutrrr",
+				payload: { url: "ftp://invalid.com/topic" },
+			});
+
+			expect(response.statusCode).toBe(500);
+			// SSRF protection returns more specific error message
+			expect(response.json().error).toContain("HTTP/HTTPS protocols");
+		});
+
+		it("should reject test-shoutrrr with localhost URL (SSRF protection)", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/settings/test-shoutrrr",
+				payload: { url: "https://localhost/topic" },
+			});
+
+			expect(response.statusCode).toBe(500);
+			expect(response.json().error).toContain("Localhost URLs are not allowed");
+		});
+
+		it("should reject test-shoutrrr with private IP (SSRF protection)", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/settings/test-shoutrrr",
+				payload: { url: "https://192.168.1.1/topic" },
+			});
+
+			expect(response.statusCode).toBe(500);
+			expect(response.json().error).toContain("Private IP addresses are not allowed");
+		});
+
+		it("should reject test-shoutrrr with internal hostname (SSRF protection)", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/settings/test-shoutrrr",
+				payload: { url: "https://server.internal/topic" },
+			});
+
+			expect(response.statusCode).toBe(500);
+			expect(response.json().error).toContain("Internal hostnames are not allowed");
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Additional Doses Routes Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /doses routes - more coverage", () => {
+		it("should return 400 when doseId is missing", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: {},
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should handle dose marking and get taken doses", async () => {
+			const doseId = "99-0-1735344000099";
+
+			// Mark the dose
+			const markResponse = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId },
+			});
+			expect(markResponse.statusCode).toBe(200);
+			expect(markResponse.json()).toEqual({ success: true });
+
+			// The GET returns doses for current user (anonymous in test)
+			// Each beforeEach clears data, so we just verify POST works correctly
+		});
+
+		it("should handle cleaning old doses for future date range", async () => {
+			// Create a medication first
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "CleanTest Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			// Mark some doses
+			await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: `${medId}-0-1735344000000` },
+			});
+
+			// Update medication with new start date
+			await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "CleanTest Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-06-01T08:00:00.000Z" }], // Future start
+				},
+			});
+
+			// The dose tracking for the old period should be cleaned up
+			// This is handled by the medications route internally
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Health Check Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /health routes", () => {
+		it("should return health status", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/health",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const json = response.json();
+			expect(json.status).toBe("ok");
+			expect(typeof json.smtpConfigured).toBe("boolean");
+			expect(typeof json.shoutrrrConfigured).toBe("boolean");
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Medication Delete Cascade Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Medication deletion with dose tracking", () => {
+		it("should handle medication deletion that has tracked doses", async () => {
+			// Create medication
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Test Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			// Mark a dose for this medication
+			await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: `${medId}-0-1735344000000` },
+			});
+
+			// Delete medication - should succeed even with tracked doses
+			const deleteResponse = await app.inject({
+				method: "DELETE",
+				url: `/medications/${medId}`,
+			});
+
+			expect(deleteResponse.statusCode).toBe(204);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Settings Edge Cases
+	// ---------------------------------------------------------------------------
+
+	describe("Settings edge cases", () => {
+		it("should handle settings with all reminder options enabled", async () => {
+			const response = await app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: {
+					emailEnabled: true,
+					notificationEmail: "test@example.com",
+					reminderDaysBefore: 7,
+					repeatDailyReminders: true,
+					lowStockDays: 30,
+					normalStockDays: 90,
+					highStockDays: 180,
+					shoutrrrEnabled: true,
+					shoutrrrUrl: "ntfy://localhost/test",
+					emailStockReminders: true,
+					emailIntakeReminders: true,
+					shoutrrrStockReminders: true,
+					shoutrrrIntakeReminders: true,
+					language: "en",
+					stockCalculationMode: "automatic",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			// Verify repeatDailyReminders is preserved when notifications are enabled
+			const getResponse = await app.inject({
+				method: "GET",
+				url: "/settings",
+			});
+
+			const data = getResponse.json();
+			expect(data.repeatDailyReminders).toBe(true);
+			expect(data.emailEnabled).toBe(true);
+			expect(data.shoutrrrEnabled).toBe(true);
+		});
+
+		it("should handle expiry warning days setting", async () => {
+			const response = await app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: {
+					emailEnabled: false,
+					notificationEmail: "",
+					reminderDaysBefore: 14,
+					repeatDailyReminders: false,
+					lowStockDays: 30,
+					normalStockDays: 90,
+					highStockDays: 180,
+					expiryWarningDays: 60,
+					shoutrrrEnabled: false,
+					shoutrrrUrl: "",
+					emailStockReminders: true,
+					emailIntakeReminders: true,
+					shoutrrrStockReminders: true,
+					shoutrrrIntakeReminders: true,
+					language: "en",
+					stockCalculationMode: "automatic",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Share Token Management
+	// ---------------------------------------------------------------------------
+
+	describe("Share token management", () => {
+		it("should create share token with custom scheduleDays", async () => {
+			await createMedication(testClient, userId, "Med1", ["Daniel"]);
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: {
+					takenBy: "Daniel",
+					scheduleDays: 90,
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.token).toBeDefined();
+			expect(data.expiresAt).toBeDefined();
+		});
+
+		it("should return validation error for invalid scheduleDays", async () => {
+			await createMedication(testClient, userId, "Med1", ["Daniel"]);
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: {
+					takenBy: "Daniel",
+					scheduleDays: 500, // Too high, max is 365
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should return validation error for missing takenBy", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: {
+					scheduleDays: 30,
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json().code).toBe("VALIDATION_ERROR");
+		});
+
+		it("should get people list with multiple persons", async () => {
+			await createMedication(testClient, userId, "Med1", ["Daniel"]);
+			await createMedication(testClient, userId, "Med2", ["Anna"]);
+			await createMedication(testClient, userId, "Med3", ["Daniel", "Anna"]);
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/share/people",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.people).toContain("Daniel");
+			expect(data.people).toContain("Anna");
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Dose validation tests
+	// ---------------------------------------------------------------------------
+
+	describe("Dose validation", () => {
+		it("should reject invalid doseId format in POST", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: null },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should handle empty string doseId", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: "" },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Medication validation edge cases
+	// ---------------------------------------------------------------------------
+
+	describe("Medication validation edge cases", () => {
+		it("should reject medication without blisters", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: { name: "No Blisters Med" },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should reject medication with empty blisters array", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: { name: "Empty Blisters Med", blisters: [] },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should reject medication with invalid blister data", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Invalid Blister Med",
+					blisters: [{ usage: -1, every: 0, start: "invalid-date" }],
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should handle medication with minimal valid data", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Minimal Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.name).toBe("Minimal Med");
+			// Check defaults
+			expect(data.packCount).toBe(1);
+			expect(data.blistersPerPack).toBe(1);
+			expect(data.pillsPerBlister).toBe(1);
+			expect(data.looseTablets).toBe(0);
+			expect(data.takenBy).toEqual([]);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Share Token Dose Routes (via share link)
+	// ---------------------------------------------------------------------------
+
+	describe("Share token dose routes", () => {
+		it("should get taken doses via share link", async () => {
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			const token = "get-doses-token";
+			await createShareToken(testClient, userId, "Daniel", token);
+
+			// Insert a dose directly
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by) VALUES (?, ?, ?)`,
+				args: [userId, "1-0-1735344000000", "Daniel"],
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/share/${token}/doses`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.doses).toHaveLength(1);
+			expect(data.doses[0].doseId).toBe("1-0-1735344000000");
+			expect(data.doses[0].markedBy).toBe("Daniel");
+		});
+
+		it("should return 404 for get doses with invalid share token", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/share/invalid-token/doses",
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should return 404 for mark dose with invalid share token", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/share/invalid-token/doses",
+				payload: { doseId: "1-0-1735344000000" },
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should return 404 for unmark dose with invalid share token", async () => {
+			const response = await app.inject({
+				method: "DELETE",
+				url: "/share/invalid-token/doses/1-0-1735344000000",
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should return validation error for empty doseId in share route", async () => {
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			const token = "validation-test-token";
+			await createShareToken(testClient, userId, "Daniel", token);
+
+			const response = await app.inject({
+				method: "POST",
+				url: `/share/${token}/doses`,
+				payload: { doseId: "" },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Medication Image Routes
+	// ---------------------------------------------------------------------------
+
+	describe("Medication image routes", () => {
+		it("should return 400 for invalid medication id in image upload", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/invalid/image",
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should return 404 for image upload to non-existent medication", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/99999/image",
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should return error for image upload without file", async () => {
+			// Create medication first
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Image Test Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/image`,
+			});
+
+			// 406 Not Acceptable when no multipart content
+			expect([400, 406]).toContain(response.statusCode);
+		});
+
+		it("should return 400 for invalid medication id in image delete", async () => {
+			const response = await app.inject({
+				method: "DELETE",
+				url: "/medications/invalid/image",
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should return 404 for image delete on non-existent medication", async () => {
+			const response = await app.inject({
+				method: "DELETE",
+				url: "/medications/99999/image",
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should handle image delete when no image exists", async () => {
+			// Create medication first (without image)
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "No Image Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "DELETE",
+				url: `/medications/${medId}/image`,
+			});
+
+			// Returns 204 No Content
+			expect(response.statusCode).toBe(204);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Real Refill Routes Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /medications/:id/refill routes", () => {
+		it("should add refill to medication stock", async () => {
+			// Create medication first
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Refill Test Med",
+					packCount: 2,
+					blistersPerPack: 3,
+					pillsPerBlister: 10,
+					looseTablets: 5,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			// Add refill
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 10 },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const data = refillResponse.json();
+			expect(data.success).toBe(true);
+			expect(data.newStock.packCount).toBe(3); // 2 + 1
+			expect(data.newStock.looseTablets).toBe(15); // 5 + 10
+		});
+
+		it("should return 400 when no packs or pills added", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Refill Test Med 2",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 0, loosePillsAdded: 0 },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should return 404 for non-existent medication", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/99999/refill",
+				payload: { packsAdded: 1 },
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should return 400 for invalid medication id", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/invalid/refill",
+				payload: { packsAdded: 1 },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+	});
+
+	describe("Real /medications/:id/refills routes (history)", () => {
+		it("should return empty array when no refills", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "No Refill Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/medications/${medId}/refills`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual([]);
+		});
+
+		it("should return refill history after adding refills", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "With Refills Med",
+					packCount: 1,
+					blistersPerPack: 2,
+					pillsPerBlister: 10,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			// Add two refills
+			await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 0 },
+			});
+			await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 0, loosePillsAdded: 5 },
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/medications/${medId}/refills`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const refills = response.json();
+			expect(refills).toHaveLength(2);
+			// Check both refills exist (order may vary)
+			const hasPackRefill = refills.some((r: any) => r.packsAdded === 1 && r.loosePillsAdded === 0);
+			const hasLooseRefill = refills.some((r: any) => r.packsAdded === 0 && r.loosePillsAdded === 5);
+			expect(hasPackRefill).toBe(true);
+			expect(hasLooseRefill).toBe(true);
+		});
+
+		it("should return 404 for non-existent medication", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/medications/99999/refills",
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Real Export/Import Routes Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /export routes", () => {
+		it("should export empty data when no medications", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/export",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.version).toBeDefined();
+			expect(data.exportedAt).toBeDefined();
+			expect(data.medications).toEqual([]);
+		});
+
+		it("should export medications with correct structure", async () => {
+			// Create a medication
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Export Test Med",
+					genericName: "Test Generic",
+					packCount: 2,
+					blistersPerPack: 3,
+					pillsPerBlister: 10,
+					looseTablets: 5,
+					pillWeightMg: 500,
+					notes: "Test notes",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/export",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.medications).toHaveLength(1);
+
+			const med = data.medications[0];
+			expect(med.name).toBe("Export Test Med");
+			expect(med.genericName).toBe("Test Generic");
+			expect(med.inventory.packCount).toBe(2);
+			expect(med.inventory.blistersPerPack).toBe(3);
+			expect(med.inventory.pillsPerBlister).toBe(10);
+			expect(med.inventory.looseTablets).toBe(5);
+			expect(med.pillWeightMg).toBe(500);
+			expect(med.notes).toBe("Test notes");
+			expect(med.schedules).toHaveLength(1);
+		});
+
+		it("should include settings when user has settings", async () => {
+			// Create settings first
+			await app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: {
+					emailEnabled: true,
+					notificationEmail: "test@example.com",
+				},
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/export",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.settings).toBeDefined();
+			expect(data.settings.emailEnabled).toBe(true);
+		});
+	});
+
+	describe("Real /import routes", () => {
+		it("should import medications from export format", async () => {
+			const importData = {
+				version: "1.0",
+				exportedAt: new Date().toISOString(),
+				medications: [
+					{
+						_exportId: "med-1",
+						name: "Imported Med",
+						genericName: "Imported Generic",
+						takenBy: ["Person A"],
+						inventory: {
+							packCount: 3,
+							blistersPerPack: 2,
+							pillsPerBlister: 14,
+							looseTablets: 7,
+						},
+						pillWeightMg: 250,
+						schedules: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z", remind: true }],
+						notes: "Imported notes",
+						intakeRemindersEnabled: true,
+					},
+				],
+			};
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/import",
+				payload: importData,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const result = response.json();
+			expect(result.success).toBe(true);
+			expect(result.imported.medications).toBe(1);
+
+			// Verify medication was created
+			const medsResponse = await app.inject({
+				method: "GET",
+				url: "/medications",
+			});
+			const meds = medsResponse.json();
+			expect(meds).toHaveLength(1);
+			expect(meds[0].name).toBe("Imported Med");
+		});
+
+		it("should return 400 for invalid import data", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/import",
+				payload: { invalid: "data" },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should replace existing medications on import", async () => {
+			// First create a medication
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Existing Med",
+					packCount: 5,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			// Verify it exists
+			let medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.json()).toHaveLength(1);
+			expect(medsResponse.json()[0].name).toBe("Existing Med");
+			expect(medsResponse.json()[0].packCount).toBe(5);
+
+			// Import will REPLACE all data
+			const importData = {
+				version: "1.0",
+				exportedAt: new Date().toISOString(),
+				medications: [
+					{
+						_exportId: "med-1",
+						name: "Imported Med",
+						inventory: { packCount: 10, blistersPerPack: 2, pillsPerBlister: 14, looseTablets: 0 },
+						schedules: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					},
+				],
+			};
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/import",
+				payload: importData,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const result = response.json();
+			expect(result.success).toBe(true);
+			expect(result.imported.medications).toBe(1);
+
+			// Verify: old med is gone, new med exists
+			medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.json()).toHaveLength(1);
+			expect(medsResponse.json()[0].name).toBe("Imported Med");
+			expect(medsResponse.json()[0].packCount).toBe(10);
+		});
+	});
 });

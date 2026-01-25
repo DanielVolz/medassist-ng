@@ -91,7 +91,7 @@ export function useDoses(): UseDosesReturn {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				credentials: "include",
-				body: JSON.stringify({ doseId })
+				body: JSON.stringify({ doseId }),
 			});
 		} catch {
 			// Revert on error
@@ -115,7 +115,7 @@ export function useDoses(): UseDosesReturn {
 		try {
 			await fetch(`/api/doses/taken/${encodeURIComponent(doseId)}`, {
 				method: "DELETE",
-				credentials: "include"
+				credentials: "include",
 			});
 		} catch {
 			// Revert on error
@@ -137,6 +137,6 @@ export function useDoses(): UseDosesReturn {
 		countTakenDoses,
 		markDoseTaken,
 		undoDoseTaken,
-		loadTakenDoses
+		loadTakenDoses,
 	};
 }

@@ -129,6 +129,7 @@ export type SharedMedication = {
 	pillsPerBlister: number;
 	takenBy: string[];
 	blisters: Blister[];
+	dismissedUntil?: string | null;
 };
 
 export type SharedScheduleData = {
@@ -154,14 +155,16 @@ export const FIELD_LIMITS = {
 	name: { min: 1, max: 100 },
 	genericName: { max: 100 },
 	takenBy: { max: 100 },
-	notes: { max: 2000 }
+	notes: { max: 2000 },
 } as const;
 
 // =============================================================================
 // Helper Functions for Medication Calculations
 // =============================================================================
 
-type MedLike = Pick<Medication, 'packCount' | 'blistersPerPack' | 'pillsPerBlister' | 'looseTablets'> & { stockAdjustment?: number };
+type MedLike = Pick<Medication, "packCount" | "blistersPerPack" | "pillsPerBlister" | "looseTablets"> & {
+	stockAdjustment?: number;
+};
 
 /** Calculate total pills including stockAdjustment */
 export function getMedTotal(med: MedLike): number {

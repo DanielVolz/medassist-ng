@@ -2,7 +2,7 @@
 // ConfirmModal Component - Simple confirmation dialog
 // =============================================================================
 
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export interface ConfirmModalProps {
 	title: string;
@@ -23,7 +23,7 @@ export function ConfirmModal({
 	onConfirm,
 	onCancel,
 	isLoading = false,
-	confirmVariant = "primary"
+	confirmVariant = "primary",
 }: ConfirmModalProps) {
 	return (
 		<div className="modal-overlay" onClick={onCancel}>
@@ -33,10 +33,7 @@ export function ConfirmModal({
 				</button>
 				<h2 style={{ marginBottom: "16px", paddingRight: "2rem" }}>{title}</h2>
 				<div style={{ marginBottom: "24px" }}>{typeof message === "string" ? <p>{message}</p> : message}</div>
-				<div
-					className="modal-footer"
-					style={{ padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end" }}
-				>
+				<div className="modal-footer" style={{ padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end" }}>
 					<button type="button" className="ghost" onClick={onCancel} disabled={isLoading}>
 						{cancelLabel}
 					</button>

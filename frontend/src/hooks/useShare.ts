@@ -61,8 +61,8 @@ export function useShare(): UseShareReturn {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					takenBy: shareSelectedPerson,
-					scheduleDays: shareSelectedDays
-				})
+					scheduleDays: shareSelectedDays,
+				}),
 			});
 
 			if (res.ok) {
@@ -117,6 +117,6 @@ export function useShare(): UseShareReturn {
 		generateShareLink,
 		copyShareLink,
 		closeShareDialog,
-		resetShareDialogState
+		resetShareDialogState,
 	};
 }

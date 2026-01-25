@@ -2,7 +2,7 @@
 // TagInput Component - Reusable tag input with suggestions
 // =============================================================================
 
-import { KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 
 export interface TagInputProps {
 	tags: string[];
@@ -29,7 +29,7 @@ export function TagInput({
 	addPlaceholder = "",
 	maxLength,
 	error,
-	datalistId = "tag-suggestions"
+	datalistId = "tag-suggestions",
 }: TagInputProps) {
 	function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
 		if ((e.key === "Enter" || e.key === ",") && inputValue.trim()) {

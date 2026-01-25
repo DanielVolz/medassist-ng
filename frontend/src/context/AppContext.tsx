@@ -1,21 +1,11 @@
-import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from "react";
+import type React from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
-import {
-	useDoses,
-	useCollapsedDays,
-	useSettings,
-	useShare,
-	useMedications,
-	useRefill,
-} from "../hooks";
-import type {
-	Medication,
-	Coverage,
-	ScheduleEvent,
-} from "../types";
-import { buildSchedulePreview, calculateCoverage } from "../utils/schedule";
+import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, useShare } from "../hooks";
+import type { Coverage, Medication, ScheduleEvent } from "../types";
 import { getSystemLocale } from "../utils/formatters";
+import { buildSchedulePreview, calculateCoverage } from "../utils/schedule";
 
 // =============================================================================
 // Types
@@ -127,7 +117,12 @@ export interface AppContextValue {
 	setEditStockPartialBlisterPills: React.Dispatch<React.SetStateAction<number>>;
 	editStockSaving: boolean;
 	loadRefillHistory: (medId: number) => Promise<void>;
-	submitRefill: (medId: number, editingId: number | null, setForm: React.Dispatch<React.SetStateAction<any>>, loadMeds: () => void) => Promise<void>;
+	submitRefill: (
+		medId: number,
+		editingId: number | null,
+		setForm: React.Dispatch<React.SetStateAction<any>>,
+		loadMeds: () => void
+	) => Promise<void>;
 	submitStockCorrection: (medId: number, selectedMed: Medication, loadMeds: () => void) => Promise<void>;
 	openRefillModal: () => void;
 	closeRefillModal: () => void;
@@ -142,6 +137,7 @@ export interface AppContextValue {
 	existingPeople: string[];
 	groupedSchedule: GroupedDay[];
 	pastDays: GroupedDay[];
+	todayDay: GroupedDay | null;
 	futureDays: GroupedDay[];
 	missedPastDoseIds: string[];
 	getDayStockStatus: (dayMeds: { medName: string; lastWhen: number }[]) => "success" | "warning" | "danger";
@@ -151,6 +147,8 @@ export interface AppContextValue {
 	setScheduleDays: React.Dispatch<React.SetStateAction<number>>;
 	showPastDays: boolean;
 	setShowPastDays: React.Dispatch<React.SetStateAction<boolean>>;
+	showFutureDays: boolean;
+	setShowFutureDays: React.Dispatch<React.SetStateAction<boolean>>;
 
 	// Modal state
 	selectedMed: Medication | null;
@@ -219,6 +217,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	// Schedule UI state
 	const [scheduleDays, setScheduleDays] = useState<number>(30);
 	const [showPastDays, setShowPastDays] = useState(false);
+	const [showFutureDays, setShowFutureDays] = useState(false);
 
 	// Modal state
 	const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
@@ -246,17 +245,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		medications.loadMeds();
 		settingsHook.loadSettings();
-	}, [user?.id]);
+	}, [medications.loadMeds, settingsHook.loadSettings]);
 
 	// Update selectedMed when meds change (e.g., after refill)
 	useEffect(() => {
 		if (selectedMed) {
-			const updated = medications.meds.find(m => m.id === selectedMed.id);
-			if (updated && (
-				updated.packCount !== selectedMed.packCount ||
-				updated.looseTablets !== selectedMed.looseTablets ||
-				updated.updatedAt !== selectedMed.updatedAt
-			)) {
+			const updated = medications.meds.find((m) => m.id === selectedMed.id);
+			if (
+				updated &&
+				(updated.packCount !== selectedMed.packCount ||
+					updated.looseTablets !== selectedMed.looseTablets ||
+					updated.updatedAt !== selectedMed.updatedAt)
+			) {
 				setSelectedMed(updated);
 			}
 		}
@@ -270,15 +270,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	);
 
 	const coverage = useMemo(
-		() => calculateCoverage(
+		() =>
+			calculateCoverage(
+				medications.meds,
+				schedule.events,
+				systemLocale,
+				settingsHook.settings.reminderDaysBefore,
+				settingsHook.settings.stockCalculationMode,
+				doses.takenDoses
+			),
+		[
 			medications.meds,
 			schedule.events,
 			systemLocale,
 			settingsHook.settings.reminderDaysBefore,
 			settingsHook.settings.stockCalculationMode,
-			doses.takenDoses
-		),
-		[medications.meds, schedule.events, systemLocale, settingsHook.settings.reminderDaysBefore, settingsHook.settings.stockCalculationMode, doses.takenDoses]
+			doses.takenDoses,
+		]
 	);
 
 	const depletionByMed = useMemo(
@@ -286,62 +294,108 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		[coverage.all]
 	);
 
-	const coverageByMed = useMemo(
-		() => Object.fromEntries(coverage.all.map((c) => [c.name, c])),
-		[coverage.all]
-	);
+	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
 
 	const existingPeople = useMemo(() => {
-		const allPeople = medications.meds.flatMap(m => m.takenBy || []);
+		const allPeople = medications.meds.flatMap((m) => m.takenBy || []);
 		return [...new Set(allPeople)].filter(Boolean).sort();
 	}, [medications.meds]);
 
 	// Get worst stock status for a day's medications
-	const getDayStockStatus = useCallback((dayMeds: { medName: string; lastWhen: number }[]): "success" | "warning" | "danger" => {
-		const statuses = dayMeds.map((item) => {
-			const cov = coverageByMed[item.medName];
-			const depletionTime = depletionByMed[item.medName];
+	const getDayStockStatus = useCallback(
+		(dayMeds: { medName: string; lastWhen: number }[]): "success" | "warning" | "danger" => {
+			const statuses = dayMeds.map((item) => {
+				const cov = coverageByMed[item.medName];
+				const depletionTime = depletionByMed[item.medName];
 
-			// Will be out of stock by this day?
-			if (typeof depletionTime === "number" && item.lastWhen > depletionTime) {
-				return "danger";
-			}
+				// Will be out of stock by this day?
+				if (typeof depletionTime === "number" && item.lastWhen > depletionTime) {
+					return "danger";
+				}
 
-			if (!cov) return "success";
-			const { daysLeft, medsLeft } = cov;
+				if (!cov) return "success";
+				const { daysLeft, medsLeft } = cov;
 
-			// Currently out of stock
-			if (medsLeft <= 0 || daysLeft === 0) return "danger";
-			// No schedule (can't calculate)
-			if (daysLeft === null) return "success";
-			// Low stock: < lowStockDays (warning)
-			if (daysLeft < settingsHook.settings.lowStockDays) return "warning";
-			// Normal/High stock
-			return "success";
-		});
-		return statuses.includes("danger") ? "danger" : statuses.includes("warning") ? "warning" : "success";
-	}, [coverageByMed, depletionByMed, settingsHook.settings.lowStockDays]);
+				// Currently out of stock
+				if (medsLeft <= 0 || daysLeft === 0) return "danger";
+				// No schedule (can't calculate)
+				if (daysLeft === null) return "success";
+				// Low stock: < lowStockDays (warning)
+				if (daysLeft < settingsHook.settings.lowStockDays) return "warning";
+				// Normal/High stock
+				return "success";
+			});
+			return statuses.includes("danger") ? "danger" : statuses.includes("warning") ? "warning" : "success";
+		},
+		[coverageByMed, depletionByMed, settingsHook.settings.lowStockDays]
+	);
 
 	const groupedSchedule = useMemo(() => {
 		const days = new Map<string, { dateStr: string; date: Date; isPast: boolean; meds: Map<string, DayMedEntry> }>();
 		schedule.events.slice(0, 2000).forEach((event) => {
-			const day = days.get(event.dateStr) ?? { dateStr: event.dateStr, date: new Date(event.when), isPast: event.isPast, meds: new Map() };
-			const medEntry = day.meds.get(event.medName) ?? { medName: event.medName, total: 0, doses: [], lastWhen: event.when };
+			const day = days.get(event.dateStr) ?? {
+				dateStr: event.dateStr,
+				date: new Date(event.when),
+				isPast: event.isPast,
+				meds: new Map(),
+			};
+			const medEntry = day.meds.get(event.medName) ?? {
+				medName: event.medName,
+				total: 0,
+				doses: [],
+				lastWhen: event.when,
+			};
 			medEntry.total += event.usage;
-			medEntry.doses.push({ id: event.id, timeStr: event.timeStr, when: event.when, usage: event.usage, takenBy: event.takenBy || [] });
+			medEntry.doses.push({
+				id: event.id,
+				timeStr: event.timeStr,
+				when: event.when,
+				usage: event.usage,
+				takenBy: event.takenBy || [],
+			});
 			medEntry.lastWhen = Math.max(medEntry.lastWhen, event.when);
 			day.meds.set(event.medName, medEntry);
 			days.set(event.dateStr, day);
 		});
-		return Array.from(days.values()).map((d) => ({ dateStr: d.dateStr, date: d.date, isPast: d.isPast, meds: Array.from(d.meds.values()) }));
+		return Array.from(days.values()).map((d) => ({
+			dateStr: d.dateStr,
+			date: d.date,
+			isPast: d.isPast,
+			meds: Array.from(d.meds.values()),
+		}));
 	}, [schedule.events]);
 
-	const pastDays = useMemo(() => groupedSchedule.filter(d => d.isPast), [groupedSchedule]);
-	const futureDays = useMemo(() => groupedSchedule.filter(d => !d.isPast).slice(0, scheduleDays), [groupedSchedule, scheduleDays]);
+	const pastDays = useMemo(() => groupedSchedule.filter((d) => d.isPast), [groupedSchedule]);
+
+	// Separate today from future days
+	const todayDay = useMemo(() => {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		return (
+			groupedSchedule.find((d) => {
+				const dayDate = new Date(d.date);
+				dayDate.setHours(0, 0, 0, 0);
+				return dayDate.getTime() === today.getTime();
+			}) || null
+		);
+	}, [groupedSchedule]);
+
+	const futureDays = useMemo(() => {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		return groupedSchedule
+			.filter((d) => {
+				if (d.isPast) return false;
+				const dayDate = new Date(d.date);
+				dayDate.setHours(0, 0, 0, 0);
+				return dayDate.getTime() > today.getTime();
+			})
+			.slice(0, scheduleDays);
+	}, [groupedSchedule, scheduleDays]);
 
 	// Build a map of medId -> dismissedUntil date string from medication records
 	// This is robust against timestamp changes from schedule updates or timezone fixes
-	const dismissedUntilByMed = useMemo(() => {
+	const _dismissedUntilByMed = useMemo(() => {
 		const map = new Map<string, string>();
 		for (const med of medications.meds) {
 			if (med.dismissedUntil) {
@@ -358,43 +412,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		const parts = doseId.split("-");
 		if (parts.length < 3) return false;
 		const timestamp = parseInt(parts[2], 10);
-		if (isNaN(timestamp)) return false;
+		if (Number.isNaN(timestamp)) return false;
 		// Compare date strings (YYYY-MM-DD format sorts correctly)
 		const doseDate = new Date(timestamp);
-		const doseDateStr = `${doseDate.getFullYear()}-${String(doseDate.getMonth() + 1).padStart(2, '0')}-${String(doseDate.getDate()).padStart(2, '0')}`;
+		const doseDateStr = `${doseDate.getFullYear()}-${String(doseDate.getMonth() + 1).padStart(2, "0")}-${String(doseDate.getDate()).padStart(2, "0")}`;
 		return doseDateStr <= dismissedUntilDate;
 	}, []);
 
 	const missedPastDoseIds = useMemo(() => {
-		const totalPastDoses = pastDays.flatMap(d =>
-			d.meds.flatMap(m => {
+		const totalPastDoses = pastDays.flatMap((d) =>
+			d.meds.flatMap((m) => {
 				// Find the medication to get its dismissedUntil
-				const med = medications.meds.find(med => med.name === m.medName);
+				const med = medications.meds.find((med) => med.name === m.medName);
 				const dismissedUntilDate = med?.dismissedUntil ?? undefined;
-				
-				return m.doses.flatMap(dose => {
+
+				return m.doses.flatMap((dose) => {
 					// Check if this dose is on or before the dismissed date for this medication
 					if (isDoseDismissed(dose.id, dismissedUntilDate)) {
 						return [];
 					}
-					
-					return (dose.takenBy || []).length > 0
-						? dose.takenBy.map((p: string) => `${dose.id}-${p}`)
-						: [dose.id];
+
+					return (dose.takenBy || []).length > 0 ? dose.takenBy.map((p: string) => `${dose.id}-${p}`) : [dose.id];
 				});
 			})
 		);
 		// Also filter out doses that are marked as taken or individually dismissed (legacy)
-		return totalPastDoses.filter(id => !doses.takenDoses.has(id) && !doses.dismissedDoses.has(id));
+		return totalPastDoses.filter((id) => !doses.takenDoses.has(id) && !doses.dismissedDoses.has(id));
 	}, [pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses, isDoseDismissed]);
 
 	// Modal helpers with browser history support
-	const openMedDetail = useCallback((med: Medication) => {
-		setSelectedMed(med);
-		refill.setRefillHistoryExpanded(false);
-		refill.loadRefillHistory(med.id);
-		window.history.pushState({ modal: 'medDetail', medId: med.id }, '');
-	}, [refill]);
+	const openMedDetail = useCallback(
+		(med: Medication) => {
+			setSelectedMed(med);
+			refill.setRefillHistoryExpanded(false);
+			refill.loadRefillHistory(med.id);
+			window.history.pushState({ modal: "medDetail", medId: med.id }, "");
+		},
+		[refill]
+	);
 
 	const closeMedDetail = useCallback(() => {
 		if (selectedMed) {
@@ -404,7 +459,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	const openImageLightbox = useCallback(() => {
 		setShowImageLightbox(true);
-		window.history.pushState({ modal: 'imageLightbox' }, '');
+		window.history.pushState({ modal: "imageLightbox" }, "");
 	}, []);
 
 	const closeImageLightbox = useCallback(() => {
@@ -415,7 +470,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	const openScheduleLightbox = useCallback((imageUrl: string) => {
 		setScheduleLightboxImage(imageUrl);
-		window.history.pushState({ modal: 'scheduleLightbox' }, '');
+		window.history.pushState({ modal: "scheduleLightbox" }, "");
 	}, []);
 
 	const closeScheduleLightbox = useCallback(() => {
@@ -426,7 +481,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	const openUserFilter = useCallback((person: string) => {
 		setSelectedUser(person);
-		window.history.pushState({ modal: 'userFilter', person }, '');
+		window.history.pushState({ modal: "userFilter", person }, "");
 	}, []);
 
 	const closeUserFilter = useCallback(() => {
@@ -444,62 +499,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const { t } = useTranslation();
 
 	// Export data to JSON file
-	const handleExport = useCallback(async (includeImages: boolean = true) => {
-		setExporting(true);
-		try {
-			const res = await fetch(`/api/export?includeSensitive=true&includeImages=${includeImages}`, {
-				credentials: "include",
-			});
-			if (!res.ok) throw new Error("Export failed");
-			const data = await res.json();
-			
-			// Create download
-			const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			const dateStr = new Date().toISOString().split("T")[0];
-			a.href = url;
-			a.download = `${t('exportImport.downloadFilename')}-${dateStr}.json`;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(url);
-		} catch (err) {
-			console.error("Export error:", err);
-		}
-		setExporting(false);
-	}, [t]);
+	const handleExport = useCallback(
+		async (includeImages: boolean = true) => {
+			setExporting(true);
+			try {
+				const res = await fetch(`/api/export?includeSensitive=true&includeImages=${includeImages}`, {
+					credentials: "include",
+				});
+				if (!res.ok) throw new Error("Export failed");
+				const data = await res.json();
+
+				// Create download
+				const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				const dateStr = new Date().toISOString().split("T")[0];
+				a.href = url;
+				a.download = `${t("exportImport.downloadFilename")}-${dateStr}.json`;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+			} catch (err) {
+				console.error("Export error:", err);
+			}
+			setExporting(false);
+		},
+		[t]
+	);
 
 	// Handle file selection for import
-	const handleImportFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (!file) return;
-		
-		const reader = new FileReader();
-		reader.onload = (event) => {
-			try {
-				const data = JSON.parse(event.target?.result as string);
-				if (!data.version || !data.exportedAt) {
-					alert(t('exportImport.invalidFile'));
-					return;
+	const handleImportFileSelect = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => {
+			const file = e.target.files?.[0];
+			if (!file) return;
+
+			const reader = new FileReader();
+			reader.onload = (event) => {
+				try {
+					const data = JSON.parse(event.target?.result as string);
+					if (!data.version || !data.exportedAt) {
+						alert(t("exportImport.invalidFile"));
+						return;
+					}
+					setPendingImportData(data);
+					setShowImportConfirm(true);
+				} catch {
+					alert(t("exportImport.invalidFile"));
 				}
-				setPendingImportData(data);
-				setShowImportConfirm(true);
-			} catch {
-				alert(t('exportImport.invalidFile'));
-			}
-		};
-		reader.readAsText(file);
-		// Reset file input
-		e.target.value = "";
-	}, [t]);
+			};
+			reader.readAsText(file);
+			// Reset file input
+			e.target.value = "";
+		},
+		[t]
+	);
 
 	// Confirm and execute import
 	const handleImportConfirm = useCallback(async () => {
 		if (!pendingImportData) return;
 		setImporting(true);
 		setShowImportConfirm(false);
-		
+
 		try {
 			const res = await fetch("/api/import", {
 				method: "POST",
@@ -507,39 +568,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				credentials: "include",
 				body: JSON.stringify(pendingImportData),
 			});
-			
+
 			// Get the response text first to handle non-JSON responses
 			const text = await res.text();
-			let data;
+			let data: { error?: string; message?: string; imported?: number } = {};
 			try {
 				data = text ? JSON.parse(text) : {};
 			} catch {
 				console.error("Import response parse error:", text);
-				alert(t('exportImport.importError') + ": Server returned invalid response");
+				alert(`${t("exportImport.importError")}: Server returned invalid response`);
 				return;
 			}
-			
+
 			if (!res.ok) {
-				alert(t('exportImport.importError') + ": " + (data.error || `HTTP ${res.status}`));
+				alert(`${t("exportImport.importError")}: ${data.error || `HTTP ${res.status}`}`);
 				return;
 			}
-			
+
 			// Show success message in UI instead of browser alert
 			setImportResult({
 				medications: data.imported?.medications || 0,
 				doses: data.imported?.doseHistory || 0,
 				shares: data.imported?.shareLinks || 0,
 			});
-			
+
 			// Reload all data
 			medications.loadMeds();
 			settingsHook.loadSettings();
 			doses.loadTakenDoses();
 		} catch (err) {
 			console.error("Import error:", err);
-			alert(t('exportImport.importError'));
+			alert(t("exportImport.importError"));
 		}
-		
+
 		setPendingImportData(null);
 		setImporting(false);
 	}, [pendingImportData, t, medications, settingsHook, doses]);
@@ -548,7 +609,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const settingsChanged = useMemo(() => {
 		const settings = settingsHook.settings;
 		const savedSettings = settingsHook.savedSettings;
-		return settings.emailEnabled !== savedSettings.emailEnabled ||
+		return (
+			settings.emailEnabled !== savedSettings.emailEnabled ||
 			settings.notificationEmail !== savedSettings.notificationEmail ||
 			settings.emailStockReminders !== savedSettings.emailStockReminders ||
 			settings.emailIntakeReminders !== savedSettings.emailIntakeReminders ||
@@ -565,234 +627,248 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settings.repeatRemindersEnabled !== savedSettings.repeatRemindersEnabled ||
 			settings.reminderRepeatIntervalMinutes !== savedSettings.reminderRepeatIntervalMinutes ||
 			settings.maxNaggingReminders !== savedSettings.maxNaggingReminders ||
-			settings.stockCalculationMode !== savedSettings.stockCalculationMode;
+			settings.stockCalculationMode !== savedSettings.stockCalculationMode
+		);
 	}, [settingsHook.settings, settingsHook.savedSettings]);
 
 	// New dismissMissedDoses that uses medication-level dismissedUntil dates
 	// This is robust against timestamp changes from schedule updates or timezone fixes
 	const [clearingMissedState, setClearingMissedState] = useState(false);
-	
-	const dismissMissedDoses = useCallback(async (doseIds: string[]) => {
-		if (doseIds.length === 0) return;
 
-		// Extract unique medication IDs from dose IDs (format: medId-blisterIdx-timestamp[-person])
-		const medIds = new Set<number>();
-		for (const doseId of doseIds) {
-			const parts = doseId.split("-");
-			if (parts.length >= 1) {
-				const medId = parseInt(parts[0], 10);
-				if (!isNaN(medId)) {
-					medIds.add(medId);
+	const dismissMissedDoses = useCallback(
+		async (doseIds: string[]) => {
+			if (doseIds.length === 0) return;
+
+			// Extract unique medication IDs from dose IDs (format: medId-blisterIdx-timestamp[-person])
+			const medIds = new Set<number>();
+			for (const doseId of doseIds) {
+				const parts = doseId.split("-");
+				if (parts.length >= 1) {
+					const medId = parseInt(parts[0], 10);
+					if (!Number.isNaN(medId)) {
+						medIds.add(medId);
+					}
 				}
 			}
-		}
 
-		if (medIds.size === 0) return;
+			if (medIds.size === 0) return;
 
-		// Get today's date in YYYY-MM-DD format
-		const today = new Date();
-		const until = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+			// Get today's date in YYYY-MM-DD format
+			const today = new Date();
+			const until = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
-		setClearingMissedState(true);
-		try {
-			const res = await fetch("/api/medications/dismiss-until", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify({ medicationIds: Array.from(medIds), until })
-			});
+			setClearingMissedState(true);
+			try {
+				const res = await fetch("/api/medications/dismiss-until", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "include",
+					body: JSON.stringify({ medicationIds: Array.from(medIds), until }),
+				});
 
-			if (res.ok) {
-				// Reload medications to get updated dismissedUntil values
-				await medications.loadMeds();
-				doses.setShowClearMissedConfirm(false);
+				if (res.ok) {
+					// Reload medications to get updated dismissedUntil values
+					await medications.loadMeds();
+					doses.setShowClearMissedConfirm(false);
+				}
+			} catch {
+				// Error - dialog stays open
+			} finally {
+				setClearingMissedState(false);
 			}
-		} catch {
-			// Error - dialog stays open
-		} finally {
-			setClearingMissedState(false);
-		}
-	}, [medications, doses]);
+		},
+		[medications, doses]
+	);
 
 	// Build context value
-	const value: AppContextValue = useMemo(() => ({
-		// From useMedications
-		...medications,
+	const value: AppContextValue = useMemo(
+		() => ({
+			// From useMedications
+			...medications,
 
-		// From useSettings
-		settings: settingsHook.settings,
-		setSettings: settingsHook.setSettings,
-		savedSettings: settingsHook.savedSettings,
-		settingsLoading: settingsHook.settingsLoading,
-		settingsSaving: settingsHook.settingsSaving,
-		settingsSaved: settingsHook.settingsSaved,
-		testingEmail: settingsHook.testingEmail,
-		testEmailResult: settingsHook.testEmailResult,
-		testingShoutrrr: settingsHook.testingShoutrrr,
-		testShoutrrrResult: settingsHook.testShoutrrrResult,
-		loadSettings: settingsHook.loadSettings,
-		saveSettings: settingsHook.saveSettings,
-		testEmail: settingsHook.testEmail,
-		testShoutrrr: settingsHook.testShoutrrr,
+			// From useSettings
+			settings: settingsHook.settings,
+			setSettings: settingsHook.setSettings,
+			savedSettings: settingsHook.savedSettings,
+			settingsLoading: settingsHook.settingsLoading,
+			settingsSaving: settingsHook.settingsSaving,
+			settingsSaved: settingsHook.settingsSaved,
+			testingEmail: settingsHook.testingEmail,
+			testEmailResult: settingsHook.testEmailResult,
+			testingShoutrrr: settingsHook.testingShoutrrr,
+			testShoutrrrResult: settingsHook.testShoutrrrResult,
+			loadSettings: settingsHook.loadSettings,
+			saveSettings: settingsHook.saveSettings,
+			testEmail: settingsHook.testEmail,
+			testShoutrrr: settingsHook.testShoutrrr,
 
-		// From useDoses
-		takenDoses: doses.takenDoses,
-		setTakenDoses: doses.setTakenDoses,
-		dismissedDoses: doses.dismissedDoses,
-		clearingMissed: clearingMissedState,
-		showClearMissedConfirm: doses.showClearMissedConfirm,
-		setShowClearMissedConfirm: doses.setShowClearMissedConfirm,
-		getDoseId: doses.getDoseId,
-		countTakenDoses: doses.countTakenDoses,
-		markDoseTaken: doses.markDoseTaken,
-		undoDoseTaken: doses.undoDoseTaken,
-		dismissMissedDoses,
+			// From useDoses
+			takenDoses: doses.takenDoses,
+			setTakenDoses: doses.setTakenDoses,
+			dismissedDoses: doses.dismissedDoses,
+			clearingMissed: clearingMissedState,
+			showClearMissedConfirm: doses.showClearMissedConfirm,
+			setShowClearMissedConfirm: doses.setShowClearMissedConfirm,
+			getDoseId: doses.getDoseId,
+			countTakenDoses: doses.countTakenDoses,
+			markDoseTaken: doses.markDoseTaken,
+			undoDoseTaken: doses.undoDoseTaken,
+			dismissMissedDoses,
 
-		// From useCollapsedDays
-		manuallyCollapsedDays: collapsed.manuallyCollapsedDays,
-		manuallyExpandedDays: collapsed.manuallyExpandedDays,
-		toggleDayCollapse: collapsed.toggleDayCollapse,
+			// From useCollapsedDays
+			manuallyCollapsedDays: collapsed.manuallyCollapsedDays,
+			manuallyExpandedDays: collapsed.manuallyExpandedDays,
+			toggleDayCollapse: collapsed.toggleDayCollapse,
 
-		// From useShare
-		showShareDialog: share.showShareDialog,
-		sharePeople: share.sharePeople,
-		shareSelectedPerson: share.shareSelectedPerson,
-		setShareSelectedPerson: share.setShareSelectedPerson,
-		shareSelectedDays: share.shareSelectedDays,
-		setShareSelectedDays: share.setShareSelectedDays,
-		shareGenerating: share.shareGenerating,
-		shareLink: share.shareLink,
-		setShareLink: share.setShareLink,
-		shareCopied: share.shareCopied,
-		setShareCopied: share.setShareCopied,
-		openShareDialog,
-		generateShareLink: share.generateShareLink,
-		copyShareLink: share.copyShareLink,
-		closeShareDialog: share.closeShareDialog,
-		resetShareDialogState: share.resetShareDialogState,
+			// From useShare
+			showShareDialog: share.showShareDialog,
+			sharePeople: share.sharePeople,
+			shareSelectedPerson: share.shareSelectedPerson,
+			setShareSelectedPerson: share.setShareSelectedPerson,
+			shareSelectedDays: share.shareSelectedDays,
+			setShareSelectedDays: share.setShareSelectedDays,
+			shareGenerating: share.shareGenerating,
+			shareLink: share.shareLink,
+			setShareLink: share.setShareLink,
+			shareCopied: share.shareCopied,
+			setShareCopied: share.setShareCopied,
+			openShareDialog,
+			generateShareLink: share.generateShareLink,
+			copyShareLink: share.copyShareLink,
+			closeShareDialog: share.closeShareDialog,
+			resetShareDialogState: share.resetShareDialogState,
 
-		// From useRefill
-		showRefillModal: refill.showRefillModal,
-		setShowRefillModal: refill.setShowRefillModal,
-		refillPacks: refill.refillPacks,
-		setRefillPacks: refill.setRefillPacks,
-		refillLoose: refill.refillLoose,
-		setRefillLoose: refill.setRefillLoose,
-		refillSaving: refill.refillSaving,
-		refillHistory: refill.refillHistory,
-		refillHistoryExpanded: refill.refillHistoryExpanded,
-		setRefillHistoryExpanded: refill.setRefillHistoryExpanded,
-		showEditStockModal: refill.showEditStockModal,
-		setShowEditStockModal: refill.setShowEditStockModal,
-		editStockFullBlisters: refill.editStockFullBlisters,
-		setEditStockFullBlisters: refill.setEditStockFullBlisters,
-		editStockPartialBlisterPills: refill.editStockPartialBlisterPills,
-		setEditStockPartialBlisterPills: refill.setEditStockPartialBlisterPills,
-		editStockSaving: refill.editStockSaving,
-		loadRefillHistory: refill.loadRefillHistory,
-		submitRefill: refill.submitRefill,
-		submitStockCorrection: refill.submitStockCorrection,
-		openRefillModal: refill.openRefillModal,
-		closeRefillModal: refill.closeRefillModal,
-		openEditStockModal: refill.openEditStockModal,
-		closeEditStockModal: refill.closeEditStockModal,
+			// From useRefill
+			showRefillModal: refill.showRefillModal,
+			setShowRefillModal: refill.setShowRefillModal,
+			refillPacks: refill.refillPacks,
+			setRefillPacks: refill.setRefillPacks,
+			refillLoose: refill.refillLoose,
+			setRefillLoose: refill.setRefillLoose,
+			refillSaving: refill.refillSaving,
+			refillHistory: refill.refillHistory,
+			refillHistoryExpanded: refill.refillHistoryExpanded,
+			setRefillHistoryExpanded: refill.setRefillHistoryExpanded,
+			showEditStockModal: refill.showEditStockModal,
+			setShowEditStockModal: refill.setShowEditStockModal,
+			editStockFullBlisters: refill.editStockFullBlisters,
+			setEditStockFullBlisters: refill.setEditStockFullBlisters,
+			editStockPartialBlisterPills: refill.editStockPartialBlisterPills,
+			setEditStockPartialBlisterPills: refill.setEditStockPartialBlisterPills,
+			editStockSaving: refill.editStockSaving,
+			loadRefillHistory: refill.loadRefillHistory,
+			submitRefill: refill.submitRefill,
+			submitStockCorrection: refill.submitStockCorrection,
+			openRefillModal: refill.openRefillModal,
+			closeRefillModal: refill.closeRefillModal,
+			openEditStockModal: refill.openEditStockModal,
+			closeEditStockModal: refill.closeEditStockModal,
 
-		// Computed values
-		schedule,
-		coverage,
-		coverageByMed,
-		depletionByMed,
-		existingPeople,
-		groupedSchedule,
-		pastDays,
-		futureDays,
-		missedPastDoseIds,
-		getDayStockStatus,
+			// Computed values
+			schedule,
+			coverage,
+			coverageByMed,
+			depletionByMed,
+			existingPeople,
+			groupedSchedule,
+			pastDays,
+			todayDay,
+			futureDays,
+			missedPastDoseIds,
+			getDayStockStatus,
 
-		// Schedule UI state
-		scheduleDays,
-		setScheduleDays,
-		showPastDays,
-		setShowPastDays,
+			// Schedule UI state
+			scheduleDays,
+			setScheduleDays,
+			showPastDays,
+			setShowPastDays,
+			showFutureDays,
+			setShowFutureDays,
 
-		// Modal state
-		selectedMed,
-		setSelectedMed,
-		showImageLightbox,
-		setShowImageLightbox,
-		scheduleLightboxImage,
-		setScheduleLightboxImage,
-		selectedUser,
-		setSelectedUser,
+			// Modal state
+			selectedMed,
+			setSelectedMed,
+			showImageLightbox,
+			setShowImageLightbox,
+			scheduleLightboxImage,
+			setScheduleLightboxImage,
+			selectedUser,
+			setSelectedUser,
 
-		// Modal helpers
-		openMedDetail,
-		closeMedDetail,
-		openImageLightbox,
-		closeImageLightbox,
-		openScheduleLightbox,
-		closeScheduleLightbox,
-		openUserFilter,
-		closeUserFilter,
+			// Modal helpers
+			openMedDetail,
+			closeMedDetail,
+			openImageLightbox,
+			closeImageLightbox,
+			openScheduleLightbox,
+			closeScheduleLightbox,
+			openUserFilter,
+			closeUserFilter,
 
-		// Export/Import
-		exporting,
-		importing,
-		showExportModal,
-		setShowExportModal,
-		showImportConfirm,
-		setShowImportConfirm,
-		pendingImportData,
-		setPendingImportData,
-		importResult,
-		setImportResult,
-		handleExport,
-		handleImportFileSelect,
-		handleImportConfirm,
-		settingsChanged,
-	}), [
-		medications,
-		settingsHook,
-		doses,
-		collapsed,
-		share,
-		refill,
-		schedule,
-		coverage,
-		coverageByMed,
-		depletionByMed,
-		existingPeople,
-		groupedSchedule,
-		pastDays,
-		futureDays,
-		missedPastDoseIds,
-		getDayStockStatus,
-		scheduleDays,
-		showPastDays,
-		selectedMed,
-		showImageLightbox,
-		scheduleLightboxImage,
-		selectedUser,
-		openMedDetail,
-		closeMedDetail,
-		openImageLightbox,
-		closeImageLightbox,
-		openScheduleLightbox,
-		closeScheduleLightbox,
-		openUserFilter,
-		closeUserFilter,
-		openShareDialog,
-		exporting,
-		importing,
-		showExportModal,
-		showImportConfirm,
-		pendingImportData,
-		importResult,
-		handleExport,
-		handleImportFileSelect,
-		handleImportConfirm,
-		settingsChanged,
-	]);
+			// Export/Import
+			exporting,
+			importing,
+			showExportModal,
+			setShowExportModal,
+			showImportConfirm,
+			setShowImportConfirm,
+			pendingImportData,
+			setPendingImportData,
+			importResult,
+			setImportResult,
+			handleExport,
+			handleImportFileSelect,
+			handleImportConfirm,
+			settingsChanged,
+		}),
+		[
+			medications,
+			settingsHook,
+			doses,
+			collapsed,
+			share,
+			refill,
+			schedule,
+			coverage,
+			coverageByMed,
+			depletionByMed,
+			existingPeople,
+			groupedSchedule,
+			pastDays,
+			todayDay,
+			futureDays,
+			missedPastDoseIds,
+			getDayStockStatus,
+			scheduleDays,
+			showPastDays,
+			showFutureDays,
+			selectedMed,
+			showImageLightbox,
+			scheduleLightboxImage,
+			selectedUser,
+			openMedDetail,
+			closeMedDetail,
+			openImageLightbox,
+			closeImageLightbox,
+			openScheduleLightbox,
+			closeScheduleLightbox,
+			openUserFilter,
+			closeUserFilter,
+			openShareDialog,
+			exporting,
+			importing,
+			showExportModal,
+			showImportConfirm,
+			pendingImportData,
+			importResult,
+			handleExport,
+			handleImportFileSelect,
+			handleImportConfirm,
+			settingsChanged,
+			clearingMissedState,
+			dismissMissedDoses,
+		]
+	);
 
 	return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

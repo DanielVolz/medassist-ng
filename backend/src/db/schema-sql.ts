@@ -8,8 +8,8 @@
  * Each statement creates a table if it doesn't exist.
  */
 export function getTableCreationSQL(): string[] {
-  return [
-    `CREATE TABLE IF NOT EXISTS users (
+	return [
+		`CREATE TABLE IF NOT EXISTS users (
       id integer PRIMARY KEY AUTOINCREMENT,
       username text NOT NULL UNIQUE,
       password_hash text,
@@ -21,7 +21,7 @@ export function getTableCreationSQL(): string[] {
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
     )`,
-    `CREATE TABLE IF NOT EXISTS medications (
+		`CREATE TABLE IF NOT EXISTS medications (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL,
       name text NOT NULL,
@@ -42,7 +42,7 @@ export function getTableCreationSQL(): string[] {
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS user_settings (
+		`CREATE TABLE IF NOT EXISTS user_settings (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL UNIQUE,
       email_enabled integer NOT NULL DEFAULT 0,
@@ -71,7 +71,7 @@ export function getTableCreationSQL(): string[] {
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS refresh_tokens (
+		`CREATE TABLE IF NOT EXISTS refresh_tokens (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL,
       token_id text NOT NULL UNIQUE,
@@ -81,7 +81,7 @@ export function getTableCreationSQL(): string[] {
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS share_tokens (
+		`CREATE TABLE IF NOT EXISTS share_tokens (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL,
       token text NOT NULL UNIQUE,
@@ -91,7 +91,7 @@ export function getTableCreationSQL(): string[] {
       expires_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS dose_tracking (
+		`CREATE TABLE IF NOT EXISTS dose_tracking (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL,
       dose_id text NOT NULL,
@@ -100,7 +100,7 @@ export function getTableCreationSQL(): string[] {
       dismissed integer NOT NULL DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-    `CREATE TABLE IF NOT EXISTS refill_history (
+		`CREATE TABLE IF NOT EXISTS refill_history (
       id integer PRIMARY KEY AUTOINCREMENT,
       medication_id integer NOT NULL,
       user_id integer NOT NULL,
@@ -110,5 +110,5 @@ export function getTableCreationSQL(): string[] {
       FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
-  ];
+	];
 }

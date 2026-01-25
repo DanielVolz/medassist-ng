@@ -502,9 +502,14 @@ export async function sendShoutrrrNotification(
 			return { success: false, error: "Unsupported URL format. Use ntfy:// or https:// URL" };
 		}
 
-		// SSRF protection: targetUrl is reconstructed from sanitizeNotificationUrl() which blocks
-		// localhost, private IPs (10.x, 172.16-31.x, 192.168.x, 169.254.x),
-		// and internal hostnames (.local, .internal, .lan, metadata.google.internal)
+		// SSRF protection: targetUrl is reconstructed from sanitizeNotificationUrl() which validates:
+		// - Only http/https protocols allowed
+		// - Blocks localhost (localhost, 127.0.0.1, ::1)
+		// - Blocks private IPs (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x)
+		// - Blocks internal hostnames (.local, .internal, .lan, metadata.google.internal)
+		// - redirect: "error" prevents redirect-based bypass attacks
+		// This is an intentional feature: users configure their own external notification services
+		// lgtm [js/request-forgery]
 		const response = await fetch(targetUrl, {
 			method,
 			headers,

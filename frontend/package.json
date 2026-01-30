@@ -12,6 +12,7 @@
     "format": "npx biome format --write .",
     "check": "npx biome check . && tsc --noEmit",
     "test": "vitest",
+    "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {

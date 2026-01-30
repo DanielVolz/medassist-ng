@@ -41,6 +41,7 @@ jobs:
       - name: Run backend tests and capture count
         id: backend-tests
         working-directory: backend
+        timeout-minutes: 5
         env:
           CI: true
         run: |
@@ -53,10 +54,11 @@ jobs:
       - name: Run frontend tests and capture count
         id: frontend-tests
         working-directory: frontend
+        timeout-minutes: 10
         env:
           CI: true
         run: |
-          OUTPUT=$(npm run test -- --run 2>&1) || true
+          OUTPUT=$(npm run test:run 2>&1) || true
           echo "$OUTPUT"
           # Extract "Tests  X passed" from output
           PASSED=$(echo "$OUTPUT" | grep -oP 'Tests\s+\K\d+(?=\s+passed)' | tail -1)

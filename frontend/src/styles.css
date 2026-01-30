@@ -4366,6 +4366,39 @@ h3 .reminder-icon.info-tooltip {
 	cursor: not-allowed;
 }
 
+/* Profile danger zone */
+.profile-danger-zone {
+	margin-top: 2rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--border-primary);
+}
+
+.profile-danger-text {
+	color: var(--text-muted);
+	font-size: 0.875rem;
+	margin-bottom: 1rem;
+}
+
+.btn-danger {
+	background: #dc2626;
+	color: white;
+	border: none;
+	padding: 0.5rem 1rem;
+	border-radius: 6px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.btn-danger:hover:not(:disabled) {
+	background: #b91c1c;
+}
+
+.btn-danger:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
 /* =============================================================================
    About Modal
    ============================================================================= */

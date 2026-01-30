@@ -32,6 +32,7 @@ interface AuthContextType {
 	updateProfile: (data: { currentPassword?: string; newPassword?: string }) => Promise<void>;
 	uploadAvatar: (file: File) => Promise<void>;
 	deleteAvatar: () => Promise<void>;
+	deleteAccount: () => Promise<void>;
 	authFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
@@ -254,6 +255,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		await refreshUser();
 	}
 
+	// Delete account
+	async function deleteAccount() {
+		const res = await fetch("/api/auth/me", {
+			method: "DELETE",
+			credentials: "include",
+		});
+
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({ error: "Delete failed" }));
+			throw new Error(err.error || "Delete failed");
+		}
+
+		setUser(null);
+	}
+
 	// Fetch wrapper that automatically refreshes token on 401
 	const authFetch = useCallback(
 		async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -295,6 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				updateProfile,
 				uploadAvatar,
 				deleteAvatar,
+				deleteAccount,
 				authFetch,
 			}}
 		>
@@ -551,7 +568,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 // =============================================================================
 export function UserProfile({ onClose }: { onClose?: () => void }) {
 	const { t } = useTranslation();
-	const { user, updateProfile, uploadAvatar, deleteAvatar } = useAuth();
+	const { user, updateProfile, uploadAvatar, deleteAvatar, deleteAccount } = useAuth();
 	const [currentPassword, setCurrentPassword] = useState("");
 	const [newPassword, setNewPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
@@ -559,6 +576,8 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 	const [success, setSuccess] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [avatarLoading, setAvatarLoading] = useState(false);
+	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+	const [deleteLoading, setDeleteLoading] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Close on Escape key
@@ -632,6 +651,18 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 			setError(err instanceof Error ? err.message : "Update failed");
 		} finally {
 			setLoading(false);
+		}
+	}
+
+	async function handleDeleteAccount() {
+		setDeleteLoading(true);
+		setError("");
+		try {
+			await deleteAccount();
+			// User will be logged out automatically
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Delete failed");
+			setDeleteLoading(false);
 		}
 	}
 
@@ -735,6 +766,48 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 					</button>
 				</div>
 			</form>
+
+			{/* Delete Account Section */}
+			<div className="profile-section profile-danger-zone">
+				<h3 className="profile-section-title">{t("auth.deleteAccount", "Delete Account")}</h3>
+				<p className="profile-danger-text">
+					{t("auth.deleteAccountHint", "Permanently delete your account and all associated data.")}
+				</p>
+				<button type="button" className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+					{t("auth.deleteAccount", "Delete Account")}
+				</button>
+			</div>
+
+			{/* Delete Confirmation Modal */}
+			{showDeleteConfirm && (
+				<div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+					<div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
+						<h2>{t("auth.deleteAccountConfirmTitle", "Delete Account?")}</h2>
+						<p className="confirm-message">
+							{t(
+								"auth.deleteAccountConfirmText",
+								"This will permanently delete your account and all your data (medications, settings, history). This action cannot be undone."
+							)}
+						</p>
+						{error && <div className="auth-error">{error}</div>}
+						<div className="confirm-actions">
+							<button
+								type="button"
+								className="btn btn-ghost"
+								onClick={() => setShowDeleteConfirm(false)}
+								disabled={deleteLoading}
+							>
+								{t("common.cancel", "Cancel")}
+							</button>
+							<button type="button" className="btn btn-danger" onClick={handleDeleteAccount} disabled={deleteLoading}>
+								{deleteLoading
+									? t("common.loading", "Loading...")
+									: t("auth.deleteAccountButton", "Yes, delete my account")}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

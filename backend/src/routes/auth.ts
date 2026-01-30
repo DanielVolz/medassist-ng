@@ -534,4 +534,44 @@ export async function authRoutes(app: FastifyInstance) {
 			return { ok: true };
 		}
 	);
+
+	// ---------------------------------------------------------------------------
+	// DELETE /auth/me - Delete user account and all data
+	// ---------------------------------------------------------------------------
+	app.delete(
+		"/auth/me",
+		{
+			preHandler: requireAuth,
+			config: { rateLimit: sensitiveRateLimitConfig },
+		},
+		async (request, reply) => {
+			const authUser = request.user as unknown as AuthUser | null;
+			if (!authUser) {
+				return reply.status(401).send({ error: "Not authenticated" });
+			}
+
+			// Delete avatar file if exists
+			const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
+			if (user?.avatarUrl) {
+				const fs = await import("node:fs/promises");
+				const path = await import("node:path");
+				try {
+					await fs.unlink(path.join(process.cwd(), "data", "images", user.avatarUrl));
+				} catch {
+					// Ignore if file doesn't exist
+				}
+			}
+
+			// Delete user - cascade delete handles all related data
+			await db.delete(users).where(eq(users.id, authUser.id));
+
+			app.log.info(`User deleted account: ${authUser.username} (ID: ${authUser.id})`);
+
+			// Clear auth cookies
+			return reply
+				.clearCookie("access_token", app.config.cookieOptions)
+				.clearCookie("refresh_token", app.config.refreshCookieOptions)
+				.send({ ok: true, message: "Account deleted" });
+		}
+	);
 }

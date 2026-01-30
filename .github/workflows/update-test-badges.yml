@@ -54,7 +54,7 @@ jobs:
       - name: Run frontend tests and capture count
         id: frontend-tests
         working-directory: frontend
-        timeout-minutes: 10
+        timeout-minutes: 5
         env:
           CI: true
         run: |

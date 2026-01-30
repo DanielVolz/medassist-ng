@@ -500,6 +500,7 @@ Example: `5-0-1735344000000` = Medication 5, Blister 0, timestamp
 - **API responses**: Return objects directly, Fastify serializes to JSON
 - **Environment**: Copy `.env.example` → `.env`, secrets must be 10+ chars
 - **i18n**: All UI text via `t('key')` function, translations in `frontend/src/i18n/*.json`
+- **UI Consistency**: Always use existing components for modals, buttons, and forms. For confirmation dialogs, use `ConfirmModal` component. Never create inline modals with custom button styling - all UI elements must match the existing design system. When adding new sections to existing components, ensure font sizes, spacing, margins, and button styles match exactly with other sections. Check existing CSS classes before creating new ones.
 
 ## Database Schema Changes (IMPORTANT: Backward Compatibility!)
 

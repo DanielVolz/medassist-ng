@@ -682,4 +682,62 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			expect(response.statusCode).toBe(401);
 		});
 	});
+
+	describe("DELETE /auth/me - Delete Account", () => {
+		it("should delete user account and all data", async () => {
+			// Register and login
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "deleteuser",
+					password: "TestPassword123",
+				},
+			});
+
+			const login = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "deleteuser",
+					password: "TestPassword123",
+				},
+			});
+
+			const accessToken = login.cookies.find((c: any) => c.name === "access_token");
+
+			// Delete account
+			const response = await app.inject({
+				method: "DELETE",
+				url: "/auth/me",
+				cookies: {
+					access_token: accessToken?.value ?? "",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().ok).toBe(true);
+
+			// Verify can't login anymore
+			const loginAgain = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "deleteuser",
+					password: "TestPassword123",
+				},
+			});
+
+			expect(loginAgain.statusCode).toBe(401);
+		});
+
+		it("should reject delete without auth", async () => {
+			const response = await app.inject({
+				method: "DELETE",
+				url: "/auth/me",
+			});
+
+			expect(response.statusCode).toBe(401);
+		});
+	});
 });

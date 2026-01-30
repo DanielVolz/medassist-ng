@@ -274,8 +274,11 @@ export function SharedSchedule() {
 				for (let d = new Date(startDate); d <= end; d.setDate(d.getDate() + blister.every)) {
 					const t = d.getTime();
 					const isPast = d < todayStart;
-					// Generate dose ID matching Dashboard format: ${med.id}-${blisterIdx}-${whenMs}
-					const doseId = `${med.id}-${blisterIdx}-${t}`;
+					// Use date-only timestamp for stable ID (immune to time changes)
+					// This ensures changing intake times doesn't invalidate past dose tracking
+					// Must match buildSchedulePreview in schedule.ts exactly
+					const dateOnlyMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+					const doseId = `${med.id}-${blisterIdx}-${dateOnlyMs}`;
 					doses.push({
 						id: doseId,
 						when: t,

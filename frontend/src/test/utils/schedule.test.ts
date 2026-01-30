@@ -466,7 +466,7 @@ describe("getReminderStatusText", () => {
 		};
 
 		const result = getReminderStatusText(7, 30, [], [lowMed], null, null, null, mockT, "en");
-		expect(result.lines.some((l) => l.text.includes("lowWarning") || l.text.includes("needReorder"))).toBe(true);
+		expect(result.lines.some((l) => l.text.includes("lowWarning") || l.text.includes("needRefill"))).toBe(true);
 	});
 
 	it("handles intake reminder type with push channel", () => {
@@ -497,7 +497,7 @@ describe("getReminderStatusText", () => {
 		expect(result.lines[0].className).toBe("danger-text");
 	});
 
-	it("shows needReorder when below critical threshold", () => {
+	it("shows needRefill when below critical threshold", () => {
 		const criticalMed: Coverage = {
 			name: "Critical",
 			medsLeft: 5,
@@ -508,7 +508,7 @@ describe("getReminderStatusText", () => {
 		};
 
 		const result = getReminderStatusText(7, 30, [criticalMed], [criticalMed], null, null, null, mockT, "en");
-		expect(result.lines.some((l) => l.text.includes("needReorder"))).toBe(true);
+		expect(result.lines.some((l) => l.text.includes("needRefill"))).toBe(true);
 	});
 
 	it("shows low warning when below low threshold but above critical", () => {

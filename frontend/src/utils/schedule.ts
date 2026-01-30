@@ -237,7 +237,7 @@ export function getReminderStatusText(
 		});
 		if (medsNeedingReminder.length > 0) {
 			lines.push({
-				text: `⚠ ${t("dashboard.reminders.needReorder", { count: medsNeedingReminder.length })}`,
+				text: `⚠ ${t("dashboard.reminders.needRefill", { count: medsNeedingReminder.length })}`,
 				className: "danger-text",
 			});
 		}
@@ -255,7 +255,7 @@ export function getReminderStatusText(
 
 	if (medsNeedingReminder.length > 0) {
 		lines.push({
-			text: `⚠ ${t("dashboard.reminders.needReorder", { count: medsNeedingReminder.length })}`,
+			text: `⚠ ${t("dashboard.reminders.needRefill", { count: medsNeedingReminder.length })}`,
 			className: "danger-text",
 			strong: true,
 		});

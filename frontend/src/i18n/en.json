@@ -17,12 +17,15 @@
   },
   "dashboard": {
     "reorder": {
-      "title": "Reorder Reminder",
+      "title": "Refill Reminder",
       "badge": "Stock watch",
       "noMeds": "No medications configured yet.",
       "allGood": "All good, enough stock.",
-      "lowWarning": "Enough stock for now, but {{count}} medication is running low.",
-      "lowWarning_other": "Enough stock for now, but {{count}} medications are running low.",
+      "lowWarning": "Enough stock for now, but {{meds}} is running low.",
+      "lowWarning_other": "Enough stock for now, but {{meds}} are running low.",
+      "lowWarningPrefix": "Enough stock for now, but",
+      "lowWarningSuffix": "is running low.",
+      "lowWarningSuffix_other": "are running low.",
       "sendReminder": "🔔 Send Reminder Now"
     },
     "overview": {
@@ -66,8 +69,8 @@
       "inDays_one": "in {{days}} day",
       "inDays_other": "in {{days}} days",
       "noRemindersNeeded": "No reminders needed",
-      "needReorder": "{{count}} med needs reorder",
-      "needReorder_other": "{{count}} meds need reorder",
+      "needRefill": "{{count}} med needs refill",
+      "needRefill_other": "{{count}} meds need refill",
       "emptyStock": "{{count}} med is empty",
       "emptyStock_other": "{{count}} meds are empty",
       "lowWarning": "{{count}} medication running low",
@@ -83,7 +86,9 @@
       "criticalMeds": "{{count}} medication critical",
       "criticalMeds_other": "{{count}} medications critical",
       "lowMeds": "{{count}} medication low",
-      "lowMeds_other": "{{count}} medications low"
+      "lowMeds_other": "{{count}} medications low",
+      "daysLeft": "{{days}} day left",
+      "daysLeft_other": "{{days}} days left"
     }
   },
   "table": {

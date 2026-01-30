@@ -71,4 +71,7 @@ Thumbs.db
 *.local
 .cache/
 .turbo/
+.roo/
+.roomodes
+AGENTS.md
 docs/TECH_STACK.md

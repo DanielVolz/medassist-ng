@@ -4182,7 +4182,8 @@ h3 .reminder-icon.info-tooltip {
 .profile-modal {
 	max-width: 420px;
 	padding: 0;
-	overflow: hidden;
+	overflow-y: auto;
+	max-height: 90vh;
 }
 
 .profile-container {
@@ -4368,7 +4369,7 @@ h3 .reminder-icon.info-tooltip {
 
 /* Profile danger zone */
 .profile-danger-zone {
-	margin-top: 2rem;
+	margin: 0 1.5rem 1.5rem;
 	padding-top: 1.5rem;
 	border-top: 1px solid var(--border-primary);
 }

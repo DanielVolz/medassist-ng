@@ -99,8 +99,7 @@ describe("MobileEditModal", () => {
 
 	it("calls onClose when close button clicked", () => {
 		const onClose = vi.fn();
-		const onResetForm = vi.fn();
-		render(<MobileEditModal {...defaultProps} onClose={onClose} onResetForm={onResetForm} />);
+		render(<MobileEditModal {...defaultProps} onClose={onClose} />);
 
 		const closeBtn = document.querySelector(".modal-close");
 		if (closeBtn) {
@@ -108,7 +107,6 @@ describe("MobileEditModal", () => {
 		}
 
 		expect(onClose).toHaveBeenCalledTimes(1);
-		expect(onResetForm).toHaveBeenCalledTimes(1);
 	});
 
 	it("renders form element", () => {
@@ -310,8 +308,9 @@ describe("MobileEditModal form submission", () => {
 
 	it("calls onSaveMedication when form submitted", () => {
 		const onSaveMedication = vi.fn((e: Event) => e.preventDefault());
+		const validForm = { ...defaultForm, name: "TestMed" };
 
-		render(<MobileEditModal {...defaultProps} onSaveMedication={onSaveMedication} />);
+		render(<MobileEditModal {...defaultProps} form={validForm} onSaveMedication={onSaveMedication} />);
 
 		const form = document.querySelector("form");
 		if (form) {

@@ -5,9 +5,7 @@ import {
 	compareSemver,
 	deriveTotal,
 	formatDateTime,
-	formatFullBlisters,
 	formatNumber,
-	formatOpenBlisterAndLoose,
 	getBlisterStock,
 	getExpiryClass,
 	pad2,
@@ -224,22 +222,6 @@ describe("getBlisterStock", () => {
 		const result = getBlisterStock(med);
 		expect(result.fullBlisters).toBe(0); // 5 / 10 = 0
 		expect(result.openBlisterPills).toBe(5); // 5 % 10 = 5
-	});
-});
-
-describe("formatFullBlisters", () => {
-	it("formats count without pill info", () => {
-		expect(formatFullBlisters({ fullBlisters: 5, openBlisterPills: 3, loosePills: 3 })).toBe("5");
-	});
-
-	it("formats count with pill info", () => {
-		expect(formatFullBlisters({ fullBlisters: 5, openBlisterPills: 3, loosePills: 3 }, 10)).toBe("5 (50)");
-	});
-});
-
-describe("formatOpenBlisterAndLoose", () => {
-	it("formats open blister pills count", () => {
-		expect(formatOpenBlisterAndLoose({ fullBlisters: 5, openBlisterPills: 7, loosePills: 7 })).toBe("7");
 	});
 });
 

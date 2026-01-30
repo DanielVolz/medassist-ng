@@ -9,7 +9,7 @@ import { doseTracking, medications } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
-import { parseLocalDateTime } from "../utils/scheduler-utils.js";
+import { parseBlisters, parseLocalDateTime, parseTakenByJson } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(process.cwd(), "data/images");
 
@@ -33,36 +33,6 @@ const medicationSchema = z.object({
 	intakeRemindersEnabled: z.boolean().default(false),
 	blisters: z.array(blisterSchema).min(1).max(12),
 });
-
-function zipBlisters(usage: number[], every: number[], start: string[]) {
-	const len = Math.min(usage.length, every.length, start.length);
-	const blisters: Array<{ usage: number; every: number; start: string }> = [];
-	for (let i = 0; i < len; i++) {
-		blisters.push({ usage: usage[i], every: every[i], start: start[i] });
-	}
-	return blisters;
-}
-
-function parseBlisters(row: typeof medications.$inferSelect) {
-	try {
-		const usage = JSON.parse(row.usageJson) as number[];
-		const every = JSON.parse(row.everyJson) as number[];
-		const start = JSON.parse(row.startJson) as string[];
-		return zipBlisters(usage, every, start);
-	} catch (_err) {
-		return [];
-	}
-}
-
-function parseTakenByJson(takenByJson: string | null | undefined): string[] {
-	if (!takenByJson) return [];
-	try {
-		const parsed = JSON.parse(takenByJson);
-		return Array.isArray(parsed) ? parsed.filter((s: unknown) => typeof s === "string" && s.trim()) : [];
-	} catch {
-		return [];
-	}
-}
 
 export async function medicationRoutes(app: FastifyInstance) {
 	// All medication routes require auth

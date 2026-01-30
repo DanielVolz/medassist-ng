@@ -7,6 +7,7 @@ import { medications, shareTokens, userSettings, users } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { parseTakenByJson } from "../utils/scheduler-utils.js";
 
 // Share token validity: 1 year in milliseconds
 const SHARE_TOKEN_VALIDITY_MS = 365 * 24 * 60 * 60 * 1000;
@@ -33,17 +34,6 @@ async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<
 		throw new Error("AUTH_REQUIRED");
 	}
 	return authUser.id;
-}
-
-// Helper to parse takenByJson
-function parseTakenByJson(takenByJson: string | null | undefined): string[] {
-	if (!takenByJson) return [];
-	try {
-		const parsed = JSON.parse(takenByJson);
-		return Array.isArray(parsed) ? parsed.filter((s: unknown) => typeof s === "string" && s.trim()) : [];
-	} catch {
-		return [];
-	}
 }
 
 // =============================================================================

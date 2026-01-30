@@ -110,11 +110,17 @@ let mockFormHookValue = createMockFormHook();
 // Mock the hooks
 vi.mock("../../hooks", () => ({
 	useMedicationForm: () => mockFormHookValue,
+	useUnsavedChangesWarning: () => ({}),
 }));
 
 // Mock the context
 vi.mock("../../context", () => ({
 	useAppContext: () => mockContextValue,
+	useUnsavedChanges: () => ({
+		setHasUnsavedChanges: vi.fn(),
+		hasUnsavedChanges: false,
+		confirmNavigation: vi.fn().mockReturnValue(true),
+	}),
 }));
 
 describe("MedicationsPage", () => {

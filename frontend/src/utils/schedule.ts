@@ -29,8 +29,11 @@ export function buildSchedulePreview(
 				const isPast = d < todayStart;
 				if (isPast && !includePast) continue;
 				const whenMs = d.getTime();
+				// Use date-only timestamp for stable ID (immune to time changes)
+				// This ensures changing intake times doesn't invalidate past dose tracking
+				const dateOnlyMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 				events.push({
-					id: `${med.id}-${idx}-${whenMs}`,
+					id: `${med.id}-${idx}-${dateOnlyMs}`,
 					medName: med.name,
 					takenBy: med.takenBy || [],
 					usage: blister.usage,

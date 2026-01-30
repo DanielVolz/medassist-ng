@@ -311,7 +311,6 @@
     "loginWithSSO": "Mit {{provider}} anmelden",
     "or": "oder",
     "deleteAccount": "Konto löschen",
-    "deleteAccountHint": "Lösche dein Konto und alle zugehörigen Daten dauerhaft.",
     "deleteAccountConfirmTitle": "Konto löschen?",
     "deleteAccountConfirmText": "Dadurch werden dein Konto und alle deine Daten (Medikamente, Einstellungen, Verlauf) dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
     "deleteAccountButton": "Ja, mein Konto löschen"

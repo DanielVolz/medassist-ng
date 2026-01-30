@@ -313,7 +313,6 @@
     "loginWithSSO": "Login with {{provider}}",
     "or": "or",
     "deleteAccount": "Delete Account",
-    "deleteAccountHint": "Permanently delete your account and all associated data.",
     "deleteAccountConfirmTitle": "Delete Account?",
     "deleteAccountConfirmText": "This will permanently delete your account and all your data (medications, settings, history). This action cannot be undone.",
     "deleteAccountButton": "Yes, delete my account"

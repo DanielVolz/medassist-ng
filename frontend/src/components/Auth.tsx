@@ -771,9 +771,6 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 			{/* Delete Account Section */}
 			<div className="profile-section profile-danger-zone">
 				<h3 className="profile-section-title">{t("auth.deleteAccount", "Delete Account")}</h3>
-				<p className="profile-danger-text">
-					{t("auth.deleteAccountHint", "Permanently delete your account and all associated data.")}
-				</p>
 				<button type="button" className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
 					{t("auth.deleteAccount", "Delete Account")}
 				</button>

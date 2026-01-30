@@ -233,24 +233,6 @@ export function getBlisterStock(med: Medication): BlisterStock {
 }
 
 /**
- * Format full blisters count with optional pills per blister
- */
-export function formatFullBlisters(stock: BlisterStock, pillsPerBlister?: number): string {
-	const count = stock.fullBlisters;
-	if (pillsPerBlister !== undefined) {
-		return `${count} (${count * pillsPerBlister})`;
-	}
-	return String(count);
-}
-
-/**
- * Format open blister and loose pills
- */
-export function formatOpenBlisterAndLoose(stock: BlisterStock): string {
-	return String(stock.openBlisterPills);
-}
-
-/**
  * Compare semantic version strings
  * Returns: negative if a < b, positive if a > b, 0 if equal
  */

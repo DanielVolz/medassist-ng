@@ -42,10 +42,6 @@ function saveIntakeReminderState(state: IntakeReminderState): void {
 	writeFileSync(intakeReminderStateFile, JSON.stringify(state, null, 2));
 }
 
-function parseBlistersFromRow(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
-	return parseBlisters(row);
-}
-
 async function sendIntakeReminderEmail(
 	email: string,
 	intakes: UpcomingIntake[],
@@ -295,7 +291,7 @@ async function checkAndSendIntakeRemindersForUser(
 
 	// Find intakes: upcoming ones in reminder window + past ones for repeat reminders
 	for (const med of medsWithReminders) {
-		const blisters = parseBlistersFromRow(med);
+		const blisters = parseBlisters(med);
 		const takenByArray = parseTakenByJson(med.takenByJson);
 
 		logger.info(

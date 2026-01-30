@@ -9,6 +9,7 @@ import { doseTracking, medications, shareTokens, userSettings } from "../db/sche
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { parseTakenByJson } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(process.cwd(), "data/images");
 
@@ -123,17 +124,6 @@ async function getUserId(request: any, reply: any): Promise<number> {
 		throw new Error("AUTH_REQUIRED");
 	}
 	return authUser.id;
-}
-
-// Parse takenByJson safely
-function parseTakenByJson(takenByJson: string | null | undefined): string[] {
-	if (!takenByJson) return [];
-	try {
-		const parsed = JSON.parse(takenByJson);
-		return Array.isArray(parsed) ? parsed.filter((s: unknown) => typeof s === "string" && s.trim()) : [];
-	} catch {
-		return [];
-	}
 }
 
 // Parse blisters from DB format to export format

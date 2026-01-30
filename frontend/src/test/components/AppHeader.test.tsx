@@ -14,6 +14,15 @@ vi.mock("react-router-dom", async () => {
 	};
 });
 
+// Mock useUnsavedChanges
+vi.mock("../../context", () => ({
+	useUnsavedChanges: () => ({
+		setHasUnsavedChanges: vi.fn(),
+		hasUnsavedChanges: false,
+		confirmNavigation: vi.fn().mockReturnValue(true),
+	}),
+}));
+
 describe("AppHeader", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

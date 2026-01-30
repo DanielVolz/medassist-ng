@@ -42,7 +42,7 @@ describe("useMedications", () => {
 			expect(result.current.meds).toEqual(mockMeds);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/medications");
+		expect(fetch).toHaveBeenCalledWith("/api/medications", { credentials: "include" });
 	});
 
 	it("handles API error gracefully", async () => {
@@ -104,7 +104,7 @@ describe("useMedications", () => {
 			await result.current.deleteMed(1, 1, mockResetForm);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/medications/1", { method: "DELETE" });
+		expect(fetch).toHaveBeenCalledWith("/api/medications/1", { method: "DELETE", credentials: "include" });
 		expect(mockResetForm).toHaveBeenCalled();
 	});
 
@@ -168,7 +168,7 @@ describe("useMedications", () => {
 			await result.current.deleteMedImage(1);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/medications/1/image", { method: "DELETE" });
+		expect(fetch).toHaveBeenCalledWith("/api/medications/1/image", { method: "DELETE", credentials: "include" });
 	});
 
 	it("allows setting meds directly", () => {

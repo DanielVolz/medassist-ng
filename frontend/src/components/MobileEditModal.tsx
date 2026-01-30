@@ -4,6 +4,7 @@
  */
 import { useTranslation } from "react-i18next";
 import type { FieldErrors, FormBlister, FormState, Medication } from "../types";
+import { deriveTotal } from "../utils";
 
 // Field limits for validation
 const FIELD_LIMITS = {
@@ -53,12 +54,13 @@ export interface MobileEditModalProps {
 	onSaveMedication: (e: React.FormEvent) => void;
 }
 
-function deriveTotal(form: FormState) {
+/** Calculate total pills from form state */
+function deriveTotalFromForm(form: FormState) {
 	const packCount = Number(form.packCount) || 0;
 	const blistersPerPack = Number(form.blistersPerPack) || 0;
 	const pillsPerBlister = Number(form.pillsPerBlister) || 1;
 	const looseTablets = Number(form.looseTablets) || 0;
-	return packCount * blistersPerPack * pillsPerBlister + looseTablets;
+	return deriveTotal(packCount, blistersPerPack, pillsPerBlister, looseTablets);
 }
 
 export function MobileEditModal({
@@ -216,7 +218,7 @@ export function MobileEditModal({
 					</label>
 					<div className="full">
 						<p className="sub">
-							<strong>{t("form.total")}:</strong> {deriveTotal(form)} {t("common.pills")}
+							<strong>{t("form.total")}:</strong> {deriveTotalFromForm(form)} {t("common.pills")}
 						</p>
 					</div>
 					<label className="full">

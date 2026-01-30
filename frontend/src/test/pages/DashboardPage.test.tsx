@@ -482,6 +482,17 @@ describe("DashboardPage with medications", () => {
 	});
 
 	it("renders schedule timeline with future doses", () => {
+		// Need showFutureDays: true for day-blocks to render
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			coverageByMed: {
+				Aspirin: mockCoverage.all[0],
+			},
+			futureDays: mockFutureDays,
+			showFutureDays: true,
+		});
+
 		render(
 			<MemoryRouter>
 				<DashboardPage />
@@ -548,6 +559,7 @@ describe("DashboardPage with email notifications", () => {
 			settings: {
 				...createMockAppContext().settings,
 				emailEnabled: true,
+				emailStockReminders: true,
 				notificationEmail: "test@example.com",
 			},
 		});
@@ -587,6 +599,7 @@ describe("DashboardPage with shoutrrr notifications", () => {
 			settings: {
 				...createMockAppContext().settings,
 				shoutrrrEnabled: true,
+				shoutrrrStockReminders: true,
 			},
 		});
 	});

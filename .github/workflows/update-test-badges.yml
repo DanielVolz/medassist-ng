@@ -41,6 +41,8 @@ jobs:
       - name: Run backend tests and capture count
         id: backend-tests
         working-directory: backend
+        env:
+          CI: true
         run: |
           OUTPUT=$(npm run test:run 2>&1) || true
           echo "$OUTPUT"
@@ -51,6 +53,8 @@ jobs:
       - name: Run frontend tests and capture count
         id: frontend-tests
         working-directory: frontend
+        env:
+          CI: true
         run: |
           OUTPUT=$(npm run test -- --run 2>&1) || true
           echo "$OUTPUT"

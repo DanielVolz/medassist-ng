@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ConfirmModal } from "./ConfirmModal";
 
 // =============================================================================
 // Types (no roles - all users are equal)
@@ -780,33 +781,26 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
 			{/* Delete Confirmation Modal */}
 			{showDeleteConfirm && (
-				<div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-					<div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
-						<h2>{t("auth.deleteAccountConfirmTitle", "Delete Account?")}</h2>
-						<p className="confirm-message">
-							{t(
-								"auth.deleteAccountConfirmText",
-								"This will permanently delete your account and all your data (medications, settings, history). This action cannot be undone."
-							)}
-						</p>
-						{error && <div className="auth-error">{error}</div>}
-						<div className="confirm-actions">
-							<button
-								type="button"
-								className="btn btn-ghost"
-								onClick={() => setShowDeleteConfirm(false)}
-								disabled={deleteLoading}
-							>
-								{t("common.cancel", "Cancel")}
-							</button>
-							<button type="button" className="btn btn-danger" onClick={handleDeleteAccount} disabled={deleteLoading}>
-								{deleteLoading
-									? t("common.loading", "Loading...")
-									: t("auth.deleteAccountButton", "Yes, delete my account")}
-							</button>
-						</div>
-					</div>
-				</div>
+				<ConfirmModal
+					title={t("auth.deleteAccountConfirmTitle", "Delete Account?")}
+					message={
+						<>
+							<p>
+								{t(
+									"auth.deleteAccountConfirmText",
+									"This will permanently delete your account and all your data (medications, settings, history). This action cannot be undone."
+								)}
+							</p>
+							{error && <div className="auth-error">{error}</div>}
+						</>
+					}
+					confirmLabel={t("auth.deleteAccountButton", "Yes, delete my account")}
+					cancelLabel={t("common.cancel", "Cancel")}
+					onConfirm={handleDeleteAccount}
+					onCancel={() => setShowDeleteConfirm(false)}
+					isLoading={deleteLoading}
+					confirmVariant="danger"
+				/>
 			)}
 		</div>
 	);

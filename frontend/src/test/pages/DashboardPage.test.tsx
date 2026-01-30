@@ -577,15 +577,15 @@ describe("DashboardPage with email notifications", () => {
 		expect(statusBar).toBeInTheDocument();
 	});
 
-	it("shows reminder email button when there are low stock meds", () => {
+	it("hides reorder reminder card when reminders are enabled (to avoid redundancy)", () => {
 		render(
 			<MemoryRouter>
 				<DashboardPage />
 			</MemoryRouter>
 		);
 
-		// Should show send reminder button
-		expect(screen.getByText(/dashboard\.reorder\.sendReminder/i)).toBeInTheDocument();
+		// Reorder card should NOT be shown when reminders are active (Reminder Bar shows the info instead)
+		expect(screen.queryByText(/dashboard\.reorder\.sendReminder/i)).not.toBeInTheDocument();
 	});
 });
 

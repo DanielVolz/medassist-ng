@@ -19,6 +19,7 @@ export function SharedSchedule() {
 	const [error, setError] = useState<string | null>(null);
 	const [expiredData, setExpiredData] = useState<ExpiredLinkData | null>(null);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
+	const [dismissedDoses, setDismissedDoses] = useState<Set<string>>(new Set());
 	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [showFutureDays, setShowFutureDays] = useState(false);
@@ -116,6 +117,7 @@ export function SharedSchedule() {
 	}, [lightboxImage]);
 
 	// Load taken doses from server with polling for real-time sync
+	// Separates taken and dismissed doses (like main app's useDoses hook)
 	useEffect(() => {
 		if (token) {
 			async function loadTakenDoses() {
@@ -123,12 +125,24 @@ export function SharedSchedule() {
 					const res = await fetch(`/api/share/${token}/doses`);
 					if (res.ok) {
 						const data = await res.json();
-						setTakenDoses(new Set(data.doses.map((d: { doseId: string }) => d.doseId)));
+						const taken = new Set<string>();
+						const dismissed = new Set<string>();
+						for (const d of data.doses as Array<{ doseId: string; dismissed?: boolean }>) {
+							if (d.dismissed) {
+								dismissed.add(d.doseId);
+							} else {
+								taken.add(d.doseId);
+							}
+						}
+						setTakenDoses(taken);
+						setDismissedDoses(dismissed);
 					} else {
 						setTakenDoses(new Set());
+						setDismissedDoses(new Set());
 					}
 				} catch {
 					setTakenDoses(new Set());
+					setDismissedDoses(new Set());
 				}
 			}
 			loadTakenDoses();
@@ -538,10 +552,12 @@ export function SharedSchedule() {
 										)
 									);
 									// Count missed doses (not taken AND not dismissed)
-									// Note: SharedSchedule doesn't have updatedAt info, so we only check dismissed status
+									// Check both: per-dose dismissed flag from API AND medication-level dismissedUntil
 									const missedPastDoses = totalPastDoses.filter((id) => {
 										if (takenDoses.has(id)) return false;
-										// Check if this dose is dismissed
+										// Check if this dose is dismissed via per-dose flag from API
+										if (dismissedDoses.has(id)) return false;
+										// Check if dismissed via medication-level dismissedUntil date
 										const parts = id.split("-");
 										if (parts.length >= 3) {
 											const timestamp = parseInt(parts[2], 10);
@@ -584,9 +600,12 @@ export function SharedSchedule() {
 							{showPastDays &&
 								pastDays.map((day) => {
 									// Helper to check if a dose ID is "done" (taken or dismissed)
+									// Checks both: per-dose dismissed flag from API AND medication-level dismissedUntil
 									const isDoseIdDone = (doseId: string) => {
 										if (takenDoses.has(doseId)) return true;
-										// Check if dismissed
+										// Check if this dose is dismissed via per-dose flag from API
+										if (dismissedDoses.has(doseId)) return true;
+										// Check if dismissed via medication-level dismissedUntil date
 										const parts = doseId.split("-");
 										if (parts.length >= 3) {
 											const timestamp = parseInt(parts[2], 10);
@@ -697,10 +716,11 @@ export function SharedSchedule() {
 															<div className="doses-col">
 																{item.doses.map((dose) => {
 																	const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
-																	const isDismissed = isDoseDismissed(dose.when, dose.medName);
+																	// Check both: medication-level dismissedUntil AND per-dose dismissed flag
+																	const isMedLevelDismissed = isDoseDismissed(dose.when, dose.medName);
 																	const allDone = people.every((person) => {
 																		const doseId = getDoseId(dose.id, person);
-																		return takenDoses.has(doseId) || isDismissed;
+																		return takenDoses.has(doseId) || dismissedDoses.has(doseId) || isMedLevelDismissed;
 																	});
 																	return (
 																		<div key={dose.id} className={`dose-item past ${allDone ? "all-taken" : ""}`}>
@@ -713,7 +733,8 @@ export function SharedSchedule() {
 																				{people.map((person) => {
 																					const doseId = getDoseId(dose.id, person);
 																					const isTaken = takenDoses.has(doseId);
-																					const isDone = isTaken || isDismissed;
+																					const isPerDoseDismissed = dismissedDoses.has(doseId);
+																					const isDone = isTaken || isPerDoseDismissed || isMedLevelDismissed;
 																					return (
 																						<div key={doseId} className={`dose-person ${isDone ? "taken" : ""}`}>
 																							{person && <span className="person-name">{person}</span>}

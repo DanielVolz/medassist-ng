@@ -7,7 +7,12 @@ import { medications, shareTokens, userSettings, users } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
-import { parseTakenByJson } from "../utils/scheduler-utils.js";
+import {
+	getAllTakenByForMedication,
+	parseIntakesJson,
+	parseTakenByJson,
+	personTakesMedication,
+} from "../utils/scheduler-utils.js";
 
 // Share token validity: 1 year in milliseconds
 const SHARE_TOKEN_VALIDITY_MS = 365 * 24 * 60 * 60 * 1000;
@@ -78,27 +83,32 @@ export async function shareRoutes(app: FastifyInstance) {
 		// Use SQLite JSON function to check if takenBy is in the array
 		const allMeds = await db.select().from(medications).where(eq(medications.userId, share.userId));
 
-		// Filter medications where takenByJson array contains the share.takenBy value
+		// Filter medications where takenBy matches either medication-level OR any intake-level takenBy
 		const meds = allMeds.filter((med) => {
 			const takenByArray = parseTakenByJson(med.takenByJson);
-			return takenByArray.includes(share.takenBy);
+			const intakes = parseIntakesJson(
+				med.intakesJson,
+				{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+				med.intakeRemindersEnabled ?? false
+			);
+			return personTakesMedication(share.takenBy, takenByArray, intakes);
 		});
 
 		// Parse blisters and build schedule data
 		const medicationsWithBlisters = meds.map((med) => {
-			let blisters: { usage: number; every: number; start: string }[] = [];
-			try {
-				const usageArr = JSON.parse(med.usageJson || "[]");
-				const everyArr = JSON.parse(med.everyJson || "[]");
-				const startArr = JSON.parse(med.startJson || "[]");
-				blisters = usageArr.map((usage: number, i: number) => ({
-					usage,
-					every: everyArr[i] ?? 1,
-					start: startArr[i] ?? new Date().toISOString(),
-				}));
-			} catch {
-				blisters = [];
-			}
+			// Parse intakes from new format, falling back to legacy
+			const intakes = parseIntakesJson(
+				med.intakesJson,
+				{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+				med.intakeRemindersEnabled ?? false
+			);
+
+			// Convert to legacy blisters format for backward compat
+			const blisters = intakes.map((i) => ({
+				usage: i.usage,
+				every: i.every,
+				start: i.start,
+			}));
 
 			// Parse takenBy JSON array
 			const takenByArray = parseTakenByJson(med.takenByJson);
@@ -110,6 +120,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				name: med.name,
 				genericName: med.genericName,
 				pillWeightMg: med.pillWeightMg,
+				doseUnit: med.doseUnit ?? "mg",
 				imageUrl: med.imageUrl,
 				totalPills,
 				packCount: med.packCount,
@@ -117,7 +128,8 @@ export async function shareRoutes(app: FastifyInstance) {
 				looseTablets: med.looseTablets,
 				pillsPerBlister: med.pillsPerBlister,
 				takenBy: takenByArray,
-				blisters,
+				intakes, // New unified format with per-intake takenBy
+				blisters, // Legacy format for backward compat
 				dismissedUntil: med.dismissedUntil,
 				updatedAt: med.updatedAt, // For filtering out doses from previous schedule configurations
 			};
@@ -153,11 +165,16 @@ export async function shareRoutes(app: FastifyInstance) {
 
 			const { takenBy, scheduleDays } = parsed.data;
 
-			// Check if user has medications for this takenBy (search in JSON array)
+			// Check if user has medications for this takenBy (search in both medication-level and intake-level)
 			const allMeds = await db.select().from(medications).where(eq(medications.userId, userId));
 			const medsForPerson = allMeds.filter((med) => {
 				const takenByArray = parseTakenByJson(med.takenByJson);
-				return takenByArray.includes(takenBy);
+				const intakes = parseIntakesJson(
+					med.intakesJson,
+					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+					med.intakeRemindersEnabled ?? false
+				);
+				return personTakesMedication(takenBy, takenByArray, intakes);
 			});
 
 			if (medsForPerson.length === 0) {
@@ -196,17 +213,30 @@ export async function shareRoutes(app: FastifyInstance) {
 	app.get("/share/people", { preHandler: requireAuth }, async (request, reply) => {
 		const userId = await getUserId(request, reply);
 
-		// Get all unique takenBy values for this user (from JSON arrays)
+		// Get all unique takenBy values for this user (from both medication-level and intake-level)
 		const meds = await db
-			.select({ takenByJson: medications.takenByJson })
+			.select({
+				takenByJson: medications.takenByJson,
+				intakesJson: medications.intakesJson,
+				usageJson: medications.usageJson,
+				everyJson: medications.everyJson,
+				startJson: medications.startJson,
+				intakeRemindersEnabled: medications.intakeRemindersEnabled,
+			})
 			.from(medications)
 			.where(eq(medications.userId, userId));
 
-		// Collect all unique person names from all takenByJson arrays
+		// Collect all unique person names from medication-level AND intake-level takenBy
 		const allPeople = new Set<string>();
 		for (const med of meds) {
 			const takenByArray = parseTakenByJson(med.takenByJson);
-			for (const person of takenByArray) {
+			const intakes = parseIntakesJson(
+				med.intakesJson,
+				{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+				med.intakeRemindersEnabled ?? false
+			);
+			const allForMed = getAllTakenByForMedication(takenByArray, intakes);
+			for (const person of allForMed) {
 				if (person) allPeople.add(person);
 			}
 		}

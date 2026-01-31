@@ -29,6 +29,20 @@
       "when": 1769354512857,
       "tag": "0003_add_reminder_info_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1769886564000,
+      "tag": "0004_add_package_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1769893708813,
+      "tag": "0005_add_intakes_json",
+      "breakpoints": true
     }
   ]
 }

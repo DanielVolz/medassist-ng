@@ -139,6 +139,13 @@ const createMockAppContext = (overrides = {}) => ({
 	coverage: { all: [], low: [] },
 	coverageByMed: {},
 	depletionByMed: {},
+	stockThresholds: {
+		lowStockDays: 7,
+		normalStockDays: 30,
+		highStockDays: 90,
+		criticalStockDays: 7,
+		expiryWarningDays: 30,
+	},
 	manuallyExpandedDays: new Set(),
 	manuallyCollapsedDays: new Set(),
 	toggleDayCollapse: vi.fn(),
@@ -400,8 +407,8 @@ describe("DashboardPage structure", () => {
 
 		// Should have all expected table columns
 		expect(screen.getByText(/table\.name/i)).toBeInTheDocument();
-		expect(screen.getByText(/table\.fullBlisters/i)).toBeInTheDocument();
-		expect(screen.getByText(/table\.openBlister/i)).toBeInTheDocument();
+		expect(screen.getByText(/table\.stock(?!Details)/i)).toBeInTheDocument();
+		expect(screen.getByText(/table\.stockDetails/i)).toBeInTheDocument();
 		expect(screen.getByText(/table\.daysLeft/i)).toBeInTheDocument();
 		expect(screen.getByText(/table\.runsOut/i)).toBeInTheDocument();
 		expect(screen.getByText(/table\.expiry/i)).toBeInTheDocument();

@@ -8,15 +8,15 @@ import { getDateLocale, getTranslations, type Language, t } from "../i18n/transl
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 // Import shared utilities
 import {
-	type Blister,
 	cleanOldIntakeReminders,
 	createDefaultIntakeReminderState,
 	getTimezone,
 	getTodaysIntakes,
 	getUpcomingIntakes,
+	type Intake,
 	type IntakeReminderState,
-	parseBlisters,
 	parseIntakeReminderState,
+	parseIntakesJson,
 	parseTakenByJson,
 	type UpcomingIntake,
 } from "../utils/scheduler-utils.js";
@@ -75,11 +75,10 @@ async function sendIntakeReminderEmail(
 		return pillText;
 	};
 
-	// Helper to format medication name with takenBy (array of names)
+	// Helper to format medication name with takenBy (single person or null)
 	const formatMedName = (intake: UpcomingIntake): string => {
-		if (intake.takenBy.length > 0) {
-			const namesStr = intake.takenBy.join(", ");
-			return `${intake.medName} <span style="color: #6b7280; font-size: 12px;">${t(tr.intakeReminder.takenBy, { name: namesStr })}</span>`;
+		if (intake.takenBy) {
+			return `${intake.medName} <span style="color: #6b7280; font-size: 12px;">${t(tr.intakeReminder.takenBy, { name: intake.takenBy })}</span>`;
 		}
 		return intake.medName;
 	};
@@ -172,7 +171,7 @@ ${description}
 
 ${intakes
 	.map((i) => {
-		const takenByStr = i.takenBy.length > 0 ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy.join(", ") })}` : "";
+		const takenByStr = i.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy })}` : "";
 		return `${i.medName}${takenByStr}: ${formatDosagePlain(i)} - ${i.intakeTimeStr}`;
 	})
 	.join("\n")}
@@ -291,62 +290,92 @@ async function checkAndSendIntakeRemindersForUser(
 
 	// Find intakes: upcoming ones in reminder window + past ones for repeat reminders
 	for (const med of medsWithReminders) {
-		const blisters = parseBlisters(med);
-		const takenByArray = parseTakenByJson(med.takenByJson);
+		// Parse intakes using new format (with per-intake takenBy), falling back to legacy
+		const intakes = parseIntakesJson(
+			med.intakesJson,
+			{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+			med.intakeRemindersEnabled ?? false
+		);
+		// Medication-level takenBy (for fallback/display purposes)
+		const medicationTakenBy = parseTakenByJson(med.takenByJson);
 
 		logger.info(
-			`[IntakeReminder] User ${settings.userId}: Processing medication "${med.name}" with ${blisters.length} blisters`
+			`[IntakeReminder] User ${settings.userId}: Processing medication "${med.name}" with ${intakes.length} intakes`
 		);
 
-		// Process each blister separately to track blisterIndex
-		blisters.forEach((blister, blisterIndex) => {
+		// Filter intakes that have reminders enabled (per-intake setting or medication-level)
+		const intakesWithReminders = intakes.filter((intake, idx) => {
+			const hasReminder = intake.intakeRemindersEnabled || med.intakeRemindersEnabled;
+			if (!hasReminder) {
+				logger.info(`[IntakeReminder] User ${settings.userId}: Intake ${idx} has reminders disabled, skipping`);
+			}
+			return hasReminder;
+		});
+
+		// Process each intake separately to track blisterIndex
+		intakesWithReminders.forEach((intake, blisterIndex) => {
+			const actualIndex = intakes.indexOf(intake); // Get the actual index in original array
 			logger.info(
-				`[IntakeReminder] User ${settings.userId}: Blister ${blisterIndex} - start: ${blister.start}, every: ${blister.every} days, usage: ${blister.usage}`
+				`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} - start: ${intake.start}, every: ${intake.every} days, usage: ${intake.usage}, takenBy: ${intake.takenBy || "(none)"}`
 			);
 
 			// Always get upcoming intakes (15 min before) for first reminders
 			const upcomingIntakes = getUpcomingIntakes(
 				med.name,
-				[blister],
+				[intake],
 				REMINDER_MINUTES_BEFORE,
-				takenByArray,
+				medicationTakenBy,
 				med.pillWeightMg,
 				locale,
-				tz
+				tz,
+				undefined, // nowOverride
+				med.id,
+				med.doseUnit ?? "mg"
 			);
 			logger.info(
-				`[IntakeReminder] User ${settings.userId}: Blister ${blisterIndex} found ${upcomingIntakes.length} upcoming intakes (reminder window)`
+				`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} found ${upcomingIntakes.length} upcoming intakes (reminder window)`
 			);
 
 			// Add upcoming intakes for first reminders
 			allUpcoming.push(
-				...upcomingIntakes.map((intake) => ({
-					...intake,
+				...upcomingIntakes.map((upcomingIntake) => ({
+					...upcomingIntake,
 					medicationId: med.id,
-					blisterIndex,
+					blisterIndex: actualIndex,
 				}))
 			);
 
 			// If repeat reminders enabled, also check for missed intakes (past the intake time)
 			if (settings.repeatRemindersEnabled) {
-				const allTodaysIntakes = getTodaysIntakes(med.name, [blister], takenByArray, med.pillWeightMg, locale, tz);
-				logger.info(
-					`[IntakeReminder] User ${settings.userId}: Blister ${blisterIndex} - all today's intakes: ${allTodaysIntakes.length}, times: ${allTodaysIntakes.map((i) => i.intakeTime.toISOString()).join(", ")}`
+				const allTodaysIntakes = getTodaysIntakes(
+					med.name,
+					[intake],
+					medicationTakenBy,
+					med.pillWeightMg,
+					locale,
+					tz,
+					med.id,
+					med.doseUnit ?? "mg"
 				);
-				const missedIntakes = allTodaysIntakes.filter((intake) => intake.intakeTime.getTime() < now.getTime());
 				logger.info(
-					`[IntakeReminder] User ${settings.userId}: Blister ${blisterIndex} found ${missedIntakes.length} missed intakes (past intake time)`
+					`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} - all today's intakes: ${allTodaysIntakes.length}, times: ${allTodaysIntakes.map((i) => i.intakeTime.toISOString()).join(", ")}`
+				);
+				const missedIntakes = allTodaysIntakes.filter(
+					(todayIntake) => todayIntake.intakeTime.getTime() < now.getTime()
+				);
+				logger.info(
+					`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} found ${missedIntakes.length} missed intakes (past intake time)`
 				);
 
 				// Add missed intakes for repeat reminders (only if not already in upcoming list)
 				const upcomingTimes = new Set(upcomingIntakes.map((i) => i.intakeTime.getTime()));
 				allUpcoming.push(
 					...missedIntakes
-						.filter((intake) => !upcomingTimes.has(intake.intakeTime.getTime()))
-						.map((intake) => ({
-							...intake,
+						.filter((missed) => !upcomingTimes.has(missed.intakeTime.getTime()))
+						.map((missed) => ({
+							...missed,
 							medicationId: med.id,
-							blisterIndex,
+							blisterIndex: actualIndex,
 						}))
 				);
 			}
@@ -438,20 +467,31 @@ async function checkAndSendIntakeRemindersForUser(
 
 		// Filter out reminders for doses that were already taken
 		remindersToSend = remindersToSend.filter((intake) => {
-			const timestamp = intake.intakeTime.getTime();
+			// Convert to date-only timestamp (midnight) to match frontend dose ID format
+			const intakeDate = intake.intakeTime;
+			const dateOnlyMs = new Date(intakeDate.getFullYear(), intakeDate.getMonth(), intakeDate.getDate()).getTime();
 
 			// Check both with and without person suffix
-			if (intake.takenBy.length > 0) {
-				// For multi-person medications, check if any person has taken it
-				const anyTaken = intake.takenBy.some((person) => {
-					const doseId = `${intake.medicationId}-${intake.blisterIndex}-${timestamp}-${person}`;
-					return takenDoseIds.has(doseId);
-				});
-				return !anyTaken; // Skip if any person has taken it
+			if (intake.takenBy) {
+				// For person-specific intake, check if that person has taken it
+				const doseId = `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}-${intake.takenBy}`;
+				const isTaken = takenDoseIds.has(doseId);
+				if (isTaken) {
+					logger.info(
+						`[IntakeReminder] User ${settings.userId}: Skipping "${intake.medName}" - dose ${doseId} already taken`
+					);
+				}
+				return !isTaken;
 			} else {
-				// For non-person-specific medications
-				const doseId = `${intake.medicationId}-${intake.blisterIndex}-${timestamp}`;
-				return !takenDoseIds.has(doseId);
+				// For non-person-specific intakes
+				const doseId = `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}`;
+				const isTaken = takenDoseIds.has(doseId);
+				if (isTaken) {
+					logger.info(
+						`[IntakeReminder] User ${settings.userId}: Skipping "${intake.medName}" - dose ${doseId} already taken`
+					);
+				}
+				return !isTaken;
 			}
 		});
 
@@ -541,8 +581,7 @@ async function checkAndSendIntakeRemindersForUser(
 		const message =
 			remindersToSend
 				.map((i) => {
-					const takenByStr =
-						i.takenBy.length > 0 ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy.join(", ") })}` : "";
+					const takenByStr = i.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy })}` : "";
 					let dosage = `${i.usage} ${i.usage === 1 ? tr.common.pill : tr.common.pills}`;
 					if (i.pillWeightMg) {
 						const totalMg = i.usage * i.pillWeightMg;
@@ -621,7 +660,7 @@ async function checkAndSendIntakeRemindersForUser(
 		// Get the first reminder's medication name and taken by for display
 		const firstReminder = remindersToSend[0];
 		const medName = firstReminder?.medName;
-		const takenBy = firstReminder?.takenBy?.length > 0 ? firstReminder.takenBy.join(", ") : undefined;
+		const takenBy = firstReminder?.takenBy || undefined;
 		await updateUserReminderSentTime(settings.userId, "intake", channel, medName, takenBy);
 	}
 }

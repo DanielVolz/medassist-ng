@@ -9,7 +9,7 @@ import { doseTracking, medications, shareTokens, userSettings } from "../db/sche
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
-import { parseTakenByJson } from "../utils/scheduler-utils.js";
+import { parseIntakesJson, parseTakenByJson } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(process.cwd(), "data/images");
 
@@ -27,6 +27,7 @@ const scheduleSchema = z.object({
 	every: z.number().int().min(1),
 	start: z.string(), // ISO datetime string
 	remind: z.boolean().optional().default(false),
+	takenBy: z.string().nullable().optional(), // Per-intake takenBy (new field)
 });
 
 const inventorySchema = z.object({
@@ -44,6 +45,7 @@ const medicationExportSchema = z.object({
 	takenBy: z.array(z.string()).default([]),
 	inventory: inventorySchema,
 	pillWeightMg: z.number().int().nullable().optional(),
+	doseUnit: z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"]).default("mg"),
 	schedules: z.array(scheduleSchema).default([]),
 	expiryDate: z.string().nullable().optional(),
 	notes: z.string().nullable().optional(),
@@ -126,28 +128,24 @@ async function getUserId(request: any, reply: any): Promise<number> {
 	return authUser.id;
 }
 
-// Parse blisters from DB format to export format
-function parseBlistersForExport(
+// Parse intakes from DB format to export format (with per-intake takenBy)
+function parseIntakesForExport(
 	row: typeof medications.$inferSelect
-): Array<{ usage: number; every: number; start: string; remind: boolean }> {
-	try {
-		const usage = JSON.parse(row.usageJson || "[]") as number[];
-		const every = JSON.parse(row.everyJson || "[]") as number[];
-		const start = JSON.parse(row.startJson || "[]") as string[];
-		const len = Math.min(usage.length, every.length, start.length);
-		const schedules: Array<{ usage: number; every: number; start: string; remind: boolean }> = [];
-		for (let i = 0; i < len; i++) {
-			schedules.push({
-				usage: usage[i],
-				every: every[i],
-				start: start[i],
-				remind: row.intakeRemindersEnabled ?? false,
-			});
-		}
-		return schedules;
-	} catch {
-		return [];
-	}
+): Array<{ usage: number; every: number; start: string; remind: boolean; takenBy: string | null }> {
+	// Use the new parseIntakesJson which falls back to legacy format
+	const intakes = parseIntakesJson(
+		row.intakesJson,
+		{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
+		row.intakeRemindersEnabled ?? false
+	);
+
+	return intakes.map((intake) => ({
+		usage: intake.usage,
+		every: intake.every,
+		start: intake.start,
+		remind: intake.intakeRemindersEnabled,
+		takenBy: intake.takenBy, // Per-intake takenBy
+	}));
 }
 
 // Read image file and convert to base64 data URL
@@ -279,7 +277,8 @@ export async function exportRoutes(app: FastifyInstance) {
 					stockAdjustment: med.stockAdjustment ?? 0,
 				},
 				pillWeightMg: med.pillWeightMg,
-				schedules: parseBlistersForExport(med),
+				doseUnit: med.doseUnit ?? "mg",
+				schedules: parseIntakesForExport(med),
 				expiryDate: med.expiryDate,
 				notes: med.notes,
 				intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
@@ -463,11 +462,22 @@ export async function exportRoutes(app: FastifyInstance) {
 			const exportIdToNewId = new Map<string, number>();
 
 			for (const med of importData.medications) {
-				// Convert schedules back to JSON arrays
+				// Convert schedules to both legacy and new formats
 				const usageJson = JSON.stringify(med.schedules.map((s) => s.usage));
 				const everyJson = JSON.stringify(med.schedules.map((s) => s.every));
 				const startJson = JSON.stringify(med.schedules.map((s) => s.start));
 				const takenByJson = JSON.stringify(med.takenBy);
+
+				// Build intakesJson array (new unified format with per-intake takenBy)
+				const intakesJson = JSON.stringify(
+					med.schedules.map((s) => ({
+						usage: s.usage,
+						every: s.every,
+						start: s.start,
+						takenBy: s.takenBy || null,
+						intakeRemindersEnabled: s.remind ?? false,
+					}))
+				);
 
 				// Check if any schedule has remind enabled
 				const intakeRemindersEnabled = med.schedules.some((s) => s.remind) || med.intakeRemindersEnabled;
@@ -486,6 +496,8 @@ export async function exportRoutes(app: FastifyInstance) {
 						stockAdjustment: med.inventory.stockAdjustment ?? 0,
 						lastStockCorrectionAt: med.lastStockCorrectionAt ? new Date(med.lastStockCorrectionAt) : null,
 						pillWeightMg: med.pillWeightMg || null,
+						doseUnit: med.doseUnit ?? "mg",
+						intakesJson,
 						usageJson,
 						everyJson,
 						startJson,

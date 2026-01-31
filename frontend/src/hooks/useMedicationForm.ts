@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { FieldErrors, FormBlister, FormState, Medication } from "../types";
+import type { FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
 import { FIELD_LIMITS } from "../types";
 import { toDateValue, toTimeValue } from "../utils/formatters";
 
@@ -14,19 +14,38 @@ export const defaultBlister = (): FormBlister => {
 	};
 };
 
+/**
+ * Create a new intake with optional per-intake takenBy
+ */
+export const defaultIntake = (takenBy: string = ""): FormIntake => {
+	const now = new Date();
+	return {
+		usage: "1",
+		every: "1",
+		startDate: toDateValue(now),
+		startTime: toTimeValue(now),
+		takenBy, // Per-intake user assignment (empty string = null/everyone)
+		intakeRemindersEnabled: false,
+	};
+};
+
 export const defaultForm = (): FormState => ({
 	name: "",
 	genericName: "",
 	takenBy: [],
+	packageType: "blister",
 	packCount: "1",
 	blistersPerPack: "1",
 	pillsPerBlister: "1",
+	totalPills: "",
 	looseTablets: "0",
 	pillWeightMg: "",
+	doseUnit: "mg",
 	expiryDate: "",
 	notes: "",
 	intakeRemindersEnabled: false,
 	blisters: [defaultBlister()],
+	intakes: [defaultIntake()],
 });
 
 export interface UseMedicationFormReturn {
@@ -53,6 +72,10 @@ export interface UseMedicationFormReturn {
 	setBlisterValue: (idx: number, field: keyof FormBlister, value: string) => void;
 	addBlister: () => void;
 	removeBlister: (idx: number) => void;
+	// Intake management with per-intake takenBy
+	setIntakeValue: (idx: number, field: keyof FormIntake, value: string | boolean) => void;
+	addIntake: (takenBy?: string) => void;
+	removeIntake: (idx: number) => void;
 	startEdit: (med: Medication, openEditModal: () => void) => void;
 	resetForm: () => void;
 	handleValueChange: <K extends keyof FormState>(key: K, value: string) => void;
@@ -134,19 +157,60 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		setForm((prev) => ({ ...prev, blisters: prev.blisters.filter((_, i) => i !== idx) }));
 	}, []);
 
+	// Intake management with per-intake takenBy
+	const setIntakeValue = useCallback((idx: number, field: keyof FormIntake, value: string | boolean) => {
+		setForm((prev) => {
+			const next = [...prev.intakes];
+			next[idx] = { ...next[idx], [field]: value };
+			return { ...prev, intakes: next };
+		});
+	}, []);
+
+	const addIntake = useCallback((takenBy: string = "") => {
+		setForm((prev) => ({ ...prev, intakes: [...prev.intakes, defaultIntake(takenBy)] }));
+	}, []);
+
+	const removeIntake = useCallback((idx: number) => {
+		setForm((prev) => ({ ...prev, intakes: prev.intakes.filter((_, i) => i !== idx) }));
+	}, []);
+
 	const startEdit = useCallback((med: Medication, openEditModal: () => void) => {
 		setEditingId(med.id);
 		setTakenByInput(""); // Clear tag input when starting edit
 		setFormSaved(true); // Existing medication is already saved
+
+		// Parse intakes - prefer new format, fallback to legacy blisters
+		const intakesFromApi =
+			med.intakes && med.intakes.length > 0
+				? med.intakes.map((i) => ({
+						usage: String(i.usage),
+						every: String(i.every),
+						startDate: toDateValue(i.start),
+						startTime: toTimeValue(i.start),
+						takenBy: i.takenBy ?? "", // Convert null to empty string for form
+						intakeRemindersEnabled: i.intakeRemindersEnabled,
+					}))
+				: med.blisters.map((s) => ({
+						usage: String(s.usage),
+						every: String(s.every),
+						startDate: toDateValue(s.start),
+						startTime: toTimeValue(s.start),
+						takenBy: "", // Legacy blisters have no per-intake takenBy
+						intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
+					}));
+
 		const editForm: FormState = {
 			name: med.name,
 			genericName: med.genericName ?? "",
 			takenBy: med.takenBy || [], // Already an array from API
+			packageType: med.packageType ?? "blister",
 			packCount: String(med.packCount),
 			blistersPerPack: String(med.blistersPerPack),
 			pillsPerBlister: String(med.pillsPerBlister),
+			totalPills: med.totalPills ? String(med.totalPills) : "",
 			looseTablets: String(med.looseTablets),
 			pillWeightMg: med.pillWeightMg ? String(med.pillWeightMg) : "",
+			doseUnit: med.doseUnit ?? "mg",
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
 			intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
@@ -156,6 +220,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 				startDate: toDateValue(s.start),
 				startTime: toTimeValue(s.start),
 			})),
+			intakes: intakesFromApi,
 		};
 		setForm(editForm);
 		setOriginalForm(editForm);
@@ -234,6 +299,9 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		setBlisterValue,
 		addBlister,
 		removeBlister,
+		setIntakeValue,
+		addIntake,
+		removeIntake,
 		startEdit,
 		resetForm,
 		handleValueChange,

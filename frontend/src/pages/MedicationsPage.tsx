@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar, MobileEditModal } from "../components";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useMedicationForm, useUnsavedChangesWarning } from "../hooks";
-import type { Medication } from "../types";
-import { FIELD_LIMITS, getPackageSize } from "../types";
+import type { DoseUnit, Medication } from "../types";
+import { DOSE_UNITS, FIELD_LIMITS, getPackageSize } from "../types";
 import { combineDateAndTime, formatDateTime, formatNumber } from "../utils/formatters";
 
 export function MedicationsPage() {
@@ -25,6 +25,7 @@ export function MedicationsPage() {
 		setRefillLoose,
 		refillSaving,
 		submitRefill,
+		coverageByMed,
 	} = useAppContext();
 
 	// Use the medication form hook
@@ -47,6 +48,9 @@ export function MedicationsPage() {
 		addBlister,
 		removeBlister,
 		setBlisterValue,
+		addIntake,
+		removeIntake,
+		setIntakeValue,
 		resetForm,
 		startEdit,
 	} = useMedicationForm();
@@ -87,12 +91,17 @@ export function MedicationsPage() {
 
 	// Calculate total tablets
 	const totalTablets = useMemo(() => {
+		if (form.packageType === "bottle") {
+			// For bottle type, looseTablets is the current stock
+			return Number(form.looseTablets) || 0;
+		}
+		// For blister type
 		const packCount = Number(form.packCount) || 0;
 		const blistersPerPack = Number(form.blistersPerPack) || 0;
 		const pillsPerBlister = Number(form.pillsPerBlister) || 1;
 		const looseTablets = Number(form.looseTablets) || 0;
 		return packCount * blistersPerPack * pillsPerBlister + looseTablets;
-	}, [form.packCount, form.blistersPerPack, form.pillsPerBlister, form.looseTablets]);
+	}, [form.packageType, form.packCount, form.blistersPerPack, form.pillsPerBlister, form.looseTablets]);
 
 	// Open mobile edit modal
 	function openEditModal() {
@@ -158,26 +167,39 @@ export function MedicationsPage() {
 		if (saving) return;
 		setSaving(true);
 
-		// Prepare medication data
-		const blisters = form.blisters.map((b) => ({
-			usage: Number(b.usage) || 1,
-			every: Number(b.every) || 1,
-			start: combineDateAndTime(b.startDate, b.startTime),
+		// Prepare intakes data with per-intake takenBy
+		const intakes = form.intakes.map((intake) => ({
+			usage: Number(intake.usage) || 1,
+			every: Number(intake.every) || 1,
+			start: combineDateAndTime(intake.startDate, intake.startTime),
+			takenBy: intake.takenBy.trim() || null, // Empty string becomes null
+			intakeRemindersEnabled: intake.intakeRemindersEnabled,
+		}));
+
+		// Also prepare legacy blisters for backward compatibility
+		const blisters = intakes.map((i) => ({
+			usage: i.usage,
+			every: i.every,
+			start: i.start,
 		}));
 
 		const body = {
 			name: form.name.trim(),
 			genericName: form.genericName.trim() || null,
 			takenBy: form.takenBy.length > 0 ? form.takenBy : [],
+			packageType: form.packageType,
 			packCount: Number(form.packCount) || 0,
 			blistersPerPack: Number(form.blistersPerPack) || 1,
 			pillsPerBlister: Number(form.pillsPerBlister) || 1,
+			totalPills: Number(form.totalPills) || null,
 			looseTablets: Number(form.looseTablets) || 0,
 			pillWeightMg: Number(form.pillWeightMg) || null,
+			doseUnit: form.doseUnit,
 			expiryDate: form.expiryDate || null,
 			notes: form.notes.trim() || null,
 			intakeRemindersEnabled: form.intakeRemindersEnabled,
-			blisters,
+			blisters, // Legacy format for backward compatibility
+			intakes, // New format with per-intake takenBy
 		};
 
 		try {
@@ -331,7 +353,9 @@ export function MedicationsPage() {
 										</span>
 									</div>
 									<div className="med-total">
-										{t("medications.details.total")}: {getPackageSize(med)} {t("common.pills")}
+										{t("medications.details.stock")}:{" "}
+										{coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)} /{" "}
+										{getPackageSize(med)} {t("common.pills")}
 									</div>
 								</div>
 								<div className="med-actions">
@@ -431,50 +455,100 @@ export function MedicationsPage() {
 						{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 					</label>
 					<label>
-						{t("form.packs")}
-						<input
-							type="number"
-							min="0"
-							value={form.packCount}
-							onChange={(e) => handleValueChange("packCount", e.target.value)}
-						/>
+						{t("form.packageType")}
+						<select
+							className="package-type-select"
+							value={form.packageType}
+							onChange={(e) => handleValueChange("packageType", e.target.value)}
+						>
+							<option value="blister">{t("form.packageTypeBlister")}</option>
+							<option value="bottle">{t("form.packageTypeBottle")}</option>
+						</select>
 					</label>
+					{form.packageType === "blister" ? (
+						<>
+							<label>
+								{t("form.packs")}
+								<input
+									type="number"
+									min="0"
+									value={form.packCount}
+									onChange={(e) => handleValueChange("packCount", e.target.value)}
+								/>
+							</label>
+							<label>
+								{t("form.blistersPerPack")}
+								<input
+									type="number"
+									min="1"
+									value={form.blistersPerPack}
+									onChange={(e) => handleValueChange("blistersPerPack", e.target.value)}
+								/>
+							</label>
+							<label>
+								{t("form.pillsPerBlister")}
+								<input
+									type="number"
+									min="1"
+									value={form.pillsPerBlister}
+									onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)}
+								/>
+							</label>
+							<label>
+								{t("form.loosePills")}
+								<input
+									type="number"
+									min="0"
+									value={form.looseTablets}
+									onChange={(e) => handleValueChange("looseTablets", e.target.value)}
+								/>
+							</label>
+						</>
+					) : (
+						<>
+							<label>
+								{t("form.totalCapacity")}
+								<input
+									type="number"
+									min="1"
+									value={form.totalPills}
+									onChange={(e) => handleValueChange("totalPills", e.target.value)}
+								/>
+							</label>
+							<label>
+								{t("form.currentPills")}
+								<input
+									type="number"
+									min="0"
+									value={form.looseTablets}
+									onChange={(e) => handleValueChange("looseTablets", e.target.value)}
+								/>
+							</label>
+						</>
+					)}
 					<label>
-						{t("form.blistersPerPack")}
-						<input
-							type="number"
-							min="1"
-							value={form.blistersPerPack}
-							onChange={(e) => handleValueChange("blistersPerPack", e.target.value)}
-						/>
-					</label>
-					<label>
-						{t("form.pillsPerBlister")}
-						<input
-							type="number"
-							min="1"
-							value={form.pillsPerBlister}
-							onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)}
-						/>
-					</label>
-					<label>
-						{t("form.loosePills")}
-						<input
-							type="number"
-							min="0"
-							value={form.looseTablets}
-							onChange={(e) => handleValueChange("looseTablets", e.target.value)}
-						/>
-					</label>
-					<label>
-						{t("form.pillWeight")}
-						<input
-							type="number"
-							min="1"
-							value={form.pillWeightMg}
-							onChange={(e) => handleValueChange("pillWeightMg", e.target.value)}
-							placeholder={t("form.placeholders.weight")}
-						/>
+						{t("form.pillWeight")} ({form.doseUnit})
+						<div className="dose-input-group">
+							<input
+								type="number"
+								min="0"
+								step="0.1"
+								value={form.pillWeightMg}
+								onChange={(e) => handleValueChange("pillWeightMg", e.target.value)}
+								placeholder={t("form.placeholders.weight")}
+							/>
+							<select
+								value={form.doseUnit}
+								onChange={(e) => handleValueChange("doseUnit", e.target.value as DoseUnit)}
+								className="dose-unit-select"
+							>
+								{DOSE_UNITS.map((unit) => (
+									<option key={unit.value} value={unit.value}>
+										{unit.label}
+									</option>
+								))}
+							</select>
+						</div>
 					</label>
 					<label>
 						{t("form.total")}
@@ -558,20 +632,12 @@ export function MedicationsPage() {
 						<div className="card-head">
 							<h3>{t("form.blisters.title")}</h3>
 							<div className="blisters-actions">
-								<label className="inline-checkbox" title={t("form.blisters.remindTooltip")}>
-									<input
-										type="checkbox"
-										checked={form.intakeRemindersEnabled}
-										onChange={(e) => setForm((prev) => ({ ...prev, intakeRemindersEnabled: e.target.checked }))}
-									/>
-									<span>🔔 {t("form.blisters.remind")}</span>
-								</label>
-								<button type="button" className="primary" onClick={addBlister}>
+								<button type="button" className="primary" onClick={() => addIntake()}>
 									+ {t("form.blisters.addIntake")}
 								</button>
 							</div>
 						</div>
-						{form.blisters.map((s, idx) => (
+						{form.intakes.map((intake, idx) => (
 							<div key={idx} className="blister-row">
 								<div className="blister-inputs">
 									<label>
@@ -580,8 +646,8 @@ export function MedicationsPage() {
 											type="number"
 											min="0"
 											step="0.1"
-											value={s.usage}
-											onChange={(e) => setBlisterValue(idx, "usage", e.target.value)}
+											value={intake.usage}
+											onChange={(e) => setIntakeValue(idx, "usage", e.target.value)}
 										/>
 									</label>
 									<label>
@@ -589,29 +655,48 @@ export function MedicationsPage() {
 										<input
 											type="number"
 											min="1"
-											value={s.every}
-											onChange={(e) => setBlisterValue(idx, "every", e.target.value)}
+											value={intake.every}
+											onChange={(e) => setIntakeValue(idx, "every", e.target.value)}
 										/>
 									</label>
 									<label>
 										{t("form.blisters.startDate")}
 										<input
 											type="date"
-											value={s.startDate}
-											onChange={(e) => setBlisterValue(idx, "startDate", e.target.value)}
+											value={intake.startDate}
+											onChange={(e) => setIntakeValue(idx, "startDate", e.target.value)}
 										/>
 									</label>
 									<label>
 										{t("form.blisters.startTime")}
 										<input
 											type="time"
-											value={s.startTime}
-											onChange={(e) => setBlisterValue(idx, "startTime", e.target.value)}
+											value={intake.startTime}
+											onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
 										/>
 									</label>
+									<label title={t("form.blisters.takenByTooltip")}>
+										{t("form.blisters.takenByIntake")}
+										<select value={intake.takenBy} onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}>
+											<option value="">{t("form.blisters.takenByEveryone")}</option>
+											{existingPeople.map((person) => (
+												<option key={person} value={person}>
+													{person}
+												</option>
+											))}
+										</select>
+									</label>
+									<label className="inline-checkbox" title={t("form.blisters.remindTooltip")}>
+										<input
+											type="checkbox"
+											checked={intake.intakeRemindersEnabled}
+											onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+										/>
+										<span>🔔</span>
+									</label>
 								</div>
-								{form.blisters.length > 1 && (
-									<button type="button" className="danger" onClick={() => removeBlister(idx)}>
+								{form.intakes.length > 1 && (
+									<button type="button" className="danger" onClick={() => removeIntake(idx)}>
 										{t("common.remove")}
 									</button>
 								)}
@@ -716,6 +801,9 @@ export function MedicationsPage() {
 				onSetBlisterValue={setBlisterValue}
 				onAddBlister={addBlister}
 				onRemoveBlister={removeBlister}
+				onSetIntakeValue={setIntakeValue}
+				onAddIntake={addIntake}
+				onRemoveIntake={removeIntake}
 				onHandleValueChange={handleValueChange}
 				refillPacks={refillPacks}
 				onRefillPacksChange={setRefillPacks}

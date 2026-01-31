@@ -92,6 +92,13 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		// Added for more detailed reminder info display
 		`ALTER TABLE user_settings ADD COLUMN last_reminder_med_name text`,
 		`ALTER TABLE user_settings ADD COLUMN last_reminder_taken_by text`,
+		// Added for package type support (blister vs bottle)
+		`ALTER TABLE medications ADD COLUMN package_type text NOT NULL DEFAULT 'blister'`,
+		`ALTER TABLE medications ADD COLUMN total_pills integer`,
+		// Added for dose unit selection (mg, g, mcg, ml, IU, etc.)
+		`ALTER TABLE medications ADD COLUMN dose_unit text DEFAULT 'mg'`,
+		// Added for intake-level takenBy: unified intakes structure
+		`ALTER TABLE medications ADD COLUMN intakes_json text NOT NULL DEFAULT '[]'`,
 	];
 
 	for (const sql of alterMigrations) {

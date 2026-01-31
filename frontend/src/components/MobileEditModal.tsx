@@ -3,7 +3,8 @@
  * Handles new medication creation and editing existing medications
  */
 import { useTranslation } from "react-i18next";
-import type { FieldErrors, FormBlister, FormState, Medication } from "../types";
+import type { DoseUnit, FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
+import { DOSE_UNITS } from "../types";
 import { deriveTotal } from "../utils";
 
 // Field limits for validation
@@ -31,10 +32,14 @@ export interface MobileEditModalProps {
 	onAddTakenByPerson: (person: string) => void;
 	onRemoveTakenByPerson: (person: string) => void;
 	onTakenByKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-	// Blister helpers
+	// Blister helpers (legacy)
 	onSetBlisterValue: (idx: number, field: keyof FormBlister, value: string) => void;
 	onAddBlister: () => void;
 	onRemoveBlister: (idx: number) => void;
+	// Intake helpers (new - with per-intake takenBy)
+	onSetIntakeValue: (idx: number, field: keyof FormIntake, value: string | boolean) => void;
+	onAddIntake: (takenBy?: string) => void;
+	onRemoveIntake: (idx: number) => void;
 	// Value change handler for numeric fields
 	onHandleValueChange: <K extends keyof FormState>(field: K, value: string) => void;
 	// Refill state (for edit mode)
@@ -56,6 +61,10 @@ export interface MobileEditModalProps {
 
 /** Calculate total pills from form state */
 function deriveTotalFromForm(form: FormState) {
+	if (form.packageType === "bottle") {
+		// For bottle type, looseTablets is the current stock
+		return Number(form.looseTablets) || 0;
+	}
 	const packCount = Number(form.packCount) || 0;
 	const blistersPerPack = Number(form.blistersPerPack) || 0;
 	const pillsPerBlister = Number(form.pillsPerBlister) || 1;
@@ -82,6 +91,9 @@ export function MobileEditModal({
 	onSetBlisterValue,
 	onAddBlister,
 	onRemoveBlister,
+	onSetIntakeValue,
+	onAddIntake,
+	onRemoveIntake,
 	onHandleValueChange,
 	refillPacks,
 	onRefillPacksChange,
@@ -180,57 +192,106 @@ export function MobileEditModal({
 						</div>
 						{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 					</label>
-					<label>
-						{t("form.packs")}
-						<input
-							type="number"
-							min="0"
-							value={form.packCount}
-							onChange={(e) => onHandleValueChange("packCount", e.target.value)}
-						/>
+					<label className="full">
+						{t("form.packageType")}
+						<select
+							className="package-type-select"
+							value={form.packageType}
+							onChange={(e) => onHandleValueChange("packageType", e.target.value)}
+						>
+							<option value="blister">{t("form.packageTypeBlister")}</option>
+							<option value="bottle">{t("form.packageTypeBottle")}</option>
+						</select>
 					</label>
-					<label>
-						{t("form.blistersPerPack")}
-						<input
-							type="number"
-							min="0"
-							value={form.blistersPerPack}
-							onChange={(e) => onHandleValueChange("blistersPerPack", e.target.value)}
-						/>
-					</label>
-					<label>
-						{t("form.pillsPerBlister")}
-						<input
-							type="number"
-							min="1"
-							value={form.pillsPerBlister}
-							onChange={(e) => onHandleValueChange("pillsPerBlister", e.target.value)}
-						/>
-					</label>
-					<label>
-						{t("form.loosePills")}
-						<input
-							type="number"
-							min="0"
-							value={form.looseTablets}
-							onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
-						/>
-					</label>
+					{form.packageType === "blister" ? (
+						<>
+							<label>
+								{t("form.packs")}
+								<input
+									type="number"
+									min="0"
+									value={form.packCount}
+									onChange={(e) => onHandleValueChange("packCount", e.target.value)}
+								/>
+							</label>
+							<label>
+								{t("form.blistersPerPack")}
+								<input
+									type="number"
+									min="0"
+									value={form.blistersPerPack}
+									onChange={(e) => onHandleValueChange("blistersPerPack", e.target.value)}
+								/>
+							</label>
+							<label>
+								{t("form.pillsPerBlister")}
+								<input
+									type="number"
+									min="1"
+									value={form.pillsPerBlister}
+									onChange={(e) => onHandleValueChange("pillsPerBlister", e.target.value)}
+								/>
+							</label>
+							<label>
+								{t("form.loosePills")}
+								<input
+									type="number"
+									min="0"
+									value={form.looseTablets}
+									onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
+								/>
+							</label>
+						</>
+					) : (
+						<>
+							<label>
+								{t("form.totalCapacity")}
+								<input
+									type="number"
+									min="1"
+									value={form.totalPills}
+									onChange={(e) => onHandleValueChange("totalPills", e.target.value)}
+								/>
+							</label>
+							<label>
+								{t("form.currentPills")}
+								<input
+									type="number"
+									min="0"
+									value={form.looseTablets}
+									onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
+								/>
+							</label>
+						</>
+					)}
 					<div className="full">
 						<p className="sub">
 							<strong>{t("form.total")}:</strong> {deriveTotalFromForm(form)} {t("common.pills")}
 						</p>
 					</div>
 					<label className="full">
-						{t("form.pillWeight")}
-						<input
-							type="number"
-							min="0"
-							step="0.1"
-							value={form.pillWeightMg}
-							onChange={(e) => onFormChange({ ...form, pillWeightMg: e.target.value })}
-							placeholder={t("form.placeholders.weight")}
-						/>
+						{t("form.pillWeight")} ({form.doseUnit})
+						<div className="dose-input-group">
+							<input
+								type="number"
+								min="0"
+								step="0.1"
+								value={form.pillWeightMg}
+								onChange={(e) => onFormChange({ ...form, pillWeightMg: e.target.value })}
+								placeholder={t("form.placeholders.weight")}
+							/>
+							<select
+								value={form.doseUnit}
+								onChange={(e) => onFormChange({ ...form, doseUnit: e.target.value as DoseUnit })}
+								className="dose-unit-select"
+							>
+								{DOSE_UNITS.map((unit) => (
+									<option key={unit.value} value={unit.value}>
+										{unit.label}
+									</option>
+								))}
+							</select>
+						</div>
 					</label>
 					<label className="full">
 						{t("form.expiryDate")}
@@ -327,19 +388,8 @@ export function MobileEditModal({
 					) : null}
 
 					<fieldset className="full blister-section">
-						<legend>
-							{t("form.blisters.title")}
-							<label className="toggle-switch small" title={t("form.blisters.remindTooltip")}>
-								<input
-									type="checkbox"
-									checked={form.intakeRemindersEnabled}
-									onChange={(e) => onFormChange({ ...form, intakeRemindersEnabled: e.target.checked })}
-								/>
-								<span className="toggle-slider"></span>
-							</label>
-							<span className="legend-hint">{t("form.blisters.remind")}</span>
-						</legend>
-						{form.blisters.map((b, idx) => (
+						<legend>{t("form.blisters.title")}</legend>
+						{form.intakes.map((intake, idx) => (
 							<div key={idx} className="blister-row">
 								<label className="compact">
 									<span>{t("form.blisters.usage")}</span>
@@ -347,8 +397,8 @@ export function MobileEditModal({
 										type="number"
 										min="0"
 										step="0.1"
-										value={b.usage}
-										onChange={(e) => onSetBlisterValue(idx, "usage", e.target.value)}
+										value={intake.usage}
+										onChange={(e) => onSetIntakeValue(idx, "usage", e.target.value)}
 									/>
 								</label>
 								<label className="compact">
@@ -356,34 +406,54 @@ export function MobileEditModal({
 									<input
 										type="number"
 										min="1"
-										value={b.every}
-										onChange={(e) => onSetBlisterValue(idx, "every", e.target.value)}
+										value={intake.every}
+										onChange={(e) => onSetIntakeValue(idx, "every", e.target.value)}
 									/>
 								</label>
 								<label className="compact full-row">
 									<span>{t("form.blisters.startDate")}</span>
 									<input
 										type="date"
-										value={b.startDate}
-										onChange={(e) => onSetBlisterValue(idx, "startDate", e.target.value)}
+										value={intake.startDate}
+										onChange={(e) => onSetIntakeValue(idx, "startDate", e.target.value)}
 									/>
 								</label>
 								<label className="compact time-label">
 									<span>{t("form.blisters.startTime")}</span>
 									<input
 										type="time"
-										value={b.startTime}
-										onChange={(e) => onSetBlisterValue(idx, "startTime", e.target.value)}
+										value={intake.startTime}
+										onChange={(e) => onSetIntakeValue(idx, "startTime", e.target.value)}
 									/>
 								</label>
-								{form.blisters.length > 1 && (
-									<button type="button" className="danger remove-blister-btn" onClick={() => onRemoveBlister(idx)}>
+								<label className="compact full-row">
+									<span>{t("form.blisters.takenByIntake")}</span>
+									<select value={intake.takenBy} onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}>
+										<option value="">{t("form.blisters.takenByEveryone")}</option>
+										{existingPeople.map((person) => (
+											<option key={person} value={person}>
+												{person}
+											</option>
+										))}
+									</select>
+								</label>
+								<label className="toggle-switch small" title={t("form.blisters.remindTooltip")}>
+									<input
+										type="checkbox"
+										checked={intake.intakeRemindersEnabled}
+										onChange={(e) => onSetIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+									/>
+									<span className="toggle-slider"></span>
+								</label>
+								<span className="legend-hint">🔔</span>
+								{form.intakes.length > 1 && (
+									<button type="button" className="danger remove-blister-btn" onClick={() => onRemoveIntake(idx)}>
 										{t("common.remove")}
 									</button>
 								)}
 							</div>
 						))}
-						<button type="button" className="ghost add-blister" onClick={onAddBlister}>
+						<button type="button" className="ghost add-blister" onClick={() => onAddIntake()}>
 							+ {t("form.blisters.addIntake")}
 						</button>
 					</fieldset>

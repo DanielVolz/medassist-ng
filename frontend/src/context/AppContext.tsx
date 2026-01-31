@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, useShare } from "../hooks";
-import type { Coverage, Medication, ScheduleEvent } from "../types";
+import type { Coverage, Medication, ScheduleEvent, StockThresholds } from "../types";
 import { getSystemLocale } from "../utils/formatters";
 import { buildSchedulePreview, calculateCoverage } from "../utils/schedule";
 
@@ -134,6 +134,7 @@ export interface AppContextValue {
 	coverage: { all: Coverage[]; low: Coverage[] };
 	coverageByMed: Record<string, Coverage>;
 	depletionByMed: Record<string, number | null>;
+	stockThresholds: StockThresholds;
 	existingPeople: string[];
 	groupedSchedule: GroupedDay[];
 	pastDays: GroupedDay[];
@@ -295,6 +296,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	);
 
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
+
+	// Centralized stock thresholds for consistent status display across all components
+	const stockThresholds: StockThresholds = useMemo(
+		() => ({
+			lowStockDays: settingsHook.settings.lowStockDays,
+			normalStockDays: settingsHook.settings.normalStockDays,
+			highStockDays: settingsHook.settings.highStockDays,
+			criticalStockDays: settingsHook.settings.reminderDaysBefore, // Critical uses the reminder threshold
+			expiryWarningDays: settingsHook.settings.expiryWarningDays,
+		}),
+		[
+			settingsHook.settings.lowStockDays,
+			settingsHook.settings.normalStockDays,
+			settingsHook.settings.highStockDays,
+			settingsHook.settings.reminderDaysBefore,
+			settingsHook.settings.expiryWarningDays,
+		]
+	);
 
 	const existingPeople = useMemo(() => {
 		const allPeople = medications.meds.flatMap((m) => m.takenBy || []);
@@ -798,6 +817,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			coverage,
 			coverageByMed,
 			depletionByMed,
+			stockThresholds,
 			existingPeople,
 			groupedSchedule,
 			pastDays,
@@ -861,6 +881,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			coverage,
 			coverageByMed,
 			depletionByMed,
+			stockThresholds,
 			existingPeople,
 			groupedSchedule,
 			pastDays,

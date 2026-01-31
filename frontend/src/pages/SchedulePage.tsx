@@ -9,15 +9,23 @@ function userStorageKey(userId: number | undefined, key: string): string {
 	return userId ? `user_${userId}_${key}` : key;
 }
 
-// Helper function to get stock status
+// Helper function to get stock status based on thresholds
 function getStockStatus(
 	daysLeft: number | null,
 	medsLeft: number,
-	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number }
+	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number }
 ) {
-	if (medsLeft <= 0 || daysLeft === null || daysLeft <= 0) return { className: "danger", label: "status.outOfStock" };
-	if (daysLeft <= settings.lowStockDays) return { className: "danger", label: "status.lowStock" };
-	if (daysLeft >= settings.highStockDays) return { className: "success", label: "status.highStock" };
+	// Out of stock or completely depleted = danger (red)
+	if (medsLeft <= 0 || daysLeft === 0) return { className: "danger", label: "status.outOfStock" };
+	// No schedule, but has stock = normal
+	if (daysLeft === null) return { className: "success", label: "status.noSchedule" };
+	// Critical: at or below reminder threshold = danger (red)
+	if (daysLeft <= settings.reminderDaysBefore) return { className: "danger", label: "status.criticalStock" };
+	// Low: below low stock threshold = warning (yellow)
+	if (daysLeft < settings.lowStockDays) return { className: "warning", label: "status.lowStock" };
+	// High stock
+	if (daysLeft >= settings.highStockDays) return { className: "high", label: "status.highStock" };
+	// Normal stock
 	return { className: "success", label: "status.normal" };
 }
 
@@ -25,7 +33,7 @@ function getStockStatus(
 function getDayStockStatus(
 	dayMeds: Array<{ medName: string }>,
 	coverageByMed: Record<string, Coverage>,
-	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number }
+	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number }
 ): string {
 	let worstLevel = 3; // 3=success, 2=warning, 1=danger
 	for (const item of dayMeds) {
@@ -197,7 +205,7 @@ export function SchedulePage() {
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">
 																		{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																		{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																		{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																	</span>
 																	<div className="dose-checks">
 																		{people.map((person) => {
@@ -301,7 +309,7 @@ export function SchedulePage() {
 															<span className="dose-time">{dose.timeStr}</span>
 															<span className="dose-usage">
 																{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 															</span>
 															<div className="dose-checks">
 																{people.map((person) => {

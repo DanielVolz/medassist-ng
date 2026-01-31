@@ -2,8 +2,36 @@
 // Schedule Building and Coverage Calculations
 // =============================================================================
 
-import type { Coverage, Medication, ScheduleEvent, StockStatus, StockThresholds } from "../types";
+import type { Blister, Coverage, Intake, Medication, ScheduleEvent, StockStatus, StockThresholds } from "../types";
 import { getMedTotal } from "../types";
+
+/**
+ * Get intakes for a medication, preferring new intakes format over legacy blisters
+ */
+function getIntakesForMed(med: Medication): Intake[] {
+	// Use new intakes array if available and non-empty
+	if (med.intakes && med.intakes.length > 0) {
+		return med.intakes;
+	}
+	// Fallback to legacy blisters (convert to Intake format)
+	return med.blisters.map((b) => ({
+		usage: b.usage,
+		every: b.every,
+		start: b.start,
+		takenBy: null, // Legacy format has no per-intake takenBy
+		intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
+	}));
+}
+
+/**
+ * Get blisters for a medication (for backward compatibility with coverage calculations)
+ */
+function getBlistersForMed(med: Medication): Blister[] {
+	if (med.intakes && med.intakes.length > 0) {
+		return med.intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
+	}
+	return med.blisters;
+}
 
 /**
  * Build schedule preview events for medications
@@ -22,10 +50,11 @@ export function buildSchedulePreview(
 	end.setDate(end.getDate() + 180); // 6 months horizon
 
 	meds.forEach((med) => {
-		med.blisters.forEach((blister, idx) => {
-			const start = new Date(blister.start);
+		const intakes = getIntakesForMed(med);
+		intakes.forEach((intake, idx) => {
+			const start = new Date(intake.start);
 			if (Number.isNaN(start.getTime())) return;
-			for (let d = new Date(start); d <= end; d.setDate(d.getDate() + blister.every)) {
+			for (let d = new Date(start); d <= end; d.setDate(d.getDate() + intake.every)) {
 				const isPast = d < todayStart;
 				if (isPast && !includePast) continue;
 				const whenMs = d.getTime();
@@ -35,8 +64,8 @@ export function buildSchedulePreview(
 				events.push({
 					id: `${med.id}-${idx}-${dateOnlyMs}`,
 					medName: med.name,
-					takenBy: med.takenBy || [],
-					usage: blister.usage,
+					takenBy: intake.takenBy, // Per-intake takenBy (string | null)
+					usage: intake.usage,
 					when: whenMs,
 					isPast,
 					timeStr: d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
@@ -58,7 +87,7 @@ export function buildSchedulePreview(
 		events,
 		today: todayCount,
 		nextThree: events.length,
-		totalBlisters: meds.reduce((acc, m) => acc + m.blisters.length, 0),
+		totalBlisters: meds.reduce((acc, m) => acc + getIntakesForMed(m).length, 0),
 	};
 }
 
@@ -67,7 +96,7 @@ export function buildSchedulePreview(
  */
 export function calculateCoverage(
 	meds: Medication[],
-	events: Array<{ medName: string; when: number }>,
+	events: Array<{ medName: string; when: number; id: string }>,
 	locale: string,
 	reminderDaysBefore: number,
 	stockCalculationMode: "automatic" | "manual",
@@ -77,32 +106,96 @@ export function calculateCoverage(
 	const now = Date.now();
 
 	const coverage: Coverage[] = meds.map((m) => {
-		const personCount = Math.max(1, m.takenBy?.length || 1);
-		const dailyRate = m.blisters.reduce((sum, s) => sum + (s.every > 0 ? s.usage / s.every : 0), 0) * personCount;
+		const intakes = getIntakesForMed(m);
+		const blisters = getBlistersForMed(m);
+		// Count unique people from all intakes (for per-intake takenBy)
+		const uniquePeople = new Set<string>();
+		intakes.forEach((intake) => {
+			if (intake.takenBy) uniquePeople.add(intake.takenBy);
+		});
+		// Also add medication-level takenBy for backward compatibility
+		m.takenBy?.forEach((person) => uniquePeople.add(person));
+		const personCount = Math.max(1, uniquePeople.size || m.takenBy?.length || 1);
+		const dailyRate = blisters.reduce((sum, s) => sum + (s.every > 0 ? s.usage / s.every : 0), 0) * personCount;
 
 		let consumed = 0;
 		const stockCorrectionCutoff = m.lastStockCorrectionAt ? new Date(m.lastStockCorrectionAt).getTime() : 0;
 
 		if (stockCalculationMode === "automatic") {
-			m.blisters.forEach((s) => {
+			// In automatic mode, calculate expected consumption based on time
+			// but also account for manual corrections (doses marked as not taken)
+			blisters.forEach((s, blisterIdx) => {
 				const blisterStart = new Date(s.start).getTime();
 				const effectiveStart = Math.max(blisterStart, stockCorrectionCutoff);
 				if (Number.isNaN(effectiveStart) || effectiveStart > now) return;
 				const period = Math.max(1, s.every) * MS_PER_DAY;
 				const occurrences = Math.floor((now - effectiveStart) / period) + 1;
-				consumed += occurrences * s.usage * personCount;
+				const intake = intakes[blisterIdx];
+				const intakePerson = intake?.takenBy;
+
+				// For per-intake takenBy, only count for that person
+				// For legacy (no takenBy), count for all people in medication takenBy
+				const peopleForThisIntake = intakePerson ? [intakePerson] : m.takenBy?.length > 0 ? m.takenBy : [null];
+				const expectedConsumed = occurrences * s.usage * peopleForThisIntake.length;
+
+				// Count how many doses were actually marked as taken for this blister
+				let actualConsumed = 0;
+
+				// Generate all expected dose IDs for this blister up to now
+				for (let i = 0; i < occurrences; i++) {
+					const doseDate = new Date(effectiveStart + i * period);
+					const dateOnlyMs = new Date(doseDate.getFullYear(), doseDate.getMonth(), doseDate.getDate()).getTime();
+					const baseDoseId = `${m.id}-${blisterIdx}-${dateOnlyMs}`;
+
+					// Check if each person has taken this dose
+					for (const person of peopleForThisIntake) {
+						const doseId = person ? `${baseDoseId}-${person}` : baseDoseId;
+						if (takenDoses.has(doseId)) {
+							actualConsumed += s.usage;
+						}
+					}
+				}
+
+				// If we have tracking data (any doses marked), use actual consumed
+				// Otherwise fall back to expected (for backwards compatibility)
+				const hasTrackingData = Array.from(takenDoses).some((id) => {
+					const parts = id.split("-");
+					return parts.length >= 3 && parseInt(parts[0], 10) === m.id && parseInt(parts[1], 10) === blisterIdx;
+				});
+
+				consumed += hasTrackingData ? actualConsumed : expectedConsumed;
 			});
 		} else {
+			// In manual mode, only count doses that are explicitly marked as taken
 			takenDoses.forEach((doseId) => {
 				const parts = doseId.split("-");
 				if (parts.length >= 3) {
 					const medId = parseInt(parts[0], 10);
 					const blisterIdx = parseInt(parts[1], 10);
 					const doseTimestamp = parseInt(parts[2], 10);
-					if (medId === m.id && m.blisters[blisterIdx]) {
-						const blisterStart = new Date(m.blisters[blisterIdx].start).getTime();
-						if (!Number.isNaN(blisterStart) && doseTimestamp >= blisterStart && doseTimestamp > stockCorrectionCutoff) {
-							consumed += m.blisters[blisterIdx].usage;
+					if (medId === m.id && blisters[blisterIdx]) {
+						// Convert blister start to date-only for comparison (dose timestamps are date-only)
+						const blisterStartDate = new Date(blisters[blisterIdx].start);
+						const blisterStartDateOnly = new Date(
+							blisterStartDate.getFullYear(),
+							blisterStartDate.getMonth(),
+							blisterStartDate.getDate()
+						).getTime();
+						// Convert stock correction cutoff to date-only as well
+						const stockCorrectionDateOnly =
+							stockCorrectionCutoff > 0
+								? new Date(
+										new Date(stockCorrectionCutoff).getFullYear(),
+										new Date(stockCorrectionCutoff).getMonth(),
+										new Date(stockCorrectionCutoff).getDate()
+									).getTime()
+								: 0;
+						if (
+							!Number.isNaN(blisterStartDateOnly) &&
+							doseTimestamp >= blisterStartDateOnly &&
+							doseTimestamp >= stockCorrectionDateOnly
+						) {
+							consumed += blisters[blisterIdx].usage;
 						}
 					}
 				}
@@ -146,22 +239,32 @@ export function calculateCoverage(
  * Get stock status based on days left and thresholds
  */
 export function getStockStatus(daysLeft: number | null, medsLeft: number, thresholds: StockThresholds): StockStatus {
+	// Out of stock or completely depleted = danger (red)
 	if (medsLeft <= 0 || daysLeft === 0) {
 		return { level: "out-of-stock", className: "danger", label: "status.outOfStock" };
 	}
 
+	// No schedule, but has stock = normal
 	if (daysLeft === null) {
 		return { level: "normal", className: "success", label: "status.noSchedule" };
 	}
 
+	// High stock
 	if (daysLeft > thresholds.highStockDays) {
 		return { level: "high", className: "high", label: "status.highStock" };
 	}
 
+	// Normal stock
 	if (daysLeft >= thresholds.lowStockDays) {
 		return { level: "normal", className: "success", label: "status.normal" };
 	}
 
+	// Critical: at or below critical threshold = danger (red)
+	if (daysLeft <= thresholds.criticalStockDays) {
+		return { level: "critical", className: "danger", label: "status.criticalStock" };
+	}
+
+	// Low stock: below lowStockDays but above critical = warning (yellow)
 	return { level: "low", className: "warning", label: "status.lowStock" };
 }
 

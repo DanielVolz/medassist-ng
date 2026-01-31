@@ -9,30 +9,50 @@ import { doseTracking, medications } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
-import { parseBlisters, parseLocalDateTime, parseTakenByJson } from "../utils/scheduler-utils.js";
+import { type Intake, parseIntakesJson, parseLocalDateTime, parseTakenByJson } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(process.cwd(), "data/images");
 
+// New intake schema with per-intake takenBy
+const intakeSchema = z.object({
+	usage: z.number().nonnegative(),
+	every: z.number().int().min(1),
+	start: z.string().datetime({ local: true }),
+	takenBy: z.string().trim().max(100).nullable().optional(), // Person for this specific intake
+	intakeRemindersEnabled: z.boolean().default(false), // Per-intake reminder setting
+});
+
+// Legacy blister schema (for backward compatibility during transition)
 const blisterSchema = z.object({
 	usage: z.number().nonnegative(),
 	every: z.number().int().min(1),
 	start: z.string().datetime({ local: true }),
 });
 
-const medicationSchema = z.object({
-	name: z.string().trim().min(1).max(100),
-	genericName: z.string().trim().max(100).nullable().optional(),
-	takenBy: z.array(z.string().trim().max(100)).default([]), // Array of person names
-	packCount: z.number().int().min(0).default(1),
-	blistersPerPack: z.number().int().min(1).default(1),
-	pillsPerBlister: z.number().int().min(1).default(1),
-	looseTablets: z.number().int().min(0).default(0),
-	pillWeightMg: z.number().int().min(1).nullable().optional(),
-	expiryDate: z.string().nullable().optional(),
-	notes: z.string().max(2000).nullable().optional(),
-	intakeRemindersEnabled: z.boolean().default(false),
-	blisters: z.array(blisterSchema).min(1).max(12),
-});
+const packageTypeSchema = z.enum(["blister", "bottle"]).default("blister");
+const doseUnitSchema = z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"]).default("mg");
+
+const medicationSchema = z
+	.object({
+		name: z.string().trim().min(1).max(100),
+		genericName: z.string().trim().max(100).nullable().optional(),
+		takenBy: z.array(z.string().trim().max(100)).default([]), // Medication-level takenBy (fallback)
+		packageType: packageTypeSchema,
+		packCount: z.number().int().min(0).default(1),
+		blistersPerPack: z.number().int().min(1).default(1),
+		pillsPerBlister: z.number().int().min(1).default(1),
+		totalPills: z.number().int().min(1).nullable().optional(), // For bottle type: total capacity
+		looseTablets: z.number().int().min(0).default(0),
+		pillWeightMg: z.number().nonnegative().nullable().optional(),
+		doseUnit: doseUnitSchema,
+		expiryDate: z.string().nullable().optional(),
+		notes: z.string().max(2000).nullable().optional(),
+		intakeRemindersEnabled: z.boolean().default(false), // Medication-level (deprecated, kept for backward compat)
+		// Accept either new intakes format or legacy blisters format
+		intakes: z.array(intakeSchema).min(1).max(12).optional(),
+		blisters: z.array(blisterSchema).min(1).max(12).optional(), // Legacy format
+	})
+	.refine((data) => data.intakes || data.blisters, { message: "Either 'intakes' or 'blisters' must be provided" });
 
 export async function medicationRoutes(app: FastifyInstance) {
 	// All medication routes require auth
@@ -58,26 +78,40 @@ export async function medicationRoutes(app: FastifyInstance) {
 	app.get("/medications", async (request, reply) => {
 		const userId = await getUserId(request, reply);
 		const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
-		return rows.map((row) => ({
-			id: row.id,
-			name: row.name,
-			genericName: row.genericName,
-			takenBy: parseTakenByJson(row.takenByJson),
-			packCount: row.packCount ?? 1,
-			blistersPerPack: row.blistersPerPack ?? 1,
-			pillsPerBlister: row.pillsPerBlister ?? 1,
-			looseTablets: row.looseTablets ?? 0,
-			stockAdjustment: row.stockAdjustment ?? 0,
-			lastStockCorrectionAt: row.lastStockCorrectionAt?.toISOString() ?? null,
-			pillWeightMg: row.pillWeightMg,
-			blisters: parseBlisters(row),
-			imageUrl: row.imageUrl,
-			expiryDate: row.expiryDate,
-			notes: row.notes,
-			intakeRemindersEnabled: row.intakeRemindersEnabled ?? false,
-			dismissedUntil: row.dismissedUntil ?? null,
-			updatedAt: row.updatedAt,
-		}));
+		return rows.map((row) => {
+			// Parse intakes from new format, falling back to legacy
+			const intakes = parseIntakesJson(
+				row.intakesJson,
+				{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
+				row.intakeRemindersEnabled ?? false
+			);
+
+			return {
+				id: row.id,
+				name: row.name,
+				genericName: row.genericName,
+				takenBy: parseTakenByJson(row.takenByJson),
+				packageType: row.packageType ?? "blister",
+				packCount: row.packCount ?? 1,
+				blistersPerPack: row.blistersPerPack ?? 1,
+				pillsPerBlister: row.pillsPerBlister ?? 1,
+				totalPills: row.totalPills ?? null,
+				looseTablets: row.looseTablets ?? 0,
+				stockAdjustment: row.stockAdjustment ?? 0,
+				lastStockCorrectionAt: row.lastStockCorrectionAt?.toISOString() ?? null,
+				pillWeightMg: row.pillWeightMg,
+				doseUnit: row.doseUnit ?? "mg",
+				intakes, // New unified format with per-intake takenBy
+				// Legacy blisters format (for backward compat with frontend during transition)
+				blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
+				imageUrl: row.imageUrl,
+				expiryDate: row.expiryDate,
+				notes: row.notes,
+				intakeRemindersEnabled: row.intakeRemindersEnabled ?? false,
+				dismissedUntil: row.dismissedUntil ?? null,
+				updatedAt: row.updatedAt,
+			};
+		});
 	});
 
 	app.post("/medications", async (req, reply) => {
@@ -89,19 +123,50 @@ export async function medicationRoutes(app: FastifyInstance) {
 			name,
 			genericName,
 			takenBy,
+			packageType,
 			packCount,
 			blistersPerPack,
 			pillsPerBlister,
+			totalPills,
 			looseTablets,
 			pillWeightMg,
+			doseUnit,
 			expiryDate,
 			notes,
 			intakeRemindersEnabled,
-			blisters,
+			intakes: inputIntakes,
+			blisters: inputBlisters,
 		} = parsed.data;
-		const usageJson = JSON.stringify(blisters.map((s) => s.usage));
-		const everyJson = JSON.stringify(blisters.map((s) => s.every));
-		const startJson = JSON.stringify(blisters.map((s) => s.start));
+
+		// Convert to unified intakes format
+		let intakes: Intake[];
+		if (inputIntakes) {
+			// New format with per-intake takenBy
+			intakes = inputIntakes.map((i) => ({
+				usage: i.usage,
+				every: i.every,
+				start: i.start,
+				takenBy: i.takenBy || null,
+				intakeRemindersEnabled: i.intakeRemindersEnabled ?? false,
+			}));
+		} else if (inputBlisters) {
+			// Legacy format - convert to new format
+			intakes = inputBlisters.map((b) => ({
+				usage: b.usage,
+				every: b.every,
+				start: b.start,
+				takenBy: null, // No per-intake takenBy from legacy
+				intakeRemindersEnabled: intakeRemindersEnabled ?? false,
+			}));
+		} else {
+			return reply.status(400).send({ error: "Either 'intakes' or 'blisters' must be provided" });
+		}
+
+		// Store both formats for backward compatibility
+		const intakesJson = JSON.stringify(intakes);
+		const usageJson = JSON.stringify(intakes.map((s) => s.usage));
+		const everyJson = JSON.stringify(intakes.map((s) => s.every));
+		const startJson = JSON.stringify(intakes.map((s) => s.start));
 		const takenByJson = JSON.stringify(takenBy || []);
 
 		const [inserted] = await db
@@ -111,14 +176,18 @@ export async function medicationRoutes(app: FastifyInstance) {
 				name,
 				genericName: genericName || null,
 				takenByJson,
+				packageType: packageType ?? "blister",
 				packCount,
 				blistersPerPack,
 				pillsPerBlister,
+				totalPills: totalPills || null,
 				looseTablets,
 				pillWeightMg: pillWeightMg || null,
+				doseUnit: doseUnit ?? "mg",
 				expiryDate: expiryDate || null,
 				notes: notes || null,
 				intakeRemindersEnabled: intakeRemindersEnabled ?? false,
+				intakesJson,
 				usageJson,
 				everyJson,
 				startJson,
@@ -130,14 +199,18 @@ export async function medicationRoutes(app: FastifyInstance) {
 			name: inserted.name,
 			genericName: inserted.genericName,
 			takenBy: parseTakenByJson(inserted.takenByJson),
+			packageType: inserted.packageType ?? "blister",
 			packCount: inserted.packCount,
 			blistersPerPack: inserted.blistersPerPack,
 			pillsPerBlister: inserted.pillsPerBlister,
+			totalPills: inserted.totalPills ?? null,
 			looseTablets: inserted.looseTablets,
 			stockAdjustment: inserted.stockAdjustment ?? 0,
 			lastStockCorrectionAt: inserted.lastStockCorrectionAt?.toISOString() ?? null,
 			pillWeightMg: inserted.pillWeightMg,
-			blisters,
+			doseUnit: inserted.doseUnit ?? "mg",
+			intakes,
+			blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
 			imageUrl: inserted.imageUrl,
 			expiryDate: inserted.expiryDate,
 			notes: inserted.notes,
@@ -165,19 +238,50 @@ export async function medicationRoutes(app: FastifyInstance) {
 			name,
 			genericName,
 			takenBy,
+			packageType,
 			packCount,
 			blistersPerPack,
 			pillsPerBlister,
+			totalPills,
 			looseTablets,
 			pillWeightMg,
+			doseUnit,
 			expiryDate,
 			notes,
 			intakeRemindersEnabled,
-			blisters,
+			intakes: inputIntakes,
+			blisters: inputBlisters,
 		} = parsed.data;
-		const usageJson = JSON.stringify(blisters.map((s) => s.usage));
-		const everyJson = JSON.stringify(blisters.map((s) => s.every));
-		const startJson = JSON.stringify(blisters.map((s) => s.start));
+
+		// Convert to unified intakes format
+		let intakes: Intake[];
+		if (inputIntakes) {
+			// New format with per-intake takenBy
+			intakes = inputIntakes.map((i) => ({
+				usage: i.usage,
+				every: i.every,
+				start: i.start,
+				takenBy: i.takenBy || null,
+				intakeRemindersEnabled: i.intakeRemindersEnabled ?? false,
+			}));
+		} else if (inputBlisters) {
+			// Legacy format - convert to new format
+			intakes = inputBlisters.map((b) => ({
+				usage: b.usage,
+				every: b.every,
+				start: b.start,
+				takenBy: null, // No per-intake takenBy from legacy
+				intakeRemindersEnabled: intakeRemindersEnabled ?? false,
+			}));
+		} else {
+			return reply.status(400).send({ error: "Either 'intakes' or 'blisters' must be provided" });
+		}
+
+		// Store both formats for backward compatibility
+		const intakesJson = JSON.stringify(intakes);
+		const usageJson = JSON.stringify(intakes.map((s) => s.usage));
+		const everyJson = JSON.stringify(intakes.map((s) => s.every));
+		const startJson = JSON.stringify(intakes.map((s) => s.start));
 		const takenByJson = JSON.stringify(takenBy || []);
 
 		const result = await db
@@ -186,14 +290,18 @@ export async function medicationRoutes(app: FastifyInstance) {
 				name,
 				genericName: genericName || null,
 				takenByJson,
+				packageType: packageType ?? "blister",
 				packCount,
 				blistersPerPack,
 				pillsPerBlister,
+				totalPills: totalPills || null,
 				looseTablets,
 				pillWeightMg: pillWeightMg || null,
+				doseUnit: doseUnit ?? "mg",
 				expiryDate: expiryDate || null,
 				notes: notes || null,
 				intakeRemindersEnabled: intakeRemindersEnabled ?? false,
+				intakesJson,
 				usageJson,
 				everyJson,
 				startJson,
@@ -206,7 +314,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 		// Clean up dose tracking entries that are before the earliest start date
 		// This ensures consistency when the user changes the start date
-		const earliestStart = Math.min(...blisters.map((b) => parseLocalDateTime(b.start).getTime()));
+		const earliestStart = Math.min(...intakes.map((b) => parseLocalDateTime(b.start).getTime()));
 		if (!Number.isNaN(earliestStart)) {
 			// Get all dose tracking entries for this medication and filter out invalid ones
 			const allDoses = await db
@@ -235,14 +343,18 @@ export async function medicationRoutes(app: FastifyInstance) {
 			name: result[0].name,
 			genericName: result[0].genericName,
 			takenBy: parseTakenByJson(result[0].takenByJson),
+			packageType: result[0].packageType ?? "blister",
 			packCount: result[0].packCount,
 			blistersPerPack: result[0].blistersPerPack,
 			pillsPerBlister: result[0].pillsPerBlister,
+			totalPills: result[0].totalPills ?? null,
 			looseTablets: result[0].looseTablets,
 			stockAdjustment: result[0].stockAdjustment ?? 0,
 			lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
 			pillWeightMg: result[0].pillWeightMg,
-			blisters,
+			doseUnit: result[0].doseUnit ?? "mg",
+			intakes,
+			blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
 			imageUrl: result[0].imageUrl,
 			expiryDate: result[0].expiryDate,
 			notes: result[0].notes,
@@ -398,7 +510,13 @@ export async function medicationRoutes(app: FastifyInstance) {
 		const now = new Date();
 
 		const payload = rows.map((row) => {
-			const blisters = parseBlisters(row);
+			// Parse intakes from new format, falling back to legacy
+			const intakes = parseIntakesJson(
+				row.intakesJson,
+				{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
+				row.intakeRemindersEnabled ?? false
+			);
+			const blisters = intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
 			const usageTotal = calculateUsageInRange(blisters, start, end);
 			const pillsPerBlister = row.pillsPerBlister ?? 1;
 			const packCount = row.packCount ?? 1;

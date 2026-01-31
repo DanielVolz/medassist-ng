@@ -88,7 +88,8 @@
       "lowMeds": "{{count}} Medikament knapp",
       "lowMeds_other": "{{count}} Medikamente knapp",
       "daysLeft": "{{days}} Tag übrig",
-      "daysLeft_other": "{{days}} Tage übrig"
+      "daysLeft_other": "{{days}} Tage übrig",
+      "needsRefill": "Nachfüllen nötig"
     }
   },
   "table": {
@@ -98,11 +99,16 @@
     "currentPills": "Aktuelle Tabletten",
     "fullBlisters": "Volle Blister",
     "openBlister": "Offener Blister",
+    "stock": "Bestand",
+    "stockDetails": "Details",
     "daysLeft": "Tage übrig",
-    "status": "Bestand",
+    "status": "Status",
     "runsOut": "Aufgebraucht",
     "autoRemind": "Auto-Erinnerung",
-    "expiry": "Ablaufdatum"
+    "expiry": "Ablaufdatum",
+    "pillsCount": "{{count}} Tabletten",
+    "pillsCount_one": "{{count}} Tablette",
+    "pillsCount_other": "{{count}} Tabletten"
   },
   "medications": {
     "list": {
@@ -116,7 +122,8 @@
       "blisters": "Blister pro Packung",
       "pillsPerBlister": "Tabletten pro Blister",
       "loose": "Lose",
-      "total": "Gesamt"
+      "total": "Gesamt",
+      "stock": "Bestand"
     }
   },
   "form": {
@@ -126,11 +133,16 @@
     "commercialName": "Handelsname",
     "genericName": "Wirkstoff",
     "takenBy": "Eingenommen von",
+    "packageType": "Verpackungsart",
+    "packageTypeBlister": "Blisterpackung",
+    "packageTypeBottle": "Pillendose / Behälter",
     "packs": "Packungen",
     "blistersPerPack": "Blister pro Packung",
     "pillsPerBlister": "Tabletten pro Blister",
+    "totalCapacity": "Gesamtkapazität",
+    "currentPills": "Aktuelle Tabletten",
     "loosePills": "Lose Tabletten",
-    "pillWeight": "Tablettengewicht (mg)",
+    "pillWeight": "Dosis pro Tablette",
     "total": "Gesamt (Tabletten)",
     "expiryDate": "Ablaufdatum",
     "notes": "Notizen",
@@ -154,7 +166,9 @@
       "every": "alle",
       "from": "ab",
       "startDate": "Datum",
-      "startTime": "Uhrzeit"
+      "startTime": "Uhrzeit",
+      "takenByIntake": "Eingenommen von",
+      "takenByEveryone": "Alle"
     }
   },
   "planner": {
@@ -260,6 +274,7 @@
   },
   "status": {
     "outOfStock": "Leer",
+    "criticalStock": "Kritisch",
     "lowStock": "Niedrig",
     "normal": "Normal",
     "highStock": "Hoch",

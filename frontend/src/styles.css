@@ -281,34 +281,13 @@ body.modal-open {
 	color: var(--text-secondary);
 }
 
-.reminder-low-stock-list {
-	display: flex;
-	flex-direction: column;
-	gap: 0.375rem;
-	padding-left: 1.75rem;
-}
-
-.reminder-low-stock-item {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	font-size: 0.8rem;
-	color: var(--text-secondary);
-}
-
-.reminder-low-stock-item .reminder-med-name {
-	font-weight: 500;
-	color: var(--text-primary);
-}
-
-.reminder-low-stock-item .reminder-days-left {
+.reminder-days-left {
 	color: var(--warning);
-	font-size: 0.75rem;
+	font-size: 0.8rem;
 }
 
-.reminder-low-stock-item.critical .reminder-days-left {
+.critical .reminder-days-left {
 	color: var(--danger);
-	font-weight: 500;
 }
 
 .med-link {
@@ -994,6 +973,27 @@ textarea.auto-resize {
 	gap: 0.75rem;
 }
 
+/* Package type selector - simple dropdown style */
+.package-type-select {
+	width: 100%;
+	padding: 0.6rem 2rem 0.6rem 0.75rem;
+	font-size: 0.9rem;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	color: var(--text-primary);
+	cursor: pointer;
+	appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 0.75rem center;
+}
+
+.package-type-select:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
 /* Form field validation */
 .form-grid label.has-error input,
 .form-grid label.has-error textarea {
@@ -1013,6 +1013,40 @@ textarea.auto-resize {
 	text-transform: none;
 	letter-spacing: normal;
 	margin-top: 0.25rem;
+}
+
+/* Dose input with unit selector */
+.dose-input-group {
+	display: flex;
+	gap: 0.5rem;
+	align-items: stretch;
+}
+
+.dose-input-group input {
+	flex: 1;
+	min-width: 0;
+}
+
+.dose-unit-select {
+	width: auto;
+	min-width: 80px;
+	padding: 0.5rem 0.75rem;
+	background: var(--bg-primary);
+	border: 1px solid var(--border-primary);
+	border-radius: var(--input-radius);
+	color: var(--text-primary);
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: border-color 150ms ease;
+}
+
+.dose-unit-select:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+.dose-unit-select:hover {
+	border-color: var(--accent);
 }
 
 /* Tag input for multi-value fields (e.g., Taken By) */
@@ -3922,6 +3956,41 @@ h3 .reminder-icon.info-tooltip {
 	cursor: pointer;
 }
 
+/* Password Input with Toggle */
+.password-input-wrapper {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+
+.password-input-wrapper input {
+	width: 100%;
+	padding-right: 2.5rem;
+}
+
+.password-toggle-btn {
+	position: absolute;
+	right: 0.5rem;
+	background: none;
+	border: none;
+	padding: 0.25rem;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-tertiary);
+	transition: color 0.15s ease;
+}
+
+.password-toggle-btn:hover {
+	color: var(--text-secondary);
+}
+
+.password-toggle-btn svg {
+	width: 1.25rem;
+	height: 1.25rem;
+}
+
 .auth-links {
 	display: flex;
 	flex-direction: column;
@@ -4336,8 +4405,7 @@ h3 .reminder-icon.info-tooltip {
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
 	margin: 0 0 1rem 0;
-	padding-bottom: 0.5rem;
-	border-bottom: 1px solid var(--border-primary);
+	padding-bottom: 0;
 }
 
 .profile-form .form-group {
@@ -4376,9 +4444,8 @@ h3 .reminder-icon.info-tooltip {
 	display: flex;
 	gap: 0.75rem;
 	justify-content: flex-end;
-	padding-top: 0.5rem;
-	border-top: 1px solid var(--border-primary);
-	margin-top: 1rem;
+	padding-top: 0;
+	margin-top: 0.5rem;
 }
 
 .profile-actions .btn {
@@ -4418,13 +4485,10 @@ h3 .reminder-icon.info-tooltip {
 /* Profile danger zone */
 .profile-danger-zone {
 	margin: 0 1.5rem 1.5rem;
-	padding-top: 1.5rem;
-	border-top: 1px solid var(--border-primary);
+	padding-top: 1rem;
 }
 
 .profile-danger-zone .profile-section-title {
-	border-bottom: none;
-	padding-bottom: 0;
 	margin-bottom: 0.75rem;
 }
 

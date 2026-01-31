@@ -7,6 +7,8 @@ const defaultSettings: StockThresholds = {
 	lowStockDays: 7,
 	normalStockDays: 30,
 	highStockDays: 90,
+	criticalStockDays: 3,
+	expiryWarningDays: 30,
 };
 
 const mockMedication: Medication = {

@@ -57,6 +57,7 @@ const createMockContext = (overrides = {}) => ({
 	setRefillLoose: vi.fn(),
 	refillSaving: false,
 	submitRefill: vi.fn(),
+	coverageByMed: {},
 	...overrides,
 });
 
@@ -65,12 +66,24 @@ const createMockFormHook = (overrides = {}) => ({
 	form: {
 		name: "",
 		genericName: "",
+		packageType: "blister" as const,
 		packCount: "0",
 		blistersPerPack: "0",
 		pillsPerBlister: "1",
 		looseTablets: "0",
+		totalPills: "",
 		takenBy: [],
 		blisters: [{ usage: "1", every: "1", startDate: new Date().toISOString().slice(0, 10), startTime: "09:00" }],
+		intakes: [
+			{
+				usage: "1",
+				every: "1",
+				startDate: new Date().toISOString().slice(0, 10),
+				startTime: "09:00",
+				takenBy: "",
+				intakeRemindersEnabled: false,
+			},
+		],
 		expiryDate: "",
 		notes: "",
 		pillWeightMg: "",
@@ -93,6 +106,9 @@ const createMockFormHook = (overrides = {}) => ({
 	addBlister: vi.fn(),
 	removeBlister: vi.fn(),
 	setBlisterValue: vi.fn(),
+	addIntake: vi.fn(),
+	removeIntake: vi.fn(),
+	setIntakeValue: vi.fn(),
 	resetForm: vi.fn(),
 	startEdit: vi.fn(),
 	showEditModal: false,
@@ -328,9 +344,9 @@ describe("MedicationsPage form interactions", () => {
 		}
 	});
 
-	it("calls addBlister when clicking add schedule button", () => {
-		const addBlister = vi.fn();
-		mockFormHookValue = createMockFormHook({ addBlister });
+	it("calls addIntake when clicking add schedule button", () => {
+		const addIntake = vi.fn();
+		mockFormHookValue = createMockFormHook({ addIntake });
 
 		render(
 			<MemoryRouter>
@@ -338,11 +354,11 @@ describe("MedicationsPage form interactions", () => {
 			</MemoryRouter>
 		);
 
-		// Find add blister button
+		// Find add intake button
 		const addBtn = screen.queryByText(/form\.blisters\.add/i) || screen.queryByText(/\+/);
 		if (addBtn) {
 			fireEvent.click(addBtn);
-			expect(addBlister).toHaveBeenCalled();
+			expect(addIntake).toHaveBeenCalled();
 		}
 	});
 });
@@ -393,12 +409,24 @@ describe("MedicationsPage editing", () => {
 			form: {
 				name: "Aspirin",
 				genericName: "Acetylsalicylic acid",
+				packageType: "blister" as const,
 				packCount: "1",
 				blistersPerPack: "2",
 				pillsPerBlister: "10",
 				looseTablets: "5",
+				totalPills: "",
 				takenBy: ["John"],
 				blisters: [{ usage: "1", every: "1", startDate: "2024-01-01", startTime: "09:00" }],
+				intakes: [
+					{
+						usage: "1",
+						every: "1",
+						startDate: "2024-01-01",
+						startTime: "09:00",
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
+				],
 				expiryDate: "2025-12-31",
 				notes: "Take with food",
 				pillWeightMg: "",
@@ -558,14 +586,24 @@ describe("MedicationsPage blister management", () => {
 		expect(blisterSections.length).toBeGreaterThan(0);
 	});
 
-	it("calls setBlisterValue when changing blister field", () => {
-		const setBlisterValue = vi.fn();
+	it("calls setIntakeValue when changing blister field", () => {
+		const setIntakeValue = vi.fn();
 		mockFormHookValue = createMockFormHook({
 			form: {
 				...createMockFormHook().form,
 				blisters: [{ usage: "1", every: "1", startDate: "2024-01-01", startTime: "09:00" }],
+				intakes: [
+					{
+						usage: "1",
+						every: "1",
+						startDate: "2024-01-01",
+						startTime: "09:00",
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
+				],
 			},
-			setBlisterValue,
+			setIntakeValue,
 		});
 
 		render(
@@ -578,7 +616,7 @@ describe("MedicationsPage blister management", () => {
 		const blisterInputs = document.querySelectorAll('.blister-inputs input[type="number"]');
 		if (blisterInputs.length > 0) {
 			fireEvent.change(blisterInputs[0], { target: { value: "2" } });
-			expect(setBlisterValue).toHaveBeenCalled();
+			expect(setIntakeValue).toHaveBeenCalled();
 		}
 	});
 });
@@ -591,9 +629,9 @@ describe("MedicationsPage add blister", () => {
 		mockFormHookValue = createMockFormHook();
 	});
 
-	it("calls addBlister when clicking add intake button", () => {
-		const addBlister = vi.fn();
-		mockFormHookValue = createMockFormHook({ addBlister });
+	it("calls addIntake when clicking add intake button", () => {
+		const addIntake = vi.fn();
+		mockFormHookValue = createMockFormHook({ addIntake });
 
 		render(
 			<MemoryRouter>
@@ -603,7 +641,7 @@ describe("MedicationsPage add blister", () => {
 
 		const addIntakeBtn = screen.getByRole("button", { name: /form\.blisters\.addIntake/i });
 		fireEvent.click(addIntakeBtn);
-		expect(addBlister).toHaveBeenCalled();
+		expect(addIntake).toHaveBeenCalled();
 	});
 });
 
@@ -618,6 +656,24 @@ describe("MedicationsPage remove blister", () => {
 				blisters: [
 					{ usage: "1", every: "1", startDate: "2024-01-01", startTime: "09:00" },
 					{ usage: "2", every: "7", startDate: "2024-01-01", startTime: "20:00" },
+				],
+				intakes: [
+					{
+						usage: "1",
+						every: "1",
+						startDate: "2024-01-01",
+						startTime: "09:00",
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
+					{
+						usage: "2",
+						every: "7",
+						startDate: "2024-01-01",
+						startTime: "20:00",
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
 				],
 			},
 		});
@@ -635,8 +691,8 @@ describe("MedicationsPage remove blister", () => {
 		expect(removeButtons.length).toBeGreaterThan(0);
 	});
 
-	it("calls removeBlister when clicking remove button", () => {
-		const removeBlister = vi.fn();
+	it("calls removeIntake when clicking remove button", () => {
+		const removeIntake = vi.fn();
 		mockFormHookValue = createMockFormHook({
 			form: {
 				...createMockFormHook().form,
@@ -644,8 +700,26 @@ describe("MedicationsPage remove blister", () => {
 					{ usage: "1", every: "1", startDate: "2024-01-01", startTime: "09:00" },
 					{ usage: "2", every: "7", startDate: "2024-01-01", startTime: "20:00" },
 				],
+				intakes: [
+					{
+						usage: "1",
+						every: "1",
+						startDate: "2024-01-01",
+						startTime: "09:00",
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
+					{
+						usage: "2",
+						every: "7",
+						startDate: "2024-01-01",
+						startTime: "20:00",
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
+				],
 			},
-			removeBlister,
+			removeIntake,
 		});
 
 		render(
@@ -657,7 +731,7 @@ describe("MedicationsPage remove blister", () => {
 		const removeButtons = document.querySelectorAll(".blister-row .danger");
 		if (removeButtons.length > 0) {
 			fireEvent.click(removeButtons[0]);
-			expect(removeBlister).toHaveBeenCalled();
+			expect(removeIntake).toHaveBeenCalled();
 		}
 	});
 });
@@ -670,19 +744,25 @@ describe("MedicationsPage intake reminders toggle", () => {
 		mockFormHookValue = createMockFormHook();
 	});
 
-	it("renders intake reminders checkbox", () => {
+	it("renders intake reminders checkbox per intake", () => {
 		render(
 			<MemoryRouter>
 				<MedicationsPage />
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText(/form\.blisters\.remind/i)).toBeInTheDocument();
+		// Now each intake row has its own reminder checkbox with the bell icon
+		// Desktop form uses class "full blisters" container
+		const blistersContainer = document.querySelector(".blisters");
+		expect(blistersContainer).toBeInTheDocument();
+		// Check for the inline-checkbox that controls intake reminders in each blister row
+		const intakeCheckbox = document.querySelector(".blister-row .inline-checkbox");
+		expect(intakeCheckbox).toBeInTheDocument();
 	});
 
-	it("can toggle intake reminders", () => {
-		const setForm = vi.fn();
-		mockFormHookValue = createMockFormHook({ setForm });
+	it("can toggle intake reminders per intake", () => {
+		const setIntakeValue = vi.fn();
+		mockFormHookValue = createMockFormHook({ setIntakeValue });
 
 		render(
 			<MemoryRouter>
@@ -690,10 +770,11 @@ describe("MedicationsPage intake reminders toggle", () => {
 			</MemoryRouter>
 		);
 
-		const checkbox = document.querySelector('.inline-checkbox input[type="checkbox"]');
+		// Each blister row has inline-checkbox for intake reminders
+		const checkbox = document.querySelector('.blister-row .inline-checkbox input[type="checkbox"]');
 		if (checkbox) {
 			fireEvent.click(checkbox);
-			expect(setForm).toHaveBeenCalled();
+			expect(setIntakeValue).toHaveBeenCalled();
 		}
 	});
 });

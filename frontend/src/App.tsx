@@ -185,6 +185,9 @@ function AppContent() {
 	const [showProfile, setShowProfile] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
 
+	// Get centralized stockThresholds from context
+	const { stockThresholds } = ctx;
+
 	// Close modal on Escape key
 	useEffect(() => {
 		const handleEscape = (e: KeyboardEvent) => {
@@ -417,7 +420,7 @@ function AppContent() {
 			<MedDetailModal
 				selectedMed={selectedMed}
 				coverage={coverage}
-				settings={settings}
+				settings={stockThresholds}
 				showImageLightbox={showImageLightbox}
 				showRefillModal={showRefillModal}
 				showEditStockModal={showEditStockModal}
@@ -450,7 +453,7 @@ function AppContent() {
 				selectedUser={selectedUser}
 				meds={meds}
 				coverage={coverage}
-				settings={settings}
+				settings={stockThresholds}
 				onClose={closeUserFilter}
 				onOpenMedDetail={openMedDetail}
 			/>

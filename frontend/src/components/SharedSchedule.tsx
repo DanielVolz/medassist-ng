@@ -153,21 +153,20 @@ export function SharedSchedule() {
 		}
 	}, [token]);
 
-	// Get dose ID with optional person suffix
-	function getDoseId(baseDoseId: string, person: string | null): string {
-		return person ? `${baseDoseId}-${person}` : baseDoseId;
+	// Get dose ID - for per-intake takenBy, the ID already has the person suffix
+	// This helper is kept for compatibility but since dose.id already includes the suffix, it just returns the id
+	function getDoseId(doseId: string, _person: string | null): string {
+		// The dose.id already includes the person suffix if there's a per-intake takenBy
+		return doseId;
 	}
 
-	// Count taken doses for a day/item
-	function _countTakenDoses(doses: Array<{ id: string; takenBy: string[] }>): { total: number; taken: number } {
+	// Count taken doses for a day/item (simplified - per-intake takenBy means one person per dose)
+	function _countTakenDoses(doses: Array<{ id: string; takenBy: string | null }>): { total: number; taken: number } {
 		let total = 0;
 		let taken = 0;
 		for (const d of doses) {
-			const people = (d.takenBy || []).length > 0 ? d.takenBy : [null];
-			for (const person of people) {
-				total++;
-				if (takenDoses.has(getDoseId(d.id, person))) taken++;
-			}
+			total++;
+			if (takenDoses.has(d.id)) taken++;
 		}
 		return { total, taken };
 	}
@@ -274,32 +273,42 @@ export function SharedSchedule() {
 			usage: number;
 			timeStr: string;
 			isPast: boolean;
-			takenBy: string[];
+			takenBy: string | null; // Per-intake takenBy (single person or null)
 			dateStr: string;
 		}[] = [];
 
 		for (const med of data.medications) {
-			med.blisters.forEach((blister, blisterIdx) => {
-				const startDate = new Date(blister.start);
+			// Use intakes (with per-intake takenBy) if available, fallback to blisters (legacy)
+			const intakes =
+				med.intakes ||
+				med.blisters.map((b) => ({ ...b, takenBy: null as string | null, intakeRemindersEnabled: false }));
+
+			intakes.forEach((intake, intakeIdx) => {
+				// Filter: only include intakes for this person (null = everyone, or matches share's takenBy)
+				if (intake.takenBy !== null && intake.takenBy !== data.takenBy) return;
+
+				const startDate = new Date(intake.start);
 				if (Number.isNaN(startDate.getTime())) return;
 
 				// Use the same iteration method as buildSchedulePreview (setDate instead of adding ms)
 				// This ensures identical timestamps even across DST changes
-				for (let d = new Date(startDate); d <= end; d.setDate(d.getDate() + blister.every)) {
+				for (let d = new Date(startDate); d <= end; d.setDate(d.getDate() + intake.every)) {
 					const t = d.getTime();
 					const isPast = d < todayStart;
 					// Use date-only timestamp for stable ID (immune to time changes)
 					// This ensures changing intake times doesn't invalidate past dose tracking
 					// Must match buildSchedulePreview in schedule.ts exactly
 					const dateOnlyMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-					const doseId = `${med.id}-${blisterIdx}-${dateOnlyMs}`;
+					// Dose ID includes person suffix if there's a per-intake takenBy
+					const baseDoseId = `${med.id}-${intakeIdx}-${dateOnlyMs}`;
+					const doseId = intake.takenBy ? `${baseDoseId}-${intake.takenBy}` : baseDoseId;
 					doses.push({
 						id: doseId,
 						when: t,
 						medName: med.name,
-						usage: blister.usage,
+						usage: intake.usage,
 						isPast,
-						takenBy: med.takenBy || [],
+						takenBy: intake.takenBy, // Per-intake takenBy (string | null)
 						timeStr: d.toLocaleTimeString(getSystemLocale(i18n.language), { hour: "2-digit", minute: "2-digit" }),
 						dateStr: d.toLocaleDateString(getSystemLocale(i18n.language), {
 							weekday: "short",
@@ -436,16 +445,11 @@ export function SharedSchedule() {
 		const depletion: Record<string, number | null> = {};
 
 		// Calculate total pills taken per medication from takenDoses
-		// Each person's taken dose counts separately toward pills consumed
+		// With per-intake takenBy, each dose.id is unique and already has person suffix if needed
 		const takenByMed: Record<string, number> = {};
 		for (const dose of schedule.flatMap((d) => d.meds.flatMap((m) => m.doses))) {
-			// Check all person-specific dose IDs for this dose
-			const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
-			for (const person of people) {
-				const doseId = person ? `${dose.id}-${person}` : dose.id;
-				if (takenDoses.has(doseId)) {
-					takenByMed[dose.medName] = (takenByMed[dose.medName] || 0) + dose.usage;
-				}
+			if (takenDoses.has(dose.id)) {
+				takenByMed[dose.medName] = (takenByMed[dose.medName] || 0) + dose.usage;
 			}
 		}
 
@@ -453,9 +457,9 @@ export function SharedSchedule() {
 			const totalCount = getMedTotal(med);
 			const taken = takenByMed[med.name] || 0;
 			const currentCount = Math.max(0, totalCount - taken);
-			// Calculate daily usage from blisters, multiplied by number of people
-			const personCount = Math.max(1, med.takenBy?.length || 1);
-			const dailyUsage = med.blisters.reduce((sum, b) => sum + b.usage / b.every, 0) * personCount;
+			// Calculate daily usage from intakes (or blisters for legacy)
+			const intakes = med.intakes || med.blisters;
+			const dailyUsage = intakes.reduce((sum, b) => sum + b.usage / b.every, 0);
 			const daysLeft = dailyUsage > 0 ? currentCount / dailyUsage : null;
 			coverage[med.name] = { daysLeft, medsLeft: currentCount, dailyUsage };
 
@@ -577,13 +581,8 @@ export function SharedSchedule() {
 							{pastDays.length > 0 &&
 								(() => {
 									// Count all past doses (for display)
-									const totalPastDoses = pastDays.flatMap((d) =>
-										d.meds.flatMap((m) =>
-											m.doses.flatMap((dose) => {
-												return (dose.takenBy || []).length > 0 ? dose.takenBy.map((p) => `${dose.id}-${p}`) : [dose.id];
-											})
-										)
-									);
+									// With per-intake takenBy, each dose.id is unique
+									const totalPastDoses = pastDays.flatMap((d) => d.meds.flatMap((m) => m.doses.map((dose) => dose.id)));
 									// Count missed doses (not taken AND not dismissed AND not from previous schedule)
 									// Check: per-dose dismissed flag, medication-level dismissedUntil, and updatedAt
 									const missedPastDoses = totalPastDoses.filter((id) => {
@@ -663,11 +662,7 @@ export function SharedSchedule() {
 										return false;
 									};
 
-									const allDoseIds = day.meds.flatMap((item) =>
-										item.doses.flatMap((d) => {
-											return (d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id];
-										})
-									);
+									const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
 									const allDayDone = allDoseIds.length > 0 && allDoseIds.every(isDoseIdDone);
 									const doneCount = allDoseIds.filter(isDoseIdDone).length;
 									const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
@@ -729,9 +724,7 @@ export function SharedSchedule() {
 														}
 													}
 
-													const itemDoseIds = item.doses.flatMap((d) =>
-														(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-													);
+													const itemDoseIds = item.doses.map((d) => d.id);
 													// A dose is "done" if taken OR dismissed
 													const allDone = itemDoseIds.every(isDoseIdDone);
 
@@ -760,70 +753,53 @@ export function SharedSchedule() {
 															</div>
 															<div className="doses-col">
 																{item.doses.map((dose) => {
-																	const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
 																	// Check: medication-level dismissedUntil, per-dose dismissed flag, and previous schedule
 																	const isMedLevelDismissed = isDoseDismissed(dose.when, dose.medName);
 																	const isFromPreviousSchedule = isDoseFromPreviousSchedule(dose.id, dose.medName);
-																	const allDone = people.every((person) => {
-																		const doseId = getDoseId(dose.id, person);
-																		return (
-																			takenDoses.has(doseId) ||
-																			dismissedDoses.has(doseId) ||
-																			isMedLevelDismissed ||
-																			isFromPreviousSchedule
-																		);
-																	});
+																	const isTaken = takenDoses.has(dose.id);
+																	const isPerDoseDismissed = dismissedDoses.has(dose.id);
+																	const isDone =
+																		isTaken || isPerDoseDismissed || isMedLevelDismissed || isFromPreviousSchedule;
 																	return (
-																		<div key={dose.id} className={`dose-item past ${allDone ? "all-taken" : ""}`}>
+																		<div key={dose.id} className={`dose-item past ${isDone ? "all-taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
 																				{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																				{med?.pillWeightMg &&
+																					` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																			</span>
 																			<div className="dose-checks">
-																				{people.map((person) => {
-																					const doseId = getDoseId(dose.id, person);
-																					const isTaken = takenDoses.has(doseId);
-																					const isPerDoseDismissed = dismissedDoses.has(doseId);
-																					const isDone =
-																						isTaken ||
-																						isPerDoseDismissed ||
-																						isMedLevelDismissed ||
-																						isFromPreviousSchedule;
-																					return (
-																						<div key={doseId} className={`dose-person ${isDone ? "taken" : ""}`}>
-																							{person && <span className="person-name">{person}</span>}
-																							{isDone ? (
-																								isTaken ? (
-																									<button
-																										className="dose-btn undo"
-																										onClick={() => undoDoseTaken(doseId)}
-																										title={t("common.undo")}
-																									>
-																										↩
-																									</button>
-																								) : (
-																									// Dismissed - show checkmark but no undo
-																									<span
-																										className="dose-btn dismissed"
-																										title={t("dashboard.schedules.dismissed") ?? "Dismissed"}
-																									>
-																										✓
-																									</span>
-																								)
-																							) : (
-																								<button
-																									className="dose-btn take"
-																									onClick={() => markDoseTaken(doseId)}
-																									disabled={isEmpty}
-																									title={t("dose.markAsTaken")}
-																								>
-																									✓
-																								</button>
-																							)}
-																						</div>
-																					);
-																				})}
+																				<div className={`dose-person ${isDone ? "taken" : ""}`}>
+																					{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
+																					{isDone ? (
+																						isTaken ? (
+																							<button
+																								className="dose-btn undo"
+																								onClick={() => undoDoseTaken(dose.id)}
+																								title={t("common.undo")}
+																							>
+																								↩
+																							</button>
+																						) : (
+																							// Dismissed - show checkmark but no undo
+																							<span
+																								className="dose-btn dismissed"
+																								title={t("dashboard.schedules.dismissed") ?? "Dismissed"}
+																							>
+																								✓
+																							</span>
+																						)
+																					) : (
+																						<button
+																							className="dose-btn take"
+																							onClick={() => markDoseTaken(dose.id)}
+																							disabled={isEmpty}
+																							title={t("dose.markAsTaken")}
+																						>
+																							✓
+																						</button>
+																					)}
+																				</div>
 																			</div>
 																		</div>
 																	);
@@ -839,11 +815,7 @@ export function SharedSchedule() {
 							{todayDay &&
 								(() => {
 									const day = todayDay;
-									const allDoseIds = day.meds.flatMap((item) =>
-										item.doses.flatMap((d) =>
-											(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-										)
-									);
+									const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
 									const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 									const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 									const worstStatus = getDayStockStatus(day.meds);
@@ -898,9 +870,7 @@ export function SharedSchedule() {
 														}
 													}
 
-													const itemDoseIds = item.doses.flatMap((d) =>
-														(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-													);
+													const itemDoseIds = item.doses.map((d) => d.id);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 													return (
 														<div
@@ -927,47 +897,40 @@ export function SharedSchedule() {
 															</div>
 															<div className="doses-col">
 																{item.doses.map((dose) => {
-																	const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
-																	const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
+																	const isTaken = takenDoses.has(dose.id);
+																	const isOverdue = dose.when < Date.now() && !isTaken;
 																	return (
-																		<div key={dose.id} className={`dose-item ${allTaken ? "all-taken" : ""}`}>
+																		<div key={dose.id} className={`dose-item ${isTaken ? "all-taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
 																				{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																				{med?.pillWeightMg &&
+																					` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																			</span>
 																			<div className="dose-checks">
-																				{people.map((person) => {
-																					const doseId = getDoseId(dose.id, person);
-																					const isTaken = takenDoses.has(doseId);
-																					const isOverdue = dose.when < Date.now() && !isTaken;
-																					return (
-																						<div
-																							key={doseId}
-																							className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}
+																				<div
+																					className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}
+																				>
+																					{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
+																					{isTaken ? (
+																						<button
+																							className="dose-btn undo"
+																							onClick={() => undoDoseTaken(dose.id)}
+																							title={t("common.undo")}
 																						>
-																							{person && <span className="person-name">{person}</span>}
-																							{isTaken ? (
-																								<button
-																									className="dose-btn undo"
-																									onClick={() => undoDoseTaken(doseId)}
-																									title={t("common.undo")}
-																								>
-																									↩
-																								</button>
-																							) : (
-																								<button
-																									className="dose-btn take"
-																									onClick={() => markDoseTaken(doseId)}
-																									title={t("dose.markAsTaken")}
-																									disabled={isEmpty}
-																								>
-																									✓
-																								</button>
-																							)}
-																						</div>
-																					);
-																				})}
+																							↩
+																						</button>
+																					) : (
+																						<button
+																							className="dose-btn take"
+																							onClick={() => markDoseTaken(dose.id)}
+																							title={t("dose.markAsTaken")}
+																							disabled={isEmpty}
+																						>
+																							✓
+																						</button>
+																					)}
+																				</div>
 																			</div>
 																		</div>
 																	);
@@ -1000,11 +963,7 @@ export function SharedSchedule() {
 							{showFutureDays &&
 								futureDays.map((day) => {
 									// Check if all doses in this day are taken (auto-collapse)
-									const allDoseIds = day.meds.flatMap((item) =>
-										item.doses.flatMap((d) =>
-											(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-										)
-									);
+									const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
 									const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 									const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 
@@ -1062,9 +1021,7 @@ export function SharedSchedule() {
 														}
 													}
 
-													const itemDoseIds = item.doses.flatMap((d) =>
-														(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-													);
+													const itemDoseIds = item.doses.map((d) => d.id);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 													return (
 														<div
@@ -1091,56 +1048,49 @@ export function SharedSchedule() {
 															</div>
 															<div className="doses-col">
 																{item.doses.map((dose) => {
-																	const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
-																	const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
+																	const isTaken = takenDoses.has(dose.id);
 																	// Only disable doses on future DAYS, not later today
 																	const doseDate = new Date(dose.when);
 																	doseDate.setHours(0, 0, 0, 0);
 																	const todayMidnight = new Date();
 																	todayMidnight.setHours(0, 0, 0, 0);
 																	const isFutureDose = doseDate.getTime() > todayMidnight.getTime();
+																	const isOverdue = dose.when < Date.now() && !isTaken && !isFutureDose;
 																	return (
 																		<div
 																			key={dose.id}
-																			className={`dose-item ${isFutureDose ? "future" : ""} ${allTaken ? "all-taken" : ""}`}
+																			className={`dose-item ${isFutureDose ? "future" : ""} ${isTaken ? "all-taken" : ""}`}
 																		>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
 																				{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																				{med?.pillWeightMg &&
+																					` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																			</span>
 																			<div className="dose-checks">
-																				{people.map((person) => {
-																					const doseId = getDoseId(dose.id, person);
-																					const isTaken = takenDoses.has(doseId);
-																					const isOverdue = dose.when < Date.now() && !isTaken && !isFutureDose;
-																					return (
-																						<div
-																							key={doseId}
-																							className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}
+																				<div
+																					className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}
+																				>
+																					{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
+																					{isTaken ? (
+																						<button
+																							className="dose-btn undo"
+																							onClick={() => undoDoseTaken(dose.id)}
+																							title={t("common.undo")}
 																						>
-																							{person && <span className="person-name">{person}</span>}
-																							{isTaken ? (
-																								<button
-																									className="dose-btn undo"
-																									onClick={() => undoDoseTaken(doseId)}
-																									title={t("common.undo")}
-																								>
-																									↩
-																								</button>
-																							) : (
-																								<button
-																									className="dose-btn take"
-																									onClick={() => markDoseTaken(doseId)}
-																									title={t("dose.markAsTaken")}
-																									disabled={isFutureDose || isEmpty}
-																								>
-																									✓
-																								</button>
-																							)}
-																						</div>
-																					);
-																				})}
+																							↩
+																						</button>
+																					) : (
+																						<button
+																							className="dose-btn take"
+																							onClick={() => markDoseTaken(dose.id)}
+																							title={t("dose.markAsTaken")}
+																							disabled={isFutureDose || isEmpty}
+																						>
+																							✓
+																						</button>
+																					)}
+																				</div>
 																			</div>
 																		</div>
 																	);

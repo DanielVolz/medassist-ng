@@ -119,6 +119,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				takenBy: takenByArray,
 				blisters,
 				dismissedUntil: med.dismissedUntil,
+				updatedAt: med.updatedAt, // For filtering out doses from previous schedule configurations
 			};
 		});
 

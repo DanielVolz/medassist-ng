@@ -13,6 +13,7 @@ export type { MedicationAvatarProps } from "./MedicationAvatar";
 export { MedicationAvatar } from "./MedicationAvatar";
 export type { MobileEditModalProps } from "./MobileEditModal";
 export { MobileEditModal } from "./MobileEditModal";
+export { PasswordInput } from "./PasswordInput";
 export { default as ProfileModal } from "./ProfileModal";
 export type { ShareDialogProps } from "./ShareDialog";
 export { ShareDialog } from "./ShareDialog";

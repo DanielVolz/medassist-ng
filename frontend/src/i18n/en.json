@@ -88,7 +88,8 @@
       "lowMeds": "{{count}} medication low",
       "lowMeds_other": "{{count}} medications low",
       "daysLeft": "{{days}} day left",
-      "daysLeft_other": "{{days}} days left"
+      "daysLeft_other": "{{days}} days left",
+      "needsRefill": "Needs refill"
     }
   },
   "table": {
@@ -98,11 +99,16 @@
     "currentPills": "Current pills",
     "fullBlisters": "Full blisters",
     "openBlister": "Open blister",
+    "stock": "Stock",
+    "stockDetails": "Details",
     "daysLeft": "Days left",
-    "status": "Stock",
+    "status": "Status",
     "runsOut": "Runs out",
     "autoRemind": "Auto-remind",
-    "expiry": "Expiry"
+    "expiry": "Expiry",
+    "pillsCount": "{{count}} pills",
+    "pillsCount_one": "{{count}} pill",
+    "pillsCount_other": "{{count}} pills"
   },
   "medications": {
     "list": {
@@ -116,7 +122,8 @@
       "blisters": "Blisters per pack",
       "pillsPerBlister": "Pills per blister",
       "loose": "Loose",
-      "total": "Total"
+      "total": "Total",
+      "stock": "Stock"
     }
   },
   "form": {
@@ -126,11 +133,16 @@
     "commercialName": "Commercial Name",
     "genericName": "Generic Name",
     "takenBy": "Taken by",
+    "packageType": "Package Type",
+    "packageTypeBlister": "Blister Pack",
+    "packageTypeBottle": "Pill Bottle / Container",
     "packs": "Packs",
     "blistersPerPack": "Blisters per pack",
     "pillsPerBlister": "Pills per blister",
+    "totalCapacity": "Total Capacity",
+    "currentPills": "Current Pills",
     "loosePills": "Loose pills",
-    "pillWeight": "Pill weight (mg)",
+    "pillWeight": "Dose per pill",
     "total": "Total (pills)",
     "expiryDate": "Expiry Date",
     "notes": "Notes",
@@ -154,7 +166,9 @@
       "every": "every",
       "from": "from",
       "startDate": "Date",
-      "startTime": "Time"
+      "startTime": "Time",
+      "takenByIntake": "Taken by",
+      "takenByEveryone": "Everyone"
     }
   },
   "planner": {
@@ -260,6 +274,7 @@
   },
   "status": {
     "outOfStock": "Empty",
+    "criticalStock": "Critical",
     "lowStock": "Low",
     "normal": "Normal",
     "highStock": "High",

@@ -171,25 +171,30 @@ export function MedDetailModal({
 					<div className="med-detail-section">
 						<h3>{t("modal.stockInfo")}</h3>
 						<div className="med-detail-grid">
-							<div className="med-detail-item">
-								<span className="med-detail-label">{t("table.fullBlisters")}</span>
-								<span className={`med-detail-value ${textClass}`}>{formatFullBlisters(stock.fullBlisters, t)}</span>
-							</div>
-							<div className="med-detail-item">
-								<span className="med-detail-label">{t("table.openBlister")}</span>
-								<span className={`med-detail-value ${textClass}`}>
-									{formatOpenBlisterAndLoose(
-										stock.openBlisterPills,
-										stock.loosePills,
-										selectedMed.pillsPerBlister ?? 1,
-										t
-									)}
-								</span>
-							</div>
-							<div className="med-detail-item full-width">
+							{selectedMed.packageType === "blister" && (
+								<>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("table.fullBlisters")}</span>
+										<span className={`med-detail-value ${textClass}`}>{formatFullBlisters(stock.fullBlisters, t)}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("table.openBlister")}</span>
+										<span className={`med-detail-value ${textClass}`}>
+											{formatOpenBlisterAndLoose(
+												stock.openBlisterPills,
+												stock.loosePills,
+												selectedMed.pillsPerBlister ?? 1,
+												t
+											)}
+										</span>
+									</div>
+								</>
+							)}
+							<div className={`med-detail-item ${selectedMed.packageType === "bottle" ? "full-width" : "full-width"}`}>
 								<span className="med-detail-label">{t("modal.currentStock")}</span>
 								<span className={`med-detail-value ${textClass}`}>
-									{currentStock} / {packageSize}
+									{currentStock} /{" "}
+									{selectedMed.packageType === "bottle" ? (selectedMed.totalPills ?? packageSize) : packageSize}
 								</span>
 							</div>
 						</div>
@@ -199,22 +204,33 @@ export function MedDetailModal({
 					<div className="med-detail-section">
 						<h3>{t("modal.packageDetails")}</h3>
 						<div className="med-detail-grid">
-							<div className="med-detail-item">
-								<span className="med-detail-label">{t("modal.packs")}</span>
-								<span className="med-detail-value">{selectedMed.packCount}</span>
-							</div>
-							<div className="med-detail-item">
-								<span className="med-detail-label">{t("modal.blistersPerPack")}</span>
-								<span className="med-detail-value">{selectedMed.blistersPerPack}</span>
-							</div>
-							<div className="med-detail-item">
-								<span className="med-detail-label">{t("modal.pillsPerBlister")}</span>
-								<span className="med-detail-value">{selectedMed.pillsPerBlister}</span>
-							</div>
+							{selectedMed.packageType === "blister" ? (
+								<>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("modal.packs")}</span>
+										<span className="med-detail-value">{selectedMed.packCount}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("modal.blistersPerPack")}</span>
+										<span className="med-detail-value">{selectedMed.blistersPerPack}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("modal.pillsPerBlister")}</span>
+										<span className="med-detail-value">{selectedMed.pillsPerBlister}</span>
+									</div>
+								</>
+							) : (
+								<div className="med-detail-item">
+									<span className="med-detail-label">{t("form.totalCapacity")}</span>
+									<span className="med-detail-value">{selectedMed.totalPills ?? "—"}</span>
+								</div>
+							)}
 							{selectedMed.pillWeightMg && (
 								<div className="med-detail-item">
 									<span className="med-detail-label">{t("modal.pillWeight")}</span>
-									<span className="med-detail-value">{selectedMed.pillWeightMg} mg</span>
+									<span className="med-detail-value">
+										{selectedMed.pillWeightMg} {selectedMed.doseUnit ?? "mg"}
+									</span>
 								</div>
 							)}
 							{selectedMed.expiryDate && (
@@ -253,7 +269,8 @@ export function MedDetailModal({
 										<div key={idx} className="med-schedule-item">
 											<span className="med-schedule-usage">
 												{totalUsage} {totalUsage !== 1 ? t("common.pills") : t("common.pill")}
-												{selectedMed.pillWeightMg && ` (${totalUsage * selectedMed.pillWeightMg} mg)`}
+												{selectedMed.pillWeightMg &&
+													` (${totalUsage * selectedMed.pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
 											</span>
 											<span className="med-schedule-freq">
 												{t("form.blisters.every")} {blister.every}{" "}

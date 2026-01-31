@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal } from "./ConfirmModal";
+import { PasswordInput } from "./PasswordInput";
 
 // =============================================================================
 // Types (no roles - all users are equal)
@@ -402,9 +403,8 @@ export function LoginForm({
 
 						<div className="form-group">
 							<label htmlFor="password">{t("auth.password", "Password")}</label>
-							<input
+							<PasswordInput
 								id="password"
-								type="password"
 								value={password}
 								onChange={(e) => setPassword(e.target.value)}
 								required
@@ -522,9 +522,8 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 
 						<div className="form-group">
 							<label htmlFor="password">{t("auth.password", "Password")} *</label>
-							<input
+							<PasswordInput
 								id="password"
-								type="password"
 								value={password}
 								onChange={(e) => setPassword(e.target.value)}
 								required
@@ -536,9 +535,8 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 
 						<div className="form-group">
 							<label htmlFor="confirmPassword">{t("auth.confirmPassword", "Confirm Password")} *</label>
-							<input
+							<PasswordInput
 								id="confirmPassword"
-								type="password"
 								value={confirmPassword}
 								onChange={(e) => setConfirmPassword(e.target.value)}
 								required
@@ -722,9 +720,8 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
 					<div className="form-group">
 						<label htmlFor="current-password">{t("auth.currentPassword", "Current Password")}</label>
-						<input
+						<PasswordInput
 							id="current-password"
-							type="password"
 							value={currentPassword}
 							onChange={(e) => setCurrentPassword(e.target.value)}
 							autoComplete="current-password"
@@ -734,9 +731,8 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
 					<div className="form-group">
 						<label htmlFor="new-password">{t("auth.newPassword", "New Password")}</label>
-						<input
+						<PasswordInput
 							id="new-password"
-							type="password"
 							value={newPassword}
 							onChange={(e) => setNewPassword(e.target.value)}
 							autoComplete="new-password"
@@ -747,9 +743,8 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
 					<div className="form-group">
 						<label htmlFor="confirm-new-password">{t("auth.confirmPassword", "Confirm Password")}</label>
-						<input
+						<PasswordInput
 							id="confirm-new-password"
-							type="password"
 							value={confirmPassword}
 							onChange={(e) => setConfirmPassword(e.target.value)}
 							autoComplete="new-password"

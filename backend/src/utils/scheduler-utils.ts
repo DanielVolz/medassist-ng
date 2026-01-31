@@ -5,7 +5,17 @@
 
 import { getDateLocale, type Language } from "../i18n/translations.js";
 
+// Legacy type - individual blister schedule (DEPRECATED: use Intake instead)
 export type Blister = { usage: number; every: number; start: string };
+
+// New unified intake type with per-intake takenBy
+export type Intake = {
+	usage: number;
+	every: number;
+	start: string;
+	takenBy: string | null; // Person taking this specific intake (null = use medication-level takenBy)
+	intakeRemindersEnabled: boolean;
+};
 
 // =============================================================================
 // Timezone utilities
@@ -147,7 +157,7 @@ export function parseLocalDateTime(isoString: string): Date {
 	);
 }
 
-/** Parse blister schedules from JSON columns */
+/** Parse blister schedules from JSON columns (DEPRECATED: use parseIntakesJson instead) */
 export function parseBlisters(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
 	try {
 		const usage = JSON.parse(row.usageJson) as number[];
@@ -164,6 +174,59 @@ export function parseBlisters(row: { usageJson: string; everyJson: string; start
 	}
 }
 
+/**
+ * Parse intakes from the new unified intakesJson format.
+ * Falls back to legacy parallel arrays if intakesJson is empty.
+ * @param intakesJson - The new unified JSON string
+ * @param legacyRow - Optional legacy row with usageJson, everyJson, startJson for fallback
+ * @param medicationIntakeRemindersEnabled - Medication-level intakeRemindersEnabled (fallback for legacy)
+ */
+export function parseIntakesJson(
+	intakesJson: string | null | undefined,
+	legacyRow?: { usageJson: string; everyJson: string; startJson: string },
+	medicationIntakeRemindersEnabled?: boolean
+): Intake[] {
+	// Try new format first
+	if (intakesJson) {
+		try {
+			const parsed = JSON.parse(intakesJson);
+			if (Array.isArray(parsed) && parsed.length > 0) {
+				return parsed.map((intake: any) => ({
+					usage: typeof intake.usage === "number" ? intake.usage : 0,
+					every: typeof intake.every === "number" ? intake.every : 1,
+					start: typeof intake.start === "string" ? intake.start : new Date().toISOString(),
+					takenBy: typeof intake.takenBy === "string" && intake.takenBy.trim() ? intake.takenBy.trim() : null,
+					intakeRemindersEnabled:
+						typeof intake.intakeRemindersEnabled === "boolean" ? intake.intakeRemindersEnabled : false,
+				}));
+			}
+		} catch {
+			// Fall through to legacy parsing
+		}
+	}
+
+	// Fallback to legacy parallel arrays
+	if (legacyRow) {
+		const blisters = parseBlisters(legacyRow);
+		return blisters.map((b) => ({
+			usage: b.usage,
+			every: b.every,
+			start: b.start,
+			takenBy: null, // Legacy format has no per-intake takenBy
+			intakeRemindersEnabled: medicationIntakeRemindersEnabled ?? false,
+		}));
+	}
+
+	return [];
+}
+
+/**
+ * Convert intakes to legacy blister format (for backward compatibility)
+ */
+export function intakesToBlisters(intakes: Intake[]): Blister[] {
+	return intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
+}
+
 /** Parse takenByJson to array of strings */
 export function parseTakenByJson(takenByJson: string | null | undefined): string[] {
 	if (!takenByJson) return [];
@@ -173,6 +236,28 @@ export function parseTakenByJson(takenByJson: string | null | undefined): string
 	} catch {
 		return [];
 	}
+}
+
+/**
+ * Get all unique takenBy values from both medication-level and intake-level.
+ * Used for filtering and sharing functionality.
+ */
+export function getAllTakenByForMedication(medicationTakenBy: string[], intakes: Intake[]): string[] {
+	const allPeople = new Set<string>(medicationTakenBy);
+	for (const intake of intakes) {
+		if (intake.takenBy) {
+			allPeople.add(intake.takenBy);
+		}
+	}
+	return Array.from(allPeople);
+}
+
+/**
+ * Check if a person takes this medication (either via medication-level or intake-level takenBy).
+ */
+export function personTakesMedication(person: string, medicationTakenBy: string[], intakes: Intake[]): boolean {
+	if (medicationTakenBy.includes(person)) return true;
+	return intakes.some((intake) => intake.takenBy === person);
 }
 
 // =============================================================================
@@ -209,24 +294,30 @@ export function calculateDepletionInfo(
 
 export type UpcomingIntake = {
 	medName: string;
+	medicationId?: number;
+	blisterIndex?: number;
 	usage: number;
 	intakeTime: Date;
 	intakeTimeStr: string;
-	takenBy: string[];
+	takenBy: string | null; // Single person for this intake (null = no specific person)
 	pillWeightMg: number | null;
+	doseUnit?: string;
 };
 
 /**
  * Get all intakes for today (past and future) - used for repeat reminders.
  * Returns all intakes scheduled for today in user's timezone.
+ * Now uses per-intake takenBy instead of medication-level.
  */
 export function getTodaysIntakes(
 	medName: string,
-	blisters: Blister[],
-	takenBy: string[],
+	intakes: Intake[],
+	medicationTakenBy: string[], // Medication-level takenBy as fallback
 	pillWeightMg: number | null,
 	locale: string,
-	tz?: string
+	tz?: string,
+	medicationId?: number,
+	doseUnit?: string
 ): UpcomingIntake[] {
 	const timezone = tz ?? getTimezone();
 	const now = new Date();
@@ -238,13 +329,18 @@ export function getTodaysIntakes(
 	const todayEnd = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
 	todayEnd.setHours(23, 59, 59, 999);
 
-	const intakes: UpcomingIntake[] = [];
+	const result: UpcomingIntake[] = [];
 
-	for (const blister of blisters) {
-		const startTime = parseLocalDateTime(blister.start).getTime();
-		const intervalMs = blister.every * 24 * 60 * 60 * 1000;
+	for (let blisterIdx = 0; blisterIdx < intakes.length; blisterIdx++) {
+		const intake = intakes[blisterIdx];
+		const startTime = parseLocalDateTime(intake.start).getTime();
+		const intervalMs = intake.every * 24 * 60 * 60 * 1000;
 
 		if (intervalMs <= 0) continue;
+
+		// Determine takenBy for this intake
+		// If intake has its own takenBy, use it; otherwise null (no specific person)
+		const effectiveTakenBy = intake.takenBy || null;
 
 		// Find all occurrences that fall within today
 		let currentTime = startTime;
@@ -260,39 +356,45 @@ export function getTodaysIntakes(
 		while (currentTime <= todayEnd.getTime()) {
 			if (currentTime >= todayStart.getTime()) {
 				const intakeDate = new Date(currentTime);
-				intakes.push({
+				result.push({
 					medName,
-					usage: blister.usage,
+					medicationId,
+					blisterIndex: blisterIdx,
+					usage: intake.usage,
 					intakeTime: intakeDate,
 					intakeTimeStr: intakeDate.toLocaleTimeString(locale, {
 						hour: "2-digit",
 						minute: "2-digit",
 						timeZone: timezone,
 					}),
-					takenBy,
+					takenBy: effectiveTakenBy,
 					pillWeightMg,
+					doseUnit,
 				});
 			}
 			currentTime += intervalMs;
 		}
 	}
 
-	return intakes;
+	return result;
 }
 
 /**
  * Get upcoming intakes that fall within the reminder window.
  * Returns intakes that should be notified about right now.
+ * Now uses per-intake takenBy instead of medication-level.
  */
 export function getUpcomingIntakes(
 	medName: string,
-	blisters: Blister[],
+	intakes: Intake[],
 	minutesBefore: number,
-	takenBy: string[],
+	medicationTakenBy: string[], // Medication-level takenBy as fallback
 	pillWeightMg: number | null,
 	locale: string,
 	tz?: string,
-	nowOverride?: number
+	nowOverride?: number,
+	medicationId?: number,
+	doseUnit?: string
 ): UpcomingIntake[] {
 	const now = nowOverride ?? Date.now();
 	const timezone = tz ?? getTimezone();
@@ -303,11 +405,15 @@ export function getUpcomingIntakes(
 
 	const upcoming: UpcomingIntake[] = [];
 
-	for (const blister of blisters) {
-		const startTime = parseLocalDateTime(blister.start).getTime();
-		const intervalMs = blister.every * 24 * 60 * 60 * 1000;
+	for (let blisterIdx = 0; blisterIdx < intakes.length; blisterIdx++) {
+		const intake = intakes[blisterIdx];
+		const startTime = parseLocalDateTime(intake.start).getTime();
+		const intervalMs = intake.every * 24 * 60 * 60 * 1000;
 
 		if (intervalMs <= 0) continue;
+
+		// Determine takenBy for this intake
+		const effectiveTakenBy = intake.takenBy || null;
 
 		// Find the next scheduled intake time (could be today or in the future)
 		let nextTime = startTime;
@@ -339,15 +445,18 @@ export function getUpcomingIntakes(
 			const intakeDate = new Date(nextTime);
 			upcoming.push({
 				medName,
-				usage: blister.usage,
+				medicationId,
+				blisterIndex: blisterIdx,
+				usage: intake.usage,
 				intakeTime: intakeDate,
 				intakeTimeStr: intakeDate.toLocaleTimeString(locale, {
 					hour: "2-digit",
 					minute: "2-digit",
 					timeZone: timezone,
 				}),
-				takenBy,
+				takenBy: effectiveTakenBy,
 				pillWeightMg,
+				doseUnit,
 			});
 		}
 	}

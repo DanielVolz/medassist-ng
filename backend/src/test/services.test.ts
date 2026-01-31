@@ -16,11 +16,23 @@ import {
 	getTodayInTimezone,
 	getTodaysIntakes,
 	getUpcomingIntakes,
+	type Intake,
 	parseBlisters,
 	parseIntakeReminderState,
 	parseReminderState,
 	parseTakenByJson,
 } from "../utils/scheduler-utils.js";
+
+// Helper to convert Blister to Intake for tests
+function blisterToIntake(blister: Blister, takenBy: string | null = null, intakeRemindersEnabled = false): Intake {
+	return {
+		usage: blister.usage,
+		every: blister.every,
+		start: blister.start,
+		takenBy,
+		intakeRemindersEnabled,
+	};
+}
 
 describe("Scheduler Utils - Timezone Functions", () => {
 	let originalTz: string | undefined;
@@ -333,45 +345,45 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 	describe("getUpcomingIntakes", () => {
 		it("should return empty array when no intakes in window", () => {
 			// With parseLocalDateTime, times are treated as local - use same format for consistency
-			const blisters: Blister[] = [{ usage: 1, every: 1, start: "2025-01-01T08:00:00" }];
+			const intakes: Intake[] = [blisterToIntake({ usage: 1, every: 1, start: "2025-01-01T08:00:00" })];
 			// Set "now" to a time far from any scheduled intake (12:00 local)
 			const now = new Date(2025, 0, 1, 12, 0, 0).getTime();
 
-			const result = getUpcomingIntakes("TestMed", blisters, 15, [], null, "en-US", "UTC", now);
+			const result = getUpcomingIntakes("TestMed", intakes, 15, [], null, "en-US", "UTC", now);
 			expect(result).toEqual([]);
 		});
 
 		it("should find intake within reminder window", () => {
 			// Schedule intake at 08:00 local, check at 07:45 local (15 minutes before)
-			const blisters: Blister[] = [{ usage: 2, every: 1, start: "2025-01-01T08:00:00" }];
+			const intakes: Intake[] = [blisterToIntake({ usage: 2, every: 1, start: "2025-01-01T08:00:00" }, "Alice")];
 			const now = new Date(2025, 0, 1, 7, 45, 0).getTime();
 
-			const result = getUpcomingIntakes("TestMed", blisters, 15, ["Alice"], 500, "en-US", "UTC", now);
+			const result = getUpcomingIntakes("TestMed", intakes, 15, [], 500, "en-US", "UTC", now);
 
 			expect(result).toHaveLength(1);
 			expect(result[0].medName).toBe("TestMed");
 			expect(result[0].usage).toBe(2);
-			expect(result[0].takenBy).toEqual(["Alice"]);
+			expect(result[0].takenBy).toBe("Alice");
 			expect(result[0].pillWeightMg).toBe(500);
 		});
 
 		it("should skip blisters with zero interval", () => {
-			const blisters: Blister[] = [{ usage: 1, every: 0, start: "2025-01-01T08:00:00" }];
+			const intakes: Intake[] = [blisterToIntake({ usage: 1, every: 0, start: "2025-01-01T08:00:00" })];
 			const now = new Date(2025, 0, 1, 7, 45, 0).getTime();
 
-			const result = getUpcomingIntakes("TestMed", blisters, 15, [], null, "en-US", "UTC", now);
+			const result = getUpcomingIntakes("TestMed", intakes, 15, [], null, "en-US", "UTC", now);
 			expect(result).toEqual([]);
 		});
 
 		it("should handle multiple blisters", () => {
 			// Two intakes at 08:00 and 08:01 local
-			const blisters: Blister[] = [
-				{ usage: 1, every: 1, start: "2025-01-01T08:00:00" },
-				{ usage: 2, every: 1, start: "2025-01-01T08:01:00" },
+			const intakes: Intake[] = [
+				blisterToIntake({ usage: 1, every: 1, start: "2025-01-01T08:00:00" }),
+				blisterToIntake({ usage: 2, every: 1, start: "2025-01-01T08:01:00" }),
 			];
 			const now = new Date(2025, 0, 1, 7, 45, 0).getTime();
 
-			const result = getUpcomingIntakes("TestMed", blisters, 15, [], null, "en-US", "UTC", now);
+			const result = getUpcomingIntakes("TestMed", intakes, 15, [], null, "en-US", "UTC", now);
 
 			// Both should be found as they're within the window
 			expect(result.length).toBeGreaterThanOrEqual(1);
@@ -382,10 +394,10 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 		it("should return all intakes for today", () => {
 			// Daily medication at 08:00 starting yesterday
 			// With parseLocalDateTime, "08:00:00.000Z" is treated as 08:00 local time
-			const blisters: Blister[] = [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }];
+			const intakes: Intake[] = [blisterToIntake({ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" })];
 
 			// Get intakes for today (today's intake should be at 08:00 local)
-			const result = getTodaysIntakes("TestMed", blisters, [], null, "en-US", "UTC");
+			const result = getTodaysIntakes("TestMed", intakes, [], null, "en-US", "UTC");
 
 			expect(result.length).toBeGreaterThanOrEqual(1);
 			const intake = result.find((i) => i.intakeTime.getHours() === 8);
@@ -399,20 +411,23 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 			const todayMidnight = new Date();
 			todayMidnight.setUTCHours(0, 1, 0, 0);
 
-			const blisters: Blister[] = [
-				{
-					usage: 2,
-					every: 1,
-					start: todayMidnight.toISOString(),
-				},
+			const intakes: Intake[] = [
+				blisterToIntake(
+					{
+						usage: 2,
+						every: 1,
+						start: todayMidnight.toISOString(),
+					},
+					"Bob"
+				),
 			];
 
-			const result = getTodaysIntakes("PastMed", blisters, ["Bob"], 250, "en-US", "UTC");
+			const result = getTodaysIntakes("PastMed", intakes, [], 250, "en-US", "UTC");
 
 			expect(result).toHaveLength(1);
 			expect(result[0].medName).toBe("PastMed");
 			expect(result[0].usage).toBe(2);
-			expect(result[0].takenBy).toEqual(["Bob"]);
+			expect(result[0].takenBy).toBe("Bob");
 			expect(result[0].pillWeightMg).toBe(250);
 		});
 
@@ -424,12 +439,12 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 			const evening = new Date(today);
 			evening.setUTCHours(20, 0, 0, 0);
 
-			const blisters: Blister[] = [
-				{ usage: 1, every: 1, start: morning.toISOString() },
-				{ usage: 1, every: 1, start: evening.toISOString() },
+			const intakes: Intake[] = [
+				blisterToIntake({ usage: 1, every: 1, start: morning.toISOString() }),
+				blisterToIntake({ usage: 1, every: 1, start: evening.toISOString() }),
 			];
 
-			const result = getTodaysIntakes("MultiMed", blisters, [], null, "en-US", "UTC");
+			const result = getTodaysIntakes("MultiMed", intakes, [], null, "en-US", "UTC");
 
 			expect(result.length).toBeGreaterThanOrEqual(2);
 		});
@@ -439,16 +454,16 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 			const lastWeek = new Date();
 			lastWeek.setDate(lastWeek.getDate() - 7);
 
-			const blisters: Blister[] = [
-				{
+			const intakes: Intake[] = [
+				blisterToIntake({
 					usage: 1,
 					every: 7,
 					start: lastWeek.toISOString(),
-				},
+				}),
 			];
 
 			// If today is not the same day of week, should return empty
-			const result = getTodaysIntakes("WeeklyMed", blisters, [], null, "en-US", "UTC");
+			const result = getTodaysIntakes("WeeklyMed", intakes, [], null, "en-US", "UTC");
 
 			// This test might return 0 or 1 depending on the day
 			expect(Array.isArray(result)).toBe(true);
@@ -458,15 +473,15 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 			// With parseLocalDateTime, the Z suffix is ignored and time is treated as local server time
 			// The intakeTimeStr is then formatted for the target timezone (Europe/Berlin)
 			// So if server is in UTC, 14:00 server time becomes 15:00 Europe/Berlin time
-			const blisters: Blister[] = [
-				{
+			const intakes: Intake[] = [
+				blisterToIntake({
 					usage: 1,
 					every: 1,
 					start: "2025-01-01T14:00:00.000Z", // Treated as 14:00 server local time
-				},
+				}),
 			];
 
-			const result = getTodaysIntakes("TzMed", blisters, [], null, "de-DE", "Europe/Berlin");
+			const result = getTodaysIntakes("TzMed", intakes, [], null, "de-DE", "Europe/Berlin");
 
 			expect(Array.isArray(result)).toBe(true);
 			if (result.length > 0) {

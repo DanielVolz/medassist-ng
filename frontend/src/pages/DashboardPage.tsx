@@ -1,26 +1,14 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
+import { getStockStatus } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
 function userStorageKey(userId: number | undefined, key: string): string {
 	return userId ? `user_${userId}_${key}` : key;
-}
-
-// Helper function to get stock status
-function getStockStatus(
-	daysLeft: number | null,
-	medsLeft: number,
-	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number }
-) {
-	if (medsLeft <= 0 || daysLeft === null || daysLeft <= 0) return { className: "danger", label: "status.outOfStock" };
-	if (daysLeft <= settings.lowStockDays) return { className: "danger", label: "status.lowStock" };
-	if (daysLeft >= settings.highStockDays) return { className: "success", label: "status.highStock" };
-	return { className: "success", label: "status.normal" };
 }
 
 // Helper function to calculate blister stock
@@ -55,19 +43,6 @@ function getMedTotal(med: {
 	stockAdjustment?: number | null;
 }): number {
 	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
-}
-
-// Get next reminder date for a medication
-function getNextReminderForMed(row: Coverage, reminderDaysBefore: number, locale: string): string {
-	if (!row.depletionDate) return "-";
-	const depletionDate = new Date(row.depletionDate);
-	const reminderDate = new Date(depletionDate);
-	reminderDate.setDate(reminderDate.getDate() - reminderDaysBefore);
-
-	const now = new Date();
-	if (reminderDate <= now) return "-";
-
-	return reminderDate.toLocaleDateString(locale, { day: "2-digit", month: "short" });
 }
 
 // Notification bell SVG icon (no emoji)
@@ -112,7 +87,7 @@ function getReminderStatusData(
 	const lowCount = allCoverage.filter((c) => {
 		if (c.medsLeft <= 0) return false;
 		if (c.daysLeft === null) return false;
-		return c.daysLeft < lowStockDays && c.daysLeft > 3;
+		return c.daysLeft < lowStockDays && c.daysLeft > reminderDaysBefore;
 	}).length;
 
 	// Determine status
@@ -134,13 +109,16 @@ function getReminderStatusData(
 		};
 	}
 
-	// Collect all low stock medications (critical + low)
-	const lowStockMeds: { name: string; daysLeft: number; isCritical: boolean }[] = [];
+	// Collect all low stock medications (critical + low), deduplicated by name
+	const lowStockMap = new Map<string, { name: string; daysLeft: number; isCritical: boolean }>();
 
 	// Add critical meds (from lowCoverage - these are ≤3 days)
 	for (const c of lowCoverage) {
 		if (c.daysLeft !== null) {
-			lowStockMeds.push({ name: c.name, daysLeft: Math.round(c.daysLeft), isCritical: true });
+			const existing = lowStockMap.get(c.name);
+			if (!existing || c.daysLeft < existing.daysLeft) {
+				lowStockMap.set(c.name, { name: c.name, daysLeft: Math.round(c.daysLeft), isCritical: true });
+			}
 		}
 	}
 
@@ -148,13 +126,16 @@ function getReminderStatusData(
 	for (const c of allCoverage) {
 		if (c.medsLeft <= 0) continue;
 		if (c.daysLeft === null) continue;
-		if (c.daysLeft < lowStockDays && c.daysLeft > 3) {
-			lowStockMeds.push({ name: c.name, daysLeft: Math.round(c.daysLeft), isCritical: false });
+		if (c.daysLeft < lowStockDays && c.daysLeft > reminderDaysBefore) {
+			const existing = lowStockMap.get(c.name);
+			if (!existing || c.daysLeft < existing.daysLeft) {
+				lowStockMap.set(c.name, { name: c.name, daysLeft: Math.round(c.daysLeft), isCritical: false });
+			}
 		}
 	}
 
-	// Sort by days left (most urgent first)
-	lowStockMeds.sort((a, b) => a.daysLeft - b.daysLeft);
+	// Convert to array and sort by days left (most urgent first)
+	const lowStockMeds = Array.from(lowStockMap.values()).sort((a, b) => a.daysLeft - b.daysLeft);
 
 	// Parse last sent info
 	let lastSent: { date: string; medName: string | null; takenBy: string | null } | null = null;
@@ -213,38 +194,8 @@ export function DashboardPage() {
 		openUserFilter,
 		openShareDialog,
 		openScheduleLightbox,
+		stockThresholds,
 	} = useAppContext();
-
-	// Local state for reminder email
-	const [sendingReminderEmail, setSendingReminderEmail] = useState(false);
-	const [reminderEmailResult, setReminderEmailResult] = useState<{ success: boolean; message: string } | null>(null);
-
-	async function sendReminderEmail() {
-		if (!settings.notificationEmail || coverage.low.length === 0) return;
-		setSendingReminderEmail(true);
-		setReminderEmailResult(null);
-
-		try {
-			const res = await fetch("/api/reminder/send-email", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify({
-					email: settings.notificationEmail,
-					lowStock: coverage.low,
-				}),
-			});
-			const data = await res.json();
-			if (res.ok) {
-				setReminderEmailResult({ success: true, message: data.message || "Email sent!" });
-			} else {
-				setReminderEmailResult({ success: false, message: data.error || "Failed to send" });
-			}
-		} catch {
-			setReminderEmailResult({ success: false, message: "Network error" });
-		}
-		setSendingReminderEmail(false);
-	}
 
 	// Get structured reminder data
 	const reminderData = getReminderStatusData(
@@ -279,23 +230,46 @@ export function DashboardPage() {
 							<NotificationBellIcon />
 						</span>
 						<span className="reminder-status-title">{t("dashboard.reminders.active")}</span>
-						<span className={`reminder-status-badge ${reminderData.status.className}`}>
-							{reminderData.status.className === "success" && "✓ "}
-							{reminderData.status.text}
-						</span>
+						{reminderData.lowStockMeds.length === 0 && (
+							<span className={`reminder-status-badge ${reminderData.status.className}`}>
+								{reminderData.status.className === "success" && "✓ "}
+								{reminderData.status.text}
+							</span>
+						)}
 					</div>
 					{(reminderData.lowStockMeds.length > 0 || (intakeRemindersEnabled && reminderData.lastSent)) && (
 						<div className="reminder-status-details">
 							{stockRemindersEnabled && reminderData.lowStockMeds.length > 0 && (
-								<div className="reminder-low-stock-list">
-									{reminderData.lowStockMeds.map((med) => (
-										<div key={med.name} className={`reminder-low-stock-item ${med.isCritical ? "critical" : ""}`}>
-											<span className="reminder-med-name">{med.name}</span>
-											<span className="reminder-days-left">
-												{t("dashboard.reminders.daysLeft", { count: med.daysLeft, days: med.daysLeft })}
-											</span>
-										</div>
-									))}
+								<div className="reminder-status-row">
+									<span className="reminder-status-label">{t("dashboard.reminders.needsRefill")}:</span>
+									<span className="reminder-status-value">
+										{reminderData.lowStockMeds.map((med, idx) => {
+											const medication = meds.find((m) => m.name === med.name);
+											const cov = coverage.all.find((c) => c.name === med.name);
+											const status = cov ? getStockStatus(cov.daysLeft, cov.medsLeft, stockThresholds) : null;
+											const textClass =
+												status?.className === "danger"
+													? "danger-text"
+													: status?.className === "warning"
+														? "warning-text"
+														: "";
+											return (
+												<span key={med.name}>
+													{idx > 0 && ", "}
+													<span
+														className={`med-link clickable ${textClass}`}
+														onClick={() => medication && openMedDetail(medication)}
+													>
+														{med.name}
+													</span>
+													<span className={`reminder-days-left ${textClass}`}>
+														{" "}
+														{t("dashboard.reminders.daysLeft", { count: med.daysLeft, days: med.daysLeft })}
+													</span>
+												</span>
+											);
+										})}
+									</span>
 								</div>
 							)}
 							{intakeRemindersEnabled && reminderData.lastSent && (
@@ -306,9 +280,9 @@ export function DashboardPage() {
 											<span className="reminder-med-name">{reminderData.lastSent.medName}</span>
 										)}
 										{reminderData.lastSent.takenBy && (
-											<span className="reminder-taken-by">({reminderData.lastSent.takenBy})</span>
+											<span className="reminder-taken-by"> ({reminderData.lastSent.takenBy})</span>
 										)}
-										<span className="reminder-date">{reminderData.lastSent.date}</span>
+										<span className="reminder-date"> {reminderData.lastSent.date}</span>
 									</span>
 								</div>
 							)}
@@ -328,149 +302,53 @@ export function DashboardPage() {
 								return <p className="muted">{t("dashboard.reorder.noMeds")}</p>;
 							}
 
-							// Count medications with "Low" stock status (based on lowStockDays setting)
-							const lowStockMeds = coverage.all.filter((c) => {
-								if (c.medsLeft <= 0) return true; // out of stock
-								if (c.daysLeft === null) return false; // no schedule
-								return c.daysLeft < settings.lowStockDays;
-							});
-							const lowStockCount = lowStockMeds.length;
-							const lowStockNames = lowStockMeds.map((c) => c.name).join(", ");
-
-							if (coverage.low.length === 0) {
-								// No critical meds (≤3 days)
-								if (lowStockCount === 0) {
-									// All good - everything is Normal or High
-									return <p className="success-text">{t("dashboard.reorder.allGood")}</p>;
-								} else {
-									// Some meds are Low but not critical - render with clickable med names
-									return (
-										<p className="warning-text">
-											{t("dashboard.reorder.lowWarningPrefix")}{" "}
-											{lowStockMeds.map((c, idx) => {
-												const med = meds.find((m) => m.name === c.name);
-												return (
-													<span key={c.name}>
-														{idx > 0 && ", "}
-														<span className="med-link clickable" onClick={() => med && openMedDetail(med)}>
-															{c.name}
-														</span>
-													</span>
-												);
-											})}{" "}
-											{t("dashboard.reorder.lowWarningSuffix", { count: lowStockCount })}
-										</p>
-									);
+							// Count medications with low stock (based on lowStockDays setting), deduplicated by name
+							const lowStockMap = new Map<string, Coverage>();
+							for (const c of coverage.all) {
+								if (c.daysLeft === null && c.medsLeft > 0) continue; // no schedule, has stock
+								if (c.medsLeft <= 0 || c.daysLeft === null || c.daysLeft < settings.lowStockDays) {
+									const existing = lowStockMap.get(c.name);
+									if (!existing || (c.daysLeft ?? 0) < (existing.daysLeft ?? 0)) {
+										lowStockMap.set(c.name, c);
+									}
 								}
 							}
+							const lowStockMeds = Array.from(lowStockMap.values());
+							const lowStockCount = lowStockMeds.length;
 
+							if (lowStockCount === 0) {
+								// All good - everything is Normal or High
+								return <p className="success-text">{t("dashboard.reorder.allGood")}</p>;
+							}
+
+							// Some meds are low - show simple text with clickable names and days left
 							return (
-								<>
-									<div className="table table-7">
-										<div className="table-head">
-											<span>{t("table.name")}</span>
-											<span>{t("table.fullBlisters")}</span>
-											<span>{t("table.openBlister")}</span>
-											<span>{t("table.daysLeft")}</span>
-											<span>{t("table.status")}</span>
-											<span>{t("table.runsOut")}</span>
-											<span>{t("table.autoRemind")}</span>
-										</div>
-										{coverage.low.map((row) => {
-											const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
-											const med = meds.find((m) => m.name === row.name);
-											const textClass =
-												status.className === "danger"
-													? "danger-text"
-													: status.className === "warning"
-														? "warning-text"
-														: "success-text";
-											const stock = getBlisterStock(
-												Math.round(row.medsLeft),
-												med?.pillsPerBlister ?? 1,
-												med?.looseTablets ?? 0,
-												med ? getMedTotal(med) : Math.round(row.medsLeft)
-											);
-											return (
-												<div key={row.name} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
-													<span data-label={t("table.name")} className="cell-with-avatar">
-														<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
-														<span className="med-name-text">{row.name}</span>
-														{med?.takenBy &&
-															med.takenBy.length > 0 &&
-															med.takenBy.map((person) => (
-																<span
-																	key={person}
-																	className="taken-by-badge clickable"
-																	onClick={(e) => {
-																		e.stopPropagation();
-																		openUserFilter(person);
-																	}}
-																>
-																	{person}
-																</span>
-															))}
-														{(med?.intakeRemindersEnabled || med?.notes) && (
-															<span className="med-icons">
-																{med?.intakeRemindersEnabled && (
-																	<span
-																		className="reminder-icon info-tooltip"
-																		data-tooltip={t("tooltips.intakeReminders")}
-																	>
-																		🔔
-																	</span>
-																)}
-																{med?.notes && (
-																	<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
-																		📝
-																	</span>
-																)}
-															</span>
-														)}
-													</span>
-													<span data-label={t("table.fullBlisters")} className={textClass}>
-														{formatFullBlisters(stock.fullBlisters, t)}
-													</span>
-													<span data-label={t("table.openBlister")} className={textClass}>
-														{formatOpenBlisterAndLoose(
-															stock.openBlisterPills,
-															stock.loosePills,
-															med?.pillsPerBlister ?? 1,
-															t
-														)}
-													</span>
-													<span data-label={t("table.days")} className={textClass}>
-														{formatNumber(row.daysLeft)}
-													</span>
-													<span data-label={t("table.status")} className={`status-chip ${status.className}`}>
-														{t(status.label)}
-													</span>
-													<span data-label={t("table.runsOut")}>{row.depletionDate ?? "-"}</span>
-													<span data-label={t("table.autoRemind")} className="next-reminder-date">
-														{getNextReminderForMed(row, settings.reminderDaysBefore, getSystemLocale(i18n.language))}
-													</span>
-												</div>
-											);
-										})}
-									</div>
-									{(settings.emailEnabled || settings.shoutrrrEnabled) && (
-										<div className="email-send-action">
-											<button
-												type="button"
-												className="ghost"
-												onClick={sendReminderEmail}
-												disabled={sendingReminderEmail}
-											>
-												{sendingReminderEmail ? t("common.sending") : t("dashboard.reorder.sendReminder")}
-											</button>
-											{reminderEmailResult && (
-												<span className={reminderEmailResult.success ? "success-text" : "danger-text"}>
-													{reminderEmailResult.message}
+								<p>
+									{t("dashboard.reorder.lowWarningPrefix")}{" "}
+									{lowStockMeds.map((c, idx) => {
+										const med = meds.find((m) => m.name === c.name);
+										const status = getStockStatus(c.daysLeft, c.medsLeft, stockThresholds);
+										const textClass =
+											status.className === "danger"
+												? "danger-text"
+												: status.className === "warning"
+													? "warning-text"
+													: "";
+										return (
+											<span key={c.name}>
+												{idx > 0 && ", "}
+												<span className={`med-link clickable ${textClass}`} onClick={() => med && openMedDetail(med)}>
+													{c.name}
 												</span>
-											)}
-										</div>
-									)}
-								</>
+												<span className={`reminder-days-left ${textClass}`}>
+													{" "}
+													({t("dashboard.reminders.daysLeft", { count: c.daysLeft ?? 0, days: c.daysLeft ?? 0 })})
+												</span>
+											</span>
+										);
+									})}{" "}
+									{t("dashboard.reorder.lowWarningSuffix", { count: lowStockCount })}
+								</p>
 							);
 						})()}
 					</article>
@@ -485,15 +363,15 @@ export function DashboardPage() {
 					<div className="table table-7">
 						<div className="table-head">
 							<span>{t("table.name")}</span>
-							<span>{t("table.fullBlisters")}</span>
-							<span>{t("table.openBlister")}</span>
+							<span>{t("table.stock")}</span>
+							<span>{t("table.stockDetails")}</span>
 							<span>{t("table.daysLeft")}</span>
 							<span>{t("table.runsOut")}</span>
 							<span>{t("table.expiry")}</span>
 							<span>{t("table.status")}</span>
 						</div>
 						{coverage.all.map((row) => {
-							const status = getStockStatus(row.daysLeft, row.medsLeft, settings);
+							const status = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds);
 							const med = meds.find((m) => m.name === row.name);
 							const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
 							const textClass =
@@ -544,11 +422,20 @@ export function DashboardPage() {
 											</span>
 										)}
 									</span>
-									<span data-label={t("table.fullBlisters")} className={textClass}>
-										{formatFullBlisters(stock.fullBlisters, t)}
+									<span data-label={t("table.stock")} className={textClass}>
+										{med?.packageType === "bottle"
+											? t("table.pillsCount", { count: Math.round(row.medsLeft) })
+											: formatFullBlisters(stock.fullBlisters, t)}
 									</span>
-									<span data-label={t("table.openBlister")} className={textClass}>
-										{formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.pillsPerBlister ?? 1, t)}
+									<span data-label={t("table.stockDetails")} className={textClass}>
+										{med?.packageType === "bottle"
+											? "-"
+											: formatOpenBlisterAndLoose(
+													stock.openBlisterPills,
+													stock.loosePills,
+													med?.pillsPerBlister ?? 1,
+													t
+												)}
 									</span>
 									<span data-label={t("table.daysLeft")} className={textClass}>
 										{formatNumber(row.daysLeft)}
@@ -605,9 +492,7 @@ export function DashboardPage() {
 								const missedCount = missedPastDoseIds.length;
 								const totalPastDoses = pastDays.flatMap((d) =>
 									d.meds.flatMap((m) =>
-										m.doses.flatMap((dose) =>
-											(dose.takenBy || []).length > 0 ? dose.takenBy.map((p) => `${dose.id}-${p}`) : [dose.id]
-										)
+										m.doses.flatMap((dose) => (dose.takenBy ? [`${dose.id}-${dose.takenBy}`] : [dose.id]))
 									)
 								);
 								return (
@@ -656,9 +541,7 @@ export function DashboardPage() {
 						{showPastDays &&
 							pastDays.map((day) => {
 								const allDoseIds = day.meds.flatMap((item) =>
-									item.doses.flatMap((d) =>
-										(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-									)
+									item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]))
 								);
 								const allDayTaken =
 									allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id) || dismissedDoses.has(id));
@@ -703,9 +586,7 @@ export function DashboardPage() {
 												const med = meds.find((m) => m.name === item.medName);
 												const medCov = coverageByMed[item.medName];
 												const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
-												const itemDoseIds = item.doses.flatMap((d) =>
-													(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-												);
+												const itemDoseIds = item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]));
 												const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -736,13 +617,14 @@ export function DashboardPage() {
 														<div className="doses-col">
 															{item.doses.map((dose) => {
 																// If no takenBy, show single checkbox; otherwise show one per person
-																const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+																const people = dose.takenBy ? [dose.takenBy] : [null];
 																return (
 																	<div key={dose.id} className="dose-item past">
 																		<span className="dose-time">{dose.timeStr}</span>
 																		<span className="dose-usage">
 																			{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																			{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																			{med?.pillWeightMg &&
+																				` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																		</span>
 																		<div className="dose-checks">
 																			{people.map((person) => {
@@ -795,9 +677,7 @@ export function DashboardPage() {
 							(() => {
 								const day = todayDay;
 								const allDoseIds = day.meds.flatMap((item) =>
-									item.doses.flatMap((d) =>
-										(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-									)
+									item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]))
 								);
 								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
@@ -808,7 +688,7 @@ export function DashboardPage() {
 									const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
 									if (willBeOutOfStock) return "danger";
 									if (!medCoverage) return "success";
-									const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings);
+									const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds);
 									return status.className;
 								});
 								const worstStatus = dayStockStatuses.includes("danger")
@@ -855,11 +735,9 @@ export function DashboardPage() {
 												const status = willBeOutOfStock
 													? { className: "danger", label: "status.outOfStock" }
 													: medCoverage
-														? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings)
+														? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
 														: null;
-												const itemDoseIds = item.doses.flatMap((d) =>
-													(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-												);
+												const itemDoseIds = item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]));
 												const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -891,7 +769,7 @@ export function DashboardPage() {
 														<div className="doses-col">
 															{item.doses.map((dose) => {
 																const isOverdue = dose.when < Date.now();
-																const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+																const people = dose.takenBy ? [dose.takenBy] : [null];
 																const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
 																return (
 																	<div
@@ -901,7 +779,8 @@ export function DashboardPage() {
 																		<span className="dose-time">{dose.timeStr}</span>
 																		<span className="dose-usage">
 																			{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																			{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																			{med?.pillWeightMg &&
+																				` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																		</span>
 																		<div className="dose-checks">
 																			{people.map((person) => {
@@ -954,9 +833,7 @@ export function DashboardPage() {
 							(() => {
 								const totalFutureDoses = futureDays.flatMap((d) =>
 									d.meds.flatMap((m) =>
-										m.doses.flatMap((dose) =>
-											(dose.takenBy || []).length > 0 ? dose.takenBy.map((p) => `${dose.id}-${p}`) : [dose.id]
-										)
+										m.doses.flatMap((dose) => (dose.takenBy ? [`${dose.id}-${dose.takenBy}`] : [dose.id]))
 									)
 								);
 								const takenFutureDoses = totalFutureDoses.filter((id) => takenDoses.has(id)).length;
@@ -988,9 +865,7 @@ export function DashboardPage() {
 						{showFutureDays &&
 							futureDays.map((day) => {
 								const allDoseIds = day.meds.flatMap((item) =>
-									item.doses.flatMap((d) =>
-										(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-									)
+									item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]))
 								);
 								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
@@ -1001,7 +876,7 @@ export function DashboardPage() {
 									const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
 									if (willBeOutOfStock) return "danger";
 									if (!medCoverage) return "success";
-									const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings);
+									const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds);
 									return status.className;
 								});
 								const worstStatus = dayStockStatuses.includes("danger")
@@ -1047,11 +922,9 @@ export function DashboardPage() {
 												const status = willBeOutOfStock
 													? { className: "danger", label: "status.outOfStock" }
 													: medCoverage
-														? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings)
+														? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
 														: null;
-												const itemDoseIds = item.doses.flatMap((d) =>
-													(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-												);
+												const itemDoseIds = item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]));
 												const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -1082,14 +955,15 @@ export function DashboardPage() {
 														</div>
 														<div className="doses-col">
 															{item.doses.map((dose) => {
-																const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+																const people = dose.takenBy ? [dose.takenBy] : [null];
 																const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
 																return (
 																	<div key={dose.id} className={`dose-item future ${allTaken ? "all-taken" : ""}`}>
 																		<span className="dose-time">{dose.timeStr}</span>
 																		<span className="dose-usage">
 																			{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																			{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} mg)`}
+																			{med?.pillWeightMg &&
+																				` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																		</span>
 																		<div className="dose-checks">
 																			{people.map((person) => {

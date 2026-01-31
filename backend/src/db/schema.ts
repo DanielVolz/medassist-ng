@@ -28,16 +28,21 @@ export const medications = sqliteTable("medications", {
 	name: text("name", { length: 100 }).notNull(),
 	genericName: text("generic_name", { length: 100 }),
 	takenByJson: text("taken_by_json").notNull().default("[]"), // JSON array of person names
+	packageType: text("package_type", { length: 20 }).notNull().default("blister"), // 'blister' or 'bottle'
 	packCount: integer("pack_count").notNull().default(1),
 	blistersPerPack: integer("blisters_per_pack").notNull().default(1),
 	pillsPerBlister: integer("pills_per_blister").notNull().default(1),
-	looseTablets: integer("loose_tablets").notNull().default(0), // TRUE loose pills (user-entered)
+	totalPills: integer("total_pills"), // For bottle type: total capacity of the container
+	looseTablets: integer("loose_tablets").notNull().default(0), // For blister: extra loose pills; for bottle: current stock
 	stockAdjustment: integer("stock_adjustment").notNull().default(0), // Hidden offset from stock corrections
 	lastStockCorrectionAt: integer("last_stock_correction_at", { mode: "timestamp" }), // When stock was last corrected - consumed doses before this don't count
 	pillWeightMg: integer("pill_weight_mg"),
-	usageJson: text("usage_json").notNull().default("[]"),
-	everyJson: text("every_json").notNull().default("[]"),
-	startJson: text("start_json").notNull().default("[]"),
+	doseUnit: text("dose_unit", { length: 20 }).default("mg"), // Unit for the dose (mg, g, mcg, ml, IU, etc.)
+	usageJson: text("usage_json").notNull().default("[]"), // DEPRECATED: Use intakesJson instead
+	everyJson: text("every_json").notNull().default("[]"), // DEPRECATED: Use intakesJson instead
+	startJson: text("start_json").notNull().default("[]"), // DEPRECATED: Use intakesJson instead
+	// New unified intakes structure: [{usage, every, start, takenBy, intakeRemindersEnabled}]
+	intakesJson: text("intakes_json").notNull().default("[]"),
 	imageUrl: text("image_url"),
 	expiryDate: text("expiry_date"),
 	notes: text("notes"),

@@ -7,10 +7,12 @@ const defaultForm: FormState = {
 	name: "",
 	genericName: "",
 	takenBy: [],
+	packageType: "blister",
 	packCount: "1",
 	blistersPerPack: "1",
 	pillsPerBlister: "1",
 	looseTablets: "0",
+	totalPills: "",
 	pillWeightMg: "",
 	expiryDate: "",
 	notes: "",
@@ -21,6 +23,16 @@ const defaultForm: FormState = {
 			every: "1",
 			startDate: "2024-01-01",
 			startTime: "09:00",
+		},
+	],
+	intakes: [
+		{
+			usage: "1",
+			every: "1",
+			startDate: "2024-01-01",
+			startTime: "09:00",
+			takenBy: "",
+			intakeRemindersEnabled: false,
 		},
 	],
 };
@@ -44,6 +56,9 @@ const defaultProps = {
 	onSetBlisterValue: vi.fn(),
 	onAddBlister: vi.fn(),
 	onRemoveBlister: vi.fn(),
+	onSetIntakeValue: vi.fn(),
+	onAddIntake: vi.fn(),
+	onRemoveIntake: vi.fn(),
 	onHandleValueChange: vi.fn(),
 	refillPacks: 0,
 	onRefillPacksChange: vi.fn(),
@@ -185,14 +200,14 @@ describe("MobileEditModal", () => {
 		expect(screen.getByText(/form\.blisters\.addIntake/i)).toBeInTheDocument();
 	});
 
-	it("calls onAddBlister when add intake clicked", () => {
-		const onAddBlister = vi.fn();
-		render(<MobileEditModal {...defaultProps} onAddBlister={onAddBlister} />);
+	it("calls onAddIntake when add intake clicked", () => {
+		const onAddIntake = vi.fn();
+		render(<MobileEditModal {...defaultProps} onAddIntake={onAddIntake} />);
 
 		const addBtn = screen.getByText(/form\.blisters\.addIntake/i);
 		fireEvent.click(addBtn);
 
-		expect(onAddBlister).toHaveBeenCalledTimes(1);
+		expect(onAddIntake).toHaveBeenCalledTimes(1);
 	});
 
 	it("renders modal content", () => {
@@ -261,6 +276,24 @@ describe("MobileEditModal blister management", () => {
 				{ usage: "1", every: "1", startDate: "2024-01-01", startTime: "09:00" },
 				{ usage: "2", every: "7", startDate: "2024-01-01", startTime: "10:00" },
 			],
+			intakes: [
+				{
+					usage: "1",
+					every: "1",
+					startDate: "2024-01-01",
+					startTime: "09:00",
+					takenBy: "",
+					intakeRemindersEnabled: false,
+				},
+				{
+					usage: "2",
+					every: "7",
+					startDate: "2024-01-01",
+					startTime: "10:00",
+					takenBy: "",
+					intakeRemindersEnabled: false,
+				},
+			],
 		};
 
 		render(<MobileEditModal {...defaultProps} form={form} />);
@@ -269,34 +302,52 @@ describe("MobileEditModal blister management", () => {
 		expect(blisterRows.length).toBe(2);
 	});
 
-	it("calls onRemoveBlister when remove button clicked", () => {
-		const onRemoveBlister = vi.fn();
+	it("calls onRemoveIntake when remove button clicked", () => {
+		const onRemoveIntake = vi.fn();
 		const form = {
 			...defaultForm,
 			blisters: [
 				{ usage: "1", every: "1", startDate: "2024-01-01", startTime: "09:00" },
 				{ usage: "2", every: "7", startDate: "2024-01-01", startTime: "10:00" },
 			],
+			intakes: [
+				{
+					usage: "1",
+					every: "1",
+					startDate: "2024-01-01",
+					startTime: "09:00",
+					takenBy: "",
+					intakeRemindersEnabled: false,
+				},
+				{
+					usage: "2",
+					every: "7",
+					startDate: "2024-01-01",
+					startTime: "10:00",
+					takenBy: "",
+					intakeRemindersEnabled: false,
+				},
+			],
 		};
 
-		render(<MobileEditModal {...defaultProps} form={form} onRemoveBlister={onRemoveBlister} />);
+		render(<MobileEditModal {...defaultProps} form={form} onRemoveIntake={onRemoveIntake} />);
 
 		const removeButtons = document.querySelectorAll(".blister-row button.danger");
 		if (removeButtons.length > 0) {
 			fireEvent.click(removeButtons[0]);
-			expect(onRemoveBlister).toHaveBeenCalled();
+			expect(onRemoveIntake).toHaveBeenCalled();
 		}
 	});
 
-	it("calls onSetBlisterValue when changing blister field", () => {
-		const onSetBlisterValue = vi.fn();
+	it("calls onSetIntakeValue when changing blister field", () => {
+		const onSetIntakeValue = vi.fn();
 
-		render(<MobileEditModal {...defaultProps} onSetBlisterValue={onSetBlisterValue} />);
+		render(<MobileEditModal {...defaultProps} onSetIntakeValue={onSetIntakeValue} />);
 
 		const usageInputs = document.querySelectorAll('.blister-row input[type="number"]');
 		if (usageInputs.length > 0) {
 			fireEvent.change(usageInputs[0], { target: { value: "2" } });
-			expect(onSetBlisterValue).toHaveBeenCalled();
+			expect(onSetIntakeValue).toHaveBeenCalled();
 		}
 	});
 });

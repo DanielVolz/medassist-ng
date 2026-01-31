@@ -130,6 +130,7 @@ export type SharedMedication = {
 	takenBy: string[];
 	blisters: Blister[];
 	dismissedUntil?: string | null;
+	updatedAt?: string | number | null; // For filtering out doses from previous schedule configurations
 };
 
 export type SharedScheduleData = {

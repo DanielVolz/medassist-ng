@@ -480,7 +480,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 						return [];
 					}
 
-					return (dose.takenBy || []).length > 0 ? dose.takenBy.map((p: string) => `${dose.id}-${p}`) : [dose.id];
+					const takenByArray = Array.isArray(dose.takenBy) ? dose.takenBy : [];
+					return takenByArray.length > 0 ? takenByArray.map((p: string) => `${dose.id}-${p}`) : [dose.id];
 				});
 			})
 		);

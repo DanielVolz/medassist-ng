@@ -126,9 +126,10 @@ export function SchedulePage() {
 					{showPastDays &&
 						pastDays.map((day) => {
 							const allDoseIds = day.meds.flatMap((item) =>
-								item.doses.flatMap((d) =>
-									(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-								)
+								item.doses.flatMap((d) => {
+									const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
+									return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
+								})
 							);
 							const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 							const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
@@ -171,9 +172,10 @@ export function SchedulePage() {
 											const med = meds.find((m) => m.name === item.medName);
 											const medCov = coverageByMed[item.medName];
 											const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
-											const itemDoseIds = item.doses.flatMap((d) =>
-												(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-											);
+											const itemDoseIds = item.doses.flatMap((d) => {
+												const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
+												return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
+											});
 											const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -275,9 +277,10 @@ export function SchedulePage() {
 										: medCoverage
 											? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings)
 											: null;
-									const itemDoseIds = item.doses.flatMap((d) =>
-										(d.takenBy || []).length > 0 ? d.takenBy.map((p) => `${d.id}-${p}`) : [d.id]
-									);
+									const itemDoseIds = item.doses.flatMap((d) => {
+										const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
+										return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
+									});
 									const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 									return (
 										<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>

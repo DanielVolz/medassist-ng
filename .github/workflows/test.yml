@@ -83,3 +83,95 @@ jobs:
 
       - name: TypeScript type check & build
         run: npm run build
+
+  # =============================================================================
+  # E2E Tests (Playwright)
+  # =============================================================================
+  e2e-test:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [backend-test, frontend-build]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Create test environment file
+        run: |
+          cat > .env << EOF
+          JWT_SECRET=testsecret123456
+          REFRESH_TOKEN_SECRET=refreshsecret123456
+          AUTH_ENABLED=true
+          REGISTRATION_ENABLED=true
+          LOCAL_AUTH_ENABLED=true
+          EOF
+
+      - name: Start backend server
+        run: npm run dev &
+        working-directory: backend
+        env:
+          JWT_SECRET: testsecret123456
+          REFRESH_TOKEN_SECRET: refreshsecret123456
+          AUTH_ENABLED: true
+          REGISTRATION_ENABLED: true
+          LOCAL_AUTH_ENABLED: true
+
+      - name: Start frontend dev server
+        run: npm run dev &
+        working-directory: frontend
+        env:
+          BACKEND_URL: http://localhost:3000
+
+      - name: Wait for servers to be ready
+        run: |
+          echo "Waiting for backend..."
+          timeout 60 bash -c 'until curl -s http://localhost:3000/health > /dev/null; do sleep 2; done'
+          echo "Backend ready!"
+          echo "Waiting for frontend..."
+          timeout 60 bash -c 'until curl -s http://localhost:5173 > /dev/null; do sleep 2; done'
+          echo "Frontend ready!"
+
+      - name: Run E2E tests
+        run: npm run test:e2e -- --project=chromium
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:5173
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-test-results
+          path: frontend/test-results/
+          retention-days: 7

@@ -122,14 +122,16 @@ test.describe("Settings Page", () => {
 
 			// Toggle the checkbox
 			await checkbox.click();
-			await page.waitForTimeout(300);
 
-			const newState = await checkbox.isChecked();
-			expect(newState).not.toBe(initialState);
+			// Wait for checkbox state to change (auto-waiting via assertion)
+			if (initialState) {
+				await expect(checkbox).not.toBeChecked();
+			} else {
+				await expect(checkbox).toBeChecked();
+			}
 
 			// Toggle back
 			await checkbox.click();
-			await page.waitForTimeout(300);
 			await expect(checkbox).toHaveJSProperty("checked", initialState);
 		}
 	});

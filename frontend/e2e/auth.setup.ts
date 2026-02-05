@@ -18,11 +18,9 @@ setup("authenticate", async ({ page }) => {
 
 	await page.goto("/");
 
-	// Wait for the app to load and determine auth state
-	await expect(page.locator("body")).toContainText(/.+/, { timeout: 15000 });
-
-	// Wait for loading state to resolve
-	await page.waitForTimeout(1000); // Give the app time to fetch auth state
+	// Wait for the app to fully load (network idle + content visible)
+	await page.waitForLoadState("networkidle");
+	await expect(page.locator("body")).not.toHaveText(/^$/, { timeout: 15000 });
 
 	// Check if auth is disabled (we can access dashboard directly)
 	const dashboardVisible = await page

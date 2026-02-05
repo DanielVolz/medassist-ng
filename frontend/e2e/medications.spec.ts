@@ -4,6 +4,20 @@ import { expect, test } from "@playwright/test";
 const authFile = path.join(import.meta.dirname, ".auth", "user.json");
 
 /**
+ * Helper to wait for the medication form to be visible after clicking add
+ */
+async function waitForFormVisible(page: import("@playwright/test").Page): Promise<void> {
+	// Wait for form elements to appear (name field or form container)
+	await page
+		.getByLabel(/commercial.*name|name/i)
+		.first()
+		.waitFor({ state: "visible", timeout: 5000 })
+		.catch(() => {
+			// Form might not be available, that's ok
+		});
+}
+
+/**
  * Medications Page E2E Tests
  *
  * These tests verify the medications management functionality including
@@ -48,7 +62,7 @@ test.describe("Medications Page", () => {
 		if (await addButton.isVisible().catch(() => false)) {
 			// Form might be hidden, click add button
 			await addButton.click();
-			await page.waitForTimeout(500);
+			await waitForFormVisible(page);
 		}
 
 		// Check for form fields - commercial name is required
@@ -75,7 +89,7 @@ test.describe("Medications Page", () => {
 		const addButton = page.getByRole("button", { name: /add|new|create/i });
 		if (await addButton.isVisible().catch(() => false)) {
 			await addButton.click();
-			await page.waitForTimeout(500);
+			await waitForFormVisible(page);
 		}
 
 		// Try to submit without filling required fields
@@ -107,7 +121,7 @@ test.describe("Medications Page", () => {
 		const addButton = page.getByRole("button", { name: /add|new|create/i });
 		if (await addButton.isVisible().catch(() => false)) {
 			await addButton.click();
-			await page.waitForTimeout(500);
+			await waitForFormVisible(page);
 		}
 
 		// Fill in medication details
@@ -136,7 +150,7 @@ test.describe("Medications Page", () => {
 		const addButton = page.getByRole("button", { name: /add|new|create/i });
 		if (await addButton.isVisible().catch(() => false)) {
 			await addButton.click();
-			await page.waitForTimeout(500);
+			await waitForFormVisible(page);
 		}
 
 		// Look for intake schedule section
@@ -162,7 +176,7 @@ test.describe("Medications Page", () => {
 		const addButton = page.getByRole("button", { name: /add|new|create/i });
 		if (await addButton.isVisible().catch(() => false)) {
 			await addButton.click();
-			await page.waitForTimeout(500);
+			await waitForFormVisible(page);
 
 			// Fill in some data
 			const nameField = page.getByLabel(/commercial.*name|name/i).first();
@@ -175,8 +189,12 @@ test.describe("Medications Page", () => {
 			if (await cancelButton.isVisible().catch(() => false)) {
 				await cancelButton.click();
 
-				// Form should be cleared or hidden
-				await page.waitForTimeout(500);
+				// Wait for form to be hidden or reset
+				await expect(nameField)
+					.not.toHaveValue("Test Medication")
+					.catch(() => {
+						// Form might be completely hidden, that's also acceptable
+					});
 			}
 		}
 	});

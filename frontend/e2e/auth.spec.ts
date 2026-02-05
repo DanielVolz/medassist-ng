@@ -1,6 +1,17 @@
 import { expect, test } from "@playwright/test";
 
 /**
+ * Helper to wait for the app's auth state to be determined
+ * The app shows Loading/Initializing until auth state is fetched
+ */
+async function waitForAuthReady(page: import("@playwright/test").Page): Promise<void> {
+	// Wait for the loading indicator to disappear
+	await page.waitForLoadState("networkidle");
+	// The app should have loaded something meaningful
+	await expect(page.locator("body")).not.toHaveText(/^$/, { timeout: 10000 });
+}
+
+/**
  * Authentication E2E Tests
  *
  * These tests verify the authentication flow including login, registration,
@@ -12,9 +23,7 @@ test.describe("Authentication", () => {
 
 	test("should display login page when not authenticated", async ({ page }) => {
 		await page.goto("/");
-
-		// Wait for auth state to be determined
-		await page.waitForTimeout(2000);
+		await waitForAuthReady(page);
 
 		// Should show either login form, registration form (first setup), or dashboard (auth disabled)
 		const hasLoginForm = await page
@@ -31,7 +40,7 @@ test.describe("Authentication", () => {
 
 	test("should have accessible form fields", async ({ page }) => {
 		await page.goto("/");
-		await page.waitForTimeout(2000);
+		await waitForAuthReady(page);
 
 		// Check if auth is enabled
 		const hasLoginForm = await page
@@ -54,7 +63,7 @@ test.describe("Authentication", () => {
 
 	test("should show validation error for empty credentials", async ({ page }) => {
 		await page.goto("/");
-		await page.waitForTimeout(2000);
+		await waitForAuthReady(page);
 
 		const hasLoginForm = await page
 			.getByLabel(/username/i)
@@ -84,7 +93,7 @@ test.describe("Authentication", () => {
 
 	test("should toggle password visibility", async ({ page }) => {
 		await page.goto("/");
-		await page.waitForTimeout(2000);
+		await waitForAuthReady(page);
 
 		const passwordField = page.getByLabel(/password/i).first();
 		const hasPasswordField = await passwordField.isVisible().catch(() => false);

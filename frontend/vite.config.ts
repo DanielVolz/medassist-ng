@@ -1,9 +1,12 @@
+import { readFileSync } from "fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { readFileSync } from "fs";
 
 // Read version from package.json at build time
 const packageJson = JSON.parse(readFileSync("./package.json", "utf-8"));
+
+// Use localhost backend for E2E tests and local dev, docker container for docker dev
+const backendTarget = process.env.BACKEND_URL || "http://backend-dev:3000";
 
 export default defineConfig({
   plugins: [react()],
@@ -15,7 +18,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://backend-dev:3000",
+        target: backendTarget,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },

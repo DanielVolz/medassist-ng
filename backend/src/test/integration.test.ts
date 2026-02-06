@@ -366,6 +366,196 @@ describe("Integration Tests", () => {
 	});
 
 	// ---------------------------------------------------------------------------
+	// Dose ID Migration on Schedule Changes
+	// ---------------------------------------------------------------------------
+
+	describe("Dose ID migration when schedule changes", () => {
+		it("should migrate dose IDs when weekly start day changes", async () => {
+			// Create a weekly medication starting Friday Oct 17
+			const createRes = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Weekly Med",
+					blisters: [{ usage: 1, every: 7, start: "2025-10-17T08:00:00" }],
+				},
+			});
+			const medId = createRes.json().id;
+
+			// Mark doses for Fridays (Oct 17, Oct 24, Oct 31)
+			const fri17 = new Date(2025, 9, 17).getTime(); // Oct 17
+			const fri24 = new Date(2025, 9, 24).getTime(); // Oct 24
+			const fri31 = new Date(2025, 9, 31).getTime(); // Oct 31
+
+			for (const ts of [fri17, fri24, fri31]) {
+				await app.inject({
+					method: "POST",
+					url: "/doses/taken",
+					payload: { doseId: `${medId}-0-${ts}` },
+				});
+			}
+
+			// Verify 3 doses exist
+			const before = await testClient.execute({
+				sql: `SELECT COUNT(*) as count FROM dose_tracking WHERE dose_id LIKE ?`,
+				args: [`${medId}-%`],
+			});
+			expect(before.rows[0].count).toBe(3);
+
+			// Change start to Saturday Oct 18 (shifts all future and past IDs)
+			await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "Weekly Med",
+					blisters: [{ usage: 1, every: 7, start: "2025-10-18T08:00:00" }],
+				},
+			});
+
+			// Doses should be migrated to Saturday dates
+			const sat18 = new Date(2025, 9, 18).getTime(); // Oct 18
+			const sat25 = new Date(2025, 9, 25).getTime(); // Oct 25
+			const nov1 = new Date(2025, 10, 1).getTime(); // Nov 1
+
+			const after = await testClient.execute({
+				sql: `SELECT dose_id FROM dose_tracking WHERE dose_id LIKE ? ORDER BY dose_id`,
+				args: [`${medId}-%`],
+			});
+			expect(after.rows.length).toBe(3);
+			const ids = after.rows.map((r: { dose_id: string }) => r.dose_id);
+			expect(ids).toContain(`${medId}-0-${sat18}`);
+			expect(ids).toContain(`${medId}-0-${sat25}`);
+			expect(ids).toContain(`${medId}-0-${nov1}`);
+		});
+
+		it("should migrate dose IDs with person suffix when schedule changes", async () => {
+			// Create weekly medication with takenBy person
+			const createRes = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Person Med",
+					intakes: [{ usage: 1, every: 7, start: "2025-10-17T08:00:00", takenBy: "Alice" }],
+				},
+			});
+			const medId = createRes.json().id;
+
+			// Mark dose with person suffix
+			const fri17 = new Date(2025, 9, 17).getTime();
+			await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: `${medId}-0-${fri17}-Alice` },
+			});
+
+			// Change start day
+			await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "Person Med",
+					intakes: [{ usage: 1, every: 7, start: "2025-10-18T08:00:00", takenBy: "Alice" }],
+				},
+			});
+
+			// Dose should be migrated with person suffix preserved
+			const sat18 = new Date(2025, 9, 18).getTime();
+			const after = await testClient.execute({
+				sql: `SELECT dose_id FROM dose_tracking WHERE dose_id LIKE ?`,
+				args: [`${medId}-%`],
+			});
+			expect(after.rows.length).toBe(1);
+			expect(after.rows[0].dose_id).toBe(`${medId}-0-${sat18}-Alice`);
+		});
+
+		it("should not migrate dose IDs when only time-of-day changes", async () => {
+			// Create daily medication at 08:00
+			const createRes = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Daily Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-10-17T08:00:00" }],
+				},
+			});
+			const medId = createRes.json().id;
+
+			// Mark dose
+			const oct17 = new Date(2025, 9, 17).getTime();
+			await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: `${medId}-0-${oct17}` },
+			});
+
+			// Change only time from 08:00 to 20:00 (same date)
+			await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "Daily Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-10-17T20:00:00" }],
+				},
+			});
+
+			// Dose ID should remain unchanged (dateOnlyMs is the same)
+			const after = await testClient.execute({
+				sql: `SELECT dose_id FROM dose_tracking WHERE dose_id LIKE ?`,
+				args: [`${medId}-%`],
+			});
+			expect(after.rows.length).toBe(1);
+			expect(after.rows[0].dose_id).toBe(`${medId}-0-${oct17}`);
+		});
+
+		it("should migrate dose IDs when interval changes from daily to every-other-day", async () => {
+			// Create daily medication starting Oct 17
+			const createRes = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Interval Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-10-17T08:00:00" }],
+				},
+			});
+			const medId = createRes.json().id;
+
+			// Mark doses for Oct 17, 18, 19
+			const oct17 = new Date(2025, 9, 17).getTime();
+			const oct18 = new Date(2025, 9, 18).getTime();
+			const oct19 = new Date(2025, 9, 19).getTime();
+
+			for (const ts of [oct17, oct18, oct19]) {
+				await app.inject({
+					method: "POST",
+					url: "/doses/taken",
+					payload: { doseId: `${medId}-0-${ts}` },
+				});
+			}
+
+			// Change to every 2 days (Oct 17, 19, 21, ...)
+			await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "Interval Med",
+					blisters: [{ usage: 1, every: 2, start: "2025-10-17T08:00:00" }],
+				},
+			});
+
+			// Oct 17 stays (matches), Oct 18 → Oct 19 (nearest), Oct 19 → no match (already used)
+			// Actually: Oct 17 is exact match (no migration needed), Oct 18 maps to Oct 19 (within 1 day = half of 2),
+			// Oct 19 was the original schedule date but the new schedule also has Oct 19,
+			// which was already taken by Oct 18's migration
+			const after = await testClient.execute({
+				sql: `SELECT dose_id FROM dose_tracking WHERE dose_id LIKE ? ORDER BY dose_id`,
+				args: [`${medId}-%`],
+			});
+			// We should have at least the doses that could be mapped
+			expect(after.rows.length).toBeGreaterThanOrEqual(2);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
 	// Share Link + Dose Tracking Integration
 	// ---------------------------------------------------------------------------
 

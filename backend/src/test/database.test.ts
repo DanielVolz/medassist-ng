@@ -14,6 +14,7 @@ import {
 	ensureDefaultUser,
 	getDbPaths,
 	repairOrphanedDoseIds,
+	repairTrailingHyphenDoseIds,
 	runAlterMigrations,
 	runDrizzleMigrations,
 } from "../db/client.js";
@@ -888,6 +889,106 @@ describe("Database Client", () => {
 			const sat18 = new Date(2025, 9, 18).getTime();
 			const doses = await client.execute("SELECT dose_id FROM dose_tracking");
 			expect(doses.rows[0].dose_id).toBe(`1-0-${sat18}`);
+		});
+	});
+
+	describe("repairTrailingHyphenDoseIds", () => {
+		let client: ReturnType<typeof createClient>;
+
+		beforeEach(async () => {
+			client = createClient({ url: ":memory:" });
+			const db = drizzle(client);
+			await migrate(db, { migrationsFolder });
+			await client.execute("INSERT INTO users (id, username, auth_provider) VALUES (1, 'testuser', 'local')");
+		});
+
+		it("should return 0 repairs when no dose IDs have trailing hyphens", async () => {
+			const ts = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${ts}`],
+			});
+
+			const result = await repairTrailingHyphenDoseIds(client);
+			expect(result.repaired).toBe(0);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it("should strip trailing hyphen from dose IDs", async () => {
+			const ts = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${ts}-`],
+			});
+
+			const result = await repairTrailingHyphenDoseIds(client);
+			expect(result.repaired).toBe(1);
+			expect(result.errors).toHaveLength(0);
+
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking");
+			expect(doses.rows[0].dose_id).toBe(`1-0-${ts}`);
+		});
+
+		it("should not modify dose IDs with valid person suffixes", async () => {
+			const ts = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${ts}-Alice`],
+			});
+
+			const result = await repairTrailingHyphenDoseIds(client);
+			expect(result.repaired).toBe(0);
+
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking");
+			expect(doses.rows[0].dose_id).toBe(`1-0-${ts}-Alice`);
+		});
+
+		it("should handle multiple trailing hyphens", async () => {
+			const ts = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${ts}--`],
+			});
+
+			const result = await repairTrailingHyphenDoseIds(client);
+			expect(result.repaired).toBe(1);
+
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking");
+			expect(doses.rows[0].dose_id).toBe(`1-0-${ts}`);
+		});
+
+		it("should repair multiple affected rows at once", async () => {
+			const ts1 = new Date(2025, 9, 17).getTime();
+			const ts2 = new Date(2025, 9, 24).getTime();
+			const ts3 = new Date(2025, 9, 31).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?), (1, ?), (1, ?)",
+				args: [`1-0-${ts1}-`, `2-0-${ts2}-`, `1-0-${ts3}`],
+			});
+
+			const result = await repairTrailingHyphenDoseIds(client);
+			expect(result.repaired).toBe(2); // Only 2 had trailing hyphens
+			expect(result.errors).toHaveLength(0);
+
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking ORDER BY dose_id");
+			const ids = doses.rows.map((r) => r.dose_id);
+			expect(ids).toContain(`1-0-${ts1}`);
+			expect(ids).toContain(`2-0-${ts2}`);
+			expect(ids).toContain(`1-0-${ts3}`);
+		});
+
+		it("should be idempotent - running twice has no effect the second time", async () => {
+			const ts = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${ts}-`],
+			});
+
+			const result1 = await repairTrailingHyphenDoseIds(client);
+			expect(result1.repaired).toBe(1);
+
+			const result2 = await repairTrailingHyphenDoseIds(client);
+			expect(result2.repaired).toBe(0);
 		});
 	});
 });

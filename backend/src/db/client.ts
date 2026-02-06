@@ -166,6 +166,29 @@ export async function ensureDefaultUser(client: Client, authEnabled: boolean): P
 const MS_PER_DAY = 86_400_000;
 
 /**
+ * Repair dose IDs that have a trailing hyphen caused by a frontend bug where
+ * `[].toString()` produced an empty string, resulting in IDs like "5-0-1729123200000-"
+ * instead of "5-0-1729123200000". This strips trailing hyphens from all dose IDs.
+ *
+ * This function is idempotent - safe to run on every startup.
+ */
+export async function repairTrailingHyphenDoseIds(client: Client): Promise<{ repaired: number; errors: string[] }> {
+	const errors: string[] = [];
+	let repaired = 0;
+
+	try {
+		const result = await client.execute(
+			"UPDATE dose_tracking SET dose_id = RTRIM(dose_id, '-') WHERE dose_id LIKE '%-'"
+		);
+		repaired = result.rowsAffected;
+	} catch (e: any) {
+		errors.push(`Trailing-hyphen repair failed: ${e.message}`);
+	}
+
+	return { repaired, errors };
+}
+
+/**
  * Repair orphaned dose tracking IDs that no longer match the current intake schedule.
  * This fixes dose IDs that became invalid when a medication's schedule was changed
  * BEFORE the on-edit migration (PR #103) was introduced.
@@ -354,6 +377,15 @@ async function runMigrations() {
 		alterResult.errors.forEach((err) => console.error(`[DB] ALTER migration error:`, err));
 	}
 	console.log(`[DB] Tables verified/created`);
+
+	// Repair dose IDs with trailing hyphens (from frontend takenBy bug)
+	const trailingResult = await repairTrailingHyphenDoseIds(client);
+	if (trailingResult.repaired > 0) {
+		console.log(`[DB] Repaired ${trailingResult.repaired} dose IDs with trailing hyphens`);
+	}
+	if (trailingResult.errors.length > 0) {
+		trailingResult.errors.forEach((err) => console.error(`[DB] Trailing-hyphen repair error:`, err));
+	}
 
 	// Repair orphaned dose tracking IDs from past schedule changes
 	const repairResult = await repairOrphanedDoseIds(client);

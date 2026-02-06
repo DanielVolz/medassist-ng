@@ -9,6 +9,7 @@
 - **Clean workspace**: Always clean up after yourself. If you create a file for a specific task, delete it once done.
 - **Remove old code when re-implementing**: When fixing a bug or re-implementing a feature that didn't work, ALWAYS remove the old/broken code completely. Never leave dead code, unused functions, or obsolete implementations in the codebase.
 - **Tests are mandatory**: Every new feature and every bug fix MUST have corresponding tests. When modifying existing features, update or add tests accordingly. If old tests become obsolete due to code changes, remove or update them.
+- **Fix bugs, don't test around them**: If you discover incorrect behavior in the code while writing tests, ALWAYS fix the buggy code first, then write tests that verify the correct behavior. NEVER write tests that mimic or assert broken behavior. The user's time is finite and irreplaceable — every bug left unfixed wastes it.
 
 ## Architecture Overview
 

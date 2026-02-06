@@ -312,29 +312,122 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 		if (!result.length) return reply.notFound();
 
-		// Clean up dose tracking entries that are before the earliest start date
-		// This ensures consistency when the user changes the start date
-		const earliestStart = Math.min(...intakes.map((b) => parseLocalDateTime(b.start).getTime()));
-		if (!Number.isNaN(earliestStart)) {
-			// Get all dose tracking entries for this medication and filter out invalid ones
-			const allDoses = await db
-				.select()
-				.from(doseTracking)
-				.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)));
+		// ---------------------------------------------------------------
+		// Migrate dose tracking IDs when intake schedule changes
+		// ---------------------------------------------------------------
+		// Parse old intakes from the existing medication row
+		const oldIntakes = parseIntakesJson(
+			existing.intakesJson,
+			{ usageJson: existing.usageJson, everyJson: existing.everyJson, startJson: existing.startJson },
+			existing.intakeRemindersEnabled
+		);
 
-			// Find doses with timestamps before the earliest start date
-			const dosesToDelete = allDoses.filter((dose) => {
-				const parts = dose.doseId.split("-");
-				if (parts.length >= 3) {
-					const timestamp = parseInt(parts[2], 10);
-					return !Number.isNaN(timestamp) && timestamp < earliestStart;
+		// Get all dose tracking entries for this medication
+		const allDoses = await db
+			.select()
+			.from(doseTracking)
+			.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)));
+
+		if (allDoses.length > 0) {
+			// Build migration map: for each intake index, map old dateOnlyMs → new dateOnlyMs
+			const now = new Date();
+			const migrationEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+			const MS_PER_DAY = 86_400_000;
+
+			for (let idx = 0; idx < Math.max(oldIntakes.length, intakes.length); idx++) {
+				const oldIntake = oldIntakes[idx];
+				const newIntake = intakes[idx];
+
+				// Skip if this intake index doesn't exist in both old and new
+				if (!oldIntake || !newIntake) continue;
+
+				const oldStart = parseLocalDateTime(oldIntake.start);
+				const newStart = parseLocalDateTime(newIntake.start);
+				const oldEvery = oldIntake.every;
+				const newEvery = newIntake.every;
+
+				// Check if start date or interval changed (time-of-day changes don't matter for dateOnlyMs)
+				const oldStartDateOnly = new Date(oldStart.getFullYear(), oldStart.getMonth(), oldStart.getDate()).getTime();
+				const newStartDateOnly = new Date(newStart.getFullYear(), newStart.getMonth(), newStart.getDate()).getTime();
+
+				if (oldStartDateOnly === newStartDateOnly && oldEvery === newEvery) {
+					continue; // No schedule change that affects dose IDs
 				}
-				return false;
-			});
 
-			// Delete invalid doses
-			for (const dose of dosesToDelete) {
-				await db.delete(doseTracking).where(eq(doseTracking.id, dose.id));
+				// Build set of new valid dateOnlyMs values for this intake
+				const newDates = new Set<number>();
+				for (let d = new Date(newStart); d <= migrationEnd; d.setDate(d.getDate() + newEvery)) {
+					newDates.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
+				}
+
+				// Build set of old dateOnlyMs values with mapping to nearest new date
+				const oldToNewMap = new Map<number, number>();
+				for (let d = new Date(oldStart); d <= migrationEnd; d.setDate(d.getDate() + oldEvery)) {
+					const oldDateMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+					// Find the closest new date within ±(newEvery/2) days
+					const halfInterval = (newEvery * MS_PER_DAY) / 2;
+					let bestMatch: number | null = null;
+					let bestDist = Infinity;
+					for (const newDateMs of newDates) {
+						const dist = Math.abs(newDateMs - oldDateMs);
+						if (dist < bestDist && dist <= halfInterval) {
+							bestDist = dist;
+							bestMatch = newDateMs;
+						}
+					}
+					if (bestMatch !== null && bestMatch !== oldDateMs) {
+						oldToNewMap.set(oldDateMs, bestMatch);
+						// Remove matched new date to prevent double-mapping
+						newDates.delete(bestMatch);
+					}
+				}
+
+				// Apply migrations to dose tracking entries
+				if (oldToNewMap.size > 0) {
+					const prefix = `${idNum}-${idx}-`;
+					const dosesToMigrate = allDoses.filter((d) => d.doseId.startsWith(prefix));
+
+					for (const dose of dosesToMigrate) {
+						const parts = dose.doseId.split("-");
+						if (parts.length >= 3) {
+							const oldTimestamp = parseInt(parts[2], 10);
+							const newTimestamp = oldToNewMap.get(oldTimestamp);
+							if (newTimestamp !== undefined) {
+								// Replace the timestamp in the dose ID, keeping any person suffix
+								const newDoseId = `${idNum}-${idx}-${newTimestamp}${parts.length > 3 ? `-${parts.slice(3).join("-")}` : ""}`;
+								await db.update(doseTracking).set({ doseId: newDoseId }).where(eq(doseTracking.id, dose.id));
+							}
+						}
+					}
+				}
+			}
+
+			// Also clean up dose tracking entries before the earliest new start date
+			const earliestStartDate = intakes.reduce((min, b) => {
+				const d = parseLocalDateTime(b.start);
+				// Use date-only (midnight) to match dose ID format
+				const dateOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+				return dateOnly < min ? dateOnly : min;
+			}, Infinity);
+			if (!Number.isNaN(earliestStartDate)) {
+				// Re-fetch after possible migrations
+				const updatedDoses = await db
+					.select()
+					.from(doseTracking)
+					.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)));
+
+				const dosesToDelete = updatedDoses.filter((dose) => {
+					const parts = dose.doseId.split("-");
+					if (parts.length >= 3) {
+						const timestamp = parseInt(parts[2], 10);
+						return !Number.isNaN(timestamp) && timestamp < earliestStartDate;
+					}
+					return false;
+				});
+
+				for (const dose of dosesToDelete) {
+					await db.delete(doseTracking).where(eq(doseTracking.id, dose.id));
+				}
 			}
 		}
 

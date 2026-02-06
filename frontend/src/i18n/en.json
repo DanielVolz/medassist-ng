@@ -176,6 +176,7 @@
     "badge": "Plan your supply",
     "from": "From",
     "until": "Until",
+    "includeUntilStart": "Include consumption from today until start date",
     "calculate": "Calculate",
     "calculating": "Calculating...",
     "sendEmail": "📧 Send via Email",

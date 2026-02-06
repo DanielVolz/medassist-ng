@@ -706,7 +706,16 @@ describe("Integration Tests", () => {
 	describe("Planner usage calculation", () => {
 		it("should calculate correct usage for daily medication", async () => {
 			// Create medication: 2 packs × 3 blisters × 10 pills = 60 pills total
-			// Schedule: 1 pill daily starting Jan 1
+			// Schedule: 1 pill daily starting tomorrow (future date)
+			const tomorrow = new Date();
+			tomorrow.setDate(tomorrow.getDate() + 1);
+			tomorrow.setHours(8, 0, 0, 0);
+			const intakeStart = tomorrow.toISOString();
+
+			const planEnd = new Date(tomorrow);
+			planEnd.setDate(planEnd.getDate() + 10);
+			const planEndStr = planEnd.toISOString();
+
 			await app.inject({
 				method: "POST",
 				url: "/medications",
@@ -716,17 +725,17 @@ describe("Integration Tests", () => {
 					blistersPerPack: 3,
 					pillsPerBlister: 10,
 					looseTablets: 0,
-					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					blisters: [{ usage: 1, every: 1, start: intakeStart }],
 				},
 			});
 
-			// Calculate usage for Jan 1-10 (10 days = 10 pills needed)
+			// Calculate usage for 10 days starting tomorrow
 			const response = await app.inject({
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: "2025-01-01T00:00:00.000Z",
-					endDate: "2025-01-11T00:00:00.000Z", // 10 days
+					startDate: intakeStart,
+					endDate: planEndStr, // 10 days
 				},
 			});
 
@@ -735,13 +744,22 @@ describe("Integration Tests", () => {
 			expect(data).toHaveLength(1);
 			expect(data[0].medicationName).toBe("Daily Med");
 			expect(data[0].plannerUsage).toBe(10); // 10 days × 1 pill
-			// Note: 'enough' depends on current stock after consumption since start date
-			// Since test runs ~364 days after Jan 1, most pills are consumed
+			expect(data[0].totalPills).toBe(60); // Current stock is full (no consumption yet)
+			expect(data[0].enough).toBe(true);
 		});
 
 		it("should detect insufficient stock", async () => {
 			// Create medication: 1 pack × 1 blister × 5 pills = 5 pills total
-			// Schedule: 1 pill daily
+			// Schedule: 1 pill daily starting tomorrow
+			const tomorrow = new Date();
+			tomorrow.setDate(tomorrow.getDate() + 1);
+			tomorrow.setHours(8, 0, 0, 0);
+			const intakeStart = tomorrow.toISOString();
+
+			const planEnd = new Date(tomorrow);
+			planEnd.setDate(planEnd.getDate() + 10);
+			const planEndStr = planEnd.toISOString();
+
 			await app.inject({
 				method: "POST",
 				url: "/medications",
@@ -751,17 +769,17 @@ describe("Integration Tests", () => {
 					blistersPerPack: 1,
 					pillsPerBlister: 5,
 					looseTablets: 0,
-					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					blisters: [{ usage: 1, every: 1, start: intakeStart }],
 				},
 			});
 
-			// Calculate usage for 10 days (needs 10 pills, only have 5 originally)
+			// Calculate usage for 10 days (needs 10 pills, only have 5)
 			const response = await app.inject({
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: "2025-01-01T00:00:00.000Z",
-					endDate: "2025-01-11T00:00:00.000Z",
+					startDate: intakeStart,
+					endDate: planEndStr,
 				},
 			});
 
@@ -773,7 +791,16 @@ describe("Integration Tests", () => {
 
 		it("should calculate weekly medication usage correctly", async () => {
 			// Create medication: 10 pills total
-			// Schedule: 1 pill every 7 days starting Jan 1
+			// Schedule: 1 pill every 7 days starting tomorrow
+			const tomorrow = new Date();
+			tomorrow.setDate(tomorrow.getDate() + 1);
+			tomorrow.setHours(8, 0, 0, 0);
+			const intakeStart = tomorrow.toISOString();
+
+			const planEnd = new Date(tomorrow);
+			planEnd.setDate(planEnd.getDate() + 35); // 35 days to get 5 weekly doses
+			const planEndStr = planEnd.toISOString();
+
 			await app.inject({
 				method: "POST",
 				url: "/medications",
@@ -782,29 +809,42 @@ describe("Integration Tests", () => {
 					packCount: 1,
 					blistersPerPack: 1,
 					pillsPerBlister: 10,
-					blisters: [{ usage: 1, every: 7, start: "2025-01-01T08:00:00.000Z" }],
+					blisters: [{ usage: 1, every: 7, start: intakeStart }],
 				},
 			});
 
-			// Calculate usage for 30 days (should need ~4-5 pills)
+			// Calculate usage for 35 days (should need 5 pills)
 			const response = await app.inject({
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: "2025-01-01T00:00:00.000Z",
-					endDate: "2025-01-31T00:00:00.000Z", // 30 days
+					startDate: intakeStart,
+					endDate: planEndStr,
 				},
 			});
 
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
-			// Jan 1, 8, 15, 22, 29 = 5 doses
+			// Day 0, 7, 14, 21, 28 = 5 doses
 			expect(data[0].plannerUsage).toBe(5);
 		});
 
 		it("should handle multiple intake schedules per medication", async () => {
 			// Create medication with morning and evening doses
 			// 30 pills total, 1.5 pills per day (1 morning + 0.5 evening)
+			const tomorrow = new Date();
+			tomorrow.setDate(tomorrow.getDate() + 1);
+			tomorrow.setHours(8, 0, 0, 0);
+			const morningStart = tomorrow.toISOString();
+
+			const eveningStart = new Date(tomorrow);
+			eveningStart.setHours(20, 0, 0, 0);
+			const eveningStartStr = eveningStart.toISOString();
+
+			const planEnd = new Date(tomorrow);
+			planEnd.setDate(planEnd.getDate() + 10);
+			const planEndStr = planEnd.toISOString();
+
 			await app.inject({
 				method: "POST",
 				url: "/medications",
@@ -814,8 +854,8 @@ describe("Integration Tests", () => {
 					blistersPerPack: 1,
 					pillsPerBlister: 30,
 					blisters: [
-						{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }, // Morning: 1 pill
-						{ usage: 0.5, every: 1, start: "2025-01-01T20:00:00.000Z" }, // Evening: 0.5 pill
+						{ usage: 1, every: 1, start: morningStart }, // Morning: 1 pill
+						{ usage: 0.5, every: 1, start: eveningStartStr }, // Evening: 0.5 pill
 					],
 				},
 			});
@@ -825,8 +865,8 @@ describe("Integration Tests", () => {
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: "2025-01-01T00:00:00.000Z",
-					endDate: "2025-01-11T00:00:00.000Z",
+					startDate: morningStart,
+					endDate: planEndStr,
 				},
 			});
 
@@ -838,6 +878,15 @@ describe("Integration Tests", () => {
 
 		it("should calculate correct blisters needed", async () => {
 			// 10 pills per blister, need 25 pills → need 3 blisters
+			const tomorrow = new Date();
+			tomorrow.setDate(tomorrow.getDate() + 1);
+			tomorrow.setHours(8, 0, 0, 0);
+			const intakeStart = tomorrow.toISOString();
+
+			const planEnd = new Date(tomorrow);
+			planEnd.setDate(planEnd.getDate() + 10);
+			const planEndStr = planEnd.toISOString();
+
 			await app.inject({
 				method: "POST",
 				url: "/medications",
@@ -846,7 +895,7 @@ describe("Integration Tests", () => {
 					packCount: 5,
 					blistersPerPack: 1,
 					pillsPerBlister: 10,
-					blisters: [{ usage: 2.5, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					blisters: [{ usage: 2.5, every: 1, start: intakeStart }],
 				},
 			});
 
@@ -855,8 +904,8 @@ describe("Integration Tests", () => {
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: "2025-01-01T00:00:00.000Z",
-					endDate: "2025-01-11T00:00:00.000Z",
+					startDate: intakeStart,
+					endDate: planEndStr,
 				},
 			});
 

@@ -176,6 +176,7 @@
     "badge": "Vorrat planen",
     "from": "Von",
     "until": "Bis",
+    "includeUntilStart": "Verbrauch von heute bis Startdatum einrechnen",
     "calculate": "Berechnen",
     "calculating": "Wird berechnet...",
     "sendEmail": "📧 Per E-Mail senden",

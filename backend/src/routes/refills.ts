@@ -61,6 +61,8 @@ export async function refillRoutes(app: FastifyInstance) {
 			.set({
 				packCount: newPackCount,
 				looseTablets: newLooseTablets,
+				stockAdjustment: 0, // Reset offset since we're adding to base stock
+				lastStockCorrectionAt: new Date(), // Reset consumed counter to now
 				updatedAt: new Date(),
 			})
 			.where(and(eq(medications.id, medId), eq(medications.userId, userId)));

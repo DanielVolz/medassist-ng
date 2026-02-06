@@ -495,10 +495,14 @@ export async function medicationRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/medications/usage", async (req, reply) => {
-		const schema = z.object({ startDate: z.string().datetime(), endDate: z.string().datetime() });
+		const schema = z.object({
+			startDate: z.string().datetime(),
+			endDate: z.string().datetime(),
+			includeUntilStart: z.boolean().optional().default(false),
+		});
 		const parsed = schema.safeParse(req.body);
 		if (!parsed.success) return reply.status(400).send(parsed.error.format());
-		const { startDate, endDate } = parsed.data;
+		const { startDate, endDate, includeUntilStart } = parsed.data;
 		const start = new Date(startDate);
 		const end = new Date(endDate);
 		if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
@@ -507,6 +511,30 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 		const userId = await getUserId(req, reply);
 		const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
+
+		// Get all taken doses for this user to calculate actual consumption
+		const takenDoses = await db
+			.select()
+			.from(doseTracking)
+			.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, false)));
+
+		// Create a map of medication ID to taken dose count
+		const takenDosesMap = new Map<number, { blisterIdx: number; usage: number }[]>();
+		takenDoses.forEach((dose) => {
+			const parts = dose.doseId.split("-");
+			if (parts.length >= 3) {
+				const medId = parseInt(parts[0], 10);
+				const blisterIdx = parseInt(parts[1], 10);
+				if (!Number.isNaN(medId) && !Number.isNaN(blisterIdx)) {
+					if (!takenDosesMap.has(medId)) {
+						takenDosesMap.set(medId, []);
+					}
+					takenDosesMap.get(medId)!.push({ blisterIdx, usage: 0 }); // usage filled later
+				}
+			}
+		});
+
+		// Use current time as the reference point for "available" stock
 		const now = new Date();
 
 		const payload = rows.map((row) => {
@@ -517,7 +545,6 @@ export async function medicationRoutes(app: FastifyInstance) {
 				row.intakeRemindersEnabled ?? false
 			);
 			const blisters = intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
-			const usageTotal = calculateUsageInRange(blisters, start, end);
 			const pillsPerBlister = row.pillsPerBlister ?? 1;
 			const packCount = row.packCount ?? 1;
 			const blistersPerPack = row.blistersPerPack ?? 1;
@@ -525,25 +552,80 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const stockAdjustment = row.stockAdjustment ?? 0;
 			const originalTotalPills = packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
 
-			// Calculate consumption up to now (same logic as frontend)
+			// Calculate consumption based on ACTUAL taken doses from dose_tracking
+			// This ensures Planner shows the same "current stock" as the Dashboard/Modal
+			// Use the same logic as frontend: generate expected doses and check which are marked
+			const stockCorrectionCutoff = row.lastStockCorrectionAt ? new Date(row.lastStockCorrectionAt).getTime() : 0;
+
+			// Build a Set of taken dose IDs for quick lookup
+			const takenDoseIds = new Set(
+				takenDoses
+					.filter((dose) => {
+						const parts = dose.doseId.split("-");
+						return parts.length >= 3 && parseInt(parts[0], 10) === row.id;
+					})
+					.map((dose) => dose.doseId)
+			);
+
+			// Count consumed pills by generating expected doses and checking if they're taken
 			let consumedUntilNow = 0;
-			blisters.forEach((blister) => {
+			const msPerDay = 86400000;
+
+			blisters.forEach((blister, blisterIdx) => {
 				const blisterStart = parseLocalDateTime(blister.start);
-				if (Number.isNaN(blisterStart.getTime()) || blisterStart > now) return;
-				const msPerDay = 86400000;
+				if (Number.isNaN(blisterStart.getTime())) return;
+
+				const effectiveStart = Math.max(blisterStart.getTime(), stockCorrectionCutoff);
+				if (effectiveStart > now.getTime()) return;
+
 				const period = Math.max(1, blister.every) * msPerDay;
-				const occurrences = Math.floor((now.getTime() - blisterStart.getTime()) / period) + 1;
-				consumedUntilNow += occurrences * blister.usage;
+				const occurrences = Math.floor((now.getTime() - effectiveStart) / period) + 1;
+
+				// Get the people for this intake (from intakes array or medication takenBy)
+				const takenByJson = row.takenByJson ? JSON.parse(row.takenByJson) : [];
+				const intake = intakes[blisterIdx];
+				const intakePerson = intake?.takenBy;
+				const peopleForThisIntake: (string | null)[] = intakePerson
+					? [intakePerson]
+					: takenByJson.length > 0
+						? takenByJson
+						: [null];
+
+				// Generate expected dose IDs and check if they're taken
+				for (let i = 0; i < occurrences; i++) {
+					const doseDate = new Date(effectiveStart + i * period);
+					const dateOnlyMs = new Date(doseDate.getFullYear(), doseDate.getMonth(), doseDate.getDate()).getTime();
+					const baseDoseId = `${row.id}-${blisterIdx}-${dateOnlyMs}`;
+
+					// Check if each person has taken this dose
+					for (const person of peopleForThisIntake) {
+						const doseId = person ? `${baseDoseId}-${person}` : baseDoseId;
+						if (takenDoseIds.has(doseId)) {
+							consumedUntilNow += blister.usage;
+						}
+					}
+				}
 			});
 
-			const currentPills = Math.max(0, originalTotalPills - consumedUntilNow);
+			const currentStock = Math.max(0, originalTotalPills - consumedUntilNow);
+
+			// Calculate usage for the planning period
+			// When includeUntilStart is true, calculate from now to end (useful for trip planning)
+			// When false, calculate from max(now, start) to end (default behavior)
+			const effectivePlannerStart = includeUntilStart ? now : new Date(Math.max(now.getTime(), start.getTime()));
+			const usageTotal = calculateUsageInRange(blisters, effectivePlannerStart, end);
+
 			const blistersNeeded = pillsPerBlister > 0 ? Math.ceil(usageTotal / pillsPerBlister) : 0;
 
-			// Calculate current stock using realistic consumption order (loose first, then blisters)
-			const consumed = originalTotalPills - currentPills;
-			const looseConsumed = Math.min(consumed, looseTablets);
-			const loosePillsRemaining = looseTablets - looseConsumed;
-			const blisterPillsConsumed = consumed - looseConsumed;
+			// Calculate AVAILABLE = stock AFTER the planned period (currentStock - usageTotal)
+			const availableAfterPeriod = Math.max(0, currentStock - usageTotal);
+
+			// Calculate stock breakdown for availableAfterPeriod
+			// Consumption order: loose pills first, then from blisters
+			const totalConsumedByEnd = originalTotalPills - availableAfterPeriod;
+			const looseConsumedByEnd = Math.min(totalConsumedByEnd, looseTablets);
+			const loosePillsRemaining = Math.max(0, looseTablets - looseConsumedByEnd);
+			const blisterPillsConsumed = totalConsumedByEnd - looseConsumedByEnd;
 			const originalBlisterPills = originalTotalPills - looseTablets;
 			const blisterPillsRemaining = Math.max(0, originalBlisterPills - blisterPillsConsumed);
 
@@ -551,11 +633,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const openBlisterPills = pillsPerBlister > 0 ? blisterPillsRemaining % pillsPerBlister : 0;
 			const loosePills = loosePillsRemaining + openBlisterPills; // Combine open blister + remaining loose
 
-			const enough = currentPills >= usageTotal;
+			const enough = currentStock >= usageTotal;
 			return {
 				medicationId: row.id,
 				medicationName: row.name,
-				totalPills: currentPills,
+				totalPills: currentStock,
 				plannerUsage: usageTotal,
 				blisterSize: pillsPerBlister,
 				blistersNeeded,

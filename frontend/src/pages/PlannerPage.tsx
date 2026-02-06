@@ -41,6 +41,7 @@ export function PlannerPage() {
 		start: toInputValue(todayIso()),
 		end: toInputValue(plusDaysIso(3)),
 	});
+	const [includeUntilStart, setIncludeUntilStart] = useState(false);
 	const [sendingPlannerEmail, setSendingPlannerEmail] = useState(false);
 	const [plannerEmailResult, setPlannerEmailResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -49,6 +50,7 @@ export function PlannerPage() {
 		if (typeof window !== "undefined" && user?.id) {
 			const savedRows = localStorage.getItem(userStorageKey(user.id, "plannerRows"));
 			const savedRange = localStorage.getItem(userStorageKey(user.id, "plannerRange"));
+			const savedIncludeUntilStart = localStorage.getItem(userStorageKey(user.id, "plannerIncludeUntilStart"));
 
 			if (savedRows) {
 				try {
@@ -69,16 +71,23 @@ export function PlannerPage() {
 			} else {
 				setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
 			}
+
+			if (savedIncludeUntilStart) {
+				setIncludeUntilStart(savedIncludeUntilStart === "true");
+			} else {
+				setIncludeUntilStart(false);
+			}
 		} else {
 			setPlannerRows([]);
 			setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
+			setIncludeUntilStart(false);
 		}
 	}, [user?.id]);
 
 	async function runPlanner(e: React.FormEvent) {
 		e.preventDefault();
 		setPlannerLoading(true);
-		const body = { startDate: toIsoString(range.start), endDate: toIsoString(range.end) };
+		const body = { startDate: toIsoString(range.start), endDate: toIsoString(range.end), includeUntilStart };
 		const rows = (await fetch("/api/medications/usage", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -93,15 +102,18 @@ export function PlannerPage() {
 		if (user?.id) {
 			localStorage.setItem(userStorageKey(user.id, "plannerRange"), JSON.stringify(range));
 			localStorage.setItem(userStorageKey(user.id, "plannerRows"), JSON.stringify(rows));
+			localStorage.setItem(userStorageKey(user.id, "plannerIncludeUntilStart"), String(includeUntilStart));
 		}
 	}
 
 	function resetRange() {
 		setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
+		setIncludeUntilStart(false);
 		setPlannerRows([]);
 		if (user?.id) {
 			localStorage.removeItem(userStorageKey(user.id, "plannerRange"));
 			localStorage.removeItem(userStorageKey(user.id, "plannerRows"));
+			localStorage.removeItem(userStorageKey(user.id, "plannerIncludeUntilStart"));
 		}
 	}
 
@@ -158,6 +170,14 @@ export function PlannerPage() {
 							value={range.end}
 							onChange={(e) => setRange({ ...range, end: e.target.value })}
 						/>
+					</label>
+					<label className="planner-checkbox">
+						<input
+							type="checkbox"
+							checked={includeUntilStart}
+							onChange={(e) => setIncludeUntilStart(e.target.checked)}
+						/>
+						{t("planner.includeUntilStart")}
 					</label>
 					<div className="planner-actions">
 						<button type="button" className="ghost" onClick={resetRange}>

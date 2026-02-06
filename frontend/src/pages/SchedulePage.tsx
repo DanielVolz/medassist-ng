@@ -3,6 +3,7 @@ import { MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
+import { expandDoseIds } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
 function userStorageKey(userId: number | undefined, key: string): string {
@@ -125,12 +126,7 @@ export function SchedulePage() {
 					{/* Past days (when expanded) */}
 					{showPastDays &&
 						pastDays.map((day) => {
-							const allDoseIds = day.meds.flatMap((item) =>
-								item.doses.flatMap((d) => {
-									const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
-									return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
-								})
-							);
+							const allDoseIds = day.meds.flatMap((item) => expandDoseIds(item.doses));
 							const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 							const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 							const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
@@ -172,10 +168,7 @@ export function SchedulePage() {
 											const med = meds.find((m) => m.name === item.medName);
 											const medCov = coverageByMed[item.medName];
 											const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
-											const itemDoseIds = item.doses.flatMap((d) => {
-												const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
-												return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
-											});
+											const itemDoseIds = expandDoseIds(item.doses);
 											const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -277,10 +270,7 @@ export function SchedulePage() {
 										: medCoverage
 											? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings)
 											: null;
-									const itemDoseIds = item.doses.flatMap((d) => {
-										const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
-										return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
-									});
+									const itemDoseIds = expandDoseIds(item.doses);
 									const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 									return (
 										<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>

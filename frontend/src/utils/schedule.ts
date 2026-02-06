@@ -446,6 +446,18 @@ export function isDoseDismissed(doseId: string, dismissedUntilDate: string | und
  * @param dismissedDoses - Set of dose IDs individually dismissed
  * @returns Array of dose IDs that are missed
  */
+/**
+ * Compute the full set of dose IDs for a list of doses, correctly handling
+ * per-intake takenBy arrays. Empty arrays produce base IDs (no suffix),
+ * non-empty arrays produce one ID per person with a `-person` suffix.
+ */
+export function expandDoseIds(doses: ReadonlyArray<{ id: string; takenBy: string[] }>): string[] {
+	return doses.flatMap((d) => {
+		const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
+		return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
+	});
+}
+
 export function computeMissedPastDoseIds(
 	pastDays: ReadonlyArray<{
 		meds: ReadonlyArray<{

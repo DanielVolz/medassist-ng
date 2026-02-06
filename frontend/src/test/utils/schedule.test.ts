@@ -4,6 +4,7 @@ import {
 	buildSchedulePreview,
 	calculateCoverage,
 	computeMissedPastDoseIds,
+	expandDoseIds,
 	getNextReminderForMed,
 	getReminderStatusText,
 	getStockStatus,
@@ -1147,3 +1148,52 @@ function groupEventsIntoPastDays(
 		meds: Array.from(medMap.entries()).map(([medName, doses]) => ({ medName, doses })),
 	}));
 }
+
+describe("expandDoseIds", () => {
+	it("returns base IDs when takenBy is empty array", () => {
+		const doses = [
+			{ id: "1-0-1729123200000", takenBy: [] as string[] },
+			{ id: "2-0-1729123200000", takenBy: [] as string[] },
+		];
+		const result = expandDoseIds(doses);
+		expect(result).toEqual(["1-0-1729123200000", "2-0-1729123200000"]);
+	});
+
+	it("returns person-suffixed IDs when takenBy has entries", () => {
+		const doses = [{ id: "1-0-1729123200000", takenBy: ["Alice"] }];
+		const result = expandDoseIds(doses);
+		expect(result).toEqual(["1-0-1729123200000-Alice"]);
+	});
+
+	it("returns multiple IDs for multiple takenBy entries", () => {
+		const doses = [{ id: "1-0-1729123200000", takenBy: ["Alice", "Bob"] }];
+		const result = expandDoseIds(doses);
+		expect(result).toEqual(["1-0-1729123200000-Alice", "1-0-1729123200000-Bob"]);
+	});
+
+	it("handles mix of empty and non-empty takenBy", () => {
+		const doses = [
+			{ id: "1-0-1729123200000", takenBy: ["Alice"] },
+			{ id: "2-0-1729123200000", takenBy: [] as string[] },
+			{ id: "3-0-1729123200000", takenBy: ["Bob", "Carol"] },
+		];
+		const result = expandDoseIds(doses);
+		expect(result).toEqual([
+			"1-0-1729123200000-Alice",
+			"2-0-1729123200000",
+			"3-0-1729123200000-Bob",
+			"3-0-1729123200000-Carol",
+		]);
+	});
+
+	it("returns empty array for empty doses", () => {
+		expect(expandDoseIds([])).toEqual([]);
+	});
+
+	it("handles non-array takenBy gracefully", () => {
+		// In case of unexpected data, treat non-array as empty
+		const doses = [{ id: "1-0-1729123200000", takenBy: null as unknown as string[] }];
+		const result = expandDoseIds(doses);
+		expect(result).toEqual(["1-0-1729123200000"]);
+	});
+});

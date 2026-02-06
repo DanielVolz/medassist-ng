@@ -4,7 +4,7 @@ import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
-import { getStockStatus } from "../utils/schedule";
+import { expandDoseIds, getStockStatus } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
 function userStorageKey(userId: number | undefined, key: string): string {
@@ -490,11 +490,7 @@ export function DashboardPage() {
 						{pastDays.length > 0 &&
 							(() => {
 								const missedCount = missedPastDoseIds.length;
-								const totalPastDoses = pastDays.flatMap((d) =>
-									d.meds.flatMap((m) =>
-										m.doses.flatMap((dose) => (dose.takenBy ? [`${dose.id}-${dose.takenBy}`] : [dose.id]))
-									)
-								);
+								const totalPastDoses = pastDays.flatMap((d) => d.meds.flatMap((m) => expandDoseIds(m.doses)));
 								return (
 									<div className="past-days-header">
 										<div
@@ -541,7 +537,10 @@ export function DashboardPage() {
 						{showPastDays &&
 							pastDays.map((day) => {
 								const allDoseIds = day.meds.flatMap((item) =>
-									item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]))
+									item.doses.flatMap((d) => {
+										const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
+										return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
+									})
 								);
 								const allDayTaken =
 									allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id) || dismissedDoses.has(id));
@@ -586,7 +585,7 @@ export function DashboardPage() {
 												const med = meds.find((m) => m.name === item.medName);
 												const medCov = coverageByMed[item.medName];
 												const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
-												const itemDoseIds = item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]));
+												const itemDoseIds = expandDoseIds(item.doses);
 												const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -676,9 +675,7 @@ export function DashboardPage() {
 						{todayDay &&
 							(() => {
 								const day = todayDay;
-								const allDoseIds = day.meds.flatMap((item) =>
-									item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]))
-								);
+								const allDoseIds = day.meds.flatMap((item) => expandDoseIds(item.doses));
 								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 
@@ -737,7 +734,7 @@ export function DashboardPage() {
 													: medCoverage
 														? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
 														: null;
-												const itemDoseIds = item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]));
+												const itemDoseIds = expandDoseIds(item.doses);
 												const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
@@ -769,7 +766,7 @@ export function DashboardPage() {
 														<div className="doses-col">
 															{item.doses.map((dose) => {
 																const isOverdue = dose.when < Date.now();
-																const people = dose.takenBy ? [dose.takenBy] : [null];
+																const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
 																const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
 																return (
 																	<div
@@ -866,9 +863,7 @@ export function DashboardPage() {
 						{/* Future days */}
 						{showFutureDays &&
 							futureDays.map((day) => {
-								const allDoseIds = day.meds.flatMap((item) =>
-									item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]))
-								);
+								const allDoseIds = day.meds.flatMap((item) => expandDoseIds(item.doses));
 								const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
 								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
 
@@ -926,7 +921,7 @@ export function DashboardPage() {
 													: medCoverage
 														? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
 														: null;
-												const itemDoseIds = item.doses.flatMap((d) => (d.takenBy ? [`${d.id}-${d.takenBy}`] : [d.id]));
+												const itemDoseIds = expandDoseIds(item.doses);
 												const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 												return (
 													<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>

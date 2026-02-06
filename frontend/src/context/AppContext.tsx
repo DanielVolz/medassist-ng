@@ -351,38 +351,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	const groupedSchedule = useMemo(() => {
 		const days = new Map<string, { dateStr: string; date: Date; isPast: boolean; meds: Map<string, DayMedEntry> }>();
-		schedule.events.slice(0, 2000).forEach((event) => {
-			const day = days.get(event.dateStr) ?? {
-				dateStr: event.dateStr,
-				date: new Date(event.when),
-				isPast: event.isPast,
-				meds: new Map(),
-			};
-			const medEntry = day.meds.get(event.medName) ?? {
-				medName: event.medName,
-				total: 0,
-				doses: [],
-				lastWhen: event.when,
-			};
-			medEntry.total += event.usage;
-			medEntry.doses.push({
-				id: event.id,
-				timeStr: event.timeStr,
-				when: event.when,
-				usage: event.usage,
-				takenBy: event.takenBy ? [event.takenBy] : [],
+		// Limit past events to scheduleDays window to avoid overwhelming the UI.
+		// Without this, medications with start dates far in the past generate thousands
+		// of events that fill the display budget and push out today/future events.
+		const pastCutoff = new Date();
+		pastCutoff.setDate(pastCutoff.getDate() - scheduleDays);
+		pastCutoff.setHours(0, 0, 0, 0);
+		const pastCutoffMs = pastCutoff.getTime();
+		schedule.events
+			.filter((e) => !e.isPast || e.when >= pastCutoffMs)
+			.forEach((event) => {
+				const day = days.get(event.dateStr) ?? {
+					dateStr: event.dateStr,
+					date: new Date(event.when),
+					isPast: event.isPast,
+					meds: new Map(),
+				};
+				const medEntry = day.meds.get(event.medName) ?? {
+					medName: event.medName,
+					total: 0,
+					doses: [],
+					lastWhen: event.when,
+				};
+				medEntry.total += event.usage;
+				medEntry.doses.push({
+					id: event.id,
+					timeStr: event.timeStr,
+					when: event.when,
+					usage: event.usage,
+					takenBy: event.takenBy ? [event.takenBy] : [],
+				});
+				medEntry.lastWhen = Math.max(medEntry.lastWhen, event.when);
+				day.meds.set(event.medName, medEntry);
+				days.set(event.dateStr, day);
 			});
-			medEntry.lastWhen = Math.max(medEntry.lastWhen, event.when);
-			day.meds.set(event.medName, medEntry);
-			days.set(event.dateStr, day);
-		});
 		return Array.from(days.values()).map((d) => ({
 			dateStr: d.dateStr,
 			date: d.date,
 			isPast: d.isPast,
 			meds: Array.from(d.meds.values()),
 		}));
-	}, [schedule.events]);
+	}, [schedule.events, scheduleDays]);
 
 	const pastDays = useMemo(() => groupedSchedule.filter((d) => d.isPast), [groupedSchedule]);
 

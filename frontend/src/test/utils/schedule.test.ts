@@ -1197,3 +1197,251 @@ describe("expandDoseIds", () => {
 		expect(result).toEqual(["1-0-1729123200000"]);
 	});
 });
+
+describe("past schedule windowing", () => {
+	// Reproduces the bug where daily medications with far-past start dates
+	// would fill all 2000 event slots, pushing today/future events out.
+	// The fix replaces slice(0, 2000) with a time-based window filter.
+
+	function buildGroupedScheduleFromEvents(
+		events: Array<{
+			dateStr: string;
+			when: number;
+			isPast: boolean;
+			medName: string;
+			id: string;
+			usage: number;
+			takenBy: string | null;
+		}>,
+		scheduleDays: number
+	) {
+		// Mirror the fixed groupedSchedule logic from AppContext.tsx
+		const pastCutoff = new Date();
+		pastCutoff.setDate(pastCutoff.getDate() - scheduleDays);
+		pastCutoff.setHours(0, 0, 0, 0);
+		const pastCutoffMs = pastCutoff.getTime();
+
+		type DayMedEntry = {
+			medName: string;
+			total: number;
+			doses: Array<{ id: string; takenBy: string[] }>;
+			lastWhen: number;
+		};
+		const days = new Map<string, { dateStr: string; date: Date; isPast: boolean; meds: Map<string, DayMedEntry> }>();
+
+		events
+			.filter((e) => !e.isPast || e.when >= pastCutoffMs)
+			.forEach((event) => {
+				const day = days.get(event.dateStr) ?? {
+					dateStr: event.dateStr,
+					date: new Date(event.when),
+					isPast: event.isPast,
+					meds: new Map(),
+				};
+				const medEntry = day.meds.get(event.medName) ?? {
+					medName: event.medName,
+					total: 0,
+					doses: [],
+					lastWhen: event.when,
+				};
+				medEntry.total += event.usage;
+				medEntry.doses.push({
+					id: event.id,
+					takenBy: event.takenBy ? [event.takenBy] : [],
+				});
+				medEntry.lastWhen = Math.max(medEntry.lastWhen, event.when);
+				day.meds.set(event.medName, medEntry);
+				days.set(event.dateStr, day);
+			});
+
+		return Array.from(days.values()).map((d) => ({
+			dateStr: d.dateStr,
+			date: d.date,
+			isPast: d.isPast,
+			meds: Array.from(d.meds.values()),
+		}));
+	}
+
+	it("includes daily meds within the scheduleDays window, not just weekly meds", () => {
+		const now = new Date();
+		const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const events: Array<{
+			dateStr: string;
+			when: number;
+			isPast: boolean;
+			medName: string;
+			id: string;
+			usage: number;
+			takenBy: string | null;
+		}> = [];
+
+		// Simulate daily med starting 400 days ago (way beyond any window)
+		for (let i = 400; i >= 1; i--) {
+			const d = new Date(todayStart);
+			d.setDate(d.getDate() - i);
+			events.push({
+				dateStr: d.toLocaleDateString("en", { weekday: "short", day: "2-digit", month: "short" }),
+				when: d.getTime(),
+				isPast: true,
+				medName: "DailyMed",
+				id: `1-0-${d.getTime()}`,
+				usage: 1,
+				takenBy: "Daniel",
+			});
+		}
+
+		// Simulate weekly Friday med starting 400 days ago
+		for (let i = 400; i >= 1; i--) {
+			const d = new Date(todayStart);
+			d.setDate(d.getDate() - i);
+			if (d.getDay() !== 5) continue; // Only Fridays
+			events.push({
+				dateStr: d.toLocaleDateString("en", { weekday: "short", day: "2-digit", month: "short" }),
+				when: d.getTime(),
+				isPast: true,
+				medName: "WeeklyMed",
+				id: `2-0-${d.getTime()}`,
+				usage: 1,
+				takenBy: null,
+			});
+		}
+
+		// Add today event
+		events.push({
+			dateStr: todayStart.toLocaleDateString("en", { weekday: "short", day: "2-digit", month: "short" }),
+			when: todayStart.getTime(),
+			isPast: false,
+			medName: "DailyMed",
+			id: `1-0-${todayStart.getTime()}`,
+			usage: 1,
+			takenBy: "Daniel",
+		});
+
+		events.sort((a, b) => a.when - b.when);
+
+		const grouped = buildGroupedScheduleFromEvents(events, 30);
+		const pastDays = grouped.filter((d) => d.isPast);
+		const todayDays = grouped.filter((d) => !d.isPast);
+
+		// Past days should contain at most 30 days (scheduleDays window)
+		expect(pastDays.length).toBeLessThanOrEqual(30);
+		expect(pastDays.length).toBeGreaterThan(0);
+
+		// Today should be present (not pushed out by past events)
+		expect(todayDays.length).toBeGreaterThanOrEqual(1);
+
+		// Past days should include DailyMed (within the 30-day window)
+		const pastDaysWithDailyMed = pastDays.filter((d) => d.meds.some((m) => m.medName === "DailyMed"));
+		expect(pastDaysWithDailyMed.length).toBeGreaterThan(0);
+
+		// Past days should NOT only be Fridays (the bug)
+		const pastDateDays = pastDays.map((d) => d.date.getDay());
+		const uniqueDaysOfWeek = new Set(pastDateDays);
+		expect(uniqueDaysOfWeek.size).toBeGreaterThan(1); // Multiple days of week, not just Friday
+	});
+
+	it("old slice(0,2000) would have cut off today for large datasets", () => {
+		const now = new Date();
+		const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const events: Array<{
+			dateStr: string;
+			when: number;
+			isPast: boolean;
+			medName: string;
+			id: string;
+			usage: number;
+			takenBy: string | null;
+		}> = [];
+
+		// Generate 3 daily meds × 2 intakes × 400 days = 2400 past events (> 2000 limit)
+		for (let medIdx = 0; medIdx < 3; medIdx++) {
+			for (let intakeIdx = 0; intakeIdx < 2; intakeIdx++) {
+				for (let i = 400; i >= 1; i--) {
+					const d = new Date(todayStart);
+					d.setDate(d.getDate() - i);
+					events.push({
+						dateStr: d.toLocaleDateString("en", { weekday: "short", day: "2-digit", month: "short" }),
+						when: d.getTime() + intakeIdx * 3600000, // offset intakes by 1 hour
+						isPast: true,
+						medName: `Med${medIdx}`,
+						id: `${medIdx}-${intakeIdx}-${d.getTime()}`,
+						usage: 1,
+						takenBy: null,
+					});
+				}
+			}
+			// Today event
+			events.push({
+				dateStr: todayStart.toLocaleDateString("en", { weekday: "short", day: "2-digit", month: "short" }),
+				when: todayStart.getTime(),
+				isPast: false,
+				medName: `Med${medIdx}`,
+				id: `${medIdx}-0-${todayStart.getTime()}`,
+				usage: 1,
+				takenBy: null,
+			});
+		}
+
+		events.sort((a, b) => a.when - b.when);
+
+		// OLD behavior: slice(0, 2000) would have cut off today
+		const oldSliced = events.slice(0, 2000);
+		const todayInOld = oldSliced.filter((e) => !e.isPast);
+		expect(todayInOld.length).toBe(0); // Today events are gone!
+
+		// NEW behavior: time-based window keeps today
+		const grouped = buildGroupedScheduleFromEvents(events, 30);
+		const todayDays = grouped.filter((d) => !d.isPast);
+		expect(todayDays.length).toBeGreaterThanOrEqual(1);
+		// All 3 meds should appear in today
+		const todayMeds = todayDays[0]?.meds.map((m) => m.medName).sort();
+		expect(todayMeds).toEqual(["Med0", "Med1", "Med2"]);
+	});
+
+	it("respects scheduleDays parameter for past window size", () => {
+		const now = new Date();
+		const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const events: Array<{
+			dateStr: string;
+			when: number;
+			isPast: boolean;
+			medName: string;
+			id: string;
+			usage: number;
+			takenBy: string | null;
+		}> = [];
+
+		// Daily med for 200 days
+		for (let i = 200; i >= 1; i--) {
+			const d = new Date(todayStart);
+			d.setDate(d.getDate() - i);
+			events.push({
+				dateStr: d.toLocaleDateString("en", { weekday: "short", day: "2-digit", month: "short" }),
+				when: d.getTime(),
+				isPast: true,
+				medName: "TestMed",
+				id: `1-0-${d.getTime()}`,
+				usage: 1,
+				takenBy: null,
+			});
+		}
+		events.sort((a, b) => a.when - b.when);
+
+		// With 30 days window
+		const grouped30 = buildGroupedScheduleFromEvents(events, 30);
+		const past30 = grouped30.filter((d) => d.isPast);
+		expect(past30.length).toBeLessThanOrEqual(30);
+
+		// With 90 days window
+		const grouped90 = buildGroupedScheduleFromEvents(events, 90);
+		const past90 = grouped90.filter((d) => d.isPast);
+		expect(past90.length).toBeLessThanOrEqual(90);
+		expect(past90.length).toBeGreaterThan(past30.length);
+
+		// With 180 days window
+		const grouped180 = buildGroupedScheduleFromEvents(events, 180);
+		const past180 = grouped180.filter((d) => d.isPast);
+		expect(past180.length).toBeLessThanOrEqual(180);
+		expect(past180.length).toBeGreaterThan(past90.length);
+	});
+});

@@ -8,6 +8,7 @@ import { useParams } from "react-router-dom";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
 import { getMedTotal } from "../types";
 import { getSystemLocale } from "../utils/formatters";
+import { isDoseDismissed } from "../utils/schedule";
 import { loadCollapsedDaysFromStorage } from "../utils/storage";
 import { MedicationAvatar } from "./MedicationAvatar";
 
@@ -395,46 +396,13 @@ export function SharedSchedule() {
 	}, [data]);
 
 	// Helper to check if a dose date is on or before the dismissedUntil date
-	function isDoseDismissed(doseTimestamp: number, medName: string): boolean {
+	function isDoseDismissedByName(doseTimestamp: number, medName: string): boolean {
 		const dismissedUntilDate = dismissedUntilByMed.get(medName);
 		if (!dismissedUntilDate) return false;
 		// Compare date strings (YYYY-MM-DD format sorts correctly)
 		const doseDate = new Date(doseTimestamp);
 		const doseDateStr = `${doseDate.getFullYear()}-${String(doseDate.getMonth() + 1).padStart(2, "0")}-${String(doseDate.getDate()).padStart(2, "0")}`;
 		return doseDateStr <= dismissedUntilDate;
-	}
-
-	// Build a map of medication name -> updatedAt timestamp
-	// Used to filter out doses from previous schedule configurations
-	const updatedAtByMed = useMemo(() => {
-		if (!data) return new Map<string, number>();
-		const map = new Map<string, number>();
-		for (const med of data.medications) {
-			if (med.updatedAt) {
-				const ts = typeof med.updatedAt === "number" ? med.updatedAt : new Date(med.updatedAt).getTime();
-				if (!Number.isNaN(ts)) {
-					map.set(med.name, ts);
-				}
-			}
-		}
-		return map;
-	}, [data]);
-
-	// Helper to check if a dose was scheduled BEFORE the medication was last updated
-	// If so, it's from a previous schedule configuration and shouldn't count as "missed"
-	// This matches the main app's isDoseFromPreviousSchedule logic in AppContext.tsx
-	function isDoseFromPreviousSchedule(doseId: string, medName: string): boolean {
-		const updatedAtTimestamp = updatedAtByMed.get(medName);
-		if (!updatedAtTimestamp) return false; // No updatedAt means it was never changed, all doses are valid
-
-		// Extract timestamp from dose ID (format: medId-blisterIdx-timestamp or medId-blisterIdx-timestamp-person)
-		const parts = doseId.split("-");
-		if (parts.length < 3) return false;
-		const doseTimestamp = parseInt(parts[2], 10);
-		if (Number.isNaN(doseTimestamp)) return false;
-
-		// If the dose was scheduled before the medication was updated, it's from a previous schedule
-		return doseTimestamp < updatedAtTimestamp;
 	}
 
 	// Calculate coverage for stock status colors (matches main app logic)
@@ -595,17 +563,12 @@ export function SharedSchedule() {
 											const medId = parts[0];
 											const med = data?.medications.find((m) => String(m.id) === medId);
 											if (med) {
-												const timestamp = parseInt(parts[2], 10);
-												if (isDoseDismissed(timestamp, med.name)) {
+												if (isDoseDismissed(id, med.dismissedUntil ?? undefined)) {
 													return false; // dismissed = not missed
-												}
-												// Check if this dose is from a previous schedule configuration
-												if (isDoseFromPreviousSchedule(id, med.name)) {
-													return false; // from previous schedule = not missed
 												}
 											}
 										}
-										return true; // not taken, not dismissed, not from previous schedule = missed
+										return true; // not taken, not dismissed = missed
 									}).length;
 									return (
 										<div
@@ -637,24 +600,19 @@ export function SharedSchedule() {
 							{/* Past days (when expanded) */}
 							{showPastDays &&
 								pastDays.map((day) => {
-									// Helper to check if a dose ID is "done" (taken, dismissed, or from previous schedule)
-									// Checks: per-dose dismissed flag, medication-level dismissedUntil, and updatedAt
+									// Helper to check if a dose ID is "done" (taken or dismissed)
+									// Checks: per-dose dismissed flag and medication-level dismissedUntil
 									const isDoseIdDone = (doseId: string) => {
 										if (takenDoses.has(doseId)) return true;
 										// Check if this dose is dismissed via per-dose flag from API
 										if (dismissedDoses.has(doseId)) return true;
-										// Check if dismissed via medication-level dismissedUntil date or from previous schedule
+										// Check if dismissed via medication-level dismissedUntil date
 										const parts = doseId.split("-");
 										if (parts.length >= 3) {
 											const medId = parts[0];
 											const med = data?.medications.find((m) => String(m.id) === medId);
 											if (med) {
-												const timestamp = parseInt(parts[2], 10);
-												if (isDoseDismissed(timestamp, med.name)) {
-													return true;
-												}
-												// Check if this dose is from a previous schedule configuration
-												if (isDoseFromPreviousSchedule(doseId, med.name)) {
+												if (isDoseDismissed(doseId, med.dismissedUntil ?? undefined)) {
 													return true;
 												}
 											}
@@ -753,13 +711,11 @@ export function SharedSchedule() {
 															</div>
 															<div className="doses-col">
 																{item.doses.map((dose) => {
-																	// Check: medication-level dismissedUntil, per-dose dismissed flag, and previous schedule
-																	const isMedLevelDismissed = isDoseDismissed(dose.when, dose.medName);
-																	const isFromPreviousSchedule = isDoseFromPreviousSchedule(dose.id, dose.medName);
+																	// Check: medication-level dismissedUntil and per-dose dismissed flag
+																	const isMedLevelDismissed = isDoseDismissedByName(dose.when, dose.medName);
 																	const isTaken = takenDoses.has(dose.id);
 																	const isPerDoseDismissed = dismissedDoses.has(dose.id);
-																	const isDone =
-																		isTaken || isPerDoseDismissed || isMedLevelDismissed || isFromPreviousSchedule;
+																	const isDone = isTaken || isPerDoseDismissed || isMedLevelDismissed;
 																	return (
 																		<div key={dose.id} className={`dose-item past ${isDone ? "all-taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>

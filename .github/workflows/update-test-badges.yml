@@ -91,16 +91,17 @@ jobs:
             exit 0
           fi
 
-      - name: Check for changes
-        id: git-check
-        run: |
-          git diff --quiet README.md || echo "changed=true" >> $GITHUB_OUTPUT
-
-      - name: Commit and push if changed
-        if: steps.git-check.outputs.changed == 'true'
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add README.md
-          git commit -m "chore: update test count badges [skip ci]"
-          git push
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: update test count badges'
+          title: 'chore: update test count badges'
+          body: |
+            Automated update of test count badges in README.md.
+            
+            - Backend tests: ${{ steps.backend-tests.outputs.count }}
+            - Frontend tests: ${{ steps.frontend-tests.outputs.count }}
+          branch: chore/update-test-badges
+          delete-branch: true
+          labels: automated

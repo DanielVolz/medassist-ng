@@ -5,6 +5,7 @@ import { type Client, createClient } from "@libsql/client";
 import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
+import { parseIntakesJson, parseLocalDateTime } from "../utils/scheduler-utils.js";
 
 dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
 
@@ -159,6 +160,142 @@ export async function ensureDefaultUser(client: Client, authEnabled: boolean): P
 }
 
 // =============================================================================
+// Startup repair: fix orphaned dose tracking IDs from past schedule changes
+// =============================================================================
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Repair orphaned dose tracking IDs that no longer match the current intake schedule.
+ * This fixes dose IDs that became invalid when a medication's schedule was changed
+ * BEFORE the on-edit migration (PR #103) was introduced.
+ *
+ * For each medication, generates all valid schedule dateOnlyMs values from each intake's
+ * start date up to today, then checks all dose_tracking entries. Any dose whose timestamp
+ * doesn't match a valid schedule date is remapped to the nearest valid date.
+ *
+ * This function is idempotent - safe to run on every startup.
+ */
+export async function repairOrphanedDoseIds(client: Client): Promise<{ repaired: number; errors: string[] }> {
+	const errors: string[] = [];
+	let repaired = 0;
+
+	try {
+		// Get all medications
+		const medsResult = await client.execute(
+			"SELECT id, intakes_json, usage_json, every_json, start_json, intake_reminders_enabled FROM medications"
+		);
+
+		if (medsResult.rows.length === 0) return { repaired, errors };
+
+		// Get all dose tracking entries
+		const dosesResult = await client.execute("SELECT id, dose_id FROM dose_tracking");
+		if (dosesResult.rows.length === 0) return { repaired, errors };
+
+		// Build a map of medId → dose entries for quick lookup
+		const dosesByMed = new Map<number, Array<{ id: number; doseId: string }>>();
+		for (const row of dosesResult.rows) {
+			const doseId = row.dose_id as string;
+			const parts = doseId.split("-");
+			if (parts.length < 3) continue;
+			const medId = parseInt(parts[0], 10);
+			if (Number.isNaN(medId)) continue;
+			if (!dosesByMed.has(medId)) dosesByMed.set(medId, []);
+			dosesByMed.get(medId)!.push({ id: row.id as number, doseId });
+		}
+
+		const now = new Date();
+		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+		for (const med of medsResult.rows) {
+			const medId = med.id as number;
+			const medDoses = dosesByMed.get(medId);
+			if (!medDoses || medDoses.length === 0) continue;
+
+			// Parse intakes
+			const intakes = parseIntakesJson(
+				med.intakes_json as string | null,
+				{
+					usageJson: (med.usage_json as string) || "[]",
+					everyJson: (med.every_json as string) || "[]",
+					startJson: (med.start_json as string) || "[]",
+				},
+				(med.intake_reminders_enabled as number) === 1
+			);
+
+			if (intakes.length === 0) continue;
+
+			// For each intake index, build the set of valid dateOnlyMs values
+			const validDatesByIntake = new Map<number, Set<number>>();
+			for (let idx = 0; idx < intakes.length; idx++) {
+				const intake = intakes[idx];
+				const start = parseLocalDateTime(intake.start);
+				const every = intake.every;
+				if (every <= 0 || Number.isNaN(start.getTime())) continue;
+
+				const validDates = new Set<number>();
+				for (let d = new Date(start); d <= today; d.setDate(d.getDate() + every)) {
+					validDates.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
+				}
+				validDatesByIntake.set(idx, validDates);
+			}
+
+			// Check each dose entry
+			for (const dose of medDoses) {
+				const parts = dose.doseId.split("-");
+				if (parts.length < 3) continue;
+
+				const intakeIdx = parseInt(parts[1], 10);
+				const dateOnlyMs = parseInt(parts[2], 10);
+				if (Number.isNaN(intakeIdx) || Number.isNaN(dateOnlyMs)) continue;
+
+				const validDates = validDatesByIntake.get(intakeIdx);
+				if (!validDates) continue; // Unknown intake index - skip
+
+				// Check if this dose's timestamp is valid
+				if (validDates.has(dateOnlyMs)) continue; // Already valid - nothing to do
+
+				// Orphaned dose - find the nearest valid schedule date
+				const intake = intakes[intakeIdx];
+				if (!intake) continue;
+
+				const halfInterval = (intake.every * MS_PER_DAY) / 2;
+				let bestMatch: number | null = null;
+				let bestDist = Infinity;
+
+				for (const validDate of validDates) {
+					const dist = Math.abs(validDate - dateOnlyMs);
+					if (dist < bestDist && dist <= halfInterval) {
+						bestDist = dist;
+						bestMatch = validDate;
+					}
+				}
+
+				if (bestMatch !== null) {
+					// Rebuild dose ID with new timestamp, preserving person suffix
+					const personSuffix = parts.length > 3 ? `-${parts.slice(3).join("-")}` : "";
+					const newDoseId = `${medId}-${intakeIdx}-${bestMatch}${personSuffix}`;
+
+					try {
+						await client.execute({
+							sql: "UPDATE dose_tracking SET dose_id = ? WHERE id = ?",
+							args: [newDoseId, dose.id],
+						});
+						repaired++;
+					} catch (e: any) {
+						errors.push(`Failed to repair dose ${dose.id}: ${e.message}`);
+					}
+				}
+			}
+		}
+	} catch (e: any) {
+		errors.push(`Repair failed: ${e.message}`);
+	}
+
+	return { repaired, errors };
+}
+
+// =============================================================================
 // Database initialization (runs on import)
 // =============================================================================
 
@@ -217,6 +354,15 @@ async function runMigrations() {
 		alterResult.errors.forEach((err) => console.error(`[DB] ALTER migration error:`, err));
 	}
 	console.log(`[DB] Tables verified/created`);
+
+	// Repair orphaned dose tracking IDs from past schedule changes
+	const repairResult = await repairOrphanedDoseIds(client);
+	if (repairResult.repaired > 0) {
+		console.log(`[DB] Repaired ${repairResult.repaired} orphaned dose tracking IDs`);
+	}
+	if (repairResult.errors.length > 0) {
+		repairResult.errors.forEach((err) => console.error(`[DB] Dose repair error:`, err));
+	}
 
 	// If auth is disabled, ensure a default user exists (ID=1)
 	const authEnabled = process.env.AUTH_ENABLED === "true";

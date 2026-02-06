@@ -13,6 +13,7 @@ import {
 	ensureDataDirectory,
 	ensureDefaultUser,
 	getDbPaths,
+	repairOrphanedDoseIds,
 	runAlterMigrations,
 	runDrizzleMigrations,
 } from "../db/client.js";
@@ -618,6 +619,275 @@ describe("Database Client", () => {
 			// Should still have only one user
 			const users = await client.execute("SELECT * FROM users");
 			expect(users.rows).toHaveLength(1);
+		});
+	});
+
+	describe("repairOrphanedDoseIds", () => {
+		let client: ReturnType<typeof createClient>;
+
+		beforeEach(async () => {
+			client = createClient({ url: ":memory:" });
+			const db = drizzle(client);
+			await migrate(db, { migrationsFolder });
+			// Create a test user
+			await client.execute("INSERT INTO users (id, username, auth_provider) VALUES (1, 'testuser', 'local')");
+		});
+
+		it("should return 0 repairs when no data exists", async () => {
+			const result = await repairOrphanedDoseIds(client);
+			expect(result.repaired).toBe(0);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it("should not modify dose IDs that already match the current schedule", async () => {
+			// Create weekly medication starting Oct 17 (Friday)
+			const intakes = JSON.stringify([
+				{ usage: 1, every: 7, start: "2025-10-17T08:00:00", takenBy: null, intakeRemindersEnabled: false },
+			]);
+			await client.execute({
+				sql: `INSERT INTO medications (id, user_id, name, intakes_json, usage_json, every_json, start_json)
+				      VALUES (1, 1, 'Weekly Med', ?, '[1]', '[7]', '["2025-10-17T08:00:00"]')`,
+				args: [intakes],
+			});
+
+			// Insert dose IDs that match the schedule (Fridays)
+			const fri17 = new Date(2025, 9, 17).getTime();
+			const fri24 = new Date(2025, 9, 24).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri17}`],
+			});
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri24}`],
+			});
+
+			const result = await repairOrphanedDoseIds(client);
+			expect(result.repaired).toBe(0);
+
+			// Verify IDs unchanged
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking ORDER BY dose_id");
+			expect(doses.rows[0].dose_id).toBe(`1-0-${fri17}`);
+			expect(doses.rows[1].dose_id).toBe(`1-0-${fri24}`);
+		});
+
+		it("should repair orphaned dose IDs when schedule shifted by 1 day", async () => {
+			// Current schedule: Saturdays (Oct 18)
+			const intakes = JSON.stringify([
+				{ usage: 1, every: 7, start: "2025-10-18T08:00:00", takenBy: null, intakeRemindersEnabled: false },
+			]);
+			await client.execute({
+				sql: `INSERT INTO medications (id, user_id, name, intakes_json, usage_json, every_json, start_json)
+				      VALUES (1, 1, 'Weekly Med', ?, '[1]', '[7]', '["2025-10-18T08:00:00"]')`,
+				args: [intakes],
+			});
+
+			// Insert orphaned dose IDs from OLD schedule (Fridays)
+			const fri17 = new Date(2025, 9, 17).getTime();
+			const fri24 = new Date(2025, 9, 24).getTime();
+			const fri31 = new Date(2025, 9, 31).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri17}`],
+			});
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri24}`],
+			});
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri31}`],
+			});
+
+			const result = await repairOrphanedDoseIds(client);
+			expect(result.repaired).toBe(3);
+			expect(result.errors).toHaveLength(0);
+
+			// Verify dose IDs are now Saturdays
+			const sat18 = new Date(2025, 9, 18).getTime();
+			const sat25 = new Date(2025, 9, 25).getTime();
+			const nov1 = new Date(2025, 10, 1).getTime();
+
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking ORDER BY dose_id");
+			const ids = doses.rows.map((r) => r.dose_id);
+			expect(ids).toContain(`1-0-${sat18}`);
+			expect(ids).toContain(`1-0-${sat25}`);
+			expect(ids).toContain(`1-0-${nov1}`);
+		});
+
+		it("should preserve person suffix when repairing dose IDs", async () => {
+			// Current schedule: Saturdays
+			const intakes = JSON.stringify([
+				{ usage: 1, every: 7, start: "2025-10-18T08:00:00", takenBy: "Alice", intakeRemindersEnabled: false },
+			]);
+			await client.execute({
+				sql: `INSERT INTO medications (id, user_id, name, intakes_json, usage_json, every_json, start_json)
+				      VALUES (1, 1, 'Person Med', ?, '[1]', '[7]', '["2025-10-18T08:00:00"]')`,
+				args: [intakes],
+			});
+
+			// Orphaned dose with person suffix (from old Friday schedule)
+			const fri17 = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri17}-Alice`],
+			});
+
+			const result = await repairOrphanedDoseIds(client);
+			expect(result.repaired).toBe(1);
+
+			// Verify person suffix preserved
+			const sat18 = new Date(2025, 9, 18).getTime();
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking");
+			expect(doses.rows[0].dose_id).toBe(`1-0-${sat18}-Alice`);
+		});
+
+		it("should not repair doses that are too far from any valid schedule date", async () => {
+			// Current schedule: biweekly (every 14 days) starting Oct 18
+			// halfInterval = 7 days, so doses more than 7 days from any valid date won't match
+			const intakes = JSON.stringify([
+				{ usage: 1, every: 14, start: "2025-10-18T08:00:00", takenBy: null, intakeRemindersEnabled: false },
+			]);
+			await client.execute({
+				sql: `INSERT INTO medications (id, user_id, name, intakes_json, usage_json, every_json, start_json)
+				      VALUES (1, 1, 'Biweekly Med', ?, '[1]', '[14]', '["2025-10-18T08:00:00"]')`,
+				args: [intakes],
+			});
+
+			// Insert dose on Oct 27 (9 days away from Oct 18, 4 days away from Nov 1)
+			// halfInterval = 7 days. Oct 27 is 9 days from Oct 18 (too far) and 4 days from Nov 1 (within range)
+			// Actually use Oct 26 which is 8 days from both (Oct 18 and Nov 1) - exactly at halfInterval + 1
+			// Wait: biweekly = Oct 18, Nov 1. Oct 26 is 8 days from Oct 18, 6 days from Nov 1 → 6 < 7, matches Nov 1
+			// Use Oct 25: 7 days from Oct 18, 7 days from Nov 1 → exactly at boundary. Use Oct 25 and check.
+			// The condition is dist <= halfInterval, so 7 <= 7 is true. Need dist > 7.
+			// Use a 28-day schedule instead: Oct 18, Nov 15. Midpoint is Nov 1-2. Nov 2 is 15 days from Oct 18, 13 from Nov 15. Both > 14. No match.
+			const intakes28 = JSON.stringify([
+				{ usage: 1, every: 28, start: "2025-10-18T08:00:00", takenBy: null, intakeRemindersEnabled: false },
+			]);
+			await client.execute({
+				sql: `UPDATE medications SET intakes_json = ?, every_json = '[28]' WHERE id = 1`,
+				args: [intakes28],
+			});
+
+			// Insert dose on Nov 2 (15 days from Oct 18, 13 days from Nov 15)
+			// halfInterval = 14 days. Both 15 > 14 and 13 < 14, so Nov 2 actually WOULD map to Nov 15.
+			// Use Nov 4: 17 days from Oct 18, 11 days from Nov 15 → 11 < 14, maps to Nov 15.
+			// For a 28-day interval, halfInterval = 14. A date must be > 14 days from ALL schedule dates.
+			// Between Oct 18 and Nov 15 (28 days), the only date > 14 from both is impossible.
+			// So lets use a gap: Oct 18 is the only past date for a monthly schedule.
+			// If we pick a date before Oct 18, like Oct 1 (17 days before Oct 18) → 17 > 14 → no match!
+			const oct1 = new Date(2025, 9, 1).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${oct1}`],
+			});
+
+			const result = await repairOrphanedDoseIds(client);
+			expect(result.repaired).toBe(0);
+
+			// Dose should remain unchanged
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking");
+			expect(doses.rows[0].dose_id).toBe(`1-0-${oct1}`);
+		});
+
+		it("should be idempotent - running twice produces same result", async () => {
+			// Current schedule: Saturdays
+			const intakes = JSON.stringify([
+				{ usage: 1, every: 7, start: "2025-10-18T08:00:00", takenBy: null, intakeRemindersEnabled: false },
+			]);
+			await client.execute({
+				sql: `INSERT INTO medications (id, user_id, name, intakes_json, usage_json, every_json, start_json)
+				      VALUES (1, 1, 'Weekly Med', ?, '[1]', '[7]', '["2025-10-18T08:00:00"]')`,
+				args: [intakes],
+			});
+
+			// Insert orphaned dose from Friday
+			const fri17 = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri17}`],
+			});
+
+			// First run
+			const result1 = await repairOrphanedDoseIds(client);
+			expect(result1.repaired).toBe(1);
+
+			// Second run - should find 0 repairs (already fixed)
+			const result2 = await repairOrphanedDoseIds(client);
+			expect(result2.repaired).toBe(0);
+
+			// Verify final state
+			const sat18 = new Date(2025, 9, 18).getTime();
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking");
+			expect(doses.rows).toHaveLength(1);
+			expect(doses.rows[0].dose_id).toBe(`1-0-${sat18}`);
+		});
+
+		it("should handle multiple medications independently", async () => {
+			// Med 1: weekly Saturdays
+			const intakes1 = JSON.stringify([
+				{ usage: 1, every: 7, start: "2025-10-18T08:00:00", takenBy: null, intakeRemindersEnabled: false },
+			]);
+			await client.execute({
+				sql: `INSERT INTO medications (id, user_id, name, intakes_json, usage_json, every_json, start_json)
+				      VALUES (1, 1, 'Med 1', ?, '[1]', '[7]', '["2025-10-18T08:00:00"]')`,
+				args: [intakes1],
+			});
+
+			// Med 2: daily starting Oct 20 (valid IDs, no repair needed)
+			const intakes2 = JSON.stringify([
+				{ usage: 1, every: 1, start: "2025-10-20T08:00:00", takenBy: null, intakeRemindersEnabled: false },
+			]);
+			await client.execute({
+				sql: `INSERT INTO medications (id, user_id, name, intakes_json, usage_json, every_json, start_json)
+				      VALUES (2, 1, 'Med 2', ?, '[1]', '[1]', '["2025-10-20T08:00:00"]')`,
+				args: [intakes2],
+			});
+
+			// Med 1: orphaned Friday dose
+			const fri17 = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri17}`],
+			});
+
+			// Med 2: valid daily dose
+			const oct20 = new Date(2025, 9, 20).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`2-0-${oct20}`],
+			});
+
+			const result = await repairOrphanedDoseIds(client);
+			expect(result.repaired).toBe(1); // Only med 1 dose repaired
+
+			// Med 2 dose should be unchanged
+			const med2Doses = await client.execute("SELECT dose_id FROM dose_tracking WHERE dose_id LIKE '2-%'");
+			expect(med2Doses.rows[0].dose_id).toBe(`2-0-${oct20}`);
+		});
+
+		it("should handle legacy format (no intakes_json, uses usage/every/start arrays)", async () => {
+			// Medication with only legacy fields (intakes_json is '[]')
+			await client.execute({
+				sql: `INSERT INTO medications (id, user_id, name, intakes_json, usage_json, every_json, start_json)
+				      VALUES (1, 1, 'Legacy Med', '[]', '[1]', '[7]', '["2025-10-18T08:00:00"]')`,
+				args: [],
+			});
+
+			// Orphaned Friday dose
+			const fri17 = new Date(2025, 9, 17).getTime();
+			await client.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?)",
+				args: [`1-0-${fri17}`],
+			});
+
+			const result = await repairOrphanedDoseIds(client);
+			expect(result.repaired).toBe(1);
+
+			// Verify mapped to Saturday
+			const sat18 = new Date(2025, 9, 18).getTime();
+			const doses = await client.execute("SELECT dose_id FROM dose_tracking");
+			expect(doses.rows[0].dose_id).toBe(`1-0-${sat18}`);
 		});
 	});
 });

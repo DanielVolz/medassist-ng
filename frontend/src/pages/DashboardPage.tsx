@@ -617,7 +617,7 @@ export function DashboardPage() {
 														<div className="doses-col">
 															{item.doses.map((dose) => {
 																// If no takenBy, show single checkbox; otherwise show one per person
-																const people = dose.takenBy ? [dose.takenBy] : [null];
+																const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
 																return (
 																	<div key={dose.id} className="dose-item past">
 																		<span className="dose-time">{dose.timeStr}</span>
@@ -833,7 +833,9 @@ export function DashboardPage() {
 							(() => {
 								const totalFutureDoses = futureDays.flatMap((d) =>
 									d.meds.flatMap((m) =>
-										m.doses.flatMap((dose) => (dose.takenBy ? [`${dose.id}-${dose.takenBy}`] : [dose.id]))
+										m.doses.flatMap((dose) =>
+											dose.takenBy.length > 0 ? dose.takenBy.map((p) => `${dose.id}-${p}`) : [dose.id]
+										)
 									)
 								);
 								const takenFutureDoses = totalFutureDoses.filter((id) => takenDoses.has(id)).length;
@@ -955,7 +957,7 @@ export function DashboardPage() {
 														</div>
 														<div className="doses-col">
 															{item.doses.map((dose) => {
-																const people = dose.takenBy ? [dose.takenBy] : [null];
+																const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
 																const allTaken = people.every((person) => takenDoses.has(getDoseId(dose.id, person)));
 																return (
 																	<div key={dose.id} className={`dose-item future ${allTaken ? "all-taken" : ""}`}>

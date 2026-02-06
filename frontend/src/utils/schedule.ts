@@ -411,3 +411,66 @@ export function getReminderStatusText(
 	}
 	return { lines };
 }
+
+// =============================================================================
+// Dose Dismissal & Missed Dose Computation
+// =============================================================================
+
+/**
+ * Check if a dose is dismissed based on its ID and a dismissedUntil date string.
+ * Extracts the date-only timestamp from the dose ID and compares it with the dismissedUntil date.
+ *
+ * @param doseId - Dose ID in format "medId-intakeIdx-dateOnlyMs" or "medId-intakeIdx-dateOnlyMs-person"
+ * @param dismissedUntilDate - YYYY-MM-DD formatted date string, or undefined if not dismissed
+ * @returns true if the dose date is on or before the dismissedUntil date
+ */
+export function isDoseDismissed(doseId: string, dismissedUntilDate: string | undefined): boolean {
+	if (!dismissedUntilDate) return false;
+	const parts = doseId.split("-");
+	if (parts.length < 3) return false;
+	const timestamp = parseInt(parts[2], 10);
+	if (Number.isNaN(timestamp)) return false;
+	const doseDate = new Date(timestamp);
+	const doseDateStr = `${doseDate.getFullYear()}-${String(doseDate.getMonth() + 1).padStart(2, "0")}-${String(doseDate.getDate()).padStart(2, "0")}`;
+	return doseDateStr <= dismissedUntilDate;
+}
+
+/**
+ * Compute the list of missed past dose IDs.
+ * A dose is "missed" if it is in the past, not taken, not individually dismissed,
+ * and not covered by the medication's dismissedUntil date.
+ *
+ * @param pastDays - Grouped schedule days that are in the past
+ * @param medications - Full medication list (used to look up dismissedUntil)
+ * @param takenDoses - Set of dose IDs marked as taken
+ * @param dismissedDoses - Set of dose IDs individually dismissed
+ * @returns Array of dose IDs that are missed
+ */
+export function computeMissedPastDoseIds(
+	pastDays: ReadonlyArray<{
+		meds: ReadonlyArray<{
+			medName: string;
+			doses: ReadonlyArray<{ id: string; takenBy: string[] }>;
+		}>;
+	}>,
+	medications: ReadonlyArray<{ name: string; dismissedUntil?: string | null }>,
+	takenDoses: Set<string>,
+	dismissedDoses: Set<string>
+): string[] {
+	const totalPastDoses = pastDays.flatMap((d) =>
+		d.meds.flatMap((m) => {
+			const med = medications.find((med) => med.name === m.medName);
+			const dismissedUntilDate = med?.dismissedUntil ?? undefined;
+
+			return m.doses.flatMap((dose) => {
+				if (isDoseDismissed(dose.id, dismissedUntilDate)) {
+					return [];
+				}
+
+				const takenByArray = Array.isArray(dose.takenBy) ? dose.takenBy : [];
+				return takenByArray.length > 0 ? takenByArray.map((p: string) => `${dose.id}-${p}`) : [dose.id];
+			});
+		})
+	);
+	return totalPastDoses.filter((id) => !takenDoses.has(id) && !dismissedDoses.has(id));
+}

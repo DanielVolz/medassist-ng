@@ -5,7 +5,7 @@ import { useAuth } from "../components/Auth";
 import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, useShare } from "../hooks";
 import type { Coverage, Medication, ScheduleEvent, StockThresholds } from "../types";
 import { getSystemLocale } from "../utils/formatters";
-import { buildSchedulePreview, calculateCoverage } from "../utils/schedule";
+import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, isDoseDismissed } from "../utils/schedule";
 
 // =============================================================================
 // Types
@@ -370,7 +370,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				timeStr: event.timeStr,
 				when: event.when,
 				usage: event.usage,
-				takenBy: event.takenBy || [],
+				takenBy: event.takenBy ? [event.takenBy] : [],
 			});
 			medEntry.lastWhen = Math.max(medEntry.lastWhen, event.when);
 			day.meds.set(event.medName, medEntry);
@@ -412,82 +412,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			.slice(0, scheduleDays);
 	}, [groupedSchedule, scheduleDays]);
 
-	// Build a map of medId -> dismissedUntil date string from medication records
-	// This is robust against timestamp changes from schedule updates or timezone fixes
-	const _dismissedUntilByMed = useMemo(() => {
-		const map = new Map<string, string>();
-		for (const med of medications.meds) {
-			if (med.dismissedUntil) {
-				map.set(String(med.id), med.dismissedUntil);
-			}
-		}
-		return map;
-	}, [medications.meds]);
-
-	// Helper to check if a dose date is on or before the dismissedUntil date
-	const isDoseDismissed = useCallback((doseId: string, dismissedUntilDate: string | undefined): boolean => {
-		if (!dismissedUntilDate) return false;
-		// Extract timestamp from dose ID (format: medId-blisterIdx-timestamp or medId-blisterIdx-timestamp-person)
-		const parts = doseId.split("-");
-		if (parts.length < 3) return false;
-		const timestamp = parseInt(parts[2], 10);
-		if (Number.isNaN(timestamp)) return false;
-		// Compare date strings (YYYY-MM-DD format sorts correctly)
-		const doseDate = new Date(timestamp);
-		const doseDateStr = `${doseDate.getFullYear()}-${String(doseDate.getMonth() + 1).padStart(2, "0")}-${String(doseDate.getDate()).padStart(2, "0")}`;
-		return doseDateStr <= dismissedUntilDate;
-	}, []);
-
-	// Helper to check if a dose was scheduled BEFORE the medication was last updated
-	// If so, it's from a previous schedule configuration and shouldn't count as "missed"
-	const isDoseFromPreviousSchedule = useCallback(
-		(doseId: string, medUpdatedAt: string | number | null | undefined): boolean => {
-			if (!medUpdatedAt) return false; // No updatedAt means it was never changed, all doses are valid
-
-			// Extract timestamp from dose ID (format: medId-blisterIdx-timestamp or medId-blisterIdx-timestamp-person)
-			const parts = doseId.split("-");
-			if (parts.length < 3) return false;
-			const doseTimestamp = parseInt(parts[2], 10);
-			if (Number.isNaN(doseTimestamp)) return false;
-
-			// Convert updatedAt to timestamp
-			const updatedAtTimestamp = typeof medUpdatedAt === "number" ? medUpdatedAt : new Date(medUpdatedAt).getTime();
-			if (Number.isNaN(updatedAtTimestamp)) return false;
-
-			// If the dose was scheduled before the medication was updated, it's from a previous schedule
-			return doseTimestamp < updatedAtTimestamp;
-		},
-		[]
+	const missedPastDoseIds = useMemo(
+		() => computeMissedPastDoseIds(pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses),
+		[pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses]
 	);
-
-	const missedPastDoseIds = useMemo(() => {
-		const totalPastDoses = pastDays.flatMap((d) =>
-			d.meds.flatMap((m) => {
-				// Find the medication to get its dismissedUntil and updatedAt
-				const med = medications.meds.find((med) => med.name === m.medName);
-				const dismissedUntilDate = med?.dismissedUntil ?? undefined;
-				const medUpdatedAt = med?.updatedAt;
-
-				return m.doses.flatMap((dose) => {
-					// Check if this dose is on or before the dismissed date for this medication
-					if (isDoseDismissed(dose.id, dismissedUntilDate)) {
-						return [];
-					}
-
-					// Check if this dose is from a previous schedule configuration
-					// (scheduled before the medication was last updated)
-					if (isDoseFromPreviousSchedule(dose.id, medUpdatedAt)) {
-						return [];
-					}
-
-					const takenByArray = Array.isArray(dose.takenBy) ? dose.takenBy : [];
-					return takenByArray.length > 0 ? takenByArray.map((p: string) => `${dose.id}-${p}`) : [dose.id];
-				});
-			})
-		);
-		// Also filter out doses that are marked as taken or individually dismissed (legacy)
-		return totalPastDoses.filter((id) => !doses.takenDoses.has(id) && !doses.dismissedDoses.has(id));
-	}, [pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses, isDoseDismissed, isDoseFromPreviousSchedule]);
 
 	// Modal helpers with browser history support
 	const openMedDetail = useCallback(

@@ -18,6 +18,12 @@ build/
 coverage/
 .nyc_output/
 
+# Playwright
+/frontend/playwright-report/
+/frontend/test-results/
+/frontend/e2e/.auth/
+/frontend/blob-report/
+
 # ===================
 # Environment
 # ===================

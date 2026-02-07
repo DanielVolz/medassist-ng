@@ -179,6 +179,14 @@ Open `http://localhost:4174` and start tracking your medications.
 
 All configuration is done via environment variables in `.env`. Copy `.env.example` to get started.
 
+### Docker Deployment
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BACKEND_URL` | `backend:3000` | Backend service URL for frontend nginx proxy (format: `hostname:port`) |
+
+> **Note:** When customizing your `docker-compose.yml`, you can change container names freely. The frontend automatically connects to the backend using the service name. If you change the backend service name, set `BACKEND_URL` to match the new service name and port.
+
 ### General
 
 | Variable | Default | Description |

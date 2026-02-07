@@ -366,6 +366,123 @@ describe("calculateCoverage", () => {
 		expect(result.all).toHaveLength(1);
 		// Daily rate should be doubled for 2 people
 	});
+
+	it("stock correction immediately reflects new stock without phantom consumption", () => {
+		// BUG: After a stock correction of +1 pill, the coverage calculation
+		// immediately consumed 1 dose (due to the +1 in occurrences formula),
+		// making the correction appear to have no effect.
+		//
+		// Scenario: User has 112 pills, corrects to 113 (+1 pill).
+		// Expected: medsLeft = 113 immediately after correction.
+		// Bug: medsLeft stayed at 112 because 1 dose was counted as consumed.
+		const correctionTime = new Date("2024-03-15T12:00:00Z");
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 14,
+				pillsPerBlister: 14,
+				looseTablets: 0,
+				stockAdjustment: -83, // 196 - 83 = 113 pills
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-01-01T08:00:00",
+					},
+				],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		// Calculate coverage immediately after correction (same second)
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		expect(result.all).toHaveLength(1);
+		// getMedTotal = 1*14*14 + 0 + (-83) = 113
+		// Consumed since correction should be 0 (not 1!)
+		expect(result.all[0].medsLeft).toBe(113);
+	});
+
+	it("stock correction with dose tracking data also reflects correctly", () => {
+		// When the user has dose tracking data, the actualConsumed path is used.
+		// Verify that no phantom dose is generated right after a stock correction.
+		const correctionTime = new Date("2024-03-15T12:00:00Z");
+		const march14 = new Date("2024-03-14T00:00:00").getTime();
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				stockAdjustment: -7, // 30 - 7 = 23 pills
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-01T08:00:00",
+					},
+				],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		// User has tracked a dose yesterday (before the correction)
+		const takenDoses = new Set([`1-0-${march14}`]);
+
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", takenDoses);
+
+		expect(result.all).toHaveLength(1);
+		// getMedTotal = 30 - 7 = 23.
+		// The taken dose from yesterday should NOT be counted (it's before the correction).
+		// No new doses should exist since the correction just happened.
+		expect(result.all[0].medsLeft).toBe(23);
+	});
+
+	it("stock correction consumption resumes after one full period", () => {
+		// After 1 day (for daily medication), the next dose should be consumed.
+		// Set system time to 1 day + 1 hour after correction.
+		const correctionTime = new Date("2024-03-14T12:00:00Z");
+		vi.setSystemTime(new Date("2024-03-15T13:00:00Z")); // 25 hours after correction
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				stockAdjustment: -7, // 30 - 7 = 23 pills
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-01T08:00:00",
+					},
+				],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		expect(result.all).toHaveLength(1);
+		// After 1 full period since correction, 1 dose should be consumed.
+		// medsLeft = 23 - 1 = 22
+		expect(result.all[0].medsLeft).toBe(22);
+	});
 });
 
 describe("getStockStatus", () => {

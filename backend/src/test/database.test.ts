@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-// Import the exported utility functions from client.ts
+// Import utility functions from db-utils (no side effects, unlike client.ts which initializes the DB)
 import {
 	buildDbUrl,
 	ensureDataDirectory,
@@ -17,7 +17,7 @@ import {
 	repairTrailingHyphenDoseIds,
 	runAlterMigrations,
 	runDrizzleMigrations,
-} from "../db/client.js";
+} from "../db/db-utils.js";
 
 // Import the exported utility functions from migrate.ts
 import { executeMigration, getStatementPreview, splitSQLStatements } from "../db/migrate.js";

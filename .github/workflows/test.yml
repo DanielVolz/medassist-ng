@@ -10,10 +10,38 @@ permissions:
 
 jobs:
   # =============================================================================
-  # Backend Tests
+  # Detect which paths changed to skip unnecessary jobs
+  # =============================================================================
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'biome.json'
+              - '.github/workflows/test.yml'
+            frontend:
+              - 'frontend/**'
+              - 'biome.json'
+              - '.github/workflows/test.yml'
+
+  # =============================================================================
+  # Backend Tests (skipped if no backend-related files changed)
   # =============================================================================
   backend-test:
     name: Backend Tests
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,10 +81,12 @@ jobs:
           retention-days: 7
 
   # =============================================================================
-  # Frontend Build Validation
+  # Frontend Build Validation (skipped if no frontend-related files changed)
   # =============================================================================
   frontend-build:
     name: Frontend Build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -1731,6 +1731,161 @@ describe("E2E Tests with Real Routes", () => {
 	});
 
 	// ---------------------------------------------------------------------------
+	// Real Stock Correction (PATCH /medications/:id/stock-adjustment) Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Real /medications/:id/stock-adjustment routes", () => {
+		it("should update stockAdjustment and lastStockCorrectionAt", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Stock Correction Med",
+					packCount: 1,
+					blistersPerPack: 14,
+					pillsPerBlister: 14,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			// Correct stock: set adjustment to -83 (196 base - 83 = 113 pills)
+			const response = await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: -83 },
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.stockAdjustment).toBe(-83);
+			expect(data.lastStockCorrectionAt).toBeTruthy();
+			expect(data.updatedAt).toBeTruthy();
+		});
+
+		it("should persist stockAdjustment in GET /medications", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Persist Stock Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 30,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			// Apply stock correction
+			await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: -7 },
+			});
+
+			// Verify via GET
+			const getResponse = await app.inject({
+				method: "GET",
+				url: "/medications",
+			});
+
+			expect(getResponse.statusCode).toBe(200);
+			const meds = getResponse.json();
+			const med = meds.find((m: any) => m.id === medId);
+			expect(med).toBeDefined();
+			expect(med.stockAdjustment).toBe(-7);
+			expect(med.lastStockCorrectionAt).toBeTruthy();
+		});
+
+		it("should not reset stockAdjustment when editing medication via PUT", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Keep Adjustment Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 30,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			// Set stock adjustment
+			await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: -5 },
+			});
+
+			// Edit the medication (change name) - should preserve stockAdjustment
+			await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "Renamed Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 30,
+					looseTablets: 0,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			// Verify stockAdjustment is preserved
+			const getResponse = await app.inject({
+				method: "GET",
+				url: "/medications",
+			});
+			const med = getResponse.json().find((m: any) => m.id === medId);
+			expect(med.name).toBe("Renamed Med");
+			expect(med.stockAdjustment).toBe(-5);
+		});
+
+		it("should return 400 for non-numeric stockAdjustment", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Bad Adjustment Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: "not-a-number" },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should return 404 for non-existent medication", async () => {
+			const response = await app.inject({
+				method: "PATCH",
+				url: "/medications/99999/stock-adjustment",
+				payload: { stockAdjustment: 5 },
+			});
+
+			expect(response.statusCode).toBe(404);
+		});
+
+		it("should return 400 for invalid medication id", async () => {
+			const response = await app.inject({
+				method: "PATCH",
+				url: "/medications/invalid/stock-adjustment",
+				payload: { stockAdjustment: 5 },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
 	// Real Export/Import Routes Tests
 	// ---------------------------------------------------------------------------
 

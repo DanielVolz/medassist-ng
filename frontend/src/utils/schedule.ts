@@ -126,9 +126,18 @@ export function calculateCoverage(
 			// but also account for manual corrections (doses marked as not taken)
 			blisters.forEach((s, blisterIdx) => {
 				const blisterStart = new Date(s.start).getTime();
-				const effectiveStart = Math.max(blisterStart, stockCorrectionCutoff);
-				if (Number.isNaN(effectiveStart) || effectiveStart > now) return;
 				const period = Math.max(1, s.every) * MS_PER_DAY;
+
+				// After a stock correction, start counting consumption from the NEXT
+				// scheduled dose, because the user's pill count already reflects all
+				// consumption up to the correction time.
+				let effectiveStart: number;
+				if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
+					effectiveStart = stockCorrectionCutoff + period;
+				} else {
+					effectiveStart = blisterStart;
+				}
+				if (Number.isNaN(effectiveStart) || effectiveStart > now) return;
 				const occurrences = Math.floor((now - effectiveStart) / period) + 1;
 				const intake = intakes[blisterIdx];
 				const intakePerson = intake?.takenBy;

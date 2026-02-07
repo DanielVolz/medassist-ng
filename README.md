@@ -183,7 +183,7 @@ All configuration is done via environment variables in `.env`. Copy `.env.exampl
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BACKEND_URL` | `backend:3000` | Backend service URL for frontend nginx proxy (format: `hostname:port`) |
+| `BACKEND_URL` | `backend:3000` | Backend service URL for frontend nginx proxy (format: `hostname:port`, no http:// prefix) |
 
 > **Note:** When customizing your `docker-compose.yml`, you can change container names freely. The frontend automatically connects to the backend using the service name. If you change the backend service name, set `BACKEND_URL` to match the new service name and port.
 

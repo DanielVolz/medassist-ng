@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { Coverage, FormState, Medication, RefillEntry } from "../types";
-import { getMedTotal } from "../types";
+import { getMedTotal, getPackageSize } from "../types";
 
 export interface UseRefillReturn {
 	// Refill state
@@ -146,8 +146,8 @@ export function useRefill(): UseRefillReturn {
 				const desiredTotal = finalFullBlisters * selectedMed.pillsPerBlister + finalPartialPills;
 
 				// The "base" from DB structure (without any stockAdjustment)
-				const baseTotal =
-					selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + selectedMed.looseTablets;
+				// Use getPackageSize() which handles both blister and bottle types correctly
+				const baseTotal = getPackageSize(selectedMed);
 
 				// stockAdjustment = what we need to make getMedTotal() return desiredTotal
 				const newStockAdjustment = desiredTotal - baseTotal;

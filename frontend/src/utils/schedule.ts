@@ -202,7 +202,7 @@ export function calculateCoverage(
 						if (
 							!Number.isNaN(blisterStartDateOnly) &&
 							doseTimestamp >= blisterStartDateOnly &&
-							doseTimestamp >= stockCorrectionDateOnly
+							doseTimestamp > stockCorrectionDateOnly
 						) {
 							consumed += blisters[blisterIdx].usage;
 						}

@@ -284,6 +284,17 @@ export async function medicationRoutes(app: FastifyInstance) {
 		const startJson = JSON.stringify(intakes.map((s) => s.start));
 		const takenByJson = JSON.stringify(takenBy || []);
 
+		// If stock-defining fields changed, reset stockAdjustment so the new
+		// base stock reflects actual inventory.  This prevents the old
+		// correction offset from skewing the total after an edit.
+		const stockFieldsChanged =
+			existing.packCount !== packCount ||
+			existing.blistersPerPack !== blistersPerPack ||
+			existing.pillsPerBlister !== pillsPerBlister ||
+			(existing.looseTablets ?? 0) !== (looseTablets ?? 0);
+
+		const stockResetFields = stockFieldsChanged ? { stockAdjustment: 0, lastStockCorrectionAt: new Date() } : {};
+
 		const result = await db
 			.update(medications)
 			.set({
@@ -306,6 +317,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				everyJson,
 				startJson,
 				updatedAt: new Date(),
+				...stockResetFields,
 			})
 			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
 			.returning();
@@ -668,10 +680,19 @@ export async function medicationRoutes(app: FastifyInstance) {
 				const blisterStart = parseLocalDateTime(blister.start);
 				if (Number.isNaN(blisterStart.getTime())) return;
 
-				const effectiveStart = Math.max(blisterStart.getTime(), stockCorrectionCutoff);
+				const period = Math.max(1, blister.every) * msPerDay;
+
+				// After a stock correction, start counting from the NEXT scheduled
+				// dose, because the user's pill count already reflects all
+				// consumption up to the correction time.
+				let effectiveStart: number;
+				if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart.getTime()) {
+					effectiveStart = stockCorrectionCutoff + period;
+				} else {
+					effectiveStart = blisterStart.getTime();
+				}
 				if (effectiveStart > now.getTime()) return;
 
-				const period = Math.max(1, blister.every) * msPerDay;
 				const occurrences = Math.floor((now.getTime() - effectiveStart) / period) + 1;
 
 				// Get the people for this intake (from intakes array or medication takenBy)

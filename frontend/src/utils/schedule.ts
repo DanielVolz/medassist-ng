@@ -100,7 +100,8 @@ export function calculateCoverage(
 	locale: string,
 	reminderDaysBefore: number,
 	stockCalculationMode: "automatic" | "manual",
-	takenDoses: Set<string>
+	takenDoses: Set<string>,
+	takenDoseTimestamps?: Map<string, number>
 ): { low: Coverage[]; all: Coverage[] } {
 	const MS_PER_DAY = 86_400_000;
 	const now = Date.now();
@@ -122,60 +123,90 @@ export function calculateCoverage(
 		const stockCorrectionCutoff = m.lastStockCorrectionAt ? new Date(m.lastStockCorrectionAt).getTime() : 0;
 
 		if (stockCalculationMode === "automatic") {
-			// In automatic mode, calculate expected consumption based on time
-			// but also account for manual corrections (doses marked as not taken)
+			// In automatic mode, stock is reduced automatically based on the schedule.
+			// Every scheduled dose counts as consumed once its time has passed.
+			// Additionally, if a user marks a future dose as taken BEFORE the scheduled
+			// time (early intake), that dose is also counted as consumed immediately.
+			// This prevents double-counting: once the scheduled time arrives, the dose
+			// was already counted via the early-taken path, not again via time.
 			blisters.forEach((s, blisterIdx) => {
 				const blisterStart = new Date(s.start).getTime();
 				const period = Math.max(1, s.every) * MS_PER_DAY;
 
 				// After a stock correction, start counting consumption from the NEXT
-				// scheduled dose, because the user's pill count already reflects all
-				// consumption up to the correction time.
+				// scheduled dose on this blister's grid, because the user's pill count
+				// already reflects all consumption up to the correction time.
+				// We align to the schedule grid so that e.g. correction at 15:40 with
+				// a daily 15:42 dose counts today's 15:42 dose (2 min later), not
+				// tomorrow's dose (24h later as the old code did).
 				let effectiveStart: number;
 				if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
-					effectiveStart = stockCorrectionCutoff + period;
+					const elapsedSinceStart = stockCorrectionCutoff - blisterStart;
+					const periodsElapsed = Math.floor(elapsedSinceStart / period);
+					effectiveStart = blisterStart + (periodsElapsed + 1) * period;
 				} else {
 					effectiveStart = blisterStart;
 				}
-				if (Number.isNaN(effectiveStart) || effectiveStart > now) return;
-				const occurrences = Math.floor((now - effectiveStart) / period) + 1;
+				if (Number.isNaN(effectiveStart)) return;
+
 				const intake = intakes[blisterIdx];
 				const intakePerson = intake?.takenBy;
 
 				// For per-intake takenBy, only count for that person
 				// For legacy (no takenBy), count for all people in medication takenBy
 				const peopleForThisIntake = intakePerson ? [intakePerson] : m.takenBy?.length > 0 ? m.takenBy : [null];
-				const expectedConsumed = occurrences * s.usage * peopleForThisIntake.length;
 
-				// Count how many doses were actually marked as taken for this blister
-				let actualConsumed = 0;
+				// Time-based: count doses where the scheduled time has already passed
+				let timeBasedConsumed = 0;
+				let lastAutoConsumedDateMs = 0;
 
-				// Generate all expected dose IDs for this blister up to now
-				for (let i = 0; i < occurrences; i++) {
-					const doseDate = new Date(effectiveStart + i * period);
-					const dateOnlyMs = new Date(doseDate.getFullYear(), doseDate.getMonth(), doseDate.getDate()).getTime();
-					const baseDoseId = `${m.id}-${blisterIdx}-${dateOnlyMs}`;
+				if (effectiveStart <= now) {
+					const occurrences = Math.floor((now - effectiveStart) / period) + 1;
+					timeBasedConsumed = occurrences * s.usage * peopleForThisIntake.length;
 
-					// Check if each person has taken this dose
-					for (const person of peopleForThisIntake) {
-						const doseId = person ? `${baseDoseId}-${person}` : baseDoseId;
-						if (takenDoses.has(doseId)) {
-							actualConsumed += s.usage;
+					// Date-only timestamp of the last auto-consumed dose
+					const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
+					lastAutoConsumedDateMs = new Date(
+						lastDoseTime.getFullYear(),
+						lastDoseTime.getMonth(),
+						lastDoseTime.getDate()
+					).getTime();
+				}
+
+				// Early intakes: count future doses already marked as taken.
+				// The cutoff is the later of: last auto-consumed date or stock correction date.
+				// This prevents double-counting (time-based + early-taken) and respects corrections.
+				const stockCorrectionDateOnly =
+					stockCorrectionCutoff > 0
+						? new Date(
+								new Date(stockCorrectionCutoff).getFullYear(),
+								new Date(stockCorrectionCutoff).getMonth(),
+								new Date(stockCorrectionCutoff).getDate()
+							).getTime()
+						: 0;
+				const earlyCutoff = Math.max(lastAutoConsumedDateMs, stockCorrectionDateOnly);
+
+				let earlyTakenConsumed = 0;
+				for (const doseId of takenDoses) {
+					const parts = doseId.split("-");
+					if (parts.length >= 3) {
+						const medId = parseInt(parts[0], 10);
+						const bIdx = parseInt(parts[1], 10);
+						const timestamp = parseInt(parts[2], 10);
+						if (medId === m.id && bIdx === blisterIdx && timestamp > earlyCutoff) {
+							earlyTakenConsumed += s.usage;
 						}
 					}
 				}
 
-				// If we have tracking data (any doses marked), use actual consumed
-				// Otherwise fall back to expected (for backwards compatibility)
-				const hasTrackingData = Array.from(takenDoses).some((id) => {
-					const parts = id.split("-");
-					return parts.length >= 3 && parseInt(parts[0], 10) === m.id && parseInt(parts[1], 10) === blisterIdx;
-				});
-
-				consumed += hasTrackingData ? actualConsumed : expectedConsumed;
+				consumed += timeBasedConsumed + earlyTakenConsumed;
 			});
 		} else {
-			// In manual mode, only count doses that are explicitly marked as taken
+			// In manual mode, only count doses that are explicitly marked as taken.
+			// For stock correction filtering, we use the actual time the dose was marked
+			// as taken (takenAt), not the scheduled date. This correctly handles same-day
+			// scenarios: if a user corrects stock at 3pm, then takes a dose at 4pm,
+			// the dose counts because takenAt (4pm) > correctionTime (3pm).
 			takenDoses.forEach((doseId) => {
 				const parts = doseId.split("-");
 				if (parts.length >= 3) {
@@ -190,19 +221,17 @@ export function calculateCoverage(
 							blisterStartDate.getMonth(),
 							blisterStartDate.getDate()
 						).getTime();
-						// Convert stock correction cutoff to date-only as well
-						const stockCorrectionDateOnly =
-							stockCorrectionCutoff > 0
-								? new Date(
-										new Date(stockCorrectionCutoff).getFullYear(),
-										new Date(stockCorrectionCutoff).getMonth(),
-										new Date(stockCorrectionCutoff).getDate()
-									).getTime()
-								: 0;
+
+						// Use actual takenAt timestamp for stock correction comparison.
+						// A dose counts only if it was MARKED after the stock correction,
+						// regardless of what day it was scheduled for.
+						const takenAt = takenDoseTimestamps?.get(doseId) ?? 0;
+						const afterCorrectionOrNoCorrectionMs = stockCorrectionCutoff === 0 || takenAt > stockCorrectionCutoff;
+
 						if (
 							!Number.isNaN(blisterStartDateOnly) &&
 							doseTimestamp >= blisterStartDateOnly &&
-							doseTimestamp > stockCorrectionDateOnly
+							afterCorrectionOrNoCorrectionMs
 						) {
 							consumed += blisters[blisterIdx].usage;
 						}

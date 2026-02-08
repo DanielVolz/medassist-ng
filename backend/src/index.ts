@@ -126,9 +126,11 @@ export async function createApp(options?: {
 // Server initialization (runs on import)
 // =============================================================================
 
+import { log } from "./utils/logger.js";
+
 // Wait for database migrations before anything else
 await migrationsReady;
-console.log("[DB] Migrations complete, starting server...");
+log.info("[DB] Migrations complete, starting server...");
 
 // Ensure images directory exists
 const imagesDir = ensureImagesDirectory();
@@ -197,12 +199,14 @@ const start = async () => {
 		// Start the automatic reminder scheduler
 		startReminderScheduler({
 			info: (msg) => app.log.info(msg),
+			debug: (msg) => app.log.debug(msg),
 			error: (msg) => app.log.error(msg),
 		});
 
 		// Start the intake reminder scheduler (checks every minute)
 		startIntakeReminderScheduler({
 			info: (msg) => app.log.info(msg),
+			debug: (msg) => app.log.debug(msg),
 			error: (msg) => app.log.error(msg),
 		});
 	} catch (err) {

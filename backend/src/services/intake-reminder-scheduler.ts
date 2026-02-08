@@ -7,6 +7,7 @@ import { getDataDir } from "../db/db-utils.js";
 import { doseTracking, medications } from "../db/schema.js";
 import { getDateLocale, getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
+import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
 import {
 	cleanOldIntakeReminders,
@@ -210,21 +211,18 @@ ${tr.intakeReminder.footer}`;
 	}
 }
 
-async function checkAndSendIntakeReminders(logger: {
-	info: (msg: string) => void;
-	error: (msg: string) => void;
-}): Promise<void> {
-	logger.info(`[IntakeReminder] Checking for intake reminders...`);
+async function checkAndSendIntakeReminders(logger: ServiceLogger): Promise<void> {
+	logger.debug(`[IntakeReminder] Checking for intake reminders...`);
 
 	// Get all user settings to iterate over each user
 	const allUserSettings = await getAllUserSettings();
 
 	if (allUserSettings.length === 0) {
-		logger.info(`[IntakeReminder] No users with settings found`);
+		logger.debug(`[IntakeReminder] No users with settings found`);
 		return; // No users with settings
 	}
 
-	logger.info(`[IntakeReminder] Found ${allUserSettings.length} users to check`);
+	logger.debug(`[IntakeReminder] Found ${allUserSettings.length} users to check`);
 
 	for (const userSettings of allUserSettings) {
 		await checkAndSendIntakeRemindersForUser(userSettings, logger);
@@ -233,12 +231,12 @@ async function checkAndSendIntakeReminders(logger: {
 
 async function checkAndSendIntakeRemindersForUser(
 	settings: UserSettings & { userId: number },
-	logger: { info: (msg: string) => void; error: (msg: string) => void }
+	logger: ServiceLogger
 ): Promise<void> {
 	const language = settings.language;
 	const tr = getTranslations(language);
 
-	logger.info(
+	logger.debug(
 		`[IntakeReminder] Checking user ${settings.userId} - repeat:${settings.repeatRemindersEnabled} skip:${settings.skipRemindersForTakenDoses}`
 	);
 
@@ -247,13 +245,13 @@ async function checkAndSendIntakeRemindersForUser(
 	const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl && settings.shoutrrrIntakeReminders;
 
 	if (!emailEnabled && !shoutrrrEnabled) {
-		logger.info(
+		logger.debug(
 			`[IntakeReminder] User ${settings.userId}: No intake notifications enabled (email:${emailEnabled}, shoutrrr:${shoutrrrEnabled})`
 		);
 		return; // No intake reminder notifications enabled for this user
 	}
 
-	logger.info(
+	logger.debug(
 		`[IntakeReminder] User ${settings.userId}: Notifications enabled (email:${emailEnabled}, shoutrrr:${shoutrrrEnabled})`
 	);
 
@@ -266,11 +264,13 @@ async function checkAndSendIntakeRemindersForUser(
 	const medsWithReminders = rows.filter((row) => row.intakeRemindersEnabled);
 
 	if (medsWithReminders.length === 0) {
-		logger.info(`[IntakeReminder] User ${settings.userId}: No medications have reminders enabled`);
+		logger.debug(`[IntakeReminder] User ${settings.userId}: No medications have reminders enabled`);
 		return; // No medications have reminders enabled for this user
 	}
 
-	logger.info(`[IntakeReminder] User ${settings.userId}: Found ${medsWithReminders.length} medications with reminders`);
+	logger.debug(
+		`[IntakeReminder] User ${settings.userId}: Found ${medsWithReminders.length} medications with reminders`
+	);
 
 	const state = loadIntakeReminderState();
 	const allUpcoming: (UpcomingIntake & { medicationId: number; blisterIndex: number })[] = [];
@@ -285,7 +285,7 @@ async function checkAndSendIntakeRemindersForUser(
 	const todayEnd = new Date(now.toLocaleString("en-US", { timeZone: tz }));
 	todayEnd.setHours(23, 59, 59, 999);
 
-	logger.info(
+	logger.debug(
 		`[IntakeReminder] User ${settings.userId}: Today range: ${todayStart.toISOString()} to ${todayEnd.toISOString()}`
 	);
 
@@ -300,7 +300,7 @@ async function checkAndSendIntakeRemindersForUser(
 		// Medication-level takenBy (for fallback/display purposes)
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
 
-		logger.info(
+		logger.debug(
 			`[IntakeReminder] User ${settings.userId}: Processing medication "${med.name}" with ${intakes.length} intakes`
 		);
 
@@ -308,7 +308,7 @@ async function checkAndSendIntakeRemindersForUser(
 		const intakesWithReminders = intakes.filter((intake, idx) => {
 			const hasReminder = intake.intakeRemindersEnabled || med.intakeRemindersEnabled;
 			if (!hasReminder) {
-				logger.info(`[IntakeReminder] User ${settings.userId}: Intake ${idx} has reminders disabled, skipping`);
+				logger.debug(`[IntakeReminder] User ${settings.userId}: Intake ${idx} has reminders disabled, skipping`);
 			}
 			return hasReminder;
 		});
@@ -316,7 +316,7 @@ async function checkAndSendIntakeRemindersForUser(
 		// Process each intake separately to track blisterIndex
 		intakesWithReminders.forEach((intake, blisterIndex) => {
 			const actualIndex = intakes.indexOf(intake); // Get the actual index in original array
-			logger.info(
+			logger.debug(
 				`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} - start: ${intake.start}, every: ${intake.every} days, usage: ${intake.usage}, takenBy: ${intake.takenBy || "(none)"}`
 			);
 
@@ -333,7 +333,7 @@ async function checkAndSendIntakeRemindersForUser(
 				med.id,
 				med.doseUnit ?? "mg"
 			);
-			logger.info(
+			logger.debug(
 				`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} found ${upcomingIntakes.length} upcoming intakes (reminder window)`
 			);
 
@@ -358,13 +358,13 @@ async function checkAndSendIntakeRemindersForUser(
 					med.id,
 					med.doseUnit ?? "mg"
 				);
-				logger.info(
+				logger.debug(
 					`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} - all today's intakes: ${allTodaysIntakes.length}, times: ${allTodaysIntakes.map((i) => i.intakeTime.toISOString()).join(", ")}`
 				);
 				const missedIntakes = allTodaysIntakes.filter(
 					(todayIntake) => todayIntake.intakeTime.getTime() < now.getTime()
 				);
-				logger.info(
+				logger.debug(
 					`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} found ${missedIntakes.length} missed intakes (past intake time)`
 				);
 
@@ -383,10 +383,10 @@ async function checkAndSendIntakeRemindersForUser(
 		});
 	}
 
-	logger.info(`[IntakeReminder] User ${settings.userId}: Total ${allUpcoming.length} intakes for today`);
+	logger.debug(`[IntakeReminder] User ${settings.userId}: Total ${allUpcoming.length} intakes for today`);
 
 	if (allUpcoming.length === 0) {
-		logger.info(`[IntakeReminder] User ${settings.userId}: No intakes for today`);
+		logger.debug(`[IntakeReminder] User ${settings.userId}: No intakes for today`);
 		return; // No upcoming intakes for today
 	}
 
@@ -419,13 +419,13 @@ async function checkAndSendIntakeRemindersForUser(
 					sendCount: 0,
 					advanceSent: false,
 				};
-				logger.info(
+				logger.debug(
 					`[IntakeReminder] User ${settings.userId}: Seeding state for past "${intake.medName}" at ${intake.intakeTimeStr} (no notification — first detection)`
 				);
 			} else {
 				// Upcoming - this is advance reminder (no counter)
 				remindersToSend.push({ ...intake, currentSendCount: 0, maxReminders, isAdvanceReminder: true });
-				logger.info(
+				logger.debug(
 					`[IntakeReminder] User ${settings.userId}: Advance reminder for "${intake.medName}" at ${intake.intakeTimeStr}`
 				);
 			}
@@ -440,13 +440,13 @@ async function checkAndSendIntakeRemindersForUser(
 
 			if (currentNaggingCount >= maxReminders) {
 				// Max nagging reminders reached - stop
-				logger.info(
+				logger.debug(
 					`[IntakeReminder] User ${settings.userId}: Max nagging (${maxReminders}) reached for "${intake.medName}" at ${intake.intakeTimeStr}`
 				);
 			} else if (timeSinceLastReminder >= intervalMs) {
 				const nextSendCount = currentNaggingCount + 1;
 				remindersToSend.push({ ...intake, currentSendCount: nextSendCount, maxReminders, isAdvanceReminder: false });
-				logger.info(
+				logger.debug(
 					`[IntakeReminder] User ${settings.userId}: Nagging reminder for "${intake.medName}" at ${intake.intakeTimeStr} (${nextSendCount}/${maxReminders})`
 				);
 			}
@@ -486,7 +486,7 @@ async function checkAndSendIntakeRemindersForUser(
 				const doseId = `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}-${intake.takenBy}`;
 				const isTaken = takenDoseIds.has(doseId);
 				if (isTaken) {
-					logger.info(
+					logger.debug(
 						`[IntakeReminder] User ${settings.userId}: Skipping "${intake.medName}" - dose ${doseId} already taken`
 					);
 				}
@@ -496,7 +496,7 @@ async function checkAndSendIntakeRemindersForUser(
 				const doseId = `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}`;
 				const isTaken = takenDoseIds.has(doseId);
 				if (isTaken) {
-					logger.info(
+					logger.debug(
 						`[IntakeReminder] User ${settings.userId}: Skipping "${intake.medName}" - dose ${doseId} already taken`
 					);
 				}
@@ -505,7 +505,7 @@ async function checkAndSendIntakeRemindersForUser(
 		});
 
 		if (remindersToSend.length === 0) {
-			logger.info(`[IntakeReminder] User ${settings.userId}: All doses taken, skipping reminders`);
+			logger.debug(`[IntakeReminder] User ${settings.userId}: All doses taken, skipping reminders`);
 			return;
 		}
 	}
@@ -679,10 +679,7 @@ async function checkAndSendIntakeRemindersForUser(
 
 let intakeCheckInterval: NodeJS.Timeout | null = null;
 
-export function startIntakeReminderScheduler(logger: {
-	info: (msg: string) => void;
-	error: (msg: string) => void;
-}): void {
+export function startIntakeReminderScheduler(logger: ServiceLogger): void {
 	logger.info(`[IntakeReminder] Starting intake reminder scheduler (checks every minute)...`);
 
 	// Run immediately on start

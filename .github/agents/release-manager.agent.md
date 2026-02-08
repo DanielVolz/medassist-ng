@@ -137,6 +137,15 @@ Use the release script whenever possible:
 
 This script handles: branch creation → version bump → PR → CI wait → merge → signed tag → push.
 
+### Version Files (MANDATORY)
+
+The version number is displayed in the **About modal** (Settings → About) showing both Frontend and Backend versions. These are read from:
+
+- **`backend/package.json`** → Backend version, returned by `/health` endpoint
+- **`frontend/package.json`** → Frontend version, injected at build time via Vite's `__APP_VERSION__` define
+
+**Both files MUST be updated to the new version before tagging a release.** If forgotten, the About modal will show the old version even after the update.
+
 ### Manual Release (if script is not available)
 
 1. Create release branch:
@@ -144,7 +153,7 @@ This script handles: branch creation → version bump → PR → CI wait → mer
    git checkout main && git pull origin main
    git checkout -b chore/release-X.Y.Z
    ```
-2. Update versions in `backend/package.json` and `frontend/package.json`
+2. Update versions in **both** `backend/package.json` and `frontend/package.json` to `X.Y.Z`
 3. Commit, push, create PR, wait for CI, merge (same as Task 1)
 4. Create signed tag:
    ```bash

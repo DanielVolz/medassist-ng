@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
-
+import { log } from "../utils/logger.js";
 // Import utilities from db-utils (side-effect-free)
 import {
 	ensureDataDirectory,
@@ -40,34 +40,34 @@ dotenv.config({ path: envPath });
 // Use absolute path to ensure it works in Docker
 const { dataDir, dbPath, url } = getDbPaths();
 
-console.log(`[DB] Data directory: ${dataDir}`);
-console.log(`[DB] Database path: ${dbPath}`);
-console.log(`[DB] Database URL: ${url}`);
+log.debug(`[DB] Data directory: ${dataDir}`);
+log.debug(`[DB] Database path: ${dbPath}`);
+log.debug(`[DB] Database URL: ${url}`);
 
 // Ensure data directory exists and is writable
 const dirResult = ensureDataDirectory(dataDir);
 if (!dirResult.success) {
-	console.error(`[DB] ERROR: Cannot access data directory: ${dirResult.error}`);
-	console.error(`[DB] Please ensure the volume mount has correct permissions.`);
-	console.error(`[DB] Try running on host: sudo chown -R 1000:1000 ${dataDir}`);
+	log.error(`[DB] ERROR: Cannot access data directory: ${dirResult.error}`);
+	log.error(`[DB] Please ensure the volume mount has correct permissions.`);
+	log.error(`[DB] Try running on host: sudo chown -R 1000:1000 ${dataDir}`);
 	process.exit(1);
 } else {
-	console.log(`[DB] Data directory is writable`);
+	log.debug(`[DB] Data directory is writable`);
 
 	// Log directory stats
 	const stats = statSync(dataDir);
-	console.log(`[DB] Directory permissions: ${stats.mode.toString(8)}`);
-	console.log(`[DB] Directory UID: ${stats.uid}, GID: ${stats.gid}`);
-	console.log(`[DB] Write test successful`);
+	log.debug(`[DB] Directory permissions: ${stats.mode.toString(8)}`);
+	log.debug(`[DB] Directory UID: ${stats.uid}, GID: ${stats.gid}`);
+	log.debug(`[DB] Write test successful`);
 }
 
 let client: Client;
 try {
 	client = createClient({ url });
-	console.log(`[DB] Database client created successfully`);
+	log.debug(`[DB] Database client created successfully`);
 } catch (err: any) {
-	console.error(`[DB] ERROR: Failed to create database client: ${err.message}`);
-	console.error(`[DB] Database path: ${dbPath}`);
+	log.error(`[DB] ERROR: Failed to create database client: ${err.message}`);
+	log.error(`[DB] Database path: ${dbPath}`);
 	process.exit(1);
 }
 
@@ -76,46 +76,46 @@ export const db = drizzle(client);
 // Auto-run migrations (self-healing database)
 async function runMigrations() {
 	// Run drizzle-kit generated migrations
-	console.log(`[DB] Running drizzle migrations...`);
+	log.info(`[DB] Running migrations...`);
 	const migrateResult = await runDrizzleMigrations(db);
 	if (!migrateResult.success) {
-		console.error(`[DB] Migration error:`, migrateResult.error);
+		log.error(`[DB] Migration error: ${migrateResult.error}`);
 	} else if (migrateResult.warning) {
-		console.log(`[DB] Migration warning:`, migrateResult.warning);
+		log.warn(`[DB] Migration warning: ${migrateResult.warning}`);
 	} else {
-		console.log(`[DB] Drizzle migrations completed`);
+		log.debug(`[DB] Drizzle migrations completed`);
 	}
 
 	// Run ALTER TABLE migrations for backward compatibility
 	const alterResult = await runAlterMigrations(client);
 	if (alterResult.errors.length > 0) {
-		alterResult.errors.forEach((err) => console.error(`[DB] ALTER migration error:`, err));
+		alterResult.errors.forEach((err) => log.error(`[DB] ALTER migration error: ${err}`));
 	}
-	console.log(`[DB] Tables verified/created`);
+	log.debug(`[DB] Tables verified/created`);
 
 	// Repair dose IDs with trailing hyphens (from frontend takenBy bug)
 	const trailingResult = await repairTrailingHyphenDoseIds(client);
 	if (trailingResult.repaired > 0) {
-		console.log(`[DB] Repaired ${trailingResult.repaired} dose IDs with trailing hyphens`);
+		log.info(`[DB] Repaired ${trailingResult.repaired} dose IDs with trailing hyphens`);
 	}
 	if (trailingResult.errors.length > 0) {
-		trailingResult.errors.forEach((err) => console.error(`[DB] Trailing-hyphen repair error:`, err));
+		trailingResult.errors.forEach((err) => log.error(`[DB] Trailing-hyphen repair error: ${err}`));
 	}
 
 	// Repair orphaned dose tracking IDs from past schedule changes
 	const repairResult = await repairOrphanedDoseIds(client);
 	if (repairResult.repaired > 0) {
-		console.log(`[DB] Repaired ${repairResult.repaired} orphaned dose tracking IDs`);
+		log.info(`[DB] Repaired ${repairResult.repaired} orphaned dose tracking IDs`);
 	}
 	if (repairResult.errors.length > 0) {
-		repairResult.errors.forEach((err) => console.error(`[DB] Dose repair error:`, err));
+		repairResult.errors.forEach((err) => log.error(`[DB] Dose repair error: ${err}`));
 	}
 
 	// If auth is disabled, ensure a default user exists (ID=1)
 	const authEnabled = process.env.AUTH_ENABLED === "true";
 	const created = await ensureDefaultUser(client, authEnabled);
 	if (created) {
-		console.log(`[DB] Created default user for auth-disabled mode`);
+		log.info(`[DB] Created default user for auth-disabled mode`);
 	}
 }
 

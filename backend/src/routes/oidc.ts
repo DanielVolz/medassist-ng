@@ -201,7 +201,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 				});
 
 				// Set cookies (use app's centralized cookie options)
-				console.log(
+				request.log.debug(
 					`[OIDC] Setting cookies for user ${user.username}, NODE_ENV=${env.NODE_ENV}, secure=${app.config.cookieOptions.secure}`
 				);
 				setAuthCookies(app, reply, accessToken, refreshToken);
@@ -241,12 +241,12 @@ async function findOrCreateOIDCUser(
 		if (existingByUsername.authProvider === "local" && !existingByUsername.oidcSubject) {
 			// Local user exists without SSO - link this OIDC account to existing user
 			await db.update(users).set({ oidcSubject: oidcSubject }).where(eq(users.id, existingByUsername.id));
-			console.log(`[OIDC] Linked OIDC to existing local user: ${username}`);
+			// Linked OIDC to existing local user
 			return { id: existingByUsername.id, username: existingByUsername.username };
 		} else if (existingByUsername.oidcSubject && existingByUsername.oidcSubject !== oidcSubject) {
 			// User already has a DIFFERENT OIDC subject - create new user with suffix
 			username = `${username}_sso`;
-			console.log(`[OIDC] Username collision (different OIDC subject), using: ${username}`);
+			// Username collision (different OIDC subject), use suffixed name
 		}
 	}
 
@@ -268,7 +268,7 @@ async function findOrCreateOIDCUser(
 		})
 		.returning({ id: users.id, username: users.username });
 
-	console.log(`[OIDC] Created new user: ${newUser.username} (ID: ${newUser.id})`);
+	// New OIDC user created
 	return newUser;
 }
 

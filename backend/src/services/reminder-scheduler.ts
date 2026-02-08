@@ -7,7 +7,7 @@ import { getDataDir } from "../db/db-utils.js";
 import { medications, userSettings } from "../db/schema.js";
 import { getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
-
+import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
 import {
 	type Blister,
@@ -236,15 +236,12 @@ ${tr.stockReminder.footer}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyN
 	}
 }
 
-async function checkAndSendReminder(logger: {
-	info: (msg: string) => void;
-	error: (msg: string) => void;
-}): Promise<void> {
+async function checkAndSendReminder(logger: ServiceLogger): Promise<void> {
 	// Get all user settings to iterate over each user
 	const allUserSettings = await getAllUserSettings();
 
 	if (allUserSettings.length === 0) {
-		logger.info("[Reminder] No users with settings found");
+		logger.debug("[Reminder] No users with settings found");
 		return;
 	}
 
@@ -255,7 +252,7 @@ async function checkAndSendReminder(logger: {
 
 async function checkAndSendReminderForUser(
 	settings: UserSettings & { userId: number },
-	logger: { info: (msg: string) => void; error: (msg: string) => void }
+	logger: ServiceLogger
 ): Promise<void> {
 	const language = settings.language;
 	const tr = getTranslations(language);
@@ -377,7 +374,7 @@ async function checkAndSendReminderForUser(
 
 let schedulerTimeout: NodeJS.Timeout | null = null;
 
-function scheduleNextCheck(logger: { info: (msg: string) => void; error: (msg: string) => void }): void {
+function scheduleNextCheck(logger: ServiceLogger): void {
 	const msUntilNext = getMsUntilNextCheck(REMINDER_HOUR);
 	const nextTime = getNextScheduledTime(REMINDER_HOUR);
 
@@ -388,7 +385,7 @@ function scheduleNextCheck(logger: { info: (msg: string) => void; error: (msg: s
 		nextScheduledCheck: nextTime.toISOString(),
 	});
 
-	logger.info(
+	logger.debug(
 		`[Reminder] Next check scheduled for ${formatInTimezone(nextTime)} (${getTimezone()}) (in ${Math.round(msUntilNext / 1000 / 60)} minutes)`
 	);
 
@@ -399,7 +396,7 @@ function scheduleNextCheck(logger: { info: (msg: string) => void; error: (msg: s
 	}, msUntilNext);
 }
 
-export function startReminderScheduler(logger: { info: (msg: string) => void; error: (msg: string) => void }): void {
+export function startReminderScheduler(logger: ServiceLogger): void {
 	logger.info(`[Reminder] Starting reminder scheduler (timezone: ${getTimezone()})...`);
 
 	// Check if we need to run immediately (missed today's check)

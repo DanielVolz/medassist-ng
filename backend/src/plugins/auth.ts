@@ -37,7 +37,6 @@ export async function getAnonymousUserId(): Promise<number> {
   `);
 
 	anonymousUserVerified = true;
-	console.log(`Created anonymous user with fixed ID ${ANONYMOUS_USER_ID} for no-auth mode`);
 
 	return ANONYMOUS_USER_ID;
 }

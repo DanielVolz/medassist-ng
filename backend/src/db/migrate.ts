@@ -63,17 +63,17 @@ export function getStatementPreview(stmt: string, maxLength: number = 50): strin
 const url = "file:./data/medassist-ng.db";
 
 async function main() {
-	console.log("Starting database setup...");
-	console.log("Database URL:", url);
-	console.log("Migrations folder:", migrationsFolder);
+	console.log("[DB] Starting database setup...");
+	console.log("[DB] Database URL:", url);
+	console.log("[DB] Migrations folder:", migrationsFolder);
 
 	const client = createClient({ url });
 	const db = drizzle(client);
 
-	console.log("Running drizzle migrations...");
+	console.log("[DB] Running drizzle migrations...");
 	await migrate(db, { migrationsFolder });
 
-	console.log("Database setup complete!");
+	console.log("[DB] Database setup complete!");
 	process.exit(0);
 }
 

@@ -3,11 +3,6 @@ name: Build and Push Docker Images
 on:
   push:
     branches: [main]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'docker-compose*.yml'
-      - '.github/workflows/docker-build.yml'
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -26,12 +21,13 @@ env:
 jobs:
   # =============================================================================
   # Build and Push Docker Images
+  # Triggered on pushes to main (tagged as "main") and version tags (v*).
   # Tests are NOT run here — branch protection on main requires all PR checks
   # (backend-test + frontend-build from test.yml) to pass before merge.
   # Tags are created from main, so code is already tested.
   #
-  # Tag builds (v*) always set "latest" in addition to the semver tags.
-  # This ensures "latest" always points to the most recent release.
+  # main push  → "main" tag only (for testing before release)
+  # Tag builds → semver tags (e.g., 1.9.0, 1.9) plus "latest"
   # =============================================================================
   build-and-push:
     runs-on: ubuntu-latest
@@ -71,7 +67,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Build and push
         uses: docker/build-push-action@v5

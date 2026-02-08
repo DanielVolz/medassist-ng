@@ -156,9 +156,9 @@ describe("Database Client Utilities", () => {
 			}
 		});
 
-		it("should use DATA_DIR env var when set", () => {
-			process.env.DATA_DIR = "/custom/data";
-			expect(getDataDir()).toBe("/custom/data");
+		it("should use DATA_DIR env var when set (Docker)", () => {
+			process.env.DATA_DIR = "/app/data";
+			expect(getDataDir()).toBe("/app/data");
 		});
 
 		it("should resolve relative DATA_DIR to absolute", () => {
@@ -168,12 +168,22 @@ describe("Database Client Utilities", () => {
 			expect(result).toMatch(/\/data$/);
 		});
 
-		it("should fall back to cwd/data when DATA_DIR is not set", () => {
+		it("should detect monorepo and use ../data when in backend/ subdir", () => {
 			delete process.env.DATA_DIR;
-			expect(getDataDir("/app")).toBe("/app/data");
+			// Tests run from backend/ which has ../docker-compose.yml
+			const result = getDataDir();
+			// Should resolve to the project root's data/ folder, not backend/data/
+			expect(result).toMatch(/\/data$/);
+			expect(result).not.toMatch(/backend\/data$/);
 		});
 
-		it("should use DATA_DIR even when cwd is provided", () => {
+		it("should fall back to cwd/data when not in monorepo", () => {
+			delete process.env.DATA_DIR;
+			// Use a directory that has no ../docker-compose.yml
+			expect(getDataDir("/tmp")).toBe("/tmp/data");
+		});
+
+		it("should prefer DATA_DIR over monorepo detection", () => {
 			process.env.DATA_DIR = "/override/data";
 			expect(getDataDir("/app")).toBe("/override/data");
 		});
@@ -190,12 +200,19 @@ describe("Database Client Utilities", () => {
 			}
 		});
 
-		it("should return correct paths based on cwd", () => {
-			delete process.env.DATA_DIR;
+		it("should return correct paths with DATA_DIR set", () => {
+			process.env.DATA_DIR = "/app/data";
 			const paths = getDbPaths("/app");
 			expect(paths.dataDir).toBe("/app/data");
 			expect(paths.dbPath).toBe("/app/data/medassist-ng.db");
 			expect(paths.url).toBe("file:/app/data/medassist-ng.db");
+		});
+
+		it("should return correct paths without DATA_DIR in non-monorepo dir", () => {
+			delete process.env.DATA_DIR;
+			const paths = getDbPaths("/tmp");
+			expect(paths.dataDir).toBe("/tmp/data");
+			expect(paths.dbPath).toBe("/tmp/data/medassist-ng.db");
 		});
 
 		it("should use process.cwd() by default", () => {
@@ -203,13 +220,6 @@ describe("Database Client Utilities", () => {
 			const paths = getDbPaths();
 			expect(paths.dataDir).toContain("data");
 			expect(paths.dbPath).toContain("medassist-ng.db");
-		});
-
-		it("should respect DATA_DIR env var", () => {
-			process.env.DATA_DIR = "/custom/data";
-			const paths = getDbPaths("/app");
-			expect(paths.dataDir).toBe("/custom/data");
-			expect(paths.dbPath).toBe("/custom/data/medassist-ng.db");
 		});
 	});
 

@@ -29,6 +29,9 @@ jobs:
   # Tests are NOT run here — branch protection on main requires all PR checks
   # (backend-test + frontend-build from test.yml) to pass before merge.
   # Tags are created from main, so code is already tested.
+  #
+  # Tag builds (v*) always set "latest" in addition to the semver tags.
+  # This ensures "latest" always points to the most recent release.
   # =============================================================================
   build-and-push:
     runs-on: ubuntu-latest
@@ -68,7 +71,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Build and push
         uses: docker/build-push-action@v5

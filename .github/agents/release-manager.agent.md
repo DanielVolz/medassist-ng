@@ -179,8 +179,8 @@ The version number is displayed in the **About modal** (Settings → About) as a
 
 ### After Tagging
 
-- The `docker-build.yml` workflow automatically builds and pushes Docker images to GHCR.
-- The `version-bump.yml` workflow automatically updates `package.json` versions if needed.
+- The `docker-build.yml` workflow automatically builds and pushes Docker images to GHCR with both versioned tags (`1.8.7`, `1.8`) and `latest`.
+- The `update-test-badges.yml` workflow runs automatically after a successful Docker build to update test count badges in the README.
 - Track progress: `https://github.com/DanielVolz/medassist-ng/actions`
 
 ---

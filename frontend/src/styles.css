@@ -1886,6 +1886,10 @@ textarea.auto-resize {
 .status-chip.high::before {
 	content: "★";
 }
+.status-chip.small {
+	font-size: 0.7rem;
+	padding: 0.2rem 0.5rem;
+}
 
 @media (max-width: 760px) {
 	.table-head,
@@ -1894,6 +1898,9 @@ textarea.auto-resize {
 		gap: 0.25rem;
 	}
 	.table-head {
+		display: none;
+	}
+	.table-row .hide-on-card {
 		display: none;
 	}
 	.table-row {
@@ -1922,8 +1929,8 @@ textarea.auto-resize {
 	/* First span (name cell) - centered horizontal layout */
 	.table-row span:first-child {
 		justify-content: center;
-		padding-bottom: 0.5rem;
-		margin-bottom: 0.25rem;
+		padding-bottom: 0.15rem;
+		margin-bottom: 0;
 	}
 	.table-row span:first-child::before {
 		display: none; /* Hide "NAME" label on mobile */
@@ -1931,6 +1938,11 @@ textarea.auto-resize {
 	/* Status chip in table row - left aligned */
 	.table-row span.status-chip {
 		align-self: flex-start;
+		justify-content: flex-start;
+		gap: 0.4rem;
+	}
+	.table-row span.status-chip::before {
+		margin-right: 0;
 	}
 	/* Avatar + name layout - centered */
 	.table-row .cell-with-avatar {
@@ -5521,6 +5533,20 @@ a.about-version-link:hover {
 .mobile-edit-form .blister-row .remove-blister-btn {
 	grid-column: 1 / -1;
 	justify-self: start;
+}
+
+.mobile-edit-form .blister-row .remind-toggle-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.blister-inputs .remind-toggle-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	align-self: end;
+	padding-bottom: 0.5rem;
 }
 
 .mobile-edit-form .blister-row .datetime-inputs {

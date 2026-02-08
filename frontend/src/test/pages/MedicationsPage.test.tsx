@@ -755,9 +755,9 @@ describe("MedicationsPage intake reminders toggle", () => {
 		// Desktop form uses class "full blisters" container
 		const blistersContainer = document.querySelector(".blisters");
 		expect(blistersContainer).toBeInTheDocument();
-		// Check for the inline-checkbox that controls intake reminders in each blister row
-		const intakeCheckbox = document.querySelector(".blister-row .inline-checkbox");
-		expect(intakeCheckbox).toBeInTheDocument();
+		// Check for the remind-toggle-row that controls intake reminders in each blister row
+		const intakeToggle = document.querySelector(".blister-row .remind-toggle-row");
+		expect(intakeToggle).toBeInTheDocument();
 	});
 
 	it("can toggle intake reminders per intake", () => {
@@ -770,8 +770,8 @@ describe("MedicationsPage intake reminders toggle", () => {
 			</MemoryRouter>
 		);
 
-		// Each blister row has inline-checkbox for intake reminders
-		const checkbox = document.querySelector('.blister-row .inline-checkbox input[type="checkbox"]');
+		// Each blister row has remind-toggle-row for intake reminders
+		const checkbox = document.querySelector('.blister-row .remind-toggle-row input[type="checkbox"]');
 		if (checkbox) {
 			fireEvent.click(checkbox);
 			expect(setIntakeValue).toHaveBeenCalled();

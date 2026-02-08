@@ -632,7 +632,11 @@ export function MedicationsPage() {
 						<div className="card-head">
 							<h3>{t("form.blisters.title")}</h3>
 							<div className="blisters-actions">
-								<button type="button" className="primary" onClick={() => addIntake()}>
+								<button
+									type="button"
+									className="primary"
+									onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+								>
 									+ {t("form.blisters.addIntake")}
 								</button>
 							</div>
@@ -675,25 +679,29 @@ export function MedicationsPage() {
 											onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
 										/>
 									</label>
-									<label title={t("form.blisters.takenByTooltip")}>
-										{t("form.blisters.takenByIntake")}
-										<select value={intake.takenBy} onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}>
-											<option value="">{t("form.blisters.takenByEveryone")}</option>
-											{existingPeople.map((person) => (
-												<option key={person} value={person}>
-													{person}
-												</option>
-											))}
-										</select>
-									</label>
-									<label className="inline-checkbox" title={t("form.blisters.remindTooltip")}>
-										<input
-											type="checkbox"
-											checked={intake.intakeRemindersEnabled}
-											onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
-										/>
+									{form.takenBy.length === 0 ? null : (
+										<label title={t("form.blisters.takenByTooltip")}>
+											{t("form.blisters.takenByIntake")}
+											<select value={intake.takenBy} onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}>
+												{form.takenBy.map((person) => (
+													<option key={person} value={person}>
+														{person}
+													</option>
+												))}
+											</select>
+										</label>
+									)}
+									<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
 										<span>🔔</span>
-									</label>
+										<label className="toggle-switch small">
+											<input
+												type="checkbox"
+												checked={intake.intakeRemindersEnabled}
+												onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+											/>
+											<span className="toggle-slider"></span>
+										</label>
+									</div>
 								</div>
 								{form.intakes.length > 1 && (
 									<button type="button" className="danger" onClick={() => removeIntake(idx)}>

@@ -424,8 +424,14 @@ describe("MobileEditModal takenBy", () => {
 
 		render(<MobileEditModal {...defaultProps} form={form} />);
 
-		expect(screen.getByText("John")).toBeInTheDocument();
-		expect(screen.getByText("Jane")).toBeInTheDocument();
+		// Check tags are rendered (use getAllByText since names also appear in intake dropdowns)
+		const johnElements = screen.getAllByText("John");
+		const janeElements = screen.getAllByText("Jane");
+		expect(johnElements.length).toBeGreaterThanOrEqual(1);
+		expect(janeElements.length).toBeGreaterThanOrEqual(1);
+		// Verify the tag elements specifically exist
+		expect(johnElements.some((el) => el.closest(".tag"))).toBe(true);
+		expect(janeElements.some((el) => el.closest(".tag"))).toBe(true);
 	});
 
 	it("calls onRemoveTakenByPerson when tag removed", () => {

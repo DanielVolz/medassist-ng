@@ -135,7 +135,7 @@
     "takenBy": "Eingenommen von",
     "packageType": "Verpackungsart",
     "packageTypeBlister": "Blisterpackung",
-    "packageTypeBottle": "Pillendose / Behälter",
+    "packageTypeBottle": "Pillendose",
     "packs": "Packungen",
     "blistersPerPack": "Blister pro Packung",
     "pillsPerBlister": "Tabletten pro Blister",

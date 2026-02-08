@@ -439,9 +439,12 @@ export function DashboardPage() {
 											? t("table.pillsCount", { count: Math.round(row.medsLeft) })
 											: formatFullBlisters(stock.fullBlisters, t)}
 									</span>
-									<span data-label={t("table.stockDetails")} className={textClass}>
+									<span
+										data-label={t("table.stockDetails")}
+										className={`${textClass}${med?.packageType === "bottle" ? " hide-on-card" : ""}`}
+									>
 										{med?.packageType === "bottle"
-											? "-"
+											? "—"
 											: formatOpenBlisterAndLoose(
 													stock.openBlisterPills,
 													stock.loosePills,
@@ -597,6 +600,9 @@ export function DashboardPage() {
 												const med = meds.find((m) => m.name === item.medName);
 												const medCov = coverageByMed[item.medName];
 												const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
+												const status = medCov
+													? getStockStatus(medCov.daysLeft, medCov.medsLeft, stockThresholds)
+													: null;
 												const itemDoseIds = expandDoseIds(item.doses);
 												const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 												return (
@@ -623,6 +629,9 @@ export function DashboardPage() {
 																<span className="tag subtle">
 																	{item.total} {t("common.pills")} {t("common.total")}
 																</span>
+																{status && (
+																	<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																)}
 															</div>
 														</div>
 														<div className="doses-col">
@@ -772,7 +781,9 @@ export function DashboardPage() {
 																<span className="tag subtle">
 																	{item.total} {t("common.pills")} {t("common.total")}
 																</span>
-																{status && <span className={`tag ${status.className}`}>{t(status.label)}</span>}
+																{status && (
+																	<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																)}
 															</div>
 														</div>
 														<div className="doses-col">
@@ -959,7 +970,9 @@ export function DashboardPage() {
 																<span className="tag subtle">
 																	{item.total} {t("common.pills")} {t("common.total")}
 																</span>
-																{status && <span className={`tag ${status.className}`}>{t(status.label)}</span>}
+																{status && (
+																	<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																)}
 															</div>
 														</div>
 														<div className="doses-col">

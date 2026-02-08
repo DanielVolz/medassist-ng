@@ -32,8 +32,9 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runner
 
-# Copy custom nginx config (must listen on 8080, not 80)
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy custom nginx config as template for envsubst processing
+# nginx-unprivileged automatically substitutes env vars in .template files
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 # Copy built static files with correct ownership (nginx user = uid 101)
 COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html
@@ -44,5 +45,5 @@ EXPOSE 8080
 # Already runs as non-root (nginx user, uid 101)
 USER nginx
 
-# Start nginx
+# Start nginx (entrypoint processes templates automatically)
 CMD ["nginx", "-g", "daemon off;"]

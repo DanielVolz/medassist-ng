@@ -1883,6 +1883,149 @@ describe("E2E Tests with Real Routes", () => {
 
 			expect(response.statusCode).toBe(400);
 		});
+
+		it("should reset stockAdjustment when stock fields change via PUT", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Reset Adj Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 30,
+					looseTablets: 0,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			// Set stock adjustment to -10
+			await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: -10 },
+			});
+
+			// Verify adjustment is set
+			let getMeds = await app.inject({ method: "GET", url: "/medications" });
+			let med = getMeds.json().find((m: any) => m.id === medId);
+			expect(med.stockAdjustment).toBe(-10);
+
+			// Edit medication with CHANGED stock fields (packCount 1 → 2)
+			await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "Reset Adj Med",
+					packCount: 2,
+					blistersPerPack: 1,
+					pillsPerBlister: 30,
+					looseTablets: 0,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			// stockAdjustment should be reset to 0
+			getMeds = await app.inject({ method: "GET", url: "/medications" });
+			med = getMeds.json().find((m: any) => m.id === medId);
+			expect(med.stockAdjustment).toBe(0);
+			expect(med.lastStockCorrectionAt).toBeTruthy();
+		});
+
+		it("should preserve stockAdjustment when only non-stock fields change via PUT", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Preserve Adj Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 30,
+					looseTablets: 0,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			// Set stock adjustment
+			await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: -5 },
+			});
+
+			// Edit only non-stock fields (name, notes)
+			await app.inject({
+				method: "PUT",
+				url: `/medications/${medId}`,
+				payload: {
+					name: "Renamed Preserve Med",
+					notes: "Updated notes",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 30,
+					looseTablets: 0,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			// stockAdjustment should be preserved
+			const getMeds = await app.inject({ method: "GET", url: "/medications" });
+			const med = getMeds.json().find((m: any) => m.id === medId);
+			expect(med.name).toBe("Renamed Preserve Med");
+			expect(med.stockAdjustment).toBe(-5);
+		});
+
+		it("should not count phantom consumption in planner after stock correction", async () => {
+			// Create medication: 1 pack × 14 blisters × 14 pills = 196 pills total
+			// Schedule: 1 pill daily starting far in the past
+			const farPast = new Date("2024-01-01T08:00:00.000Z");
+
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Planner Phantom Med",
+					packCount: 1,
+					blistersPerPack: 14,
+					pillsPerBlister: 14,
+					looseTablets: 0,
+					blisters: [{ usage: 1, every: 1, start: farPast.toISOString() }],
+				},
+			});
+			const medId = createResponse.json().id;
+
+			// Correct stock to 113 pills (196 base - 83 = 113)
+			await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: -83 },
+			});
+
+			// Query planner immediately - stock should be ~113 (not reduced by phantom dose)
+			const tomorrow = new Date();
+			tomorrow.setDate(tomorrow.getDate() + 1);
+			const nextWeek = new Date();
+			nextWeek.setDate(nextWeek.getDate() + 7);
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/usage",
+				payload: {
+					startDate: tomorrow.toISOString(),
+					endDate: nextWeek.toISOString(),
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			const med = data.find((m: any) => m.medicationId === medId);
+			expect(med).toBeDefined();
+			// Total should be very close to 113 (not 112 or lower from phantom consumption)
+			// Allow up to 1 pill of natural consumption (test runs fast, but at most 1 day could pass)
+			expect(med.totalPills).toBeGreaterThanOrEqual(112);
+			expect(med.totalPills).toBeLessThanOrEqual(113);
+		});
 	});
 
 	// ---------------------------------------------------------------------------

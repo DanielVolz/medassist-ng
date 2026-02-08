@@ -139,12 +139,14 @@ This script handles: branch creation → version bump → PR → CI wait → mer
 
 ### Version Files (MANDATORY)
 
-The version number is displayed in the **About modal** (Settings → About) showing both Frontend and Backend versions. These are read from:
+The version number is displayed in the **About modal** (Settings → About) as a single unified app version. This version is a **clickable link** pointing to the corresponding GitHub release (`https://github.com/DanielVolz/medassist-ng/releases/tag/vX.Y.Z`). The version is read from:
 
 - **`backend/package.json`** → Backend version, returned by `/health` endpoint
-- **`frontend/package.json`** → Frontend version, injected at build time via Vite's `__APP_VERSION__` define
+- **`frontend/package.json`** → Frontend version, injected at build time via Vite's `__APP_VERSION__` define and used to construct the release link
 
-**Both files MUST be updated to the new version before tagging a release.** If forgotten, the About modal will show the old version even after the update.
+**Both files MUST be updated to the new version before tagging a release.** If forgotten:
+- The About modal will show the old version
+- The version link will point to a non-existent GitHub release page
 
 ### Manual Release (if script is not available)
 

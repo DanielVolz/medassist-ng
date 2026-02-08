@@ -16,10 +16,6 @@ describe("AboutModal", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ version: "1.0.0" }),
-		});
 	});
 
 	it("returns null when not open", () => {
@@ -65,8 +61,10 @@ describe("AboutModal", () => {
 		expect(links.length).toBeGreaterThan(0);
 	});
 
-	it("fetches backend version on open", async () => {
+	it("renders version as link to GitHub release", () => {
 		render(<AboutModal {...defaultProps} />);
-		expect(fetch).toHaveBeenCalledWith("/api/health");
+		const versionLink = screen.getByText("1.0.0").closest("a");
+		expect(versionLink).toHaveAttribute("href", "https://github.com/test/repo/releases/tag/v1.0.0");
+		expect(versionLink).toHaveAttribute("target", "_blank");
 	});
 });

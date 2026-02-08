@@ -474,8 +474,6 @@
     "appName": "MedAssist-ng",
     "description": "Open-Source Medikamentenverwaltung und Planungsanwendung für selbst gehostete Umgebungen.",
     "version": "Version",
-    "frontend": "Frontend",
-    "backend": "Backend",
     "checkForUpdates": "Nach Updates suchen",
     "checking": "Prüfe...",
     "upToDate": "Du bist auf dem neuesten Stand!",

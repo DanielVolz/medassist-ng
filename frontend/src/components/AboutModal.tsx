@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { FRONTEND_VERSION, GITHUB_URL } from "../App";
 
 interface UpdateCheckResult {
-	status: "checking" | "up-to-date" | "update-available" | "error";
+	status: "up-to-date" | "update-available" | "error";
 	latestVersion?: string;
 	lastChecked?: string;
 }
@@ -15,18 +15,12 @@ interface AboutModalProps {
 
 export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 	const { t } = useTranslation();
-	const [backendVersion, setBackendVersion] = useState<string | null>(null);
+	const [isChecking, setIsChecking] = useState(false);
 	const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
 
-	// Fetch backend version and cached update result on mount
+	// Load cached update check result on mount
 	useEffect(() => {
 		if (!isOpen) return;
-
-		// Fetch backend version
-		fetch("/api/health")
-			.then((res) => res.json())
-			.then((data) => setBackendVersion(data.version || "unknown"))
-			.catch(() => setBackendVersion("unknown"));
 
 		// Load cached update check result
 		const cached = sessionStorage.getItem("updateCheckResult");
@@ -43,9 +37,13 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 	}, [isOpen]);
 
 	async function checkForUpdates() {
-		setUpdateCheckResult({ status: "checking" });
+		setIsChecking(true);
+		const minDelay = new Promise((resolve) => setTimeout(resolve, 1000));
 		try {
-			const res = await fetch(`https://api.github.com/repos/DanielVolz/medassist-ng/releases/latest`);
+			const [res] = await Promise.all([
+				fetch(`https://api.github.com/repos/DanielVolz/medassist-ng/releases/latest`),
+				minDelay,
+			]);
 			if (!res.ok) throw new Error("Failed to fetch");
 			const data = await res.json();
 			const latestVersion = (data.tag_name || "").replace(/^v/, "");
@@ -61,6 +59,8 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 			sessionStorage.setItem("updateCheckResult", JSON.stringify(result));
 		} catch {
 			setUpdateCheckResult({ status: "error" });
+		} finally {
+			setIsChecking(false);
 		}
 	}
 
@@ -74,32 +74,27 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 				</button>
 				<div className="about-header">
 					<div className="about-logo">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-							<path d="M19.5 12c0 4.14-3.36 7.5-7.5 7.5S4.5 16.14 4.5 12 7.86 4.5 12 4.5s7.5 3.36 7.5 7.5z" />
-							<path d="M12 8v4l2.5 2.5" />
-							<path d="M9 2h6M12 2v2" />
-						</svg>
+						<img src="/favicon.svg" alt="MedAssist-ng" />
 					</div>
 					<h2>{t("about.appName", "MedAssist-ng")}</h2>
 					<p className="about-tagline">{t("about.description", "Personal medication tracking and reminder app")}</p>
 				</div>
 				<div className="about-versions">
 					<div className="about-version-row">
-						<span className="about-version-label">{t("about.frontendVersion", "Frontend")}</span>
-						<span className="about-version-value">{FRONTEND_VERSION}</span>
-					</div>
-					<div className="about-version-row">
-						<span className="about-version-label">{t("about.backendVersion", "Backend")}</span>
-						<span className="about-version-value">{backendVersion || "..."}</span>
+						<span className="about-version-label">{t("about.version", "Version")}</span>
+						<a
+							href={`${GITHUB_URL}/releases/tag/v${FRONTEND_VERSION}`}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="about-version-value about-version-link"
+						>
+							{FRONTEND_VERSION}
+						</a>
 					</div>
 				</div>
 				<div className="about-update-section">
-					<button
-						className="about-update-btn"
-						onClick={checkForUpdates}
-						disabled={updateCheckResult?.status === "checking"}
-					>
-						{updateCheckResult?.status === "checking" ? (
+					<button className="about-update-btn" onClick={checkForUpdates} disabled={isChecking}>
+						{isChecking ? (
 							<>
 								<span className="spinner-small"></span>
 								{t("about.checking", "Checking...")}
@@ -116,7 +111,7 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 							</>
 						)}
 					</button>
-					{updateCheckResult && updateCheckResult.status !== "checking" && (
+					{updateCheckResult && (
 						<div className={`about-update-result ${updateCheckResult.status}`}>
 							{updateCheckResult.status === "up-to-date" && (
 								<span className="update-status-text">✓ {t("about.upToDate", "You are up to date!")}</span>

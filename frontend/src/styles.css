@@ -4551,18 +4551,12 @@ h3 .reminder-icon.info-tooltip {
 	width: 64px;
 	height: 64px;
 	margin: 0 auto 1rem;
-	background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-	border-radius: 16px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	box-shadow: 0 4px 12px rgba(var(--accent-rgb, 59, 130, 246), 0.25);
 }
 
-.about-logo svg {
-	width: 36px;
-	height: 36px;
-	stroke: white;
+.about-logo img {
+	width: 64px;
+	height: 64px;
+	border-radius: 16px;
 }
 
 .about-header h2 {
@@ -4586,13 +4580,10 @@ h3 .reminder-icon.info-tooltip {
 
 .about-version-row {
 	display: flex;
-	justify-content: space-between;
+	justify-content: center;
 	align-items: center;
+	gap: 0.75rem;
 	padding: 0.5rem 0;
-}
-
-.about-version-row:not(:last-child) {
-	border-bottom: 1px dashed var(--border-secondary);
 }
 
 .about-version-label {
@@ -4610,9 +4601,20 @@ h3 .reminder-icon.info-tooltip {
 	border-radius: 4px;
 }
 
+a.about-version-link {
+	color: var(--accent-primary);
+	text-decoration: none;
+	transition: text-decoration 0.15s ease;
+}
+
+a.about-version-link:hover {
+	text-decoration: underline;
+}
+
 .about-update-section {
 	padding: 1.25rem 1.5rem;
 	border-bottom: 1px solid var(--border-primary);
+	min-height: 148px;
 }
 
 .about-update-btn {

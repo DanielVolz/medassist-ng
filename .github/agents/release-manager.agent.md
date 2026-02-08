@@ -129,13 +129,26 @@ Apply these rules strictly:
 
 ## Task 3: Execute Release
 
-Use the release script whenever possible:
+Use the release script — it is **fully non-interactive** (no y/N prompts) and handles the entire flow automatically:
 
 ```bash
-./scripts/release.sh <patch|minor|major>
+./scripts/release.sh <patch|minor|major|x.y.z>
 ```
 
-This script handles: branch creation → version bump → PR → CI wait → merge → signed tag → push.
+The script performs these steps in order:
+1. Checks out and updates `main`
+2. Creates release branch `chore/release-X.Y.Z`
+3. Bumps version in `backend/package.json` and `frontend/package.json`
+4. Commits, pushes, and creates a PR
+5. Waits for CI checks (with retry logic — polls every 15s, waits up to 10 minutes)
+6. Merges the PR (squash + delete branch)
+7. Creates a signed tag `vX.Y.Z` and pushes it
+
+**The script auto-detects the git remote** (`origin` or `github`) and uses it consistently.
+
+**CI wait behavior:** GitHub Actions can take 10-30 seconds before checks appear on a new PR. The script waits 20 seconds initially, then polls every 15 seconds until checks are registered, then watches them to completion. Maximum wait is 10 minutes.
+
+**On failure:** If CI fails, the script exits with an error. The release branch and PR remain open for inspection. Fix the issue, push to the branch, and the PR will re-run CI. Then merge manually or re-run the script.
 
 ### Version Files (MANDATORY)
 

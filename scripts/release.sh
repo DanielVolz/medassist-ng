@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# MedAssist Release Script
+# MedAssist Release Script (non-interactive)
 # =============================================================================
 # Usage:
 #   ./scripts/release.sh patch    # 1.0.0 -> 1.0.1 (bugfixes)
@@ -8,8 +8,9 @@
 #   ./scripts/release.sh major    # 1.0.0 -> 2.0.0 (breaking changes)
 #   ./scripts/release.sh 1.2.3    # explicit version
 #
-# This script creates a PR for the version bump (required due to branch protection),
-# waits for CI, merges it, and then creates a signed tag for the release.
+# Fully non-interactive: no y/N prompts. Designed to be called by AI agents
+# or CI systems. Creates a PR for the version bump (required due to branch
+# protection), waits for CI with retry logic, merges, and creates a signed tag.
 # =============================================================================
 
 set -e
@@ -21,45 +22,98 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# GitHub repo
+# Configuration
 GITHUB_REPO="DanielVolz/medassist-ng"
+CI_POLL_INTERVAL=15          # seconds between CI status polls
+CI_INITIAL_DELAY=20          # seconds to wait before first CI check
+CI_MAX_WAIT=600              # maximum seconds to wait for CI (10 minutes)
 
 # Get script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
-# Check for gh CLI
+# Detect git remote name (prefer 'origin', fall back to 'github')
+detect_remote() {
+    if git remote | grep -q '^origin$'; then
+        echo "origin"
+    elif git remote | grep -q '^github$'; then
+        echo "github"
+    else
+        echo -e "${RED}Error: No 'origin' or 'github' remote found.${NC}" >&2
+        exit 1
+    fi
+}
+
+GIT_REMOTE=$(detect_remote)
+
+# Wait for CI checks on a PR with retry logic
+# GitHub Actions can take 10-30 seconds before checks are reported.
+# This function polls until checks appear and then watches them.
+wait_for_ci() {
+    local pr_number="$1"
+    local elapsed=0
+
+    echo -e "${BLUE}Waiting ${CI_INITIAL_DELAY}s for CI checks to be registered...${NC}"
+    sleep "${CI_INITIAL_DELAY}"
+    elapsed=$CI_INITIAL_DELAY
+
+    while [[ $elapsed -lt $CI_MAX_WAIT ]]; do
+        # Check if any checks have been reported
+        local check_output
+        check_output=$(gh pr checks "${pr_number}" --repo "${GITHUB_REPO}" 2>&1) || true
+
+        if echo "$check_output" | grep -q "no checks reported"; then
+            echo -e "${YELLOW}No checks reported yet (${elapsed}s elapsed). Retrying in ${CI_POLL_INTERVAL}s...${NC}"
+            sleep "${CI_POLL_INTERVAL}"
+            elapsed=$((elapsed + CI_POLL_INTERVAL))
+            continue
+        fi
+
+        # Checks are registered — use --watch to wait for completion
+        echo -e "${BLUE}CI checks registered. Watching for completion...${NC}"
+        if gh pr checks "${pr_number}" --repo "${GITHUB_REPO}" --watch; then
+            echo -e "${GREEN}CI checks passed!${NC}"
+            return 0
+        else
+            echo -e "${RED}CI checks failed!${NC}"
+            return 1
+        fi
+    done
+
+    echo -e "${RED}Timed out waiting for CI checks after ${CI_MAX_WAIT}s.${NC}"
+    return 1
+}
+
+# ─── Preflight checks ────────────────────────────────────────────────────────
+
 if ! command -v gh &> /dev/null; then
     echo -e "${RED}Error: GitHub CLI (gh) is required but not installed.${NC}"
     echo "Install it with: brew install gh"
     exit 1
 fi
 
-# Check gh authentication
 if ! gh auth status &> /dev/null; then
     echo -e "${RED}Error: Not authenticated with GitHub CLI.${NC}"
     echo "Run: gh auth login"
     exit 1
 fi
 
-# Check for uncommitted changes
 if [[ -n $(git status --porcelain) ]]; then
     echo -e "${RED}Error: You have uncommitted changes. Commit or stash them first.${NC}"
     git status --short
     exit 1
 fi
 
-# Make sure we're on main and up to date
+# ─── Determine version ───────────────────────────────────────────────────────
+
 echo -e "${BLUE}Updating main branch...${NC}"
 git checkout main
-git pull origin main 2>/dev/null || git pull github main 2>/dev/null || true
+git pull "${GIT_REMOTE}" main
 
-# Get current version from backend/package.json
 CURRENT_VERSION=$(grep '"version"' backend/package.json | sed 's/.*"version": "\(.*\)".*/\1/')
 echo -e "${BLUE}Current version: ${YELLOW}v${CURRENT_VERSION}${NC}"
 
-# Calculate new version
 if [[ -z "$1" ]]; then
     echo -e "${RED}Usage: $0 <patch|minor|major|x.y.z>${NC}"
     exit 1
@@ -79,7 +133,6 @@ case "$1" in
         NEW_VERSION="$((major + 1)).0.0"
         ;;
     *)
-        # Assume explicit version (validate format)
         if [[ ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo -e "${RED}Invalid version format. Use: x.y.z${NC}"
             exit 1
@@ -88,45 +141,31 @@ case "$1" in
         ;;
 esac
 
-echo -e "${GREEN}New version: ${YELLOW}v${NEW_VERSION}${NC}"
-echo ""
+echo -e "${GREEN}Releasing: ${YELLOW}v${CURRENT_VERSION} → v${NEW_VERSION}${NC}"
 
-# Confirm
-read -p "Release v${NEW_VERSION}? (y/N) " -n 1 -r
-echo ""
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 1
-fi
+# ─── Create release branch and PR ────────────────────────────────────────────
 
-# Branch name for the release
 RELEASE_BRANCH="chore/release-${NEW_VERSION}"
 
-# Check if branch already exists
 if git show-ref --verify --quiet "refs/heads/${RELEASE_BRANCH}"; then
     echo -e "${YELLOW}Branch ${RELEASE_BRANCH} already exists locally. Deleting...${NC}"
     git branch -D "${RELEASE_BRANCH}"
 fi
 
-# Create release branch
 echo -e "${BLUE}Creating release branch...${NC}"
 git checkout -b "${RELEASE_BRANCH}"
 
-# Update version in package.json files
 echo -e "${BLUE}Updating package.json files...${NC}"
 sed -i '' "s/\"version\": \"${CURRENT_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" backend/package.json
 sed -i '' "s/\"version\": \"${CURRENT_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" frontend/package.json 2>/dev/null || true
 
-# Commit version bump
 echo -e "${BLUE}Committing version bump...${NC}"
 git add backend/package.json frontend/package.json 2>/dev/null || git add backend/package.json
 git commit -m "chore: release v${NEW_VERSION}"
 
-# Push branch to GitHub
-echo -e "${BLUE}Pushing release branch to GitHub...${NC}"
-git push -u origin "${RELEASE_BRANCH}" 2>/dev/null || git push -u github "${RELEASE_BRANCH}"
+echo -e "${BLUE}Pushing release branch...${NC}"
+git push -u "${GIT_REMOTE}" "${RELEASE_BRANCH}"
 
-# Create PR
 echo -e "${BLUE}Creating Pull Request...${NC}"
 PR_URL=$(gh pr create \
     --repo "${GITHUB_REPO}" \
@@ -136,57 +175,49 @@ PR_URL=$(gh pr create \
 
 Automated version bump for release v${NEW_VERSION}.
 
-This PR was created by the release script." \
-    2>&1)
+This PR was created by the release script.")
 
 echo -e "${GREEN}PR created: ${YELLOW}${PR_URL}${NC}"
-
-# Extract PR number
 PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
 
-# Wait for CI checks
-echo -e "${BLUE}Waiting for CI checks to complete...${NC}"
-if ! gh pr checks "${PR_NUMBER}" --repo "${GITHUB_REPO}" --watch; then
+# ─── Wait for CI and merge ────────────────────────────────────────────────────
+
+if ! wait_for_ci "${PR_NUMBER}"; then
     echo -e "${RED}CI checks failed! Please fix the issues and try again.${NC}"
+    echo -e "${RED}Release branch '${RELEASE_BRANCH}' and PR #${PR_NUMBER} are still open.${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}CI checks passed!${NC}"
-
-# Merge PR
-echo -e "${BLUE}Merging PR...${NC}"
+echo -e "${BLUE}Merging PR #${PR_NUMBER}...${NC}"
 gh pr merge "${PR_NUMBER}" --repo "${GITHUB_REPO}" --squash --delete-branch
 
-# Switch back to main and pull
-echo -e "${BLUE}Updating main branch with merged changes...${NC}"
+echo -e "${BLUE}Updating main branch...${NC}"
 git checkout main
-git pull origin main 2>/dev/null || git pull github main 2>/dev/null || true
+git pull "${GIT_REMOTE}" main
 
-# Check if tag exists and delete it
+# ─── Create and push signed tag ──────────────────────────────────────────────
+
 if git rev-parse "v${NEW_VERSION}" >/dev/null 2>&1; then
     echo -e "${YELLOW}Tag v${NEW_VERSION} already exists locally. Deleting...${NC}"
     git tag -d "v${NEW_VERSION}"
 fi
 
-# Check if remote tag exists
-if git ls-remote --tags origin "v${NEW_VERSION}" 2>/dev/null | grep -q "v${NEW_VERSION}" || \
-   git ls-remote --tags github "v${NEW_VERSION}" 2>/dev/null | grep -q "v${NEW_VERSION}"; then
+if git ls-remote --tags "${GIT_REMOTE}" "v${NEW_VERSION}" 2>/dev/null | grep -q "v${NEW_VERSION}"; then
     echo -e "${YELLOW}Tag v${NEW_VERSION} exists on remote. Deleting...${NC}"
-    git push origin ":refs/tags/v${NEW_VERSION}" 2>/dev/null || true
-    git push github ":refs/tags/v${NEW_VERSION}" 2>/dev/null || true
+    git push "${GIT_REMOTE}" ":refs/tags/v${NEW_VERSION}" 2>/dev/null || true
 fi
 
-# Create signed tag
 echo -e "${BLUE}Creating signed tag v${NEW_VERSION}...${NC}"
 git tag -s "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
 
-# Push tag
-echo -e "${BLUE}Pushing tag to GitHub...${NC}"
-git push origin "v${NEW_VERSION}" 2>/dev/null || git push github "v${NEW_VERSION}"
+echo -e "${BLUE}Pushing tag...${NC}"
+git push "${GIT_REMOTE}" "v${NEW_VERSION}"
+
+# ─── Done ─────────────────────────────────────────────────────────────────────
 
 echo ""
 echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}✓ Released v${NEW_VERSION}${NC}"
+echo -e "${GREEN}  ✓ Released v${NEW_VERSION}${NC}"
 echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "${BLUE}GitHub Actions will now build and publish Docker images.${NC}"

@@ -202,7 +202,10 @@ export function MedDetailModal({
 
 					{/* Package Details Section */}
 					<div className="med-detail-section">
-						<h3>{t("modal.packageDetails")}</h3>
+						<h3>
+							{t("modal.packageDetails")} (
+							{selectedMed.packageType === "bottle" ? t("form.packageTypeBottle") : t("form.packageTypeBlister")})
+						</h3>
 						<div className="med-detail-grid">
 							{selectedMed.packageType === "blister" ? (
 								<>

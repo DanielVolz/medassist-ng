@@ -426,26 +426,29 @@ export function MobileEditModal({
 										onChange={(e) => onSetIntakeValue(idx, "startTime", e.target.value)}
 									/>
 								</label>
-								<label className="compact full-row">
-									<span>{t("form.blisters.takenByIntake")}</span>
-									<select value={intake.takenBy} onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}>
-										<option value="">{t("form.blisters.takenByEveryone")}</option>
-										{existingPeople.map((person) => (
-											<option key={person} value={person}>
-												{person}
-											</option>
-										))}
-									</select>
-								</label>
-								<label className="toggle-switch small" title={t("form.blisters.remindTooltip")}>
-									<input
-										type="checkbox"
-										checked={intake.intakeRemindersEnabled}
-										onChange={(e) => onSetIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
-									/>
-									<span className="toggle-slider"></span>
-								</label>
-								<span className="legend-hint">🔔</span>
+								{form.takenBy.length === 0 ? null : (
+									<label className="compact full-row">
+										<span>{t("form.blisters.takenByIntake")}</span>
+										<select value={intake.takenBy} onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}>
+											{form.takenBy.map((person) => (
+												<option key={person} value={person}>
+													{person}
+												</option>
+											))}
+										</select>
+									</label>
+								)}
+								<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
+									<span className="legend-hint">🔔</span>
+									<label className="toggle-switch small">
+										<input
+											type="checkbox"
+											checked={intake.intakeRemindersEnabled}
+											onChange={(e) => onSetIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+										/>
+										<span className="toggle-slider"></span>
+									</label>
+								</div>
 								{form.intakes.length > 1 && (
 									<button type="button" className="danger remove-blister-btn" onClick={() => onRemoveIntake(idx)}>
 										{t("common.remove")}
@@ -453,7 +456,11 @@ export function MobileEditModal({
 								)}
 							</div>
 						))}
-						<button type="button" className="ghost add-blister" onClick={() => onAddIntake()}>
+						<button
+							type="button"
+							className="ghost add-blister"
+							onClick={() => onAddIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+						>
 							+ {t("form.blisters.addIntake")}
 						</button>
 					</fieldset>

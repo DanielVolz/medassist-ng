@@ -213,9 +213,7 @@ export function PlannerPage() {
 											<strong>{row.plannerUsage}</strong>&nbsp;{t("common.pills")}
 										</span>
 										<span data-label={t("planner.table.blisters")}>
-											{row.packageType === "bottle"
-												? `${row.plannerUsage} ${t("common.pills")}`
-												: `${row.blistersNeeded} × ${row.blisterSize}`}
+											{row.packageType === "bottle" ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`}
 										</span>
 										<span data-label={t("planner.table.available")}>
 											{row.packageType === "bottle" ? (

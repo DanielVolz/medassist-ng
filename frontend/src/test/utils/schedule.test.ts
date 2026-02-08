@@ -409,8 +409,9 @@ describe("calculateCoverage", () => {
 	});
 
 	it("stock correction with dose tracking data also reflects correctly", () => {
-		// When the user has dose tracking data, the actualConsumed path is used.
-		// Verify that no phantom dose is generated right after a stock correction.
+		// In automatic mode, dose tracking data is ignored — stock is always
+		// reduced based on the schedule. Verify that tracked doses don't affect
+		// the calculation and that stock correction still resets the baseline.
 		const correctionTime = new Date("2024-03-15T12:00:00Z");
 		const march14 = new Date("2024-03-14T00:00:00").getTime();
 
@@ -437,20 +438,23 @@ describe("calculateCoverage", () => {
 		];
 
 		// User has tracked a dose yesterday (before the correction)
+		// In automatic mode, this should be ignored — only the schedule matters.
 		const takenDoses = new Set([`1-0-${march14}`]);
 
 		const result = calculateCoverage(meds, [], "en", 7, "automatic", takenDoses);
 
 		expect(result.all).toHaveLength(1);
 		// getMedTotal = 30 - 7 = 23.
-		// The taken dose from yesterday should NOT be counted (it's before the correction).
-		// No new doses should exist since the correction just happened.
+		// Automatic mode ignores tracking data. After correction, consumption
+		// restarts from correctionTime + period, which is in the future.
 		expect(result.all[0].medsLeft).toBe(23);
 	});
 
 	it("stock correction consumption resumes after one full period", () => {
-		// After 1 day (for daily medication), the next dose should be consumed.
-		// Set system time to 1 day + 1 hour after correction.
+		// After correction, the next scheduled dose on the blister's grid should
+		// be counted once its time arrives.
+		// Correction at March 14 12:00, blister start 08:00 daily →
+		// next dose after correction = March 15 08:00. Now is 13:00 on March 15 → 1 dose.
 		const correctionTime = new Date("2024-03-14T12:00:00Z");
 		vi.setSystemTime(new Date("2024-03-15T13:00:00Z")); // 25 hours after correction
 
@@ -484,14 +488,205 @@ describe("calculateCoverage", () => {
 		expect(result.all[0].medsLeft).toBe(22);
 	});
 
-	it("manual mode: stock correction excludes same-day taken doses", () => {
-		// BUG FIX: In manual mode, doses taken on the same day as a stock correction
-		// were counted as consumed (>= comparison with date-only timestamps).
-		// The user already accounted for today's consumption when setting the stock count.
-		//
-		// Scenario: User has 110 pills, took 1 dose today, corrects to 111.
-		// Bug: medsLeft = 111 - 1 = 110 (today's dose counted)
-		// Fix: medsLeft = 111 - 0 = 111 (today's dose excluded)
+	it("stock correction aligns to schedule grid, not correction timestamp", () => {
+		// BUG: When correction happened just before a scheduled dose (e.g. 15:40
+		// correction, 15:42 dose), the old code added 1 full period to the correction
+		// time (15:40 + 24h = tomorrow 15:40), missing today's 15:42 dose entirely.
+		// FIX: Align effectiveStart to the blister's schedule grid so that the first
+		// dose counted is the next one on the schedule after the correction.
+		const correctionTime = new Date("2024-03-14T15:40:00Z"); // 2 min before dose
+		vi.setSystemTime(new Date("2024-03-14T15:45:00Z")); // 5 min after correction, 3 min after dose
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				stockAdjustment: -5, // 30 - 5 = 25 pills
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-01T15:42:00Z", // Daily at 15:42
+					},
+				],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		expect(result.all).toHaveLength(1);
+		// Correction at 15:40, dose at 15:42, now at 15:45.
+		// The 15:42 dose is AFTER the correction → should be counted.
+		// medsLeft = 25 - 1 = 24
+		expect(result.all[0].medsLeft).toBe(24);
+	});
+
+	it("stock correction shortly after a dose does not count that dose again", () => {
+		// If correction happens shortly AFTER a dose, that dose is already reflected
+		// in the stock count and should NOT be counted again.
+		const correctionTime = new Date("2024-03-14T15:45:00Z"); // 3 min AFTER the 15:42 dose
+		vi.setSystemTime(new Date("2024-03-14T16:00:00Z")); // 15 min after correction
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				stockAdjustment: -5,
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-01T15:42:00Z", // Daily at 15:42
+					},
+				],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		expect(result.all).toHaveLength(1);
+		// Correction at 15:45, after today's 15:42 dose → next dose is TOMORROW 15:42.
+		// Now is 16:00 today → next dose hasn't arrived yet → 0 consumed.
+		// medsLeft = 25
+		expect(result.all[0].medsLeft).toBe(25);
+	});
+
+	it("automatic mode ignores past dose tracking data", () => {
+		// Automatic mode uses time-based expected consumption for past doses.
+		// Even if a user marks only some past doses as taken, the stock should still
+		// decrease for ALL scheduled doses whose time has passed.
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-10T09:00:00",
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		// System time is March 15 12:00, start is 09:00 → 6 occurrences (March 10-15)
+		const march10 = new Date("2024-03-10T00:00:00").getTime();
+		const march11 = new Date("2024-03-11T00:00:00").getTime();
+
+		// User only marked 2 out of 6 past doses as taken
+		const takenDoses = new Set([`1-0-${march10}`, `1-0-${march11}`]);
+
+		const resultWithTracking = calculateCoverage(meds, [], "en", 7, "automatic", takenDoses);
+		const resultWithoutTracking = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		// Both should have the same medsLeft — past tracking data doesn't reduce extra
+		expect(resultWithTracking.all[0].medsLeft).toBe(resultWithoutTracking.all[0].medsLeft);
+		// 30 pills - 6 consumed = 24
+		expect(resultWithTracking.all[0].medsLeft).toBe(24);
+	});
+
+	it("automatic mode counts early-taken future doses", () => {
+		// If a user marks a dose as taken BEFORE the scheduled time,
+		// it should count as consumed immediately (early intake).
+		// System time is March 15 12:00, intake at 21:00 → today's dose not yet auto-consumed
+		vi.setSystemTime(new Date("2024-03-15T12:00:00Z"));
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-10T21:00:00", // 21:00 = after current time 12:00
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		// 5 occurrences auto-consumed: March 10-14 (all at 21:00, which is past)
+		// March 15 at 21:00 hasn't passed yet (it's only 12:00)
+		const resultNoTracking = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+		expect(resultNoTracking.all[0].medsLeft).toBe(25); // 30 - 5 = 25
+
+		// User marks today's (March 15) dose as taken early at 12:00
+		const march15 = new Date("2024-03-15T00:00:00").getTime();
+		const takenDoses = new Set([`1-0-${march15}`]);
+
+		const resultEarlyTaken = calculateCoverage(meds, [], "en", 7, "automatic", takenDoses);
+		// 5 auto + 1 early = 6 consumed → 30 - 6 = 24
+		expect(resultEarlyTaken.all[0].medsLeft).toBe(24);
+	});
+
+	it("automatic mode does not double-count after intake time passes", () => {
+		// After the scheduled time, the dose is auto-consumed.
+		// If it was also marked as taken (earlier), it should NOT be counted twice.
+		vi.setSystemTime(new Date("2024-03-15T22:00:00Z")); // After 21:00
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-10T21:00:00",
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		// 6 occurrences auto-consumed: March 10-15 (all at 21:00, now it's 22:00)
+		const march15 = new Date("2024-03-15T00:00:00").getTime();
+		const march14 = new Date("2024-03-14T00:00:00").getTime();
+		// User marked March 14 and 15 as taken (both already auto-consumed by now)
+		const takenDoses = new Set([`1-0-${march14}`, `1-0-${march15}`]);
+
+		const resultTracked = calculateCoverage(meds, [], "en", 7, "automatic", takenDoses);
+		const resultNoTracking = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		// Both should be 24 (30 - 6). No double counting!
+		expect(resultTracked.all[0].medsLeft).toBe(24);
+		expect(resultNoTracking.all[0].medsLeft).toBe(24);
+	});
+
+	it("manual mode: dose taken BEFORE stock correction is excluded", () => {
+		// When a user corrects stock, any dose marked BEFORE the correction
+		// is already reflected in the corrected count and should NOT be counted.
 		const correctionTime = new Date("2024-03-15T12:00:00Z");
 		const todayMidnight = new Date("2024-03-15T00:00:00").getTime();
 
@@ -517,15 +712,57 @@ describe("calculateCoverage", () => {
 			},
 		];
 
-		// User took a dose today (before the correction)
-		const takenDoses = new Set([`1-0-${todayMidnight}`]);
+		// User took a dose today at 10am (BEFORE the correction at 12pm)
+		const doseId = `1-0-${todayMidnight}`;
+		const takenDoses = new Set([doseId]);
+		const takenDoseTimestamps = new Map([[doseId, new Date("2024-03-15T10:00:00Z").getTime()]]);
 
-		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses);
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses, takenDoseTimestamps);
 
 		expect(result.all).toHaveLength(1);
 		// getMedTotal = 196 - 85 = 111
-		// Today's taken dose should NOT be counted (same day as correction)
+		// Dose was taken BEFORE correction → NOT counted
 		expect(result.all[0].medsLeft).toBe(111);
+	});
+
+	it("manual mode: dose taken AFTER stock correction is counted", () => {
+		// When a user corrects stock and then takes a dose, that dose SHOULD be counted.
+		const correctionTime = new Date("2024-03-15T12:00:00Z");
+		const todayMidnight = new Date("2024-03-15T00:00:00").getTime();
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "DailyMed",
+				packCount: 1,
+				blistersPerPack: 14,
+				pillsPerBlister: 14,
+				looseTablets: 0,
+				stockAdjustment: -85, // 196 - 85 = 111 pills
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-01-01T08:00:00",
+					},
+				],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		// User took a dose today at 2pm (AFTER the correction at 12pm)
+		const doseId = `1-0-${todayMidnight}`;
+		const takenDoses = new Set([doseId]);
+		const takenDoseTimestamps = new Map([[doseId, new Date("2024-03-15T14:00:00Z").getTime()]]);
+
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses, takenDoseTimestamps);
+
+		expect(result.all).toHaveLength(1);
+		// getMedTotal = 196 - 85 = 111
+		// Dose was taken AFTER correction → counted → 111 - 1 = 110
+		expect(result.all[0].medsLeft).toBe(110);
 	});
 
 	it("manual mode: stock correction counts next-day taken doses", () => {
@@ -555,14 +792,16 @@ describe("calculateCoverage", () => {
 			},
 		];
 
-		// User takes dose on March 15 (day after correction on March 14)
-		const takenDoses = new Set([`1-0-${march15Midnight}`]);
+		// User takes dose on March 15 at 8am (day after correction on March 14)
+		const doseId = `1-0-${march15Midnight}`;
+		const takenDoses = new Set([doseId]);
+		const takenDoseTimestamps = new Map([[doseId, new Date("2024-03-15T08:00:00Z").getTime()]]);
 
-		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses);
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses, takenDoseTimestamps);
 
 		expect(result.all).toHaveLength(1);
 		// getMedTotal = 30 - 7 = 23
-		// March 15 dose should be counted (day after correction)
+		// March 15 dose should be counted (taken after correction)
 		expect(result.all[0].medsLeft).toBe(22);
 	});
 
@@ -592,9 +831,16 @@ describe("calculateCoverage", () => {
 		];
 
 		// User took doses on March 14 and 15
-		const takenDoses = new Set([`1-0-${march14Midnight}`, `1-0-${march15Midnight}`]);
+		const doseId1 = `1-0-${march14Midnight}`;
+		const doseId2 = `1-0-${march15Midnight}`;
+		const takenDoses = new Set([doseId1, doseId2]);
+		// No stock correction → takenAt doesn't matter, but provide for completeness
+		const takenDoseTimestamps = new Map([
+			[doseId1, new Date("2024-03-14T08:00:00Z").getTime()],
+			[doseId2, new Date("2024-03-15T08:00:00Z").getTime()],
+		]);
 
-		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses);
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses, takenDoseTimestamps);
 
 		expect(result.all).toHaveLength(1);
 		// Both doses should be counted: medsLeft = 30 - 2 = 28
@@ -603,7 +849,7 @@ describe("calculateCoverage", () => {
 
 	it("manual mode: stock correction with multiple medications", () => {
 		// Regression test: 3 medications (daily, daily, weekly).
-		// Stock correction on all 3. The daily ones have same-day taken doses.
+		// Stock correction on all 3. Daily meds have doses taken BEFORE correction.
 		const correctionTime = new Date("2024-03-15T12:00:00Z");
 		const todayMidnight = new Date("2024-03-15T00:00:00").getTime();
 
@@ -649,20 +895,112 @@ describe("calculateCoverage", () => {
 			},
 		];
 
-		// Daily meds have same-day taken doses, weekly med does not
-		const takenDoses = new Set([`1-0-${todayMidnight}`, `2-0-${todayMidnight}`]);
+		// Daily meds have same-day doses taken BEFORE correction (at 8am, correction at 12pm)
+		const doseId1 = `1-0-${todayMidnight}`;
+		const doseId2 = `2-0-${todayMidnight}`;
+		const takenDoses = new Set([doseId1, doseId2]);
+		const takenDoseTimestamps = new Map([
+			[doseId1, new Date("2024-03-15T08:00:00Z").getTime()], // Before correction
+			[doseId2, new Date("2024-03-15T09:00:00Z").getTime()], // Before correction
+		]);
 
-		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses);
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses, takenDoseTimestamps);
 
 		expect(result.all).toHaveLength(3);
 		const daily1 = result.all.find((c) => c.name === "DailyMed1")!;
 		const daily2 = result.all.find((c) => c.name === "DailyMed2")!;
 		const weekly = result.all.find((c) => c.name === "WeeklyMed")!;
 
-		// All three should reflect full stock (same-day doses excluded)
+		// All three should reflect full stock (doses taken before correction → excluded)
 		expect(daily1.medsLeft).toBe(111);
 		expect(daily2.medsLeft).toBe(20);
 		expect(weekly.medsLeft).toBe(8);
+	});
+
+	it("manual mode: person-suffix dose IDs are counted correctly", () => {
+		// BUG HUNT: In prod (manual mode), dose IDs have a person suffix like
+		// "31-0-1770505200000-Daniel". Does the manual mode code correctly parse
+		// and count these?
+		const march14 = new Date("2024-03-14T00:00:00").getTime();
+		const march15 = new Date("2024-03-15T00:00:00").getTime();
+
+		const meds: Medication[] = [
+			{
+				id: 31,
+				name: "ProdMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: ["Daniel"],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-01T08:00:00",
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		// Dose IDs with person suffix (as prod generates them)
+		const doseId1 = `31-0-${march14}-Daniel`;
+		const doseId2 = `31-0-${march15}-Daniel`;
+		const takenDoses = new Set([doseId1, doseId2]);
+		// No stock correction → all counted
+		const takenDoseTimestamps = new Map([
+			[doseId1, new Date("2024-03-14T08:00:00Z").getTime()],
+			[doseId2, new Date("2024-03-15T08:00:00Z").getTime()],
+		]);
+
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses, takenDoseTimestamps);
+
+		expect(result.all).toHaveLength(1);
+		// Both doses should be counted: medsLeft = 30 - 2 = 28
+		expect(result.all[0].medsLeft).toBe(28);
+	});
+
+	it("manual mode: future dose taken today counts immediately", () => {
+		// User marks a future dose (later today) as taken.
+		// It should be counted in manual mode immediately.
+		vi.setSystemTime(new Date("2024-03-15T12:00:00Z"));
+		const march15 = new Date("2024-03-15T00:00:00").getTime();
+
+		const meds: Medication[] = [
+			{
+				id: 31,
+				name: "ProdMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: ["Daniel"],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-01T21:00:00", // 21:00, still in future at 12:00
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		// No doses taken → 30 pills
+		const resultBefore = calculateCoverage(meds, [], "en", 7, "manual", new Set());
+		expect(resultBefore.all[0].medsLeft).toBe(30);
+
+		// Take today's dose (future time) → 29 pills
+		const doseId = `31-0-${march15}-Daniel`;
+		const takenDoses = new Set([doseId]);
+		const takenDoseTimestamps = new Map([[doseId, Date.now()]]);
+		const resultAfter = calculateCoverage(meds, [], "en", 7, "manual", takenDoses, takenDoseTimestamps);
+		expect(resultAfter.all[0].medsLeft).toBe(29);
+
+		// Undo → back to 30 pills
+		const resultUndo = calculateCoverage(meds, [], "en", 7, "manual", new Set());
+		expect(resultUndo.all[0].medsLeft).toBe(30);
 	});
 });
 

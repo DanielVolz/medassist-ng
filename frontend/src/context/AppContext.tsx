@@ -278,7 +278,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				systemLocale,
 				settingsHook.settings.reminderDaysBefore,
 				settingsHook.settings.stockCalculationMode,
-				doses.takenDoses
+				doses.takenDoses,
+				doses.takenDoseTimestamps
 			),
 		[
 			medications.meds,
@@ -287,6 +288,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settingsHook.settings.reminderDaysBefore,
 			settingsHook.settings.stockCalculationMode,
 			doses.takenDoses,
+			doses.takenDoseTimestamps,
 		]
 	);
 

@@ -103,10 +103,14 @@ describe("useDoses", () => {
 	});
 
 	it("marks dose as taken optimistically", async () => {
-		// First call for initial load, subsequent calls for marking dose
+		// First call for initial load, second for marking dose, third for re-sync
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-			.mockResolvedValueOnce({ ok: true });
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ doses: [{ doseId: "new-dose", takenAt: Date.now(), dismissed: false }] }),
+			});
 
 		const { result } = renderHook(() => useDoses());
 
@@ -119,7 +123,9 @@ describe("useDoses", () => {
 			await result.current.markDoseTaken("new-dose");
 		});
 
-		expect(result.current.takenDoses.has("new-dose")).toBe(true);
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("new-dose")).toBe(true);
+		});
 		expect(fetch).toHaveBeenCalledWith(
 			"/api/doses/taken",
 			expect.objectContaining({
@@ -130,10 +136,11 @@ describe("useDoses", () => {
 	});
 
 	it("reverts optimistic update on error", async () => {
-		// First call for initial load, second for marking dose fails
+		// First call for initial load, second for marking dose fails, third for re-sync
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-			.mockRejectedValueOnce(new Error("Network error"));
+			.mockRejectedValueOnce(new Error("Network error"))
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
 
 		const { result } = renderHook(() => useDoses());
 
@@ -153,12 +160,13 @@ describe("useDoses", () => {
 
 	it("undoes dose taken optimistically", async () => {
 		const mockDoses = {
-			doses: [{ doseId: "taken-dose", dismissed: false }],
+			doses: [{ doseId: "taken-dose", takenAt: Date.now(), dismissed: false }],
 		};
 
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDoses) })
-			.mockResolvedValueOnce({ ok: true });
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
 
 		const { result } = renderHook(() => useDoses());
 
@@ -170,7 +178,9 @@ describe("useDoses", () => {
 			await result.current.undoDoseTaken("taken-dose");
 		});
 
-		expect(result.current.takenDoses.has("taken-dose")).toBe(false);
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("taken-dose")).toBe(false);
+		});
 		expect(fetch).toHaveBeenCalledWith("/api/doses/taken/taken-dose", expect.objectContaining({ method: "DELETE" }));
 	});
 

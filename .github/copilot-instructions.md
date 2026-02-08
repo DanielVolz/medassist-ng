@@ -138,11 +138,16 @@ Push to main / Tag created
         ↓
 ┌─────────────────────────────────────┐
 │  docker-build.yml                   │
-│  ├─ backend-test (parallel)         │
-│  ├─ frontend-build (parallel)       │
-│  └─ build-and-push (after tests)    │
+│  └─ build-and-push                  │
 │      ├─ Build Docker images         │
 │      └─ Push to GHCR                │
+│      (Tag builds also set "latest") │
+└─────────────────────────────────────┘
+        ↓ After successful build
+┌─────────────────────────────────────┐
+│  update-test-badges.yml             │
+│  (workflow_run after docker-build)  │
+│  └─ Run tests, update badge counts  │
 └─────────────────────────────────────┘
 ```
 
@@ -179,7 +184,9 @@ gh pr merge --squash --delete-branch
 | File | Trigger | Purpose |
 |------|---------|--------|
 | `.github/workflows/test.yml` | Pull Requests | Run tests, block PR on failures |
-| `.github/workflows/docker-build.yml` | Push to main, Tags | Tests + Build and push Docker images |
+| `.github/workflows/docker-build.yml` | Push to main, Tags | Build and push Docker images (+ create GitHub release on tags) |
+| `.github/workflows/update-test-badges.yml` | After successful docker-build | Update test count badges in README |
+| `.github/workflows/codeql.yml` | Push to main, PRs, Weekly | Security analysis |
 
 ## Key Patterns
 

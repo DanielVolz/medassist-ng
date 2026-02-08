@@ -2,13 +2,10 @@ name: Update Test Badges
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: ["Build and Push Docker Images"]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'backend/src/**'
-      - 'frontend/src/**'
-      - 'backend/package.json'
-      - 'frontend/package.json'
 
 permissions:
   contents: write
@@ -17,6 +14,8 @@ jobs:
   update-badges:
     name: Update Test Count Badges
     runs-on: ubuntu-latest
+    # Only run after successful docker builds, not failed ones
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout repository

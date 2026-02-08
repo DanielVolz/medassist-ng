@@ -52,7 +52,7 @@ services:
       - /tmp:noexec,nosuid,size=64m
       - /var/cache/nginx:noexec,nosuid,size=64m
       - /var/run:noexec,nosuid,size=64m
-      - /etc/nginx/conf.d:noexec,nosuid,size=1m
+      - /etc/nginx/conf.d:noexec,nosuid,size=1m,uid=101,gid=101
     cap_drop:
       - ALL
 

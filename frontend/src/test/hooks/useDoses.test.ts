@@ -184,6 +184,95 @@ describe("useDoses", () => {
 		expect(fetch).toHaveBeenCalledWith("/api/doses/taken/taken-dose", expect.objectContaining({ method: "DELETE" }));
 	});
 
+	it("reverts undo on error by re-adding the dose", async () => {
+		const mockDoses = {
+			doses: [{ doseId: "taken-dose", takenAt: 1710500000000, dismissed: false }],
+		};
+
+		// Initial load returns taken-dose, DELETE fails, re-sync returns taken-dose still there
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDoses) })
+			.mockRejectedValueOnce(new Error("Network error"))
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDoses) });
+
+		const { result } = renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("taken-dose")).toBe(true);
+		});
+
+		await act(async () => {
+			await result.current.undoDoseTaken("taken-dose");
+		});
+
+		// After error, the dose should be re-added (reverted)
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("taken-dose")).toBe(true);
+		});
+	});
+
+	it("populates takenDoseTimestamps from API response", async () => {
+		const takenAt = 1710500000000;
+		const mockDoses = {
+			doses: [{ doseId: "dose-1", takenAt, dismissed: false }],
+		};
+
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(mockDoses),
+		});
+
+		const { result } = renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(result.current.takenDoseTimestamps.get("dose-1")).toBe(takenAt);
+		});
+	});
+
+	it("markDoseTaken sets takenDoseTimestamp optimistically", async () => {
+		const now = Date.now();
+		vi.setSystemTime(now);
+
+		// Initial load, POST success, re-sync
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ doses: [{ doseId: "new-dose", takenAt: now, dismissed: false }] }),
+			});
+
+		const { result } = renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(0);
+		});
+
+		await act(async () => {
+			await result.current.markDoseTaken("new-dose");
+		});
+
+		await waitFor(() => {
+			expect(result.current.takenDoseTimestamps.has("new-dose")).toBe(true);
+			expect(result.current.takenDoseTimestamps.get("new-dose")).toBe(now);
+		});
+
+		vi.useRealTimers();
+	});
+
+	it("keeps state on fetch error during initial load", async () => {
+		// Initial load fails
+		(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Network error"));
+
+		const { result } = renderHook(() => useDoses());
+
+		// Should keep empty state, not crash
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(0);
+			expect(result.current.dismissedDoses.size).toBe(0);
+		});
+	});
+
 	it("setShowClearMissedConfirm works", () => {
 		const { result } = renderHook(() => useDoses());
 

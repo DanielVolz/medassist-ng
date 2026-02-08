@@ -37,6 +37,7 @@ const inventorySchema = z.object({
 	pillsPerBlister: z.number().int().min(1).default(1),
 	looseTablets: z.number().int().min(0).default(0),
 	stockAdjustment: z.number().int().default(0), // Manual stock correction
+	packageType: z.enum(["blister", "bottle"]).default("blister"),
 });
 
 const medicationExportSchema = z.object({
@@ -276,6 +277,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					pillsPerBlister: med.pillsPerBlister ?? 1,
 					looseTablets: med.looseTablets ?? 0,
 					stockAdjustment: med.stockAdjustment ?? 0,
+					packageType: med.packageType ?? "blister",
 				},
 				pillWeightMg: med.pillWeightMg,
 				doseUnit: med.doseUnit ?? "mg",
@@ -490,6 +492,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						name: med.name,
 						genericName: med.genericName || null,
 						takenByJson,
+						packageType: med.inventory.packageType ?? "blister",
 						packCount: med.inventory.packCount,
 						blistersPerPack: med.inventory.blistersPerPack,
 						pillsPerBlister: med.inventory.pillsPerBlister,

@@ -14,7 +14,7 @@ export type { Settings, UseSettingsReturn } from "./useSettings";
 export { useSettings } from "./useSettings";
 export type { UseShareReturn } from "./useShare";
 export { useShare } from "./useShare";
-export type { Theme, UseThemeReturn } from "./useTheme";
+export type { Theme, ThemePreference, UseThemeReturn } from "./useTheme";
 export { useTheme } from "./useTheme";
 export type { UseUnsavedChangesWarningReturn } from "./useUnsavedChangesWarning";
 export { useUnsavedChangesWarning } from "./useUnsavedChangesWarning";

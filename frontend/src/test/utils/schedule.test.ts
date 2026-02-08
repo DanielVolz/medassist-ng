@@ -289,6 +289,113 @@ describe("calculateCoverage", () => {
 		expect(result.all[0].daysLeft).toBeNull();
 	});
 
+	it("uses intakes format when available instead of blisters", () => {
+		// The new intakes format should be used for coverage calculation
+		// when med.intakes is present, falling through getBlistersForMed
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "IntakesMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				blisters: [], // Empty blisters — intakes should be used instead
+				intakes: [
+					{
+						usage: 2,
+						every: 1,
+						start: "2024-03-10T09:00:00",
+						takenBy: null,
+						intakeRemindersEnabled: false,
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		expect(result.all).toHaveLength(1);
+		// 30 pills, 2 per day consumed. March 10 09:00 to March 15 12:00 = 6 occurrences × 2 = 12 consumed
+		expect(result.all[0].medsLeft).toBe(18);
+		expect(result.all[0].daysLeft).toBe(9); // 18 pills / 2 per day = 9 days
+	});
+
+	it("per-intake takenBy counts person correctly in automatic mode", () => {
+		// When intakes have per-intake takenBy, each person-intake pair is counted
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "PersonMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 60,
+				looseTablets: 0,
+				takenBy: ["Alice", "Bob"],
+				blisters: [],
+				intakes: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-10T09:00:00",
+						takenBy: "Alice",
+						intakeRemindersEnabled: false,
+					},
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-10T09:00:00",
+						takenBy: "Bob",
+						intakeRemindersEnabled: false,
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		expect(result.all).toHaveLength(1);
+		// 2 intakes × 1 pill/day × 6 occurrences = 12 consumed
+		// dailyRate = 2 (1/day × 2 people)
+		// medsLeft = 60 - 12 = 48, daysLeft = 48 / 2 = 24
+		expect(result.all[0].medsLeft).toBe(48);
+		expect(result.all[0].daysLeft).toBe(24);
+	});
+
+	it("automatic mode without stock correction counts from blister start", () => {
+		// Without stock correction, effectiveStart should be the blisterStart itself.
+		// This tests the `else` branch where effectiveStart = blisterStart.
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-13T09:00:00", // 2 days ago + today = 3 occurrences
+					},
+				],
+				updatedAt: null,
+				// No lastStockCorrectionAt
+			},
+		];
+
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		expect(result.all).toHaveLength(1);
+		// March 13, 14, 15 at 09:00 — all past (it's 12:00 on March 15) = 3 consumed
+		expect(result.all[0].medsLeft).toBe(27);
+	});
+
 	it("filters low stock medications", () => {
 		const meds: Medication[] = [
 			{
@@ -1045,6 +1152,19 @@ describe("getStockStatus", () => {
 		const result = getStockStatus(null, 100, thresholds);
 		expect(result.level).toBe("normal");
 		expect(result.label).toBe("status.noSchedule");
+	});
+
+	it("returns critical when daysLeft is at or below criticalStockDays", () => {
+		const thresholdsWithCritical: StockThresholds = {
+			lowStockDays: 30,
+			criticalStockDays: 7,
+			normalStockDays: 90,
+			highStockDays: 180,
+		};
+
+		const result = getStockStatus(5, 10, thresholdsWithCritical);
+		expect(result.level).toBe("critical");
+		expect(result.className).toBe("danger");
 	});
 });
 

@@ -117,7 +117,23 @@ export function calculateCoverage(
 		// Also add medication-level takenBy for backward compatibility
 		m.takenBy?.forEach((person) => uniquePeople.add(person));
 		const personCount = Math.max(1, uniquePeople.size || m.takenBy?.length || 1);
-		const dailyRate = blisters.reduce((sum, s) => sum + (s.every > 0 ? s.usage / s.every : 0), 0) * personCount;
+
+		// Calculate daily consumption rate per intake, accounting for per-intake takenBy.
+		// When an intake has a per-intake takenBy (new format), it represents exactly
+		// one person's dose — do NOT multiply by personCount again.
+		// For legacy intakes (no takenBy), the intake applies to ALL people.
+		let dailyRate = 0;
+		blisters.forEach((s, idx) => {
+			const baseRate = s.every > 0 ? s.usage / s.every : 0;
+			const intake = intakes[idx];
+			if (intake?.takenBy) {
+				// Per-intake takenBy: this intake is for exactly 1 person
+				dailyRate += baseRate;
+			} else {
+				// Legacy: this intake applies to all people
+				dailyRate += baseRate * personCount;
+			}
+		});
 
 		let consumed = 0;
 		const stockCorrectionCutoff = m.lastStockCorrectionAt ? new Date(m.lastStockCorrectionAt).getTime() : 0;

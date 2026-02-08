@@ -176,7 +176,8 @@
     "badge": "Vorrat planen",
     "from": "Von",
     "until": "Bis",
-    "includeUntilStart": "Verbrauch von heute bis Startdatum einrechnen",
+    "includeUntilStart": "Aktuellen Verbrauch einrechnen",
+    "includeUntilStartTooltip": "Wenn aktiviert, werden die Pillen, die zwischen heute und dem gewählten Startdatum verbraucht werden, vom aktuellen Bestand abgezogen. So erhältst du ein genaueres Bild davon, wie viel du zu Beginn des Planungszeitraums tatsächlich noch übrig hast.",
     "calculate": "Berechnen",
     "calculating": "Wird berechnet...",
     "sendEmail": "📧 Per E-Mail senden",
@@ -289,6 +290,12 @@
     "hasNotes": "Hat Notizen",
     "lightMode": "Zum hellen Modus wechseln",
     "darkMode": "Zum dunklen Modus wechseln"
+  },
+  "theme": {
+    "title": "Design",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System"
   },
   "dose": {
     "takenBy": "eingenommen von",
@@ -478,10 +485,9 @@
     "checking": "Prüfe...",
     "upToDate": "Du bist auf dem neuesten Stand!",
     "updateAvailable": "Update verfügbar",
-    "viewOnGitHub": "Auf GitHub ansehen",
     "downloadUpdate": "Update herunterladen",
     "checkFailed": "Update-Prüfung fehlgeschlagen",
-    "lastChecked": "Zuletzt geprüft",
+    "viewOnGitHub": "Auf GitHub ansehen",
     "github": "GitHub",
     "license": "MIT-Lizenz",
     "copyright": "© {{year}} Daniel Volz",

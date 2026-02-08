@@ -2,7 +2,7 @@
 // SharedSchedule Component - Public view for shared schedules
 // =============================================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
@@ -24,22 +24,59 @@ export function SharedSchedule() {
 	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [showFutureDays, setShowFutureDays] = useState(false);
-	const [theme, setTheme] = useState<"light" | "dark">(() => {
+
+	// Theme preference: light, dark, or system
+	type ThemePreference = "light" | "dark" | "system";
+	const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
 		if (typeof window !== "undefined") {
-			return (localStorage.getItem("theme") as "light" | "dark") || "dark";
+			const stored = localStorage.getItem("theme") as ThemePreference | null;
+			if (stored === "light" || stored === "dark" || stored === "system") return stored;
 		}
 		return "dark";
 	});
 
-	// Apply theme to document
-	useEffect(() => {
-		document.documentElement.setAttribute("data-theme", theme);
-		localStorage.setItem("theme", theme);
-	}, [theme]);
-
-	function toggleTheme() {
-		setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+	function getSystemTheme(): "light" | "dark" {
+		if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches) {
+			return "light";
+		}
+		return "dark";
 	}
+
+	const resolvedTheme = themePreference === "system" ? getSystemTheme() : themePreference;
+
+	// Apply resolved theme to document
+	useEffect(() => {
+		document.documentElement.setAttribute("data-theme", resolvedTheme);
+		localStorage.setItem("theme", themePreference);
+	}, [themePreference, resolvedTheme]);
+
+	// Listen for system theme changes when preference is "system"
+	useEffect(() => {
+		if (themePreference !== "system") return;
+		const mq = window.matchMedia?.("(prefers-color-scheme: light)");
+		if (!mq) return;
+		const handler = () => {
+			const resolved = mq.matches ? "light" : "dark";
+			document.documentElement.setAttribute("data-theme", resolved);
+		};
+		mq.addEventListener("change", handler);
+		return () => mq.removeEventListener("change", handler);
+	}, [themePreference]);
+
+	// Theme dropdown state
+	const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+	const themeMenuRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		if (!themeMenuOpen) return;
+		const handleClickOutside = (e: MouseEvent) => {
+			if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
+				setThemeMenuOpen(false);
+			}
+		};
+		document.addEventListener("click", handleClickOutside);
+		return () => document.removeEventListener("click", handleClickOutside);
+	}, [themeMenuOpen]);
 
 	// Collapsed days state for SharedSchedule (token-specific localStorage)
 	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
@@ -522,13 +559,62 @@ export function SharedSchedule() {
 						💊 {t("share.scheduleFor")} {data.takenBy}
 					</h1>
 					<div className="shared-schedule-header-actions">
-						<button
-							className="icon-btn"
-							onClick={toggleTheme}
-							title={theme === "dark" ? t("tooltips.lightMode") : t("tooltips.darkMode")}
-						>
-							{theme === "dark" ? "☀️" : "🌙"}
-						</button>
+						<div className={`theme-menu ${themeMenuOpen ? "open" : ""}`} ref={themeMenuRef}>
+							<button className="icon-btn" onClick={() => setThemeMenuOpen(!themeMenuOpen)} title={t("theme.title")}>
+								{resolvedTheme === "dark" ? "🌙" : "☀️"}
+							</button>
+							<div className="theme-dropdown">
+								<button
+									className={`theme-dropdown-item${themePreference === "light" ? " active" : ""}`}
+									onClick={() => {
+										setThemePreference("light");
+										setThemeMenuOpen(false);
+									}}
+								>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+										<circle cx="12" cy="12" r="5" />
+										<line x1="12" y1="1" x2="12" y2="3" />
+										<line x1="12" y1="21" x2="12" y2="23" />
+										<line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+										<line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+										<line x1="1" y1="12" x2="3" y2="12" />
+										<line x1="21" y1="12" x2="23" y2="12" />
+										<line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+										<line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+									</svg>
+									{t("theme.light")}
+									{themePreference === "light" && <span className="theme-check">✓</span>}
+								</button>
+								<button
+									className={`theme-dropdown-item${themePreference === "dark" ? " active" : ""}`}
+									onClick={() => {
+										setThemePreference("dark");
+										setThemeMenuOpen(false);
+									}}
+								>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+										<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+									</svg>
+									{t("theme.dark")}
+									{themePreference === "dark" && <span className="theme-check">✓</span>}
+								</button>
+								<button
+									className={`theme-dropdown-item${themePreference === "system" ? " active" : ""}`}
+									onClick={() => {
+										setThemePreference("system");
+										setThemeMenuOpen(false);
+									}}
+								>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+										<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+										<line x1="8" y1="21" x2="16" y2="21" />
+										<line x1="12" y1="17" x2="12" y2="21" />
+									</svg>
+									{t("theme.system")}
+									{themePreference === "system" && <span className="theme-check">✓</span>}
+								</button>
+							</div>
+						</div>
 					</div>
 					<p className="shared-schedule-period">
 						{t("share.period")}:{" "}

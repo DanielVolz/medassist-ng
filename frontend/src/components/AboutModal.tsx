@@ -5,7 +5,6 @@ import { FRONTEND_VERSION, GITHUB_URL } from "../App";
 interface UpdateCheckResult {
 	status: "up-to-date" | "update-available" | "error";
 	latestVersion?: string;
-	lastChecked?: string;
 }
 
 interface AboutModalProps {
@@ -18,21 +17,10 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 	const [isChecking, setIsChecking] = useState(false);
 	const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
 
-	// Load cached update check result on mount
+	// Reset check result when modal opens so stale results are never shown
 	useEffect(() => {
-		if (!isOpen) return;
-
-		// Load cached update check result
-		const cached = sessionStorage.getItem("updateCheckResult");
-		if (cached) {
-			try {
-				const parsed = JSON.parse(cached);
-				if (parsed && typeof parsed === "object") {
-					setUpdateCheckResult(parsed);
-				}
-			} catch {
-				// ignore
-			}
+		if (isOpen) {
+			setUpdateCheckResult(null);
 		}
 	}, [isOpen]);
 
@@ -49,14 +37,10 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 			const latestVersion = (data.tag_name || "").replace(/^v/, "");
 			const currentVersion = FRONTEND_VERSION.replace(/^v/, "");
 			const isUpToDate = latestVersion === currentVersion;
-			const result: UpdateCheckResult = {
+			setUpdateCheckResult({
 				status: isUpToDate ? "up-to-date" : "update-available",
 				latestVersion,
-				lastChecked: new Date().toISOString(),
-			};
-			setUpdateCheckResult(result);
-			// Cache the result
-			sessionStorage.setItem("updateCheckResult", JSON.stringify(result));
+			});
 		} catch {
 			setUpdateCheckResult({ status: "error" });
 		} finally {
@@ -114,11 +98,11 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 					{updateCheckResult && (
 						<div className={`about-update-result ${updateCheckResult.status}`}>
 							{updateCheckResult.status === "up-to-date" && (
-								<span className="update-status-text">✓ {t("about.upToDate", "You are up to date!")}</span>
+								<span className="update-status-text">&#10003; {t("about.upToDate", "You are up to date!")}</span>
 							)}
 							{updateCheckResult.status === "update-available" && (
 								<span className="update-status-text">
-									⬆ {t("about.updateAvailable", "Update available")}:{" "}
+									&#11014; {t("about.updateAvailable", "Update available")}:{" "}
 									<strong>v{updateCheckResult.latestVersion}</strong>
 									<a
 										href={`${GITHUB_URL}/releases/latest`}
@@ -131,11 +115,8 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 								</span>
 							)}
 							{updateCheckResult.status === "error" && (
-								<span className="update-status-text">⚠ {t("about.checkFailed", "Could not check for updates")}</span>
-							)}
-							{updateCheckResult.lastChecked && (
-								<span className="update-last-checked">
-									{t("about.lastChecked", "Last checked")}: {new Date(updateCheckResult.lastChecked).toLocaleString()}
+								<span className="update-status-text">
+									&#9888; {t("about.checkFailed", "Could not check for updates")}
 								</span>
 							)}
 						</div>

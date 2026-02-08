@@ -178,6 +178,9 @@ export function PlannerPage() {
 							onChange={(e) => setIncludeUntilStart(e.target.checked)}
 						/>
 						{t("planner.includeUntilStart")}
+						<span className="info-tooltip small" data-tooltip={t("planner.includeUntilStartTooltip")}>
+							ⓘ
+						</span>
 					</label>
 					<div className="planner-actions">
 						<button type="button" className="ghost" onClick={resetRange}>
@@ -210,11 +213,19 @@ export function PlannerPage() {
 											<strong>{row.plannerUsage}</strong>&nbsp;{t("common.pills")}
 										</span>
 										<span data-label={t("planner.table.blisters")}>
-											{row.blistersNeeded} × {row.blisterSize}
+											{row.packageType === "bottle"
+												? `${row.plannerUsage} ${t("common.pills")}`
+												: `${row.blistersNeeded} × ${row.blisterSize}`}
 										</span>
 										<span data-label={t("planner.table.available")}>
-											{row.fullBlisters} {t("common.blisters")}
-											{row.loosePills > 0 && ` + ${Math.round(row.loosePills * 10) / 10} ${t("common.pills")}`}
+											{row.packageType === "bottle" ? (
+												`${Math.round(row.loosePills * 10) / 10} ${t("common.pills")}`
+											) : (
+												<>
+													{row.fullBlisters} {t("common.blisters")}
+													{row.loosePills > 0 && ` + ${Math.round(row.loosePills * 10) / 10} ${t("common.pills")}`}
+												</>
+											)}
 										</span>
 										<span
 											data-label={t("table.status")}

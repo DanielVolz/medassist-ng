@@ -18,6 +18,38 @@ You are the release manager for **MedAssist-ng**. Your job is to guide code from
 
 ---
 
+## PR Strategy: One PR per Feature/Fix
+
+**Each feature or bug fix MUST be submitted as its own separate PR.** Do NOT bundle multiple unrelated changes into a single PR.
+
+**Why:**
+- Each change gets its own PR number for release notes (e.g., `(#140)`, `(#141)`)
+- CI tests each change in isolation — failures are easy to trace
+- Git blame and rollbacks are precise
+- Code review stays focused
+
+**Rules:**
+- One logical change = one branch = one PR
+- If a bug fix is discovered while working on a feature, create a **separate branch and PR** for the fix
+- Related changes (e.g., a feature + its tests) belong in the **same** PR
+- Squash-merge is still used — keeps `main` history clean with one commit per PR
+- Branch naming reflects the change: `fix/bottle-stock-calc`, `feat/theme-dropdown`, etc.
+
+**Example — bad (bundled):**
+```
+PR #138: "feat: theme dropdown, fix bottle bugs, fix planner, fix reminders"
+```
+
+**Example — good (separate):**
+```
+PR #138: "fix: bottle-type stock calculations across all subsystems"
+PR #139: "fix: intake reminder past-intake seeding"
+PR #140: "feat: theme dropdown with Light/Dark/System options"
+PR #141: "fix: planner checkbox layout on single line"
+```
+
+---
+
 ## Task 1: Branch, PR, and Merge Workflow
 
 When code changes (features or bug fixes) are complete and tested locally:

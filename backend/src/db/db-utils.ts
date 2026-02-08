@@ -23,12 +23,24 @@ const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 /**
  * Get the data directory path.
- * Checks DATA_DIR env var first, then falls back to resolve(cwd, "data").
- * This ensures local dev (`cd backend && npm run dev`) and Docker both
- * use the same directory when DATA_DIR is set.
+ *
+ * Resolution order:
+ * 1. DATA_DIR env var (set by docker-compose for containers)
+ * 2. Monorepo detection: if ../docker-compose.yml exists, we're in backend/
+ *    subdirectory → use ../data (project root's data folder)
+ * 3. Fallback: resolve(cwd, "data") (running from project root or standalone)
  */
 export function getDataDir(cwd: string = process.cwd()): string {
-	return process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : resolve(cwd, "data");
+	// Docker containers set DATA_DIR explicitly
+	if (process.env.DATA_DIR) return resolve(process.env.DATA_DIR);
+
+	// Local dev: detect if we're in backend/ subdirectory of the monorepo
+	if (existsSync(resolve(cwd, "..", "docker-compose.yml"))) {
+		return resolve(cwd, "..", "data");
+	}
+
+	// Default: data/ relative to cwd (running from project root)
+	return resolve(cwd, "data");
 }
 
 /** Build the database URL from a path */

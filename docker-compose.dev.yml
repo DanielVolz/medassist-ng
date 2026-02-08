@@ -9,6 +9,8 @@ services:
       - ./data:/app/data
     env_file:
       - .env
+    environment:
+      - DATA_DIR=/app/data
     ports:
       - "3000:3000"
     security_opt:

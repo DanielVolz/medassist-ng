@@ -483,6 +483,187 @@ describe("calculateCoverage", () => {
 		// medsLeft = 23 - 1 = 22
 		expect(result.all[0].medsLeft).toBe(22);
 	});
+
+	it("manual mode: stock correction excludes same-day taken doses", () => {
+		// BUG FIX: In manual mode, doses taken on the same day as a stock correction
+		// were counted as consumed (>= comparison with date-only timestamps).
+		// The user already accounted for today's consumption when setting the stock count.
+		//
+		// Scenario: User has 110 pills, took 1 dose today, corrects to 111.
+		// Bug: medsLeft = 111 - 1 = 110 (today's dose counted)
+		// Fix: medsLeft = 111 - 0 = 111 (today's dose excluded)
+		const correctionTime = new Date("2024-03-15T12:00:00Z");
+		const todayMidnight = new Date("2024-03-15T00:00:00").getTime();
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "DailyMed",
+				packCount: 1,
+				blistersPerPack: 14,
+				pillsPerBlister: 14,
+				looseTablets: 0,
+				stockAdjustment: -85, // 196 - 85 = 111 pills
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-01-01T08:00:00",
+					},
+				],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		// User took a dose today (before the correction)
+		const takenDoses = new Set([`1-0-${todayMidnight}`]);
+
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses);
+
+		expect(result.all).toHaveLength(1);
+		// getMedTotal = 196 - 85 = 111
+		// Today's taken dose should NOT be counted (same day as correction)
+		expect(result.all[0].medsLeft).toBe(111);
+	});
+
+	it("manual mode: stock correction counts next-day taken doses", () => {
+		// After a stock correction, doses taken the next day SHOULD be counted.
+		const correctionTime = new Date("2024-03-14T12:00:00Z");
+		const march15Midnight = new Date("2024-03-15T00:00:00").getTime();
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "DailyMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				stockAdjustment: -7, // 30 - 7 = 23 pills
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-01T08:00:00",
+					},
+				],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		// User takes dose on March 15 (day after correction on March 14)
+		const takenDoses = new Set([`1-0-${march15Midnight}`]);
+
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses);
+
+		expect(result.all).toHaveLength(1);
+		// getMedTotal = 30 - 7 = 23
+		// March 15 dose should be counted (day after correction)
+		expect(result.all[0].medsLeft).toBe(22);
+	});
+
+	it("manual mode: no stock correction counts all taken doses", () => {
+		// Without any stock correction, all taken doses should be counted
+		const march14Midnight = new Date("2024-03-14T00:00:00").getTime();
+		const march15Midnight = new Date("2024-03-15T00:00:00").getTime();
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "DailyMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				blisters: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-01T08:00:00",
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		// User took doses on March 14 and 15
+		const takenDoses = new Set([`1-0-${march14Midnight}`, `1-0-${march15Midnight}`]);
+
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses);
+
+		expect(result.all).toHaveLength(1);
+		// Both doses should be counted: medsLeft = 30 - 2 = 28
+		expect(result.all[0].medsLeft).toBe(28);
+	});
+
+	it("manual mode: stock correction with multiple medications", () => {
+		// Regression test: 3 medications (daily, daily, weekly).
+		// Stock correction on all 3. The daily ones have same-day taken doses.
+		const correctionTime = new Date("2024-03-15T12:00:00Z");
+		const todayMidnight = new Date("2024-03-15T00:00:00").getTime();
+
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "DailyMed1",
+				packCount: 1,
+				blistersPerPack: 14,
+				pillsPerBlister: 14,
+				looseTablets: 0,
+				stockAdjustment: -85, // 196 - 85 = 111
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [{ usage: 1, every: 1, start: "2024-01-01T08:00:00" }],
+				updatedAt: correctionTime.toISOString(),
+			},
+			{
+				id: 2,
+				name: "DailyMed2",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				stockAdjustment: -10, // 30 - 10 = 20
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00" }],
+				updatedAt: correctionTime.toISOString(),
+			},
+			{
+				id: 3,
+				name: "WeeklyMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 10,
+				looseTablets: 0,
+				stockAdjustment: -2, // 10 - 2 = 8
+				lastStockCorrectionAt: correctionTime.toISOString(),
+				takenBy: [],
+				blisters: [{ usage: 1, every: 7, start: "2024-01-05T10:00:00" }],
+				updatedAt: correctionTime.toISOString(),
+			},
+		];
+
+		// Daily meds have same-day taken doses, weekly med does not
+		const takenDoses = new Set([`1-0-${todayMidnight}`, `2-0-${todayMidnight}`]);
+
+		const result = calculateCoverage(meds, [], "en", 7, "manual", takenDoses);
+
+		expect(result.all).toHaveLength(3);
+		const daily1 = result.all.find((c) => c.name === "DailyMed1")!;
+		const daily2 = result.all.find((c) => c.name === "DailyMed2")!;
+		const weekly = result.all.find((c) => c.name === "WeeklyMed")!;
+
+		// All three should reflect full stock (same-day doses excluded)
+		expect(daily1.medsLeft).toBe(111);
+		expect(daily2.medsLeft).toBe(20);
+		expect(weekly.medsLeft).toBe(8);
+	});
 });
 
 describe("getStockStatus", () => {

@@ -287,6 +287,114 @@ describe("useRefill", () => {
 		expect(mockLoadMeds).toHaveBeenCalled();
 	});
 
+	it("stock correction uses correct base for bottle type medications", async () => {
+		// BUG FIX: submitStockCorrection used blister formula (packCount * blistersPerPack * pillsPerBlister + looseTablets)
+		// for ALL medications, but getMedTotal() uses only looseTablets + stockAdjustment for bottles.
+		// This mismatch caused the correction to compute the wrong stockAdjustment.
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const bottleMed: Medication = {
+			id: 4,
+			name: "Pills in a Box",
+			packageType: "bottle",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 150,
+			stockAdjustment: -2,
+			takenBy: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-31T20:27:00" }],
+			updatedAt: null,
+		};
+
+		// getMedTotal for bottle = looseTablets + stockAdjustment = 150 + (-2) = 148
+		// getPackageSize for bottle = looseTablets = 150
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		// Pre-fill: user sees 148 pills (148 / 1 = 148 full, 0 partial)
+		act(() => {
+			result.current.openEditStockModal(bottleMed, {
+				all: [{ name: "Pills in a Box", medsLeft: 148, daysLeft: 148 }] as Coverage[],
+			});
+		});
+
+		// User adds +1 → 149 full blisters (pillsPerBlister=1)
+		act(() => {
+			result.current.setEditStockFullBlisters(149);
+			result.current.setEditStockPartialBlisterPills(0);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(4, bottleMed, mockLoadMeds);
+		});
+
+		// desiredTotal = 149 * 1 + 0 = 149
+		// baseTotal (fixed) = getPackageSize(bottle) = looseTablets = 150
+		// newStockAdjustment = 149 - 150 = -1
+		// → getMedTotal = 150 + (-1) = 149 ✓
+		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+			(call: [string, RequestInit]) => call[0] === "/api/medications/4/stock-adjustment"
+		);
+		expect(fetchCall).toBeDefined();
+		const body = JSON.parse(fetchCall![1].body as string);
+		expect(body.stockAdjustment).toBe(-1); // NOT -2 (the old bug)
+	});
+
+	it("stock correction uses correct base for blister type medications", async () => {
+		// Ensure blister type still works correctly after the bottle fix
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const blisterMed: Medication = {
+			id: 2,
+			name: "Blister Med",
+			packageType: "blister",
+			packCount: 1,
+			blistersPerPack: 5,
+			pillsPerBlister: 5,
+			looseTablets: 0,
+			stockAdjustment: 1,
+			takenBy: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-30T21:07:00" }],
+			updatedAt: null,
+		};
+
+		// getMedTotal for blister = 1*5*5 + 0 + 1 = 26
+		// getPackageSize for blister = 1*5*5 + 0 = 25
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		// User sees 26 pills → 5 full blisters (5pills each) + 1 partial
+		act(() => {
+			result.current.openEditStockModal(blisterMed, {
+				all: [{ name: "Blister Med", medsLeft: 26, daysLeft: 26 }] as Coverage[],
+			});
+		});
+
+		// User changes to 27 (+1): 5 full + 2 partial
+		act(() => {
+			result.current.setEditStockFullBlisters(5);
+			result.current.setEditStockPartialBlisterPills(2);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(2, blisterMed, mockLoadMeds);
+		});
+
+		// desiredTotal = 5 * 5 + 2 = 27
+		// baseTotal = getPackageSize(blister) = 1*5*5 + 0 = 25
+		// newStockAdjustment = 27 - 25 = 2
+		// → getMedTotal = 25 + 2 = 27 ✓
+		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+			(call: [string, RequestInit]) => call[0] === "/api/medications/2/stock-adjustment"
+		);
+		expect(fetchCall).toBeDefined();
+		const body = JSON.parse(fetchCall![1].body as string);
+		expect(body.stockAdjustment).toBe(2);
+	});
+
 	it("allows setting state directly", () => {
 		const { result } = renderHook(() => useRefill());
 

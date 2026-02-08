@@ -34,14 +34,18 @@ function formatOpenBlisterAndLoose(
 	return `${openBlisterPills} ${t("common.of")} ${pillsPerBlister} ${t("common.pills")}`;
 }
 
-// Get total pills for a medication
+// Get total pills for a medication (packageType-aware)
 function getMedTotal(med: {
 	packCount: number;
 	blistersPerPack: number;
 	pillsPerBlister: number;
 	looseTablets: number;
 	stockAdjustment?: number | null;
+	packageType?: string;
 }): number {
+	if (med.packageType === "bottle") {
+		return med.looseTablets + (med.stockAdjustment ?? 0);
+	}
 	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
 }
 
@@ -276,9 +280,17 @@ export function DashboardPage() {
 								<div className="reminder-status-row">
 									<span className="reminder-status-label">{t("dashboard.reminders.lastSent")}:</span>
 									<span className="reminder-status-value">
-										{reminderData.lastSent.medName && (
-											<span className="reminder-med-name">{reminderData.lastSent.medName}</span>
-										)}
+										{reminderData.lastSent.medName &&
+											(() => {
+												const medication = meds.find((m) => m.name === reminderData.lastSent!.medName);
+												return medication ? (
+													<span className="med-link clickable" onClick={() => openMedDetail(medication)}>
+														{reminderData.lastSent!.medName}
+													</span>
+												) : (
+													<span className="reminder-med-name">{reminderData.lastSent!.medName}</span>
+												);
+											})()}
 										{reminderData.lastSent.takenBy && (
 											<span className="reminder-taken-by"> ({reminderData.lastSent.takenBy})</span>
 										)}

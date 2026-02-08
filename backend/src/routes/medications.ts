@@ -656,7 +656,13 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const blistersPerPack = row.blistersPerPack ?? 1;
 			const looseTablets = row.looseTablets ?? 0;
 			const stockAdjustment = row.stockAdjustment ?? 0;
-			const originalTotalPills = packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
+			const packageType = row.packageType ?? "blister";
+
+			// For bottle type, looseTablets IS the current stock (no blister math)
+			const originalTotalPills =
+				packageType === "bottle"
+					? looseTablets + stockAdjustment
+					: packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
 
 			// Calculate consumption based on ACTUAL taken doses from dose_tracking
 			// This ensures Planner shows the same "current stock" as the Dashboard/Modal
@@ -735,18 +741,27 @@ export async function medicationRoutes(app: FastifyInstance) {
 			// Calculate AVAILABLE = stock AFTER the planned period (currentStock - usageTotal)
 			const availableAfterPeriod = Math.max(0, currentStock - usageTotal);
 
-			// Calculate stock breakdown for availableAfterPeriod
-			// Consumption order: loose pills first, then from blisters
-			const totalConsumedByEnd = originalTotalPills - availableAfterPeriod;
-			const looseConsumedByEnd = Math.min(totalConsumedByEnd, looseTablets);
-			const loosePillsRemaining = Math.max(0, looseTablets - looseConsumedByEnd);
-			const blisterPillsConsumed = totalConsumedByEnd - looseConsumedByEnd;
-			const originalBlisterPills = originalTotalPills - looseTablets;
-			const blisterPillsRemaining = Math.max(0, originalBlisterPills - blisterPillsConsumed);
+			let fullBlisters: number;
+			let loosePills: number;
 
-			const fullBlisters = pillsPerBlister > 0 ? Math.floor(blisterPillsRemaining / pillsPerBlister) : 0;
-			const openBlisterPills = pillsPerBlister > 0 ? blisterPillsRemaining % pillsPerBlister : 0;
-			const loosePills = loosePillsRemaining + openBlisterPills; // Combine open blister + remaining loose
+			if (packageType === "bottle") {
+				// Bottle type: no blisters, everything is loose pills
+				fullBlisters = 0;
+				loosePills = availableAfterPeriod;
+			} else {
+				// Blister type: calculate stock breakdown
+				// Consumption order: loose pills first, then from blisters
+				const totalConsumedByEnd = originalTotalPills - availableAfterPeriod;
+				const looseConsumedByEnd = Math.min(totalConsumedByEnd, looseTablets);
+				const loosePillsRemaining = Math.max(0, looseTablets - looseConsumedByEnd);
+				const blisterPillsConsumed = totalConsumedByEnd - looseConsumedByEnd;
+				const originalBlisterPills = originalTotalPills - looseTablets;
+				const blisterPillsRemaining = Math.max(0, originalBlisterPills - blisterPillsConsumed);
+
+				fullBlisters = pillsPerBlister > 0 ? Math.floor(blisterPillsRemaining / pillsPerBlister) : 0;
+				const openBlisterPills = pillsPerBlister > 0 ? blisterPillsRemaining % pillsPerBlister : 0;
+				loosePills = loosePillsRemaining + openBlisterPills; // Combine open blister + remaining loose
+			}
 
 			const enough = currentStock >= usageTotal;
 			return {
@@ -759,6 +774,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				fullBlisters,
 				loosePills,
 				enough,
+				packageType,
 			};
 		});
 

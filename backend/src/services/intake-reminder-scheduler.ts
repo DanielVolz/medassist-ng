@@ -409,10 +409,18 @@ async function checkAndSendIntakeRemindersForUser(
 		if (!existingEntry) {
 			// New dose - send first reminder
 			if (isIntakePast) {
-				// Already missed - this is first nagging reminder (count=1)
-				remindersToSend.push({ ...intake, currentSendCount: 1, maxReminders, isAdvanceReminder: false });
+				// Intake time already passed and we have no state entry — this means the scheduler
+				// was not aware of this intake before it happened (e.g., user just enabled reminders).
+				// Seed the state as already handled so repeat reminders can track from here,
+				// but do NOT send a notification for intakes that were missed before tracking started.
+				state.reminders[key] = {
+					firstSentAt: nowMs,
+					lastSentAt: nowMs,
+					sendCount: 0,
+					advanceSent: false,
+				};
 				logger.info(
-					`[IntakeReminder] User ${settings.userId}: First nagging for missed "${intake.medName}" at ${intake.intakeTimeStr} (1/${maxReminders})`
+					`[IntakeReminder] User ${settings.userId}: Seeding state for past "${intake.medName}" at ${intake.intakeTimeStr} (no notification — first detection)`
 				);
 			} else {
 				// Upcoming - this is advance reminder (no counter)
@@ -551,7 +559,10 @@ async function checkAndSendIntakeRemindersForUser(
 		if (hasNaggingReminder && highestSendCount > 0) {
 			// Nagging reminder - show counter
 			const counterStr = `(${highestSendCount}/${maxReminderCount})`;
-			title = language === "de" ? `⚠️ Medikamenten-Erinnerung ${counterStr}` : `⚠️ Medication Reminder ${counterStr}`;
+			title =
+				language === "de"
+					? `⚠️ Erinnerung: Medikamenteneinnahme ${counterStr}`
+					: `⚠️ Reminder: Medication intake ${counterStr}`;
 		} else {
 			// Advance reminder - no counter
 			title = t(tr.push.intakeTitle, { minutes: REMINDER_MINUTES_BEFORE });

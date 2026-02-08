@@ -1,10 +1,11 @@
 /**
  * AppHeader - Main application header with navigation and user menu
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useUnsavedChanges } from "../context";
+import type { ThemePreference } from "../hooks";
 import { useTheme } from "../hooks";
 import { useAuth } from "./Auth";
 
@@ -19,8 +20,24 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 	const location = useLocation();
 	const currentPath = location.pathname;
 	const { user, authState, logout } = useAuth();
-	const { theme, toggleTheme } = useTheme();
+	const { theme, themePreference, setThemePreference } = useTheme();
 	const { confirmNavigation } = useUnsavedChanges();
+
+	// Theme dropdown state
+	const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+	const themeMenuRef = useRef<HTMLDivElement>(null);
+
+	// Close theme dropdown when clicking outside
+	useEffect(() => {
+		if (!themeMenuOpen) return;
+		const handleClickOutside = (e: MouseEvent) => {
+			if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
+				setThemeMenuOpen(false);
+			}
+		};
+		document.addEventListener("click", handleClickOutside);
+		return () => document.removeEventListener("click", handleClickOutside);
+	}, [themeMenuOpen]);
 
 	// Safe navigation that checks for unsaved changes first
 	const safeNavigate = async (path: string) => {
@@ -94,13 +111,62 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 						⚙️
 					</button>
 				)}
-				<button
-					className="icon-btn"
-					onClick={toggleTheme}
-					title={theme === "dark" ? t("tooltips.lightMode") : t("tooltips.darkMode")}
-				>
-					{theme === "dark" ? "☀️" : "🌙"}
-				</button>
+				<div className={`theme-menu ${themeMenuOpen ? "open" : ""}`} ref={themeMenuRef}>
+					<button className="icon-btn" onClick={() => setThemeMenuOpen(!themeMenuOpen)} title={t("theme.title")}>
+						{theme === "dark" ? "🌙" : "☀️"}
+					</button>
+					<div className="theme-dropdown">
+						<button
+							className={`theme-dropdown-item${themePreference === "light" ? " active" : ""}`}
+							onClick={() => {
+								setThemePreference("light");
+								setThemeMenuOpen(false);
+							}}
+						>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+								<circle cx="12" cy="12" r="5" />
+								<line x1="12" y1="1" x2="12" y2="3" />
+								<line x1="12" y1="21" x2="12" y2="23" />
+								<line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+								<line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+								<line x1="1" y1="12" x2="3" y2="12" />
+								<line x1="21" y1="12" x2="23" y2="12" />
+								<line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+								<line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+							</svg>
+							{t("theme.light")}
+							{themePreference === "light" && <span className="theme-check">✓</span>}
+						</button>
+						<button
+							className={`theme-dropdown-item${themePreference === "dark" ? " active" : ""}`}
+							onClick={() => {
+								setThemePreference("dark");
+								setThemeMenuOpen(false);
+							}}
+						>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+								<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+							</svg>
+							{t("theme.dark")}
+							{themePreference === "dark" && <span className="theme-check">✓</span>}
+						</button>
+						<button
+							className={`theme-dropdown-item${themePreference === "system" ? " active" : ""}`}
+							onClick={() => {
+								setThemePreference("system");
+								setThemeMenuOpen(false);
+							}}
+						>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+								<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+								<line x1="8" y1="21" x2="16" y2="21" />
+								<line x1="12" y1="17" x2="12" y2="21" />
+							</svg>
+							{t("theme.system")}
+							{themePreference === "system" && <span className="theme-check">✓</span>}
+						</button>
+					</div>
+				</div>
 				{authState?.authEnabled && user && (
 					<div className={`user-menu ${userDropdownOpen ? "open" : ""}`}>
 						<button className="user-menu-btn" onClick={() => setUserDropdownOpen(!userDropdownOpen)}>

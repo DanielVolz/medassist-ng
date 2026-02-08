@@ -2214,4 +2214,250 @@ describe("E2E Tests with Real Routes", () => {
 			expect(medsResponse.json()[0].packCount).toBe(10);
 		});
 	});
+
+	// ---------------------------------------------------------------------------
+	// Package Type (bottle vs blister) Tests
+	// ---------------------------------------------------------------------------
+
+	describe("Package type handling (bottle vs blister)", () => {
+		const bottleMedication = {
+			name: "Vitamin D Drops",
+			packageType: "bottle",
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 120,
+			blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+		};
+
+		const blisterMedication = {
+			name: "Aspirin Blister",
+			packageType: "blister",
+			packCount: 2,
+			blistersPerPack: 3,
+			pillsPerBlister: 10,
+			looseTablets: 5,
+			blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+		};
+
+		it("should create and return bottle type medication", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: bottleMedication,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.packageType).toBe("bottle");
+			expect(data.looseTablets).toBe(120);
+		});
+
+		it("should return packageType in shared schedule for bottle type", async () => {
+			// Create bottle medication with takenBy
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: { ...bottleMedication, takenBy: ["Daniel"] },
+			});
+
+			// Create share token
+			const shareResponse = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: { takenBy: "Daniel", scheduleDays: 30 },
+			});
+			expect(shareResponse.statusCode).toBe(200);
+			const { token } = shareResponse.json();
+
+			// Get shared schedule
+			const scheduleResponse = await app.inject({
+				method: "GET",
+				url: `/share/${token}`,
+			});
+
+			expect(scheduleResponse.statusCode).toBe(200);
+			const data = scheduleResponse.json();
+			expect(data.medications).toHaveLength(1);
+			expect(data.medications[0].packageType).toBe("bottle");
+			// Bottle totalPills = looseTablets + stockAdjustment (no blister math)
+			expect(data.medications[0].totalPills).toBe(120);
+		});
+
+		it("should calculate correct totalPills for shared blister medication", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: { ...blisterMedication, takenBy: ["Daniel"] },
+			});
+
+			const shareResponse = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: { takenBy: "Daniel", scheduleDays: 30 },
+			});
+			const { token } = shareResponse.json();
+
+			const scheduleResponse = await app.inject({
+				method: "GET",
+				url: `/share/${token}`,
+			});
+
+			expect(scheduleResponse.statusCode).toBe(200);
+			const data = scheduleResponse.json();
+			expect(data.medications).toHaveLength(1);
+			expect(data.medications[0].packageType).toBe("blister");
+			// Blister totalPills = 2 * 3 * 10 + 5 = 65
+			expect(data.medications[0].totalPills).toBe(65);
+		});
+
+		it("should calculate correct refill totalPillsAdded for bottle type", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: bottleMedication,
+			});
+			const medId = createResponse.json().id;
+
+			// Refill bottle: only loosePillsAdded matters, packs should add 0 pills
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 0, loosePillsAdded: 30 },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const data = refillResponse.json();
+			expect(data.refill.totalPillsAdded).toBe(30);
+			// newStock.totalPills should be looseTablets only (no blister math)
+			expect(data.newStock.totalPills).toBe(150); // 120 + 30
+		});
+
+		it("should calculate correct refill totalPillsAdded for blister type", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: blisterMedication,
+			});
+			const medId = createResponse.json().id;
+
+			// Refill blister: 1 pack = 3 blisters * 10 pills = 30 pills + 5 loose
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 5 },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const data = refillResponse.json();
+			expect(data.refill.totalPillsAdded).toBe(35); // 1*30 + 5
+		});
+
+		it("should return correct totalPillsAdded in refill history for bottle type", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: bottleMedication,
+			});
+			const medId = createResponse.json().id;
+
+			// Add refill
+			await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 0, loosePillsAdded: 25 },
+			});
+
+			// Get refill history
+			const historyResponse = await app.inject({
+				method: "GET",
+				url: `/medications/${medId}/refills`,
+			});
+
+			expect(historyResponse.statusCode).toBe(200);
+			const refills = historyResponse.json();
+			expect(refills).toHaveLength(1);
+			// For bottle type, totalPillsAdded = loosePillsAdded only
+			expect(refills[0].totalPillsAdded).toBe(25);
+		});
+
+		it("should export and import bottle type medication correctly", async () => {
+			// Create bottle medication
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: bottleMedication,
+			});
+
+			// Export
+			const exportResponse = await app.inject({
+				method: "GET",
+				url: "/export",
+			});
+
+			expect(exportResponse.statusCode).toBe(200);
+			const exportData = exportResponse.json();
+			expect(exportData.medications).toHaveLength(1);
+			expect(exportData.medications[0].inventory.packageType).toBe("bottle");
+			expect(exportData.medications[0].inventory.looseTablets).toBe(120);
+
+			// Clear and re-import
+			await clearData(testClient);
+			await testClient.execute(
+				"INSERT INTO users (id, username, auth_provider) VALUES (999999999, '__anonymous__', 'anonymous')"
+			);
+
+			const importResponse = await app.inject({
+				method: "POST",
+				url: "/import",
+				payload: exportData,
+			});
+
+			expect(importResponse.statusCode).toBe(200);
+			expect(importResponse.json().success).toBe(true);
+
+			// Verify imported medication has correct packageType
+			const medsResponse = await app.inject({
+				method: "GET",
+				url: "/medications",
+			});
+
+			expect(medsResponse.json()).toHaveLength(1);
+			const med = medsResponse.json()[0];
+			expect(med.name).toBe("Vitamin D Drops");
+			expect(med.packageType).toBe("bottle");
+			expect(med.looseTablets).toBe(120);
+		});
+
+		it("should default to blister when importing without packageType", async () => {
+			const importData = {
+				version: "1.0",
+				exportedAt: new Date().toISOString(),
+				medications: [
+					{
+						_exportId: "med-1",
+						name: "Old Export Med",
+						inventory: { packCount: 2, blistersPerPack: 3, pillsPerBlister: 10, looseTablets: 0 },
+						schedules: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					},
+				],
+			};
+
+			const importResponse = await app.inject({
+				method: "POST",
+				url: "/import",
+				payload: importData,
+			});
+
+			expect(importResponse.statusCode).toBe(200);
+
+			const medsResponse = await app.inject({
+				method: "GET",
+				url: "/medications",
+			});
+
+			expect(medsResponse.json()).toHaveLength(1);
+			expect(medsResponse.json()[0].packageType).toBe("blister");
+		});
+	});
 });

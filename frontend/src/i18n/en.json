@@ -176,7 +176,8 @@
     "badge": "Plan your supply",
     "from": "From",
     "until": "Until",
-    "includeUntilStart": "Include consumption from today until start date",
+    "includeUntilStart": "Include current consumption",
+    "includeUntilStartTooltip": "When enabled, pills consumed between today and the selected start date are subtracted from your current stock. This gives a more accurate picture of how much you'll actually have left when the planning period begins.",
     "calculate": "Calculate",
     "calculating": "Calculating...",
     "sendEmail": "📧 Send via Email",
@@ -289,6 +290,12 @@
     "hasNotes": "Has notes",
     "lightMode": "Switch to light mode",
     "darkMode": "Switch to dark mode"
+  },
+  "theme": {
+    "title": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
   },
   "dose": {
     "takenBy": "taken by",
@@ -478,10 +485,9 @@
     "checking": "Checking...",
     "upToDate": "You're up to date!",
     "updateAvailable": "Update available",
-    "viewOnGitHub": "View on GitHub",
     "downloadUpdate": "Download Update",
     "checkFailed": "Could not check for updates",
-    "lastChecked": "Last checked",
+    "viewOnGitHub": "View on GitHub",
     "github": "GitHub",
     "license": "MIT License",
     "copyright": "© {{year}} Daniel Volz",

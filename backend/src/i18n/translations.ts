@@ -156,7 +156,7 @@ const translations: Record<Language, TranslationKeys> = {
 		push: {
 			stockTitle: "MedAssist-ng: 1 Medication Running Low",
 			stockTitleMultiple: "MedAssist-ng: {count} Medications Running Low",
-			intakeTitle: "💊 Medication Reminder in {minutes} min",
+			intakeTitle: "💊 Reminder: Medication intake in {minutes} min",
 			pillsLeft: "{count} pills",
 			daysLeft: "{count} days left",
 			pillsAt: "{count} pills at {time}",
@@ -210,7 +210,7 @@ const translations: Record<Language, TranslationKeys> = {
 		push: {
 			stockTitle: "MedAssist-ng: 1 Medikament wird knapp",
 			stockTitleMultiple: "MedAssist-ng: {count} Medikamente werden knapp",
-			intakeTitle: "💊 Einnahme-Erinnerung in {minutes} Min.",
+			intakeTitle: "💊 Erinnerung: Medikamenteneinnahme in {minutes} Min.",
 			pillsLeft: "{count} Tabletten",
 			daysLeft: "{count} Tage übrig",
 			pillsAt: "{count} Tabletten um {time}",

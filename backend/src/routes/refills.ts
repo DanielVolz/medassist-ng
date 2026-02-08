@@ -78,9 +78,13 @@ export async function refillRoutes(app: FastifyInstance) {
 			})
 			.returning();
 
-		// Calculate pills added for response
-		const pillsPerPack = med.blistersPerPack * med.pillsPerBlister;
-		const totalPillsAdded = packsAdded * pillsPerPack + loosePillsAdded;
+		// Calculate pills added for response (packageType-aware)
+		const isBottle = (med.packageType ?? "blister") === "bottle";
+		const pillsPerPack = isBottle ? 0 : med.blistersPerPack * med.pillsPerBlister;
+		const totalPillsAdded = isBottle ? loosePillsAdded : packsAdded * pillsPerPack + loosePillsAdded;
+		const newTotalPills = isBottle
+			? newLooseTablets + (med.stockAdjustment ?? 0)
+			: newPackCount * pillsPerPack + newLooseTablets + (med.stockAdjustment ?? 0);
 
 		return {
 			success: true,
@@ -94,7 +98,7 @@ export async function refillRoutes(app: FastifyInstance) {
 			newStock: {
 				packCount: newPackCount,
 				looseTablets: newLooseTablets,
-				totalPills: newPackCount * pillsPerPack + newLooseTablets,
+				totalPills: newTotalPills,
 			},
 		};
 	});
@@ -120,13 +124,14 @@ export async function refillRoutes(app: FastifyInstance) {
 			.where(eq(refillHistory.medicationId, medId))
 			.orderBy(desc(refillHistory.refillDate));
 
-		const pillsPerPack = med.blistersPerPack * med.pillsPerBlister;
+		const isBottle = (med.packageType ?? "blister") === "bottle";
+		const pillsPerPack = isBottle ? 0 : med.blistersPerPack * med.pillsPerBlister;
 
 		return refills.map((r) => ({
 			id: r.id,
 			packsAdded: r.packsAdded,
 			loosePillsAdded: r.loosePillsAdded,
-			totalPillsAdded: r.packsAdded * pillsPerPack + r.loosePillsAdded,
+			totalPillsAdded: isBottle ? r.loosePillsAdded : r.packsAdded * pillsPerPack + r.loosePillsAdded,
 			refillDate: r.refillDate,
 		}));
 	});

@@ -67,6 +67,7 @@ export type PlannerRow = {
 	fullBlisters: number;
 	loosePills: number;
 	enough: boolean;
+	packageType?: PackageType;
 };
 
 export type RefillEntry = {
@@ -170,6 +171,7 @@ export type SharedMedication = {
 	doseUnit?: DoseUnit | null;
 	imageUrl?: string | null;
 	totalPills: number;
+	packageType?: PackageType;
 	packCount: number;
 	blistersPerPack: number;
 	looseTablets: number;

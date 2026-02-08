@@ -212,19 +212,20 @@ Read the actual code changes (not just commit messages) to understand what was a
 - Use `### Heading` for sections
 - Use **bold** for feature names in bullet points
 - Keep descriptions on the same line as the feature name
-- Minimal emoji usage (sparingly, not on every line)
+- **No emojis** — do not use emoji in headings or bullet points
+- **Include commit references** — each bullet point must end with the PR number (e.g., `(#136)`) or short commit hash (e.g., `(ab12cd3)`) linking to the commit/PR. Use PR numbers when available.
 - Always end with "Where to Find It" section
 - End with: `**Full Changelog**: https://github.com/DanielVolz/medassist-ng/compare/vPREV...vNEW`
 
 **ONLY include user-relevant changes.** DO NOT include:
-- ❌ Technical implementation details (new columns, endpoints, database changes)
-- ❌ Number of tests added
-- ❌ Internal API changes (unless breaking)
-- ❌ Excessive emoji on every bullet point
-- ❌ .gitignore changes or other developer-only file changes
-- ❌ AI/Copilot instruction updates
-- ❌ CI/CD workflow changes (unless affecting users)
-- ❌ Code refactoring without user-visible changes
+- Technical implementation details (new columns, endpoints, database changes)
+- Number of tests added
+- Internal API changes (unless breaking)
+- Emojis anywhere in the release notes
+- .gitignore changes or other developer-only file changes
+- AI/Copilot instruction updates
+- CI/CD workflow changes (unless affecting users)
+- Code refactoring without user-visible changes
 
 ### Example: Good Release Notes
 
@@ -235,14 +236,14 @@ This release introduces a medication refill tracking feature and improves the mo
 
 ### New Features
 
-- **Medication Refill**: Track when you refill your medications with a single click. Add full packs or individual pills and view complete refill history.
-- **Automatic Stock Updates**: Stock levels are automatically recalculated after each refill.
-- **Refill History**: Each medication shows a complete history of all refills with timestamps.
+- **Medication Refill**: Track when you refill your medications with a single click. Add full packs or individual pills and view complete refill history. (#120)
+- **Automatic Stock Updates**: Stock levels are automatically recalculated after each refill. (#120)
+- **Refill History**: Each medication shows a complete history of all refills with timestamps. (#122)
 
-### Mobile Improvements
+### Improvements
 
-- **Centered Tooltips**: Info tooltips now display centered on screen for better readability.
-- **Touch-friendly**: Tooltips close automatically when scrolling on touch devices.
+- **Centered Tooltips**: Info tooltips now display centered on screen for better readability. (#125)
+- **Touch-friendly**: Tooltips close automatically when scrolling on touch devices. (#125)
 
 ### Where to Find It
 
@@ -294,6 +295,30 @@ gh release create vX.Y.Z --title "vX.Y.Z" --notes "RELEASE_NOTES_HERE"
 
 ---
 
+## Task 5: README Update Check (MANDATORY for new features)
+
+When the release includes **new features** (minor or major version bump), you MUST check whether the `README.md` needs to be updated **before** executing the release.
+
+### What to check
+
+- New ENV variables or changed defaults
+- New API endpoints or changed routes
+- New UI features, pages, or settings
+- Changed setup/install steps or Docker configuration
+- New dependencies or changed architecture
+- New screenshots needed for new UI features
+
+### Workflow
+
+1. Review the changes included in the release
+2. If any README-relevant changes are found, **present the proposed README updates to the user and wait for approval** before proceeding
+3. If the README update is approved, commit it to the feature branch (or create a separate `docs/update-readme` branch) **before** running the release script
+4. Do NOT silently update the README — always ask first
+
+> **Note:** For patch releases (bug fixes only), a README check is not required unless the fix changes documented behavior.
+
+---
+
 ## Complete Workflow Summary
 
 ```
@@ -308,11 +333,12 @@ Ready for release?
         ↓
 5. Check current version (git tag + package.json)
 6. Analyze changes → determine SemVer level
-7. Run ./scripts/release.sh <patch|minor|major>
+7. If minor/major: check README.md for needed updates (Task 5)
+8. Run ./scripts/release.sh <patch|minor|major>
    (or manually: branch → version bump → PR → CI → merge → tag)
         ↓
-8. Write release notes (mandatory for minor/major)
-9. Publish GitHub release
+9. Write release notes (mandatory for minor/major)
+10. Publish GitHub release
         ↓
 Docker images built automatically via CI
 ```

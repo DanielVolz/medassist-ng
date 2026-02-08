@@ -82,7 +82,7 @@ describe("AppHeader", () => {
 		});
 	});
 
-	it("renders theme toggle button", async () => {
+	it("renders theme menu button", async () => {
 		const mockOnOpenProfile = vi.fn();
 		const mockOnOpenAbout = vi.fn();
 
@@ -95,10 +95,31 @@ describe("AppHeader", () => {
 		);
 
 		await waitFor(() => {
-			const buttons = screen.getAllByRole("button");
-			const themeBtn = buttons.find((btn) => btn.textContent?.includes("🌙") || btn.textContent?.includes("☀️"));
+			const themeBtn = screen.getByTitle(/theme\.title/i);
 			expect(themeBtn).toBeInTheDocument();
 		});
+	});
+
+	it("opens theme dropdown and shows Light/Dark/System options", async () => {
+		const mockOnOpenProfile = vi.fn();
+		const mockOnOpenAbout = vi.fn();
+
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<AuthProvider>
+					<AppHeader onOpenProfile={mockOnOpenProfile} onOpenAbout={mockOnOpenAbout} />
+				</AuthProvider>
+			</MemoryRouter>
+		);
+
+		await waitFor(() => {
+			const themeBtn = screen.getByTitle(/theme\.title/i);
+			fireEvent.click(themeBtn);
+		});
+
+		expect(screen.getByText(/theme\.light/i)).toBeInTheDocument();
+		expect(screen.getByText(/theme\.dark/i)).toBeInTheDocument();
+		expect(screen.getByText(/theme\.system/i)).toBeInTheDocument();
 	});
 
 	it("renders settings button when auth is disabled", async () => {

@@ -526,7 +526,7 @@ export function MedicationsPage() {
 							</label>
 						</>
 					)}
-					<label>
+					<label className="full">
 						{t("form.pillWeight")} ({form.doseUnit})
 						<div className="dose-input-group">
 							<input

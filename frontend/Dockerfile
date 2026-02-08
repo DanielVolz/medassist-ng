@@ -32,6 +32,11 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runner
 
+# Redirect envsubst output to /tmp (writable under read_only: true)
+# and update nginx main config to include from there instead of /etc/nginx/conf.d/
+ENV NGINX_ENVSUBST_OUTPUT_DIR=/tmp
+RUN sed -i 's|include /etc/nginx/conf.d/\*.conf;|include /tmp/default.conf;|' /etc/nginx/nginx.conf
+
 # Copy custom nginx config as template for envsubst processing
 # nginx-unprivileged automatically substitutes env vars in .template files
 COPY nginx.conf /etc/nginx/templates/default.conf.template

@@ -5,13 +5,14 @@ import { and, eq, like } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
+import { getDataDir } from "../db/db-utils.js";
 import { doseTracking, medications } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
 import { type Intake, parseIntakesJson, parseLocalDateTime, parseTakenByJson } from "../utils/scheduler-utils.js";
 
-const IMAGES_DIR = resolve(process.cwd(), "data/images");
+const IMAGES_DIR = resolve(getDataDir(), "images");
 
 // New intake schema with per-intake takenBy
 const intakeSchema = z.object({

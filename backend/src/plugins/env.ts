@@ -1,7 +1,10 @@
+import { existsSync } from "node:fs";
 import dotenv from "dotenv";
 import { z } from "zod";
 
-dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
+// Load .env: try cwd first, then parent dir (for local dev running from backend/)
+const envPath = process.env.DOTENV_PATH || (existsSync(".env") ? ".env" : "../.env");
+dotenv.config({ path: envPath });
 
 const EnvSchema = z.object({
 	NODE_ENV: z.enum(["development", "production", "test"]).default("production"),

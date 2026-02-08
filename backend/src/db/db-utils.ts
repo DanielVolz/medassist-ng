@@ -21,6 +21,16 @@ const migrationsFolder = resolve(__dirname, "../../drizzle");
 // Path & Directory utilities
 // =============================================================================
 
+/**
+ * Get the data directory path.
+ * Checks DATA_DIR env var first, then falls back to resolve(cwd, "data").
+ * This ensures local dev (`cd backend && npm run dev`) and Docker both
+ * use the same directory when DATA_DIR is set.
+ */
+export function getDataDir(cwd: string = process.cwd()): string {
+	return process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : resolve(cwd, "data");
+}
+
 /** Build the database URL from a path */
 export function buildDbUrl(dbPath: string): string {
 	return `file:${dbPath}`;
@@ -28,7 +38,7 @@ export function buildDbUrl(dbPath: string): string {
 
 /** Get data directory and database path */
 export function getDbPaths(cwd: string = process.cwd()): { dataDir: string; dbPath: string; url: string } {
-	const dataDir = resolve(cwd, "data");
+	const dataDir = getDataDir(cwd);
 	const dbPath = resolve(dataDir, "medassist-ng.db");
 	const url = buildDbUrl(dbPath);
 	return { dataDir, dbPath, url };

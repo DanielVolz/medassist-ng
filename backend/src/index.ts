@@ -10,6 +10,7 @@ import sensible from "@fastify/sensible";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import { migrationsReady } from "./db/client.js";
+import { getDataDir } from "./db/db-utils.js";
 import { env } from "./plugins/env.js";
 import { authRoutes } from "./routes/auth.js";
 import { doseRoutes } from "./routes/doses.js";
@@ -66,7 +67,7 @@ export async function createApp(options?: {
 		accessTtlMinutes: options?.accessTtlMinutes ?? 15,
 		refreshTtlDays: options?.refreshTtlDays ?? 7,
 		isProduction: options?.isProduction ?? false,
-		imagesDir: options?.imagesDir ?? resolve(process.cwd(), "data/images"),
+		imagesDir: options?.imagesDir ?? resolve(getDataDir(), "images"),
 	};
 
 	const app = Fastify({

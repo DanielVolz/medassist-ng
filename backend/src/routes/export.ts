@@ -5,13 +5,14 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
+import { getDataDir } from "../db/db-utils.js";
 import { doseTracking, medications, shareTokens, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
 import { parseIntakesJson, parseTakenByJson } from "../utils/scheduler-utils.js";
 
-const IMAGES_DIR = resolve(process.cwd(), "data/images");
+const IMAGES_DIR = resolve(getDataDir(), "images");
 
 // =============================================================================
 // Export Format Version (bump this when format changes)

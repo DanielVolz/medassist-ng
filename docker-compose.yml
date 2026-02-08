@@ -35,6 +35,8 @@ services:
   frontend:
     image: ghcr.io/danielvolz/medassist-ng-frontend:latest
     container_name: medassist-ng-frontend
+    environment:
+      - BACKEND_URL=backend:3000
     ports:
       - "4174:8080"
     networks:

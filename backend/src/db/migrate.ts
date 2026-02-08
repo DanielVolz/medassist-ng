@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Client, createClient } from "@libsql/client";
@@ -5,7 +6,9 @@ import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 
-dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
+// Load .env: try cwd first, then parent dir (for local dev running from backend/)
+const envPath = process.env.DOTENV_PATH || (existsSync(".env") ? ".env" : "../.env");
+dotenv.config({ path: envPath });
 
 // Get migrations folder path (relative to this file's location)
 const __filename = fileURLToPath(import.meta.url);

@@ -5,13 +5,14 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Import utility functions from db-utils (no side effects, unlike client.ts which initializes the DB)
 import {
 	buildDbUrl,
 	ensureDataDirectory,
 	ensureDefaultUser,
+	getDataDir,
 	getDbPaths,
 	repairOrphanedDoseIds,
 	repairTrailingHyphenDoseIds,
@@ -144,8 +145,53 @@ describe("Database Client Utilities", () => {
 		});
 	});
 
+	describe("getDataDir", () => {
+		const originalDataDir = process.env.DATA_DIR;
+
+		afterEach(() => {
+			if (originalDataDir === undefined) {
+				delete process.env.DATA_DIR;
+			} else {
+				process.env.DATA_DIR = originalDataDir;
+			}
+		});
+
+		it("should use DATA_DIR env var when set", () => {
+			process.env.DATA_DIR = "/custom/data";
+			expect(getDataDir()).toBe("/custom/data");
+		});
+
+		it("should resolve relative DATA_DIR to absolute", () => {
+			process.env.DATA_DIR = "../data";
+			const result = getDataDir();
+			expect(result).not.toContain("..");
+			expect(result).toMatch(/\/data$/);
+		});
+
+		it("should fall back to cwd/data when DATA_DIR is not set", () => {
+			delete process.env.DATA_DIR;
+			expect(getDataDir("/app")).toBe("/app/data");
+		});
+
+		it("should use DATA_DIR even when cwd is provided", () => {
+			process.env.DATA_DIR = "/override/data";
+			expect(getDataDir("/app")).toBe("/override/data");
+		});
+	});
+
 	describe("getDbPaths", () => {
+		const originalDataDir = process.env.DATA_DIR;
+
+		afterEach(() => {
+			if (originalDataDir === undefined) {
+				delete process.env.DATA_DIR;
+			} else {
+				process.env.DATA_DIR = originalDataDir;
+			}
+		});
+
 		it("should return correct paths based on cwd", () => {
+			delete process.env.DATA_DIR;
 			const paths = getDbPaths("/app");
 			expect(paths.dataDir).toBe("/app/data");
 			expect(paths.dbPath).toBe("/app/data/medassist-ng.db");
@@ -153,9 +199,17 @@ describe("Database Client Utilities", () => {
 		});
 
 		it("should use process.cwd() by default", () => {
+			delete process.env.DATA_DIR;
 			const paths = getDbPaths();
 			expect(paths.dataDir).toContain("data");
 			expect(paths.dbPath).toContain("medassist-ng.db");
+		});
+
+		it("should respect DATA_DIR env var", () => {
+			process.env.DATA_DIR = "/custom/data";
+			const paths = getDbPaths("/app");
+			expect(paths.dataDir).toBe("/custom/data");
+			expect(paths.dbPath).toBe("/custom/data/medassist-ng.db");
 		});
 	});
 

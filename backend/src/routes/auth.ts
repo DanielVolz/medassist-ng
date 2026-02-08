@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
+import { getDataDir } from "../db/db-utils.js";
 import { refreshTokens, users } from "../db/schema.js";
 import { getAuthState, requireAuth } from "../plugins/auth.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -476,7 +477,7 @@ export async function authRoutes(app: FastifyInstance) {
 			// Save file
 			const fs = await import("node:fs/promises");
 			const path = await import("node:path");
-			const imagesDir = path.join(process.cwd(), "data", "images");
+			const imagesDir = path.join(getDataDir(), "images");
 			await fs.mkdir(imagesDir, { recursive: true });
 
 			const buffer = await data.toBuffer();
@@ -523,7 +524,7 @@ export async function authRoutes(app: FastifyInstance) {
 			const fs = await import("node:fs/promises");
 			const path = await import("node:path");
 			try {
-				await fs.unlink(path.join(process.cwd(), "data", "images", user.avatarUrl));
+				await fs.unlink(path.join(getDataDir(), "images", user.avatarUrl));
 			} catch {
 				// Ignore if file doesn't exist
 			}
@@ -556,7 +557,7 @@ export async function authRoutes(app: FastifyInstance) {
 				const fs = await import("node:fs/promises");
 				const path = await import("node:path");
 				try {
-					await fs.unlink(path.join(process.cwd(), "data", "images", user.avatarUrl));
+					await fs.unlink(path.join(getDataDir(), "images", user.avatarUrl));
 				} catch {
 					// Ignore if file doesn't exist
 				}

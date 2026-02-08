@@ -1,4 +1,5 @@
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
@@ -7,6 +8,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import {
 	ensureDataDirectory,
 	ensureDefaultUser,
+	getDataDir,
 	getDbPaths,
 	repairOrphanedDoseIds,
 	repairTrailingHyphenDoseIds,
@@ -19,6 +21,7 @@ export {
 	buildDbUrl,
 	ensureDataDirectory,
 	ensureDefaultUser,
+	getDataDir,
 	getDbPaths,
 	repairOrphanedDoseIds,
 	repairTrailingHyphenDoseIds,
@@ -26,7 +29,9 @@ export {
 	runDrizzleMigrations,
 } from "./db-utils.js";
 
-dotenv.config({ path: process.env.DOTENV_PATH || ".env" });
+// Load .env: try cwd first, then parent dir (for local dev running from backend/)
+const envPath = process.env.DOTENV_PATH || (existsSync(".env") ? ".env" : "../.env");
+dotenv.config({ path: envPath });
 
 // =============================================================================
 // Database initialization (runs on import)

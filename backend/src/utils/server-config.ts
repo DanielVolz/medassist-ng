@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { CookieSerializeOptions } from "@fastify/cookie";
+import { getDataDir } from "../db/db-utils.js";
 
 /**
  * Parse comma-separated CORS origins string
@@ -81,8 +82,7 @@ export function buildAppConfig(options: AppConfigOptions): AppConfig {
  * Ensure images directory exists
  */
 export function ensureImagesDirectory(cwd?: string): string {
-	const basePath = cwd || process.cwd();
-	const imagesDir = resolve(basePath, "data/images");
+	const imagesDir = resolve(getDataDir(cwd), "images");
 	if (!existsSync(imagesDir)) {
 		mkdirSync(imagesDir, { recursive: true });
 	}

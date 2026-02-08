@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
+import { getDataDir } from "../db/db-utils.js";
 import { medications, userSettings } from "../db/schema.js";
 import { getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
@@ -25,7 +26,7 @@ import {
 
 const REMINDER_HOUR = parseInt(process.env.REMINDER_HOUR ?? "6", 10); // Default 6:00 AM local time
 
-const reminderStateFile = resolve(process.cwd(), "data", "reminder-state.json");
+const reminderStateFile = resolve(getDataDir(), "reminder-state.json");
 
 function loadReminderState(): ReminderState {
 	try {

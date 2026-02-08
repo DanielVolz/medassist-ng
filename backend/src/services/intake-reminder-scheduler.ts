@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { and, eq, gte, lte } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
+import { getDataDir } from "../db/db-utils.js";
 import { doseTracking, medications } from "../db/schema.js";
 import { getDateLocale, getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
@@ -25,7 +26,7 @@ import { updateReminderSentTime, updateUserReminderSentTime } from "./reminder-s
 const REMINDER_MINUTES_BEFORE = parseInt(process.env.REMINDER_MINUTES_BEFORE ?? "15", 10);
 const CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute
 
-const intakeReminderStateFile = resolve(process.cwd(), "data", "intake-reminder-state.json");
+const intakeReminderStateFile = resolve(getDataDir(), "intake-reminder-state.json");
 
 function loadIntakeReminderState(): IntakeReminderState {
 	try {

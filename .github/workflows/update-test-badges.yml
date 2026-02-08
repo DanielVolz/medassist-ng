@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   update-badges:
@@ -92,17 +91,14 @@ jobs:
             exit 0
           fi
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: 'chore: update test count badges'
-          title: 'chore: update test count badges'
-          body: |
-            Automated update of test count badges in README.md.
-            
-            - Backend tests: ${{ steps.backend-tests.outputs.count }}
-            - Frontend tests: ${{ steps.frontend-tests.outputs.count }}
-          branch: chore/update-test-badges
-          delete-branch: true
-          labels: automated
+      - name: Commit and push badge updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "No badge changes to commit"
+          else
+            git commit -m "chore: update test count badges [skip ci]"
+            git push
+          fi

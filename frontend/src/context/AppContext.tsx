@@ -615,7 +615,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settings.repeatRemindersEnabled !== savedSettings.repeatRemindersEnabled ||
 			settings.reminderRepeatIntervalMinutes !== savedSettings.reminderRepeatIntervalMinutes ||
 			settings.maxNaggingReminders !== savedSettings.maxNaggingReminders ||
-			settings.stockCalculationMode !== savedSettings.stockCalculationMode
+			settings.stockCalculationMode !== savedSettings.stockCalculationMode ||
+			settings.shareStockStatus !== savedSettings.shareStockStatus ||
+			settings.expiryWarningDays !== savedSettings.expiryWarningDays
 		);
 	}, [settingsHook.settings, settingsHook.savedSettings]);
 

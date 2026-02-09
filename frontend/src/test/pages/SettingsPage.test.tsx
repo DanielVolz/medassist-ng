@@ -30,6 +30,7 @@ const createMockContext = (overrides = {}) => ({
 		skipReminderIfTaken: true,
 		skipRemindersForTakenDoses: false,
 		stockCalculationMode: "automatic",
+		shareStockStatus: true,
 		stockCheckTime: "08:00",
 		intakeReminderTime: "09:00",
 	},
@@ -635,6 +636,58 @@ describe("SettingsPage stock calculation mode", () => {
 	});
 });
 
+describe("SettingsPage share stock status", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				shareStockStatus: true,
+			},
+		});
+	});
+
+	it("renders share stock status toggle", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/settings\.stock\.shareStockStatus$/)).toBeInTheDocument();
+	});
+
+	it("toggles share stock status setting", () => {
+		const setSettings = vi.fn();
+		mockContextValue = createMockContext({
+			setSettings,
+			settings: {
+				...createMockContext().settings,
+				shareStockStatus: true,
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		// Find the toggle by its associated label text
+		const label = screen.getByText(/settings\.stock\.shareStockStatus$/);
+		const settingRow = label.closest(".setting-row");
+		const checkbox = settingRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+		expect(checkbox).toBeTruthy();
+		expect(checkbox.checked).toBe(true);
+
+		// Toggle it off
+		fireEvent.click(checkbox);
+
+		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ shareStockStatus: false }));
+	});
+});
+
 describe("SettingsPage repeat reminders", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -898,7 +951,7 @@ describe("SettingsPage schedule overview", () => {
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText(/settings\.schedule\.lastSent/i)).toBeInTheDocument();
+		expect(screen.getByText(/settings\.schedule\.lastIntakeSent/i)).toBeInTheDocument();
 	});
 });
 
@@ -964,7 +1017,8 @@ describe("SettingsPage stock display thresholds", () => {
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText(/settings\.stock\.lowStockDays/i)).toBeInTheDocument();
+		// Low stock is now shown as a chip label, not plain text
+		expect(screen.getByText(/status\.lowStock/i)).toBeInTheDocument();
 	});
 
 	it("shows high stock days input", () => {
@@ -974,7 +1028,8 @@ describe("SettingsPage stock display thresholds", () => {
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText(/settings\.stock\.highStockDays/i)).toBeInTheDocument();
+		// High stock is now shown as a chip label, not plain text
+		expect(screen.getByText(/status\.highStock/i)).toBeInTheDocument();
 	});
 
 	it("allows changing high stock days", () => {
@@ -1011,14 +1066,14 @@ describe("SettingsPage repeat daily reminders", () => {
 		});
 	});
 
-	it("shows repeat daily reminders toggle", () => {
+	it("shows repeat daily reminders toggle in notifications", () => {
 		render(
 			<MemoryRouter>
 				<SettingsPage />
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText(/settings\.stock\.repeatDaily/i)).toBeInTheDocument();
+		expect(screen.getByText(/settings\.stockReminder\.repeatDaily/i)).toBeInTheDocument();
 	});
 });
 
@@ -1151,6 +1206,237 @@ describe("SettingsPage importing state", () => {
 
 		const importBtn = screen.getByText(/exportImport\.importing/i);
 		expect(importBtn).toBeDisabled();
+	});
+});
+
+describe("SettingsPage stock threshold chips", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockContextValue = createMockContext();
+	});
+
+	it("renders Critical stock chip", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		// Critical chip appears in both Stock Thresholds and Notification trigger
+		const criticalChips = screen.getAllByText(/status\.criticalStock/i);
+		expect(criticalChips.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("renders Low stock chip", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/status\.lowStock/i)).toBeInTheDocument();
+	});
+
+	it("renders High stock chip", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/status\.highStock/i)).toBeInTheDocument();
+	});
+
+	it("renders stock calculation mode first in stock card", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/settings\.stock\.calculationMode/i)).toBeInTheDocument();
+	});
+
+	it("renders thresholds section header", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/settings\.stock\.thresholds/i)).toBeInTheDocument();
+	});
+
+	it("renders three threshold inputs (Critical, Low, High)", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		// Should have a threshold-chips-group with 3 labels
+		const chipGroup = document.querySelector(".threshold-chips-group");
+		expect(chipGroup).toBeInTheDocument();
+		const inputs = chipGroup?.querySelectorAll('input[type="number"]');
+		expect(inputs?.length).toBe(3);
+	});
+});
+
+describe("SettingsPage stock threshold validation", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("shows validation error when Critical >= Low", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				reminderDaysBefore: 30,
+				lowStockDays: 30,
+				highStockDays: 180,
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/settings\.stock\.thresholdValidation/i)).toBeInTheDocument();
+	});
+
+	it("shows validation error when Low >= High", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				reminderDaysBefore: 7,
+				lowStockDays: 200,
+				highStockDays: 180,
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/settings\.stock\.thresholdValidation/i)).toBeInTheDocument();
+	});
+
+	it("does not show validation error when thresholds are valid", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				reminderDaysBefore: 7,
+				lowStockDays: 30,
+				highStockDays: 180,
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.queryByText(/settings\.stock\.thresholdValidation/i)).not.toBeInTheDocument();
+	});
+
+	it("disables save button when thresholds are invalid", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				reminderDaysBefore: 30,
+				lowStockDays: 30,
+				highStockDays: 180,
+			},
+			settingsChanged: true,
+			settingsSaved: false,
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		const submitBtn = document.querySelector('button[type="submit"]');
+		expect(submitBtn).toBeDisabled();
+	});
+
+	it("enables save button when thresholds are valid and changes exist", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				reminderDaysBefore: 7,
+				lowStockDays: 30,
+				highStockDays: 180,
+			},
+			settingsChanged: true,
+			settingsSaved: false,
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		const submitBtn = document.querySelector('button[type="submit"]');
+		expect(submitBtn).not.toBeDisabled();
+	});
+
+	it("marks invalid threshold input with error styling", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				reminderDaysBefore: 30,
+				lowStockDays: 30,
+				highStockDays: 180,
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		const invalidLabels = document.querySelectorAll(".threshold-invalid");
+		expect(invalidLabels.length).toBeGreaterThan(0);
+	});
+});
+
+describe("SettingsPage stock reminder in notifications", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockContextValue = createMockContext();
+	});
+
+	it("renders stock reminder section in notifications card", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/settings\.stockReminder\.title/i)).toBeInTheDocument();
+	});
+
+	it("renders stock reminder description with Critical chip", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/settings\.stockReminder\.description/i)).toBeInTheDocument();
+		// Critical chip should appear next to the description text
+		const descLabel = screen.getByText(/settings\.stockReminder\.description/i);
+		const criticalChip = descLabel.querySelector(".status-chip.danger");
+		expect(criticalChip).toBeInTheDocument();
 	});
 });
 

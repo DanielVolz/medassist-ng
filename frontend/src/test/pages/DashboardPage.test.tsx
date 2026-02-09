@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPage } from "../../pages/DashboardPage";
@@ -160,6 +160,7 @@ const createMockAppContext = (overrides = {}) => ({
 	setShowClearMissedConfirm: vi.fn(),
 	clearingMissed: false,
 	dismissMissedDoses: vi.fn(),
+	loadSettings: vi.fn(),
 	...overrides,
 });
 
@@ -592,7 +593,9 @@ describe("DashboardPage with email notifications", () => {
 		);
 
 		// Reorder card should NOT be shown when reminders are active (Reminder Bar shows the info instead)
-		expect(screen.queryByText(/dashboard\.reorder\.sendReminder/i)).not.toBeInTheDocument();
+		// The send reminder button IS shown in the reminder status bar (not the reorder card)
+		expect(document.querySelector(".reminder-status-bar")).toBeInTheDocument();
+		expect(screen.queryByText(/dashboard\.reorder\.title/i)).not.toBeInTheDocument();
 	});
 });
 
@@ -621,6 +624,76 @@ describe("DashboardPage with shoutrrr notifications", () => {
 		// Should show status bar
 		const statusBar = document.querySelector(".reminder-status-bar");
 		expect(statusBar).toBeInTheDocument();
+	});
+
+	it("shows send reminder button when stock reminders are enabled and low stock exists", () => {
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText("dashboard.reorder.sendReminder")).toBeInTheDocument();
+	});
+
+	it("sends manual reminder notification on button click", async () => {
+		global.fetch = vi.fn().mockImplementation((url: string) => {
+			if (url === "/api/reminder/send-email") {
+				return Promise.resolve({
+					ok: true,
+					json: () => Promise.resolve({ success: true, message: "Notification sent via push" }),
+				});
+			}
+			// Settings refresh after successful send
+			return Promise.resolve({
+				ok: true,
+				json: () => Promise.resolve({}),
+			});
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const sendButton = screen.getByText("dashboard.reorder.sendReminder");
+		fireEvent.click(sendButton);
+
+		await waitFor(() => {
+			expect(global.fetch).toHaveBeenCalledWith(
+				"/api/reminder/send-email",
+				expect.objectContaining({
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "include",
+				})
+			);
+		});
+
+		await waitFor(() => {
+			expect(screen.getByText("Notification sent via push")).toBeInTheDocument();
+		});
+	});
+
+	it("shows error message when manual reminder fails", async () => {
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: false,
+			json: () => Promise.resolve({ error: "No notification channels configured" }),
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const sendButton = screen.getByText("dashboard.reorder.sendReminder");
+		fireEvent.click(sendButton);
+
+		await waitFor(() => {
+			expect(screen.getByText("No notification channels configured")).toBeInTheDocument();
+		});
 	});
 });
 
@@ -817,5 +890,71 @@ describe("DashboardPage good stock state", () => {
 
 		// Should show all good message
 		expect(screen.getByText(/dashboard\.reorder\.allGood/i)).toBeInTheDocument();
+	});
+});
+
+describe("DashboardPage bottle package type", () => {
+	const bottleMed = {
+		id: 3,
+		name: "Ibuprofen",
+		packageType: "bottle" as const,
+		packCount: 0,
+		blistersPerPack: 1,
+		pillsPerBlister: 1,
+		looseTablets: 100,
+		totalPills: 200,
+		takenBy: [],
+		blisters: [{ usage: 2, every: 1, start: "2024-01-01T09:00:00Z" }],
+		intakeRemindersEnabled: false,
+		notes: null,
+		expiryDate: null,
+		imageUrl: null,
+		updatedAt: null,
+	};
+
+	const bottleCoverage = {
+		name: "Ibuprofen",
+		medsLeft: 100,
+		daysLeft: 50,
+		depletionDate: "2025-04-01",
+		depletionTime: Date.now() + 50 * 86400000,
+		nextDose: null,
+	};
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorage.clear();
+		mockContextValue = createMockAppContext({
+			meds: [bottleMed],
+			coverage: { all: [bottleCoverage], low: [] },
+			coverageByMed: { Ibuprofen: bottleCoverage },
+		});
+	});
+
+	it("renders pill count instead of blisters for bottle type", () => {
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		// Should show medication name
+		expect(screen.getByText("Ibuprofen")).toBeInTheDocument();
+
+		// Should show pills count (bottle shows pillsCount, not blisters)
+		expect(screen.getByText(/table\.pillsCount/i)).toBeInTheDocument();
+	});
+
+	it("shows dash for stock details column for bottle type", () => {
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		// For bottle type, the stock details column shows "—"
+		const dashElements = document.querySelectorAll('[data-label="table.stockDetails"]');
+		const bottleDetails = Array.from(dashElements).find((el) => el.textContent === "—");
+		expect(bottleDetails).toBeInTheDocument();
 	});
 });

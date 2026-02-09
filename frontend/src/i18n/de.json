@@ -21,11 +21,11 @@
       "badge": "Bestandsüberwachung",
       "noMeds": "Noch keine Medikamente konfiguriert.",
       "allGood": "Alles in Ordnung, genug Vorrat.",
-      "lowWarning": "Genug Vorrat, aber {{meds}} wird knapp.",
-      "lowWarning_other": "Genug Vorrat, aber {{meds}} werden knapp.",
+      "lowWarning": "Genug Vorrat, aber {{meds}} ist kritisch niedrig.",
+      "lowWarning_other": "Genug Vorrat, aber {{meds}} sind kritisch niedrig.",
       "lowWarningPrefix": "Genug Vorrat, aber",
-      "lowWarningSuffix": "wird knapp.",
-      "lowWarningSuffix_other": "werden knapp.",
+      "lowWarningSuffix": "ist kritisch niedrig.",
+      "lowWarningSuffix_other": "sind kritisch niedrig.",
       "sendReminder": "🔔 Erinnerung jetzt senden"
     },
     "overview": {
@@ -59,10 +59,11 @@
     "reminders": {
       "active": "Automatische Erinnerungen aktiv",
       "status": "Status",
-      "allStockOk": "Bestand OK",
-      "allOk": "Alles OK",
+      "allStockOk": "Bestand gut",
+      "allOk": "Alles gut",
       "lastReminder": "Letzte Einnahme-Erinnerung",
       "lastSent": "Letzte Einnahme-Erinnerung",
+      "lastStockSent": "Letzte Bestands-Erinnerung",
       "next": "Nachbestell-Erinnerung",
       "nextIn": "Nachbestell-Erinnerung",
       "inDays": "in {{days}} Tagen",
@@ -73,8 +74,8 @@
       "needRefill_other": "{{count}} Medikamente nachfüllen",
       "emptyStock": "{{count}} Medikament leer",
       "emptyStock_other": "{{count}} Medikamente leer",
-      "lowWarning": "{{count}} Medikament wird knapp",
-      "lowWarning_other": "{{count}} Medikamente werden knapp",
+      "lowWarning": "{{count}} Medikament kritisch niedrig",
+      "lowWarning_other": "{{count}} Medikamente kritisch niedrig",
       "waitingFirstCheck": "Warte auf erste Prüfung",
       "type": "Typ",
       "typeStock": "Bestand",
@@ -123,7 +124,9 @@
       "pillsPerBlister": "Tabletten pro Blister",
       "loose": "Lose",
       "total": "Gesamt",
-      "stock": "Bestand"
+      "stock": "Bestand",
+      "totalCapacity": "Kapazität",
+      "type": "Typ"
     }
   },
   "form": {
@@ -181,6 +184,7 @@
     "calculate": "Berechnen",
     "calculating": "Wird berechnet...",
     "sendEmail": "📧 Per E-Mail senden",
+    "sendNotification": "🔔 Bedarf senden",
     "table": {
       "medication": "Medikament",
       "usage": "Verbrauch",
@@ -229,25 +233,34 @@
       "intakeCheck": "Einnahmeprüfung",
       "15minBefore": "15 Min. vor geplanter Zeit",
       "nextCheck": "Nächste Bestandsprüfung",
-      "lastSent": "Zuletzt gesendet",
+      "lastSent": "Letzte Benachrichtigung",
+      "lastStockSent": "Letzte Bestands-Erinnerung",
+      "lastIntakeSent": "Letzte Einnahme-Erinnerung",
       "envHint": "Diese Werte können über REMINDER_HOUR und REMINDER_MINUTES_BEFORE in .env konfiguriert werden"
     },
     "stock": {
       "title": "Bestand",
-      "threshold": "Erinnerungsschwelle",
-      "remindWhen": "Erinnern wenn Vorrat unter",
-      "repeatDaily": "Täglich wiederholen",
-      "repeatTooltip": "Wenn aktiviert, wird täglich eine Erinnerung gesendet solange der Bestand niedrig ist. Andernfalls nur einmal pro Medikament bis zum Auffüllen.",
       "calculationMode": "Bestandsberechnung",
       "automatic": "Automatisch",
       "automaticDesc": "Bestand wird automatisch anhand des Einnahmeplans reduziert",
       "manual": "Manuell",
       "manualDesc": "Bestand wird nur reduziert wenn Dosen als genommen markiert werden",
-      "display": "Anzeige",
-      "lowStockDays": "Niedriger Bestand (Tage)",
-      "lowStockTooltip": "Gelbe Warnung ab diesem Schwellenwert",
-      "highStockDays": "Hoher Bestand (Tage)",
-      "highStockTooltip": "Grün mit Stern ab diesem Schwellenwert"
+      "thresholds": "Schwellenwerte",
+      "criticalStockDays": "Kritisch (Tage)",
+      "criticalStockTooltip": "Bestand unter diesem Wert ist kritisch und erfordert sofortige Aufmerksamkeit",
+      "lowStockDays": "Niedrig (Tage)",
+      "lowStockTooltip": "Bestand unter diesem Wert bedeutet, dass bald nachbestellt werden sollte",
+      "highStockDays": "Hoch (Tage)",
+      "highStockTooltip": "Bestand über diesem Wert bedeutet, dass du gut versorgt bist",
+      "thresholdValidation": "Werte müssen sein: Kritisch < Niedrig < Hoch",
+      "shareStockStatus": "Bestand auf geteilten Links anzeigen",
+      "shareStockStatusDesc": "Bestandsstatus (Normal/Niedrig/Kritisch) und farbige Rahmen auf geteilten Zeitplan-Links für Einnahme-Nutzer anzeigen"
+    },
+    "stockReminder": {
+      "title": "Bestands-Erinnerung",
+      "description": "Benachrichtigung wenn Medikamentenbestand erreicht",
+      "repeatDaily": "Täglich wiederholen",
+      "repeatTooltip": "Wenn aktiviert, wird täglich eine Erinnerung gesendet solange der Bestand kritisch ist. Andernfalls nur einmal pro Medikament bis zum Auffüllen."
     },
     "saveSettings": "Einstellungen speichern"
   },
@@ -288,6 +301,7 @@
   "tooltips": {
     "intakeReminders": "Einnahme-Erinnerungen aktiviert",
     "hasNotes": "Hat Notizen",
+    "stockExceedsCapacity": "Bestand überschreitet Packungskapazität — Packungsanzahl anpassen",
     "lightMode": "Zum hellen Modus wechseln",
     "darkMode": "Zum dunklen Modus wechseln"
   },
@@ -348,6 +362,9 @@
   "common": {
     "loading": "Wird geladen...",
     "sending": "Wird gesendet...",
+    "sent": "Gesendet!",
+    "sendFailed": "Senden fehlgeschlagen",
+    "networkError": "Netzwerkfehler",
     "saving": "Wird gespeichert...",
     "unsavedChanges": {
       "title": "Ungespeicherte Änderungen",
@@ -386,6 +403,9 @@
     "fullBlisters": "volle Blister",
     "inBlister": "in 1 Blister",
     "total": "gesamt",
+    "pillsTotal": "{{count}} Tabletten gesamt",
+    "pillsTotal_one": "{{count}} Tablette gesamt",
+    "pillsTotal_other": "{{count}} Tabletten gesamt",
     "max": "max"
   },
   "share": {
@@ -450,6 +470,7 @@
   "refill": {
     "title": "Nachfüllen",
     "packs": "Packungen hinzufügen",
+    "pillsToAdd": "Tabletten hinzufügen",
     "loosePills": "Lose Tabletten hinzufügen",
     "pillsPerPack": "1 Packung = {{count}} Tabletten",
     "addToStock": "Zum Bestand hinzufügen",
@@ -466,6 +487,7 @@
   "editStock": {
     "title": "Bestand korrigieren",
     "hint": "Dies ist für die Korrektur von Bestandsabweichungen. Für normale Bestandsänderungen nutze 'Nachfüllen'.",
+    "totalPills": "Gesamte Tabletten",
     "fullBlisters": "Volle Blister",
     "partialBlisterPills": "Angebrochener Blister",
     "pillsPerBlister": "(je {{count}} Tabletten)",

@@ -117,8 +117,11 @@ export function PlannerPage() {
 		}
 	}
 
-	async function sendPlannerEmail() {
-		if (!settings.notificationEmail || plannerRows.length === 0) return;
+	const canSendNotification =
+		(settings.emailEnabled && settings.notificationEmail) || (settings.shoutrrrEnabled && settings.shoutrrrUrl);
+
+	async function sendPlannerNotification() {
+		if (!canSendNotification || plannerRows.length === 0) return;
 		setSendingPlannerEmail(true);
 		setPlannerEmailResult(null);
 
@@ -136,12 +139,12 @@ export function PlannerPage() {
 			});
 			const data = await res.json();
 			if (res.ok) {
-				setPlannerEmailResult({ success: true, message: data.message || "Email sent!" });
+				setPlannerEmailResult({ success: true, message: data.message || t("common.sent") });
 			} else {
-				setPlannerEmailResult({ success: false, message: data.error || "Failed to send" });
+				setPlannerEmailResult({ success: false, message: data.error || t("common.sendFailed") });
 			}
 		} catch {
-			setPlannerEmailResult({ success: false, message: "Network error" });
+			setPlannerEmailResult({ success: false, message: t("common.networkError") });
 		}
 		setSendingPlannerEmail(false);
 	}
@@ -210,18 +213,20 @@ export function PlannerPage() {
 											{row.medicationName}
 										</span>
 										<span data-label={t("planner.table.usage")}>
-											<strong>{row.plannerUsage}</strong>&nbsp;{t("common.pills")}
+											<strong>{row.plannerUsage}</strong>&nbsp;
+											{row.plannerUsage === 1 ? t("common.pill") : t("common.pills")}
 										</span>
 										<span data-label={t("planner.table.blisters")}>
 											{row.packageType === "bottle" ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`}
 										</span>
 										<span data-label={t("planner.table.available")}>
 											{row.packageType === "bottle" ? (
-												`${Math.round(row.loosePills * 10) / 10} ${t("common.pills")}`
+												`${Math.round(row.loosePills * 10) / 10} ${Math.round(row.loosePills * 10) / 10 === 1 ? t("common.pill") : t("common.pills")}`
 											) : (
 												<>
 													{row.fullBlisters} {t("common.blisters")}
-													{row.loosePills > 0 && ` + ${Math.round(row.loosePills * 10) / 10} ${t("common.pills")}`}
+													{row.loosePills > 0 &&
+														` + ${Math.round(row.loosePills * 10) / 10} ${Math.round(row.loosePills * 10) / 10 === 1 ? t("common.pill") : t("common.pills")}`}
 												</>
 											)}
 										</span>
@@ -235,10 +240,15 @@ export function PlannerPage() {
 								);
 							})}
 						</div>
-						{settings.emailEnabled && settings.notificationEmail && (
+						{canSendNotification && (
 							<div className="planner-email-action">
-								<button type="button" className="ghost" onClick={sendPlannerEmail} disabled={sendingPlannerEmail}>
-									{sendingPlannerEmail ? t("common.sending") : t("planner.sendEmail")}
+								<button
+									type="button"
+									className="ghost"
+									onClick={sendPlannerNotification}
+									disabled={sendingPlannerEmail}
+								>
+									{sendingPlannerEmail ? t("common.sending") : t("planner.sendNotification")}
 								</button>
 								{plannerEmailResult && (
 									<span className={plannerEmailResult.success ? "success-text" : "danger-text"}>

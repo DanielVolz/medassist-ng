@@ -59,6 +59,44 @@ describe("getMedTotal", () => {
 
 		expect(getMedTotal(med)).toBe(0);
 	});
+
+	it("calculates bottle type from looseTablets only", () => {
+		const med = {
+			packageType: "bottle" as const,
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 150,
+		};
+
+		expect(getMedTotal(med)).toBe(150);
+	});
+
+	it("calculates bottle type with stock adjustment", () => {
+		const med = {
+			packageType: "bottle" as const,
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 150,
+			stockAdjustment: -10,
+		};
+
+		expect(getMedTotal(med)).toBe(140); // 150 + (-10) = 140
+	});
+
+	it("ignores blister fields for bottle type", () => {
+		const med = {
+			packageType: "bottle" as const,
+			packCount: 5,
+			blistersPerPack: 10,
+			pillsPerBlister: 20,
+			looseTablets: 80,
+		};
+
+		// Should use looseTablets only, NOT 5*10*20 + 80 = 1080
+		expect(getMedTotal(med)).toBe(80);
+	});
 });
 
 describe("getPackageSize", () => {
@@ -83,6 +121,32 @@ describe("getPackageSize", () => {
 		};
 
 		expect(getPackageSize(med)).toBe(10);
+	});
+
+	it("returns looseTablets for bottle type", () => {
+		const med = {
+			packageType: "bottle" as const,
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 200,
+		};
+
+		expect(getPackageSize(med)).toBe(200);
+	});
+
+	it("ignores blister fields for bottle type", () => {
+		const med = {
+			packageType: "bottle" as const,
+			packCount: 5,
+			blistersPerPack: 10,
+			pillsPerBlister: 20,
+			looseTablets: 80,
+			stockAdjustment: 50,
+		};
+
+		// Should use looseTablets only, ignore stockAdjustment and blister math
+		expect(getPackageSize(med)).toBe(80);
 	});
 });
 

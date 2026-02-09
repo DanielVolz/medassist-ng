@@ -238,6 +238,75 @@ export function SettingsPage() {
 
 						<div className="setting-section">
 							<div className="section-header">
+								<h3>{t("settings.stockReminder.title")}</h3>
+							</div>
+							<div className="setting-row compact">
+								<label className="setting-label">
+									{t("settings.stockReminder.description")}{" "}
+									<span className="status-chip small danger">{t("status.criticalStock")}</span>
+								</label>
+								<label
+									className={`toggle-switch small${!settings.emailEnabled && !settings.shoutrrrEnabled ? " disabled" : ""}`}
+								>
+									<input
+										type="checkbox"
+										checked={
+											(settings.emailEnabled && settings.emailStockReminders) ||
+											(settings.shoutrrrEnabled && settings.shoutrrrStockReminders)
+										}
+										onChange={(e) => {
+											const newVal = e.target.checked;
+											if (newVal) {
+												setSettings({
+													...settings,
+													emailStockReminders: settings.emailEnabled ? true : settings.emailStockReminders,
+													shoutrrrStockReminders: settings.shoutrrrEnabled ? true : settings.shoutrrrStockReminders,
+												});
+											} else {
+												setSettings({
+													...settings,
+													emailStockReminders: false,
+													shoutrrrStockReminders: false,
+													repeatDailyReminders: false,
+												});
+											}
+										}}
+										disabled={!settings.emailEnabled && !settings.shoutrrrEnabled}
+									/>
+									<span className="toggle-slider"></span>
+								</label>
+							</div>
+							<div className="setting-row compact" style={{ marginTop: "4px" }}>
+								<label className="setting-label">
+									{t("settings.stockReminder.repeatDaily")}
+									<span
+										className="info-tooltip small tooltip-align-left"
+										data-tooltip={t("settings.stockReminder.repeatTooltip")}
+									>
+										ⓘ
+									</span>
+								</label>
+								<label
+									className={`toggle-switch small${!((settings.emailEnabled && settings.emailStockReminders) || (settings.shoutrrrEnabled && settings.shoutrrrStockReminders)) ? " disabled" : ""}`}
+								>
+									<input
+										type="checkbox"
+										checked={settings.repeatDailyReminders}
+										onChange={(e) => setSettings({ ...settings, repeatDailyReminders: e.target.checked })}
+										disabled={
+											!(
+												(settings.emailEnabled && settings.emailStockReminders) ||
+												(settings.shoutrrrEnabled && settings.shoutrrrStockReminders)
+											)
+										}
+									/>
+									<span className="toggle-slider"></span>
+								</label>
+							</div>
+						</div>
+
+						<div className="setting-section">
+							<div className="section-header">
 								<h3>{t("settings.notifications.email")}</h3>
 								<label className={`toggle-switch small${!settings.smtpHost ? " disabled" : ""}`}>
 									<input
@@ -400,9 +469,23 @@ export function SettingsPage() {
 									</span>
 								</div>
 							)}
+							{settings.lastStockReminderSent && (
+								<div className="schedule-row">
+									<span className="schedule-label">{t("settings.schedule.lastStockSent")}</span>
+									<span className="schedule-value">
+										{new Date(settings.lastStockReminderSent).toLocaleString(getSystemLocale(i18n.language), {
+											day: "2-digit",
+											month: "2-digit",
+											year: "numeric",
+											hour: "2-digit",
+											minute: "2-digit",
+										})}
+									</span>
+								</div>
+							)}
 							{settings.lastAutoEmailSent && (
 								<div className="schedule-row">
-									<span className="schedule-label">{t("settings.schedule.lastSent")}</span>
+									<span className="schedule-label">{t("settings.schedule.lastIntakeSent")}</span>
 									<span className="schedule-value">
 										{new Date(settings.lastAutoEmailSent).toLocaleString(getSystemLocale(i18n.language), {
 											day: "2-digit",
@@ -421,51 +504,6 @@ export function SettingsPage() {
 					<article className="card">
 						<div className="card-head">
 							<h2>{t("settings.stock.title")}</h2>
-						</div>
-
-						<div className="setting-section">
-							<div className="section-header">
-								<h3>{t("settings.stock.threshold")}</h3>
-							</div>
-							<div className="threshold-input">
-								<label>
-									<span className="threshold-label">{t("settings.stock.remindWhen")}</span>
-									<div className="threshold-field">
-										<input
-											type="number"
-											min="1"
-											max="90"
-											value={settings.reminderDaysBefore}
-											onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
-										/>
-										<span className="threshold-unit">{t("common.days")}</span>
-									</div>
-								</label>
-							</div>
-							<div className="setting-row compact">
-								<label className="setting-label">
-									{t("settings.stock.repeatDaily")}
-									<span className="info-tooltip small" data-tooltip={t("settings.stock.repeatTooltip")}>
-										ⓘ
-									</span>
-								</label>
-								<label
-									className={`toggle-switch small${!((settings.emailEnabled && settings.emailStockReminders && settings.notificationEmail) || (settings.shoutrrrEnabled && settings.shoutrrrStockReminders && settings.shoutrrrUrl)) ? " disabled" : ""}`}
-								>
-									<input
-										type="checkbox"
-										checked={settings.repeatDailyReminders}
-										onChange={(e) => setSettings({ ...settings, repeatDailyReminders: e.target.checked })}
-										disabled={
-											!(
-												(settings.emailEnabled && settings.emailStockReminders && settings.notificationEmail) ||
-												(settings.shoutrrrEnabled && settings.shoutrrrStockReminders && settings.shoutrrrUrl)
-											)
-										}
-									/>
-									<span className="toggle-slider"></span>
-								</label>
-							</div>
 						</div>
 
 						<div className="setting-section">
@@ -512,38 +550,98 @@ export function SettingsPage() {
 
 						<div className="setting-section">
 							<div className="section-header">
-								<h3>{t("settings.stock.display")}</h3>
+								<h3>{t("settings.stock.thresholds")}</h3>
 							</div>
-							<div className="setting-group">
-								<label>
-									<span className="field-label">{t("settings.stock.lowStockDays")}</span>
+							<div className="setting-group threshold-chips-group">
+								<label className={settings.reminderDaysBefore >= settings.lowStockDays ? "threshold-invalid" : ""}>
+									<span className="field-label threshold-chip-label">
+										<span className="status-chip small danger">{t("status.criticalStock")}</span>
+										<span
+											className="info-tooltip small tooltip-align-left"
+											data-tooltip={t("settings.stock.criticalStockTooltip")}
+										>
+											ⓘ
+										</span>
+									</span>
 									<div className="input-with-tooltip">
 										<input
 											type="number"
 											min="1"
+											max="364"
+											value={settings.reminderDaysBefore}
+											onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
+										/>
+									</div>
+								</label>
+								<label
+									className={
+										settings.lowStockDays <= settings.reminderDaysBefore ||
+										settings.lowStockDays >= settings.highStockDays
+											? "threshold-invalid"
+											: ""
+									}
+								>
+									<span className="field-label threshold-chip-label">
+										<span className="status-chip small warning">{t("status.lowStock")}</span>
+										<span
+											className="info-tooltip small tooltip-align-left"
+											data-tooltip={t("settings.stock.lowStockTooltip")}
+										>
+											ⓘ
+										</span>
+									</span>
+									<div className="input-with-tooltip">
+										<input
+											type="number"
+											min="2"
 											max="365"
 											value={settings.lowStockDays}
 											onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
 										/>
-										<span className="info-tooltip" data-tooltip={t("settings.stock.lowStockTooltip")}>
-											ⓘ
-										</span>
 									</div>
 								</label>
-								<label>
-									<span className="field-label">{t("settings.stock.highStockDays")}</span>
+								<label className={settings.highStockDays <= settings.lowStockDays ? "threshold-invalid" : ""}>
+									<span className="field-label threshold-chip-label">
+										<span className="status-chip small high">{t("status.highStock")}</span>
+										<span
+											className="info-tooltip small tooltip-align-left"
+											data-tooltip={t("settings.stock.highStockTooltip")}
+										>
+											ⓘ
+										</span>
+									</span>
 									<div className="input-with-tooltip">
 										<input
 											type="number"
-											min="1"
+											min="3"
 											max="730"
 											value={settings.highStockDays}
 											onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
 										/>
-										<span className="info-tooltip" data-tooltip={t("settings.stock.highStockTooltip")}>
-											ⓘ
-										</span>
 									</div>
+								</label>
+							</div>
+							{(settings.reminderDaysBefore >= settings.lowStockDays ||
+								settings.lowStockDays >= settings.highStockDays) && (
+								<p className="threshold-validation-error">{t("settings.stock.thresholdValidation")}</p>
+							)}
+						</div>
+
+						<div className="setting-section">
+							<div className="setting-row compact">
+								<div className="setting-label">
+									<span>{t("settings.stock.shareStockStatus")}</span>
+									<span className="info-tooltip small" data-tooltip={t("settings.stock.shareStockStatusDesc")}>
+										ⓘ
+									</span>
+								</div>
+								<label className="toggle-switch small">
+									<input
+										type="checkbox"
+										checked={settings.shareStockStatus}
+										onChange={(e) => setSettings({ ...settings, shareStockStatus: e.target.checked })}
+									/>
+									<span className="toggle-slider"></span>
 								</label>
 							</div>
 						</div>
@@ -651,7 +749,15 @@ export function SettingsPage() {
 					</article>
 
 					<div className="form-footer">
-						<button type="submit" disabled={settingsSaving || (!settingsChanged && settingsSaved)}>
+						<button
+							type="submit"
+							disabled={
+								settingsSaving ||
+								(!settingsChanged && settingsSaved) ||
+								settings.reminderDaysBefore >= settings.lowStockDays ||
+								settings.lowStockDays >= settings.highStockDays
+							}
+						>
 							{settingsSaving
 								? t("common.saving")
 								: settingsSaved && !settingsChanged

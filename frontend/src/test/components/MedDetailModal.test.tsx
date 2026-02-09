@@ -15,6 +15,7 @@ const mockMedication: Medication = {
 	id: 1,
 	name: "Test Med",
 	genericName: "Generic Name",
+	packageType: "blister",
 	packCount: 1,
 	blistersPerPack: 1,
 	pillsPerBlister: 30,
@@ -383,5 +384,199 @@ describe("MedDetailModal with refill history", () => {
 		if (expandButton) {
 			fireEvent.click(expandButton);
 		}
+	});
+});
+
+describe("MedDetailModal intake schedule usage display", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("does not multiply usage by personCount when intakes have per-intake takenBy", () => {
+		// Two people at medication level, but each intake has its own takenBy
+		const med: Medication = {
+			...mockMedication,
+			takenBy: ["Alice", "Bob"],
+			blisters: [
+				{ usage: 1, every: 1, start: "2024-01-01T09:00:00" },
+				{ usage: 1, every: 1, start: "2024-01-01T21:00:00" },
+			],
+			intakes: [
+				{ usage: 1, every: 1, start: "2024-01-01T09:00:00", takenBy: "Alice", intakeRemindersEnabled: false },
+				{ usage: 1, every: 1, start: "2024-01-01T21:00:00", takenBy: "Bob", intakeRemindersEnabled: false },
+			],
+		};
+		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
+
+		const usageElements = document.querySelectorAll(".med-schedule-usage");
+		// Each intake should show "1 pill" (not "2 pills")
+		usageElements.forEach((el) => {
+			expect(el.textContent).toContain("1");
+			expect(el.textContent).not.toMatch(/^2\b/);
+		});
+	});
+
+	it("multiplies usage by personCount for legacy blisters without per-intake takenBy", () => {
+		// Two people at medication level, legacy blisters without intakes
+		const med: Medication = {
+			...mockMedication,
+			takenBy: ["Alice", "Bob"],
+			blisters: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00" }],
+			// No intakes array - legacy format
+		};
+		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
+
+		const usageElements = document.querySelectorAll(".med-schedule-usage");
+		// Legacy: 1 pill * 2 people = "2 pills"
+		expect(usageElements.length).toBe(1);
+		expect(usageElements[0].textContent).toContain("2");
+	});
+
+	it("shows correct usage for single person with per-intake takenBy", () => {
+		const med: Medication = {
+			...mockMedication,
+			takenBy: ["Alice"],
+			pillWeightMg: 500,
+			blisters: [{ usage: 2, every: 1, start: "2024-01-01T09:00:00" }],
+			intakes: [{ usage: 2, every: 1, start: "2024-01-01T09:00:00", takenBy: "Alice", intakeRemindersEnabled: false }],
+		};
+		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
+
+		const usageElements = document.querySelectorAll(".med-schedule-usage");
+		expect(usageElements.length).toBe(1);
+		// Should show "2 pills (1000 mg)" - usage=2, not multiplied
+		expect(usageElements[0].textContent).toContain("2");
+		expect(usageElements[0].textContent).toContain("1000");
+	});
+});
+
+describe("MedDetailModal stock overflow warning", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("shows warning icon when stock exceeds package capacity", () => {
+		const overflowCoverage: Coverage = {
+			name: "Test Med",
+			medsLeft: 49,
+			daysLeft: 49,
+			depletionDate: "2024-03-01",
+			depletionTime: Date.now() + 49 * 86400000,
+			nextDose: null,
+		};
+
+		render(<MedDetailModal {...defaultProps} coverage={{ all: [overflowCoverage] }} />);
+
+		// packageSize = 1 * 1 * 30 + 0 = 30, currentStock = 49 > 30
+		const warningIcon = document.querySelector(".info-tooltip.tooltip-align-left.warning-text");
+		expect(warningIcon).toBeInTheDocument();
+		expect(warningIcon?.getAttribute("data-tooltip")).toBe("tooltips.stockExceedsCapacity");
+	});
+
+	it("does not show warning icon when stock is within package capacity", () => {
+		render(<MedDetailModal {...defaultProps} />);
+
+		// packageSize = 30, currentStock = 25 < 30
+		const warningIcon = document.querySelector(".info-tooltip.tooltip-align-left.warning-text");
+		expect(warningIcon).not.toBeInTheDocument();
+	});
+
+	it("does not show warning icon when stock equals package capacity", () => {
+		const exactCoverage: Coverage = {
+			name: "Test Med",
+			medsLeft: 30,
+			daysLeft: 30,
+			depletionDate: "2024-02-01",
+			depletionTime: Date.now() + 30 * 86400000,
+			nextDose: null,
+		};
+
+		render(<MedDetailModal {...defaultProps} coverage={{ all: [exactCoverage] }} />);
+
+		// packageSize = 30, currentStock = 30 — equal, no warning
+		const warningIcon = document.querySelector(".info-tooltip.tooltip-align-left.warning-text");
+		expect(warningIcon).not.toBeInTheDocument();
+	});
+});
+
+describe("MedDetailModal bottle package type", () => {
+	const bottleMed: Medication = {
+		id: 2,
+		name: "Bottle Med",
+		genericName: null,
+		packageType: "bottle",
+		packCount: 0,
+		blistersPerPack: 1,
+		pillsPerBlister: 1,
+		looseTablets: 80,
+		totalPills: 100,
+		takenBy: [],
+		blisters: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00" }],
+		updatedAt: null,
+		expiryDate: null,
+		notes: null,
+	};
+
+	const bottleCoverage: Coverage = {
+		name: "Bottle Med",
+		medsLeft: 80,
+		daysLeft: 80,
+		depletionDate: "2024-06-01",
+		depletionTime: Date.now() + 80 * 86400000,
+		nextDose: null,
+	};
+
+	const bottleProps = {
+		...defaultProps,
+		selectedMed: bottleMed,
+		coverage: { all: [bottleCoverage] },
+	};
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("does not show blister fields in stock info section", () => {
+		render(<MedDetailModal {...bottleProps} />);
+
+		// Should show current stock
+		expect(screen.getByText(/modal\.currentStock/i)).toBeInTheDocument();
+
+		// Should NOT show full blisters or open blister labels
+		expect(screen.queryByText(/table\.fullBlisters/i)).not.toBeInTheDocument();
+		expect(screen.queryByText(/table\.openBlister/i)).not.toBeInTheDocument();
+	});
+
+	it("shows bottle type in package details section", () => {
+		render(<MedDetailModal {...bottleProps} />);
+
+		// Should show package type as bottle
+		expect(screen.getByText(/form\.packageTypeBottle/i)).toBeInTheDocument();
+
+		// Should show total capacity
+		expect(screen.getByText(/form\.totalCapacity/i)).toBeInTheDocument();
+	});
+
+	it("shows pills-only refill modal for bottle type", () => {
+		render(<MedDetailModal {...bottleProps} showRefillModal={true} />);
+
+		// Should show pills to add label
+		expect(screen.getByText(/refill\.pillsToAdd/i)).toBeInTheDocument();
+
+		// Should NOT show packs label in refill
+		const refillModal = document.querySelector(".refill-modal");
+		// Packs label should not be present for bottle type
+		expect(screen.queryByText("refill.packs")).not.toBeInTheDocument();
+	});
+
+	it("shows total pills input in edit stock modal for bottle type", () => {
+		render(<MedDetailModal {...bottleProps} showEditStockModal={true} />);
+
+		// Should show total pills label
+		expect(screen.getByText(/editStock\.totalPills/i)).toBeInTheDocument();
+
+		// Should NOT show full blisters or partial blister labels
+		expect(screen.queryByText(/editStock\.fullBlisters/i)).not.toBeInTheDocument();
+		expect(screen.queryByText(/editStock\.partialBlisterPills/i)).not.toBeInTheDocument();
 	});
 });

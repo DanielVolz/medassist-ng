@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
@@ -80,12 +81,16 @@ function getReminderStatusData(
 	_lastNotificationChannel: string | null,
 	lastReminderMedName: string | null,
 	lastReminderTakenBy: string | null,
+	lastStockReminderSent: string | null,
+	_lastStockReminderChannel: string | null,
+	lastStockReminderMedNames: string | null,
 	t: (key: string, options?: Record<string, unknown>) => string,
 	locale: string
 ): {
 	status: { text: string; className: string };
 	lowStockMeds: { name: string; daysLeft: number; isCritical: boolean }[];
-	lastSent: { date: string; medName: string | null; takenBy: string | null } | null;
+	lastStockSent: { date: string; medNames: string | null } | null;
+	lastIntakeSent: { date: string; medName: string | null; takenBy: string | null } | null;
 } {
 	const criticalCount = lowCoverage.length;
 	const lowCount = allCoverage.filter((c) => {
@@ -141,25 +146,40 @@ function getReminderStatusData(
 	// Convert to array and sort by days left (most urgent first)
 	const lowStockMeds = Array.from(lowStockMap.values()).sort((a, b) => a.daysLeft - b.daysLeft);
 
-	// Parse last sent info
-	let lastSent: { date: string; medName: string | null; takenBy: string | null } | null = null;
-	if (lastAutoEmailSent) {
-		const lastSentDate = new Date(lastAutoEmailSent);
-		const formattedDate = lastSentDate.toLocaleDateString(locale, {
+	// Parse last stock reminder sent info (from dedicated stock tracking columns)
+	let lastStockSent: { date: string; medNames: string | null } | null = null;
+	if (lastStockReminderSent) {
+		const sentDate = new Date(lastStockReminderSent);
+		const formattedDate = sentDate.toLocaleDateString(locale, {
 			day: "2-digit",
 			month: "short",
 			hour: "2-digit",
 			minute: "2-digit",
 		});
+		lastStockSent = {
+			date: formattedDate,
+			medNames: lastStockReminderMedNames,
+		};
+	}
 
-		lastSent = {
+	// Parse last intake reminder sent info (from intake tracking columns)
+	let lastIntakeSent: { date: string; medName: string | null; takenBy: string | null } | null = null;
+	if (lastAutoEmailSent) {
+		const sentDate = new Date(lastAutoEmailSent);
+		const formattedDate = sentDate.toLocaleDateString(locale, {
+			day: "2-digit",
+			month: "short",
+			hour: "2-digit",
+			minute: "2-digit",
+		});
+		lastIntakeSent = {
 			date: formattedDate,
 			medName: lastReminderMedName,
 			takenBy: lastReminderTakenBy,
 		};
 	}
 
-	return { status, lowStockMeds, lastSent };
+	return { status, lowStockMeds, lastStockSent, lastIntakeSent };
 }
 
 export function DashboardPage() {
@@ -199,6 +219,7 @@ export function DashboardPage() {
 		openShareDialog,
 		openScheduleLightbox,
 		stockThresholds,
+		loadSettings,
 	} = useAppContext();
 
 	// Get structured reminder data
@@ -212,6 +233,9 @@ export function DashboardPage() {
 		settings.lastNotificationChannel,
 		settings.lastReminderMedName,
 		settings.lastReminderTakenBy,
+		settings.lastStockReminderSent,
+		settings.lastStockReminderChannel,
+		settings.lastStockReminderMedNames,
 		t,
 		getSystemLocale(i18n.language)
 	);
@@ -225,6 +249,50 @@ export function DashboardPage() {
 		(settings.shoutrrrEnabled && settings.shoutrrrIntakeReminders);
 	const anyRemindersEnabled = stockRemindersEnabled || intakeRemindersEnabled;
 
+	// Manual reminder send state
+	const [sendingReminder, setSendingReminder] = useState(false);
+	const [reminderResult, setReminderResult] = useState<{ success: boolean; message: string } | null>(null);
+
+	async function sendManualReminder() {
+		if (!stockRemindersEnabled || reminderData.lowStockMeds.length === 0) return;
+		setSendingReminder(true);
+		setReminderResult(null);
+
+		try {
+			const lowStock = reminderData.lowStockMeds.map((m) => {
+				const cov = coverage.all.find((c) => c.name === m.name);
+				return {
+					name: m.name,
+					medsLeft: cov?.medsLeft ?? 0,
+					daysLeft: m.daysLeft,
+					depletionDate: cov?.depletionDate ?? null,
+					isCritical: m.isCritical,
+				};
+			});
+
+			const res = await fetch("/api/reminder/send-email", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({
+					email: settings.notificationEmail,
+					lowStock,
+				}),
+			});
+			const data = await res.json();
+			if (res.ok) {
+				setReminderResult({ success: true, message: data.message || t("common.sent") });
+				// Refresh settings so "Last stock reminder" row appears immediately
+				loadSettings();
+			} else {
+				setReminderResult({ success: false, message: data.error || t("common.sendFailed") });
+			}
+		} catch {
+			setReminderResult({ success: false, message: t("common.networkError") });
+		}
+		setSendingReminder(false);
+	}
+
 	return (
 		<>
 			{anyRemindersEnabled && (
@@ -234,14 +302,11 @@ export function DashboardPage() {
 							<NotificationBellIcon />
 						</span>
 						<span className="reminder-status-title">{t("dashboard.reminders.active")}</span>
-						{reminderData.lowStockMeds.length === 0 && (
-							<span className={`reminder-status-badge ${reminderData.status.className}`}>
-								{reminderData.status.className === "success" && "✓ "}
-								{reminderData.status.text}
-							</span>
-						)}
+						<span className={`status-chip small ${reminderData.status.className}`}>{reminderData.status.text}</span>
 					</div>
-					{(reminderData.lowStockMeds.length > 0 || (intakeRemindersEnabled && reminderData.lastSent)) && (
+					{(reminderData.lowStockMeds.length > 0 ||
+						(stockRemindersEnabled && reminderData.lastStockSent) ||
+						(intakeRemindersEnabled && reminderData.lastIntakeSent)) && (
 						<div className="reminder-status-details">
 							{stockRemindersEnabled && reminderData.lowStockMeds.length > 0 && (
 								<div className="reminder-status-row">
@@ -276,27 +341,65 @@ export function DashboardPage() {
 									</span>
 								</div>
 							)}
-							{intakeRemindersEnabled && reminderData.lastSent && (
+							{stockRemindersEnabled && reminderData.lastStockSent && (
+								<div className="reminder-status-row">
+									<span className="reminder-status-label">{t("dashboard.reminders.lastStockSent")}:</span>
+									<span className="reminder-status-value">
+										{reminderData.lastStockSent.medNames &&
+											(() => {
+												// Extract first med name (medNames may be "Name (+N)")
+												const rawName = reminderData.lastStockSent!.medNames!;
+												const firstName = rawName.replace(/\s*\(\+\d+\)$/, "");
+												const suffix = rawName.includes("(+") ? rawName.slice(firstName.length) : "";
+												const medication = meds.find((m) => m.name === firstName);
+												return medication ? (
+													<>
+														<span className="med-link clickable" onClick={() => openMedDetail(medication)}>
+															{firstName}
+														</span>
+														{suffix && <span className="reminder-med-name">{suffix}</span>}
+													</>
+												) : (
+													<span className="reminder-med-name">{rawName}</span>
+												);
+											})()}
+										<span className="reminder-date"> {reminderData.lastStockSent.date}</span>
+									</span>
+								</div>
+							)}
+							{intakeRemindersEnabled && reminderData.lastIntakeSent && (
 								<div className="reminder-status-row">
 									<span className="reminder-status-label">{t("dashboard.reminders.lastSent")}:</span>
 									<span className="reminder-status-value">
-										{reminderData.lastSent.medName &&
+										{reminderData.lastIntakeSent.medName &&
 											(() => {
-												const medication = meds.find((m) => m.name === reminderData.lastSent!.medName);
+												const medication = meds.find((m) => m.name === reminderData.lastIntakeSent!.medName);
 												return medication ? (
 													<span className="med-link clickable" onClick={() => openMedDetail(medication)}>
-														{reminderData.lastSent!.medName}
+														{reminderData.lastIntakeSent!.medName}
 													</span>
 												) : (
-													<span className="reminder-med-name">{reminderData.lastSent!.medName}</span>
+													<span className="reminder-med-name">{reminderData.lastIntakeSent!.medName}</span>
 												);
 											})()}
-										{reminderData.lastSent.takenBy && (
-											<span className="reminder-taken-by"> ({reminderData.lastSent.takenBy})</span>
+										{reminderData.lastIntakeSent.takenBy && (
+											<span className="reminder-taken-by"> ({reminderData.lastIntakeSent.takenBy})</span>
 										)}
-										<span className="reminder-date"> {reminderData.lastSent.date}</span>
+										<span className="reminder-date"> {reminderData.lastIntakeSent.date}</span>
 									</span>
 								</div>
+							)}
+						</div>
+					)}
+					{stockRemindersEnabled && reminderData.lowStockMeds.length > 0 && (
+						<div className="reminder-send-row">
+							<button type="button" className="ghost" onClick={sendManualReminder} disabled={sendingReminder}>
+								{sendingReminder ? t("common.sending") : t("dashboard.reorder.sendReminder")}
+							</button>
+							{reminderResult && (
+								<span className={`reminder-send-result ${reminderResult.success ? "success" : "error"}`}>
+									{reminderResult.message}
+								</span>
 							)}
 						</div>
 					)}
@@ -568,7 +671,7 @@ export function DashboardPage() {
 								return (
 									<div
 										key={day.dateStr}
-										className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} stock-${worstStatus}`}
+										className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : allDoseIds.length > 0 ? "past-missed" : ""}`}
 									>
 										<div
 											className="day-divider clickable"
@@ -626,9 +729,7 @@ export function DashboardPage() {
 																)}
 															</div>
 															<div className="tag-row">
-																<span className="tag subtle">
-																	{item.total} {t("common.pills")} {t("common.total")}
-																</span>
+																<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
 																{status && (
 																	<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
 																)}
@@ -778,9 +879,7 @@ export function DashboardPage() {
 																)}
 															</div>
 															<div className="tag-row">
-																<span className="tag subtle">
-																	{item.total} {t("common.pills")} {t("common.total")}
-																</span>
+																<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
 																{status && (
 																	<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
 																)}
@@ -967,9 +1066,7 @@ export function DashboardPage() {
 																)}
 															</div>
 															<div className="tag-row">
-																<span className="tag subtle">
-																	{item.total} {t("common.pills")} {t("common.total")}
-																</span>
+																<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
 																{status && (
 																	<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
 																)}

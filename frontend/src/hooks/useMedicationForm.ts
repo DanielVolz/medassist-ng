@@ -207,7 +207,11 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			packCount: String(med.packCount),
 			blistersPerPack: String(med.blistersPerPack),
 			pillsPerBlister: String(med.pillsPerBlister),
-			totalPills: med.totalPills ? String(med.totalPills) : "",
+			totalPills: med.totalPills
+				? String(med.totalPills)
+				: med.packageType === "bottle" && med.looseTablets
+					? String(med.looseTablets)
+					: "",
 			looseTablets: String(med.looseTablets),
 			pillWeightMg: med.pillWeightMg ? String(med.pillWeightMg) : "",
 			doseUnit: med.doseUnit ?? "mg",

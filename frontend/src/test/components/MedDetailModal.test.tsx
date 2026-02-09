@@ -569,6 +569,29 @@ describe("MedDetailModal bottle package type", () => {
 		expect(screen.queryByText("refill.packs")).not.toBeInTheDocument();
 	});
 
+	it("shows looseTablets as total capacity fallback when totalPills is null (backward compat)", () => {
+		// Old medications created before totalPills column existed
+		const oldBottleMed: Medication = {
+			...bottleMed,
+			totalPills: null,
+			looseTablets: 180,
+		};
+		const oldCoverage: Coverage = {
+			name: "Bottle Med",
+			medsLeft: 138,
+			daysLeft: 138,
+			depletionDate: "2024-06-01",
+			depletionTime: Date.now() + 138 * 86400000,
+			nextDose: null,
+		};
+		render(<MedDetailModal {...bottleProps} selectedMed={oldBottleMed} coverage={{ all: [oldCoverage] }} />);
+
+		// Total Capacity should show 180 (looseTablets), not "—"
+		const capacityLabel = screen.getByText(/form\.totalCapacity/i);
+		const capacityValue = capacityLabel.closest(".med-detail-item")?.querySelector(".med-detail-value");
+		expect(capacityValue?.textContent).toBe("180");
+	});
+
 	it("shows total pills input in edit stock modal for bottle type", () => {
 		render(<MedDetailModal {...bottleProps} showEditStockModal={true} />);
 

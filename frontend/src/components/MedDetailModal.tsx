@@ -235,7 +235,7 @@ export function MedDetailModal({
 							) : (
 								<div className="med-detail-item">
 									<span className="med-detail-label">{t("form.totalCapacity")}</span>
-									<span className="med-detail-value">{selectedMed.totalPills ?? "—"}</span>
+									<span className="med-detail-value">{(selectedMed.totalPills ?? packageSize) || "—"}</span>
 								</div>
 							)}
 							{selectedMed.pillWeightMg && (

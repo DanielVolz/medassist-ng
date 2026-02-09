@@ -86,12 +86,18 @@ export const userSettings = sqliteTable("user_settings", {
 	language: text("language", { length: 10 }).notNull().default("en"),
 	// Stock calculation mode: "automatic" (schedule-based) or "manual" (only marked doses)
 	stockCalculationMode: text("stock_calculation_mode", { length: 20 }).notNull().default("automatic"),
-	// Last notification tracking
+	// Whether shared schedule links show stock status (Critical/Low/Normal) to intake users
+	shareStockStatus: integer("share_stock_status", { mode: "boolean" }).notNull().default(true),
+	// Last notification tracking (intake reminders)
 	lastAutoEmailSent: text("last_auto_email_sent"),
 	lastNotificationType: text("last_notification_type"),
 	lastNotificationChannel: text("last_notification_channel"),
 	lastReminderMedName: text("last_reminder_med_name"),
 	lastReminderTakenBy: text("last_reminder_taken_by"),
+	// Last stock reminder tracking (separate from intake)
+	lastStockReminderSent: text("last_stock_reminder_sent"),
+	lastStockReminderChannel: text("last_stock_reminder_channel"),
+	lastStockReminderMedNames: text("last_stock_reminder_med_names"),
 	// Timestamps
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });

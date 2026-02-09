@@ -64,20 +64,29 @@ function getRegionFromTimezone(): string | undefined {
 }
 
 type TranslationKeys = {
-	// Stock reminder email
+	// Stock reminder (shared across email + push)
 	stockReminder: {
 		subject: string;
 		title: string;
 		description: string;
+		descriptionEmpty: string;
+		descriptionMixed: string;
 		alertSingle: string;
 		alertMultiple: string;
+		alertEmptySingle: string;
+		alertEmptyMultiple: string;
+		alertLowSingle: string;
+		alertLowMultiple: string;
+		alertLowStockSingle: string;
+		alertLowStockMultiple: string;
+		descriptionLow: string;
 		tableHeaders: {
 			medication: string;
 			pills: string;
 			days: string;
 			runsOut: string;
 		};
-		footer: string;
+		now: string;
 		repeatDailyNote: string;
 	};
 	// Intake reminder email
@@ -94,7 +103,6 @@ type TranslationKeys = {
 		};
 		pills: string;
 		takenBy: string;
-		footer: string;
 	};
 	// Push notifications
 	push: {
@@ -107,35 +115,68 @@ type TranslationKeys = {
 		repeatDailyNote: string;
 		empty: string;
 		low: string;
+		critical: string;
+		lowStock: string;
 		reorderNow: string;
 		emptySection: string;
 		lowSection: string;
+		criticalSection: string;
+		lowStockSection: string;
+	};
+	// Demand calculator email
+	demandCalculator: {
+		subject: string;
+		title: string;
+		description: string;
+		summaryOutOfStock: string;
+		summaryAllOk: string;
+		tableHeaders: {
+			medication: string;
+			usage: string;
+			needed: string;
+			available: string;
+			status: string;
+		};
+		statusEnough: string;
+		statusEmpty: string;
 	};
 	// Common
 	common: {
 		pill: string;
 		pills: string;
+		blister: string;
+		blisters: string;
 		day: string;
 		days: string;
 		soon: string;
+		footer: string;
 	};
 };
 
 const translations: Record<Language, TranslationKeys> = {
 	en: {
 		stockReminder: {
-			subject: "MedAssist-ng Auto-Reminder: {count} Medication{s} Running Low",
+			subject: "MedAssist-ng Auto-Reminder: {count} Medication{s} Running Critically Low",
 			title: "⚠️ MedAssist-ng - Automatic Reorder Reminder",
-			description: "The following medications are running low and need to be reordered:",
-			alertSingle: "⚠️ 1 medication running low!",
-			alertMultiple: "⚠️ {count} medications running low!",
+			description: "The following medications are running critically low and need to be reordered:",
+			descriptionEmpty: "The following medications are empty and need to be reordered immediately:",
+			descriptionMixed: "The following medications need to be reordered:",
+			alertSingle: "⚠️ 1 medication running critically low!",
+			alertMultiple: "⚠️ {count} medications running critically low!",
+			alertEmptySingle: "🚨 1 medication empty - reorder immediately!",
+			alertEmptyMultiple: "🚨 {count} medications empty - reorder immediately!",
+			alertLowSingle: "⚠️ 1 medication running critically low",
+			alertLowMultiple: "⚠️ {count} medications running critically low",
+			alertLowStockSingle: "⚠️ 1 medication running low",
+			alertLowStockMultiple: "⚠️ {count} medications running low",
+			descriptionLow: "The following medications are running low and should be reordered soon:",
 			tableHeaders: {
 				medication: "Medication",
 				pills: "Pills",
 				days: "Days",
 				runsOut: "Runs Out",
 			},
-			footer: "🤖 Automatic reminder from MedAssist-ng",
+			now: "NOW",
 			repeatDailyNote: "You are receiving this daily reminder because 'Repeat Daily' is enabled in settings.",
 		},
 		intakeReminder: {
@@ -151,44 +192,75 @@ const translations: Record<Language, TranslationKeys> = {
 			},
 			pills: "pills",
 			takenBy: "for {name}",
-			footer: "🤖 Automatic reminder from MedAssist-ng",
 		},
 		push: {
-			stockTitle: "MedAssist-ng: 1 Medication Running Low",
-			stockTitleMultiple: "MedAssist-ng: {count} Medications Running Low",
+			stockTitle: "MedAssist-ng: 1 Medication Running Critically Low",
+			stockTitleMultiple: "MedAssist-ng: {count} Medications Running Critically Low",
 			intakeTitle: "💊 Reminder: Medication intake in {minutes} min",
 			pillsLeft: "{count} pills",
 			daysLeft: "{count} days left",
 			pillsAt: "{count} pills at {time}",
 			repeatDailyNote: "(Daily reminder enabled)",
 			empty: "Empty",
-			low: "Low",
+			low: "Critical",
+			critical: "Critical",
+			lowStock: "Low",
 			reorderNow: "Reorder Now!",
-			emptySection: "EMPTY (reorder immediately)",
-			lowSection: "RUNNING LOW (reorder soon)",
+			emptySection: "Empty (reorder immediately)",
+			lowSection: "Running critically low",
+			criticalSection: "Running critically low",
+			lowStockSection: "Running low",
+		},
+		demandCalculator: {
+			subject: "MedAssist-ng - Supply Overview ({from} - {until})",
+			title: "MedAssist-ng - Demand Calculator",
+			description: "Supply overview from {from} to {until}",
+			summaryOutOfStock: "⚠️ {count} medication{s} will be out of stock during this period.",
+			summaryAllOk: "✓ All medications have sufficient supply for this period.",
+			tableHeaders: {
+				medication: "Medication",
+				usage: "Usage",
+				needed: "Blisters needed",
+				available: "Available",
+				status: "Status",
+			},
+			statusEnough: "✓ Enough",
+			statusEmpty: "✗ Empty",
 		},
 		common: {
 			pill: "pill",
 			pills: "pills",
+			blister: "blister",
+			blisters: "blisters",
 			day: "day",
 			days: "days",
 			soon: "soon",
+			footer: "🤖 Sent from MedAssist-ng",
 		},
 	},
 	de: {
 		stockReminder: {
-			subject: "MedAssist-ng Auto-Erinnerung: {count} Medikament{e} wird knapp",
+			subject: "MedAssist-ng Auto-Erinnerung: {count} Medikament{e} kritisch niedrig",
 			title: "⚠️ MedAssist-ng - Automatische Nachbestell-Erinnerung",
-			description: "Die folgenden Medikamente gehen zur Neige und sollten nachbestellt werden:",
-			alertSingle: "⚠️ 1 Medikament wird knapp!",
-			alertMultiple: "⚠️ {count} Medikamente werden knapp!",
+			description: "Die folgenden Medikamente sind kritisch niedrig und sollten nachbestellt werden:",
+			descriptionEmpty: "Die folgenden Medikamente sind leer und müssen sofort nachbestellt werden:",
+			descriptionMixed: "Die folgenden Medikamente müssen nachbestellt werden:",
+			alertSingle: "⚠️ 1 Medikament kritisch niedrig!",
+			alertMultiple: "⚠️ {count} Medikamente kritisch niedrig!",
+			alertEmptySingle: "🚨 1 Medikament leer - sofort nachbestellen!",
+			alertEmptyMultiple: "🚨 {count} Medikamente leer - sofort nachbestellen!",
+			alertLowSingle: "⚠️ 1 Medikament kritisch niedrig",
+			alertLowMultiple: "⚠️ {count} Medikamente kritisch niedrig",
+			alertLowStockSingle: "⚠️ 1 Medikament niedrig",
+			alertLowStockMultiple: "⚠️ {count} Medikamente niedrig",
+			descriptionLow: "Die folgenden Medikamente werden knapp und sollten bald nachbestellt werden:",
 			tableHeaders: {
 				medication: "Medikament",
 				pills: "Tabletten",
 				days: "Tage",
 				runsOut: "Aufgebraucht",
 			},
-			footer: "🤖 Automatische Erinnerung von MedAssist-ng",
+			now: "JETZT",
 			repeatDailyNote:
 				"Sie erhalten diese tägliche Erinnerung, weil 'Täglich wiederholen' in den Einstellungen aktiviert ist.",
 		},
@@ -205,28 +277,50 @@ const translations: Record<Language, TranslationKeys> = {
 			},
 			pills: "Tabletten",
 			takenBy: "für {name}",
-			footer: "🤖 Automatische Erinnerung von MedAssist-ng",
 		},
 		push: {
-			stockTitle: "MedAssist-ng: 1 Medikament wird knapp",
-			stockTitleMultiple: "MedAssist-ng: {count} Medikamente werden knapp",
+			stockTitle: "MedAssist-ng: 1 Medikament kritisch niedrig",
+			stockTitleMultiple: "MedAssist-ng: {count} Medikamente kritisch niedrig",
 			intakeTitle: "💊 Erinnerung: Medikamenteneinnahme in {minutes} Min.",
 			pillsLeft: "{count} Tabletten",
 			daysLeft: "{count} Tage übrig",
 			pillsAt: "{count} Tabletten um {time}",
 			repeatDailyNote: "(Tägliche Erinnerung aktiviert)",
 			empty: "Leer",
-			low: "Knapp",
+			low: "Kritisch",
+			critical: "Kritisch",
+			lowStock: "Niedrig",
 			reorderNow: "Jetzt nachbestellen!",
-			emptySection: "LEER (sofort nachbestellen)",
-			lowSection: "WIRD KNAPP (bald nachbestellen)",
+			emptySection: "Leer (sofort nachbestellen)",
+			lowSection: "Kritisch niedrig",
+			criticalSection: "Kritisch niedrig",
+			lowStockSection: "Niedrig",
+		},
+		demandCalculator: {
+			subject: "MedAssist-ng - Bestandsübersicht ({from} - {until})",
+			title: "MedAssist-ng - Bedarfsrechner",
+			description: "Bestandsübersicht von {from} bis {until}",
+			summaryOutOfStock: "⚠️ {count} Medikament{e} wird im Zeitraum nicht ausreichen.",
+			summaryAllOk: "✓ Alle Medikamente reichen für diesen Zeitraum.",
+			tableHeaders: {
+				medication: "Medikament",
+				usage: "Verbrauch",
+				needed: "Blister benötigt",
+				available: "Verfügbar",
+				status: "Status",
+			},
+			statusEnough: "✓ Ausreichend",
+			statusEmpty: "✗ Leer",
 		},
 		common: {
 			pill: "Tablette",
 			pills: "Tabletten",
+			blister: "Blister",
+			blisters: "Blister",
 			day: "Tag",
 			days: "Tage",
 			soon: "bald",
+			footer: "🤖 Gesendet von MedAssist-ng",
 		},
 	},
 };
@@ -263,4 +357,39 @@ export function getDateLocale(language: Language): string {
 		default:
 			return "en-US";
 	}
+}
+
+/**
+ * Get the app URL from the first CORS_ORIGINS entry.
+ * Falls back to empty string if not set.
+ */
+export function getAppUrl(): string {
+	const origins = process.env.CORS_ORIGINS || "";
+	return origins.split(",")[0]?.trim() || "";
+}
+
+/**
+ * Get the unified footer as HTML with MedAssist-ng as a link to the instance.
+ * @param variant - 'planner' uses the Medication Planner footer text
+ */
+export function getFooterHtml(language: Language): string {
+	const tr = getTranslations(language);
+	const appUrl = getAppUrl();
+	const appName = appUrl
+		? `<a href="${appUrl}" style="color: #6b7280; text-decoration: underline;">MedAssist-ng</a>`
+		: "MedAssist-ng";
+	return tr.common.footer.replace("MedAssist-ng", appName);
+}
+
+/**
+ * Get the unified footer as plain text.
+ * @param variant - 'planner' uses the Medication Planner footer text
+ */
+export function getFooterPlain(language: Language): string {
+	const tr = getTranslations(language);
+	const appUrl = getAppUrl();
+	if (appUrl) {
+		return `${tr.common.footer} (${appUrl})`;
+	}
+	return tr.common.footer;
 }

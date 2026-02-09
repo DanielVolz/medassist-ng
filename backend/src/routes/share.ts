@@ -135,6 +135,8 @@ export async function shareRoutes(app: FastifyInstance) {
 				blisters, // Legacy format for backward compat
 				dismissedUntil: med.dismissedUntil,
 				updatedAt: med.updatedAt, // For filtering out doses from previous schedule configurations
+				lastStockCorrectionAt: med.lastStockCorrectionAt?.getTime() ?? null,
+				stockAdjustment: med.stockAdjustment ?? 0,
 			};
 		});
 
@@ -145,7 +147,13 @@ export async function shareRoutes(app: FastifyInstance) {
 			medications: medicationsWithBlisters,
 			stockThresholds: {
 				lowStockDays: settings?.lowStockDays ?? 30,
+				normalStockDays: settings?.normalStockDays ?? 60,
+				highStockDays: settings?.highStockDays ?? 90,
+				reminderDaysBefore: settings?.reminderDaysBefore ?? 7,
+				expiryWarningDays: settings?.expiryWarningDays ?? 90,
 			},
+			stockCalculationMode: (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic",
+			shareStockStatus: settings?.shareStockStatus ?? true,
 		};
 	});
 

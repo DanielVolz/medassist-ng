@@ -88,10 +88,10 @@ export async function runDrizzleMigrations(
 		await migrate(database, { migrationsFolder });
 		return { success: true };
 	} catch (err: any) {
-		// If the error is "duplicate column", it means the schema is already up-to-date
-		// This happens when ALTER migrations in client.ts have already added the columns
-		// We consider this a success with a warning, not a failure
-		if (err.message?.includes("duplicate column")) {
+		// If the error is about existing schema objects, the DB is already up-to-date
+		// This happens when ALTER migrations in client.ts have already added the columns,
+		// or when tables were created before drizzle migrations were introduced
+		if (err.message?.includes("duplicate column") || err.message?.includes("already exists")) {
 			return { success: true, warning: `Schema already up-to-date: ${err.message}` };
 		}
 		return { success: false, error: err.message };
@@ -129,6 +129,12 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE medications ADD COLUMN dose_unit text DEFAULT 'mg'`,
 		// Added for intake-level takenBy: unified intakes structure
 		`ALTER TABLE medications ADD COLUMN intakes_json text NOT NULL DEFAULT '[]'`,
+		// Added for separate stock reminder tracking
+		`ALTER TABLE user_settings ADD COLUMN last_stock_reminder_sent text`,
+		`ALTER TABLE user_settings ADD COLUMN last_stock_reminder_channel text`,
+		`ALTER TABLE user_settings ADD COLUMN last_stock_reminder_med_names text`,
+		// Added for share stock visibility toggle
+		`ALTER TABLE user_settings ADD COLUMN share_stock_status integer NOT NULL DEFAULT 1`,
 	];
 
 	for (const sql of alterMigrations) {

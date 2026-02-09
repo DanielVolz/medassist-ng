@@ -216,13 +216,14 @@ export interface UpdateUserSettingsOptions {
 	userId: number;
 	stockCalculationMode?: "automatic" | "manual";
 	lowStockDays?: number;
+	shareStockStatus?: boolean;
 }
 
 /**
  * Create or update user settings
  */
 export async function setUserSettings(client: Client, options: UpdateUserSettingsOptions): Promise<void> {
-	const { userId, stockCalculationMode = "automatic", lowStockDays = 30 } = options;
+	const { userId, stockCalculationMode = "automatic", lowStockDays = 30, shareStockStatus } = options;
 
 	// Check if settings exist
 	const existing = await client.execute({
@@ -232,13 +233,19 @@ export async function setUserSettings(client: Client, options: UpdateUserSetting
 
 	if (existing.rows.length > 0) {
 		await client.execute({
-			sql: `UPDATE user_settings SET stock_calculation_mode = ?, low_stock_days = ? WHERE user_id = ?`,
-			args: [stockCalculationMode, lowStockDays, userId],
+			sql: `UPDATE user_settings SET stock_calculation_mode = ?, low_stock_days = ?${shareStockStatus !== undefined ? ", share_stock_status = ?" : ""} WHERE user_id = ?`,
+			args:
+				shareStockStatus !== undefined
+					? [stockCalculationMode, lowStockDays, shareStockStatus ? 1 : 0, userId]
+					: [stockCalculationMode, lowStockDays, userId],
 		});
 	} else {
 		await client.execute({
-			sql: `INSERT INTO user_settings (user_id, stock_calculation_mode, low_stock_days) VALUES (?, ?, ?)`,
-			args: [userId, stockCalculationMode, lowStockDays],
+			sql: `INSERT INTO user_settings (user_id, stock_calculation_mode, low_stock_days${shareStockStatus !== undefined ? ", share_stock_status" : ""}) VALUES (?, ?, ?${shareStockStatus !== undefined ? ", ?" : ""})`,
+			args:
+				shareStockStatus !== undefined
+					? [userId, stockCalculationMode, lowStockDays, shareStockStatus ? 1 : 0]
+					: [userId, stockCalculationMode, lowStockDays],
 		});
 	}
 }

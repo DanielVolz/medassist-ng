@@ -1,6 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import nodemailer from "nodemailer";
-import { getDateLocale, getTranslations, type Language, t } from "../i18n/translations.js";
+import {
+	getDateLocale,
+	getFooterHtml,
+	getFooterPlain,
+	getTranslations,
+	type Language,
+	t,
+} from "../i18n/translations.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
@@ -29,6 +36,7 @@ type PlannerRow = {
 	fullBlisters: number;
 	loosePills: number;
 	enough: boolean;
+	packageType?: string;
 };
 
 type SendEmailBody = {
@@ -44,6 +52,7 @@ type LowStockItem = {
 	medsLeft: number;
 	daysLeft: number | null;
 	depletionDate: string | null;
+	isCritical?: boolean;
 };
 
 type ReminderEmailBody = {
@@ -68,32 +77,28 @@ export async function plannerRoutes(app: FastifyInstance) {
 		return authUser.id;
 	}
 
+	// Demand calculator notification (supports email and push)
 	app.post<{ Body: SendEmailBody }>("/planner/send-email", async (request, reply) => {
 		const { email, from, until, rows, language: bodyLanguage } = request.body;
 
-		if (!email || !rows || rows.length === 0) {
-			return reply.status(400).send({ error: "Missing email or planner data" });
+		if (!rows || rows.length === 0) {
+			return reply.status(400).send({ error: "Missing planner data" });
 		}
 
-		const smtpHost = process.env.SMTP_HOST;
-		const smtpUser = process.env.SMTP_USER;
-		const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
-		const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-		const smtpSecure = process.env.SMTP_SECURE === "true";
-		const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
-
-		if (!smtpHost || !smtpUser) {
-			return reply.status(400).send({ error: "SMTP not configured" });
-		}
+		// Load user settings for notification channels
+		const userId = await getUserId(request);
+		const userSettings = await loadUserSettings(userId);
+		const notificationSettings = {
+			emailEnabled: userSettings.emailEnabled,
+			shoutrrrEnabled: userSettings.shoutrrrEnabled,
+			shoutrrrUrl: userSettings.shoutrrrUrl || "",
+		};
 
 		// Get locale from user settings or use the language passed in the body
-		let language: Language = bodyLanguage || "en";
-		const authUser = request.user as unknown as AuthUser | null;
-		if (authUser?.id) {
-			const userSettings = await loadUserSettings(authUser.id);
-			language = userSettings.language;
-		}
+		const language: Language = (userSettings.language as Language) || bodyLanguage || "en";
 		const locale = getDateLocale(language);
+		const tr = getTranslations(language);
+		const dc = tr.demandCalculator;
 
 		// Format dates for display - escape to prevent XSS even though toLocaleDateString should be safe
 		const fromDate = escapeHtml(
@@ -111,47 +116,93 @@ export async function plannerRoutes(app: FastifyInstance) {
 			})
 		);
 
-		// Build HTML table with horizontal scroll for mobile
-		// Escape/coerce all user-provided values to prevent XSS
-		const tableRows = rows
-			.map((row) => {
-				const safeName = escapeHtml(row.medicationName);
-				const safeTotalPills = Number(row.totalPills) || 0;
-				const safePlannerUsage = Number(row.plannerUsage) || 0;
-				const safeBlistersNeeded = Number(row.blistersNeeded) || 0;
-				const safeBlisterSize = Number(row.blisterSize) || 0;
-				const safeFullBlisters = Number(row.fullBlisters) || 0;
-				const safeLoosePills = Number(row.loosePills) || 0;
-				return `
+		const outOfStockCount = rows.filter((r) => !r.enough).length;
+		const summaryText = outOfStockCount > 0 ? t(dc.summaryOutOfStock, { count: outOfStockCount }) : dc.summaryAllOk;
+
+		// Build plain text (shared between email and push)
+		const plainText = `${dc.title}
+${t(dc.description, { from: fromDate, until: untilDate })}
+
+${summaryText}
+
+${rows
+	.map((r) => {
+		const isBottle = r.packageType === "bottle";
+		const usage = `${r.plannerUsage} ${tr.common.pills}`;
+		const needed = isBottle ? "–" : `${r.blistersNeeded} × ${r.blisterSize}`;
+		const loosePills = Math.round((Number(r.loosePills) || 0) * 10) / 10;
+		const available = isBottle
+			? `${loosePills} ${tr.common.pills}`
+			: `${r.fullBlisters} ${tr.common.blisters}${loosePills > 0 ? ` + ${loosePills} ${tr.common.pills}` : ""}`;
+		const status = r.enough ? dc.statusEnough : dc.statusEmpty;
+		return `${r.medicationName}: ${usage}, ${needed}, ${available} - ${status}`;
+	})
+	.join("\n")}
+
+---
+${getFooterPlain(language)}`;
+
+		const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
+
+		// Send email if enabled
+		if (notificationSettings.emailEnabled && email) {
+			const smtpHost = process.env.SMTP_HOST;
+			const smtpUser = process.env.SMTP_USER;
+			const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
+			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
+			const smtpSecure = process.env.SMTP_SECURE === "true";
+			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+
+			if (smtpHost && smtpUser) {
+				// Build HTML table with horizontal scroll for mobile
+				// Escape/coerce all user-provided values to prevent XSS
+				const tableRows = rows
+					.map((row) => {
+						const safeName = escapeHtml(row.medicationName);
+						const safePlannerUsage = Number(row.plannerUsage) || 0;
+						const safeBlistersNeeded = Number(row.blistersNeeded) || 0;
+						const safeBlisterSize = Number(row.blisterSize) || 0;
+						const safeFullBlisters = Number(row.fullBlisters) || 0;
+						const safeLoosePills = Math.round((Number(row.loosePills) || 0) * 10) / 10;
+						const isBottle = row.packageType === "bottle";
+
+						// "Blisters needed" column: dash for bottles
+						const neededCell = isBottle ? "–" : `${safeBlistersNeeded} × ${safeBlisterSize}`;
+
+						// "Available" column: match frontend format
+						let availableCell: string;
+						if (isBottle) {
+							availableCell = `${safeLoosePills} ${tr.common.pills}`;
+						} else {
+							availableCell = `${safeFullBlisters} ${tr.common.blisters}`;
+							if (safeLoosePills > 0) {
+								availableCell += ` + ${safeLoosePills} ${tr.common.pills}`;
+							}
+						}
+
+						return `
         <tr>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${safeName}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safeTotalPills}</strong></td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safePlannerUsage}</strong></td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeBlistersNeeded} × ${safeBlisterSize}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeFullBlisters}${safeLoosePills > 0 ? ` (+${safeLoosePills})` : ""}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safePlannerUsage}</strong> ${tr.common.pills}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${neededCell}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${availableCell}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">
             <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; ${
 							row.enough ? "background: #d1fae5; color: #065f46;" : "background: #fee2e2; color: #991b1b;"
 						}">
-              ${row.enough ? "✓ OK" : "✗ Out of Stock"}
+              ${row.enough ? dc.statusEnough : dc.statusEmpty}
             </span>
           </td>
         </tr>
       `;
-			})
-			.join("");
+					})
+					.join("");
 
-		const outOfStockCount = rows.filter((r) => !r.enough).length;
-		const summaryText =
-			outOfStockCount > 0
-				? `⚠️ ${outOfStockCount} medication${outOfStockCount > 1 ? "s" : ""} will be out of stock during this period.`
-				: "✓ All medications have sufficient supply for this period.";
-
-		const html = `
+				const html = `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
         <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">MedAssist-ng - Demand Calculator</h2>
-          <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">Supply overview from <strong>${fromDate}</strong> to <strong>${untilDate}</strong></p>
+          <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${dc.title}</h2>
+          <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">${t(dc.description, { from: `<strong>${fromDate}</strong>`, until: `<strong>${untilDate}</strong>` })}</p>
           
           <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; ${
 						outOfStockCount > 0
@@ -167,12 +218,11 @@ export async function plannerRoutes(app: FastifyInstance) {
             <table style="width: 100%; border-collapse: collapse; background: white; min-width: 550px;">
               <thead>
                 <tr style="background: #f3f4f6;">
-                  <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Medication</th>
-                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Stock</th>
-                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Usage</th>
-                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Needed</th>
-                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Available</th>
-                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">Status</th>
+                  <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.medication}</th>
+                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.usage}</th>
+                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.needed}</th>
+                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.available}</th>
+                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.status}</th>
                 </tr>
               </thead>
               <tbody>
@@ -182,44 +232,76 @@ export async function plannerRoutes(app: FastifyInstance) {
           </div>
 
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-          <p style="color: #9ca3af; font-size: 11px; margin: 0;">Sent from MedAssist-ng Medication Planner</p>
+          <p style="color: #9ca3af; font-size: 11px; margin: 0;">${getFooterHtml(language)}</p>
         </div>
       </div>
     `;
 
-		const plainText = `MedAssist-ng - Demand Calculator
-Supply overview from ${fromDate} to ${untilDate}
+				try {
+					const transporter = nodemailer.createTransport({
+						host: smtpHost,
+						port: smtpPort,
+						secure: smtpSecure,
+						auth: {
+							user: smtpUser,
+							pass: smtpPass ?? "",
+						},
+					});
 
-${summaryText}
+					await transporter.sendMail({
+						from: smtpFrom,
+						to: email,
+						subject: t(dc.subject, { from: fromDate, until: untilDate }),
+						text: plainText,
+						html,
+					});
 
-${rows.map((r) => `${r.medicationName}: ${r.totalPills} pills in stock, ${r.plannerUsage} pills needed, ${r.fullBlisters} blisters available${r.loosePills > 0 ? ` (+${r.loosePills} loose)` : ""} (${r.blistersNeeded} needed) - ${r.enough ? "Enough" : "OUT OF STOCK"}`).join("\n")}
+					results.email = true;
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : "Unknown error";
+					results.errors.push(`Email: ${errorMessage}`);
+				}
+			}
+		}
 
----
-Sent from MedAssist-ng Medication Planner`;
+		// Send push notification if enabled
+		if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
+			const pushTitle = t(dc.subject, { from: fromDate, until: untilDate });
+			const pushMessage = `${summaryText}\n\n${rows
+				.map((r) => {
+					const usage = `${r.plannerUsage} ${tr.common.pills}`;
+					const status = r.enough ? dc.statusEnough : dc.statusEmpty;
+					return `${r.enough ? "✓" : "✗"} ${r.medicationName}: ${usage} - ${status}`;
+				})
+				.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 
-		try {
-			const transporter = nodemailer.createTransport({
-				host: smtpHost,
-				port: smtpPort,
-				secure: smtpSecure,
-				auth: {
-					user: smtpUser,
-					pass: smtpPass ?? "",
-				},
+			try {
+				const pushResult = await sendShoutrrrNotification(notificationSettings.shoutrrrUrl, pushTitle, pushMessage);
+				if (pushResult.success) {
+					results.push = true;
+				} else {
+					results.errors.push(`Push: ${pushResult.error}`);
+				}
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : "Unknown error";
+				results.errors.push(`Push: ${errorMessage}`);
+			}
+		}
+
+		// Build response message
+		const sentChannels: string[] = [];
+		if (results.email) sentChannels.push("email");
+		if (results.push) sentChannels.push("push");
+
+		if (sentChannels.length > 0) {
+			return reply.send({
+				success: true,
+				message: `Notification sent via ${sentChannels.join(" and ")}`,
 			});
-
-			await transporter.sendMail({
-				from: smtpFrom,
-				to: email,
-				subject: `MedAssist-ng - Supply Overview (${fromDate} - ${untilDate})`,
-				text: plainText,
-				html,
-			});
-
-			return reply.send({ success: true, message: "Email sent successfully" });
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : "Unknown error";
-			return reply.status(500).send({ error: `Failed to send email: ${errorMessage}` });
+		} else if (results.errors.length > 0) {
+			return reply.status(500).send({ error: results.errors.join("; ") });
+		} else {
+			return reply.status(400).send({ error: "No notification channels configured" });
 		}
 	});
 
@@ -240,11 +322,66 @@ Sent from MedAssist-ng Medication Planner`;
 			shoutrrrUrl: userSettings.shoutrrrUrl || "",
 		};
 
+		// Get translations based on user language
+		const language = (userSettings.language as Language) || "en";
+		const tr = getTranslations(language);
+
 		const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
 
-		// Separate empty from low stock medications
+		// Separate into 3 categories: empty, critical, and low stock
 		const emptyMeds = lowStock.filter((r) => r.medsLeft <= 0);
-		const lowMeds = lowStock.filter((r) => r.medsLeft > 0);
+		const criticalMeds = lowStock.filter((r) => r.medsLeft > 0 && r.isCritical !== false);
+		const lowStockMeds = lowStock.filter((r) => r.medsLeft > 0 && r.isCritical === false);
+
+		// Build shared notification content (method-agnostic)
+		const titleParts: string[] = [];
+		if (emptyMeds.length > 0) {
+			titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty}`);
+		}
+		if (criticalMeds.length > 0) {
+			titleParts.push(`🚨 ${criticalMeds.length} ${tr.push.critical}`);
+		}
+		if (lowStockMeds.length > 0) {
+			titleParts.push(`⚠️ ${lowStockMeds.length} ${tr.push.lowStock}`);
+		}
+		const notificationTitle = `MedAssist: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
+
+		// Build description text
+		let descriptionText: string;
+		if (emptyMeds.length > 0 && (criticalMeds.length > 0 || lowStockMeds.length > 0)) {
+			descriptionText = tr.stockReminder.descriptionMixed;
+		} else if (emptyMeds.length > 0) {
+			descriptionText = tr.stockReminder.descriptionEmpty;
+		} else if (criticalMeds.length > 0) {
+			descriptionText = tr.stockReminder.description;
+		} else {
+			descriptionText = tr.stockReminder.descriptionLow;
+		}
+
+		// Build section-based message (shared between email plain text and push)
+		const messageParts: string[] = [];
+		if (emptyMeds.length > 0) {
+			messageParts.push(`🚨 ${tr.push.emptySection}:`);
+			emptyMeds.forEach((r) => messageParts.push(`  • ${r.name}`));
+		}
+		if (criticalMeds.length > 0) {
+			if (messageParts.length > 0) messageParts.push("");
+			messageParts.push(`🚨 ${tr.push.criticalSection}:`);
+			criticalMeds.forEach((r) =>
+				messageParts.push(
+					`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
+				)
+			);
+		}
+		if (lowStockMeds.length > 0) {
+			if (messageParts.length > 0) messageParts.push("");
+			messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
+			lowStockMeds.forEach((r) =>
+				messageParts.push(
+					`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
+				)
+			);
+		}
 
 		// Send email if enabled
 		if (notificationSettings.emailEnabled && email) {
@@ -256,52 +393,59 @@ Sent from MedAssist-ng Medication Planner`;
 			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
 
 			if (smtpHost && smtpUser) {
-				// Build subject line based on what we have
-				let subjectText: string;
-				if (emptyMeds.length > 0 && lowMeds.length > 0) {
-					subjectText = `🚨 ${emptyMeds.length} Empty, ⚠️ ${lowMeds.length} Running Low`;
-				} else if (emptyMeds.length > 0) {
-					subjectText = `🚨 ${emptyMeds.length} Medication${emptyMeds.length > 1 ? "s" : ""} Empty`;
-				} else {
-					subjectText = `⚠️ ${lowMeds.length} Medication${lowMeds.length > 1 ? "s" : ""} Running Low`;
-				}
+				// Build subject line from shared title parts
+				const subjectText = titleParts.join(", ");
 
-				// Build alert box based on what we have
-				let alertHtml: string;
-				if (emptyMeds.length > 0 && lowMeds.length > 0) {
-					alertHtml = `
+				// Build alert boxes for each category
+				const alertParts: string[] = [];
+
+				if (emptyMeds.length > 0) {
+					const emptyAlert =
+						emptyMeds.length === 1
+							? tr.stockReminder.alertEmptySingle
+							: t(tr.stockReminder.alertEmptyMultiple, { count: emptyMeds.length });
+					alertParts.push(`
             <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: #fef2f2; border: 1px solid #dc2626;">
               <p style="margin: 0; color: #dc2626; font-weight: 600; font-size: 13px;">
-                🚨 ${emptyMeds.length} medication${emptyMeds.length > 1 ? "s" : ""} EMPTY - reorder immediately!
+                ${emptyAlert}
               </p>
-            </div>
-            <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #fffbeb; border: 1px solid #f59e0b;">
-              <p style="margin: 0; color: #b45309; font-weight: 500; font-size: 13px;">
-                ⚠️ ${lowMeds.length} medication${lowMeds.length > 1 ? "s" : ""} running low - reorder soon
-              </p>
-            </div>`;
-				} else if (emptyMeds.length > 0) {
-					alertHtml = `
-            <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #fef2f2; border: 1px solid #dc2626;">
-              <p style="margin: 0; color: #dc2626; font-weight: 600; font-size: 13px;">
-                🚨 ${emptyMeds.length} medication${emptyMeds.length > 1 ? "s" : ""} EMPTY - reorder immediately!
-              </p>
-            </div>`;
-				} else {
-					alertHtml = `
-            <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #fffbeb; border: 1px solid #f59e0b;">
-              <p style="margin: 0; color: #b45309; font-weight: 500; font-size: 13px;">
-                ⚠️ ${lowMeds.length} medication${lowMeds.length > 1 ? "s" : ""} running low - reorder soon
-              </p>
-            </div>`;
+            </div>`);
 				}
+
+				if (criticalMeds.length > 0) {
+					const criticalAlert =
+						criticalMeds.length === 1
+							? tr.stockReminder.alertLowSingle
+							: t(tr.stockReminder.alertLowMultiple, { count: criticalMeds.length });
+					alertParts.push(`
+            <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: #fff7ed; border: 1px solid #ea580c;">
+              <p style="margin: 0; color: #c2410c; font-weight: 600; font-size: 13px;">
+                ${criticalAlert}
+              </p>
+            </div>`);
+				}
+
+				if (lowStockMeds.length > 0) {
+					const lowAlert =
+						lowStockMeds.length === 1
+							? tr.stockReminder.alertLowStockSingle
+							: t(tr.stockReminder.alertLowStockMultiple, { count: lowStockMeds.length });
+					alertParts.push(`
+            <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: #fffbeb; border: 1px solid #f59e0b;">
+              <p style="margin: 0; color: #b45309; font-weight: 500; font-size: 13px;">
+                ${lowAlert}
+              </p>
+            </div>`);
+				}
+
+				const alertHtml = alertParts.join("");
 
 				// Build table rows with status indicator
 				const buildTableRow = (row: LowStockItem) => {
 					const isEmpty = row.medsLeft <= 0;
-					const statusIcon = isEmpty ? "🚨" : "⚠️";
-					const rowBg = isEmpty ? "#fef2f2" : "white";
-					// Escape user-provided strings and coerce numbers to prevent XSS
+					const isCritical = row.isCritical !== false;
+					const statusIcon = isEmpty ? "🚨" : isCritical ? "🚨" : "⚠️";
+					const rowBg = isEmpty ? "#fef2f2" : isCritical ? "#fff7ed" : "white";
 					const safeName = escapeHtml(row.name);
 					const safeMedsLeft = Number(row.medsLeft) || 0;
 					const safeDaysLeft = Number(row.daysLeft) || 0;
@@ -311,26 +455,16 @@ Sent from MedAssist-ng Medication Planner`;
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${safeName}</td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${safeMedsLeft}</strong></td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeDaysLeft}</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? "<strong>NOW</strong>" : safeDepletionDate}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? `<strong>${tr.stockReminder.now}</strong>` : safeDepletionDate}</td>
           </tr>`;
 				};
 
 				const tableRows = lowStock.map(buildTableRow).join("");
 
-				// Build description text
-				let descriptionText: string;
-				if (emptyMeds.length > 0 && lowMeds.length > 0) {
-					descriptionText = "The following medications need to be reordered:";
-				} else if (emptyMeds.length > 0) {
-					descriptionText = "The following medications are EMPTY and need to be reordered immediately:";
-				} else {
-					descriptionText = "The following medications are running low and need to be reordered:";
-				}
-
 				const html = `
           <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
             <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${emptyMeds.length > 0 ? "🚨" : "⚠️"} MedAssist-ng - Reorder Reminder</h2>
+              <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${emptyMeds.length > 0 ? "🚨" : "⚠️"} MedAssist-ng - ${tr.push.reorderNow}</h2>
               <p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">${descriptionText}</p>
               
               ${alertHtml}
@@ -339,10 +473,10 @@ Sent from MedAssist-ng Medication Planner`;
                 <table style="width: 100%; border-collapse: collapse; background: white; min-width: 400px;">
                   <thead>
                     <tr style="background: #f3f4f6;">
-                      <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Medication</th>
-                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Pills</th>
-                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Days</th>
-                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">Runs Out</th>
+                      <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.medication}</th>
+                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.pills}</th>
+                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.days}</th>
+                      <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.runsOut}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -352,33 +486,12 @@ Sent from MedAssist-ng Medication Planner`;
               </div>
 
               <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-              <p style="color: #9ca3af; font-size: 11px; margin: 0;">Sent from MedAssist-ng Medication Planner</p>
+              <p style="color: #9ca3af; font-size: 11px; margin: 0;">${getFooterHtml(language)}</p>
             </div>
           </div>
         `;
 
-				// Build plain text with sections
-				let plainTextContent: string;
-				if (emptyMeds.length > 0 && lowMeds.length > 0) {
-					plainTextContent = `🚨 EMPTY (reorder immediately):
-${emptyMeds.map((r) => `  • ${r.name}`).join("\n")}
-
-⚠️ RUNNING LOW (reorder soon):
-${lowMeds.map((r) => `  • ${r.name}: ${r.medsLeft} pills left, ${r.daysLeft ?? 0} days remaining`).join("\n")}`;
-				} else if (emptyMeds.length > 0) {
-					plainTextContent = `🚨 EMPTY (reorder immediately):
-${emptyMeds.map((r) => `  • ${r.name}`).join("\n")}`;
-				} else {
-					plainTextContent = `⚠️ Running low:
-${lowMeds.map((r) => `  • ${r.name}: ${r.medsLeft} pills left, ${r.daysLeft ?? 0} days remaining, runs out ${r.depletionDate ?? "soon"}`).join("\n")}`;
-				}
-
-				const plainText = `MedAssist-ng - Reorder Reminder
-
-${plainTextContent}
-
----
-Sent from MedAssist-ng Medication Planner`;
+				const plainText = `MedAssist-ng - ${tr.push.reorderNow}\n\n${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 
 				try {
 					const transporter = nodemailer.createTransport({
@@ -409,38 +522,10 @@ Sent from MedAssist-ng Medication Planner`;
 
 		// Send push notification if enabled
 		if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
-			// Get translations based on user language (default to 'en')
-			const tr = getTranslations((userSettings.language as Language) || "en");
-
-			// Build clear title
-			const titleParts: string[] = [];
-			if (emptyMeds.length > 0) {
-				titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty}`);
-			}
-			if (lowMeds.length > 0) {
-				titleParts.push(`⚠️ ${lowMeds.length} ${tr.push.low}`);
-			}
-			const title = `MedAssist: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
-
-			// Build clear message with sections
-			const messageParts: string[] = [];
-			if (emptyMeds.length > 0) {
-				messageParts.push(`🚨 ${tr.push.emptySection}:`);
-				emptyMeds.forEach((r) => messageParts.push(`  • ${r.name}`));
-			}
-			if (lowMeds.length > 0) {
-				if (emptyMeds.length > 0) messageParts.push("");
-				messageParts.push(`⚠️ ${tr.push.lowSection}:`);
-				lowMeds.forEach((r) =>
-					messageParts.push(
-						`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
-					)
-				);
-			}
-			const message = messageParts.join("\n");
+			const message = messageParts.join("\n") + `\n\n---\n${getFooterPlain(language)}`;
 
 			try {
-				const pushResult = await sendShoutrrrNotification(notificationSettings.shoutrrrUrl, title, message);
+				const pushResult = await sendShoutrrrNotification(notificationSettings.shoutrrrUrl, notificationTitle, message);
 				if (pushResult.success) {
 					results.push = true;
 				} else {
@@ -458,7 +543,9 @@ Sent from MedAssist-ng Medication Planner`;
 			updateReminderSentTime("stock", channel);
 
 			// Also update user settings in database so frontend can display the info
-			await updateUserReminderSentTime(userId, "stock", channel);
+			const firstMed = lowStock[0];
+			const medNames = lowStock.length > 1 ? `${firstMed.name} (+${lowStock.length - 1})` : firstMed?.name;
+			await updateUserReminderSentTime(userId, "stock", channel, medNames);
 		}
 
 		// Build response message

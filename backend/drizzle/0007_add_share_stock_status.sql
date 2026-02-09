@@ -1,0 +1,1 @@
+ALTER TABLE `user_settings` ADD `share_stock_status` integer DEFAULT true NOT NULL;

@@ -43,6 +43,20 @@
       "when": 1769893708813,
       "tag": "0005_add_intakes_json",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1770626907896,
+      "tag": "0006_add_stock_reminder_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1770659669121,
+      "tag": "0007_add_share_stock_status",
+      "breakpoints": true
     }
   ]
 }

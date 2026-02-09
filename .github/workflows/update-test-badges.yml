@@ -10,6 +10,11 @@ on:
 permissions:
   contents: write
 
+# Prevent parallel badge workflows from racing each other
+concurrency:
+  group: update-test-badges
+  cancel-in-progress: true
+
 jobs:
   update-badges:
     name: Update Test Count Badges
@@ -99,5 +104,8 @@ jobs:
             echo "No badge changes to commit"
           else
             git commit -m "chore: update test count badges [skip ci]"
+            # Rebase on latest main to avoid push rejection when concurrent
+            # badge workflows or other [skip ci] commits land between checkout and push
+            git pull --rebase origin main
             git push
           fi

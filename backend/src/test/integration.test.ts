@@ -1181,6 +1181,92 @@ describe("Integration Tests", () => {
 			expect(data[0].plannerUsage).toBe(10);
 			expect(data[0].enough).toBe(true); // 45 > 10
 		});
+
+		it("should use user-selected start date, not current time (fix asymmetric counting)", async () => {
+			// Regression test: When a planner range starts today, the old code used
+			// max(now, start) as the effective start. If now was between the morning
+			// dose (07:00) and evening dose (20:00), morning was skipped but evening
+			// counted, giving an asymmetric result (e.g., 5 instead of 6).
+			//
+			// Example: medication with daily morning (07:00) + evening (20:00) intakes,
+			// planner range [today 01:00, today+3 01:00).
+			// Old code at 15:00: morning 07:00 < 15:00 → skipped, evening 20:00 ≥ 15:00 → counted
+			// Result: 2 morning + 3 evening = 5 instead of 3+3 = 6.
+
+			// Use a past start date so the intakes predate the planner range
+			const intakeStart = "2025-01-01T07:00:00.000Z";
+			const intakeEvening = "2025-01-01T20:00:00.000Z";
+
+			// Plan range: Feb 9 00:00 to Feb 12 00:00 UTC (3 full days)
+			const planStart = "2026-02-09T00:00:00.000Z";
+			const planEnd = "2026-02-12T00:00:00.000Z";
+
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Twice Daily Med Asymmetric",
+					packCount: 5,
+					blistersPerPack: 5,
+					pillsPerBlister: 10,
+					blisters: [
+						{ usage: 1, every: 1, start: intakeStart },
+						{ usage: 1, every: 1, start: intakeEvening },
+					],
+				},
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/usage",
+				payload: {
+					startDate: planStart,
+					endDate: planEnd,
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			// Both morning and evening should have exactly 3 occurrences each
+			// (Feb 9, 10, 11) for a total of 6, regardless of current time
+			expect(data[0].plannerUsage).toBe(6);
+		});
+
+		it("should handle planner range starting before blister start", async () => {
+			// Blister starts on Feb 10, planner range starts Feb 9
+			// Should only count doses from Feb 10 onwards
+			const intakeMorning = "2026-02-10T07:00:00.000Z";
+			const intakeEvening = "2026-02-10T20:00:00.000Z";
+
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Recent Start Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 30,
+					blisters: [
+						{ usage: 1, every: 1, start: intakeMorning },
+						{ usage: 1, every: 1, start: intakeEvening },
+					],
+				},
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/usage",
+				payload: {
+					startDate: "2026-02-09T00:00:00.000Z",
+					endDate: "2026-02-12T00:00:00.000Z",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			// Only Feb 10 and Feb 11 have doses (blister starts Feb 10)
+			expect(data[0].plannerUsage).toBe(4); // 2 days × 2 intakes
+		});
 	});
 
 	// ---------------------------------------------------------------------------

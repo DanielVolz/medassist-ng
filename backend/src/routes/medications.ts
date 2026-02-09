@@ -731,9 +731,13 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const currentStock = Math.max(0, originalTotalPills - consumedUntilNow);
 
 			// Calculate usage for the planning period
+			// Always use the user-selected start date for the usage calculation.
+			// Using max(now, start) would cause asymmetric counting when now falls
+			// between morning and evening doses on the start day (e.g., morning dose
+			// skipped but evening counted), leading to confusing off-by-one results.
+			// The stock already reflects consumed doses, so no double-counting occurs.
 			// When includeUntilStart is true, calculate from now to end (useful for trip planning)
-			// When false, calculate from max(now, start) to end (default behavior)
-			const effectivePlannerStart = includeUntilStart ? now : new Date(Math.max(now.getTime(), start.getTime()));
+			const effectivePlannerStart = includeUntilStart ? now : start;
 			const usageTotal = calculateUsageInRange(blisters, effectivePlannerStart, end);
 
 			const blistersNeeded = pillsPerBlister > 0 ? Math.ceil(usageTotal / pillsPerBlister) : 0;
@@ -840,12 +844,28 @@ function calculateUsageInRange(
 	end: Date
 ) {
 	let total = 0;
+	const msPerDay = 86400000;
 	blisters.forEach((blister) => {
 		const blisterStart = parseLocalDateTime(blister.start);
 		if (Number.isNaN(blisterStart.getTime())) return;
-		// iterate occurrences from blisterStart up to end
-		for (let dt = new Date(blisterStart); dt < end; dt.setDate(dt.getDate() + blister.every)) {
-			if (dt >= start && dt < end) total += blister.usage;
+
+		const every = Math.max(1, blister.every);
+
+		// Skip ahead to the first occurrence at or after start to avoid
+		// iterating through months/years of past doses
+		const dt = new Date(blisterStart);
+		if (dt < start) {
+			const daysToSkip = Math.floor((start.getTime() - dt.getTime()) / (every * msPerDay));
+			dt.setDate(dt.getDate() + daysToSkip * every);
+			// Fine-tune: advance until we reach or pass start
+			while (dt < start) {
+				dt.setDate(dt.getDate() + every);
+			}
+		}
+
+		// Count occurrences in [start, end)
+		for (; dt < end; dt.setDate(dt.getDate() + every)) {
+			total += blister.usage;
 		}
 	});
 	return Number(total.toFixed(2));

@@ -110,11 +110,15 @@ async function createSchema(client: Client) {
       expiry_warning_days integer NOT NULL DEFAULT 90,
       language text NOT NULL DEFAULT 'en',
       stock_calculation_mode text NOT NULL DEFAULT 'automatic',
+      share_stock_status integer NOT NULL DEFAULT 1,
       last_auto_email_sent text,
       last_notification_type text,
       last_notification_channel text,
       last_reminder_med_name text,
       last_reminder_taken_by text,
+      last_stock_reminder_sent text,
+      last_stock_reminder_channel text,
+      last_stock_reminder_med_names text,
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
@@ -161,21 +165,6 @@ describe("Planner Routes", () => {
 	});
 
 	describe("POST /planner/send-email", () => {
-		it("should reject request with missing email", async () => {
-			const response = await app.inject({
-				method: "POST",
-				url: "/planner/send-email",
-				payload: {
-					from: "2025-01-01",
-					until: "2025-01-31",
-					rows: [{ medicationName: "Test", totalPills: 10, plannerUsage: 5, enough: true }],
-				},
-			});
-
-			expect(response.statusCode).toBe(400);
-			expect(response.json()).toEqual({ error: "Missing email or planner data" });
-		});
-
 		it("should reject request with missing rows", async () => {
 			const response = await app.inject({
 				method: "POST",
@@ -189,10 +178,16 @@ describe("Planner Routes", () => {
 			});
 
 			expect(response.statusCode).toBe(400);
-			expect(response.json()).toEqual({ error: "Missing email or planner data" });
+			expect(response.json()).toEqual({ error: "Missing planner data" });
 		});
 
-		it("should reject when SMTP is not configured", async () => {
+		it("should return error when no notification channels configured", async () => {
+			// User settings exist but email/shoutrrr disabled
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 0, 0, 'en')`,
+				args: [999999999],
+			});
+
 			const response = await app.inject({
 				method: "POST",
 				url: "/planner/send-email",
@@ -217,7 +212,7 @@ describe("Planner Routes", () => {
 			});
 
 			expect(response.statusCode).toBe(400);
-			expect(response.json()).toEqual({ error: "SMTP not configured" });
+			expect(response.json()).toEqual({ error: "No notification channels configured" });
 		});
 
 		it("should send email successfully when SMTP is configured", async () => {
@@ -225,6 +220,12 @@ describe("Planner Routes", () => {
 			process.env.SMTP_HOST = "smtp.test.com";
 			process.env.SMTP_USER = "user@test.com";
 			process.env.SMTP_PASS = "password";
+
+			// Enable email in user settings
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
+				args: [999999999],
+			});
 
 			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
 
@@ -253,7 +254,7 @@ describe("Planner Routes", () => {
 			});
 
 			expect(response.statusCode).toBe(200);
-			expect(response.json()).toEqual({ success: true, message: "Email sent successfully" });
+			expect(response.json()).toEqual({ success: true, message: "Notification sent via email" });
 			expect(mockSendMail).toHaveBeenCalledTimes(1);
 
 			// Cleanup
@@ -266,6 +267,11 @@ describe("Planner Routes", () => {
 			process.env.SMTP_HOST = "smtp.test.com";
 			process.env.SMTP_USER = "user@test.com";
 			process.env.SMTP_PASS = "password";
+
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
+				args: [999999999],
+			});
 
 			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
 
@@ -308,7 +314,7 @@ describe("Planner Routes", () => {
 
 			// Check that HTML contains out of stock warning
 			const mailCall = mockSendMail.mock.calls[0][0];
-			expect(mailCall.html).toContain("Out of Stock");
+			expect(mailCall.html).toContain("Empty");
 			expect(mailCall.html).toContain("1 medication");
 
 			delete process.env.SMTP_HOST;
@@ -320,6 +326,11 @@ describe("Planner Routes", () => {
 			process.env.SMTP_HOST = "smtp.test.com";
 			process.env.SMTP_USER = "user@test.com";
 			process.env.SMTP_PASS = "password";
+
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
+				args: [999999999],
+			});
 
 			mockSendMail.mockRejectedValueOnce(new Error("Connection refused"));
 
@@ -347,7 +358,7 @@ describe("Planner Routes", () => {
 			});
 
 			expect(response.statusCode).toBe(500);
-			expect(response.json().error).toContain("Failed to send email");
+			expect(response.json().error).toContain("Email:");
 			expect(response.json().error).toContain("Connection refused");
 
 			delete process.env.SMTP_HOST;
@@ -359,6 +370,12 @@ describe("Planner Routes", () => {
 			process.env.SMTP_HOST = "smtp.test.com";
 			process.env.SMTP_USER = "user@test.com";
 			process.env.SMTP_PASS = "password";
+
+			// User settings with German language
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'de')`,
+				args: [999999999],
+			});
 
 			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
 
@@ -390,11 +407,177 @@ describe("Planner Routes", () => {
 
 			// German date format should be used
 			const mailCall = mockSendMail.mock.calls[0][0];
-			expect(mailCall.subject).toContain("Supply Overview");
+			expect(mailCall.subject).toContain("Bestandsübersicht");
 
 			delete process.env.SMTP_HOST;
 			delete process.env.SMTP_USER;
 			delete process.env.SMTP_PASS;
+		});
+
+		it("should send push notification when shoutrrr is enabled", async () => {
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, shoutrrr_url, language) VALUES (?, 0, 1, 'ntfy://localhost/test', 'en')`,
+				args: [999999999],
+			});
+
+			mockSendShoutrrr.mockResolvedValueOnce({ success: true });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/planner/send-email",
+				payload: {
+					email: "test@example.com",
+					from: "2025-01-01",
+					until: "2025-01-31",
+					rows: [
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 30,
+							plannerUsage: 10,
+							blisterSize: 10,
+							blistersNeeded: 1,
+							fullBlisters: 3,
+							loosePills: 0,
+							enough: true,
+						},
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true, message: "Notification sent via push" });
+			expect(mockSendShoutrrr).toHaveBeenCalledTimes(1);
+
+			// Verify push message contains medication info
+			const [_url, title, message] = mockSendShoutrrr.mock.calls[0];
+			expect(title).toContain("Supply Overview");
+			expect(message).toContain("Aspirin");
+		});
+
+		it("should send both email and push when both enabled", async () => {
+			process.env.SMTP_HOST = "smtp.test.com";
+			process.env.SMTP_USER = "user@test.com";
+			process.env.SMTP_PASS = "password";
+
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, shoutrrr_url, language) VALUES (?, 1, 1, 'ntfy://localhost/test', 'en')`,
+				args: [999999999],
+			});
+
+			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendShoutrrr.mockResolvedValueOnce({ success: true });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/planner/send-email",
+				payload: {
+					email: "test@example.com",
+					from: "2025-01-01",
+					until: "2025-01-31",
+					rows: [
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 5,
+							plannerUsage: 30,
+							blisterSize: 10,
+							blistersNeeded: 3,
+							fullBlisters: 0,
+							loosePills: 5,
+							enough: false,
+						},
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true, message: "Notification sent via email and push" });
+			expect(mockSendMail).toHaveBeenCalledTimes(1);
+			expect(mockSendShoutrrr).toHaveBeenCalledTimes(1);
+
+			// Verify push message contains out of stock info
+			const [_url, _title, message] = mockSendShoutrrr.mock.calls[0];
+			expect(message).toContain("Aspirin");
+			expect(message).toContain("Empty");
+
+			delete process.env.SMTP_HOST;
+			delete process.env.SMTP_USER;
+			delete process.env.SMTP_PASS;
+		});
+
+		it("should send push with German translations", async () => {
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, shoutrrr_url, language) VALUES (?, 0, 1, 'ntfy://localhost/test', 'de')`,
+				args: [999999999],
+			});
+
+			mockSendShoutrrr.mockResolvedValueOnce({ success: true });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/planner/send-email",
+				payload: {
+					email: "test@example.com",
+					from: "2025-01-01",
+					until: "2025-01-31",
+					rows: [
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 5,
+							plannerUsage: 30,
+							blisterSize: 10,
+							blistersNeeded: 3,
+							fullBlisters: 0,
+							loosePills: 5,
+							enough: false,
+						},
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			// Check German translations in push
+			const [_url, title] = mockSendShoutrrr.mock.calls[0];
+			expect(title).toContain("Bestandsübersicht");
+		});
+
+		it("should handle push error gracefully", async () => {
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, shoutrrr_url, language) VALUES (?, 0, 1, 'ntfy://localhost/test', 'en')`,
+				args: [999999999],
+			});
+
+			mockSendShoutrrr.mockResolvedValueOnce({ success: false, error: "Connection failed" });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/planner/send-email",
+				payload: {
+					email: "test@example.com",
+					from: "2025-01-01",
+					until: "2025-01-31",
+					rows: [
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 30,
+							plannerUsage: 10,
+							blisterSize: 10,
+							blistersNeeded: 1,
+							fullBlisters: 3,
+							loosePills: 0,
+							enough: true,
+						},
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(500);
+			expect(response.json().error).toContain("Push:");
+			expect(response.json().error).toContain("Connection failed");
 		});
 	});
 
@@ -503,10 +686,10 @@ describe("Planner Routes", () => {
 
 			expect(response.statusCode).toBe(200);
 
-			// Check email contains EMPTY warning
+			// Check email contains empty warning
 			const mailCall = mockSendMail.mock.calls[0][0];
 			expect(mailCall.subject).toContain("Empty");
-			expect(mailCall.html).toContain("EMPTY");
+			expect(mailCall.html).toContain("empty");
 
 			delete process.env.SMTP_HOST;
 			delete process.env.SMTP_USER;
@@ -541,7 +724,7 @@ describe("Planner Routes", () => {
 
 			const mailCall = mockSendMail.mock.calls[0][0];
 			expect(mailCall.subject).toContain("Empty");
-			expect(mailCall.subject).toContain("Running Low");
+			expect(mailCall.subject).toContain("Critical");
 
 			delete process.env.SMTP_HOST;
 			delete process.env.SMTP_USER;
@@ -697,6 +880,104 @@ describe("Planner Routes", () => {
 			expect(response.statusCode).toBe(500);
 			expect(response.json().error).toContain("Push:");
 			expect(response.json().error).toContain("Network error");
+		});
+
+		it("should differentiate critical and low stock in push notification", async () => {
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, shoutrrr_url, language) VALUES (?, 0, 1, 'ntfy://localhost/test', 'en')`,
+				args: [999999999],
+			});
+
+			mockSendShoutrrr.mockResolvedValueOnce({ success: true });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/reminder/send-email",
+				payload: {
+					email: "test@example.com",
+					lowStock: [
+						{ name: "Aspirin", medsLeft: 5, daysLeft: 3, depletionDate: "2025-01-03", isCritical: true },
+						{ name: "Ibuprofen", medsLeft: 49, daysLeft: 24, depletionDate: "2025-01-24", isCritical: false },
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			const [_url, title, message] = mockSendShoutrrr.mock.calls[0];
+			// Title should contain both Critical and Low labels
+			expect(title).toContain("Critical");
+			expect(title).toContain("Low");
+			// Message should have separate sections
+			expect(message).toContain("Running critically low");
+			expect(message).toContain("Aspirin");
+			expect(message).toContain("Running low");
+			expect(message).toContain("Ibuprofen");
+		});
+
+		it("should differentiate critical and low stock in email", async () => {
+			process.env.SMTP_HOST = "smtp.test.com";
+			process.env.SMTP_USER = "user@test.com";
+			process.env.SMTP_PASS = "password";
+
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
+				args: [999999999],
+			});
+
+			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/reminder/send-email",
+				payload: {
+					email: "test@example.com",
+					lowStock: [
+						{ name: "Aspirin", medsLeft: 5, daysLeft: 3, depletionDate: "2025-01-03", isCritical: true },
+						{ name: "Ibuprofen", medsLeft: 49, daysLeft: 24, depletionDate: "2025-01-24", isCritical: false },
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			const mailCall = mockSendMail.mock.calls[0][0];
+			// Subject should contain both Critical and Low
+			expect(mailCall.subject).toContain("Critical");
+			expect(mailCall.subject).toContain("Low");
+			// HTML should have separate alert boxes
+			expect(mailCall.html).toContain("critically low");
+			expect(mailCall.html).toContain("running low");
+
+			delete process.env.SMTP_HOST;
+			delete process.env.SMTP_USER;
+			delete process.env.SMTP_PASS;
+		});
+
+		it("should label all meds as critical when isCritical not provided", async () => {
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, shoutrrr_url, language) VALUES (?, 0, 1, 'ntfy://localhost/test', 'en')`,
+				args: [999999999],
+			});
+
+			mockSendShoutrrr.mockResolvedValueOnce({ success: true });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/reminder/send-email",
+				payload: {
+					email: "test@example.com",
+					lowStock: [{ name: "Aspirin", medsLeft: 5, daysLeft: 3, depletionDate: "2025-01-03" }],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			const [_url, title, message] = mockSendShoutrrr.mock.calls[0];
+			// Should be treated as critical (backwards compat)
+			expect(title).toContain("Critical");
+			expect(title).not.toContain("Low");
+			expect(message).toContain("Running critically low");
 		});
 	});
 });

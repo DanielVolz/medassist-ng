@@ -51,6 +51,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
 				expiryWarningDays: 90,
 				language: "en",
 				stockCalculationMode: "automatic",
+				shareStockStatus: true,
 			};
 		}
 
@@ -76,6 +77,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
 			expiryWarningDays: s.expiry_warning_days,
 			language: s.language,
 			stockCalculationMode: s.stock_calculation_mode,
+			shareStockStatus: Boolean(s.share_stock_status ?? 1),
 		};
 	});
 
@@ -102,6 +104,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
 			expiryWarningDays?: number;
 			language?: string;
 			stockCalculationMode?: "automatic" | "manual";
+			shareStockStatus?: boolean;
 		};
 	}>("/settings", async (request, reply) => {
 		const userId = 1;
@@ -150,8 +153,8 @@ async function registerSettingsRoutes(ctx: TestContext) {
           reminder_days_before, repeat_daily_reminders, skip_reminders_for_taken_doses,
           repeat_reminders_enabled, reminder_repeat_interval_minutes, max_nagging_reminders,
           low_stock_days, normal_stock_days, high_stock_days,
-          expiry_warning_days, language, stock_calculation_mode
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          expiry_warning_days, language, stock_calculation_mode, share_stock_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				args: [
 					userId,
 					body.emailEnabled ? 1 : 0,
@@ -174,6 +177,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
 					body.expiryWarningDays ?? 90,
 					body.language || "en",
 					body.stockCalculationMode || "automatic",
+					body.shareStockStatus !== false ? 1 : 0,
 				],
 			});
 		} else {
@@ -200,6 +204,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
           expiry_warning_days = ?,
           language = ?,
           stock_calculation_mode = ?,
+          share_stock_status = ?,
           updated_at = strftime('%s','now')
         WHERE user_id = ?`,
 				args: [
@@ -223,6 +228,7 @@ async function registerSettingsRoutes(ctx: TestContext) {
 					body.expiryWarningDays ?? 90,
 					body.language || "en",
 					body.stockCalculationMode || "automatic",
+					body.shareStockStatus !== false ? 1 : 0,
 					userId,
 				],
 			});
@@ -539,6 +545,64 @@ describe("Settings API", () => {
 			});
 
 			expect(getResponse.json().stockCalculationMode).toBe("automatic");
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Share Stock Status
+	// ---------------------------------------------------------------------------
+
+	describe("Share Stock Status", () => {
+		it("should default to true (show stock on shared links)", async () => {
+			const response = await ctx.app.inject({
+				method: "GET",
+				url: "/settings",
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().shareStockStatus).toBe(true);
+		});
+
+		it("should disable share stock status", async () => {
+			const response = await ctx.app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: { shareStockStatus: false },
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			const getResponse = await ctx.app.inject({
+				method: "GET",
+				url: "/settings",
+			});
+
+			expect(getResponse.json().shareStockStatus).toBe(false);
+		});
+
+		it("should re-enable share stock status", async () => {
+			// Disable first
+			await ctx.app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: { shareStockStatus: false },
+			});
+
+			// Re-enable
+			const response = await ctx.app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: { shareStockStatus: true },
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			const getResponse = await ctx.app.inject({
+				method: "GET",
+				url: "/settings",
+			});
+
+			expect(getResponse.json().shareStockStatus).toBe(true);
 		});
 	});
 

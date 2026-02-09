@@ -30,11 +30,15 @@ export type UserSettings = {
 	highStockDays: number;
 	language: Language;
 	stockCalculationMode: "automatic" | "manual";
+	shareStockStatus: boolean;
 	lastAutoEmailSent: string | null;
 	lastNotificationType: string | null;
 	lastNotificationChannel: string | null;
 	lastReminderMedName: string | null;
 	lastReminderTakenBy: string | null;
+	lastStockReminderSent: string | null;
+	lastStockReminderChannel: string | null;
+	lastStockReminderMedNames: string | null;
 };
 
 type SettingsBody = {
@@ -57,6 +61,7 @@ type SettingsBody = {
 	maxNaggingReminders: number;
 	language: string;
 	stockCalculationMode: "automatic" | "manual";
+	shareStockStatus: boolean;
 };
 
 type TestEmailBody = {
@@ -104,11 +109,15 @@ function getDefaultSettings() {
 		highStockDays: envInt("DEFAULT_HIGH_STOCK_DAYS", 180),
 		language: (process.env.DEFAULT_LANGUAGE as "en" | "de") || "en",
 		stockCalculationMode: (process.env.DEFAULT_STOCK_CALCULATION_MODE as "automatic" | "manual") || "automatic",
+		shareStockStatus: envBool("DEFAULT_SHARE_STOCK_STATUS", true),
 		lastAutoEmailSent: null,
 		lastNotificationType: null,
 		lastNotificationChannel: null,
 		lastReminderMedName: null,
 		lastReminderTakenBy: null,
+		lastStockReminderSent: null,
+		lastStockReminderChannel: null,
+		lastStockReminderMedNames: null,
 	};
 }
 
@@ -154,11 +163,15 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
 		highStockDays: settings.highStockDays,
 		language: settings.language as Language,
 		stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
+		shareStockStatus: settings.shareStockStatus ?? true,
 		lastAutoEmailSent: settings.lastAutoEmailSent,
 		lastNotificationType: settings.lastNotificationType,
 		lastNotificationChannel: settings.lastNotificationChannel,
 		lastReminderMedName: settings.lastReminderMedName ?? null,
 		lastReminderTakenBy: settings.lastReminderTakenBy ?? null,
+		lastStockReminderSent: settings.lastStockReminderSent ?? null,
+		lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
+		lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
 	};
 }
 
@@ -186,11 +199,15 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
 		highStockDays: settings.highStockDays,
 		language: settings.language as Language,
 		stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
+		shareStockStatus: settings.shareStockStatus ?? true,
 		lastAutoEmailSent: settings.lastAutoEmailSent,
 		lastNotificationType: settings.lastNotificationType,
 		lastNotificationChannel: settings.lastNotificationChannel,
 		lastReminderMedName: settings.lastReminderMedName ?? null,
 		lastReminderTakenBy: settings.lastReminderTakenBy ?? null,
+		lastStockReminderSent: settings.lastStockReminderSent ?? null,
+		lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
+		lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
 	}));
 }
 
@@ -241,6 +258,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 			maxNaggingReminders: settings.maxNaggingReminders ?? 5,
 			language: settings.language,
 			stockCalculationMode: settings.stockCalculationMode ?? "automatic",
+			shareStockStatus: settings.shareStockStatus ?? true,
 			// SMTP settings (from .env - shared/server-configured)
 			smtpHost: process.env.SMTP_HOST ?? "",
 			smtpPort: parseInt(process.env.SMTP_PORT ?? "587", 10),
@@ -254,6 +272,10 @@ export async function settingsRoutes(app: FastifyInstance) {
 			lastNotificationChannel: settings.lastNotificationChannel,
 			lastReminderMedName: settings.lastReminderMedName ?? null,
 			lastReminderTakenBy: settings.lastReminderTakenBy ?? null,
+			// Stock reminder tracking (separate from intake)
+			lastStockReminderSent: settings.lastStockReminderSent ?? null,
+			lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
+			lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
 			// Server settings (from .env, read-only)
 			expiryWarningDays: parseInt(process.env.EXPIRY_WARNING_DAYS ?? "30", 10),
 		});
@@ -296,6 +318,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 			highStockDays: body.highStockDays ?? 180,
 			language: body.language ?? "en",
 			stockCalculationMode: body.stockCalculationMode ?? "automatic",
+			shareStockStatus: body.shareStockStatus ?? true,
 			updatedAt: new Date(),
 		};
 

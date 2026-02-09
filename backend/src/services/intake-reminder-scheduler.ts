@@ -5,7 +5,14 @@ import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/db-utils.js";
 import { doseTracking, medications } from "../db/schema.js";
-import { getDateLocale, getTranslations, type Language, t } from "../i18n/translations.js";
+import {
+	getDateLocale,
+	getFooterHtml,
+	getFooterPlain,
+	getTranslations,
+	type Language,
+	t,
+} from "../i18n/translations.js";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
@@ -150,7 +157,7 @@ async function sendIntakeReminderEmail(
 
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
         <p style="color: #9ca3af; font-size: 11px; margin: 0;">
-          ${tr.intakeReminder.footer}
+          ${getFooterHtml(language)}
         </p>
       </div>
     </div>
@@ -179,7 +186,7 @@ ${intakes
 	.join("\n")}
 
 ---
-${tr.intakeReminder.footer}`;
+${getFooterPlain(language)}`;
 
 	const subject = isRepeat
 		? `[Reminder] ${t(tr.intakeReminder.subject, { medications: intakes.map((i) => i.medName).join(", ") })}`
@@ -601,7 +608,9 @@ async function checkAndSendIntakeRemindersForUser(
 					}
 					return `• ${i.medName}${takenByStr}: ${dosage} @ ${i.intakeTimeStr}`;
 				})
-				.join("\n") + repeatNote;
+				.join("\n") +
+			repeatNote +
+			`\n\n---\n${getFooterPlain(language)}`;
 
 		const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
 		shoutrrrSuccess = result.success;

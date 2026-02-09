@@ -5,7 +5,7 @@ import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/db-utils.js";
 import { medications, userSettings } from "../db/schema.js";
-import { getTranslations, type Language, t } from "../i18n/translations.js";
+import { getFooterHtml, getFooterPlain, getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
@@ -63,6 +63,7 @@ export function updateReminderSentTime(
 }
 
 // Update user settings in database when reminder is sent
+// Stock and intake reminders are tracked separately so neither overwrites the other
 export async function updateUserReminderSentTime(
 	userId: number,
 	type: "stock" | "intake" = "stock",
@@ -71,16 +72,30 @@ export async function updateUserReminderSentTime(
 	takenBy?: string
 ): Promise<void> {
 	const now = new Date().toISOString();
-	await db
-		.update(userSettings)
-		.set({
-			lastAutoEmailSent: now,
-			lastNotificationType: type,
-			lastNotificationChannel: channel,
-			lastReminderMedName: medName ?? null,
-			lastReminderTakenBy: takenBy ?? null,
-		})
-		.where(eq(userSettings.userId, userId));
+	if (type === "stock") {
+		// Write to dedicated stock reminder columns only — do NOT touch the shared
+		// lastNotificationType column, as that would block intake reminder display
+		await db
+			.update(userSettings)
+			.set({
+				lastStockReminderSent: now,
+				lastStockReminderChannel: channel,
+				lastStockReminderMedNames: medName ?? null,
+			})
+			.where(eq(userSettings.userId, userId));
+	} else {
+		// Write to intake reminder columns
+		await db
+			.update(userSettings)
+			.set({
+				lastAutoEmailSent: now,
+				lastNotificationType: type,
+				lastNotificationChannel: channel,
+				lastReminderMedName: medName ?? null,
+				lastReminderTakenBy: takenBy ?? null,
+			})
+			.where(eq(userSettings.userId, userId));
+	}
 }
 
 function parseBlistersFromRow(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
@@ -191,7 +206,7 @@ async function sendReminderEmail(
 
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
         <p style="color: #9ca3af; font-size: 11px; margin: 0;">
-          ${tr.stockReminder.footer}
+          ${getFooterHtml(language)}
         </p>
         ${isRepeatDaily ? `<p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0 0; font-style: italic;">${tr.stockReminder.repeatDailyNote}</p>` : ""}
       </div>
@@ -205,7 +220,7 @@ ${tr.stockReminder.description}
 ${lowStock.map((r) => `${r.name}: ${r.medsLeft} ${tr.common.pills}, ${r.daysLeft ?? 0} ${tr.common.days}, ${tr.stockReminder.tableHeaders.runsOut}: ${r.depletionDate ?? tr.common.soon}`).join("\n")}
 
 ---
-${tr.stockReminder.footer}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyNote}` : ""}`;
+${getFooterPlain(language)}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyNote}` : ""}`;
 
 	const subjectPlural = lowStock.length === 1 ? "" : language === "de" ? "e" : "s";
 	const subject = t(tr.stockReminder.subject, { count: lowStock.length, s: subjectPlural, e: subjectPlural });
@@ -305,30 +320,30 @@ async function checkAndSendReminderForUser(
 
 	// Send Shoutrrr notification if enabled
 	if (shoutrrrEnabled) {
-		// Separate empty from low stock medications
+		// Separate empty from critical stock medications (all auto-reminder meds are critical by definition)
 		const emptyMeds = allLowStock.filter((m) => m.medsLeft <= 0);
-		const lowMeds = allLowStock.filter((m) => m.medsLeft > 0);
+		const criticalMeds = allLowStock.filter((m) => m.medsLeft > 0);
 
 		// Build clear title
 		const titleParts: string[] = [];
 		if (emptyMeds.length > 0) {
 			titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty || "Empty"}`);
 		}
-		if (lowMeds.length > 0) {
-			titleParts.push(`⚠️ ${lowMeds.length} ${tr.push.low || "Low"}`);
+		if (criticalMeds.length > 0) {
+			titleParts.push(`🚨 ${criticalMeds.length} ${tr.push.critical || "Critical"}`);
 		}
 		const title = `MedAssist: ${titleParts.join(", ")} - ${tr.push.reorderNow || "Reorder Now!"}`;
 
 		// Build clear message with sections
 		const messageParts: string[] = [];
 		if (emptyMeds.length > 0) {
-			messageParts.push(`🚨 ${tr.push.emptySection || "EMPTY (reorder immediately)"}:`);
+			messageParts.push(`🚨 ${tr.push.emptySection || "Empty (reorder immediately)"}:`);
 			emptyMeds.forEach((m) => messageParts.push(`  • ${m.name}`));
 		}
-		if (lowMeds.length > 0) {
+		if (criticalMeds.length > 0) {
 			if (emptyMeds.length > 0) messageParts.push("");
-			messageParts.push(`⚠️ ${tr.push.lowSection || "RUNNING LOW (reorder soon)"}:`);
-			lowMeds.forEach((m) =>
+			messageParts.push(`🚨 ${tr.push.criticalSection || "Running critically low"}:`);
+			criticalMeds.forEach((m) =>
 				messageParts.push(
 					`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
 				)
@@ -340,7 +355,7 @@ async function checkAndSendReminderForUser(
 			messageParts.push(tr.push.repeatDailyNote);
 		}
 
-		const message = messageParts.join("\n");
+		const message = messageParts.join("\n") + `\n\n---\n${getFooterPlain(language)}`;
 
 		const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
 		shoutrrrSuccess = result.success;

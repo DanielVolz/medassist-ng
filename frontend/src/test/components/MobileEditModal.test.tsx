@@ -541,3 +541,52 @@ describe("MobileEditModal optional fields", () => {
 		expect(toggle).toBeInTheDocument();
 	});
 });
+
+describe("MobileEditModal bottle package type", () => {
+	const bottleForm: FormState = {
+		...defaultForm,
+		packageType: "bottle",
+		packCount: "0",
+		blistersPerPack: "1",
+		pillsPerBlister: "1",
+		looseTablets: "80",
+		totalPills: "100",
+	};
+
+	it("shows pills-only refill form for bottle type when editing", () => {
+		render(<MobileEditModal {...defaultProps} form={bottleForm} editingId={1} />);
+
+		// Should show "pillsToAdd" label for bottle
+		expect(screen.getByText(/refill\.pillsToAdd/i)).toBeInTheDocument();
+
+		// Should NOT show "packs" label in refill section
+		const refillSection = document.querySelector(".refill-section");
+		expect(refillSection).toBeInTheDocument();
+		expect(refillSection!.textContent).not.toContain("refill.packs");
+		expect(refillSection!.textContent).not.toContain("refill.loosePills");
+	});
+
+	it("shows packs and loose refill form for blister type when editing", () => {
+		render(<MobileEditModal {...defaultProps} form={defaultForm} editingId={1} />);
+
+		// Should show "packs" and "loosePills" labels for blister
+		const refillSection = document.querySelector(".refill-section");
+		expect(refillSection).toBeInTheDocument();
+		expect(refillSection!.textContent).toContain("refill.packs");
+		expect(refillSection!.textContent).toContain("refill.loosePills");
+	});
+
+	it("shows totalCapacity and currentPills fields for bottle form", () => {
+		render(<MobileEditModal {...defaultProps} form={bottleForm} />);
+
+		// Should show total capacity field
+		expect(screen.getByText(/form\.totalCapacity/i)).toBeInTheDocument();
+		// Should show current pills field
+		expect(screen.getByText(/form\.currentPills/i)).toBeInTheDocument();
+
+		// Should NOT show blister-specific fields
+		expect(screen.queryByText("form.packs")).not.toBeInTheDocument();
+		expect(screen.queryByText("form.blistersPerPack")).not.toBeInTheDocument();
+		expect(screen.queryByText("form.pillsPerBlister")).not.toBeInTheDocument();
+	});
+});

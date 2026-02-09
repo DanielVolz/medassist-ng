@@ -66,7 +66,8 @@ export function UserFilterModal({
 								</div>
 								<div className="user-med-stats">
 									<span className="user-med-pills">
-										{currentStock}/{formatNumber(packageSize)} {t("common.pills")}
+										{currentStock}/{formatNumber(packageSize)}{" "}
+										{packageSize === 1 ? t("common.pill") : t("common.pills")}
 									</span>
 									{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
 								</div>

@@ -136,7 +136,7 @@ export function SchedulePage() {
 							return (
 								<div
 									key={day.dateStr}
-									className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} stock-${worstStatus}`}
+									className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : allDoseIds.length > 0 ? "past-missed" : ""}`}
 								>
 									<div
 										className="day-divider clickable"
@@ -186,9 +186,7 @@ export function SchedulePage() {
 															)}
 														</div>
 														<div className="tag-row">
-															<span className="tag subtle">
-																{item.total} {t("common.pills")} {t("common.total")}
-															</span>
+															<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
 														</div>
 													</div>
 													<div className="doses-col">
@@ -285,9 +283,7 @@ export function SchedulePage() {
 													)}
 												</div>
 												<div className="tag-row">
-													<span className="tag subtle">
-														{item.total} {t("common.pills")} {t("common.total")}
-													</span>
+													<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
 													{status && <span className={`tag ${status.className}`}>{t(status.label)}</span>}
 												</div>
 											</div>

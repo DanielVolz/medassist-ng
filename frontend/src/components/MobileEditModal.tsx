@@ -266,7 +266,8 @@ export function MobileEditModal({
 					)}
 					<div className="full">
 						<p className="sub">
-							<strong>{t("form.total")}:</strong> {deriveTotalFromForm(form)} {t("common.pills")}
+							<strong>{t("form.total")}:</strong> {deriveTotalFromForm(form)}{" "}
+							{deriveTotalFromForm(form) === 1 ? t("common.pill") : t("common.pills")}
 						</p>
 					</div>
 					<label className="full">
@@ -307,24 +308,38 @@ export function MobileEditModal({
 						<div className="full refill-section">
 							<h4 className="refill-title">{t("refill.title")}</h4>
 							<div className="refill-form-inline">
-								<label>
-									{t("refill.packs")}
-									<input
-										type="number"
-										min="0"
-										value={refillPacks}
-										onChange={(e) => onRefillPacksChange(parseInt(e.target.value, 10) || 0)}
-									/>
-								</label>
-								<label>
-									{t("refill.loosePills")}
-									<input
-										type="number"
-										min="0"
-										value={refillLoose}
-										onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
-									/>
-								</label>
+								{form.packageType === "blister" ? (
+									<>
+										<label>
+											{t("refill.packs")}
+											<input
+												type="number"
+												min="0"
+												value={refillPacks}
+												onChange={(e) => onRefillPacksChange(parseInt(e.target.value, 10) || 0)}
+											/>
+										</label>
+										<label>
+											{t("refill.loosePills")}
+											<input
+												type="number"
+												min="0"
+												value={refillLoose}
+												onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
+											/>
+										</label>
+									</>
+								) : (
+									<label>
+										{t("refill.pillsToAdd")}
+										<input
+											type="number"
+											min="0"
+											value={refillLoose}
+											onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
+										/>
+									</label>
+								)}
 								<button
 									type="button"
 									className="success"
@@ -333,12 +348,18 @@ export function MobileEditModal({
 								>
 									{refillSaving ? t("common.saving") : t("refill.button")}
 								</button>
-								{(refillPacks > 0 || refillLoose > 0) && (
-									<span className="refill-preview">
-										+{refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) + refillLoose}{" "}
-										{t("common.pills")}
-									</span>
-								)}
+								{(() => {
+									const totalRefill =
+										form.packageType === "blister"
+											? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
+												refillLoose
+											: refillLoose;
+									return totalRefill > 0 ? (
+										<span className="refill-preview">
+											+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+										</span>
+									) : null;
+								})()}
 							</div>
 						</div>
 					)}

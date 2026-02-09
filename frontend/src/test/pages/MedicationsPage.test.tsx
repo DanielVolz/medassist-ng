@@ -9,6 +9,7 @@ const mockMeds = [
 		id: 1,
 		name: "Aspirin",
 		genericName: "Acetylsalicylic acid",
+		packageType: "blister" as const,
 		packCount: 1,
 		blistersPerPack: 2,
 		pillsPerBlister: 10,
@@ -25,6 +26,7 @@ const mockMeds = [
 		id: 2,
 		name: "Vitamin D",
 		genericName: null,
+		packageType: "blister" as const,
 		packCount: 0,
 		blistersPerPack: 1,
 		pillsPerBlister: 30,
@@ -1441,5 +1443,178 @@ describe("MedicationsPage form saved state", () => {
 		);
 
 		expect(screen.getByText(/common\.saved/i)).toBeInTheDocument();
+	});
+
+	it("shows stock overflow warning when medsLeft exceeds package size", () => {
+		const overflowMed = {
+			...mockMeds[0],
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 10,
+			looseTablets: 0,
+		};
+
+		mockContextValue = createMockContext({
+			meds: [overflowMed],
+			coverageByMed: {
+				[overflowMed.name]: {
+					name: overflowMed.name,
+					medsLeft: 25,
+					daysLeft: 25,
+					depletionDate: "2024-02-01",
+					depletionTime: Date.now() + 25 * 86400000,
+					nextDose: null,
+				},
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		// packageSize = 1*1*10 + 0 = 10, medsLeft = 25 > 10 → warning shown
+		const warningIcon = document.querySelector(".med-total .info-tooltip.tooltip-align-left.warning-text");
+		expect(warningIcon).toBeInTheDocument();
+	});
+
+	it("does not show stock overflow warning when stock is within capacity", () => {
+		const normalMed = {
+			...mockMeds[0],
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 30,
+			looseTablets: 0,
+		};
+
+		mockContextValue = createMockContext({
+			meds: [normalMed],
+			coverageByMed: {
+				[normalMed.name]: {
+					name: normalMed.name,
+					medsLeft: 20,
+					daysLeft: 20,
+					depletionDate: "2024-02-01",
+					depletionTime: Date.now() + 20 * 86400000,
+					nextDose: null,
+				},
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		// packageSize = 30, medsLeft = 20 < 30 → no warning
+		const warningIcon = document.querySelector(".med-total .info-tooltip.tooltip-align-left.warning-text");
+		expect(warningIcon).not.toBeInTheDocument();
+	});
+});
+
+describe("MedicationsPage bottle package type", () => {
+	const bottleMed = {
+		id: 3,
+		name: "Ibuprofen",
+		genericName: null,
+		packageType: "bottle" as const,
+		packCount: 0,
+		blistersPerPack: 1,
+		pillsPerBlister: 1,
+		looseTablets: 150,
+		totalPills: 200,
+		takenBy: [],
+		blisters: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00Z" }],
+		intakeRemindersEnabled: false,
+		notes: null,
+		expiryDate: null,
+		imageUrl: null,
+		updatedAt: null,
+	};
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorage.clear();
+		mockContextValue = createMockContext({ meds: [bottleMed] });
+		mockFormHookValue = createMockFormHook();
+	});
+
+	it("shows bottle type and capacity instead of blister fields in med-details", () => {
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		const medDetails = document.querySelector(".med-details");
+		expect(medDetails).toBeInTheDocument();
+
+		// Should show type and capacity for bottle
+		expect(medDetails!.textContent).toContain("form.packageTypeBottle");
+		expect(medDetails!.textContent).toContain("medications.details.totalCapacity");
+
+		// Should NOT show blister-specific fields
+		expect(medDetails!.textContent).not.toContain("medications.details.blisters");
+		expect(medDetails!.textContent).not.toContain("medications.details.pillsPerBlister");
+	});
+
+	it("shows pills-only refill form for bottle type when editing", () => {
+		mockFormHookValue = createMockFormHook({
+			editingId: 3,
+			form: {
+				...createMockFormHook().form,
+				packageType: "bottle" as const,
+				totalPills: "200",
+				looseTablets: "150",
+			},
+		});
+		mockContextValue = createMockContext({ meds: [bottleMed] });
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		// Should show "pillsToAdd" label for bottle
+		expect(screen.getByText(/refill\.pillsToAdd/i)).toBeInTheDocument();
+
+		// Should NOT show "packs" label in refill
+		const refillSection = document.querySelector(".refill-section");
+		expect(refillSection).toBeInTheDocument();
+		expect(refillSection!.textContent).not.toContain("refill.packs");
+	});
+});
+
+describe("MedicationsPage blister refill shows packs", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorage.clear();
+		mockContextValue = createMockContext({ meds: mockMeds });
+		mockFormHookValue = createMockFormHook({
+			editingId: 1,
+			form: {
+				...createMockFormHook().form,
+				packageType: "blister" as const,
+				packCount: "1",
+				blistersPerPack: "2",
+				pillsPerBlister: "10",
+			},
+		});
+	});
+
+	it("shows packs and loose pills refill fields for blister type", () => {
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		const refillSection = document.querySelector(".refill-section");
+		expect(refillSection).toBeInTheDocument();
+		expect(refillSection!.textContent).toContain("refill.packs");
+		expect(refillSection!.textContent).toContain("refill.loosePills");
 	});
 });

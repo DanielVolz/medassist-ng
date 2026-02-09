@@ -181,6 +181,8 @@ export type SharedMedication = {
 	intakes?: Intake[]; // New intake format with per-intake takenBy
 	dismissedUntil?: string | null;
 	updatedAt?: string | number | null; // For filtering out doses from previous schedule configurations
+	lastStockCorrectionAt?: number | null; // Timestamp in ms for stock correction cutoff
+	stockAdjustment?: number; // Manual stock adjustment
 };
 
 export type SharedScheduleData = {
@@ -190,7 +192,13 @@ export type SharedScheduleData = {
 	medications: SharedMedication[];
 	stockThresholds?: {
 		lowStockDays: number;
+		normalStockDays?: number;
+		highStockDays?: number;
+		reminderDaysBefore?: number;
+		expiryWarningDays?: number;
 	};
+	stockCalculationMode?: "automatic" | "manual";
+	shareStockStatus?: boolean;
 };
 
 export type ExpiredLinkData = {

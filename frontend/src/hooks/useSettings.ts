@@ -30,6 +30,9 @@ export interface Settings {
 	lastNotificationChannel: "email" | "push" | "both" | null;
 	lastReminderMedName: string | null;
 	lastReminderTakenBy: string | null;
+	lastStockReminderSent: string | null;
+	lastStockReminderChannel: "email" | "push" | "both" | null;
+	lastStockReminderMedNames: string | null;
 	shoutrrrEnabled: boolean;
 	shoutrrrUrl: string;
 	emailStockReminders: boolean;
@@ -37,6 +40,7 @@ export interface Settings {
 	shoutrrrStockReminders: boolean;
 	shoutrrrIntakeReminders: boolean;
 	stockCalculationMode: "automatic" | "manual";
+	shareStockStatus: boolean;
 	expiryWarningDays: number;
 }
 
@@ -65,6 +69,9 @@ const defaultSettings: Settings = {
 	lastNotificationChannel: null,
 	lastReminderMedName: null,
 	lastReminderTakenBy: null,
+	lastStockReminderSent: null,
+	lastStockReminderChannel: null,
+	lastStockReminderMedNames: null,
 	shoutrrrEnabled: false,
 	shoutrrrUrl: "",
 	emailStockReminders: true,
@@ -72,6 +79,7 @@ const defaultSettings: Settings = {
 	shoutrrrStockReminders: true,
 	shoutrrrIntakeReminders: true,
 	stockCalculationMode: "automatic",
+	shareStockStatus: true,
 	expiryWarningDays: 30,
 };
 
@@ -141,6 +149,9 @@ export function useSettings(): UseSettingsReturn {
 						lastNotificationChannel: data.lastNotificationChannel ?? prev.lastNotificationChannel,
 						lastReminderMedName: data.lastReminderMedName ?? prev.lastReminderMedName,
 						lastReminderTakenBy: data.lastReminderTakenBy ?? prev.lastReminderTakenBy,
+						lastStockReminderSent: data.lastStockReminderSent ?? prev.lastStockReminderSent,
+						lastStockReminderChannel: data.lastStockReminderChannel ?? prev.lastStockReminderChannel,
+						lastStockReminderMedNames: data.lastStockReminderMedNames ?? prev.lastStockReminderMedNames,
 					}));
 					setSavedSettings((prev) => ({
 						...prev,
@@ -149,6 +160,9 @@ export function useSettings(): UseSettingsReturn {
 						lastNotificationChannel: data.lastNotificationChannel ?? prev.lastNotificationChannel,
 						lastReminderMedName: data.lastReminderMedName ?? prev.lastReminderMedName,
 						lastReminderTakenBy: data.lastReminderTakenBy ?? prev.lastReminderTakenBy,
+						lastStockReminderSent: data.lastStockReminderSent ?? prev.lastStockReminderSent,
+						lastStockReminderChannel: data.lastStockReminderChannel ?? prev.lastStockReminderChannel,
+						lastStockReminderMedNames: data.lastStockReminderMedNames ?? prev.lastStockReminderMedNames,
 					}));
 				})
 				.catch(() => {});
@@ -198,6 +212,7 @@ export function useSettings(): UseSettingsReturn {
 				shoutrrrStockReminders: settings.shoutrrrStockReminders,
 				shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
 				stockCalculationMode: settings.stockCalculationMode,
+				shareStockStatus: settings.shareStockStatus,
 				language: i18n.language,
 				smtpHost: settings.smtpHost,
 				smtpPort: settings.smtpPort,

@@ -195,6 +195,16 @@ export function MedDetailModal({
 								<span className={`med-detail-value ${textClass}`}>
 									{currentStock} /{" "}
 									{selectedMed.packageType === "bottle" ? (selectedMed.totalPills ?? packageSize) : packageSize}
+									{currentStock >
+										(selectedMed.packageType === "bottle" ? (selectedMed.totalPills ?? packageSize) : packageSize) && (
+										<span
+											className="info-tooltip tooltip-align-left warning-text"
+											data-tooltip={t("tooltips.stockExceedsCapacity")}
+										>
+											{" "}
+											⚠️
+										</span>
+									)}
 								</span>
 							</div>
 						</div>
@@ -266,7 +276,12 @@ export function MedDetailModal({
 							</h3>
 							<div className="med-detail-schedules">
 								{selectedMed.blisters.map((blister, idx) => {
-									const personCount = Math.max(1, selectedMed.takenBy?.length || 1);
+									// When using new intakes format with per-intake takenBy,
+									// each intake already represents one person's dose — don't multiply.
+									// For legacy intakes (no per-intake takenBy), multiply by personCount.
+									const intake = selectedMed.intakes?.[idx];
+									const hasPerIntakeTakenBy = !!intake?.takenBy;
+									const personCount = hasPerIntakeTakenBy ? 1 : Math.max(1, selectedMed.takenBy?.length || 1);
 									const totalUsage = blister.usage * personCount;
 									return (
 										<div key={idx} className="med-schedule-item">
@@ -350,10 +365,14 @@ export function MedDetailModal({
 												})}
 											</span>
 											<span className="refill-amount">
-												+
-												{entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister +
-													entry.loosePillsAdded}{" "}
-												{t("common.pills")}
+												{(() => {
+													const total =
+														selectedMed.packageType === "bottle"
+															? entry.loosePillsAdded
+															: entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister +
+																entry.loosePillsAdded;
+													return `+${total} ${total === 1 ? t("common.pill") : t("common.pills")}`;
+												})()}
 											</span>
 										</div>
 									))}
@@ -408,24 +427,38 @@ export function MedDetailModal({
 						<p className="refill-med-name">{selectedMed.name}</p>
 
 						<div className="refill-form">
-							<label>
-								{t("refill.packs")}
-								<input
-									type="number"
-									min="0"
-									value={refillPacks}
-									onChange={(e) => onRefillPacksChange(parseInt(e.target.value, 10) || 0)}
-								/>
-							</label>
-							<label>
-								{t("refill.loosePills")}
-								<input
-									type="number"
-									min="0"
-									value={refillLoose}
-									onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
-								/>
-							</label>
+							{selectedMed.packageType === "blister" ? (
+								<>
+									<label>
+										{t("refill.packs")}
+										<input
+											type="number"
+											min="0"
+											value={refillPacks}
+											onChange={(e) => onRefillPacksChange(parseInt(e.target.value, 10) || 0)}
+										/>
+									</label>
+									<label>
+										{t("refill.loosePills")}
+										<input
+											type="number"
+											min="0"
+											value={refillLoose}
+											onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
+										/>
+									</label>
+								</>
+							) : (
+								<label>
+									{t("refill.pillsToAdd")}
+									<input
+										type="number"
+										min="0"
+										value={refillLoose}
+										onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
+									/>
+								</label>
+							)}
 						</div>
 
 						<div className="modal-footer">
@@ -440,12 +473,17 @@ export function MedDetailModal({
 								>
 									{refillSaving ? t("common.saving") : t("refill.button")}
 								</button>
-								{(refillPacks > 0 || refillLoose > 0) && (
-									<span className="refill-preview">
-										+{refillPacks * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + refillLoose}{" "}
-										{t("common.pills")}
-									</span>
-								)}
+								{(() => {
+									const totalRefill =
+										selectedMed.packageType === "blister"
+											? refillPacks * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + refillLoose
+											: refillLoose;
+									return totalRefill > 0 ? (
+										<span className="refill-preview">
+											+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+										</span>
+									) : null;
+								})()}
 							</div>
 						</div>
 					</div>
@@ -472,50 +510,67 @@ export function MedDetailModal({
 						{(() => {
 							const dbTotal = getMedTotal(selectedMed);
 							const currentTotal = medCoverage ? Math.round(medCoverage.medsLeft) : dbTotal;
-							const newTotal = editStockFullBlisters * selectedMed.pillsPerBlister + editStockPartialBlisterPills;
+							const isBottle = selectedMed.packageType === "bottle";
+							const newTotal = isBottle
+								? editStockPartialBlisterPills
+								: editStockFullBlisters * selectedMed.pillsPerBlister + editStockPartialBlisterPills;
 							const difference = newTotal - currentTotal;
 
 							return (
 								<>
 									<div className="edit-stock-form">
-										<label>
-											{t("editStock.fullBlisters")}{" "}
-											{t("editStock.pillsPerBlister", { count: selectedMed.pillsPerBlister })}
-											<input
-												type="number"
-												min="0"
-												value={editStockFullBlisters}
-												onChange={(e) => onEditStockFullBlistersChange(parseInt(e.target.value, 10) || 0)}
-											/>
-										</label>
-										<label>
-											{t("editStock.partialBlisterPills")}
-											<input
-												type="number"
-												min={editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0}
-												max={selectedMed.pillsPerBlister}
-												value={editStockPartialBlisterPills}
-												onChange={(e) => {
-													const val = parseInt(e.target.value, 10) || 0;
-													const min = editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0;
-													const max = selectedMed.pillsPerBlister;
-													onEditStockPartialBlisterPillsChange(Math.max(min, Math.min(val, max)));
-												}}
-											/>
-										</label>
+										{isBottle ? (
+											<label>
+												{t("editStock.totalPills")}
+												<input
+													type="number"
+													min="0"
+													value={editStockPartialBlisterPills}
+													onChange={(e) => onEditStockPartialBlisterPillsChange(parseInt(e.target.value, 10) || 0)}
+												/>
+											</label>
+										) : (
+											<>
+												<label>
+													{t("editStock.fullBlisters")}{" "}
+													{t("editStock.pillsPerBlister", { count: selectedMed.pillsPerBlister })}
+													<input
+														type="number"
+														min="0"
+														value={editStockFullBlisters}
+														onChange={(e) => onEditStockFullBlistersChange(parseInt(e.target.value, 10) || 0)}
+													/>
+												</label>
+												<label>
+													{t("editStock.partialBlisterPills")}
+													<input
+														type="number"
+														min={editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0}
+														max={selectedMed.pillsPerBlister}
+														value={editStockPartialBlisterPills}
+														onChange={(e) => {
+															const val = parseInt(e.target.value, 10) || 0;
+															const min = editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0;
+															const max = selectedMed.pillsPerBlister;
+															onEditStockPartialBlisterPillsChange(Math.max(min, Math.min(val, max)));
+														}}
+													/>
+												</label>
+											</>
+										)}
 									</div>
 
 									<div className="edit-stock-summary">
 										<div className="summary-row">
 											<span>{t("editStock.currentTotal")}:</span>
 											<span>
-												{currentTotal} {t("common.pills")}
+												{currentTotal} {currentTotal === 1 ? t("common.pill") : t("common.pills")}
 											</span>
 										</div>
 										<div className="summary-row">
 											<span>{t("editStock.newTotal")}:</span>
 											<span>
-												{newTotal} {t("common.pills")}
+												{newTotal} {newTotal === 1 ? t("common.pill") : t("common.pills")}
 											</span>
 										</div>
 										<div
@@ -524,7 +579,7 @@ export function MedDetailModal({
 											<span>{t("editStock.difference")}:</span>
 											<span>
 												{difference > 0 ? "+" : ""}
-												{difference} {t("common.pills")}
+												{difference} {Math.abs(difference) === 1 ? t("common.pill") : t("common.pills")}
 											</span>
 										</div>
 									</div>

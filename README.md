@@ -120,7 +120,7 @@ Share your medication schedule with others via a public link.
 </details>
 
 ### Smart Inventory
-- Track exact stock: packs, blisters, and loose pills
+- Track exact stock: packs, blisters, bottles, and loose pills
 - Display remaining days of supply
 - Automatic calculation based on intake schedule
 
@@ -141,6 +141,7 @@ Share your medication schedule with others via a public link.
 ### Trip Planner
 - Calculate how many pills you need for a trip or date range
 - Plan ahead for vacations, business trips, or hospital stays
+- Send demand reports via email or push notification
 
 ### Multi-Person Support
 - Manage medications for multiple people
@@ -253,6 +254,14 @@ Configure push notifications in Settings → Push, or set defaults via environme
 | `DEFAULT_SHOUTRRR_URL` | — | Shoutrrr URL (see examples below) |
 | `DEFAULT_SHOUTRRR_STOCK_REMINDERS` | `true` | Send stock warnings via push |
 | `DEFAULT_SHOUTRRR_INTAKE_REMINDERS` | `true` | Send intake reminders via push |
+
+### Default User Settings
+
+These defaults are applied when a new user is created. Once a user saves settings in the app, their values take precedence.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEFAULT_SHARE_STOCK_STATUS` | `true` | Show stock status (Normal/Low/Critical) on shared schedule links |
 
 #### URL Examples
 

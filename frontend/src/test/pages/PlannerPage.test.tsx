@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlannerPage } from "../../pages/PlannerPage";
@@ -479,5 +479,103 @@ describe("PlannerPage medication detail", () => {
 			fireEvent.click(medRow);
 			expect(openMedDetail).toHaveBeenCalled();
 		}
+	});
+});
+
+describe("PlannerPage bottle package type", () => {
+	const bottlePlannerRows = [
+		{
+			medicationId: 3,
+			medicationName: "Ibuprofen",
+			totalPills: 60,
+			plannerUsage: 20,
+			blisterSize: 1,
+			blistersNeeded: 0,
+			fullBlisters: 0,
+			loosePills: 20,
+			enough: true,
+			packageType: "bottle" as const,
+		},
+	];
+
+	const blisterPlannerRows = [
+		{
+			medicationId: 1,
+			medicationName: "Aspirin",
+			totalPills: 60,
+			plannerUsage: 20,
+			blisterSize: 10,
+			blistersNeeded: 2,
+			fullBlisters: 2,
+			loosePills: 0,
+			enough: true,
+			packageType: "blister" as const,
+		},
+	];
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorage.clear();
+		mockContextValue = createMockContext({ meds: mockMeds });
+	});
+
+	it("shows dash for blisters column when bottle type", async () => {
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(bottlePlannerRows),
+		});
+
+		render(
+			<MemoryRouter>
+				<PlannerPage />
+			</MemoryRouter>
+		);
+
+		// Submit the form to trigger the planner calculation
+		const form = document.querySelector("form.planner");
+		expect(form).toBeInTheDocument();
+		await act(async () => {
+			fireEvent.submit(form!);
+		});
+
+		// For bottle type, blisters column should show "–"
+		await waitFor(() => {
+			const tableRows = document.querySelectorAll(".table-row");
+			expect(tableRows.length).toBeGreaterThan(0);
+		});
+		const tableRows = document.querySelectorAll(".table-row");
+		const bottleRow = Array.from(tableRows).find((row) => row.textContent?.includes("Ibuprofen"));
+		expect(bottleRow).toBeTruthy();
+		expect(bottleRow!.textContent).toContain("–");
+	});
+
+	it("shows blisters calculation for blister type", async () => {
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(blisterPlannerRows),
+		});
+
+		render(
+			<MemoryRouter>
+				<PlannerPage />
+			</MemoryRouter>
+		);
+
+		// Submit the form to trigger the planner calculation
+		const form = document.querySelector("form.planner");
+		expect(form).toBeInTheDocument();
+		await act(async () => {
+			fireEvent.submit(form!);
+		});
+
+		// For blister type, should show "2 × 10"
+		await waitFor(() => {
+			const tableRows = document.querySelectorAll(".table-row");
+			expect(tableRows.length).toBeGreaterThan(0);
+		});
+		const tableRows = document.querySelectorAll(".table-row");
+		const blisterRow = Array.from(tableRows).find((row) => row.textContent?.includes("Aspirin"));
+		expect(blisterRow).toBeTruthy();
+		expect(blisterRow!.textContent).toContain("2 × 10");
 	});
 });

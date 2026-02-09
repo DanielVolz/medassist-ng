@@ -21,11 +21,11 @@
       "badge": "Stock watch",
       "noMeds": "No medications configured yet.",
       "allGood": "All good, enough stock.",
-      "lowWarning": "Enough stock for now, but {{meds}} is running low.",
-      "lowWarning_other": "Enough stock for now, but {{meds}} are running low.",
+      "lowWarning": "Enough stock for now, but {{meds}} is running critically low.",
+      "lowWarning_other": "Enough stock for now, but {{meds}} are running critically low.",
       "lowWarningPrefix": "Enough stock for now, but",
-      "lowWarningSuffix": "is running low.",
-      "lowWarningSuffix_other": "are running low.",
+      "lowWarningSuffix": "is running critically low.",
+      "lowWarningSuffix_other": "are running critically low.",
       "sendReminder": "🔔 Send Reminder Now"
     },
     "overview": {
@@ -59,10 +59,11 @@
     "reminders": {
       "active": "Automatic reminders active",
       "status": "Status",
-      "allStockOk": "All stock OK",
-      "allOk": "All OK",
+      "allStockOk": "All stock good",
+      "allOk": "All good",
       "lastReminder": "Last intake reminder",
       "lastSent": "Last intake reminder",
+      "lastStockSent": "Last stock reminder",
       "next": "Refill reminder",
       "nextIn": "Refill reminder",
       "inDays": "in {{days}} days",
@@ -73,8 +74,8 @@
       "needRefill_other": "{{count}} meds need refill",
       "emptyStock": "{{count}} med is empty",
       "emptyStock_other": "{{count}} meds are empty",
-      "lowWarning": "{{count}} medication running low",
-      "lowWarning_other": "{{count}} medications running low",
+      "lowWarning": "{{count}} medication running critically low",
+      "lowWarning_other": "{{count}} medications running critically low",
       "waitingFirstCheck": "Waiting for first check",
       "type": "Type",
       "typeStock": "Stock",
@@ -123,7 +124,9 @@
       "pillsPerBlister": "Pills per blister",
       "loose": "Loose",
       "total": "Total",
-      "stock": "Stock"
+      "stock": "Stock",
+      "totalCapacity": "Capacity",
+      "type": "Type"
     }
   },
   "form": {
@@ -181,6 +184,7 @@
     "calculate": "Calculate",
     "calculating": "Calculating...",
     "sendEmail": "📧 Send via Email",
+    "sendNotification": "🔔 Send Demand",
     "table": {
       "medication": "Medication",
       "usage": "Usage",
@@ -229,25 +233,34 @@
       "intakeCheck": "Intake check",
       "15minBefore": "15 min before scheduled time",
       "nextCheck": "Next stock check",
-      "lastSent": "Last sent",
+      "lastSent": "Last notification sent",
+      "lastStockSent": "Last stock reminder",
+      "lastIntakeSent": "Last intake reminder",
       "envHint": "These values can be configured via REMINDER_HOUR and REMINDER_MINUTES_BEFORE in .env"
     },
     "stock": {
       "title": "Stock",
-      "threshold": "Reminder Threshold",
-      "remindWhen": "Remind when supply drops below",
-      "repeatDaily": "Repeat daily",
-      "repeatTooltip": "When enabled, sends reminders every day while stock is low. Otherwise, only notifies once per medication until restocked.",
       "calculationMode": "Stock Calculation",
       "automatic": "Automatic",
       "automaticDesc": "Stock automatically decreases based on schedule",
       "manual": "Manual",
       "manualDesc": "Stock only decreases when doses are marked as taken",
-      "display": "Display",
-      "lowStockDays": "Low Stock (days)",
-      "lowStockTooltip": "Yellow warning color threshold",
-      "highStockDays": "High Stock (days)",
-      "highStockTooltip": "Green with star threshold"
+      "thresholds": "Thresholds",
+      "criticalStockDays": "Critical (days)",
+      "criticalStockTooltip": "Stock below this value is critical and needs immediate attention",
+      "lowStockDays": "Low (days)",
+      "lowStockTooltip": "Stock below this value means you should reorder soon",
+      "highStockDays": "High (days)",
+      "highStockTooltip": "Stock above this value means you are well supplied",
+      "thresholdValidation": "Values must be: Critical < Low < High",
+      "shareStockStatus": "Show Stock on Shared Links",
+      "shareStockStatusDesc": "Show stock status (Normal/Low/Critical) and colored borders on shared schedule links for intake users"
+    },
+    "stockReminder": {
+      "title": "Stock Reminder",
+      "description": "Sends notification when medication stock reaches",
+      "repeatDaily": "Repeat daily",
+      "repeatTooltip": "When enabled, sends reminders every day while stock is critical. Otherwise, only notifies once per medication until restocked."
     },
     "saveSettings": "Save Settings"
   },
@@ -288,6 +301,7 @@
   "tooltips": {
     "intakeReminders": "Intake reminders enabled",
     "hasNotes": "Has notes",
+    "stockExceedsCapacity": "Stock exceeds package capacity — consider updating pack count",
     "lightMode": "Switch to light mode",
     "darkMode": "Switch to dark mode"
   },
@@ -348,6 +362,9 @@
   "common": {
     "loading": "Loading...",
     "sending": "Sending...",
+    "sent": "Sent!",
+    "sendFailed": "Failed to send",
+    "networkError": "Network error",
     "saving": "Saving...",
     "unsavedChanges": {
       "title": "Unsaved Changes",
@@ -386,6 +403,9 @@
     "fullBlisters": "full blisters",
     "inBlister": "in 1 blister",
     "total": "total",
+    "pillsTotal": "{{count}} pills total",
+    "pillsTotal_one": "{{count}} pill total",
+    "pillsTotal_other": "{{count}} pills total",
     "max": "max"
   },
   "share": {
@@ -450,6 +470,7 @@
   "refill": {
     "title": "Refill",
     "packs": "Packs to add",
+    "pillsToAdd": "Pills to add",
     "loosePills": "Loose pills to add",
     "pillsPerPack": "1 pack = {{count}} pills",
     "addToStock": "Add to Stock",
@@ -466,6 +487,7 @@
   "editStock": {
     "title": "Correct Stock",
     "hint": "This is for correcting stock discrepancies. For regular stock changes, use 'Refill'.",
+    "totalPills": "Total pills",
     "fullBlisters": "Full blisters",
     "partialBlisterPills": "Partial blister",
     "pillsPerBlister": "({{count}} pills each)",

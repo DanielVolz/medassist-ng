@@ -340,22 +340,46 @@ export function MedicationsPage() {
 									</div>
 									<div className="med-details">
 										<span>
-											{t("medications.details.packs")}: <strong>{med.packCount}</strong>
+											{t("medications.details.type")}:{" "}
+											<strong>
+												{med.packageType === "bottle" ? t("form.packageTypeBottle") : t("form.packageTypeBlister")}
+											</strong>
 										</span>
-										<span>
-											{t("medications.details.blisters")}: <strong>{med.blistersPerPack}</strong>
-										</span>
-										<span>
-											{t("medications.details.pillsPerBlister")}: <strong>{med.pillsPerBlister}</strong>
-										</span>
-										<span>
-											{t("medications.details.loose")}: <strong>{med.looseTablets}</strong>
-										</span>
+										{med.packageType === "blister" ? (
+											<>
+												<span>
+													{t("medications.details.packs")}: <strong>{med.packCount}</strong>
+												</span>
+												<span>
+													{t("medications.details.blisters")}: <strong>{med.blistersPerPack}</strong>
+												</span>
+												<span>
+													{t("medications.details.pillsPerBlister")}: <strong>{med.pillsPerBlister}</strong>
+												</span>
+												<span>
+													{t("medications.details.loose")}: <strong>{med.looseTablets}</strong>
+												</span>
+											</>
+										) : (
+											<span>
+												{t("medications.details.totalCapacity")}: <strong>{med.totalPills ?? med.looseTablets}</strong>
+											</span>
+										)}
 									</div>
 									<div className="med-total">
 										{t("medications.details.stock")}:{" "}
 										{coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)} /{" "}
-										{getPackageSize(med)} {t("common.pills")}
+										{getPackageSize(med)} {getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}
+										{(coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)) >
+											getPackageSize(med) && (
+											<span
+												className="info-tooltip tooltip-align-left warning-text"
+												data-tooltip={t("tooltips.stockExceedsCapacity")}
+											>
+												{" "}
+												⚠️
+											</span>
+										)}
 									</div>
 								</div>
 								<div className="med-actions">
@@ -569,24 +593,38 @@ export function MedicationsPage() {
 						<div className="full refill-section">
 							<h4 className="refill-title">{t("refill.title")}</h4>
 							<div className="refill-form-inline">
-								<label>
-									{t("refill.packs")}
-									<input
-										type="number"
-										min="0"
-										value={refillPacks}
-										onChange={(e) => setRefillPacks(parseInt(e.target.value, 10) || 0)}
-									/>
-								</label>
-								<label>
-									{t("refill.loosePills")}
-									<input
-										type="number"
-										min="0"
-										value={refillLoose}
-										onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
-									/>
-								</label>
+								{form.packageType === "blister" ? (
+									<>
+										<label>
+											{t("refill.packs")}
+											<input
+												type="number"
+												min="0"
+												value={refillPacks}
+												onChange={(e) => setRefillPacks(parseInt(e.target.value, 10) || 0)}
+											/>
+										</label>
+										<label>
+											{t("refill.loosePills")}
+											<input
+												type="number"
+												min="0"
+												value={refillLoose}
+												onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
+											/>
+										</label>
+									</>
+								) : (
+									<label>
+										{t("refill.pillsToAdd")}
+										<input
+											type="number"
+											min="0"
+											value={refillLoose}
+											onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
+										/>
+									</label>
+								)}
 								<button
 									type="button"
 									className="success"
@@ -595,12 +633,18 @@ export function MedicationsPage() {
 								>
 									{refillSaving ? t("refill.adding") : t("refill.button")}
 								</button>
-								{(refillPacks > 0 || refillLoose > 0) && (
-									<span className="refill-preview">
-										+{refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) + refillLoose}{" "}
-										{t("common.pills")}
-									</span>
-								)}
+								{(() => {
+									const totalRefill =
+										form.packageType === "blister"
+											? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
+												refillLoose
+											: refillLoose;
+									return totalRefill > 0 ? (
+										<span className="refill-preview">
+											+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+										</span>
+									) : null;
+								})()}
 							</div>
 						</div>
 					)}

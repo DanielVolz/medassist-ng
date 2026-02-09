@@ -432,6 +432,11 @@ export function getUpcomingIntakes(
 			const currentNotifyTime = currentOccurrence - minutesBefore * 60 * 1000;
 			if (currentNotifyTime >= currentMinuteStart && currentOccurrence > now) {
 				nextTime = currentOccurrence;
+			} else if (currentNotifyTime < currentMinuteStart && currentOccurrence > now) {
+				// CATCH-UP: The notify window was missed (e.g. due to system sleep/restart)
+				// but the intake time is still in the future — include it so the advance
+				// reminder can still be sent rather than falling into a dead zone.
+				nextTime = currentOccurrence;
 			} else {
 				nextTime = nextOccurrence;
 			}
@@ -440,8 +445,15 @@ export function getUpcomingIntakes(
 		// Calculate when we should notify for this intake
 		const notifyTime = nextTime - minutesBefore * 60 * 1000;
 
-		// Check if notifyTime falls within the current minute (precise matching)
-		if (notifyTime >= currentMinuteStart && notifyTime < currentMinuteEnd) {
+		// Match if:
+		// 1. notifyTime falls within the current minute (normal case), OR
+		// 2. notifyTime is in the past but intakeTime is still in the future (catch-up
+		//    for missed advance reminder window — e.g. scheduler was down during the
+		//    exact notification minute due to system sleep, restart, or heavy load)
+		const isInCurrentMinute = notifyTime >= currentMinuteStart && notifyTime < currentMinuteEnd;
+		const isMissedButStillUpcoming = notifyTime < currentMinuteStart && nextTime > now;
+
+		if (isInCurrentMinute || isMissedButStillUpcoming) {
 			const intakeDate = new Date(nextTime);
 			upcoming.push({
 				medName,

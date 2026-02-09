@@ -416,19 +416,29 @@ async function checkAndSendIntakeRemindersForUser(
 		if (!existingEntry) {
 			// New dose - send first reminder
 			if (isIntakePast) {
-				// Intake time already passed and we have no state entry — this means the scheduler
-				// was not aware of this intake before it happened (e.g., user just enabled reminders).
-				// Seed the state as already handled so repeat reminders can track from here,
-				// but do NOT send a notification for intakes that were missed before tracking started.
-				state.reminders[key] = {
-					firstSentAt: nowMs,
-					lastSentAt: nowMs,
-					sendCount: 0,
-					advanceSent: false,
-				};
-				logger.debug(
-					`[IntakeReminder] User ${settings.userId}: Seeding state for past "${intake.medName}" at ${intake.intakeTimeStr} (no notification — first detection)`
-				);
+				// Intake time already passed and we have no state entry. Check how recently it was missed.
+				const minutesSinceIntake = (nowMs - intakeTimeMs) / 60000;
+				const gracePeriodMinutes = (settings.reminderRepeatIntervalMinutes ?? 30) + REMINDER_MINUTES_BEFORE;
+
+				if (minutesSinceIntake <= gracePeriodMinutes) {
+					// Recently missed — scheduler likely recovered from sleep/restart.
+					// Send a catch-up reminder (counts as first nagging reminder).
+					remindersToSend.push({ ...intake, currentSendCount: 1, maxReminders, isAdvanceReminder: false });
+					logger.info(
+						`[IntakeReminder] User ${settings.userId}: Catch-up reminder for recently missed "${intake.medName}" at ${intake.intakeTimeStr} (${Math.round(minutesSinceIntake)} min ago)`
+					);
+				} else {
+					// Long ago — seed state without notification (user likely already noticed)
+					state.reminders[key] = {
+						firstSentAt: nowMs,
+						lastSentAt: nowMs,
+						sendCount: 0,
+						advanceSent: false,
+					};
+					logger.debug(
+						`[IntakeReminder] User ${settings.userId}: Seeding state for old past "${intake.medName}" at ${intake.intakeTimeStr} (no notification — ${Math.round(minutesSinceIntake)} min ago)`
+					);
+				}
 			} else {
 				// Upcoming - this is advance reminder (no counter)
 				remindersToSend.push({ ...intake, currentSendCount: 0, maxReminders, isAdvanceReminder: true });

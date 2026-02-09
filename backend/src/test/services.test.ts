@@ -388,6 +388,56 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 			// Both should be found as they're within the window
 			expect(result.length).toBeGreaterThanOrEqual(1);
 		});
+
+		it("should catch up missed advance reminder when notify window passed but intake still future", () => {
+			// Intake at 15:57, reminder 15 min before = 15:42
+			// Scheduler was down at 15:42, now running at 15:50 (intake still in future)
+			const intakes: Intake[] = [blisterToIntake({ usage: 1, every: 1, start: "2025-01-01T15:57:00" })];
+			// "now" = 15:50 local time on the same day — past the 15:42 notify window, but before 15:57 intake
+			const now = new Date(2025, 0, 1, 15, 50, 0).getTime();
+
+			const result = getUpcomingIntakes("TestMed", intakes, 15, [], null, "en-US", "UTC", now);
+
+			// Should still return the intake as a catch-up advance reminder
+			expect(result).toHaveLength(1);
+			expect(result[0].medName).toBe("TestMed");
+			expect(result[0].usage).toBe(1);
+		});
+
+		it("should catch up missed advance reminder even 1 minute before intake", () => {
+			// Intake at 08:00, reminder at 07:45. Scheduler catches up at 07:59.
+			const intakes: Intake[] = [blisterToIntake({ usage: 1, every: 1, start: "2025-01-01T08:00:00" })];
+			const now = new Date(2025, 0, 1, 7, 59, 30).getTime();
+
+			const result = getUpcomingIntakes("TestMed", intakes, 15, [], null, "en-US", "UTC", now);
+
+			expect(result).toHaveLength(1);
+		});
+
+		it("should not catch up for intakes already in the past", () => {
+			// Intake at 08:00, reminder at 07:45. Now = 08:05 (intake already past).
+			const intakes: Intake[] = [blisterToIntake({ usage: 1, every: 1, start: "2025-01-01T08:00:00" })];
+			const now = new Date(2025, 0, 1, 8, 5, 0).getTime();
+
+			const result = getUpcomingIntakes("TestMed", intakes, 15, [], null, "en-US", "UTC", now);
+
+			// Should NOT return — intake is past, handled by getTodaysIntakes instead
+			expect(result).toHaveLength(0);
+		});
+
+		it("should catch up for recurring intake on later day", () => {
+			// Intake started Jan 1 at 10:00, every 1 day. Now = Jan 3 at 09:50 (past notify, before intake)
+			const intakes: Intake[] = [blisterToIntake({ usage: 1, every: 1, start: "2025-01-01T10:00:00" })];
+			const now = new Date(2025, 0, 3, 9, 50, 0).getTime();
+
+			const result = getUpcomingIntakes("TestMed", intakes, 15, [], null, "en-US", "UTC", now);
+
+			// Should return today's occurrence via catch-up
+			expect(result).toHaveLength(1);
+			// The intake time should be Jan 3 at 10:00
+			expect(result[0].intakeTime.getHours()).toBe(10);
+			expect(result[0].intakeTime.getDate()).toBe(3);
+		});
 	});
 
 	describe("getTodaysIntakes", () => {

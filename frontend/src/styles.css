@@ -1500,7 +1500,7 @@ textarea.auto-resize {
 	user-select: none;
 }
 .day-divider.clickable:hover {
-	color: var(--accent);
+	opacity: 0.8;
 }
 /* Keep warning/danger colors on hover */
 .day-block.stock-warning .day-divider.clickable:hover {

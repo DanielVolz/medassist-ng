@@ -94,6 +94,7 @@ const createMockContext = (overrides = {}) => ({
 	pastDays: [],
 	futureDays: [],
 	takenDoses: new Set(),
+	dismissedDoses: new Set(),
 	markDoseTaken: vi.fn(),
 	undoDoseTaken: vi.fn(),
 	coverageByMed: {},

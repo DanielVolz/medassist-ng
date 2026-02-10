@@ -5,7 +5,7 @@ import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
-import { expandDoseIds, getStockStatus } from "../utils/schedule";
+import { expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
 function userStorageKey(userId: number | undefined, key: string): string {
@@ -604,65 +604,37 @@ export function DashboardPage() {
 						</div>
 					</div>
 					<div className="timeline">
-						{/* Past days toggle */}
-						{pastDays.length > 0 &&
-							(() => {
-								const missedCount = missedPastDoseIds.length;
-								const totalPastDoses = pastDays.flatMap((d) => d.meds.flatMap((m) => expandDoseIds(m.doses)));
-								return (
-									<div className="past-days-header">
-										<div
-											className={`past-days-toggle ${showPastDays ? "expanded" : ""} ${missedCount > 0 ? "has-missed" : ""}`}
-											onClick={() => setShowPastDays(!showPastDays)}
-										>
-											<span className="past-days-icon">{showPastDays ? "▼" : "▶"}</span>
-											<span className="past-days-label">
-												{showPastDays ? t("dashboard.schedules.hidePastDays") : t("dashboard.schedules.showPastDays")}
-											</span>
-											<span className="past-days-count">
-												({t("dashboard.schedules.pastDaysCount", { count: pastDays.length })})
-											</span>
-											{missedCount > 0 ? (
-												<span
-													className="past-days-warning"
-													title={t("dashboard.schedules.missedDoses", { count: missedCount })}
-												>
-													⚠️ {missedCount}
-												</span>
-											) : totalPastDoses.length > 0 ? (
-												<span className="past-days-complete" title={t("dashboard.schedules.allTaken")}>
-													✓
-												</span>
-											) : null}
-										</div>
-										{missedCount > 0 && (
-											<button
-												type="button"
-												className="clear-missed-btn"
-												onClick={(e) => {
-													e.stopPropagation();
-													setShowClearMissedConfirm(true);
-												}}
-												title={t("dashboard.schedules.clearMissed")}
-											>
-												{t("dashboard.schedules.clearMissed")}
-											</button>
-										)}
-									</div>
-								);
-							})()}
-						{/* Past days (when expanded) */}
+						{/* Past days (when expanded) — rendered above toggle */}
 						{showPastDays &&
 							pastDays.map((day) => {
+								// Get ALL dose IDs for this day (for total count and yellow styling)
 								const allDoseIds = day.meds.flatMap((item) =>
 									item.doses.flatMap((d) => {
 										const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
 										return takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
 									})
 								);
-								const allDayTaken =
-									allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id) || dismissedDoses.has(id));
-								const takenCount = allDoseIds.filter((id) => takenDoses.has(id) || dismissedDoses.has(id)).length;
+
+								// Really taken = all doses marked as taken by human (for green "All taken")
+								const allReallyTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
+								const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+
+								// Count missed doses that are NOT dismissed (for warning icon)
+								const missedNotDismissedCount = day.meds.reduce((count, item) => {
+									const med = meds.find((m) => m.name === item.medName);
+									const dismissedUntilDate = med?.dismissedUntil ?? undefined;
+									return (
+										count +
+										item.doses.reduce((doseCount, d) => {
+											if (isDoseDismissed(d.id, dismissedUntilDate)) return doseCount;
+											const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
+											const ids = takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
+											return doseCount + ids.filter((id) => !takenDoses.has(id) && !dismissedDoses.has(id)).length;
+										}, 0)
+									);
+								}, 0);
+								const hasRealMissed = missedNotDismissedCount > 0;
+
 								const isAutoCollapsed = true; // Past days are always auto-collapsed
 								const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 								const isCollapsed = !isManuallyExpanded;
@@ -671,7 +643,7 @@ export function DashboardPage() {
 								return (
 									<div
 										key={day.dateStr}
-										className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : allDoseIds.length > 0 ? "past-missed" : ""}`}
+										className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allReallyTaken ? "all-taken" : allDoseIds.length > 0 ? "past-missed" : ""}`}
 									>
 										<div
 											className="day-divider clickable"
@@ -681,16 +653,18 @@ export function DashboardPage() {
 											<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
 											<span className="day-date">{day.dateStr}</span>
 											<span className="day-summary">
-												{allDayTaken ? (
+												{allReallyTaken ? (
 													<span className="day-complete">✓ {t("dashboard.schedules.allTaken")}</span>
 												) : (
 													<>
-														<span
-															className="day-warning"
-															title={t("dashboard.schedules.missedDoses", { count: allDoseIds.length - takenCount })}
-														>
-															⚠️
-														</span>
+														{hasRealMissed && (
+															<span
+																className="day-warning"
+																title={t("dashboard.schedules.missedDoses", { count: missedNotDismissedCount })}
+															>
+																⚠️
+															</span>
+														)}
 														<span className="day-progress">
 															{takenCount}/{allDoseIds.length}
 														</span>
@@ -793,6 +767,63 @@ export function DashboardPage() {
 									</div>
 								);
 							})}
+						{/* Past days toggle */}
+						{pastDays.length > 0 &&
+							(() => {
+								const missedCount = missedPastDoseIds.length;
+								const totalPastDoses = pastDays.flatMap((d) => d.meds.flatMap((m) => expandDoseIds(m.doses)));
+								return (
+									<div className="past-days-header">
+										<div
+											className={`past-days-toggle ${showPastDays ? "expanded" : ""} ${missedCount > 0 ? "has-missed" : ""}`}
+											onClick={() => {
+												const wasCollapsed = !showPastDays;
+												setShowPastDays(!showPastDays);
+												if (wasCollapsed) {
+													setTimeout(() => {
+														document
+															.querySelector(".day-block.today")
+															?.scrollIntoView({ behavior: "smooth", block: "center" });
+													}, 50);
+												}
+											}}
+										>
+											<span className="past-days-icon">{showPastDays ? "▼" : "▶"}</span>
+											<span className="past-days-label">
+												{showPastDays ? t("dashboard.schedules.hidePastDays") : t("dashboard.schedules.showPastDays")}
+											</span>
+											<span className="past-days-count">
+												({t("dashboard.schedules.pastDaysCount", { count: pastDays.length })})
+											</span>
+											{missedCount > 0 ? (
+												<span
+													className="past-days-warning"
+													title={t("dashboard.schedules.missedDoses", { count: missedCount })}
+												>
+													⚠️ {missedCount}
+												</span>
+											) : totalPastDoses.length > 0 ? (
+												<span className="past-days-complete" title={t("dashboard.schedules.allTaken")}>
+													✓
+												</span>
+											) : null}
+										</div>
+										{missedCount > 0 && (
+											<button
+												type="button"
+												className="clear-missed-btn"
+												onClick={(e) => {
+													e.stopPropagation();
+													setShowClearMissedConfirm(true);
+												}}
+												title={t("dashboard.schedules.clearMissed")}
+											>
+												{t("dashboard.schedules.clearMissed")}
+											</button>
+										)}
+									</div>
+								);
+							})()}
 						{/* Today - always visible */}
 						{todayDay &&
 							(() => {

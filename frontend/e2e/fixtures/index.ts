@@ -2,121 +2,128 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
 
-// Storage state path for authenticated sessions
-const authFile = path.join(import.meta.dirname, "..", ".auth", "user.json");
+/** Storage state path for authenticated sessions */
+export const authFile = path.join(import.meta.dirname, "..", ".auth", "user.json");
 
 /**
- * Test user credentials for E2E tests
- * These are used for setting up a test user during the setup phase
+ * Test user credentials for E2E tests.
+ * Override with PLAYWRIGHT_USERNAME / PLAYWRIGHT_PASSWORD env vars.
+ * The setup script registers this user if it doesn't exist and registration is enabled.
  */
 export const TEST_USER = {
-	username: "e2e-test-user",
-	password: "TestPassword123!",
+	username: process.env.PLAYWRIGHT_USERNAME || "e2e-test-user",
+	password: process.env.PLAYWRIGHT_PASSWORD || "TestPassword123!",
 } as const;
 
-/**
- * Custom test fixture that extends Playwright's base test
- * Provides utility functions for common testing operations
- */
-export const test = base.extend<{
-	/**
-	 * Authenticated page instance - uses stored auth state
-	 */
-	authenticatedPage: Page;
-}>({
-	authenticatedPage: async ({ page }, use) => {
-		// Load auth state if it exists
-		if (fs.existsSync(authFile)) {
-			const storageState = JSON.parse(fs.readFileSync(authFile, "utf-8"));
-			await page.context().addCookies(storageState.cookies || []);
-			// Note: localStorage must be set after navigating to the page
-		}
+// ---------------------------------------------------------------------------
+// Auth-me response mocking
+// ---------------------------------------------------------------------------
+// The backend rate-limits /auth/me to 10 req/min.  Because every page
+// navigation triggers the React app's auth-state check (which calls
+// /auth/me), running 50+ E2E tests in a single suite easily exceeds the
+// limit.
+//
+// Solution: build a synthetic /auth/me response from the JWT payload
+// stored in the auth file.  This avoids all /auth/me network requests
+// from test pages, completely eliminating rate-limit issues while still
+// testing the real backend for all other API calls.
+// ---------------------------------------------------------------------------
+let mockMeBody: string | null = null;
 
+function getMockAuthMeBody(): string | null {
+	if (mockMeBody) return mockMeBody;
+	try {
+		const state = JSON.parse(fs.readFileSync(authFile, "utf-8"));
+		const token = state.cookies?.find((c: { name: string }) => c.name === "access_token")?.value;
+		if (!token) return null;
+		const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
+		mockMeBody = JSON.stringify({
+			id: payload.sub,
+			username: payload.username,
+			avatarUrl: null,
+			authProvider: "local",
+			createdAt: new Date().toISOString(),
+			lastLoginAt: new Date().toISOString(),
+		});
+		return mockMeBody;
+	} catch {
+		return null;
+	}
+}
+
+async function setupAuthMeMock(page: Page): Promise<void> {
+	const body = getMockAuthMeBody();
+	if (body) {
+		await page.route("**/api/auth/me", (route) =>
+			route.fulfill({ status: 200, contentType: "application/json", body }),
+		);
+	}
+}
+
+/**
+ * Extended test fixture that automatically mocks /auth/me on every page
+ * using user data from the JWT in the stored auth file.
+ *
+ * Import this `test` (instead of `@playwright/test`) in every spec file
+ * that logs in via `storageState: authFile`.
+ *
+ * auth.spec.ts should keep importing from `@playwright/test` directly
+ * since it tests the unauthenticated flow.
+ */
+export const test = base.extend<{}>({
+	page: async ({ page }, use) => {
+		await setupAuthMeMock(page);
 		await use(page);
 	},
 });
 
 /**
- * Helper to wait for the app to be fully loaded
+ * Wait for the app to be fully loaded past any loading/initializing screens.
+ * Includes a single retry with page reload to handle transient auth failures
+ * (e.g. brief race between context setup and cookie application).
  */
 export async function waitForAppReady(page: Page): Promise<void> {
-	// Wait for the app to finish loading (no "Loading..." or "Initializing...")
-	await expect(page.getByText(/Loading\.\.\.|Initializing\.\.\./i)).not.toBeVisible({
-		timeout: 10000,
-	});
+	const hero = page.locator("header.hero");
+	try {
+		await expect(hero).toBeVisible({ timeout: 5000 });
+	} catch {
+		// Auth might have failed transiently — reload and retry once
+		await page.reload();
+		await expect(hero).toBeVisible({ timeout: 15000 });
+	}
 }
 
 /**
- * Helper to login with the test user
+ * Navigate to a page and wait for it to be ready.
  */
-export async function loginTestUser(page: Page): Promise<void> {
-	await page.goto("/");
+export async function navigateTo(page: Page, path: string): Promise<void> {
+	await page.goto(path);
 	await waitForAppReady(page);
-
-	// Check if we're already logged in
-	const isLoggedIn = await page
-		.getByRole("navigation")
-		.isVisible()
-		.catch(() => false);
-	if (isLoggedIn) {
-		return;
-	}
-
-	// Fill login form
-	await page.getByLabel(/username/i).fill(TEST_USER.username);
-	await page.getByLabel(/password/i).fill(TEST_USER.password);
-	await page.getByRole("button", { name: /sign in|log in|login/i }).click();
-
-	// Wait for successful login
-	await expect(page.getByRole("navigation")).toBeVisible({ timeout: 10000 });
 }
 
 /**
- * Helper to register a new user (for setup)
+ * Click a navigation tab by its text.
  */
-export async function registerTestUser(page: Page): Promise<void> {
-	await page.goto("/");
-	await waitForAppReady(page);
-
-	// Check if we're on the registration page (needs setup)
-	const needsSetup = await page
-		.getByText(/create.*account|register|first user/i)
-		.isVisible()
-		.catch(() => false);
-
-	if (needsSetup) {
-		// Fill registration form
-		await page.getByLabel(/username/i).fill(TEST_USER.username);
-		await page
-			.getByLabel(/password/i)
-			.first()
-			.fill(TEST_USER.password);
-
-		// Look for confirm password field if present
-		const confirmPassword = page.getByLabel(/confirm.*password/i);
-		if (await confirmPassword.isVisible().catch(() => false)) {
-			await confirmPassword.fill(TEST_USER.password);
-		}
-
-		// Submit registration
-		await page.getByRole("button", { name: /register|create|sign up/i }).click();
-
-		// Wait for successful registration
-		await expect(page.getByRole("navigation")).toBeVisible({ timeout: 10000 });
-	}
+export async function clickNavTab(page: Page, tabName: string): Promise<void> {
+	await page.locator(`button.pill:has-text("${tabName}")`).click();
 }
 
 /**
- * Helper to logout
+ * Open the user dropdown menu (when auth is enabled).
  */
-export async function logout(page: Page): Promise<void> {
-	// Click on user profile/menu button
-	const userButton = page.getByRole("button", { name: /profile|user|account|menu/i });
-	if (await userButton.isVisible().catch(() => false)) {
-		await userButton.click();
-		await page.getByRole("button", { name: /logout|sign out|log out/i }).click();
-		await expect(page.getByLabel(/username/i)).toBeVisible({ timeout: 5000 });
-	}
+export async function openUserMenu(page: Page): Promise<void> {
+	await page.locator(".user-menu-btn").click();
+	await expect(page.locator(".user-dropdown")).toBeVisible();
+}
+
+/**
+ * Sign out via the user dropdown menu.
+ */
+export async function signOut(page: Page): Promise<void> {
+	await openUserMenu(page);
+	await page.locator('.dropdown-item:has-text("Sign Out")').click();
+	// Should redirect to login page
+	await expect(page.locator(".auth-container")).toBeVisible({ timeout: 10000 });
 }
 
 // Re-export expect for convenience

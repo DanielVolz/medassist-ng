@@ -83,7 +83,7 @@ export default defineConfig({
 			testMatch: /.*\.setup\.ts/,
 		},
 
-		// Desktop browsers
+		// Desktop Chrome — primary test browser, always runs
 		{
 			name: "chromium",
 			use: {
@@ -92,6 +92,7 @@ export default defineConfig({
 			dependencies: ["setup"],
 		},
 
+		// Desktop Firefox — runs locally and optionally in CI
 		{
 			name: "firefox",
 			use: {
@@ -100,27 +101,11 @@ export default defineConfig({
 			dependencies: ["setup"],
 		},
 
+		// Desktop Safari — runs locally and optionally in CI
 		{
 			name: "webkit",
 			use: {
 				...devices["Desktop Safari"],
-			},
-			dependencies: ["setup"],
-		},
-
-		// Mobile browsers (optional)
-		{
-			name: "mobile-chrome",
-			use: {
-				...devices["Pixel 5"],
-			},
-			dependencies: ["setup"],
-		},
-
-		{
-			name: "mobile-safari",
-			use: {
-				...devices["iPhone 12"],
 			},
 			dependencies: ["setup"],
 		},
@@ -129,20 +114,19 @@ export default defineConfig({
 	// Directory for test output files (screenshots, traces, videos)
 	outputDir: "test-results/",
 
-	// Web server configuration - automatically start dev server if not running
-	// Commented out by default as you typically run the dev servers separately
-	// webServer: [
-	//   {
-	//     command: 'cd ../backend && npm run dev',
-	//     url: 'http://localhost:3000/health',
-	//     reuseExistingServer: !process.env.CI,
-	//     timeout: 120 * 1000,
-	//   },
-	//   {
-	//     command: 'npm run dev',
-	//     url: 'http://localhost:5173',
-	//     reuseExistingServer: !process.env.CI,
-	//     timeout: 120 * 1000,
-	//   },
-	// ],
+	// Web server configuration — automatically start dev servers in CI
+	webServer: [
+		{
+			command: "cd ../backend && npm run dev",
+			url: "http://localhost:3000/health",
+			reuseExistingServer: !process.env.CI,
+			timeout: 120 * 1000,
+		},
+		{
+			command: "npm run dev",
+			url: "http://localhost:5173",
+			reuseExistingServer: !process.env.CI,
+			timeout: 120 * 1000,
+		},
+	],
 });

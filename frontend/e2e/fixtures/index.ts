@@ -85,7 +85,7 @@ export const test = base.extend<{}>({
 export async function waitForAppReady(page: Page): Promise<void> {
 	const hero = page.locator("header.hero");
 	try {
-		await expect(hero).toBeVisible({ timeout: 5000 });
+		await expect(hero).toBeVisible({ timeout: 15000 });
 	} catch {
 		// Auth might have failed transiently — reload and retry once
 		await page.reload();
@@ -99,6 +99,7 @@ export async function waitForAppReady(page: Page): Promise<void> {
 export async function navigateTo(page: Page, path: string): Promise<void> {
 	await page.goto(path);
 	await waitForAppReady(page);
+	await page.waitForLoadState("networkidle");
 }
 
 /**
@@ -128,3 +129,130 @@ export async function signOut(page: Page): Promise<void> {
 
 // Re-export expect for convenience
 export { expect };
+
+// ---------------------------------------------------------------------------
+// API helpers — create / delete medications via backend API
+// ---------------------------------------------------------------------------
+const API_BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
+
+function getAuthCookie(): string | null {
+	try {
+		const state = JSON.parse(fs.readFileSync(authFile, "utf-8"));
+		return state.cookies?.find((c: { name: string }) => c.name === "access_token")?.value ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/** Typed medication response (subset of fields we care about) */
+export interface TestMedication {
+	id: number;
+	name: string;
+	genericName?: string | null;
+}
+
+/**
+ * Create a medication via the backend API.  Returns the created medication
+ * including its `id`.  Uses the stored auth cookie from the setup project.
+ * Includes automatic retry for rate-limit (429) responses.
+ */
+export async function createMedicationViaAPI(
+	data: {
+		name: string;
+		genericName?: string;
+		packageType?: "blister" | "bottle";
+		packCount?: number;
+		blistersPerPack?: number;
+		pillsPerBlister?: number;
+		looseTablets?: number;
+		totalPills?: number;
+		intakes?: { usage: number; every: number; start: string; intakeRemindersEnabled?: boolean }[];
+	},
+): Promise<TestMedication> {
+	const token = getAuthCookie();
+	const isBottle = data.packageType === "bottle";
+	const body = {
+		packageType: isBottle ? "bottle" : "blister",
+		packCount: isBottle ? 1 : (data.packCount ?? 1),
+		blistersPerPack: isBottle ? 1 : (data.blistersPerPack ?? 1),
+		pillsPerBlister: isBottle ? 1 : (data.pillsPerBlister ?? 10),
+		// For bottles: looseTablets IS the current stock. Default to totalPills if not specified.
+		looseTablets: isBottle ? (data.looseTablets ?? data.totalPills ?? 0) : (data.looseTablets ?? 0),
+		totalPills: isBottle ? (data.totalPills ?? null) : null,
+		intakes: [
+			{
+				usage: 1,
+				every: 1,
+				start: new Date().toISOString().slice(0, 16),
+				intakeRemindersEnabled: false,
+			},
+		],
+		...data,
+	};
+
+	for (let attempt = 0; attempt < 5; attempt++) {
+		const res = await fetch(`${API_BASE}/api/medications`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				...(token ? { Cookie: `access_token=${token}` } : {}),
+			},
+			body: JSON.stringify(body),
+		});
+		if (res.status === 429) {
+			// Rate limited — exponential backoff: 3s, 6s, 9s, 12s, 15s
+			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			continue;
+		}
+		if (!res.ok) {
+			const text = await res.text();
+			throw new Error(`Failed to create medication: ${res.status} ${text}`);
+		}
+		return res.json() as Promise<TestMedication>;
+	}
+	throw new Error("Failed to create medication after 5 retries (rate limited)");
+}
+
+/**
+ * Delete a medication via the backend API.
+ */
+export async function deleteMedicationViaAPI(id: number): Promise<void> {
+	const token = getAuthCookie();
+	await fetch(`${API_BASE}/api/medications/${id}`, {
+		method: "DELETE",
+		headers: token ? { Cookie: `access_token=${token}` } : {},
+	});
+}
+
+/**
+ * Delete ALL medications for the test user via the backend API.
+ * Includes retry logic for rate-limited responses.
+ */
+export async function deleteAllMedicationsViaAPI(): Promise<void> {
+	const token = getAuthCookie();
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const res = await fetch(`${API_BASE}/api/medications`, {
+			headers: token ? { Cookie: `access_token=${token}` } : {},
+		});
+		if (res.status === 429) {
+			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			continue;
+		}
+		if (!res.ok) return;
+		const meds = (await res.json()) as TestMedication[];
+		for (const med of meds) {
+			for (let delAttempt = 0; delAttempt < 3; delAttempt++) {
+				const delRes = await fetch(`${API_BASE}/api/medications/${med.id}`, {
+					method: "DELETE",
+					headers: token ? { Cookie: `access_token=${token}` } : {},
+				});
+				if (delRes.status === 429) {
+					await new Promise((r) => setTimeout(r, 3000));
+					continue;
+				}
+				break;
+			}
+		}
+		return;
+	}
+}

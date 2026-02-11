@@ -13,8 +13,9 @@ const authFile = path.join(import.meta.dirname, ".auth", "user.json");
 function isTokenValid(token: string): boolean {
 	try {
 		const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
-		// Require at least 2 minutes of remaining validity
-		return typeof payload.exp === "number" && Date.now() / 1000 < payload.exp - 120;
+		// Require at least 10 minutes of remaining validity to ensure the token
+		// lasts through the entire test run (which can take 7+ minutes)
+		return typeof payload.exp === "number" && Date.now() / 1000 < payload.exp - 600;
 	} catch {
 		return false;
 	}

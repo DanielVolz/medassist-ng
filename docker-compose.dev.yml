@@ -11,6 +11,7 @@ services:
       - .env
     environment:
       - DATA_DIR=/app/data
+      - RATE_LIMIT_MAX=300
     ports:
       - "3000:3000"
     security_opt:

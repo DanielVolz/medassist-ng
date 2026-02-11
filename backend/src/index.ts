@@ -164,7 +164,7 @@ await app.register(sensible);
 await app.register(helmet);
 await app.register(cors, { origin: origins, credentials: true });
 await app.register(rateLimit, {
-	max: 100,
+	max: Number(process.env.RATE_LIMIT_MAX) || 100,
 	timeWindow: "1 minute",
 });
 await app.register(cookie, { secret: env.COOKIE_SECRET ?? "dev-cookie-secret" });

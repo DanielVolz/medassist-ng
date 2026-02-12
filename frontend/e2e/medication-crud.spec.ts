@@ -1,5 +1,14 @@
-import { test, authFile, navigateTo, expect, deleteAllMedicationsViaAPI, createMedicationViaAPI, deleteMedicationViaAPI, type TestMedication } from "./fixtures";
 import type { Page } from "@playwright/test";
+import {
+	authFile,
+	createMedicationViaAPI,
+	deleteAllMedicationsViaAPI,
+	deleteMedicationViaAPI,
+	expect,
+	navigateTo,
+	type TestMedication,
+	test,
+} from "./fixtures";
 
 /**
  * Medication CRUD E2E Tests
@@ -27,7 +36,7 @@ async function fillAndSaveMedication(
 		expiryDate?: string;
 		notes?: string;
 		intakes?: { usage: string; every: string }[];
-	},
+	}
 ): Promise<void> {
 	await page.getByLabel(/Commercial Name/i).fill(opts.name);
 	if (opts.genericName) {
@@ -342,13 +351,17 @@ test.describe("Medication CRUD", () => {
 
 		test("should display multiple medications in the list", async ({ page }) => {
 			createdMeds.push(await createMedicationViaAPI({ name: "Med Alpha" }));
-			createdMeds.push(await createMedicationViaAPI({
-				name: "Med Beta",
-				packCount: 2,
-				blistersPerPack: 2,
-				pillsPerBlister: 14,
-				intakes: [{ usage: 2, every: 1, start: new Date().toISOString().slice(0, 16), intakeRemindersEnabled: false }],
-			}));
+			createdMeds.push(
+				await createMedicationViaAPI({
+					name: "Med Beta",
+					packCount: 2,
+					blistersPerPack: 2,
+					pillsPerBlister: 14,
+					intakes: [
+						{ usage: 2, every: 1, start: new Date().toISOString().slice(0, 16), intakeRemindersEnabled: false },
+					],
+				})
+			);
 			await navigateTo(page, "/medications");
 
 			// Both medications should be in the list
@@ -358,13 +371,15 @@ test.describe("Medication CRUD", () => {
 		});
 
 		test("should show stock details on medication row", async ({ page }) => {
-			createdMeds.push(await createMedicationViaAPI({
-				name: "Stock Detail Med",
-				packCount: 3,
-				blistersPerPack: 2,
-				pillsPerBlister: 10,
-				looseTablets: 3,
-			}));
+			createdMeds.push(
+				await createMedicationViaAPI({
+					name: "Stock Detail Med",
+					packCount: 3,
+					blistersPerPack: 2,
+					pillsPerBlister: 10,
+					looseTablets: 3,
+				})
+			);
 			await navigateTo(page, "/medications");
 
 			const medRow = page.locator(".med-row").filter({ hasText: "Stock Detail Med" });
@@ -395,7 +410,10 @@ test.describe("Medication CRUD", () => {
 			await page.getByRole("button", { name: /Intake/i }).click();
 			expect(await page.locator(".blister-row").count()).toBe(3);
 
-			const removeBtn = page.locator(".blister-row").last().getByRole("button", { name: /Remove/i });
+			const removeBtn = page
+				.locator(".blister-row")
+				.last()
+				.getByRole("button", { name: /Remove/i });
 			await removeBtn.click();
 			expect(await page.locator(".blister-row").count()).toBe(2);
 		});

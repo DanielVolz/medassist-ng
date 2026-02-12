@@ -1,12 +1,12 @@
 import {
-	test,
 	authFile,
-	navigateTo,
-	expect,
 	createMedicationViaAPI,
-	deleteMedicationViaAPI,
 	deleteAllMedicationsViaAPI,
+	deleteMedicationViaAPI,
+	expect,
+	navigateTo,
 	type TestMedication,
+	test,
 } from "./fixtures";
 
 /**
@@ -51,7 +51,7 @@ test.describe("Schedule with medications", () => {
 				blistersPerPack: 2,
 				pillsPerBlister: 14,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 		createdMeds.push(
 			await createMedicationViaAPI({
@@ -61,7 +61,7 @@ test.describe("Schedule with medications", () => {
 				blistersPerPack: 1,
 				pillsPerBlister: 30,
 				intakes: [{ usage: 1, every: 1, start: threeDaysAgo, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 		createdMeds.push(
 			await createMedicationViaAPI({
@@ -69,7 +69,7 @@ test.describe("Schedule with medications", () => {
 				packageType: "bottle",
 				totalPills: 52,
 				intakes: [{ usage: 1, every: 7, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 	});
 

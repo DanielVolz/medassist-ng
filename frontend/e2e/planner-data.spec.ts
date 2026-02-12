@@ -1,14 +1,14 @@
-import {
-	test,
-	authFile,
-	navigateTo,
-	expect,
-	createMedicationViaAPI,
-	deleteMedicationViaAPI,
-	deleteAllMedicationsViaAPI,
-	type TestMedication,
-} from "./fixtures";
 import type { Page } from "@playwright/test";
+import {
+	authFile,
+	createMedicationViaAPI,
+	deleteAllMedicationsViaAPI,
+	deleteMedicationViaAPI,
+	expect,
+	navigateTo,
+	type TestMedication,
+	test,
+} from "./fixtures";
 
 /**
  * Helper: navigate to planner, wait for page to be ready, click Calculate,
@@ -57,7 +57,7 @@ test.describe("Planner with medications", () => {
 				pillsPerBlister: 10,
 				looseTablets: 0,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 		// Medication with very low stock (3 pills)
 		createdMeds.push(
@@ -69,7 +69,7 @@ test.describe("Planner with medications", () => {
 				pillsPerBlister: 3,
 				looseTablets: 0,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 	});
 

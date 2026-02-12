@@ -1,12 +1,12 @@
 import {
-	test,
 	authFile,
-	navigateTo,
-	expect,
 	createMedicationViaAPI,
-	deleteMedicationViaAPI,
 	deleteAllMedicationsViaAPI,
+	deleteMedicationViaAPI,
+	expect,
+	navigateTo,
 	type TestMedication,
+	test,
 } from "./fixtures";
 
 /**
@@ -46,7 +46,7 @@ test.describe("Dashboard with medications", () => {
 				pillsPerBlister: 10,
 				looseTablets: 0,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 		createdMeds.push(
 			await createMedicationViaAPI({
@@ -55,7 +55,7 @@ test.describe("Dashboard with medications", () => {
 				totalPills: 90,
 				looseTablets: 90,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 	});
 

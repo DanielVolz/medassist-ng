@@ -1,12 +1,12 @@
 import {
-	test,
 	authFile,
-	navigateTo,
-	expect,
 	createMedicationViaAPI,
 	createShareTokenViaAPI,
 	deleteAllMedicationsViaAPI,
+	expect,
+	navigateTo,
 	type TestMedication,
+	test,
 } from "./fixtures";
 
 /**
@@ -49,7 +49,7 @@ test.describe("Share Schedule", () => {
 				blistersPerPack: 2,
 				pillsPerBlister: 10,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false, takenBy: PERSON_ALICE }],
-			}),
+			})
 		);
 
 		// Create medication for Bob
@@ -61,7 +61,7 @@ test.describe("Share Schedule", () => {
 				totalPills: 60,
 				looseTablets: 60,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false, takenBy: PERSON_BOB }],
-			}),
+			})
 		);
 	});
 

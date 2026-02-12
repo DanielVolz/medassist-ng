@@ -1,12 +1,12 @@
 import {
-	test,
 	authFile,
-	navigateTo,
-	expect,
 	createMedicationViaAPI,
 	deleteAllMedicationsViaAPI,
-	updateSettingsViaAPI,
+	expect,
+	navigateTo,
 	type TestMedication,
+	test,
+	updateSettingsViaAPI,
 } from "./fixtures";
 
 /**
@@ -66,7 +66,7 @@ test.describe("Stock Status Levels", () => {
 				blistersPerPack: 3,
 				pillsPerBlister: 10,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 
 		// Normal stock: 60 pills, 1/day = 60 days → Normal status
@@ -79,7 +79,7 @@ test.describe("Stock Status Levels", () => {
 				blistersPerPack: 3,
 				pillsPerBlister: 10,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 
 		// Low stock: 20 pills, 1/day = 20 days → Low/Warning status
@@ -91,7 +91,7 @@ test.describe("Stock Status Levels", () => {
 				blistersPerPack: 2,
 				pillsPerBlister: 10,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 
 		// Critical stock: 5 pills, 1/day = 5 days → Critical/Danger status
@@ -103,7 +103,7 @@ test.describe("Stock Status Levels", () => {
 				totalPills: 5,
 				looseTablets: 5,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 
 		// Depleted: bottle with stated capacity 1 but 0 pills in stock → Out of Stock
@@ -114,7 +114,7 @@ test.describe("Stock Status Levels", () => {
 				totalPills: 1,
 				looseTablets: 0,
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
-			}),
+			})
 		);
 	});
 
@@ -218,9 +218,8 @@ test.describe("Stock Status Levels", () => {
 		if (await reorderCard.isVisible().catch(() => false)) {
 			// Should mention at least one of the low stock meds
 			const cardText = await reorderCard.textContent();
-			const mentionsLow = cardText?.includes(MED_LOW) ||
-				cardText?.includes(MED_CRITICAL) ||
-				cardText?.includes(MED_DEPLETED);
+			const mentionsLow =
+				cardText?.includes(MED_LOW) || cardText?.includes(MED_CRITICAL) || cardText?.includes(MED_DEPLETED);
 			expect(mentionsLow).toBeTruthy();
 		}
 	});

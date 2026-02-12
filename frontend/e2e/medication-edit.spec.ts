@@ -1,13 +1,13 @@
+import type { Page } from "@playwright/test";
 import {
-	test,
 	authFile,
-	navigateTo,
-	expect,
 	createMedicationViaAPI,
 	deleteAllMedicationsViaAPI,
+	expect,
+	navigateTo,
 	type TestMedication,
+	test,
 } from "./fixtures";
-import type { Page } from "@playwright/test";
 
 /**
  * Medication Edit E2E Tests
@@ -141,10 +141,12 @@ test.describe("Medication Editing", () => {
 	});
 
 	test("should remove a taken-by person from a medication", async ({ page }) => {
-		createdMeds.push(await createMedicationViaAPI({
-			name: "Remove TakenBy Med",
-			takenBy: ["Alice", "Bob"],
-		}));
+		createdMeds.push(
+			await createMedicationViaAPI({
+				name: "Remove TakenBy Med",
+				takenBy: ["Alice", "Bob"],
+			})
+		);
 		await navigateTo(page, "/medications");
 
 		await clickEditMed(page, "Remove TakenBy Med");
@@ -196,12 +198,14 @@ test.describe("Medication Editing", () => {
 	});
 
 	test("should use refill feature to add stock in edit mode", async ({ page }) => {
-		createdMeds.push(await createMedicationViaAPI({
-			name: "Refill Test Med",
-			packCount: 1,
-			blistersPerPack: 2,
-			pillsPerBlister: 10,
-		}));
+		createdMeds.push(
+			await createMedicationViaAPI({
+				name: "Refill Test Med",
+				packCount: 1,
+				blistersPerPack: 2,
+				pillsPerBlister: 10,
+			})
+		);
 		await navigateTo(page, "/medications");
 
 		await clickEditMed(page, "Refill Test Med");
@@ -227,15 +231,19 @@ test.describe("Medication Editing", () => {
 	});
 
 	test("should edit intake schedule usage and interval", async ({ page }) => {
-		createdMeds.push(await createMedicationViaAPI({
-			name: "Edit Intake Med",
-			intakes: [{
-				usage: 1,
-				every: 1,
-				start: new Date().toISOString().slice(0, 16),
-				intakeRemindersEnabled: false,
-			}],
-		}));
+		createdMeds.push(
+			await createMedicationViaAPI({
+				name: "Edit Intake Med",
+				intakes: [
+					{
+						usage: 1,
+						every: 1,
+						start: new Date().toISOString().slice(0, 16),
+						intakeRemindersEnabled: false,
+					},
+				],
+			})
+		);
 		await navigateTo(page, "/medications");
 
 		await clickEditMed(page, "Edit Intake Med");
@@ -261,15 +269,19 @@ test.describe("Medication Editing", () => {
 	});
 
 	test("should add a second intake schedule row", async ({ page }) => {
-		createdMeds.push(await createMedicationViaAPI({
-			name: "Add Intake Med",
-			intakes: [{
-				usage: 1,
-				every: 1,
-				start: new Date().toISOString().slice(0, 16),
-				intakeRemindersEnabled: false,
-			}],
-		}));
+		createdMeds.push(
+			await createMedicationViaAPI({
+				name: "Add Intake Med",
+				intakes: [
+					{
+						usage: 1,
+						every: 1,
+						start: new Date().toISOString().slice(0, 16),
+						intakeRemindersEnabled: false,
+					},
+				],
+			})
+		);
 		await navigateTo(page, "/medications");
 
 		await clickEditMed(page, "Add Intake Med");
@@ -294,15 +306,19 @@ test.describe("Medication Editing", () => {
 	});
 
 	test("should toggle intake reminder on a medication", async ({ page }) => {
-		createdMeds.push(await createMedicationViaAPI({
-			name: "Reminder Toggle Med",
-			intakes: [{
-				usage: 1,
-				every: 1,
-				start: new Date().toISOString().slice(0, 16),
-				intakeRemindersEnabled: false,
-			}],
-		}));
+		createdMeds.push(
+			await createMedicationViaAPI({
+				name: "Reminder Toggle Med",
+				intakes: [
+					{
+						usage: 1,
+						every: 1,
+						start: new Date().toISOString().slice(0, 16),
+						intakeRemindersEnabled: false,
+					},
+				],
+			})
+		);
 		await navigateTo(page, "/medications");
 
 		await clickEditMed(page, "Reminder Toggle Med");
@@ -329,13 +345,15 @@ test.describe("Medication Editing", () => {
 	});
 
 	test("should change package type between blister and bottle", async ({ page }) => {
-		createdMeds.push(await createMedicationViaAPI({
-			name: "PackType Change Med",
-			packageType: "blister",
-			packCount: 2,
-			blistersPerPack: 3,
-			pillsPerBlister: 10,
-		}));
+		createdMeds.push(
+			await createMedicationViaAPI({
+				name: "PackType Change Med",
+				packageType: "blister",
+				packCount: 2,
+				blistersPerPack: 3,
+				pillsPerBlister: 10,
+			})
+		);
 		await navigateTo(page, "/medications");
 
 		await clickEditMed(page, "PackType Change Med");

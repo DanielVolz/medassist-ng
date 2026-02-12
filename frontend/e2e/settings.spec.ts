@@ -1,5 +1,5 @@
-import { test, authFile, navigateTo } from "./fixtures";
 import { expect } from "@playwright/test";
+import { authFile, navigateTo, test } from "./fixtures";
 
 /**
  * Settings Page E2E Tests
@@ -174,7 +174,7 @@ test.describe("Settings Page", () => {
 		await page.locator("button.user-menu-btn").click();
 
 		// Click settings option in dropdown
-		const settingsOption = page.locator('.user-dropdown').getByText(/Settings/i);
+		const settingsOption = page.locator(".user-dropdown").getByText(/Settings/i);
 		await expect(settingsOption).toBeVisible();
 		await settingsOption.click();
 

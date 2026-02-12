@@ -1,5 +1,5 @@
-import { test, authFile, navigateTo } from "./fixtures";
 import { expect } from "@playwright/test";
+import { authFile, navigateTo, test } from "./fixtures";
 
 /**
  * Planner Page E2E Tests

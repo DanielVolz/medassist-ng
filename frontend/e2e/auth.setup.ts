@@ -56,7 +56,10 @@ setup("authenticate", async ({ page }) => {
 	// ---- 2. Check if auth is disabled ----
 	await page.goto("/");
 
-	const authDisabled = await page.locator("header.hero").isVisible().catch(() => false);
+	const authDisabled = await page
+		.locator("header.hero")
+		.isVisible()
+		.catch(() => false);
 	if (authDisabled) {
 		await page.context().storageState({ path: authFile });
 		return;

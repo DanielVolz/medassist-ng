@@ -1,118 +1,113 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
-/**
- * Helper to wait for the app's auth state to be determined
- * The app shows Loading/Initializing until auth state is fetched
- */
-async function waitForAuthReady(page: import("@playwright/test").Page): Promise<void> {
-	// Wait for the loading indicator to disappear
-	await page.waitForLoadState("networkidle");
-	// The app should have loaded something meaningful
-	await expect(page.locator("body")).not.toHaveText(/^$/, { timeout: 10000 });
+async function isAuthEnabled(page: Page): Promise<boolean> {
+	try {
+		const response = await page.request.get("/api/auth/state");
+		if (!response.ok()) return true;
+		const state = await response.json();
+		return state?.authEnabled !== false;
+	} catch {
+		return true;
+	}
 }
 
 /**
  * Authentication E2E Tests
  *
- * These tests verify the authentication flow including login, registration,
- * and logout functionality.
+ * Tests the login/register UI when not authenticated.
+ * Uses empty storage state to simulate unauthenticated access.
+ *
+ * NOTE: This file intentionally imports `test` from @playwright/test
+ * (not from fixtures) because auth tests use empty storageState and
+ * must NOT have the auth-me caching interceptor.
  */
 test.describe("Authentication", () => {
-	// Skip auth dependency for these tests since we're testing auth itself
 	test.use({ storageState: { cookies: [], origins: [] } });
 
-	test("should display login page when not authenticated", async ({ page }) => {
+	test("should show login page for unauthenticated users", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
 		await page.goto("/");
-		await waitForAuthReady(page);
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-		// Should show either login form, registration form (first setup), or dashboard (auth disabled)
-		const hasLoginForm = await page
-			.getByLabel(/username/i)
-			.isVisible()
-			.catch(() => false);
-		const hasDashboard = await page
-			.getByText(/dashboard|medications/i)
-			.isVisible()
-			.catch(() => false);
-
-		expect(hasLoginForm || hasDashboard).toBeTruthy();
+		// Should have the app title
+		await expect(page.locator(".auth-title")).toContainText("MedAssist-ng");
 	});
 
-	test("should have accessible form fields", async ({ page }) => {
+	test("should have username and password fields", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
 		await page.goto("/");
-		await waitForAuthReady(page);
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-		// Check if auth is enabled
-		const hasLoginForm = await page
-			.getByLabel(/username/i)
-			.isVisible()
-			.catch(() => false);
+		const usernameField = page.locator("#username");
+		const passwordField = page.locator("#password");
 
-		if (hasLoginForm) {
-			// Username field should be accessible
-			const usernameField = page.getByLabel(/username/i);
-			await expect(usernameField).toBeVisible();
-			await expect(usernameField).toBeEnabled();
-
-			// Password field should be accessible
-			const passwordField = page.getByLabel(/password/i);
-			await expect(passwordField).toBeVisible();
-			await expect(passwordField).toBeEnabled();
-		}
+		await expect(usernameField).toBeVisible();
+		await expect(usernameField).toBeEnabled();
+		await expect(passwordField).toBeVisible();
+		await expect(passwordField).toBeEnabled();
 	});
 
-	test("should show validation error for empty credentials", async ({ page }) => {
+	test("should have a submit button", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
 		await page.goto("/");
-		await waitForAuthReady(page);
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-		const hasLoginForm = await page
-			.getByLabel(/username/i)
-			.isVisible()
-			.catch(() => false);
-
-		if (hasLoginForm) {
-			// Try to submit empty form
-			const submitButton = page.getByRole("button", { name: /sign in|log in|login|register|create/i });
-
-			if (await submitButton.isVisible()) {
-				await submitButton.click();
-
-				// Check for validation - either HTML5 validation or custom error
-				const usernameField = page.getByLabel(/username/i);
-				const isInvalid =
-					(await usernameField.evaluate((el) => (el as HTMLInputElement).validity.valueMissing).catch(() => false)) ||
-					(await page
-						.getByText(/required|invalid|error/i)
-						.isVisible()
-						.catch(() => false));
-
-				expect(isInvalid || true).toBeTruthy(); // Validation varies by implementation
-			}
-		}
+		const submitButton = page.locator('button.auth-submit[type="submit"]');
+		await expect(submitButton).toBeVisible();
+		await expect(submitButton).toBeEnabled();
 	});
 
-	test("should toggle password visibility", async ({ page }) => {
+	test("should not navigate to dashboard without credentials", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
+		await page.goto("/dashboard");
+
+		// Should NOT show the app header (redirected to login)
+		await expect(page.locator("header.hero")).not.toBeVisible({ timeout: 10000 });
+
+		// Should show auth form instead
+		await expect(page.locator(".auth-container")).toBeVisible();
+	});
+
+	test("should show error for invalid credentials", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
 		await page.goto("/");
-		await waitForAuthReady(page);
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-		const passwordField = page.getByLabel(/password/i).first();
-		const hasPasswordField = await passwordField.isVisible().catch(() => false);
+		// Fill in invalid credentials
+		await page.locator("#username").fill("nonexistent-user");
+		await page.locator("#password").fill("wrongpassword");
+		await page.locator('button.auth-submit[type="submit"]').click();
 
-		if (hasPasswordField) {
-			// Check initial type is password
-			await expect(passwordField).toHaveAttribute("type", "password");
+		// Should show an error message
+		await expect(page.locator(".auth-error")).toBeVisible({ timeout: 5000 });
+	});
 
-			// Find and click the toggle button (often an eye icon)
-			const toggleButton = page.getByRole("button", { name: /show|hide|toggle.*password/i });
-			const hasToggle = await toggleButton.isVisible().catch(() => false);
+	test("should toggle between login and register forms", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
 
-			if (hasToggle) {
-				await toggleButton.click();
-				await expect(passwordField).toHaveAttribute("type", "text");
+		await page.goto("/");
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-				await toggleButton.click();
-				await expect(passwordField).toHaveAttribute("type", "password");
-			}
-		}
+		const toggleButton = page.locator("button.auth-link-btn");
+		test.skip(
+			!(await toggleButton.isVisible().catch(() => false)),
+			"Registration toggle is unavailable in this environment"
+		);
+
+		// Check current subtitle text
+		const subtitle = page.locator(".auth-subtitle");
+		const initialText = await subtitle.textContent();
+
+		// Click the toggle link (Create account / Already have an account)
+		await toggleButton.click();
+
+		// Subtitle should change
+		const newText = await subtitle.textContent();
+		expect(newText).not.toBe(initialText);
 	});
 });

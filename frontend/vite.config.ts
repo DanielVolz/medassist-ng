@@ -5,8 +5,8 @@ import react from "@vitejs/plugin-react";
 // Read version from package.json at build time
 const packageJson = JSON.parse(readFileSync("./package.json", "utf-8"));
 
-// Use localhost backend for E2E tests and local dev, docker container for docker dev
-const backendTarget = process.env.BACKEND_URL || "http://backend-dev:3000";
+// Default to localhost for local dev and CI; docker dev overrides via BACKEND_URL
+const backendTarget = process.env.BACKEND_URL || "http://localhost:3000";
 
 export default defineConfig({
   plugins: [react()],

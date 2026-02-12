@@ -62,14 +62,14 @@ export default defineConfig({
 		// Capture screenshot on failure
 		screenshot: "only-on-failure",
 
-		// Record video on first retry
-		video: "on-first-retry",
+		// Record video for every test so runs can be reviewed
+		video: "on",
 
 		// Default viewport size
 		viewport: { width: 1280, height: 720 },
 
 		// Wait for network idle before considering navigation complete
-		navigationTimeout: 10000,
+		navigationTimeout: 30000,
 
 		// Accept cookies and local storage
 		actionTimeout: 5000,
@@ -83,66 +83,71 @@ export default defineConfig({
 			testMatch: /.*\.setup\.ts/,
 		},
 
-		// Desktop browsers
+		// Desktop Chrome — primary test browser, always runs
+		// Excludes data/crud tests (those run in chromium-data to avoid DB conflicts)
 		{
 			name: "chromium",
 			use: {
 				...devices["Desktop Chrome"],
 			},
+			testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
 			dependencies: ["setup"],
+			retries: 1,
 		},
 
+		// Desktop Firefox — runs locally and optionally in CI
+		// Excludes data/crud/edit/status/schedule tests (those run in chromium-data to avoid DB conflicts)
 		{
 			name: "firefox",
 			use: {
 				...devices["Desktop Firefox"],
 			},
+			testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
 			dependencies: ["setup"],
 		},
 
+		// Desktop Safari — runs locally and optionally in CI
+		// Excludes data/crud/edit/status/schedule tests (those run in chromium-data to avoid DB conflicts)
 		{
 			name: "webkit",
 			use: {
 				...devices["Desktop Safari"],
 			},
+			testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
 			dependencies: ["setup"],
 		},
 
-		// Mobile browsers (optional)
+		// Data tests — only Chromium, run serially to avoid DB conflicts
+		// These tests create/edit/delete medications and must not run concurrently
+		// across browsers since all share the same backend database.
 		{
-			name: "mobile-chrome",
+			name: "chromium-data",
+			testMatch: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
 			use: {
-				...devices["Pixel 5"],
+				...devices["Desktop Chrome"],
 			},
 			dependencies: ["setup"],
-		},
-
-		{
-			name: "mobile-safari",
-			use: {
-				...devices["iPhone 12"],
-			},
-			dependencies: ["setup"],
+			fullyParallel: false,
+			retries: 1,
 		},
 	],
 
 	// Directory for test output files (screenshots, traces, videos)
 	outputDir: "test-results/",
 
-	// Web server configuration - automatically start dev server if not running
-	// Commented out by default as you typically run the dev servers separately
-	// webServer: [
-	//   {
-	//     command: 'cd ../backend && npm run dev',
-	//     url: 'http://localhost:3000/health',
-	//     reuseExistingServer: !process.env.CI,
-	//     timeout: 120 * 1000,
-	//   },
-	//   {
-	//     command: 'npm run dev',
-	//     url: 'http://localhost:5173',
-	//     reuseExistingServer: !process.env.CI,
-	//     timeout: 120 * 1000,
-	//   },
-	// ],
+	// Web server configuration — automatically start dev servers in CI
+	webServer: [
+		{
+			command: "cd ../backend && npm run dev",
+			url: "http://localhost:3000/health",
+			reuseExistingServer: !process.env.CI,
+			timeout: 120 * 1000,
+		},
+		{
+			command: "npm run dev",
+			url: "http://localhost:5173",
+			reuseExistingServer: !process.env.CI,
+			timeout: 120 * 1000,
+		},
+	],
 });

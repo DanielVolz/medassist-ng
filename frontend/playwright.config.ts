@@ -90,30 +90,30 @@ export default defineConfig({
 			use: {
 				...devices["Desktop Chrome"],
 			},
-			testIgnore: /.*-(?:data|crud)\.spec\.ts/,
+			testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
 			dependencies: ["setup"],
 			retries: 1,
 		},
 
 		// Desktop Firefox — runs locally and optionally in CI
-		// Excludes data/crud tests (those run in chromium-data to avoid DB conflicts)
+		// Excludes data/crud/edit/status/schedule tests (those run in chromium-data to avoid DB conflicts)
 		{
 			name: "firefox",
 			use: {
 				...devices["Desktop Firefox"],
 			},
-			testIgnore: /.*-(?:data|crud)\.spec\.ts/,
+			testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
 			dependencies: ["setup"],
 		},
 
 		// Desktop Safari — runs locally and optionally in CI
-		// Excludes data/crud tests (those run in chromium-data to avoid DB conflicts)
+		// Excludes data/crud/edit/status/schedule tests (those run in chromium-data to avoid DB conflicts)
 		{
 			name: "webkit",
 			use: {
 				...devices["Desktop Safari"],
 			},
-			testIgnore: /.*-(?:data|crud)\.spec\.ts/,
+			testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
 			dependencies: ["setup"],
 		},
 
@@ -122,7 +122,7 @@ export default defineConfig({
 		// across browsers since all share the same backend database.
 		{
 			name: "chromium-data",
-			testMatch: /.*-(?:data|crud)\.spec\.ts/,
+			testMatch: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
 			use: {
 				...devices["Desktop Chrome"],
 			},

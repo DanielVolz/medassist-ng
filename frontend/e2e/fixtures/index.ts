@@ -149,6 +149,16 @@ export interface TestMedication {
 	id: number;
 	name: string;
 	genericName?: string | null;
+	takenBy?: string[];
+	notes?: string | null;
+}
+
+/** Typed share token response */
+export interface TestShareToken {
+	token: string;
+	takenBy: string;
+	scheduleDays: number;
+	expiresAt: string;
 }
 
 /**
@@ -160,13 +170,17 @@ export async function createMedicationViaAPI(
 	data: {
 		name: string;
 		genericName?: string;
+		takenBy?: string[];
+		notes?: string;
+		expiryDate?: string;
 		packageType?: "blister" | "bottle";
 		packCount?: number;
 		blistersPerPack?: number;
 		pillsPerBlister?: number;
 		looseTablets?: number;
 		totalPills?: number;
-		intakes?: { usage: number; every: number; start: string; intakeRemindersEnabled?: boolean }[];
+		intakeRemindersEnabled?: boolean;
+		intakes?: { usage: number; every: number; start: string; intakeRemindersEnabled?: boolean; takenBy?: string | null }[];
 	},
 ): Promise<TestMedication> {
 	const token = getAuthCookie();
@@ -188,6 +202,8 @@ export async function createMedicationViaAPI(
 			},
 		],
 		...data,
+		// Ensure takenBy is always an array (medication-level)
+		takenBy: data.takenBy ?? [],
 	};
 
 	for (let attempt = 0; attempt < 5; attempt++) {
@@ -254,5 +270,55 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
 			}
 		}
 		return;
+	}
+}
+
+/**
+ * Create a share token via the backend API.
+ * Requires a medication with takenBy to exist first.
+ */
+export async function createShareTokenViaAPI(takenBy: string, scheduleDays = 30): Promise<TestShareToken> {
+	const token = getAuthCookie();
+	for (let attempt = 0; attempt < 5; attempt++) {
+		const res = await fetch(`${API_BASE}/api/share`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				...(token ? { Cookie: `access_token=${token}` } : {}),
+			},
+			body: JSON.stringify({ takenBy, scheduleDays }),
+		});
+		if (res.status === 429) {
+			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			continue;
+		}
+		if (!res.ok) {
+			const text = await res.text();
+			throw new Error(`Failed to create share token: ${res.status} ${text}`);
+		}
+		return res.json() as Promise<TestShareToken>;
+	}
+	throw new Error("Failed to create share token after 5 retries (rate limited)");
+}
+
+/**
+ * Update user settings via the backend API.
+ */
+export async function updateSettingsViaAPI(settings: Record<string, unknown>): Promise<void> {
+	const token = getAuthCookie();
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const res = await fetch(`${API_BASE}/api/settings`, {
+			method: "PUT",
+			headers: {
+				"Content-Type": "application/json",
+				...(token ? { Cookie: `access_token=${token}` } : {}),
+			},
+			body: JSON.stringify(settings),
+		});
+		if (res.status === 429) {
+			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			continue;
+		}
+		if (res.ok) return;
 	}
 }

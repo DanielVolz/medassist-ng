@@ -55,7 +55,7 @@ async function setupAuthMeMock(page: Page): Promise<void> {
 	const body = getMockAuthMeBody();
 	if (body) {
 		await page.route("**/api/auth/me", (route) =>
-			route.fulfill({ status: 200, contentType: "application/json", body }),
+			route.fulfill({ status: 200, contentType: "application/json", body })
 		);
 	}
 }
@@ -166,23 +166,27 @@ export interface TestShareToken {
  * including its `id`.  Uses the stored auth cookie from the setup project.
  * Includes automatic retry for rate-limit (429) responses.
  */
-export async function createMedicationViaAPI(
-	data: {
-		name: string;
-		genericName?: string;
-		takenBy?: string[];
-		notes?: string;
-		expiryDate?: string;
-		packageType?: "blister" | "bottle";
-		packCount?: number;
-		blistersPerPack?: number;
-		pillsPerBlister?: number;
-		looseTablets?: number;
-		totalPills?: number;
+export async function createMedicationViaAPI(data: {
+	name: string;
+	genericName?: string;
+	takenBy?: string[];
+	notes?: string;
+	expiryDate?: string;
+	packageType?: "blister" | "bottle";
+	packCount?: number;
+	blistersPerPack?: number;
+	pillsPerBlister?: number;
+	looseTablets?: number;
+	totalPills?: number;
+	intakeRemindersEnabled?: boolean;
+	intakes?: {
+		usage: number;
+		every: number;
+		start: string;
 		intakeRemindersEnabled?: boolean;
-		intakes?: { usage: number; every: number; start: string; intakeRemindersEnabled?: boolean; takenBy?: string | null }[];
-	},
-): Promise<TestMedication> {
+		takenBy?: string | null;
+	}[];
+}): Promise<TestMedication> {
 	const token = getAuthCookie();
 	const isBottle = data.packageType === "bottle";
 	const body = {

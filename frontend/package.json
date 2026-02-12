@@ -14,7 +14,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
+    "test:e2e": "rm -rf test-results && playwright test --project=chromium --project=chromium-data --workers=1; find \"$PWD/test-results\" -name video.webm -not -path '*retry*' -print0 | xargs -0 ls -tr | sed \"s/^/file '/\" | sed \"s/$/'/ \" > /tmp/e2e-videos.txt && ffmpeg -y -f concat -safe 0 -i /tmp/e2e-videos.txt -c copy test-results/all-tests.webm && open -a 'Google Chrome' test-results/all-tests.webm",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",

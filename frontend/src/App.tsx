@@ -322,20 +322,15 @@ function AppContent() {
 	useEffect(() => {
 		const isModalOpen = selectedMed || selectedUser || showProfile || showAbout || showShareDialog;
 		if (isModalOpen) {
-			const scrollY = window.scrollY;
+			document.documentElement.classList.add("modal-open");
 			document.body.classList.add("modal-open");
-			document.body.style.top = `-${scrollY}px`;
 		} else {
-			const scrollY = document.body.style.top;
+			document.documentElement.classList.remove("modal-open");
 			document.body.classList.remove("modal-open");
-			document.body.style.top = "";
-			if (scrollY) {
-				window.scrollTo(0, parseInt(scrollY || "0", 10) * -1);
-			}
 		}
 		return () => {
+			document.documentElement.classList.remove("modal-open");
 			document.body.classList.remove("modal-open");
-			document.body.style.top = "";
 		};
 	}, [selectedMed, selectedUser, showProfile, showAbout, showShareDialog]);
 

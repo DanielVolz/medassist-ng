@@ -21,7 +21,7 @@ function getBlisterStock(totalPills: number, pillsPerBlister: number, _looseTabl
 
 // Helper to format full blisters
 function formatFullBlisters(count: number, t: (key: string) => string): string {
-	return `${count} ${t("common.blisters")}`;
+	return `${count} ${count === 1 ? t("common.blister") : t("common.blisters")}`;
 }
 
 // Helper to format open blister and loose pills

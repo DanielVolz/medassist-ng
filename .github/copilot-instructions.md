@@ -11,6 +11,7 @@
 - **Tests are mandatory**: Every new feature and every bug fix MUST have corresponding tests. When modifying existing features, update or add tests accordingly. If old tests become obsolete due to code changes, remove or update them.
 - **Fix bugs, don't test around them**: If you discover incorrect behavior in the code while writing tests, ALWAYS fix the buggy code first, then write tests that verify the correct behavior. NEVER write tests that mimic or assert broken behavior. The user's time is finite and irreplaceable — every bug left unfixed wastes it.
 - **Keep README.md up to date**: After implementing code changes, check whether the `README.md` needs to be updated (e.g., new features, changed ENV variables, new commands, changed architecture, new endpoints, updated screenshots). If changes are relevant to the README, **ask the user for confirmation** before updating it. Do NOT silently update the README — always present the proposed README changes and wait for approval. Examples of README-relevant changes: new ENV variables, new API endpoints, new UI features, changed setup/install steps, new dependencies, changed Docker configuration.
+- **Track work in GitHub Project**: All features, bugs, and tasks MUST be tracked in the [GitHub Project board](https://github.com/users/DanielVolz/projects/1). Before starting work, ensure a corresponding issue exists. Use the `enhancement`, `bug`, or `triage` labels so the issue is automatically added to the board. Update the issue status as work progresses (Triage → Backlog → Ready → In progress → Done).
 
 ## Architecture Overview
 
@@ -50,6 +51,17 @@ cd backend && npm run migrate
 cd backend && npm test              # Run all tests
 cd backend && npm run test:coverage # Run with coverage report
 ```
+
+## GitHub CLI Safety (Non-Interactive Only)
+
+- Never use `gh` commands that can open an interactive pager and block execution (requiring `q`).
+- Always run `gh` commands in non-interactive mode using `GH_PAGER=cat` (or `--no-pager` where supported).
+- Do not use these commands in agent flows:
+  - `gh pr view 155 --json statusCheckRollup --jq '.statusCheckRollup[] | {name:.name,conclusion:.conclusion,detailsUrl:.detailsUrl,workflowName:.workflowName}'`
+  - `SHA=$(gh pr view 155 --json headRefOid --jq .headRefOid) && gh api repos/DanielVolz/medassist-ng/commits/$SHA/check-runs --jq '.check_runs[] | {name,conclusion,details_url,html_url,app:.app.name}'`
+- Use safe variants instead:
+  - `GH_PAGER=cat gh pr view <PR_NUMBER> --json statusCheckRollup --jq '<jq-filter>'`
+  - `GH_PAGER=cat gh api repos/<owner>/<repo>/commits/<sha>/check-runs --jq '<jq-filter>'`
 
 ## Testing (MANDATORY)
 
@@ -187,6 +199,7 @@ gh pr merge --squash --delete-branch
 | `.github/workflows/docker-build.yml` | Push to main, Tags | Build and push Docker images (+ create GitHub release on tags) |
 | `.github/workflows/update-test-badges.yml` | After successful docker-build | Update test count badges in README |
 | `.github/workflows/codeql.yml` | Push to main, PRs, Weekly | Security analysis |
+| `.github/workflows/add-to-project.yml` | Issues opened/labeled | Auto-add issues with `enhancement`, `bug`, or `triage` labels to GitHub Project |
 
 ## Key Patterns
 
@@ -464,3 +477,52 @@ If a breaking change is unavoidable:
 | Docker prod | `docker-compose.yml` |
 | Docker dev | `docker-compose.dev.yml` |
 | Env template | `.env.example` |
+| Project setup | `docs/PROJECT_SETUP.md` |
+
+## GitHub Project Management
+
+All work is tracked in the [GitHub Project board](https://github.com/users/DanielVolz/projects/1) (Project ID: `PVT_kwHOADH82s4BO2OT`).
+
+### Board Columns (Status)
+| Column | Color | Description |
+|--------|-------|-------------|
+| Triage | Purple | New issues needing review |
+| Backlog | Green | Accepted, not yet started |
+| Ready | Blue | Ready to be picked up |
+| In progress | Yellow | Currently being worked on |
+| Done | Orange | Completed |
+
+### Custom Fields
+| Field | Options | Usage |
+|-------|---------|-------|
+| **Type** | Bug (red), Feature (green), Chore (gray), Documentation (blue) | Categorize the work |
+| **Priority** | High (red), Medium (orange), Low (yellow) | Set urgency |
+| **Size** | XS, S, M, L, XL | Estimate effort |
+
+### Agent Workflow for Issues
+
+1. **Before starting work**: Check the Project board for existing issues. If the task has no issue yet, create one:
+   ```bash
+   gh issue create --title "feat: description" --label enhancement
+   ```
+   Issues with `enhancement`, `bug`, or `triage` labels are **automatically added** to the Project board.
+
+2. **When starting work**: Move the issue to "In progress":
+   ```bash
+   # List items to find the item ID
+   gh project item-list 1 --owner DanielVolz
+   # Update status (use GraphQL for field updates)
+   ```
+
+3. **When work is done locally**: Leave in "In progress" and tell the user to invoke `@release-manager`.
+
+4. **After merge**: The issue moves to "Done" (via `closes #N` in PR body or manually).
+
+### Issue Labels
+| Label | Applied by | Purpose |
+|-------|-----------|--------|
+| `enhancement` | Feature request template | New features |
+| `bug` | Bug report template | Bug fixes |
+| `triage` | Both templates | Needs review |
+
+All three labels trigger the `add-to-project.yml` workflow, which automatically adds the issue to the Project board.

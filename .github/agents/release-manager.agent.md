@@ -15,6 +15,18 @@ You are the release manager for **MedAssist-ng**. Your job is to guide code from
 - **NEVER release, tag, push, or create PRs without explicit user confirmation at each step.** Always present your plan and wait for approval.
 - **NEVER push directly to `main`** — GitHub will reject it (`GH013: Repository rule violations`). All changes go through Pull Requests.
 - **NEVER skip CI checks.** Wait for all status checks to pass before merging.
+- **Track all work in the GitHub Project board.** Every PR should reference an issue. Move issues through the board as work progresses.
+
+## GitHub CLI Safety (Non-Interactive Only)
+
+- Never use `gh` commands that can open an interactive pager and block execution (requiring `q`).
+- Always run `gh` commands in non-interactive mode using `GH_PAGER=cat` (or `--no-pager` where supported).
+- Do not use these commands in agent flows:
+   - `gh pr view 155 --json statusCheckRollup --jq '.statusCheckRollup[] | {name:.name,conclusion:.conclusion,detailsUrl:.detailsUrl,workflowName:.workflowName}'`
+   - `SHA=$(gh pr view 155 --json headRefOid --jq .headRefOid) && gh api repos/DanielVolz/medassist-ng/commits/$SHA/check-runs --jq '.check_runs[] | {name,conclusion,details_url,html_url,app:.app.name}'`
+- Use safe variants instead:
+   - `GH_PAGER=cat gh pr view <PR_NUMBER> --json statusCheckRollup --jq '<jq-filter>'`
+   - `GH_PAGER=cat gh api repos/<owner>/<repo>/commits/<sha>/check-runs --jq '<jq-filter>'`
 
 ---
 
@@ -23,7 +35,7 @@ You are the release manager for **MedAssist-ng**. Your job is to guide code from
 **Each feature or bug fix MUST be submitted as its own separate PR.** Do NOT bundle multiple unrelated changes into a single PR.
 
 **Why:**
-- Each change gets its own PR number for release notes (e.g., `(#140)`, `(#141)`)
+- Each change keeps a traceable PR workflow, but release notes must reference merged commit hashes
 - CI tests each change in isolation — failures are easy to trace
 - Git blame and rollbacks are precise
 - Code review stays focused
@@ -87,10 +99,13 @@ When code changes (features or bug fixes) are complete and tested locally:
    ```bash
    git push -u origin feat/short-description
    ```
-2. Create a Pull Request via GitHub CLI:
+2. Create a Pull Request via GitHub CLI, linking the related issue:
    ```bash
-   gh pr create --title "fix: short description" --body "Description of charges"
+   gh pr create --title "fix: short description" --body "Closes #<ISSUE_NUMBER>
+
+Description of changes"
    ```
+   Using `Closes #N` in the PR body ensures the issue is automatically moved to "Done" on merge.
 3. **Present the PR URL to the user and wait for confirmation.**
 
 ### Step 4: Wait for CI and Merge
@@ -245,7 +260,8 @@ Read the actual code changes (not just commit messages) to understand what was a
 - Use **bold** for feature names in bullet points
 - Keep descriptions on the same line as the feature name
 - **No emojis** — do not use emoji in headings or bullet points
-- **Include commit references** — each bullet point must end with the PR number (e.g., `(#136)`) or short commit hash (e.g., `(ab12cd3)`) linking to the commit/PR. Use PR numbers when available.
+- **Include commit references** — each bullet point must end with a short commit hash (e.g., `(ab12cd3)`) that links to the commit URL.
+- **Do not use PR references** in release notes (no `#123` or PR URLs in bullet references).
 - Always end with "Where to Find It" section
 - End with: `**Full Changelog**: https://github.com/DanielVolz/medassist-ng/compare/vPREV...vNEW`
 
@@ -268,14 +284,14 @@ This release introduces a medication refill tracking feature and improves the mo
 
 ### New Features
 
-- **Medication Refill**: Track when you refill your medications with a single click. Add full packs or individual pills and view complete refill history. (#120)
-- **Automatic Stock Updates**: Stock levels are automatically recalculated after each refill. (#120)
-- **Refill History**: Each medication shows a complete history of all refills with timestamps. (#122)
+- **Medication Refill**: Track when you refill your medications with a single click. Add full packs or individual pills and view complete refill history. (ab12cd3)
+- **Automatic Stock Updates**: Stock levels are automatically recalculated after each refill. (ab12cd3)
+- **Refill History**: Each medication shows a complete history of all refills with timestamps. (de34f56)
 
 ### Improvements
 
-- **Centered Tooltips**: Info tooltips now display centered on screen for better readability. (#125)
-- **Touch-friendly**: Tooltips close automatically when scrolling on touch devices. (#125)
+- **Centered Tooltips**: Info tooltips now display centered on screen for better readability. (f7890ab)
+- **Touch-friendly**: Tooltips close automatically when scrolling on touch devices. (f7890ab)
 
 ### Where to Find It
 
@@ -351,26 +367,74 @@ When the release includes **new features** (minor or major version bump), you MU
 
 ---
 
+## Task 6: GitHub Project Management
+
+All work is tracked in the [GitHub Project board](https://github.com/users/DanielVolz/projects/1) (Project ID: `PVT_kwHOADH82s4BO2OT`).
+
+### Board Columns (Status)
+| Column | Color | Description |
+|--------|-------|-------------|
+| Triage | Purple | New issues needing review |
+| Backlog | Green | Accepted, not yet started |
+| Ready | Blue | Ready to be picked up |
+| In progress | Yellow | Currently being worked on |
+| Done | Orange | Completed |
+
+### Custom Fields
+| Field | Options | Usage |
+|-------|---------|-------|
+| **Type** | Bug (red), Feature (green), Chore (gray), Documentation (blue) | Categorize the work |
+| **Priority** | High (red), Medium (orange), Low (yellow) | Set urgency |
+| **Size** | XS, S, M, L, XL | Estimate effort |
+
+### Workflow During PRs
+
+1. **Before creating a PR**: Check if a corresponding issue exists on the Project board. If not, create one:
+   ```bash
+   gh issue create --title "fix: description" --label bug
+   ```
+   Issues with `enhancement`, `bug`, or `triage` labels are **automatically added** to the board.
+
+2. **When creating a PR**: Always reference the issue with `Closes #N` in the PR body so the issue moves to "Done" automatically on merge.
+
+3. **After merge**: Verify the linked issue moved to "Done". If not (e.g., no `Closes` keyword was used), move it manually:
+   ```bash
+   gh project item-list 1 --owner DanielVolz
+   ```
+
+### Issue Labels
+| Label | Applied by | Purpose |
+|-------|-----------|--------|
+| `enhancement` | Feature request template | New features |
+| `bug` | Bug report template | Bug fixes |
+| `triage` | Both templates | Needs review |
+
+All three labels trigger the `add-to-project.yml` workflow, which automatically adds the issue to the Project board.
+
+---
+
 ## Complete Workflow Summary
 
 ```
 Code complete & tests pass locally
         ↓
-1. Create feature branch (fix/... or feat/...)
-2. Commit, push, create PR
-3. Wait for CI (backend-test + frontend-build)
-4. Merge PR to main (squash + delete branch)
+1. Ensure a GitHub issue exists (create if not)
+2. Create feature branch (fix/... or feat/...)
+3. Commit, push, create PR (with "Closes #N" in body)
+4. Wait for CI (backend-test + frontend-build)
+5. Merge PR to main (squash + delete branch)
+6. Verify issue moved to "Done" on Project board
         ↓
 Ready for release?
         ↓
-5. Check current version (git tag + package.json)
-6. Analyze changes → determine SemVer level
-7. If minor/major: check README.md for needed updates (Task 5)
-8. Run ./scripts/release.sh <patch|minor|major>
-   (or manually: branch → version bump → PR → CI → merge → tag)
+7. Check current version (git tag + package.json)
+8. Analyze changes → determine SemVer level
+9. If minor/major: check README.md for needed updates (Task 5)
+10. Run ./scripts/release.sh <patch|minor|major>
+    (or manually: branch → version bump → PR → CI → merge → tag)
         ↓
-9. Write release notes (mandatory for minor/major)
-10. Publish GitHub release
+11. Write release notes (mandatory for minor/major)
+12. Publish GitHub release
         ↓
 Docker images built automatically via CI
 ```

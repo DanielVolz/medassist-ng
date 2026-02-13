@@ -17,6 +17,7 @@ You are the release manager for **MedAssist-ng**. Your job is to guide code from
 - **NEVER skip CI checks.** Wait for all status checks to pass before merging.
 - **Testing ownership belongs to `@testing-manager`**. Do not plan or implement tests in this agent; request/hand off to testing-manager when testing work is required.
 - **Track all work in the GitHub Project board.** Every PR should reference an issue. Move issues through the board as work progresses.
+- **ALWAYS verify Project board status after merge.** GitHub Projects V2 does NOT auto-move items to "Done" when issues are closed. After every PR merge, check the linked issue's project status and move it to "Done" manually via GraphQL if needed (see Task 6).
 
 ## CI/CD Ownership (Authoritative)
 
@@ -412,12 +413,64 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
    ```
    Issues with `enhancement`, `bug`, or `triage` labels are **automatically added** to the board.
 
-2. **When creating a PR**: Always reference the issue with `Closes #N` in the PR body so the issue moves to "Done" automatically on merge.
+2. **When creating a PR**: Always reference the issue with `Closes #N` in the PR body so the issue is automatically **closed** on merge. Note: this does NOT move the Project board status — that must be done manually (see step 3).
 
-3. **After merge**: Verify the linked issue moved to "Done". If not (e.g., no `Closes` keyword was used), move it manually:
+3. **After merge (MANDATORY)**: GitHub Projects V2 does NOT auto-move items to "Done" when issues close. You MUST verify and update the board status after every merge:
+
+   **Step 1 — Check current status:**
    ```bash
-   gh project item-list 1 --owner DanielVolz
+   GH_PAGER=cat gh issue view <ISSUE_NUMBER> --json state,projectItems --jq '{state, projects: [.projectItems[] | {title: .title, status: .status.name}]}'
    ```
+
+   **Step 2 — If status is not "Done", move it via GraphQL:**
+
+   First, get the item ID and field IDs:
+   ```bash
+   GH_PAGER=cat gh api graphql -f query='query {
+     user(login: "DanielVolz") {
+       projectV2(number: 1) {
+         id
+         items(first: 100) {
+           nodes {
+             id
+             content { ... on Issue { number } }
+             fieldValues(first: 10) {
+               nodes {
+                 ... on ProjectV2ItemFieldSingleSelectValue {
+                   name
+                   field { ... on ProjectV2SingleSelectField { id options { id name } } }
+                 }
+               }
+             }
+           }
+         }
+       }
+     }
+   }' --jq '.data.user.projectV2.items.nodes[] | select(.content.number == <ISSUE_NUMBER>)'
+   ```
+
+   Then update the status field to "Done" (`ca45af98`):
+   ```bash
+   GH_PAGER=cat gh api graphql -f query='mutation {
+     updateProjectV2ItemFieldValue(input: {
+       projectId: "PVT_kwHOADH82s4BO2OT"
+       itemId: "<ITEM_ID>"
+       fieldId: "PVTSSF_lAHOADH82s4BO2OTzg9bdkE"
+       value: { singleSelectOptionId: "ca45af98" }
+     }) { projectV2Item { id } }
+   }'
+   ```
+
+   **Known Project field IDs (Status):**
+   | Status | Option ID |
+   |--------|-----------|
+   | Triage | `826183f5` |
+   | Backlog | `c7cb819e` |
+   | Ready | `13307944` |
+   | In progress | `732e285e` |
+   | Done | `ca45af98` |
+
+   Status field ID: `PVTSSF_lAHOADH82s4BO2OTzg9bdkE`
 
 ### Issue Labels
 | Label | Applied by | Purpose |
@@ -440,7 +493,7 @@ Code complete & validated by testing-manager
 3. Commit, push, create PR (with "Closes #N" in body)
 4. Wait for CI (all required checks)
 5. Merge PR to main (squash + delete branch)
-6. Verify issue moved to "Done" on Project board
+6. Verify issue moved to "Done" on Project board (it WON'T auto-move — use GraphQL, see Task 6)
         ↓
 Ready for release?
         ↓

@@ -21,7 +21,8 @@
 			"style": {
 				"noNonNullAssertion": "off",
 				"useConst": "error",
-				"noParameterAssign": "off"
+				"noParameterAssign": "off",
+				"noNestedTernary": "warn"
 			},
 			"correctness": {
 				"noUnusedVariables": "warn",

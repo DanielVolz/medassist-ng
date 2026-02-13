@@ -220,6 +220,9 @@ describe("SchedulePage", () => {
 	});
 
 	it("can change schedule days", () => {
+		const setScheduleDays = vi.fn();
+		mockContextValue = createMockContext({ setScheduleDays });
+
 		render(
 			<MemoryRouter>
 				<SchedulePage />
@@ -230,6 +233,7 @@ describe("SchedulePage", () => {
 		expect(select).toBeInTheDocument();
 
 		fireEvent.change(select, { target: { value: "90" } });
+		expect(setScheduleDays).toHaveBeenCalledWith(90);
 	});
 });
 
@@ -483,6 +487,28 @@ describe("SchedulePage with past days", () => {
 		if (toggle) {
 			fireEvent.click(toggle);
 			expect(setShowPastDays).toHaveBeenCalledWith(true);
+		}
+	});
+
+	it("collapses past days when already expanded", () => {
+		const setShowPastDays = vi.fn();
+		mockContextValue = createMockContext({
+			pastDays: mockPastDays,
+			showPastDays: true,
+			setShowPastDays,
+			missedPastDoseIds: [],
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		const toggle = document.querySelector(".past-days-toggle");
+		if (toggle) {
+			fireEvent.click(toggle);
+			expect(setShowPastDays).toHaveBeenCalledWith(false);
 		}
 	});
 });

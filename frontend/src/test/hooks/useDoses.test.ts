@@ -282,4 +282,26 @@ describe("useDoses", () => {
 
 		expect(result.current.showClearMissedConfirm).toBe(true);
 	});
+
+	it("undoDoseTaken encodes special characters in dose ID", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ doses: [{ doseId: "dose 1/a", takenAt: Date.now(), dismissed: false }] }),
+			})
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
+
+		const { result } = renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("dose 1/a")).toBe(true);
+		});
+
+		await act(async () => {
+			await result.current.undoDoseTaken("dose 1/a");
+		});
+
+		expect(fetch).toHaveBeenCalledWith("/api/doses/taken/dose%201%2Fa", expect.objectContaining({ method: "DELETE" }));
+	});
 });

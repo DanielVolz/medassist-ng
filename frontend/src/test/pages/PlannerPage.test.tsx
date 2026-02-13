@@ -398,6 +398,107 @@ describe("PlannerPage with email enabled", () => {
 		const _emailBtn = document.querySelector(".ghost");
 		// Email button may be present
 	});
+
+	it("sends planner notification and shows success message", async () => {
+		global.fetch = vi
+			.fn()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve([
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 25,
+							plannerUsage: 5,
+							blisterSize: 10,
+							blistersNeeded: 1,
+							fullBlisters: 1,
+							loosePills: 0,
+							enough: true,
+							packageType: "blister",
+						},
+					]),
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ message: "Planner notification sent" }),
+			});
+
+		render(
+			<MemoryRouter>
+				<PlannerPage />
+			</MemoryRouter>
+		);
+
+		await act(async () => {
+			fireEvent.submit(document.querySelector("form.planner")!);
+		});
+
+		const notifyBtn = await screen.findByRole("button", { name: /planner\.sendNotification/i });
+		await act(async () => {
+			fireEvent.click(notifyBtn);
+		});
+
+		expect(global.fetch).toHaveBeenCalledWith(
+			"/api/planner/send-email",
+			expect.objectContaining({
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+			})
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("Planner notification sent")).toBeInTheDocument();
+		});
+	});
+
+	it("shows error message when planner notification fails", async () => {
+		global.fetch = vi
+			.fn()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve([
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 25,
+							plannerUsage: 5,
+							blisterSize: 10,
+							blistersNeeded: 1,
+							fullBlisters: 1,
+							loosePills: 0,
+							enough: true,
+							packageType: "blister",
+						},
+					]),
+			})
+			.mockResolvedValueOnce({
+				ok: false,
+				json: () => Promise.resolve({ error: "Could not send planner notification" }),
+			});
+
+		render(
+			<MemoryRouter>
+				<PlannerPage />
+			</MemoryRouter>
+		);
+
+		await act(async () => {
+			fireEvent.submit(document.querySelector("form.planner")!);
+		});
+
+		const notifyBtn = await screen.findByRole("button", { name: /planner\.sendNotification/i });
+		await act(async () => {
+			fireEvent.click(notifyBtn);
+		});
+
+		await waitFor(() => {
+			expect(screen.getByText("Could not send planner notification")).toBeInTheDocument();
+		});
+	});
 });
 
 describe("PlannerPage form interactions", () => {
@@ -444,6 +545,55 @@ describe("PlannerPage form interactions", () => {
 
 		// Form should be reset (no results table)
 		expect(screen.getByText(/planner\.title/i)).toBeInTheDocument();
+	});
+
+	it("toggles includeUntilStart checkbox", () => {
+		render(
+			<MemoryRouter>
+				<PlannerPage />
+			</MemoryRouter>
+		);
+
+		const checkbox = document.querySelector('.planner-checkbox input[type="checkbox"]') as HTMLInputElement;
+		expect(checkbox.checked).toBe(false);
+		fireEvent.click(checkbox);
+		expect(checkbox.checked).toBe(true);
+	});
+
+	it("submits planner request with includeUntilStart=true", async () => {
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve([]),
+		});
+
+		render(
+			<MemoryRouter>
+				<PlannerPage />
+			</MemoryRouter>
+		);
+
+		const checkbox = document.querySelector('.planner-checkbox input[type="checkbox"]') as HTMLInputElement;
+		fireEvent.click(checkbox);
+
+		const form = document.querySelector("form.planner") as HTMLFormElement;
+		await act(async () => {
+			fireEvent.submit(form);
+		});
+
+		expect(global.fetch).toHaveBeenCalledWith(
+			"/api/medications/usage",
+			expect.objectContaining({
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+			})
+		);
+
+		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+		const body = JSON.parse(fetchCall[1].body);
+		expect(body.includeUntilStart).toBe(true);
+		expect(typeof body.startDate).toBe("string");
+		expect(typeof body.endDate).toBe("string");
 	});
 });
 

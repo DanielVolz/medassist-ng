@@ -41,6 +41,13 @@ describe("useTheme", () => {
 		expect(result.current.themePreference).toBe("light");
 	});
 
+	it("falls back to dark for invalid stored theme", () => {
+		(window.localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue("invalid-theme");
+		const { result } = renderHook(() => useTheme());
+		expect(result.current.theme).toBe("dark");
+		expect(result.current.themePreference).toBe("dark");
+	});
+
 	it("toggles theme through light → dark → system → light", () => {
 		(window.localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue("light");
 		const { result } = renderHook(() => useTheme());
@@ -102,5 +109,49 @@ describe("useTheme", () => {
 			result.current.setThemePreference("light");
 		});
 		expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+	});
+
+	it("reacts to system theme changes when preference is system", () => {
+		let isLight = false;
+		let changeHandler: (() => void) | undefined;
+		const addEventListener = vi.fn((_: string, handler: () => void) => {
+			changeHandler = handler;
+		});
+		const removeEventListener = vi.fn();
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: vi.fn().mockImplementation((query: string) => ({
+				matches: query === "(prefers-color-scheme: light)" ? isLight : false,
+				media: query,
+				onchange: null,
+				addEventListener,
+				removeEventListener,
+				dispatchEvent: vi.fn(),
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+			})),
+		});
+
+		const { result } = renderHook(() => useTheme());
+
+		act(() => {
+			result.current.setThemePreference("system");
+		});
+
+		expect(addEventListener).toHaveBeenCalledWith("change", expect.any(Function));
+		expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+
+		act(() => {
+			isLight = true;
+			changeHandler?.();
+		});
+
+		expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+
+		act(() => {
+			result.current.setThemePreference("dark");
+		});
+
+		expect(removeEventListener).toHaveBeenCalledWith("change", expect.any(Function));
 	});
 });

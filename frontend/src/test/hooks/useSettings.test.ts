@@ -249,4 +249,79 @@ describe("useSettings", () => {
 		// emailEnabled should be false in the saved state
 		expect(result.current.settings.emailEnabled).toBe(false);
 	});
+
+	it("auto-disables shoutrrr when URL is empty", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({ ok: true });
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		act(() => {
+			result.current.setSettings((s) => ({
+				...s,
+				shoutrrrEnabled: true,
+				shoutrrrUrl: "",
+			}));
+		});
+
+		const mockEvent = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+
+		await act(async () => {
+			await result.current.saveSettings(mockEvent);
+		});
+
+		expect(result.current.settings.shoutrrrEnabled).toBe(false);
+	});
+
+	it("refreshes reminder status on interval", async () => {
+		let refreshCallback: (() => void) | null = null;
+		const nativeSetInterval = global.setInterval;
+		vi.spyOn(global, "setInterval").mockImplementation((handler: TimerHandler, timeout?: number) => {
+			if (timeout === 30000) {
+				refreshCallback = handler as () => void;
+				return 1 as unknown as ReturnType<typeof setInterval>;
+			}
+			return nativeSetInterval(handler, timeout);
+		});
+
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						lastAutoEmailSent: "2026-01-01T10:00:00.000Z",
+						lastNotificationType: "stock",
+						lastNotificationChannel: "email",
+						lastReminderMedName: "Aspirin",
+						lastReminderTakenBy: "Max",
+						lastStockReminderSent: "2026-01-01T09:00:00.000Z",
+						lastStockReminderChannel: "both",
+						lastStockReminderMedNames: "Aspirin",
+					}),
+			});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		expect(refreshCallback).not.toBeNull();
+
+		act(() => {
+			refreshCallback?.();
+		});
+
+		await waitFor(() => {
+			expect(result.current.settings.lastAutoEmailSent).toBe("2026-01-01T10:00:00.000Z");
+			expect(result.current.settings.lastNotificationType).toBe("stock");
+			expect(result.current.settings.lastStockReminderChannel).toBe("both");
+		});
+	});
 });

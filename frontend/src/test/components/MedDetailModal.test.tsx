@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MedDetailModal } from "../../components/MedDetailModal";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../../types";
+import * as utils from "../../utils";
 
 const defaultSettings: StockThresholds = {
 	lowStockDays: 7,
@@ -242,15 +243,73 @@ describe("MedDetailModal with refill modal", () => {
 
 	it("calls onSubmitRefill when refill submitted", () => {
 		const onSubmitRefill = vi.fn();
-		render(<MedDetailModal {...defaultProps} showRefillModal={true} onSubmitRefill={onSubmitRefill} />);
+		render(<MedDetailModal {...defaultProps} showRefillModal={true} onSubmitRefill={onSubmitRefill} refillLoose={1} />);
 
-		const submitBtns = document.querySelectorAll("button");
-		const submitBtn = Array.from(submitBtns).find(
-			(btn) => btn.textContent?.includes("refill") || btn.textContent?.includes("submit")
+		const submitBtn = document.querySelector(".refill-modal .modal-footer .success") as HTMLButtonElement;
+		fireEvent.click(submitBtn);
+		expect(onSubmitRefill).toHaveBeenCalledWith(mockMedication.id);
+	});
+
+	it("disables refill submit button when no pills are entered", () => {
+		render(<MedDetailModal {...defaultProps} showRefillModal={true} refillPacks={0} refillLoose={0} />);
+
+		const submitBtn = document.querySelector(".refill-modal .modal-footer .success") as HTMLButtonElement;
+		expect(submitBtn).toBeDisabled();
+	});
+
+	it("shows singular refill preview text when total refill is one pill", () => {
+		const bottleMed: Medication = {
+			...mockMedication,
+			packageType: "bottle",
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 10,
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={bottleMed} showRefillModal={true} refillLoose={1} />);
+
+		expect(screen.getByText(/\+1 common\.pill/i)).toBeInTheDocument();
+	});
+
+	it("parses refill packs and loose pills inputs", () => {
+		const onRefillPacksChange = vi.fn();
+		const onRefillLooseChange = vi.fn();
+		render(
+			<MedDetailModal
+				{...defaultProps}
+				showRefillModal={true}
+				onRefillPacksChange={onRefillPacksChange}
+				onRefillLooseChange={onRefillLooseChange}
+			/>
 		);
-		if (submitBtn) {
-			fireEvent.click(submitBtn);
-		}
+
+		const numberInputs = document.querySelectorAll(".refill-modal input[type='number']");
+		fireEvent.change(numberInputs[0], { target: { value: "3" } });
+		fireEvent.change(numberInputs[1], { target: { value: "5" } });
+
+		expect(onRefillPacksChange).toHaveBeenCalledWith(3);
+		expect(onRefillLooseChange).toHaveBeenCalledWith(5);
+	});
+
+	it("uses zero fallback for invalid refill input values", () => {
+		const onRefillPacksChange = vi.fn();
+		const onRefillLooseChange = vi.fn();
+		render(
+			<MedDetailModal
+				{...defaultProps}
+				showRefillModal={true}
+				onRefillPacksChange={onRefillPacksChange}
+				onRefillLooseChange={onRefillLooseChange}
+			/>
+		);
+
+		const numberInputs = document.querySelectorAll(".refill-modal input[type='number']");
+		fireEvent.change(numberInputs[0], { target: { value: "NaN" } });
+		fireEvent.change(numberInputs[1], { target: { value: "" } });
+
+		expect(onRefillPacksChange).toHaveBeenCalledWith(0);
+		expect(onRefillLooseChange).toHaveBeenCalledWith(0);
 	});
 });
 
@@ -278,6 +337,24 @@ describe("MedDetailModal actions", () => {
 			fireEvent.click(refillBtn);
 			expect(onOpenRefillModal).toHaveBeenCalled();
 		}
+	});
+
+	it("calls generateICS when export calendar button is clicked", () => {
+		const generateICSSpy = vi.spyOn(utils, "generateICS").mockImplementation(() => "BEGIN:VCALENDAR");
+		render(<MedDetailModal {...defaultProps} />);
+
+		fireEvent.click(screen.getByTitle("modal.exportTooltip"));
+		expect(generateICSSpy).toHaveBeenCalledWith(mockMedication);
+	});
+
+	it("does not render export calendar button when no blisters exist", () => {
+		const medWithoutBlisters: Medication = {
+			...mockMedication,
+			blisters: [],
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={medWithoutBlisters} />);
+		expect(screen.queryByTitle("modal.exportTooltip")).not.toBeInTheDocument();
 	});
 });
 
@@ -322,6 +399,41 @@ describe("MedDetailModal with image", () => {
 		if (avatar) {
 			fireEvent.click(avatar);
 		}
+
+		expect(onOpenImageLightbox).toHaveBeenCalledTimes(1);
+	});
+
+	it("renders lightbox when enabled and image is present", () => {
+		const med = { ...mockMedication, imageUrl: "test-image.jpg" };
+		render(<MedDetailModal {...defaultProps} selectedMed={med} showImageLightbox={true} />);
+
+		expect(document.querySelector(".lightbox-overlay")).toBeInTheDocument();
+	});
+});
+
+describe("MedDetailModal nested modal overlays", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("closes refill modal when clicking refill overlay", () => {
+		const onCloseRefillModal = vi.fn();
+		render(<MedDetailModal {...defaultProps} showRefillModal={true} onCloseRefillModal={onCloseRefillModal} />);
+
+		const overlays = document.querySelectorAll(".modal-overlay");
+		fireEvent.click(overlays[1]);
+		expect(onCloseRefillModal).toHaveBeenCalledTimes(1);
+	});
+
+	it("closes edit stock modal when clicking edit-stock overlay", () => {
+		const onCloseEditStockModal = vi.fn();
+		render(
+			<MedDetailModal {...defaultProps} showEditStockModal={true} onCloseEditStockModal={onCloseEditStockModal} />
+		);
+
+		const overlays = document.querySelectorAll(".modal-overlay");
+		fireEvent.click(overlays[1]);
+		expect(onCloseEditStockModal).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -567,6 +679,24 @@ describe("MedDetailModal bottle package type", () => {
 		const refillModal = document.querySelector(".refill-modal");
 		// Packs label should not be present for bottle type
 		expect(screen.queryByText("refill.packs")).not.toBeInTheDocument();
+	});
+
+	it("parses bottle refill pills input", () => {
+		const onRefillLooseChange = vi.fn();
+		render(<MedDetailModal {...bottleProps} showRefillModal={true} onRefillLooseChange={onRefillLooseChange} />);
+
+		const input = document.querySelector(".refill-modal input[type='number']") as HTMLInputElement;
+		fireEvent.change(input, { target: { value: "7" } });
+		expect(onRefillLooseChange).toHaveBeenCalledWith(7);
+	});
+
+	it("uses zero fallback for invalid bottle refill input", () => {
+		const onRefillLooseChange = vi.fn();
+		render(<MedDetailModal {...bottleProps} showRefillModal={true} onRefillLooseChange={onRefillLooseChange} />);
+
+		const input = document.querySelector(".refill-modal input[type='number']") as HTMLInputElement;
+		fireEvent.change(input, { target: { value: "" } });
+		expect(onRefillLooseChange).toHaveBeenCalledWith(0);
 	});
 
 	it("shows looseTablets as total capacity fallback when totalPills is null (backward compat)", () => {

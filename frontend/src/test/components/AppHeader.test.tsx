@@ -6,6 +6,7 @@ import { AuthProvider } from "../../components/Auth";
 
 // Mock useNavigate
 const mockNavigate = vi.fn();
+const mockConfirmNavigation = vi.fn();
 vi.mock("react-router-dom", async () => {
 	const actual = await vi.importActual("react-router-dom");
 	return {
@@ -19,7 +20,7 @@ vi.mock("../../context", () => ({
 	useUnsavedChanges: () => ({
 		setHasUnsavedChanges: vi.fn(),
 		hasUnsavedChanges: false,
-		confirmNavigation: vi.fn().mockReturnValue(true),
+		confirmNavigation: mockConfirmNavigation,
 	}),
 }));
 
@@ -27,6 +28,7 @@ describe("AppHeader", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockNavigate.mockClear();
+		mockConfirmNavigation.mockResolvedValue(true);
 		// Set up default auth mock - auth disabled
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({
@@ -279,6 +281,99 @@ describe("AppHeader", () => {
 				fireEvent.click(medsBtn);
 				expect(mockNavigate).toHaveBeenCalledWith("/medications");
 			}
+		});
+	});
+
+	it("does not navigate when unsaved changes confirmation is denied", async () => {
+		mockConfirmNavigation.mockResolvedValueOnce(false);
+
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<AuthProvider>
+					<AppHeader onOpenProfile={vi.fn()} onOpenAbout={vi.fn()} />
+				</AuthProvider>
+			</MemoryRouter>
+		);
+
+		await waitFor(() => {
+			const buttons = screen.getAllByRole("button");
+			const plannerBtn = buttons.find((btn) => btn.textContent?.includes("nav.planner"));
+			expect(plannerBtn).toBeInTheDocument();
+			if (plannerBtn) fireEvent.click(plannerBtn);
+		});
+
+		await waitFor(() => {
+			expect(mockConfirmNavigation).toHaveBeenCalled();
+			expect(mockNavigate).not.toHaveBeenCalledWith("/planner");
+		});
+	});
+
+	it("renders authenticated user menu and handles profile/about/settings/logout actions", async () => {
+		const onOpenProfile = vi.fn();
+		const onOpenAbout = vi.fn();
+
+		(global.fetch as ReturnType<typeof vi.fn>).mockReset();
+		mockNavigate.mockClear();
+		mockConfirmNavigation.mockResolvedValue(true);
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						authEnabled: true,
+						registrationEnabled: true,
+						localAuthEnabled: true,
+						oidcEnabled: false,
+						oidcProviderName: "",
+						hasUsers: true,
+						needsSetup: false,
+					}),
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ id: 1, username: "tester", avatarUrl: null }),
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+			});
+
+		const { container } = render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<AuthProvider>
+					<AppHeader onOpenProfile={onOpenProfile} onOpenAbout={onOpenAbout} />
+				</AuthProvider>
+			</MemoryRouter>
+		);
+
+		await waitFor(() => {
+			expect(container.querySelector(".user-menu-btn")).toBeInTheDocument();
+		});
+
+		// Settings icon should not be shown when auth is enabled
+		expect(screen.queryByTitle(/nav\.settings/i)).not.toBeInTheDocument();
+
+		const userMenuBtn = container.querySelector(".user-menu-btn") as HTMLButtonElement;
+		fireEvent.click(userMenuBtn);
+		fireEvent.click(screen.getByText(/auth\.profile/i));
+		expect(onOpenProfile).toHaveBeenCalled();
+
+		fireEvent.click(userMenuBtn);
+		fireEvent.click(screen.getByText(/about\.title/i));
+		expect(onOpenAbout).toHaveBeenCalled();
+
+		fireEvent.click(userMenuBtn);
+		fireEvent.click(screen.getByText(/^nav\.settings$/i));
+		await waitFor(() => {
+			expect(mockNavigate).toHaveBeenCalledWith("/settings");
+		});
+
+		fireEvent.click(userMenuBtn);
+		fireEvent.click(screen.getByText(/auth\.signOut/i));
+		await waitFor(() => {
+			expect(fetch).toHaveBeenCalledWith("/api/auth/logout", {
+				method: "POST",
+				credentials: "include",
+			});
 		});
 	});
 });

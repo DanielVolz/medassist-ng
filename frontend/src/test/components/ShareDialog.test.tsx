@@ -90,4 +90,22 @@ describe("ShareDialog", () => {
 		fireEvent.click(input);
 		expect(selectMock).toHaveBeenCalled();
 	});
+
+	it("calls person and period change callbacks", () => {
+		render(<ShareDialog {...defaultProps} />);
+
+		const selects = screen.getAllByRole("combobox");
+		fireEvent.change(selects[0], { target: { value: "Bob" } });
+		fireEvent.change(selects[1], { target: { value: "90" } });
+
+		expect(defaultProps.onShareSelectedPersonChange).toHaveBeenCalledWith("Bob");
+		expect(defaultProps.onShareSelectedDaysChange).toHaveBeenCalledWith(90);
+	});
+
+	it("disables generate button when no person is selected", () => {
+		render(<ShareDialog {...defaultProps} shareSelectedPerson="" />);
+
+		const generateButton = screen.getByRole("button", { name: /share\.generateLink/i });
+		expect(generateButton).toBeDisabled();
+	});
 });

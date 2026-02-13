@@ -213,7 +213,7 @@ Generate secrets with: `openssl rand -hex 32`
 | `OIDC_ISSUER_URL` | — | OIDC provider URL |
 | `OIDC_CLIENT_ID` | — | Client ID from OIDC provider |
 | `OIDC_CLIENT_SECRET` | — | Client secret from OIDC provider |
-| `OIDC_REDIRECT_URI` | — | Callback URL |
+| `OIDC_REDIRECT_URI` | — | Full callback URL (e.g., `https://your-domain.com/api/auth/oidc/callback`) |
 | `OIDC_SCOPES` | `openid profile email` | Scopes to request |
 | `OIDC_USERNAME_CLAIM` | `preferred_username` | Claim for username |
 | `OIDC_AUTO_CREATE_USERS` | `true` | Auto-create users on first SSO login |

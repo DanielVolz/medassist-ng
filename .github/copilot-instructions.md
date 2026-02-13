@@ -8,7 +8,7 @@ Use `AGENTS.md` as the canonical governance source and `.github/skills/*/SKILL.m
 ## Always-On Rules
 
 - English only for project artifacts.
-- No remote git/release actions by normal agent (`git push`, PR create/merge, tag/release).
+- **NEVER run remote git commands** — no `git push`, no `gh pr create/merge`, no `gh release`, no `git tag`. Prepare locally, then hand off to `@release-manager`.
 - Testing work belongs to `@testing-manager`.
 - PR/release/CI orchestration belongs to `@release-manager`.
 - Keep changes local, focused, and consistent with existing UI/API patterns.

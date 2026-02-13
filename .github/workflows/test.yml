@@ -81,7 +81,7 @@ jobs:
           retention-days: 7
 
   # =============================================================================
-  # Frontend Build Validation (skipped if no frontend-related files changed)
+  # Frontend Tests & Build (skipped if no frontend-related files changed)
   # =============================================================================
   frontend-build:
     name: Frontend Build
@@ -111,5 +111,16 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
       - name: TypeScript type check & build
         run: npm run build
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 7

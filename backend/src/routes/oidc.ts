@@ -144,12 +144,16 @@ export async function oidcRoutes(app: FastifyInstance) {
 
 			try {
 				const config = await getOIDCConfig();
-				const _redirectUri = env.OIDC_REDIRECT_URI!;
+				const redirectUri = env.OIDC_REDIRECT_URI!;
 
 				// Exchange code for tokens
+				// Build complete callback URL with query parameters for validation
+				const callbackUrl = new URL(redirectUri);
+				callbackUrl.search = new URLSearchParams(request.query as Record<string, string>).toString();
+
 				const tokens = await client.authorizationCodeGrant(
 					config,
-					new URL(request.url, `http://${request.headers.host}`),
+					callbackUrl,
 					{
 						pkceCodeVerifier: storedVerifier.value,
 						expectedState: state,

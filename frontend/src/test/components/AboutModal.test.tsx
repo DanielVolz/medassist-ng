@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AboutModal from "../../components/AboutModal";
 
@@ -66,5 +66,65 @@ describe("AboutModal", () => {
 		const versionLink = screen.getByText("1.0.0").closest("a");
 		expect(versionLink).toHaveAttribute("href", "https://github.com/test/repo/releases/tag/v1.0.0");
 		expect(versionLink).toHaveAttribute("target", "_blank");
+	});
+
+	it("shows up-to-date result after successful version check", async () => {
+		vi.useFakeTimers();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ tag_name: "v1.0.0" }),
+		});
+
+		render(<AboutModal {...defaultProps} />);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /about\.checkForUpdates/i }));
+			await vi.advanceTimersByTimeAsync(1000);
+		});
+
+		expect(screen.getByText(/about\.upToDate/i)).toBeInTheDocument();
+
+		vi.useRealTimers();
+	});
+
+	it("shows update available result with download link", async () => {
+		vi.useFakeTimers();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ tag_name: "v1.2.0" }),
+		});
+
+		render(<AboutModal {...defaultProps} />);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /about\.checkForUpdates/i }));
+			await vi.advanceTimersByTimeAsync(1000);
+		});
+
+		expect(screen.getByText(/about\.updateAvailable/i)).toBeInTheDocument();
+
+		const downloadLink = screen.getByRole("link", { name: /about\.downloadUpdate/i });
+		expect(downloadLink).toHaveAttribute("href", "https://github.com/test/repo/releases/latest");
+
+		vi.useRealTimers();
+	});
+
+	it("shows error result when update check fails", async () => {
+		vi.useFakeTimers();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: false,
+			json: () => Promise.resolve({}),
+		});
+
+		render(<AboutModal {...defaultProps} />);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /about\.checkForUpdates/i }));
+			await vi.advanceTimersByTimeAsync(1000);
+		});
+
+		expect(screen.getByText(/about\.checkFailed/i)).toBeInTheDocument();
+
+		vi.useRealTimers();
 	});
 });

@@ -8,24 +8,29 @@ import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatte
 import { expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
-function userStorageKey(userId: number | undefined, key: string): string {
+export function userStorageKey(userId: number | undefined, key: string): string {
 	return userId ? `user_${userId}_${key}` : key;
 }
 
 // Helper function to calculate blister stock
-function getBlisterStock(totalPills: number, pillsPerBlister: number, _looseTablets: number, _originalTotal: number) {
+export function getBlisterStock(
+	totalPills: number,
+	pillsPerBlister: number,
+	_looseTablets: number,
+	_originalTotal: number
+) {
 	const fullBlisters = Math.floor(totalPills / pillsPerBlister);
 	const openBlisterPills = totalPills % pillsPerBlister;
 	return { fullBlisters, openBlisterPills, loosePills: openBlisterPills };
 }
 
 // Helper to format full blisters
-function formatFullBlisters(count: number, t: (key: string) => string): string {
+export function formatFullBlisters(count: number, t: (key: string) => string): string {
 	return `${count} ${count === 1 ? t("common.blister") : t("common.blisters")}`;
 }
 
 // Helper to format open blister and loose pills
-function formatOpenBlisterAndLoose(
+export function formatOpenBlisterAndLoose(
 	openBlisterPills: number,
 	loosePills: number,
 	pillsPerBlister: number,
@@ -36,7 +41,7 @@ function formatOpenBlisterAndLoose(
 }
 
 // Get total pills for a medication (packageType-aware)
-function getMedTotal(med: {
+export function getMedTotal(med: {
 	packCount: number;
 	blistersPerPack: number;
 	pillsPerBlister: number;
@@ -71,7 +76,7 @@ function NotificationBellIcon() {
 }
 
 // Get structured reminder status data
-function getReminderStatusData(
+export function getReminderStatusData(
 	reminderDaysBefore: number,
 	lowStockDays: number,
 	lowCoverage: Coverage[],

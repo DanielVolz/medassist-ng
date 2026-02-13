@@ -78,4 +78,14 @@ describe("ExportModal", () => {
 		fireEvent.click(screen.getByText(/exportImport\.cancelButton/i));
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
+
+	it("does not trigger export actions while exporting", () => {
+		const { container } = render(<ExportModal {...defaultProps} exporting={true} />);
+		const actionCards = container.querySelectorAll(".action-card");
+
+		fireEvent.click(actionCards[0]);
+		fireEvent.click(actionCards[1]);
+
+		expect(defaultProps.onExport).not.toHaveBeenCalled();
+	});
 });

@@ -84,4 +84,14 @@ describe("useCollapsedDays", () => {
 
 		expect(window.localStorage.setItem).not.toHaveBeenCalled();
 	});
+
+	it("saves expanded days key when toggling auto-collapsed day", () => {
+		const { result } = renderHook(() => useCollapsedDays(7));
+
+		act(() => {
+			result.current.toggleDayCollapse("2024-02-01", true);
+		});
+
+		expect(window.localStorage.setItem).toHaveBeenCalledWith("expandedDays_user_7", expect.any(String));
+	});
 });

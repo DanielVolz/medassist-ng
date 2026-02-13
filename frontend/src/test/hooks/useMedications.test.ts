@@ -38,6 +38,8 @@ describe("useMedications", () => {
 			result.current.loadMeds();
 		});
 
+		expect(result.current.loading).toBe(true);
+
 		await waitFor(() => {
 			expect(result.current.meds).toEqual(mockMeds);
 		});
@@ -105,6 +107,23 @@ describe("useMedications", () => {
 		});
 
 		expect(fetch).toHaveBeenCalledWith("/api/medications/1", { method: "DELETE", credentials: "include" });
+		expect(mockResetForm).toHaveBeenCalled();
+	});
+
+	it("still reloads medications when delete request fails", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockRejectedValueOnce(new Error("Delete failed"))
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+
+		const mockResetForm = vi.fn();
+		const { result } = renderHook(() => useMedications());
+
+		await act(async () => {
+			await result.current.deleteMed(5, 5, mockResetForm);
+		});
+
+		expect(fetch).toHaveBeenCalledWith("/api/medications/5", { method: "DELETE", credentials: "include" });
+		expect(fetch).toHaveBeenCalledWith("/api/medications", { credentials: "include" });
 		expect(mockResetForm).toHaveBeenCalled();
 	});
 

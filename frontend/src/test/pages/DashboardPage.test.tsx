@@ -1,7 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DashboardPage } from "../../pages/DashboardPage";
+import {
+	DashboardPage,
+	formatFullBlisters,
+	formatOpenBlisterAndLoose,
+	getBlisterStock,
+	getMedTotal,
+	getReminderStatusData,
+	userStorageKey,
+} from "../../pages/DashboardPage";
 
 // Mock data for tests with medications
 const mockMeds = [
@@ -131,6 +139,7 @@ const createMockAppContext = (overrides = {}) => ({
 	showPastDays: false,
 	setShowPastDays: vi.fn(),
 	pastDays: [],
+	todayDay: null,
 	futureDays: [],
 	takenDoses: new Set(),
 	dismissedDoses: new Set(),
@@ -165,6 +174,119 @@ const createMockAppContext = (overrides = {}) => ({
 });
 
 let mockContextValue = createMockAppContext();
+
+describe("DashboardPage helper functions", () => {
+	it("builds user storage key correctly", () => {
+		expect(userStorageKey(5, "scheduleDays")).toBe("user_5_scheduleDays");
+		expect(userStorageKey(undefined, "scheduleDays")).toBe("scheduleDays");
+	});
+
+	it("calculates blister stock breakdown", () => {
+		expect(getBlisterStock(27, 10, 0, 27)).toEqual({ fullBlisters: 2, openBlisterPills: 7, loosePills: 7 });
+	});
+
+	it("formats blister and open blister labels", () => {
+		const t = (key: string) => key;
+		expect(formatFullBlisters(1, t)).toBe("1 common.blister");
+		expect(formatFullBlisters(3, t)).toBe("3 common.blisters");
+		expect(formatOpenBlisterAndLoose(0, 0, 10, t)).toBe("-");
+		expect(formatOpenBlisterAndLoose(4, 4, 10, t)).toBe("4 common.of 10 common.pills");
+	});
+
+	it("computes total pills for blister and bottle types", () => {
+		expect(
+			getMedTotal({
+				packageType: "blister",
+				packCount: 1,
+				blistersPerPack: 2,
+				pillsPerBlister: 10,
+				looseTablets: 3,
+				stockAdjustment: 2,
+			})
+		).toBe(25);
+
+		expect(
+			getMedTotal({
+				packageType: "bottle",
+				packCount: 0,
+				blistersPerPack: 1,
+				pillsPerBlister: 1,
+				looseTablets: 50,
+				stockAdjustment: -3,
+			})
+		).toBe(47);
+	});
+
+	it("builds reminder status data for critical and history rows", () => {
+		const t = (key: string) => key;
+		const result = getReminderStatusData(
+			7,
+			30,
+			[{ name: "A", daysLeft: 2, medsLeft: 1, depletionDate: null, depletionTime: null, nextDose: null }],
+			[
+				{ name: "A", daysLeft: 2, medsLeft: 1, depletionDate: null, depletionTime: null, nextDose: null },
+				{ name: "B", daysLeft: 10, medsLeft: 4, depletionDate: null, depletionTime: null, nextDose: null },
+			],
+			"2026-01-01T10:00:00.000Z",
+			"intake",
+			"email",
+			"A",
+			"Max",
+			"2026-01-01T09:00:00.000Z",
+			"both",
+			"A (+1)",
+			t,
+			"en-US"
+		);
+
+		expect(result.status.className).toBe("danger");
+		expect(result.lowStockMeds.length).toBe(2);
+		expect(result.lastStockSent).not.toBeNull();
+		expect(result.lastIntakeSent?.medName).toBe("A");
+	});
+
+	it("builds warning and success reminder statuses", () => {
+		const t = (key: string) => key;
+
+		const warning = getReminderStatusData(
+			7,
+			30,
+			[],
+			[{ name: "C", daysLeft: 12, medsLeft: 10, depletionDate: null, depletionTime: null, nextDose: null }],
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			t,
+			"en-US"
+		);
+		expect(warning.status.className).toBe("warning");
+
+		const success = getReminderStatusData(
+			7,
+			30,
+			[],
+			[{ name: "D", daysLeft: 40, medsLeft: 10, depletionDate: null, depletionTime: null, nextDose: null }],
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			t,
+			"en-US"
+		);
+		expect(success.status.className).toBe("success");
+		expect(success.lastStockSent).toBeNull();
+		expect(success.lastIntakeSent).toBeNull();
+	});
+});
 
 // Mock the context
 vi.mock("../../context", () => ({
@@ -357,6 +479,9 @@ describe("DashboardPage interactions", () => {
 	});
 
 	it("can change schedule days", () => {
+		const setScheduleDays = vi.fn();
+		mockContextValue = createMockAppContext({ setScheduleDays });
+
 		render(
 			<MemoryRouter>
 				<DashboardPage />
@@ -367,6 +492,7 @@ describe("DashboardPage interactions", () => {
 		expect(select).toBeInTheDocument();
 
 		fireEvent.change(select, { target: { value: "90" } });
+		expect(setScheduleDays).toHaveBeenCalledWith(90);
 	});
 });
 
@@ -757,6 +883,28 @@ describe("DashboardPage with past days", () => {
 		}
 	});
 
+	it("collapses past days when already expanded", () => {
+		const setShowPastDays = vi.fn();
+		mockContextValue = createMockAppContext({
+			pastDays: mockPastDays,
+			showPastDays: true,
+			setShowPastDays,
+			missedPastDoseIds: [],
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const toggle = document.querySelector(".past-days-toggle");
+		if (toggle) {
+			fireEvent.click(toggle);
+			expect(setShowPastDays).toHaveBeenCalledWith(false);
+		}
+	});
+
 	it("shows clear missed doses button when there are missed doses", () => {
 		render(
 			<MemoryRouter>
@@ -767,6 +915,272 @@ describe("DashboardPage with past days", () => {
 		// Should show clear missed button
 		const clearBtn = document.querySelector(".clear-missed-btn");
 		expect(clearBtn).toBeInTheDocument();
+	});
+
+	it("opens clear missed confirmation modal and confirms action", () => {
+		const dismissMissedDoses = vi.fn();
+		mockContextValue = createMockAppContext({
+			pastDays: mockPastDays,
+			showPastDays: false,
+			missedPastDoseIds: ["1-0-1-John", "1-0-2-John"],
+			showClearMissedConfirm: true,
+			dismissMissedDoses,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/dashboard\.schedules\.clearMissedConfirmTitle/i)).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: /dashboard\.schedules\.clearMissedConfirm/i }));
+		expect(dismissMissedDoses).toHaveBeenCalledWith(["1-0-1-John", "1-0-2-John"]);
+	});
+});
+
+describe("DashboardPage additional branches", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorage.clear();
+	});
+
+	it("calls openShareDialog when share button is clicked", () => {
+		const openShareDialog = vi.fn();
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			openShareDialog,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /share\.button/i }));
+		expect(openShareDialog).toHaveBeenCalled();
+	});
+
+	it("toggles future days visibility", () => {
+		const setShowFutureDays = vi.fn();
+		mockContextValue = createMockAppContext({
+			futureDays: mockFutureDays,
+			showFutureDays: false,
+			setShowFutureDays,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const futureToggle = document.querySelector(".future-days-toggle");
+		expect(futureToggle).toBeInTheDocument();
+		fireEvent.click(futureToggle!);
+		expect(setShowFutureDays).toHaveBeenCalledWith(true);
+	});
+
+	it("shows network error on manual reminder fetch failure", async () => {
+		global.fetch = vi.fn().mockRejectedValue(new Error("offline"));
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			settings: {
+				...createMockAppContext().settings,
+				emailEnabled: true,
+				emailStockReminders: true,
+				notificationEmail: "test@example.com",
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByText("dashboard.reorder.sendReminder"));
+
+		await waitFor(() => {
+			expect(screen.getByText("common.networkError")).toBeInTheDocument();
+		});
+	});
+
+	it("opens medication detail from last stock reminder med link", () => {
+		const openMedDetail = vi.fn();
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			settings: {
+				...createMockAppContext().settings,
+				emailEnabled: true,
+				emailStockReminders: true,
+				lastStockReminderSent: "2026-02-10T10:00:00.000Z",
+				lastStockReminderChannel: "email",
+				lastStockReminderMedNames: "Aspirin (+1)",
+			},
+			openMedDetail,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const reminderMedLink = document.querySelector(".reminder-status-bar .med-link") as HTMLElement;
+		expect(reminderMedLink).toBeInTheDocument();
+		fireEvent.click(reminderMedLink);
+		expect(openMedDetail).toHaveBeenCalled();
+	});
+
+	it("persists selected schedule days to localStorage", () => {
+		const setScheduleDays = vi.fn();
+		const setItemSpy = vi.spyOn(window.localStorage, "setItem");
+		mockContextValue = createMockAppContext({ setScheduleDays });
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const select = document.querySelector(".schedule-days-select") as HTMLSelectElement;
+		fireEvent.change(select, { target: { value: "180" } });
+
+		expect(setScheduleDays).toHaveBeenCalledWith(180);
+		expect(setItemSpy).toHaveBeenCalledWith("user_1_scheduleDays", "180");
+	});
+
+	it("opens schedule lightbox when clicking medication avatar image", () => {
+		const openScheduleLightbox = vi.fn();
+		const medsWithImage = [{ ...mockMeds[0], imageUrl: "aspirin.png" }];
+		const futureDay = [
+			{
+				dateStr: "Tomorrow",
+				date: new Date(Date.now() + 86400000),
+				isPast: false,
+				meds: [
+					{
+						medName: "Aspirin",
+						total: 1,
+						doses: [{ id: "1-0-1", timeStr: "09:00", when: Date.now() + 86400000, usage: 1, takenBy: [] }],
+						lastWhen: Date.now() + 86400000,
+					},
+				],
+			},
+		];
+
+		mockContextValue = createMockAppContext({
+			meds: medsWithImage,
+			coverage: mockCoverage,
+			coverageByMed: { Aspirin: mockCoverage.all[0] },
+			depletionByMed: { Aspirin: Date.now() + 10 * 86400000 },
+			futureDays: futureDay,
+			showFutureDays: true,
+			manuallyExpandedDays: new Set(["Tomorrow"]),
+			openScheduleLightbox,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const avatar = document.querySelector(".day-block .med-avatar.clickable") as HTMLElement;
+		expect(avatar).toBeInTheDocument();
+		fireEvent.click(avatar);
+		expect(openScheduleLightbox).toHaveBeenCalledWith("/api/images/aspirin.png");
+	});
+
+	it("clicking clear missed button opens confirmation", () => {
+		const setShowClearMissedConfirm = vi.fn();
+		mockContextValue = createMockAppContext({
+			pastDays: mockPastDays,
+			missedPastDoseIds: ["1-0-1-John"],
+			setShowClearMissedConfirm,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const clearBtn = document.querySelector(".clear-missed-btn") as HTMLButtonElement;
+		fireEvent.click(clearBtn);
+		expect(setShowClearMissedConfirm).toHaveBeenCalledWith(true);
+	});
+
+	it("renders and interacts with today day schedule block", () => {
+		const markDoseTaken = vi.fn();
+		const undoDoseTaken = vi.fn();
+		const todayDoseId = "1-0-1000";
+		const today = {
+			dateStr: "Today",
+			date: new Date(),
+			isPast: false,
+			meds: [
+				{
+					medName: "Aspirin",
+					total: 1,
+					doses: [{ id: todayDoseId, timeStr: "09:00", when: Date.now() - 1000, usage: 1, takenBy: ["John"] }],
+					lastWhen: Date.now() - 1000,
+				},
+			],
+		};
+
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			coverageByMed: { Aspirin: mockCoverage.all[0] },
+			depletionByMed: { Aspirin: Date.now() + 10 * 86400000 },
+			todayDay: today,
+			markDoseTaken,
+			undoDoseTaken,
+			takenDoses: new Set<string>(),
+			getDoseId: vi.fn((id: string, person: string | null) => (person ? `${id}-${person}` : id)),
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText("Today")).toBeInTheDocument();
+		const takeButton = document.querySelector(".day-block.today .dose-btn.take") as HTMLButtonElement;
+		expect(takeButton).toBeInTheDocument();
+		fireEvent.click(takeButton);
+		expect(markDoseTaken).toHaveBeenCalled();
+
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			coverageByMed: { Aspirin: mockCoverage.all[0] },
+			depletionByMed: { Aspirin: Date.now() + 10 * 86400000 },
+			todayDay: today,
+			markDoseTaken,
+			undoDoseTaken,
+			takenDoses: new Set<string>([`${todayDoseId}-John`]),
+			manuallyExpandedDays: new Set<string>(["Today"]),
+			getDoseId: vi.fn((id: string, person: string | null) => (person ? `${id}-${person}` : id)),
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const undoButton = document.querySelector(".day-block.today .dose-btn.undo") as HTMLButtonElement;
+		expect(undoButton).toBeInTheDocument();
+		fireEvent.click(undoButton);
+		expect(undoDoseTaken).toHaveBeenCalled();
 	});
 });
 

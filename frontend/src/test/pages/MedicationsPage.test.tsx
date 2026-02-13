@@ -318,6 +318,23 @@ describe("MedicationsPage with medications", () => {
 		const editButtons = document.querySelectorAll(".info");
 		expect(editButtons.length).toBeGreaterThan(0);
 	});
+
+	it("calls startEdit when clicking edit button", () => {
+		const startEdit = vi.fn();
+		mockFormHookValue = createMockFormHook({ startEdit });
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		const editButton = document.querySelector(".med-actions .info") as HTMLButtonElement;
+		fireEvent.click(editButton);
+		expect(startEdit).toHaveBeenCalledTimes(1);
+		expect(startEdit.mock.calls[0][0]).toEqual(expect.objectContaining({ id: 1, name: "Aspirin" }));
+		expect(typeof startEdit.mock.calls[0][1]).toBe("function");
+	});
 });
 
 describe("MedicationsPage form interactions", () => {
@@ -362,6 +379,21 @@ describe("MedicationsPage form interactions", () => {
 			fireEvent.click(addBtn);
 			expect(addIntake).toHaveBeenCalled();
 		}
+	});
+
+	it("calls handleValueChange when package type is changed", () => {
+		const handleValueChange = vi.fn();
+		mockFormHookValue = createMockFormHook({ handleValueChange });
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		const packageTypeSelect = document.querySelector(".package-type-select") as HTMLSelectElement;
+		fireEvent.change(packageTypeSelect, { target: { value: "bottle" } });
+		expect(handleValueChange).toHaveBeenCalledWith("packageType", "bottle");
 	});
 });
 
@@ -829,6 +861,24 @@ describe("MedicationsPage image upload for existing medication", () => {
 		const fileInput = document.querySelector('input[type="file"]');
 		expect(fileInput).toBeInTheDocument();
 	});
+
+	it("calls uploadMedImage when selecting file for existing medication", () => {
+		const uploadMedImage = vi.fn();
+		mockContextValue = createMockContext({ meds: mockMeds, uploadMedImage });
+		mockFormHookValue = createMockFormHook({ editingId: 1 });
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+		const file = new File(["img"], "existing-med.jpg", { type: "image/jpeg" });
+		fireEvent.change(fileInput, { target: { files: [file] } });
+
+		expect(uploadMedImage).toHaveBeenCalledWith(1, file);
+	});
 });
 
 describe("MedicationsPage with medication image", () => {
@@ -1075,6 +1125,23 @@ describe("MedicationsPage new entry button", () => {
 		const newEntryBtn = screen.getByRole("button", { name: /form\.newEntry/i });
 		fireEvent.click(newEntryBtn);
 		expect(resetForm).toHaveBeenCalled();
+	});
+
+	it("opens mobile edit modal when clicking new entry on mobile", () => {
+		const resetForm = vi.fn();
+		mockFormHookValue = createMockFormHook({ resetForm });
+
+		Object.defineProperty(window, "innerWidth", { value: 375, writable: true });
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /form\.newEntry/i }));
+		expect(resetForm).toHaveBeenCalled();
+		expect(document.querySelector(".modal-content.edit-modal")).toBeInTheDocument();
 	});
 });
 
@@ -1616,5 +1683,381 @@ describe("MedicationsPage blister refill shows packs", () => {
 		expect(refillSection).toBeInTheDocument();
 		expect(refillSection!.textContent).toContain("refill.packs");
 		expect(refillSection!.textContent).toContain("refill.loosePills");
+	});
+});
+
+describe("MedicationsPage save and unsaved branches", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorage.clear();
+		Object.defineProperty(window, "innerWidth", { value: 1024, writable: true });
+	});
+
+	it("saves new medication successfully", async () => {
+		const setSaving = vi.fn();
+		const loadMeds = vi.fn();
+		const setFormSaved = vi.fn();
+		const resetForm = vi.fn();
+		const setOriginalForm = vi.fn();
+
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ id: 99 }),
+		});
+
+		mockContextValue = createMockContext({ setSaving, loadMeds });
+		mockFormHookValue = createMockFormHook({
+			formChanged: true,
+			setFormSaved,
+			resetForm,
+			setOriginalForm,
+			form: {
+				...createMockFormHook().form,
+				name: "New Medication",
+				intakes: [
+					{
+						usage: "1",
+						every: "1",
+						startDate: "2026-02-10",
+						startTime: "09:00",
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
+				],
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.submit(document.querySelector("form.form-grid")!);
+
+		await screen.findByText(/medications\.list\.title/i);
+		expect(fetch).toHaveBeenCalledWith(
+			"/api/medications",
+			expect.objectContaining({ method: "POST", credentials: "include" })
+		);
+		expect(setSaving).toHaveBeenCalledWith(true);
+		expect(setFormSaved).toHaveBeenCalledWith(true);
+		expect(loadMeds).toHaveBeenCalled();
+		expect(resetForm).toHaveBeenCalled();
+		expect(setSaving).toHaveBeenCalledWith(false);
+	});
+
+	it("shows alert when save fails", async () => {
+		const setSaving = vi.fn();
+		const mockAlert = vi.fn();
+		global.alert = mockAlert;
+
+		global.fetch = vi.fn().mockResolvedValue({ ok: false });
+
+		mockContextValue = createMockContext({ setSaving });
+		mockFormHookValue = createMockFormHook({
+			formChanged: true,
+			form: {
+				...createMockFormHook().form,
+				name: "Broken Medication",
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.submit(document.querySelector("form.form-grid")!);
+
+		await screen.findByText(/medications\.list\.title/i);
+		expect(mockAlert).toHaveBeenCalledWith("common.saveFailed");
+		expect(setSaving).toHaveBeenCalledWith(false);
+	});
+
+	it("opens unsaved confirmation when closing mobile modal with unsaved changes", async () => {
+		const resetForm = vi.fn();
+		mockContextValue = createMockContext();
+		mockFormHookValue = createMockFormHook({
+			formChanged: true,
+			resetForm,
+		});
+
+		Object.defineProperty(window, "innerWidth", { value: 375, writable: true });
+		vi.spyOn(window.history, "pushState").mockImplementation(() => {});
+		vi.spyOn(window.history, "back").mockImplementation(() => {});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /form\.newEntry/i }));
+		fireEvent.click(document.querySelector(".modal-close") as HTMLButtonElement);
+
+		expect(screen.getByText(/common\.unsavedChanges\.title/i)).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: /common\.unsavedChanges\.leave/i }));
+		expect(resetForm).toHaveBeenCalled();
+	});
+
+	it("keeps editing when unsaved confirmation stay is clicked", () => {
+		mockContextValue = createMockContext();
+		mockFormHookValue = createMockFormHook({ formChanged: true });
+		Object.defineProperty(window, "innerWidth", { value: 375, writable: true });
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /form\.newEntry/i }));
+		fireEvent.click(document.querySelector(".modal-close") as HTMLButtonElement);
+
+		expect(screen.getByText(/common\.unsavedChanges\.title/i)).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: /common\.unsavedChanges\.stay/i }));
+		expect(screen.queryByText(/common\.unsavedChanges\.title/i)).not.toBeInTheDocument();
+	});
+
+	it("saves existing medication via PUT and updates original form", async () => {
+		const setSaving = vi.fn();
+		const setFormSaved = vi.fn();
+		const setOriginalForm = vi.fn();
+		const resetForm = vi.fn();
+
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ id: 1 }),
+		});
+
+		mockContextValue = createMockContext({ setSaving, loadMeds: vi.fn() });
+		mockFormHookValue = createMockFormHook({
+			editingId: 1,
+			formChanged: true,
+			setFormSaved,
+			setOriginalForm,
+			resetForm,
+			form: {
+				...createMockFormHook().form,
+				name: "Edited Medication",
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.submit(document.querySelector("form.form-grid")!);
+
+		await screen.findByText(/medications\.list\.title/i);
+		expect(fetch).toHaveBeenCalledWith(
+			"/api/medications/1",
+			expect.objectContaining({ method: "PUT", credentials: "include" })
+		);
+		expect(setFormSaved).toHaveBeenCalledWith(true);
+		expect(setOriginalForm).toHaveBeenCalled();
+		expect(resetForm).not.toHaveBeenCalled();
+		expect(setSaving).toHaveBeenCalledWith(false);
+	});
+
+	it("uploads selected image after saving a new medication", async () => {
+		const uploadMedImage = vi.fn();
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ id: 123 }),
+		});
+
+		class MockFileReader {
+			onload: ((event: ProgressEvent<FileReader>) => void) | null = null;
+			readAsDataURL = vi.fn(() => {
+				this.onload?.({ target: { result: "data:image/png;base64,test" } } as unknown as ProgressEvent<FileReader>);
+			});
+		}
+		vi.stubGlobal("FileReader", MockFileReader as unknown as typeof FileReader);
+
+		mockContextValue = createMockContext({ uploadMedImage });
+		mockFormHookValue = createMockFormHook({
+			formChanged: true,
+			form: {
+				...createMockFormHook().form,
+				name: "With Image",
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		const fileInput = document.querySelector('.image-upload-section input[type="file"]') as HTMLInputElement;
+		const file = new File(["img"], "new-med.png", { type: "image/png" });
+		fireEvent.change(fileInput, { target: { files: [file] } });
+
+		fireEvent.submit(document.querySelector("form.form-grid")!);
+
+		await screen.findByText(/medications\.list\.title/i);
+		expect(uploadMedImage).toHaveBeenCalledWith(123, file);
+	});
+
+	it("closes mobile modal without confirmation when there are no unsaved changes", () => {
+		mockContextValue = createMockContext();
+		mockFormHookValue = createMockFormHook({ formChanged: false });
+		Object.defineProperty(window, "innerWidth", { value: 375, writable: true });
+		const backSpy = vi.spyOn(window.history, "back").mockImplementation(() => {});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /form\.newEntry/i }));
+		fireEvent.click(document.querySelector(".modal-close") as HTMLButtonElement);
+
+		expect(backSpy).toHaveBeenCalled();
+		expect(screen.queryByText(/common\.unsavedChanges\.title/i)).not.toBeInTheDocument();
+	});
+
+	it("renders image preview and removes image in edit mode", () => {
+		const deleteMedImage = vi.fn();
+		const medsWithImage = [{ ...mockMeds[0], imageUrl: "edit-image.png" }];
+		mockContextValue = createMockContext({ meds: medsWithImage, deleteMedImage });
+		mockFormHookValue = createMockFormHook({ editingId: 1 });
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		expect(document.querySelector(".image-preview img")).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: /form\.removeImage/i }));
+		expect(deleteMedImage).toHaveBeenCalledWith(1);
+	});
+
+	it("passes single takenBy person to addIntake button", () => {
+		const addIntake = vi.fn();
+		mockContextValue = createMockContext();
+		mockFormHookValue = createMockFormHook({
+			addIntake,
+			form: {
+				...createMockFormHook().form,
+				takenBy: ["John"],
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /form\.blisters\.addIntake/i }));
+		expect(addIntake).toHaveBeenCalledWith("John");
+	});
+
+	it("does not pass takenBy person to addIntake when multiple people exist", () => {
+		const addIntake = vi.fn();
+		mockContextValue = createMockContext();
+		mockFormHookValue = createMockFormHook({
+			addIntake,
+			form: {
+				...createMockFormHook().form,
+				takenBy: ["John", "Jane"],
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /form\.blisters\.addIntake/i }));
+		expect(addIntake).toHaveBeenCalledWith(undefined);
+	});
+
+	it("shows and updates intake-specific takenBy select when takenBy list is present", () => {
+		const setIntakeValue = vi.fn();
+		mockContextValue = createMockContext();
+		mockFormHookValue = createMockFormHook({
+			setIntakeValue,
+			form: {
+				...createMockFormHook().form,
+				takenBy: ["John", "Jane"],
+				intakes: [
+					{
+						usage: "1",
+						every: "1",
+						startDate: "2024-01-01",
+						startTime: "09:00",
+						takenBy: "John",
+						intakeRemindersEnabled: false,
+					},
+				],
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/form\.blisters\.takenByIntake/i)).toBeInTheDocument();
+		const select = document.querySelector(".blister-row select") as HTMLSelectElement;
+		fireEvent.change(select, { target: { value: "Jane" } });
+		expect(setIntakeValue).toHaveBeenCalledWith(0, "takenBy", "Jane");
+	});
+
+	it("shows pending preview for new medication after selecting an image", () => {
+		class MockFileReader {
+			onload: ((event: ProgressEvent<FileReader>) => void) | null = null;
+			readAsDataURL = vi.fn(() => {
+				this.onload?.({ target: { result: "data:image/png;base64,preview" } } as unknown as ProgressEvent<FileReader>);
+			});
+		}
+		vi.stubGlobal("FileReader", MockFileReader as unknown as typeof FileReader);
+
+		mockContextValue = createMockContext();
+		mockFormHookValue = createMockFormHook();
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		const fileInput = document.querySelector('.image-upload-section input[type="file"]') as HTMLInputElement;
+		const file = new File(["img"], "preview.png", { type: "image/png" });
+		fireEvent.change(fileInput, { target: { files: [file] } });
+
+		expect(document.querySelector('.image-preview img[alt="Preview"]')).toBeInTheDocument();
+	});
+
+	it("disables edit image upload when uploading and shows refill adding label", () => {
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			uploadingImage: true,
+			refillSaving: true,
+			refillPacks: 1,
+			refillLoose: 1,
+		});
+		mockFormHookValue = createMockFormHook({ editingId: 1 });
+
+		render(
+			<MemoryRouter>
+				<MedicationsPage />
+			</MemoryRouter>
+		);
+
+		const fileInput = document.querySelector('.image-upload-section input[type="file"]') as HTMLInputElement;
+		expect(fileInput).toBeDisabled();
+		expect(screen.getByText(/refill\.adding/i)).toBeInTheDocument();
 	});
 });

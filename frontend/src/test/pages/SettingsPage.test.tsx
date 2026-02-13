@@ -3,6 +3,22 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
 
+const changeLanguageMock = vi.fn();
+
+vi.mock("react-i18next", async () => {
+	const actual = await vi.importActual<typeof import("react-i18next")>("react-i18next");
+	return {
+		...actual,
+		useTranslation: () => ({
+			t: (key: string) => key,
+			i18n: {
+				language: "en",
+				changeLanguage: changeLanguageMock,
+			},
+		}),
+	};
+});
+
 // Factory function for mock context
 const createMockContext = (overrides = {}) => ({
 	settings: {
@@ -254,6 +270,19 @@ describe("SettingsPage interactions", () => {
 		expect(select).toBeInTheDocument();
 		expect(select).not.toBeNull();
 	});
+
+	it("calls i18n.changeLanguage when language is changed", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		const select = document.querySelector(".language-select") as HTMLSelectElement;
+		fireEvent.change(select, { target: { value: "de" } });
+
+		expect(changeLanguageMock).toHaveBeenCalledWith("de");
+	});
 });
 
 describe("SettingsPage loading state", () => {
@@ -347,6 +376,50 @@ describe("SettingsPage with shoutrrr enabled", () => {
 		const toggles = document.querySelectorAll(".toggle-switch");
 		expect(toggles.length).toBeGreaterThan(0);
 	});
+
+	it("updates shoutrrr stock reminder matrix toggle", () => {
+		const setSettings = vi.fn();
+		mockContextValue = createMockContext({
+			setSettings,
+			settings: {
+				...createMockContext().settings,
+				shoutrrrEnabled: true,
+				shoutrrrUrl: "ntfy://example.com/topic",
+				shoutrrrStockReminders: false,
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		const matrixToggles = document.querySelectorAll('.notification-matrix .matrix-row input[type="checkbox"]');
+		fireEvent.click(matrixToggles[1]);
+		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ shoutrrrStockReminders: true }));
+	});
+
+	it("keeps shoutrrr matrix unchecked when URL is empty", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				shoutrrrEnabled: true,
+				shoutrrrUrl: "",
+				shoutrrrStockReminders: true,
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		const matrixToggles = document.querySelectorAll('.notification-matrix .matrix-row input[type="checkbox"]');
+		const shoutrrrStockToggle = matrixToggles[1] as HTMLInputElement;
+		expect(shoutrrrStockToggle.checked).toBe(false);
+	});
 });
 
 describe("SettingsPage test buttons", () => {
@@ -380,16 +453,9 @@ describe("SettingsPage test buttons", () => {
 			</MemoryRouter>
 		);
 
-		// Look for test email button
-		const testButtons = document.querySelectorAll("button");
-		const testEmailBtn = Array.from(testButtons).find(
-			(btn) =>
-				btn.textContent?.toLowerCase().includes("test") || btn.getAttribute("title")?.toLowerCase().includes("test")
-		);
-
-		if (testEmailBtn) {
-			fireEvent.click(testEmailBtn);
-		}
+		const testEmailBtn = screen.getByRole("button", { name: /common\.test/i });
+		fireEvent.click(testEmailBtn);
+		expect(testEmail).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -849,13 +915,67 @@ describe("SettingsPage shoutrrr URL input", () => {
 			</MemoryRouter>
 		);
 
-		const ghostButtons = document.querySelectorAll("button.ghost");
-		// Find test button (there should be one for shoutrrr when enabled)
-		if (ghostButtons.length > 0) {
-			const lastGhostBtn = ghostButtons[ghostButtons.length - 1];
-			fireEvent.click(lastGhostBtn);
-			// testShoutrrr should have been called
-		}
+		const testButtons = screen.getAllByRole("button", { name: /common\.test/i });
+		const pushTestButton = testButtons[testButtons.length - 1];
+		fireEvent.click(pushTestButton);
+		expect(testShoutrrr).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("SettingsPage import interactions", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockContextValue = createMockContext();
+	});
+
+	it("calls handleImportFileSelect when selecting a file", () => {
+		const handleImportFileSelect = vi.fn();
+		mockContextValue = createMockContext({ handleImportFileSelect });
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		const fileInput = document.querySelector("#import-file-input") as HTMLInputElement;
+		const file = new File(["{}"], "backup.json", { type: "application/json" });
+		fireEvent.change(fileInput, { target: { files: [file] } });
+
+		expect(handleImportFileSelect).toHaveBeenCalledTimes(1);
+	});
+
+	it("closes import confirmation and clears pending import data on cancel", () => {
+		const setShowImportConfirm = vi.fn();
+		const setPendingImportData = vi.fn();
+		mockContextValue = createMockContext({
+			showImportConfirm: true,
+			setShowImportConfirm,
+			setPendingImportData,
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /exportImport\.cancelButton/i }));
+		expect(setShowImportConfirm).toHaveBeenCalledWith(false);
+		expect(setPendingImportData).toHaveBeenCalledWith(null);
+	});
+
+	it("triggers hidden import input click when import button is pressed", () => {
+		const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click");
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /exportImport\.import$/i }));
+		expect(clickSpy).toHaveBeenCalled();
 	});
 });
 
@@ -919,6 +1039,7 @@ describe("SettingsPage schedule overview", () => {
 			settings: {
 				...createMockContext().settings,
 				nextScheduledCheck: "2024-01-15T06:00:00Z",
+				lastStockReminderSent: "2024-01-13T06:00:00Z",
 				lastAutoEmailSent: "2024-01-14T06:00:00Z",
 			},
 		});
@@ -952,6 +1073,43 @@ describe("SettingsPage schedule overview", () => {
 		);
 
 		expect(screen.getByText(/settings\.schedule\.lastIntakeSent/i)).toBeInTheDocument();
+	});
+
+	it("shows last stock reminder time when available", () => {
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/settings\.schedule\.lastStockSent/i)).toBeInTheDocument();
+	});
+});
+
+describe("SettingsPage import success banner", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockContextValue = createMockContext({
+			importResult: { medications: 2, doses: 5, shares: 1 },
+			setImportResult: vi.fn(),
+		});
+	});
+
+	it("clears import result when success banner close is clicked", () => {
+		const setImportResult = vi.fn();
+		mockContextValue = createMockContext({
+			importResult: { medications: 2, doses: 5, shares: 1 },
+			setImportResult,
+		});
+
+		render(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Close" }));
+		expect(setImportResult).toHaveBeenCalledWith(null);
 	});
 });
 

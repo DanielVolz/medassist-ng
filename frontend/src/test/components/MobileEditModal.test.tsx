@@ -357,6 +357,21 @@ describe("MobileEditModal form submission", () => {
 		vi.clearAllMocks();
 	});
 
+	it("does not call onSaveMedication when native form validation fails", () => {
+		const onSaveMedication = vi.fn();
+		render(<MobileEditModal {...defaultProps} onSaveMedication={onSaveMedication} />);
+
+		const form = document.querySelector("form") as HTMLFormElement;
+		const checkValiditySpy = vi.spyOn(form, "checkValidity").mockReturnValue(false);
+		const reportValiditySpy = vi.spyOn(form, "reportValidity").mockReturnValue(false);
+
+		fireEvent.submit(form);
+
+		expect(checkValiditySpy).toHaveBeenCalled();
+		expect(reportValiditySpy).toHaveBeenCalled();
+		expect(onSaveMedication).not.toHaveBeenCalled();
+	});
+
 	it("calls onSaveMedication when form submitted", () => {
 		const onSaveMedication = vi.fn((e: Event) => e.preventDefault());
 		const validForm = { ...defaultForm, name: "TestMed" };
@@ -383,6 +398,72 @@ describe("MobileEditModal form submission", () => {
 		// Form should still render
 		const modal = document.querySelector(".modal-overlay");
 		expect(modal).toBeInTheDocument();
+	});
+});
+
+describe("MobileEditModal field callbacks", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("calls onFormChange when commercial name changes", () => {
+		const onFormChange = vi.fn();
+		render(<MobileEditModal {...defaultProps} onFormChange={onFormChange} />);
+
+		const nameInput = document.querySelector('input[placeholder="form.placeholders.commercial"]') as HTMLInputElement;
+		fireEvent.change(nameInput, { target: { value: "Aspirin" } });
+
+		expect(onFormChange).toHaveBeenCalledWith(expect.objectContaining({ name: "Aspirin" }));
+	});
+
+	it("calls onFormChange when generic name changes", () => {
+		const onFormChange = vi.fn();
+		render(<MobileEditModal {...defaultProps} onFormChange={onFormChange} />);
+
+		const genericInput = document.querySelector('input[placeholder="form.placeholders.generic"]') as HTMLInputElement;
+		fireEvent.change(genericInput, { target: { value: "Acetylsalicylic acid" } });
+
+		expect(onFormChange).toHaveBeenCalledWith(expect.objectContaining({ genericName: "Acetylsalicylic acid" }));
+	});
+
+	it("calls onFormChange when notes change", () => {
+		const onFormChange = vi.fn();
+		render(<MobileEditModal {...defaultProps} onFormChange={onFormChange} />);
+
+		const notes = document.querySelector("textarea") as HTMLTextAreaElement;
+		fireEvent.change(notes, { target: { value: "Take with food" } });
+
+		expect(onFormChange).toHaveBeenCalledWith(expect.objectContaining({ notes: "Take with food" }));
+	});
+
+	it("calls onFormChange when dose unit changes", () => {
+		const onFormChange = vi.fn();
+		render(<MobileEditModal {...defaultProps} onFormChange={onFormChange} />);
+
+		const doseUnitSelect = document.querySelector(".dose-unit-select") as HTMLSelectElement;
+		fireEvent.change(doseUnitSelect, { target: { value: "g" } });
+
+		expect(onFormChange).toHaveBeenCalledWith(expect.objectContaining({ doseUnit: "g" }));
+	});
+
+	it("calls onHandleValueChange when package type changes", () => {
+		const onHandleValueChange = vi.fn();
+		render(<MobileEditModal {...defaultProps} onHandleValueChange={onHandleValueChange} />);
+
+		const packageSelect = document.querySelector(".package-type-select") as HTMLSelectElement;
+		fireEvent.change(packageSelect, { target: { value: "bottle" } });
+
+		expect(onHandleValueChange).toHaveBeenCalledWith("packageType", "bottle");
+	});
+
+	it("calls onHandleValueChange when blister stock values change", () => {
+		const onHandleValueChange = vi.fn();
+		render(<MobileEditModal {...defaultProps} onHandleValueChange={onHandleValueChange} />);
+
+		const packCountInput = document.querySelector('input[type="number"][min="0"]') as HTMLInputElement;
+		fireEvent.change(packCountInput, { target: { value: "4" } });
+
+		expect(onHandleValueChange).toHaveBeenCalledWith("packCount", "4");
 	});
 });
 
@@ -414,6 +495,31 @@ describe("MobileEditModal with filled form", () => {
 describe("MobileEditModal takenBy", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+	});
+
+	it("shows add-person placeholder when people already exist", () => {
+		const form = {
+			...defaultForm,
+			takenBy: ["John"],
+		};
+
+		render(<MobileEditModal {...defaultProps} form={form} />);
+
+		const input = document.querySelector(".tag-input-container input") as HTMLInputElement;
+		expect(input.placeholder).toBe("form.placeholders.addPerson");
+	});
+
+	it("filters takenBy suggestions and excludes already selected people", () => {
+		const form = {
+			...defaultForm,
+			takenBy: ["John"],
+		};
+
+		render(<MobileEditModal {...defaultProps} form={form} existingPeople={["John", "Jane", "Alex"]} />);
+
+		expect(document.querySelector('#takenby-suggestions-modal option[value="John"]')).not.toBeInTheDocument();
+		expect(document.querySelector('#takenby-suggestions-modal option[value="Jane"]')).toBeInTheDocument();
+		expect(document.querySelector('#takenby-suggestions-modal option[value="Alex"]')).toBeInTheDocument();
 	});
 
 	it("displays takenBy tags", () => {
@@ -473,6 +579,17 @@ describe("MobileEditModal takenBy", () => {
 			fireEvent.keyDown(tagInputContainer, { key: "Enter" });
 			expect(onTakenByKeyDown).toHaveBeenCalled();
 		}
+	});
+
+	it("calls onAddTakenByPerson on blur when input has value", () => {
+		const onAddTakenByPerson = vi.fn();
+
+		render(<MobileEditModal {...defaultProps} takenByInput="Alex" onAddTakenByPerson={onAddTakenByPerson} />);
+
+		const tagInput = document.querySelector(".tag-input-container input") as HTMLInputElement;
+		fireEvent.blur(tagInput);
+
+		expect(onAddTakenByPerson).toHaveBeenCalledWith("Alex");
 	});
 });
 
@@ -540,6 +657,41 @@ describe("MobileEditModal optional fields", () => {
 		const toggle = document.querySelector('.toggle-switch input[type="checkbox"]');
 		expect(toggle).toBeInTheDocument();
 	});
+
+	it("shows intake takenBy select when takenBy list is not empty", () => {
+		const form = {
+			...defaultForm,
+			takenBy: ["John", "Jane"],
+			intakes: [
+				{
+					usage: "1",
+					every: "1",
+					startDate: "2024-01-01",
+					startTime: "09:00",
+					takenBy: "John",
+					intakeRemindersEnabled: false,
+				},
+			],
+		};
+
+		render(<MobileEditModal {...defaultProps} form={form} />);
+
+		expect(screen.getByText(/form\.blisters\.takenByIntake/i)).toBeInTheDocument();
+		expect(document.querySelector('.blister-row select option[value="John"]')).toBeInTheDocument();
+	});
+
+	it("passes single takenBy person as default when adding intake", () => {
+		const onAddIntake = vi.fn();
+		const form = {
+			...defaultForm,
+			takenBy: ["OnlyPerson"],
+		};
+
+		render(<MobileEditModal {...defaultProps} form={form} onAddIntake={onAddIntake} />);
+
+		fireEvent.click(screen.getByText(/form\.blisters\.addIntake/i));
+		expect(onAddIntake).toHaveBeenCalledWith("OnlyPerson");
+	});
 });
 
 describe("MobileEditModal bottle package type", () => {
@@ -588,5 +740,102 @@ describe("MobileEditModal bottle package type", () => {
 		expect(screen.queryByText("form.packs")).not.toBeInTheDocument();
 		expect(screen.queryByText("form.blistersPerPack")).not.toBeInTheDocument();
 		expect(screen.queryByText("form.pillsPerBlister")).not.toBeInTheDocument();
+	});
+});
+
+describe("MobileEditModal refill and image actions", () => {
+	const baseMed = {
+		id: 1,
+		name: "Aspirin",
+		takenBy: [],
+		packageType: "blister" as const,
+		packCount: 1,
+		blistersPerPack: 2,
+		pillsPerBlister: 10,
+		looseTablets: 0,
+		blisters: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00.000Z" }],
+		intakes: [
+			{
+				usage: 1,
+				every: 1,
+				start: "2024-01-01T09:00:00.000Z",
+				takenBy: null,
+				intakeRemindersEnabled: false,
+			},
+		],
+		updatedAt: null,
+		imageUrl: null,
+	};
+
+	it("calls onSubmitRefill when refill button is clicked", () => {
+		const onSubmitRefill = vi.fn().mockResolvedValue(undefined);
+
+		render(
+			<MobileEditModal
+				{...defaultProps}
+				editingId={1}
+				meds={[baseMed]}
+				refillLoose={2}
+				onSubmitRefill={onSubmitRefill}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /refill\.button/i }));
+		expect(onSubmitRefill).toHaveBeenCalledWith(1);
+	});
+
+	it("disables refill button when refill values are empty", () => {
+		render(<MobileEditModal {...defaultProps} editingId={1} meds={[baseMed]} refillPacks={0} refillLoose={0} />);
+
+		const refillButton = screen.getByRole("button", { name: /refill\.button/i });
+		expect(refillButton).toBeDisabled();
+	});
+
+	it("shows refill preview for singular pill", () => {
+		render(<MobileEditModal {...defaultProps} editingId={1} meds={[baseMed]} refillPacks={0} refillLoose={1} />);
+
+		expect(document.querySelector(".refill-preview")?.textContent).toContain("+1 common.pill");
+	});
+
+	it("disables refill button while refill is saving", () => {
+		render(
+			<MobileEditModal
+				{...defaultProps}
+				editingId={1}
+				meds={[baseMed]}
+				refillPacks={1}
+				refillLoose={0}
+				refillSaving={true}
+			/>
+		);
+
+		const refillButton = screen.getByRole("button", { name: /common\.saving/i });
+		expect(refillButton).toBeDisabled();
+	});
+
+	it("calls onUploadMedImage when selecting a file", () => {
+		const onUploadMedImage = vi.fn().mockResolvedValue(undefined);
+		render(<MobileEditModal {...defaultProps} editingId={1} meds={[baseMed]} onUploadMedImage={onUploadMedImage} />);
+
+		const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+		const file = new File(["img"], "med.png", { type: "image/png" });
+		fireEvent.change(fileInput, { target: { files: [file] } });
+
+		expect(onUploadMedImage).toHaveBeenCalledWith(1, file);
+	});
+
+	it("calls onDeleteMedImage when delete image button is clicked", () => {
+		const onDeleteMedImage = vi.fn().mockResolvedValue(undefined);
+		render(
+			<MobileEditModal
+				{...defaultProps}
+				editingId={1}
+				meds={[{ ...baseMed, imageUrl: "aspirin.png" }]}
+				onDeleteMedImage={onDeleteMedImage}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /form\.removeImage/i }));
+		expect(onDeleteMedImage).toHaveBeenCalledWith(1);
 	});
 });

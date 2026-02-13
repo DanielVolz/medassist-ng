@@ -151,14 +151,10 @@ export async function oidcRoutes(app: FastifyInstance) {
 				const callbackUrl = new URL(redirectUri);
 				callbackUrl.search = new URLSearchParams(request.query as Record<string, string>).toString();
 
-				const tokens = await client.authorizationCodeGrant(
-					config,
-					callbackUrl,
-					{
-						pkceCodeVerifier: storedVerifier.value,
-						expectedState: state,
-					}
-				);
+				const tokens = await client.authorizationCodeGrant(config, callbackUrl, {
+					pkceCodeVerifier: storedVerifier.value,
+					expectedState: state,
+				});
 
 				// Get user info
 				const sub = tokens.claims()?.sub;

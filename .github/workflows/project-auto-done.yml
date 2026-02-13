@@ -1,0 +1,105 @@
+name: Move Done in Project
+
+on:
+  issues:
+    types: [closed]
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  move-to-done:
+    name: Move to Done
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    steps:
+      - name: Move project item to Done
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          script: |
+            const projectId = 'PVT_kwHOADH82s4BO2OT';
+            const statusFieldId = 'PVTSSF_lAHOADH82s4BO2OTzg9bdkE';
+            const doneOptionId = 'ca45af98';
+
+            // Determine content ID (issue or PR node ID)
+            const nodeId = context.payload.issue?.node_id || context.payload.pull_request?.node_id;
+            const number = context.payload.issue?.number || context.payload.pull_request?.number;
+            const type = context.payload.issue ? 'issue' : 'pull_request';
+
+            console.log(`Processing ${type} #${number} (${nodeId})`);
+
+            // Find the project item by content node ID
+            const result = await github.graphql(`
+              query($nodeId: ID!) {
+                node(id: $nodeId) {
+                  ... on Issue {
+                    projectItems(first: 10) {
+                      nodes {
+                        id
+                        project { id }
+                        fieldValueByName(name: "Status") {
+                          ... on ProjectV2ItemFieldSingleSelectValue {
+                            name
+                            optionId
+                          }
+                        }
+                      }
+                    }
+                  }
+                  ... on PullRequest {
+                    projectItems(first: 10) {
+                      nodes {
+                        id
+                        project { id }
+                        fieldValueByName(name: "Status") {
+                          ... on ProjectV2ItemFieldSingleSelectValue {
+                            name
+                            optionId
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { nodeId });
+
+            const items = result.node?.projectItems?.nodes || [];
+            const projectItem = items.find(item => item.project.id === projectId);
+
+            if (!projectItem) {
+              console.log(`${type} #${number} is not in the project board — skipping.`);
+              return;
+            }
+
+            const currentStatus = projectItem.fieldValueByName?.name || 'unknown';
+            if (currentStatus === 'Done') {
+              console.log(`${type} #${number} is already "Done" — skipping.`);
+              return;
+            }
+
+            console.log(`Moving ${type} #${number} from "${currentStatus}" to "Done"...`);
+
+            await github.graphql(`
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId
+                  itemId: $itemId
+                  fieldId: $fieldId
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }
+            `, {
+              projectId,
+              itemId: projectItem.id,
+              fieldId: statusFieldId,
+              optionId: doneOptionId
+            });
+
+            console.log(`Successfully moved ${type} #${number} to "Done".`);

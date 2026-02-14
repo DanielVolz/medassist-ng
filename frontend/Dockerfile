@@ -42,8 +42,7 @@ RUN sed -i 's|include /etc/nginx/conf.d/\*.conf;|include /tmp/default.conf;|' /e
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 # Copy entrypoint wrapper (translates LOG_LEVEL → nginx access log control)
-COPY nginx-entrypoint.sh /nginx-entrypoint.sh
-RUN chmod +x /nginx-entrypoint.sh
+COPY --chmod=755 nginx-entrypoint.sh /nginx-entrypoint.sh
 
 # Copy built static files with correct ownership (nginx user = uid 101)
 COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html

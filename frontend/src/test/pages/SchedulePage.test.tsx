@@ -45,7 +45,16 @@ const mockFutureDays = [
 			{
 				medName: "Aspirin",
 				total: 1,
-				doses: [{ id: `1-0-${FIXED_TIMESTAMP}`, timeStr: "09:00", when: FIXED_TIMESTAMP, usage: 1, takenBy: ["John"] }],
+				doses: [
+					{
+						id: `1-0-${FIXED_TIMESTAMP}`,
+						timeStr: "09:00",
+						when: FIXED_TIMESTAMP,
+						usage: 1,
+						takenBy: ["John"],
+						intakeRemindersEnabled: true,
+					},
+				],
 				lastWhen: FIXED_TIMESTAMP,
 			},
 		],

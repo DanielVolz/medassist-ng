@@ -136,6 +136,10 @@
       "stock": "Stock",
       "totalCapacity": "Capacity",
       "type": "Type"
+    },
+    "deleteModal": {
+      "title": "Delete medication",
+      "message": "Do you really want to delete \"{{name}}\"?"
     }
   },
   "form": {

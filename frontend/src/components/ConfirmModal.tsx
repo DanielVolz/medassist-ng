@@ -13,6 +13,7 @@ export interface ConfirmModalProps {
 	onCancel: () => void;
 	isLoading?: boolean;
 	confirmVariant?: "primary" | "danger" | "success";
+	overlayClassName?: string;
 }
 
 export function ConfirmModal({
@@ -24,9 +25,10 @@ export function ConfirmModal({
 	onCancel,
 	isLoading = false,
 	confirmVariant = "primary",
+	overlayClassName,
 }: ConfirmModalProps) {
 	return (
-		<div className="modal-overlay" onClick={onCancel}>
+		<div className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`} onClick={onCancel}>
 			<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "450px" }}>
 				<button className="modal-close" onClick={onCancel}>
 					×

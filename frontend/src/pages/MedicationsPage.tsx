@@ -6,6 +6,7 @@ import { useMedicationForm, useUnsavedChangesWarning } from "../hooks";
 import type { DoseUnit, Medication } from "../types";
 import { DOSE_UNITS, FIELD_LIMITS, getPackageSize } from "../types";
 import { combineDateAndTime, formatDateTime, formatNumber } from "../utils/formatters";
+import { log } from "../utils/logger";
 
 export function MedicationsPage() {
 	const { t } = useTranslation();
@@ -299,7 +300,7 @@ export function MedicationsPage() {
 				setOriginalForm(form);
 			}
 		} catch (err) {
-			console.error("Save error:", err);
+			log.error("Save error:", err);
 			alert(err instanceof Error && err.message ? err.message : t("common.saveFailed"));
 		}
 

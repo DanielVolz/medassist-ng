@@ -14,6 +14,7 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version || "unknown"),
+    __LOG_LEVEL__: JSON.stringify(process.env.LOG_LEVEL || "warn"),
   },
   server: {
     port: 5173,

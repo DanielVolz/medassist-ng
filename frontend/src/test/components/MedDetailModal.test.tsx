@@ -277,7 +277,7 @@ describe("MedDetailModal with refill modal", () => {
 
 		const submitBtn = document.querySelector(".refill-modal .modal-footer .success") as HTMLButtonElement;
 		fireEvent.click(submitBtn);
-		expect(onSubmitRefill).toHaveBeenCalledWith(mockMedication.id);
+		expect(onSubmitRefill).toHaveBeenCalledWith(mockMedication.id, undefined);
 	});
 
 	it("disables refill submit button when no pills are entered", () => {

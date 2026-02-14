@@ -138,12 +138,18 @@ describe("useRefill", () => {
 			await result.current.submitRefill(1, 1, mockSetForm, mockLoadMeds);
 		});
 
-		expect(fetch).toHaveBeenCalledWith(
+		expect(fetch).toHaveBeenNthCalledWith(
+			1,
 			"/api/medications/1/refill",
 			expect.objectContaining({
 				method: "POST",
-				body: JSON.stringify({ packsAdded: 1, loosePillsAdded: 0 }),
+				body: JSON.stringify({ packsAdded: 1, loosePillsAdded: 0, usePrescription: false }),
 			})
+		);
+		expect(fetch).toHaveBeenNthCalledWith(
+			2,
+			"/api/medications/1/refills",
+			expect.objectContaining({ credentials: "include" })
 		);
 		expect(mockSetForm).toHaveBeenCalled();
 		expect(mockLoadMeds).toHaveBeenCalled();

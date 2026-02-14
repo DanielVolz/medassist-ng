@@ -135,6 +135,19 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE user_settings ADD COLUMN last_stock_reminder_med_names text`,
 		// Added for share stock visibility toggle
 		`ALTER TABLE user_settings ADD COLUMN share_stock_status integer NOT NULL DEFAULT 1`,
+		// Added for prescription refill tracking and reminders
+		`ALTER TABLE medications ADD COLUMN prescription_enabled integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE medications ADD COLUMN prescription_authorized_refills integer`,
+		`ALTER TABLE medications ADD COLUMN prescription_remaining_refills integer`,
+		`ALTER TABLE medications ADD COLUMN prescription_low_refill_threshold integer NOT NULL DEFAULT 1`,
+		`ALTER TABLE medications ADD COLUMN prescription_expiry_date text`,
+		`ALTER TABLE user_settings ADD COLUMN email_prescription_reminders integer NOT NULL DEFAULT 1`,
+		`ALTER TABLE user_settings ADD COLUMN shoutrrr_prescription_reminders integer NOT NULL DEFAULT 1`,
+		`ALTER TABLE user_settings ADD COLUMN last_prescription_reminder_sent text`,
+		`ALTER TABLE user_settings ADD COLUMN last_prescription_reminder_channel text`,
+		`ALTER TABLE user_settings ADD COLUMN last_prescription_reminder_med_names text`,
+		// Added for refill history prescription tracking
+		`ALTER TABLE refill_history ADD COLUMN used_prescription integer NOT NULL DEFAULT 0`,
 	];
 
 	for (const sql of alterMigrations) {
@@ -166,6 +179,23 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 			await client.execute(sql);
 		} catch (e: any) {
 			// Silently ignore "table already exists" errors
+			if (!e.message?.includes("already exists")) {
+				errors.push(e.message);
+			}
+		}
+	}
+
+	// Create indexes that might be missing (silently fail if already exists)
+	const createIndexMigrations = [
+		// Added in v1.6.x - case-insensitive unique usernames
+		`CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_unique ON users(lower(username))`,
+	];
+
+	for (const sql of createIndexMigrations) {
+		try {
+			await client.execute(sql);
+		} catch (e: any) {
+			// Silently ignore "already exists" errors
 			if (!e.message?.includes("already exists")) {
 				errors.push(e.message);
 			}

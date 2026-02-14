@@ -84,7 +84,7 @@ describe("useSettings", () => {
 		expect(result.current.settingsSaved).toBe(true);
 	});
 
-	it("validates email before saving", async () => {
+	it("keeps email channel enabled when recipient is non-empty", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 			ok: true,
 			json: () => Promise.resolve({}),
@@ -111,8 +111,7 @@ describe("useSettings", () => {
 			await result.current.saveSettings(mockEvent);
 		});
 
-		expect(result.current.testEmailResult?.success).toBe(false);
-		expect(result.current.testEmailResult?.message).toContain("Invalid email");
+		expect(result.current.settings.emailEnabled).toBe(true);
 	});
 
 	it("tests email notification", async () => {

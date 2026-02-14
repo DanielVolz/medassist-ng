@@ -79,7 +79,7 @@ function NotificationBellIcon() {
 export function getReminderStatusData(
 	reminderDaysBefore: number,
 	lowStockDays: number,
-	lowCoverage: Coverage[],
+	_allLowCoverage: Coverage[],
 	allCoverage: Coverage[],
 	lastAutoEmailSent: string | null,
 	lastNotificationType: string | null,
@@ -97,12 +97,30 @@ export function getReminderStatusData(
 	lastStockSent: { date: string; medNames: string | null } | null;
 	lastIntakeSent: { date: string; medName: string | null; takenBy: string | null } | null;
 } {
-	const criticalCount = lowCoverage.length;
-	const lowCount = allCoverage.filter((c) => {
-		if (c.medsLeft <= 0) return false;
-		if (c.daysLeft === null) return false;
-		return c.daysLeft < lowStockDays && c.daysLeft > reminderDaysBefore;
-	}).length;
+	const lowStockMap = new Map<string, { name: string; daysLeft: number; isCritical: boolean }>();
+
+	for (const c of allCoverage) {
+		if (c.medsLeft <= 0) {
+			lowStockMap.set(c.name, { name: c.name, daysLeft: 0, isCritical: true });
+			continue;
+		}
+
+		if (c.daysLeft === null) continue;
+
+		const roundedDaysLeft = Math.round(c.daysLeft);
+		const isCritical = c.daysLeft <= reminderDaysBefore;
+		const isLow = c.daysLeft < lowStockDays;
+		if (!isCritical && !isLow) continue;
+
+		const existing = lowStockMap.get(c.name);
+		if (!existing || roundedDaysLeft < existing.daysLeft || (isCritical && !existing.isCritical)) {
+			lowStockMap.set(c.name, { name: c.name, daysLeft: roundedDaysLeft, isCritical });
+		}
+	}
+
+	const lowStockMeds = Array.from(lowStockMap.values()).sort((a, b) => a.daysLeft - b.daysLeft);
+	const criticalCount = lowStockMeds.filter((m) => m.isCritical).length;
+	const lowCount = lowStockMeds.filter((m) => !m.isCritical).length;
 
 	// Determine status
 	let status: { text: string; className: string };
@@ -122,34 +140,6 @@ export function getReminderStatusData(
 			className: "success",
 		};
 	}
-
-	// Collect all low stock medications (critical + low), deduplicated by name
-	const lowStockMap = new Map<string, { name: string; daysLeft: number; isCritical: boolean }>();
-
-	// Add critical meds (from lowCoverage - these are ≤3 days)
-	for (const c of lowCoverage) {
-		if (c.daysLeft !== null) {
-			const existing = lowStockMap.get(c.name);
-			if (!existing || c.daysLeft < existing.daysLeft) {
-				lowStockMap.set(c.name, { name: c.name, daysLeft: Math.round(c.daysLeft), isCritical: true });
-			}
-		}
-	}
-
-	// Add low but not critical meds
-	for (const c of allCoverage) {
-		if (c.medsLeft <= 0) continue;
-		if (c.daysLeft === null) continue;
-		if (c.daysLeft < lowStockDays && c.daysLeft > reminderDaysBefore) {
-			const existing = lowStockMap.get(c.name);
-			if (!existing || c.daysLeft < existing.daysLeft) {
-				lowStockMap.set(c.name, { name: c.name, daysLeft: Math.round(c.daysLeft), isCritical: false });
-			}
-		}
-	}
-
-	// Convert to array and sort by days left (most urgent first)
-	const lowStockMeds = Array.from(lowStockMap.values()).sort((a, b) => a.daysLeft - b.daysLeft);
 
 	// Parse last stock reminder sent info (from dedicated stock tracking columns)
 	let lastStockSent: { date: string; medNames: string | null } | null = null;
@@ -252,45 +242,117 @@ export function DashboardPage() {
 	const intakeRemindersEnabled =
 		(settings.emailEnabled && settings.emailIntakeReminders) ||
 		(settings.shoutrrrEnabled && settings.shoutrrrIntakeReminders);
-	const anyRemindersEnabled = stockRemindersEnabled || intakeRemindersEnabled;
+	const prescriptionRemindersEnabled =
+		(settings.emailEnabled && settings.emailPrescriptionReminders) ||
+		(settings.shoutrrrEnabled && settings.shoutrrrPrescriptionReminders);
+
+	const prescriptionLowMeds = meds
+		.filter((med) => {
+			if (!med.prescriptionEnabled) return false;
+			const remaining = med.prescriptionRemainingRefills ?? 0;
+			const threshold = med.prescriptionLowRefillThreshold ?? 1;
+			return remaining <= threshold;
+		})
+		.map((med) => ({
+			id: med.id,
+			name: med.name,
+			remainingRefills: med.prescriptionRemainingRefills ?? 0,
+			threshold: med.prescriptionLowRefillThreshold ?? 1,
+		}))
+		.sort((a, b) => a.remainingRefills - b.remainingRefills);
+
+	const anyRemindersEnabled = stockRemindersEnabled || intakeRemindersEnabled || prescriptionRemindersEnabled;
+
+	const prescriptionEmptyCount = prescriptionLowMeds.filter((med) => med.remainingRefills <= 0).length;
+	const prescriptionStatus =
+		prescriptionRemindersEnabled && prescriptionLowMeds.length > 0
+			? {
+					text:
+						prescriptionEmptyCount > 0
+							? t("dashboard.reminders.prescriptionCriticalMeds", { count: prescriptionEmptyCount })
+							: t("dashboard.reminders.prescriptionLowMeds", { count: prescriptionLowMeds.length }),
+					className: prescriptionEmptyCount > 0 ? "danger" : "warning",
+				}
+			: null;
 
 	// Manual reminder send state
 	const [sendingReminder, setSendingReminder] = useState(false);
 	const [reminderResult, setReminderResult] = useState<{ success: boolean; message: string } | null>(null);
 
 	async function sendManualReminder() {
-		if (!stockRemindersEnabled || reminderData.lowStockMeds.length === 0) return;
+		const sendableStock = stockRemindersEnabled && reminderData.lowStockMeds.length > 0;
+		const sendablePrescription = prescriptionRemindersEnabled && prescriptionLowMeds.length > 0;
+		if (!sendableStock && !sendablePrescription) return;
+
 		setSendingReminder(true);
 		setReminderResult(null);
 
 		try {
-			const lowStock = reminderData.lowStockMeds.map((m) => {
-				const cov = coverage.all.find((c) => c.name === m.name);
-				return {
-					name: m.name,
-					medsLeft: cov?.medsLeft ?? 0,
-					daysLeft: m.daysLeft,
-					depletionDate: cov?.depletionDate ?? null,
-					isCritical: m.isCritical,
-				};
-			});
+			const messages: string[] = [];
+			const errors: string[] = [];
 
-			const res = await fetch("/api/reminder/send-email", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify({
-					email: settings.notificationEmail,
-					lowStock,
-				}),
-			});
-			const data = await res.json();
-			if (res.ok) {
-				setReminderResult({ success: true, message: data.message || t("common.sent") });
-				// Refresh settings so "Last stock reminder" row appears immediately
+			if (sendableStock) {
+				const lowStock = reminderData.lowStockMeds.map((m) => {
+					const cov = coverage.all.find((c) => c.name === m.name);
+					return {
+						name: m.name,
+						medsLeft: cov?.medsLeft ?? 0,
+						daysLeft: m.daysLeft,
+						depletionDate: cov?.depletionDate ?? null,
+						isCritical: m.isCritical,
+					};
+				});
+
+				const stockRes = await fetch("/api/reminder/send-email", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "include",
+					body: JSON.stringify({
+						email: settings.notificationEmail,
+						lowStock,
+					}),
+				});
+				const stockData = await stockRes.json();
+				if (stockRes.ok) {
+					messages.push(stockData.message || t("common.sent"));
+				} else {
+					errors.push(stockData.error || t("common.sendFailed"));
+				}
+			}
+
+			if (sendablePrescription) {
+				const prescriptionLow = prescriptionLowMeds.map((med) => {
+					const fullMed = meds.find((m) => m.id === med.id);
+					return {
+						name: med.name,
+						remainingRefills: med.remainingRefills,
+						threshold: med.threshold,
+						expiryDate: fullMed?.prescriptionExpiryDate ?? null,
+					};
+				});
+
+				const prescriptionRes = await fetch("/api/reminder/send-prescription", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "include",
+					body: JSON.stringify({
+						email: settings.notificationEmail,
+						prescriptionLow,
+					}),
+				});
+				const prescriptionData = await prescriptionRes.json();
+				if (prescriptionRes.ok) {
+					messages.push(prescriptionData.message || t("common.sent"));
+				} else {
+					errors.push(prescriptionData.error || t("common.sendFailed"));
+				}
+			}
+
+			if (messages.length > 0) {
+				setReminderResult({ success: true, message: messages.join(" • ") });
 				loadSettings();
 			} else {
-				setReminderResult({ success: false, message: data.error || t("common.sendFailed") });
+				setReminderResult({ success: false, message: errors.join(" • ") || t("common.sendFailed") });
 			}
 		} catch {
 			setReminderResult({ success: false, message: t("common.networkError") });
@@ -307,9 +369,15 @@ export function DashboardPage() {
 							<NotificationBellIcon />
 						</span>
 						<span className="reminder-status-title">{t("dashboard.reminders.active")}</span>
-						<span className={`status-chip small ${reminderData.status.className}`}>{reminderData.status.text}</span>
+						{stockRemindersEnabled && (
+							<span className={`status-chip small ${reminderData.status.className}`}>{reminderData.status.text}</span>
+						)}
+						{prescriptionStatus && (
+							<span className={`status-chip small ${prescriptionStatus.className}`}>{prescriptionStatus.text}</span>
+						)}
 					</div>
 					{(reminderData.lowStockMeds.length > 0 ||
+						(prescriptionRemindersEnabled && prescriptionLowMeds.length > 0) ||
 						(stockRemindersEnabled && reminderData.lastStockSent) ||
 						(intakeRemindersEnabled && reminderData.lastIntakeSent)) && (
 						<div className="reminder-status-details">
@@ -346,27 +414,54 @@ export function DashboardPage() {
 									</span>
 								</div>
 							)}
+							{prescriptionRemindersEnabled && prescriptionLowMeds.length > 0 && (
+								<div className="reminder-status-row">
+									<span className="reminder-status-label">{t("dashboard.reminders.needsPrescriptionRefill")}:</span>
+									<span className="reminder-status-value">
+										{prescriptionLowMeds.map((med, idx) => {
+											const medication = meds.find((m) => m.id === med.id);
+											const textClass = med.remainingRefills <= 0 ? "danger-text" : "warning-text";
+											return (
+												<span key={med.id}>
+													{idx > 0 && ", "}
+													<span className={`reminder-days-left ${textClass}`}>
+														{t("prescription.remainingRefills")}: {med.remainingRefills} ·{" "}
+														{t("dashboard.reminders.usedBy")}:{" "}
+														<span
+															className={`med-link clickable ${textClass}`}
+															onClick={() => medication && openMedDetail(medication)}
+														>
+															{med.name}
+														</span>
+													</span>
+												</span>
+											);
+										})}
+									</span>
+								</div>
+							)}
 							{stockRemindersEnabled && reminderData.lastStockSent && (
 								<div className="reminder-status-row">
 									<span className="reminder-status-label">{t("dashboard.reminders.lastStockSent")}:</span>
 									<span className="reminder-status-value">
 										{reminderData.lastStockSent.medNames &&
 											(() => {
-												// Extract first med name (medNames may be "Name (+N)")
-												const rawName = reminderData.lastStockSent!.medNames!;
-												const firstName = rawName.replace(/\s*\(\+\d+\)$/, "");
-												const suffix = rawName.includes("(+") ? rawName.slice(firstName.length) : "";
-												const medication = meds.find((m) => m.name === firstName);
-												return medication ? (
-													<>
-														<span className="med-link clickable" onClick={() => openMedDetail(medication)}>
-															{firstName}
+												const names = reminderData.lastStockSent!.medNames!.split(", ");
+												return names.map((name, idx) => {
+													const medication = meds.find((m) => m.name === name);
+													return (
+														<span key={name}>
+															{idx > 0 && ", "}
+															{medication ? (
+																<span className="med-link clickable" onClick={() => openMedDetail(medication)}>
+																	{name}
+																</span>
+															) : (
+																<span className="reminder-med-name">{name}</span>
+															)}
 														</span>
-														{suffix && <span className="reminder-med-name">{suffix}</span>}
-													</>
-												) : (
-													<span className="reminder-med-name">{rawName}</span>
-												);
+													);
+												});
 											})()}
 										<span className="reminder-date"> {reminderData.lastStockSent.date}</span>
 									</span>
@@ -396,7 +491,8 @@ export function DashboardPage() {
 							)}
 						</div>
 					)}
-					{stockRemindersEnabled && reminderData.lowStockMeds.length > 0 && (
+					{((stockRemindersEnabled && reminderData.lowStockMeds.length > 0) ||
+						(prescriptionRemindersEnabled && prescriptionLowMeds.length > 0)) && (
 						<div className="reminder-send-row">
 							<button type="button" className="ghost" onClick={sendManualReminder} disabled={sendingReminder}>
 								{sendingReminder ? t("common.sending") : t("dashboard.reorder.sendReminder")}
@@ -527,20 +623,26 @@ export function DashboardPage() {
 													</span>
 												))}
 										</span>
-										{(med?.intakeRemindersEnabled || med?.notes) && (
-											<span className="med-icons">
-												{med?.intakeRemindersEnabled && (
-													<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
-														🔔
+										{(() => {
+											const hasIntakeReminders =
+												med?.intakes?.some((i) => i.intakeRemindersEnabled) ?? med?.intakeRemindersEnabled;
+											return (
+												(hasIntakeReminders || med?.notes) && (
+													<span className="med-icons">
+														{hasIntakeReminders && (
+															<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
+																🔔
+															</span>
+														)}
+														{med?.notes && (
+															<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
+																📝
+															</span>
+														)}
 													</span>
-												)}
-												{med?.notes && (
-													<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
-														📝
-													</span>
-												)}
-											</span>
-										)}
+												)
+											);
+										})()}
 									</span>
 									<span data-label={t("table.stock")} className={textClass}>
 										{med?.packageType === "bottle"
@@ -698,14 +800,6 @@ export function DashboardPage() {
 																	<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																</div>
 																<span className="med-name-text">{item.medName}</span>
-																{med?.intakeRemindersEnabled && (
-																	<span
-																		className="reminder-icon info-tooltip"
-																		data-tooltip={t("tooltips.intakeReminders")}
-																	>
-																		🔔
-																	</span>
-																)}
 															</div>
 															<div className="tag-row">
 																<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
@@ -726,6 +820,14 @@ export function DashboardPage() {
 																			{med?.pillWeightMg &&
 																				` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																		</span>
+																		{dose.intakeRemindersEnabled && (
+																			<span
+																				className="reminder-icon info-tooltip"
+																				data-tooltip={t("tooltips.intakeReminders")}
+																			>
+																				🔔
+																			</span>
+																		)}
 																		<div className="dose-checks">
 																			{people.map((person) => {
 																				const doseId = getDoseId(dose.id, person);
@@ -905,14 +1007,6 @@ export function DashboardPage() {
 																	<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																</div>
 																<span className="med-name-text">{item.medName}</span>
-																{med?.intakeRemindersEnabled && (
-																	<span
-																		className="reminder-icon info-tooltip"
-																		data-tooltip={t("tooltips.intakeReminders")}
-																	>
-																		🔔
-																	</span>
-																)}
 															</div>
 															<div className="tag-row">
 																<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
@@ -937,6 +1031,14 @@ export function DashboardPage() {
 																			{med?.pillWeightMg &&
 																				` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																		</span>
+																		{dose.intakeRemindersEnabled && (
+																			<span
+																				className="reminder-icon info-tooltip"
+																				data-tooltip={t("tooltips.intakeReminders")}
+																			>
+																				🔔
+																			</span>
+																		)}
 																		<div className="dose-checks">
 																			{people.map((person) => {
 																				const doseId = getDoseId(dose.id, person);
@@ -1092,14 +1194,6 @@ export function DashboardPage() {
 																	<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																</div>
 																<span className="med-name-text">{item.medName}</span>
-																{med?.intakeRemindersEnabled && (
-																	<span
-																		className="reminder-icon info-tooltip"
-																		data-tooltip={t("tooltips.intakeReminders")}
-																	>
-																		🔔
-																	</span>
-																)}
 															</div>
 															<div className="tag-row">
 																<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
@@ -1120,6 +1214,14 @@ export function DashboardPage() {
 																			{med?.pillWeightMg &&
 																				` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 																		</span>
+																		{dose.intakeRemindersEnabled && (
+																			<span
+																				className="reminder-icon info-tooltip"
+																				data-tooltip={t("tooltips.intakeReminders")}
+																			>
+																				🔔
+																			</span>
+																		)}
 																		<div className="dose-checks">
 																			{people.map((person) => {
 																				const doseId = getDoseId(dose.id, person);

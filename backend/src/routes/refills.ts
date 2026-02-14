@@ -11,6 +11,7 @@ const refillSchema = z
 	.object({
 		packsAdded: z.number().int().min(0).default(0),
 		loosePillsAdded: z.number().int().min(0).default(0),
+		usePrescription: z.boolean().default(false),
 	})
 	.refine((data) => data.packsAdded > 0 || data.loosePillsAdded > 0, {
 		message: "Must add at least one pack or some loose pills",
@@ -50,17 +51,32 @@ export async function refillRoutes(app: FastifyInstance) {
 			.where(and(eq(medications.id, medId), eq(medications.userId, userId)));
 		if (!med) return reply.notFound("Medication not found");
 
-		const { packsAdded, loosePillsAdded } = parsed.data;
+		const { packsAdded, loosePillsAdded, usePrescription } = parsed.data;
+
+		if (usePrescription) {
+			if (!(med.prescriptionEnabled ?? false)) {
+				return reply.status(400).send({ error: "Prescription refill is not enabled for this medication" });
+			}
+			const remaining = med.prescriptionRemainingRefills ?? 0;
+			if (remaining <= 0) {
+				return reply.status(409).send({ error: "No remaining prescription refills" });
+			}
+		}
 
 		// Update medication stock
 		const newPackCount = med.packCount + packsAdded;
 		const newLooseTablets = med.looseTablets + loosePillsAdded;
+
+		const newRemainingRefills = usePrescription
+			? Math.max(0, (med.prescriptionRemainingRefills ?? 0) - 1)
+			: (med.prescriptionRemainingRefills ?? null);
 
 		await db
 			.update(medications)
 			.set({
 				packCount: newPackCount,
 				looseTablets: newLooseTablets,
+				prescriptionRemainingRefills: newRemainingRefills,
 				stockAdjustment: 0, // Reset offset since we're adding to base stock
 				lastStockCorrectionAt: new Date(), // Reset consumed counter to now
 				updatedAt: new Date(),
@@ -75,6 +91,7 @@ export async function refillRoutes(app: FastifyInstance) {
 				userId,
 				packsAdded,
 				loosePillsAdded,
+				usedPrescription: usePrescription,
 			})
 			.returning();
 
@@ -99,6 +116,13 @@ export async function refillRoutes(app: FastifyInstance) {
 				packCount: newPackCount,
 				looseTablets: newLooseTablets,
 				totalPills: newTotalPills,
+			},
+			prescription: {
+				used: usePrescription,
+				remainingRefills: newRemainingRefills,
+				authorizedRefills: med.prescriptionAuthorizedRefills ?? null,
+				lowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
+				enabled: med.prescriptionEnabled ?? false,
 			},
 		};
 	});
@@ -132,6 +156,7 @@ export async function refillRoutes(app: FastifyInstance) {
 			packsAdded: r.packsAdded,
 			loosePillsAdded: r.loosePillsAdded,
 			totalPillsAdded: isBottle ? r.loosePillsAdded : r.packsAdded * pillsPerPack + r.loosePillsAdded,
+			usedPrescription: r.usedPrescription ?? false,
 			refillDate: r.refillDate,
 		}));
 	});

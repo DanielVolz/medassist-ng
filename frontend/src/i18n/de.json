@@ -88,6 +88,15 @@
       "criticalMeds_other": "{{count}} Medikamente kritisch",
       "lowMeds": "{{count}} Medikament knapp",
       "lowMeds_other": "{{count}} Medikamente knapp",
+      "prescriptionNeeds": "Rezept knapp",
+      "prescriptionLowMeds": "{{count}} Rezept knapp",
+      "prescriptionLowMeds_other": "{{count}} Rezepte knapp",
+      "prescriptionCriticalMeds": "{{count}} Rezept aufgebraucht",
+      "prescriptionCriticalMeds_other": "{{count}} Rezepte aufgebraucht",
+      "needsPrescriptionRefill": "Rezept nachfüllen nötig",
+      "usedBy": "Verwendet von",
+      "refillsLeft": "{{count}} Nachfüllung übrig",
+      "refillsLeft_other": "{{count}} Nachfüllungen übrig",
       "daysLeft": "{{days}} Tag übrig",
       "daysLeft_other": "{{days}} Tage übrig",
       "needsRefill": "Nachfüllen nötig"
@@ -133,6 +142,11 @@
     "editEntry": "Medikament bearbeiten",
     "newEntry": "Neues Medikament",
     "badge": "Packungen + lose Tabletten",
+    "sections": {
+      "general": "Allgemein",
+      "stock": "Bestand & Dosis",
+      "prescription": "Rezept"
+    },
     "commercialName": "Handelsname",
     "genericName": "Wirkstoff",
     "takenBy": "Eingenommen von",
@@ -206,6 +220,7 @@
       "push": "Push",
       "stockReminders": "Bestands-Erinnerungen",
       "intakeReminders": "Einnahme-Erinnerungen",
+      "prescriptionReminders": "Rezept-Erinnerungen",
       "enableHint": "Aktivieren Sie mindestens einen Kanal, um Benachrichtigungen zu erhalten.",
       "skipTakenDoses": "Keine Erinnerungen für genommene Dosen",
       "skipTakenDosesTooltip": "Sende keine Einnahme-Erinnerungen für Dosen, die heute bereits als genommen markiert wurden",
@@ -228,7 +243,7 @@
     },
     "schedule": {
       "title": "Erinnerungsplan",
-      "stockCheck": "Bestandsprüfung",
+      "stockCheck": "Bestands- & Rezeptprüfung",
       "dailyAt6": "Täglich um 6:00 Uhr",
       "intakeCheck": "Einnahmeprüfung",
       "15minBefore": "15 Min. vor geplanter Zeit",
@@ -236,6 +251,7 @@
       "lastSent": "Letzte Benachrichtigung",
       "lastStockSent": "Letzte Bestands-Erinnerung",
       "lastIntakeSent": "Letzte Einnahme-Erinnerung",
+      "lastPrescriptionSent": "Letzte Rezept-Erinnerung",
       "envHint": "Diese Werte können über REMINDER_HOUR und REMINDER_MINUTES_BEFORE in .env konfiguriert werden"
     },
     "stock": {
@@ -258,7 +274,8 @@
     },
     "stockReminder": {
       "title": "Bestands-Erinnerung",
-      "description": "Benachrichtigung wenn Medikamentenbestand erreicht",
+      "description": "Bestands-Erinnerungen aktivieren",
+      "infoTooltip": "Benachrichtigungen umfassen alle Medikamente mit Niedrig- oder Kritisch-Status. Niedrig: Bestand wird knapp. Kritisch: Bestand ist kritisch niedrig — bald nachbestellen.",
       "repeatDaily": "Täglich wiederholen",
       "repeatTooltip": "Wenn aktiviert, wird täglich eine Erinnerung gesendet solange der Bestand kritisch ist. Andernfalls nur einmal pro Medikament bis zum Auffüllen."
     },
@@ -364,6 +381,7 @@
     "sending": "Wird gesendet...",
     "sent": "Gesendet!",
     "sendFailed": "Senden fehlgeschlagen",
+    "saveFailed": "Speichern fehlgeschlagen",
     "networkError": "Netzwerkfehler",
     "saving": "Wird gespeichert...",
     "unsavedChanges": {
@@ -468,6 +486,7 @@
     "downloadFilename": "medassist-export"
   },
   "refill": {
+    "saveFirst": "Speichere das Medikament zuerst, um Nachfüllen zu aktivieren",
     "title": "Nachfüllen",
     "packs": "Packungen hinzufügen",
     "pillsToAdd": "Tabletten hinzufügen",
@@ -482,7 +501,16 @@
     "packsAdded_other": "{{count}} Packungen",
     "pillsAdded": "{{count}} Tablette",
     "pillsAdded_other": "{{count}} Tabletten",
-    "button": "Nachfüllen"
+    "button": "Nachfüllen",
+    "viaPrescription": "Rezept"
+  },
+  "prescription": {
+    "enabled": "Rezept verfolgen",
+    "authorizedRefills": "Genehmigte Nachfüllungen",
+    "remainingRefills": "Verbleibende Nachfüllungen",
+    "lowThreshold": "Schwelle für Rezept-Erinnerung",
+    "expiryDate": "Rezeptablauf",
+    "useForRefill": "Rezept-Nachfüllung verwenden"
   },
   "editStock": {
     "title": "Bestand korrigieren",

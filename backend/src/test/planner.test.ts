@@ -94,10 +94,12 @@ async function createSchema(client: Client) {
       notification_email text,
       email_stock_reminders integer NOT NULL DEFAULT 1,
       email_intake_reminders integer NOT NULL DEFAULT 1,
+		email_prescription_reminders integer NOT NULL DEFAULT 1,
       shoutrrr_enabled integer NOT NULL DEFAULT 0,
       shoutrrr_url text,
       shoutrrr_stock_reminders integer NOT NULL DEFAULT 1,
       shoutrrr_intake_reminders integer NOT NULL DEFAULT 1,
+		shoutrrr_prescription_reminders integer NOT NULL DEFAULT 1,
       reminder_days_before integer NOT NULL DEFAULT 7,
       repeat_daily_reminders integer NOT NULL DEFAULT 0,
       skip_reminders_for_taken_doses integer NOT NULL DEFAULT 0,
@@ -119,6 +121,9 @@ async function createSchema(client: Client) {
       last_stock_reminder_sent text,
       last_stock_reminder_channel text,
       last_stock_reminder_med_names text,
+			last_prescription_reminder_sent text,
+			last_prescription_reminder_channel text,
+			last_prescription_reminder_med_names text,
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
@@ -978,6 +983,108 @@ describe("Planner Routes", () => {
 			expect(title).toContain("Critical");
 			expect(title).not.toContain("Low");
 			expect(message).toContain("Running critically low");
+		});
+	});
+
+	describe("POST /reminder/send-prescription", () => {
+		it("should reject request with missing prescription data", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/reminder/send-prescription",
+				payload: {
+					email: "test@example.com",
+					prescriptionLow: [],
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json()).toEqual({ error: "Missing prescription reminder data" });
+		});
+
+		it("should return error when no notification channels configured", async () => {
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 0, 0, 'en')`,
+				args: [999999999],
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/reminder/send-prescription",
+				payload: {
+					email: "test@example.com",
+					prescriptionLow: [{ name: "Aspirin", remainingRefills: 0, threshold: 1, expiryDate: "2026-01-01" }],
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json()).toEqual({ error: "No notification channels configured" });
+		});
+
+		it("should send prescription email reminder when email is enabled", async () => {
+			process.env.SMTP_HOST = "smtp.test.com";
+			process.env.SMTP_USER = "user@test.com";
+			process.env.SMTP_PASS = "password";
+
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
+				args: [999999999],
+			});
+
+			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/reminder/send-prescription",
+				payload: {
+					email: "test@example.com",
+					prescriptionLow: [
+						{ name: "Aspirin", remainingRefills: 0, threshold: 1, expiryDate: "2026-01-01" },
+						{ name: "Ibuprofen", remainingRefills: 1, threshold: 2, expiryDate: null },
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true, message: "Prescription reminder sent via email" });
+			expect(mockSendMail).toHaveBeenCalledTimes(1);
+			expect(mockUpdateReminderSentTime).toHaveBeenCalledWith("prescription", "email");
+			expect(mockUpdateUserReminderSentTime).toHaveBeenCalledWith(
+				999999999,
+				"prescription",
+				"email",
+				"Aspirin, Ibuprofen"
+			);
+
+			delete process.env.SMTP_HOST;
+			delete process.env.SMTP_USER;
+			delete process.env.SMTP_PASS;
+		});
+
+		it("should send prescription push reminder when shoutrrr is enabled", async () => {
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, shoutrrr_url, language) VALUES (?, 0, 1, 'ntfy://localhost/test', 'en')`,
+				args: [999999999],
+			});
+
+			mockSendShoutrrr.mockResolvedValueOnce({ success: true });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/reminder/send-prescription",
+				payload: {
+					email: "test@example.com",
+					prescriptionLow: [{ name: "Aspirin", remainingRefills: 1, threshold: 2, expiryDate: "2026-01-01" }],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true, message: "Prescription reminder sent via push" });
+			expect(mockSendShoutrrr).toHaveBeenCalledTimes(1);
+			const [_url, title, message] = mockSendShoutrrr.mock.calls[0];
+			expect(title).toContain("Renew Now");
+			expect(message).toContain("Aspirin");
+			expect(mockUpdateReminderSentTime).toHaveBeenCalledWith("prescription", "push");
+			expect(mockUpdateUserReminderSentTime).toHaveBeenCalledWith(999999999, "prescription", "push", "Aspirin");
 		});
 	});
 });

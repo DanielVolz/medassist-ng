@@ -23,6 +23,8 @@ export function MedicationsPage() {
 		setRefillPacks,
 		refillLoose,
 		setRefillLoose,
+		usePrescriptionRefill,
+		setUsePrescriptionRefill,
 		refillSaving,
 		submitRefill,
 		coverageByMed,
@@ -57,6 +59,9 @@ export function MedicationsPage() {
 
 	// Warn user about unsaved changes when navigating away
 	useUnsavedChangesWarning(formChanged);
+
+	// View mode: grid (default) or form (edit/new)
+	const [viewMode, setViewMode] = useState<"grid" | "form">("grid");
 
 	// Mobile modal state (declared early because it's used in useEffect below)
 	const [showEditModal, setShowEditModal] = useState(false);
@@ -148,6 +153,7 @@ export function MedicationsPage() {
 			window.history.back();
 		}
 		resetForm();
+		setViewMode("grid");
 	}
 
 	// Handle delete medication
@@ -158,7 +164,7 @@ export function MedicationsPage() {
 
 	// Handle submit refill
 	async function handleSubmitRefill(medId: number) {
-		await submitRefill(medId, editingId, setForm, loadMeds);
+		await submitRefill(medId, editingId, setForm, loadMeds, usePrescriptionRefill);
 	}
 
 	// Save medication
@@ -183,6 +189,10 @@ export function MedicationsPage() {
 			start: i.start,
 		}));
 
+		const authorizedRefills = Number(form.prescriptionAuthorizedRefills || 0);
+		const remainingRefills = Math.min(Number(form.prescriptionRemainingRefills || 0), authorizedRefills);
+		const lowRefillThreshold = Math.min(Number(form.prescriptionLowRefillThreshold || 1), authorizedRefills);
+
 		const body = {
 			name: form.name.trim(),
 			genericName: form.genericName.trim() || null,
@@ -198,6 +208,11 @@ export function MedicationsPage() {
 			expiryDate: form.expiryDate || null,
 			notes: form.notes.trim() || null,
 			intakeRemindersEnabled: form.intakeRemindersEnabled,
+			prescriptionEnabled: form.prescriptionEnabled,
+			prescriptionAuthorizedRefills: form.prescriptionEnabled ? authorizedRefills : null,
+			prescriptionRemainingRefills: form.prescriptionEnabled ? remainingRefills : null,
+			prescriptionLowRefillThreshold: form.prescriptionEnabled ? lowRefillThreshold : 1,
+			prescriptionExpiryDate: form.prescriptionExpiryDate || null,
 			blisters, // Legacy format for backward compatibility
 			intakes, // New format with per-intake takenBy
 		};
@@ -218,7 +233,18 @@ export function MedicationsPage() {
 			});
 
 			if (!res.ok) {
-				throw new Error("Failed to save");
+				let errorMessage = t("common.saveFailed");
+				try {
+					const errorBody = (await res.json()) as { error?: string; message?: string };
+					if (typeof errorBody?.error === "string" && errorBody.error.trim().length > 0) {
+						errorMessage = errorBody.error;
+					} else if (typeof errorBody?.message === "string" && errorBody.message.trim().length > 0) {
+						errorMessage = errorBody.message;
+					}
+				} catch {
+					// keep translated fallback
+				}
+				throw new Error(errorMessage);
 			}
 
 			const saved = await res.json();
@@ -242,13 +268,14 @@ export function MedicationsPage() {
 			// Reset form after successful save
 			if (!editingId) {
 				resetForm();
+				setViewMode("grid");
 			} else {
 				// Update originalForm so formChanged becomes false
 				setOriginalForm(form);
 			}
 		} catch (err) {
 			console.error("Save error:", err);
-			alert(t("common.saveFailed"));
+			alert(err instanceof Error && err.message ? err.message : t("common.saveFailed"));
 		}
 
 		setSaving(false);
@@ -305,533 +332,741 @@ export function MedicationsPage() {
 		return () => document.removeEventListener("keydown", handleEscape);
 	}, [showEditModal, closeEditModal]);
 
-	// Handle edit button click - open modal on mobile
+	// Handle edit button click - open modal on mobile, switch to form on desktop
 	function handleEditClick(med: Medication) {
 		startEdit(med, openEditModal);
+		setViewMode("form");
 	}
 
 	return (
-		<section className="grid">
-			<article className="card meds">
-				<div className="card-head">
-					<h2>{t("medications.list.title")}</h2>
-					<button
-						type="button"
-						className="btn primary small"
-						onClick={() => {
-							resetForm();
-							// On mobile, open the edit modal
-							if (window.innerWidth <= 768) {
-								openEditModal();
-							}
-						}}
-					>
-						+ {t("form.newEntry")}
-					</button>
-				</div>
-				<div className="med-list">
-					{meds.map((med) => (
-						<div key={med.id} className={`med-row${editingId === med.id ? " editing" : ""}`}>
-							<div className="med-header">
-								<div className="med-info">
-									<div className="med-name-row">
-										<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
-										<div className="med-name">{med.name}</div>
-									</div>
-									<div className="med-details">
-										<span>
-											{t("medications.details.type")}:{" "}
-											<strong>
-												{med.packageType === "bottle" ? t("form.packageTypeBottle") : t("form.packageTypeBlister")}
-											</strong>
-										</span>
-										{med.packageType === "blister" ? (
-											<>
-												<span>
-													{t("medications.details.packs")}: <strong>{med.packCount}</strong>
-												</span>
-												<span>
-													{t("medications.details.blisters")}: <strong>{med.blistersPerPack}</strong>
-												</span>
-												<span>
-													{t("medications.details.pillsPerBlister")}: <strong>{med.pillsPerBlister}</strong>
-												</span>
-												<span>
-													{t("medications.details.loose")}: <strong>{med.looseTablets}</strong>
-												</span>
-											</>
-										) : (
-											<span>
-												{t("medications.details.totalCapacity")}: <strong>{med.totalPills ?? med.looseTablets}</strong>
-											</span>
-										)}
-									</div>
-									<div className="med-total">
-										{t("medications.details.stock")}:{" "}
-										{coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)} /{" "}
-										{getPackageSize(med)} {getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}
-										{(coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)) >
-											getPackageSize(med) && (
-											<span
-												className="info-tooltip tooltip-align-left warning-text"
-												data-tooltip={t("tooltips.stockExceedsCapacity")}
-											>
-												{" "}
-												⚠️
-											</span>
-										)}
-									</div>
-								</div>
-								<div className="med-actions">
-									<button className="info" onClick={() => handleEditClick(med)}>
-										{t("common.edit")}
-									</button>
-									<button className="danger" onClick={() => handleDeleteMed(med.id)}>
-										{t("common.delete")}
-									</button>
-								</div>
-							</div>
-							<div className="blister-list">
-								{med.blisters.map((s, idx) => (
-									<div key={`${med.id}-${idx}`} className="blister-row-simple">
-										{s.usage} {s.usage === 1 ? t("common.pill") : t("common.pills")} · {t("form.blisters.every")}{" "}
-										{s.every} {s.every === 1 ? t("common.day") : t("common.days")} · {t("form.blisters.from")}{" "}
-										{formatDateTime(s.start)}
-									</div>
-								))}
-							</div>
-						</div>
-					))}
-				</div>
-			</article>
-
-			<article className="card form desktop-only">
-				<div className="card-head">
-					{editingId ? (
-						<div className="edit-header">
-							<MedicationAvatar
-								name={meds.find((m) => m.id === editingId)?.name || ""}
-								imageUrl={meds.find((m) => m.id === editingId)?.imageUrl}
-								size="md"
-							/>
-							<h2>
-								{t("form.editEntry")}: {meds.find((m) => m.id === editingId)?.name}
-							</h2>
-						</div>
-					) : (
-						<h2>{t("form.newEntry")}</h2>
-					)}
-				</div>
-				<form className="form-grid" onSubmit={saveMedication}>
-					<label className={fieldErrors.name ? "has-error" : ""}>
-						{t("form.commercialName")}
-						<input
-							value={form.name}
-							onChange={(e) => setForm({ ...form, name: e.target.value })}
-							placeholder={t("form.placeholders.commercial")}
-							maxLength={FIELD_LIMITS.name.max}
-							required
-						/>
-						{fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
-					</label>
-					<label className={fieldErrors.genericName ? "has-error" : ""}>
-						{t("form.genericName")}
-						<input
-							value={form.genericName}
-							onChange={(e) => setForm({ ...form, genericName: e.target.value })}
-							placeholder={t("form.placeholders.generic")}
-							maxLength={FIELD_LIMITS.genericName.max}
-						/>
-						{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
-					</label>
-					<label className={fieldErrors.takenBy ? "has-error" : ""}>
-						{t("form.takenBy")}
-						<div className="tag-input-container">
-							{form.takenBy.map((person) => (
-								<span key={person} className="tag">
-									{person}
-									<button type="button" className="tag-remove" onClick={() => removeTakenByPerson(person)}>
-										×
-									</button>
-								</span>
-							))}
-							<input
-								value={takenByInput}
-								onChange={(e) => setTakenByInput(e.target.value)}
-								onKeyDown={handleTakenByKeyDown}
-								onBlur={() => {
-									if (takenByInput.trim()) addTakenByPerson(takenByInput);
-								}}
-								placeholder={
-									form.takenBy.length === 0 ? t("form.placeholders.takenBy") : t("form.placeholders.addPerson")
+		<section className={viewMode === "grid" ? "med-grid-wrapper" : "grid"}>
+			{viewMode === "grid" ? (
+				/* ── Grid View: compact medication cards ── */
+				<article className="card">
+					<div className="card-head">
+						<h2>{t("medications.list.title")}</h2>
+						<button
+							type="button"
+							className="btn primary small"
+							onClick={() => {
+								resetForm();
+								if (window.innerWidth <= 768) {
+									openEditModal();
+								} else {
+									setViewMode("form");
 								}
-								maxLength={FIELD_LIMITS.takenBy.max}
-								list="takenby-suggestions"
-							/>
-							<datalist id="takenby-suggestions">
-								{existingPeople
-									.filter((p) => !form.takenBy.includes(p))
-									.map((person) => (
-										<option key={person} value={person} />
-									))}
-							</datalist>
-						</div>
-						{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
-					</label>
-					<label>
-						{t("form.packageType")}
-						<select
-							className="package-type-select"
-							value={form.packageType}
-							onChange={(e) => handleValueChange("packageType", e.target.value)}
+							}}
 						>
-							<option value="blister">{t("form.packageTypeBlister")}</option>
-							<option value="bottle">{t("form.packageTypeBottle")}</option>
-						</select>
-					</label>
-					{form.packageType === "blister" ? (
-						<>
-							<label>
-								{t("form.packs")}
-								<input
-									type="number"
-									min="0"
-									value={form.packCount}
-									onChange={(e) => handleValueChange("packCount", e.target.value)}
-								/>
-							</label>
-							<label>
-								{t("form.blistersPerPack")}
-								<input
-									type="number"
-									min="1"
-									value={form.blistersPerPack}
-									onChange={(e) => handleValueChange("blistersPerPack", e.target.value)}
-								/>
-							</label>
-							<label>
-								{t("form.pillsPerBlister")}
-								<input
-									type="number"
-									min="1"
-									value={form.pillsPerBlister}
-									onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)}
-								/>
-							</label>
-							<label>
-								{t("form.loosePills")}
-								<input
-									type="number"
-									min="0"
-									value={form.looseTablets}
-									onChange={(e) => handleValueChange("looseTablets", e.target.value)}
-								/>
-							</label>
-						</>
-					) : (
-						<>
-							<label>
-								{t("form.totalCapacity")}
-								<input
-									type="number"
-									min="1"
-									value={form.totalPills}
-									onChange={(e) => handleValueChange("totalPills", e.target.value)}
-								/>
-							</label>
-							<label>
-								{t("form.currentPills")}
-								<input
-									type="number"
-									min="0"
-									value={form.looseTablets}
-									onChange={(e) => handleValueChange("looseTablets", e.target.value)}
-								/>
-							</label>
-						</>
-					)}
-					<label className="full">
-						{t("form.pillWeight")} ({form.doseUnit})
-						<div className="dose-input-group">
-							<input
-								type="number"
-								min="0"
-								step="0.1"
-								value={form.pillWeightMg}
-								onChange={(e) => handleValueChange("pillWeightMg", e.target.value)}
-								placeholder={t("form.placeholders.weight")}
-							/>
-							<select
-								value={form.doseUnit}
-								onChange={(e) => handleValueChange("doseUnit", e.target.value as DoseUnit)}
-								className="dose-unit-select"
+							+ {t("form.newEntry")}
+						</button>
+					</div>
+					<div className="med-grid">
+						{meds.map((med) => (
+							<div key={med.id} className="med-row">
+								<div className="med-header">
+									<div className="med-info">
+										<div className="med-name-row">
+											<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
+											<div className="med-name">{med.name}</div>
+										</div>
+										<div className="med-details">
+											<span>
+												{t("medications.details.type")}:{" "}
+												<strong>
+													{med.packageType === "bottle" ? t("form.packageTypeBottle") : t("form.packageTypeBlister")}
+												</strong>
+											</span>
+											{med.packageType === "blister" ? (
+												<>
+													<span>
+														{t("medications.details.packs")}: <strong>{med.packCount}</strong>
+													</span>
+													<span>
+														{t("medications.details.blisters")}: <strong>{med.blistersPerPack}</strong>
+													</span>
+													<span>
+														{t("medications.details.pillsPerBlister")}: <strong>{med.pillsPerBlister}</strong>
+													</span>
+													<span>
+														{t("medications.details.loose")}: <strong>{med.looseTablets}</strong>
+													</span>
+												</>
+											) : (
+												<span>
+													{t("medications.details.totalCapacity")}:{" "}
+													<strong>{med.totalPills ?? med.looseTablets}</strong>
+												</span>
+											)}
+										</div>
+										<div className="med-total">
+											{t("medications.details.stock")}:{" "}
+											{coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)} /{" "}
+											{getPackageSize(med)} {getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}
+											{(coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)) >
+												getPackageSize(med) && (
+												<span
+													className="info-tooltip tooltip-align-left warning-text"
+													data-tooltip={t("tooltips.stockExceedsCapacity")}
+												>
+													{" "}
+													⚠️
+												</span>
+											)}
+											{med.prescriptionEnabled && (
+												<div className="med-total">
+													{t("prescription.remainingRefills")}: <strong>{med.prescriptionRemainingRefills ?? 0}</strong>
+												</div>
+											)}
+										</div>
+									</div>
+									<div className="med-actions">
+										<button className="info" onClick={() => handleEditClick(med)}>
+											{t("common.edit")}
+										</button>
+										<button className="danger" onClick={() => handleDeleteMed(med.id)}>
+											{t("common.delete")}
+										</button>
+									</div>
+								</div>
+								<div className="blister-list">
+									{med.blisters.map((s, idx) => (
+										<div key={`${med.id}-${idx}`} className="blister-row-simple">
+											{s.usage} {s.usage === 1 ? t("common.pill") : t("common.pills")} · {t("form.blisters.every")}{" "}
+											{s.every} {s.every === 1 ? t("common.day") : t("common.days")} · {t("form.blisters.from")}{" "}
+											{formatDateTime(s.start)}
+										</div>
+									))}
+								</div>
+							</div>
+						))}
+					</div>
+				</article>
+			) : (
+				/* ── Form View: list panel + form panel (existing layout) ── */
+				<>
+					<article className="card meds">
+						<div className="card-head">
+							<h2>{t("medications.list.title")}</h2>
+							<button
+								type="button"
+								className="btn primary small"
+								onClick={() => {
+									resetForm();
+									// On mobile, open the edit modal
+									if (window.innerWidth <= 768) {
+										openEditModal();
+									}
+								}}
 							>
-								{DOSE_UNITS.map((unit) => (
-									<option key={unit.value} value={unit.value}>
-										{unit.label}
-									</option>
-								))}
-							</select>
+								+ {t("form.newEntry")}
+							</button>
 						</div>
-					</label>
-					<label>
-						{t("form.total")}
-						<div className="static-value">{formatNumber(totalTablets)}</div>
-					</label>
-					<label>
-						{t("form.expiryDate")}
-						<input
-							type="date"
-							value={form.expiryDate}
-							onChange={(e) => handleValueChange("expiryDate", e.target.value)}
-							placeholder={t("common.optional")}
-						/>
-					</label>
+						<div className="med-list">
+							{meds.map((med) => (
+								<div key={med.id} className={`med-row${editingId === med.id ? " editing" : ""}`}>
+									<div className="med-header">
+										<div className="med-info">
+											<div className="med-name-row">
+												<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
+												<div className="med-name">{med.name}</div>
+											</div>
+											<div className="med-details">
+												<span>
+													{t("medications.details.type")}:{" "}
+													<strong>
+														{med.packageType === "bottle" ? t("form.packageTypeBottle") : t("form.packageTypeBlister")}
+													</strong>
+												</span>
+												{med.packageType === "blister" ? (
+													<>
+														<span>
+															{t("medications.details.packs")}: <strong>{med.packCount}</strong>
+														</span>
+														<span>
+															{t("medications.details.blisters")}: <strong>{med.blistersPerPack}</strong>
+														</span>
+														<span>
+															{t("medications.details.pillsPerBlister")}: <strong>{med.pillsPerBlister}</strong>
+														</span>
+														<span>
+															{t("medications.details.loose")}: <strong>{med.looseTablets}</strong>
+														</span>
+													</>
+												) : (
+													<span>
+														{t("medications.details.totalCapacity")}:{" "}
+														<strong>{med.totalPills ?? med.looseTablets}</strong>
+													</span>
+												)}
+											</div>
+											<div className="med-total">
+												{t("medications.details.stock")}:{" "}
+												{coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)} /{" "}
+												{getPackageSize(med)} {getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}
+												{(coverageByMed[med.name]
+													? Math.round(coverageByMed[med.name].medsLeft)
+													: getPackageSize(med)) > getPackageSize(med) && (
+													<span
+														className="info-tooltip tooltip-align-left warning-text"
+														data-tooltip={t("tooltips.stockExceedsCapacity")}
+													>
+														{" "}
+														⚠️
+													</span>
+												)}
+												{med.prescriptionEnabled && (
+													<div className="med-total">
+														{t("prescription.remainingRefills")}:{" "}
+														<strong>{med.prescriptionRemainingRefills ?? 0}</strong>
+													</div>
+												)}
+											</div>
+										</div>
+										<div className="med-actions">
+											<button className="info" onClick={() => handleEditClick(med)}>
+												{t("common.edit")}
+											</button>
+											<button className="danger" onClick={() => handleDeleteMed(med.id)}>
+												{t("common.delete")}
+											</button>
+										</div>
+									</div>
+									<div className="blister-list">
+										{med.blisters.map((s, idx) => (
+											<div key={`${med.id}-${idx}`} className="blister-row-simple">
+												{s.usage} {s.usage === 1 ? t("common.pill") : t("common.pills")} · {t("form.blisters.every")}{" "}
+												{s.every} {s.every === 1 ? t("common.day") : t("common.days")} · {t("form.blisters.from")}{" "}
+												{formatDateTime(s.start)}
+											</div>
+										))}
+									</div>
+								</div>
+							))}
+						</div>
+					</article>
 
-					{/* Refill section - only shown when editing */}
-					{editingId && (
-						<div className="full refill-section">
-							<h4 className="refill-title">{t("refill.title")}</h4>
-							<div className="refill-form-inline">
+					<article className="card form desktop-only">
+						<div className="card-head">
+							{editingId ? (
+								<div className="edit-header">
+									<MedicationAvatar
+										name={meds.find((m) => m.id === editingId)?.name || ""}
+										imageUrl={meds.find((m) => m.id === editingId)?.imageUrl}
+										size="md"
+									/>
+									<h2>
+										{t("form.editEntry")}: {meds.find((m) => m.id === editingId)?.name}
+									</h2>
+								</div>
+							) : (
+								<h2>{t("form.newEntry")}</h2>
+							)}
+						</div>
+						<form className="form-grid" onSubmit={saveMedication}>
+							<div className="full form-category">
+								<h4 className="form-category-title">{t("form.sections.general")}</h4>
+								<label className={fieldErrors.name ? "has-error" : ""}>
+									{t("form.commercialName")}
+									<input
+										value={form.name}
+										onChange={(e) => setForm({ ...form, name: e.target.value })}
+										placeholder={t("form.placeholders.commercial")}
+										maxLength={FIELD_LIMITS.name.max}
+										required
+									/>
+									{fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
+								</label>
+								<label className={fieldErrors.genericName ? "has-error" : ""}>
+									{t("form.genericName")}
+									<input
+										value={form.genericName}
+										onChange={(e) => setForm({ ...form, genericName: e.target.value })}
+										placeholder={t("form.placeholders.generic")}
+										maxLength={FIELD_LIMITS.genericName.max}
+									/>
+									{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
+								</label>
+								<label className={fieldErrors.takenBy ? "has-error" : ""}>
+									{t("form.takenBy")}
+									<div className="tag-input-container">
+										{form.takenBy.map((person) => (
+											<span key={person} className="tag">
+												{person}
+												<button type="button" className="tag-remove" onClick={() => removeTakenByPerson(person)}>
+													×
+												</button>
+											</span>
+										))}
+										<input
+											value={takenByInput}
+											onChange={(e) => setTakenByInput(e.target.value)}
+											onKeyDown={handleTakenByKeyDown}
+											onBlur={() => {
+												if (takenByInput.trim()) addTakenByPerson(takenByInput);
+											}}
+											placeholder={
+												form.takenBy.length === 0 ? t("form.placeholders.takenBy") : t("form.placeholders.addPerson")
+											}
+											maxLength={FIELD_LIMITS.takenBy.max}
+											list="takenby-suggestions"
+										/>
+										<datalist id="takenby-suggestions">
+											{existingPeople
+												.filter((p) => !form.takenBy.includes(p))
+												.map((person) => (
+													<option key={person} value={person} />
+												))}
+										</datalist>
+									</div>
+									{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
+								</label>
+								<label>
+									{t("form.packageType")}
+									<select
+										className="package-type-select"
+										value={form.packageType}
+										onChange={(e) => handleValueChange("packageType", e.target.value)}
+									>
+										<option value="blister">{t("form.packageTypeBlister")}</option>
+										<option value="bottle">{t("form.packageTypeBottle")}</option>
+									</select>
+								</label>
+							</div>
+
+							<div className="full form-category">
+								<h4 className="form-category-title">{t("form.sections.stock")}</h4>
 								{form.packageType === "blister" ? (
 									<>
 										<label>
-											{t("refill.packs")}
+											{t("form.packs")}
 											<input
-												type="number"
-												min="0"
-												value={refillPacks}
-												onChange={(e) => setRefillPacks(parseInt(e.target.value, 10) || 0)}
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.packCount}
+												onChange={(e) => handleValueChange("packCount", e.target.value)}
 											/>
 										</label>
 										<label>
-											{t("refill.loosePills")}
+											{t("form.blistersPerPack")}
 											<input
-												type="number"
-												min="0"
-												value={refillLoose}
-												onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.blistersPerPack}
+												onChange={(e) => handleValueChange("blistersPerPack", e.target.value)}
+											/>
+										</label>
+										<label>
+											{t("form.pillsPerBlister")}
+											<input
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.pillsPerBlister}
+												onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)}
+											/>
+										</label>
+										<label>
+											{t("form.loosePills")}
+											<input
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.looseTablets}
+												onChange={(e) => handleValueChange("looseTablets", e.target.value)}
 											/>
 										</label>
 									</>
 								) : (
-									<label>
-										{t("refill.pillsToAdd")}
-										<input
-											type="number"
-											min="0"
-											value={refillLoose}
-											onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
-										/>
-									</label>
+									<>
+										<label>
+											{t("form.totalCapacity")}
+											<input
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.totalPills}
+												onChange={(e) => handleValueChange("totalPills", e.target.value)}
+											/>
+										</label>
+										<label>
+											{t("form.currentPills")}
+											<input
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.looseTablets}
+												onChange={(e) => handleValueChange("looseTablets", e.target.value)}
+											/>
+										</label>
+									</>
 								)}
-								<button
-									type="button"
-									className="success"
-									onClick={() => handleSubmitRefill(editingId!)}
-									disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
-								>
-									{refillSaving ? t("refill.adding") : t("refill.button")}
-								</button>
-								{(() => {
-									const totalRefill =
-										form.packageType === "blister"
-											? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
-												refillLoose
-											: refillLoose;
-									return totalRefill > 0 ? (
-										<span className="refill-preview">
-											+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+								<label className="full">
+									{t("form.pillWeight")} ({form.doseUnit})
+									<div className="dose-input-group">
+										<input
+											type="text"
+											inputMode="decimal"
+											pattern="[0-9]*\.?[0-9]*"
+											value={form.pillWeightMg}
+											onChange={(e) => handleValueChange("pillWeightMg", e.target.value)}
+											placeholder={t("form.placeholders.weight")}
+										/>
+										<select
+											value={form.doseUnit}
+											onChange={(e) => handleValueChange("doseUnit", e.target.value as DoseUnit)}
+											className="dose-unit-select"
+										>
+											{DOSE_UNITS.map((unit) => (
+												<option key={unit.value} value={unit.value}>
+													{unit.label}
+												</option>
+											))}
+										</select>
+									</div>
+								</label>
+								<label>
+									{t("form.total")}
+									<div className="static-value">{formatNumber(totalTablets)}</div>
+								</label>
+								<label>
+									{t("form.expiryDate")}
+									<input
+										type="date"
+										value={form.expiryDate}
+										onChange={(e) => handleValueChange("expiryDate", e.target.value)}
+										placeholder={t("common.optional")}
+									/>
+								</label>
+								<label className={`full ${fieldErrors.notes ? "has-error" : ""}`}>
+									{t("form.notes")}
+									<textarea
+										value={form.notes}
+										onChange={(e) => handleValueChange("notes", e.target.value)}
+										placeholder={t("form.placeholders.notes")}
+										rows={2}
+										maxLength={FIELD_LIMITS.notes.max}
+										className="auto-resize"
+										onInput={(e) => {
+											const t = e.target as HTMLTextAreaElement;
+											t.style.height = "auto";
+											t.style.height = `${t.scrollHeight}px`;
+										}}
+									/>
+									{form.notes.length > 0 && (
+										<span className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}>
+											{t("common.validation.tooLong", { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
 										</span>
-									) : null;
+									)}
+									{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
+								</label>
+							</div>
+
+							<div className="full form-category">
+								<h4 className="form-category-title">{t("form.sections.prescription")}</h4>
+								<label className="full">
+									{t("prescription.enabled")}
+									<label className="toggle-switch small">
+										<input
+											type="checkbox"
+											checked={form.prescriptionEnabled}
+											onChange={(e) => handleValueChange("prescriptionEnabled", e.target.checked)}
+										/>
+										<span className="toggle-slider"></span>
+									</label>
+								</label>
+								{form.prescriptionEnabled && (
+									<>
+										<label className="prescription-field">
+											{t("prescription.authorizedRefills")}
+											<input
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.prescriptionAuthorizedRefills}
+												onChange={(e) => handleValueChange("prescriptionAuthorizedRefills", e.target.value)}
+											/>
+										</label>
+										<label className="prescription-field">
+											{t("prescription.remainingRefills")}
+											<input
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.prescriptionRemainingRefills}
+												onChange={(e) => handleValueChange("prescriptionRemainingRefills", e.target.value)}
+											/>
+										</label>
+										<label className="prescription-field">
+											{t("prescription.lowThreshold")}
+											<input
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
+												value={form.prescriptionLowRefillThreshold}
+												onChange={(e) => handleValueChange("prescriptionLowRefillThreshold", e.target.value)}
+											/>
+										</label>
+										<label className="prescription-field">
+											{t("prescription.expiryDate")}
+											<input
+												type="date"
+												value={form.prescriptionExpiryDate}
+												onChange={(e) => handleValueChange("prescriptionExpiryDate", e.target.value)}
+											/>
+										</label>
+									</>
+								)}
+							</div>
+
+							<div className="full form-category refill-section">
+								<h4 className="form-category-title">{t("refill.title")}</h4>
+								{editingId ? (
+									<>
+										{form.packageType === "blister" ? (
+											<>
+												<label>
+													{t("refill.packs")}
+													<input
+														type="text"
+														inputMode="numeric"
+														pattern="[0-9]*"
+														value={refillPacks}
+														onChange={(e) => setRefillPacks(parseInt(e.target.value, 10) || 0)}
+													/>
+												</label>
+												<label>
+													{t("refill.loosePills")}
+													<input
+														type="text"
+														inputMode="numeric"
+														pattern="[0-9]*"
+														value={refillLoose}
+														onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
+													/>
+												</label>
+											</>
+										) : (
+											<label className="full">
+												{t("refill.pillsToAdd")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={refillLoose}
+													onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
+												/>
+											</label>
+										)}
+										<div className="refill-submit-row full">
+											<button
+												type="button"
+												className="success"
+												onClick={() => handleSubmitRefill(editingId)}
+												disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
+											>
+												{refillSaving ? t("refill.adding") : t("refill.button")}
+											</button>
+											{(() => {
+												const totalRefill =
+													form.packageType === "blister"
+														? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
+															refillLoose
+														: refillLoose;
+												return totalRefill > 0 ? (
+													<span className="refill-preview">
+														+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+													</span>
+												) : null;
+											})()}
+										</div>
+										{form.prescriptionEnabled && (
+											<div className="refill-prescription-row full">
+												<label className="refill-prescription-toggle">
+													<input
+														type="checkbox"
+														checked={usePrescriptionRefill}
+														onChange={(e) => setUsePrescriptionRefill(e.target.checked)}
+														disabled={(Number(form.prescriptionRemainingRefills) || 0) <= 0}
+													/>
+													<span className="refill-prescription-label-text">{t("prescription.useForRefill")}</span>
+												</label>
+												<span className="refill-remaining-badge">
+													{t("prescription.remainingRefills")}: {Number(form.prescriptionRemainingRefills) || 0}
+												</span>
+											</div>
+										)}
+									</>
+								) : (
+									<p className="refill-unavailable">
+										{t("refill.saveFirst", "Save medication first to enable refill")}
+									</p>
+								)}
+							</div>
+
+							<div className="full form-category intake-section">
+								<div className="form-category-header">
+									<h4 className="form-category-title">{t("form.blisters.title")}</h4>
+									<button
+										type="button"
+										className="primary"
+										onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+									>
+										+ {t("form.blisters.addIntake")}
+									</button>
+								</div>
+								{form.intakes.map((intake, idx) => (
+									<div key={idx} className="blister-row">
+										<div className="blister-inputs">
+											<label>
+												{t("form.blisters.usage")}
+												<input
+													type="text"
+													inputMode="decimal"
+													pattern="[0-9]*\.?[0-9]*"
+													value={intake.usage}
+													onChange={(e) => setIntakeValue(idx, "usage", e.target.value)}
+												/>
+											</label>
+											<label>
+												{t("form.blisters.everyDays")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={intake.every}
+													onChange={(e) => setIntakeValue(idx, "every", e.target.value)}
+												/>
+											</label>
+											<label>
+												{t("form.blisters.startDate")}
+												<input
+													type="date"
+													value={intake.startDate}
+													onChange={(e) => setIntakeValue(idx, "startDate", e.target.value)}
+												/>
+											</label>
+											<label>
+												{t("form.blisters.startTime")}
+												<input
+													type="time"
+													value={intake.startTime}
+													onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
+												/>
+											</label>
+											{form.takenBy.length === 0 ? null : (
+												<label title={t("form.blisters.takenByTooltip")}>
+													{t("form.blisters.takenByIntake")}
+													<select
+														value={intake.takenBy}
+														onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}
+													>
+														{form.takenBy.map((person) => (
+															<option key={person} value={person}>
+																{person}
+															</option>
+														))}
+													</select>
+												</label>
+											)}
+											<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
+												<span>🔔</span>
+												<label className="toggle-switch small">
+													<input
+														type="checkbox"
+														checked={intake.intakeRemindersEnabled}
+														onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+													/>
+													<span className="toggle-slider"></span>
+												</label>
+											</div>
+										</div>
+										{form.intakes.length > 1 && (
+											<button type="button" className="danger" onClick={() => removeIntake(idx)}>
+												{t("common.remove")}
+											</button>
+										)}
+									</div>
+								))}
+							</div>
+
+							<div className="full form-category image-section">
+								<h4 className="form-category-title">{t("form.medicationImage")}</h4>
+								{(() => {
+									// When editing an existing medication
+									if (editingId) {
+										const currentMed = meds.find((m) => m.id === editingId);
+										if (currentMed?.imageUrl) {
+											return (
+												<div className="image-preview">
+													<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
+													<button type="button" className="danger" onClick={() => deleteMedImage(editingId)}>
+														{t("form.removeImage")}
+													</button>
+												</div>
+											);
+										}
+										return (
+											<input
+												type="file"
+												accept="image/jpeg,image/png,image/webp,image/gif"
+												onChange={(e) => e.target.files?.[0] && uploadMedImage(editingId, e.target.files[0])}
+												disabled={uploadingImage}
+											/>
+										);
+									}
+									// When creating a new medication
+									if (pendingImagePreview) {
+										return (
+											<div className="image-preview">
+												<img src={pendingImagePreview} alt="Preview" />
+												<button
+													type="button"
+													className="danger"
+													onClick={() => {
+														setPendingImage(null);
+														setPendingImagePreview(null);
+													}}
+												>
+													{t("form.removeImage")}
+												</button>
+											</div>
+										);
+									}
+									return (
+										<input
+											type="file"
+											accept="image/jpeg,image/png,image/webp,image/gif"
+											onChange={(e) => {
+												const file = e.target.files?.[0];
+												if (file) {
+													setPendingImage(file);
+													const reader = new FileReader();
+													reader.onload = (ev) => setPendingImagePreview(ev.target?.result as string);
+													reader.readAsDataURL(file);
+												}
+											}}
+										/>
+									);
 								})()}
 							</div>
-						</div>
-					)}
 
-					<label className={`full ${fieldErrors.notes ? "has-error" : ""}`}>
-						{t("form.notes")}
-						<textarea
-							value={form.notes}
-							onChange={(e) => handleValueChange("notes", e.target.value)}
-							placeholder={t("form.placeholders.notes")}
-							rows={2}
-							maxLength={FIELD_LIMITS.notes.max}
-							className="auto-resize"
-							onInput={(e) => {
-								const t = e.target as HTMLTextAreaElement;
-								t.style.height = "auto";
-								t.style.height = `${t.scrollHeight}px`;
-							}}
-						/>
-						{form.notes.length > 0 && (
-							<span className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}>
-								{t("common.validation.tooLong", { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
-							</span>
-						)}
-						{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
-					</label>
-
-					<div className="full blisters">
-						<div className="card-head">
-							<h3>{t("form.blisters.title")}</h3>
-							<div className="blisters-actions">
+							<div className="full align-end gap">
+								<button type="button" className="ghost" onClick={handleResetForm}>
+									{t("common.cancel")}
+								</button>
 								<button
-									type="button"
-									className="primary"
-									onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+									type="submit"
+									disabled={saving || hasValidationErrors || (!formChanged && (formSaved || !!editingId))}
 								>
-									+ {t("form.blisters.addIntake")}
+									{formSaved && !formChanged ? t("common.saved") : t("common.save")}
 								</button>
 							</div>
-						</div>
-						{form.intakes.map((intake, idx) => (
-							<div key={idx} className="blister-row">
-								<div className="blister-inputs">
-									<label>
-										{t("form.blisters.usage")}
-										<input
-											type="number"
-											min="0"
-											step="0.1"
-											value={intake.usage}
-											onChange={(e) => setIntakeValue(idx, "usage", e.target.value)}
-										/>
-									</label>
-									<label>
-										{t("form.blisters.everyDays")}
-										<input
-											type="number"
-											min="1"
-											value={intake.every}
-											onChange={(e) => setIntakeValue(idx, "every", e.target.value)}
-										/>
-									</label>
-									<label>
-										{t("form.blisters.startDate")}
-										<input
-											type="date"
-											value={intake.startDate}
-											onChange={(e) => setIntakeValue(idx, "startDate", e.target.value)}
-										/>
-									</label>
-									<label>
-										{t("form.blisters.startTime")}
-										<input
-											type="time"
-											value={intake.startTime}
-											onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
-										/>
-									</label>
-									{form.takenBy.length === 0 ? null : (
-										<label title={t("form.blisters.takenByTooltip")}>
-											{t("form.blisters.takenByIntake")}
-											<select value={intake.takenBy} onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}>
-												{form.takenBy.map((person) => (
-													<option key={person} value={person}>
-														{person}
-													</option>
-												))}
-											</select>
-										</label>
-									)}
-									<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
-										<span>🔔</span>
-										<label className="toggle-switch small">
-											<input
-												type="checkbox"
-												checked={intake.intakeRemindersEnabled}
-												onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
-											/>
-											<span className="toggle-slider"></span>
-										</label>
-									</div>
-								</div>
-								{form.intakes.length > 1 && (
-									<button type="button" className="danger" onClick={() => removeIntake(idx)}>
-										{t("common.remove")}
-									</button>
-								)}
-							</div>
-						))}
-					</div>
-
-					<div className="full image-upload-section">
-						<label className="setting-label">{t("form.medicationImage")}</label>
-						{(() => {
-							// When editing an existing medication
-							if (editingId) {
-								const currentMed = meds.find((m) => m.id === editingId);
-								if (currentMed?.imageUrl) {
-									return (
-										<div className="image-preview">
-											<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
-											<button type="button" className="danger" onClick={() => deleteMedImage(editingId)}>
-												{t("form.removeImage")}
-											</button>
-										</div>
-									);
-								}
-								return (
-									<input
-										type="file"
-										accept="image/jpeg,image/png,image/webp,image/gif"
-										onChange={(e) => e.target.files?.[0] && uploadMedImage(editingId, e.target.files[0])}
-										disabled={uploadingImage}
-									/>
-								);
-							}
-							// When creating a new medication
-							if (pendingImagePreview) {
-								return (
-									<div className="image-preview">
-										<img src={pendingImagePreview} alt="Preview" />
-										<button
-											type="button"
-											className="danger"
-											onClick={() => {
-												setPendingImage(null);
-												setPendingImagePreview(null);
-											}}
-										>
-											{t("form.removeImage")}
-										</button>
-									</div>
-								);
-							}
-							return (
-								<input
-									type="file"
-									accept="image/jpeg,image/png,image/webp,image/gif"
-									onChange={(e) => {
-										const file = e.target.files?.[0];
-										if (file) {
-											setPendingImage(file);
-											const reader = new FileReader();
-											reader.onload = (ev) => setPendingImagePreview(ev.target?.result as string);
-											reader.readAsDataURL(file);
-										}
-									}}
-								/>
-							);
-						})()}
-					</div>
-
-					<div className="full align-end gap">
-						{editingId && (
-							<button type="button" className="ghost" onClick={handleResetForm}>
-								{t("common.cancel")}
-							</button>
-						)}
-						<button
-							type="submit"
-							disabled={saving || hasValidationErrors || (!formChanged && (formSaved || !!editingId))}
-						>
-							{formSaved && !formChanged ? t("common.saved") : t("common.save")}
-						</button>
-					</div>
-				</form>
-			</article>
+						</form>
+					</article>
+				</>
+			)}
 
 			{/* Mobile Edit Modal */}
 			<MobileEditModal
@@ -861,6 +1096,8 @@ export function MedicationsPage() {
 				onRefillPacksChange={setRefillPacks}
 				refillLoose={refillLoose}
 				onRefillLooseChange={setRefillLoose}
+				usePrescriptionRefill={usePrescriptionRefill}
+				onUsePrescriptionRefillChange={setUsePrescriptionRefill}
 				refillSaving={refillSaving}
 				onSubmitRefill={handleSubmitRefill}
 				meds={meds}

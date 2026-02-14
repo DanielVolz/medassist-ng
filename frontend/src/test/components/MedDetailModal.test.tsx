@@ -144,6 +144,36 @@ describe("MedDetailModal", () => {
 		expect(screen.getByText("Test notes")).toBeInTheDocument();
 	});
 
+	it("shows prescription details section when prescription is enabled", () => {
+		const med: Medication = {
+			...mockMedication,
+			prescriptionEnabled: true,
+			prescriptionAuthorizedRefills: 5,
+			prescriptionRemainingRefills: 2,
+			prescriptionLowRefillThreshold: 1,
+			prescriptionExpiryDate: "2026-12-31",
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
+
+		expect(screen.getByText(/form\.sections\.prescription/i)).toBeInTheDocument();
+		expect(screen.getByText(/prescription\.authorizedRefills/i)).toBeInTheDocument();
+		expect(screen.getByText(/prescription\.remainingRefills/i)).toBeInTheDocument();
+		expect(screen.getByText(/prescription\.lowThreshold/i)).toBeInTheDocument();
+		expect(screen.getByText(/prescription\.expiryDate/i)).toBeInTheDocument();
+	});
+
+	it("does not show prescription details section when prescription is disabled", () => {
+		const med: Medication = {
+			...mockMedication,
+			prescriptionEnabled: false,
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
+
+		expect(screen.queryByText(/form\.sections\.prescription/i)).not.toBeInTheDocument();
+	});
+
 	it("displays schedule information", () => {
 		render(<MedDetailModal {...defaultProps} />);
 
@@ -247,7 +277,7 @@ describe("MedDetailModal with refill modal", () => {
 
 		const submitBtn = document.querySelector(".refill-modal .modal-footer .success") as HTMLButtonElement;
 		fireEvent.click(submitBtn);
-		expect(onSubmitRefill).toHaveBeenCalledWith(mockMedication.id);
+		expect(onSubmitRefill).toHaveBeenCalledWith(mockMedication.id, undefined);
 	});
 
 	it("disables refill submit button when no pills are entered", () => {

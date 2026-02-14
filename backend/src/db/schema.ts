@@ -47,6 +47,11 @@ export const medications = sqliteTable("medications", {
 	expiryDate: text("expiry_date"),
 	notes: text("notes"),
 	intakeRemindersEnabled: integer("intake_reminders_enabled", { mode: "boolean" }).notNull().default(false),
+	prescriptionEnabled: integer("prescription_enabled", { mode: "boolean" }).notNull().default(false),
+	prescriptionAuthorizedRefills: integer("prescription_authorized_refills"),
+	prescriptionRemainingRefills: integer("prescription_remaining_refills"),
+	prescriptionLowRefillThreshold: integer("prescription_low_refill_threshold").notNull().default(1),
+	prescriptionExpiryDate: text("prescription_expiry_date"),
 	dismissedUntil: text("dismissed_until"), // ISO date string (e.g. "2026-01-23") - all past doses until this date are dismissed
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -65,11 +70,15 @@ export const userSettings = sqliteTable("user_settings", {
 	notificationEmail: text("notification_email"),
 	emailStockReminders: integer("email_stock_reminders", { mode: "boolean" }).notNull().default(true),
 	emailIntakeReminders: integer("email_intake_reminders", { mode: "boolean" }).notNull().default(true),
+	emailPrescriptionReminders: integer("email_prescription_reminders", { mode: "boolean" }).notNull().default(true),
 	// Push notifications (shoutrrr/ntfy)
 	shoutrrrEnabled: integer("shoutrrr_enabled", { mode: "boolean" }).notNull().default(false),
 	shoutrrrUrl: text("shoutrrr_url"),
 	shoutrrrStockReminders: integer("shoutrrr_stock_reminders", { mode: "boolean" }).notNull().default(true),
 	shoutrrrIntakeReminders: integer("shoutrrr_intake_reminders", { mode: "boolean" }).notNull().default(true),
+	shoutrrrPrescriptionReminders: integer("shoutrrr_prescription_reminders", { mode: "boolean" })
+		.notNull()
+		.default(true),
 	// Reminder settings
 	reminderDaysBefore: integer("reminder_days_before").notNull().default(7),
 	repeatDailyReminders: integer("repeat_daily_reminders", { mode: "boolean" }).notNull().default(false),
@@ -98,6 +107,10 @@ export const userSettings = sqliteTable("user_settings", {
 	lastStockReminderSent: text("last_stock_reminder_sent"),
 	lastStockReminderChannel: text("last_stock_reminder_channel"),
 	lastStockReminderMedNames: text("last_stock_reminder_med_names"),
+	// Last prescription reminder tracking (separate from stock/intake)
+	lastPrescriptionReminderSent: text("last_prescription_reminder_sent"),
+	lastPrescriptionReminderChannel: text("last_prescription_reminder_channel"),
+	lastPrescriptionReminderMedNames: text("last_prescription_reminder_med_names"),
 	// Timestamps
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -159,5 +172,6 @@ export const refillHistory = sqliteTable("refill_history", {
 		.references(() => users.id, { onDelete: "cascade" }),
 	packsAdded: integer("packs_added").notNull().default(0),
 	loosePillsAdded: integer("loose_pills_added").notNull().default(0),
+	usedPrescription: integer("used_prescription", { mode: "boolean" }).notNull().default(false),
 	refillDate: integer("refill_date", { mode: "timestamp" }).notNull().default(sql`(strftime('%s','now'))`),
 });

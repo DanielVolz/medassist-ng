@@ -2,7 +2,7 @@
 // useSettings Hook - Settings state and operations
 // =============================================================================
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 export interface Settings {
@@ -26,19 +26,24 @@ export interface Settings {
 	hasSmtpPassword: boolean;
 	lastAutoEmailSent: string | null;
 	nextScheduledCheck: string | null;
-	lastNotificationType: "stock" | "intake" | null;
+	lastNotificationType: "stock" | "intake" | "prescription" | null;
 	lastNotificationChannel: "email" | "push" | "both" | null;
 	lastReminderMedName: string | null;
 	lastReminderTakenBy: string | null;
 	lastStockReminderSent: string | null;
 	lastStockReminderChannel: "email" | "push" | "both" | null;
 	lastStockReminderMedNames: string | null;
+	lastPrescriptionReminderSent: string | null;
+	lastPrescriptionReminderChannel: "email" | "push" | "both" | null;
+	lastPrescriptionReminderMedNames: string | null;
 	shoutrrrEnabled: boolean;
 	shoutrrrUrl: string;
 	emailStockReminders: boolean;
 	emailIntakeReminders: boolean;
+	emailPrescriptionReminders: boolean;
 	shoutrrrStockReminders: boolean;
 	shoutrrrIntakeReminders: boolean;
+	shoutrrrPrescriptionReminders: boolean;
 	stockCalculationMode: "automatic" | "manual";
 	shareStockStatus: boolean;
 	expiryWarningDays: number;
@@ -72,12 +77,17 @@ const defaultSettings: Settings = {
 	lastStockReminderSent: null,
 	lastStockReminderChannel: null,
 	lastStockReminderMedNames: null,
+	lastPrescriptionReminderSent: null,
+	lastPrescriptionReminderChannel: null,
+	lastPrescriptionReminderMedNames: null,
 	shoutrrrEnabled: false,
 	shoutrrrUrl: "",
 	emailStockReminders: true,
 	emailIntakeReminders: true,
+	emailPrescriptionReminders: true,
 	shoutrrrStockReminders: true,
 	shoutrrrIntakeReminders: true,
+	shoutrrrPrescriptionReminders: true,
 	stockCalculationMode: "automatic",
 	shareStockStatus: true,
 	expiryWarningDays: 30,
@@ -97,7 +107,7 @@ export interface UseSettingsReturn {
 	testShoutrrrResult: { success: boolean; message: string } | null;
 	setTestShoutrrrResult: React.Dispatch<React.SetStateAction<{ success: boolean; message: string } | null>>;
 	loadSettings: () => void;
-	saveSettings: (e: React.FormEvent) => Promise<void>;
+	saveSettings: (e?: React.FormEvent) => Promise<void>;
 	testEmail: () => Promise<void>;
 	testShoutrrr: () => Promise<void>;
 	hasUnsavedChanges: boolean;
@@ -152,6 +162,11 @@ export function useSettings(): UseSettingsReturn {
 						lastStockReminderSent: data.lastStockReminderSent ?? prev.lastStockReminderSent,
 						lastStockReminderChannel: data.lastStockReminderChannel ?? prev.lastStockReminderChannel,
 						lastStockReminderMedNames: data.lastStockReminderMedNames ?? prev.lastStockReminderMedNames,
+						lastPrescriptionReminderSent: data.lastPrescriptionReminderSent ?? prev.lastPrescriptionReminderSent,
+						lastPrescriptionReminderChannel:
+							data.lastPrescriptionReminderChannel ?? prev.lastPrescriptionReminderChannel,
+						lastPrescriptionReminderMedNames:
+							data.lastPrescriptionReminderMedNames ?? prev.lastPrescriptionReminderMedNames,
 					}));
 					setSavedSettings((prev) => ({
 						...prev,
@@ -163,6 +178,11 @@ export function useSettings(): UseSettingsReturn {
 						lastStockReminderSent: data.lastStockReminderSent ?? prev.lastStockReminderSent,
 						lastStockReminderChannel: data.lastStockReminderChannel ?? prev.lastStockReminderChannel,
 						lastStockReminderMedNames: data.lastStockReminderMedNames ?? prev.lastStockReminderMedNames,
+						lastPrescriptionReminderSent: data.lastPrescriptionReminderSent ?? prev.lastPrescriptionReminderSent,
+						lastPrescriptionReminderChannel:
+							data.lastPrescriptionReminderChannel ?? prev.lastPrescriptionReminderChannel,
+						lastPrescriptionReminderMedNames:
+							data.lastPrescriptionReminderMedNames ?? prev.lastPrescriptionReminderMedNames,
 					}));
 				})
 				.catch(() => {});
@@ -172,54 +192,45 @@ export function useSettings(): UseSettingsReturn {
 		return () => clearInterval(interval);
 	}, []);
 
-	const saveSettings = useCallback(
-		async (e: React.FormEvent) => {
-			e.preventDefault();
-
+	// Internal save function (no event needed)
+	const performSave = useCallback(
+		async (settingsToSave: Settings) => {
 			// Auto-disable email if no recipient is set
-			const effectiveEmailEnabled = settings.emailEnabled && !!settings.notificationEmail?.trim();
+			const effectiveEmailEnabled = settingsToSave.emailEnabled && !!settingsToSave.notificationEmail?.trim();
 			// Auto-disable push if no URL is set
-			const effectiveShoutrrrEnabled = settings.shoutrrrEnabled && !!settings.shoutrrrUrl?.trim();
-
-			// Validate email if email notifications are enabled
-			if (effectiveEmailEnabled && settings.notificationEmail) {
-				const emailRegex = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
-				if (!emailRegex.test(settings.notificationEmail)) {
-					setTestEmailResult({ success: false, message: "Invalid email address" });
-					return;
-				}
-			}
+			const effectiveShoutrrrEnabled = settingsToSave.shoutrrrEnabled && !!settingsToSave.shoutrrrUrl?.trim();
 
 			setSettingsSaving(true);
-			setTestEmailResult(null);
 
 			const payload = {
 				emailEnabled: effectiveEmailEnabled,
-				notificationEmail: settings.notificationEmail,
-				reminderDaysBefore: settings.reminderDaysBefore,
-				repeatDailyReminders: settings.repeatDailyReminders,
-				skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
-				repeatRemindersEnabled: settings.repeatRemindersEnabled,
-				reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes,
-				maxNaggingReminders: settings.maxNaggingReminders ?? 5,
-				lowStockDays: settings.lowStockDays,
-				normalStockDays: settings.normalStockDays,
-				highStockDays: settings.highStockDays,
+				notificationEmail: settingsToSave.notificationEmail,
+				reminderDaysBefore: settingsToSave.reminderDaysBefore,
+				repeatDailyReminders: settingsToSave.repeatDailyReminders,
+				skipRemindersForTakenDoses: settingsToSave.skipRemindersForTakenDoses,
+				repeatRemindersEnabled: settingsToSave.repeatRemindersEnabled,
+				reminderRepeatIntervalMinutes: settingsToSave.reminderRepeatIntervalMinutes,
+				maxNaggingReminders: settingsToSave.maxNaggingReminders ?? 5,
+				lowStockDays: settingsToSave.lowStockDays,
+				normalStockDays: settingsToSave.normalStockDays,
+				highStockDays: settingsToSave.highStockDays,
 				shoutrrrEnabled: effectiveShoutrrrEnabled,
-				shoutrrrUrl: settings.shoutrrrUrl,
-				emailStockReminders: settings.emailStockReminders,
-				emailIntakeReminders: settings.emailIntakeReminders,
-				shoutrrrStockReminders: settings.shoutrrrStockReminders,
-				shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
-				stockCalculationMode: settings.stockCalculationMode,
-				shareStockStatus: settings.shareStockStatus,
+				shoutrrrUrl: settingsToSave.shoutrrrUrl,
+				emailStockReminders: settingsToSave.emailStockReminders,
+				emailIntakeReminders: settingsToSave.emailIntakeReminders,
+				emailPrescriptionReminders: settingsToSave.emailPrescriptionReminders,
+				shoutrrrStockReminders: settingsToSave.shoutrrrStockReminders,
+				shoutrrrIntakeReminders: settingsToSave.shoutrrrIntakeReminders,
+				shoutrrrPrescriptionReminders: settingsToSave.shoutrrrPrescriptionReminders,
+				stockCalculationMode: settingsToSave.stockCalculationMode,
+				shareStockStatus: settingsToSave.shareStockStatus,
 				language: i18n.language,
-				smtpHost: settings.smtpHost,
-				smtpPort: settings.smtpPort,
-				smtpUser: settings.smtpUser,
-				smtpPass: settings.smtpPass || undefined,
-				smtpFrom: settings.smtpFrom,
-				smtpSecure: settings.smtpSecure,
+				smtpHost: settingsToSave.smtpHost,
+				smtpPort: settingsToSave.smtpPort,
+				smtpUser: settingsToSave.smtpUser,
+				smtpPass: settingsToSave.smtpPass || undefined,
+				smtpFrom: settingsToSave.smtpFrom,
+				smtpSecure: settingsToSave.smtpSecure,
 			};
 
 			await fetch("/api/settings", {
@@ -230,7 +241,7 @@ export function useSettings(): UseSettingsReturn {
 			}).catch(() => null);
 
 			const updatedSettings = {
-				...settings,
+				...settingsToSave,
 				emailEnabled: effectiveEmailEnabled,
 				shoutrrrEnabled: effectiveShoutrrrEnabled,
 			};
@@ -239,7 +250,62 @@ export function useSettings(): UseSettingsReturn {
 			setSavedSettings(updatedSettings);
 			setSettingsSaved(true);
 		},
-		[settings, i18n.language]
+		[i18n.language]
+	);
+
+	// Debounced auto-save: fires whenever settings change
+	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const initialLoadDone = useRef(false);
+
+	useEffect(() => {
+		// Skip auto-save during initial load
+		if (!initialLoadDone.current) {
+			return;
+		}
+
+		// Don't save if nothing changed
+		if (JSON.stringify(settings) === JSON.stringify(savedSettings)) {
+			return;
+		}
+
+		// Don't save if thresholds are invalid
+		if (settings.reminderDaysBefore >= settings.lowStockDays || settings.lowStockDays >= settings.highStockDays) {
+			return;
+		}
+
+		if (debounceRef.current) {
+			clearTimeout(debounceRef.current);
+		}
+
+		debounceRef.current = setTimeout(() => {
+			performSave(settings);
+		}, 600);
+
+		return () => {
+			if (debounceRef.current) {
+				clearTimeout(debounceRef.current);
+			}
+		};
+	}, [settings, savedSettings, performSave]);
+
+	// Mark initial load as done after first settings load completes
+	useEffect(() => {
+		if (!settingsLoading && !initialLoadDone.current) {
+			// Use a small delay to ensure savedSettings is set
+			const t = setTimeout(() => {
+				initialLoadDone.current = true;
+			}, 100);
+			return () => clearTimeout(t);
+		}
+	}, [settingsLoading]);
+
+	// Legacy saveSettings wrapper (kept for compatibility)
+	const saveSettings = useCallback(
+		async (e?: React.FormEvent) => {
+			if (e) e.preventDefault();
+			await performSave(settings);
+		},
+		[settings, performSave]
 	);
 
 	const testEmail = useCallback(async () => {

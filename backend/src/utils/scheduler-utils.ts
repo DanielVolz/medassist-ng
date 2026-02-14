@@ -485,7 +485,7 @@ export type ReminderState = {
 	lastAutoEmailDate: string | null;
 	notifiedMedications: string[];
 	nextScheduledCheck: string | null;
-	lastNotificationType: "stock" | "intake" | null;
+	lastNotificationType: "stock" | "intake" | "prescription" | null;
 	lastNotificationChannel: "email" | "push" | "both" | null;
 };
 

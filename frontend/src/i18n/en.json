@@ -88,6 +88,15 @@
       "criticalMeds_other": "{{count}} medications critical",
       "lowMeds": "{{count}} medication low",
       "lowMeds_other": "{{count}} medications low",
+      "prescriptionNeeds": "Prescription low",
+      "prescriptionLowMeds": "{{count}} prescription low",
+      "prescriptionLowMeds_other": "{{count}} prescriptions low",
+      "prescriptionCriticalMeds": "{{count}} prescription empty",
+      "prescriptionCriticalMeds_other": "{{count}} prescriptions empty",
+      "needsPrescriptionRefill": "Needs prescription refill",
+      "usedBy": "Used by",
+      "refillsLeft": "{{count}} refill left",
+      "refillsLeft_other": "{{count}} refills left",
       "daysLeft": "{{days}} day left",
       "daysLeft_other": "{{days}} days left",
       "needsRefill": "Needs refill"
@@ -133,6 +142,11 @@
     "editEntry": "Edit medication",
     "newEntry": "New medication",
     "badge": "Packs + loose pills",
+    "sections": {
+      "general": "General",
+      "stock": "Stock & Dose",
+      "prescription": "Prescription"
+    },
     "commercialName": "Commercial Name",
     "genericName": "Generic Name",
     "takenBy": "Taken by",
@@ -206,6 +220,7 @@
       "push": "Push",
       "stockReminders": "Stock Reminders",
       "intakeReminders": "Intake Reminders",
+      "prescriptionReminders": "Prescription Reminders",
       "enableHint": "Enable at least one channel below to receive notifications.",
       "skipTakenDoses": "Skip reminders for taken doses",
       "skipTakenDosesTooltip": "Don't send intake reminders for doses that have already been marked as taken today",
@@ -228,7 +243,7 @@
     },
     "schedule": {
       "title": "Reminder Schedule",
-      "stockCheck": "Stock check",
+      "stockCheck": "Stock & prescription check",
       "dailyAt6": "Daily at 6:00 AM",
       "intakeCheck": "Intake check",
       "15minBefore": "15 min before scheduled time",
@@ -236,6 +251,7 @@
       "lastSent": "Last notification sent",
       "lastStockSent": "Last stock reminder",
       "lastIntakeSent": "Last intake reminder",
+      "lastPrescriptionSent": "Last prescription reminder",
       "envHint": "These values can be configured via REMINDER_HOUR and REMINDER_MINUTES_BEFORE in .env"
     },
     "stock": {
@@ -258,7 +274,8 @@
     },
     "stockReminder": {
       "title": "Stock Reminder",
-      "description": "Sends notification when medication stock reaches",
+      "description": "Enable stock reminders",
+      "infoTooltip": "Notifications include all medications with Low or Critical stock status. Low: stock is running low. Critical: stock is critically low — reorder soon.",
       "repeatDaily": "Repeat daily",
       "repeatTooltip": "When enabled, sends reminders every day while stock is critical. Otherwise, only notifies once per medication until restocked."
     },
@@ -364,6 +381,7 @@
     "sending": "Sending...",
     "sent": "Sent!",
     "sendFailed": "Failed to send",
+    "saveFailed": "Failed to save",
     "networkError": "Network error",
     "saving": "Saving...",
     "unsavedChanges": {
@@ -468,6 +486,7 @@
     "downloadFilename": "medassist-export"
   },
   "refill": {
+    "saveFirst": "Save medication first to enable refill",
     "title": "Refill",
     "packs": "Packs to add",
     "pillsToAdd": "Pills to add",
@@ -482,7 +501,16 @@
     "packsAdded_other": "{{count}} packs",
     "pillsAdded": "{{count}} pill",
     "pillsAdded_other": "{{count}} pills",
-    "button": "Refill"
+    "button": "Refill",
+    "viaPrescription": "Prescription"
+  },
+  "prescription": {
+    "enabled": "Track prescription",
+    "authorizedRefills": "Authorized refills",
+    "remainingRefills": "Remaining refills",
+    "lowThreshold": "Low-refill reminder threshold",
+    "expiryDate": "Prescription expiry",
+    "useForRefill": "Use prescription refill"
   },
   "editStock": {
     "title": "Correct Stock",

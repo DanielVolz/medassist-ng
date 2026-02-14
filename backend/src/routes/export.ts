@@ -52,6 +52,11 @@ const medicationExportSchema = z.object({
 	expiryDate: z.string().nullable().optional(),
 	notes: z.string().nullable().optional(),
 	intakeRemindersEnabled: z.boolean().default(false),
+	prescriptionEnabled: z.boolean().default(false),
+	prescriptionAuthorizedRefills: z.number().int().min(0).nullable().optional(),
+	prescriptionRemainingRefills: z.number().int().min(0).nullable().optional(),
+	prescriptionLowRefillThreshold: z.number().int().min(0).default(1),
+	prescriptionExpiryDate: z.string().nullable().optional(),
 	image: z.string().nullable().optional(), // base64 data URL or null
 	lastStockCorrectionAt: z.string().nullable().optional(), // ISO datetime of last stock correction
 });
@@ -80,11 +85,13 @@ const settingsExportSchema = z
 		notificationEmail: z.string().nullable().optional(),
 		emailStockReminders: z.boolean().default(true),
 		emailIntakeReminders: z.boolean().default(true),
+		emailPrescriptionReminders: z.boolean().default(true),
 		// Push notifications
 		shoutrrrEnabled: z.boolean().optional(),
 		shoutrrrUrl: z.string().nullable().optional(),
 		shoutrrrStockReminders: z.boolean().default(true),
 		shoutrrrIntakeReminders: z.boolean().default(true),
+		shoutrrrPrescriptionReminders: z.boolean().default(true),
 		// Reminder settings
 		reminderDaysBefore: z.number().int().default(7),
 		repeatDailyReminders: z.boolean().default(false),
@@ -285,6 +292,11 @@ export async function exportRoutes(app: FastifyInstance) {
 				expiryDate: med.expiryDate,
 				notes: med.notes,
 				intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
+				prescriptionEnabled: med.prescriptionEnabled ?? false,
+				prescriptionAuthorizedRefills: med.prescriptionAuthorizedRefills ?? null,
+				prescriptionRemainingRefills: med.prescriptionRemainingRefills ?? null,
+				prescriptionLowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
+				prescriptionExpiryDate: med.prescriptionExpiryDate ?? null,
 				image: includeImages ? imageToBase64(med.imageUrl) : null,
 				lastStockCorrectionAt: lastStockCorrectionAtIso,
 			};
@@ -346,11 +358,13 @@ export async function exportRoutes(app: FastifyInstance) {
 					notificationEmail: settings.notificationEmail,
 					emailStockReminders: settings.emailStockReminders,
 					emailIntakeReminders: settings.emailIntakeReminders,
+					emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
 					// Only include sensitive data if requested
 					shoutrrrEnabled: includeSensitive ? settings.shoutrrrEnabled : undefined,
 					shoutrrrUrl: includeSensitive ? settings.shoutrrrUrl : undefined,
 					shoutrrrStockReminders: settings.shoutrrrStockReminders,
 					shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+					shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
 					reminderDaysBefore: settings.reminderDaysBefore,
 					repeatDailyReminders: settings.repeatDailyReminders,
 					skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
@@ -508,6 +522,11 @@ export async function exportRoutes(app: FastifyInstance) {
 						expiryDate: med.expiryDate || null,
 						notes: med.notes || null,
 						intakeRemindersEnabled,
+						prescriptionEnabled: med.prescriptionEnabled ?? false,
+						prescriptionAuthorizedRefills: med.prescriptionEnabled ? (med.prescriptionAuthorizedRefills ?? null) : null,
+						prescriptionRemainingRefills: med.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? null) : null,
+						prescriptionLowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
+						prescriptionExpiryDate: med.prescriptionExpiryDate || null,
 						imageUrl: null, // Will be set after image is saved
 					})
 					.returning();
@@ -551,10 +570,12 @@ export async function exportRoutes(app: FastifyInstance) {
 					notificationEmail: importData.settings.notificationEmail || null,
 					emailStockReminders: importData.settings.emailStockReminders ?? true,
 					emailIntakeReminders: importData.settings.emailIntakeReminders ?? true,
+					emailPrescriptionReminders: importData.settings.emailPrescriptionReminders ?? true,
 					shoutrrrEnabled: importData.settings.shoutrrrEnabled ?? false,
 					shoutrrrUrl: importData.settings.shoutrrrUrl || null,
 					shoutrrrStockReminders: importData.settings.shoutrrrStockReminders ?? true,
 					shoutrrrIntakeReminders: importData.settings.shoutrrrIntakeReminders ?? true,
+					shoutrrrPrescriptionReminders: importData.settings.shoutrrrPrescriptionReminders ?? true,
 					reminderDaysBefore: importData.settings.reminderDaysBefore ?? 7,
 					repeatDailyReminders: importData.settings.repeatDailyReminders ?? false,
 					skipRemindersForTakenDoses: importData.settings.skipRemindersForTakenDoses ?? false,

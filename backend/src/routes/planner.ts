@@ -61,6 +61,19 @@ type ReminderEmailBody = {
 	language?: Language; // Optional: passed from frontend for unauthenticated requests
 };
 
+type PrescriptionReminderItem = {
+	name: string;
+	remainingRefills: number;
+	threshold: number;
+	expiryDate?: string | null;
+};
+
+type PrescriptionReminderBody = {
+	email: string;
+	prescriptionLow: PrescriptionReminderItem[];
+	language?: Language;
+};
+
 export async function plannerRoutes(app: FastifyInstance) {
 	// Add auth hook for all planner routes
 	app.addHook("preHandler", requireAuth);
@@ -344,7 +357,7 @@ ${getFooterPlain(language)}`;
 		if (lowStockMeds.length > 0) {
 			titleParts.push(`⚠️ ${lowStockMeds.length} ${tr.push.lowStock}`);
 		}
-		const notificationTitle = `MedAssist: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
+		const notificationTitle = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
 
 		// Build description text
 		let descriptionText: string;
@@ -485,8 +498,7 @@ ${getFooterPlain(language)}`;
                 </table>
               </div>
 
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-              <p style="color: #9ca3af; font-size: 11px; margin: 0;">${getFooterHtml(language)}</p>
+							<p style="color: #9ca3af; font-size: 11px; margin: 16px 0 0 0;">${getFooterHtml(language)}</p>
             </div>
           </div>
         `;
@@ -507,7 +519,7 @@ ${getFooterPlain(language)}`;
 					await transporter.sendMail({
 						from: smtpFrom,
 						to: email,
-						subject: `MedAssist-ng - ${subjectText}`,
+						subject: `MedAssist-ng: ${subjectText}`,
 						text: plainText,
 						html,
 					});
@@ -544,7 +556,7 @@ ${getFooterPlain(language)}`;
 
 			// Also update user settings in database so frontend can display the info
 			const firstMed = lowStock[0];
-			const medNames = lowStock.length > 1 ? `${firstMed.name} (+${lowStock.length - 1})` : firstMed?.name;
+			const medNames = lowStock.map((m: { name: string }) => m.name).join(", ");
 			await updateUserReminderSentTime(userId, "stock", channel, medNames);
 		}
 
@@ -563,5 +575,213 @@ ${getFooterPlain(language)}`;
 		} else {
 			return reply.status(400).send({ error: "No notification channels configured" });
 		}
+	});
+
+	// Manual prescription reminder (supports email and push)
+	app.post<{ Body: PrescriptionReminderBody }>("/reminder/send-prescription", async (request, reply) => {
+		const { email, prescriptionLow } = request.body;
+
+		if (!prescriptionLow || prescriptionLow.length === 0) {
+			return reply.status(400).send({ error: "Missing prescription reminder data" });
+		}
+
+		const userId = await getUserId(request);
+		const userSettings = await loadUserSettings(userId);
+		const language = (userSettings.language as Language) || "en";
+		const tr = getTranslations(language);
+
+		const emptyRx = prescriptionLow.filter((item) => item.remainingRefills <= 0);
+		const lowRx = prescriptionLow.filter((item) => item.remainingRefills > 0);
+
+		const lines = prescriptionLow.map((item) => {
+			const expirySuffix = item.expiryDate ? t(tr.prescriptionReminder.expiresSuffix, { date: item.expiryDate }) : "";
+			if (item.remainingRefills <= 0) {
+				return `- ${t(tr.prescriptionReminder.lineEmpty, {
+					name: item.name,
+					expirySuffix,
+				})}`;
+			}
+			return `- ${t(tr.prescriptionReminder.line, {
+				name: item.name,
+				refills: item.remainingRefills,
+				expirySuffix,
+			})}`;
+		});
+
+		const medNames = prescriptionLow.map((m: { name: string }) => m.name).join(", ");
+
+		const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
+
+		if (userSettings.emailEnabled && userSettings.emailPrescriptionReminders && email) {
+			const smtpHost = process.env.SMTP_HOST;
+			const smtpUser = process.env.SMTP_USER;
+			const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
+			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
+			const smtpSecure = process.env.SMTP_SECURE === "true";
+			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+
+			if (smtpHost && smtpUser) {
+				try {
+					const transporter = nodemailer.createTransport({
+						host: smtpHost,
+						port: smtpPort,
+						secure: smtpSecure,
+						auth: {
+							user: smtpUser,
+							pass: smtpPass ?? "",
+						},
+					});
+
+					const subject =
+						prescriptionLow.length === 1
+							? tr.prescriptionReminder.subjectSingle
+							: t(tr.prescriptionReminder.subjectMultiple, { count: prescriptionLow.length });
+
+					const bodyText =
+						emptyRx.length > 0 ? tr.prescriptionReminder.descriptionEmpty : tr.prescriptionReminder.descriptionLow;
+					const alertText =
+						emptyRx.length > 0
+							? emptyRx.length === 1
+								? tr.prescriptionReminder.alertEmptySingle
+								: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length })
+							: lowRx.length === 1
+								? tr.prescriptionReminder.alertLowSingle
+								: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
+
+					const tableRows = prescriptionLow
+						.map((item) => {
+							const isEmpty = item.remainingRefills <= 0;
+							const safeName = escapeHtml(item.name);
+							const safeRefills = Number(item.remainingRefills) || 0;
+							const safeThreshold = Number(item.threshold) || 0;
+							const safeExpiry = item.expiryDate ? escapeHtml(String(item.expiryDate)) : "-";
+							const rowBg = isEmpty ? "#fef2f2" : "white";
+							return `
+					<tr style="background: ${rowBg};">
+						<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${isEmpty ? "🚨" : "⚠️"} ${safeName}</td>
+						<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${safeRefills}</strong></td>
+						<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeThreshold}</td>
+						<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeExpiry}</td>
+					</tr>`;
+						})
+						.join("");
+
+					const emailTitle = emptyRx.length > 0 ? tr.prescriptionReminder.titleEmpty : tr.prescriptionReminder.title;
+					const text = `${emailTitle}\n\n${bodyText}\n\n${lines.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+					const html = `
+					<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
+						<div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+							<h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${emailTitle}</h2>
+							<p style="color: #6b7280; margin: 0 0 16px; font-size: 13px;">${bodyText}</p>
+
+							<div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; ${emptyRx.length > 0 ? "background: #fef2f2; border: 1px solid #dc2626;" : "background: #fffbeb; border: 1px solid #f59e0b;"}">
+								<p style="margin: 0; ${emptyRx.length > 0 ? "color: #dc2626; font-weight: 600;" : "color: #b45309; font-weight: 500;"} font-size: 13px;">
+									${alertText}
+								</p>
+							</div>
+
+							<div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+								<table style="width: 100%; border-collapse: collapse; background: white; min-width: 460px;">
+									<thead>
+										<tr style="background: #f3f4f6;">
+											<th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.prescriptionReminder.tableHeaders.medication}</th>
+											<th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.prescriptionReminder.tableHeaders.refillsLeft}</th>
+											<th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.prescriptionReminder.tableHeaders.reminderThreshold}</th>
+											<th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.prescriptionReminder.tableHeaders.prescriptionExpires}</th>
+										</tr>
+									</thead>
+									<tbody>
+										${tableRows}
+									</tbody>
+								</table>
+							</div>
+
+							<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
+							<p style="color: #9ca3af; font-size: 11px; margin: 0;">${getFooterHtml(language)}</p>
+						</div>
+					</div>
+				`;
+
+					await transporter.sendMail({
+						from: smtpFrom,
+						to: email,
+						subject,
+						text,
+						html,
+					});
+
+					results.email = true;
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : "Unknown error";
+					results.errors.push(`Email: ${errorMessage}`);
+				}
+			}
+		}
+
+		if (userSettings.shoutrrrEnabled && userSettings.shoutrrrPrescriptionReminders && userSettings.shoutrrrUrl) {
+			const titleParts: string[] = [];
+			if (emptyRx.length > 0)
+				titleParts.push(
+					`🚨 ${emptyRx.length} ${emptyRx.length === 1 ? tr.prescriptionReminder.pushEmptySingle : tr.prescriptionReminder.pushEmpty}`
+				);
+			if (lowRx.length > 0)
+				titleParts.push(
+					`🚨 ${lowRx.length} ${lowRx.length === 1 ? tr.prescriptionReminder.pushLowSingle : tr.prescriptionReminder.pushLow}`
+				);
+			const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.prescriptionReminder.pushRenewNow}`;
+
+			const messageParts: string[] = [];
+			if (emptyRx.length > 0) {
+				messageParts.push(`🚨 ${tr.prescriptionReminder.pushEmptySection}:`);
+				for (const m of emptyRx) {
+					messageParts.push(`  • ${m.name}`);
+				}
+			}
+			if (lowRx.length > 0) {
+				if (emptyRx.length > 0) messageParts.push("");
+				messageParts.push(`🚨 ${tr.prescriptionReminder.pushLowSection}:`);
+				for (const m of lowRx) {
+					messageParts.push(
+						`  • ${m.name}: ${t(tr.prescriptionReminder.pushRefillsLeft, { count: m.remainingRefills })}`
+					);
+				}
+			}
+			const message = messageParts.join("\n") + `\n\n---\n${getFooterPlain(language)}`;
+
+			try {
+				const pushResult = await sendShoutrrrNotification(userSettings.shoutrrrUrl, title, message);
+				if (pushResult.success) {
+					results.push = true;
+				} else {
+					results.errors.push(`Push: ${pushResult.error}`);
+				}
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : "Unknown error";
+				results.errors.push(`Push: ${errorMessage}`);
+			}
+		}
+
+		if (results.email || results.push) {
+			const channel = results.email && results.push ? "both" : results.email ? "email" : "push";
+			updateReminderSentTime("prescription", channel);
+			await updateUserReminderSentTime(userId, "prescription", channel, medNames);
+		}
+
+		const sentChannels: string[] = [];
+		if (results.email) sentChannels.push("email");
+		if (results.push) sentChannels.push("push");
+
+		if (sentChannels.length > 0) {
+			return reply.send({
+				success: true,
+				message: `Prescription reminder sent via ${sentChannels.join(" and ")}`,
+			});
+		}
+
+		if (results.errors.length > 0) {
+			return reply.status(500).send({ error: results.errors.join("; ") });
+		}
+
+		return reply.status(400).send({ error: "No notification channels configured" });
 	});
 }

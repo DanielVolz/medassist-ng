@@ -48,12 +48,39 @@ const medicationSchema = z
 		doseUnit: doseUnitSchema,
 		expiryDate: z.string().nullable().optional(),
 		notes: z.string().max(2000).nullable().optional(),
+		prescriptionEnabled: z.boolean().default(false),
+		prescriptionAuthorizedRefills: z.number().int().min(0).nullable().optional(),
+		prescriptionRemainingRefills: z.number().int().min(0).nullable().optional(),
+		prescriptionLowRefillThreshold: z.number().int().min(0).default(1),
+		prescriptionExpiryDate: z.string().nullable().optional(),
 		intakeRemindersEnabled: z.boolean().default(false), // Medication-level (deprecated, kept for backward compat)
 		// Accept either new intakes format or legacy blisters format
 		intakes: z.array(intakeSchema).min(1).max(12).optional(),
 		blisters: z.array(blisterSchema).min(1).max(12).optional(), // Legacy format
 	})
-	.refine((data) => data.intakes || data.blisters, { message: "Either 'intakes' or 'blisters' must be provided" });
+	.refine((data) => data.intakes || data.blisters, { message: "Either 'intakes' or 'blisters' must be provided" })
+	.refine(
+		(data) => {
+			if (!data.prescriptionEnabled) return true;
+			if (data.prescriptionAuthorizedRefills == null || data.prescriptionRemainingRefills == null) return false;
+			return data.prescriptionRemainingRefills <= data.prescriptionAuthorizedRefills;
+		},
+		{
+			message: "When prescription is enabled, remaining refills must be <= authorized refills",
+			path: ["prescriptionRemainingRefills"],
+		}
+	)
+	.refine(
+		(data) => {
+			if (!data.prescriptionEnabled) return true;
+			if (data.prescriptionAuthorizedRefills == null) return false;
+			return data.prescriptionLowRefillThreshold <= data.prescriptionAuthorizedRefills;
+		},
+		{
+			message: "When prescription is enabled, low refill threshold must be <= authorized refills",
+			path: ["prescriptionLowRefillThreshold"],
+		}
+	);
 
 export async function medicationRoutes(app: FastifyInstance) {
 	// All medication routes require auth
@@ -109,6 +136,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 				expiryDate: row.expiryDate,
 				notes: row.notes,
 				intakeRemindersEnabled: row.intakeRemindersEnabled ?? false,
+				prescriptionEnabled: row.prescriptionEnabled ?? false,
+				prescriptionAuthorizedRefills: row.prescriptionAuthorizedRefills ?? null,
+				prescriptionRemainingRefills: row.prescriptionRemainingRefills ?? null,
+				prescriptionLowRefillThreshold: row.prescriptionLowRefillThreshold ?? 1,
+				prescriptionExpiryDate: row.prescriptionExpiryDate ?? null,
 				dismissedUntil: row.dismissedUntil ?? null,
 				updatedAt: row.updatedAt,
 			};
@@ -134,6 +166,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 			doseUnit,
 			expiryDate,
 			notes,
+			prescriptionEnabled,
+			prescriptionAuthorizedRefills,
+			prescriptionRemainingRefills,
+			prescriptionLowRefillThreshold,
+			prescriptionExpiryDate,
 			intakeRemindersEnabled,
 			intakes: inputIntakes,
 			blisters: inputBlisters,
@@ -187,6 +224,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 				doseUnit: doseUnit ?? "mg",
 				expiryDate: expiryDate || null,
 				notes: notes || null,
+				prescriptionEnabled: prescriptionEnabled ?? false,
+				prescriptionAuthorizedRefills: prescriptionEnabled ? (prescriptionAuthorizedRefills ?? null) : null,
+				prescriptionRemainingRefills: prescriptionEnabled ? (prescriptionRemainingRefills ?? null) : null,
+				prescriptionLowRefillThreshold: prescriptionLowRefillThreshold ?? 1,
+				prescriptionExpiryDate: prescriptionExpiryDate || null,
 				intakeRemindersEnabled: intakeRemindersEnabled ?? false,
 				intakesJson,
 				usageJson,
@@ -216,6 +258,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 			expiryDate: inserted.expiryDate,
 			notes: inserted.notes,
 			intakeRemindersEnabled: inserted.intakeRemindersEnabled,
+			prescriptionEnabled: inserted.prescriptionEnabled ?? false,
+			prescriptionAuthorizedRefills: inserted.prescriptionAuthorizedRefills ?? null,
+			prescriptionRemainingRefills: inserted.prescriptionRemainingRefills ?? null,
+			prescriptionLowRefillThreshold: inserted.prescriptionLowRefillThreshold ?? 1,
+			prescriptionExpiryDate: inserted.prescriptionExpiryDate ?? null,
 			updatedAt: inserted.updatedAt,
 		};
 	});
@@ -249,6 +296,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 			doseUnit,
 			expiryDate,
 			notes,
+			prescriptionEnabled,
+			prescriptionAuthorizedRefills,
+			prescriptionRemainingRefills,
+			prescriptionLowRefillThreshold,
+			prescriptionExpiryDate,
 			intakeRemindersEnabled,
 			intakes: inputIntakes,
 			blisters: inputBlisters,
@@ -312,6 +364,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 				doseUnit: doseUnit ?? "mg",
 				expiryDate: expiryDate || null,
 				notes: notes || null,
+				prescriptionEnabled: prescriptionEnabled ?? false,
+				prescriptionAuthorizedRefills: prescriptionEnabled ? (prescriptionAuthorizedRefills ?? null) : null,
+				prescriptionRemainingRefills: prescriptionEnabled ? (prescriptionRemainingRefills ?? null) : null,
+				prescriptionLowRefillThreshold: prescriptionLowRefillThreshold ?? 1,
+				prescriptionExpiryDate: prescriptionExpiryDate || null,
 				intakeRemindersEnabled: intakeRemindersEnabled ?? false,
 				intakesJson,
 				usageJson,
@@ -465,6 +522,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 			expiryDate: result[0].expiryDate,
 			notes: result[0].notes,
 			intakeRemindersEnabled: result[0].intakeRemindersEnabled,
+			prescriptionEnabled: result[0].prescriptionEnabled ?? false,
+			prescriptionAuthorizedRefills: result[0].prescriptionAuthorizedRefills ?? null,
+			prescriptionRemainingRefills: result[0].prescriptionRemainingRefills ?? null,
+			prescriptionLowRefillThreshold: result[0].prescriptionLowRefillThreshold ?? 1,
+			prescriptionExpiryDate: result[0].prescriptionExpiryDate ?? null,
 			updatedAt: result[0].updatedAt,
 		};
 	});

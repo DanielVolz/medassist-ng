@@ -15,10 +15,12 @@ export type UserSettings = {
 	notificationEmail: string | null;
 	emailStockReminders: boolean;
 	emailIntakeReminders: boolean;
+	emailPrescriptionReminders: boolean;
 	shoutrrrEnabled: boolean;
 	shoutrrrUrl: string | null;
 	shoutrrrStockReminders: boolean;
 	shoutrrrIntakeReminders: boolean;
+	shoutrrrPrescriptionReminders: boolean;
 	reminderDaysBefore: number;
 	repeatDailyReminders: boolean;
 	skipRemindersForTakenDoses: boolean;
@@ -39,6 +41,9 @@ export type UserSettings = {
 	lastStockReminderSent: string | null;
 	lastStockReminderChannel: string | null;
 	lastStockReminderMedNames: string | null;
+	lastPrescriptionReminderSent: string | null;
+	lastPrescriptionReminderChannel: string | null;
+	lastPrescriptionReminderMedNames: string | null;
 };
 
 type SettingsBody = {
@@ -53,8 +58,10 @@ type SettingsBody = {
 	shoutrrrUrl: string;
 	emailStockReminders: boolean;
 	emailIntakeReminders: boolean;
+	emailPrescriptionReminders: boolean;
 	shoutrrrStockReminders: boolean;
 	shoutrrrIntakeReminders: boolean;
+	shoutrrrPrescriptionReminders: boolean;
 	skipRemindersForTakenDoses: boolean;
 	repeatRemindersEnabled: boolean;
 	reminderRepeatIntervalMinutes: number;
@@ -94,10 +101,12 @@ function getDefaultSettings() {
 		notificationEmail: process.env.DEFAULT_NOTIFICATION_EMAIL || null,
 		emailStockReminders: envBool("DEFAULT_EMAIL_STOCK_REMINDERS", true),
 		emailIntakeReminders: envBool("DEFAULT_EMAIL_INTAKE_REMINDERS", true),
+		emailPrescriptionReminders: envBool("DEFAULT_EMAIL_PRESCRIPTION_REMINDERS", true),
 		shoutrrrEnabled: envBool("DEFAULT_SHOUTRRR_ENABLED", false),
 		shoutrrrUrl: process.env.DEFAULT_SHOUTRRR_URL || null,
 		shoutrrrStockReminders: envBool("DEFAULT_SHOUTRRR_STOCK_REMINDERS", true),
 		shoutrrrIntakeReminders: envBool("DEFAULT_SHOUTRRR_INTAKE_REMINDERS", true),
+		shoutrrrPrescriptionReminders: envBool("DEFAULT_SHOUTRRR_PRESCRIPTION_REMINDERS", true),
 		reminderDaysBefore: envInt("REMINDER_DAYS_BEFORE", 7),
 		repeatDailyReminders: envBool("DEFAULT_REPEAT_DAILY_REMINDERS", false),
 		skipRemindersForTakenDoses: envBool("DEFAULT_SKIP_REMINDERS_FOR_TAKEN_DOSES", false),
@@ -118,6 +127,9 @@ function getDefaultSettings() {
 		lastStockReminderSent: null,
 		lastStockReminderChannel: null,
 		lastStockReminderMedNames: null,
+		lastPrescriptionReminderSent: null,
+		lastPrescriptionReminderChannel: null,
+		lastPrescriptionReminderMedNames: null,
 	};
 }
 
@@ -148,10 +160,12 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
 		notificationEmail: settings.notificationEmail,
 		emailStockReminders: settings.emailStockReminders,
 		emailIntakeReminders: settings.emailIntakeReminders,
+		emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
 		shoutrrrEnabled: settings.shoutrrrEnabled,
 		shoutrrrUrl: settings.shoutrrrUrl,
 		shoutrrrStockReminders: settings.shoutrrrStockReminders,
 		shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+		shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
 		reminderDaysBefore: settings.reminderDaysBefore,
 		repeatDailyReminders: settings.repeatDailyReminders,
 		skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
@@ -172,6 +186,9 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
 		lastStockReminderSent: settings.lastStockReminderSent ?? null,
 		lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
 		lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
+		lastPrescriptionReminderSent: settings.lastPrescriptionReminderSent ?? null,
+		lastPrescriptionReminderChannel: settings.lastPrescriptionReminderChannel ?? null,
+		lastPrescriptionReminderMedNames: settings.lastPrescriptionReminderMedNames ?? null,
 	};
 }
 
@@ -184,10 +201,12 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
 		notificationEmail: settings.notificationEmail,
 		emailStockReminders: settings.emailStockReminders,
 		emailIntakeReminders: settings.emailIntakeReminders,
+		emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
 		shoutrrrEnabled: settings.shoutrrrEnabled,
 		shoutrrrUrl: settings.shoutrrrUrl,
 		shoutrrrStockReminders: settings.shoutrrrStockReminders,
 		shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+		shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
 		reminderDaysBefore: settings.reminderDaysBefore,
 		repeatDailyReminders: settings.repeatDailyReminders,
 		skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
@@ -208,6 +227,9 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
 		lastStockReminderSent: settings.lastStockReminderSent ?? null,
 		lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
 		lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
+		lastPrescriptionReminderSent: settings.lastPrescriptionReminderSent ?? null,
+		lastPrescriptionReminderChannel: settings.lastPrescriptionReminderChannel ?? null,
+		lastPrescriptionReminderMedNames: settings.lastPrescriptionReminderMedNames ?? null,
 	}));
 }
 
@@ -250,8 +272,10 @@ export async function settingsRoutes(app: FastifyInstance) {
 			shoutrrrUrl: settings.shoutrrrUrl ?? "",
 			emailStockReminders: settings.emailStockReminders,
 			emailIntakeReminders: settings.emailIntakeReminders,
+			emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
 			shoutrrrStockReminders: settings.shoutrrrStockReminders,
 			shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+			shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
 			skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
 			repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
 			reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
@@ -276,6 +300,10 @@ export async function settingsRoutes(app: FastifyInstance) {
 			lastStockReminderSent: settings.lastStockReminderSent ?? null,
 			lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
 			lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
+			// Prescription reminder tracking (separate from stock/intake)
+			lastPrescriptionReminderSent: settings.lastPrescriptionReminderSent ?? null,
+			lastPrescriptionReminderChannel: settings.lastPrescriptionReminderChannel ?? null,
+			lastPrescriptionReminderMedNames: settings.lastPrescriptionReminderMedNames ?? null,
 			// Server settings (from .env, read-only)
 			expiryWarningDays: parseInt(process.env.EXPIRY_WARNING_DAYS ?? "30", 10),
 		});
@@ -303,10 +331,12 @@ export async function settingsRoutes(app: FastifyInstance) {
 			notificationEmail: body.notificationEmail || null,
 			emailStockReminders: body.emailStockReminders ?? true,
 			emailIntakeReminders: body.emailIntakeReminders ?? true,
+			emailPrescriptionReminders: body.emailPrescriptionReminders ?? true,
 			shoutrrrEnabled: body.shoutrrrEnabled ?? false,
 			shoutrrrUrl: body.shoutrrrUrl || null,
 			shoutrrrStockReminders: body.shoutrrrStockReminders ?? true,
 			shoutrrrIntakeReminders: body.shoutrrrIntakeReminders ?? true,
+			shoutrrrPrescriptionReminders: body.shoutrrrPrescriptionReminders ?? true,
 			reminderDaysBefore: body.reminderDaysBefore,
 			repeatDailyReminders,
 			skipRemindersForTakenDoses: body.skipRemindersForTakenDoses ?? false,
@@ -328,6 +358,30 @@ export async function settingsRoutes(app: FastifyInstance) {
 			await db.insert(userSettings).values({
 				userId: userId,
 				...settingsData,
+			});
+		}
+
+		return reply.send({ success: true });
+	});
+
+	// Update only the language setting (lightweight, called on dropdown change)
+	app.put<{ Body: { language: string } }>("/settings/language", async (request, reply) => {
+		const userId = await getUserId(request, reply);
+		const { language } = request.body;
+
+		if (!language || !["en", "de"].includes(language)) {
+			return reply.status(400).send({ error: "Invalid language" });
+		}
+
+		const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+
+		if (existingSettings.length > 0) {
+			await db.update(userSettings).set({ language, updatedAt: new Date() }).where(eq(userSettings.userId, userId));
+		} else {
+			await db.insert(userSettings).values({
+				userId,
+				...getDefaultSettings(),
+				language,
 			});
 		}
 
@@ -533,7 +587,10 @@ export async function sendShoutrrrNotification(
 		// This works for ntfy, Apprise, and most simple push services
 		if (!isJsonWebhook) {
 			targetUrl = sanitizedUrl;
-			headers = { Title: cleanTitle, Tags: "pill" };
+			// Use RFC 2047 Base64 encoding for Title header to safely pass non-ASCII
+			// characters (umlauts, accents, etc.) through HTTP headers
+			const encodedTitle = `=?UTF-8?B?${Buffer.from(cleanTitle, "utf-8").toString("base64")}?=`;
+			headers = { Title: encodedTitle, Tags: "pill" };
 			body = message;
 
 			// Add auth if present (extracted during sanitization)

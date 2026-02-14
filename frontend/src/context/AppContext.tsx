@@ -17,6 +17,7 @@ export type DoseInfo = {
 	when: number;
 	usage: number;
 	takenBy: string[];
+	intakeRemindersEnabled: boolean;
 };
 
 export type DayMedEntry = {
@@ -58,7 +59,7 @@ export interface AppContextValue {
 	testingShoutrrr: boolean;
 	testShoutrrrResult: { success: boolean; message: string } | null;
 	loadSettings: () => void;
-	saveSettings: (e: React.FormEvent) => Promise<void>;
+	saveSettings: (e?: React.FormEvent) => Promise<void>;
 	testEmail: () => Promise<void>;
 	testShoutrrr: () => Promise<void>;
 
@@ -105,6 +106,8 @@ export interface AppContextValue {
 	setRefillPacks: React.Dispatch<React.SetStateAction<number>>;
 	refillLoose: number;
 	setRefillLoose: React.Dispatch<React.SetStateAction<number>>;
+	usePrescriptionRefill: boolean;
+	setUsePrescriptionRefill: React.Dispatch<React.SetStateAction<boolean>>;
 	refillSaving: boolean;
 	refillHistory: ReturnType<typeof useRefill>["refillHistory"];
 	refillHistoryExpanded: boolean;
@@ -121,7 +124,8 @@ export interface AppContextValue {
 		medId: number,
 		editingId: number | null,
 		setForm: React.Dispatch<React.SetStateAction<any>>,
-		loadMeds: () => void
+		loadMeds: () => void,
+		usePrescription?: boolean
 	) => Promise<void>;
 	submitStockCorrection: (medId: number, selectedMed: Medication, loadMeds: () => void) => Promise<void>;
 	openRefillModal: () => void;
@@ -382,6 +386,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 					when: event.when,
 					usage: event.usage,
 					takenBy: event.takenBy ? [event.takenBy] : [],
+					intakeRemindersEnabled: event.intakeRemindersEnabled,
 				});
 				medEntry.lastWhen = Math.max(medEntry.lastWhen, event.when);
 				day.meds.set(event.medName, medEntry);
@@ -602,6 +607,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settings.notificationEmail !== savedSettings.notificationEmail ||
 			settings.emailStockReminders !== savedSettings.emailStockReminders ||
 			settings.emailIntakeReminders !== savedSettings.emailIntakeReminders ||
+			settings.emailPrescriptionReminders !== savedSettings.emailPrescriptionReminders ||
 			settings.reminderDaysBefore !== savedSettings.reminderDaysBefore ||
 			settings.repeatDailyReminders !== savedSettings.repeatDailyReminders ||
 			settings.lowStockDays !== savedSettings.lowStockDays ||
@@ -611,6 +617,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settings.shoutrrrUrl !== savedSettings.shoutrrrUrl ||
 			settings.shoutrrrStockReminders !== savedSettings.shoutrrrStockReminders ||
 			settings.shoutrrrIntakeReminders !== savedSettings.shoutrrrIntakeReminders ||
+			settings.shoutrrrPrescriptionReminders !== savedSettings.shoutrrrPrescriptionReminders ||
 			settings.skipRemindersForTakenDoses !== savedSettings.skipRemindersForTakenDoses ||
 			settings.repeatRemindersEnabled !== savedSettings.repeatRemindersEnabled ||
 			settings.reminderRepeatIntervalMinutes !== savedSettings.reminderRepeatIntervalMinutes ||
@@ -735,6 +742,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setRefillPacks: refill.setRefillPacks,
 			refillLoose: refill.refillLoose,
 			setRefillLoose: refill.setRefillLoose,
+			usePrescriptionRefill: refill.usePrescriptionRefill,
+			setUsePrescriptionRefill: refill.setUsePrescriptionRefill,
 			refillSaving: refill.refillSaving,
 			refillHistory: refill.refillHistory,
 			refillHistoryExpanded: refill.refillHistoryExpanded,

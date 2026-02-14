@@ -460,7 +460,7 @@ describe("MobileEditModal field callbacks", () => {
 		const onHandleValueChange = vi.fn();
 		render(<MobileEditModal {...defaultProps} onHandleValueChange={onHandleValueChange} />);
 
-		const packCountInput = document.querySelector('input[type="number"][min="0"]') as HTMLInputElement;
+		const packCountInput = document.querySelector('input[type="text"][inputmode="numeric"]') as HTMLInputElement;
 		fireEvent.change(packCountInput, { target: { value: "4" } });
 
 		expect(onHandleValueChange).toHaveBeenCalledWith("packCount", "4");

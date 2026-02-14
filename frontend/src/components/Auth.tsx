@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { log } from "../utils/logger";
 import { ConfirmModal } from "./ConfirmModal";
 import { PasswordInput } from "./PasswordInput";
 
@@ -109,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			}
 			setLoading(false);
 		} catch (err) {
-			console.error(`Failed to fetch auth state (attempt ${retryCount + 1}/${maxRetries + 1}):`, err);
+			log.error(`Failed to fetch auth state (attempt ${retryCount + 1}/${maxRetries + 1}):`, err);
 
 			// Retry on connection errors or 5xx errors (server might be restarting)
 			if (retryCount < maxRetries) {

@@ -5,6 +5,7 @@ import { useAuth } from "../components/Auth";
 import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, useShare } from "../hooks";
 import type { Coverage, Medication, ScheduleEvent, StockThresholds } from "../types";
 import { getSystemLocale } from "../utils/formatters";
+import { log } from "../utils/logger";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, isDoseDismissed } from "../utils/schedule";
 
 // =============================================================================
@@ -514,7 +515,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				document.body.removeChild(a);
 				URL.revokeObjectURL(url);
 			} catch (err) {
-				console.error("Export error:", err);
+				log.error("Export error:", err);
 			}
 			setExporting(false);
 		},
@@ -568,7 +569,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			try {
 				data = text ? JSON.parse(text) : {};
 			} catch {
-				console.error("Import response parse error:", text);
+				log.error("Import response parse error:", text);
 				alert(`${t("exportImport.importError")}: Server returned invalid response`);
 				return;
 			}
@@ -590,7 +591,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settingsHook.loadSettings();
 			doses.loadTakenDoses();
 		} catch (err) {
-			console.error("Import error:", err);
+			log.error("Import error:", err);
 			alert(t("exportImport.importError"));
 		}
 

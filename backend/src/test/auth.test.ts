@@ -194,6 +194,29 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			expect(response.json().code).toBe("USERNAME_EXISTS");
 		});
 
+		it("should reject duplicate username regardless of case", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "CaseUser",
+					password: "TestPassword123",
+				},
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "caseuser",
+					password: "AnotherPassword123",
+				},
+			});
+
+			expect(response.statusCode).toBe(409);
+			expect(response.json().code).toBe("USERNAME_EXISTS");
+		});
+
 		it("should reject short password", async () => {
 			const response = await app.inject({
 				method: "POST",
@@ -273,6 +296,21 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			const cookies = response.cookies;
 			expect(cookies.find((c: any) => c.name === "access_token")).toBeDefined();
 			expect(cookies.find((c: any) => c.name === "refresh_token")).toBeDefined();
+		});
+
+		it("should login case-insensitively with different username casing", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "LOGINUSER",
+					password: "TestPassword123",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().ok).toBe(true);
+			expect(response.json().user.username).toBe("loginuser");
 		});
 
 		it("should reject invalid password", async () => {

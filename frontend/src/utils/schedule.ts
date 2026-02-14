@@ -70,6 +70,7 @@ export function buildSchedulePreview(
 					isPast,
 					timeStr: d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
 					dateStr: d.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" }),
+					intakeRemindersEnabled: intake.intakeRemindersEnabled,
 				});
 			}
 		});

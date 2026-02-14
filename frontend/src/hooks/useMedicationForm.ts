@@ -43,6 +43,11 @@ export const defaultForm = (): FormState => ({
 	doseUnit: "mg",
 	expiryDate: "",
 	notes: "",
+	prescriptionEnabled: false,
+	prescriptionAuthorizedRefills: "",
+	prescriptionRemainingRefills: "",
+	prescriptionLowRefillThreshold: "1",
+	prescriptionExpiryDate: "",
 	intakeRemindersEnabled: false,
 	blisters: [defaultBlister()],
 	intakes: [defaultIntake()],
@@ -78,7 +83,7 @@ export interface UseMedicationFormReturn {
 	removeIntake: (idx: number) => void;
 	startEdit: (med: Medication, openEditModal: () => void) => void;
 	resetForm: () => void;
-	handleValueChange: <K extends keyof FormState>(key: K, value: string) => void;
+	handleValueChange: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
 	addTakenByPerson: (name: string) => void;
 	removeTakenByPerson: (name: string) => void;
 	handleTakenByKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -95,6 +100,12 @@ export function useMedicationForm(): UseMedicationFormReturn {
 	const [pendingImage, setPendingImage] = useState<File | null>(null);
 	const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
 	const [takenByInput, setTakenByInput] = useState("");
+
+	const parseNonNegativeInt = useCallback((value: string): number => {
+		const parsed = Number.parseInt(value, 10);
+		if (Number.isNaN(parsed) || parsed < 0) return 0;
+		return parsed;
+	}, []);
 
 	// Validate form fields
 	const validateField = useCallback(
@@ -199,6 +210,10 @@ export function useMedicationForm(): UseMedicationFormReturn {
 						intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
 					}));
 
+		const authorizedRefills = Math.max(0, med.prescriptionAuthorizedRefills ?? 0);
+		const remainingRefills = Math.min(Math.max(0, med.prescriptionRemainingRefills ?? 0), authorizedRefills);
+		const lowRefillThreshold = Math.min(Math.max(0, med.prescriptionLowRefillThreshold ?? 1), authorizedRefills);
+
 		const editForm: FormState = {
 			name: med.name,
 			genericName: med.genericName ?? "",
@@ -217,6 +232,11 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			doseUnit: med.doseUnit ?? "mg",
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
+			prescriptionEnabled: med.prescriptionEnabled ?? false,
+			prescriptionAuthorizedRefills: med.prescriptionAuthorizedRefills != null ? String(authorizedRefills) : "",
+			prescriptionRemainingRefills: med.prescriptionRemainingRefills != null ? String(remainingRefills) : "",
+			prescriptionLowRefillThreshold: String(lowRefillThreshold),
+			prescriptionExpiryDate: med.prescriptionExpiryDate ? med.prescriptionExpiryDate.slice(0, 10) : "",
 			intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
 			blisters: med.blisters.map((s) => ({
 				usage: String(s.usage),
@@ -246,9 +266,54 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		setOriginalForm(newForm);
 	}, []);
 
-	const handleValueChange = useCallback(<K extends keyof FormState>(key: K, value: string) => {
-		setForm((prev) => ({ ...prev, [key]: value }));
-	}, []);
+	const handleValueChange = useCallback(
+		<K extends keyof FormState>(key: K, value: FormState[K]) => {
+			setForm((prev) => {
+				const next = { ...prev, [key]: value } as FormState;
+
+				if (key === "prescriptionAuthorizedRefills") {
+					const raw = String(value);
+					next.prescriptionAuthorizedRefills = raw === "" ? "" : String(parseNonNegativeInt(raw));
+				}
+
+				if (key === "prescriptionRemainingRefills") {
+					const raw = String(value);
+					next.prescriptionRemainingRefills = raw === "" ? "" : String(parseNonNegativeInt(raw));
+				}
+
+				if (key === "prescriptionLowRefillThreshold") {
+					const raw = String(value);
+					next.prescriptionLowRefillThreshold = raw === "" ? "" : String(parseNonNegativeInt(raw));
+				}
+
+				if (!next.prescriptionEnabled) {
+					return next;
+				}
+
+				const authorizedRefills = parseNonNegativeInt(next.prescriptionAuthorizedRefills);
+
+				if (key === "prescriptionAuthorizedRefills") {
+					next.prescriptionRemainingRefills = String(
+						Math.min(parseNonNegativeInt(next.prescriptionRemainingRefills), authorizedRefills)
+					);
+					next.prescriptionLowRefillThreshold = String(
+						Math.min(parseNonNegativeInt(next.prescriptionLowRefillThreshold), authorizedRefills)
+					);
+				}
+
+				if (key === "prescriptionRemainingRefills") {
+					next.prescriptionRemainingRefills = String(Math.min(parseNonNegativeInt(String(value)), authorizedRefills));
+				}
+
+				if (key === "prescriptionLowRefillThreshold") {
+					next.prescriptionLowRefillThreshold = String(Math.min(parseNonNegativeInt(String(value)), authorizedRefills));
+				}
+
+				return next;
+			});
+		},
+		[parseNonNegativeInt]
+	);
 
 	// Tag input helpers for "Taken By" field
 	const addTakenByPerson = useCallback(

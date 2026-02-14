@@ -127,6 +127,8 @@ function AppContent() {
 		setRefillPacks,
 		refillLoose,
 		setRefillLoose,
+		usePrescriptionRefill,
+		setUsePrescriptionRefill,
 		refillSaving,
 		refillHistory,
 		refillHistoryExpanded,
@@ -355,8 +357,8 @@ function AppContent() {
 	};
 
 	// For MedDetailModal: refill without form update (not editing)
-	const handleSubmitRefill = async (medId: number) => {
-		await ctx.submitRefill(medId, null, () => {}, loadMeds);
+	const handleSubmitRefill = async (medId: number, usePrescription: boolean = false) => {
+		await ctx.submitRefill(medId, null, () => {}, loadMeds, usePrescription);
 	};
 
 	// Wrapper for openEditStockModal (provides selectedMed and coverage)
@@ -430,6 +432,8 @@ function AppContent() {
 				onRefillPacksChange={setRefillPacks}
 				refillLoose={refillLoose}
 				onRefillLooseChange={setRefillLoose}
+				usePrescriptionRefill={usePrescriptionRefill}
+				onUsePrescriptionRefillChange={setUsePrescriptionRefill}
 				refillSaving={refillSaving}
 				refillHistory={refillHistory}
 				refillHistoryExpanded={refillHistoryExpanded}

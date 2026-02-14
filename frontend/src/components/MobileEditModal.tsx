@@ -41,12 +41,14 @@ export interface MobileEditModalProps {
 	onAddIntake: (takenBy?: string) => void;
 	onRemoveIntake: (idx: number) => void;
 	// Value change handler for numeric fields
-	onHandleValueChange: <K extends keyof FormState>(field: K, value: string) => void;
+	onHandleValueChange: <K extends keyof FormState>(field: K, value: FormState[K]) => void;
 	// Refill state (for edit mode)
 	refillPacks: number;
 	onRefillPacksChange: (value: number) => void;
 	refillLoose: number;
 	onRefillLooseChange: (value: number) => void;
+	usePrescriptionRefill: boolean;
+	onUsePrescriptionRefillChange: (value: boolean) => void;
 	refillSaving: boolean;
 	onSubmitRefill: (medId: number) => Promise<void>;
 	// Image handling
@@ -99,6 +101,8 @@ export function MobileEditModal({
 	onRefillPacksChange,
 	refillLoose,
 	onRefillLooseChange,
+	usePrescriptionRefill,
+	onUsePrescriptionRefillChange,
 	refillSaving,
 	onSubmitRefill,
 	meds,
@@ -137,184 +141,276 @@ export function MobileEditModal({
 						onSaveMedication(e);
 					}}
 				>
-					<label className={`full ${fieldErrors.name ? "has-error" : ""}`}>
-						{t("form.commercialName")}
-						<input
-							value={form.name}
-							onChange={(e) => onFormChange({ ...form, name: e.target.value })}
-							placeholder={t("form.placeholders.commercial")}
-							maxLength={FIELD_LIMITS.name.max}
-							required
-						/>
-						{fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
-					</label>
-					<label className={`full ${fieldErrors.genericName ? "has-error" : ""}`}>
-						{t("form.genericName")}
-						<input
-							value={form.genericName}
-							onChange={(e) => onFormChange({ ...form, genericName: e.target.value })}
-							placeholder={t("form.placeholders.generic")}
-							maxLength={FIELD_LIMITS.genericName.max}
-						/>
-						{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
-					</label>
-					<label className={`full ${fieldErrors.takenBy ? "has-error" : ""}`}>
-						{t("form.takenBy")}
-						<div className="tag-input-container">
-							{form.takenBy.map((person) => (
-								<span key={person} className="tag">
-									{person}
-									<button type="button" className="tag-remove" onClick={() => onRemoveTakenByPerson(person)}>
-										×
-									</button>
-								</span>
-							))}
+					<div className="full form-category">
+						<h4 className="form-category-title">{t("form.sections.general")}</h4>
+						<label className={`full ${fieldErrors.name ? "has-error" : ""}`}>
+							{t("form.commercialName")}
 							<input
-								value={takenByInput}
-								onChange={(e) => onTakenByInputChange(e.target.value)}
-								onKeyDown={onTakenByKeyDown}
-								onBlur={() => {
-									if (takenByInput.trim()) onAddTakenByPerson(takenByInput);
-								}}
-								placeholder={
-									form.takenBy.length === 0 ? t("form.placeholders.takenBy") : t("form.placeholders.addPerson")
-								}
-								maxLength={FIELD_LIMITS.takenBy.max}
-								list="takenby-suggestions-modal"
+								value={form.name}
+								onChange={(e) => onFormChange({ ...form, name: e.target.value })}
+								placeholder={t("form.placeholders.commercial")}
+								maxLength={FIELD_LIMITS.name.max}
+								required
 							/>
-							<datalist id="takenby-suggestions-modal">
-								{existingPeople
-									.filter((p) => !form.takenBy.includes(p))
-									.map((person) => (
-										<option key={person} value={person} />
-									))}
-							</datalist>
-						</div>
-						{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
-					</label>
-					<label className="full">
-						{t("form.packageType")}
-						<select
-							className="package-type-select"
-							value={form.packageType}
-							onChange={(e) => onHandleValueChange("packageType", e.target.value)}
-						>
-							<option value="blister">{t("form.packageTypeBlister")}</option>
-							<option value="bottle">{t("form.packageTypeBottle")}</option>
-						</select>
-					</label>
-					{form.packageType === "blister" ? (
-						<>
-							<label>
-								{t("form.packs")}
-								<input
-									type="number"
-									min="0"
-									value={form.packCount}
-									onChange={(e) => onHandleValueChange("packCount", e.target.value)}
-								/>
-							</label>
-							<label>
-								{t("form.blistersPerPack")}
-								<input
-									type="number"
-									min="0"
-									value={form.blistersPerPack}
-									onChange={(e) => onHandleValueChange("blistersPerPack", e.target.value)}
-								/>
-							</label>
-							<label>
-								{t("form.pillsPerBlister")}
-								<input
-									type="number"
-									min="1"
-									value={form.pillsPerBlister}
-									onChange={(e) => onHandleValueChange("pillsPerBlister", e.target.value)}
-								/>
-							</label>
-							<label>
-								{t("form.loosePills")}
-								<input
-									type="number"
-									min="0"
-									value={form.looseTablets}
-									onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
-								/>
-							</label>
-						</>
-					) : (
-						<>
-							<label>
-								{t("form.totalCapacity")}
-								<input
-									type="number"
-									min="1"
-									value={form.totalPills}
-									onChange={(e) => onHandleValueChange("totalPills", e.target.value)}
-								/>
-							</label>
-							<label>
-								{t("form.currentPills")}
-								<input
-									type="number"
-									min="0"
-									value={form.looseTablets}
-									onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
-								/>
-							</label>
-						</>
-					)}
-					<div className="full">
-						<p className="sub">
-							<strong>{t("form.total")}:</strong> {deriveTotalFromForm(form)}{" "}
-							{deriveTotalFromForm(form) === 1 ? t("common.pill") : t("common.pills")}
-						</p>
-					</div>
-					<label className="full">
-						{t("form.pillWeight")} ({form.doseUnit})
-						<div className="dose-input-group">
+							{fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
+						</label>
+						<label className={`full ${fieldErrors.genericName ? "has-error" : ""}`}>
+							{t("form.genericName")}
 							<input
-								type="number"
-								min="0"
-								step="0.1"
-								value={form.pillWeightMg}
-								onChange={(e) => onFormChange({ ...form, pillWeightMg: e.target.value })}
-								placeholder={t("form.placeholders.weight")}
+								value={form.genericName}
+								onChange={(e) => onFormChange({ ...form, genericName: e.target.value })}
+								placeholder={t("form.placeholders.generic")}
+								maxLength={FIELD_LIMITS.genericName.max}
 							/>
-							<select
-								value={form.doseUnit}
-								onChange={(e) => onFormChange({ ...form, doseUnit: e.target.value as DoseUnit })}
-								className="dose-unit-select"
-							>
-								{DOSE_UNITS.map((unit) => (
-									<option key={unit.value} value={unit.value}>
-										{unit.label}
-									</option>
+							{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
+						</label>
+						<label className={`full ${fieldErrors.takenBy ? "has-error" : ""}`}>
+							{t("form.takenBy")}
+							<div className="tag-input-container">
+								{form.takenBy.map((person) => (
+									<span key={person} className="tag">
+										{person}
+										<button type="button" className="tag-remove" onClick={() => onRemoveTakenByPerson(person)}>
+											×
+										</button>
+									</span>
 								))}
+								<input
+									value={takenByInput}
+									onChange={(e) => onTakenByInputChange(e.target.value)}
+									onKeyDown={onTakenByKeyDown}
+									onBlur={() => {
+										if (takenByInput.trim()) onAddTakenByPerson(takenByInput);
+									}}
+									placeholder={
+										form.takenBy.length === 0 ? t("form.placeholders.takenBy") : t("form.placeholders.addPerson")
+									}
+									maxLength={FIELD_LIMITS.takenBy.max}
+									list="takenby-suggestions-modal"
+								/>
+								<datalist id="takenby-suggestions-modal">
+									{existingPeople
+										.filter((p) => !form.takenBy.includes(p))
+										.map((person) => (
+											<option key={person} value={person} />
+										))}
+								</datalist>
+							</div>
+							{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
+						</label>
+						<label className="full">
+							{t("form.packageType")}
+							<select
+								className="package-type-select"
+								value={form.packageType}
+								onChange={(e) => onHandleValueChange("packageType", e.target.value)}
+							>
+								<option value="blister">{t("form.packageTypeBlister")}</option>
+								<option value="bottle">{t("form.packageTypeBottle")}</option>
 							</select>
-						</div>
-					</label>
-					<label className="full">
-						{t("form.expiryDate")}
-						<input
-							type="date"
-							value={form.expiryDate}
-							onChange={(e) => onFormChange({ ...form, expiryDate: e.target.value })}
-						/>
-					</label>
+						</label>
+					</div>
 
-					{/* Refill section - only shown when editing (mobile) */}
-					{editingId && (
-						<div className="full refill-section">
-							<h4 className="refill-title">{t("refill.title")}</h4>
-							<div className="refill-form-inline">
+					<div className="full form-category">
+						<h4 className="form-category-title">{t("form.sections.stock")}</h4>
+						{form.packageType === "blister" ? (
+							<>
+								<label>
+									{t("form.packs")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.packCount}
+										onChange={(e) => onHandleValueChange("packCount", e.target.value)}
+									/>
+								</label>
+								<label>
+									{t("form.blistersPerPack")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.blistersPerPack}
+										onChange={(e) => onHandleValueChange("blistersPerPack", e.target.value)}
+									/>
+								</label>
+								<label>
+									{t("form.pillsPerBlister")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.pillsPerBlister}
+										onChange={(e) => onHandleValueChange("pillsPerBlister", e.target.value)}
+									/>
+								</label>
+								<label>
+									{t("form.loosePills")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.looseTablets}
+										onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
+									/>
+								</label>
+							</>
+						) : (
+							<>
+								<label>
+									{t("form.totalCapacity")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.totalPills}
+										onChange={(e) => onHandleValueChange("totalPills", e.target.value)}
+									/>
+								</label>
+								<label>
+									{t("form.currentPills")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.looseTablets}
+										onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
+									/>
+								</label>
+							</>
+						)}
+						<div className="full">
+							<p className="sub">
+								<strong>{t("form.total")}:</strong> {deriveTotalFromForm(form)}{" "}
+								{deriveTotalFromForm(form) === 1 ? t("common.pill") : t("common.pills")}
+							</p>
+						</div>
+						<label className="full">
+							{t("form.pillWeight")} ({form.doseUnit})
+							<div className="dose-input-group">
+								<input
+									type="text"
+									inputMode="decimal"
+									pattern="[0-9]*\.?[0-9]*"
+									value={form.pillWeightMg}
+									onChange={(e) => onFormChange({ ...form, pillWeightMg: e.target.value })}
+									placeholder={t("form.placeholders.weight")}
+								/>
+								<select
+									value={form.doseUnit}
+									onChange={(e) => onFormChange({ ...form, doseUnit: e.target.value as DoseUnit })}
+									className="dose-unit-select"
+								>
+									{DOSE_UNITS.map((unit) => (
+										<option key={unit.value} value={unit.value}>
+											{unit.label}
+										</option>
+									))}
+								</select>
+							</div>
+						</label>
+						<label className="full">
+							{t("form.expiryDate")}
+							<input
+								type="date"
+								value={form.expiryDate}
+								onChange={(e) => onFormChange({ ...form, expiryDate: e.target.value })}
+							/>
+						</label>
+						<label className={`full ${fieldErrors.notes ? "has-error" : ""}`}>
+							{t("form.notes")}
+							<textarea
+								value={form.notes}
+								onChange={(e) => onFormChange({ ...form, notes: e.target.value })}
+								placeholder={t("form.placeholders.notes")}
+								rows={2}
+								maxLength={FIELD_LIMITS.notes.max}
+								className="auto-resize"
+								onInput={(e) => {
+									const target = e.target as HTMLTextAreaElement;
+									target.style.height = "auto";
+									target.style.height = `${target.scrollHeight}px`;
+								}}
+							/>
+							{form.notes.length > 0 && (
+								<span className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}>
+									{t("common.validation.tooLong", { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
+								</span>
+							)}
+							{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
+						</label>
+					</div>
+
+					<div className="full form-category">
+						<h4 className="form-category-title">{t("form.sections.prescription")}</h4>
+						<label className="full">
+							{t("prescription.enabled")}
+							<label className="toggle-switch small">
+								<input
+									type="checkbox"
+									checked={form.prescriptionEnabled}
+									onChange={(e) => onHandleValueChange("prescriptionEnabled", e.target.checked)}
+								/>
+								<span className="toggle-slider"></span>
+							</label>
+						</label>
+						{form.prescriptionEnabled && (
+							<>
+								<label className="prescription-field">
+									{t("prescription.authorizedRefills")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.prescriptionAuthorizedRefills}
+										onChange={(e) => onHandleValueChange("prescriptionAuthorizedRefills", e.target.value)}
+									/>
+								</label>
+								<label className="prescription-field">
+									{t("prescription.remainingRefills")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.prescriptionRemainingRefills}
+										onChange={(e) => onHandleValueChange("prescriptionRemainingRefills", e.target.value)}
+									/>
+								</label>
+								<label className="prescription-field">
+									{t("prescription.lowThreshold")}
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={form.prescriptionLowRefillThreshold}
+										onChange={(e) => onHandleValueChange("prescriptionLowRefillThreshold", e.target.value)}
+									/>
+								</label>
+								<label className="prescription-field">
+									{t("prescription.expiryDate")}
+									<input
+										type="date"
+										value={form.prescriptionExpiryDate}
+										onChange={(e) => onHandleValueChange("prescriptionExpiryDate", e.target.value)}
+									/>
+								</label>
+							</>
+						)}
+					</div>
+
+					<div className="full form-category refill-section">
+						<h4 className="form-category-title">{t("refill.title")}</h4>
+						{editingId ? (
+							<>
 								{form.packageType === "blister" ? (
 									<>
 										<label>
 											{t("refill.packs")}
 											<input
-												type="number"
-												min="0"
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
 												value={refillPacks}
 												onChange={(e) => onRefillPacksChange(parseInt(e.target.value, 10) || 0)}
 											/>
@@ -322,102 +418,109 @@ export function MobileEditModal({
 										<label>
 											{t("refill.loosePills")}
 											<input
-												type="number"
-												min="0"
+												type="text"
+												inputMode="numeric"
+												pattern="[0-9]*"
 												value={refillLoose}
 												onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
 											/>
 										</label>
 									</>
 								) : (
-									<label>
+									<label className="full">
 										{t("refill.pillsToAdd")}
 										<input
-											type="number"
-											min="0"
+											type="text"
+											inputMode="numeric"
+											pattern="[0-9]*"
 											value={refillLoose}
 											onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
 										/>
 									</label>
 								)}
-								<button
-									type="button"
-									className="success"
-									onClick={() => onSubmitRefill(editingId)}
-									disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
-								>
-									{refillSaving ? t("common.saving") : t("refill.button")}
-								</button>
-								{(() => {
-									const totalRefill =
-										form.packageType === "blister"
-											? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
-												refillLoose
-											: refillLoose;
-									return totalRefill > 0 ? (
-										<span className="refill-preview">
-											+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+								<div className="refill-submit-row full">
+									<button
+										type="button"
+										className="success"
+										onClick={() => onSubmitRefill(editingId)}
+										disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
+									>
+										{refillSaving ? t("common.saving") : t("refill.button")}
+									</button>
+									{(() => {
+										const totalRefill =
+											form.packageType === "blister"
+												? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
+													refillLoose
+												: refillLoose;
+										return totalRefill > 0 ? (
+											<span className="refill-preview">
+												+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+											</span>
+										) : null;
+									})()}
+								</div>
+								{form.prescriptionEnabled && (
+									<div className="refill-prescription-row full">
+										<label className="refill-prescription-toggle">
+											<input
+												type="checkbox"
+												checked={usePrescriptionRefill}
+												onChange={(e) => onUsePrescriptionRefillChange(e.target.checked)}
+												disabled={(Number(form.prescriptionRemainingRefills) || 0) <= 0}
+											/>
+											<span className="refill-prescription-label-text">{t("prescription.useForRefill")}</span>
+										</label>
+										<span className="refill-remaining-badge">
+											{t("prescription.remainingRefills")}: {Number(form.prescriptionRemainingRefills) || 0}
 										</span>
-									) : null;
-								})()}
-							</div>
+									</div>
+								)}
+							</>
+						) : (
+							<p className="refill-unavailable">{t("refill.saveFirst", "Save medication first to enable refill")}</p>
+						)}
+					</div>
+
+					{editingId && (
+						<div className="full form-category image-section">
+							<h4 className="form-category-title">{t("form.medicationImage")}</h4>
+							{currentMed?.imageUrl ? (
+								<div className="image-preview">
+									<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
+									<button type="button" className="danger" onClick={() => onDeleteMedImage(editingId)}>
+										{t("form.removeImage")}
+									</button>
+								</div>
+							) : (
+								<input
+									type="file"
+									accept="image/*"
+									onChange={(e) => e.target.files?.[0] && onUploadMedImage(editingId, e.target.files[0])}
+								/>
+							)}
 						</div>
 					)}
 
-					<label className={`full ${fieldErrors.notes ? "has-error" : ""}`}>
-						{t("form.notes")}
-						<textarea
-							value={form.notes}
-							onChange={(e) => onFormChange({ ...form, notes: e.target.value })}
-							placeholder={t("form.placeholders.notes")}
-							rows={2}
-							maxLength={FIELD_LIMITS.notes.max}
-							className="auto-resize"
-							onInput={(e) => {
-								const target = e.target as HTMLTextAreaElement;
-								target.style.height = "auto";
-								target.style.height = `${target.scrollHeight}px`;
-							}}
-						/>
-						{form.notes.length > 0 && (
-							<span className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}>
-								{t("common.validation.tooLong", { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
-							</span>
-						)}
-						{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
-					</label>
-
-					{editingId && currentMed?.imageUrl ? (
-						<div className="full image-field">
-							<span className="field-label">{t("form.medicationImage")}</span>
-							<div className="image-preview">
-								<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
-								<button type="button" className="danger" onClick={() => onDeleteMedImage(editingId)}>
-									{t("form.removeImage")}
-								</button>
-							</div>
+					<div className="full form-category intake-section">
+						<div className="form-category-header">
+							<h4 className="form-category-title">{t("form.blisters.title")}</h4>
+							<button
+								type="button"
+								className="ghost add-blister"
+								onClick={() => onAddIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+							>
+								+ {t("form.blisters.addIntake")}
+							</button>
 						</div>
-					) : editingId ? (
-						<label className="full">
-							{t("form.medicationImage")}
-							<input
-								type="file"
-								accept="image/*"
-								onChange={(e) => e.target.files?.[0] && onUploadMedImage(editingId, e.target.files[0])}
-							/>
-						</label>
-					) : null}
-
-					<fieldset className="full blister-section">
-						<legend>{t("form.blisters.title")}</legend>
 						{form.intakes.map((intake, idx) => (
 							<div key={idx} className="blister-row">
 								<label className="compact">
 									<span>{t("form.blisters.usage")}</span>
 									<input
-										type="number"
-										min="0"
-										step="0.1"
+										type="text"
+										inputMode="decimal"
+										pattern="[0-9]*\.?[0-9]*"
 										value={intake.usage}
 										onChange={(e) => onSetIntakeValue(idx, "usage", e.target.value)}
 									/>
@@ -425,8 +528,9 @@ export function MobileEditModal({
 								<label className="compact">
 									<span>{t("form.blisters.everyDays")}</span>
 									<input
-										type="number"
-										min="1"
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
 										value={intake.every}
 										onChange={(e) => onSetIntakeValue(idx, "every", e.target.value)}
 									/>
@@ -477,14 +581,7 @@ export function MobileEditModal({
 								)}
 							</div>
 						))}
-						<button
-							type="button"
-							className="ghost add-blister"
-							onClick={() => onAddIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
-						>
-							+ {t("form.blisters.addIntake")}
-						</button>
-					</fieldset>
+					</div>
 
 					<div className="modal-footer">
 						<button type="button" className="ghost" onClick={onClose}>

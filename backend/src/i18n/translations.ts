@@ -123,6 +123,39 @@ type TranslationKeys = {
 		criticalSection: string;
 		lowStockSection: string;
 	};
+	// Prescription reminder (shared across email + push)
+	prescriptionReminder: {
+		subjectSingle: string;
+		subjectMultiple: string;
+		pushTitleLow: string;
+		pushTitleEmpty: string;
+		pushEmpty: string;
+		pushEmptySingle: string;
+		pushLow: string;
+		pushLowSingle: string;
+		pushRenewNow: string;
+		pushEmptySection: string;
+		pushLowSection: string;
+		pushRefillsLeft: string;
+		title: string;
+		titleEmpty: string;
+		descriptionLow: string;
+		descriptionEmpty: string;
+		alertLowSingle: string;
+		alertLowMultiple: string;
+		alertEmptySingle: string;
+		alertEmptyMultiple: string;
+		line: string;
+		lineEmpty: string;
+		expiresSuffix: string;
+		repeatDailyNote: string;
+		tableHeaders: {
+			medication: string;
+			refillsLeft: string;
+			reminderThreshold: string;
+			prescriptionExpires: string;
+		};
+	};
 	// Demand calculator email
 	demandCalculator: {
 		subject: string;
@@ -156,8 +189,8 @@ type TranslationKeys = {
 const translations: Record<Language, TranslationKeys> = {
 	en: {
 		stockReminder: {
-			subject: "MedAssist-ng Auto-Reminder: {count} Medication{s} Running Critically Low",
-			title: "⚠️ MedAssist-ng - Automatic Reorder Reminder",
+			subject: "MedAssist-ng: ⚠️ {count} Medication{s} Running Critically Low",
+			title: "⚠️ MedAssist-ng: Automatic Reorder Reminder",
 			description: "The following medications are running critically low and need to be reordered:",
 			descriptionEmpty: "The following medications are empty and need to be reordered immediately:",
 			descriptionMixed: "The following medications need to be reordered:",
@@ -211,9 +244,41 @@ const translations: Record<Language, TranslationKeys> = {
 			criticalSection: "Running critically low",
 			lowStockSection: "Running low",
 		},
+		prescriptionReminder: {
+			subjectSingle: "MedAssist-ng: 🚨 Prescription Refill Reminder",
+			subjectMultiple: "MedAssist-ng: 🚨 {count} Prescriptions Need Renewal Soon",
+			pushTitleLow: "💊 MedAssist-ng: {count} prescriptions are running low",
+			pushTitleEmpty: "💊 MedAssist-ng: {count} prescriptions need renewal now",
+			pushEmpty: "prescriptions out of refills",
+			pushEmptySingle: "prescription out of refills",
+			pushLow: "prescriptions low on refills",
+			pushLowSingle: "prescription low on refills",
+			pushRenewNow: "Renew Now!",
+			pushEmptySection: "Prescriptions with no refills left",
+			pushLowSection: "Prescriptions running low on refills",
+			pushRefillsLeft: "{count} refill(s) remaining on this prescription",
+			title: "⚠️ MedAssist-ng - Prescription Reminder",
+			titleEmpty: "🚨 MedAssist-ng - Prescription Reminder",
+			descriptionLow: "Some prescriptions are low on remaining refills.",
+			descriptionEmpty: "Some prescriptions have no refills left. Contact your doctor for renewal.",
+			alertLowSingle: "⚠️ 1 prescription is low on refills",
+			alertLowMultiple: "⚠️ {count} prescriptions are low on refills",
+			alertEmptySingle: "🚨 1 prescription needs renewal now",
+			alertEmptyMultiple: "🚨 {count} prescriptions need renewal now",
+			line: "{name}: {refills} refill(s) remaining on this prescription{expirySuffix}",
+			lineEmpty: "{name}: no refills remaining on this prescription{expirySuffix}",
+			expiresSuffix: ", expires {date}",
+			repeatDailyNote: "You are receiving this daily reminder because 'Repeat Daily' is enabled in settings.",
+			tableHeaders: {
+				medication: "Medication",
+				refillsLeft: "Prescription refills left",
+				reminderThreshold: "Reminder threshold",
+				prescriptionExpires: "Prescription expires",
+			},
+		},
 		demandCalculator: {
-			subject: "MedAssist-ng - Supply Overview ({from} - {until})",
-			title: "MedAssist-ng - Demand Calculator",
+			subject: "MedAssist-ng: Supply Overview ({from} - {until})",
+			title: "MedAssist-ng: Demand Calculator",
 			description: "Supply overview from {from} to {until}",
 			summaryOutOfStock: "⚠️ {count} medication{s} will be out of stock during this period.",
 			summaryAllOk: "✓ All medications have sufficient supply for this period.",
@@ -240,8 +305,8 @@ const translations: Record<Language, TranslationKeys> = {
 	},
 	de: {
 		stockReminder: {
-			subject: "MedAssist-ng Auto-Erinnerung: {count} Medikament{e} kritisch niedrig",
-			title: "⚠️ MedAssist-ng - Automatische Nachbestell-Erinnerung",
+			subject: "MedAssist-ng: ⚠️ {count} Medikament{e} kritisch niedrig",
+			title: "⚠️ MedAssist-ng: Automatische Nachbestell-Erinnerung",
 			description: "Die folgenden Medikamente sind kritisch niedrig und sollten nachbestellt werden:",
 			descriptionEmpty: "Die folgenden Medikamente sind leer und müssen sofort nachbestellt werden:",
 			descriptionMixed: "Die folgenden Medikamente müssen nachbestellt werden:",
@@ -296,9 +361,43 @@ const translations: Record<Language, TranslationKeys> = {
 			criticalSection: "Kritisch niedrig",
 			lowStockSection: "Niedrig",
 		},
+		prescriptionReminder: {
+			subjectSingle: "MedAssist-ng: 🚨 Rezept-Nachfüll-Erinnerung",
+			subjectMultiple: "MedAssist-ng: 🚨 {count} Rezepte müssen bald erneuert werden",
+			pushTitleLow: "💊 MedAssist-ng: {count} Rezept(e) haben nur noch wenige Nachfüllungen",
+			pushTitleEmpty: "💊 MedAssist-ng: {count} Rezept(e) müssen jetzt erneuert werden",
+			pushEmpty: "Rezepte ohne verbleibende Nachfüllung",
+			pushEmptySingle: "Rezept ohne verbleibende Nachfüllung",
+			pushLow: "Rezepte mit wenigen verbleibenden Nachfüllungen",
+			pushLowSingle: "Rezept mit wenigen verbleibenden Nachfüllungen",
+			pushRenewNow: "Jetzt erneuern!",
+			pushEmptySection: "Rezepte ohne Nachfüllungen",
+			pushLowSection: "Rezepte mit bald aufgebrauchten Nachfüllungen",
+			pushRefillsLeft: "{count} Nachfüllung(en) für dieses Rezept übrig",
+			title: "⚠️ MedAssist-ng - Rezept-Erinnerung",
+			titleEmpty: "🚨 MedAssist-ng - Rezept-Erinnerung",
+			descriptionLow: "Einige Rezepte haben nur noch wenige Nachfüllungen.",
+			descriptionEmpty:
+				"Einige Rezepte haben keine Nachfüllungen mehr. Bitte kontaktieren Sie Ihren Arzt für eine Erneuerung.",
+			alertLowSingle: "⚠️ 1 Rezept ist bei den Nachfüllungen niedrig",
+			alertLowMultiple: "⚠️ {count} Rezepte sind bei den Nachfüllungen niedrig",
+			alertEmptySingle: "🚨 1 Rezept muss jetzt erneuert werden",
+			alertEmptyMultiple: "🚨 {count} Rezepte müssen jetzt erneuert werden",
+			line: "{name}: {refills} Nachfüllung(en) für dieses Rezept übrig{expirySuffix}",
+			lineEmpty: "{name}: keine Nachfüllung mehr für dieses Rezept{expirySuffix}",
+			expiresSuffix: ", läuft ab {date}",
+			repeatDailyNote:
+				"Sie erhalten diese tägliche Erinnerung, weil 'Täglich wiederholen' in den Einstellungen aktiviert ist.",
+			tableHeaders: {
+				medication: "Medikament",
+				refillsLeft: "Rezept-Nachfüllungen übrig",
+				reminderThreshold: "Erinnerungsschwelle",
+				prescriptionExpires: "Rezeptablauf",
+			},
+		},
 		demandCalculator: {
-			subject: "MedAssist-ng - Bestandsübersicht ({from} - {until})",
-			title: "MedAssist-ng - Bedarfsrechner",
+			subject: "MedAssist-ng: Bestandsübersicht ({from} - {until})",
+			title: "MedAssist-ng: Bedarfsrechner",
 			description: "Bestandsübersicht von {from} bis {until}",
 			summaryOutOfStock: "⚠️ {count} Medikament{e} wird im Zeitraum nicht ausreichen.",
 			summaryAllOk: "✓ Alle Medikamente reichen für diesen Zeitraum.",

@@ -9,10 +9,6 @@ export function SettingsPage() {
 		settings,
 		setSettings,
 		settingsLoading,
-		settingsSaving,
-		settingsSaved,
-		saveSettings,
-		settingsChanged,
 		// Email testing
 		testEmail,
 		testingEmail,
@@ -41,7 +37,7 @@ export function SettingsPage() {
 			{settingsLoading ? (
 				<p>{t("settings.loading")}</p>
 			) : (
-				<form className="settings-form" onSubmit={saveSettings}>
+				<div className="settings-form">
 					{/* Language */}
 					<article className="card">
 						<div className="card-head">
@@ -52,7 +48,16 @@ export function SettingsPage() {
 								<span className="setting-label">{t("settings.language.select")}</span>
 								<select
 									value={i18n.language}
-									onChange={(e) => i18n.changeLanguage(e.target.value)}
+									onChange={(e) => {
+										const lang = e.target.value;
+										i18n.changeLanguage(lang);
+										fetch("/api/settings/language", {
+											method: "PUT",
+											headers: { "Content-Type": "application/json" },
+											credentials: "include",
+											body: JSON.stringify({ language: lang }),
+										});
+									}}
 									className="language-select"
 								>
 									<option value="en">🇬🇧 English</option>
@@ -132,6 +137,37 @@ export function SettingsPage() {
 										</label>
 									</div>
 								</div>
+								<div className="matrix-row">
+									<div className="matrix-label">{t("settings.notifications.prescriptionReminders")}</div>
+									<div className="matrix-cell">
+										<label className={`toggle-switch small${!settings.emailEnabled ? " disabled" : ""}`}>
+											<input
+												type="checkbox"
+												checked={
+													settings.smtpHost && settings.emailEnabled ? settings.emailPrescriptionReminders : false
+												}
+												onChange={(e) => setSettings({ ...settings, emailPrescriptionReminders: e.target.checked })}
+												disabled={!settings.emailEnabled}
+											/>
+											<span className="toggle-slider"></span>
+										</label>
+									</div>
+									<div className="matrix-cell">
+										<label className={`toggle-switch small${!settings.shoutrrrEnabled ? " disabled" : ""}`}>
+											<input
+												type="checkbox"
+												checked={
+													settings.shoutrrrUrl && settings.shoutrrrEnabled
+														? settings.shoutrrrPrescriptionReminders
+														: false
+												}
+												onChange={(e) => setSettings({ ...settings, shoutrrrPrescriptionReminders: e.target.checked })}
+												disabled={!settings.shoutrrrEnabled}
+											/>
+											<span className="toggle-slider"></span>
+										</label>
+									</div>
+								</div>
 							</div>
 							{!settings.emailEnabled && !settings.shoutrrrEnabled && (
 								<p className="hint-text">{t("settings.notifications.enableHint")}</p>
@@ -196,10 +232,9 @@ export function SettingsPage() {
 											</span>
 										</label>
 										<input
-											type="number"
-											min="5"
-											max="480"
-											step="5"
+											type="text"
+											inputMode="numeric"
+											pattern="[0-9]*"
 											value={settings.reminderRepeatIntervalMinutes}
 											onChange={(e) =>
 												setSettings({ ...settings, reminderRepeatIntervalMinutes: parseInt(e.target.value, 10) || 30 })
@@ -218,10 +253,9 @@ export function SettingsPage() {
 											</span>
 										</label>
 										<input
-											type="number"
-											min="1"
-											max="20"
-											step="1"
+											type="text"
+											inputMode="numeric"
+											pattern="[0-9]*"
 											value={settings.maxNaggingReminders ?? 5}
 											onChange={(e) => {
 												const val = parseInt(e.target.value, 10);
@@ -243,7 +277,9 @@ export function SettingsPage() {
 							<div className="setting-row compact">
 								<label className="setting-label">
 									{t("settings.stockReminder.description")}{" "}
-									<span className="status-chip small danger">{t("status.criticalStock")}</span>
+									<span className="info-tooltip small" data-tooltip={t("settings.stockReminder.infoTooltip")}>
+										ⓘ
+									</span>{" "}
 								</label>
 								<label
 									className={`toggle-switch small${!settings.emailEnabled && !settings.shoutrrrEnabled ? " disabled" : ""}`}
@@ -276,6 +312,7 @@ export function SettingsPage() {
 									<span className="toggle-slider"></span>
 								</label>
 							</div>
+
 							<div className="setting-row compact" style={{ marginTop: "4px" }}>
 								<label className="setting-label">
 									{t("settings.stockReminder.repeatDaily")}
@@ -320,6 +357,7 @@ export function SettingsPage() {
 													emailEnabled: false,
 													emailStockReminders: false,
 													emailIntakeReminders: false,
+													emailPrescriptionReminders: false,
 													skipRemindersForTakenDoses: false,
 													repeatRemindersEnabled: false,
 												});
@@ -389,6 +427,7 @@ export function SettingsPage() {
 													shoutrrrEnabled: false,
 													shoutrrrStockReminders: false,
 													shoutrrrIntakeReminders: false,
+													shoutrrrPrescriptionReminders: false,
 													skipRemindersForTakenDoses: false,
 													repeatRemindersEnabled: false,
 												});
@@ -497,6 +536,20 @@ export function SettingsPage() {
 									</span>
 								</div>
 							)}
+							{settings.lastPrescriptionReminderSent && (
+								<div className="schedule-row">
+									<span className="schedule-label">{t("settings.schedule.lastPrescriptionSent")}</span>
+									<span className="schedule-value">
+										{new Date(settings.lastPrescriptionReminderSent).toLocaleString(getSystemLocale(i18n.language), {
+											day: "2-digit",
+											month: "2-digit",
+											year: "numeric",
+											hour: "2-digit",
+											minute: "2-digit",
+										})}
+									</span>
+								</div>
+							)}
 						</div>
 					</article>
 
@@ -565,9 +618,9 @@ export function SettingsPage() {
 									</span>
 									<div className="input-with-tooltip">
 										<input
-											type="number"
-											min="1"
-											max="364"
+											type="text"
+											inputMode="numeric"
+											pattern="[0-9]*"
 											value={settings.reminderDaysBefore}
 											onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
 										/>
@@ -592,9 +645,9 @@ export function SettingsPage() {
 									</span>
 									<div className="input-with-tooltip">
 										<input
-											type="number"
-											min="2"
-											max="365"
+											type="text"
+											inputMode="numeric"
+											pattern="[0-9]*"
 											value={settings.lowStockDays}
 											onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
 										/>
@@ -612,9 +665,9 @@ export function SettingsPage() {
 									</span>
 									<div className="input-with-tooltip">
 										<input
-											type="number"
-											min="3"
-											max="730"
+											type="text"
+											inputMode="numeric"
+											pattern="[0-9]*"
 											value={settings.highStockDays}
 											onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
 										/>
@@ -747,25 +800,7 @@ export function SettingsPage() {
 							</div>
 						</div>
 					</article>
-
-					<div className="form-footer">
-						<button
-							type="submit"
-							disabled={
-								settingsSaving ||
-								(!settingsChanged && settingsSaved) ||
-								settings.reminderDaysBefore >= settings.lowStockDays ||
-								settings.lowStockDays >= settings.highStockDays
-							}
-						>
-							{settingsSaving
-								? t("common.saving")
-								: settingsSaved && !settingsChanged
-									? t("common.saved")
-									: t("settings.saveSettings")}
-						</button>
-					</div>
-				</form>
+				</div>
 			)}
 
 			{/* Import Confirmation Modal */}

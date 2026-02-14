@@ -99,6 +99,11 @@ async function createSchema(client: Client) {
 		    expiry_date text,
 		    notes text,
 		    intake_reminders_enabled integer NOT NULL DEFAULT 0,
+		    prescription_enabled integer NOT NULL DEFAULT 0,
+		    prescription_authorized_refills integer,
+		    prescription_remaining_refills integer,
+		    prescription_low_refill_threshold integer NOT NULL DEFAULT 1,
+		    prescription_expiry_date text,
 		    dismissed_until text,
 		    updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
 		    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -110,10 +115,12 @@ async function createSchema(client: Client) {
       notification_email text,
       email_stock_reminders integer NOT NULL DEFAULT 1,
       email_intake_reminders integer NOT NULL DEFAULT 1,
+	email_prescription_reminders integer NOT NULL DEFAULT 1,
       shoutrrr_enabled integer NOT NULL DEFAULT 0,
       shoutrrr_url text,
       shoutrrr_stock_reminders integer NOT NULL DEFAULT 1,
       shoutrrr_intake_reminders integer NOT NULL DEFAULT 1,
+	shoutrrr_prescription_reminders integer NOT NULL DEFAULT 1,
       reminder_days_before integer NOT NULL DEFAULT 7,
       repeat_daily_reminders integer NOT NULL DEFAULT 0,
       skip_reminders_for_taken_doses integer NOT NULL DEFAULT 0,
@@ -135,6 +142,9 @@ async function createSchema(client: Client) {
       last_stock_reminder_sent text,
       last_stock_reminder_channel text,
       last_stock_reminder_med_names text,
+			last_prescription_reminder_sent text,
+			last_prescription_reminder_channel text,
+			last_prescription_reminder_med_names text,
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
@@ -163,6 +173,7 @@ async function createSchema(client: Client) {
       user_id integer NOT NULL,
       packs_added integer NOT NULL DEFAULT 0,
       loose_pills_added integer NOT NULL DEFAULT 0,
+		used_prescription integer NOT NULL DEFAULT 0,
       refill_date integer NOT NULL DEFAULT (strftime('%s','now')),
       FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -1619,6 +1630,83 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.success).toBe(true);
 			expect(data.newStock.packCount).toBe(3); // 2 + 1
 			expect(data.newStock.looseTablets).toBe(15); // 5 + 10
+		});
+
+		it("should decrement remaining refills and mark history when using prescription refill", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Prescription Refill Med",
+					packCount: 1,
+					blistersPerPack: 2,
+					pillsPerBlister: 10,
+					looseTablets: 0,
+					prescriptionEnabled: true,
+					prescriptionAuthorizedRefills: 3,
+					prescriptionRemainingRefills: 2,
+					prescriptionLowRefillThreshold: 1,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 0, usePrescription: true },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			expect(refillData.prescription.used).toBe(true);
+			expect(refillData.prescription.remainingRefills).toBe(1);
+
+			const medsResponse = await app.inject({
+				method: "GET",
+				url: "/medications",
+			});
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((m: any) => m.id === medId);
+			expect(med.prescriptionRemainingRefills).toBe(1);
+
+			const historyResponse = await app.inject({
+				method: "GET",
+				url: `/medications/${medId}/refills`,
+			});
+			expect(historyResponse.statusCode).toBe(200);
+			expect(historyResponse.json()[0].usedPrescription).toBe(true);
+		});
+
+		it("should reject prescription refill when no remaining prescription refills are available", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Prescription Empty Med",
+					packCount: 1,
+					blistersPerPack: 2,
+					pillsPerBlister: 10,
+					looseTablets: 0,
+					prescriptionEnabled: true,
+					prescriptionAuthorizedRefills: 2,
+					prescriptionRemainingRefills: 0,
+					prescriptionLowRefillThreshold: 1,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 0, usePrescription: true },
+			});
+
+			expect(refillResponse.statusCode).toBe(409);
+			expect(refillResponse.json().error).toContain("No remaining prescription refills");
 		});
 
 		it("should return 400 when no packs or pills added", async () => {

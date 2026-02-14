@@ -319,7 +319,7 @@ body.modal-open {
 .reminder-status-details {
 	display: flex;
 	flex-direction: column;
-	gap: 0.25rem;
+	gap: 0.5rem;
 	padding-left: 1.75rem;
 }
 
@@ -375,8 +375,9 @@ body.modal-open {
 
 .reminder-send-row {
 	display: flex;
-	align-items: center;
-	gap: 0.75rem;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.35rem;
 	padding-left: 1.75rem;
 	padding-top: 0.25rem;
 }
@@ -433,6 +434,9 @@ body.modal-open {
 		gap: 0.15rem;
 	}
 	.reminder-low-stock-list {
+		padding-left: 0;
+	}
+	.reminder-send-row {
 		padding-left: 0;
 	}
 }
@@ -602,6 +606,26 @@ body.modal-open {
 	flex-direction: column;
 	gap: 0.75rem;
 }
+
+/* Grid view for medications page */
+.med-grid-wrapper {
+	max-width: 1200px;
+	margin: 0 auto;
+	width: 100%;
+}
+
+.med-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 1rem;
+}
+
+@media (max-width: 768px) {
+	.med-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
 .med-row {
 	display: flex;
 	flex-direction: column;
@@ -823,18 +847,8 @@ body.modal-open {
 	}
 }
 
-.blisters h3 {
-	margin: 0;
-}
 .gap {
 	gap: 0.6rem;
-}
-
-/* Blisters header actions */
-.blisters-actions {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
 }
 
 /* Inline checkbox for compact layout */
@@ -1069,6 +1083,82 @@ textarea.auto-resize {
 .form-grid .full {
 	grid-column: 1 / -1;
 }
+
+.form-category {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem 1.25rem;
+	padding: 0.95rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 12px;
+	background: var(--bg-tertiary);
+}
+
+.form-category-title {
+	grid-column: 1 / -1;
+	margin: 0;
+	color: var(--accent-light);
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+.form-category .full {
+	grid-column: 1 / -1;
+}
+
+.form-category > label:not(.full) {
+	align-self: end;
+}
+
+.form-category-header {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.form-category-header .form-category-title {
+	margin: 0;
+}
+
+/* Intake section */
+.intake-section .blister-row {
+	grid-column: 1 / -1;
+}
+
+/* Image section */
+.image-section {
+	grid-template-columns: 1fr;
+}
+
+.image-section .image-preview {
+	grid-column: 1 / -1;
+}
+
+.image-section input[type="file"] {
+	grid-column: 1 / -1;
+	font-size: 0.9rem;
+}
+
+.image-section input[type="file"]::file-selector-button {
+	background: var(--accent);
+	color: white;
+	border: none;
+	padding: 0.5rem 1rem;
+	border-radius: 6px;
+	cursor: pointer;
+	margin-right: 0.75rem;
+	font-weight: 500;
+}
+
+.image-section input[type="file"]::file-selector-button:hover {
+	background: var(--accent-light);
+}
+
 .form-grid .optional-label {
 	text-transform: none;
 	font-weight: 400;
@@ -1926,6 +2016,7 @@ textarea.auto-resize {
 .status-chip.small {
 	font-size: 0.7rem;
 	padding: 0.2rem 0.5rem;
+	word-spacing: 0.1rem;
 }
 
 @media (max-width: 760px) {
@@ -3354,13 +3445,6 @@ textarea.auto-resize {
 	margin-bottom: 0.75rem;
 }
 
-/* Image upload section */
-.image-upload-section {
-	margin-top: 1rem;
-	padding-top: 1rem;
-	border-top: 1px solid var(--border-primary);
-}
-
 .image-preview {
 	display: flex;
 	align-items: center;
@@ -3374,26 +3458,6 @@ textarea.auto-resize {
 	object-fit: cover;
 	border-radius: 8px;
 	border: 1px solid var(--border-primary);
-}
-
-.image-upload-section input[type="file"] {
-	margin-top: 0.5rem;
-	font-size: 0.9rem;
-}
-
-.image-upload-section input[type="file"]::file-selector-button {
-	background: var(--accent);
-	color: white;
-	border: none;
-	padding: 0.5rem 1rem;
-	border-radius: 6px;
-	cursor: pointer;
-	margin-right: 0.75rem;
-	font-weight: 500;
-}
-
-.image-upload-section input[type="file"]::file-selector-button:hover {
-	background: var(--accent-light);
 }
 
 /* Modal styles */
@@ -5168,30 +5232,68 @@ a.about-version-link:hover {
 	}
 }
 
-/* Inline refill form in edit modal */
-.refill-form-inline {
+/* Refill: submit row (button + pill preview) */
+.refill-submit-row {
 	display: flex;
-	align-items: flex-end;
+	align-items: center;
 	gap: 1rem;
-	flex-wrap: wrap;
 }
 
-.refill-form-inline label {
-	flex: 1;
-	min-width: 100px;
+.refill-submit-row button {
+	height: 42px;
+	padding: 0 2rem;
+	min-width: 120px;
+	flex-shrink: 0;
 }
 
-.refill-form-inline label input {
+/* Refill: prescription toggle row */
+.refill-prescription-row {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding-top: 0.25rem;
+	border-top: 1px solid var(--border-primary);
+}
+
+.refill-prescription-row .refill-prescription-toggle {
+	display: grid;
+	grid-template-columns: 18px minmax(0, 1fr);
+	align-items: start;
+	gap: 0.6rem;
+	margin: 0;
+	text-transform: none;
+	letter-spacing: normal;
+	line-height: 1.2;
+	font-size: 0.95rem;
+	color: var(--text-primary);
+	cursor: pointer;
+	white-space: normal;
 	width: 100%;
 }
 
-.refill-form-inline button {
+.refill-prescription-row .refill-prescription-toggle input {
+	width: 18px;
+	height: 18px;
+	min-width: 18px;
+	margin: 0;
 	flex-shrink: 0;
-	margin-bottom: 0;
-	align-self: flex-end;
-	height: 42px;
-	padding: 0 1rem;
-	min-width: 110px;
+}
+
+.refill-prescription-label-text {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.refill-prescription-row .refill-prescription-toggle input:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.refill-remaining-badge {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--success);
+	margin-left: auto;
 }
 
 .refill-preview {
@@ -5212,11 +5314,7 @@ a.about-version-link:hover {
 }
 
 .refill-section {
-	border-left: 3px solid var(--success);
-	background: var(--bg-secondary);
-	margin-top: 1.5rem;
-	padding: 1rem 1rem 1rem 1.25rem;
-	border-radius: 0 8px 8px 0;
+	margin-top: 0;
 }
 
 .refill-section .refill-title {
@@ -5226,21 +5324,31 @@ a.about-version-link:hover {
 	margin: 0 0 0.75rem 0;
 }
 
-.refill-section .refill-form-inline button {
+.refill-section .refill-submit-row button {
 	background: var(--success);
 	color: white;
 	border: none;
 }
 
-.refill-section .refill-form-inline button:hover:not(:disabled) {
+.refill-section .refill-submit-row button:hover:not(:disabled) {
 	background: var(--success-hover, #3aa865);
 	filter: brightness(1.1);
 }
 
-.refill-section .refill-form-inline button:disabled {
+.refill-section .refill-submit-row button:disabled {
 	background: var(--bg-tertiary);
 	color: var(--text-tertiary);
 	cursor: not-allowed;
+}
+
+.refill-unavailable {
+	grid-column: 1 / -1;
+	margin: 0;
+	padding: 0.6rem 0.75rem;
+	border-radius: 8px;
+	border: 1px dashed var(--border-secondary);
+	color: var(--text-secondary);
+	font-size: 0.88rem;
 }
 
 /* =============================================================================
@@ -5573,35 +5681,36 @@ a.about-version-link:hover {
 	width: 100%;
 }
 
+.mobile-edit-form .form-category {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.75rem 1rem;
+	padding: 0.8rem;
+}
+
+.mobile-edit-form .refill-prescription-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0.6rem;
+	align-items: start;
+	width: 100%;
+}
+
+.mobile-edit-form .refill-prescription-row .refill-prescription-toggle {
+	grid-template-columns: 18px minmax(0, 1fr);
+	line-height: 1.3;
+	max-width: 100%;
+}
+
+.mobile-edit-form .refill-remaining-badge {
+	margin-left: 0;
+	justify-self: start;
+}
+
 .mobile-edit-form.form-grid input,
 .mobile-edit-form.form-grid textarea,
 .mobile-edit-form.form-grid select {
 	font-size: 16px !important;
 	width: 100%;
-}
-
-/* Mobile Blister/Intake Schedule Section */
-.mobile-edit-form .blister-section {
-	padding: 1rem;
-	margin-top: 0.5rem;
-}
-
-.mobile-edit-form .blister-section legend {
-	font-size: 0.95rem;
-	padding: 0 0.5rem;
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	flex-wrap: nowrap;
-	width: 100%;
-}
-
-.mobile-edit-form .blister-section legend .toggle-switch {
-	margin-left: auto;
-}
-
-.mobile-edit-form .blister-section legend .legend-hint {
-	margin-left: 0;
 }
 
 .mobile-edit-form .blister-row {

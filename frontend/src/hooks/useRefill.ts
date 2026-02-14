@@ -10,6 +10,8 @@ export interface UseRefillReturn {
 	setRefillPacks: React.Dispatch<React.SetStateAction<number>>;
 	refillLoose: number;
 	setRefillLoose: React.Dispatch<React.SetStateAction<number>>;
+	usePrescriptionRefill: boolean;
+	setUsePrescriptionRefill: React.Dispatch<React.SetStateAction<boolean>>;
 	refillSaving: boolean;
 	refillHistory: RefillEntry[];
 	refillHistoryExpanded: boolean;
@@ -30,7 +32,8 @@ export interface UseRefillReturn {
 		medId: number,
 		editingId: number | null,
 		setForm: React.Dispatch<React.SetStateAction<FormState>>,
-		loadMeds: () => void
+		loadMeds: () => void,
+		usePrescription?: boolean
 	) => Promise<void>;
 	submitStockCorrection: (medId: number, selectedMed: Medication, loadMeds: () => void) => Promise<void>;
 	openRefillModal: () => void;
@@ -44,6 +47,7 @@ export function useRefill(): UseRefillReturn {
 	const [showRefillModal, setShowRefillModal] = useState(false);
 	const [refillPacks, setRefillPacks] = useState(1);
 	const [refillLoose, setRefillLoose] = useState(0);
+	const [usePrescriptionRefill, setUsePrescriptionRefill] = useState(false);
 	const [refillSaving, setRefillSaving] = useState(false);
 	const [refillHistory, setRefillHistory] = useState<RefillEntry[]>([]);
 	const [refillHistoryExpanded, setRefillHistoryExpanded] = useState(false);
@@ -75,7 +79,8 @@ export function useRefill(): UseRefillReturn {
 			medId: number,
 			editingId: number | null,
 			setForm: React.Dispatch<React.SetStateAction<FormState>>,
-			loadMeds: () => void
+			loadMeds: () => void,
+			usePrescription: boolean = false
 		) => {
 			if (refillPacks < 1 && refillLoose < 1) return;
 			setRefillSaving(true);
@@ -84,7 +89,7 @@ export function useRefill(): UseRefillReturn {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					credentials: "include",
-					body: JSON.stringify({ packsAdded: refillPacks, loosePillsAdded: refillLoose }),
+					body: JSON.stringify({ packsAdded: refillPacks, loosePillsAdded: refillLoose, usePrescription }),
 				});
 				if (res.ok) {
 					const data = await res.json();
@@ -94,11 +99,16 @@ export function useRefill(): UseRefillReturn {
 							...f,
 							packCount: String(data.newStock.packCount),
 							looseTablets: String(data.newStock.looseTablets),
+							prescriptionRemainingRefills:
+								data.prescription?.remainingRefills != null
+									? String(data.prescription.remainingRefills)
+									: f.prescriptionRemainingRefills,
 						}));
 					}
 					// Reset refill form
 					setRefillPacks(1);
 					setRefillLoose(0);
+					setUsePrescriptionRefill(false);
 					// Close refill modal via history back for proper back-button support
 					if (showRefillModal) {
 						window.history.back();
@@ -217,6 +227,8 @@ export function useRefill(): UseRefillReturn {
 		setRefillPacks,
 		refillLoose,
 		setRefillLoose,
+		usePrescriptionRefill,
+		setUsePrescriptionRefill,
 		refillSaving,
 		refillHistory,
 		refillHistoryExpanded,

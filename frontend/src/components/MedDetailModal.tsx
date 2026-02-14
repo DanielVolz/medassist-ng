@@ -6,6 +6,7 @@
  * 1. Context mode: Uses useAppContext() for all state (when no props provided)
  * 2. Props mode: Accepts all required data as props (for gradual adoption)
  */
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lightbox, MedicationAvatar } from "../components";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
@@ -83,11 +84,13 @@ export interface MedDetailModalProps {
 	onRefillPacksChange: (value: number) => void;
 	refillLoose: number;
 	onRefillLooseChange: (value: number) => void;
+	usePrescriptionRefill: boolean;
+	onUsePrescriptionRefillChange: (value: boolean) => void;
 	refillSaving: boolean;
 	refillHistory: RefillEntry[];
 	refillHistoryExpanded: boolean;
 	onRefillHistoryExpandedChange: (value: boolean) => void;
-	onSubmitRefill: (medId: number) => Promise<void>;
+	onSubmitRefill: (medId: number, usePrescription?: boolean) => Promise<void>;
 	// Edit stock state
 	editStockFullBlisters: number;
 	onEditStockFullBlistersChange: (value: number) => void;
@@ -115,6 +118,8 @@ export function MedDetailModal({
 	onRefillPacksChange,
 	refillLoose,
 	onRefillLooseChange,
+	usePrescriptionRefill,
+	onUsePrescriptionRefillChange,
 	refillSaving,
 	refillHistory,
 	refillHistoryExpanded,
@@ -128,6 +133,20 @@ export function MedDetailModal({
 	onSubmitStockCorrection,
 }: MedDetailModalProps) {
 	const { t, i18n } = useTranslation();
+	const [editStockFullInput, setEditStockFullInput] = useState("0");
+	const [editStockPartialInput, setEditStockPartialInput] = useState("0");
+
+	const parseStockInput = (value: string): number => {
+		const parsed = Number.parseInt(value, 10);
+		return Number.isNaN(parsed) ? 0 : parsed;
+	};
+
+	useEffect(() => {
+		if (showEditStockModal) {
+			setEditStockFullInput(String(editStockFullBlisters));
+			setEditStockPartialInput(String(editStockPartialBlisterPills));
+		}
+	}, [showEditStockModal, editStockFullBlisters, editStockPartialBlisterPills]);
 
 	if (!selectedMed) return null;
 
@@ -138,6 +157,7 @@ export function MedDetailModal({
 	const textClass =
 		status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "success-text";
 	const stock = getBlisterStock(currentStock, selectedMed.pillsPerBlister, selectedMed.looseTablets, packageSize);
+	const fullForBounds = Math.max(0, parseStockInput(editStockFullInput));
 
 	return (
 		<div className="modal-overlay" onClick={onClose}>
@@ -263,6 +283,42 @@ export function MedDetailModal({
 						</div>
 					</div>
 
+					{/* Prescription Details Section */}
+					{selectedMed.prescriptionEnabled && (
+						<div className="med-detail-section">
+							<h3>{t("form.sections.prescription")}</h3>
+							<div className="med-detail-grid">
+								<div className="med-detail-item">
+									<span className="med-detail-label">{t("prescription.authorizedRefills")}</span>
+									<span className="med-detail-value">{selectedMed.prescriptionAuthorizedRefills ?? "—"}</span>
+								</div>
+								<div className="med-detail-item">
+									<span className="med-detail-label">{t("prescription.remainingRefills")}</span>
+									<span className="med-detail-value">{selectedMed.prescriptionRemainingRefills ?? "—"}</span>
+								</div>
+								<div className="med-detail-item">
+									<span className="med-detail-label">{t("prescription.lowThreshold")}</span>
+									<span className="med-detail-value">{selectedMed.prescriptionLowRefillThreshold ?? "—"}</span>
+								</div>
+								<div className="med-detail-item">
+									<span className="med-detail-label">{t("prescription.expiryDate")}</span>
+									<span className="med-detail-value">
+										{selectedMed.prescriptionExpiryDate
+											? new Date(selectedMed.prescriptionExpiryDate).toLocaleDateString(
+													getSystemLocale(i18n.language),
+													{
+														day: "2-digit",
+														month: "short",
+														year: "numeric",
+													}
+												)
+											: "—"}
+									</span>
+								</div>
+							</div>
+						</div>
+					)}
+
 					{/* Intake Schedule Section */}
 					{selectedMed.blisters.length > 0 && (
 						<div className="med-detail-section">
@@ -373,6 +429,12 @@ export function MedDetailModal({
 																entry.loosePillsAdded;
 													return `+${total} ${total === 1 ? t("common.pill") : t("common.pills")}`;
 												})()}
+												{entry.usedPrescription && (
+													<span className="refill-prescription-badge" title={t("refill.viaPrescription")}>
+														{" "}
+														📋
+													</span>
+												)}
 											</span>
 										</div>
 									))}
@@ -459,6 +521,23 @@ export function MedDetailModal({
 									/>
 								</label>
 							)}
+
+							{selectedMed.prescriptionEnabled && (
+								<div className="refill-prescription-row full">
+									<label className="refill-prescription-toggle">
+										<input
+											type="checkbox"
+											checked={usePrescriptionRefill}
+											onChange={(e) => onUsePrescriptionRefillChange(e.target.checked)}
+											disabled={(Number(selectedMed.prescriptionRemainingRefills) || 0) <= 0}
+										/>
+										<span className="refill-prescription-label-text">{t("prescription.useForRefill")}</span>
+									</label>
+									<span className="refill-remaining-badge">
+										{t("prescription.remainingRefills")}: {Number(selectedMed.prescriptionRemainingRefills) || 0}
+									</span>
+								</div>
+							)}
 						</div>
 
 						<div className="modal-footer">
@@ -468,7 +547,7 @@ export function MedDetailModal({
 							<div className="refill-footer-right">
 								<button
 									className="success"
-									onClick={() => onSubmitRefill(selectedMed.id)}
+									onClick={() => onSubmitRefill(selectedMed.id, usePrescriptionRefill)}
 									disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
 								>
 									{refillSaving ? t("common.saving") : t("refill.button")}
@@ -525,8 +604,17 @@ export function MedDetailModal({
 												<input
 													type="number"
 													min="0"
-													value={editStockPartialBlisterPills}
-													onChange={(e) => onEditStockPartialBlisterPillsChange(parseInt(e.target.value, 10) || 0)}
+													value={editStockPartialInput}
+													onChange={(e) => {
+														const raw = e.target.value;
+														setEditStockPartialInput(raw);
+														onEditStockPartialBlisterPillsChange(raw === "" ? 0 : Math.max(0, parseStockInput(raw)));
+													}}
+													onBlur={() => {
+														const normalized = Math.max(0, parseStockInput(editStockPartialInput));
+														onEditStockPartialBlisterPillsChange(normalized);
+														setEditStockPartialInput(String(normalized));
+													}}
 												/>
 											</label>
 										) : (
@@ -537,22 +625,44 @@ export function MedDetailModal({
 													<input
 														type="number"
 														min="0"
-														value={editStockFullBlisters}
-														onChange={(e) => onEditStockFullBlistersChange(parseInt(e.target.value, 10) || 0)}
+														value={editStockFullInput}
+														onChange={(e) => {
+															const raw = e.target.value;
+															setEditStockFullInput(raw);
+															onEditStockFullBlistersChange(raw === "" ? 0 : Math.max(0, parseStockInput(raw)));
+														}}
+														onBlur={() => {
+															const normalized = Math.max(0, parseStockInput(editStockFullInput));
+															onEditStockFullBlistersChange(normalized);
+															setEditStockFullInput(String(normalized));
+														}}
 													/>
 												</label>
 												<label>
 													{t("editStock.partialBlisterPills")}
 													<input
 														type="number"
-														min={editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0}
+														min={fullForBounds > 0 ? -(selectedMed.pillsPerBlister - 1) : 0}
 														max={selectedMed.pillsPerBlister}
-														value={editStockPartialBlisterPills}
+														value={editStockPartialInput}
 														onChange={(e) => {
-															const val = parseInt(e.target.value, 10) || 0;
-															const min = editStockFullBlisters > 0 ? -(selectedMed.pillsPerBlister - 1) : 0;
+															const raw = e.target.value;
+															setEditStockPartialInput(raw);
+															if (raw === "") {
+																onEditStockPartialBlisterPillsChange(0);
+																return;
+															}
+															const val = parseStockInput(raw);
+															const min = fullForBounds > 0 ? -(selectedMed.pillsPerBlister - 1) : 0;
 															const max = selectedMed.pillsPerBlister;
 															onEditStockPartialBlisterPillsChange(Math.max(min, Math.min(val, max)));
+														}}
+														onBlur={() => {
+															const min = fullForBounds > 0 ? -(selectedMed.pillsPerBlister - 1) : 0;
+															const max = selectedMed.pillsPerBlister;
+															const normalized = Math.max(min, Math.min(parseStockInput(editStockPartialInput), max));
+															onEditStockPartialBlisterPillsChange(normalized);
+															setEditStockPartialInput(String(normalized));
 														}}
 													/>
 												</label>

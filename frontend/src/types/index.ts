@@ -52,6 +52,11 @@ export type Medication = {
 	imageUrl?: string | null;
 	expiryDate?: string | null;
 	notes?: string | null;
+	prescriptionEnabled?: boolean;
+	prescriptionAuthorizedRefills?: number | null;
+	prescriptionRemainingRefills?: number | null;
+	prescriptionLowRefillThreshold?: number;
+	prescriptionExpiryDate?: string | null;
 	intakeRemindersEnabled?: boolean; // Medication-level setting (deprecated, use per-intake)
 	dismissedUntil?: string | null; // ISO date string (YYYY-MM-DD) - all past doses until this date are dismissed
 	updatedAt: string | number | null;
@@ -74,6 +79,7 @@ export type RefillEntry = {
 	id: number;
 	packsAdded: number;
 	loosePillsAdded: number;
+	usedPrescription?: boolean;
 	refillDate: string;
 };
 
@@ -110,6 +116,11 @@ export type FormState = {
 	doseUnit: DoseUnit; // Unit for the dose (mg, g, mcg, ml, IU, etc.)
 	expiryDate: string;
 	notes: string;
+	prescriptionEnabled: boolean;
+	prescriptionAuthorizedRefills: string;
+	prescriptionRemainingRefills: string;
+	prescriptionLowRefillThreshold: string;
+	prescriptionExpiryDate: string;
 	intakeRemindersEnabled: boolean; // Deprecated, kept for backward compat
 	blisters: FormBlister[]; // Legacy form format
 	intakes: FormIntake[]; // New form format with per-intake takenBy
@@ -154,6 +165,7 @@ export type ScheduleEvent = {
 	when: number;
 	isPast: boolean;
 	takenBy: string | null; // Per-intake takenBy (single person or null)
+	intakeRemindersEnabled: boolean; // Per-intake reminder flag
 };
 
 export type BlisterStock = {

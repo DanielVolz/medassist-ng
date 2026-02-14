@@ -1,12 +1,14 @@
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // Read version from package.json at build time
 const packageJson = JSON.parse(readFileSync("./package.json", "utf-8"));
 
-// Default to localhost for local dev and CI; docker dev overrides via BACKEND_URL
-const backendTarget = process.env.BACKEND_URL || "http://localhost:3000";
+// Default to localhost for local dev and CI.
+// In Docker, prefer backend-dev to avoid localhost proxy failures.
+const defaultBackendTarget = existsSync("/.dockerenv") ? "http://backend-dev:3000" : "http://localhost:3000";
+const backendTarget = process.env.BACKEND_URL || defaultBackendTarget;
 
 export default defineConfig({
   plugins: [react()],

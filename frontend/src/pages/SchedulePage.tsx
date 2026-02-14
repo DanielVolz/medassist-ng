@@ -176,14 +176,6 @@ export function SchedulePage() {
 														<div className="med-name">
 															<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 															<span className="med-name-text">{item.medName}</span>
-															{med?.intakeRemindersEnabled && (
-																<span
-																	className="reminder-icon info-tooltip"
-																	data-tooltip={t("tooltips.intakeReminders")}
-																>
-																	🔔
-																</span>
-															)}
 														</div>
 														<div className="tag-row">
 															<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
@@ -199,7 +191,15 @@ export function SchedulePage() {
 																	<span className="dose-usage">
 																		{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
 																		{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
-																	</span>
+																	</span>{" "}
+																	{dose.intakeRemindersEnabled && (
+																		<span
+																			className="reminder-icon info-tooltip"
+																			data-tooltip={t("tooltips.intakeReminders")}
+																		>
+																			🔔
+																		</span>
+																	)}{" "}
 																	<div className="dose-checks">
 																		{people.map((person) => {
 																			const doseId = getDoseId(dose.id, person);
@@ -313,11 +313,6 @@ export function SchedulePage() {
 												<div className="med-name">
 													<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 													<span className="med-name-text">{item.medName}</span>
-													{med?.intakeRemindersEnabled && (
-														<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
-															🔔
-														</span>
-													)}
 												</div>
 												<div className="tag-row">
 													<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
@@ -337,6 +332,14 @@ export function SchedulePage() {
 																{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
 																{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
 															</span>
+															{dose.intakeRemindersEnabled && (
+																<span
+																	className="reminder-icon info-tooltip"
+																	data-tooltip={t("tooltips.intakeReminders")}
+																>
+																	🔔
+																</span>
+															)}
 															<div className="dose-checks">
 																{people.map((person) => {
 																	const doseId = getDoseId(dose.id, person);

@@ -1,5 +1,8 @@
+import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import nodemailer from "nodemailer";
+import { db } from "../db/client.js";
+import { medications } from "../db/schema.js";
 import {
 	getDateLocale,
 	getFooterHtml,
@@ -132,6 +135,21 @@ export async function plannerRoutes(app: FastifyInstance) {
 		const outOfStockCount = rows.filter((r) => !r.enough).length;
 		const summaryText = outOfStockCount > 0 ? t(dc.summaryOutOfStock, { count: outOfStockCount }) : dc.summaryAllOk;
 
+		// Load prescription data for medications referenced in planner rows
+		const medIds = rows.map((r) => r.medicationId).filter(Boolean);
+		const allMeds =
+			medIds.length > 0
+				? await db
+						.select({
+							id: medications.id,
+							prescriptionEnabled: medications.prescriptionEnabled,
+							prescriptionRemainingRefills: medications.prescriptionRemainingRefills,
+						})
+						.from(medications)
+						.where(eq(medications.userId, userId))
+				: [];
+		const prescriptionMap = new Map(allMeds.map((m) => [m.id, m]));
+
 		// Build plain text (shared between email and push)
 		const plainText = `${dc.title}
 ${t(dc.description, { from: fromDate, until: untilDate })}
@@ -143,12 +161,16 @@ ${rows
 		const isBottle = r.packageType === "bottle";
 		const usage = `${r.plannerUsage} ${tr.common.pills}`;
 		const needed = isBottle ? "–" : `${r.blistersNeeded} × ${r.blisterSize}`;
+		const medPrescription = prescriptionMap.get(r.medicationId);
+		const rxRefills = medPrescription?.prescriptionEnabled
+			? String(medPrescription.prescriptionRemainingRefills ?? 0)
+			: dc.prescriptionNotApplicable;
 		const loosePills = Math.round((Number(r.loosePills) || 0) * 10) / 10;
 		const available = isBottle
 			? `${loosePills} ${tr.common.pills}`
 			: `${r.fullBlisters} ${tr.common.blisters}${loosePills > 0 ? ` + ${loosePills} ${tr.common.pills}` : ""}`;
 		const status = r.enough ? dc.statusEnough : dc.statusEmpty;
-		return `${r.medicationName}: ${usage}, ${needed}, ${available} - ${status}`;
+		return `${r.medicationName}: ${usage}, ${needed}, ${dc.tableHeaders.prescriptionRefills}: ${rxRefills}, ${available} - ${status}`;
 	})
 	.join("\n")}
 
@@ -182,6 +204,12 @@ ${getFooterPlain(language)}`;
 						// "Blisters needed" column: dash for bottles
 						const neededCell = isBottle ? "–" : `${safeBlistersNeeded} × ${safeBlisterSize}`;
 
+						// "Prescription refills" column
+						const medPrescription = prescriptionMap.get(row.medicationId);
+						const rxCell = medPrescription?.prescriptionEnabled
+							? String(medPrescription.prescriptionRemainingRefills ?? 0)
+							: dc.prescriptionNotApplicable;
+
 						// "Available" column: match frontend format
 						let availableCell: string;
 						if (isBottle) {
@@ -198,6 +226,7 @@ ${getFooterPlain(language)}`;
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${safeName}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safePlannerUsage}</strong> ${tr.common.pills}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${neededCell}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${rxCell}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${availableCell}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">
             <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; ${
@@ -234,6 +263,7 @@ ${getFooterPlain(language)}`;
                   <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.medication}</th>
                   <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.usage}</th>
                   <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.needed}</th>
+                  <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.prescriptionRefills}</th>
                   <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.available}</th>
                   <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; white-space: nowrap;">${dc.tableHeaders.status}</th>
                 </tr>

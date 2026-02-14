@@ -167,11 +167,13 @@ type TranslationKeys = {
 			medication: string;
 			usage: string;
 			needed: string;
+			prescriptionRefills: string;
 			available: string;
 			status: string;
 		};
 		statusEnough: string;
 		statusEmpty: string;
+		prescriptionNotApplicable: string;
 	};
 	// Common
 	common: {
@@ -286,11 +288,13 @@ const translations: Record<Language, TranslationKeys> = {
 				medication: "Medication",
 				usage: "Usage",
 				needed: "Blisters needed",
+				prescriptionRefills: "Prescription refills",
 				available: "Available",
 				status: "Status",
 			},
 			statusEnough: "✓ Enough",
 			statusEmpty: "✗ Empty",
+			prescriptionNotApplicable: "–",
 		},
 		common: {
 			pill: "pill",
@@ -405,11 +409,13 @@ const translations: Record<Language, TranslationKeys> = {
 				medication: "Medikament",
 				usage: "Verbrauch",
 				needed: "Blister benötigt",
+				prescriptionRefills: "Rezept-Nachfüllungen",
 				available: "Verfügbar",
 				status: "Status",
 			},
 			statusEnough: "✓ Ausreichend",
 			statusEmpty: "✗ Leer",
+			prescriptionNotApplicable: "–",
 		},
 		common: {
 			pill: "Tablette",

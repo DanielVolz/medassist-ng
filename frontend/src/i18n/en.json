@@ -207,6 +207,7 @@
       "medication": "Medication",
       "usage": "Usage",
       "blistersNeeded": "Blisters needed",
+      "prescriptionRefills": "Prescription refills",
       "blisters": "Blisters",
       "available": "Available"
     }

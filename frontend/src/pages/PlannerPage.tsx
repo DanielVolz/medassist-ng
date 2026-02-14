@@ -196,16 +196,19 @@ export function PlannerPage() {
 				</form>
 				{plannerRows.length > 0 && (
 					<>
-						<div className="table">
+						<div className="table table-6">
 							<div className="table-head">
 								<span>{t("planner.table.medication")}</span>
 								<span>{t("planner.table.usage")}</span>
 								<span>{t("planner.table.blistersNeeded")}</span>
+								<span>{t("planner.table.prescriptionRefills")}</span>
 								<span>{t("planner.table.available")}</span>
 								<span>{t("table.status")}</span>
 							</div>
 							{plannerRows.map((row) => {
-								const med = meds.find((m) => m.name === row.medicationName);
+								const med =
+									meds.find((m) => m.id === row.medicationId) || meds.find((m) => m.name === row.medicationName);
+								const remainingRefills = med?.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? 0) : null;
 								return (
 									<div key={row.medicationId} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
 										<span data-label={t("planner.table.medication")} className="cell-with-avatar">
@@ -219,6 +222,7 @@ export function PlannerPage() {
 										<span data-label={t("planner.table.blisters")}>
 											{row.packageType === "bottle" ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`}
 										</span>
+										<span data-label={t("planner.table.prescriptionRefills")}>{remainingRefills ?? "–"}</span>
 										<span data-label={t("planner.table.available")}>
 											{row.packageType === "bottle" ? (
 												`${Math.round(row.loosePills * 10) / 10} ${Math.round(row.loosePills * 10) / 10 === 1 ? t("common.pill") : t("common.pills")}`

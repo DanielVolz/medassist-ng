@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import argon2 from "argon2";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -129,7 +129,7 @@ export async function authRoutes(app: FastifyInstance) {
 			const { username, password } = parsed.data;
 
 			// Check if username already exists
-			const [existingUser] = await db.select().from(users).where(eq(users.username, username));
+			const [existingUser] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
 			if (existingUser) {
 				return reply.status(409).send({ error: "Username already taken", code: "USERNAME_EXISTS" });
 			}
@@ -190,7 +190,7 @@ export async function authRoutes(app: FastifyInstance) {
 			const { username, password, rememberMe } = parsed.data;
 
 			// Find user by username
-			const [user] = await db.select().from(users).where(eq(users.username, username));
+			const [user] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
 
 			// Generic error to prevent user enumeration
 			const invalidCredentialsError = () =>

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import * as client from "openid-client";
 import { db } from "../db/client.js";
@@ -234,7 +234,7 @@ async function findOrCreateOIDCUser(
 	}
 
 	// Check if username already exists (potential collision)
-	const [existingByUsername] = await db.select().from(users).where(eq(users.username, username));
+	const [existingByUsername] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
 
 	if (existingByUsername) {
 		// Username collision! Check if it's a local user without OIDC linked

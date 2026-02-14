@@ -93,6 +93,9 @@ export function MedicationsPage() {
 	const closeConfirmedRef = useRef(false);
 	// Confirmation modal for unsaved changes
 	const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+	const [unsavedConfirmSource, setUnsavedConfirmSource] = useState<"mobile-edit" | "desktop-form" | null>(null);
+	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+	const [deleteCandidate, setDeleteCandidate] = useState<Medication | null>(null);
 
 	// Calculate total tablets
 	const totalTablets = useMemo(() => {
@@ -119,6 +122,7 @@ export function MedicationsPage() {
 		if (showEditModal) {
 			// Check for unsaved changes before closing
 			if (formChanged) {
+				setUnsavedConfirmSource("mobile-edit");
 				setShowUnsavedConfirm(true);
 				return;
 			}
@@ -131,6 +135,7 @@ export function MedicationsPage() {
 	// Handle confirmed close (user clicked "Leave" in confirmation modal)
 	function handleConfirmClose() {
 		setShowUnsavedConfirm(false);
+		setUnsavedConfirmSource(null);
 		closeConfirmedRef.current = true;
 		hasUnsavedHistoryState.current = false;
 		if (showEditModal) {
@@ -143,6 +148,10 @@ export function MedicationsPage() {
 	// Handle cancelled close (user clicked "Stay" in confirmation modal)
 	function handleCancelClose() {
 		setShowUnsavedConfirm(false);
+		if (unsavedConfirmSource === "mobile-edit") {
+			setShowEditModal(true);
+		}
+		setUnsavedConfirmSource(null);
 	}
 
 	// Helper to reset form and clear history state
@@ -156,10 +165,26 @@ export function MedicationsPage() {
 		setViewMode("grid");
 	}
 
-	// Handle delete medication
-	async function handleDeleteMed(id: number) {
-		if (!confirm(t("medications.deleteConfirm"))) return;
-		await deleteMed(id, editingId, resetForm);
+	function requestDeleteMed(med: Medication) {
+		setDeleteCandidate(med);
+		setShowDeleteConfirm(true);
+		window.history.pushState({ modal: "delete-confirm" }, "");
+	}
+
+	async function handleConfirmDelete() {
+		if (!deleteCandidate) return;
+		await deleteMed(deleteCandidate.id, editingId, resetForm);
+		setShowDeleteConfirm(false);
+		setDeleteCandidate(null);
+		// Pop the delete-confirm history entry
+		window.history.back();
+	}
+
+	function handleCancelDelete() {
+		setShowDeleteConfirm(false);
+		setDeleteCandidate(null);
+		// Pop the delete-confirm history entry
+		window.history.back();
 	}
 
 	// Handle submit refill
@@ -284,6 +309,13 @@ export function MedicationsPage() {
 	// Handle browser back button for modals and unsaved changes
 	useEffect(() => {
 		const handlePopState = () => {
+			// Delete confirmation is open — dismiss it and stay where we are
+			if (showDeleteConfirm) {
+				setShowDeleteConfirm(false);
+				setDeleteCandidate(null);
+				return;
+			}
+
 			// If close was already confirmed programmatically, allow navigation
 			if (closeConfirmedRef.current) {
 				closeConfirmedRef.current = false;
@@ -301,6 +333,7 @@ export function MedicationsPage() {
 					// Re-push history state to stay in modal
 					window.history.pushState({ modal: "edit" }, "");
 					// Show confirmation modal
+					setUnsavedConfirmSource("mobile-edit");
 					setShowUnsavedConfirm(true);
 					return;
 				}
@@ -314,12 +347,13 @@ export function MedicationsPage() {
 				// Re-push history state to stay on page
 				window.history.pushState({ unsavedChanges: true }, "");
 				// Show confirmation modal
+				setUnsavedConfirmSource("desktop-form");
 				setShowUnsavedConfirm(true);
 			}
 		};
 		window.addEventListener("popstate", handlePopState);
 		return () => window.removeEventListener("popstate", handlePopState);
-	}, [showEditModal, formChanged, resetForm]);
+	}, [showDeleteConfirm, showEditModal, formChanged, resetForm]);
 
 	// Close modal on Escape key
 	useEffect(() => {
@@ -444,10 +478,12 @@ export function MedicationsPage() {
 										</div>
 									</div>
 									<div className="med-actions">
-										<button className="info" onClick={() => handleEditClick(med)}>
-											{t("common.edit")}
-										</button>
-										<button className="danger" onClick={() => handleDeleteMed(med.id)}>
+										{editingId !== med.id && (
+											<button className="info" onClick={() => handleEditClick(med)}>
+												{t("common.edit")}
+											</button>
+										)}
+										<button className="danger" onClick={() => requestDeleteMed(med)}>
 											{t("common.delete")}
 										</button>
 									</div>
@@ -547,10 +583,12 @@ export function MedicationsPage() {
 											</div>
 										</div>
 										<div className="med-actions">
-											<button className="info" onClick={() => handleEditClick(med)}>
-												{t("common.edit")}
-											</button>
-											<button className="danger" onClick={() => handleDeleteMed(med.id)}>
+											{editingId !== med.id && (
+												<button className="info" onClick={() => handleEditClick(med)}>
+													{t("common.edit")}
+												</button>
+											)}
+											<button className="danger" onClick={() => requestDeleteMed(med)}>
 												{t("common.delete")}
 											</button>
 										</div>
@@ -1145,10 +1183,27 @@ export function MedicationsPage() {
 					title={t("common.unsavedChanges.title", "Unsaved Changes")}
 					message={t("common.unsavedChanges.message")}
 					confirmLabel={t("common.unsavedChanges.leave", "Leave")}
-					cancelLabel={t("common.unsavedChanges.stay", "Stay")}
+					cancelLabel={
+						unsavedConfirmSource === "mobile-edit" ? t("common.back") : t("common.unsavedChanges.stay", "Stay")
+					}
 					onConfirm={handleConfirmClose}
 					onCancel={handleCancelClose}
 					confirmVariant="danger"
+					overlayClassName={showEditModal ? "nested-confirm" : undefined}
+				/>
+			)}
+
+			{/* Delete Medication Confirmation Modal */}
+			{showDeleteConfirm && deleteCandidate && (
+				<ConfirmModal
+					title={t("medications.deleteModal.title")}
+					message={t("medications.deleteModal.message", { name: deleteCandidate.name })}
+					confirmLabel={t("common.delete")}
+					cancelLabel={t("common.cancel")}
+					onConfirm={handleConfirmDelete}
+					onCancel={handleCancelDelete}
+					confirmVariant="danger"
+					overlayClassName={showEditModal ? "nested-confirm" : undefined}
 				/>
 			)}
 		</section>

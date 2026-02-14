@@ -136,6 +136,10 @@
       "stock": "Bestand",
       "totalCapacity": "Kapazität",
       "type": "Typ"
+    },
+    "deleteModal": {
+      "title": "Medikament löschen",
+      "message": "Möchtest du \"{{name}}\" wirklich löschen?"
     }
   },
   "form": {

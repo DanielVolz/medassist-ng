@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { authFile, navigateTo, test } from "./fixtures";
 
 /**
@@ -9,6 +9,14 @@ import { authFile, navigateTo, test } from "./fixtures";
  */
 test.describe("Medications Page", () => {
 	test.use({ storageState: authFile });
+
+	async function openMedicationForm(page: Page) {
+		await navigateTo(page, "/medications");
+		const newMedicationButton = page.getByRole("button", { name: /New medication/i });
+		if (await newMedicationButton.isVisible().catch(() => false)) {
+			await newMedicationButton.click();
+		}
+	}
 
 	test("should display medications page", async ({ page }) => {
 		await navigateTo(page, "/medications");
@@ -31,9 +39,8 @@ test.describe("Medications Page", () => {
 	});
 
 	test("should display the medication form with required fields", async ({ page }) => {
-		await navigateTo(page, "/medications");
+		await openMedicationForm(page);
 
-		// The form should always be visible on the medications page
 		const commercialName = page.getByLabel(/Commercial Name/i);
 		await expect(commercialName).toBeVisible();
 
@@ -45,7 +52,7 @@ test.describe("Medications Page", () => {
 	});
 
 	test("should fill in medication details", async ({ page }) => {
-		await navigateTo(page, "/medications");
+		await openMedicationForm(page);
 
 		const nameField = page.getByLabel(/Commercial Name/i);
 		await nameField.fill("Test Aspirin");
@@ -57,7 +64,7 @@ test.describe("Medications Page", () => {
 	});
 
 	test("should have stock inventory fields", async ({ page }) => {
-		await navigateTo(page, "/medications");
+		await openMedicationForm(page);
 
 		// Stock fields should be visible
 		await expect(page.getByLabel(/^Packs$/i)).toBeVisible();
@@ -74,7 +81,7 @@ test.describe("Medications Page", () => {
 	});
 
 	test("should toggle package type between blister and bottle", async ({ page }) => {
-		await navigateTo(page, "/medications");
+		await openMedicationForm(page);
 
 		// Find the package type radio buttons or selector
 		const blisterOption = page.getByText(/Blister Pack/i);
@@ -93,7 +100,7 @@ test.describe("Medications Page", () => {
 	});
 
 	test("should have intake schedule with add button", async ({ page }) => {
-		await navigateTo(page, "/medications");
+		await openMedicationForm(page);
 
 		// Intake schedule section
 		const scheduleSection = page.getByText(/Intake schedule/i);
@@ -108,7 +115,7 @@ test.describe("Medications Page", () => {
 	});
 
 	test("should have save and cancel buttons", async ({ page }) => {
-		await navigateTo(page, "/medications");
+		await openMedicationForm(page);
 
 		// Fill in a name to make the form dirty
 		await page.getByLabel(/Commercial Name/i).fill("Test");
@@ -119,7 +126,7 @@ test.describe("Medications Page", () => {
 	});
 
 	test("should prevent navigation with unsaved changes", async ({ page }) => {
-		await navigateTo(page, "/medications");
+		await openMedicationForm(page);
 
 		// Fill in the form to create unsaved changes
 		await page.getByLabel(/Commercial Name/i).fill("Unsaved Medication");

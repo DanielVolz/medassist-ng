@@ -13,7 +13,7 @@ test.describe("Settings Page", () => {
 	test("should display settings form", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		await expect(page.locator("form.settings-form")).toBeVisible();
+		await expect(page.locator("div.settings-form")).toBeVisible();
 	});
 
 	test("should show language section with select", async ({ page }) => {
@@ -60,7 +60,7 @@ test.describe("Settings Page", () => {
 		await expect(thresholdGroup).toBeVisible();
 
 		// Should have three threshold number inputs
-		const thresholdInputs = thresholdGroup.locator('input[type="number"]');
+		const thresholdInputs = thresholdGroup.locator('input[type="text"]');
 		await expect(thresholdInputs).toHaveCount(3);
 	});
 
@@ -97,11 +97,11 @@ test.describe("Settings Page", () => {
 		await expect(otherCard).toHaveClass(/selected/);
 	});
 
-	test("should have save button in form footer", async ({ page }) => {
+	test("should have export action button", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const saveButton = page.locator('div.form-footer > button[type="submit"]');
-		await expect(saveButton).toBeVisible();
+		const exportButton = page.getByRole("button", { name: /Export Data|Daten exportieren/i });
+		await expect(exportButton).toBeVisible();
 	});
 
 	test("should show export/import section", async ({ page }) => {
@@ -156,7 +156,7 @@ test.describe("Settings Page", () => {
 		await navigateTo(page, "/settings");
 
 		const thresholdGroup = page.locator("div.threshold-chips-group");
-		const inputs = thresholdGroup.locator('input[type="number"]');
+		const inputs = thresholdGroup.locator('input[type="text"]');
 
 		// Set an invalid value (critical > low)
 		const criticalInput = inputs.first();
@@ -182,6 +182,6 @@ test.describe("Settings Page", () => {
 		await settingsOption.click();
 
 		await expect(page).toHaveURL(/\/settings/);
-		await expect(page.locator("form.settings-form")).toBeVisible();
+		await expect(page.locator("div.settings-form")).toBeVisible();
 	});
 });

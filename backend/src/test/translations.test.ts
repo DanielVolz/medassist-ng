@@ -98,7 +98,7 @@ describe("Translations Module", () => {
 
 			// Stock reminder subject
 			const subject = t(translations.stockReminder.subject, { count: 3, s: "s" });
-			expect(subject).toBe("MedAssist-ng Auto-Reminder: 3 Medications Running Critically Low");
+			expect(subject).toBe("MedAssist-ng: ⚠️ 3 Medications Running Critically Low");
 
 			// Intake reminder description
 			const description = t(translations.intakeReminder.description, { minutes: 30 });
@@ -113,7 +113,7 @@ describe("Translations Module", () => {
 			const translations = getTranslations("de");
 
 			const subject = t(translations.stockReminder.subject, { count: 2, e: "e" });
-			expect(subject).toBe("MedAssist-ng Auto-Erinnerung: 2 Medikamente kritisch niedrig");
+			expect(subject).toBe("MedAssist-ng: ⚠️ 2 Medikamente kritisch niedrig");
 
 			const takenBy = t(translations.intakeReminder.takenBy, { name: "Daniel" });
 			expect(takenBy).toBe("für Daniel");

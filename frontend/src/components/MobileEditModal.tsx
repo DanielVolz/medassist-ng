@@ -125,6 +125,9 @@ export function MobileEditModal({
 					×
 				</button>
 				<div className="edit-modal-header">
+					<button type="button" className="ghost small" onClick={onClose}>
+						← {t("common.back")}
+					</button>
 					<h2>{editingId ? t("form.editEntry") : t("form.newEntry")}</h2>
 				</div>
 				<form

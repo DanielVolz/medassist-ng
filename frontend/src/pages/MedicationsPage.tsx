@@ -338,6 +338,30 @@ export function MedicationsPage() {
 		setViewMode("form");
 	}
 
+	const orderedMeds = useMemo(() => {
+		if (!editingId) {
+			return meds;
+		}
+
+		const selectedMedication = meds.find((med) => med.id === editingId);
+		if (!selectedMedication) {
+			return meds;
+		}
+
+		return [selectedMedication, ...meds.filter((med) => med.id !== editingId)];
+	}, [meds, editingId]);
+
+	const medListRef = useRef<HTMLDivElement | null>(null);
+	useEffect(() => {
+		if (viewMode !== "form" || !editingId) {
+			return;
+		}
+
+		if (medListRef.current) {
+			medListRef.current.scrollTop = 0;
+		}
+	}, [viewMode, editingId]);
+
 	return (
 		<section className={viewMode === "grid" ? "med-grid-wrapper" : "grid"}>
 			{viewMode === "grid" ? (
@@ -361,7 +385,7 @@ export function MedicationsPage() {
 						</button>
 					</div>
 					<div className="med-grid">
-						{meds.map((med) => (
+						{orderedMeds.map((med) => (
 							<div key={med.id} className="med-row">
 								<div className="med-header">
 									<div className="med-info">
@@ -461,8 +485,8 @@ export function MedicationsPage() {
 								+ {t("form.newEntry")}
 							</button>
 						</div>
-						<div className="med-list">
-							{meds.map((med) => (
+						<div className="med-list" ref={medListRef}>
+							{orderedMeds.map((med) => (
 								<div key={med.id} className={`med-row${editingId === med.id ? " editing" : ""}`}>
 									<div className="med-header">
 										<div className="med-info">
@@ -547,20 +571,25 @@ export function MedicationsPage() {
 
 					<article className="card form desktop-only">
 						<div className="card-head">
-							{editingId ? (
-								<div className="edit-header">
-									<MedicationAvatar
-										name={meds.find((m) => m.id === editingId)?.name || ""}
-										imageUrl={meds.find((m) => m.id === editingId)?.imageUrl}
-										size="md"
-									/>
-									<h2>
-										{t("form.editEntry")}: {meds.find((m) => m.id === editingId)?.name}
-									</h2>
-								</div>
-							) : (
-								<h2>{t("form.newEntry")}</h2>
-							)}
+							<div className="edit-header">
+								<button type="button" className="ghost small" onClick={handleResetForm}>
+									← {t("common.back")}
+								</button>
+								{editingId ? (
+									<>
+										<MedicationAvatar
+											name={meds.find((m) => m.id === editingId)?.name || ""}
+											imageUrl={meds.find((m) => m.id === editingId)?.imageUrl}
+											size="md"
+										/>
+										<h2>
+											{t("form.editEntry")}: {meds.find((m) => m.id === editingId)?.name}
+										</h2>
+									</>
+								) : (
+									<h2>{t("form.newEntry")}</h2>
+								)}
+							</div>
 						</div>
 						<form className="form-grid" onSubmit={saveMedication}>
 							<div className="full form-category">

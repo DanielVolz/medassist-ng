@@ -221,8 +221,10 @@ ${getFooterPlain(language)}`;
 							}
 						}
 
+						const rowBg = row.enough ? "" : " background: #fef2f2;";
+
 						return `
-        <tr>
+        <tr style="${rowBg}">
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${safeName}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safePlannerUsage}</strong> ${tr.common.pills}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${neededCell}</td>

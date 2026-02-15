@@ -89,6 +89,29 @@ PR #141: "fix: planner checkbox layout on single line"
 
 ---
 
+## PR Metadata (MANDATORY)
+
+Every Pull Request MUST have the following sidebar fields populated at creation time:
+
+| Field | Value | How |
+|-------|-------|-----|
+| **Assignee** | `DanielVolz` (repo owner) | `--assignee DanielVolz` |
+| **Label** | Match the change type: `enhancement` (feat), `bug` (fix), `documentation` (docs) | `--label <label>` |
+| **Project** | `@DanielVolz's MedAssist-ng project` | `--project "@DanielVolz's MedAssist-ng project"` |
+
+**Label mapping for PRs:**
+| Branch prefix / commit type | Label |
+|---|---|
+| `feat/` | `enhancement` |
+| `fix/` | `bug` |
+| `docs/` | `documentation` |
+| `chore/` (non-release) | `enhancement` or `bug` depending on content |
+| `chore/release-*` | No label needed (release PRs are automated) |
+
+These fields provide traceability, filtering, and project board integration. **Never leave them empty.**
+
+---
+
 ## Task 1: Branch, PR, and Merge Workflow
 
 When code changes (features or bug fixes) are complete:
@@ -121,13 +144,20 @@ When code changes (features or bug fixes) are complete:
    ```bash
    git push -u origin feat/short-description
    ```
-2. Create a Pull Request via GitHub CLI, linking the related issue:
+2. Create a Pull Request via GitHub CLI with **all metadata fields populated**:
    ```bash
-   gh pr create --title "fix: short description" --body "Closes #<ISSUE_NUMBER>
+   gh pr create \
+     --title "fix: short description" \
+     --body "Closes #<ISSUE_NUMBER>
 
-Description of changes"
+   Description of changes" \
+     --assignee DanielVolz \
+     --label bug \
+     --project "@DanielVolz's MedAssist-ng project"
    ```
-   Using `Closes #N` in the PR body ensures the issue is automatically moved to "Done" on merge.
+   - Use `--label enhancement` for `feat/` branches, `--label bug` for `fix/` branches, `--label documentation` for `docs/` branches.
+   - Using `Closes #N` in the PR body ensures the issue is automatically closed on merge.
+   - The `--project` flag links the PR to the Project board.
 3. **Present the PR URL to the user and wait for confirmation.**
 
 ### Step 4: Wait for CI and Merge
@@ -462,7 +492,7 @@ Code complete & validated by testing-manager
         ↓
 1. Ensure a GitHub issue exists (create if not)
 2. Create feature branch (fix/... or feat/...)
-3. Commit, push, create PR (with "Closes #N" in body)
+3. Commit, push, create PR (with "Closes #N" in body, assignee, label, project)
 4. Wait for CI (all required checks)
 5. Merge PR to main (squash + delete branch)
 6. Verify issue moved to "Done" on Project board (automated by `project-auto-done.yml`; fallback: GraphQL, see Task 6)

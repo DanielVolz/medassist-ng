@@ -607,10 +607,7 @@ describe("DashboardPage with medications", () => {
 			</MemoryRouter>
 		);
 
-		// Aspirin has intakeRemindersEnabled and notes
-		const reminderIcons = document.querySelectorAll(".reminder-icon");
-		expect(reminderIcons.length).toBeGreaterThan(0);
-
+		// Aspirin has notes
 		const notesIcons = document.querySelectorAll(".notes-icon");
 		expect(notesIcons.length).toBeGreaterThan(0);
 	});

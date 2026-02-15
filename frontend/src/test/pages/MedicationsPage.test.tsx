@@ -83,6 +83,8 @@ const createMockFormHook = (overrides = {}) => ({
 		prescriptionRemainingRefills: "",
 		prescriptionLowRefillThreshold: "1",
 		prescriptionExpiryDate: "",
+		medicationStartDate: "",
+		doseUnit: "mg" as const,
 	},
 	setForm: vi.fn(),
 	editingId: null,
@@ -132,6 +134,10 @@ vi.mock("../../context", () => ({
 	}),
 }));
 
+vi.mock("../../components/Auth", () => ({
+	useAuth: () => ({ user: { id: 1, username: "testuser" }, isAuthenticated: true }),
+}));
+
 function renderPage() {
 	render(
 		<MemoryRouter>
@@ -156,7 +162,8 @@ describe("MedicationsPage", () => {
 	it("renders list-first view with new button", () => {
 		renderPage();
 		expect(screen.getByText(/medications\.list\.title/i)).toBeInTheDocument();
-		expect(screen.getByText(/form\.newEntry/i)).toBeInTheDocument();
+		// Button text and form heading both contain "form.newEntry" in the DOM
+		expect(screen.getAllByText(/form\.newEntry/i).length).toBeGreaterThanOrEqual(1);
 	});
 
 	it("opens form after clicking new button", () => {

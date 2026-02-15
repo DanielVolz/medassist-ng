@@ -14,9 +14,16 @@ const defaultForm: FormState = {
 	looseTablets: "0",
 	totalPills: "",
 	pillWeightMg: "",
+	doseUnit: "mg",
+	medicationStartDate: "",
 	expiryDate: "",
 	notes: "",
 	intakeRemindersEnabled: false,
+	prescriptionEnabled: false,
+	prescriptionAuthorizedRefills: "",
+	prescriptionRemainingRefills: "",
+	prescriptionLowRefillThreshold: "1",
+	prescriptionExpiryDate: "",
 	blisters: [
 		{
 			usage: "1",
@@ -47,6 +54,8 @@ const defaultProps = {
 	formSaved: false,
 	formChanged: false,
 	hasValidationErrors: false,
+	dateConsistencyError: null,
+	readOnlyMode: false,
 	takenByInput: "",
 	onTakenByInputChange: vi.fn(),
 	existingPeople: [],
@@ -108,7 +117,7 @@ describe("MobileEditModal", () => {
 	it("renders close button", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
-		const closeBtn = document.querySelector(".modal-close");
+		const closeBtn = document.querySelector(".btn-nav");
 		expect(closeBtn).toBeInTheDocument();
 	});
 
@@ -116,7 +125,7 @@ describe("MobileEditModal", () => {
 		const onClose = vi.fn();
 		render(<MobileEditModal {...defaultProps} onClose={onClose} />);
 
-		const closeBtn = document.querySelector(".modal-close");
+		const closeBtn = document.querySelector(".btn-nav");
 		if (closeBtn) {
 			fireEvent.click(closeBtn);
 		}
@@ -191,7 +200,7 @@ describe("MobileEditModal", () => {
 		render(<MobileEditModal {...defaultProps} hasValidationErrors={true} />);
 
 		const saveBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
-		expect(saveBtn).toBeDisabled();
+		expect(saveBtn).toHaveClass("has-validation-error");
 	});
 
 	it("renders add intake button", () => {

@@ -71,11 +71,56 @@ export function getRegionFromTimezone(): string | undefined {
 }
 
 /**
- * Get locale for formatting based on app language and timezone region.
- * Combines app language (en/de) with region from timezone (DE/US/etc.)
- * Example: app=en + timezone=Europe/Berlin → en-DE (English text, German format)
+ * Map region code to the region's primary language for date/number formatting.
+ * This ensures dates use regional conventions (e.g., dots in Germany)
+ * regardless of the app's UI language.
+ */
+const REGION_TO_LANG: Record<string, string> = {
+	DE: "de",
+	AT: "de",
+	CH: "de",
+	GB: "en",
+	IE: "en",
+	FR: "fr",
+	ES: "es",
+	IT: "it",
+	NL: "nl",
+	BE: "nl",
+	PL: "pl",
+	CZ: "cs",
+	SE: "sv",
+	NO: "nb",
+	DK: "da",
+	FI: "fi",
+	GR: "el",
+	PT: "pt",
+	RU: "ru",
+	UA: "uk",
+	HU: "hu",
+	RO: "ro",
+	US: "en",
+	CA: "en",
+	MX: "es",
+	BR: "pt",
+	AR: "es",
+	JP: "ja",
+	CN: "zh",
+	HK: "zh",
+	SG: "en",
+	KR: "ko",
+	AE: "ar",
+	IN: "en",
+	AU: "en",
+	NZ: "en",
+};
+
+/**
+ * Get locale for text-based date formatting (weekday names, month names).
+ * Uses the app's UI language + timezone region so text appears in the app language
+ * while regional conventions (day-first order) are respected.
  *
- * @param appLanguage - The app's UI language (e.g., 'en', 'de')
+ * Example: app=en + timezone=Europe/Berlin → en-DE
+ * → "Thu, 05. Feb." (English names, German order)
  */
 export function getSystemLocale(appLanguage?: string): string {
 	const region = getRegionFromTimezone();
@@ -86,6 +131,25 @@ export function getSystemLocale(appLanguage?: string): string {
 	}
 
 	// Fallback: use browser language, or en-US as last resort
+	return navigator.language || "en-US";
+}
+
+/**
+ * Get locale for purely numeric date/number formatting.
+ * Uses the region's native language so separators match regional conventions
+ * (e.g., dots in Germany: 14.02.2026, slashes in US: 02/14/2026).
+ *
+ * Only use this for numeric-only output (2-digit day/month/year, no text).
+ * For output that includes weekday or month names, use getSystemLocale() instead.
+ */
+export function getNumericLocale(): string {
+	const region = getRegionFromTimezone();
+
+	if (region) {
+		const regionLang = REGION_TO_LANG[region] || "en";
+		return `${regionLang}-${region}`;
+	}
+
 	return navigator.language || "en-US";
 }
 
@@ -114,7 +178,7 @@ export function formatDateTime(iso: string | null | undefined, locale?: string):
 	if (!match) return "-";
 
 	const [, year, month, day, hour, minute] = match;
-	const effectiveLocale = locale ?? getSystemLocale();
+	const effectiveLocale = locale ?? getNumericLocale();
 
 	// Create a date object for formatting, but use local timezone interpretation
 	// by creating the date without the Z suffix
@@ -134,6 +198,20 @@ export function formatDateTime(iso: string | null | undefined, locale?: string):
 	const dateStr = d.toLocaleDateString(effectiveLocale, dateOpts);
 	const timeStr = d.toLocaleTimeString(effectiveLocale, timeOpts);
 	return `${dateStr} ${timeStr}`;
+}
+
+/**
+ * Format a date-only string (YYYY-MM-DD) or ISO datetime to a localized date (no time).
+ */
+export function formatDate(dateStr: string | null | undefined, locale?: string): string {
+	if (!dateStr) return "-";
+	const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+	if (!match) return "-";
+	const [, year, month, day] = match;
+	const d = new Date(`${year}-${month}-${day}T00:00:00`);
+	if (Number.isNaN(d.getTime())) return "-";
+	const effectiveLocale = locale ?? getNumericLocale();
+	return d.toLocaleDateString(effectiveLocale, { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 /**

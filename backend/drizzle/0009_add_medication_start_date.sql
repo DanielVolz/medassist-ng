@@ -1,0 +1,1 @@
+ALTER TABLE `medications` ADD `medication_start_date` text DEFAULT '' NOT NULL;

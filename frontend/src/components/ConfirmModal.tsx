@@ -2,7 +2,7 @@
 // ConfirmModal Component - Simple confirmation dialog
 // =============================================================================
 
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 
 export interface ConfirmModalProps {
 	title: string;
@@ -27,6 +27,17 @@ export function ConfirmModal({
 	confirmVariant = "primary",
 	overlayClassName,
 }: ConfirmModalProps) {
+	// Close on Escape key
+	useEffect(() => {
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key === "Escape") {
+				onCancel();
+			}
+		}
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
+	}, [onCancel]);
+
 	return (
 		<div className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`} onClick={onCancel}>
 			<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "450px" }}>

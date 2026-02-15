@@ -32,6 +32,9 @@ const blisterSchema = z.object({
 
 const packageTypeSchema = z.enum(["blister", "bottle"]).default("blister");
 const doseUnitSchema = z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"]).default("mg");
+const medicationStartDateSchema = z
+	.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()])
+	.optional();
 
 const medicationSchema = z
 	.object({
@@ -46,6 +49,7 @@ const medicationSchema = z
 		looseTablets: z.number().int().min(0).default(0),
 		pillWeightMg: z.number().nonnegative().nullable().optional(),
 		doseUnit: doseUnitSchema,
+		medicationStartDate: medicationStartDateSchema,
 		expiryDate: z.string().nullable().optional(),
 		notes: z.string().max(2000).nullable().optional(),
 		prescriptionEnabled: z.boolean().default(false),
@@ -59,6 +63,19 @@ const medicationSchema = z
 		blisters: z.array(blisterSchema).min(1).max(12).optional(), // Legacy format
 	})
 	.refine((data) => data.intakes || data.blisters, { message: "Either 'intakes' or 'blisters' must be provided" })
+	.refine(
+		(data) => {
+			const startDate = data.medicationStartDate ?? "";
+			if (!startDate) return true;
+
+			const scheduleStarts = data.intakes?.map((i) => i.start) ?? data.blisters?.map((b) => b.start) ?? [];
+			return scheduleStarts.every((scheduleStart) => scheduleStart.slice(0, 10) >= startDate);
+		},
+		{
+			message: "Medication start date must be on or before all intake dates",
+			path: ["medicationStartDate"],
+		}
+	)
 	.refine(
 		(data) => {
 			if (!data.prescriptionEnabled) return true;
@@ -103,9 +120,13 @@ export async function medicationRoutes(app: FastifyInstance) {
 		return authUser.id;
 	}
 
-	app.get("/medications", async (request, reply) => {
+	app.get<{ Querystring: { includeObsolete?: string } }>("/medications", async (request, reply) => {
 		const userId = await getUserId(request, reply);
-		const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
+		const includeObsolete = request.query.includeObsolete === "true";
+		const whereClause = includeObsolete
+			? eq(medications.userId, userId)
+			: and(eq(medications.userId, userId), eq(medications.isObsolete, false));
+		const rows = await db.select().from(medications).where(whereClause).orderBy(medications.id);
 		return rows.map((row) => {
 			// Parse intakes from new format, falling back to legacy
 			const intakes = parseIntakesJson(
@@ -129,6 +150,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				lastStockCorrectionAt: row.lastStockCorrectionAt?.toISOString() ?? null,
 				pillWeightMg: row.pillWeightMg,
 				doseUnit: row.doseUnit ?? "mg",
+				medicationStartDate: row.medicationStartDate || null,
 				intakes, // New unified format with per-intake takenBy
 				// Legacy blisters format (for backward compat with frontend during transition)
 				blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
@@ -136,6 +158,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 				expiryDate: row.expiryDate,
 				notes: row.notes,
 				intakeRemindersEnabled: row.intakeRemindersEnabled ?? false,
+				isObsolete: row.isObsolete ?? false,
+				obsoleteAt: row.obsoleteAt?.toISOString() ?? null,
 				prescriptionEnabled: row.prescriptionEnabled ?? false,
 				prescriptionAuthorizedRefills: row.prescriptionAuthorizedRefills ?? null,
 				prescriptionRemainingRefills: row.prescriptionRemainingRefills ?? null,
@@ -164,6 +188,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			looseTablets,
 			pillWeightMg,
 			doseUnit,
+			medicationStartDate,
 			expiryDate,
 			notes,
 			prescriptionEnabled,
@@ -222,6 +247,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				looseTablets,
 				pillWeightMg: pillWeightMg || null,
 				doseUnit: doseUnit ?? "mg",
+				medicationStartDate: medicationStartDate ?? "",
 				expiryDate: expiryDate || null,
 				notes: notes || null,
 				prescriptionEnabled: prescriptionEnabled ?? false,
@@ -252,12 +278,15 @@ export async function medicationRoutes(app: FastifyInstance) {
 			lastStockCorrectionAt: inserted.lastStockCorrectionAt?.toISOString() ?? null,
 			pillWeightMg: inserted.pillWeightMg,
 			doseUnit: inserted.doseUnit ?? "mg",
+			medicationStartDate: inserted.medicationStartDate || null,
 			intakes,
 			blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
 			imageUrl: inserted.imageUrl,
 			expiryDate: inserted.expiryDate,
 			notes: inserted.notes,
 			intakeRemindersEnabled: inserted.intakeRemindersEnabled,
+			isObsolete: inserted.isObsolete ?? false,
+			obsoleteAt: inserted.obsoleteAt?.toISOString() ?? null,
 			prescriptionEnabled: inserted.prescriptionEnabled ?? false,
 			prescriptionAuthorizedRefills: inserted.prescriptionAuthorizedRefills ?? null,
 			prescriptionRemainingRefills: inserted.prescriptionRemainingRefills ?? null,
@@ -294,6 +323,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			looseTablets,
 			pillWeightMg,
 			doseUnit,
+			medicationStartDate,
 			expiryDate,
 			notes,
 			prescriptionEnabled,
@@ -362,6 +392,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				looseTablets,
 				pillWeightMg: pillWeightMg || null,
 				doseUnit: doseUnit ?? "mg",
+				medicationStartDate: medicationStartDate ?? "",
 				expiryDate: expiryDate || null,
 				notes: notes || null,
 				prescriptionEnabled: prescriptionEnabled ?? false,
@@ -516,18 +547,79 @@ export async function medicationRoutes(app: FastifyInstance) {
 			lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
 			pillWeightMg: result[0].pillWeightMg,
 			doseUnit: result[0].doseUnit ?? "mg",
+			medicationStartDate: result[0].medicationStartDate || null,
 			intakes,
 			blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
 			imageUrl: result[0].imageUrl,
 			expiryDate: result[0].expiryDate,
 			notes: result[0].notes,
 			intakeRemindersEnabled: result[0].intakeRemindersEnabled,
+			isObsolete: result[0].isObsolete ?? false,
+			obsoleteAt: result[0].obsoleteAt?.toISOString() ?? null,
 			prescriptionEnabled: result[0].prescriptionEnabled ?? false,
 			prescriptionAuthorizedRefills: result[0].prescriptionAuthorizedRefills ?? null,
 			prescriptionRemainingRefills: result[0].prescriptionRemainingRefills ?? null,
 			prescriptionLowRefillThreshold: result[0].prescriptionLowRefillThreshold ?? 1,
 			prescriptionExpiryDate: result[0].prescriptionExpiryDate ?? null,
 			updatedAt: result[0].updatedAt,
+		};
+	});
+
+	app.post<{ Params: { id: string } }>("/medications/:id/obsolete", async (req, reply) => {
+		const idNum = Number(req.params.id);
+		if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
+
+		const userId = await getUserId(req, reply);
+		const [existing] = await db
+			.select()
+			.from(medications)
+			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+		if (!existing) return reply.notFound();
+
+		const [updated] = await db
+			.update(medications)
+			.set({
+				isObsolete: true,
+				obsoleteAt: new Date(),
+				updatedAt: new Date(),
+			})
+			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
+			.returning();
+
+		return {
+			id: updated.id,
+			isObsolete: updated.isObsolete ?? false,
+			obsoleteAt: updated.obsoleteAt?.toISOString() ?? null,
+			updatedAt: updated.updatedAt,
+		};
+	});
+
+	app.post<{ Params: { id: string } }>("/medications/:id/reactivate", async (req, reply) => {
+		const idNum = Number(req.params.id);
+		if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
+
+		const userId = await getUserId(req, reply);
+		const [existing] = await db
+			.select()
+			.from(medications)
+			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+		if (!existing) return reply.notFound();
+
+		const [updated] = await db
+			.update(medications)
+			.set({
+				isObsolete: false,
+				obsoleteAt: null,
+				updatedAt: new Date(),
+			})
+			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
+			.returning();
+
+		return {
+			id: updated.id,
+			isObsolete: updated.isObsolete ?? false,
+			obsoleteAt: updated.obsoleteAt?.toISOString() ?? null,
+			updatedAt: updated.updatedAt,
 		};
 	});
 
@@ -678,7 +770,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 		}
 
 		const userId = await getUserId(req, reply);
-		const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
+		const rows = await db
+			.select()
+			.from(medications)
+			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)))
+			.orderBy(medications.id);
 
 		// Get all taken doses for this user to calculate actual consumption
 		const takenDoses = await db

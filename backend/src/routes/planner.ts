@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
@@ -103,6 +103,16 @@ export async function plannerRoutes(app: FastifyInstance) {
 
 		// Load user settings for notification channels
 		const userId = await getUserId(request);
+		const activeMeds = await db
+			.select({ id: medications.id })
+			.from(medications)
+			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
+		const activeMedIds = new Set(activeMeds.map((med) => med.id));
+		const activeRows = rows.filter((row) => activeMedIds.has(row.medicationId));
+		if (activeRows.length === 0) {
+			return reply.status(400).send({ error: "No active medications to notify" });
+		}
+
 		const userSettings = await loadUserSettings(userId);
 		const notificationSettings = {
 			emailEnabled: userSettings.emailEnabled,
@@ -132,11 +142,11 @@ export async function plannerRoutes(app: FastifyInstance) {
 			})
 		);
 
-		const outOfStockCount = rows.filter((r) => !r.enough).length;
+		const outOfStockCount = activeRows.filter((r) => !r.enough).length;
 		const summaryText = outOfStockCount > 0 ? t(dc.summaryOutOfStock, { count: outOfStockCount }) : dc.summaryAllOk;
 
 		// Load prescription data for medications referenced in planner rows
-		const medIds = rows.map((r) => r.medicationId).filter(Boolean);
+		const medIds = activeRows.map((r) => r.medicationId).filter(Boolean);
 		const allMeds =
 			medIds.length > 0
 				? await db
@@ -156,7 +166,7 @@ ${t(dc.description, { from: fromDate, until: untilDate })}
 
 ${summaryText}
 
-${rows
+${activeRows
 	.map((r) => {
 		const isBottle = r.packageType === "bottle";
 		const usage = `${r.plannerUsage} ${tr.common.pills}`;
@@ -191,7 +201,7 @@ ${getFooterPlain(language)}`;
 			if (smtpHost && smtpUser) {
 				// Build HTML table with horizontal scroll for mobile
 				// Escape/coerce all user-provided values to prevent XSS
-				const tableRows = rows
+				const tableRows = activeRows
 					.map((row) => {
 						const safeName = escapeHtml(row.medicationName);
 						const safePlannerUsage = Number(row.plannerUsage) || 0;
@@ -312,7 +322,7 @@ ${getFooterPlain(language)}`;
 		// Send push notification if enabled
 		if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
 			const pushTitle = t(dc.subject, { from: fromDate, until: untilDate });
-			const pushMessage = `${summaryText}\n\n${rows
+			const pushMessage = `${summaryText}\n\n${activeRows
 				.map((r) => {
 					const usage = `${r.plannerUsage} ${tr.common.pills}`;
 					const status = r.enough ? dc.statusEnough : dc.statusEmpty;
@@ -360,6 +370,16 @@ ${getFooterPlain(language)}`;
 
 		// Load user settings
 		const userId = await getUserId(request);
+		const activeMeds = await db
+			.select({ name: medications.name })
+			.from(medications)
+			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
+		const activeMedNames = new Set(activeMeds.map((med) => med.name));
+		const filteredLowStock = lowStock.filter((item) => activeMedNames.has(item.name));
+		if (filteredLowStock.length === 0) {
+			return reply.status(400).send({ error: "No active medications to notify" });
+		}
+
 		const userSettings = await loadUserSettings(userId);
 		const notificationSettings = {
 			emailEnabled: userSettings.emailEnabled,
@@ -374,9 +394,9 @@ ${getFooterPlain(language)}`;
 		const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
 
 		// Separate into 3 categories: empty, critical, and low stock
-		const emptyMeds = lowStock.filter((r) => r.medsLeft <= 0);
-		const criticalMeds = lowStock.filter((r) => r.medsLeft > 0 && r.isCritical !== false);
-		const lowStockMeds = lowStock.filter((r) => r.medsLeft > 0 && r.isCritical === false);
+		const emptyMeds = filteredLowStock.filter((r) => r.medsLeft <= 0);
+		const criticalMeds = filteredLowStock.filter((r) => r.medsLeft > 0 && r.isCritical !== false);
+		const lowStockMeds = filteredLowStock.filter((r) => r.medsLeft > 0 && r.isCritical === false);
 
 		// Build shared notification content (method-agnostic)
 		const titleParts: string[] = [];
@@ -504,7 +524,7 @@ ${getFooterPlain(language)}`;
           </tr>`;
 				};
 
-				const tableRows = lowStock.map(buildTableRow).join("");
+				const tableRows = filteredLowStock.map(buildTableRow).join("");
 
 				const html = `
           <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
@@ -587,8 +607,7 @@ ${getFooterPlain(language)}`;
 			updateReminderSentTime("stock", channel);
 
 			// Also update user settings in database so frontend can display the info
-			const firstMed = lowStock[0];
-			const medNames = lowStock.map((m: { name: string }) => m.name).join(", ");
+			const medNames = filteredLowStock.map((m: { name: string }) => m.name).join(", ");
 			await updateUserReminderSentTime(userId, "stock", channel, medNames);
 		}
 
@@ -618,14 +637,24 @@ ${getFooterPlain(language)}`;
 		}
 
 		const userId = await getUserId(request);
+		const activeMeds = await db
+			.select({ name: medications.name })
+			.from(medications)
+			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
+		const activeMedNames = new Set(activeMeds.map((med) => med.name));
+		const filteredPrescriptionLow = prescriptionLow.filter((item) => activeMedNames.has(item.name));
+		if (filteredPrescriptionLow.length === 0) {
+			return reply.status(400).send({ error: "No active medications to notify" });
+		}
+
 		const userSettings = await loadUserSettings(userId);
 		const language = (userSettings.language as Language) || "en";
 		const tr = getTranslations(language);
 
-		const emptyRx = prescriptionLow.filter((item) => item.remainingRefills <= 0);
-		const lowRx = prescriptionLow.filter((item) => item.remainingRefills > 0);
+		const emptyRx = filteredPrescriptionLow.filter((item) => item.remainingRefills <= 0);
+		const lowRx = filteredPrescriptionLow.filter((item) => item.remainingRefills > 0);
 
-		const lines = prescriptionLow.map((item) => {
+		const lines = filteredPrescriptionLow.map((item) => {
 			const expirySuffix = item.expiryDate ? t(tr.prescriptionReminder.expiresSuffix, { date: item.expiryDate }) : "";
 			if (item.remainingRefills <= 0) {
 				return `- ${t(tr.prescriptionReminder.lineEmpty, {
@@ -640,7 +669,7 @@ ${getFooterPlain(language)}`;
 			})}`;
 		});
 
-		const medNames = prescriptionLow.map((m: { name: string }) => m.name).join(", ");
+		const medNames = filteredPrescriptionLow.map((m: { name: string }) => m.name).join(", ");
 
 		const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
 
@@ -665,9 +694,9 @@ ${getFooterPlain(language)}`;
 					});
 
 					const subject =
-						prescriptionLow.length === 1
+						filteredPrescriptionLow.length === 1
 							? tr.prescriptionReminder.subjectSingle
-							: t(tr.prescriptionReminder.subjectMultiple, { count: prescriptionLow.length });
+							: t(tr.prescriptionReminder.subjectMultiple, { count: filteredPrescriptionLow.length });
 
 					const bodyText =
 						emptyRx.length > 0 ? tr.prescriptionReminder.descriptionEmpty : tr.prescriptionReminder.descriptionLow;
@@ -680,7 +709,7 @@ ${getFooterPlain(language)}`;
 								? tr.prescriptionReminder.alertLowSingle
 								: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
 
-					const tableRows = prescriptionLow
+					const tableRows = filteredPrescriptionLow
 						.map((item) => {
 							const isEmpty = item.remainingRefills <= 0;
 							const safeName = escapeHtml(item.name);

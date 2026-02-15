@@ -3,6 +3,8 @@
 export { default as AboutModal } from "./AboutModal";
 export type { ConfirmModalProps } from "./ConfirmModal";
 export { ConfirmModal } from "./ConfirmModal";
+export { DateInput } from "./DateInput";
+export { DateTimeInput } from "./DateTimeInput";
 export { default as ExportModal } from "./ExportModal";
 export type { LightboxProps } from "./Lightbox";
 

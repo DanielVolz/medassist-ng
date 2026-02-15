@@ -1,15 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ConfirmModal, MedicationAvatar, MobileEditModal } from "../components";
+import { ConfirmModal, DateInput, Lightbox, MedicationAvatar, MobileEditModal } from "../components";
+import { useAuth } from "../components/Auth";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useMedicationForm, useUnsavedChangesWarning } from "../hooks";
 import type { DoseUnit, Medication } from "../types";
 import { DOSE_UNITS, FIELD_LIMITS, getPackageSize } from "../types";
-import { combineDateAndTime, formatDateTime, formatNumber } from "../utils/formatters";
+import { combineDateAndTime, formatDate, formatDateTime, formatNumber } from "../utils/formatters";
 import { log } from "../utils/logger";
+
+function userStorageKey(userId: number | undefined, key: string): string {
+	return userId ? `user_${userId}_${key}` : key;
+}
+
+const OBSOLETE_SECTION_STORAGE_KEY = "medicationsShowObsolete";
 
 export function MedicationsPage() {
 	const { t } = useTranslation();
+	const { user } = useAuth();
 	const {
 		meds,
 		saving,
@@ -63,6 +71,7 @@ export function MedicationsPage() {
 
 	// View mode: grid (default) or form (edit/new)
 	const [viewMode, setViewMode] = useState<"grid" | "form">("grid");
+	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
 
 	// Mobile modal state (declared early because it's used in useEffect below)
 	const [showEditModal, setShowEditModal] = useState(false);
@@ -92,11 +101,47 @@ export function MedicationsPage() {
 	const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
 	// Track if close was confirmed programmatically (to avoid double confirmation)
 	const closeConfirmedRef = useRef(false);
+	// Pending action to execute after user confirms "Leave" in unsaved changes modal
+	const pendingActionRef = useRef<(() => void) | null>(null);
 	// Confirmation modal for unsaved changes
 	const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 	const [unsavedConfirmSource, setUnsavedConfirmSource] = useState<"mobile-edit" | "desktop-form" | null>(null);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [deleteCandidate, setDeleteCandidate] = useState<Medication | null>(null);
+	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
+	const [obsoleteCandidate, setObsoleteCandidate] = useState<Medication | null>(null);
+	const [allMeds, setAllMeds] = useState<Medication[]>(meds);
+	const [showObsolete, setShowObsolete] = useState(true);
+	const [readOnlyView, setReadOnlyView] = useState(false);
+
+	useEffect(() => {
+		const saved = localStorage.getItem(userStorageKey(user?.id, OBSOLETE_SECTION_STORAGE_KEY));
+		if (saved !== null) {
+			setShowObsolete(saved === "true");
+		}
+	}, [user?.id]);
+
+	const toggleObsoleteSection = useCallback(() => {
+		setShowObsolete((prev) => {
+			const next = !prev;
+			localStorage.setItem(userStorageKey(user?.id, OBSOLETE_SECTION_STORAGE_KEY), String(next));
+			return next;
+		});
+	}, [user?.id]);
+
+	const loadAllMeds = useCallback(async () => {
+		try {
+			const res = await fetch("/api/medications?includeObsolete=true", { credentials: "include" });
+			const data = (await res.json()) as unknown;
+			setAllMeds(Array.isArray(data) ? (data as Medication[]) : []);
+		} catch {
+			setAllMeds([]);
+		}
+	}, []);
+
+	useEffect(() => {
+		void loadAllMeds();
+	}, [loadAllMeds]);
 
 	// Calculate total tablets
 	const totalTablets = useMemo(() => {
@@ -111,6 +156,19 @@ export function MedicationsPage() {
 		const looseTablets = Number(form.looseTablets) || 0;
 		return packCount * blistersPerPack * pillsPerBlister + looseTablets;
 	}, [form.packageType, form.packCount, form.blistersPerPack, form.pillsPerBlister, form.looseTablets]);
+
+	const dateConsistencyError = useMemo(() => {
+		const medicationStartDate = form.medicationStartDate;
+		if (!medicationStartDate) return null;
+
+		const conflictingIntake = form.intakes.find((intake) => intake.startDate && intake.startDate < medicationStartDate);
+		if (!conflictingIntake?.startDate) return null;
+
+		return t("form.validation.startDateAfterIntake", {
+			medicationStartDate,
+			intakeDate: conflictingIntake.startDate,
+		});
+	}, [form.medicationStartDate, form.intakes, t]);
 
 	// Open mobile edit modal
 	function openEditModal() {
@@ -135,20 +193,34 @@ export function MedicationsPage() {
 
 	// Handle confirmed close (user clicked "Leave" in confirmation modal)
 	function handleConfirmClose() {
+		const source = unsavedConfirmSource;
+		const pendingAction = pendingActionRef.current;
 		setShowUnsavedConfirm(false);
 		setUnsavedConfirmSource(null);
+		pendingActionRef.current = null;
 		closeConfirmedRef.current = true;
 		hasUnsavedHistoryState.current = false;
-		if (showEditModal) {
+
+		if (pendingAction) {
+			// There's a pending action (e.g. switching to another medication) — reset and run it
+			resetForm();
+			setReadOnlyView(false);
+			pendingAction();
+		} else if (source === "mobile-edit" && showEditModal) {
 			setShowEditModal(false);
+			resetForm();
+			setReadOnlyView(false);
+			window.history.back();
+		} else {
+			// Desktop form — reset and go back to grid
+			handleResetForm();
 		}
-		resetForm();
-		window.history.back();
 	}
 
 	// Handle cancelled close (user clicked "Stay" in confirmation modal)
 	function handleCancelClose() {
 		setShowUnsavedConfirm(false);
+		pendingActionRef.current = null;
 		if (unsavedConfirmSource === "mobile-edit") {
 			setShowEditModal(true);
 		}
@@ -163,7 +235,22 @@ export function MedicationsPage() {
 			window.history.back();
 		}
 		resetForm();
+		setReadOnlyView(false);
 		setViewMode("grid");
+	}
+
+	// Guard for desktop form Back/Cancel — shows unsaved changes modal if needed
+	function handleDesktopFormLeave() {
+		if (readOnlyView) {
+			handleResetForm();
+			return;
+		}
+		if (formChanged) {
+			setUnsavedConfirmSource("desktop-form");
+			setShowUnsavedConfirm(true);
+			return;
+		}
+		handleResetForm();
 	}
 
 	function requestDeleteMed(med: Medication) {
@@ -175,6 +262,7 @@ export function MedicationsPage() {
 	async function handleConfirmDelete() {
 		if (!deleteCandidate) return;
 		await deleteMed(deleteCandidate.id, editingId, resetForm);
+		await loadAllMeds();
 		setShowDeleteConfirm(false);
 		setDeleteCandidate(null);
 		// Pop the delete-confirm history entry
@@ -188,14 +276,70 @@ export function MedicationsPage() {
 		window.history.back();
 	}
 
+	function requestMarkObsolete(med: Medication) {
+		setObsoleteCandidate(med);
+		setShowObsoleteConfirm(true);
+		window.history.pushState({ modal: "obsolete-confirm" }, "");
+	}
+
+	async function handleConfirmMarkObsolete() {
+		if (!obsoleteCandidate) return;
+		await markMedicationObsolete(obsoleteCandidate.id);
+		setShowObsoleteConfirm(false);
+		setObsoleteCandidate(null);
+		window.history.back();
+	}
+
+	function handleCancelMarkObsolete() {
+		setShowObsoleteConfirm(false);
+		setObsoleteCandidate(null);
+		window.history.back();
+	}
+
 	// Handle submit refill
 	async function handleSubmitRefill(medId: number) {
 		await submitRefill(medId, editingId, setForm, loadMeds, usePrescriptionRefill);
+		await loadAllMeds();
+	}
+
+	async function markMedicationObsolete(id: number) {
+		try {
+			await fetch(`/api/medications/${id}/obsolete`, { method: "POST", credentials: "include" });
+			if (editingId === id) {
+				handleResetForm();
+			}
+			loadMeds();
+			await loadAllMeds();
+		} catch {
+			// ignore
+		}
+	}
+
+	async function reactivateMedication(id: number) {
+		try {
+			await fetch(`/api/medications/${id}/reactivate`, { method: "POST", credentials: "include" });
+			loadMeds();
+			await loadAllMeds();
+		} catch {
+			// ignore
+		}
 	}
 
 	// Save medication
 	async function saveMedication(e: React.FormEvent) {
 		e.preventDefault();
+		if (readOnlyView) return;
+		if (hasValidationErrors || dateConsistencyError) {
+			// Scroll to first visible error so the user sees what's wrong
+			const firstError = document.querySelector(".field-error");
+			if (firstError) {
+				firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+				// Brief highlight pulse
+				firstError.classList.add("error-pulse");
+				setTimeout(() => firstError.classList.remove("error-pulse"), 1500);
+			}
+			return;
+		}
 		if (saving) return;
 		setSaving(true);
 
@@ -231,6 +375,7 @@ export function MedicationsPage() {
 			looseTablets: Number(form.looseTablets) || 0,
 			pillWeightMg: Number(form.pillWeightMg) || null,
 			doseUnit: form.doseUnit,
+			medicationStartDate: form.medicationStartDate || null,
 			expiryDate: form.expiryDate || null,
 			notes: form.notes.trim() || null,
 			intakeRemindersEnabled: form.intakeRemindersEnabled,
@@ -284,6 +429,7 @@ export function MedicationsPage() {
 
 			setFormSaved(true);
 			loadMeds();
+			void loadAllMeds();
 
 			// Clean up history state if we had unsaved changes
 			if (hasUnsavedHistoryState.current) {
@@ -310,6 +456,13 @@ export function MedicationsPage() {
 	// Handle browser back button for modals and unsaved changes
 	useEffect(() => {
 		const handlePopState = () => {
+			// Obsolete confirmation is open — dismiss it and stay where we are
+			if (showObsoleteConfirm) {
+				setShowObsoleteConfirm(false);
+				setObsoleteCandidate(null);
+				return;
+			}
+
 			// Delete confirmation is open — dismiss it and stay where we are
 			if (showDeleteConfirm) {
 				setShowDeleteConfirm(false);
@@ -354,7 +507,7 @@ export function MedicationsPage() {
 		};
 		window.addEventListener("popstate", handlePopState);
 		return () => window.removeEventListener("popstate", handlePopState);
-	}, [showDeleteConfirm, showEditModal, formChanged, resetForm]);
+	}, [showObsoleteConfirm, showDeleteConfirm, showEditModal, formChanged, resetForm]);
 
 	// Close modal on Escape key
 	useEffect(() => {
@@ -369,167 +522,125 @@ export function MedicationsPage() {
 
 	// Handle edit button click - open modal on mobile, switch to form on desktop
 	function handleEditClick(med: Medication) {
+		if (formChanged) {
+			pendingActionRef.current = () => {
+				setReadOnlyView(false);
+				startEdit(med, openEditModal);
+				setViewMode("form");
+			};
+			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
+			setShowUnsavedConfirm(true);
+			return;
+		}
+		setReadOnlyView(false);
 		startEdit(med, openEditModal);
 		setViewMode("form");
 	}
 
-	const orderedMeds = useMemo(() => {
-		if (!editingId) {
-			return meds;
-		}
-
-		const selectedMedication = meds.find((med) => med.id === editingId);
-		if (!selectedMedication) {
-			return meds;
-		}
-
-		return [selectedMedication, ...meds.filter((med) => med.id !== editingId)];
-	}, [meds, editingId]);
-
-	const medListRef = useRef<HTMLDivElement | null>(null);
-	useEffect(() => {
-		if (viewMode !== "form" || !editingId) {
+	function handleViewClick(med: Medication) {
+		if (formChanged) {
+			pendingActionRef.current = () => {
+				setReadOnlyView(true);
+				startEdit(med, openEditModal);
+				setViewMode("form");
+			};
+			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
+			setShowUnsavedConfirm(true);
 			return;
 		}
+		setReadOnlyView(true);
+		startEdit(med, openEditModal);
+		setViewMode("form");
+	}
 
-		if (medListRef.current) {
-			medListRef.current.scrollTop = 0;
+	function handleNewEntryClick() {
+		if (formChanged) {
+			pendingActionRef.current = () => {
+				resetForm();
+				setReadOnlyView(false);
+				if (window.innerWidth <= 768) {
+					openEditModal();
+				} else {
+					setViewMode("form");
+				}
+			};
+			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
+			setShowUnsavedConfirm(true);
+			return;
 		}
-	}, [viewMode, editingId]);
+		resetForm();
+		setReadOnlyView(false);
+		if (window.innerWidth <= 768) {
+			openEditModal();
+		} else {
+			setViewMode("form");
+		}
+	}
+
+	const activeMeds = useMemo(() => allMeds.filter((med) => !med.isObsolete), [allMeds]);
+	const obsoleteMeds = useMemo(() => allMeds.filter((med) => med.isObsolete), [allMeds]);
+
+	const orderedMeds = useMemo(() => {
+		if (!editingId) {
+			return activeMeds;
+		}
+
+		const selectedMedication = activeMeds.find((med) => med.id === editingId);
+		if (!selectedMedication) {
+			return activeMeds;
+		}
+
+		return [selectedMedication, ...activeMeds.filter((med) => med.id !== editingId)];
+	}, [activeMeds, editingId]);
+
+	const selectedMedication = useMemo(() => {
+		if (!editingId) return null;
+		return allMeds.find((med) => med.id === editingId) ?? null;
+	}, [allMeds, editingId]);
 
 	return (
-		<section className={viewMode === "grid" ? "med-grid-wrapper" : "grid"}>
-			{viewMode === "grid" ? (
-				/* ── Grid View: compact medication cards ── */
-				<article className="card">
-					<div className="card-head">
-						<h2>{t("medications.list.title")}</h2>
-						<button
-							type="button"
-							className="btn primary small"
-							onClick={() => {
-								resetForm();
-								if (window.innerWidth <= 768) {
-									openEditModal();
-								} else {
-									setViewMode("form");
-								}
-							}}
-						>
-							+ {t("form.newEntry")}
-						</button>
-					</div>
-					<div className="med-grid">
-						{orderedMeds.map((med) => (
-							<div key={med.id} className="med-row">
-								<div className="med-header">
-									<div className="med-info">
-										<div className="med-name-row">
-											<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
-											<div className="med-name">{med.name}</div>
-										</div>
-										<div className="med-details">
-											<span>
-												{t("medications.details.type")}:{" "}
-												<strong>
-													{med.packageType === "bottle" ? t("form.packageTypeBottle") : t("form.packageTypeBlister")}
-												</strong>
-											</span>
-											{med.packageType === "blister" ? (
-												<>
-													<span>
-														{t("medications.details.packs")}: <strong>{med.packCount}</strong>
-													</span>
-													<span>
-														{t("medications.details.blisters")}: <strong>{med.blistersPerPack}</strong>
-													</span>
-													<span>
-														{t("medications.details.pillsPerBlister")}: <strong>{med.pillsPerBlister}</strong>
-													</span>
-													<span>
-														{t("medications.details.loose")}: <strong>{med.looseTablets}</strong>
-													</span>
-												</>
-											) : (
-												<span>
-													{t("medications.details.totalCapacity")}:{" "}
-													<strong>{med.totalPills ?? med.looseTablets}</strong>
-												</span>
-											)}
-										</div>
-										<div className="med-total">
-											{t("medications.details.stock")}:{" "}
-											{coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)} /{" "}
-											{getPackageSize(med)} {getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}
-											{(coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)) >
-												getPackageSize(med) && (
-												<span
-													className="info-tooltip tooltip-align-left warning-text"
-													data-tooltip={t("tooltips.stockExceedsCapacity")}
-												>
-													{" "}
-													⚠️
-												</span>
-											)}
-											{med.prescriptionEnabled && (
-												<div className="med-total">
-													{t("prescription.remainingRefills")}: <strong>{med.prescriptionRemainingRefills ?? 0}</strong>
-												</div>
-											)}
-										</div>
-									</div>
-									<div className="med-actions">
-										{editingId !== med.id && (
-											<button className="info" onClick={() => handleEditClick(med)}>
-												{t("common.edit")}
-											</button>
-										)}
-										<button className="danger" onClick={() => requestDeleteMed(med)}>
-											{t("common.delete")}
-										</button>
-									</div>
-								</div>
-								<div className="blister-list">
-									{med.blisters.map((s, idx) => (
-										<div key={`${med.id}-${idx}`} className="blister-row-simple">
-											{s.usage} {s.usage === 1 ? t("common.pill") : t("common.pills")} · {t("form.blisters.every")}{" "}
-											{s.every} {s.every === 1 ? t("common.day") : t("common.days")} · {t("form.blisters.from")}{" "}
-											{formatDateTime(s.start)}
-										</div>
-									))}
-								</div>
-							</div>
-						))}
-					</div>
-				</article>
-			) : (
-				/* ── Form View: list panel + form panel (existing layout) ── */
-				<>
-					<article className="card meds">
-						<div className="card-head">
-							<h2>{t("medications.list.title")}</h2>
-							<button
-								type="button"
-								className="btn primary small"
-								onClick={() => {
-									resetForm();
-									// On mobile, open the edit modal
-									if (window.innerWidth <= 768) {
-										openEditModal();
-									}
-								}}
-							>
-								+ {t("form.newEntry")}
-							</button>
-						</div>
-						<div className="med-list" ref={medListRef}>
+		<section className={`med-grid-wrapper${viewMode === "form" ? " desktop-edit-open" : ""}`}>
+			{/* ── Grid View: always visible medication cards ── */}
+			<article className="card">
+				<div className="card-head">
+					<h2>{t("medications.list.title")}</h2>
+					<button type="button" className="btn primary small" onClick={handleNewEntryClick}>
+						+ {t("form.newEntry")}
+					</button>
+				</div>
+				<div className="med-groups">
+					<div className="med-group med-group-active">
+						<div className="med-grid">
 							{orderedMeds.map((med) => (
 								<div key={med.id} className={`med-row${editingId === med.id ? " editing" : ""}`}>
 									<div className="med-header">
 										<div className="med-info">
 											<div className="med-name-row">
-												<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
-												<div className="med-name">{med.name}</div>
+												<span
+													className={med.imageUrl ? "med-avatar-clickable" : undefined}
+													onClick={() =>
+														med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name })
+													}
+												>
+													<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
+												</span>
+												<div className="med-name-block">
+													<div className="med-name">{med.name}</div>
+													{med.genericName && <div className="med-generic-name">{med.genericName}</div>}
+												</div>
+											</div>
+											<div className="med-actions">
+												<button className="danger" onClick={() => requestDeleteMed(med)}>
+													{t("common.delete")}
+												</button>
+												<button className="btn-obsolete" onClick={() => requestMarkObsolete(med)}>
+													{t("medications.list.markObsolete")}
+												</button>
+												{editingId !== med.id && (
+													<button className="info" onClick={() => handleEditClick(med)}>
+														{t("common.edit")}
+													</button>
+												)}
 											</div>
 											<div className="med-details">
 												<span>
@@ -560,6 +671,11 @@ export function MedicationsPage() {
 													</span>
 												)}
 											</div>
+											{med.prescriptionEnabled && (
+												<div className="med-total">
+													{t("prescription.remainingRefills")}: <strong>{med.prescriptionRemainingRefills ?? 0}</strong>
+												</div>
+											)}
 											<div className="med-total">
 												{t("medications.details.stock")}:{" "}
 												{coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)} /{" "}
@@ -575,74 +691,131 @@ export function MedicationsPage() {
 														⚠️
 													</span>
 												)}
-												{med.prescriptionEnabled && (
-													<div className="med-total">
-														{t("prescription.remainingRefills")}:{" "}
-														<strong>{med.prescriptionRemainingRefills ?? 0}</strong>
-													</div>
-												)}
 											</div>
-										</div>
-										<div className="med-actions">
-											{editingId !== med.id && (
-												<button className="info" onClick={() => handleEditClick(med)}>
-													{t("common.edit")}
-												</button>
-											)}
-											<button className="danger" onClick={() => requestDeleteMed(med)}>
-												{t("common.delete")}
-											</button>
 										</div>
 									</div>
 									<div className="blister-list">
-										{med.blisters.map((s, idx) => (
+										{(med.intakes ?? med.blisters).map((s, idx) => (
 											<div key={`${med.id}-${idx}`} className="blister-row-simple">
 												{s.usage} {s.usage === 1 ? t("common.pill") : t("common.pills")} · {t("form.blisters.every")}{" "}
 												{s.every} {s.every === 1 ? t("common.day") : t("common.days")} · {t("form.blisters.from")}{" "}
 												{formatDateTime(s.start)}
+												{"takenBy" in s && s.takenBy && <span className="blister-taken-by"> · {s.takenBy}</span>}
+												{"intakeRemindersEnabled" in s && s.intakeRemindersEnabled && (
+													<span className="blister-reminder-icon" title={t("form.blisters.remindTooltip")}>
+														{" "}
+														🔔
+													</span>
+												)}
 											</div>
 										))}
 									</div>
 								</div>
 							))}
 						</div>
-					</article>
-
-					<article className="card form desktop-only">
-						<div className="card-head">
-							<div className="edit-header">
-								<button type="button" className="ghost small" onClick={handleResetForm}>
-									← {t("common.back")}
-								</button>
-								{editingId ? (
-									<>
-										<MedicationAvatar
-											name={meds.find((m) => m.id === editingId)?.name || ""}
-											imageUrl={meds.find((m) => m.id === editingId)?.imageUrl}
-											size="md"
-										/>
-										<h2>
-											{t("form.editEntry")}: {meds.find((m) => m.id === editingId)?.name}
-										</h2>
-									</>
-								) : (
-									<h2>{t("form.newEntry")}</h2>
-								)}
-							</div>
+					</div>
+					{obsoleteMeds.length > 0 && (
+						<div className="med-group med-group-obsolete">
+							<button
+								type="button"
+								className="med-group-head med-group-head-toggle"
+								onClick={toggleObsoleteSection}
+								aria-expanded={showObsolete}
+							>
+								<h3 className="med-group-title">
+									{showObsolete ? "▼" : "▶"} {t("medications.list.obsoleteTitle", { count: obsoleteMeds.length })}
+								</h3>
+							</button>
+							{showObsolete && (
+								<div className="med-grid med-grid-obsolete">
+									{obsoleteMeds.map((med) => (
+										<div key={med.id} className="med-row obsolete-row">
+											<div className="med-header">
+												<div className="med-info">
+													<div className="med-name-row">
+														<span
+															className={med.imageUrl ? "med-avatar-clickable" : undefined}
+															onClick={() =>
+																med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name })
+															}
+														>
+															<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
+														</span>
+														<div className="med-name-block">
+															<div className="med-name">{med.name}</div>
+															{med.genericName && <div className="med-generic-name">{med.genericName}</div>}
+														</div>
+													</div>
+													<div className="med-actions">
+														<button className="danger" onClick={() => requestDeleteMed(med)}>
+															{t("common.delete")}
+														</button>
+														<button className="success" onClick={() => reactivateMedication(med.id)}>
+															{t("medications.list.reactivate")}
+														</button>
+														<button className="info" onClick={() => handleViewClick(med)}>
+															{t("common.view")}
+														</button>
+													</div>
+													<div className="med-details">
+														{med.medicationStartDate && (
+															<span style={{ gridColumn: "1 / -1" }}>
+																{t("medications.list.started")}: <strong>{formatDate(med.medicationStartDate)}</strong>
+															</span>
+														)}
+														<span style={{ gridColumn: "1 / -1" }}>
+															{t("medications.list.obsoleteSince")}: <strong>{formatDate(med.obsoleteAt)}</strong>
+														</span>
+													</div>
+												</div>
+											</div>
+										</div>
+									))}
+								</div>
+							)}
 						</div>
-						<form className="form-grid" onSubmit={saveMedication}>
+					)}
+				</div>
+			</article>
+
+			{/* ── Desktop Edit Panel: inline below medication list ── */}
+			<aside className={`edit-sidebar desktop-only${viewMode === "form" ? " open" : ""}`}>
+				<article className="card form">
+					<div className="card-head">
+						<div className="edit-header">
+							<button type="button" className="ghost small btn-nav" onClick={handleDesktopFormLeave}>
+								← {t("common.back")}
+							</button>
+							{editingId ? (
+								<>
+									<MedicationAvatar
+										name={selectedMedication?.name || ""}
+										imageUrl={selectedMedication?.imageUrl}
+										size="md"
+									/>
+									<h2>
+										{readOnlyView ? t("form.viewEntry") : t("form.editEntry")}: {selectedMedication?.name}
+									</h2>
+								</>
+							) : (
+								<h2>{t("form.newEntry")}</h2>
+							)}
+						</div>
+					</div>
+					<form className="form-grid" onSubmit={saveMedication}>
+						<fieldset className="readonly-fieldset" disabled={readOnlyView}>
 							<div className="full form-category">
 								<h4 className="form-category-title">{t("form.sections.general")}</h4>
-								<label className={fieldErrors.name ? "has-error" : ""}>
+								<label className={!readOnlyView && fieldErrors.name ? "has-error" : ""}>
 									{t("form.commercialName")}
 									<input
 										value={form.name}
 										onChange={(e) => setForm({ ...form, name: e.target.value })}
 										placeholder={t("form.placeholders.commercial")}
 										maxLength={FIELD_LIMITS.name.max}
-										required
+										required={!readOnlyView}
 									/>
-									{fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
+									{!readOnlyView && fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
 								</label>
 								<label className={fieldErrors.genericName ? "has-error" : ""}>
 									{t("form.genericName")}
@@ -654,37 +827,53 @@ export function MedicationsPage() {
 									/>
 									{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
 								</label>
+								<label>
+									{t("form.medicationStartDate")}
+									<DateInput
+										value={form.medicationStartDate}
+										onChange={(e) => handleValueChange("medicationStartDate", e.target.value)}
+									/>
+									{!readOnlyView && dateConsistencyError && <span className="field-error">{dateConsistencyError}</span>}
+								</label>
 								<label className={fieldErrors.takenBy ? "has-error" : ""}>
 									{t("form.takenBy")}
 									<div className="tag-input-container">
 										{form.takenBy.map((person) => (
 											<span key={person} className="tag">
 												{person}
-												<button type="button" className="tag-remove" onClick={() => removeTakenByPerson(person)}>
-													×
-												</button>
+												{!readOnlyView && (
+													<button type="button" className="tag-remove" onClick={() => removeTakenByPerson(person)}>
+														×
+													</button>
+												)}
 											</span>
 										))}
-										<input
-											value={takenByInput}
-											onChange={(e) => setTakenByInput(e.target.value)}
-											onKeyDown={handleTakenByKeyDown}
-											onBlur={() => {
-												if (takenByInput.trim()) addTakenByPerson(takenByInput);
-											}}
-											placeholder={
-												form.takenBy.length === 0 ? t("form.placeholders.takenBy") : t("form.placeholders.addPerson")
-											}
-											maxLength={FIELD_LIMITS.takenBy.max}
-											list="takenby-suggestions"
-										/>
-										<datalist id="takenby-suggestions">
-											{existingPeople
-												.filter((p) => !form.takenBy.includes(p))
-												.map((person) => (
-													<option key={person} value={person} />
-												))}
-										</datalist>
+										{!readOnlyView && (
+											<>
+												<input
+													value={takenByInput}
+													onChange={(e) => setTakenByInput(e.target.value)}
+													onKeyDown={handleTakenByKeyDown}
+													onBlur={() => {
+														if (takenByInput.trim()) addTakenByPerson(takenByInput);
+													}}
+													placeholder={
+														form.takenBy.length === 0
+															? t("form.placeholders.takenBy")
+															: t("form.placeholders.addPerson")
+													}
+													maxLength={FIELD_LIMITS.takenBy.max}
+													list="takenby-suggestions"
+												/>
+												<datalist id="takenby-suggestions">
+													{existingPeople
+														.filter((p) => !form.takenBy.includes(p))
+														.map((person) => (
+															<option key={person} value={person} />
+														))}
+												</datalist>
+											</>
+										)}
 									</div>
 									{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 								</label>
@@ -800,8 +989,7 @@ export function MedicationsPage() {
 								</label>
 								<label>
 									{t("form.expiryDate")}
-									<input
-										type="date"
+									<DateInput
 										value={form.expiryDate}
 										onChange={(e) => handleValueChange("expiryDate", e.target.value)}
 										placeholder={t("common.optional")}
@@ -878,8 +1066,7 @@ export function MedicationsPage() {
 										</label>
 										<label className="prescription-field">
 											{t("prescription.expiryDate")}
-											<input
-												type="date"
+											<DateInput
 												value={form.prescriptionExpiryDate}
 												onChange={(e) => handleValueChange("prescriptionExpiryDate", e.target.value)}
 											/>
@@ -888,24 +1075,37 @@ export function MedicationsPage() {
 								)}
 							</div>
 
-							<div className="full form-category refill-section">
-								<h4 className="form-category-title">{t("refill.title")}</h4>
-								{editingId ? (
-									<>
-										{form.packageType === "blister" ? (
-											<>
-												<label>
-													{t("refill.packs")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
-														value={refillPacks}
-														onChange={(e) => setRefillPacks(parseInt(e.target.value, 10) || 0)}
-													/>
-												</label>
-												<label>
-													{t("refill.loosePills")}
+							{!readOnlyView && (
+								<div className="full form-category refill-section">
+									<h4 className="form-category-title">{t("refill.title")}</h4>
+									{editingId ? (
+										<>
+											{form.packageType === "blister" ? (
+												<>
+													<label>
+														{t("refill.packs")}
+														<input
+															type="text"
+															inputMode="numeric"
+															pattern="[0-9]*"
+															value={refillPacks}
+															onChange={(e) => setRefillPacks(parseInt(e.target.value, 10) || 0)}
+														/>
+													</label>
+													<label>
+														{t("refill.loosePills")}
+														<input
+															type="text"
+															inputMode="numeric"
+															pattern="[0-9]*"
+															value={refillLoose}
+															onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
+														/>
+													</label>
+												</>
+											) : (
+												<label className="full">
+													{t("refill.pillsToAdd")}
 													<input
 														type="text"
 														inputMode="numeric"
@@ -914,75 +1114,66 @@ export function MedicationsPage() {
 														onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
 													/>
 												</label>
-											</>
-										) : (
-											<label className="full">
-												{t("refill.pillsToAdd")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
-													value={refillLoose}
-													onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
-												/>
-											</label>
-										)}
-										<div className="refill-submit-row full">
-											<button
-												type="button"
-												className="success"
-												onClick={() => handleSubmitRefill(editingId)}
-												disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
-											>
-												{refillSaving ? t("refill.adding") : t("refill.button")}
-											</button>
-											{(() => {
-												const totalRefill =
-													form.packageType === "blister"
-														? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
-															refillLoose
-														: refillLoose;
-												return totalRefill > 0 ? (
-													<span className="refill-preview">
-														+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
-													</span>
-												) : null;
-											})()}
-										</div>
-										{form.prescriptionEnabled && (
-											<div className="refill-prescription-row full">
-												<label className="refill-prescription-toggle">
-													<input
-														type="checkbox"
-														checked={usePrescriptionRefill}
-														onChange={(e) => setUsePrescriptionRefill(e.target.checked)}
-														disabled={(Number(form.prescriptionRemainingRefills) || 0) <= 0}
-													/>
-													<span className="refill-prescription-label-text">{t("prescription.useForRefill")}</span>
-												</label>
-												<span className="refill-remaining-badge">
-													{t("prescription.remainingRefills")}: {Number(form.prescriptionRemainingRefills) || 0}
-												</span>
+											)}
+											<div className="refill-submit-row full">
+												<button
+													type="button"
+													className="success"
+													onClick={() => handleSubmitRefill(editingId)}
+													disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
+												>
+													{refillSaving ? t("refill.adding") : t("refill.button")}
+												</button>
+												{(() => {
+													const totalRefill =
+														form.packageType === "blister"
+															? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
+																refillLoose
+															: refillLoose;
+													return totalRefill > 0 ? (
+														<span className="refill-preview">
+															+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+														</span>
+													) : null;
+												})()}
 											</div>
-										)}
-									</>
-								) : (
-									<p className="refill-unavailable">
-										{t("refill.saveFirst", "Save medication first to enable refill")}
-									</p>
-								)}
-							</div>
+											{form.prescriptionEnabled && (
+												<div className="refill-prescription-row full">
+													<label className="refill-prescription-toggle">
+														<input
+															type="checkbox"
+															checked={usePrescriptionRefill}
+															onChange={(e) => setUsePrescriptionRefill(e.target.checked)}
+															disabled={(Number(form.prescriptionRemainingRefills) || 0) <= 0}
+														/>
+														<span className="refill-prescription-label-text">{t("prescription.useForRefill")}</span>
+													</label>
+													<span className="refill-remaining-badge">
+														{t("prescription.remainingRefills")}: {Number(form.prescriptionRemainingRefills) || 0}
+													</span>
+												</div>
+											)}
+										</>
+									) : (
+										<p className="refill-unavailable">
+											{t("refill.saveFirst", "Save medication first to enable refill")}
+										</p>
+									)}
+								</div>
+							)}
 
 							<div className="full form-category intake-section">
 								<div className="form-category-header">
 									<h4 className="form-category-title">{t("form.blisters.title")}</h4>
-									<button
-										type="button"
-										className="primary"
-										onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
-									>
-										+ {t("form.blisters.addIntake")}
-									</button>
+									{!readOnlyView && (
+										<button
+											type="button"
+											className="primary"
+											onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+										>
+											+ {t("form.blisters.addIntake")}
+										</button>
+									)}
 								</div>
 								{form.intakes.map((intake, idx) => (
 									<div key={idx} className="blister-row">
@@ -1009,8 +1200,7 @@ export function MedicationsPage() {
 											</label>
 											<label>
 												{t("form.blisters.startDate")}
-												<input
-													type="date"
+												<DateInput
 													value={intake.startDate}
 													onChange={(e) => setIntakeValue(idx, "startDate", e.target.value)}
 												/>
@@ -1050,7 +1240,7 @@ export function MedicationsPage() {
 												</label>
 											</div>
 										</div>
-										{form.intakes.length > 1 && (
+										{!readOnlyView && form.intakes.length > 1 && (
 											<button type="button" className="danger" onClick={() => removeIntake(idx)}>
 												{t("common.remove")}
 											</button>
@@ -1119,22 +1309,24 @@ export function MedicationsPage() {
 									);
 								})()}
 							</div>
-
-							<div className="full align-end gap">
-								<button type="button" className="ghost" onClick={handleResetForm}>
-									{t("common.cancel")}
-								</button>
+						</fieldset>
+						<div className="full align-end gap">
+							<button type="button" className="ghost" onClick={handleDesktopFormLeave}>
+								{readOnlyView ? t("common.close") : t("common.cancel")}
+							</button>
+							{!readOnlyView && (
 								<button
 									type="submit"
-									disabled={saving || hasValidationErrors || (!formChanged && (formSaved || !!editingId))}
+									disabled={saving || (!formChanged && (formSaved || !!editingId))}
+									className={hasValidationErrors || dateConsistencyError ? "has-validation-error" : ""}
 								>
 									{formSaved && !formChanged ? t("common.saved") : t("common.save")}
 								</button>
-							</div>
-						</form>
-					</article>
-				</>
-			)}
+							)}
+						</div>
+					</form>
+				</article>
+			</aside>
 
 			{/* Mobile Edit Modal */}
 			<MobileEditModal
@@ -1147,6 +1339,8 @@ export function MedicationsPage() {
 				formSaved={formSaved}
 				formChanged={formChanged}
 				hasValidationErrors={hasValidationErrors}
+				dateConsistencyError={dateConsistencyError}
+				readOnlyMode={readOnlyView}
 				takenByInput={takenByInput}
 				onTakenByInputChange={setTakenByInput}
 				existingPeople={existingPeople}
@@ -1168,7 +1362,7 @@ export function MedicationsPage() {
 				onUsePrescriptionRefillChange={setUsePrescriptionRefill}
 				refillSaving={refillSaving}
 				onSubmitRefill={handleSubmitRefill}
-				meds={meds}
+				meds={allMeds}
 				onUploadMedImage={uploadMedImage}
 				onDeleteMedImage={deleteMedImage}
 				onClose={() => {
@@ -1195,6 +1389,20 @@ export function MedicationsPage() {
 			)}
 
 			{/* Delete Medication Confirmation Modal */}
+			{showObsoleteConfirm && obsoleteCandidate && (
+				<ConfirmModal
+					title={t("medications.obsoleteModal.title")}
+					message={t("medications.obsoleteModal.message", { name: obsoleteCandidate.name })}
+					confirmLabel={t("medications.list.markObsolete")}
+					cancelLabel={t("common.cancel")}
+					onConfirm={handleConfirmMarkObsolete}
+					onCancel={handleCancelMarkObsolete}
+					confirmVariant="danger"
+					overlayClassName={showEditModal ? "nested-confirm" : undefined}
+				/>
+			)}
+
+			{/* Delete Medication Confirmation Modal */}
 			{showDeleteConfirm && deleteCandidate && (
 				<ConfirmModal
 					title={t("medications.deleteModal.title")}
@@ -1206,6 +1414,11 @@ export function MedicationsPage() {
 					confirmVariant="danger"
 					overlayClassName={showEditModal ? "nested-confirm" : undefined}
 				/>
+			)}
+
+			{/* Image Lightbox */}
+			{lightboxImage && (
+				<Lightbox src={lightboxImage.src} alt={lightboxImage.alt} onClose={() => setLightboxImage(null)} />
 			)}
 		</section>
 	);

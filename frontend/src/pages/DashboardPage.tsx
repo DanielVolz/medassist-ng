@@ -607,42 +607,34 @@ export function DashboardPage() {
 									<span data-label={t("table.name")} className="cell-with-avatar">
 										<span className="med-name-line">
 											<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
-											<span className="med-name-text">{row.name}</span>
-											{med?.takenBy &&
-												med.takenBy.length > 0 &&
-												med.takenBy.map((person) => (
-													<span
-														key={person}
-														className="taken-by-badge clickable"
-														onClick={(e) => {
-															e.stopPropagation();
-															openUserFilter(person);
-														}}
-													>
-														{person}
+											<span className="med-name-block-dash">
+												<span className="med-name-text">{row.name}</span>
+												{med?.takenBy && med.takenBy.length > 0 && (
+													<span className="med-taken-by-line">
+														{med.takenBy.map((person) => (
+															<span
+																key={person}
+																className="taken-by-badge clickable"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	openUserFilter(person);
+																}}
+															>
+																{person}
+																{med.intakes?.some((i) => i.takenBy === person && i.intakeRemindersEnabled) && " 🔔"}
+															</span>
+														))}
 													</span>
-												))}
+												)}
+											</span>
 										</span>
-										{(() => {
-											const hasIntakeReminders =
-												med?.intakes?.some((i) => i.intakeRemindersEnabled) ?? med?.intakeRemindersEnabled;
-											return (
-												(hasIntakeReminders || med?.notes) && (
-													<span className="med-icons">
-														{hasIntakeReminders && (
-															<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
-																🔔
-															</span>
-														)}
-														{med?.notes && (
-															<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
-																📝
-															</span>
-														)}
-													</span>
-												)
-											);
-										})()}
+										{med?.notes && (
+											<span className="med-icons">
+												<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
+													📝
+												</span>
+											</span>
+										)}
 									</span>
 									<span data-label={t("table.stock")} className={textClass}>
 										{med?.packageType === "bottle"

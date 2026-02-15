@@ -181,7 +181,16 @@ export function MedDetailModal({
 							{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
 							{selectedMed.takenBy && (selectedMed.takenBy || []).length > 0 && (
 								<span className="med-taken-by">
-									{t("modal.for")} {selectedMed.takenBy.join(", ")}
+									{t("modal.for")}{" "}
+									{selectedMed.takenBy.map((person, index) => (
+										<span key={person}>
+											{index > 0 && ", "}
+											{person}
+											{selectedMed.intakes?.some(
+												(intake) => intake.takenBy === person && intake.intakeRemindersEnabled
+											) && <span className="taken-by-badge">🔔</span>}
+										</span>
+									))}
 								</span>
 							)}
 						</div>
@@ -287,7 +296,7 @@ export function MedDetailModal({
 					{selectedMed.prescriptionEnabled && (
 						<div className="med-detail-section">
 							<h3>{t("form.sections.prescription")}</h3>
-							<div className="med-detail-grid">
+							<div className="med-detail-grid prescription-detail-grid">
 								<div className="med-detail-item">
 									<span className="med-detail-label">{t("prescription.authorizedRefills")}</span>
 									<span className="med-detail-value">{selectedMed.prescriptionAuthorizedRefills ?? "—"}</span>

@@ -12,6 +12,7 @@ export interface LightboxProps {
 
 export function Lightbox({ src, alt, onClose }: LightboxProps) {
 	function handleOverlayClick(e: MouseEvent) {
+		e.stopPropagation();
 		if (e.target === e.currentTarget) {
 			onClose();
 		}
@@ -19,10 +20,12 @@ export function Lightbox({ src, alt, onClose }: LightboxProps) {
 
 	return (
 		<div className="lightbox-overlay" onClick={handleOverlayClick}>
-			<button className="lightbox-close" onClick={onClose}>
-				×
-			</button>
-			<img src={src} alt={alt} className="lightbox-image" onClick={(e) => e.stopPropagation()} />
+			<div className="lightbox-container">
+				<button className="lightbox-close" onClick={onClose}>
+					×
+				</button>
+				<img src={src} alt={alt} className="lightbox-image" onClick={(e) => e.stopPropagation()} />
+			</div>
 		</div>
 	);
 }

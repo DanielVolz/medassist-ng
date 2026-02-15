@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/db-utils.js";
@@ -144,7 +144,11 @@ async function getMedicationsNeedingReminder(
 	lowStockDays: number,
 	language: Language
 ): Promise<LowStockItem[]> {
-	const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
+	const rows = await db
+		.select()
+		.from(medications)
+		.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)))
+		.orderBy(medications.id);
 
 	const lowStock: LowStockItem[] = [];
 
@@ -176,7 +180,11 @@ async function getMedicationsNeedingReminder(
 }
 
 async function getMedicationsNeedingPrescriptionReminder(userId: number): Promise<PrescriptionReminderItem[]> {
-	const rows = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
+	const rows = await db
+		.select()
+		.from(medications)
+		.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)))
+		.orderBy(medications.id);
 
 	return rows
 		.filter(

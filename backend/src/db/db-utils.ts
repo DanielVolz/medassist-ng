@@ -119,6 +119,11 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE medications ADD COLUMN last_stock_correction_at integer`,
 		// Added in v1.5.1 - dismiss past doses until date (robust against timestamp changes)
 		`ALTER TABLE medications ADD COLUMN dismissed_until text`,
+		// Added for soft-archiving medications (without deleting history)
+		`ALTER TABLE medications ADD COLUMN is_obsolete integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE medications ADD COLUMN obsolete_at integer`,
+		// Added for explicit medication lifecycle start date
+		`ALTER TABLE medications ADD COLUMN medication_start_date text NOT NULL DEFAULT ''`,
 		// Added for more detailed reminder info display
 		`ALTER TABLE user_settings ADD COLUMN last_reminder_med_name text`,
 		`ALTER TABLE user_settings ADD COLUMN last_reminder_taken_by text`,

@@ -45,6 +45,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -63,6 +64,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -81,6 +83,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -100,6 +103,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -118,6 +122,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -136,6 +141,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -154,6 +160,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -175,6 +182,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -187,8 +195,9 @@ describe("UserFilterModal", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
-	it("calls onClose and onOpenMedDetail when medication clicked", () => {
+	it("calls onClearUser and onOpenMedDetail when medication clicked", () => {
 		const onClose = vi.fn();
+		const onClearUser = vi.fn();
 		const onOpenMedDetail = vi.fn();
 
 		render(
@@ -198,6 +207,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={onClearUser}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -207,7 +217,7 @@ describe("UserFilterModal", () => {
 			fireEvent.click(medItem);
 		}
 
-		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(onClearUser).toHaveBeenCalledTimes(1);
 		expect(onOpenMedDetail).toHaveBeenCalledWith(mockMedication);
 	});
 
@@ -222,6 +232,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -243,6 +254,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [mockCoverage] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);
@@ -272,6 +284,7 @@ describe("UserFilterModal", () => {
 				coverage={{ all: [] }}
 				settings={defaultSettings}
 				onClose={onClose}
+				onClearUser={vi.fn()}
 				onOpenMedDetail={onOpenMedDetail}
 			/>
 		);

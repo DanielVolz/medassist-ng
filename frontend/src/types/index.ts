@@ -47,6 +47,7 @@ export type Medication = {
 	lastStockCorrectionAt?: string | null;
 	pillWeightMg?: number | null;
 	doseUnit?: DoseUnit | null; // Unit for the dose (mg, g, mcg, ml, IU, etc.)
+	medicationStartDate?: string | null;
 	blisters: Blister[]; // Legacy array format
 	intakes?: Intake[]; // New intake format with per-intake takenBy
 	imageUrl?: string | null;
@@ -58,6 +59,8 @@ export type Medication = {
 	prescriptionLowRefillThreshold?: number;
 	prescriptionExpiryDate?: string | null;
 	intakeRemindersEnabled?: boolean; // Medication-level setting (deprecated, use per-intake)
+	isObsolete?: boolean;
+	obsoleteAt?: string | null;
 	dismissedUntil?: string | null; // ISO date string (YYYY-MM-DD) - all past doses until this date are dismissed
 	updatedAt: string | number | null;
 };
@@ -114,6 +117,7 @@ export type FormState = {
 	looseTablets: string; // For blister: extra loose pills; for bottle: current stock
 	pillWeightMg: string;
 	doseUnit: DoseUnit; // Unit for the dose (mg, g, mcg, ml, IU, etc.)
+	medicationStartDate: string;
 	expiryDate: string;
 	notes: string;
 	prescriptionEnabled: boolean;

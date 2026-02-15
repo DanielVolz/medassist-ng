@@ -57,6 +57,20 @@
       "when": 1770659669121,
       "tag": "0007_add_share_stock_status",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1771160400000,
+      "tag": "0008_add_obsolete_medications",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1771164000000,
+      "tag": "0009_add_medication_start_date",
+      "breakpoints": true
     }
   ]
 }

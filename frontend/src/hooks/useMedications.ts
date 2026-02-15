@@ -22,7 +22,7 @@ export function useMedications(): UseMedicationsReturn {
 
 	const loadMeds = useCallback(() => {
 		setLoading(true);
-		fetch("/api/medications", { credentials: "include" })
+		fetch("/api/medications?includeObsolete=true", { credentials: "include" })
 			.then((res) => res.json())
 			.then((data) => setMeds(Array.isArray(data) ? data : []))
 			.catch(() => setMeds([]))

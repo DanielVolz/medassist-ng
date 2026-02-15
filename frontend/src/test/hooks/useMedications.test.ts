@@ -44,7 +44,7 @@ describe("useMedications", () => {
 			expect(result.current.meds).toEqual(mockMeds);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/medications", { credentials: "include" });
+		expect(fetch).toHaveBeenCalledWith("/api/medications?includeObsolete=true", { credentials: "include" });
 	});
 
 	it("handles API error gracefully", async () => {
@@ -123,7 +123,7 @@ describe("useMedications", () => {
 		});
 
 		expect(fetch).toHaveBeenCalledWith("/api/medications/5", { method: "DELETE", credentials: "include" });
-		expect(fetch).toHaveBeenCalledWith("/api/medications", { credentials: "include" });
+		expect(fetch).toHaveBeenCalledWith("/api/medications?includeObsolete=true", { credentials: "include" });
 		expect(mockResetForm).toHaveBeenCalled();
 	});
 

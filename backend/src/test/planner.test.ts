@@ -111,6 +111,9 @@ async function createSchema(client: Client) {
       expiry_date text,
       notes text,
       intake_reminders_enabled integer NOT NULL DEFAULT 0,
+      medication_start_date text NOT NULL DEFAULT '',
+      is_obsolete integer NOT NULL DEFAULT 0,
+      obsolete_at integer,
       prescription_enabled integer NOT NULL DEFAULT 0,
       prescription_authorized_refills integer,
       prescription_remaining_refills integer,
@@ -168,6 +171,7 @@ async function createSchema(client: Client) {
 }
 
 async function clearData(client: Client) {
+	await client.execute("DELETE FROM medications");
 	await client.execute("DELETE FROM user_settings");
 	await client.execute("DELETE FROM users");
 	await client.execute("DELETE FROM sqlite_sequence");
@@ -187,6 +191,18 @@ describe("Planner Routes", () => {
 		await testClient.execute(
 			"INSERT INTO users (id, username, auth_provider) VALUES (999999999, '__anonymous__', 'anonymous')"
 		);
+
+		// Insert test medications so active-medication filters pass
+		await testClient.execute({
+			sql: `INSERT INTO medications (id, user_id, name, taken_by_json, usage_json, every_json, start_json)
+			       VALUES (1, 999999999, 'Aspirin', '["Daniel"]', '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]')`,
+			args: [],
+		});
+		await testClient.execute({
+			sql: `INSERT INTO medications (id, user_id, name, taken_by_json, usage_json, every_json, start_json)
+			       VALUES (2, 999999999, 'Ibuprofen', '["Daniel"]', '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]')`,
+			args: [],
+		});
 
 		app = Fastify({ logger: false });
 		await app.register(plannerRoutes);

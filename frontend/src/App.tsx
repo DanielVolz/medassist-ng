@@ -454,6 +454,11 @@ function AppContent() {
 				coverage={coverage}
 				settings={stockThresholds}
 				onClose={closeUserFilter}
+				onClearUser={() => {
+					setSelectedUser(null);
+					// Replace the userFilter history entry so it doesn't remain on the stack
+					window.history.replaceState(null, "");
+				}}
 				onOpenMedDetail={openMedDetail}
 			/>
 

@@ -7,6 +7,7 @@ import { MedicationAvatar } from "../components";
 import type { Coverage, Medication, StockThresholds } from "../types";
 import { getMedTotal, getPackageSize } from "../types";
 import { formatNumber } from "../utils";
+import { getSystemLocale } from "../utils/formatters";
 import { getStockStatus } from "../utils/schedule";
 
 export interface UserFilterModalProps {
@@ -15,6 +16,7 @@ export interface UserFilterModalProps {
 	coverage: { all: Coverage[] };
 	settings: StockThresholds;
 	onClose: () => void;
+	onClearUser: () => void;
 	onOpenMedDetail: (med: Medication) => void;
 }
 
@@ -24,13 +26,14 @@ export function UserFilterModal({
 	coverage,
 	settings,
 	onClose,
+	onClearUser,
 	onOpenMedDetail,
 }: UserFilterModalProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 
 	if (!selectedUser) return null;
 
-	const userMeds = meds.filter((m) => (m.takenBy || []).includes(selectedUser));
+	const userMeds = meds.filter((m) => !m.isObsolete && (m.takenBy || []).includes(selectedUser));
 
 	return (
 		<div className="modal-overlay" onClick={onClose}>
@@ -47,15 +50,29 @@ export function UserFilterModal({
 				<div className="user-meds-list">
 					{userMeds.map((med) => {
 						const medCoverage = coverage.all.find((c) => c.name === med.name);
-						const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
+						// Fallback: if no coverage data (e.g. obsolete med), compute basic status from total pills
+						const status = medCoverage
+							? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings)
+							: getStockStatus(null, getMedTotal(med), settings);
 						const packageSize = getPackageSize(med);
 						const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(getMedTotal(med));
+
+						// Get intakes relevant to this person
+						const personIntakes = (
+							med.intakes ||
+							med.blisters.map((b) => ({
+								...b,
+								takenBy: null as string | null,
+								intakeRemindersEnabled: false,
+							}))
+						).filter((intake) => intake.takenBy === null || intake.takenBy === selectedUser);
+
 						return (
 							<div
 								key={med.id}
 								className="user-med-item clickable"
 								onClick={() => {
-									onClose();
+									onClearUser();
 									onOpenMedDetail(med);
 								}}
 							>
@@ -63,6 +80,25 @@ export function UserFilterModal({
 								<div className="user-med-info">
 									<span className="user-med-name">{med.name}</span>
 									{med.genericName && <span className="user-med-generic">{med.genericName}</span>}
+									{personIntakes.length > 0 && (
+										<div className="user-med-intakes">
+											{personIntakes.map((intake, idx) => {
+												const timeStr = new Date(intake.start).toLocaleTimeString(getSystemLocale(i18n.language), {
+													hour: "2-digit",
+													minute: "2-digit",
+												});
+												return (
+													<span key={idx} className="user-med-intake-item">
+														{intake.usage} {intake.usage !== 1 ? t("common.pills") : t("common.pill")}
+														{med.pillWeightMg != null &&
+															` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}
+														{t("form.blisters.every")} {intake.every}{" "}
+														{intake.every !== 1 ? t("common.days") : t("common.day")} {t("modal.at")} {timeStr}
+													</span>
+												);
+											})}
+										</div>
+									)}
 								</div>
 								<div className="user-med-stats">
 									<span className="user-med-pills">

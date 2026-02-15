@@ -125,7 +125,12 @@
       "title": "Medication list",
       "entries": "{{count}} entries",
       "entries_one": "{{count}} entry",
-      "entries_other": "{{count}} entries"
+      "entries_other": "{{count}} entries",
+      "markObsolete": "Mark obsolete",
+      "reactivate": "Reactivate",
+      "obsoleteTitle": "Obsolete ({{count}})",
+      "obsoleteSince": "Stopped",
+      "started": "Started"
     },
     "details": {
       "packs": "Packs",
@@ -140,10 +145,15 @@
     "deleteModal": {
       "title": "Delete medication",
       "message": "Do you really want to delete \"{{name}}\"?"
+    },
+    "obsoleteModal": {
+      "title": "Mark medication as obsolete",
+      "message": "Do you really want to mark \"{{name}}\" as obsolete?"
     }
   },
   "form": {
     "editEntry": "Edit medication",
+    "viewEntry": "View medication",
     "newEntry": "New medication",
     "badge": "Packs + loose pills",
     "sections": {
@@ -165,6 +175,7 @@
     "loosePills": "Loose pills",
     "pillWeight": "Dose per pill",
     "total": "Total (pills)",
+    "medicationStartDate": "Medication Start Date",
     "expiryDate": "Expiry Date",
     "notes": "Notes",
     "medicationImage": "Medication Image",
@@ -176,6 +187,9 @@
       "addPerson": "Add another person...",
       "weight": "e.g. 240",
       "notes": "e.g. Take with food, avoid alcohol... (optional)"
+    },
+    "validation": {
+      "startDateAfterIntake": "Medication start date ({{medicationStartDate}}) cannot be after intake date ({{intakeDate}})."
     },
     "blisters": {
       "title": "Intake schedule",
@@ -406,6 +420,7 @@
     "cancel": "Cancel",
     "close": "Close",
     "edit": "Edit",
+    "view": "View",
     "delete": "Delete",
     "remove": "Remove",
     "reset": "Reset",
@@ -513,7 +528,7 @@
   "prescription": {
     "enabled": "Track prescription",
     "authorizedRefills": "Authorized refills",
-    "remainingRefills": "Remaining refills",
+    "remainingRefills": "Remaining prescription refills",
     "lowThreshold": "Low-refill reminder threshold",
     "expiryDate": "Prescription expiry",
     "useForRefill": "Use prescription refill"

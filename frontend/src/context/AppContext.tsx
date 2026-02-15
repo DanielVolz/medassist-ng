@@ -270,15 +270,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	// Computed values - combine app language with timezone region for locale
 	const systemLocale = getSystemLocale(i18n.language);
-	const schedule = useMemo(
-		() => buildSchedulePreview(medications.meds, systemLocale, true),
-		[medications.meds, systemLocale]
-	);
+	const activeMeds = useMemo(() => medications.meds.filter((m) => !m.isObsolete), [medications.meds]);
+	const schedule = useMemo(() => buildSchedulePreview(activeMeds, systemLocale, true), [activeMeds, systemLocale]);
 
 	const coverage = useMemo(
 		() =>
 			calculateCoverage(
-				medications.meds,
+				activeMeds,
 				schedule.events,
 				systemLocale,
 				settingsHook.settings.reminderDaysBefore,
@@ -287,7 +285,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				doses.takenDoseTimestamps
 			),
 		[
-			medications.meds,
+			activeMeds,
 			schedule.events,
 			systemLocale,
 			settingsHook.settings.reminderDaysBefore,
@@ -430,8 +428,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	}, [groupedSchedule, scheduleDays]);
 
 	const missedPastDoseIds = useMemo(
-		() => computeMissedPastDoseIds(pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses),
-		[pastDays, medications.meds, doses.takenDoses, doses.dismissedDoses]
+		() => computeMissedPastDoseIds(pastDays, activeMeds, doses.takenDoses, doses.dismissedDoses),
+		[pastDays, activeMeds, doses.takenDoses, doses.dismissedDoses]
 	);
 
 	// Modal helpers with browser history support
@@ -486,8 +484,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	// Wrapper to pass meds to openShareDialog
 	const openShareDialog = useCallback(() => {
-		share.openShareDialog(medications.meds);
-	}, [share, medications.meds]);
+		share.openShareDialog(activeMeds);
+	}, [share, activeMeds]);
 
 	// Get t function for translations
 	const { t } = useTranslation();

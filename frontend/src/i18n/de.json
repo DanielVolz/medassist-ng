@@ -125,7 +125,12 @@
       "title": "Medikamentenliste",
       "entries": "{{count}} Einträge",
       "entries_one": "{{count}} Eintrag",
-      "entries_other": "{{count}} Einträge"
+      "entries_other": "{{count}} Einträge",
+      "markObsolete": "Als obsolet markieren",
+      "reactivate": "Reaktivieren",
+      "obsoleteTitle": "Obsolet ({{count}})",
+      "obsoleteSince": "Beendet",
+      "started": "Gestartet"
     },
     "details": {
       "packs": "Packungen",
@@ -140,10 +145,15 @@
     "deleteModal": {
       "title": "Medikament löschen",
       "message": "Möchtest du \"{{name}}\" wirklich löschen?"
+    },
+    "obsoleteModal": {
+      "title": "Medikament als obsolet markieren",
+      "message": "Möchtest du \"{{name}}\" wirklich als obsolet markieren?"
     }
   },
   "form": {
     "editEntry": "Medikament bearbeiten",
+    "viewEntry": "Medikament ansehen",
     "newEntry": "Neues Medikament",
     "badge": "Packungen + lose Tabletten",
     "sections": {
@@ -165,6 +175,7 @@
     "loosePills": "Lose Tabletten",
     "pillWeight": "Dosis pro Tablette",
     "total": "Gesamt (Tabletten)",
+    "medicationStartDate": "Medikations-Startdatum",
     "expiryDate": "Ablaufdatum",
     "notes": "Notizen",
     "medicationImage": "Medikamentenbild",
@@ -177,6 +188,9 @@
       "weight": "z.B. 240",
       "notes": "z.B. Mit Essen einnehmen, Alkohol vermeiden... (optional)"
     },
+      "validation": {
+        "startDateAfterIntake": "Das Medikations-Startdatum ({{medicationStartDate}}) darf nicht nach dem Einnahmedatum ({{intakeDate}}) liegen."
+      },
     "blisters": {
       "title": "Einnahmeplan",
       "remind": "Erinnern",
@@ -406,6 +420,7 @@
     "cancel": "Abbrechen",
     "close": "Schließen",
     "edit": "Bearbeiten",
+    "view": "Ansehen",
     "delete": "Löschen",
     "remove": "Entfernen",
     "reset": "Zurücksetzen",
@@ -513,7 +528,7 @@
   "prescription": {
     "enabled": "Rezept verfolgen",
     "authorizedRefills": "Genehmigte Nachfüllungen",
-    "remainingRefills": "Verbleibende Nachfüllungen",
+    "remainingRefills": "Verbleibende Rezept-Nachfüllungen",
     "lowThreshold": "Schwelle für Rezept-Erinnerung",
     "expiryDate": "Rezeptablauf",
     "useForRefill": "Rezept-Nachfüllung verwenden"

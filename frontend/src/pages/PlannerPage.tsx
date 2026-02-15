@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MedicationAvatar } from "../components";
+import { DateTimeInput, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { PlannerRow } from "../types";
@@ -158,8 +158,7 @@ export function PlannerPage() {
 				<form className="planner" onSubmit={runPlanner}>
 					<label>
 						{t("planner.from")}
-						<input
-							type="datetime-local"
+						<DateTimeInput
 							step="60"
 							value={range.start}
 							onChange={(e) => setRange({ ...range, start: e.target.value })}
@@ -167,12 +166,7 @@ export function PlannerPage() {
 					</label>
 					<label>
 						{t("planner.until")}
-						<input
-							type="datetime-local"
-							step="60"
-							value={range.end}
-							onChange={(e) => setRange({ ...range, end: e.target.value })}
-						/>
+						<DateTimeInput step="60" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} />
 					</label>
 					<label className="planner-checkbox">
 						<input

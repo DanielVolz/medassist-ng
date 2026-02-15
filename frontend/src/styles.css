@@ -30,6 +30,13 @@
 	--btn-primary-bg: var(--accent);
 	--btn-primary-hover: #3d94ff;
 	--btn-ghost-hover: rgba(255, 255, 255, 0.08);
+	--btn-danger-text: #2f0a0a;
+	--btn-success-text: #0a2b1f;
+	--btn-obsolete-bg: linear-gradient(135deg, #f7d14a 0%, #f2b91a 100%);
+	--btn-obsolete-hover: linear-gradient(135deg, #f9db72 0%, #f5c73c 100%);
+	--btn-obsolete-text: #2b2205;
+	--btn-obsolete-border: #f8e38a;
+	--btn-obsolete-shadow: 0 6px 14px rgba(252, 211, 77, 0.28);
 }
 
 [data-theme="light"] {
@@ -60,6 +67,13 @@
 	--btn-primary-bg: var(--accent);
 	--btn-primary-hover: #1d4ed8;
 	--btn-ghost-hover: rgba(0, 0, 0, 0.06);
+	--btn-danger-text: #ffffff;
+	--btn-success-text: #ffffff;
+	--btn-obsolete-bg: linear-gradient(135deg, #f5b52c 0%, #f59e0b 100%);
+	--btn-obsolete-hover: linear-gradient(135deg, #f8c85b 0%, #f7ad2d 100%);
+	--btn-obsolete-text: #ffffff;
+	--btn-obsolete-border: #d48806;
+	--btn-obsolete-shadow: 0 6px 14px rgba(245, 158, 11, 0.22);
 }
 
 * {
@@ -90,6 +104,7 @@ body.modal-open {
 	max-width: 1200px;
 	margin: 0 auto;
 	padding: 2.5rem 1.5rem 3rem;
+	overflow-x: hidden;
 }
 
 .hero {
@@ -491,8 +506,10 @@ body.modal-open {
 .grid {
 	display: grid;
 	gap: 1rem;
-	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
 	margin-bottom: 1rem;
+	max-width: 100%;
+	overflow: hidden;
 }
 
 .card {
@@ -617,19 +634,128 @@ body.modal-open {
 .med-grid {
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
+	grid-auto-rows: auto;
 	gap: 1rem;
+}
+
+.med-groups {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.med-group {
+	border: 1px solid var(--border-primary);
+	border-radius: 12px;
+	padding: 0.9rem;
+	background: color-mix(in srgb, var(--bg-secondary) 75%, var(--bg-tertiary));
+}
+
+.med-group-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 0.8rem;
+}
+
+.med-group-head-toggle {
+	cursor: pointer;
+	user-select: none;
+	border-radius: 8px;
+	padding: 0.1rem 0.25rem;
+	margin: -0.1rem -0.25rem 0.8rem;
+}
+
+.med-group-head-toggle:hover .med-group-title {
+	color: var(--text-primary);
+}
+
+.med-group-title {
+	margin: 0;
+	font-size: 0.92rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+
+.med-group-obsolete {
+	border-color: var(--border-primary);
+	background: var(--bg-secondary);
+	opacity: 1;
+}
+
+.med-grid-obsolete {
+	grid-template-columns: repeat(2, 1fr);
+	grid-auto-rows: auto;
+}
+
+.obsolete-row {
+	border-color: var(--border-primary);
+}
+
+.obsolete-row .med-actions button {
+	opacity: 0.72;
+	filter: saturate(0.72);
+	box-shadow: none;
+}
+
+.obsolete-row .med-actions button:hover {
+	opacity: 0.9;
+	filter: saturate(0.85);
 }
 
 @media (max-width: 768px) {
 	.med-grid {
 		grid-template-columns: 1fr;
 	}
+
+	/* Flatten nested boxes on mobile to reclaim horizontal space */
+	.med-grid-wrapper > .card {
+		background: transparent !important;
+		border: none !important;
+		box-shadow: none !important;
+		padding: 0 !important;
+		border-radius: 0 !important;
+	}
+
+	.med-grid-wrapper .card-head {
+		padding: 0 0.25rem;
+	}
+
+	.med-group,
+	.med-groups {
+		border: none !important;
+		background: transparent !important;
+		padding: 0 !important;
+		border-radius: 0 !important;
+	}
+
+	.med-group-head {
+		padding: 0 0.25rem;
+	}
+
+	.med-row {
+		padding: 0.65rem;
+		border-radius: 8px;
+	}
+
+	.blister-row-simple {
+		padding: 0.45rem 0.5rem 0.45rem 0.65rem;
+		font-size: 0.82rem;
+	}
+
+	.med-details {
+		gap: 0.2rem 0.75rem;
+		font-size: 0.82rem;
+	}
 }
 
 .med-row {
-	display: flex;
-	flex-direction: column;
-	gap: 0.75rem;
+	display: grid;
+	grid-template-rows: subgrid;
+	grid-row: span 2;
+	gap: 0;
 	border: 1px solid var(--border-primary);
 	padding: 1rem;
 	border-radius: 10px;
@@ -646,9 +772,8 @@ body.modal-open {
 }
 .med-header {
 	display: flex;
-	justify-content: space-between;
-	align-items: flex-start;
-	gap: 1rem;
+	flex-direction: column;
+	gap: 0.5rem;
 }
 .med-info {
 	flex: 1;
@@ -661,7 +786,7 @@ body.modal-open {
 }
 .med-details {
 	display: grid;
-	grid-template-columns: repeat(2, 1fr);
+	grid-template-columns: max-content max-content;
 	gap: 0.25rem 1.5rem;
 	color: var(--text-secondary);
 	font-size: 0.9rem;
@@ -690,8 +815,9 @@ body.modal-open {
 	display: flex;
 	flex-direction: column;
 	gap: 0.4rem;
-	margin-top: 0.5rem;
+	padding-top: 0.5rem;
 	width: 100%;
+	align-self: start;
 }
 .blister-row-simple {
 	color: var(--text-muted);
@@ -788,6 +914,8 @@ body.modal-open {
 	align-items: center;
 	gap: 0.5rem;
 	flex-shrink: 0;
+	margin-bottom: 0.75rem;
+	flex-wrap: wrap;
 }
 .med-actions button {
 	padding: 0.5rem 0.9rem;
@@ -799,6 +927,9 @@ body.modal-open {
 	}
 	.med-actions {
 		align-self: flex-start;
+	}
+	.med-details {
+		grid-template-columns: repeat(2, 1fr);
 	}
 }
 .blister-list {
@@ -931,7 +1062,7 @@ button.secondary:hover {
 /* Success button (Refill, etc.) */
 button.success {
 	background: var(--success);
-	color: white;
+	color: var(--btn-success-text);
 	border: none;
 }
 button.success:hover {
@@ -982,10 +1113,39 @@ button.ghost:hover {
 	background: var(--btn-ghost-hover);
 }
 
+/* Navigation button (Back): neutral and low visual urgency */
+button.btn-nav {
+	background: transparent;
+	border: 1px solid var(--border-secondary);
+	color: var(--text-primary);
+	box-shadow: none;
+}
+button.btn-nav:hover {
+	background: var(--btn-ghost-hover);
+	border-color: var(--accent);
+}
+
+/* Reversible status-change button (Mark obsolete): warning, not destructive */
+button.btn-obsolete {
+	background: var(--btn-obsolete-bg);
+	border: 1px solid var(--btn-obsolete-border);
+	color: var(--btn-obsolete-text);
+	box-shadow: none;
+	font-weight: 700;
+}
+button.btn-obsolete:hover {
+	background: var(--btn-obsolete-hover);
+	transform: none;
+	box-shadow: none;
+}
+button.btn-obsolete:active {
+	transform: none;
+}
+
 /* Danger button (Delete, etc.) */
 button.danger {
 	background: var(--danger);
-	color: white;
+	color: var(--btn-danger-text);
 	border: none;
 }
 button.danger:hover {
@@ -1210,6 +1370,70 @@ textarea.auto-resize {
 	text-transform: none;
 	letter-spacing: normal;
 	margin-top: 0.25rem;
+}
+
+.field-error.error-pulse {
+	animation: error-pulse-anim 1.5s ease;
+}
+
+@keyframes error-pulse-anim {
+	0%,
+	100% {
+		background: transparent;
+	}
+	15% {
+		background: rgba(239, 68, 68, 0.18);
+		border-radius: 4px;
+		padding: 2px 6px;
+	}
+	85% {
+		background: rgba(239, 68, 68, 0.18);
+		border-radius: 4px;
+		padding: 2px 6px;
+	}
+}
+
+button.has-validation-error {
+	opacity: 0.65;
+	cursor: not-allowed;
+}
+
+.readonly-fieldset {
+	display: contents;
+}
+
+/* Subtle read-only styling for disabled fieldset inputs */
+.readonly-fieldset:disabled input,
+.readonly-fieldset:disabled select,
+.readonly-fieldset:disabled textarea,
+.readonly-fieldset:disabled .date-input-wrapper {
+	opacity: 0.55;
+	cursor: default;
+	border-color: transparent;
+	background: var(--bg-input);
+	pointer-events: none;
+}
+
+.readonly-fieldset:disabled .date-input-display {
+	opacity: 0.55;
+}
+
+.readonly-fieldset:disabled .tag {
+	opacity: 0.55;
+	pointer-events: none;
+}
+
+.readonly-fieldset:disabled .static-value {
+	opacity: 0.55;
+	border-color: transparent;
+}
+
+.readonly-fieldset:disabled .tag-input-container {
+	border-color: transparent;
+}
+
+.readonly-fieldset:disabled label {
+	opacity: 0.7;
 }
 
 /* Dose input with unit selector */
@@ -2038,13 +2262,13 @@ textarea.auto-resize {
 		gap: 0.5rem;
 		align-items: stretch;
 	}
-	.table-row span {
+	.table-row > span {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		text-align: left;
 	}
-	.table-row span::before {
+	.table-row > span::before {
 		content: attr(data-label);
 		font-weight: 600;
 		color: var(--accent-light);
@@ -2055,44 +2279,44 @@ textarea.auto-resize {
 		text-align: left;
 	}
 	/* First span (name cell) - centered horizontal layout */
-	.table-row span:first-child {
-		justify-content: center;
+	.table-row > span:first-child {
+		justify-content: flex-start;
 		padding-bottom: 0.15rem;
 		margin-bottom: 0;
 	}
-	.table-row span:first-child::before {
+	.table-row > span:first-child::before {
 		display: none; /* Hide "NAME" label on mobile */
 	}
 	/* Status chip in table row - left aligned */
-	.table-row span.status-chip {
+	.table-row > span.status-chip {
 		align-self: flex-start;
 		justify-content: flex-start;
 		gap: 0.4rem;
 	}
-	.table-row span.status-chip::before {
+	.table-row > span.status-chip::before {
 		margin-right: 0;
 	}
-	/* Avatar + name layout - centered */
+	/* Avatar + name layout - left aligned */
 	.table-row .cell-with-avatar {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
+		align-items: flex-start;
 		gap: 0.25rem;
 	}
 	.table-row .cell-with-avatar .med-name-line {
 		display: flex;
-		align-items: center;
-		justify-content: center;
+		align-items: flex-start;
+		justify-content: flex-start;
 		gap: 0.4rem;
 	}
 	.table-row .cell-with-avatar .med-avatar {
 		flex-shrink: 0;
 	}
-	/* Icons on separate line on mobile - centered under med name */
+	/* Icons on separate line on mobile - left aligned */
 	.table-row .cell-with-avatar .med-icons {
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		justify-content: flex-start;
 		gap: 0.5rem;
 		width: 100%;
 	}
@@ -2101,6 +2325,30 @@ textarea.auto-resize {
 	.table-row .reminder-icon,
 	.table-row .notes-icon {
 		flex-shrink: 0;
+	}
+
+	/* Prevent data-label ::before on nested spans inside name cell */
+	.table-row .cell-with-avatar span::before {
+		display: none;
+	}
+	.table-row .cell-with-avatar .taken-by-badge,
+	.table-row .cell-with-avatar .med-name-text {
+		display: inline !important;
+		justify-content: initial;
+	}
+	.table-row .med-taken-by-line {
+		display: flex !important;
+		align-items: center;
+		flex-wrap: wrap;
+		row-gap: 0.2rem;
+		column-gap: 0.5rem;
+		justify-content: flex-start;
+	}
+	.table-row .cell-with-avatar .taken-by-badge {
+		display: inline-flex !important;
+		align-items: center;
+		line-height: 1;
+		margin-left: 0;
 	}
 	.table-4 .table-head,
 	.table-4 .table-row,
@@ -2116,7 +2364,17 @@ textarea.auto-resize {
 
 @media (max-width: 600px) {
 	.page {
-		padding: 1rem 0.75rem 2rem;
+		padding: 0.75rem 0.4rem 2rem;
+	}
+
+	.grid {
+		grid-template-columns: 1fr;
+	}
+
+	.card {
+		padding: 0.65rem;
+		overflow: hidden;
+		max-width: 100%;
 	}
 
 	.hero {
@@ -3389,6 +3647,20 @@ textarea.auto-resize {
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+.med-avatar-clickable {
+	cursor: pointer;
+	display: inline-flex;
+}
+.med-avatar-clickable .med-avatar {
+	transition:
+		transform 0.15s,
+		box-shadow 0.15s;
+}
+.med-avatar-clickable:hover .med-avatar {
+	transform: scale(1.1);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 /* Table/Timeline cells with avatar */
 .cell-with-avatar {
 	display: flex;
@@ -3401,6 +3673,21 @@ textarea.auto-resize {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
+}
+
+.med-taken-by-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem;
+	justify-content: flex-start;
+}
+
+.med-name-block-dash {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	min-width: 0;
 }
 
 .cell-with-avatar .med-icons {
@@ -3444,12 +3731,26 @@ textarea.auto-resize {
 	gap: 0.75rem;
 	margin-bottom: 0.75rem;
 }
+.med-name-block {
+	min-width: 0;
+}
+.med-generic-name {
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+	font-weight: 400;
+	margin-top: 0.1rem;
+}
 
 .image-preview {
 	display: flex;
 	align-items: center;
 	gap: 1rem;
 	margin-top: 0.5rem;
+	width: 100%;
+}
+
+.image-preview button {
+	margin-left: auto;
 }
 
 .image-preview img {
@@ -3509,19 +3810,24 @@ textarea.auto-resize {
 	}
 }
 
+.modal-close,
+.lightbox-close {
+	width: 2rem;
+	height: 2rem;
+	min-width: 2rem;
+	min-height: 2rem;
+	font-size: 1.2rem;
+	line-height: 1;
+}
+
 .modal-close {
 	position: absolute;
 	top: 1rem;
 	right: 1rem;
 	background: var(--btn-ghost-hover);
 	border: 1px solid var(--border-secondary);
-	font-size: 1.2rem;
 	color: var(--text-secondary);
 	cursor: pointer;
-	width: 2rem;
-	height: 2rem;
-	min-width: 2rem;
-	min-height: 2rem;
 	aspect-ratio: 1;
 	display: flex;
 	align-items: center;
@@ -3738,6 +4044,19 @@ textarea.auto-resize {
 	color: var(--text-secondary);
 }
 
+.user-med-intakes {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	margin-top: 0.15rem;
+}
+
+.user-med-intake-item {
+	font-size: 0.78rem;
+	color: var(--text-secondary);
+	line-height: 1.3;
+}
+
 .user-meds-empty {
 	padding: 2rem;
 	text-align: center;
@@ -3826,6 +4145,16 @@ textarea.auto-resize {
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
 	gap: 0.75rem;
+}
+
+.prescription-detail-grid .med-detail-item {
+	display: grid;
+	grid-template-rows: minmax(2.6em, auto) auto;
+	align-items: start;
+}
+
+.prescription-detail-grid .med-detail-value {
+	align-self: end;
 }
 
 .med-detail-item {
@@ -3961,19 +4290,19 @@ textarea.auto-resize {
 	animation: fadeIn 0.2s ease;
 }
 
+.lightbox-container {
+	position: relative;
+	display: inline-flex;
+}
+
 .lightbox-close {
 	position: absolute;
-	top: 1rem;
-	right: 1rem;
-	background: rgba(255, 255, 255, 0.1);
+	top: -0.5rem;
+	right: -0.5rem;
+	background: rgba(255, 255, 255, 0.15);
 	border: none;
-	font-size: 1.5rem;
 	color: white;
 	cursor: pointer;
-	width: 3rem;
-	height: 3rem;
-	min-width: 3rem;
-	min-height: 3rem;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -3981,11 +4310,11 @@ textarea.auto-resize {
 	transition: background 150ms ease;
 	box-shadow: none;
 	padding: 0;
-	line-height: 1;
+	z-index: 1;
 }
 
 .lightbox-close:hover {
-	background: rgba(255, 255, 255, 0.25);
+	background: rgba(255, 255, 255, 0.35);
 }
 
 .lightbox-image {
@@ -5645,6 +5974,37 @@ a.about-version-link:hover {
 	}
 }
 
+/* ── Desktop Edit Panel (two-column layout) ── */
+.edit-sidebar {
+	display: none;
+	padding: 0;
+}
+
+@media (min-width: 769px) {
+	.med-grid-wrapper.desktop-edit-open {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(380px, 46%);
+		gap: 1rem;
+		align-items: start;
+	}
+
+	.med-grid-wrapper.desktop-edit-open .med-grid,
+	.med-grid-wrapper.desktop-edit-open .med-grid-obsolete {
+		grid-template-columns: 1fr;
+	}
+
+	.edit-sidebar.open {
+		display: block;
+	}
+}
+
+.edit-sidebar .card {
+	box-shadow: none;
+	border: none;
+	background: transparent;
+	padding: 0;
+}
+
 /* Desktop only - hide on mobile */
 @media (max-width: 768px) {
 	.desktop-only {
@@ -5657,7 +6017,7 @@ a.about-version-link:hover {
 	max-width: 95vw;
 	max-height: 90vh;
 	overflow-y: auto;
-	padding: 1.5rem;
+	padding: 0.75rem;
 }
 
 .edit-modal-header {
@@ -5687,8 +6047,9 @@ a.about-version-link:hover {
 
 .mobile-edit-form .form-category {
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	gap: 0.75rem 1rem;
-	padding: 0.8rem;
+	gap: 0.75rem 0.75rem;
+	padding: 0.5rem;
+	border-color: color-mix(in srgb, var(--border-primary) 50%, transparent);
 }
 
 .mobile-edit-form .refill-prescription-row {
@@ -5846,6 +6207,74 @@ a.about-version-link:hover {
 .action-card button,
 .action-card .btn {
 	flex-shrink: 0;
+}
+
+/* ==========================================
+   Custom DateInput / DateTimeInput
+   ========================================== */
+.date-input-wrapper {
+	position: relative;
+	display: flex;
+	align-items: center;
+	width: 100%;
+	cursor: pointer;
+}
+
+.date-input-display {
+	position: absolute;
+	left: 0.85rem;
+	right: 2.5rem;
+	pointer-events: none;
+	color: var(--text-primary);
+	font-size: 0.95rem;
+	font-family: inherit;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	z-index: 1;
+}
+
+.date-input-native {
+	color: transparent !important;
+	caret-color: transparent !important;
+	width: 100%;
+	cursor: pointer;
+}
+
+/* Ensure native text stays invisible on focus/selection */
+.date-input-native:focus,
+.date-input-native:active {
+	color: transparent !important;
+	caret-color: transparent !important;
+}
+
+.date-input-native::selection {
+	background: transparent;
+	color: transparent;
+}
+
+.date-input-native::-webkit-datetime-edit {
+	color: transparent;
+}
+
+/* Keep the calendar/clock picker icon visible and clickable */
+.date-input-native::-webkit-calendar-picker-indicator {
+	opacity: 0.6;
+	cursor: pointer;
+	filter: invert(0.8);
+	z-index: 2;
+}
+
+.date-input-native::-webkit-calendar-picker-indicator:hover {
+	opacity: 1;
+}
+
+/* Light theme: don't invert icon */
+@media (prefers-color-scheme: light) {
+	.date-input-native::-webkit-calendar-picker-indicator {
+		filter: none;
+		opacity: 0.7;
+	}
 }
 
 @media (max-width: 480px) {

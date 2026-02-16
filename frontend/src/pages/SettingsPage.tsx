@@ -30,7 +30,10 @@ export function SettingsPage() {
 		handleImportConfirm,
 		importResult,
 		setImportResult,
+		meds,
 	} = useAppContext();
+
+	const hasExistingData = meds.length > 0;
 
 	return (
 		<section className="grid">
@@ -799,21 +802,25 @@ export function SettingsPage() {
 			{/* Import Confirmation Modal */}
 			{showImportConfirm && (
 				<ConfirmModal
-					title={t("exportImport.confirmImport")}
+					title={t(hasExistingData ? "exportImport.confirmImport" : "exportImport.confirmImportEmpty")}
 					message={
-						<>
-							<p style={{ marginBottom: "12px" }}>{t("exportImport.confirmImportMessage")}</p>
-							<p className="warning-text">⚠️ {t("exportImport.confirmImportWarning")}</p>
-						</>
+						hasExistingData ? (
+							<>
+								<p style={{ marginBottom: "12px" }}>{t("exportImport.confirmImportMessage")}</p>
+								<p className="warning-text">⚠️ {t("exportImport.confirmImportWarning")}</p>
+							</>
+						) : (
+							<p>{t("exportImport.confirmImportEmptyMessage")}</p>
+						)
 					}
-					confirmLabel={t("exportImport.confirmButton")}
+					confirmLabel={t(hasExistingData ? "exportImport.confirmButton" : "exportImport.confirmButtonEmpty")}
 					cancelLabel={t("exportImport.cancelButton")}
 					onConfirm={handleImportConfirm}
 					onCancel={() => {
 						setShowImportConfirm(false);
 						setPendingImportData(null);
 					}}
-					confirmVariant="danger"
+					confirmVariant={hasExistingData ? "danger" : "primary"}
 				/>
 			)}
 

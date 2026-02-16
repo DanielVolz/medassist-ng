@@ -168,17 +168,19 @@ export function PlannerPage() {
 						{t("planner.until")}
 						<DateTimeInput step="60" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} />
 					</label>
-					<label className="planner-checkbox">
-						<input
-							type="checkbox"
-							checked={includeUntilStart}
-							onChange={(e) => setIncludeUntilStart(e.target.checked)}
-						/>
-						{t("planner.includeUntilStart")}
+					<div className="planner-checkbox-row">
+						<label className="planner-checkbox">
+							<input
+								type="checkbox"
+								checked={includeUntilStart}
+								onChange={(e) => setIncludeUntilStart(e.target.checked)}
+							/>
+							{t("planner.includeUntilStart")}
+						</label>
 						<span className="info-tooltip small" data-tooltip={t("planner.includeUntilStartTooltip")}>
 							ⓘ
 						</span>
-					</label>
+					</div>
 					<div className="planner-actions">
 						<button type="button" className="ghost" onClick={resetRange}>
 							{t("common.reset")}
@@ -210,8 +212,10 @@ export function PlannerPage() {
 											{row.medicationName}
 										</span>
 										<span data-label={t("planner.table.usage")}>
-											<strong>{row.plannerUsage}</strong>&nbsp;
-											{row.plannerUsage === 1 ? t("common.pill") : t("common.pills")}
+											<span>
+												<strong>{row.plannerUsage}</strong>&nbsp;
+												{row.plannerUsage === 1 ? t("common.pill") : t("common.pills")}
+											</span>
 										</span>
 										<span data-label={t("planner.table.blisters")}>
 											{row.packageType === "bottle" ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`}

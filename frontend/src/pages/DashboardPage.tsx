@@ -608,7 +608,17 @@ export function DashboardPage() {
 										<span className="med-name-line">
 											<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
 											<span className="med-name-block-dash">
-												<span className="med-name-text">{row.name}</span>
+												<span className="med-name-text">
+													{row.name}
+													{med?.notes && (
+														<>
+															{" "}
+															<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
+																📝
+															</span>
+														</>
+													)}
+												</span>
 												{med?.takenBy && med.takenBy.length > 0 && (
 													<span className="med-taken-by-line">
 														{med.takenBy.map((person) => (
@@ -628,13 +638,6 @@ export function DashboardPage() {
 												)}
 											</span>
 										</span>
-										{med?.notes && (
-											<span className="med-icons">
-												<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
-													📝
-												</span>
-											</span>
-										)}
 									</span>
 									<span data-label={t("table.stock")} className={textClass}>
 										{med?.packageType === "bottle"

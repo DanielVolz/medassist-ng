@@ -2,11 +2,11 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import { eq } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/db-utils.js";
-import { doseTracking, medications, shareTokens, userSettings } from "../db/schema.js";
+import { doseTracking, medications, refillHistory, shareTokens, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -17,7 +17,7 @@ const IMAGES_DIR = resolve(getDataDir(), "images");
 // =============================================================================
 // Export Format Version (bump this when format changes)
 // =============================================================================
-const EXPORT_VERSION = "1.0";
+const EXPORT_VERSION = "1.1";
 
 // =============================================================================
 // Zod Schemas for Import Validation
@@ -35,6 +35,7 @@ const inventorySchema = z.object({
 	packCount: z.number().int().min(0).default(1),
 	blistersPerPack: z.number().int().min(1).default(1),
 	pillsPerBlister: z.number().int().min(1).default(1),
+	totalPills: z.number().int().nullable().optional(), // For bottle type: total capacity
 	looseTablets: z.number().int().min(0).default(0),
 	stockAdjustment: z.number().int().default(0), // Manual stock correction
 	packageType: z.enum(["blister", "bottle"]).default("blister"),
@@ -60,6 +61,7 @@ const medicationExportSchema = z.object({
 	prescriptionRemainingRefills: z.number().int().min(0).nullable().optional(),
 	prescriptionLowRefillThreshold: z.number().int().min(0).default(1),
 	prescriptionExpiryDate: z.string().nullable().optional(),
+	dismissedUntil: z.string().nullable().optional(), // ISO date string for dismissed past doses
 	image: z.string().nullable().optional(), // base64 data URL or null
 	lastStockCorrectionAt: z.string().nullable().optional(), // ISO datetime of last stock correction
 });
@@ -72,6 +74,14 @@ const doseHistorySchema = z.object({
 	markedBy: z.string().nullable().optional(),
 	dismissed: z.boolean().default(false),
 	takenByPerson: z.string().nullable().optional(), // Person suffix from dose ID (e.g., "Daniel")
+});
+
+const refillHistoryExportSchema = z.object({
+	medicationRef: z.string(), // References _exportId
+	packsAdded: z.number().int().min(0).default(0),
+	loosePillsAdded: z.number().int().min(0).default(0),
+	usedPrescription: z.boolean().default(false),
+	refillDate: z.string(), // ISO datetime
 });
 
 const shareLinkSchema = z.object({
@@ -106,9 +116,11 @@ const settingsExportSchema = z
 		lowStockDays: z.number().int().default(30),
 		normalStockDays: z.number().int().default(90),
 		highStockDays: z.number().int().default(180),
+		expiryWarningDays: z.number().int().default(90),
 		// UI preferences
 		language: z.string().default("en"),
 		stockCalculationMode: z.enum(["automatic", "manual"]).default("automatic"),
+		shareStockStatus: z.boolean().default(true),
 	})
 	.optional();
 
@@ -118,6 +130,7 @@ const importDataSchema = z.object({
 	includeSensitiveData: z.boolean().default(false),
 	medications: z.array(medicationExportSchema).default([]),
 	doseHistory: z.array(doseHistorySchema).default([]),
+	refillHistory: z.array(refillHistoryExportSchema).default([]),
 	settings: settingsExportSchema,
 	shareLinks: z.array(shareLinkSchema).default([]),
 });
@@ -127,7 +140,7 @@ const importDataSchema = z.object({
 // =============================================================================
 
 // Helper to get user ID from request
-async function getUserId(request: any, reply: any): Promise<number> {
+async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
 	if (!env.AUTH_ENABLED) {
 		return getAnonymousUserId();
 	}
@@ -285,6 +298,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					packCount: med.packCount ?? 1,
 					blistersPerPack: med.blistersPerPack ?? 1,
 					pillsPerBlister: med.pillsPerBlister ?? 1,
+					totalPills: med.totalPills ?? null,
 					looseTablets: med.looseTablets ?? 0,
 					stockAdjustment: med.stockAdjustment ?? 0,
 					packageType: med.packageType ?? "blister",
@@ -303,6 +317,7 @@ export async function exportRoutes(app: FastifyInstance) {
 				prescriptionRemainingRefills: med.prescriptionRemainingRefills ?? null,
 				prescriptionLowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
 				prescriptionExpiryDate: med.prescriptionExpiryDate ?? null,
+				dismissedUntil: med.dismissedUntil ?? null,
 				image: includeImages ? imageToBase64(med.imageUrl) : null,
 				lastStockCorrectionAt: lastStockCorrectionAtIso,
 			};
@@ -380,8 +395,10 @@ export async function exportRoutes(app: FastifyInstance) {
 					lowStockDays: settings.lowStockDays,
 					normalStockDays: settings.normalStockDays,
 					highStockDays: settings.highStockDays,
+					expiryWarningDays: settings.expiryWarningDays,
 					language: settings.language,
 					stockCalculationMode: settings.stockCalculationMode,
+					shareStockStatus: settings.shareStockStatus,
 				}
 			: undefined;
 
@@ -412,6 +429,39 @@ export async function exportRoutes(app: FastifyInstance) {
 			};
 		});
 
+		// 5. Load refill history
+		const refills = await db.select().from(refillHistory).where(eq(refillHistory.userId, userId));
+
+		const exportRefillHistory = refills
+			.map((refill) => {
+				const exportId = medIdToExportId.get(refill.medicationId);
+				if (!exportId) return null; // Orphaned refill, skip
+
+				// Safely convert refillDate to ISO string
+				let refillDateIso: string;
+				try {
+					if (refill.refillDate instanceof Date && !Number.isNaN(refill.refillDate.getTime())) {
+						refillDateIso = refill.refillDate.toISOString();
+					} else if (typeof refill.refillDate === "number" || typeof refill.refillDate === "string") {
+						const d = new Date(refill.refillDate);
+						refillDateIso = !Number.isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+					} else {
+						refillDateIso = new Date().toISOString();
+					}
+				} catch {
+					refillDateIso = new Date().toISOString();
+				}
+
+				return {
+					medicationRef: exportId,
+					packsAdded: refill.packsAdded ?? 0,
+					loosePillsAdded: refill.loosePillsAdded ?? 0,
+					usedPrescription: refill.usedPrescription ?? false,
+					refillDate: refillDateIso,
+				};
+			})
+			.filter((r): r is NonNullable<typeof r> => r !== null);
+
 		// Build export object
 		const exportData = {
 			version: EXPORT_VERSION,
@@ -419,6 +469,7 @@ export async function exportRoutes(app: FastifyInstance) {
 			includeSensitiveData: includeSensitive,
 			medications: exportMedications,
 			doseHistory: exportDoseHistory,
+			refillHistory: exportRefillHistory,
 			settings: exportSettings,
 			shareLinks: exportShareLinks,
 		};
@@ -475,7 +526,8 @@ export async function exportRoutes(app: FastifyInstance) {
 				}
 			}
 
-			// Delete in order: doses, share tokens, medications, settings
+			// Delete in order: refill history, doses, share tokens, medications, settings
+			await db.delete(refillHistory).where(eq(refillHistory.userId, userId));
 			await db.delete(doseTracking).where(eq(doseTracking.userId, userId));
 			await db.delete(shareTokens).where(eq(shareTokens.userId, userId));
 			await db.delete(medications).where(eq(medications.userId, userId));
@@ -517,6 +569,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						blistersPerPack: med.inventory.blistersPerPack,
 						pillsPerBlister: med.inventory.pillsPerBlister,
 						looseTablets: med.inventory.looseTablets,
+						totalPills: med.inventory.totalPills ?? null,
 						stockAdjustment: med.inventory.stockAdjustment ?? 0,
 						lastStockCorrectionAt: med.lastStockCorrectionAt ? new Date(med.lastStockCorrectionAt) : null,
 						pillWeightMg: med.pillWeightMg || null,
@@ -536,6 +589,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						prescriptionRemainingRefills: med.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? null) : null,
 						prescriptionLowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
 						prescriptionExpiryDate: med.prescriptionExpiryDate || null,
+						dismissedUntil: med.dismissedUntil || null,
 						imageUrl: null, // Will be set after image is saved
 					})
 					.returning();
@@ -594,8 +648,10 @@ export async function exportRoutes(app: FastifyInstance) {
 					lowStockDays: importData.settings.lowStockDays ?? 30,
 					normalStockDays: importData.settings.normalStockDays ?? 90,
 					highStockDays: importData.settings.highStockDays ?? 180,
+					expiryWarningDays: importData.settings.expiryWarningDays ?? 90,
 					language: importData.settings.language ?? "en",
 					stockCalculationMode: importData.settings.stockCalculationMode ?? "automatic",
+					shareStockStatus: importData.settings.shareStockStatus ?? true,
 				});
 			}
 
@@ -613,11 +669,27 @@ export async function exportRoutes(app: FastifyInstance) {
 				});
 			}
 
+			// 7. Import refill history with remapped medication IDs
+			for (const refill of importData.refillHistory) {
+				const newMedId = exportIdToNewId.get(refill.medicationRef);
+				if (!newMedId) continue; // Skip orphaned refill records
+
+				await db.insert(refillHistory).values({
+					medicationId: newMedId,
+					userId,
+					packsAdded: refill.packsAdded ?? 0,
+					loosePillsAdded: refill.loosePillsAdded ?? 0,
+					usedPrescription: refill.usedPrescription ?? false,
+					refillDate: new Date(refill.refillDate),
+				});
+			}
+
 			return {
 				success: true,
 				imported: {
 					medications: importData.medications.length,
 					doseHistory: importData.doseHistory.length,
+					refillHistory: importData.refillHistory.length,
 					settings: importData.settings ? 1 : 0,
 					shareLinks: importData.shareLinks.length,
 				},

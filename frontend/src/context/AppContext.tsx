@@ -175,8 +175,20 @@ export interface AppContextValue {
 	setShowImportConfirm: React.Dispatch<React.SetStateAction<boolean>>;
 	pendingImportData: unknown;
 	setPendingImportData: React.Dispatch<React.SetStateAction<unknown>>;
-	importResult: { medications: number; doses: number; shares: number } | null;
-	setImportResult: React.Dispatch<React.SetStateAction<{ medications: number; doses: number; shares: number } | null>>;
+	importResult: {
+		medications: number;
+		doses: number;
+		refills: number;
+		shares: number;
+	} | null;
+	setImportResult: React.Dispatch<
+		React.SetStateAction<{
+			medications: number;
+			doses: number;
+			refills: number;
+			shares: number;
+		} | null>
+	>;
 	handleExport: (includeImages?: boolean) => Promise<void>;
 	handleImportFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	handleImportConfirm: () => Promise<void>;
@@ -237,7 +249,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const [showExportModal, setShowExportModal] = useState(false);
 	const [showImportConfirm, setShowImportConfirm] = useState(false);
 	const [pendingImportData, setPendingImportData] = useState<unknown>(null);
-	const [importResult, setImportResult] = useState<{ medications: number; doses: number; shares: number } | null>(null);
+	const [importResult, setImportResult] = useState<{
+		medications: number;
+		doses: number;
+		refills: number;
+		shares: number;
+	} | null>(null);
 
 	// Load user-specific scheduleDays when user changes
 	useEffect(() => {
@@ -581,6 +598,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setImportResult({
 				medications: data.imported?.medications || 0,
 				doses: data.imported?.doseHistory || 0,
+				refills: data.imported?.refillHistory || 0,
 				shares: data.imported?.shareLinks || 0,
 			});
 

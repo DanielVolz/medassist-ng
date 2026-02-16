@@ -86,6 +86,7 @@ const createMockContext = (overrides = {}) => ({
 	handleImportConfirm: vi.fn(),
 	importResult: null,
 	setImportResult: vi.fn(),
+	meds: [],
 	...overrides,
 });
 

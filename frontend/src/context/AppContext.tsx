@@ -522,9 +522,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
 				const url = URL.createObjectURL(blob);
 				const a = document.createElement("a");
-				const dateStr = new Date().toISOString().split("T")[0];
+				const now = new Date();
+				const dateStr = now.toISOString().replace(/[-:]/g, "").replace(/T/, "-").slice(0, 13);
+				const userPart = user?.username ? `-${user.username}` : "";
 				a.href = url;
-				a.download = `${t("exportImport.downloadFilename")}-${dateStr}.json`;
+				a.download = `${t("exportImport.downloadFilename")}${userPart}-${dateStr}.json`;
 				document.body.appendChild(a);
 				a.click();
 				document.body.removeChild(a);

@@ -475,7 +475,11 @@ export async function exportRoutes(app: FastifyInstance) {
 		};
 
 		// Set download headers
-		const filename = `medassist-export-${new Date().toISOString().split("T")[0]}.json`;
+		const now = new Date();
+		const dateStr = now.toISOString().replace(/[-:]/g, "").replace(/T/, "-").slice(0, 13);
+		const authUser = env.AUTH_ENABLED ? (request.user as unknown as AuthUser | null) : null;
+		const userPart = authUser?.username ? `-${authUser.username}` : "";
+		const filename = `medassist-export${userPart}-${dateStr}.json`;
 		reply.header("Content-Type", "application/json");
 		reply.header("Content-Disposition", `attachment; filename="${filename}"`);
 

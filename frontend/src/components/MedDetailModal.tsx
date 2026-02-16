@@ -356,8 +356,7 @@ export function MedDetailModal({
 													` (${totalUsage * selectedMed.pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
 											</span>
 											<span className="med-schedule-freq">
-												{t("form.blisters.every")} {blister.every}{" "}
-												{blister.every !== 1 ? t("common.days") : t("common.day")}
+												{blister.every === 1 ? t("common.daily") : t("common.everyNDays", { count: blister.every })}
 											</span>
 											<span className="med-schedule-time">
 												{t("modal.at")}{" "}

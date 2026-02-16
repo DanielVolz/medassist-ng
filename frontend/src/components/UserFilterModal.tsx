@@ -92,8 +92,8 @@ export function UserFilterModal({
 														{intake.usage} {intake.usage !== 1 ? t("common.pills") : t("common.pill")}
 														{med.pillWeightMg != null &&
 															` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}
-														{t("form.blisters.every")} {intake.every}{" "}
-														{intake.every !== 1 ? t("common.days") : t("common.day")} {t("modal.at")} {timeStr}
+														{intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every })}{" "}
+														{t("modal.at")} {timeStr}
 													</span>
 												);
 											})}

@@ -43,28 +43,26 @@ export function SettingsPage() {
 						<div className="card-head">
 							<h2>{t("settings.language.title")}</h2>
 						</div>
-						<div className="setting-section">
-							<label className="setting-row language-row">
-								<span className="setting-label">{t("settings.language.select")}</span>
-								<select
-									value={i18n.language}
-									onChange={(e) => {
-										const lang = e.target.value;
-										i18n.changeLanguage(lang);
-										fetch("/api/settings/language", {
-											method: "PUT",
-											headers: { "Content-Type": "application/json" },
-											credentials: "include",
-											body: JSON.stringify({ language: lang }),
-										});
-									}}
-									className="language-select"
-								>
-									<option value="en">🇬🇧 English</option>
-									<option value="de">🇩🇪 Deutsch</option>
-								</select>
-							</label>
-						</div>
+						<label className="setting-row language-row">
+							<span className="setting-label">{t("settings.language.select")}</span>
+							<select
+								value={i18n.language}
+								onChange={(e) => {
+									const lang = e.target.value;
+									i18n.changeLanguage(lang);
+									fetch("/api/settings/language", {
+										method: "PUT",
+										headers: { "Content-Type": "application/json" },
+										credentials: "include",
+										body: JSON.stringify({ language: lang }),
+									});
+								}}
+								className="language-select"
+							>
+								<option value="en">🇬🇧 English</option>
+								<option value="de">🇩🇪 Deutsch</option>
+							</select>
+						</label>
 					</article>
 
 					{/* Notifications */}
@@ -373,25 +371,25 @@ export function SettingsPage() {
 							{settings.emailEnabled && (
 								<>
 									<div className="setting-group">
-										<label className="full">
-											<span className="field-label">{t("settings.email.recipient")}</span>
-											<div className="input-with-tooltip">
-												<input
-													type="email"
-													value={settings.notificationEmail}
-													onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
-													placeholder="your@email.com"
-													pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$"
-													autoComplete="email"
-												/>
+										<div className="full">
+											<span className="field-label">
+												{t("settings.email.recipient")}
 												<span
 													className="info-tooltip"
 													data-tooltip={`SMTP: ${settings.smtpHost || t("settings.email.notConfigured")}:${settings.smtpPort}${settings.hasSmtpPassword ? "\nPassword: ✓" : ""}`}
 												>
 													ⓘ
 												</span>
-											</div>
-										</label>
+											</span>
+											<input
+												type="email"
+												value={settings.notificationEmail}
+												onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
+												placeholder="your@email.com"
+												pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$"
+												autoComplete="email"
+											/>
+										</div>
 									</div>
 									<div className="setting-actions">
 										<button
@@ -442,23 +440,23 @@ export function SettingsPage() {
 							{settings.shoutrrrEnabled && (
 								<>
 									<div className="setting-group">
-										<label className="full">
-											<span className="field-label">{t("settings.push.url")}</span>
-											<div className="input-with-tooltip">
-												<input
-													type="text"
-													value={settings.shoutrrrUrl}
-													onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
-													placeholder={t("settings.push.urlPlaceholder")}
-												/>
+										<div className="full">
+											<span className="field-label">
+												{t("settings.push.url")}
 												<span
 													className="info-tooltip"
 													data-tooltip={`${t("settings.push.supports")}\n\n${t("settings.push.docsLink")}`}
 												>
 													ⓘ
 												</span>
-											</div>
-										</label>
+											</span>
+											<input
+												type="text"
+												value={settings.shoutrrrUrl}
+												onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
+												placeholder={t("settings.push.urlPlaceholder")}
+											/>
+										</div>
 									</div>
 									<div className="setting-actions">
 										<button
@@ -606,7 +604,7 @@ export function SettingsPage() {
 								<h3>{t("settings.stock.thresholds")}</h3>
 							</div>
 							<div className="setting-group threshold-chips-group">
-								<label className={settings.reminderDaysBefore >= settings.lowStockDays ? "threshold-invalid" : ""}>
+								<div className={settings.reminderDaysBefore >= settings.lowStockDays ? "threshold-invalid" : ""}>
 									<span className="field-label threshold-chip-label">
 										<span className="status-chip small danger">{t("status.criticalStock")}</span>
 										<span
@@ -616,17 +614,15 @@ export function SettingsPage() {
 											ⓘ
 										</span>
 									</span>
-									<div className="input-with-tooltip">
-										<input
-											type="text"
-											inputMode="numeric"
-											pattern="[0-9]*"
-											value={settings.reminderDaysBefore}
-											onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
-										/>
-									</div>
-								</label>
-								<label
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={settings.reminderDaysBefore}
+										onChange={(e) => setSettings({ ...settings, reminderDaysBefore: Number(e.target.value) || 7 })}
+									/>
+								</div>
+								<div
 									className={
 										settings.lowStockDays <= settings.reminderDaysBefore ||
 										settings.lowStockDays >= settings.highStockDays
@@ -643,17 +639,15 @@ export function SettingsPage() {
 											ⓘ
 										</span>
 									</span>
-									<div className="input-with-tooltip">
-										<input
-											type="text"
-											inputMode="numeric"
-											pattern="[0-9]*"
-											value={settings.lowStockDays}
-											onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
-										/>
-									</div>
-								</label>
-								<label className={settings.highStockDays <= settings.lowStockDays ? "threshold-invalid" : ""}>
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={settings.lowStockDays}
+										onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
+									/>
+								</div>
+								<div className={settings.highStockDays <= settings.lowStockDays ? "threshold-invalid" : ""}>
 									<span className="field-label threshold-chip-label">
 										<span className="status-chip small high">{t("status.highStock")}</span>
 										<span
@@ -663,16 +657,14 @@ export function SettingsPage() {
 											ⓘ
 										</span>
 									</span>
-									<div className="input-with-tooltip">
-										<input
-											type="text"
-											inputMode="numeric"
-											pattern="[0-9]*"
-											value={settings.highStockDays}
-											onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
-										/>
-									</div>
-								</label>
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										value={settings.highStockDays}
+										onChange={(e) => setSettings({ ...settings, highStockDays: Number(e.target.value) || 180 })}
+									/>
+								</div>
 							</div>
 							{(settings.reminderDaysBefore >= settings.lowStockDays ||
 								settings.lowStockDays >= settings.highStockDays) && (
@@ -734,6 +726,7 @@ export function SettingsPage() {
 													{t("exportImport.importSuccessDetails", {
 														medications: importResult.medications,
 														doses: importResult.doses,
+														refills: importResult.refills,
 														shares: importResult.shares,
 													})}
 												</span>

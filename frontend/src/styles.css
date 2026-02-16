@@ -2503,8 +2503,14 @@ button.has-validation-error {
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 }
-.planner label.planner-checkbox {
+.planner .planner-checkbox-row {
 	grid-column: 1 / -1;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 0.5rem;
+}
+.planner label.planner-checkbox {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
@@ -2911,14 +2917,18 @@ button.has-validation-error {
 		opacity: 1;
 		visibility: visible;
 		position: fixed;
-		top: 50%;
-		left: 50%;
-		bottom: auto;
-		right: auto;
-		transform: translate(-50%, -50%);
-		max-width: calc(100vw - 32px);
-		width: max-content;
+		top: auto;
+		bottom: var(--tooltip-bottom, 50%);
+		left: 16px !important;
+		right: 16px !important;
+		transform: none !important;
+		width: auto !important;
+		max-width: none !important;
 		z-index: 9999;
+	}
+
+	.info-tooltip.tooltip-active::before {
+		display: none;
 	}
 
 	.info-tooltip::before {
@@ -3456,23 +3466,22 @@ button.has-validation-error {
 	font-family: "SF Mono", "Fira Code", monospace;
 }
 
-/* Input with tooltip inside */
+/* Input with tooltip beside */
 .input-with-tooltip {
-	position: relative;
 	display: flex;
 	align-items: center;
+	gap: 0.5rem;
 }
 
 .input-with-tooltip input {
-	width: 100%;
-	padding-right: 2.5rem;
+	flex: 1;
+	min-width: 0;
 }
 
 .input-with-tooltip .info-tooltip {
-	position: absolute;
-	right: 0.75rem;
-	top: 50%;
-	transform: translateY(-50%);
+	flex-shrink: 0;
+	cursor: pointer;
+	padding: 0.25rem;
 }
 
 /* SMTP Info */
@@ -3671,7 +3680,7 @@ button.has-validation-error {
 
 .cell-with-avatar .med-name-line {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 0.5rem;
 }
 
@@ -4015,14 +4024,14 @@ button.has-validation-error {
 
 .user-med-info {
 	flex: 1;
-	min-width: 120px;
+	min-width: 150px;
 }
 
 .user-med-name {
 	display: block;
 	font-weight: 600;
 	color: var(--text-primary);
-	word-break: break-word;
+	white-space: nowrap;
 }
 
 .user-med-generic {
@@ -4199,7 +4208,8 @@ button.has-validation-error {
 .med-schedule-item {
 	display: flex;
 	align-items: center;
-	gap: 0.75rem;
+	justify-content: flex-start;
+	gap: 1rem;
 	background: var(--bg-secondary);
 	padding: 0.75rem 1rem;
 	border-radius: 8px;
@@ -4216,7 +4226,6 @@ button.has-validation-error {
 }
 
 .med-schedule-time {
-	margin-left: auto;
 	font-weight: 500;
 }
 
@@ -6076,6 +6085,10 @@ a.about-version-link:hover {
 .mobile-edit-form.form-grid select {
 	font-size: 16px !important;
 	width: 100%;
+}
+
+.mobile-edit-form .date-input-display {
+	font-size: 16px !important;
 }
 
 .mobile-edit-form .blister-row {

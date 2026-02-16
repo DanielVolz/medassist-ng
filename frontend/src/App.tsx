@@ -301,6 +301,12 @@ function AppContent() {
 				closeAllTooltips();
 				// Toggle this one
 				target.classList.add("tooltip-active");
+				// Position tooltip above the icon on mobile
+				if (window.innerWidth <= 640) {
+					const rect = target.getBoundingClientRect();
+					// Place tooltip bottom edge just above the icon
+					target.style.setProperty("--tooltip-bottom", `${window.innerHeight - rect.top + 8}px`);
+				}
 			} else {
 				closeAllTooltips();
 			}

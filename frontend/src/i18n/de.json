@@ -434,6 +434,8 @@
     "of": "von",
     "loose": "lose",
     "none": "Kein",
+    "daily": "täglich",
+    "everyNDays": "alle {{count}} Tage",
     "day": "Tag",
     "days": "Tage",
     "blister": "Blister",

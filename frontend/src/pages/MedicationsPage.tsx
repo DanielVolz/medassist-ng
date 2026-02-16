@@ -697,9 +697,9 @@ export function MedicationsPage() {
 									<div className="blister-list">
 										{(med.intakes ?? med.blisters).map((s, idx) => (
 											<div key={`${med.id}-${idx}`} className="blister-row-simple">
-												{s.usage} {s.usage === 1 ? t("common.pill") : t("common.pills")} · {t("form.blisters.every")}{" "}
-												{s.every} {s.every === 1 ? t("common.day") : t("common.days")} · {t("form.blisters.from")}{" "}
-												{formatDateTime(s.start)}
+												{s.usage} {s.usage === 1 ? t("common.pill") : t("common.pills")} ·{" "}
+												{s.every === 1 ? t("common.daily") : t("common.everyNDays", { count: s.every })} ·{" "}
+												{t("form.blisters.from")} {formatDateTime(s.start)}
 												{"takenBy" in s && s.takenBy && <span className="blister-taken-by"> · {s.takenBy}</span>}
 												{"intakeRemindersEnabled" in s && s.intakeRemindersEnabled && (
 													<span className="blister-reminder-icon" title={t("form.blisters.remindTooltip")}>

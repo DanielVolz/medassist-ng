@@ -501,7 +501,7 @@
     "cancelButton": "Abbrechen",
     "exportSuccess": "Daten erfolgreich exportiert",
     "importSuccess": "Daten erfolgreich importiert",
-    "importSuccessDetails": "Importiert: {{medications}} Medikamente, {{doses}} Dosen, {{shares}} Teilen-Links",
+    "importSuccessDetails": "Importiert: {{medications}} Medikamente, {{doses}} Dosen, {{refills}} Nachfüllungen, {{shares}} Teilen-Links",
     "importError": "Daten konnten nicht importiert werden",
     "invalidFile": "Ungültiges Dateiformat. Bitte wähle eine gültige MedAssist-ng-Exportdatei.",
     "downloadFilename": "medassist-export"

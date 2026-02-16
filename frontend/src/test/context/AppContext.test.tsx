@@ -256,7 +256,7 @@ describe("useAppContext", () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve({}),
-			text: () => Promise.resolve('{"imported":{"medications":1,"doseHistory":2,"shareLinks":3}}'),
+			text: () => Promise.resolve('{"imported":{"medications":1,"doseHistory":2,"refillHistory":4,"shareLinks":3}}'),
 		});
 	});
 
@@ -364,7 +364,7 @@ describe("useAppContext", () => {
 		expect(mockUseMedications().loadMeds).toHaveBeenCalled();
 		expect(mockUseSettings().loadSettings).toHaveBeenCalled();
 		expect(mockUseDoses().loadTakenDoses).toHaveBeenCalled();
-		expect(result.current.importResult).toEqual({ medications: 1, doses: 2, shares: 3 });
+		expect(result.current.importResult).toEqual({ medications: 1, doses: 2, refills: 4, shares: 3 });
 	});
 
 	it("exports data and triggers JSON download", async () => {

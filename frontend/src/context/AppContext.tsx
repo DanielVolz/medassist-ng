@@ -537,7 +537,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			}
 			setExporting(false);
 		},
-		[t, user.username]
+		[t, user?.username]
 	);
 
 	// Handle file selection for import

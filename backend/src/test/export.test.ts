@@ -152,8 +152,9 @@ async function registerExportRoutes(ctx: TestContext) {
 	});
 
 	// POST /import
-	app.post<{ Body: Record<string, unknown> }>("/import", async (request, reply) => {
-		const importData = request.body;
+	// biome-ignore lint/suspicious/noExplicitAny: test helper with dynamic import data shape
+	app.post("/import", async (request, reply) => {
+		const importData = request.body as any;
 
 		// Basic validation
 		if (!importData.version) {

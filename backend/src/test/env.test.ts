@@ -3,7 +3,7 @@ import { z } from "zod";
 
 // Mock process.exit to prevent tests from exiting
 const mockExit = vi.fn();
-vi.spyOn(process, "exit").mockImplementation(mockExit as (...args: unknown[]) => never);
+vi.spyOn(process, "exit").mockImplementation(mockExit as unknown as (...args: unknown[]) => never);
 
 // Re-create the schema from env.ts for testing
 const EnvSchema = z.object({

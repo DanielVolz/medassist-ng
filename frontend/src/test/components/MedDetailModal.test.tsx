@@ -706,7 +706,7 @@ describe("MedDetailModal bottle package type", () => {
 		expect(screen.getByText(/refill\.pillsToAdd/i)).toBeInTheDocument();
 
 		// Should NOT show packs label in refill
-		const refillModal = document.querySelector(".refill-modal");
+		const _refillModal = document.querySelector(".refill-modal");
 		// Packs label should not be present for bottle type
 		expect(screen.queryByText("refill.packs")).not.toBeInTheDocument();
 	});

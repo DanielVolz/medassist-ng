@@ -129,7 +129,7 @@ export function SchedulePage() {
 
 							const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 							const isCollapsed = !isManuallyExpanded;
-							const worstStatus = getDayStockStatus(day.meds, coverageByMed, settings);
+							const _worstStatus = getDayStockStatus(day.meds, coverageByMed, settings);
 
 							return (
 								<div
@@ -139,6 +139,9 @@ export function SchedulePage() {
 									<div
 										className="day-divider clickable"
 										onClick={() => toggleDayCollapse(day.dateStr, true)}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, true);
+										}}
 										title={isCollapsed ? t("common.expand") : t("common.collapse")}
 									>
 										<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
@@ -210,6 +213,9 @@ export function SchedulePage() {
 																						<span
 																							className="person-name clickable"
 																							onClick={() => openUserFilter(person)}
+																							onKeyDown={(e) => {
+																								if (e.key === "Enter" || e.key === " ") openUserFilter(person);
+																							}}
 																						>
 																							{person}
 																						</span>
@@ -262,6 +268,19 @@ export function SchedulePage() {
 													.querySelector(".day-block.today")
 													?.scrollIntoView({ behavior: "smooth", block: "center" });
 											}, 50);
+										}
+									}}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											const wasCollapsed = !showPastDays;
+											setShowPastDays(!showPastDays);
+											if (wasCollapsed) {
+												setTimeout(() => {
+													document
+														.querySelector(".day-block.today")
+														?.scrollIntoView({ behavior: "smooth", block: "center" });
+												}, 50);
+											}
 										}
 									}}
 								>
@@ -351,7 +370,13 @@ export function SchedulePage() {
 																			className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}
 																		>
 																			{person && (
-																				<span className="person-name clickable" onClick={() => openUserFilter(person)}>
+																				<span
+																					className="person-name clickable"
+																					onClick={() => openUserFilter(person)}
+																					onKeyDown={(e) => {
+																						if (e.key === "Enter" || e.key === " ") openUserFilter(person);
+																					}}
+																				>
 																					{person}
 																				</span>
 																			)}

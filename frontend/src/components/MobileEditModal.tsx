@@ -137,13 +137,28 @@ export function MobileEditModal({
 	const currentMed = editingId ? meds.find((m) => m.id === editingId) : null;
 
 	return (
-		<div className="modal-overlay" onClick={onClose}>
-			<div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
+		<div
+			className="modal-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose();
+			}}
+		>
+			<div
+				className="modal-content edit-modal"
+				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
+			>
 				<div className="edit-modal-header">
 					<button type="button" className="ghost small btn-nav" onClick={onClose}>
 						← {t("common.back")}
 					</button>
-					<h2>{editingId ? (readOnlyMode ? t("form.viewEntry") : t("form.editEntry")) : t("form.newEntry")}</h2>
+					<h2>
+						{(() => {
+							const editLabel = readOnlyMode ? t("form.viewEntry") : t("form.editEntry");
+							return editingId ? editLabel : t("form.newEntry");
+						})()}
+					</h2>
 				</div>
 				<form
 					className="form-grid mobile-edit-form"

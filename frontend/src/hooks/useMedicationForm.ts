@@ -215,6 +215,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		const remainingRefills = Math.min(Math.max(0, med.prescriptionRemainingRefills ?? 0), authorizedRefills);
 		const lowRefillThreshold = Math.min(Math.max(0, med.prescriptionLowRefillThreshold ?? 1), authorizedRefills);
 
+		const bottleTotalPills = med.packageType === "bottle" && med.looseTablets ? String(med.looseTablets) : "";
 		const editForm: FormState = {
 			name: med.name,
 			genericName: med.genericName ?? "",
@@ -223,11 +224,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			packCount: String(med.packCount),
 			blistersPerPack: String(med.blistersPerPack),
 			pillsPerBlister: String(med.pillsPerBlister),
-			totalPills: med.totalPills
-				? String(med.totalPills)
-				: med.packageType === "bottle" && med.looseTablets
-					? String(med.looseTablets)
-					: "",
+			totalPills: med.totalPills ? String(med.totalPills) : bottleTotalPills,
 			looseTablets: String(med.looseTablets),
 			pillWeightMg: med.pillWeightMg ? String(med.pillWeightMg) : "",
 			doseUnit: med.doseUnit ?? "mg",

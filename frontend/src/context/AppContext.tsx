@@ -6,7 +6,7 @@ import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, use
 import type { Coverage, Medication, ScheduleEvent, StockThresholds } from "../types";
 import { getSystemLocale } from "../utils/formatters";
 import { log } from "../utils/logger";
-import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, isDoseDismissed } from "../utils/schedule";
+import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds } from "../utils/schedule";
 
 // =============================================================================
 // Types
@@ -366,7 +366,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				// Normal/High stock
 				return "success";
 			});
-			return statuses.includes("danger") ? "danger" : statuses.includes("warning") ? "warning" : "success";
+			const fallbackStatus = statuses.includes("warning") ? "warning" : "success";
+			return statuses.includes("danger") ? "danger" : fallbackStatus;
 		},
 		[coverageByMed, depletionByMed, settingsHook.settings.lowStockDays]
 	);
@@ -536,7 +537,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			}
 			setExporting(false);
 		},
-		[t]
+		[t, user?.username]
 	);
 
 	// Handle file selection for import

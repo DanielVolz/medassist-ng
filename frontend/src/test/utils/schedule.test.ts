@@ -1892,11 +1892,8 @@ function groupEventsIntoPastDays(
 		const medMap = dayMap.get(dateKey)!;
 		if (!medMap.has(event.medName)) medMap.set(event.medName, []);
 		// Mirror AppContext normalization: string|null → string[]
-		const takenBy = Array.isArray(event.takenBy)
-			? event.takenBy
-			: typeof event.takenBy === "string"
-				? [event.takenBy]
-				: [];
+		const singleOrEmpty = typeof event.takenBy === "string" ? [event.takenBy] : [];
+		const takenBy = Array.isArray(event.takenBy) ? event.takenBy : singleOrEmpty;
 		medMap.get(event.medName)!.push({ id: event.id, takenBy });
 	}
 

@@ -160,7 +160,7 @@ test.describe("Share Schedule", () => {
 
 		// Should show the shared schedule page (not the login page)
 		// Wait for either the schedule content or an error
-		const sharedContent = page.locator(".shared-schedule, .share-page");
+		const _sharedContent = page.locator(".shared-schedule, .share-page");
 		const dayBlock = page.locator(".day-block");
 		const medName = page.getByText(MED_ALICE);
 

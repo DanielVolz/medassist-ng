@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
@@ -239,7 +239,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
 	// Helper to get user ID from request
 	// Returns anonymous user ID when auth is disabled
-	async function getUserId(request: any, reply: any): Promise<number> {
+	async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
 		// If auth is disabled, use the anonymous user
 		if (!env.AUTH_ENABLED) {
 			return getAnonymousUserId();
@@ -544,7 +544,7 @@ export async function sendShoutrrrNotification(
 		}
 
 		// Use ONLY the reconstructed URL from validation - never the original urlStr
-		const { url: sanitizedUrl, isNtfy, auth } = validation;
+		const { url: sanitizedUrl, isNtfy: _isNtfy, auth } = validation;
 
 		let targetUrl: string;
 		const method = "POST";

@@ -509,8 +509,10 @@ ${getFooterPlain(language)}`;
 				const buildTableRow = (row: LowStockItem) => {
 					const isEmpty = row.medsLeft <= 0;
 					const isCritical = row.isCritical !== false;
-					const statusIcon = isEmpty ? "🚨" : isCritical ? "🚨" : "⚠️";
-					const rowBg = isEmpty ? "#fef2f2" : isCritical ? "#fff7ed" : "white";
+					const nonEmptyIcon = isCritical ? "🚨" : "⚠️";
+					const statusIcon = isEmpty ? "🚨" : nonEmptyIcon;
+					const nonEmptyBg = isCritical ? "#fff7ed" : "white";
+					const rowBg = isEmpty ? "#fef2f2" : nonEmptyBg;
 					const safeName = escapeHtml(row.name);
 					const safeMedsLeft = Number(row.medsLeft) || 0;
 					const safeDaysLeft = Number(row.daysLeft) || 0;
@@ -586,7 +588,7 @@ ${getFooterPlain(language)}`;
 
 		// Send push notification if enabled
 		if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
-			const message = messageParts.join("\n") + `\n\n---\n${getFooterPlain(language)}`;
+			const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 
 			try {
 				const pushResult = await sendShoutrrrNotification(notificationSettings.shoutrrrUrl, notificationTitle, message);
@@ -603,7 +605,8 @@ ${getFooterPlain(language)}`;
 
 		// Update the reminder state to record this notification was sent
 		if (results.email || results.push) {
-			const channel = results.email && results.push ? "both" : results.email ? "email" : "push";
+			const singleChannel = results.email ? "email" : "push";
+			const channel = results.email && results.push ? "both" : singleChannel;
 			updateReminderSentTime("stock", channel);
 
 			// Also update user settings in database so frontend can display the info
@@ -700,14 +703,15 @@ ${getFooterPlain(language)}`;
 
 					const bodyText =
 						emptyRx.length > 0 ? tr.prescriptionReminder.descriptionEmpty : tr.prescriptionReminder.descriptionLow;
-					const alertText =
-						emptyRx.length > 0
-							? emptyRx.length === 1
-								? tr.prescriptionReminder.alertEmptySingle
-								: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length })
-							: lowRx.length === 1
-								? tr.prescriptionReminder.alertLowSingle
-								: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
+					const emptyAlert =
+						emptyRx.length === 1
+							? tr.prescriptionReminder.alertEmptySingle
+							: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length });
+					const lowAlert =
+						lowRx.length === 1
+							? tr.prescriptionReminder.alertLowSingle
+							: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
+					const alertText = emptyRx.length > 0 ? emptyAlert : lowAlert;
 
 					const tableRows = filteredPrescriptionLow
 						.map((item) => {
@@ -807,7 +811,7 @@ ${getFooterPlain(language)}`;
 					);
 				}
 			}
-			const message = messageParts.join("\n") + `\n\n---\n${getFooterPlain(language)}`;
+			const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 
 			try {
 				const pushResult = await sendShoutrrrNotification(userSettings.shoutrrrUrl, title, message);
@@ -823,7 +827,8 @@ ${getFooterPlain(language)}`;
 		}
 
 		if (results.email || results.push) {
-			const channel = results.email && results.push ? "both" : results.email ? "email" : "push";
+			const singleChannel = results.email ? "email" : "push";
+			const channel = results.email && results.push ? "both" : singleChannel;
 			updateReminderSentTime("prescription", channel);
 			await updateUserReminderSentTime(userId, "prescription", channel, medNames);
 		}

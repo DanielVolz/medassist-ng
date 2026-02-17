@@ -36,8 +36,18 @@ export function UserFilterModal({
 	const userMeds = meds.filter((m) => !m.isObsolete && (m.takenBy || []).includes(selectedUser));
 
 	return (
-		<div className="modal-overlay" onClick={onClose}>
-			<div className="modal-content user-meds-modal" onClick={(e) => e.stopPropagation()}>
+		<div
+			className="modal-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose();
+			}}
+		>
+			<div
+				className="modal-content user-meds-modal"
+				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
+			>
 				<button className="modal-close" onClick={onClose}>
 					×
 				</button>
@@ -74,6 +84,12 @@ export function UserFilterModal({
 								onClick={() => {
 									onClearUser();
 									onOpenMedDetail(med);
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										onClearUser();
+										onOpenMedDetail(med);
+									}
 								}}
 							>
 								<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="sm" />

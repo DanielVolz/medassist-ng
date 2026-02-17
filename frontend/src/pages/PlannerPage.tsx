@@ -206,7 +206,16 @@ export function PlannerPage() {
 									meds.find((m) => m.id === row.medicationId) || meds.find((m) => m.name === row.medicationName);
 								const remainingRefills = med?.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? 0) : null;
 								return (
-									<div key={row.medicationId} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
+									<div
+										key={row.medicationId}
+										className="table-row clickable"
+										onClick={() => med && openMedDetail(med)}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" || e.key === " ") {
+												if (med) openMedDetail(med);
+											}
+										}}
+									>
 										<span data-label={t("planner.table.medication")} className="cell-with-avatar">
 											<MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />
 											{row.medicationName}

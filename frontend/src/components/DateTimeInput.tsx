@@ -29,7 +29,13 @@ export function DateTimeInput({ value, placeholder, className, ...rest }: DateTi
 	}, []);
 
 	return (
-		<div className={`date-input-wrapper ${className ?? ""}`} onClick={handleClick}>
+		<div
+			className={`date-input-wrapper ${className ?? ""}`}
+			onClick={handleClick}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") handleClick();
+			}}
+		>
 			<span className="date-input-display" aria-hidden="true">
 				{displayValue || placeholder || ""}
 			</span>

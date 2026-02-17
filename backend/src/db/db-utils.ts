@@ -71,8 +71,8 @@ export function ensureDataDirectory(dataDir: string): { success: boolean; error?
 		writeFileSync(testFile, "test");
 
 		return { success: true };
-	} catch (err: any) {
-		return { success: false, error: err.message };
+	} catch (err: unknown) {
+		return { success: false, error: (err as Error).message };
 	}
 }
 
@@ -87,14 +87,14 @@ export async function runDrizzleMigrations(
 	try {
 		await migrate(database, { migrationsFolder });
 		return { success: true };
-	} catch (err: any) {
+	} catch (err: unknown) {
 		// If the error is about existing schema objects, the DB is already up-to-date
 		// This happens when ALTER migrations in client.ts have already added the columns,
 		// or when tables were created before drizzle migrations were introduced
-		if (err.message?.includes("duplicate column") || err.message?.includes("already exists")) {
-			return { success: true, warning: `Schema already up-to-date: ${err.message}` };
+		if ((err as Error).message?.includes("duplicate column") || (err as Error).message?.includes("already exists")) {
+			return { success: true, warning: `Schema already up-to-date: ${(err as Error).message}` };
 		}
-		return { success: false, error: err.message };
+		return { success: false, error: (err as Error).message };
 	}
 }
 
@@ -158,10 +158,10 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 	for (const sql of alterMigrations) {
 		try {
 			await client.execute(sql);
-		} catch (e: any) {
+		} catch (e: unknown) {
 			// Silently ignore "duplicate column" errors - column already exists
-			if (!e.message?.includes("duplicate column")) {
-				errors.push(e.message);
+			if (!(e as Error).message?.includes("duplicate column")) {
+				errors.push((e as Error).message);
 			}
 		}
 	}
@@ -182,10 +182,10 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 	for (const sql of createTableMigrations) {
 		try {
 			await client.execute(sql);
-		} catch (e: any) {
+		} catch (e: unknown) {
 			// Silently ignore "table already exists" errors
-			if (!e.message?.includes("already exists")) {
-				errors.push(e.message);
+			if (!(e as Error).message?.includes("already exists")) {
+				errors.push((e as Error).message);
 			}
 		}
 	}
@@ -199,10 +199,10 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 	for (const sql of createIndexMigrations) {
 		try {
 			await client.execute(sql);
-		} catch (e: any) {
+		} catch (e: unknown) {
 			// Silently ignore "already exists" errors
-			if (!e.message?.includes("already exists")) {
-				errors.push(e.message);
+			if (!(e as Error).message?.includes("already exists")) {
+				errors.push((e as Error).message);
 			}
 		}
 	}
@@ -227,8 +227,8 @@ export async function ensureDefaultUser(client: Client, authEnabled: boolean): P
 			return true; // Created
 		}
 		return false; // Already exists
-	} catch (e: any) {
-		console.error(`[DB] Error creating default user:`, e.message);
+	} catch (e: unknown) {
+		console.error(`[DB] Error creating default user:`, (e as Error).message);
 		return false;
 	}
 }
@@ -255,8 +255,8 @@ export async function repairTrailingHyphenDoseIds(client: Client): Promise<{ rep
 			"UPDATE dose_tracking SET dose_id = RTRIM(dose_id, '-') WHERE dose_id LIKE '%-'"
 		);
 		repaired = result.rowsAffected;
-	} catch (e: any) {
-		errors.push(`Trailing-hyphen repair failed: ${e.message}`);
+	} catch (e: unknown) {
+		errors.push(`Trailing-hyphen repair failed: ${(e as Error).message}`);
 	}
 
 	return { repaired, errors };
@@ -379,14 +379,14 @@ export async function repairOrphanedDoseIds(client: Client): Promise<{ repaired:
 							args: [newDoseId, dose.id],
 						});
 						repaired++;
-					} catch (e: any) {
-						errors.push(`Failed to repair dose ${dose.id}: ${e.message}`);
+					} catch (e: unknown) {
+						errors.push(`Failed to repair dose ${dose.id}: ${(e as Error).message}`);
 					}
 				}
 			}
 		}
-	} catch (e: any) {
-		errors.push(`Repair failed: ${e.message}`);
+	} catch (e: unknown) {
+		errors.push(`Repair failed: ${(e as Error).message}`);
 	}
 
 	return { repaired, errors };

@@ -82,7 +82,7 @@ export function getReminderStatusData(
 	_allLowCoverage: Coverage[],
 	allCoverage: Coverage[],
 	lastAutoEmailSent: string | null,
-	lastNotificationType: string | null,
+	_lastNotificationType: string | null,
 	_lastNotificationChannel: string | null,
 	lastReminderMedName: string | null,
 	lastReminderTakenBy: string | null,
@@ -401,6 +401,11 @@ export function DashboardPage() {
 													<span
 														className={`med-link clickable ${textClass}`}
 														onClick={() => medication && openMedDetail(medication)}
+														onKeyDown={(e) => {
+															if (e.key === "Enter" || e.key === " ") {
+																if (medication) openMedDetail(medication);
+															}
+														}}
 													>
 														{med.name}
 													</span>
@@ -430,6 +435,11 @@ export function DashboardPage() {
 														<span
 															className={`med-link clickable ${textClass}`}
 															onClick={() => medication && openMedDetail(medication)}
+															onKeyDown={(e) => {
+																if (e.key === "Enter" || e.key === " ") {
+																	if (medication) openMedDetail(medication);
+																}
+															}}
 														>
 															{med.name}
 														</span>
@@ -453,7 +463,13 @@ export function DashboardPage() {
 														<span key={name}>
 															{idx > 0 && ", "}
 															{medication ? (
-																<span className="med-link clickable" onClick={() => openMedDetail(medication)}>
+																<span
+																	className="med-link clickable"
+																	onClick={() => openMedDetail(medication)}
+																	onKeyDown={(e) => {
+																		if (e.key === "Enter" || e.key === " ") openMedDetail(medication);
+																	}}
+																>
 																	{name}
 																</span>
 															) : (
@@ -475,7 +491,13 @@ export function DashboardPage() {
 											(() => {
 												const medication = meds.find((m) => m.name === reminderData.lastIntakeSent!.medName);
 												return medication ? (
-													<span className="med-link clickable" onClick={() => openMedDetail(medication)}>
+													<span
+														className="med-link clickable"
+														onClick={() => openMedDetail(medication)}
+														onKeyDown={(e) => {
+															if (e.key === "Enter" || e.key === " ") openMedDetail(medication);
+														}}
+													>
 														{reminderData.lastIntakeSent!.medName}
 													</span>
 												) : (
@@ -553,7 +575,15 @@ export function DashboardPage() {
 										return (
 											<span key={c.name}>
 												{idx > 0 && ", "}
-												<span className={`med-link clickable ${textClass}`} onClick={() => med && openMedDetail(med)}>
+												<span
+													className={`med-link clickable ${textClass}`}
+													onClick={() => med && openMedDetail(med)}
+													onKeyDown={(e) => {
+														if (e.key === "Enter" || e.key === " ") {
+															if (med) openMedDetail(med);
+														}
+													}}
+												>
 													{c.name}
 												</span>
 												<span className={`reminder-days-left ${textClass}`}>
@@ -603,7 +633,16 @@ export function DashboardPage() {
 								med ? getMedTotal(med) : Math.round(row.medsLeft)
 							);
 							return (
-								<div key={row.name} className="table-row clickable" onClick={() => med && openMedDetail(med)}>
+								<div
+									key={row.name}
+									className="table-row clickable"
+									onClick={() => med && openMedDetail(med)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											if (med) openMedDetail(med);
+										}
+									}}
+								>
 									<span data-label={t("table.name")} className="cell-with-avatar">
 										<span className="med-name-line">
 											<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
@@ -628,6 +667,12 @@ export function DashboardPage() {
 																onClick={(e) => {
 																	e.stopPropagation();
 																	openUserFilter(person);
+																}}
+																onKeyDown={(e) => {
+																	if (e.key === "Enter" || e.key === " ") {
+																		e.stopPropagation();
+																		openUserFilter(person);
+																	}
 																}}
 															>
 																{person}
@@ -740,7 +785,7 @@ export function DashboardPage() {
 								const isAutoCollapsed = true; // Past days are always auto-collapsed
 								const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 								const isCollapsed = !isManuallyExpanded;
-								const worstStatus = getDayStockStatus(day.meds);
+								const _worstStatus = getDayStockStatus(day.meds);
 
 								return (
 									<div
@@ -750,6 +795,9 @@ export function DashboardPage() {
 										<div
 											className="day-divider clickable"
 											onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
+											}}
 											title={isCollapsed ? t("common.expand") : t("common.collapse")}
 										>
 											<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
@@ -791,6 +839,11 @@ export function DashboardPage() {
 																<div
 																	className={med?.imageUrl ? "med-avatar clickable" : ""}
 																	onClick={() => med?.imageUrl && openScheduleLightbox(`/api/images/${med.imageUrl}`)}
+																	onKeyDown={(e) => {
+																		if (e.key === "Enter" || e.key === " ") {
+																			if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
+																		}
+																	}}
 																>
 																	<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																</div>
@@ -833,6 +886,9 @@ export function DashboardPage() {
 																							<span
 																								className="person-name clickable"
 																								onClick={() => openUserFilter(person)}
+																								onKeyDown={(e) => {
+																									if (e.key === "Enter" || e.key === " ") openUserFilter(person);
+																								}}
 																							>
 																								{person}
 																							</span>
@@ -887,6 +943,19 @@ export function DashboardPage() {
 															.querySelector(".day-block.today")
 															?.scrollIntoView({ behavior: "smooth", block: "center" });
 													}, 50);
+												}
+											}}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") {
+													const wasCollapsed = !showPastDays;
+													setShowPastDays(!showPastDays);
+													if (wasCollapsed) {
+														setTimeout(() => {
+															document
+																.querySelector(".day-block.today")
+																?.scrollIntoView({ behavior: "smooth", block: "center" });
+														}, 50);
+													}
 												}
 											}}
 										>
@@ -963,6 +1032,9 @@ export function DashboardPage() {
 										<div
 											className="day-divider clickable"
 											onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
+											}}
 											title={isCollapsed ? t("common.expand") : t("common.collapse")}
 										>
 											<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
@@ -998,6 +1070,11 @@ export function DashboardPage() {
 																<div
 																	className={med?.imageUrl ? "med-avatar clickable" : ""}
 																	onClick={() => med?.imageUrl && openScheduleLightbox(`/api/images/${med.imageUrl}`)}
+																	onKeyDown={(e) => {
+																		if (e.key === "Enter" || e.key === " ") {
+																			if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
+																		}
+																	}}
 																>
 																	<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																</div>
@@ -1044,6 +1121,9 @@ export function DashboardPage() {
 																							<span
 																								className="person-name clickable"
 																								onClick={() => openUserFilter(person)}
+																								onKeyDown={(e) => {
+																									if (e.key === "Enter" || e.key === " ") openUserFilter(person);
+																								}}
 																							>
 																								{person}
 																							</span>
@@ -1096,6 +1176,9 @@ export function DashboardPage() {
 										<div
 											className={`future-days-toggle ${showFutureDays ? "expanded" : ""}`}
 											onClick={() => setShowFutureDays(!showFutureDays)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") setShowFutureDays(!showFutureDays);
+											}}
 										>
 											<span className="future-days-icon">{showFutureDays ? "▼" : "▶"}</span>
 											<span className="future-days-label">
@@ -1150,6 +1233,9 @@ export function DashboardPage() {
 										<div
 											className="day-divider clickable"
 											onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
+											}}
 											title={isCollapsed ? t("common.expand") : t("common.collapse")}
 										>
 											<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
@@ -1185,6 +1271,11 @@ export function DashboardPage() {
 																<div
 																	className={med?.imageUrl ? "med-avatar clickable" : ""}
 																	onClick={() => med?.imageUrl && openScheduleLightbox(`/api/images/${med.imageUrl}`)}
+																	onKeyDown={(e) => {
+																		if (e.key === "Enter" || e.key === " ") {
+																			if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
+																		}
+																	}}
 																>
 																	<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																</div>
@@ -1227,6 +1318,9 @@ export function DashboardPage() {
 																							<span
 																								className="person-name clickable"
 																								onClick={() => openUserFilter(person)}
+																								onKeyDown={(e) => {
+																									if (e.key === "Enter" || e.key === " ") openUserFilter(person);
+																								}}
 																							>
 																								{person}
 																							</span>

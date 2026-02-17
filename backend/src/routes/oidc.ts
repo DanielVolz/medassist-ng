@@ -104,7 +104,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 			});
 
 			return reply.redirect(authUrl.href);
-		} catch (err: any) {
+		} catch (err: unknown) {
 			console.error("[OIDC] Login error:", err);
 			return reply.redirect(`${getFrontendUrl()}/?error=oidc_init_failed`);
 		}
@@ -167,7 +167,10 @@ export async function oidcRoutes(app: FastifyInstance) {
 				// Extract username from configured claim
 				const usernameClaim = env.OIDC_USERNAME_CLAIM;
 				const username =
-					(userInfo as any)[usernameClaim] || userInfo.preferred_username || userInfo.email || userInfo.sub;
+					(userInfo as Record<string, string>)[usernameClaim] ||
+					userInfo.preferred_username ||
+					userInfo.email ||
+					userInfo.sub;
 				const oidcSubject = userInfo.sub;
 
 				if (!username || !oidcSubject) {
@@ -210,7 +213,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 				// In dev: CORS_ORIGINS contains the frontend URL
 				const frontendUrl = env.CORS_ORIGINS.split(",")[0] || "http://localhost:5173";
 				return reply.redirect(`${frontendUrl}/dashboard`);
-			} catch (err: any) {
+			} catch (err: unknown) {
 				console.error("[OIDC] Callback error:", err);
 				return reply.redirect(`${getFrontendUrl()}/?error=oidc_callback_failed`);
 			}

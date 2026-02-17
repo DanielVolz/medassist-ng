@@ -275,8 +275,10 @@ async function sendReminderEmail(
 		.map((row) => {
 			const isEmpty = row.medsLeft <= 0;
 			const isCritical = row.isCritical;
-			const statusIcon = isEmpty ? "🚨" : isCritical ? "🚨" : "⚠️";
-			const rowBg = isEmpty ? "#fef2f2" : isCritical ? "#fff7ed" : "white";
+			const nonEmptyIcon = isCritical ? "🚨" : "⚠️";
+			const statusIcon = isEmpty ? "🚨" : nonEmptyIcon;
+			const nonEmptyBg = isCritical ? "#fff7ed" : "white";
+			const rowBg = isEmpty ? "#fef2f2" : nonEmptyBg;
 			return `
       <tr style="background: ${rowBg};">
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${row.name}</td>
@@ -329,7 +331,8 @@ ${lowStock.map((r) => `${r.name}: ${r.medsLeft} ${tr.common.pills}, ${r.daysLeft
 ---
 ${getFooterPlain(language)}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyNote}` : ""}`;
 
-	const subjectPlural = lowStock.length === 1 ? "" : language === "de" ? "e" : "s";
+	const pluralSuffix = language === "de" ? "e" : "s";
+	const subjectPlural = lowStock.length === 1 ? "" : pluralSuffix;
 	const subject = t(tr.stockReminder.subject, { count: lowStock.length, s: subjectPlural, e: subjectPlural });
 
 	try {
@@ -460,7 +463,7 @@ async function checkAndSendReminderForUser(
 						)
 					);
 				}
-				const message = messageParts.join("\n") + `\n\n---\n${getFooterPlain(language)}`;
+				const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 				const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
 				shoutrrrSuccess = result.success;
 				if (!result.success) {
@@ -470,7 +473,8 @@ async function checkAndSendReminderForUser(
 
 			if (emailSuccess || shoutrrrSuccess) {
 				const currentState = loadReminderState();
-				const channel = emailSuccess && shoutrrrSuccess ? "both" : emailSuccess ? "email" : "push";
+				const singleChannel = emailSuccess ? "email" : "push";
+				const channel = emailSuccess && shoutrrrSuccess ? "both" : singleChannel;
 				saveReminderState({
 					lastAutoEmailSent: new Date().toISOString(),
 					lastAutoEmailDate: today,
@@ -480,7 +484,6 @@ async function checkAndSendReminderForUser(
 					lastNotificationChannel: channel,
 				});
 
-				const firstMed = allLowStock[0];
 				const medNames = allLowStock.map((m) => m.name).join(", ");
 				await updateUserReminderSentTime(settings.userId, "stock", channel, medNames);
 			}
@@ -537,14 +540,15 @@ async function checkAndSendReminderForUser(
 
 						const bodyText =
 							emptyRx.length > 0 ? tr.prescriptionReminder.descriptionEmpty : tr.prescriptionReminder.descriptionLow;
-						const alertText =
-							emptyRx.length > 0
-								? emptyRx.length === 1
-									? tr.prescriptionReminder.alertEmptySingle
-									: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length })
-								: lowRx.length === 1
-									? tr.prescriptionReminder.alertLowSingle
-									: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
+						const emptyAlert =
+							emptyRx.length === 1
+								? tr.prescriptionReminder.alertEmptySingle
+								: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length });
+						const lowAlert =
+							lowRx.length === 1
+								? tr.prescriptionReminder.alertLowSingle
+								: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
+						const alertText = emptyRx.length > 0 ? emptyAlert : lowAlert;
 
 						const tableRows = allPrescriptionLow
 							.map((item) => {
@@ -649,7 +653,7 @@ async function checkAndSendReminderForUser(
 						);
 					}
 				}
-				const message = messageParts.join("\n") + `\n\n---\n${getFooterPlain(language)}`;
+				const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 				const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
 				shoutrrrSuccess = result.success;
 				if (!result.success) {
@@ -659,7 +663,8 @@ async function checkAndSendReminderForUser(
 
 			if (emailSuccess || shoutrrrSuccess) {
 				const currentState = loadReminderState();
-				const channel = emailSuccess && shoutrrrSuccess ? "both" : emailSuccess ? "email" : "push";
+				const singleChannel = emailSuccess ? "email" : "push";
+				const channel = emailSuccess && shoutrrrSuccess ? "both" : singleChannel;
 				saveReminderState({
 					lastAutoEmailSent: new Date().toISOString(),
 					lastAutoEmailDate: today,
@@ -669,7 +674,6 @@ async function checkAndSendReminderForUser(
 					lastNotificationChannel: channel,
 				});
 
-				const firstMed = allPrescriptionLow[0];
 				const medNames = allPrescriptionLow.map((m) => m.name).join(", ");
 				await updateUserReminderSentTime(settings.userId, "prescription", channel, medNames);
 			}

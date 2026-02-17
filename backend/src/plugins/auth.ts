@@ -142,9 +142,12 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 			id: user.id,
 			username: user.username,
 		};
-	} catch (err: any) {
+	} catch (err: unknown) {
 		// Re-throw our own errors
-		if (err?.message === "AUTH_REQUIRED" || err?.message === "USER_NOT_FOUND" || err?.message === "ACCOUNT_DISABLED") {
+		if (
+			err instanceof Error &&
+			(err.message === "AUTH_REQUIRED" || err.message === "USER_NOT_FOUND" || err.message === "ACCOUNT_DISABLED")
+		) {
 			throw err;
 		}
 		// JWT verification failed

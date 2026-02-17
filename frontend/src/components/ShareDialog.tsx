@@ -42,8 +42,18 @@ export function ShareDialog({
 	if (!show) return null;
 
 	return (
-		<div className="modal-overlay" onClick={onClose}>
-			<div className="modal-content share-dialog-modal" onClick={(e) => e.stopPropagation()}>
+		<div
+			className="modal-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose();
+			}}
+		>
+			<div
+				className="modal-content share-dialog-modal"
+				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
+			>
 				<button className="modal-close" onClick={onClose}>
 					×
 				</button>
@@ -53,71 +63,79 @@ export function ShareDialog({
 					<p className="share-dialog-description">{t("share.description")}</p>
 				</div>
 
-				{sharePeople.length === 0 ? (
-					<div className="share-dialog-empty">
-						<p>{t("share.noPeople")}</p>
-					</div>
-				) : shareLink ? (
-					<div className="share-dialog-result">
-						<p className="share-success">{t("share.linkGenerated")}</p>
-						<div className="share-link-box">
-							<input
-								type="text"
-								value={shareLink}
-								readOnly
-								className="share-link-input"
-								onClick={(e) => (e.target as HTMLInputElement).select()}
-							/>
-							<button className="btn-copy" onClick={onCopyShareLink}>
-								{shareCopied ? "✓" : "📋"}
-							</button>
-						</div>
-						{shareCopied && <span className="share-copied-hint">{t("share.copied")}</span>}
-						<div className="share-dialog-footer">
-							<button
-								className="ghost"
-								onClick={() => {
-									onShareLinkChange(null);
-									onShareCopiedChange(false);
-								}}
-							>
-								{t("share.generateAnother")}
-							</button>
-							<button onClick={onClose}>{t("common.close")}</button>
-						</div>
-					</div>
-				) : (
-					<div className="share-dialog-form">
-						<div className="form-group">
-							<label>{t("share.selectPerson")}</label>
-							<select value={shareSelectedPerson} onChange={(e) => onShareSelectedPersonChange(e.target.value)}>
-								{sharePeople.map((person) => (
-									<option key={person} value={person}>
-										{person}
-									</option>
-								))}
-							</select>
-						</div>
+				{(() => {
+					if (sharePeople.length === 0) {
+						return (
+							<div className="share-dialog-empty">
+								<p>{t("share.noPeople")}</p>
+							</div>
+						);
+					}
+					if (shareLink) {
+						return (
+							<div className="share-dialog-result">
+								<p className="share-success">{t("share.linkGenerated")}</p>
+								<div className="share-link-box">
+									<input
+										type="text"
+										value={shareLink}
+										readOnly
+										className="share-link-input"
+										onClick={(e) => (e.target as HTMLInputElement).select()}
+									/>
+									<button className="btn-copy" onClick={onCopyShareLink}>
+										{shareCopied ? "✓" : "📋"}
+									</button>
+								</div>
+								{shareCopied && <span className="share-copied-hint">{t("share.copied")}</span>}
+								<div className="share-dialog-footer">
+									<button
+										className="ghost"
+										onClick={() => {
+											onShareLinkChange(null);
+											onShareCopiedChange(false);
+										}}
+									>
+										{t("share.generateAnother")}
+									</button>
+									<button onClick={onClose}>{t("common.close")}</button>
+								</div>
+							</div>
+						);
+					}
+					return (
+						<div className="share-dialog-form">
+							<div className="form-group">
+								<label>{t("share.selectPerson")}</label>
+								<select value={shareSelectedPerson} onChange={(e) => onShareSelectedPersonChange(e.target.value)}>
+									{sharePeople.map((person) => (
+										<option key={person} value={person}>
+											{person}
+										</option>
+									))}
+								</select>
+							</div>
 
-						<div className="form-group">
-							<label>{t("share.selectPeriod")}</label>
-							<select value={shareSelectedDays} onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}>
-								<option value={30}>{t("dashboard.schedules.1month")}</option>
-								<option value={90}>{t("dashboard.schedules.3months")}</option>
-								<option value={180}>{t("dashboard.schedules.6months")}</option>
-							</select>
-						</div>
+							<div className="form-group">
+								<label>{t("share.selectPeriod")}</label>
+								<select value={shareSelectedDays} onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}>
+									<option value={30}>{t("dashboard.schedules.1month")}</option>
+									<option value={90}>{t("dashboard.schedules.3months")}</option>
+									<option value={180}>{t("dashboard.schedules.6months")}</option>
+								</select>
+							</div>
 
-						<div className="share-dialog-footer">
-							<button className="ghost" onClick={onClose}>
-								{t("common.cancel")}
-							</button>
-							<button onClick={onGenerateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
-								{shareGenerating ? t("share.generating") : t("share.generateLink")}
-							</button>
+							<div className="share-dialog-footer">
+								<button className="ghost" onClick={onClose}>
+									{t("common.cancel")}
+								</button>
+								<button onClick={onGenerateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
+									{shareGenerating ? t("share.generating") : t("share.generateLink")}
+								</button>
+							</div>
 						</div>
-					</div>
-				)}
+					);
+				})()}
 			</div>
 		</div>
 	);

@@ -664,6 +664,13 @@ body.modal-open {
 	border-radius: 8px;
 	padding: 0.1rem 0.25rem;
 	margin: -0.1rem -0.25rem 0.8rem;
+	background: none;
+	box-shadow: none;
+	color: inherit;
+}
+
+.med-group-head-toggle:hover {
+	background: var(--bg-tertiary);
 }
 
 .med-group-head-toggle:hover .med-group-title {

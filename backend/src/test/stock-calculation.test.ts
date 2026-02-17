@@ -612,8 +612,8 @@ describe("Stock Calculation API", () => {
 			const data = response.json();
 			expect(data).toHaveLength(2);
 
-			const medA = data.find((d: any) => d.medicationName === "Med A");
-			const medB = data.find((d: any) => d.medicationName === "Med B");
+			const medA = data.find((d: Record<string, unknown>) => d.medicationName === "Med A");
+			const medB = data.find((d: Record<string, unknown>) => d.medicationName === "Med B");
 
 			expect(medA.plannerUsage).toBe(10); // 10 days × 1 pill
 			expect(medB.plannerUsage).toBe(10); // 5 doses × 2 pills

@@ -294,8 +294,8 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 
 			// Should set cookies
 			const cookies = response.cookies;
-			expect(cookies.find((c: any) => c.name === "access_token")).toBeDefined();
-			expect(cookies.find((c: any) => c.name === "refresh_token")).toBeDefined();
+			expect(cookies.find((c: { name: string }) => c.name === "access_token")).toBeDefined();
+			expect(cookies.find((c: { name: string }) => c.name === "refresh_token")).toBeDefined();
 		});
 
 		it("should login case-insensitively with different username casing", async () => {
@@ -393,7 +393,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				},
 			});
 
-			const refreshToken = login.cookies.find((c: any) => c.name === "refresh_token");
+			const refreshToken = login.cookies.find((c: { name: string }) => c.name === "refresh_token");
 
 			const response = await app.inject({
 				method: "POST",
@@ -456,7 +456,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				},
 			});
 
-			const refreshToken = login.cookies.find((c: any) => c.name === "refresh_token");
+			const refreshToken = login.cookies.find((c: { name: string }) => c.name === "refresh_token");
 
 			const response = await app.inject({
 				method: "POST",
@@ -506,7 +506,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				},
 			});
 
-			const accessToken = login.cookies.find((c: any) => c.name === "access_token");
+			const accessToken = login.cookies.find((c: { name: string }) => c.name === "access_token");
 
 			const response = await app.inject({
 				method: "GET",
@@ -604,7 +604,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				},
 			});
 
-			const accessToken = login.cookies.find((c: any) => c.name === "access_token");
+			const accessToken = login.cookies.find((c: { name: string }) => c.name === "access_token");
 
 			const response = await app.inject({
 				method: "PUT",
@@ -653,7 +653,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				},
 			});
 
-			const accessToken = login.cookies.find((c: any) => c.name === "access_token");
+			const accessToken = login.cookies.find((c: { name: string }) => c.name === "access_token");
 
 			const response = await app.inject({
 				method: "PUT",
@@ -689,7 +689,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				},
 			});
 
-			const accessToken = login.cookies.find((c: any) => c.name === "access_token");
+			const accessToken = login.cookies.find((c: { name: string }) => c.name === "access_token");
 
 			const response = await app.inject({
 				method: "PUT",
@@ -742,7 +742,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				},
 			});
 
-			const accessToken = login.cookies.find((c: any) => c.name === "access_token");
+			const accessToken = login.cookies.find((c: { name: string }) => c.name === "access_token");
 
 			// Delete account
 			const response = await app.inject({

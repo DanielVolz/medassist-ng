@@ -71,7 +71,7 @@ test.describe("Medications Page", () => {
 
 		// Either blister or bottle fields depending on package type
 		const blistersField = page.getByLabel(/Blisters per pack/i);
-		const pillsField = page.getByLabel(/Pills per blister/i);
+		const _pillsField = page.getByLabel(/Pills per blister/i);
 		const capacityField = page.getByLabel(/Total Capacity/i);
 
 		const hasBlister = await blistersField.isVisible().catch(() => false);

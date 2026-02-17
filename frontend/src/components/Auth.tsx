@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		initialFetchDone.current = true;
 		fetchAuthState();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [fetchAuthState]);
 
 	// Proactively refresh token every 10 minutes to prevent expiration
 	useEffect(() => {
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 		return () => clearInterval(refreshInterval);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [user, authState?.authEnabled]);
+	}, [user, authState?.authEnabled, refreshUser, tryRefreshToken]);
 
 	async function fetchAuthState(retryCount = 0) {
 		const maxRetries = 3;

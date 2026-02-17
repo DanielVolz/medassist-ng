@@ -3,7 +3,6 @@ import {
 	authFile,
 	createMedicationViaAPI,
 	deleteAllMedicationsViaAPI,
-	deleteMedicationViaAPI,
 	expect,
 	navigateTo,
 	type TestMedication,

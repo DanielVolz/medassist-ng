@@ -22,7 +22,6 @@ import {
 	getTimezone,
 	getTodaysIntakes,
 	getUpcomingIntakes,
-	type Intake,
 	type IntakeReminderState,
 	parseIntakeReminderState,
 	parseIntakesJson,
@@ -321,7 +320,7 @@ async function checkAndSendIntakeRemindersForUser(
 		});
 
 		// Process each intake separately to track blisterIndex
-		intakesWithReminders.forEach((intake, blisterIndex) => {
+		intakesWithReminders.forEach((intake, _blisterIndex) => {
 			const actualIndex = intakes.indexOf(intake); // Get the actual index in original array
 			logger.debug(
 				`[IntakeReminder] User ${settings.userId}: Intake ${actualIndex} - start: ${intake.start}, every: ${intake.every} days, usage: ${intake.usage}, takenBy: ${intake.takenBy || "(none)"}`
@@ -684,7 +683,8 @@ async function checkAndSendIntakeRemindersForUser(
 		saveIntakeReminderState(state);
 
 		// Update global reminder state for UI display
-		const channel = emailSuccess && shoutrrrSuccess ? "both" : emailSuccess ? "email" : "push";
+		const singleChannel = emailSuccess ? "email" : "push";
+		const channel = emailSuccess && shoutrrrSuccess ? "both" : singleChannel;
 		updateReminderSentTime("intake", channel);
 
 		// Also update user settings in database so frontend can display the info

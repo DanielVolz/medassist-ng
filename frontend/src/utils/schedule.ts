@@ -171,7 +171,8 @@ export function calculateCoverage(
 
 				// For per-intake takenBy, only count for that person
 				// For legacy (no takenBy), count for all people in medication takenBy
-				const peopleForThisIntake = intakePerson ? [intakePerson] : m.takenBy?.length > 0 ? m.takenBy : [null];
+				const fallbackPeople = m.takenBy?.length > 0 ? m.takenBy : [null];
+				const peopleForThisIntake = intakePerson ? [intakePerson] : fallbackPeople;
 
 				// Time-based: count doses where the scheduled time has already passed
 				let timeBasedConsumed = 0;

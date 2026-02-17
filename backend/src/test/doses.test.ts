@@ -271,7 +271,7 @@ describe("Dose Tracking API", () => {
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
 			expect(data.doses).toHaveLength(2);
-			expect(data.doses.map((d: any) => d.doseId).sort()).toEqual([doseId1, doseId2].sort());
+			expect(data.doses.map((d: { doseId: string }) => d.doseId).sort()).toEqual([doseId1, doseId2].sort());
 			// Each dose should have a takenAt timestamp
 			for (const dose of data.doses) {
 				expect(dose.takenAt).toBeTypeOf("number");

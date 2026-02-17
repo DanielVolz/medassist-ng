@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 
 // Import from utils to avoid index.ts import side effects (server start)
@@ -294,10 +294,18 @@ describe("Server Bootstrap", () => {
 				refreshCookieOptions,
 			});
 
-			expect((app as any).config.accessTtl).toBe(15);
-			expect((app as any).config.refreshTtl).toBe(7);
-			expect((app as any).config.cookieOptions.httpOnly).toBe(true);
-			expect((app as any).config.refreshCookieOptions.maxAge).toBe(7 * 24 * 60 * 60);
+			const appWithConfig = app as unknown as {
+				config: {
+					accessTtl: number;
+					refreshTtl: number;
+					cookieOptions: { httpOnly: boolean };
+					refreshCookieOptions: { maxAge: number };
+				};
+			};
+			expect(appWithConfig.config.accessTtl).toBe(15);
+			expect(appWithConfig.config.refreshTtl).toBe(7);
+			expect(appWithConfig.config.cookieOptions.httpOnly).toBe(true);
+			expect(appWithConfig.config.refreshCookieOptions.maxAge).toBe(7 * 24 * 60 * 60);
 
 			await app.close();
 		});
@@ -364,15 +372,15 @@ describe("Server Bootstrap", () => {
 			const app = Fastify({ logger: false });
 
 			// Mock route plugins
-			const healthRoutes = async (app: any) => {
+			const healthRoutes = async (app: FastifyInstance) => {
 				app.get("/health", async () => ({ status: "ok" }));
 			};
 
-			const authRoutes = async (app: any) => {
+			const authRoutes = async (app: FastifyInstance) => {
 				app.post("/auth/login", async () => ({ token: "mock" }));
 			};
 
-			const medicationRoutes = async (app: any) => {
+			const medicationRoutes = async (app: FastifyInstance) => {
 				app.get("/medications", async () => []);
 			};
 

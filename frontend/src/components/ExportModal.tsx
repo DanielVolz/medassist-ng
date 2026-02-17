@@ -13,8 +13,19 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 	if (!isOpen) return null;
 
 	return (
-		<div className="modal-overlay" onClick={onClose}>
-			<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "450px" }}>
+		<div
+			className="modal-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose();
+			}}
+		>
+			<div
+				className="modal-content"
+				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
+				style={{ maxWidth: "450px" }}
+			>
 				<button className="modal-close" onClick={onClose}>
 					×
 				</button>

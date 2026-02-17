@@ -191,7 +191,7 @@ export function parseIntakesJson(
 		try {
 			const parsed = JSON.parse(intakesJson);
 			if (Array.isArray(parsed) && parsed.length > 0) {
-				return parsed.map((intake: any) => ({
+				return parsed.map((intake: Record<string, unknown>) => ({
 					usage: typeof intake.usage === "number" ? intake.usage : 0,
 					every: typeof intake.every === "number" ? intake.every : 1,
 					start: typeof intake.start === "string" ? intake.start : new Date().toISOString(),
@@ -312,7 +312,7 @@ export type UpcomingIntake = {
 export function getTodaysIntakes(
 	medName: string,
 	intakes: Intake[],
-	medicationTakenBy: string[], // Medication-level takenBy as fallback
+	_medicationTakenBy: string[], // Medication-level takenBy as fallback
 	pillWeightMg: number | null,
 	locale: string,
 	tz?: string,
@@ -388,7 +388,7 @@ export function getUpcomingIntakes(
 	medName: string,
 	intakes: Intake[],
 	minutesBefore: number,
-	medicationTakenBy: string[], // Medication-level takenBy as fallback
+	_medicationTakenBy: string[], // Medication-level takenBy as fallback
 	pillWeightMg: number | null,
 	locale: string,
 	tz?: string,

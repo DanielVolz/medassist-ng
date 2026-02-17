@@ -209,7 +209,7 @@ export function SharedSchedule() {
 
 	// Get dose ID - for per-intake takenBy, the ID already has the person suffix
 	// This helper is kept for compatibility but since dose.id already includes the suffix, it just returns the id
-	function getDoseId(doseId: string, _person: string | null): string {
+	function _getDoseId(doseId: string, _person: string | null): string {
 		// The dose.id already includes the person suffix if there's a per-intake takenBy
 		return doseId;
 	}
@@ -479,7 +479,8 @@ export function SharedSchedule() {
 
 					const intake = intakes[blisterIdx];
 					const intakePerson = intake?.takenBy;
-					const peopleForThisIntake = intakePerson ? [intakePerson] : med.takenBy?.length > 0 ? med.takenBy : [null];
+					const fallbackPeople = med.takenBy?.length > 0 ? med.takenBy : [null];
+					const peopleForThisIntake = intakePerson ? [intakePerson] : fallbackPeople;
 
 					let timeBasedConsumed = 0;
 					let lastAutoConsumedDateMs = 0;
@@ -579,7 +580,8 @@ export function SharedSchedule() {
 			const status = getStockStatus(coverage.daysLeft, coverage.medsLeft, stockThresholds);
 			return status.className;
 		});
-		return statuses.includes("danger") ? "danger" : statuses.includes("warning") ? "warning" : "success";
+		const fallbackStatus = statuses.includes("warning") ? "warning" : "success";
+		return statuses.includes("danger") ? "danger" : fallbackStatus;
 	}
 
 	// Whether to show stock status indicators on the shared schedule
@@ -606,7 +608,7 @@ export function SharedSchedule() {
 	const missedPastDoseIds = useMemo(() => {
 		const allPastDoseIds = pastDays.flatMap((d) => d.meds.flatMap((m) => m.doses.map((dose) => dose.id)));
 		return allPastDoseIds.filter((id) => !isDoseIdDone(id));
-	}, [pastDays, takenDoses, dismissedDoses, data]);
+	}, [pastDays, isDoseIdDone]);
 
 	if (loading) {
 		return (
@@ -714,14 +716,19 @@ export function SharedSchedule() {
 							</div>
 						</div>
 					</div>
-					<p className="shared-schedule-period">
-						{t("share.period")}:{" "}
-						{data.scheduleDays === 30
-							? t("dashboard.schedules.1month")
-							: data.scheduleDays === 90
-								? t("dashboard.schedules.3months")
-								: t("dashboard.schedules.6months")}
-					</p>
+					{(() => {
+						const periodLabel =
+							data.scheduleDays === 30
+								? t("dashboard.schedules.1month")
+								: data.scheduleDays === 90
+									? t("dashboard.schedules.3months")
+									: t("dashboard.schedules.6months");
+						return (
+							<p className="shared-schedule-period">
+								{t("share.period")}: {periodLabel}
+							</p>
+						);
+					})()}
 				</header>
 
 				<div className="timeline">
@@ -757,14 +764,18 @@ export function SharedSchedule() {
 									const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 									const isCollapsed = !isManuallyExpanded;
 
+									const pastMissedClass = allDoseIds.length > 0 ? "past-missed" : "";
 									return (
 										<div
 											key={day.dateStr}
-											className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allReallyTaken ? "all-taken" : allDoseIds.length > 0 ? "past-missed" : ""}`}
+											className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allReallyTaken ? "all-taken" : pastMissedClass}`}
 										>
 											<div
 												className="day-divider clickable"
 												onClick={() => toggleDayCollapse(day.dateStr, true)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, true);
+												}}
 												title={isCollapsed ? t("common.expand") : t("common.collapse")}
 											>
 												<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
@@ -817,6 +828,11 @@ export function SharedSchedule() {
 																	<div
 																		className={med?.imageUrl ? "med-avatar clickable" : ""}
 																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
+																		onKeyDown={(e) => {
+																			if (e.key === "Enter" || e.key === " ") {
+																				if (med?.imageUrl) openLightbox(med.imageUrl, med.name);
+																			}
+																		}}
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
@@ -894,6 +910,9 @@ export function SharedSchedule() {
 														}, 50);
 													}
 												}}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === " ") setShowPastDays(!showPastDays);
+												}}
 											>
 												<span className="past-days-icon">{showPastDays ? "▼" : "▶"}</span>
 												<span className="past-days-label">
@@ -941,6 +960,9 @@ export function SharedSchedule() {
 											<div
 												className="day-divider clickable"
 												onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
+												}}
 												title={isCollapsed ? t("common.expand") : t("common.collapse")}
 											>
 												<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
@@ -982,6 +1004,11 @@ export function SharedSchedule() {
 																	<div
 																		className={med?.imageUrl ? "med-avatar clickable" : ""}
 																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
+																		onKeyDown={(e) => {
+																			if (e.key === "Enter" || e.key === " ") {
+																				if (med?.imageUrl) openLightbox(med.imageUrl, med.name);
+																			}
+																		}}
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
@@ -1058,6 +1085,9 @@ export function SharedSchedule() {
 											<div
 												className={`future-days-toggle ${showFutureDays ? "expanded" : ""}`}
 												onClick={() => setShowFutureDays(!showFutureDays)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === " ") setShowFutureDays(!showFutureDays);
+												}}
 											>
 												<span className="future-days-icon">{showFutureDays ? "▼" : "▶"}</span>
 												<span className="future-days-label">
@@ -1099,6 +1129,9 @@ export function SharedSchedule() {
 											<div
 												className="day-divider clickable"
 												onClick={() => toggleDayCollapse(day.dateStr, isAutoCollapsed)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
+												}}
 												title={isCollapsed ? t("common.expand") : t("common.collapse")}
 											>
 												<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
@@ -1139,6 +1172,11 @@ export function SharedSchedule() {
 																	<div
 																		className={med?.imageUrl ? "med-avatar clickable" : ""}
 																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
+																		onKeyDown={(e) => {
+																			if (e.key === "Enter" || e.key === " ") {
+																				if (med?.imageUrl) openLightbox(med.imageUrl, med.name);
+																			}
+																		}}
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
@@ -1215,7 +1253,13 @@ export function SharedSchedule() {
 
 			{/* Image Lightbox */}
 			{lightboxImage && (
-				<div className="lightbox-overlay" onClick={closeLightbox}>
+				<div
+					className="lightbox-overlay"
+					onClick={closeLightbox}
+					onKeyDown={(e) => {
+						if (e.key === "Escape") closeLightbox();
+					}}
+				>
 					<button className="lightbox-close" onClick={closeLightbox}>
 						×
 					</button>
@@ -1224,6 +1268,7 @@ export function SharedSchedule() {
 						alt={lightboxImage.name}
 						className="lightbox-image"
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					/>
 				</div>
 			)}

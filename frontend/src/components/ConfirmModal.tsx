@@ -39,8 +39,19 @@ export function ConfirmModal({
 	}, [onCancel]);
 
 	return (
-		<div className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`} onClick={onCancel}>
-			<div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "450px" }}>
+		<div
+			className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`}
+			onClick={onCancel}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onCancel();
+			}}
+		>
+			<div
+				className="modal-content"
+				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
+				style={{ maxWidth: "450px" }}
+			>
 				<button className="modal-close" onClick={onCancel}>
 					×
 				</button>

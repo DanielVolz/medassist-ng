@@ -1,5 +1,4 @@
 import { existsSync, statSync } from "node:fs";
-import { resolve } from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
@@ -8,7 +7,6 @@ import { log } from "../utils/logger.js";
 import {
 	ensureDataDirectory,
 	ensureDefaultUser,
-	getDataDir,
 	getDbPaths,
 	repairOrphanedDoseIds,
 	repairTrailingHyphenDoseIds,
@@ -65,8 +63,8 @@ let client: Client;
 try {
 	client = createClient({ url });
 	log.debug(`[DB] Database client created successfully`);
-} catch (err: any) {
-	log.error(`[DB] ERROR: Failed to create database client: ${err.message}`);
+} catch (err: unknown) {
+	log.error(`[DB] ERROR: Failed to create database client: ${(err as Error).message}`);
 	log.error(`[DB] Database path: ${dbPath}`);
 	process.exit(1);
 }

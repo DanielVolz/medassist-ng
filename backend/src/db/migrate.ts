@@ -41,8 +41,8 @@ export async function executeMigration(
 		const executed = Number(tables.rows[0].count) || 0;
 
 		return { success: true, executed, errors };
-	} catch (err: any) {
-		errors.push(err.message);
+	} catch (err: unknown) {
+		errors.push((err as Error).message);
 		return { success: false, executed: 0, errors };
 	}
 }

@@ -1671,7 +1671,7 @@ describe("E2E Tests with Real Routes", () => {
 				url: "/medications",
 			});
 			expect(medsResponse.statusCode).toBe(200);
-			const med = medsResponse.json().find((m: any) => m.id === medId);
+			const med = medsResponse.json().find((m: Record<string, unknown>) => m.id === medId);
 			expect(med.prescriptionRemainingRefills).toBe(1);
 
 			const historyResponse = await app.inject({
@@ -1809,8 +1809,10 @@ describe("E2E Tests with Real Routes", () => {
 			const refills = response.json();
 			expect(refills).toHaveLength(2);
 			// Check both refills exist (order may vary)
-			const hasPackRefill = refills.some((r: any) => r.packsAdded === 1 && r.loosePillsAdded === 0);
-			const hasLooseRefill = refills.some((r: any) => r.packsAdded === 0 && r.loosePillsAdded === 5);
+			const hasPackRefill = refills.some((r: Record<string, unknown>) => r.packsAdded === 1 && r.loosePillsAdded === 0);
+			const hasLooseRefill = refills.some(
+				(r: Record<string, unknown>) => r.packsAdded === 0 && r.loosePillsAdded === 5
+			);
 			expect(hasPackRefill).toBe(true);
 			expect(hasLooseRefill).toBe(true);
 		});
@@ -1888,7 +1890,7 @@ describe("E2E Tests with Real Routes", () => {
 
 			expect(getResponse.statusCode).toBe(200);
 			const meds = getResponse.json();
-			const med = meds.find((m: any) => m.id === medId);
+			const med = meds.find((m: Record<string, unknown>) => m.id === medId);
 			expect(med).toBeDefined();
 			expect(med.stockAdjustment).toBe(-7);
 			expect(med.lastStockCorrectionAt).toBeTruthy();
@@ -1934,7 +1936,7 @@ describe("E2E Tests with Real Routes", () => {
 				method: "GET",
 				url: "/medications",
 			});
-			const med = getResponse.json().find((m: any) => m.id === medId);
+			const med = getResponse.json().find((m: Record<string, unknown>) => m.id === medId);
 			expect(med.name).toBe("Renamed Med");
 			expect(med.stockAdjustment).toBe(-5);
 		});
@@ -2003,7 +2005,7 @@ describe("E2E Tests with Real Routes", () => {
 
 			// Verify adjustment is set
 			let getMeds = await app.inject({ method: "GET", url: "/medications" });
-			let med = getMeds.json().find((m: any) => m.id === medId);
+			let med = getMeds.json().find((m: Record<string, unknown>) => m.id === medId);
 			expect(med.stockAdjustment).toBe(-10);
 
 			// Edit medication with CHANGED stock fields (packCount 1 → 2)
@@ -2022,7 +2024,7 @@ describe("E2E Tests with Real Routes", () => {
 
 			// stockAdjustment should be reset to 0
 			getMeds = await app.inject({ method: "GET", url: "/medications" });
-			med = getMeds.json().find((m: any) => m.id === medId);
+			med = getMeds.json().find((m: Record<string, unknown>) => m.id === medId);
 			expect(med.stockAdjustment).toBe(0);
 			expect(med.lastStockCorrectionAt).toBeTruthy();
 		});
@@ -2066,7 +2068,7 @@ describe("E2E Tests with Real Routes", () => {
 
 			// stockAdjustment should be preserved
 			const getMeds = await app.inject({ method: "GET", url: "/medications" });
-			const med = getMeds.json().find((m: any) => m.id === medId);
+			const med = getMeds.json().find((m: Record<string, unknown>) => m.id === medId);
 			expect(med.name).toBe("Renamed Preserve Med");
 			expect(med.stockAdjustment).toBe(-5);
 		});
@@ -2114,7 +2116,7 @@ describe("E2E Tests with Real Routes", () => {
 
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
-			const med = data.find((m: any) => m.medicationId === medId);
+			const med = data.find((m: Record<string, unknown>) => m.medicationId === medId);
 			expect(med).toBeDefined();
 			// Total should be very close to 113 (not 112 or lower from phantom consumption)
 			// Allow up to 1 pill of natural consumption (test runs fast, but at most 1 day could pass)

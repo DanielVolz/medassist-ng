@@ -621,6 +621,11 @@ export function MedicationsPage() {
 													onClick={() =>
 														med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name })
 													}
+													onKeyDown={(e) => {
+														if (e.key === "Enter" || e.key === " ") {
+															if (med.imageUrl) setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name });
+														}
+													}}
 												>
 													<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
 												</span>
@@ -738,6 +743,12 @@ export function MedicationsPage() {
 															onClick={() =>
 																med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name })
 															}
+															onKeyDown={(e) => {
+																if (e.key === "Enter" || e.key === " ") {
+																	if (med.imageUrl)
+																		setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name });
+																}
+															}}
 														>
 															<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
 														</span>

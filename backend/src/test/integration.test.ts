@@ -1333,8 +1333,8 @@ describe("Integration Tests", () => {
 				url: "/medications",
 			});
 			const meds = medsRes.json();
-			const med1 = meds.find((m: any) => m.id === med1Id);
-			const med2 = meds.find((m: any) => m.id === med2Id);
+			const med1 = meds.find((m: Record<string, unknown>) => m.id === med1Id);
+			const med2 = meds.find((m: Record<string, unknown>) => m.id === med2Id);
 
 			expect(med1.dismissedUntil).toBe("2025-01-15");
 			expect(med2.dismissedUntil).toBe("2025-01-15");
@@ -1376,7 +1376,7 @@ describe("Integration Tests", () => {
 				method: "GET",
 				url: "/medications",
 			});
-			const med = medsRes.json().find((m: any) => m.id === medId);
+			const med = medsRes.json().find((m: Record<string, unknown>) => m.id === medId);
 			expect(med.dismissedUntil).toBeNull();
 		});
 
@@ -1446,7 +1446,7 @@ describe("Integration Tests", () => {
 				method: "GET",
 				url: "/medications",
 			});
-			const med = medsRes.json().find((m: any) => m.id === medId);
+			const med = medsRes.json().find((m: Record<string, unknown>) => m.id === medId);
 			expect(med.dismissedUntil).toBeNull();
 		});
 	});

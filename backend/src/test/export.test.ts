@@ -23,10 +23,12 @@ async function registerExportRoutes(ctx: TestContext) {
 	const userId = 1; // Test user ID
 
 	// Helper to parse blisters from DB
-	function parseBlisters(row: any): Array<{ usage: number; every: number; start: string; remind: boolean }> {
-		const usage = JSON.parse(row.usage_json || "[]") as number[];
-		const every = JSON.parse(row.every_json || "[]") as number[];
-		const start = JSON.parse(row.start_json || "[]") as string[];
+	function parseBlisters(
+		row: Record<string, unknown>
+	): Array<{ usage: number; every: number; start: string; remind: boolean }> {
+		const usage = JSON.parse((row.usage_json as string) || "[]") as number[];
+		const every = JSON.parse((row.every_json as string) || "[]") as number[];
+		const start = JSON.parse((row.start_json as string) || "[]") as string[];
 		const len = Math.min(usage.length, every.length, start.length);
 		return Array.from({ length: len }, (_, i) => ({
 			usage: usage[i],
@@ -99,7 +101,7 @@ async function registerExportRoutes(ctx: TestContext) {
 			args: [userId],
 		});
 
-		let settings;
+		let settings: Record<string, unknown> | undefined;
 		if (settingsResult.rows.length > 0) {
 			const s = settingsResult.rows[0];
 			settings = {
@@ -150,8 +152,8 @@ async function registerExportRoutes(ctx: TestContext) {
 	});
 
 	// POST /import
-	app.post<{ Body: any }>("/import", async (request, reply) => {
-		const importData = request.body as any;
+	app.post<{ Body: Record<string, unknown> }>("/import", async (request, reply) => {
+		const importData = request.body;
 
 		// Basic validation
 		if (!importData.version) {
@@ -167,9 +169,15 @@ async function registerExportRoutes(ctx: TestContext) {
 		// Import medications
 		const exportIdToNewId = new Map<string, number>();
 		for (const med of importData.medications || []) {
-			const usageJson = JSON.stringify((med.schedules || []).map((s: any) => s.usage));
-			const everyJson = JSON.stringify((med.schedules || []).map((s: any) => s.every));
-			const startJson = JSON.stringify((med.schedules || []).map((s: any) => s.start));
+			const usageJson = JSON.stringify(
+				((med.schedules as Array<Record<string, unknown>>) || []).map((s: Record<string, unknown>) => s.usage)
+			);
+			const everyJson = JSON.stringify(
+				((med.schedules as Array<Record<string, unknown>>) || []).map((s: Record<string, unknown>) => s.every)
+			);
+			const startJson = JSON.stringify(
+				((med.schedules as Array<Record<string, unknown>>) || []).map((s: Record<string, unknown>) => s.start)
+			);
 			const takenByJson = JSON.stringify(med.takenBy || []);
 
 			const result = await client.execute({

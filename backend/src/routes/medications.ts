@@ -864,11 +864,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 				const takenByJson = row.takenByJson ? JSON.parse(row.takenByJson) : [];
 				const intake = intakes[blisterIdx];
 				const intakePerson = intake?.takenBy;
-				const peopleForThisIntake: (string | null)[] = intakePerson
-					? [intakePerson]
-					: takenByJson.length > 0
-						? takenByJson
-						: [null];
+				const takenByFallback: (string | null)[] = takenByJson.length > 0 ? takenByJson : [null];
+				const peopleForThisIntake: (string | null)[] = intakePerson ? [intakePerson] : takenByFallback;
 
 				// Generate expected dose IDs and check if they're taken
 				for (let i = 0; i < occurrences; i++) {

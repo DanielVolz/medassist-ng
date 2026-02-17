@@ -154,14 +154,24 @@ export function MedDetailModal({
 	const packageSize = getPackageSize(selectedMed);
 	const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
 	const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
-	const textClass =
-		status?.className === "danger" ? "danger-text" : status?.className === "warning" ? "warning-text" : "success-text";
+	const fallbackTextClass = status?.className === "warning" ? "warning-text" : "success-text";
+	const textClass = status?.className === "danger" ? "danger-text" : fallbackTextClass;
 	const stock = getBlisterStock(currentStock, selectedMed.pillsPerBlister, selectedMed.looseTablets, packageSize);
 	const fullForBounds = Math.max(0, parseStockInput(editStockFullInput));
 
 	return (
-		<div className="modal-overlay" onClick={onClose}>
-			<div className="modal-content med-detail-modal" onClick={(e) => e.stopPropagation()}>
+		<div
+			className="modal-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose();
+			}}
+		>
+			<div
+				className="modal-content med-detail-modal"
+				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
+			>
 				<button className="modal-close" onClick={onClose}>
 					×
 				</button>
@@ -172,6 +182,11 @@ export function MedDetailModal({
 						<div
 							className={`med-detail-avatar-wrapper ${selectedMed.imageUrl ? "clickable" : ""}`}
 							onClick={() => selectedMed.imageUrl && onOpenImageLightbox()}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									if (selectedMed.imageUrl) onOpenImageLightbox();
+								}
+							}}
 						>
 							<MedicationAvatar name={selectedMed.name} imageUrl={selectedMed.imageUrl} size="lg" />
 							{selectedMed.imageUrl && <span className="expand-icon">🔍</span>}
@@ -408,6 +423,9 @@ export function MedDetailModal({
 							<h3
 								className="section-header-clickable"
 								onClick={() => onRefillHistoryExpandedChange(!refillHistoryExpanded)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") onRefillHistoryExpandedChange(!refillHistoryExpanded);
+								}}
 							>
 								{t("refill.history")} ({refillHistory.length})
 								<span className="expand-arrow">{refillHistoryExpanded ? "▼" : "▶"}</span>
@@ -488,8 +506,16 @@ export function MedDetailModal({
 						e.stopPropagation();
 						onCloseRefillModal();
 					}}
+					onKeyDown={(e) => {
+						e.stopPropagation();
+						if (e.key === "Escape") onCloseRefillModal();
+					}}
 				>
-					<div className="modal-content refill-modal" onClick={(e) => e.stopPropagation()}>
+					<div
+						className="modal-content refill-modal"
+						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
+					>
 						<button className="modal-close" onClick={onCloseRefillModal}>
 							×
 						</button>
@@ -585,8 +611,16 @@ export function MedDetailModal({
 						e.stopPropagation();
 						onCloseEditStockModal();
 					}}
+					onKeyDown={(e) => {
+						e.stopPropagation();
+						if (e.key === "Escape") onCloseEditStockModal();
+					}}
 				>
-					<div className="modal-content edit-stock-modal" onClick={(e) => e.stopPropagation()}>
+					<div
+						className="modal-content edit-stock-modal"
+						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
+					>
 						<button className="modal-close" onClick={onCloseEditStockModal}>
 							×
 						</button>
@@ -602,6 +636,8 @@ export function MedDetailModal({
 								? editStockPartialBlisterPills
 								: editStockFullBlisters * selectedMed.pillsPerBlister + editStockPartialBlisterPills;
 							const difference = newTotal - currentTotal;
+							const negativeFallback = difference < 0 ? "negative" : "";
+							const differenceClass = difference > 0 ? "positive" : negativeFallback;
 
 							return (
 								<>
@@ -691,9 +727,7 @@ export function MedDetailModal({
 												{newTotal} {newTotal === 1 ? t("common.pill") : t("common.pills")}
 											</span>
 										</div>
-										<div
-											className={`summary-row difference ${difference > 0 ? "positive" : difference < 0 ? "negative" : ""}`}
-										>
+										<div className={`summary-row difference ${differenceClass}`}>
 											<span>{t("editStock.difference")}:</span>
 											<span>
 												{difference > 0 ? "+" : ""}

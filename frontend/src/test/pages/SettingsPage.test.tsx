@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
@@ -91,9 +92,51 @@ const createMockContext = (overrides = {}) => ({
 });
 
 let mockContextValue = createMockContext();
+const fetchMock = vi.fn();
 
 vi.mock("../../context", () => ({
 	useAppContext: () => mockContextValue,
+}));
+
+interface MockConfirmModalProps {
+	title: string;
+	message: ReactNode;
+	confirmLabel: string;
+	cancelLabel: string;
+	onConfirm: () => void;
+	onCancel: () => void;
+}
+
+interface MockExportModalProps {
+	isOpen: boolean;
+	onClose: () => void;
+	onExport: () => void;
+}
+
+vi.mock("../../components", () => ({
+	ConfirmModal: ({ title, message, confirmLabel, cancelLabel, onConfirm, onCancel }: MockConfirmModalProps) => (
+		<div>
+			<div>{title}</div>
+			<div>{message}</div>
+			<button type="button" onClick={onConfirm}>
+				{confirmLabel}
+			</button>
+			<button type="button" onClick={onCancel}>
+				{cancelLabel}
+			</button>
+		</div>
+	),
+	ExportModal: ({ isOpen, onClose, onExport }: MockExportModalProps) =>
+		isOpen ? (
+			<div>
+				<button type="button" onClick={onExport}>
+					export-modal-export
+				</button>
+				<button type="button" onClick={onClose}>
+					export-modal-close
+				</button>
+			</div>
+		) : null,
 }));
 
 function renderPage() {
@@ -108,11 +151,19 @@ describe("SettingsPage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockContextValue = createMockContext();
+		fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+		vi.stubGlobal("fetch", fetchMock);
 	});
 
 	it("renders settings form container", () => {
 		renderPage();
 		expect(document.querySelector(".settings-form")).toBeInTheDocument();
+	});
+
+	it("renders loading text while settings are loading", () => {
+		mockContextValue = createMockContext({ settingsLoading: true });
+		renderPage();
+		expect(screen.getByText("settings.loading")).toBeInTheDocument();
 	});
 
 	it("renders major sections", () => {
@@ -129,6 +180,177 @@ describe("SettingsPage", () => {
 		expect(select).toBeInTheDocument();
 		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
 		expect(changeLanguageMock).toHaveBeenCalledWith("de");
+		expect(fetchMock).toHaveBeenCalledWith("/api/settings/language", expect.objectContaining({ method: "PUT" }));
+	});
+
+	it("updates timeline toggles through setSettings", () => {
+		const setSettings = vi.fn();
+		mockContextValue = createMockContext({
+			setSettings,
+			settings: {
+				...createMockContext().settings,
+				swapDashboardMainSections: false,
+				upcomingTodayOnly: false,
+				shareScheduleTodayOnly: false,
+			},
+		});
+
+		renderPage();
+
+		const swapRow = screen.getByText("settings.timeline.swapDashboardSections").closest(".setting-row");
+		const upcomingRow = screen.getByText("settings.timeline.upcomingTodayOnly").closest(".setting-row");
+		const sharedRow = screen.getByText("settings.timeline.shareScheduleTodayOnly").closest(".setting-row");
+
+		const swapToggle = swapRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+		const upcomingToggle = upcomingRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+		const sharedToggle = sharedRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+		expect(swapToggle).toBeInTheDocument();
+		expect(upcomingToggle).toBeInTheDocument();
+		expect(sharedToggle).toBeInTheDocument();
+
+		fireEvent.click(swapToggle);
+		fireEvent.click(upcomingToggle);
+		fireEvent.click(sharedToggle);
+
+		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ swapDashboardMainSections: true }));
+		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ upcomingTodayOnly: true }));
+		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ shareScheduleTodayOnly: true }));
+	});
+
+	it("updates share stock status toggle through setSettings", () => {
+		const setSettings = vi.fn();
+		mockContextValue = createMockContext({
+			setSettings,
+			settings: {
+				...createMockContext().settings,
+				shareStockStatus: false,
+			},
+		});
+
+		renderPage();
+
+		const shareStockRow = screen.getByText("settings.stock.shareStockStatus").closest(".setting-row");
+		const shareStockToggle = shareStockRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+		expect(shareStockToggle).toBeInTheDocument();
+
+		fireEvent.click(shareStockToggle);
+
+		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ shareStockStatus: true }));
+	});
+
+	it("opens export modal when export action is clicked", () => {
+		const setShowExportModal = vi.fn();
+		mockContextValue = createMockContext({ setShowExportModal });
+
+		renderPage();
+		fireEvent.click(screen.getByText("exportImport.export"));
+
+		expect(setShowExportModal).toHaveBeenCalledWith(true);
+	});
+
+	it("triggers export modal close callback", () => {
+		const setShowExportModal = vi.fn();
+		mockContextValue = createMockContext({
+			showExportModal: true,
+			setShowExportModal,
+		});
+
+		renderPage();
+		fireEvent.click(screen.getByText("export-modal-close"));
+
+		expect(setShowExportModal).toHaveBeenCalledWith(false);
+	});
+
+	it("triggers export modal export callback", () => {
+		const handleExport = vi.fn();
+		mockContextValue = createMockContext({
+			showExportModal: true,
+			handleExport,
+		});
+
+		renderPage();
+		fireEvent.click(screen.getByText("export-modal-export"));
+
+		expect(handleExport).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls testEmail when email test button is clicked", () => {
+		const testEmail = vi.fn();
+		mockContextValue = createMockContext({
+			testEmail,
+			settings: {
+				...createMockContext().settings,
+				smtpHost: "smtp.example.com",
+				emailEnabled: true,
+				notificationEmail: "a@example.com",
+			},
+		});
+
+		renderPage();
+		fireEvent.click(screen.getByText("common.test"));
+		expect(testEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls testShoutrrr when push test button is clicked", () => {
+		const testShoutrrr = vi.fn();
+		mockContextValue = createMockContext({
+			testShoutrrr,
+			settings: {
+				...createMockContext().settings,
+				shoutrrrEnabled: true,
+				shoutrrrUrl: "https://ntfy.sh/topic",
+			},
+		});
+
+		renderPage();
+		const testButtons = screen.getAllByText("common.test");
+		fireEvent.click(testButtons[testButtons.length - 1]);
+		expect(testShoutrrr).toHaveBeenCalledTimes(1);
+	});
+
+	it("clears import success banner when close is clicked", () => {
+		const setImportResult = vi.fn();
+		mockContextValue = createMockContext({
+			setImportResult,
+			importResult: {
+				medications: 1,
+				doses: 2,
+				refills: 3,
+				shares: 4,
+			},
+		});
+
+		renderPage();
+		fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+		expect(setImportResult).toHaveBeenCalledWith(null);
+	});
+
+	it("opens hidden import file input when import action is clicked", () => {
+		renderPage();
+
+		const importInput = document.getElementById("import-file-input") as HTMLInputElement;
+		const clickSpy = vi.spyOn(importInput, "click");
+
+		fireEvent.click(screen.getByText("exportImport.import"));
+
+		expect(clickSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("cancels import confirm and clears pending import", () => {
+		const setShowImportConfirm = vi.fn();
+		const setPendingImportData = vi.fn();
+		mockContextValue = createMockContext({
+			setShowImportConfirm,
+			setPendingImportData,
+			showImportConfirm: true,
+			meds: [{ id: 1 }],
+		});
+
+		renderPage();
+		fireEvent.click(screen.getByText("exportImport.cancelButton"));
+		expect(setShowImportConfirm).toHaveBeenCalledWith(false);
+		expect(setPendingImportData).toHaveBeenCalledWith(null);
 	});
 
 	it("renders notification matrix with toggle switches", () => {
@@ -151,5 +373,73 @@ describe("SettingsPage", () => {
 		const modeGroup = document.querySelector(".calculation-mode-group");
 		expect(modeGroup).toBeInTheDocument();
 		expect(modeGroup?.querySelectorAll(".radio-card").length).toBe(2);
+	});
+
+	it("renders threshold validation message when critical/low/high order is invalid", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				reminderDaysBefore: 30,
+				lowStockDays: 20,
+				highStockDays: 10,
+			},
+		});
+
+		renderPage();
+		expect(screen.getByText("settings.stock.thresholdValidation")).toBeInTheDocument();
+	});
+
+	it("renders email and push test result messages", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				emailEnabled: true,
+				notificationEmail: "a@example.com",
+				smtpHost: "smtp.example.com",
+				shoutrrrEnabled: true,
+				shoutrrrUrl: "https://ntfy.sh/topic",
+			},
+			testEmailResult: { success: true, message: "email ok" },
+			testShoutrrrResult: { success: false, message: "push failed" },
+		});
+
+		renderPage();
+		expect(screen.getByText("email ok")).toBeInTheDocument();
+		expect(screen.getByText("push failed")).toBeInTheDocument();
+	});
+
+	it("renders import confirm for existing data and handles confirm", () => {
+		const handleImportConfirm = vi.fn();
+		mockContextValue = createMockContext({
+			handleImportConfirm,
+			showImportConfirm: true,
+			meds: [{ id: 1 }],
+		});
+
+		renderPage();
+		expect(screen.getByText("exportImport.confirmImport")).toBeInTheDocument();
+		expect(screen.getByText(/exportImport\.confirmImportWarning/i)).toBeInTheDocument();
+
+		fireEvent.click(screen.getByText("exportImport.confirmButton"));
+		expect(handleImportConfirm).toHaveBeenCalledTimes(1);
+	});
+
+	it("renders import confirm for empty state and handles cancel", () => {
+		const setShowImportConfirm = vi.fn();
+		const setPendingImportData = vi.fn();
+		mockContextValue = createMockContext({
+			setShowImportConfirm,
+			setPendingImportData,
+			showImportConfirm: true,
+			meds: [],
+		});
+
+		renderPage();
+		expect(screen.getByText("exportImport.confirmImportEmpty")).toBeInTheDocument();
+		expect(screen.getByText("exportImport.confirmImportEmptyMessage")).toBeInTheDocument();
+
+		fireEvent.click(screen.getByText("exportImport.cancelButton"));
+		expect(setShowImportConfirm).toHaveBeenCalledWith(false);
+		expect(setPendingImportData).toHaveBeenCalledWith(null);
 	});
 });

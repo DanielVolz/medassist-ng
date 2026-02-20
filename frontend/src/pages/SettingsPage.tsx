@@ -34,7 +34,6 @@ export function SettingsPage() {
 	} = useAppContext();
 
 	const hasExistingData = meds.length > 0;
-
 	return (
 		<section className="grid">
 			{settingsLoading ? (
@@ -674,8 +673,62 @@ export function SettingsPage() {
 								<p className="threshold-validation-error">{t("settings.stock.thresholdValidation")}</p>
 							)}
 						</div>
+					</article>
+
+					{/* General UI */}
+					<article className="card">
+						<div className="card-head">
+							<h2>{t("settings.timeline.title")}</h2>
+						</div>
 
 						<div className="setting-section">
+							<div className="section-header">
+								<h3>{t("settings.timeline.dashboardSectionOrder")}</h3>
+							</div>
+							<div className="setting-row compact">
+								<div className="setting-label">
+									<span>{t("settings.timeline.swapDashboardSections")}</span>
+									<span className="info-tooltip small" data-tooltip={t("settings.timeline.swapDashboardSectionsDesc")}>
+										ⓘ
+									</span>
+								</div>
+								<label className="toggle-switch small">
+									<input
+										type="checkbox"
+										checked={settings.swapDashboardMainSections}
+										onChange={(e) => setSettings({ ...settings, swapDashboardMainSections: e.target.checked })}
+									/>
+									<span className="toggle-slider"></span>
+								</label>
+							</div>
+						</div>
+
+						<div className="setting-section">
+							<div className="section-header">
+								<h3>{t("settings.timeline.upcomingSection")}</h3>
+							</div>
+							<div className="setting-row compact">
+								<div className="setting-label">
+									<span>{t("settings.timeline.upcomingTodayOnly")}</span>
+									<span className="info-tooltip small" data-tooltip={t("settings.timeline.upcomingTodayOnlyDesc")}>
+										ⓘ
+									</span>
+								</div>
+								<label className="toggle-switch small">
+									<input
+										type="checkbox"
+										checked={settings.upcomingTodayOnly}
+										onChange={(e) => setSettings({ ...settings, upcomingTodayOnly: e.target.checked })}
+									/>
+									<span className="toggle-slider"></span>
+								</label>
+							</div>
+						</div>
+
+						<div className="setting-section">
+							<div className="section-header">
+								<h3>{t("settings.timeline.sharedSection")}</h3>
+							</div>
 							<div className="setting-row compact">
 								<div className="setting-label">
 									<span>{t("settings.stock.shareStockStatus")}</span>
@@ -688,6 +741,22 @@ export function SettingsPage() {
 										type="checkbox"
 										checked={settings.shareStockStatus}
 										onChange={(e) => setSettings({ ...settings, shareStockStatus: e.target.checked })}
+									/>
+									<span className="toggle-slider"></span>
+								</label>
+							</div>
+							<div className="setting-row compact" style={{ marginTop: "10px" }}>
+								<div className="setting-label">
+									<span>{t("settings.timeline.shareScheduleTodayOnly")}</span>
+									<span className="info-tooltip small" data-tooltip={t("settings.timeline.shareScheduleTodayOnlyDesc")}>
+										ⓘ
+									</span>
+								</div>
+								<label className="toggle-switch small">
+									<input
+										type="checkbox"
+										checked={settings.shareScheduleTodayOnly}
+										onChange={(e) => setSettings({ ...settings, shareScheduleTodayOnly: e.target.checked })}
 									/>
 									<span className="toggle-slider"></span>
 								</label>
@@ -737,6 +806,7 @@ export function SettingsPage() {
 											<button
 												type="button"
 												onClick={() => setImportResult(null)}
+												aria-label={t("common.close")}
 												style={{
 													background: "none",
 													border: "none",
@@ -747,7 +817,6 @@ export function SettingsPage() {
 													color: "inherit",
 													opacity: 0.7,
 												}}
-												aria-label="Close"
 											>
 												×
 											</button>

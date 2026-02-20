@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Coverage, FormState, Medication, RefillEntry } from "../types";
 import { getMedTotal, getPackageSize } from "../types";
 
@@ -24,7 +24,10 @@ export interface UseRefillReturn {
 	setEditStockFullBlisters: React.Dispatch<React.SetStateAction<number>>;
 	editStockPartialBlisterPills: number;
 	setEditStockPartialBlisterPills: React.Dispatch<React.SetStateAction<number>>;
+	editStockLoosePills: number;
+	setEditStockLoosePills: React.Dispatch<React.SetStateAction<number>>;
 	editStockSaving: boolean;
+	editStockMedication: Medication | null;
 
 	// Actions
 	loadRefillHistory: (medId: number) => Promise<void>;
@@ -56,7 +59,9 @@ export function useRefill(): UseRefillReturn {
 	const [showEditStockModal, setShowEditStockModal] = useState(false);
 	const [editStockFullBlisters, setEditStockFullBlisters] = useState(0);
 	const [editStockPartialBlisterPills, setEditStockPartialBlisterPills] = useState(0);
+	const [editStockLoosePills, setEditStockLoosePills] = useState(0);
 	const [editStockSaving, setEditStockSaving] = useState(false);
+	const [editStockMedication, setEditStockMedication] = useState<Medication | null>(null);
 
 	// Load refill history for a medication
 	const loadRefillHistory = useCallback(async (medId: number) => {
@@ -132,42 +137,60 @@ export function useRefill(): UseRefillReturn {
 			if (!selectedMed) return;
 			setEditStockSaving(true);
 			try {
-				// Auto-convert: handle full blister and negative partial blister
-				let finalFullBlisters = editStockFullBlisters;
-				let finalPartialPills = editStockPartialBlisterPills;
+				// Clamp all fields to non-negative values.
+				let finalFullBlisters = Math.max(0, editStockFullBlisters);
+				let finalPartialPills =
+					selectedMed.packageType === "bottle"
+						? Math.max(0, editStockPartialBlisterPills)
+						: Math.max(0, editStockPartialBlisterPills);
+				const finalLoosePills = Math.max(0, editStockLoosePills);
 
-				// Handle full blister: e.g. 9 pills in a 9-pill blister = +1 full blister, 0 partial
-				if (finalPartialPills >= selectedMed.pillsPerBlister) {
-					finalFullBlisters += 1;
-					finalPartialPills = 0;
+				// Canonicalize blister values: partial overflow becomes additional full blisters.
+				if (selectedMed.packageType !== "bottle" && selectedMed.pillsPerBlister > 0) {
+					finalFullBlisters += Math.floor(finalPartialPills / selectedMed.pillsPerBlister);
+					finalPartialPills %= selectedMed.pillsPerBlister;
 				}
 
-				// Handle negative partial: e.g. -3 with 136 full = 135 full, 6 partial (for 9-pill blister)
-				if (finalPartialPills < 0 && finalFullBlisters > 0) {
-					finalFullBlisters -= 1;
-					finalPartialPills = selectedMed.pillsPerBlister + finalPartialPills;
-				}
+				// Structural max = sealed package capacity only (no looseTablets offset).
+				const structuralMax =
+					selectedMed.packageType === "bottle"
+						? (selectedMed.totalPills ?? getPackageSize(selectedMed))
+						: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
 
-				// Ensure we don't go negative
-				if (finalPartialPills < 0) finalPartialPills = 0;
-				if (finalFullBlisters < 0) finalFullBlisters = 0;
+				// For blister meds, only sealed pills are capped to package size.
+				// Loose pills are extra and can be above package size.
+				const desiredTotal =
+					selectedMed.packageType === "bottle"
+						? Math.min(structuralMax, Math.max(0, finalPartialPills))
+						: Math.min(structuralMax, finalFullBlisters * selectedMed.pillsPerBlister + finalPartialPills) +
+							finalLoosePills;
 
-				// What the user says they have RIGHT NOW = the new DB total
-				const desiredTotal = finalFullBlisters * selectedMed.pillsPerBlister + finalPartialPills;
-
-				// The "base" from DB structure (without any stockAdjustment)
-				// Use getPackageSize() which handles both blister and bottle types correctly
-				const baseTotal = getPackageSize(selectedMed);
-
+				// The "base" from DB structure used to compute stockAdjustment differs by type:
+				// - Bottle: looseTablets is the base (not changed during correction)
+				// - Blister: use structuralMax + finalLoosePills as the new base so that
+				//   updating looseTablets in the DB doesn't cause a stale-split display bug.
+				const baseTotal =
+					selectedMed.packageType === "bottle"
+						? getPackageSize(selectedMed) // bottle: stockAdjustment relative to fixed looseTablets base
+						: structuralMax + finalLoosePills; // blister: base = sealed capacity + NEW loose pills
 				// stockAdjustment = what we need to make getMedTotal() return desiredTotal
 				const newStockAdjustment = desiredTotal - baseTotal;
 
-				// Use the PATCH endpoint - it sets stockAdjustment AND lastStockCorrectionAt
+				// For blister corrections also send the new looseTablets value so the DB
+				// reflects the actual loose count (avoids stale-split display on reload).
+				const patchBody: { stockAdjustment: number; looseTablets?: number } = {
+					stockAdjustment: newStockAdjustment,
+				};
+				if (selectedMed.packageType !== "bottle") {
+					patchBody.looseTablets = finalLoosePills;
+				}
+
+				// Use the PATCH endpoint - it sets stockAdjustment, looseTablets, AND lastStockCorrectionAt
 				const res = await fetch(`/api/medications/${medId}/stock-adjustment`, {
 					method: "PATCH",
 					headers: { "Content-Type": "application/json" },
 					credentials: "include",
-					body: JSON.stringify({ stockAdjustment: newStockAdjustment }),
+					body: JSON.stringify(patchBody),
 				});
 				if (res.ok) {
 					// Close edit stock modal via history back
@@ -182,7 +205,7 @@ export function useRefill(): UseRefillReturn {
 			}
 			setEditStockSaving(false);
 		},
-		[editStockFullBlisters, editStockPartialBlisterPills, showEditStockModal]
+		[editStockFullBlisters, editStockPartialBlisterPills, editStockLoosePills, showEditStockModal]
 	);
 
 	const openRefillModal = useCallback(() => {
@@ -198,25 +221,51 @@ export function useRefill(): UseRefillReturn {
 
 	const openEditStockModal = useCallback((selectedMed: Medication, coverage: { all: Coverage[] }) => {
 		if (!selectedMed) return;
+		setEditStockMedication(selectedMed);
 		// Get current stock from coverage (after consumption)
 		const medCoverage = coverage.all.find((c) => c.name === selectedMed.name);
 		const dbTotal = getMedTotal(selectedMed);
-		const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : dbTotal;
+		const currentStock = Math.max(0, medCoverage ? Math.round(medCoverage.medsLeft) : dbTotal);
 
-		// Simply divide into full blisters and partial
-		const fullBlisters = Math.floor(currentStock / selectedMed.pillsPerBlister);
-		const partialPills = currentStock % selectedMed.pillsPerBlister;
+		// Bottle correction uses only total pills input.
+		// For blister, keep loose pills separated from sealed blister/partial counts.
+		const knownLoose = Math.min(currentStock, Math.max(0, selectedMed.looseTablets));
+		const sealedPills = Math.max(0, currentStock - knownLoose);
+		const fullBlisters =
+			selectedMed.packageType === "bottle" ? 0 : Math.floor(sealedPills / selectedMed.pillsPerBlister);
+		const partialPills =
+			selectedMed.packageType === "bottle" ? Math.max(0, currentStock) : sealedPills % selectedMed.pillsPerBlister;
 
 		// Pre-fill with current values
 		setEditStockFullBlisters(fullBlisters);
 		setEditStockPartialBlisterPills(partialPills);
+		setEditStockLoosePills(selectedMed.packageType === "bottle" ? 0 : knownLoose);
 		setShowEditStockModal(true);
 		window.history.pushState({ modal: "editStock" }, "");
 	}, []);
 
 	const closeEditStockModal = useCallback(() => {
 		if (showEditStockModal) {
+			let popstateHandled = false;
+			const handlePopstate = () => {
+				popstateHandled = true;
+			};
+			window.addEventListener("popstate", handlePopstate, { once: true });
 			window.history.back();
+
+			// Fallback for cases where no history entry exists for edit stock.
+			window.setTimeout(() => {
+				if (!popstateHandled) {
+					window.removeEventListener("popstate", handlePopstate);
+					setShowEditStockModal(false);
+				}
+			}, 150);
+		}
+	}, [showEditStockModal]);
+
+	useEffect(() => {
+		if (!showEditStockModal) {
+			setEditStockMedication(null);
 		}
 	}, [showEditStockModal]);
 
@@ -239,7 +288,10 @@ export function useRefill(): UseRefillReturn {
 		setEditStockFullBlisters,
 		editStockPartialBlisterPills,
 		setEditStockPartialBlisterPills,
+		editStockLoosePills,
+		setEditStockLoosePills,
 		editStockSaving,
+		editStockMedication,
 		loadRefillHistory,
 		submitRefill,
 		submitStockCorrection,

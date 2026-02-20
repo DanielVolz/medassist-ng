@@ -198,8 +198,36 @@ describe("useRefill", () => {
 
 		expect(result.current.showEditStockModal).toBe(true);
 		expect(window.history.pushState).toHaveBeenCalledWith({ modal: "editStock" }, "");
-		expect(result.current.editStockFullBlisters).toBe(2); // 20 / 10 = 2
-		expect(result.current.editStockPartialBlisterPills).toBe(0); // 20 % 10 = 0
+		expect(result.current.editStockFullBlisters).toBe(1); // (20 - 5 loose) / 10 = 1
+		expect(result.current.editStockPartialBlisterPills).toBe(5); // (20 - 5 loose) % 10 = 5
+		expect(result.current.editStockLoosePills).toBe(5); // loose pills are tracked separately
+	});
+
+	it("prefills bottle correction with total pills in partial field", () => {
+		const { result } = renderHook(() => useRefill());
+
+		const bottleMed: Medication = {
+			id: 4,
+			name: "Bottle Test",
+			packageType: "bottle",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 150,
+			stockAdjustment: -2,
+			takenBy: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-31T20:27:00" }],
+			updatedAt: null,
+		};
+
+		act(() => {
+			result.current.openEditStockModal(bottleMed, {
+				all: [{ name: "Bottle Test", medsLeft: 148, daysLeft: 148 }] as Coverage[],
+			});
+		});
+
+		expect(result.current.editStockFullBlisters).toBe(0);
+		expect(result.current.editStockPartialBlisterPills).toBe(148);
 	});
 
 	it("closes edit stock modal using history back", () => {
@@ -319,24 +347,23 @@ describe("useRefill", () => {
 		const mockLoadMeds = vi.fn();
 		const { result } = renderHook(() => useRefill());
 
-		// Pre-fill: user sees 148 pills (148 / 1 = 148 full, 0 partial)
+		// Pre-fill for bottle: full=0, partial=current total
 		act(() => {
 			result.current.openEditStockModal(bottleMed, {
 				all: [{ name: "Pills in a Box", medsLeft: 148, daysLeft: 148 }] as Coverage[],
 			});
 		});
 
-		// User adds +1 → 149 full blisters (pillsPerBlister=1)
+		// User sets total to 149 pills.
 		act(() => {
-			result.current.setEditStockFullBlisters(149);
-			result.current.setEditStockPartialBlisterPills(0);
+			result.current.setEditStockPartialBlisterPills(149);
 		});
 
 		await act(async () => {
 			await result.current.submitStockCorrection(4, bottleMed, mockLoadMeds);
 		});
 
-		// desiredTotal = 149 * 1 + 0 = 149
+		// desiredTotal = 149
 		// baseTotal (fixed) = getPackageSize(bottle) = looseTablets = 150
 		// newStockAdjustment = 149 - 150 = -1
 		// → getMedTotal = 150 + (-1) = 149 ✓
@@ -348,8 +375,8 @@ describe("useRefill", () => {
 		expect(body.stockAdjustment).toBe(-1); // NOT -2 (the old bug)
 	});
 
-	it("stock correction uses correct base for blister type medications", async () => {
-		// Ensure blister type still works correctly after the bottle fix
+	it("stock correction clamps blister totals to package size", async () => {
+		// Ensure blister correction enforces configured package max.
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
 		const blisterMed: Medication = {
@@ -379,7 +406,7 @@ describe("useRefill", () => {
 			});
 		});
 
-		// User changes to 27 (+1): 5 full + 2 partial
+		// User attempts to set 27 (+1): 5 full + 2 partial.
 		act(() => {
 			result.current.setEditStockFullBlisters(5);
 			result.current.setEditStockPartialBlisterPills(2);
@@ -389,16 +416,132 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(2, blisterMed, mockLoadMeds);
 		});
 
-		// desiredTotal = 5 * 5 + 2 = 27
-		// baseTotal = getPackageSize(blister) = 1*5*5 + 0 = 25
-		// newStockAdjustment = 27 - 25 = 2
-		// → getMedTotal = 25 + 2 = 27 ✓
+		// desiredTotal is capped to package max (25)
+		// baseTotal = getPackageSize(blister) = 25
+		// newStockAdjustment = 25 - 25 = 0
 		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
 			(call: [string, RequestInit]) => call[0] === "/api/medications/2/stock-adjustment"
 		);
 		expect(fetchCall).toBeDefined();
 		const body = JSON.parse(fetchCall![1].body as string);
-		expect(body.stockAdjustment).toBe(2);
+		expect(body.stockAdjustment).toBe(0);
+	});
+
+	it("stock correction allows loose pills beyond package size", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const blisterMed: Medication = {
+			id: 5,
+			name: "Loose Friendly",
+			packageType: "blister",
+			packCount: 1,
+			blistersPerPack: 2,
+			pillsPerBlister: 10,
+			looseTablets: 0,
+			stockAdjustment: 0,
+			takenBy: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-30T21:07:00" }],
+			updatedAt: null,
+		};
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(blisterMed, {
+				all: [{ name: "Loose Friendly", medsLeft: 0, daysLeft: 0 }] as Coverage[],
+			});
+			// sealed package part at max (20), loose adds +7 beyond max
+			result.current.setEditStockFullBlisters(2);
+			result.current.setEditStockPartialBlisterPills(0);
+			result.current.setEditStockLoosePills(7);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(5, blisterMed, mockLoadMeds);
+		});
+
+		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+			(call: [string, RequestInit]) => call[0] === "/api/medications/5/stock-adjustment"
+		);
+		expect(fetchCall).toBeDefined();
+		const body = JSON.parse(fetchCall![1].body as string);
+		// NEW: baseTotal = structuralMax + finalLoosePills = 20 + 7 = 27; desiredTotal = 27 => stockAdjustment=0
+		// looseTablets is sent separately so DB reflects the actual loose count after correction
+		expect(body.stockAdjustment).toBe(0);
+		expect(body.looseTablets).toBe(7);
+	});
+
+	it("stock correction carries partial overflow into full blisters", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const blisterMed: Medication = {
+			id: 6,
+			name: "Carry Partial",
+			packageType: "blister",
+			packCount: 11,
+			blistersPerPack: 5,
+			pillsPerBlister: 5,
+			looseTablets: 2,
+			stockAdjustment: -223,
+			takenBy: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-30T21:07:00" }],
+			updatedAt: null,
+		};
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(blisterMed, {
+				all: [{ name: "Carry Partial", medsLeft: 54, daysLeft: 54 }] as Coverage[],
+			});
+			// 10 full + 5 partial + 2 loose should canonicalize to 11 full + 0 partial + 2 loose => 57
+			result.current.setEditStockFullBlisters(10);
+			result.current.setEditStockPartialBlisterPills(5);
+			result.current.setEditStockLoosePills(2);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(6, blisterMed, mockLoadMeds);
+		});
+
+		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+			(call: [string, RequestInit]) => call[0] === "/api/medications/6/stock-adjustment"
+		);
+		expect(fetchCall).toBeDefined();
+		const body = JSON.parse(fetchCall![1].body as string);
+		// baseTotal = structuralMax + finalLoosePills = 275 + 2 = 277; desiredTotal = 57 => stockAdjustment = -220
+		expect(body.stockAdjustment).toBe(-220);
+		expect(body.looseTablets).toBe(2);
+	});
+
+	it("prefill keeps loose pills separate from partial blister pills", () => {
+		const blisterMed: Medication = {
+			id: 7,
+			name: "Loose Separate",
+			packageType: "blister",
+			packCount: 11,
+			blistersPerPack: 5,
+			pillsPerBlister: 5,
+			looseTablets: 2,
+			stockAdjustment: -223,
+			takenBy: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-30T21:07:00" }],
+			updatedAt: null,
+		};
+
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(blisterMed, {
+				all: [{ name: "Loose Separate", medsLeft: 54, daysLeft: 54 }] as Coverage[],
+			});
+		});
+
+		expect(result.current.editStockFullBlisters).toBe(10);
+		expect(result.current.editStockPartialBlisterPills).toBe(2);
+		expect(result.current.editStockLoosePills).toBe(2);
 	});
 
 	it("allows setting state directly", () => {

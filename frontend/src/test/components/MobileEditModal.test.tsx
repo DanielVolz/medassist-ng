@@ -170,10 +170,11 @@ describe("MobileEditModal", () => {
 		expect(screen.getByText(/form\.pillsPerBlister/i)).toBeInTheDocument();
 	});
 
-	it("renders loose tablets input", () => {
+	it("does not render loose tablets input in package section", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
-		expect(screen.getByText(/form\.loose/i)).toBeInTheDocument();
+		expect(screen.queryByText(/form\.loosePills/i)).not.toBeInTheDocument();
+		expect(screen.getByText(/form\.total/i)).toBeInTheDocument();
 	});
 
 	it("renders intake schedules section", () => {
@@ -206,14 +207,14 @@ describe("MobileEditModal", () => {
 	it("renders add intake button", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
-		expect(screen.getByText(/form\.blisters\.addIntake/i)).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /form\.blisters\.addIntake/i })).toBeInTheDocument();
 	});
 
 	it("calls onAddIntake when add intake clicked", () => {
 		const onAddIntake = vi.fn();
 		render(<MobileEditModal {...defaultProps} onAddIntake={onAddIntake} />);
 
-		const addBtn = screen.getByText(/form\.blisters\.addIntake/i);
+		const addBtn = screen.getByRole("button", { name: /form\.blisters\.addIntake/i });
 		fireEvent.click(addBtn);
 
 		expect(onAddIntake).toHaveBeenCalledTimes(1);
@@ -698,7 +699,7 @@ describe("MobileEditModal optional fields", () => {
 
 		render(<MobileEditModal {...defaultProps} form={form} onAddIntake={onAddIntake} />);
 
-		fireEvent.click(screen.getByText(/form\.blisters\.addIntake/i));
+		fireEvent.click(screen.getByRole("button", { name: /form\.blisters\.addIntake/i }));
 		expect(onAddIntake).toHaveBeenCalledWith("OnlyPerson");
 	});
 });
@@ -713,29 +714,6 @@ describe("MobileEditModal bottle package type", () => {
 		looseTablets: "80",
 		totalPills: "100",
 	};
-
-	it("shows pills-only refill form for bottle type when editing", () => {
-		render(<MobileEditModal {...defaultProps} form={bottleForm} editingId={1} />);
-
-		// Should show "pillsToAdd" label for bottle
-		expect(screen.getByText(/refill\.pillsToAdd/i)).toBeInTheDocument();
-
-		// Should NOT show "packs" label in refill section
-		const refillSection = document.querySelector(".refill-section");
-		expect(refillSection).toBeInTheDocument();
-		expect(refillSection!.textContent).not.toContain("refill.packs");
-		expect(refillSection!.textContent).not.toContain("refill.loosePills");
-	});
-
-	it("shows packs and loose refill form for blister type when editing", () => {
-		render(<MobileEditModal {...defaultProps} form={defaultForm} editingId={1} />);
-
-		// Should show "packs" and "loosePills" labels for blister
-		const refillSection = document.querySelector(".refill-section");
-		expect(refillSection).toBeInTheDocument();
-		expect(refillSection!.textContent).toContain("refill.packs");
-		expect(refillSection!.textContent).toContain("refill.loosePills");
-	});
 
 	it("shows totalCapacity and currentPills fields for bottle form", () => {
 		render(<MobileEditModal {...defaultProps} form={bottleForm} />);
@@ -752,7 +730,7 @@ describe("MobileEditModal bottle package type", () => {
 	});
 });
 
-describe("MobileEditModal refill and image actions", () => {
+describe("MobileEditModal image actions", () => {
 	const baseMed = {
 		id: 1,
 		name: "Aspirin",
@@ -775,52 +753,6 @@ describe("MobileEditModal refill and image actions", () => {
 		updatedAt: null,
 		imageUrl: null,
 	};
-
-	it("calls onSubmitRefill when refill button is clicked", () => {
-		const onSubmitRefill = vi.fn().mockResolvedValue(undefined);
-
-		render(
-			<MobileEditModal
-				{...defaultProps}
-				editingId={1}
-				meds={[baseMed]}
-				refillLoose={2}
-				onSubmitRefill={onSubmitRefill}
-			/>
-		);
-
-		fireEvent.click(screen.getByRole("button", { name: /refill\.button/i }));
-		expect(onSubmitRefill).toHaveBeenCalledWith(1);
-	});
-
-	it("disables refill button when refill values are empty", () => {
-		render(<MobileEditModal {...defaultProps} editingId={1} meds={[baseMed]} refillPacks={0} refillLoose={0} />);
-
-		const refillButton = screen.getByRole("button", { name: /refill\.button/i });
-		expect(refillButton).toBeDisabled();
-	});
-
-	it("shows refill preview for singular pill", () => {
-		render(<MobileEditModal {...defaultProps} editingId={1} meds={[baseMed]} refillPacks={0} refillLoose={1} />);
-
-		expect(document.querySelector(".refill-preview")?.textContent).toContain("+1 common.pill");
-	});
-
-	it("disables refill button while refill is saving", () => {
-		render(
-			<MobileEditModal
-				{...defaultProps}
-				editingId={1}
-				meds={[baseMed]}
-				refillPacks={1}
-				refillLoose={0}
-				refillSaving={true}
-			/>
-		);
-
-		const refillButton = screen.getByRole("button", { name: /common\.saving/i });
-		expect(refillButton).toBeDisabled();
-	});
 
 	it("calls onUploadMedImage when selecting a file", () => {
 		const onUploadMedImage = vi.fn().mockResolvedValue(undefined);

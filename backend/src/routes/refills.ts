@@ -52,23 +52,34 @@ export async function refillRoutes(app: FastifyInstance) {
 		if (!med) return reply.notFound("Medication not found");
 
 		const { packsAdded, loosePillsAdded, usePrescription } = parsed.data;
+		const isBottle = (med.packageType ?? "blister") === "bottle";
+		const effectivePacksAdded = isBottle ? 0 : packsAdded;
+		const effectiveLoosePillsAdded = loosePillsAdded;
+		const remainingPrescriptionRefills = med.prescriptionRemainingRefills ?? 0;
+
+		if (effectivePacksAdded < 1 && effectiveLoosePillsAdded < 1) {
+			return reply.status(400).send({ error: "Must add at least one pack or some loose pills" });
+		}
 
 		if (usePrescription) {
 			if (!(med.prescriptionEnabled ?? false)) {
 				return reply.status(400).send({ error: "Prescription refill is not enabled for this medication" });
 			}
-			const remaining = med.prescriptionRemainingRefills ?? 0;
-			if (remaining <= 0) {
+			if (remainingPrescriptionRefills <= 0) {
 				return reply.status(409).send({ error: "No remaining prescription refills" });
+			}
+			if (!isBottle && effectivePacksAdded > remainingPrescriptionRefills) {
+				return reply.status(409).send({ error: "Packs to add exceed remaining prescription refills" });
 			}
 		}
 
 		// Update medication stock
-		const newPackCount = med.packCount + packsAdded;
-		const newLooseTablets = med.looseTablets + loosePillsAdded;
+		const newPackCount = med.packCount + effectivePacksAdded;
+		const newLooseTablets = med.looseTablets + effectiveLoosePillsAdded;
 
+		const consumedRefills = usePrescription ? (isBottle ? 1 : effectivePacksAdded) : 0;
 		const newRemainingRefills = usePrescription
-			? Math.max(0, (med.prescriptionRemainingRefills ?? 0) - 1)
+			? Math.max(0, remainingPrescriptionRefills - consumedRefills)
 			: (med.prescriptionRemainingRefills ?? null);
 
 		await db
@@ -77,8 +88,6 @@ export async function refillRoutes(app: FastifyInstance) {
 				packCount: newPackCount,
 				looseTablets: newLooseTablets,
 				prescriptionRemainingRefills: newRemainingRefills,
-				stockAdjustment: 0, // Reset offset since we're adding to base stock
-				lastStockCorrectionAt: new Date(), // Reset consumed counter to now
 				updatedAt: new Date(),
 			})
 			.where(and(eq(medications.id, medId), eq(medications.userId, userId)));
@@ -89,16 +98,17 @@ export async function refillRoutes(app: FastifyInstance) {
 			.values({
 				medicationId: medId,
 				userId,
-				packsAdded,
-				loosePillsAdded,
+				packsAdded: effectivePacksAdded,
+				loosePillsAdded: effectiveLoosePillsAdded,
 				usedPrescription: usePrescription,
 			})
 			.returning();
 
 		// Calculate pills added for response (packageType-aware)
-		const isBottle = (med.packageType ?? "blister") === "bottle";
 		const pillsPerPack = isBottle ? 0 : med.blistersPerPack * med.pillsPerBlister;
-		const totalPillsAdded = isBottle ? loosePillsAdded : packsAdded * pillsPerPack + loosePillsAdded;
+		const totalPillsAdded = isBottle
+			? effectiveLoosePillsAdded
+			: effectivePacksAdded * pillsPerPack + effectiveLoosePillsAdded;
 		const newTotalPills = isBottle
 			? newLooseTablets + (med.stockAdjustment ?? 0)
 			: newPackCount * pillsPerPack + newLooseTablets + (med.stockAdjustment ?? 0);
@@ -107,8 +117,8 @@ export async function refillRoutes(app: FastifyInstance) {
 			success: true,
 			refill: {
 				id: refill.id,
-				packsAdded,
-				loosePillsAdded,
+				packsAdded: effectivePacksAdded,
+				loosePillsAdded: effectiveLoosePillsAdded,
 				totalPillsAdded,
 				refillDate: refill.refillDate,
 			},

@@ -46,6 +46,15 @@ describe("Lightbox", () => {
 		expect(onClose).toHaveBeenCalled();
 	});
 
+	it("calls onClose when Escape key is pressed", () => {
+		const onClose = vi.fn();
+		render(<Lightbox {...defaultProps} onClose={onClose} />);
+
+		fireEvent.keyDown(document, { key: "Escape" });
+
+		expect(onClose).toHaveBeenCalled();
+	});
+
 	it("does not call onClose when image is clicked", () => {
 		const onClose = vi.fn();
 		render(<Lightbox {...defaultProps} onClose={onClose} />);

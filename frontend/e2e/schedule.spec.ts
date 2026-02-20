@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { authFile, navigateTo, test } from "./fixtures";
+import { authFile, createMedicationViaAPI, deleteAllMedicationsViaAPI, navigateTo, test } from "./fixtures";
 
 /**
  * Schedule / Timeline E2E Tests
@@ -9,6 +9,32 @@ import { authFile, navigateTo, test } from "./fixtures";
  */
 test.describe("Schedule Timeline", () => {
 	test.use({ storageState: authFile });
+
+	const seededName = "Schedule Smoke Seed";
+	const startThreeDaysAgo = (() => {
+		const d = new Date();
+		d.setDate(d.getDate() - 3);
+		d.setHours(8, 0, 0, 0);
+		const pad = (n: number) => n.toString().padStart(2, "0");
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+	})();
+
+	test.beforeAll(async () => {
+		await deleteAllMedicationsViaAPI();
+		await createMedicationViaAPI({
+			name: seededName,
+			packageType: "blister",
+			packCount: 2,
+			blistersPerPack: 2,
+			pillsPerBlister: 10,
+			takenBy: ["Daniel"],
+			intakes: [{ usage: 1, every: 1, start: startThreeDaysAgo, intakeRemindersEnabled: false, takenBy: "Daniel" }],
+		});
+	});
+
+	test.afterAll(async () => {
+		await deleteAllMedicationsViaAPI();
+	});
 
 	test("should have timeline container in DOM", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
@@ -44,22 +70,16 @@ test.describe("Schedule Timeline", () => {
 	test("should show past days toggle when medications exist", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// Past days toggle only appears when there are scheduled medications
+		// Past days toggle appears when there are scheduled medications
 		const pastToggle = page.locator(".past-days-toggle");
-		const hasPastToggle = await pastToggle.isVisible().catch(() => false);
-
-		// Just verify it doesn't crash — visibility depends on medication data
-		expect(typeof hasPastToggle).toBe("boolean");
+		await expect(pastToggle).toBeVisible();
 	});
 
 	test("should expand/collapse past days on click", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
 		const pastToggle = page.locator(".past-days-toggle");
-		if (!(await pastToggle.isVisible().catch(() => false))) {
-			// No medications — past days toggle not shown
-			return;
-		}
+		await expect(pastToggle).toBeVisible();
 
 		const wasExpanded = await pastToggle.evaluate((el) => el.classList.contains("expanded"));
 
@@ -75,62 +95,56 @@ test.describe("Schedule Timeline", () => {
 	test("should show future days toggle when medications exist", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// Future days toggle only appears when there are scheduled medications
+		// Future days toggle appears when there are scheduled medications
 		const futureToggle = page.locator(".future-days-toggle");
-		const hasFutureToggle = await futureToggle.isVisible().catch(() => false);
-		expect(typeof hasFutureToggle).toBe("boolean");
+		await expect(futureToggle).toBeVisible();
 	});
 
 	test("should display day blocks in timeline", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// There should be at least one day block (today)
+		// With medications there should be day blocks; otherwise empty-state is expected.
 		const dayBlocks = page.locator(".day-block");
-		expect(await dayBlocks.count()).toBeGreaterThanOrEqual(0);
+		const dayBlockCount = await dayBlocks.count();
+		if (dayBlockCount === 0) {
+			await expect(page.getByText(/No medications/i)).toBeVisible();
+			return;
+		}
+		expect(dayBlockCount).toBeGreaterThanOrEqual(1);
 	});
 
 	test("should highlight today block", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// If there are medications, today should be highlighted
+		// With medications, today should be highlighted
 		const todayBlock = page.locator(".day-block.today");
-		const hasTodayBlock = await todayBlock.isVisible().catch(() => false);
-
-		// Today block exists only if there are medications with schedules
-		if (hasTodayBlock) {
-			await expect(todayBlock).toBeVisible();
-			// Should have a day divider with date text
-			await expect(todayBlock.locator(".day-date")).toBeVisible();
-		}
+		await expect(todayBlock).toBeVisible();
+		await expect(todayBlock.locator(".day-date")).toBeVisible();
 	});
 
 	test("should show day summary with progress", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
 		const todayBlock = page.locator(".day-block.today");
-		if (await todayBlock.isVisible().catch(() => false)) {
-			const summary = todayBlock.locator(".day-summary");
-			await expect(summary).toBeVisible();
-		}
+		await expect(todayBlock).toBeVisible();
+		const summary = todayBlock.locator(".day-summary");
+		await expect(summary).toBeVisible();
 	});
 
 	test("should collapse/expand a day block", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
 		const todayBlock = page.locator(".day-block.today");
-		if (await todayBlock.isVisible().catch(() => false)) {
-			const dayDivider = todayBlock.locator(".day-divider");
-			await dayDivider.click();
+		await expect(todayBlock).toBeVisible();
+		const dayDivider = todayBlock.locator(".day-divider");
+		await dayDivider.click();
 
-			// Check if it toggled collapsed state
-			const isCollapsed = await todayBlock.evaluate((el) => el.classList.contains("collapsed"));
+		const isCollapsed = await todayBlock.evaluate((el) => el.classList.contains("collapsed"));
 
-			// Click again to restore
-			await dayDivider.click();
-			const isCollapsedAfter = await todayBlock.evaluate((el) => el.classList.contains("collapsed"));
+		await dayDivider.click();
+		const isCollapsedAfter = await todayBlock.evaluate((el) => el.classList.contains("collapsed"));
 
-			expect(isCollapsed).not.toBe(isCollapsedAfter);
-		}
+		expect(isCollapsed).not.toBe(isCollapsedAfter);
 	});
 
 	test("should show overview table with stock status", async ({ page }) => {
@@ -138,23 +152,15 @@ test.describe("Schedule Timeline", () => {
 
 		// Overview table has class .table.table-7
 		const overviewTable = page.locator(".table.table-7");
-		const hasTable = await overviewTable.isVisible().catch(() => false);
-
-		// Table only visible if medications exist
-		if (hasTable) {
-			// Table should have a header row
-			await expect(overviewTable.locator(".table-head")).toBeVisible();
-		}
+		await expect(overviewTable).toBeVisible();
+		await expect(overviewTable.locator(".table-head")).toBeVisible();
 	});
 
 	test("should display share button in schedules section", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		await expect(page.locator(".taken-by-badge").first()).toBeVisible();
 
 		const shareBtn = page.locator("button.share-btn");
-		// Share button only visible if there are takenBy users
-		const hasShareBtn = await shareBtn.isVisible().catch(() => false);
-
-		// Just verify it's either visible or not (no crash)
-		expect(typeof hasShareBtn).toBe("boolean");
+		await expect(shareBtn).toBeVisible();
 	});
 });

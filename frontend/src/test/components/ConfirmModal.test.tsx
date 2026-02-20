@@ -92,4 +92,22 @@ describe("ConfirmModal", () => {
 		const confirmBtn = screen.getByText("Yes");
 		expect(confirmBtn.className).toContain("success");
 	});
+
+	it("applies warning variant when specified", () => {
+		render(<ConfirmModal {...defaultProps} confirmVariant="warning" />);
+		const confirmBtn = screen.getByText("Yes");
+		expect(confirmBtn.className).toContain("warning");
+	});
+
+	it("applies custom overlay class", () => {
+		const { container } = render(<ConfirmModal {...defaultProps} overlayClassName="nested-confirm" />);
+		const overlay = container.querySelector(".modal-overlay");
+		expect(overlay?.className).toContain("nested-confirm");
+	});
+
+	it("calls onCancel when Escape is pressed", () => {
+		render(<ConfirmModal {...defaultProps} />);
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(defaultProps.onCancel).toHaveBeenCalledTimes(1);
+	});
 });

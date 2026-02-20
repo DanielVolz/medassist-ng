@@ -1,11 +1,13 @@
+import { Bell, Eye, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ConfirmModal, DateInput, Lightbox, MedicationAvatar, MobileEditModal } from "../components";
+import { useSearchParams } from "react-router-dom";
+import { ConfirmModal, DateInput, Lightbox, MedicationAvatar, MobileEditModal, ReportModal } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useMedicationForm, useUnsavedChangesWarning } from "../hooks";
 import type { DoseUnit, Medication } from "../types";
-import { DOSE_UNITS, FIELD_LIMITS, getPackageSize } from "../types";
+import { DOSE_UNITS, FIELD_LIMITS, getMedTotal, getPackageSize } from "../types";
 import { combineDateAndTime, formatDate, formatDateTime, formatNumber } from "../utils/formatters";
 import { log } from "../utils/logger";
 
@@ -16,6 +18,7 @@ function userStorageKey(userId: number | undefined, key: string): string {
 const OBSOLETE_SECTION_STORAGE_KEY = "medicationsShowObsolete";
 
 export function MedicationsPage() {
+	const [searchParams, setSearchParams] = useSearchParams();
 	const { t } = useTranslation();
 	const { user } = useAuth();
 	const {
@@ -28,14 +31,7 @@ export function MedicationsPage() {
 		deleteMedImage,
 		uploadingImage,
 		existingPeople,
-		refillPacks,
-		setRefillPacks,
-		refillLoose,
-		setRefillLoose,
-		usePrescriptionRefill,
-		setUsePrescriptionRefill,
-		refillSaving,
-		submitRefill,
+		coverage,
 		coverageByMed,
 	} = useAppContext();
 
@@ -72,9 +68,12 @@ export function MedicationsPage() {
 	// View mode: grid (default) or form (edit/new)
 	const [viewMode, setViewMode] = useState<"grid" | "form">("grid");
 	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
+	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
 
 	// Mobile modal state (declared early because it's used in useEffect below)
 	const [showEditModal, setShowEditModal] = useState(false);
+	const processedEditMedIdRef = useRef<string | null>(null);
+	const hasDesktopFormHistoryState = useRef(false);
 
 	// Sync formChanged state to the global context for navigation blocking
 	const { setHasUnsavedChanges } = useUnsavedChanges();
@@ -96,6 +95,18 @@ export function MedicationsPage() {
 		}
 	}, [formChanged, showEditModal]);
 
+	// Push a history state when desktop form is open so browser back returns to grid view.
+	useEffect(() => {
+		const isDesktop = window.innerWidth > 768;
+		if (isDesktop && viewMode === "form" && !showEditModal && !hasDesktopFormHistoryState.current) {
+			window.history.pushState({ desktopForm: true }, "");
+			hasDesktopFormHistoryState.current = true;
+		}
+		if ((viewMode === "grid" || showEditModal) && hasDesktopFormHistoryState.current) {
+			hasDesktopFormHistoryState.current = false;
+		}
+	}, [viewMode, showEditModal]);
+
 	// Image state for new medications
 	const [pendingImage, setPendingImage] = useState<File | null>(null);
 	const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
@@ -113,6 +124,8 @@ export function MedicationsPage() {
 	const [allMeds, setAllMeds] = useState<Medication[]>(meds);
 	const [showObsolete, setShowObsolete] = useState(true);
 	const [readOnlyView, setReadOnlyView] = useState(false);
+	const [showReportModal, setShowReportModal] = useState(false);
+	const [showNameValidation, setShowNameValidation] = useState(false);
 
 	useEffect(() => {
 		const saved = localStorage.getItem(userStorageKey(user?.id, OBSOLETE_SECTION_STORAGE_KEY));
@@ -153,8 +166,7 @@ export function MedicationsPage() {
 		const packCount = Number(form.packCount) || 0;
 		const blistersPerPack = Number(form.blistersPerPack) || 0;
 		const pillsPerBlister = Number(form.pillsPerBlister) || 1;
-		const looseTablets = Number(form.looseTablets) || 0;
-		return packCount * blistersPerPack * pillsPerBlister + looseTablets;
+		return packCount * blistersPerPack * pillsPerBlister;
 	}, [form.packageType, form.packCount, form.blistersPerPack, form.pillsPerBlister, form.looseTablets]);
 
 	const dateConsistencyError = useMemo(() => {
@@ -169,6 +181,18 @@ export function MedicationsPage() {
 			intakeDate: conflictingIntake.startDate,
 		});
 	}, [form.medicationStartDate, form.intakes, t]);
+
+	const clearEditMedIdParam = useCallback(() => {
+		setSearchParams(
+			(prevParams) => {
+				if (!prevParams.has("editMedId")) return prevParams;
+				const nextParams = new URLSearchParams(prevParams);
+				nextParams.delete("editMedId");
+				return nextParams;
+			},
+			{ replace: true }
+		);
+	}, [setSearchParams]);
 
 	// Open mobile edit modal
 	function openEditModal() {
@@ -185,6 +209,7 @@ export function MedicationsPage() {
 				setShowUnsavedConfirm(true);
 				return;
 			}
+			clearEditMedIdParam();
 			// Mark as confirmed to avoid double confirmation in popstate handler
 			closeConfirmedRef.current = true;
 			window.history.back();
@@ -207,6 +232,7 @@ export function MedicationsPage() {
 			setReadOnlyView(false);
 			pendingAction();
 		} else if (source === "mobile-edit" && showEditModal) {
+			clearEditMedIdParam();
 			setShowEditModal(false);
 			resetForm();
 			setReadOnlyView(false);
@@ -229,12 +255,15 @@ export function MedicationsPage() {
 
 	// Helper to reset form and clear history state
 	function handleResetForm() {
+		hasDesktopFormHistoryState.current = false;
 		if (hasUnsavedHistoryState.current) {
 			hasUnsavedHistoryState.current = false;
 			// Go back to remove the unsaved changes history entry
 			window.history.back();
 		}
 		resetForm();
+		setShowNameValidation(false);
+		setActiveTab("general");
 		setReadOnlyView(false);
 		setViewMode("grid");
 	}
@@ -296,12 +325,6 @@ export function MedicationsPage() {
 		window.history.back();
 	}
 
-	// Handle submit refill
-	async function handleSubmitRefill(medId: number) {
-		await submitRefill(medId, editingId, setForm, loadMeds, usePrescriptionRefill);
-		await loadAllMeds();
-	}
-
 	async function markMedicationObsolete(id: number) {
 		try {
 			await fetch(`/api/medications/${id}/obsolete`, { method: "POST", credentials: "include" });
@@ -330,6 +353,7 @@ export function MedicationsPage() {
 		e.preventDefault();
 		if (readOnlyView) return;
 		if (hasValidationErrors || dateConsistencyError) {
+			setShowNameValidation(true);
 			// Scroll to first visible error so the user sees what's wrong
 			const firstError = document.querySelector(".field-error");
 			if (firstError) {
@@ -491,8 +515,26 @@ export function MedicationsPage() {
 					setShowUnsavedConfirm(true);
 					return;
 				}
+				clearEditMedIdParam();
 				setShowEditModal(false);
 				resetForm();
+				return;
+			}
+
+			// Handle desktop form: browser back should return to medication overview grid.
+			if (viewMode === "form" && hasDesktopFormHistoryState.current) {
+				if (formChanged) {
+					window.history.pushState({ desktopForm: true }, "");
+					setUnsavedConfirmSource("desktop-form");
+					setShowUnsavedConfirm(true);
+					return;
+				}
+				hasDesktopFormHistoryState.current = false;
+				resetForm();
+				setShowNameValidation(false);
+				setActiveTab("general");
+				setReadOnlyView(false);
+				setViewMode("grid");
 				return;
 			}
 
@@ -507,7 +549,7 @@ export function MedicationsPage() {
 		};
 		window.addEventListener("popstate", handlePopState);
 		return () => window.removeEventListener("popstate", handlePopState);
-	}, [showObsoleteConfirm, showDeleteConfirm, showEditModal, formChanged, resetForm]);
+	}, [showObsoleteConfirm, showDeleteConfirm, showEditModal, viewMode, formChanged, resetForm, clearEditMedIdParam]);
 
 	// Close modal on Escape key
 	useEffect(() => {
@@ -521,35 +563,66 @@ export function MedicationsPage() {
 	}, [showEditModal, closeEditModal]);
 
 	// Handle edit button click - open modal on mobile, switch to form on desktop
+	const normalizeMedicationForEdit = useCallback(
+		(med: Medication): Medication => {
+			if (med.packageType !== "blister") return med;
+
+			const pillsPerPack = Math.max(1, med.blistersPerPack * med.pillsPerBlister);
+			const fallbackStock = Math.max(0, getMedTotal(med));
+			const currentStock = Math.max(0, Math.round(coverageByMed[med.name]?.medsLeft ?? fallbackStock));
+			const nextPackCount = Math.floor(currentStock / pillsPerPack);
+			const nextLooseTablets = currentStock % pillsPerPack;
+
+			if (nextPackCount === med.packCount && nextLooseTablets === med.looseTablets) {
+				return med;
+			}
+
+			return {
+				...med,
+				packCount: nextPackCount,
+				looseTablets: nextLooseTablets,
+			};
+		},
+		[coverageByMed]
+	);
+
 	function handleEditClick(med: Medication) {
+		const normalizedMed = normalizeMedicationForEdit(med);
 		if (formChanged) {
 			pendingActionRef.current = () => {
+				setShowNameValidation(false);
 				setReadOnlyView(false);
-				startEdit(med, openEditModal);
+				startEdit(normalizedMed, openEditModal);
 				setViewMode("form");
 			};
 			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
 			setShowUnsavedConfirm(true);
 			return;
 		}
+		setShowNameValidation(false);
 		setReadOnlyView(false);
-		startEdit(med, openEditModal);
+		setActiveTab("general");
+		startEdit(normalizedMed, openEditModal);
 		setViewMode("form");
 	}
 
 	function handleViewClick(med: Medication) {
+		const normalizedMed = normalizeMedicationForEdit(med);
 		if (formChanged) {
 			pendingActionRef.current = () => {
+				setShowNameValidation(false);
 				setReadOnlyView(true);
-				startEdit(med, openEditModal);
+				startEdit(normalizedMed, openEditModal);
 				setViewMode("form");
 			};
 			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
 			setShowUnsavedConfirm(true);
 			return;
 		}
+		setShowNameValidation(false);
 		setReadOnlyView(true);
-		startEdit(med, openEditModal);
+		setActiveTab("general");
+		startEdit(normalizedMed, openEditModal);
 		setViewMode("form");
 	}
 
@@ -557,6 +630,7 @@ export function MedicationsPage() {
 		if (formChanged) {
 			pendingActionRef.current = () => {
 				resetForm();
+				setShowNameValidation(false);
 				setReadOnlyView(false);
 				if (window.innerWidth <= 768) {
 					openEditModal();
@@ -569,6 +643,7 @@ export function MedicationsPage() {
 			return;
 		}
 		resetForm();
+		setShowNameValidation(false);
 		setReadOnlyView(false);
 		if (window.innerWidth <= 768) {
 			openEditModal();
@@ -593,6 +668,31 @@ export function MedicationsPage() {
 		return [selectedMedication, ...activeMeds.filter((med) => med.id !== editingId)];
 	}, [activeMeds, editingId]);
 
+	useEffect(() => {
+		const editMedId = searchParams.get("editMedId");
+		if (!editMedId) {
+			processedEditMedIdRef.current = null;
+			return;
+		}
+		if (processedEditMedIdRef.current === editMedId) return;
+		const parsedMedId = Number.parseInt(editMedId, 10);
+		if (Number.isNaN(parsedMedId)) return;
+		const medicationToEdit = allMeds.find((med) => med.id === parsedMedId);
+		if (!medicationToEdit) return;
+
+		processedEditMedIdRef.current = editMedId;
+
+		setShowNameValidation(false);
+		setReadOnlyView(false);
+		setActiveTab("general");
+		startEdit(normalizeMedicationForEdit(medicationToEdit), openEditModal);
+		setViewMode("form");
+
+		const nextParams = new URLSearchParams(searchParams);
+		nextParams.delete("editMedId");
+		setSearchParams(nextParams, { replace: true });
+	}, [allMeds, normalizeMedicationForEdit, openEditModal, searchParams, setSearchParams, startEdit]);
+
 	const selectedMedication = useMemo(() => {
 		if (!editingId) return null;
 		return allMeds.find((med) => med.id === editingId) ?? null;
@@ -604,9 +704,14 @@ export function MedicationsPage() {
 			<article className="card">
 				<div className="card-head">
 					<h2>{t("medications.list.title")}</h2>
-					<button type="button" className="btn primary small" onClick={handleNewEntryClick}>
-						+ {t("form.newEntry")}
-					</button>
+					<div className="card-head-actions">
+						<button type="button" className="btn primary small" onClick={handleNewEntryClick}>
+							+ {t("form.newEntry")}
+						</button>
+						<button type="button" className="btn ghost small" onClick={() => setShowReportModal(true)}>
+							{t("report.button")}
+						</button>
+					</div>
 				</div>
 				<div className="med-groups">
 					<div className="med-group med-group-active">
@@ -635,17 +740,27 @@ export function MedicationsPage() {
 												</div>
 											</div>
 											<div className="med-actions">
-												<button className="danger" onClick={() => requestDeleteMed(med)}>
-													{t("common.delete")}
+												{editingId !== med.id && (
+													<button
+														className="info icon-only tooltip-trigger"
+														onClick={() => handleEditClick(med)}
+														aria-label={t("common.edit")}
+														data-tooltip={t("common.edit")}
+													>
+														<Pencil size={18} aria-hidden="true" />
+													</button>
+												)}
+												<button
+													className="danger icon-only tooltip-trigger"
+													onClick={() => requestDeleteMed(med)}
+													aria-label={t("common.delete")}
+													data-tooltip={t("common.delete")}
+												>
+													<Trash2 size={18} aria-hidden="true" />
 												</button>
 												<button className="btn-obsolete" onClick={() => requestMarkObsolete(med)}>
 													{t("medications.list.markObsolete")}
 												</button>
-												{editingId !== med.id && (
-													<button className="info" onClick={() => handleEditClick(med)}>
-														{t("common.edit")}
-													</button>
-												)}
 											</div>
 											<div className="med-details">
 												<span>
@@ -709,7 +824,7 @@ export function MedicationsPage() {
 												{"intakeRemindersEnabled" in s && s.intakeRemindersEnabled && (
 													<span className="blister-reminder-icon" title={t("form.blisters.remindTooltip")}>
 														{" "}
-														🔔
+														<Bell size={12} aria-hidden="true" />
 													</span>
 												)}
 											</div>
@@ -758,14 +873,24 @@ export function MedicationsPage() {
 														</div>
 													</div>
 													<div className="med-actions">
-														<button className="danger" onClick={() => requestDeleteMed(med)}>
-															{t("common.delete")}
+														<button
+															className="info icon-only tooltip-trigger"
+															onClick={() => handleViewClick(med)}
+															aria-label={t("common.view")}
+															data-tooltip={t("common.view")}
+														>
+															<Eye size={18} aria-hidden="true" />
+														</button>
+														<button
+															className="danger icon-only tooltip-trigger"
+															onClick={() => requestDeleteMed(med)}
+															aria-label={t("common.delete")}
+															data-tooltip={t("common.delete")}
+														>
+															<Trash2 size={18} aria-hidden="true" />
 														</button>
 														<button className="success" onClick={() => reactivateMedication(med.id)}>
 															{t("medications.list.reactivate")}
-														</button>
-														<button className="info" onClick={() => handleViewClick(med)}>
-															{t("common.view")}
 														</button>
 													</div>
 													<div className="med-details">
@@ -798,480 +923,201 @@ export function MedicationsPage() {
 								← {t("common.back")}
 							</button>
 							{editingId ? (
-								<>
-									<MedicationAvatar
-										name={selectedMedication?.name || ""}
-										imageUrl={selectedMedication?.imageUrl}
-										size="md"
-									/>
-									<h2>
-										{readOnlyView ? t("form.viewEntry") : t("form.editEntry")}: {selectedMedication?.name}
-									</h2>
-								</>
+								<h2>
+									{readOnlyView ? t("form.viewEntry") : t("form.editEntry")}: {selectedMedication?.name}
+								</h2>
 							) : (
 								<h2>{t("form.newEntry")}</h2>
 							)}
 						</div>
 					</div>
-					<form className="form-grid" onSubmit={saveMedication}>
+					<form
+						className="form-grid"
+						onSubmit={saveMedication}
+						autoComplete="off"
+						spellCheck={false}
+						autoCorrect="off"
+						autoCapitalize="off"
+					>
+						<div className="full form-tabs" role="tablist" aria-label={t("form.sections.general")}>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={activeTab === "general"}
+								className={`form-tab${activeTab === "general" ? " active" : ""}`}
+								onClick={() => setActiveTab("general")}
+							>
+								{t("form.sections.general")}
+							</button>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={activeTab === "stock"}
+								className={`form-tab${activeTab === "stock" ? " active" : ""}`}
+								onClick={() => setActiveTab("stock")}
+							>
+								{t("form.sections.stock")}
+							</button>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={activeTab === "prescription"}
+								className={`form-tab${activeTab === "prescription" ? " active" : ""}`}
+								onClick={() => setActiveTab("prescription")}
+							>
+								{t("form.sections.prescription")}
+							</button>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={activeTab === "schedule"}
+								className={`form-tab${activeTab === "schedule" ? " active" : ""}`}
+								onClick={() => setActiveTab("schedule")}
+							>
+								{t("form.sections.schedule")}
+							</button>
+						</div>
 						<fieldset className="readonly-fieldset" disabled={readOnlyView}>
-							<div className="full form-category">
-								<h4 className="form-category-title">{t("form.sections.general")}</h4>
-								<label className={!readOnlyView && fieldErrors.name ? "has-error" : ""}>
-									{t("form.commercialName")}
-									<input
-										value={form.name}
-										onChange={(e) => setForm({ ...form, name: e.target.value })}
-										placeholder={t("form.placeholders.commercial")}
-										maxLength={FIELD_LIMITS.name.max}
-										required={!readOnlyView}
-									/>
-									{!readOnlyView && fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
-								</label>
-								<label className={fieldErrors.genericName ? "has-error" : ""}>
-									{t("form.genericName")}
-									<input
-										value={form.genericName}
-										onChange={(e) => setForm({ ...form, genericName: e.target.value })}
-										placeholder={t("form.placeholders.generic")}
-										maxLength={FIELD_LIMITS.genericName.max}
-									/>
-									{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
-								</label>
-								<label>
-									{t("form.medicationStartDate")}
-									<DateInput
-										value={form.medicationStartDate}
-										onChange={(e) => handleValueChange("medicationStartDate", e.target.value)}
-									/>
-									{!readOnlyView && dateConsistencyError && <span className="field-error">{dateConsistencyError}</span>}
-								</label>
-								<label className={fieldErrors.takenBy ? "has-error" : ""}>
-									{t("form.takenBy")}
-									<div className="tag-input-container">
-										{form.takenBy.map((person) => (
-											<span key={person} className="tag">
-												{person}
-												{!readOnlyView && (
-													<button type="button" className="tag-remove" onClick={() => removeTakenByPerson(person)}>
-														×
-													</button>
-												)}
-											</span>
-										))}
-										{!readOnlyView && (
-											<>
-												<input
-													value={takenByInput}
-													onChange={(e) => setTakenByInput(e.target.value)}
-													onKeyDown={handleTakenByKeyDown}
-													onBlur={() => {
-														if (takenByInput.trim()) addTakenByPerson(takenByInput);
-													}}
-													placeholder={
-														form.takenBy.length === 0
-															? t("form.placeholders.takenBy")
-															: t("form.placeholders.addPerson")
-													}
-													maxLength={FIELD_LIMITS.takenBy.max}
-													list="takenby-suggestions"
-												/>
-												<datalist id="takenby-suggestions">
-													{existingPeople
-														.filter((p) => !form.takenBy.includes(p))
-														.map((person) => (
-															<option key={person} value={person} />
-														))}
-												</datalist>
-											</>
+							<div className={`form-tab-panel${activeTab === "general" ? " active" : ""}`}>
+								<div className="full form-category">
+									<h4 className="form-category-title">{t("form.sections.general")}</h4>
+									<label className={!readOnlyView && showNameValidation && fieldErrors.name ? "has-error" : ""}>
+										{t("form.commercialName")}
+										<input
+											value={form.name}
+											onChange={(e) => {
+												setShowNameValidation(true);
+												setForm({ ...form, name: e.target.value });
+											}}
+											onBlur={() => setShowNameValidation(true)}
+											placeholder={t("form.placeholders.commercial")}
+											maxLength={FIELD_LIMITS.name.max}
+											required={!readOnlyView}
+										/>
+										{!readOnlyView && showNameValidation && fieldErrors.name && (
+											<span className="field-error">{fieldErrors.name}</span>
 										)}
-									</div>
-									{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
-								</label>
-								<label>
-									{t("form.packageType")}
-									<select
-										className="package-type-select"
-										value={form.packageType}
-										onChange={(e) => handleValueChange("packageType", e.target.value)}
-									>
-										<option value="blister">{t("form.packageTypeBlister")}</option>
-										<option value="bottle">{t("form.packageTypeBottle")}</option>
-									</select>
-								</label>
-							</div>
-
-							<div className="full form-category">
-								<h4 className="form-category-title">{t("form.sections.stock")}</h4>
-								{form.packageType === "blister" ? (
-									<>
-										<label>
-											{t("form.packs")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.packCount}
-												onChange={(e) => handleValueChange("packCount", e.target.value)}
-											/>
-										</label>
-										<label>
-											{t("form.blistersPerPack")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.blistersPerPack}
-												onChange={(e) => handleValueChange("blistersPerPack", e.target.value)}
-											/>
-										</label>
-										<label>
-											{t("form.pillsPerBlister")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.pillsPerBlister}
-												onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)}
-											/>
-										</label>
-										<label>
-											{t("form.loosePills")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.looseTablets}
-												onChange={(e) => handleValueChange("looseTablets", e.target.value)}
-											/>
-										</label>
-									</>
-								) : (
-									<>
-										<label>
-											{t("form.totalCapacity")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.totalPills}
-												onChange={(e) => handleValueChange("totalPills", e.target.value)}
-											/>
-										</label>
-										<label>
-											{t("form.currentPills")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.looseTablets}
-												onChange={(e) => handleValueChange("looseTablets", e.target.value)}
-											/>
-										</label>
-									</>
-								)}
-								<label className="full">
-									{t("form.pillWeight")} ({form.doseUnit})
-									<div className="dose-input-group">
-										<input
-											type="text"
-											inputMode="decimal"
-											pattern="[0-9]*\.?[0-9]*"
-											value={form.pillWeightMg}
-											onChange={(e) => handleValueChange("pillWeightMg", e.target.value)}
-											placeholder={t("form.placeholders.weight")}
-										/>
-										<select
-											value={form.doseUnit}
-											onChange={(e) => handleValueChange("doseUnit", e.target.value as DoseUnit)}
-											className="dose-unit-select"
-										>
-											{DOSE_UNITS.map((unit) => (
-												<option key={unit.value} value={unit.value}>
-													{unit.label}
-												</option>
-											))}
-										</select>
-									</div>
-								</label>
-								<label>
-									{t("form.total")}
-									<div className="static-value">{formatNumber(totalTablets)}</div>
-								</label>
-								<label>
-									{t("form.expiryDate")}
-									<DateInput
-										value={form.expiryDate}
-										onChange={(e) => handleValueChange("expiryDate", e.target.value)}
-										placeholder={t("common.optional")}
-									/>
-								</label>
-								<label className={`full ${fieldErrors.notes ? "has-error" : ""}`}>
-									{t("form.notes")}
-									<textarea
-										value={form.notes}
-										onChange={(e) => handleValueChange("notes", e.target.value)}
-										placeholder={t("form.placeholders.notes")}
-										rows={2}
-										maxLength={FIELD_LIMITS.notes.max}
-										className="auto-resize"
-										onInput={(e) => {
-											const t = e.target as HTMLTextAreaElement;
-											t.style.height = "auto";
-											t.style.height = `${t.scrollHeight}px`;
-										}}
-									/>
-									{form.notes.length > 0 && (
-										<span className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}>
-											{t("common.validation.tooLong", { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
-										</span>
-									)}
-									{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
-								</label>
-							</div>
-
-							<div className="full form-category">
-								<h4 className="form-category-title">{t("form.sections.prescription")}</h4>
-								<label className="full">
-									{t("prescription.enabled")}
-									<label className="toggle-switch small">
-										<input
-											type="checkbox"
-											checked={form.prescriptionEnabled}
-											onChange={(e) => handleValueChange("prescriptionEnabled", e.target.checked)}
-										/>
-										<span className="toggle-slider"></span>
 									</label>
-								</label>
-								{form.prescriptionEnabled && (
-									<>
-										<label className="prescription-field">
-											{t("prescription.authorizedRefills")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.prescriptionAuthorizedRefills}
-												onChange={(e) => handleValueChange("prescriptionAuthorizedRefills", e.target.value)}
-											/>
-										</label>
-										<label className="prescription-field">
-											{t("prescription.remainingRefills")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.prescriptionRemainingRefills}
-												onChange={(e) => handleValueChange("prescriptionRemainingRefills", e.target.value)}
-											/>
-										</label>
-										<label className="prescription-field">
-											{t("prescription.lowThreshold")}
-											<input
-												type="text"
-												inputMode="numeric"
-												pattern="[0-9]*"
-												value={form.prescriptionLowRefillThreshold}
-												onChange={(e) => handleValueChange("prescriptionLowRefillThreshold", e.target.value)}
-											/>
-										</label>
-										<label className="prescription-field">
-											{t("prescription.expiryDate")}
-											<DateInput
-												value={form.prescriptionExpiryDate}
-												onChange={(e) => handleValueChange("prescriptionExpiryDate", e.target.value)}
-											/>
-										</label>
-									</>
-								)}
-							</div>
-
-							{!readOnlyView && (
-								<div className="full form-category refill-section">
-									<h4 className="form-category-title">{t("refill.title")}</h4>
-									{editingId ? (
-										<>
-											{form.packageType === "blister" ? (
-												<>
-													<label>
-														{t("refill.packs")}
-														<input
-															type="text"
-															inputMode="numeric"
-															pattern="[0-9]*"
-															value={refillPacks}
-															onChange={(e) => setRefillPacks(parseInt(e.target.value, 10) || 0)}
-														/>
-													</label>
-													<label>
-														{t("refill.loosePills")}
-														<input
-															type="text"
-															inputMode="numeric"
-															pattern="[0-9]*"
-															value={refillLoose}
-															onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
-														/>
-													</label>
-												</>
-											) : (
-												<label className="full">
-													{t("refill.pillsToAdd")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
-														value={refillLoose}
-														onChange={(e) => setRefillLoose(parseInt(e.target.value, 10) || 0)}
-													/>
-												</label>
-											)}
-											<div className="refill-submit-row full">
-												<button
-													type="button"
-													className="success"
-													onClick={() => handleSubmitRefill(editingId)}
-													disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
-												>
-													{refillSaving ? t("refill.adding") : t("refill.button")}
-												</button>
-												{(() => {
-													const totalRefill =
-														form.packageType === "blister"
-															? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
-																refillLoose
-															: refillLoose;
-													return totalRefill > 0 ? (
-														<span className="refill-preview">
-															+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
-														</span>
-													) : null;
-												})()}
-											</div>
-											{form.prescriptionEnabled && (
-												<div className="refill-prescription-row full">
-													<label className="refill-prescription-toggle">
-														<input
-															type="checkbox"
-															checked={usePrescriptionRefill}
-															onChange={(e) => setUsePrescriptionRefill(e.target.checked)}
-															disabled={(Number(form.prescriptionRemainingRefills) || 0) <= 0}
-														/>
-														<span className="refill-prescription-label-text">{t("prescription.useForRefill")}</span>
-													</label>
-													<span className="refill-remaining-badge">
-														{t("prescription.remainingRefills")}: {Number(form.prescriptionRemainingRefills) || 0}
-													</span>
-												</div>
-											)}
-										</>
-									) : (
-										<p className="refill-unavailable">
-											{t("refill.saveFirst", "Save medication first to enable refill")}
-										</p>
-									)}
-								</div>
-							)}
-
-							<div className="full form-category intake-section">
-								<div className="form-category-header">
-									<h4 className="form-category-title">{t("form.blisters.title")}</h4>
-									{!readOnlyView && (
-										<button
-											type="button"
-											className="primary"
-											onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
-										>
-											+ {t("form.blisters.addIntake")}
-										</button>
-									)}
-								</div>
-								{form.intakes.map((intake, idx) => (
-									<div key={idx} className="blister-row">
-										<div className="blister-inputs">
-											<label>
-												{t("form.blisters.usage")}
-												<input
-													type="text"
-													inputMode="decimal"
-													pattern="[0-9]*\.?[0-9]*"
-													value={intake.usage}
-													onChange={(e) => setIntakeValue(idx, "usage", e.target.value)}
-												/>
-											</label>
-											<label>
-												{t("form.blisters.everyDays")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
-													value={intake.every}
-													onChange={(e) => setIntakeValue(idx, "every", e.target.value)}
-												/>
-											</label>
-											<label>
-												{t("form.blisters.startDate")}
-												<DateInput
-													value={intake.startDate}
-													onChange={(e) => setIntakeValue(idx, "startDate", e.target.value)}
-												/>
-											</label>
-											<label>
-												{t("form.blisters.startTime")}
-												<input
-													type="time"
-													value={intake.startTime}
-													onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
-												/>
-											</label>
-											{form.takenBy.length === 0 ? null : (
-												<label title={t("form.blisters.takenByTooltip")}>
-													{t("form.blisters.takenByIntake")}
-													<select
-														value={intake.takenBy}
-														onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}
-													>
-														{form.takenBy.map((person) => (
-															<option key={person} value={person}>
-																{person}
-															</option>
-														))}
-													</select>
-												</label>
-											)}
-											<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
-												<span>🔔</span>
-												<label className="toggle-switch small">
-													<input
-														type="checkbox"
-														checked={intake.intakeRemindersEnabled}
-														onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
-													/>
-													<span className="toggle-slider"></span>
-												</label>
-											</div>
-										</div>
-										{!readOnlyView && form.intakes.length > 1 && (
-											<button type="button" className="danger" onClick={() => removeIntake(idx)}>
-												{t("common.remove")}
-											</button>
+									<label className={fieldErrors.genericName ? "has-error" : ""}>
+										{t("form.genericName")}
+										<input
+											value={form.genericName}
+											onChange={(e) => setForm({ ...form, genericName: e.target.value })}
+											placeholder={t("form.placeholders.generic")}
+											maxLength={FIELD_LIMITS.genericName.max}
+										/>
+										{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
+									</label>
+									<label>
+										{t("form.medicationStartDate")}
+										<DateInput
+											value={form.medicationStartDate}
+											onChange={(e) => handleValueChange("medicationStartDate", e.target.value)}
+										/>
+										{!readOnlyView && dateConsistencyError && (
+											<span className="field-error">{dateConsistencyError}</span>
 										)}
-									</div>
-								))}
-							</div>
+									</label>
+									<label>
+										{t("form.packageType")}
+										<select
+											className="package-type-select"
+											value={form.packageType}
+											onChange={(e) => handleValueChange("packageType", e.target.value)}
+										>
+											<option value="blister">{t("form.packageTypeBlister")}</option>
+											<option value="bottle">{t("form.packageTypeBottle")}</option>
+										</select>
+									</label>
+									<label className={`full ${fieldErrors.takenBy ? "has-error" : ""}`}>
+										{t("form.takenBy")}
+										<div className="tag-input-container">
+											{form.takenBy.map((person) => (
+												<span key={person} className="tag">
+													{person}
+													{!readOnlyView && (
+														<button type="button" className="tag-remove" onClick={() => removeTakenByPerson(person)}>
+															×
+														</button>
+													)}
+												</span>
+											))}
+											{!readOnlyView && (
+												<>
+													<input
+														value={takenByInput}
+														onChange={(e) => setTakenByInput(e.target.value)}
+														onKeyDown={handleTakenByKeyDown}
+														onBlur={() => {
+															if (takenByInput.trim()) addTakenByPerson(takenByInput);
+														}}
+														placeholder={
+															form.takenBy.length === 0
+																? t("form.placeholders.takenBy")
+																: t("form.placeholders.addPerson")
+														}
+														maxLength={FIELD_LIMITS.takenBy.max}
+														list="takenby-suggestions"
+													/>
+													<datalist id="takenby-suggestions">
+														{existingPeople
+															.filter((p) => !form.takenBy.includes(p))
+															.map((person) => (
+																<option key={person} value={person} />
+															))}
+													</datalist>
+												</>
+											)}
+										</div>
+										{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
+									</label>
+								</div>
 
-							<div className="full form-category image-section">
-								<h4 className="form-category-title">{t("form.medicationImage")}</h4>
-								{(() => {
-									// When editing an existing medication
-									if (editingId) {
-										const currentMed = meds.find((m) => m.id === editingId);
-										if (currentMed?.imageUrl) {
+								<div className="full form-category image-section">
+									<h4 className="form-category-title">{t("form.medicationImage")}</h4>
+									{(() => {
+										if (editingId) {
+											const currentMed = meds.find((m) => m.id === editingId);
+											if (currentMed?.imageUrl) {
+												return (
+													<div className="image-preview">
+														<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
+														<button
+															type="button"
+															className="danger icon-only tooltip-trigger"
+															onClick={() => deleteMedImage(editingId)}
+															aria-label={t("form.removeImage")}
+															data-tooltip={t("form.removeImage")}
+														>
+															<Trash2 size={18} aria-hidden="true" />
+														</button>
+													</div>
+												);
+											}
+											return (
+												<input
+													type="file"
+													accept="image/jpeg,image/png,image/webp,image/gif"
+													onChange={(e) => e.target.files?.[0] && uploadMedImage(editingId, e.target.files[0])}
+													disabled={uploadingImage}
+												/>
+											);
+										}
+										if (pendingImagePreview) {
 											return (
 												<div className="image-preview">
-													<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
-													<button type="button" className="danger" onClick={() => deleteMedImage(editingId)}>
-														{t("form.removeImage")}
+													<img src={pendingImagePreview} alt="Preview" />
+													<button
+														type="button"
+														className="danger icon-only tooltip-trigger"
+														onClick={() => {
+															setPendingImage(null);
+															setPendingImagePreview(null);
+														}}
+														aria-label={t("form.removeImage")}
+														data-tooltip={t("form.removeImage")}
+													>
+														<Trash2 size={18} aria-hidden="true" />
 													</button>
 												</div>
 											);
@@ -1280,50 +1126,316 @@ export function MedicationsPage() {
 											<input
 												type="file"
 												accept="image/jpeg,image/png,image/webp,image/gif"
-												onChange={(e) => e.target.files?.[0] && uploadMedImage(editingId, e.target.files[0])}
-												disabled={uploadingImage}
+												onChange={(e) => {
+													const file = e.target.files?.[0];
+													if (file) {
+														setPendingImage(file);
+														const reader = new FileReader();
+														reader.onload = (ev) => setPendingImagePreview(ev.target?.result as string);
+														reader.readAsDataURL(file);
+													}
+												}}
 											/>
 										);
-									}
-									// When creating a new medication
-									if (pendingImagePreview) {
-										return (
-											<div className="image-preview">
-												<img src={pendingImagePreview} alt="Preview" />
-												<button
-													type="button"
-													className="danger"
-													onClick={() => {
-														setPendingImage(null);
-														setPendingImagePreview(null);
-													}}
-												>
-													{t("form.removeImage")}
-												</button>
-											</div>
-										);
-									}
-									return (
-										<input
-											type="file"
-											accept="image/jpeg,image/png,image/webp,image/gif"
-											onChange={(e) => {
-												const file = e.target.files?.[0];
-												if (file) {
-													setPendingImage(file);
-													const reader = new FileReader();
-													reader.onload = (ev) => setPendingImagePreview(ev.target?.result as string);
-													reader.readAsDataURL(file);
-												}
+									})()}
+								</div>
+							</div>
+							{/* end general tab */}
+
+							<div className={`form-tab-panel${activeTab === "stock" ? " active" : ""}`}>
+								<div className="full form-category">
+									<h4 className="form-category-title">{t("form.sections.stock")}</h4>
+									{form.packageType === "blister" ? (
+										<>
+											<label>
+												{t("form.packs")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={form.packCount}
+													onChange={(e) => handleValueChange("packCount", e.target.value)}
+												/>
+											</label>
+											<label>
+												{t("form.blistersPerPack")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={form.blistersPerPack}
+													onChange={(e) => handleValueChange("blistersPerPack", e.target.value)}
+												/>
+											</label>
+											<label>
+												{t("form.pillsPerBlister")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={form.pillsPerBlister}
+													onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)}
+												/>
+											</label>
+											<label>
+												{t("form.total")}
+												<div className="static-value">{formatNumber(totalTablets)}</div>
+											</label>
+										</>
+									) : (
+										<>
+											<label>
+												{t("form.totalCapacity")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={form.totalPills}
+													onChange={(e) => handleValueChange("totalPills", e.target.value)}
+												/>
+											</label>
+											<label>
+												{t("form.currentPills")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={form.looseTablets}
+													onChange={(e) => handleValueChange("looseTablets", e.target.value)}
+												/>
+											</label>
+										</>
+									)}
+									<label className="full">
+										{t("form.pillWeight")} ({form.doseUnit})
+										<div className="dose-input-group">
+											<input
+												type="text"
+												inputMode="decimal"
+												pattern="[0-9]*\.?[0-9]*"
+												value={form.pillWeightMg}
+												onChange={(e) => handleValueChange("pillWeightMg", e.target.value)}
+												placeholder={t("form.placeholders.weight")}
+											/>
+											<select
+												value={form.doseUnit}
+												onChange={(e) => handleValueChange("doseUnit", e.target.value as DoseUnit)}
+												className="dose-unit-select"
+											>
+												{DOSE_UNITS.map((unit) => (
+													<option key={unit.value} value={unit.value}>
+														{unit.label}
+													</option>
+												))}
+											</select>
+										</div>
+									</label>
+									{form.packageType === "bottle" && (
+										<div className="full stock-total-row">
+											<label className="stock-total-field">
+												{t("form.total")}
+												<div className="static-value">{formatNumber(totalTablets)}</div>
+											</label>
+										</div>
+									)}
+									<label>
+										{t("form.expiryDate")}
+										<DateInput
+											value={form.expiryDate}
+											onChange={(e) => handleValueChange("expiryDate", e.target.value)}
+											placeholder={t("common.optional")}
+										/>
+									</label>
+									<label className={`full ${fieldErrors.notes ? "has-error" : ""}`}>
+										{t("form.notes")}
+										<textarea
+											value={form.notes}
+											onChange={(e) => handleValueChange("notes", e.target.value)}
+											placeholder={t("form.placeholders.notes")}
+											rows={2}
+											maxLength={FIELD_LIMITS.notes.max}
+											className="auto-resize"
+											onInput={(e) => {
+												const t = e.target as HTMLTextAreaElement;
+												t.style.height = "auto";
+												t.style.height = `${t.scrollHeight}px`;
 											}}
 										/>
-									);
-								})()}
+										{form.notes.length > 0 && (
+											<span
+												className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}
+											>
+												{t("common.validation.tooLong", { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
+											</span>
+										)}
+										{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
+									</label>
+								</div>
 							</div>
+							{/* end stock tab */}
+
+							<div className={`form-tab-panel${activeTab === "prescription" ? " active" : ""}`}>
+								<div className="full form-category">
+									<h4 className="form-category-title">{t("form.sections.prescription")}</h4>
+									<label className="full">
+										{t("prescription.enabled")}
+										<label className="toggle-switch small">
+											<input
+												type="checkbox"
+												checked={form.prescriptionEnabled}
+												onChange={(e) => handleValueChange("prescriptionEnabled", e.target.checked)}
+											/>
+											<span className="toggle-slider"></span>
+										</label>
+									</label>
+									{form.prescriptionEnabled && (
+										<>
+											<label className="prescription-field">
+												{t("prescription.authorizedRefills")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={form.prescriptionAuthorizedRefills}
+													onChange={(e) => handleValueChange("prescriptionAuthorizedRefills", e.target.value)}
+												/>
+											</label>
+											<label className="prescription-field">
+												{t("prescription.remainingRefills")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={form.prescriptionRemainingRefills}
+													onChange={(e) => handleValueChange("prescriptionRemainingRefills", e.target.value)}
+												/>
+											</label>
+											<label className="prescription-field">
+												{t("prescription.lowThreshold")}
+												<input
+													type="text"
+													inputMode="numeric"
+													pattern="[0-9]*"
+													value={form.prescriptionLowRefillThreshold}
+													onChange={(e) => handleValueChange("prescriptionLowRefillThreshold", e.target.value)}
+												/>
+											</label>
+											<label className="prescription-field">
+												{t("prescription.expiryDate")}
+												<DateInput
+													value={form.prescriptionExpiryDate}
+													onChange={(e) => handleValueChange("prescriptionExpiryDate", e.target.value)}
+												/>
+											</label>
+										</>
+									)}
+								</div>
+							</div>
+							{/* end prescription tab */}
+
+							<div className={`form-tab-panel${activeTab === "schedule" ? " active" : ""}`}>
+								<div className="full form-category intake-section">
+									<div className="form-category-header">
+										<h4 className="form-category-title">{t("form.blisters.title")}</h4>
+										{!readOnlyView && (
+											<button
+												type="button"
+												className="primary icon-only tooltip-trigger"
+												onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+												aria-label={t("form.blisters.addIntake")}
+												data-tooltip={t("form.blisters.addIntake")}
+											>
+												<Plus size={18} aria-hidden="true" />
+											</button>
+										)}
+									</div>
+									{form.intakes.map((intake, idx) => (
+										<div key={idx} className="blister-row">
+											<div className="blister-inputs">
+												<label>
+													{t("form.blisters.usage")}
+													<input
+														type="text"
+														inputMode="decimal"
+														pattern="[0-9]*\.?[0-9]*"
+														value={intake.usage}
+														onChange={(e) => setIntakeValue(idx, "usage", e.target.value)}
+													/>
+												</label>
+												<label>
+													{t("form.blisters.everyDays")}
+													<input
+														type="text"
+														inputMode="numeric"
+														pattern="[0-9]*"
+														value={intake.every}
+														onChange={(e) => setIntakeValue(idx, "every", e.target.value)}
+													/>
+												</label>
+												<label>
+													{t("form.blisters.startDate")}
+													<DateInput
+														value={intake.startDate}
+														onChange={(e) => setIntakeValue(idx, "startDate", e.target.value)}
+													/>
+												</label>
+												<label>
+													{t("form.blisters.startTime")}
+													<input
+														type="time"
+														value={intake.startTime}
+														onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
+													/>
+												</label>
+												{form.takenBy.length === 0 ? null : (
+													<label className="taken-by-field" title={t("form.blisters.takenByTooltip")}>
+														{t("form.blisters.takenByIntake")}
+														<select
+															value={intake.takenBy}
+															onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}
+														>
+															{form.takenBy.map((person) => (
+																<option key={person} value={person}>
+																	{person}
+																</option>
+															))}
+														</select>
+													</label>
+												)}
+												<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
+													<span className="blister-reminder-icon">
+														<Bell size={14} aria-hidden="true" />
+													</span>
+													<label className="toggle-switch small">
+														<input
+															type="checkbox"
+															checked={intake.intakeRemindersEnabled}
+															onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+														/>
+														<span className="toggle-slider"></span>
+													</label>
+												</div>
+											</div>
+											{!readOnlyView && form.intakes.length > 1 && (
+												<button
+													type="button"
+													className="danger icon-only tooltip-trigger"
+													onClick={() => removeIntake(idx)}
+													aria-label={t("common.remove")}
+													data-tooltip={t("common.remove")}
+												>
+													<Minus size={18} aria-hidden="true" />
+												</button>
+											)}
+										</div>
+									))}
+								</div>
+							</div>
+							{/* end schedule tab */}
 						</fieldset>
 						<div className="full align-end gap">
 							<button type="button" className="ghost" onClick={handleDesktopFormLeave}>
-								{readOnlyView ? t("common.close") : t("common.cancel")}
+								{readOnlyView || (formSaved && !formChanged) ? t("common.close") : t("common.cancel")}
 							</button>
 							{!readOnlyView && (
 								<button
@@ -1365,14 +1477,6 @@ export function MedicationsPage() {
 				onAddIntake={addIntake}
 				onRemoveIntake={removeIntake}
 				onHandleValueChange={handleValueChange}
-				refillPacks={refillPacks}
-				onRefillPacksChange={setRefillPacks}
-				refillLoose={refillLoose}
-				onRefillLooseChange={setRefillLoose}
-				usePrescriptionRefill={usePrescriptionRefill}
-				onUsePrescriptionRefillChange={setUsePrescriptionRefill}
-				refillSaving={refillSaving}
-				onSubmitRefill={handleSubmitRefill}
 				meds={allMeds}
 				onUploadMedImage={uploadMedImage}
 				onDeleteMedImage={deleteMedImage}
@@ -1408,7 +1512,7 @@ export function MedicationsPage() {
 					cancelLabel={t("common.cancel")}
 					onConfirm={handleConfirmMarkObsolete}
 					onCancel={handleCancelMarkObsolete}
-					confirmVariant="danger"
+					confirmVariant="warning"
 					overlayClassName={showEditModal ? "nested-confirm" : undefined}
 				/>
 			)}
@@ -1431,6 +1535,9 @@ export function MedicationsPage() {
 			{lightboxImage && (
 				<Lightbox src={lightboxImage.src} alt={lightboxImage.alt} onClose={() => setLightboxImage(null)} />
 			)}
+
+			{/* Report Modal */}
+			<ReportModal isOpen={showReportModal} onClose={() => setShowReportModal(false)} medications={allMeds} />
 		</section>
 	);
 }

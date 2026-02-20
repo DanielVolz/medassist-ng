@@ -116,6 +116,20 @@ const mockPastDays = [
 	},
 ];
 
+const mockTodayDay = {
+	dateStr: "Today",
+	date: new Date(),
+	isPast: false,
+	meds: [
+		{
+			medName: "Aspirin",
+			total: 1,
+			doses: [{ id: `1-0-${Date.now() + 60_000}`, timeStr: "09:00", when: Date.now() + 60_000, usage: 1, takenBy: [] }],
+			lastWhen: Date.now() + 60_000,
+		},
+	],
+};
+
 // Default mock factory
 const createMockAppContext = (overrides = {}) => ({
 	meds: [],
@@ -133,6 +147,8 @@ const createMockAppContext = (overrides = {}) => ({
 		lastAutoEmailSent: null,
 		lastNotificationType: null,
 		lastNotificationChannel: null,
+		upcomingTodayOnly: false,
+		shareScheduleTodayOnly: false,
 	},
 	scheduleDays: 30,
 	setScheduleDays: vi.fn(),
@@ -494,6 +510,33 @@ describe("DashboardPage interactions", () => {
 		fireEvent.change(select, { target: { value: "90" } });
 		expect(setScheduleDays).toHaveBeenCalledWith(90);
 	});
+
+	it("hides past and future sections when upcomingTodayOnly is enabled", () => {
+		mockContextValue = createMockAppContext({
+			settings: {
+				...createMockAppContext().settings,
+				upcomingTodayOnly: true,
+			},
+			showPastDays: true,
+			showFutureDays: true,
+			pastDays: mockPastDays,
+			todayDay: mockTodayDay,
+			futureDays: mockFutureDays,
+			meds: mockMeds,
+			coverage: mockCoverage,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		expect(document.querySelector(".day-block.today")).toBeInTheDocument();
+		expect(document.querySelector(".past-days-toggle")).not.toBeInTheDocument();
+		expect(document.querySelector(".future-days-toggle")).not.toBeInTheDocument();
+		expect(document.querySelector(".day-block.past")).not.toBeInTheDocument();
+	});
 });
 
 describe("DashboardPage structure", () => {
@@ -607,9 +650,10 @@ describe("DashboardPage with medications", () => {
 			</MemoryRouter>
 		);
 
-		// Aspirin has notes
+		// Aspirin has notes and reminders.
 		const notesIcons = document.querySelectorAll(".notes-icon");
 		expect(notesIcons.length).toBeGreaterThan(0);
+		expect(document.querySelectorAll(".notes-icon svg").length).toBeGreaterThan(0);
 	});
 
 	it("renders schedule timeline with future doses", () => {

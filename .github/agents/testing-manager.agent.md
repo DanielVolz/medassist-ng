@@ -15,6 +15,7 @@ You are the testing manager for **MedAssist-ng**. Your job is to ensure every fe
 - **Tests are mandatory**: Every new feature and every bug fix MUST have corresponding tests.
 - **Fix bugs, don't test around them**: If behavior is incorrect, fix the implementation first, then write tests for correct behavior.
 - **Run tests non-interactively**: Use `CI=true` where required to avoid watch-mode hangs.
+- **Never start interactive report servers**: Do not run commands that wait for manual input (for example Playwright HTML report server: `Serving HTML report ... Press Ctrl+C to quit`). Always use finite, non-interactive commands and reporters.
 - **No remote git operations**: Do not push, merge, create PRs, tags, or releases. Hand over to `@release-manager` when ready.
 - **Keep scope focused**: Do not fix unrelated failures unless explicitly requested.
 
@@ -67,8 +68,8 @@ cd frontend && npm run build
 ```bash
 cd frontend && npm run test:e2e
 cd frontend && npm run test:e2e -- --project=chromium
-cd frontend && npm run test:e2e:ui
-cd frontend && npm run test:e2e:headed
+# Never use interactive UI/headed/report-server commands in agent runs.
+# Do not use: npm run test:e2e:ui, npm run test:e2e:headed, npx playwright show-report
 ```
 
 ## Backend Test Patterns

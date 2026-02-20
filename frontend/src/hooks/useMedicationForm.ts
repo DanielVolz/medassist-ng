@@ -190,6 +190,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		setEditingId(med.id);
 		setTakenByInput(""); // Clear tag input when starting edit
 		setFormSaved(true); // Existing medication is already saved
+		setFieldErrors({}); // Prevent one-frame stale error highlight from previous/default form state
 
 		// Parse intakes - prefer new format, fallback to legacy blisters
 		const intakesFromApi =
@@ -259,6 +260,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		setPendingImage(null);
 		setPendingImagePreview(null);
 		setTakenByInput("");
+		setFieldErrors({});
 		setFormSaved(false);
 		const newForm = defaultForm();
 		setForm(newForm);

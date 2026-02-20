@@ -64,6 +64,8 @@ const defaultProps = {
 	onEditStockFullBlistersChange: vi.fn(),
 	editStockPartialBlisterPills: 0,
 	onEditStockPartialBlisterPillsChange: vi.fn(),
+	editStockLoosePills: 0,
+	onEditStockLoosePillsChange: vi.fn(),
 	editStockSaving: false,
 	onSubmitStockCorrection: vi.fn(),
 };
@@ -100,7 +102,8 @@ describe("MedDetailModal", () => {
 	it("renders close button", () => {
 		render(<MedDetailModal {...defaultProps} />);
 
-		const closeBtn = screen.getByText("×");
+		const closeButtons = screen.getAllByRole("button", { name: /common\.close/i });
+		const closeBtn = closeButtons[0];
 		expect(closeBtn).toBeInTheDocument();
 	});
 
@@ -108,7 +111,8 @@ describe("MedDetailModal", () => {
 		const onClose = vi.fn();
 		render(<MedDetailModal {...defaultProps} onClose={onClose} />);
 
-		const closeBtn = screen.getByText("×");
+		const closeButtons = screen.getAllByRole("button", { name: /common\.close/i });
+		const closeBtn = closeButtons[0];
 		fireEvent.click(closeBtn);
 
 		expect(onClose).toHaveBeenCalledTimes(1);
@@ -142,6 +146,23 @@ describe("MedDetailModal", () => {
 		render(<MedDetailModal {...defaultProps} />);
 
 		expect(screen.getByText("Test notes")).toBeInTheDocument();
+	});
+
+	it("shows loose pills in stock details for blister medications", () => {
+		const medWithLoose: Medication = {
+			...mockMedication,
+			pillsPerBlister: 5,
+			looseTablets: 2,
+		};
+
+		const coverageWithLoose: Coverage = {
+			...mockCoverage,
+			medsLeft: 50,
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={medWithLoose} coverage={{ all: [coverageWithLoose] }} />);
+
+		expect(screen.getByText("+ 2 modal.loosePills", { exact: false })).toBeInTheDocument();
 	});
 
 	it("shows prescription details section when prescription is enabled", () => {
@@ -341,6 +362,26 @@ describe("MedDetailModal with refill modal", () => {
 		expect(onRefillPacksChange).toHaveBeenCalledWith(0);
 		expect(onRefillLooseChange).toHaveBeenCalledWith(0);
 	});
+
+	it("shows package size breakdown key for blister stock correction", () => {
+		render(<MedDetailModal {...defaultProps} showEditStockModal={true} />);
+
+		expect(screen.queryByText("editStock.packageSizeBreakdown")).not.toBeInTheDocument();
+		expect(document.querySelector(".edit-stock-live-breakdown")).toBeInTheDocument();
+	});
+
+	it("shows numeric package size text for bottle stock correction", () => {
+		const bottleMed: Medication = {
+			...mockMedication,
+			packageType: "bottle",
+			totalPills: 150,
+			looseTablets: 130,
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={bottleMed} showEditStockModal={true} />);
+
+		expect(screen.getByText("editStock.packageSize_150")).toBeInTheDocument();
+	});
 });
 
 describe("MedDetailModal actions", () => {
@@ -373,8 +414,16 @@ describe("MedDetailModal actions", () => {
 		const generateICSSpy = vi.spyOn(utils, "generateICS").mockImplementation(() => "BEGIN:VCALENDAR");
 		render(<MedDetailModal {...defaultProps} />);
 
-		fireEvent.click(screen.getByTitle("modal.exportTooltip"));
+		fireEvent.click(screen.getByRole("button", { name: /modal\.exportTooltip/i }));
 		expect(generateICSSpy).toHaveBeenCalledWith(mockMedication);
+	});
+
+	it("calls onOpenEditStockModal when stock correction icon is clicked", () => {
+		const onOpenEditStockModal = vi.fn();
+		render(<MedDetailModal {...defaultProps} onOpenEditStockModal={onOpenEditStockModal} />);
+
+		fireEvent.click(screen.getByRole("button", { name: /editStock\.buttonLabel/i }));
+		expect(onOpenEditStockModal).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not render export calendar button when no blisters exist", () => {
@@ -384,7 +433,7 @@ describe("MedDetailModal actions", () => {
 		};
 
 		render(<MedDetailModal {...defaultProps} selectedMed={medWithoutBlisters} />);
-		expect(screen.queryByTitle("modal.exportTooltip")).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /modal\.exportTooltip/i })).not.toBeInTheDocument();
 	});
 });
 
@@ -464,6 +513,23 @@ describe("MedDetailModal nested modal overlays", () => {
 		const overlays = document.querySelectorAll(".modal-overlay");
 		fireEvent.click(overlays[1]);
 		expect(onCloseEditStockModal).toHaveBeenCalledTimes(1);
+	});
+
+	it("renders only edit stock modal in editStockOnly mode", () => {
+		render(<MedDetailModal {...defaultProps} showEditStockModal={true} editStockOnly={true} />);
+
+		expect(screen.getByText("editStock.title")).toBeInTheDocument();
+		expect(screen.queryByText("form.sections.schedule")).not.toBeInTheDocument();
+	});
+
+	it("closes edit stock modal on Escape", () => {
+		const onCloseEditStockModal = vi.fn();
+		render(
+			<MedDetailModal {...defaultProps} showEditStockModal={true} onCloseEditStockModal={onCloseEditStockModal} />
+		);
+
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(onCloseEditStockModal).toHaveBeenCalled();
 	});
 });
 
@@ -592,12 +658,93 @@ describe("MedDetailModal intake schedule usage display", () => {
 	});
 });
 
+describe("MedDetailModal partial blister normalization", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("carries partial pills into full blisters when partial reaches pillsPerBlister", () => {
+		const onEditStockFullBlistersChange = vi.fn();
+		const onEditStockPartialBlisterPillsChange = vi.fn();
+		const blisterMed: Medication = {
+			...mockMedication,
+			packCount: 10,
+			blistersPerPack: 5,
+			pillsPerBlister: 5,
+			looseTablets: 0,
+		};
+
+		// full=12, partial=4 (one below pillsPerBlister)
+		render(
+			<MedDetailModal
+				{...defaultProps}
+				selectedMed={blisterMed}
+				showEditStockModal={true}
+				editStockFullBlisters={12}
+				editStockPartialBlisterPills={4}
+				editStockLoosePills={0}
+				onEditStockFullBlistersChange={onEditStockFullBlistersChange}
+				onEditStockPartialBlisterPillsChange={onEditStockPartialBlisterPillsChange}
+			/>
+		);
+
+		// Find the increment button for the partial blister pills stepper
+		// The partial stepper is the second stepper in the modal
+		const incrementButtons = document.querySelectorAll(".stepper-btn.increment");
+		const partialIncrementBtn = incrementButtons[1]; // full[0], partial[1], loose[2]
+		expect(partialIncrementBtn).not.toBeDisabled();
+
+		// Press + on partial: 4 → 5 = pillsPerBlister → normalization carries to full
+		fireEvent.click(partialIncrementBtn);
+
+		// full should have been called with 13 (12 + 1 carry)
+		expect(onEditStockFullBlistersChange).toHaveBeenCalledWith(13);
+		// partial should have been called with 0 (5 % 5 = 0)
+		expect(onEditStockPartialBlisterPillsChange).toHaveBeenCalledWith(0);
+	});
+
+	it("does not carry partial pills into full when below pillsPerBlister", () => {
+		const onEditStockFullBlistersChange = vi.fn();
+		const onEditStockPartialBlisterPillsChange = vi.fn();
+		const blisterMed: Medication = {
+			...mockMedication,
+			packCount: 10,
+			blistersPerPack: 5,
+			pillsPerBlister: 5,
+			looseTablets: 0,
+		};
+
+		// full=12, partial=0
+		render(
+			<MedDetailModal
+				{...defaultProps}
+				selectedMed={blisterMed}
+				showEditStockModal={true}
+				editStockFullBlisters={12}
+				editStockPartialBlisterPills={0}
+				editStockLoosePills={0}
+				onEditStockFullBlistersChange={onEditStockFullBlistersChange}
+				onEditStockPartialBlisterPillsChange={onEditStockPartialBlisterPillsChange}
+			/>
+		);
+
+		const incrementButtons = document.querySelectorAll(".stepper-btn.increment");
+		const partialIncrementBtn = incrementButtons[1];
+		fireEvent.click(partialIncrementBtn);
+
+		// full should not change (1 partial pill with pbb=5 is NOT a carry)
+		expect(onEditStockFullBlistersChange).toHaveBeenCalledWith(12);
+		// partial should go to 1
+		expect(onEditStockPartialBlisterPillsChange).toHaveBeenCalledWith(1);
+	});
+});
+
 describe("MedDetailModal stock overflow warning", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 	});
 
-	it("shows warning icon when stock exceeds package capacity", () => {
+	it("does not show overflow warning icon with live stock denominator", () => {
 		const overflowCoverage: Coverage = {
 			name: "Test Med",
 			medsLeft: 49,
@@ -609,10 +756,9 @@ describe("MedDetailModal stock overflow warning", () => {
 
 		render(<MedDetailModal {...defaultProps} coverage={{ all: [overflowCoverage] }} />);
 
-		// packageSize = 1 * 1 * 30 + 0 = 30, currentStock = 49 > 30
+		// Live denominator uses current stock, so overflow warning is not shown in detail row.
 		const warningIcon = document.querySelector(".info-tooltip.tooltip-align-left.warning-text");
-		expect(warningIcon).toBeInTheDocument();
-		expect(warningIcon?.getAttribute("data-tooltip")).toBe("tooltips.stockExceedsCapacity");
+		expect(warningIcon).not.toBeInTheDocument();
 	});
 
 	it("does not show warning icon when stock is within package capacity", () => {

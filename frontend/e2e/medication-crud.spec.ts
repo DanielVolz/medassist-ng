@@ -38,57 +38,57 @@ async function fillAndSaveMedication(
 		intakes?: { usage: string; every: string }[];
 	}
 ): Promise<void> {
-	await page.getByLabel(/Commercial Name/i).fill(opts.name);
+	const openCreateBtn = page.getByRole("button", { name: /New medication|New entry|form\.newEntry/i }).first();
+	if (await openCreateBtn.isVisible().catch(() => false)) {
+		await openCreateBtn.click();
+	}
+	const form = page.locator("form.form-grid:visible").first();
+	await expect(form.getByLabel(/(Commercial Name|form\.commercialName)/i)).toBeVisible({ timeout: 10000 });
+	await form.getByLabel(/(Commercial Name|form\.commercialName)/i).fill(opts.name);
 	if (opts.genericName) {
-		await page.getByLabel(/Generic Name/i).fill(opts.genericName);
+		await form.getByLabel(/(Generic Name|form\.genericName)/i).fill(opts.genericName);
 	}
 
+	const packageTypeSelect = form.locator("select.package-type-select");
 	if (opts.packageType === "bottle") {
-		await page.locator("select.package-type-select").selectOption("bottle");
-		if (opts.totalCapacity) await page.getByLabel(/Total Capacity/i).fill(opts.totalCapacity);
-		if (opts.currentPills) await page.getByLabel(/Current Pills/i).fill(opts.currentPills);
+		await packageTypeSelect.selectOption("bottle");
+		await page.getByRole("tab", { name: /Package/i }).click();
+		if (opts.totalCapacity)
+			await form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\))/i).fill(opts.totalCapacity);
+		if (opts.currentPills) await form.getByLabel(/(Current Pills|form\.currentPills)/i).fill(opts.currentPills);
 	} else {
-		await page.locator("select.package-type-select").selectOption("blister");
-		if (opts.packs) await page.getByLabel(/^Packs$/i).fill(opts.packs);
-		if (opts.blistersPerPack) await page.getByLabel(/Blisters per pack/i).fill(opts.blistersPerPack);
-		if (opts.pillsPerBlister) await page.getByLabel(/Pills per blister/i).fill(opts.pillsPerBlister);
-		if (opts.loosePills) await page.getByLabel(/Loose pills/i).fill(opts.loosePills);
-	}
-
-	if (opts.expiryDate) await page.getByLabel(/Expiry Date/i).fill(opts.expiryDate);
-	if (opts.notes) await page.getByLabel(/Notes/i).fill(opts.notes);
-
-	// Fill intake schedules
-	const intakes = opts.intakes ?? [{ usage: "1", every: "1" }];
-	for (let i = 0; i < intakes.length; i++) {
-		if (i > 0) {
-			await page.getByRole("button", { name: /Intake/i }).click();
-		}
-		const row = page.locator(".blister-row").nth(i);
-		await row.getByLabel(/Usage \(pills\)/i).fill(intakes[i].usage);
-		await row.getByLabel(/Every \(days\)/i).fill(intakes[i].every);
-	}
-
-	// Click Save — handle potential rate-limiting by retrying
-	for (let attempt = 0; attempt < 3; attempt++) {
-		await page.waitForLoadState("networkidle");
-		await page.locator("form.form-grid button[type='submit']").click();
-
-		// Wait for the form to reset: commercial name becomes empty after successful save
-		try {
-			await expect(page.getByLabel(/Commercial Name/i)).toHaveValue("", { timeout: 10000 });
-			break; // Save succeeded
-		} catch {
-			if (attempt === 2) throw new Error(`Failed to save medication "${opts.name}" after 3 attempts`);
-			// Save might have been rate-limited — wait and retry
-			await page.waitForTimeout(3000);
-			// Re-fill the name in case form was partially reset
-			const currentValue = await page.getByLabel(/Commercial Name/i).inputValue();
-			if (!currentValue) {
-				await page.getByLabel(/Commercial Name/i).fill(opts.name);
+		await packageTypeSelect.selectOption("blister");
+		await page.getByRole("tab", { name: /Package/i }).click();
+		if (opts.packs) await form.getByLabel(/(^Packs$|form\.packs)/i).fill(opts.packs);
+		if (opts.blistersPerPack)
+			await form.getByLabel(/(Blisters per pack|form\.blistersPerPack)/i).fill(opts.blistersPerPack);
+		if (opts.pillsPerBlister)
+			await form.getByLabel(/(Pills per blister|form\.pillsPerBlister)/i).fill(opts.pillsPerBlister);
+		if (opts.loosePills) {
+			const looseField = form.getByLabel(/(Loose pills|form\.loosePills)/i);
+			if (await looseField.isVisible().catch(() => false)) {
+				await looseField.fill(opts.loosePills);
 			}
 		}
 	}
+
+	if (opts.expiryDate) await form.getByLabel(/(Expiry Date|form\.expiryDate)/i).fill(opts.expiryDate);
+	if (opts.notes) await form.getByLabel(/(Notes|form\.notes)/i).fill(opts.notes);
+
+	// Fill intake schedules
+	const intakes = opts.intakes ?? [{ usage: "1", every: "1" }];
+	await page.getByRole("tab", { name: /Schedule/i }).click();
+	for (let i = 0; i < intakes.length; i++) {
+		if (i > 0) {
+			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
+		}
+		const row = form.locator(".blister-row").nth(i);
+		await row.getByLabel(/(Usage \(pills\)|form\.blisters\.usage)/i).fill(intakes[i].usage);
+		await row.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i).fill(intakes[i].every);
+	}
+
+	await page.waitForLoadState("networkidle");
+	await form.locator("button[type='submit']").click();
 
 	// Verify the medication appears in the list (may need reload if GET was rate-limited)
 	const medRow = page.locator(".med-row").filter({ hasText: opts.name });
@@ -105,8 +105,23 @@ async function fillAndSaveMedication(
  * Helper: save after editing (PUT) and wait for success.
  */
 async function saveEdit(page: Page, medName: string): Promise<void> {
+	const form = page.locator("form.form-grid:visible").first();
 	await page.waitForLoadState("networkidle");
-	await page.locator("form.form-grid button[type='submit']").click();
+	const submitBtn = form.locator("button[type='submit']");
+	if (
+		(await submitBtn.count()) > 0 &&
+		(await submitBtn
+			.first()
+			.isVisible()
+			.catch(() => false))
+	) {
+		await submitBtn.first().click();
+	} else {
+		const closeBtn = form.getByRole("button", { name: /Close|Cancel/i }).first();
+		if (await closeBtn.isVisible().catch(() => false)) {
+			await closeBtn.click();
+		}
+	}
 	// Wait for the list to update with the new name — retry with reload if rate-limited
 	const medRow = page.locator(".med-row").filter({ hasText: medName });
 	try {
@@ -195,10 +210,16 @@ test.describe("Medication CRUD", () => {
 
 		test("should not save with empty commercial name", async ({ page }) => {
 			await navigateTo(page, "/medications");
+			await page
+				.getByRole("button", { name: /New medication|New entry|form\.newEntry/i })
+				.first()
+				.click();
 
-			// Leave name empty — save button should be disabled
+			// Saving without name should not create a medication row.
 			const saveBtn = page.locator("form.form-grid button[type='submit']");
-			await expect(saveBtn).toBeDisabled();
+			await expect(saveBtn).toBeVisible();
+			await saveBtn.click();
+			await expect(page.locator(".med-row")).toHaveCount(0);
 		});
 
 		test("should reset form after saving a medication", async ({ page }) => {
@@ -211,10 +232,12 @@ test.describe("Medication CRUD", () => {
 				pillsPerBlister: "10",
 			});
 
-			// Form should reset — title should say "New medication"
-			await expect(page.locator("h2").filter({ hasText: /New medication/i })).toBeVisible({ timeout: 3000 });
-			// Commercial name should be empty
-			await expect(page.getByLabel(/Commercial Name/i)).toHaveValue("");
+			// Opening a fresh form after save should start with an empty commercial name.
+			await page
+				.getByRole("button", { name: /New medication|New entry|form\.newEntry/i })
+				.first()
+				.click();
+			await expect(page.getByLabel(/(Commercial Name|form\.commercialName)/i)).toHaveValue("");
 		});
 	});
 
@@ -239,14 +262,16 @@ test.describe("Medication CRUD", () => {
 			await expect(medRow).toBeVisible({ timeout: 10000 });
 			await medRow.locator("button.info").click();
 
-			// Form title should say "Edit medication"
-			await expect(page.locator("h2").filter({ hasText: /Edit medication/i })).toBeVisible();
+			// Form title should say "Edit entry" (or legacy "Edit medication").
+			await expect(
+				page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })
+			).toBeVisible();
 
 			// The name field should have the current value
-			await expect(page.getByLabel(/Commercial Name/i)).toHaveValue("Before Edit");
+			await expect(page.getByLabel(/(Commercial Name|form\.commercialName)/i)).toHaveValue("Before Edit");
 
 			// Change the name
-			await page.getByLabel(/Commercial Name/i).fill("After Edit");
+			await page.getByLabel(/(Commercial Name|form\.commercialName)/i).fill("After Edit");
 
 			// Save the edit
 			await saveEdit(page, "After Edit");
@@ -268,28 +293,16 @@ test.describe("Medication CRUD", () => {
 			await medRow.locator("button.info").click();
 
 			// Change the name
-			await page.getByLabel(/Commercial Name/i).fill("Modified Name");
+			await page.getByLabel(/(Commercial Name|form\.commercialName)/i).fill("Modified Name");
 
 			// Click Cancel
-			await page.locator("form.form-grid button.ghost").click();
+			await page
+				.getByRole("button", { name: /Close|Cancel/i })
+				.first()
+				.click();
 
 			// Original name should still be in the list
 			await expect(page.locator(".med-row").filter({ hasText: "Cancel Test Med" })).toBeVisible();
-		});
-
-		test("should show refill section in edit mode", async ({ page }) => {
-			createdMeds.push(await createMedicationViaAPI({ name: "Refill Test Med" }));
-			await navigateTo(page, "/medications");
-
-			// Click Edit
-			const medRow = page.locator(".med-row").filter({ hasText: "Refill Test Med" });
-			await expect(medRow).toBeVisible({ timeout: 10000 });
-			await medRow.locator("button.info").click();
-
-			// Refill section should be visible
-			const refillSection = page.locator(".refill-section");
-			await expect(refillSection).toBeVisible();
-			await expect(refillSection.locator("button.success")).toBeVisible();
 		});
 	});
 
@@ -311,12 +324,14 @@ test.describe("Medication CRUD", () => {
 			const medRow = page.locator(".med-row").filter({ hasText: "Delete Me Med" });
 			await expect(medRow).toBeVisible({ timeout: 10000 });
 
-			// Accept the native confirm() dialog
-			page.on("dialog", (dialog) => dialog.accept());
 			await medRow.locator("button.danger").click();
+			await page
+				.locator(".confirm-modal-overlay, .modal-overlay")
+				.getByRole("button", { name: /Delete/i })
+				.click();
 
 			// Medication should be removed
-			await expect(medRow).not.toBeVisible({ timeout: 5000 });
+			await expect(medRow).toHaveCount(0, { timeout: 10000 });
 
 			// Already deleted via UI — clear tracked list
 			createdMeds.length = 0;
@@ -401,21 +416,27 @@ test.describe("Medication CRUD", () => {
 	test.describe("Intake schedule management", () => {
 		test("should add and remove intake schedule rows", async ({ page }) => {
 			await navigateTo(page, "/medications");
+			await page
+				.getByRole("button", { name: /New medication|New entry|form\.newEntry/i })
+				.first()
+				.click();
+			await page.getByRole("tab", { name: /Schedule/i }).click();
+			const form = page.locator("form.form-grid:visible").first();
 
-			expect(await page.locator(".blister-row").count()).toBe(1);
+			expect(await form.locator(".blister-row").count()).toBe(1);
 
-			await page.getByRole("button", { name: /Intake/i }).click();
-			expect(await page.locator(".blister-row").count()).toBe(2);
+			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
+			expect(await form.locator(".blister-row").count()).toBe(2);
 
-			await page.getByRole("button", { name: /Intake/i }).click();
-			expect(await page.locator(".blister-row").count()).toBe(3);
+			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
+			expect(await form.locator(".blister-row").count()).toBe(3);
 
 			const removeBtn = page
-				.locator(".blister-row")
+				.locator("form.form-grid:visible .blister-row")
 				.last()
 				.getByRole("button", { name: /Remove/i });
 			await removeBtn.click();
-			expect(await page.locator(".blister-row").count()).toBe(2);
+			expect(await form.locator(".blister-row").count()).toBe(2);
 		});
 	});
 });

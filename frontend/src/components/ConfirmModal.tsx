@@ -12,7 +12,7 @@ export interface ConfirmModalProps {
 	onConfirm: () => void;
 	onCancel: () => void;
 	isLoading?: boolean;
-	confirmVariant?: "primary" | "danger" | "success";
+	confirmVariant?: "primary" | "danger" | "success" | "warning";
 	overlayClassName?: string;
 }
 

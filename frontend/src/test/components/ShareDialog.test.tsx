@@ -54,7 +54,7 @@ describe("ShareDialog", () => {
 
 	it("calls onClose when close button is clicked", () => {
 		render(<ShareDialog {...defaultProps} />);
-		fireEvent.click(screen.getByText("×"));
+		fireEvent.click(screen.getByRole("button", { name: /common\.close/i }));
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 
@@ -73,13 +73,13 @@ describe("ShareDialog", () => {
 
 	it("calls onCopyShareLink when copy button is clicked", () => {
 		render(<ShareDialog {...defaultProps} shareLink="http://example.com/share/abc123" />);
-		fireEvent.click(screen.getByText("📋"));
+		fireEvent.click(screen.getByRole("button", { name: /share\.copyLink/i }));
 		expect(defaultProps.onCopyShareLink).toHaveBeenCalled();
 	});
 
 	it("shows copied indicator after copy", () => {
 		render(<ShareDialog {...defaultProps} shareLink="http://example.com/share/abc123" shareCopied={true} />);
-		expect(screen.getByText("✓")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /share\.copied/i })).toBeInTheDocument();
 	});
 
 	it("selects link text when input is clicked", () => {

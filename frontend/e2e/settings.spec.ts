@@ -130,10 +130,7 @@ test.describe("Settings Page", () => {
 			}
 		}
 
-		if (!enabledToggle) {
-			// All toggles disabled (no notification channels configured) — skip
-			return;
-		}
+		test.skip(!enabledToggle, "All notification toggles are disabled in this environment");
 
 		const checkbox = enabledToggle.locator('input[type="checkbox"]');
 		const initialState = await checkbox.isChecked();

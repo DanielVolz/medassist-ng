@@ -154,6 +154,8 @@ export async function shareRoutes(app: FastifyInstance) {
 			},
 			stockCalculationMode: (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic",
 			shareStockStatus: settings?.shareStockStatus ?? true,
+			upcomingTodayOnly: settings?.upcomingTodayOnly ?? false,
+			shareScheduleTodayOnly: settings?.shareScheduleTodayOnly ?? false,
 		};
 	});
 

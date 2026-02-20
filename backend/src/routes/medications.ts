@@ -623,9 +623,9 @@ export async function medicationRoutes(app: FastifyInstance) {
 		};
 	});
 
-	// Stock correction endpoint - only updates stockAdjustment, preserves looseTablets
+	// Stock correction endpoint - updates stockAdjustment and optionally looseTablets (for blister type)
 	// Also sets lastStockCorrectionAt so consumed doses before this point don't count
-	app.patch<{ Params: { id: string }; Body: { stockAdjustment: number } }>(
+	app.patch<{ Params: { id: string }; Body: { stockAdjustment: number; looseTablets?: number } }>(
 		"/medications/:id/stock-adjustment",
 		async (req, reply) => {
 			const idNum = Number(req.params.id);
@@ -640,16 +640,32 @@ export async function medicationRoutes(app: FastifyInstance) {
 				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
 			if (!existing) return reply.notFound();
 
-			const { stockAdjustment } = req.body as { stockAdjustment: number };
+			const { stockAdjustment, looseTablets } = req.body as { stockAdjustment: number; looseTablets?: number };
 			if (typeof stockAdjustment !== "number") return reply.badRequest("stockAdjustment must be a number");
+			if (
+				looseTablets !== undefined &&
+				(typeof looseTablets !== "number" || !Number.isInteger(looseTablets) || looseTablets < 0)
+			) {
+				return reply.badRequest("looseTablets must be a non-negative integer");
+			}
+
+			const updateFields: {
+				stockAdjustment: number;
+				lastStockCorrectionAt: Date;
+				updatedAt: Date;
+				looseTablets?: number;
+			} = {
+				stockAdjustment,
+				lastStockCorrectionAt: new Date(),
+				updatedAt: new Date(),
+			};
+			if (looseTablets !== undefined) {
+				updateFields.looseTablets = looseTablets;
+			}
 
 			const result = await db
 				.update(medications)
-				.set({
-					stockAdjustment,
-					lastStockCorrectionAt: new Date(), // Mark when correction was made
-					updatedAt: new Date(),
-				})
+				.set(updateFields)
 				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
 				.returning();
 

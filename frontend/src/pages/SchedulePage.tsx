@@ -192,8 +192,12 @@ export function SchedulePage() {
 																<div key={dose.id} className="dose-item past">
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">
-																		{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																		{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
+																		<span className="dose-usage-main">
+																			{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																		</span>
+																		{med?.pillWeightMg && (
+																			<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																		)}
 																	</span>{" "}
 																	{dose.intakeRemindersEnabled && (
 																		<span
@@ -235,7 +239,8 @@ export function SchedulePage() {
 																							disabled={isEmpty}
 																							title={t("dose.markAsTaken")}
 																						>
-																							✓
+																							<span className="dose-btn-label">{t("dose.take")}</span>
+																							<span aria-hidden="true">✓</span>
 																						</button>
 																					)}
 																				</div>
@@ -348,8 +353,12 @@ export function SchedulePage() {
 														<div key={dose.id} className="dose-item">
 															<span className="dose-time">{dose.timeStr}</span>
 															<span className="dose-usage">
-																{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																{med?.pillWeightMg && ` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
+																<span className="dose-usage-main">
+																	{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																</span>
+																{med?.pillWeightMg && (
+																	<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																)}
 															</span>
 															{dose.intakeRemindersEnabled && (
 																<span
@@ -395,7 +404,8 @@ export function SchedulePage() {
 																					disabled={isEmpty}
 																					title={t("dose.markAsTaken")}
 																				>
-																					✓
+																					<span className="dose-btn-label">{t("dose.take")}</span>
+																					<span aria-hidden="true">✓</span>
 																				</button>
 																			)}
 																		</div>

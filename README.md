@@ -123,6 +123,7 @@ Share your medication schedule with others via a public link.
 - Track exact stock: packs, blisters, bottles, and loose pills
 - Display remaining days of supply
 - Automatic calculation based on intake schedule
+- Manual stock correction supports partial blisters and loose pills
 
 ### Medication Refill
 - One-click refill with pack or loose pill options
@@ -132,6 +133,7 @@ Share your medication schedule with others via a public link.
 ### Flexible Schedules
 - Daily, weekly, or custom intervals per medication
 - Independent schedules for each medication
+- Optional timeline filters for dashboard and shared schedule views
 
 ### Stock Alerts & Reminders
 - Notifications before stock runs out
@@ -142,6 +144,10 @@ Share your medication schedule with others via a public link.
 - Calculate how many pills you need for a trip or date range
 - Plan ahead for vacations, business trips, or hospital stays
 - Send demand reports via email or push notification
+
+### Reports
+- Generate medication reports as PDF, Markdown, or plain text
+- Include intake history, refill history, and prescription details
 
 ### Multi-Person Support
 - Manage medications for multiple people

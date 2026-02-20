@@ -295,14 +295,15 @@
 }
 
 .mobile-edit-form .blister-row .remove-blister-btn {
-	grid-column: 1 / -1;
-	justify-self: start;
+	grid-column: 2 / 3;
+	justify-self: end;
 }
 
 .mobile-edit-form .blister-row .remind-toggle-row {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
+	grid-column: 1 / 2;
 }
 
 .blister-inputs .remind-toggle-row {

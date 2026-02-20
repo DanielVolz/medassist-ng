@@ -4325,14 +4325,21 @@ button.has-validation-error {
 /* Medication Detail Modal */
 .med-detail-modal {
 	padding: 0;
+	width: min(100vw - 1rem, 520px);
 	max-height: 90vh;
 	background: var(--bg-primary);
 	overscroll-behavior: contain;
-	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .med-detail-modal .med-detail-body {
 	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
 }
 
 .med-detail-header {
@@ -4673,32 +4680,36 @@ button.has-validation-error {
 	background: var(--bg-primary);
 	border-radius: 0 0 12px 12px;
 	flex-shrink: 0;
-	overflow: visible;
-	position: sticky;
-	bottom: 0;
-	z-index: 200;
+	overflow: hidden;
+	position: relative;
+	z-index: 1;
+	padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+	margin: 0 -2rem;
+}
+
+/* Mobile devices can report wide CSS viewports (e.g., 768px in device emulation).
+   Use input modality instead of width-only breakpoints so the modal still fills the handset viewport. */
+@media (hover: none) and (pointer: coarse) {
+	.med-detail-overlay {
+		padding: 0.4rem;
+		align-items: stretch;
+	}
+
+	.modal-content.med-detail-modal {
+		width: calc(100vw - 0.8rem);
+		max-width: none;
+		max-height: calc(100dvh - 0.8rem);
+		margin: auto;
+		border-radius: 12px;
+	}
 }
 
 .med-detail-footer::before {
-	content: "";
-	position: absolute;
-	left: 0;
-	right: 0;
-	top: -2px;
-	height: 2px;
-	background: var(--bg-primary);
-	pointer-events: none;
+	content: none;
 }
 
 .med-detail-footer::after {
-	content: "";
-	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: -2px;
-	height: 2px;
-	background: var(--bg-primary);
-	pointer-events: none;
+	content: none;
 }
 
 .med-detail-footer .footer-actions {
@@ -4860,10 +4871,23 @@ button.has-validation-error {
 
 /* Mobile adjustments for modal */
 @media (max-width: 500px) {
+	.med-detail-overlay {
+		padding: 0.4rem;
+		align-items: stretch;
+	}
+
 	.modal-content {
 		max-height: 85vh;
 		border-radius: 12px 12px 0 0;
 		margin-top: auto;
+	}
+
+	.modal-content.med-detail-modal {
+		width: calc(100vw - 0.8rem);
+		max-width: none;
+		max-height: calc(100dvh - 0.8rem);
+		border-radius: 12px;
+		margin: auto;
 	}
 
 	.med-detail-header {
@@ -4882,17 +4906,25 @@ button.has-validation-error {
 
 	.med-detail-footer {
 		padding: 1rem 1.5rem;
+		padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
 		flex-wrap: wrap;
 		gap: 0.75rem;
+		margin: 0 -1.5rem;
 	}
 
 	.med-detail-footer > button {
-		flex: 1 1 auto;
+		flex: 0 0 auto;
+		width: min(100%, 560px);
 	}
 
 	.med-detail-footer .footer-actions {
-		flex: 1 1 auto;
-		justify-content: flex-end;
+		flex: 0 0 auto;
+		width: 100%;
+		justify-content: center;
+		margin-left: 0;
 	}
 
 	.med-detail-footer button {
@@ -4902,6 +4934,44 @@ button.has-validation-error {
 
 	.med-detail-grid {
 		gap: 0.5rem;
+	}
+}
+
+/* Hard mobile override for MedDetailModal: remove side frame and use full handset viewport. */
+@media (max-width: 900px) {
+	.modal-overlay.med-detail-overlay {
+		padding: 0 !important;
+		align-items: stretch;
+	}
+
+	.modal-overlay.med-detail-overlay > .modal-content.med-detail-modal {
+		width: 100vw !important;
+		max-width: 100vw !important;
+		max-height: 100dvh !important;
+		height: 100dvh;
+		margin: 0 !important;
+		border-radius: 0 !important;
+		border-left: none;
+		border-right: none;
+	}
+
+	.modal-overlay.med-detail-overlay .med-detail-header {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+
+	.modal-overlay.med-detail-overlay .med-detail-body {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+
+	.modal-overlay.med-detail-overlay .med-detail-footer {
+		margin: 0;
+		padding-left: 1rem;
+		padding-right: 1rem;
+		position: sticky;
+		bottom: 0;
+		z-index: 5;
 	}
 }
 

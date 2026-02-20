@@ -664,7 +664,7 @@ export function MedDetailModal({
 
 	return (
 		<div
-			className="modal-overlay"
+			className="modal-overlay med-detail-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
 				if (showEditStockModal) return;

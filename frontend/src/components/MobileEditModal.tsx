@@ -2,8 +2,9 @@
  * MobileEditModal - Full-screen edit form for medications (mobile-optimized)
  * Handles new medication creation and editing existing medications
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Minus, Plus, Trash2 } from "lucide-react";
 import type { DoseUnit, FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
 import { DOSE_UNITS } from "../types";
 import { deriveTotal } from "../utils";
@@ -46,15 +47,6 @@ export interface MobileEditModalProps {
 	onRemoveIntake: (idx: number) => void;
 	// Value change handler for numeric fields
 	onHandleValueChange: <K extends keyof FormState>(field: K, value: FormState[K]) => void;
-	// Refill state (for edit mode)
-	refillPacks: number;
-	onRefillPacksChange: (value: number) => void;
-	refillLoose: number;
-	onRefillLooseChange: (value: number) => void;
-	usePrescriptionRefill: boolean;
-	onUsePrescriptionRefillChange: (value: boolean) => void;
-	refillSaving: boolean;
-	onSubmitRefill: (medId: number) => Promise<void>;
 	// Image handling
 	meds: Medication[];
 	onUploadMedImage: (medId: number, file: File) => Promise<void>;
@@ -74,8 +66,7 @@ function deriveTotalFromForm(form: FormState) {
 	const packCount = Number(form.packCount) || 0;
 	const blistersPerPack = Number(form.blistersPerPack) || 0;
 	const pillsPerBlister = Number(form.pillsPerBlister) || 1;
-	const looseTablets = Number(form.looseTablets) || 0;
-	return deriveTotal(packCount, blistersPerPack, pillsPerBlister, looseTablets);
+	return deriveTotal(packCount, blistersPerPack, pillsPerBlister, 0);
 }
 
 export function MobileEditModal({
@@ -103,14 +94,6 @@ export function MobileEditModal({
 	onAddIntake,
 	onRemoveIntake,
 	onHandleValueChange,
-	refillPacks,
-	onRefillPacksChange,
-	refillLoose,
-	onRefillLooseChange,
-	usePrescriptionRefill,
-	onUsePrescriptionRefillChange,
-	refillSaving,
-	onSubmitRefill,
 	meds,
 	onUploadMedImage,
 	onDeleteMedImage,
@@ -119,6 +102,12 @@ export function MobileEditModal({
 	onSaveMedication,
 }: MobileEditModalProps) {
 	const { t } = useTranslation();
+	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
+
+	// Reset tab when modal opens
+	useEffect(() => {
+		if (show) setActiveTab("general");
+	}, [show]);
 
 	// Close on Escape key
 	useEffect(() => {
@@ -162,6 +151,10 @@ export function MobileEditModal({
 				</div>
 				<form
 					className="form-grid mobile-edit-form"
+					autoComplete="off"
+					spellCheck={false}
+					autoCorrect="off"
+					autoCapitalize="off"
 					onSubmit={(e) => {
 						// Check native HTML5 validation first
 						const formElement = e.currentTarget;
@@ -174,7 +167,14 @@ export function MobileEditModal({
 						onSaveMedication(e);
 					}}
 				>
+					<nav className="full form-tabs" role="tablist">
+						<a role="tab" aria-selected={activeTab === "general"} className={`form-tab${activeTab === "general" ? " active" : ""}`} onClick={() => setActiveTab("general")}>{t("form.sections.general")}</a>
+						<a role="tab" aria-selected={activeTab === "stock"} className={`form-tab${activeTab === "stock" ? " active" : ""}`} onClick={() => setActiveTab("stock")}>{t("form.sections.stock")}</a>
+						<a role="tab" aria-selected={activeTab === "prescription"} className={`form-tab${activeTab === "prescription" ? " active" : ""}`} onClick={() => setActiveTab("prescription")}>{t("form.sections.prescription")}</a>
+						<a role="tab" aria-selected={activeTab === "schedule"} className={`form-tab${activeTab === "schedule" ? " active" : ""}`} onClick={() => setActiveTab("schedule")}>{t("form.sections.schedule")}</a>
+					</nav>
 					<fieldset className="readonly-fieldset" disabled={readOnlyMode}>
+						<div className={`form-tab-panel${activeTab === "general" ? " active" : ""}`}>
 						<div className="full form-category">
 							<h4 className="form-category-title">{t("form.sections.general")}</h4>
 							<label className={`full ${!readOnlyMode && fieldErrors.name ? "has-error" : ""}`}>
@@ -205,6 +205,17 @@ export function MobileEditModal({
 									onChange={(e) => onHandleValueChange("medicationStartDate", e.target.value)}
 								/>
 								{!readOnlyMode && dateConsistencyError && <span className="field-error">{dateConsistencyError}</span>}
+							</label>
+							<label className="full">
+								{t("form.packageType")}
+								<select
+									className="package-type-select"
+									value={form.packageType}
+									onChange={(e) => onHandleValueChange("packageType", e.target.value)}
+								>
+									<option value="blister">{t("form.packageTypeBlister")}</option>
+									<option value="bottle">{t("form.packageTypeBottle")}</option>
+								</select>
 							</label>
 							<label className={`full ${fieldErrors.takenBy ? "has-error" : ""}`}>
 								{t("form.takenBy")}
@@ -240,19 +251,35 @@ export function MobileEditModal({
 								</div>
 								{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 							</label>
-							<label className="full">
-								{t("form.packageType")}
-								<select
-									className="package-type-select"
-									value={form.packageType}
-									onChange={(e) => onHandleValueChange("packageType", e.target.value)}
-								>
-									<option value="blister">{t("form.packageTypeBlister")}</option>
-									<option value="bottle">{t("form.packageTypeBottle")}</option>
-								</select>
-							</label>
 						</div>
 
+						{editingId && (
+							<div className="full form-category image-section">
+								<h4 className="form-category-title">{t("form.medicationImage")}</h4>
+								{currentMed?.imageUrl ? (
+									<div className="image-preview">
+										<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
+										<button
+											type="button"
+											className="danger icon-only tooltip-trigger"
+											onClick={() => onDeleteMedImage(editingId)}
+											aria-label={t("form.removeImage")}
+											data-tooltip={t("form.removeImage")}
+										>
+											<Trash2 size={18} aria-hidden="true" />
+										</button>
+									</div>
+								) : (
+									<input
+										type="file"
+										accept="image/*"
+										onChange={(e) => e.target.files?.[0] && onUploadMedImage(editingId, e.target.files[0])}
+									/>
+								)}
+							</div>
+						)}
+						</div>
+						<div className={`form-tab-panel${activeTab === "stock" ? " active" : ""}`}>
 						<div className="full form-category">
 							<h4 className="form-category-title">{t("form.sections.stock")}</h4>
 							{form.packageType === "blister" ? (
@@ -288,14 +315,8 @@ export function MobileEditModal({
 										/>
 									</label>
 									<label>
-										{t("form.loosePills")}
-										<input
-											type="text"
-											inputMode="numeric"
-											pattern="[0-9]*"
-											value={form.looseTablets}
-											onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
-										/>
+										{t("form.total")}
+										<div className="static-value">{deriveTotalFromForm(form)}</div>
 									</label>
 								</>
 							) : (
@@ -322,12 +343,16 @@ export function MobileEditModal({
 									</label>
 								</>
 							)}
-							<div className="full">
-								<p className="sub">
-									<strong>{t("form.total")}:</strong> {deriveTotalFromForm(form)}{" "}
-									{deriveTotalFromForm(form) === 1 ? t("common.pill") : t("common.pills")}
-								</p>
-							</div>
+							{form.packageType === "bottle" && (
+								<div className="full stock-total-row">
+									<div className="stock-total-field">
+										<p className="sub">
+											<strong>{t("form.total")}:</strong> {deriveTotalFromForm(form)}{" "}
+											{deriveTotalFromForm(form) === 1 ? t("common.pill") : t("common.pills")}
+										</p>
+									</div>
+								</div>
+							)}
 							<label className="full">
 								{t("form.pillWeight")} ({form.doseUnit})
 								<div className="dose-input-group">
@@ -382,7 +407,8 @@ export function MobileEditModal({
 								{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
 							</label>
 						</div>
-
+						</div>
+						<div className={`form-tab-panel${activeTab === "prescription" ? " active" : ""}`}>
 						<div className="full form-category">
 							<h4 className="form-category-title">{t("form.sections.prescription")}</h4>
 							<label className="full">
@@ -438,124 +464,20 @@ export function MobileEditModal({
 								</>
 							)}
 						</div>
-
-						{!readOnlyMode && (
-							<div className="full form-category refill-section">
-								<h4 className="form-category-title">{t("refill.title")}</h4>
-								{editingId ? (
-									<>
-										{form.packageType === "blister" ? (
-											<>
-												<label>
-													{t("refill.packs")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
-														value={refillPacks}
-														onChange={(e) => onRefillPacksChange(parseInt(e.target.value, 10) || 0)}
-													/>
-												</label>
-												<label>
-													{t("refill.loosePills")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
-														value={refillLoose}
-														onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
-													/>
-												</label>
-											</>
-										) : (
-											<label className="full">
-												{t("refill.pillsToAdd")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
-													value={refillLoose}
-													onChange={(e) => onRefillLooseChange(parseInt(e.target.value, 10) || 0)}
-												/>
-											</label>
-										)}
-										<div className="refill-submit-row full">
-											<button
-												type="button"
-												className="success"
-												onClick={() => onSubmitRefill(editingId)}
-												disabled={(refillPacks < 1 && refillLoose < 1) || refillSaving}
-											>
-												{refillSaving ? t("common.saving") : t("refill.button")}
-											</button>
-											{(() => {
-												const totalRefill =
-													form.packageType === "blister"
-														? refillPacks * Number(form.blistersPerPack || 0) * Number(form.pillsPerBlister || 1) +
-															refillLoose
-														: refillLoose;
-												return totalRefill > 0 ? (
-													<span className="refill-preview">
-														+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
-													</span>
-												) : null;
-											})()}
-										</div>
-										{form.prescriptionEnabled && (
-											<div className="refill-prescription-row full">
-												<label className="refill-prescription-toggle">
-													<input
-														type="checkbox"
-														checked={usePrescriptionRefill}
-														onChange={(e) => onUsePrescriptionRefillChange(e.target.checked)}
-														disabled={(Number(form.prescriptionRemainingRefills) || 0) <= 0}
-													/>
-													<span className="refill-prescription-label-text">{t("prescription.useForRefill")}</span>
-												</label>
-												<span className="refill-remaining-badge">
-													{t("prescription.remainingRefills")}: {Number(form.prescriptionRemainingRefills) || 0}
-												</span>
-											</div>
-										)}
-									</>
-								) : (
-									<p className="refill-unavailable">
-										{t("refill.saveFirst", "Save medication first to enable refill")}
-									</p>
-								)}
-							</div>
-						)}
-
-						{editingId && (
-							<div className="full form-category image-section">
-								<h4 className="form-category-title">{t("form.medicationImage")}</h4>
-								{currentMed?.imageUrl ? (
-									<div className="image-preview">
-										<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
-										<button type="button" className="danger" onClick={() => onDeleteMedImage(editingId)}>
-											{t("form.removeImage")}
-										</button>
-									</div>
-								) : (
-									<input
-										type="file"
-										accept="image/*"
-										onChange={(e) => e.target.files?.[0] && onUploadMedImage(editingId, e.target.files[0])}
-									/>
-								)}
-							</div>
-						)}
-
+						</div>
+						<div className={`form-tab-panel${activeTab === "schedule" ? " active" : ""}`}>
 						<div className="full form-category intake-section">
 							<div className="form-category-header">
 								<h4 className="form-category-title">{t("form.blisters.title")}</h4>
 								{!readOnlyMode && (
 									<button
 										type="button"
-										className="ghost add-blister"
+										className="ghost add-blister icon-only tooltip-trigger"
 										onClick={() => onAddIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+										aria-label={t("form.blisters.addIntake")}
+										data-tooltip={t("form.blisters.addIntake")}
 									>
-										+ {t("form.blisters.addIntake")}
+										<Plus size={18} aria-hidden="true" />
 									</button>
 								)}
 							</div>
@@ -597,7 +519,7 @@ export function MobileEditModal({
 										/>
 									</label>
 									{form.takenBy.length === 0 ? null : (
-										<label className="compact full-row">
+										<label className="compact full-row taken-by-field">
 											<span>{t("form.blisters.takenByIntake")}</span>
 											<select value={intake.takenBy} onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}>
 												{form.takenBy.map((person) => (
@@ -620,17 +542,24 @@ export function MobileEditModal({
 										</label>
 									</div>
 									{!readOnlyMode && form.intakes.length > 1 && (
-										<button type="button" className="danger remove-blister-btn" onClick={() => onRemoveIntake(idx)}>
-											{t("common.remove")}
+										<button
+											type="button"
+											className="danger remove-blister-btn icon-only tooltip-trigger"
+											onClick={() => onRemoveIntake(idx)}
+											aria-label={t("common.remove")}
+											data-tooltip={t("common.remove")}
+										>
+											<Minus size={18} aria-hidden="true" />
 										</button>
 									)}
 								</div>
 							))}
 						</div>
+						</div>
 					</fieldset>
 					<div className="modal-footer">
 						<button type="button" className="ghost" onClick={onClose}>
-							{readOnlyMode ? t("common.close") : t("common.cancel")}
+							{readOnlyMode || (formSaved && !formChanged) ? t("common.close") : t("common.cancel")}
 						</button>
 						{!readOnlyMode && (
 							<button

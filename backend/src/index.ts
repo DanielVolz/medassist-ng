@@ -20,6 +20,7 @@ import { medicationRoutes } from "./routes/medications.js";
 import { oidcRoutes } from "./routes/oidc.js";
 import { plannerRoutes } from "./routes/planner.js";
 import { refillRoutes } from "./routes/refills.js";
+import { reportRoutes } from "./routes/report.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { shareRoutes } from "./routes/share.js";
 import { startIntakeReminderScheduler } from "./services/intake-reminder-scheduler.js";
@@ -118,6 +119,7 @@ export async function createApp(options?: {
 	await app.register(doseRoutes);
 	await app.register(exportRoutes);
 	await app.register(refillRoutes);
+	await app.register(reportRoutes);
 
 	return app;
 }
@@ -190,6 +192,7 @@ await app.register(shareRoutes);
 await app.register(doseRoutes);
 await app.register(exportRoutes);
 await app.register(refillRoutes);
+await app.register(reportRoutes);
 
 const start = async () => {
 	try {

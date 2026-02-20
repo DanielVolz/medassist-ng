@@ -17,6 +17,7 @@ export type { MobileEditModalProps } from "./MobileEditModal";
 export { MobileEditModal } from "./MobileEditModal";
 export { PasswordInput } from "./PasswordInput";
 export { default as ProfileModal } from "./ProfileModal";
+export { default as ReportModal } from "./ReportModal";
 export type { ShareDialogProps } from "./ShareDialog";
 export { ShareDialog } from "./ShareDialog";
 export { SharedSchedule } from "./SharedSchedule";

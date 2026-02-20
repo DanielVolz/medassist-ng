@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "E2E stable",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test:e2e"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "E2E stable + merged video",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test:e2e:with-video"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "E2E all browsers",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test:e2e:all"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "E2E all browsers + merged video",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test:e2e:all:with-video"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

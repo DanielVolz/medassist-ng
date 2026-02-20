@@ -55,6 +55,7 @@ const { medicationRoutes } = await import("../routes/medications.js");
 const { settingsRoutes } = await import("../routes/settings.js");
 const { healthRoutes } = await import("../routes/health.js");
 const { refillRoutes } = await import("../routes/refills.js");
+const { reportRoutes } = await import("../routes/report.js");
 const { exportRoutes } = await import("../routes/export.js");
 
 // =============================================================================
@@ -137,6 +138,9 @@ async function createSchema(client: Client) {
       language text NOT NULL DEFAULT 'en',
       stock_calculation_mode text NOT NULL DEFAULT 'automatic',
       share_stock_status integer NOT NULL DEFAULT 1,
+	upcoming_today_only integer NOT NULL DEFAULT 0,
+	share_schedule_today_only integer NOT NULL DEFAULT 0,
+	swap_dashboard_main_sections integer NOT NULL DEFAULT 0,
       last_auto_email_sent text,
       last_notification_type text,
       last_notification_channel text,
@@ -261,9 +265,78 @@ describe("E2E Tests with Real Routes", () => {
 		await app.register(settingsRoutes);
 		await app.register(healthRoutes);
 		await app.register(refillRoutes);
+		await app.register(reportRoutes);
 		await app.register(exportRoutes);
 
 		await app.ready();
+	});
+
+	// ---------------------------------------------------------------------------
+	// Report Routes
+	// ---------------------------------------------------------------------------
+
+	describe("Real /medications/report-data route", () => {
+		it("should return 400 for invalid payload", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/report-data",
+				payload: { medicationIds: [] },
+			});
+
+			expect(response.statusCode).toBe(400);
+		});
+
+		it("should return 403 when requested medication is not owned by user", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/report-data",
+				payload: { medicationIds: [999999] },
+			});
+
+			expect(response.statusCode).toBe(403);
+			expect(response.json().error).toBe("Access denied to medication");
+		});
+
+		it("should aggregate taken/dismissed doses and refill history", async () => {
+			const medId = await createMedication(testClient, userId, "Report Med", ["Daniel"]);
+
+			// One taken dose and one dismissed dose for the same medication
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed)
+				      VALUES (?, ?, ?, 0)`,
+				args: [userId, `${medId}-0-1735344000000`, 1735344000],
+			});
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed)
+				      VALUES (?, ?, ?, 1)`,
+				args: [userId, `${medId}-0-1735430400000-Daniel`, 1735430400],
+			});
+
+			await testClient.execute({
+				sql: `INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date)
+				      VALUES (?, ?, ?, ?, ?, ?)`,
+				args: [medId, userId, 2, 5, 1, 1735516800],
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/report-data",
+				payload: { medicationIds: [medId] },
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data[medId].dosesTaken).toBe(1);
+			expect(data[medId].dosesDismissed).toBe(1);
+			expect(data[medId].firstDoseAt).toBe(new Date(1735344000 * 1000).toISOString());
+			expect(data[medId].lastDoseAt).toBe(new Date(1735344000 * 1000).toISOString());
+			expect(data[medId].refills).toHaveLength(1);
+			expect(data[medId].refills[0]).toMatchObject({
+				packsAdded: 2,
+				loosePillsAdded: 5,
+				usedPrescription: true,
+			});
+		});
 	});
 
 	afterAll(async () => {
@@ -743,6 +816,39 @@ describe("E2E Tests with Real Routes", () => {
 
 			const data = getResponse.json();
 			expect(data.repeatDailyReminders).toBe(false);
+		});
+
+		it("should reject invalid language in lightweight language endpoint", async () => {
+			const response = await app.inject({
+				method: "PUT",
+				url: "/settings/language",
+				payload: { language: "fr" },
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json().error).toBe("Invalid language");
+		});
+
+		it("should create and update language via lightweight language endpoint", async () => {
+			let response = await app.inject({
+				method: "PUT",
+				url: "/settings/language",
+				payload: { language: "de" },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			response = await app.inject({
+				method: "PUT",
+				url: "/settings/language",
+				payload: { language: "en" },
+			});
+
+			expect(response.statusCode).toBe(200);
+
+			const getResponse = await app.inject({ method: "GET", url: "/settings" });
+			expect(getResponse.json().language).toBe("en");
 		});
 	});
 
@@ -2202,6 +2308,87 @@ describe("E2E Tests with Real Routes", () => {
 			const data = response.json();
 			expect(data.settings).toBeDefined();
 			expect(data.settings.emailEnabled).toBe(true);
+		});
+
+		it("should include sensitive settings when requested", async () => {
+			await app.inject({
+				method: "PUT",
+				url: "/settings",
+				payload: {
+					emailEnabled: false,
+					notificationEmail: "",
+					reminderDaysBefore: 7,
+					repeatDailyReminders: false,
+					lowStockDays: 30,
+					normalStockDays: 90,
+					highStockDays: 180,
+					shoutrrrEnabled: true,
+					shoutrrrUrl: "https://example.com/topic",
+					emailStockReminders: false,
+					emailIntakeReminders: false,
+					emailPrescriptionReminders: false,
+					shoutrrrStockReminders: true,
+					shoutrrrIntakeReminders: true,
+					shoutrrrPrescriptionReminders: true,
+					skipRemindersForTakenDoses: false,
+					repeatRemindersEnabled: false,
+					reminderRepeatIntervalMinutes: 30,
+					maxNaggingReminders: 5,
+					language: "en",
+					stockCalculationMode: "automatic",
+					shareStockStatus: true,
+					upcomingTodayOnly: false,
+					shareScheduleTodayOnly: false,
+					swapDashboardMainSections: false,
+				},
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/export?includeSensitive=true",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.settings.shoutrrrEnabled).toBe(true);
+			expect(data.settings.shoutrrrUrl).toBe("https://example.com/topic");
+		});
+
+		it("should gracefully export malformed date-like DB values", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Date Edge Med",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id as number;
+
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, 0)`,
+				args: [userId, `${medId}-0-1735344000000`, "not-a-date"],
+			});
+			await testClient.execute({
+				sql: `INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date)
+				      VALUES (?, ?, ?, ?, ?, ?)`,
+				args: [medId, userId, 1, 0, 0, "still-not-a-date"],
+			});
+			await testClient.execute({
+				sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at) VALUES (?, ?, ?, ?, ?)`,
+				args: [userId, "date-edge-token", "Daniel", 30, "broken-date"],
+			});
+
+			const response = await app.inject({ method: "GET", url: "/export" });
+			expect(response.statusCode).toBe(200);
+
+			const data = response.json();
+			expect(data.doseHistory).toHaveLength(1);
+			expect(Number.isNaN(Date.parse(data.doseHistory[0].takenAt))).toBe(false);
+			expect(data.refillHistory).toHaveLength(1);
+			expect(Number.isNaN(Date.parse(data.refillHistory[0].refillDate))).toBe(false);
+			expect(data.shareLinks).toHaveLength(1);
+			expect(data.shareLinks[0].expiresAt).toBeNull();
 		});
 	});
 

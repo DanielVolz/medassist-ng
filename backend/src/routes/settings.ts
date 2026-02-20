@@ -33,6 +33,9 @@ export type UserSettings = {
 	language: Language;
 	stockCalculationMode: "automatic" | "manual";
 	shareStockStatus: boolean;
+	upcomingTodayOnly: boolean;
+	shareScheduleTodayOnly: boolean;
+	swapDashboardMainSections: boolean;
 	lastAutoEmailSent: string | null;
 	lastNotificationType: string | null;
 	lastNotificationChannel: string | null;
@@ -69,6 +72,9 @@ type SettingsBody = {
 	language: string;
 	stockCalculationMode: "automatic" | "manual";
 	shareStockStatus: boolean;
+	upcomingTodayOnly: boolean;
+	shareScheduleTodayOnly: boolean;
+	swapDashboardMainSections: boolean;
 };
 
 type TestEmailBody = {
@@ -119,6 +125,9 @@ function getDefaultSettings() {
 		language: (process.env.DEFAULT_LANGUAGE as "en" | "de") || "en",
 		stockCalculationMode: (process.env.DEFAULT_STOCK_CALCULATION_MODE as "automatic" | "manual") || "automatic",
 		shareStockStatus: envBool("DEFAULT_SHARE_STOCK_STATUS", true),
+		upcomingTodayOnly: envBool("DEFAULT_UPCOMING_TODAY_ONLY", false),
+		shareScheduleTodayOnly: envBool("DEFAULT_SHARE_SCHEDULE_TODAY_ONLY", false),
+		swapDashboardMainSections: false,
 		lastAutoEmailSent: null,
 		lastNotificationType: null,
 		lastNotificationChannel: null,
@@ -178,6 +187,9 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
 		language: settings.language as Language,
 		stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
 		shareStockStatus: settings.shareStockStatus ?? true,
+		upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
+		shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
+		swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
 		lastAutoEmailSent: settings.lastAutoEmailSent,
 		lastNotificationType: settings.lastNotificationType,
 		lastNotificationChannel: settings.lastNotificationChannel,
@@ -219,6 +231,9 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
 		language: settings.language as Language,
 		stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
 		shareStockStatus: settings.shareStockStatus ?? true,
+		upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
+		shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
+		swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
 		lastAutoEmailSent: settings.lastAutoEmailSent,
 		lastNotificationType: settings.lastNotificationType,
 		lastNotificationChannel: settings.lastNotificationChannel,
@@ -283,6 +298,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 			language: settings.language,
 			stockCalculationMode: settings.stockCalculationMode ?? "automatic",
 			shareStockStatus: settings.shareStockStatus ?? true,
+			upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
+			shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
+			swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
 			// SMTP settings (from .env - shared/server-configured)
 			smtpHost: process.env.SMTP_HOST ?? "",
 			smtpPort: parseInt(process.env.SMTP_PORT ?? "587", 10),
@@ -349,6 +367,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 			language: body.language ?? "en",
 			stockCalculationMode: body.stockCalculationMode ?? "automatic",
 			shareStockStatus: body.shareStockStatus ?? true,
+			upcomingTodayOnly: body.upcomingTodayOnly ?? false,
+			shareScheduleTodayOnly: body.shareScheduleTodayOnly ?? false,
+			swapDashboardMainSections: body.swapDashboardMainSections ?? false,
 			updatedAt: new Date(),
 		};
 

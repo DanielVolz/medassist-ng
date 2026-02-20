@@ -46,6 +46,9 @@ export interface Settings {
 	shoutrrrPrescriptionReminders: boolean;
 	stockCalculationMode: "automatic" | "manual";
 	shareStockStatus: boolean;
+	upcomingTodayOnly: boolean;
+	shareScheduleTodayOnly: boolean;
+	swapDashboardMainSections: boolean;
 	expiryWarningDays: number;
 }
 
@@ -90,6 +93,9 @@ const defaultSettings: Settings = {
 	shoutrrrPrescriptionReminders: true,
 	stockCalculationMode: "automatic",
 	shareStockStatus: true,
+	upcomingTodayOnly: false,
+	shareScheduleTodayOnly: false,
+	swapDashboardMainSections: false,
 	expiryWarningDays: 30,
 };
 
@@ -224,6 +230,9 @@ export function useSettings(): UseSettingsReturn {
 				shoutrrrPrescriptionReminders: settingsToSave.shoutrrrPrescriptionReminders,
 				stockCalculationMode: settingsToSave.stockCalculationMode,
 				shareStockStatus: settingsToSave.shareStockStatus,
+				upcomingTodayOnly: settingsToSave.upcomingTodayOnly,
+				shareScheduleTodayOnly: settingsToSave.shareScheduleTodayOnly,
+				swapDashboardMainSections: settingsToSave.swapDashboardMainSections,
 				language: i18n.language,
 				smtpHost: settingsToSave.smtpHost,
 				smtpPort: settingsToSave.smtpPort,

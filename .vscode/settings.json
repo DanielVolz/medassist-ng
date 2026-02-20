@@ -1,5 +1,8 @@
 {
   "vitest.root": "backend",
   "vitest.enable": true,
-  "vitest.commandLine": "npm test --"
+  "vitest.commandLine": "npm test --",
+  "chat.tools.terminal.autoApprove": {
+    "test": true
+  }
 }

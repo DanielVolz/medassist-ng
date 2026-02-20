@@ -2,6 +2,8 @@
  * ShareDialog - Modal for generating share links for medication schedules
  * Allows sharing schedule view for a specific person
  */
+
+import { Check, Copy, Link2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 export interface ShareDialogProps {
@@ -38,6 +40,8 @@ export function ShareDialog({
 	onCopyShareLink,
 }: ShareDialogProps) {
 	const { t } = useTranslation();
+	const closeLabel = t("common.close");
+	const copyLabel = shareCopied ? t("share.copied") : t("share.copyLink");
 
 	if (!show) return null;
 
@@ -54,12 +58,20 @@ export function ShareDialog({
 				onClick={(e) => e.stopPropagation()}
 				onKeyDown={(e) => e.stopPropagation()}
 			>
-				<button className="modal-close" onClick={onClose}>
-					×
+				<button
+					type="button"
+					className="modal-close tooltip-trigger"
+					onClick={onClose}
+					aria-label={closeLabel}
+					data-tooltip={closeLabel}
+				>
+					<X size={18} aria-hidden="true" />
 				</button>
 
 				<div className="share-dialog-header">
-					<h2>🔗 {t("share.title")}</h2>
+					<h2>
+						<Link2 size={18} aria-hidden="true" /> {t("share.title")}
+					</h2>
 					<p className="share-dialog-description">{t("share.description")}</p>
 				</div>
 
@@ -83,8 +95,14 @@ export function ShareDialog({
 										className="share-link-input"
 										onClick={(e) => (e.target as HTMLInputElement).select()}
 									/>
-									<button className="btn-copy" onClick={onCopyShareLink}>
-										{shareCopied ? "✓" : "📋"}
+									<button
+										type="button"
+										className="btn-copy icon-only tooltip-trigger"
+										onClick={onCopyShareLink}
+										aria-label={copyLabel}
+										data-tooltip={copyLabel}
+									>
+										{shareCopied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
 									</button>
 								</div>
 								{shareCopied && <span className="share-copied-hint">{t("share.copied")}</span>}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
 	AboutModal,
 	Lightbox,
@@ -112,6 +112,7 @@ function AppRouter() {
 // =============================================================================
 
 function AppContent() {
+	const navigate = useNavigate();
 	// Get shared state from AppContext
 	const ctx = useAppContext();
 	const {
@@ -139,7 +140,10 @@ function AppContent() {
 		setEditStockFullBlisters,
 		editStockPartialBlisterPills,
 		setEditStockPartialBlisterPills,
+		editStockLoosePills,
+		setEditStockLoosePills,
 		editStockSaving,
+		editStockMedication,
 		openRefillModal,
 		closeRefillModal,
 		openEditStockModal,
@@ -289,23 +293,24 @@ function AppContent() {
 	// Close tooltips on scroll/touch (for mobile)
 	useEffect(() => {
 		const closeAllTooltips = () => {
-			document.querySelectorAll(".info-tooltip.tooltip-active").forEach((el) => {
+			document.querySelectorAll(".info-tooltip.tooltip-active, .tooltip-trigger.tooltip-active").forEach((el) => {
 				el.classList.remove("tooltip-active");
 			});
 		};
 
 		const handleTooltipClick = (e: Event) => {
 			const target = e.target as HTMLElement;
-			if (target.classList.contains("info-tooltip")) {
+			const tooltipTrigger = target.closest(".info-tooltip, .tooltip-trigger") as HTMLElement | null;
+			if (tooltipTrigger) {
 				// Close other tooltips first
 				closeAllTooltips();
 				// Toggle this one
-				target.classList.add("tooltip-active");
+				tooltipTrigger.classList.add("tooltip-active");
 				// Position tooltip above the icon on mobile
 				if (window.innerWidth <= 640) {
-					const rect = target.getBoundingClientRect();
+					const rect = tooltipTrigger.getBoundingClientRect();
 					// Place tooltip bottom edge just above the icon
-					target.style.setProperty("--tooltip-bottom", `${window.innerHeight - rect.top + 8}px`);
+					tooltipTrigger.style.setProperty("--tooltip-bottom", `${window.innerHeight - rect.top + 8}px`);
 				}
 			} else {
 				closeAllTooltips();
@@ -357,9 +362,11 @@ function AppContent() {
 		}
 	}, [meds, selectedMed, setSelectedMed]);
 
+	const stockCorrectionMed = selectedMed ?? (showEditStockModal ? editStockMedication : null);
+
 	const handleSubmitStockCorrection = async (medId: number) => {
-		if (!selectedMed) return;
-		await ctx.submitStockCorrection(medId, selectedMed, loadMeds);
+		if (!stockCorrectionMed) return;
+		await ctx.submitStockCorrection(medId, stockCorrectionMed, loadMeds);
 	};
 
 	// For MedDetailModal: refill without form update (not editing)
@@ -367,11 +374,19 @@ function AppContent() {
 		await ctx.submitRefill(medId, null, () => {}, loadMeds, usePrescription);
 	};
 
-	// Wrapper for openEditStockModal (provides selectedMed and coverage)
-	const handleOpenEditStockModal = () => {
-		if (selectedMed) {
-			openEditStockModal(selectedMed, coverage);
-		}
+	const handleOpenMedicationEdit = () => {
+		if (!selectedMed) return;
+		const medId = selectedMed.id;
+		setShowImageLightbox(false);
+		setShowRefillModal(false);
+		setShowEditStockModal(false);
+		setSelectedMed(null);
+		navigate(`/medications?editMedId=${medId}`);
+	};
+
+	const handleOpenEditStockFromDetail = () => {
+		if (!selectedMed) return;
+		openEditStockModal(selectedMed, coverage);
 	};
 
 	function openProfile() {
@@ -421,18 +436,20 @@ function AppContent() {
 
 			{/* Medication Detail Modal */}
 			<MedDetailModal
-				selectedMed={selectedMed}
+				selectedMed={stockCorrectionMed}
 				coverage={coverage}
 				settings={stockThresholds}
 				showImageLightbox={showImageLightbox}
 				showRefillModal={showRefillModal}
 				showEditStockModal={showEditStockModal}
+				editStockOnly={showEditStockModal && !selectedMed}
 				onClose={closeMedDetail}
 				onOpenImageLightbox={openImageLightbox}
 				onCloseImageLightbox={closeImageLightbox}
 				onOpenRefillModal={openRefillModal}
 				onCloseRefillModal={closeRefillModal}
-				onOpenEditStockModal={handleOpenEditStockModal}
+				onOpenMedicationEdit={handleOpenMedicationEdit}
+				onOpenEditStockModal={handleOpenEditStockFromDetail}
 				onCloseEditStockModal={closeEditStockModal}
 				refillPacks={refillPacks}
 				onRefillPacksChange={setRefillPacks}
@@ -449,6 +466,8 @@ function AppContent() {
 				onEditStockFullBlistersChange={setEditStockFullBlisters}
 				editStockPartialBlisterPills={editStockPartialBlisterPills}
 				onEditStockPartialBlisterPillsChange={setEditStockPartialBlisterPills}
+				editStockLoosePills={editStockLoosePills}
+				onEditStockLoosePillsChange={setEditStockLoosePills}
 				editStockSaving={editStockSaving}
 				onSubmitStockCorrection={handleSubmitStockCorrection}
 			/>

@@ -193,7 +193,10 @@ test.describe("Schedule with medications", () => {
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 
 		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
-		if (!(await takeBtn.isVisible().catch(() => false))) return;
+		test.skip(
+			!(await takeBtn.isVisible().catch(() => false)),
+			"No actionable take-dose button is visible for today"
+		);
 
 		await takeBtn.click();
 		await page.waitForLoadState("networkidle");

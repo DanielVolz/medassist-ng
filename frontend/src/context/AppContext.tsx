@@ -119,7 +119,10 @@ export interface AppContextValue {
 	setEditStockFullBlisters: React.Dispatch<React.SetStateAction<number>>;
 	editStockPartialBlisterPills: number;
 	setEditStockPartialBlisterPills: React.Dispatch<React.SetStateAction<number>>;
+	editStockLoosePills: number;
+	setEditStockLoosePills: React.Dispatch<React.SetStateAction<number>>;
 	editStockSaving: boolean;
+	editStockMedication: Medication | null;
 	loadRefillHistory: (medId: number) => Promise<void>;
 	submitRefill: (
 		medId: number,
@@ -644,6 +647,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settings.maxNaggingReminders !== savedSettings.maxNaggingReminders ||
 			settings.stockCalculationMode !== savedSettings.stockCalculationMode ||
 			settings.shareStockStatus !== savedSettings.shareStockStatus ||
+			settings.upcomingTodayOnly !== savedSettings.upcomingTodayOnly ||
+			settings.shareScheduleTodayOnly !== savedSettings.shareScheduleTodayOnly ||
 			settings.expiryWarningDays !== savedSettings.expiryWarningDays
 		);
 	}, [settingsHook.settings, settingsHook.savedSettings]);
@@ -774,7 +779,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setEditStockFullBlisters: refill.setEditStockFullBlisters,
 			editStockPartialBlisterPills: refill.editStockPartialBlisterPills,
 			setEditStockPartialBlisterPills: refill.setEditStockPartialBlisterPills,
+			editStockLoosePills: refill.editStockLoosePills,
+			setEditStockLoosePills: refill.setEditStockLoosePills,
 			editStockSaving: refill.editStockSaving,
+			editStockMedication: refill.editStockMedication,
 			loadRefillHistory: refill.loadRefillHistory,
 			submitRefill: refill.submitRefill,
 			submitStockCorrection: refill.submitStockCorrection,

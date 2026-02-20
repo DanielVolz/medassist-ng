@@ -586,6 +586,7 @@ export function SharedSchedule() {
 
 	// Whether to show stock status indicators on the shared schedule
 	const showStock = data?.shareStockStatus !== false;
+	const showOnlyToday = data?.shareScheduleTodayOnly === true && (data?.upcomingTodayOnly ?? true);
 
 	// Helper: check if a dose is "done" (taken, per-dose dismissed, or med-level dismissed)
 	function isDoseIdDone(doseId: string): boolean {
@@ -716,19 +717,20 @@ export function SharedSchedule() {
 							</div>
 						</div>
 					</div>
-					{(() => {
-						const periodLabel =
-							data.scheduleDays === 30
-								? t("dashboard.schedules.1month")
-								: data.scheduleDays === 90
-									? t("dashboard.schedules.3months")
-									: t("dashboard.schedules.6months");
-						return (
-							<p className="shared-schedule-period">
-								{t("share.period")}: {periodLabel}
-							</p>
-						);
-					})()}
+					{!showOnlyToday &&
+						(() => {
+							const periodLabel =
+								data.scheduleDays === 30
+									? t("dashboard.schedules.1month")
+									: data.scheduleDays === 90
+										? t("dashboard.schedules.3months")
+										: t("dashboard.schedules.6months");
+							return (
+								<p className="shared-schedule-period">
+									{t("share.period")}: {periodLabel}
+								</p>
+							);
+						})()}
 				</header>
 
 				<div className="timeline">
@@ -737,7 +739,8 @@ export function SharedSchedule() {
 					) : (
 						<>
 							{/* Past days (when expanded) — rendered above toggle */}
-							{showPastDays &&
+							{!showOnlyToday &&
+								showPastDays &&
 								pastDays.map((day) => {
 									// Get ALL dose IDs for this day (for total count and yellow styling)
 									const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
@@ -836,8 +839,10 @@ export function SharedSchedule() {
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
-																	<span className="med-name-text">{item.medName}</span>
-																	{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
+																	<div className="med-name-stack">
+																		<span className="med-name-text">{item.medName}</span>
+																		{med?.genericName && <span className="med-generic-inline">{med.genericName}</span>}
+																	</div>
 																</div>
 																<div className="tag-row">
 																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
@@ -853,9 +858,12 @@ export function SharedSchedule() {
 																		<div key={dose.id} className="dose-item past">
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				{med?.pillWeightMg &&
-																					` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
+																				<span className="dose-usage-main">
+																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																				</span>
+																				{med?.pillWeightMg && (
+																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				)}
 																			</span>
 																			<div className="dose-checks">
 																				<div className={`dose-person ${isTaken ? "taken" : ""}`}>
@@ -875,7 +883,8 @@ export function SharedSchedule() {
 																							disabled={isEmpty}
 																							title={t("dose.markAsTaken")}
 																						>
-																							✓
+																							<span className="dose-btn-label">{t("dose.take")}</span>
+																							<span aria-hidden="true">✓</span>
 																						</button>
 																					)}
 																				</div>
@@ -891,7 +900,8 @@ export function SharedSchedule() {
 									);
 								})}
 							{/* Past days toggle */}
-							{pastDays.length > 0 &&
+							{!showOnlyToday &&
+								pastDays.length > 0 &&
 								(() => {
 									const missedCount = missedPastDoseIds.length;
 									const totalPastDoses = pastDays.flatMap((d) => d.meds.flatMap((m) => m.doses.map((dose) => dose.id)));
@@ -1012,8 +1022,10 @@ export function SharedSchedule() {
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
-																	<span className="med-name-text">{item.medName}</span>
-																	{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
+																	<div className="med-name-stack">
+																		<span className="med-name-text">{item.medName}</span>
+																		{med?.genericName && <span className="med-generic-inline">{med.genericName}</span>}
+																	</div>
 																</div>
 																<div className="tag-row">
 																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
@@ -1033,9 +1045,12 @@ export function SharedSchedule() {
 																		>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				{med?.pillWeightMg &&
-																					` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
+																				<span className="dose-usage-main">
+																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																				</span>
+																				{med?.pillWeightMg && (
+																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				)}
 																			</span>
 																			<div className="dose-checks">
 																				<div
@@ -1057,7 +1072,8 @@ export function SharedSchedule() {
 																							title={t("dose.markAsTaken")}
 																							disabled={isEmpty}
 																						>
-																							✓
+																							<span className="dose-btn-label">{t("dose.take")}</span>
+																							<span aria-hidden="true">✓</span>
 																						</button>
 																					)}
 																				</div>
@@ -1074,7 +1090,8 @@ export function SharedSchedule() {
 								})()}
 
 							{/* Future days toggle — identical to DashboardPage */}
-							{futureDays.length > 0 &&
+							{!showOnlyToday &&
+								futureDays.length > 0 &&
 								(() => {
 									const totalFutureDoses = futureDays.flatMap((d) =>
 										d.meds.flatMap((m) => m.doses.map((dose) => dose.id))
@@ -1109,7 +1126,8 @@ export function SharedSchedule() {
 								})()}
 
 							{/* Future days (when expanded) — identical to DashboardPage */}
-							{showFutureDays &&
+							{!showOnlyToday &&
+								showFutureDays &&
 								futureDays.map((day) => {
 									const allDoseIds = day.meds.flatMap((item) => item.doses.map((d) => d.id));
 									const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
@@ -1180,8 +1198,10 @@ export function SharedSchedule() {
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
-																	<span className="med-name-text">{item.medName}</span>
-																	{med?.genericName && <span className="med-generic-inline">({med.genericName})</span>}
+																	<div className="med-name-stack">
+																		<span className="med-name-text">{item.medName}</span>
+																		{med?.genericName && <span className="med-generic-inline">{med.genericName}</span>}
+																	</div>
 																</div>
 																<div className="tag-row">
 																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
@@ -1197,9 +1217,12 @@ export function SharedSchedule() {
 																		<div key={dose.id} className={`dose-item future ${isTaken ? "all-taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				{med?.pillWeightMg &&
-																					` (${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}
+																				<span className="dose-usage-main">
+																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																				</span>
+																				{med?.pillWeightMg && (
+																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				)}
 																			</span>
 																			<div className="dose-checks">
 																				<div className={`dose-person ${isTaken ? "taken" : ""}`}>
@@ -1219,7 +1242,8 @@ export function SharedSchedule() {
 																							title={t("dose.markAsTaken")}
 																							disabled={true}
 																						>
-																							✓
+																							<span className="dose-btn-label">{t("dose.take")}</span>
+																							<span aria-hidden="true">✓</span>
 																						</button>
 																					)}
 																				</div>

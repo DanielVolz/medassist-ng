@@ -215,6 +215,8 @@ export type SharedScheduleData = {
 	};
 	stockCalculationMode?: "automatic" | "manual";
 	shareStockStatus?: boolean;
+	upcomingTodayOnly?: boolean;
+	shareScheduleTodayOnly?: boolean;
 };
 
 export type ExpiredLinkData = {

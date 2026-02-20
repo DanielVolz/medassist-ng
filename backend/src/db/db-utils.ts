@@ -140,6 +140,10 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE user_settings ADD COLUMN last_stock_reminder_med_names text`,
 		// Added for share stock visibility toggle
 		`ALTER TABLE user_settings ADD COLUMN share_stock_status integer NOT NULL DEFAULT 1`,
+		// Added for timeline visibility toggles (dashboard + shared schedule)
+		`ALTER TABLE user_settings ADD COLUMN upcoming_today_only integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_settings ADD COLUMN share_schedule_today_only integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_settings ADD COLUMN swap_dashboard_main_sections integer NOT NULL DEFAULT 0`,
 		// Added for prescription refill tracking and reminders
 		`ALTER TABLE medications ADD COLUMN prescription_enabled integer NOT NULL DEFAULT 0`,
 		`ALTER TABLE medications ADD COLUMN prescription_authorized_refills integer`,

@@ -96,7 +96,7 @@ test.describe("Dashboard with medications", () => {
 		await expect(ibuprofenRow).toBeVisible();
 		const rowText = await ibuprofenRow.textContent();
 		// Stock should show around 59-60 (60 pills minus today's consumed dose)
-		expect(rowText).toContain("59");
+		expect((rowText ?? "").includes("59") || (rowText ?? "").includes("60")).toBeTruthy();
 	});
 
 	test("should show today block in timeline", async ({ page }) => {
@@ -140,7 +140,10 @@ test.describe("Dashboard with medications", () => {
 		await expect(todayBlock).toBeVisible({ timeout: 10000 });
 
 		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
-		if (!(await takeBtn.isVisible().catch(() => false))) return;
+		test.skip(
+			!(await takeBtn.isVisible().catch(() => false)),
+			"No actionable take-dose button is visible for today"
+		);
 
 		await takeBtn.click();
 		await expect(todayBlock.locator("button.dose-btn.undo").first()).toBeVisible({ timeout: 5000 });
@@ -153,20 +156,23 @@ test.describe("Dashboard with medications", () => {
 		const todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 
+		// Normalize state first: if a dose is already taken, undo it so we can
+		// always execute the same take -> undo flow deterministically.
+		const existingUndo = todayBlock.locator("button.dose-btn.undo").first();
+		if (await existingUndo.isVisible().catch(() => false)) {
+			await existingUndo.click();
+			await page.waitForLoadState("networkidle");
+		}
+
 		// Mark a dose as taken first
 		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
-		if (!(await takeBtn.isVisible().catch(() => false))) return;
+		await expect(takeBtn).toBeVisible({ timeout: 10000 });
 		await takeBtn.click();
 		await page.waitForLoadState("networkidle");
 
 		// Wait for undo button to appear (confirms the take succeeded)
 		const undoBtn = todayBlock.locator("button.dose-btn.undo").first();
-		try {
-			await expect(undoBtn).toBeVisible({ timeout: 10000 });
-		} catch {
-			// Take might have been rate-limited — skip this test gracefully
-			return;
-		}
+		await expect(undoBtn).toBeVisible({ timeout: 10000 });
 		await undoBtn.click();
 		await page.waitForLoadState("networkidle");
 

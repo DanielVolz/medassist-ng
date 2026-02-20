@@ -53,14 +53,17 @@ async function fillAndSaveMedication(
 	if (opts.packageType === "bottle") {
 		await packageTypeSelect.selectOption("bottle");
 		await page.getByRole("tab", { name: /Package/i }).click();
-		if (opts.totalCapacity) await form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\))/i).fill(opts.totalCapacity);
+		if (opts.totalCapacity)
+			await form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\))/i).fill(opts.totalCapacity);
 		if (opts.currentPills) await form.getByLabel(/(Current Pills|form\.currentPills)/i).fill(opts.currentPills);
 	} else {
 		await packageTypeSelect.selectOption("blister");
 		await page.getByRole("tab", { name: /Package/i }).click();
 		if (opts.packs) await form.getByLabel(/(^Packs$|form\.packs)/i).fill(opts.packs);
-		if (opts.blistersPerPack) await form.getByLabel(/(Blisters per pack|form\.blistersPerPack)/i).fill(opts.blistersPerPack);
-		if (opts.pillsPerBlister) await form.getByLabel(/(Pills per blister|form\.pillsPerBlister)/i).fill(opts.pillsPerBlister);
+		if (opts.blistersPerPack)
+			await form.getByLabel(/(Blisters per pack|form\.blistersPerPack)/i).fill(opts.blistersPerPack);
+		if (opts.pillsPerBlister)
+			await form.getByLabel(/(Pills per blister|form\.pillsPerBlister)/i).fill(opts.pillsPerBlister);
 		if (opts.loosePills) {
 			const looseField = form.getByLabel(/(Loose pills|form\.loosePills)/i);
 			if (await looseField.isVisible().catch(() => false)) {
@@ -105,7 +108,13 @@ async function saveEdit(page: Page, medName: string): Promise<void> {
 	const form = page.locator("form.form-grid:visible").first();
 	await page.waitForLoadState("networkidle");
 	const submitBtn = form.locator("button[type='submit']");
-	if ((await submitBtn.count()) > 0 && (await submitBtn.first().isVisible().catch(() => false))) {
+	if (
+		(await submitBtn.count()) > 0 &&
+		(await submitBtn
+			.first()
+			.isVisible()
+			.catch(() => false))
+	) {
 		await submitBtn.first().click();
 	} else {
 		const closeBtn = form.getByRole("button", { name: /Close|Cancel/i }).first();
@@ -201,7 +210,10 @@ test.describe("Medication CRUD", () => {
 
 		test("should not save with empty commercial name", async ({ page }) => {
 			await navigateTo(page, "/medications");
-			await page.getByRole("button", { name: /New medication|New entry|form\.newEntry/i }).first().click();
+			await page
+				.getByRole("button", { name: /New medication|New entry|form\.newEntry/i })
+				.first()
+				.click();
 
 			// Saving without name should not create a medication row.
 			const saveBtn = page.locator("form.form-grid button[type='submit']");
@@ -221,7 +233,10 @@ test.describe("Medication CRUD", () => {
 			});
 
 			// Opening a fresh form after save should start with an empty commercial name.
-			await page.getByRole("button", { name: /New medication|New entry|form\.newEntry/i }).first().click();
+			await page
+				.getByRole("button", { name: /New medication|New entry|form\.newEntry/i })
+				.first()
+				.click();
 			await expect(page.getByLabel(/(Commercial Name|form\.commercialName)/i)).toHaveValue("");
 		});
 	});
@@ -248,7 +263,9 @@ test.describe("Medication CRUD", () => {
 			await medRow.locator("button.info").click();
 
 			// Form title should say "Edit entry" (or legacy "Edit medication").
-			await expect(page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })).toBeVisible();
+			await expect(
+				page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })
+			).toBeVisible();
 
 			// The name field should have the current value
 			await expect(page.getByLabel(/(Commercial Name|form\.commercialName)/i)).toHaveValue("Before Edit");
@@ -279,13 +296,14 @@ test.describe("Medication CRUD", () => {
 			await page.getByLabel(/(Commercial Name|form\.commercialName)/i).fill("Modified Name");
 
 			// Click Cancel
-			await page.getByRole("button", { name: /Close|Cancel/i }).first().click();
+			await page
+				.getByRole("button", { name: /Close|Cancel/i })
+				.first()
+				.click();
 
 			// Original name should still be in the list
 			await expect(page.locator(".med-row").filter({ hasText: "Cancel Test Med" })).toBeVisible();
 		});
-
-
 	});
 
 	test.describe("Delete medication", () => {
@@ -398,7 +416,10 @@ test.describe("Medication CRUD", () => {
 	test.describe("Intake schedule management", () => {
 		test("should add and remove intake schedule rows", async ({ page }) => {
 			await navigateTo(page, "/medications");
-			await page.getByRole("button", { name: /New medication|New entry|form\.newEntry/i }).first().click();
+			await page
+				.getByRole("button", { name: /New medication|New entry|form\.newEntry/i })
+				.first()
+				.click();
 			await page.getByRole("tab", { name: /Schedule/i }).click();
 			const form = page.locator("form.form-grid:visible").first();
 

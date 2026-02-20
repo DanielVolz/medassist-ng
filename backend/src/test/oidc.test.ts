@@ -57,6 +57,10 @@ async function buildOidcApp(envOverrides: Record<string, unknown>) {
 	const app = Fastify({ logger: false });
 	await app.register(cookie, { secret: "test-cookie-secret" });
 	app.decorate("config", {
+		accessSecret: "test-jwt-secret-12345",
+		refreshSecret: "test-refresh-secret-12345",
+		accessTtl: 15 * 60,
+		refreshTtl: 7 * 24 * 60 * 60,
 		cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
 		refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth" },
 	});

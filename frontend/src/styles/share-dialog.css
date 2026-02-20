@@ -10,13 +10,10 @@
 	text-align: center;
 	margin-bottom: 1.5rem;
 }
-w.share-dialog-header h2 {
+.share-dialog-header h2 {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;
-}
-
-.share-dialog-header h2 {
 	font-size: 1.25rem;
 	margin-bottom: 0.5rem;
 }

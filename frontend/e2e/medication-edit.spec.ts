@@ -28,7 +28,9 @@ async function clickEditMed(page: Page, medName: string): Promise<void> {
 	}
 	await expect(medRow).toBeVisible({ timeout: 10000 });
 	await medRow.locator("button.info").click();
-	await expect(page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })).toBeVisible({ timeout: 5000 });
+	await expect(page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })).toBeVisible({
+		timeout: 5000,
+	});
 }
 
 /** Helper: save edit and verify success */
@@ -38,7 +40,13 @@ async function saveEditAndVerify(page: Page, medName: string): Promise<void> {
 	await page.waitForLoadState("networkidle");
 
 	const submitBtn = form.locator("button[type='submit']");
-	if ((await submitBtn.count()) > 0 && (await submitBtn.first().isVisible().catch(() => false))) {
+	if (
+		(await submitBtn.count()) > 0 &&
+		(await submitBtn
+			.first()
+			.isVisible()
+			.catch(() => false))
+	) {
 		await submitBtn.first().click();
 	} else {
 		const closeBtn = form.getByRole("button", { name: /Close|Cancel/i }).first();

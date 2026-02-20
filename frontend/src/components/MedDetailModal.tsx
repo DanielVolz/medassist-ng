@@ -6,9 +6,10 @@
  * 1. Context mode: Uses useAppContext() for all state (when no props provided)
  * 2. Props mode: Accepts all required data as props (for gradual adoption)
  */
+
+import { Bell, Calendar, ClipboardList, FilePenLine, Minus, NotebookPen, Pencil, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, Calendar, ClipboardList, FilePenLine, Minus, NotebookPen, Pencil, Plus, X } from "lucide-react";
 import { Lightbox, MedicationAvatar } from "../components";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
 import { getMedTotal, getPackageSize } from "../types";
@@ -223,7 +224,7 @@ export function MedDetailModal({
 	// Structural max = sealed package capacity only (excludes pre-existing looseTablets).
 	const structuralMax =
 		selectedMed.packageType === "bottle"
-			? selectedMed.totalPills ?? packageSize
+			? (selectedMed.totalPills ?? packageSize)
 			: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
 	const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
 	const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
@@ -249,7 +250,7 @@ export function MedDetailModal({
 	const normalizeBlisterStock = (nextFull: number, nextPartial: number, nextLoose: number) => {
 		let normalizedFull = Math.max(0, nextFull);
 		let normalizedPartial = Math.max(0, nextPartial);
-		let normalizedLoose = Math.max(0, nextLoose);
+		const normalizedLoose = Math.max(0, nextLoose);
 
 		if (selectedMed.pillsPerBlister > 0) {
 			normalizedFull += Math.floor(normalizedPartial / selectedMed.pillsPerBlister);
@@ -376,10 +377,7 @@ export function MedDetailModal({
 		if (!showEditStockModal) return null;
 		const fullInputMax = Math.min(
 			maxFullBlisters,
-			Math.floor(
-				Math.max(0, structuralMax - Math.max(0, editStockPartialBlisterPills)) /
-					selectedMed.pillsPerBlister
-			)
+			Math.floor(Math.max(0, structuralMax - Math.max(0, editStockPartialBlisterPills)) / selectedMed.pillsPerBlister)
 		);
 
 		return (
@@ -441,7 +439,9 @@ export function MedDetailModal({
 						const isBottle = selectedMed.packageType === "bottle";
 						const enteredTotal = isBottle
 							? editStockPartialBlisterPills
-							: editStockFullBlisters * selectedMed.pillsPerBlister + editStockPartialBlisterPills + editStockLoosePills;
+							: editStockFullBlisters * selectedMed.pillsPerBlister +
+								editStockPartialBlisterPills +
+								editStockLoosePills;
 						const newTotal = Math.max(0, enteredTotal);
 						const difference = newTotal - currentTotal;
 						const differenceClass = difference > 0 ? "positive" : difference < 0 ? "negative" : "";
@@ -463,13 +463,19 @@ export function MedDetailModal({
 													setShowStockCapNotice(parsed > structuralMax);
 												},
 												onBlur: () => {
-													const normalized = Math.min(structuralMax, Math.max(0, parseStockInput(editStockPartialInput)));
+													const normalized = Math.min(
+														structuralMax,
+														Math.max(0, parseStockInput(editStockPartialInput))
+													);
 													onEditStockPartialBlisterPillsChange(normalized);
 													setEditStockPartialInput(String(normalized));
 													setShowStockCapNotice(false);
 												},
 												onStep: (delta) => {
-													const next = Math.min(structuralMax, Math.max(0, parseStockInput(editStockPartialInput) + delta));
+													const next = Math.min(
+														structuralMax,
+														Math.max(0, parseStockInput(editStockPartialInput) + delta)
+													);
 													onEditStockPartialBlisterPillsChange(next);
 													setEditStockPartialInput(String(next));
 													setShowStockCapNotice(false);
@@ -479,7 +485,8 @@ export function MedDetailModal({
 									) : (
 										<>
 											<label>
-												{t("editStock.fullBlisters")} {t("editStock.pillsPerBlister", { count: selectedMed.pillsPerBlister })}
+												{t("editStock.fullBlisters")}{" "}
+												{t("editStock.pillsPerBlister", { count: selectedMed.pillsPerBlister })}
 												{renderStepperInput({
 													value: editStockFullInput,
 													min: 0,
@@ -497,9 +504,7 @@ export function MedDetailModal({
 														setEditStockFullInput(String(normalized.full));
 														setEditStockPartialInput(String(normalized.partial));
 														setEditStockLooseInput(String(normalized.loose));
-														setShowStockCapNotice(
-															rawFull * selectedMed.pillsPerBlister + rawPartial > structuralMax
-														);
+														setShowStockCapNotice(rawFull * selectedMed.pillsPerBlister + rawPartial > structuralMax);
 													},
 													onBlur: () => {
 														const normalized = normalizeBlisterStock(
@@ -527,14 +532,13 @@ export function MedDetailModal({
 														setEditStockFullInput(String(normalized.full));
 														setEditStockPartialInput(String(normalized.partial));
 														setEditStockLooseInput(String(normalized.loose));
-														setShowStockCapNotice(
-															rawFull * selectedMed.pillsPerBlister + rawPartial > structuralMax
-														);
+														setShowStockCapNotice(rawFull * selectedMed.pillsPerBlister + rawPartial > structuralMax);
 													},
 												})}
 											</label>
 											<label>
-												{t("editStock.partialBlisterPills")} {partialForDisplay} {t("common.of")} {selectedMed.pillsPerBlister} ({t("common.max")} {maxPartialPills})
+												{t("editStock.partialBlisterPills")} {partialForDisplay} {t("common.of")}{" "}
+												{selectedMed.pillsPerBlister} ({t("common.max")} {maxPartialPills})
 												{renderStepperInput({
 													value: editStockPartialInput,
 													min: 0,
@@ -585,35 +589,33 @@ export function MedDetailModal({
 														setEditStockFullInput(String(normalized.full));
 														setEditStockPartialInput(String(normalized.partial));
 														setEditStockLooseInput(String(normalized.loose));
-														setShowStockCapNotice(
-															nextFull * selectedMed.pillsPerBlister + nextPartial > structuralMax
-														);
+														setShowStockCapNotice(nextFull * selectedMed.pillsPerBlister + nextPartial > structuralMax);
 													},
 												})}
 											</label>
-										<label>
-											{t("editStock.loosePills")}
-											{renderStepperInput({
-												value: editStockLooseInput,
-												min: 0,
-												max: Number.MAX_SAFE_INTEGER,
-												onChange: (raw) => {
-													const nextLoose = raw === "" ? 0 : Math.max(0, parseStockInput(raw));
-													setEditStockLooseInput(raw);
-													onEditStockLoosePillsChange(nextLoose);
-												},
-												onBlur: () => {
-													const normalized = Math.max(0, parseStockInput(editStockLooseInput));
-													onEditStockLoosePillsChange(normalized);
-													setEditStockLooseInput(String(normalized));
-												},
-												onStep: (delta) => {
-													const next = Math.max(0, parseStockInput(editStockLooseInput) + delta);
-													onEditStockLoosePillsChange(next);
-													setEditStockLooseInput(String(next));
-												},
-											})}
-										</label>
+											<label>
+												{t("editStock.loosePills")}
+												{renderStepperInput({
+													value: editStockLooseInput,
+													min: 0,
+													max: Number.MAX_SAFE_INTEGER,
+													onChange: (raw) => {
+														const nextLoose = raw === "" ? 0 : Math.max(0, parseStockInput(raw));
+														setEditStockLooseInput(raw);
+														onEditStockLoosePillsChange(nextLoose);
+													},
+													onBlur: () => {
+														const normalized = Math.max(0, parseStockInput(editStockLooseInput));
+														onEditStockLoosePillsChange(normalized);
+														setEditStockLooseInput(String(normalized));
+													},
+													onStep: (delta) => {
+														const next = Math.max(0, parseStockInput(editStockLooseInput) + delta);
+														onEditStockLoosePillsChange(next);
+														setEditStockLooseInput(String(next));
+													},
+												})}
+											</label>
 										</>
 									)}
 								</div>
@@ -928,10 +930,7 @@ export function MedDetailModal({
 					{selectedMed.notes && (
 						<div className="med-detail-section">
 							<h3>
-								<span
-									className="notes-icon notes-icon-static"
-									aria-hidden="true"
-								>
+								<span className="notes-icon notes-icon-static" aria-hidden="true">
 									<NotebookPen size={14} />
 								</span>{" "}
 								{t("modal.notes")}
@@ -980,8 +979,8 @@ export function MedDetailModal({
 												})()}
 												{entry.usedPrescription && (
 													<span className="refill-prescription-badge" title={t("refill.viaPrescription")}>
-															{" "}
-															<ClipboardList size={14} aria-hidden="true" />
+														{" "}
+														<ClipboardList size={14} aria-hidden="true" />
 													</span>
 												)}
 											</span>
@@ -993,41 +992,41 @@ export function MedDetailModal({
 					)}
 					{/* Footer */}
 					<div className="med-detail-footer">
-					<button onClick={onClose}>{t("common.close")}</button>
-					<div className="footer-actions">
-						<button className="success" onClick={onOpenRefillModal}>
-							{t("refill.button")}
-						</button>
-						{onOpenMedicationEdit && (
-							<button
-								className="info icon-only tooltip-trigger"
-								onClick={onOpenMedicationEdit}
-								aria-label={t("common.edit")}
-								data-tooltip={t("common.edit")}
-							>
-								<Pencil size={18} aria-hidden="true" />
+						<button onClick={onClose}>{t("common.close")}</button>
+						<div className="footer-actions">
+							<button className="success" onClick={onOpenRefillModal}>
+								{t("refill.button")}
 							</button>
-						)}
-						{onOpenEditStockModal && (
-							<button
-								className="icon-stock-correction icon-only tooltip-trigger"
-								onClick={onOpenEditStockModal}
-								aria-label={t("editStock.buttonLabel")}
-								data-tooltip={t("editStock.buttonLabel")}
-							>
-								<FilePenLine size={18} aria-hidden="true" />
-							</button>
-						)}
-						{selectedMed.blisters.length > 0 && (
-							<button
-								className="secondary icon-only tooltip-trigger"
-								onClick={() => generateICS(selectedMed)}
-								aria-label={t("modal.exportTooltip")}
-								data-tooltip={t("modal.exportTooltip")}
-							>
-								<Calendar size={18} aria-hidden="true" />
-							</button>
-						)}
+							{onOpenMedicationEdit && (
+								<button
+									className="info icon-only tooltip-trigger"
+									onClick={onOpenMedicationEdit}
+									aria-label={t("common.edit")}
+									data-tooltip={t("common.edit")}
+								>
+									<Pencil size={18} aria-hidden="true" />
+								</button>
+							)}
+							{onOpenEditStockModal && (
+								<button
+									className="icon-stock-correction icon-only tooltip-trigger"
+									onClick={onOpenEditStockModal}
+									aria-label={t("editStock.buttonLabel")}
+									data-tooltip={t("editStock.buttonLabel")}
+								>
+									<FilePenLine size={18} aria-hidden="true" />
+								</button>
+							)}
+							{selectedMed.blisters.length > 0 && (
+								<button
+									className="secondary icon-only tooltip-trigger"
+									onClick={() => generateICS(selectedMed)}
+									aria-label={t("modal.exportTooltip")}
+									data-tooltip={t("modal.exportTooltip")}
+								>
+									<Calendar size={18} aria-hidden="true" />
+								</button>
+							)}
 						</div>
 					</div>
 				</div>
@@ -1111,7 +1110,11 @@ export function MedDetailModal({
 											onChange={(e) => {
 												const checked = e.target.checked;
 												onUsePrescriptionRefillChange(checked);
-												if (checked && selectedMed.packageType === "blister" && refillPacks > remainingPrescriptionRefills) {
+												if (
+													checked &&
+													selectedMed.packageType === "blister" &&
+													refillPacks > remainingPrescriptionRefills
+												) {
 													onRefillPacksChange(remainingPrescriptionRefills);
 												}
 											}}

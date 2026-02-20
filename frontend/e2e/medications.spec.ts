@@ -54,9 +54,9 @@ test.describe("Medications Page", () => {
 		// Package type selector should exist
 		await expect(form.getByText(/(Package Type|form\.packageType)/i)).toBeVisible();
 
-			// Tabbed form should expose navigation to Package/Schedule sections
-			await expect(page.getByRole("tab", { name: /Package/i })).toBeVisible();
-			await expect(page.getByRole("tab", { name: /Schedule/i })).toBeVisible();
+		// Tabbed form should expose navigation to Package/Schedule sections
+		await expect(page.getByRole("tab", { name: /Package/i })).toBeVisible();
+		await expect(page.getByRole("tab", { name: /Schedule/i })).toBeVisible();
 	});
 
 	test("should fill in medication details", async ({ page }) => {
@@ -75,22 +75,22 @@ test.describe("Medications Page", () => {
 	test("should have stock inventory fields", async ({ page }) => {
 		await openMedicationForm(page);
 		const form = visibleMedForm(page);
-			await page.getByRole("tab", { name: /Package/i }).click();
+		await page.getByRole("tab", { name: /Package/i }).click();
 
-			// Package tab should expose stock-related fields for at least one package mode.
-			const packsField = form.getByLabel(/(^Packs$|form\.packs)/i).first();
-			const totalField = form.getByText(/(Total \(pills\)|Total Capacity|form\.totalCapacity)/i).first();
+		// Package tab should expose stock-related fields for at least one package mode.
+		const packsField = form.getByLabel(/(^Packs$|form\.packs)/i).first();
+		const totalField = form.getByText(/(Total \(pills\)|Total Capacity|form\.totalCapacity)/i).first();
 
-			const hasPacks = await packsField.isVisible().catch(() => false);
-			const hasTotal = await totalField.isVisible().catch(() => false);
+		const hasPacks = await packsField.isVisible().catch(() => false);
+		const hasTotal = await totalField.isVisible().catch(() => false);
 
-			expect(hasPacks || hasTotal).toBeTruthy();
+		expect(hasPacks || hasTotal).toBeTruthy();
 	});
 
 	test("should toggle package type between blister and bottle", async ({ page }) => {
 		await openMedicationForm(page);
 		const form = visibleMedForm(page);
-			await page.getByRole("tab", { name: /Package/i }).click();
+		await page.getByRole("tab", { name: /Package/i }).click();
 
 		// Find the package type radio buttons or selector
 		const blisterOption = form.getByText(/(Blister Pack|form\.packageType\.blister)/i);
@@ -111,13 +111,15 @@ test.describe("Medications Page", () => {
 	test("should have intake schedule with add button", async ({ page }) => {
 		await openMedicationForm(page);
 		const form = visibleMedForm(page);
-			await page.getByRole("tab", { name: /Schedule/i }).click();
+		await page.getByRole("tab", { name: /Schedule/i }).click();
 
 		// Intake schedule section
-			await expect(page.getByRole("tab", { name: /Schedule/i, selected: true })).toBeVisible();
+		await expect(page.getByRole("tab", { name: /Schedule/i, selected: true })).toBeVisible();
 
 		// Should have at least one intake entry
-		await expect(form.getByText(/(Usage \(pills\)|Every \(days\)|form\.blisters\.usage|form\.blisters\.everyDays)/i).first()).toBeVisible();
+		await expect(
+			form.getByText(/(Usage \(pills\)|Every \(days\)|form\.blisters\.usage|form\.blisters\.everyDays)/i).first()
+		).toBeVisible();
 
 		// Should have an add intake button
 		const addIntake = form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i });

@@ -28,6 +28,7 @@ Use this orientation for quick navigation before applying the rules below.
 - Testing work belongs to `@testing-manager`.
 - PR/release/CI orchestration belongs to `@release-manager`.
 - Keep changes local, focused, and consistent with existing UI/API patterns.
+- **Hard PR scope + size rule**: one cohesive objective per PR; if scope drifts or diff becomes large (target <= 500 changed lines, hard split at ~800+), split into logical follow-up PRs instead of bundling.
 - Remove obsolete code when re-implementing — never leave dead code behind.
 - **Document behavioral discoveries**: When you discover or clarify how a feature works (e.g., what triggers notifications, how thresholds interact, which code paths exist), **always** add or update the relevant section in `doku/APP_BEHAVIOR.md`. This is mandatory — do not rely on conversation context alone.
 

@@ -122,13 +122,23 @@ export function MobileEditModal({
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, [show, onClose]);
 
+	// Lock background scroll while modal is open.
+	useEffect(() => {
+		if (!show) return;
+		const previousOverflow = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		return () => {
+			document.body.style.overflow = previousOverflow;
+		};
+	}, [show]);
+
 	if (!show) return null;
 
 	const currentMed = editingId ? meds.find((m) => m.id === editingId) : null;
 
 	return (
 		<div
-			className="modal-overlay"
+			className="modal-overlay mobile-edit-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
 				if (e.key === "Escape") onClose();
@@ -446,14 +456,14 @@ export function MobileEditModal({
 								<h4 className="form-category-title">{t("form.sections.prescription")}</h4>
 								<label className="full">
 									{t("prescription.enabled")}
-									<label className="toggle-switch small">
+									<span className="toggle-switch small">
 										<input
 											type="checkbox"
 											checked={form.prescriptionEnabled}
 											onChange={(e) => onHandleValueChange("prescriptionEnabled", e.target.checked)}
 										/>
 										<span className="toggle-slider"></span>
-									</label>
+									</span>
 								</label>
 								{form.prescriptionEnabled && (
 									<>

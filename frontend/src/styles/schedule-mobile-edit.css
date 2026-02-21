@@ -190,11 +190,20 @@
 }
 
 /* Mobile Edit Modal */
+.mobile-edit-overlay {
+	align-items: flex-start;
+	padding-top: 0.75rem;
+	padding-bottom: 0.75rem;
+}
+
 .edit-modal {
 	max-width: 95vw;
-	max-height: 90vh;
-	overflow-y: auto;
+	max-height: none;
+	height: min(92dvh, 92vh);
 	padding: 0.75rem;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .edit-modal-header {
@@ -211,9 +220,24 @@
 }
 
 .mobile-edit-form.form-grid {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	gap: 0.75rem 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.mobile-edit-form .readonly-fieldset {
+	display: block;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.mobile-edit-form .form-tab-panel.active {
+	display: block;
 }
 
 .mobile-edit-form.form-grid > label {

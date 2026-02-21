@@ -1,8 +1,6 @@
-import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, ExportModal } from "../components";
 import { useAppContext } from "../context";
-import { useModalHistory } from "../hooks";
 import { getSystemLocale } from "../utils/formatters";
 
 export function SettingsPage() {
@@ -34,14 +32,6 @@ export function SettingsPage() {
 		setImportResult,
 		meds,
 	} = useAppContext();
-
-	const closeExport = useCallback(() => setShowExportModal(false), [setShowExportModal]);
-	const closeImportConfirm = useCallback(() => {
-		setShowImportConfirm(false);
-		setPendingImportData(null);
-	}, [setShowImportConfirm, setPendingImportData]);
-	useModalHistory(showExportModal, "export", closeExport);
-	useModalHistory(showImportConfirm, "importConfirm", closeImportConfirm);
 
 	const hasExistingData = meds.length > 0;
 	return (

@@ -64,7 +64,7 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 				</div>
 				<div className="modal-footer" style={{ padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end" }}>
 					<button type="button" className="ghost" onClick={onClose}>
-						{t("exportImport.cancelButton")}
+						{t("common.close")}
 					</button>
 				</div>
 			</div>

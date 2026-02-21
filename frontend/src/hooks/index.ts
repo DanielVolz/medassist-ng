@@ -8,6 +8,7 @@ export type { UseMedicationFormReturn } from "./useMedicationForm";
 export { defaultBlister, defaultForm, useMedicationForm } from "./useMedicationForm";
 export type { UseMedicationsReturn } from "./useMedications";
 export { useMedications } from "./useMedications";
+export { useModalHistory } from "./useModalHistory";
 export type { UseRefillReturn } from "./useRefill";
 export { useRefill } from "./useRefill";
 export type { Settings, UseSettingsReturn } from "./useSettings";

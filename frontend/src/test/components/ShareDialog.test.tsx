@@ -54,7 +54,8 @@ describe("ShareDialog", () => {
 
 	it("calls onClose when close button is clicked", () => {
 		render(<ShareDialog {...defaultProps} />);
-		fireEvent.click(screen.getByRole("button", { name: /common\.close/i }));
+		const closeButtons = screen.getAllByRole("button", { name: /common\.close/i });
+		fireEvent.click(closeButtons[closeButtons.length - 1]);
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 

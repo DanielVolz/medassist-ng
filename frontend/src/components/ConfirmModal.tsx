@@ -47,7 +47,7 @@ export function ConfirmModal({
 			}}
 		>
 			<div
-				className="modal-content"
+				className="modal-content confirm-modal"
 				onClick={(e) => e.stopPropagation()}
 				onKeyDown={(e) => e.stopPropagation()}
 				style={{ maxWidth: "450px" }}

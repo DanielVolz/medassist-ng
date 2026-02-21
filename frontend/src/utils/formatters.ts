@@ -3,6 +3,8 @@
 // =============================================================================
 
 import type { BlisterStock, Medication } from "../types";
+import { getMedTotal } from "../types";
+import { splitCurrentBlisterStock } from "./stock";
 
 /**
  * Map timezone to region code (ISO 3166-1 alpha-2).
@@ -302,12 +304,7 @@ export function getExpiryClass(expiryDate: string | null | undefined, thresholdD
  * Calculate blister stock breakdown for a medication
  */
 export function getBlisterStock(med: Medication): BlisterStock {
-	const total =
-		med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
-	const bSize = med.pillsPerBlister;
-	const fullBlisters = Math.floor(total / bSize);
-	const openBlisterPills = total % bSize;
-	return { fullBlisters, openBlisterPills, loosePills: openBlisterPills };
+	return splitCurrentBlisterStock(getMedTotal(med), med.pillsPerBlister, med.looseTablets);
 }
 
 /**

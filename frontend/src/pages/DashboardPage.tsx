@@ -5,8 +5,10 @@ import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
+import { getMedTotal as getMedTotalFromTypes } from "../types";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
 import { expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
+import { splitCurrentBlisterStock } from "../utils/stock";
 
 // Helper for user-specific localStorage keys
 export function userStorageKey(userId: number | undefined, key: string): string {
@@ -17,12 +19,10 @@ export function userStorageKey(userId: number | undefined, key: string): string 
 export function getBlisterStock(
 	totalPills: number,
 	pillsPerBlister: number,
-	_looseTablets: number,
+	looseTablets: number,
 	_originalTotal: number
 ) {
-	const fullBlisters = Math.floor(totalPills / pillsPerBlister);
-	const openBlisterPills = totalPills % pillsPerBlister;
-	return { fullBlisters, openBlisterPills, loosePills: openBlisterPills };
+	return splitCurrentBlisterStock(totalPills, pillsPerBlister, looseTablets);
 }
 
 // Helper to format full blisters
@@ -37,8 +37,16 @@ export function formatOpenBlisterAndLoose(
 	pillsPerBlister: number,
 	t: (key: string) => string
 ): string {
-	if (openBlisterPills === 0 && loosePills === 0) return "-";
-	return `${openBlisterPills} ${t("common.of")} ${pillsPerBlister} ${t("common.pills")}`;
+	if (openBlisterPills > 0 && loosePills > 0) {
+		return `${openBlisterPills} ${t("common.of")} ${pillsPerBlister} ${t("common.pills")} + ${loosePills} ${t("modal.loosePills")}`;
+	}
+	if (openBlisterPills > 0) {
+		return `${openBlisterPills} ${t("common.of")} ${pillsPerBlister} ${t("common.pills")}`;
+	}
+	if (loosePills > 0) {
+		return `${loosePills} ${t("modal.loosePills")}`;
+	}
+	return "-";
 }
 
 // Get total pills for a medication (packageType-aware)
@@ -50,10 +58,7 @@ export function getMedTotal(med: {
 	stockAdjustment?: number | null;
 	packageType?: string;
 }): number {
-	if (med.packageType === "bottle") {
-		return med.looseTablets + (med.stockAdjustment ?? 0);
-	}
-	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
+	return getMedTotalFromTypes(med);
 }
 
 // Notification bell SVG icon (no emoji)

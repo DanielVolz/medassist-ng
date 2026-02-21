@@ -69,6 +69,7 @@ export type PlannerRow = {
 	medicationId: number;
 	medicationName: string;
 	totalPills: number;
+	currentPills?: number;
 	plannerUsage: number;
 	blisterSize: number;
 	blistersNeeded: number;

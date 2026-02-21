@@ -15,30 +15,11 @@ import type { Coverage, Medication, RefillEntry, StockThresholds } from "../type
 import { getMedTotal, getPackageSize } from "../types";
 import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
 import { getStockStatus } from "../utils/schedule";
+import { splitCurrentBlisterStock } from "../utils/stock";
 
 // =============================================================================
 // Local Helper Functions
 // =============================================================================
-
-/**
- * Calculate blister stock - divides current pills into full blisters and partial
- */
-function getBlisterStock(
-	currentPills: number,
-	pillsPerBlister: number,
-	originalLooseTablets: number,
-	_originalTotalPills: number
-): { fullBlisters: number; openBlisterPills: number; loosePills: number } {
-	if (pillsPerBlister <= 0 || pillsPerBlister === 1) {
-		return { fullBlisters: 0, openBlisterPills: 0, loosePills: currentPills };
-	}
-	const safeCurrent = Math.max(0, currentPills);
-	const loosePills = Math.min(safeCurrent, Math.max(0, originalLooseTablets));
-	const sealedPills = Math.max(0, safeCurrent - loosePills);
-	const fullBlisters = Math.floor(sealedPills / pillsPerBlister);
-	const openBlisterPills = sealedPills % pillsPerBlister;
-	return { fullBlisters, openBlisterPills, loosePills };
-}
 
 /**
  * Format full blisters column
@@ -230,7 +211,7 @@ export function MedDetailModal({
 	const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 	const fallbackTextClass = status?.className === "warning" ? "warning-text" : "success-text";
 	const textClass = status?.className === "danger" ? "danger-text" : fallbackTextClass;
-	const stock = getBlisterStock(currentStock, selectedMed.pillsPerBlister, selectedMed.looseTablets, packageSize);
+	const stock = splitCurrentBlisterStock(currentStock, selectedMed.pillsPerBlister, selectedMed.looseTablets);
 	const currentFullBlisters = Math.max(0, stock.fullBlisters);
 	const currentPartialPills = Math.max(0, stock.openBlisterPills);
 	const currentLoosePills = Math.max(0, stock.loosePills);

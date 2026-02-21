@@ -562,37 +562,12 @@ export function MedicationsPage() {
 		return () => document.removeEventListener("keydown", handleEscape);
 	}, [showEditModal, closeEditModal]);
 
-	// Handle edit button click - open modal on mobile, switch to form on desktop
-	const normalizeMedicationForEdit = useCallback(
-		(med: Medication): Medication => {
-			if (med.packageType !== "blister") return med;
-
-			const pillsPerPack = Math.max(1, med.blistersPerPack * med.pillsPerBlister);
-			const fallbackStock = Math.max(0, getMedTotal(med));
-			const currentStock = Math.max(0, Math.round(coverageByMed[med.name]?.medsLeft ?? fallbackStock));
-			const nextPackCount = Math.floor(currentStock / pillsPerPack);
-			const nextLooseTablets = currentStock % pillsPerPack;
-
-			if (nextPackCount === med.packCount && nextLooseTablets === med.looseTablets) {
-				return med;
-			}
-
-			return {
-				...med,
-				packCount: nextPackCount,
-				looseTablets: nextLooseTablets,
-			};
-		},
-		[coverageByMed]
-	);
-
 	function handleEditClick(med: Medication) {
-		const normalizedMed = normalizeMedicationForEdit(med);
 		if (formChanged) {
 			pendingActionRef.current = () => {
 				setShowNameValidation(false);
 				setReadOnlyView(false);
-				startEdit(normalizedMed, openEditModal);
+				startEdit(med, openEditModal);
 				setViewMode("form");
 			};
 			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
@@ -602,17 +577,16 @@ export function MedicationsPage() {
 		setShowNameValidation(false);
 		setReadOnlyView(false);
 		setActiveTab("general");
-		startEdit(normalizedMed, openEditModal);
+		startEdit(med, openEditModal);
 		setViewMode("form");
 	}
 
 	function handleViewClick(med: Medication) {
-		const normalizedMed = normalizeMedicationForEdit(med);
 		if (formChanged) {
 			pendingActionRef.current = () => {
 				setShowNameValidation(false);
 				setReadOnlyView(true);
-				startEdit(normalizedMed, openEditModal);
+				startEdit(med, openEditModal);
 				setViewMode("form");
 			};
 			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
@@ -622,7 +596,7 @@ export function MedicationsPage() {
 		setShowNameValidation(false);
 		setReadOnlyView(true);
 		setActiveTab("general");
-		startEdit(normalizedMed, openEditModal);
+		startEdit(med, openEditModal);
 		setViewMode("form");
 	}
 
@@ -685,13 +659,13 @@ export function MedicationsPage() {
 		setShowNameValidation(false);
 		setReadOnlyView(false);
 		setActiveTab("general");
-		startEdit(normalizeMedicationForEdit(medicationToEdit), openEditModal);
+		startEdit(medicationToEdit, openEditModal);
 		setViewMode("form");
 
 		const nextParams = new URLSearchParams(searchParams);
 		nextParams.delete("editMedId");
 		setSearchParams(nextParams, { replace: true });
-	}, [allMeds, normalizeMedicationForEdit, openEditModal, searchParams, setSearchParams, startEdit]);
+	}, [allMeds, openEditModal, searchParams, setSearchParams, startEdit]);
 
 	const selectedMedication = useMemo(() => {
 		if (!editingId) return null;

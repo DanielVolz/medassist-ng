@@ -245,8 +245,8 @@ describe("useSettings", () => {
 			await result.current.saveSettings(mockEvent);
 		});
 
-		// emailEnabled should be false in the saved state
-		expect(result.current.settings.emailEnabled).toBe(false);
+		// Local state preserves user choice; backend receives effective value via payload
+		expect(result.current.settings.emailEnabled).toBe(true);
 	});
 
 	it("auto-disables shoutrrr when URL is empty", async () => {
@@ -274,7 +274,8 @@ describe("useSettings", () => {
 			await result.current.saveSettings(mockEvent);
 		});
 
-		expect(result.current.settings.shoutrrrEnabled).toBe(false);
+		// Local state preserves user choice; backend receives effective value via payload
+		expect(result.current.settings.shoutrrrEnabled).toBe(true);
 	});
 
 	it("refreshes reminder status on interval", async () => {

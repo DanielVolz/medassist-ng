@@ -249,11 +249,7 @@ export function useSettings(): UseSettingsReturn {
 				body: JSON.stringify(payload),
 			}).catch(() => null);
 
-			const updatedSettings = {
-				...settingsToSave,
-				emailEnabled: effectiveEmailEnabled,
-				shoutrrrEnabled: effectiveShoutrrrEnabled,
-			};
+			const updatedSettings = { ...settingsToSave };
 			setSettings(updatedSettings);
 			setSettingsSaving(false);
 			setSavedSettings(updatedSettings);

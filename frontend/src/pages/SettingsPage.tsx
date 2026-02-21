@@ -1,6 +1,8 @@
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, ExportModal } from "../components";
 import { useAppContext } from "../context";
+import { useModalHistory } from "../hooks";
 import { getSystemLocale } from "../utils/formatters";
 
 export function SettingsPage() {
@@ -32,6 +34,14 @@ export function SettingsPage() {
 		setImportResult,
 		meds,
 	} = useAppContext();
+
+	const closeExport = useCallback(() => setShowExportModal(false), [setShowExportModal]);
+	const closeImportConfirm = useCallback(() => {
+		setShowImportConfirm(false);
+		setPendingImportData(null);
+	}, [setShowImportConfirm, setPendingImportData]);
+	useModalHistory(showExportModal, "export", closeExport);
+	useModalHistory(showImportConfirm, "importConfirm", closeImportConfirm);
 
 	const hasExistingData = meds.length > 0;
 	return (
@@ -89,7 +99,7 @@ export function SettingsPage() {
 										<label className={`toggle-switch small${!settings.emailEnabled ? " disabled" : ""}`}>
 											<input
 												type="checkbox"
-												checked={settings.smtpHost && settings.emailEnabled ? settings.emailStockReminders : false}
+												checked={settings.emailStockReminders}
 												onChange={(e) => setSettings({ ...settings, emailStockReminders: e.target.checked })}
 												disabled={!settings.emailEnabled}
 											/>
@@ -100,9 +110,7 @@ export function SettingsPage() {
 										<label className={`toggle-switch small${!settings.shoutrrrEnabled ? " disabled" : ""}`}>
 											<input
 												type="checkbox"
-												checked={
-													settings.shoutrrrUrl && settings.shoutrrrEnabled ? settings.shoutrrrStockReminders : false
-												}
+												checked={settings.shoutrrrStockReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrStockReminders: e.target.checked })}
 												disabled={!settings.shoutrrrEnabled}
 											/>
@@ -116,7 +124,7 @@ export function SettingsPage() {
 										<label className={`toggle-switch small${!settings.emailEnabled ? " disabled" : ""}`}>
 											<input
 												type="checkbox"
-												checked={settings.smtpHost && settings.emailEnabled ? settings.emailIntakeReminders : false}
+												checked={settings.emailIntakeReminders}
 												onChange={(e) => setSettings({ ...settings, emailIntakeReminders: e.target.checked })}
 												disabled={!settings.emailEnabled}
 											/>
@@ -127,9 +135,7 @@ export function SettingsPage() {
 										<label className={`toggle-switch small${!settings.shoutrrrEnabled ? " disabled" : ""}`}>
 											<input
 												type="checkbox"
-												checked={
-													settings.shoutrrrUrl && settings.shoutrrrEnabled ? settings.shoutrrrIntakeReminders : false
-												}
+												checked={settings.shoutrrrIntakeReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrIntakeReminders: e.target.checked })}
 												disabled={!settings.shoutrrrEnabled}
 											/>
@@ -143,9 +149,7 @@ export function SettingsPage() {
 										<label className={`toggle-switch small${!settings.emailEnabled ? " disabled" : ""}`}>
 											<input
 												type="checkbox"
-												checked={
-													settings.smtpHost && settings.emailEnabled ? settings.emailPrescriptionReminders : false
-												}
+												checked={settings.emailPrescriptionReminders}
 												onChange={(e) => setSettings({ ...settings, emailPrescriptionReminders: e.target.checked })}
 												disabled={!settings.emailEnabled}
 											/>
@@ -156,11 +160,7 @@ export function SettingsPage() {
 										<label className={`toggle-switch small${!settings.shoutrrrEnabled ? " disabled" : ""}`}>
 											<input
 												type="checkbox"
-												checked={
-													settings.shoutrrrUrl && settings.shoutrrrEnabled
-														? settings.shoutrrrPrescriptionReminders
-														: false
-												}
+												checked={settings.shoutrrrPrescriptionReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrPrescriptionReminders: e.target.checked })}
 												disabled={!settings.shoutrrrEnabled}
 											/>

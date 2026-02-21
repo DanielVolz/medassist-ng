@@ -124,6 +124,7 @@ const fetchMock = vi.fn();
 vi.mock("../../hooks", () => ({
 	useMedicationForm: () => mockFormHookValue,
 	useUnsavedChangesWarning: () => ({}),
+	useModalHistory: vi.fn(),
 }));
 
 vi.mock("../../context", () => ({

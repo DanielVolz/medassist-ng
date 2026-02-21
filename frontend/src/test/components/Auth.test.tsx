@@ -556,7 +556,7 @@ describe("UserProfile", () => {
 		);
 
 		await waitFor(() => {
-			const cancelBtn = screen.getByText(/common\.cancel/i);
+			const cancelBtn = screen.getByText(/common\.close/i);
 			fireEvent.click(cancelBtn);
 		});
 

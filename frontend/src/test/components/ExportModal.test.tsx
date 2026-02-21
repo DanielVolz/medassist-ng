@@ -70,12 +70,12 @@ describe("ExportModal", () => {
 
 	it("renders cancel button", () => {
 		render(<ExportModal {...defaultProps} />);
-		expect(screen.getByText(/exportImport\.cancelButton/i)).toBeInTheDocument();
+		expect(screen.getByText(/common\.close/i)).toBeInTheDocument();
 	});
 
 	it("calls onClose when cancel button is clicked", () => {
 		render(<ExportModal {...defaultProps} />);
-		fireEvent.click(screen.getByText(/exportImport\.cancelButton/i));
+		fireEvent.click(screen.getByText(/common\.close/i));
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 

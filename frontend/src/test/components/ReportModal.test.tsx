@@ -30,7 +30,7 @@ describe("ReportModal", () => {
 		render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
 
 		expect(screen.getByText(/report\.title/i)).toBeInTheDocument();
-		fireEvent.click(screen.getByRole("button", { name: /common\.cancel/i }));
+		fireEvent.click(screen.getByRole("button", { name: /common\.close/i }));
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 

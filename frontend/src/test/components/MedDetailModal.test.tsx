@@ -216,6 +216,32 @@ describe("MedDetailModal", () => {
 		const body = document.querySelector(".med-detail-body");
 		expect(body).toBeInTheDocument();
 	});
+
+	it("shows configured pack count in package details, independent from current stock", () => {
+		const medWithConfiguredPacks: Medication = {
+			...mockMedication,
+			packCount: 11,
+			blistersPerPack: 5,
+			pillsPerBlister: 5,
+		};
+
+		const lowCurrentStockCoverage: Coverage = {
+			...mockCoverage,
+			medsLeft: 47,
+		};
+
+		render(
+			<MedDetailModal
+				{...defaultProps}
+				selectedMed={medWithConfiguredPacks}
+				coverage={{ all: [lowCurrentStockCoverage] }}
+			/>
+		);
+
+		const packsLabel = screen.getByText(/modal\.packs/i);
+		const packsValue = packsLabel.closest(".med-detail-item")?.querySelector(".med-detail-value");
+		expect(packsValue?.textContent).toBe("11");
+	});
 });
 
 describe("MedDetailModal without coverage", () => {
@@ -744,7 +770,7 @@ describe("MedDetailModal stock overflow warning", () => {
 		vi.clearAllMocks();
 	});
 
-	it("does not show overflow warning icon with live stock denominator", () => {
+	it("shows overflow warning icon when stock exceeds blister package capacity", () => {
 		const overflowCoverage: Coverage = {
 			name: "Test Med",
 			medsLeft: 49,
@@ -756,9 +782,9 @@ describe("MedDetailModal stock overflow warning", () => {
 
 		render(<MedDetailModal {...defaultProps} coverage={{ all: [overflowCoverage] }} />);
 
-		// Live denominator uses current stock, so overflow warning is not shown in detail row.
+		// For blister meds, denominator is package capacity (not current stock), so overflow is shown.
 		const warningIcon = document.querySelector(".info-tooltip.tooltip-align-left.warning-text");
-		expect(warningIcon).not.toBeInTheDocument();
+		expect(warningIcon).toBeInTheDocument();
 	});
 
 	it("does not show warning icon when stock is within package capacity", () => {

@@ -153,6 +153,7 @@
   },
   "form": {
     "editEntry": "Bearbeiten",
+    "editEntryWithName": "Bearbeiten: {{name}}",
     "viewEntry": "Ansehen",
     "newEntry": "Neues Medikament",
     "badge": "Packungen + lose Tabletten",
@@ -462,7 +463,9 @@
     "pillsTotal": "{{count}} Tabletten gesamt",
     "pillsTotal_one": "{{count}} Tablette gesamt",
     "pillsTotal_other": "{{count}} Tabletten gesamt",
-    "max": "max"
+    "max": "max",
+    "on": "An",
+    "off": "Aus"
   },
   "share": {
     "button": "Teilen",

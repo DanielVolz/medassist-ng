@@ -4323,9 +4323,10 @@ button.has-validation-error {
 /* Modal base styles moved to styles/modals-base.css */
 
 /* Medication Detail Modal */
-.med-detail-modal {
+.modal-content.med-detail-modal {
 	padding: 0;
-	width: min(100vw - 1rem, 520px);
+	width: min(100vw - 1rem, 711px);
+	max-width: 711px;
 	max-height: 90vh;
 	background: var(--bg-primary);
 	overscroll-behavior: contain;
@@ -4668,6 +4669,22 @@ button.has-validation-error {
 
 .med-schedule-time {
 	font-weight: 500;
+	margin-left: auto;
+}
+
+.med-schedule-person {
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+}
+
+.med-schedule-bell {
+	color: var(--warning);
+	display: inline-flex;
+	align-items: center;
+}
+
+[data-theme="light"] .med-schedule-bell {
+	color: #b45309;
 }
 
 .med-detail-footer {
@@ -4689,7 +4706,7 @@ button.has-validation-error {
 
 /* Mobile devices can report wide CSS viewports (e.g., 768px in device emulation).
    Use input modality instead of width-only breakpoints so the modal still fills the handset viewport. */
-@media (hover: none) and (pointer: coarse) {
+@media (hover: none) and (pointer: coarse) and (max-width: 500px) {
 	.med-detail-overlay {
 		padding: 0.4rem;
 		align-items: stretch;
@@ -4938,7 +4955,7 @@ button.has-validation-error {
 }
 
 /* Hard mobile override for MedDetailModal: remove side frame and use full handset viewport. */
-@media (max-width: 900px) {
+@media (max-width: 500px) {
 	.modal-overlay.med-detail-overlay {
 		padding: 0 !important;
 		align-items: stretch;

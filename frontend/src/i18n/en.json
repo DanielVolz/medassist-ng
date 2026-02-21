@@ -153,6 +153,7 @@
   },
   "form": {
     "editEntry": "Edit",
+    "editEntryWithName": "Edit: {{name}}",
     "viewEntry": "View",
     "newEntry": "New medication",
     "badge": "Packs + loose pills",
@@ -462,7 +463,9 @@
     "pillsTotal": "{{count}} pills total",
     "pillsTotal_one": "{{count}} pill total",
     "pillsTotal_other": "{{count}} pills total",
-    "max": "max"
+    "max": "max",
+    "on": "On",
+    "off": "Off"
   },
   "share": {
     "button": "Share",

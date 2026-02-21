@@ -1,3 +1,4 @@
+import { Bell } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
@@ -204,7 +205,7 @@ export function SchedulePage() {
 																			className="reminder-icon info-tooltip"
 																			data-tooltip={t("tooltips.intakeReminders")}
 																		>
-																			🔔
+																			<Bell size={14} aria-hidden="true" />
 																		</span>
 																	)}{" "}
 																	<div className="dose-checks">
@@ -365,7 +366,7 @@ export function SchedulePage() {
 																	className="reminder-icon info-tooltip"
 																	data-tooltip={t("tooltips.intakeReminders")}
 																>
-																	🔔
+																	<Bell size={14} aria-hidden="true" />
 																</span>
 															)}
 															<div className="dose-checks">

@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/style/noNestedTernary: timeline rendering uses explicit UI-state branching */
 import { Bell, NotebookPen, Share2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

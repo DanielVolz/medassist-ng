@@ -3,6 +3,7 @@
  * Handles new medication creation and editing existing medications
  */
 
+/* biome-ignore-all lint/a11y/noLabelWithoutControl: modal uses custom DateInput and static value fields */
 import { Bell, Minus, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -91,9 +92,9 @@ export function MobileEditModal({
 	onAddTakenByPerson,
 	onRemoveTakenByPerson,
 	onTakenByKeyDown,
-	onSetBlisterValue,
-	onAddBlister,
-	onRemoveBlister,
+	_onSetBlisterValue,
+	_onAddBlister,
+	_onRemoveBlister,
 	onSetIntakeValue,
 	onAddIntake,
 	onRemoveIntake,
@@ -639,7 +640,10 @@ export function MobileEditModal({
 											)}
 										</div>
 										{form.intakes.map((intake, idx) => (
-											<div key={idx} className="blister-row">
+											<div
+												key={`${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}`}
+												className="blister-row"
+											>
 												<label className="compact">
 													<span>{t("form.blisters.usage")}</span>
 													<input

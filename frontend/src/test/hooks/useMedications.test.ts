@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMedications } from "../../hooks/useMedications";
+import type { Medication } from "../../types";
 
 describe("useMedications", () => {
 	beforeEach(() => {
@@ -193,7 +194,7 @@ describe("useMedications", () => {
 	it("allows setting meds directly", () => {
 		const { result } = renderHook(() => useMedications());
 
-		const newMeds = [{ id: 1, name: "NewMed" }] as any;
+		const newMeds: Array<Pick<Medication, "id" | "name">> = [{ id: 1, name: "NewMed" }];
 
 		act(() => {
 			result.current.setMeds(newMeds);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
 	AboutModal,
@@ -119,8 +119,6 @@ function AppContent() {
 		// Medications
 		meds,
 		loadMeds,
-		// Settings
-		settings,
 		// Refill
 		showRefillModal,
 		setShowRefillModal,
@@ -190,6 +188,17 @@ function AppContent() {
 	// Local-only state (not shared across components)
 	const [showProfile, setShowProfile] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
+	const closeProfile = useCallback(() => {
+		if (showProfile) {
+			window.history.back();
+		}
+	}, [showProfile]);
+
+	const closeAbout = useCallback(() => {
+		if (showAbout) {
+			window.history.back();
+		}
+	}, [showAbout]);
 
 	// Get centralized stockThresholds from context
 	const { stockThresholds } = ctx;
@@ -389,25 +398,15 @@ function AppContent() {
 		openEditStockModal(selectedMed, coverage);
 	};
 
-	function openProfile() {
+	const openProfile = useCallback(() => {
 		setShowProfile(true);
 		window.history.pushState({ modal: "profile" }, "");
-	}
-	function closeProfile() {
-		if (showProfile) {
-			window.history.back();
-		}
-	}
+	}, []);
 
-	function openAbout() {
+	const openAbout = useCallback(() => {
 		setShowAbout(true);
 		window.history.pushState({ modal: "about" }, "");
-	}
-	function closeAbout() {
-		if (showAbout) {
-			window.history.back();
-		}
-	}
+	}, []);
 
 	return (
 		<main className="page">

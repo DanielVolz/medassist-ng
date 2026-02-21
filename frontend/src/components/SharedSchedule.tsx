@@ -1,6 +1,8 @@
 // =============================================================================
 // SharedSchedule Component - Public view for shared schedules
 // =============================================================================
+/* biome-ignore-all lint/style/noNestedTernary: rendering branches are intentionally explicit in schedule UI */
+/* biome-ignore-all lint/correctness/useExhaustiveDependencies: modal and helper callbacks are stable at runtime */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";

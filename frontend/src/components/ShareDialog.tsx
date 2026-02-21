@@ -124,8 +124,12 @@ export function ShareDialog({
 					return (
 						<div className="share-dialog-form">
 							<div className="form-group">
-								<label>{t("share.selectPerson")}</label>
-								<select value={shareSelectedPerson} onChange={(e) => onShareSelectedPersonChange(e.target.value)}>
+								<label htmlFor="share-person-select">{t("share.selectPerson")}</label>
+								<select
+									id="share-person-select"
+									value={shareSelectedPerson}
+									onChange={(e) => onShareSelectedPersonChange(e.target.value)}
+								>
 									{sharePeople.map((person) => (
 										<option key={person} value={person}>
 											{person}
@@ -135,8 +139,12 @@ export function ShareDialog({
 							</div>
 
 							<div className="form-group">
-								<label>{t("share.selectPeriod")}</label>
-								<select value={shareSelectedDays} onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}>
+								<label htmlFor="share-period-select">{t("share.selectPeriod")}</label>
+								<select
+									id="share-period-select"
+									value={shareSelectedDays}
+									onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}
+								>
 									<option value={30}>{t("dashboard.schedules.1month")}</option>
 									<option value={90}>{t("dashboard.schedules.3months")}</option>
 									<option value={180}>{t("dashboard.schedules.6months")}</option>

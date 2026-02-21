@@ -1,5 +1,5 @@
 import cookie from "@fastify/cookie";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type OidcMocks = {

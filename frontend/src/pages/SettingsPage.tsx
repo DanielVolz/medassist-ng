@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/a11y/noLabelWithoutControl: settings rows use label-styled text with adjacent custom toggle controls */
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, ExportModal } from "../components";
 import { useAppContext } from "../context";

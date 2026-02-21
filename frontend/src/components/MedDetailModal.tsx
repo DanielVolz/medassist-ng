@@ -215,10 +215,8 @@ export function MedDetailModal({
 	const currentFullBlisters = Math.max(0, stock.fullBlisters);
 	const currentPartialPills = Math.max(0, stock.openBlisterPills);
 	const currentLoosePills = Math.max(0, stock.loosePills);
-	const pillsPerPack = Math.max(1, selectedMed.blistersPerPack * selectedMed.pillsPerBlister);
-	const remainingPacks = Math.max(0, Math.ceil(Math.max(0, currentStock) / pillsPerPack));
 	const stockDisplayTotal =
-		selectedMed.packageType === "bottle" ? (selectedMed.totalPills ?? packageSize) : Math.max(0, currentStock);
+		selectedMed.packageType === "bottle" ? (selectedMed.totalPills ?? packageSize) : Math.max(0, structuralMax);
 	const maxPartialPills = Math.min(
 		Math.max(0, selectedMed.pillsPerBlister),
 		Math.max(0, structuralMax - Math.max(0, editStockFullBlisters) * selectedMed.pillsPerBlister)
@@ -763,7 +761,7 @@ export function MedDetailModal({
 								<>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t("modal.packs")}</span>
-										<span className="med-detail-value">{remainingPacks}</span>
+										<span className="med-detail-value">{selectedMed.packCount}</span>
 									</div>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t("modal.blistersPerPack")}</span>
@@ -971,44 +969,45 @@ export function MedDetailModal({
 							)}
 						</div>
 					)}
-					{/* Footer */}
-					<div className="med-detail-footer">
-						<button onClick={onClose}>{t("common.close")}</button>
-						<div className="footer-actions">
-							<button className="success" onClick={onOpenRefillModal}>
-								{t("refill.button")}
+				</div>
+
+				{/* Footer */}
+				<div className="med-detail-footer">
+					<button onClick={onClose}>{t("common.close")}</button>
+					<div className="footer-actions">
+						<button className="success" onClick={onOpenRefillModal}>
+							{t("refill.button")}
+						</button>
+						{onOpenMedicationEdit && (
+							<button
+								className="info icon-only tooltip-trigger"
+								onClick={onOpenMedicationEdit}
+								aria-label={t("common.edit")}
+								data-tooltip={t("common.edit")}
+							>
+								<Pencil size={18} aria-hidden="true" />
 							</button>
-							{onOpenMedicationEdit && (
-								<button
-									className="info icon-only tooltip-trigger"
-									onClick={onOpenMedicationEdit}
-									aria-label={t("common.edit")}
-									data-tooltip={t("common.edit")}
-								>
-									<Pencil size={18} aria-hidden="true" />
-								</button>
-							)}
-							{onOpenEditStockModal && (
-								<button
-									className="icon-stock-correction icon-only tooltip-trigger"
-									onClick={onOpenEditStockModal}
-									aria-label={t("editStock.buttonLabel")}
-									data-tooltip={t("editStock.buttonLabel")}
-								>
-									<FilePenLine size={18} aria-hidden="true" />
-								</button>
-							)}
-							{selectedMed.blisters.length > 0 && (
-								<button
-									className="secondary icon-only tooltip-trigger"
-									onClick={() => generateICS(selectedMed)}
-									aria-label={t("modal.exportTooltip")}
-									data-tooltip={t("modal.exportTooltip")}
-								>
-									<Calendar size={18} aria-hidden="true" />
-								</button>
-							)}
-						</div>
+						)}
+						{onOpenEditStockModal && (
+							<button
+								className="icon-stock-correction icon-only tooltip-trigger"
+								onClick={onOpenEditStockModal}
+								aria-label={t("editStock.buttonLabel")}
+								data-tooltip={t("editStock.buttonLabel")}
+							>
+								<FilePenLine size={18} aria-hidden="true" />
+							</button>
+						)}
+						{selectedMed.blisters.length > 0 && (
+							<button
+								className="secondary icon-only tooltip-trigger"
+								onClick={() => generateICS(selectedMed)}
+								aria-label={t("modal.exportTooltip")}
+								data-tooltip={t("modal.exportTooltip")}
+							>
+								<Calendar size={18} aria-hidden="true" />
+							</button>
+						)}
 					</div>
 				</div>
 			</div>

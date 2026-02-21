@@ -71,6 +71,13 @@
       "when": 1771164000000,
       "tag": "0009_add_medication_start_date",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1771694832866,
+      "tag": "0010_mean_spot",
+      "breakpoints": true
     }
   ]
 }

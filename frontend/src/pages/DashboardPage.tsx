@@ -64,6 +64,7 @@ export function DashboardPage() {
 		missedPastDoseIds,
 		getDayStockStatus,
 		getDoseId,
+		isDoseTakenAutomatically,
 		showClearMissedConfirm,
 		setShowClearMissedConfirm,
 		clearingMissed,
@@ -767,6 +768,8 @@ export function DashboardPage() {
 																				{people.map((person) => {
 																					const doseId = getDoseId(dose.id, person);
 																					const isTaken = takenDoses.has(doseId);
+																					const isAutomaticallyTaken =
+																						isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																					return (
 																						<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																							{person && (
@@ -786,6 +789,14 @@ export function DashboardPage() {
 																									onClick={() => undoDoseTaken(doseId)}
 																									title={t("common.undo")}
 																								>
+																									{isAutomaticallyTaken && (
+																										<span
+																											className="info-tooltip"
+																											data-tooltip={t("tooltips.automaticTaken")}
+																										>
+																											🤖
+																										</span>
+																									)}
 																									↩
 																								</button>
 																							) : (
@@ -1013,6 +1024,8 @@ export function DashboardPage() {
 																				{people.map((person) => {
 																					const doseId = getDoseId(dose.id, person);
 																					const isTaken = takenDoses.has(doseId);
+																					const isAutomaticallyTaken =
+																						isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																					return (
 																						<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																							{person && (
@@ -1032,6 +1045,14 @@ export function DashboardPage() {
 																									onClick={() => undoDoseTaken(doseId)}
 																									title={t("common.undo")}
 																								>
+																									{isAutomaticallyTaken && (
+																										<span
+																											className="info-tooltip"
+																											data-tooltip={t("tooltips.automaticTaken")}
+																										>
+																											🤖
+																										</span>
+																									)}
 																									↩
 																								</button>
 																							) : (
@@ -1222,6 +1243,8 @@ export function DashboardPage() {
 																				{people.map((person) => {
 																					const doseId = getDoseId(dose.id, person);
 																					const isTaken = takenDoses.has(doseId);
+																					const isAutomaticallyTaken =
+																						isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																					return (
 																						<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																							{person && (
@@ -1241,6 +1264,14 @@ export function DashboardPage() {
 																									onClick={() => undoDoseTaken(doseId)}
 																									title={t("common.undo")}
 																								>
+																									{isAutomaticallyTaken && (
+																										<span
+																											className="info-tooltip"
+																											data-tooltip={t("tooltips.automaticTaken")}
+																										>
+																											🤖
+																										</span>
+																									)}
 																									↩
 																								</button>
 																							) : (

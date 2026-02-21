@@ -8,10 +8,12 @@ export interface UseDosesReturn {
 	takenDoses: Set<string>;
 	setTakenDoses: React.Dispatch<React.SetStateAction<Set<string>>>;
 	takenDoseTimestamps: Map<string, number>;
+	takenDoseSources: Map<string, "manual" | "automatic">;
 	dismissedDoses: Set<string>;
 	showClearMissedConfirm: boolean;
 	setShowClearMissedConfirm: (show: boolean) => void;
 	getDoseId: (baseDoseId: string, person: string | null) => string;
+	isDoseTakenAutomatically: (doseId: string) => boolean;
 	countTakenDoses: (doses: Array<{ id: string; takenBy: string[] }>) => { total: number; taken: number };
 	markDoseTaken: (doseId: string) => Promise<void>;
 	undoDoseTaken: (doseId: string) => Promise<void>;
@@ -21,6 +23,7 @@ export interface UseDosesReturn {
 export function useDoses(): UseDosesReturn {
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [takenDoseTimestamps, setTakenDoseTimestamps] = useState<Map<string, number>>(new Map());
+	const [takenDoseSources, setTakenDoseSources] = useState<Map<string, "manual" | "automatic">>(new Map());
 	const [dismissedDoses, setDismissedDoses] = useState<Set<string>>(new Set());
 	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
 
@@ -42,6 +45,7 @@ export function useDoses(): UseDosesReturn {
 				const data = await res.json();
 				const taken = new Set<string>();
 				const timestamps = new Map<string, number>();
+				const sources = new Map<string, "manual" | "automatic">();
 				const dismissed = new Set<string>();
 				for (const d of data.doses) {
 					if (d.dismissed) {
@@ -49,10 +53,12 @@ export function useDoses(): UseDosesReturn {
 					} else {
 						taken.add(d.doseId);
 						timestamps.set(d.doseId, d.takenAt);
+						sources.set(d.doseId, d.takenSource === "automatic" ? "automatic" : "manual");
 					}
 				}
 				setTakenDoses(taken);
 				setTakenDoseTimestamps(timestamps);
+				setTakenDoseSources(sources);
 				setDismissedDoses(dismissed);
 			}
 			// Don't reset on error - keep current state
@@ -74,6 +80,13 @@ export function useDoses(): UseDosesReturn {
 	const getDoseId = useCallback((baseDoseId: string, person: string | null): string => {
 		return person ? `${baseDoseId}-${person}` : baseDoseId;
 	}, []);
+
+	const isDoseTakenAutomatically = useCallback(
+		(doseId: string): boolean => {
+			return takenDoseSources.get(doseId) === "automatic";
+		},
+		[takenDoseSources]
+	);
 
 	// Count taken doses for a day/item
 	const countTakenDoses = useCallback(
@@ -106,6 +119,11 @@ export function useDoses(): UseDosesReturn {
 				next.set(doseId, Date.now());
 				return next;
 			});
+			setTakenDoseSources((prev) => {
+				const next = new Map(prev);
+				next.set(doseId, "manual");
+				return next;
+			});
 
 			// Send to server
 			try {
@@ -123,6 +141,11 @@ export function useDoses(): UseDosesReturn {
 					return next;
 				});
 				setTakenDoseTimestamps((prev) => {
+					const next = new Map(prev);
+					next.delete(doseId);
+					return next;
+				});
+				setTakenDoseSources((prev) => {
 					const next = new Map(prev);
 					next.delete(doseId);
 					return next;
@@ -146,6 +169,11 @@ export function useDoses(): UseDosesReturn {
 				return next;
 			});
 			setTakenDoseTimestamps((prev) => {
+				const next = new Map(prev);
+				next.delete(doseId);
+				return next;
+			});
+			setTakenDoseSources((prev) => {
 				const next = new Map(prev);
 				next.delete(doseId);
 				return next;
@@ -177,10 +205,12 @@ export function useDoses(): UseDosesReturn {
 		takenDoses,
 		setTakenDoses,
 		takenDoseTimestamps,
+		takenDoseSources,
 		dismissedDoses,
 		showClearMissedConfirm,
 		setShowClearMissedConfirm,
 		getDoseId,
+		isDoseTakenAutomatically,
 		countTakenDoses,
 		markDoseTaken,
 		undoDoseTaken,

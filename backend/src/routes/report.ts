@@ -51,17 +51,22 @@ export async function reportRoutes(app: FastifyInstance) {
 				doseId: doseTracking.doseId,
 				takenAt: doseTracking.takenAt,
 				dismissed: doseTracking.dismissed,
+				takenSource: doseTracking.takenSource,
 			})
 			.from(doseTracking)
 			.where(eq(doseTracking.userId, userId));
 
 		// Group doses by medication ID
-		const dosesByMed = new Map<number, { takenAt: Date; dismissed: boolean }[]>();
+		const dosesByMed = new Map<number, { takenAt: Date; dismissed: boolean; takenSource: string }[]>();
 		for (const dose of allDoses) {
 			const medId = Number.parseInt(dose.doseId.split("-")[0], 10);
 			if (Number.isNaN(medId) || !medicationIds.includes(medId)) continue;
 			if (!dosesByMed.has(medId)) dosesByMed.set(medId, []);
-			dosesByMed.get(medId)!.push({ takenAt: dose.takenAt, dismissed: dose.dismissed });
+			dosesByMed.get(medId)!.push({
+				takenAt: dose.takenAt,
+				dismissed: dose.dismissed,
+				takenSource: dose.takenSource ?? "manual",
+			});
 		}
 
 		// Fetch refill history for requested medications
@@ -69,6 +74,7 @@ export async function reportRoutes(app: FastifyInstance) {
 			number,
 			{
 				dosesTaken: number;
+				automaticDosesTaken: number;
 				dosesDismissed: number;
 				firstDoseAt: string | null;
 				lastDoseAt: string | null;
@@ -79,6 +85,7 @@ export async function reportRoutes(app: FastifyInstance) {
 		for (const medId of medicationIds) {
 			const doses = dosesByMed.get(medId) ?? [];
 			const takenDoses = doses.filter((d) => !d.dismissed);
+			const automaticTakenDoses = takenDoses.filter((d) => d.takenSource === "automatic");
 			const dismissedDoses = doses.filter((d) => d.dismissed);
 
 			const sortedTaken = takenDoses.map((d) => d.takenAt.getTime()).sort((a, b) => a - b);
@@ -88,6 +95,7 @@ export async function reportRoutes(app: FastifyInstance) {
 
 			result[medId] = {
 				dosesTaken: takenDoses.length,
+				automaticDosesTaken: automaticTakenDoses.length,
 				dosesDismissed: dismissedDoses.length,
 				firstDoseAt: sortedTaken.length > 0 ? new Date(sortedTaken[0]).toISOString() : null,
 				lastDoseAt: sortedTaken.length > 0 ? new Date(sortedTaken[sortedTaken.length - 1]).toISOString() : null,

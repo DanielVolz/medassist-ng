@@ -351,6 +351,7 @@
   },
   "tooltips": {
     "intakeReminders": "Einnahme-Erinnerungen aktiviert",
+    "automaticTaken": "Automatisch eingenommen",
     "hasNotes": "Hat Notizen",
     "stockExceedsCapacity": "Bestand überschreitet Packungskapazität — Packungsanzahl anpassen",
     "lightMode": "Zum hellen Modus wechseln",
@@ -648,6 +649,7 @@
     "docPrescriptionExpiry": "Rezeptablauf",
     "docIntakeHistory": "Einnahme-Verlauf",
     "docDosesTaken": "Eingenommene Dosen",
+    "docDosesTakenAutomatic": "Automatisch eingenommen",
     "docDosesDismissed": "Verworfene Dosen",
     "docFirstDose": "Erste Dosis",
     "docLastDose": "Letzte Dosis",

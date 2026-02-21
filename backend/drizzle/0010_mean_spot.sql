@@ -1,0 +1,1 @@
+ALTER TABLE `dose_tracking` ADD `taken_source` text DEFAULT 'manual' NOT NULL;

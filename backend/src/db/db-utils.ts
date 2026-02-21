@@ -111,6 +111,8 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`,
 		// Added in v1.2.3 - dismiss missed doses without deducting stock
 		`ALTER TABLE dose_tracking ADD COLUMN dismissed integer NOT NULL DEFAULT 0`,
+		// Added for intake automation auditability (manual vs automatic taken)
+		`ALTER TABLE dose_tracking ADD COLUMN taken_source text NOT NULL DEFAULT 'manual'`,
 		// Added in v1.3.x - stock calculation mode (automatic/manual)
 		`ALTER TABLE user_settings ADD COLUMN stock_calculation_mode text NOT NULL DEFAULT 'automatic'`,
 		// Added for stock correction - hidden offset that doesn't affect looseTablets

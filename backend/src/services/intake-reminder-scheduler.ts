@@ -50,6 +50,113 @@ function saveIntakeReminderState(state: IntakeReminderState): void {
 	writeFileSync(intakeReminderStateFile, JSON.stringify(state, null, 2));
 }
 
+function buildDoseIdForIntake(intake: UpcomingIntake & { medicationId: number; blisterIndex: number }): string {
+	const intakeDate = intake.intakeTime;
+	const dateOnlyMs = new Date(intakeDate.getFullYear(), intakeDate.getMonth(), intakeDate.getDate()).getTime();
+	if (intake.takenBy) {
+		return `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}-${intake.takenBy}`;
+	}
+	return `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}`;
+}
+
+async function autoMarkDueIntakesAsTaken(
+	settings: UserSettings & { userId: number },
+	rows: (typeof medications.$inferSelect)[],
+	locale: string,
+	tz: string,
+	logger: ServiceLogger
+): Promise<number> {
+	if (settings.stockCalculationMode !== "automatic") {
+		return 0;
+	}
+
+	const now = new Date();
+	const nowInTimezone = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+	const todayStart = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+	todayStart.setHours(0, 0, 0, 0);
+	const todayEnd = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+	todayEnd.setHours(23, 59, 59, 999);
+
+	const existingToday = await db
+		.select({ doseId: doseTracking.doseId })
+		.from(doseTracking)
+		.where(
+			and(
+				eq(doseTracking.userId, settings.userId),
+				gte(doseTracking.takenAt, todayStart),
+				lte(doseTracking.takenAt, todayEnd)
+			)
+		);
+	const existingDoseIds = new Set(existingToday.map((d) => d.doseId));
+
+	let inserted = 0;
+
+	for (const med of rows) {
+		if (med.isObsolete) {
+			continue;
+		}
+
+		const intakes = parseIntakesJson(
+			med.intakesJson,
+			{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+			med.intakeRemindersEnabled ?? false
+		);
+		if (intakes.length === 0) {
+			continue;
+		}
+
+		const medicationTakenBy = parseTakenByJson(med.takenByJson);
+		const todaysIntakes = getTodaysIntakes(
+			med.name,
+			intakes,
+			medicationTakenBy,
+			med.pillWeightMg,
+			locale,
+			tz,
+			med.id,
+			med.doseUnit ?? "mg"
+		);
+
+		for (const intake of todaysIntakes) {
+			const intakeTimeInTimezone = new Date(intake.intakeTime.toLocaleString("en-US", { timeZone: tz }));
+			if (intakeTimeInTimezone.getTime() > nowInTimezone.getTime()) {
+				continue;
+			}
+			if (intake.medicationId === undefined || intake.blisterIndex === undefined) {
+				continue;
+			}
+
+			const doseId = buildDoseIdForIntake({
+				...intake,
+				medicationId: intake.medicationId,
+				blisterIndex: intake.blisterIndex,
+			});
+
+			if (existingDoseIds.has(doseId)) {
+				continue;
+			}
+
+			await db.insert(doseTracking).values({
+				userId: settings.userId,
+				doseId,
+				takenAt: intake.intakeTime,
+				markedBy: null,
+				takenSource: "automatic",
+				dismissed: false,
+			});
+
+			existingDoseIds.add(doseId);
+			inserted++;
+		}
+	}
+
+	if (inserted > 0) {
+		logger.info(`[IntakeReminder] User ${settings.userId}: Auto-marked ${inserted} due intake dose(s) as taken`);
+	}
+
+	return inserted;
+}
+
 async function sendIntakeReminderEmail(
 	email: string,
 	intakes: UpcomingIntake[],
@@ -246,6 +353,17 @@ async function checkAndSendIntakeRemindersForUser(
 		`[IntakeReminder] Checking user ${settings.userId} - repeat:${settings.repeatRemindersEnabled} skip:${settings.skipRemindersForTakenDoses}`
 	);
 
+	const rows = await db
+		.select()
+		.from(medications)
+		.where(eq(medications.userId, settings.userId))
+		.orderBy(medications.id);
+
+	const locale = getDateLocale(language);
+	const tz = getTimezone();
+
+	await autoMarkDueIntakesAsTaken(settings, rows, locale, tz, logger);
+
 	// Check if any intake reminder notifications are enabled (granular check)
 	const emailEnabled = settings.emailEnabled && settings.notificationEmail && settings.emailIntakeReminders;
 	const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl && settings.shoutrrrIntakeReminders;
@@ -262,11 +380,6 @@ async function checkAndSendIntakeRemindersForUser(
 	);
 
 	// Get all medications with intake reminders enabled for this user
-	const rows = await db
-		.select()
-		.from(medications)
-		.where(eq(medications.userId, settings.userId))
-		.orderBy(medications.id);
 	const medsWithReminders = rows.filter((row) => row.intakeRemindersEnabled);
 
 	if (medsWithReminders.length === 0) {
@@ -280,9 +393,6 @@ async function checkAndSendIntakeRemindersForUser(
 
 	const state = loadIntakeReminderState();
 	const allUpcoming: (UpcomingIntake & { medicationId: number; blisterIndex: number })[] = [];
-	const locale = getDateLocale(language);
-	const tz = getTimezone();
-
 	// Get start and end of today in user's timezone (for filtering today's doses only)
 	const now = new Date();
 	const todayStart = new Date(now.toLocaleString("en-US", { timeZone: tz }));

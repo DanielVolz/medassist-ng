@@ -16,6 +16,7 @@ type ReportData = Record<
 	number,
 	{
 		dosesTaken: number;
+		automaticDosesTaken: number;
 		dosesDismissed: number;
 		firstDoseAt: string | null;
 		lastDoseAt: string | null;
@@ -382,6 +383,9 @@ function generateTextReport(
 			lines.push(h3(t("report.docIntakeHistory")));
 			if (data.dosesTaken > 0 || data.dosesDismissed > 0) {
 				lines.push(item(t("report.docDosesTaken"), String(data.dosesTaken)));
+				if (data.automaticDosesTaken > 0) {
+					lines.push(item(`🤖 ${t("report.docDosesTakenAutomatic")}`, String(data.automaticDosesTaken)));
+				}
 				if (data.dosesDismissed > 0) lines.push(item(t("report.docDosesDismissed"), String(data.dosesDismissed)));
 				if (data.firstDoseAt) lines.push(item(t("report.docFirstDose"), fmtDate(data.firstDoseAt)));
 				if (data.lastDoseAt) lines.push(item(t("report.docLastDose"), fmtDate(data.lastDoseAt)));
@@ -580,6 +584,9 @@ function buildPrintHtml(
 			if (data.dosesTaken > 0 || data.dosesDismissed > 0) {
 				s += `<table><tbody>`;
 				s += `<tr><td class="label">${escHtml(t("report.docDosesTaken"))}</td><td>${data.dosesTaken}</td></tr>`;
+				if (data.automaticDosesTaken > 0) {
+					s += `<tr><td class="label">${escHtml(`🤖 ${t("report.docDosesTakenAutomatic")}`)}</td><td>${data.automaticDosesTaken}</td></tr>`;
+				}
 				if (data.dosesDismissed > 0)
 					s += `<tr><td class="label">${escHtml(t("report.docDosesDismissed"))}</td><td>${data.dosesDismissed}</td></tr>`;
 				if (data.firstDoseAt)

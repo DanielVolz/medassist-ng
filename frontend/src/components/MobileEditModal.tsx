@@ -192,7 +192,7 @@ export function MobileEditModal({
 		const strip = tabStripRef.current;
 		if (!strip) return;
 		const btn = strip.children[activeTabIndex] as HTMLElement | undefined;
-		if (btn) btn.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+		if (btn) btn.scrollIntoView?.({ behavior: "smooth", inline: "nearest", block: "nearest" });
 	}, [activeTabIndex]);
 
 	// Non-passive touch listeners for reliable horizontal swipe detection.

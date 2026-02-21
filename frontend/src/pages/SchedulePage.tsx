@@ -66,6 +66,7 @@ export function SchedulePage() {
 		pastDays,
 		futureDays,
 		takenDoses,
+		isDoseTakenAutomatically,
 		dismissedDoses,
 		markDoseTaken,
 		undoDoseTaken,
@@ -212,6 +213,8 @@ export function SchedulePage() {
 																		{people.map((person) => {
 																			const doseId = getDoseId(dose.id, person);
 																			const isTaken = takenDoses.has(doseId);
+																			const isAutomaticallyTaken =
+																				isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																			return (
 																				<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
 																					{person && (
@@ -231,6 +234,14 @@ export function SchedulePage() {
 																							onClick={() => undoDoseTaken(doseId)}
 																							title={t("common.undo")}
 																						>
+																							{isAutomaticallyTaken && (
+																								<span
+																									className="info-tooltip"
+																									data-tooltip={t("tooltips.automaticTaken")}
+																								>
+																									🤖
+																								</span>
+																							)}
 																							↩
 																						</button>
 																					) : (
@@ -373,6 +384,8 @@ export function SchedulePage() {
 																{people.map((person) => {
 																	const doseId = getDoseId(dose.id, person);
 																	const isTaken = takenDoses.has(doseId);
+																	const isAutomaticallyTaken =
+																		isTaken && isDoseTakenAutomatically(doseId) && dose.when <= now;
 																	const isOverdue = !isTaken && dose.when < now && !isPastDay;
 																	return (
 																		<div
@@ -396,6 +409,11 @@ export function SchedulePage() {
 																					onClick={() => undoDoseTaken(doseId)}
 																					title={t("common.undo")}
 																				>
+																					{isAutomaticallyTaken && (
+																						<span className="info-tooltip" data-tooltip={t("tooltips.automaticTaken")}>
+																							🤖
+																						</span>
+																					)}
 																					↩
 																				</button>
 																			) : (

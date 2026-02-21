@@ -351,6 +351,7 @@
   },
   "tooltips": {
     "intakeReminders": "Intake reminders enabled",
+    "automaticTaken": "Automatically taken",
     "hasNotes": "Has notes",
     "stockExceedsCapacity": "Stock exceeds package capacity — consider updating pack count",
     "lightMode": "Switch to light mode",
@@ -648,6 +649,7 @@
     "docPrescriptionExpiry": "Prescription expiry",
     "docIntakeHistory": "Intake History",
     "docDosesTaken": "Doses taken",
+    "docDosesTakenAutomatic": "Automatically taken",
     "docDosesDismissed": "Doses dismissed",
     "docFirstDose": "First dose",
     "docLastDose": "Last dose",

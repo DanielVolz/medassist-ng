@@ -163,6 +163,7 @@ export const doseTracking = sqliteTable("dose_tracking", {
 	doseId: text("dose_id", { length: 255 }).notNull(), // e.g. "med-5-1-86400000-1735200000000"
 	takenAt: integer("taken_at", { mode: "timestamp" }).notNull().default(sql`(strftime('%s','now'))`),
 	markedBy: text("marked_by", { length: 100 }), // null = user, "Daniel" = via share link
+	takenSource: text("taken_source", { length: 20 }).notNull().default("manual"), // manual or automatic
 	dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false), // true = missed dose acknowledged without taking
 });
 

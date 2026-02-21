@@ -72,6 +72,7 @@ const doseHistorySchema = z.object({
 	scheduledTime: z.string(), // ISO datetime
 	takenAt: z.string(), // ISO datetime
 	markedBy: z.string().nullable().optional(),
+	takenSource: z.enum(["manual", "automatic"]).default("manual"),
 	dismissed: z.boolean().default(false),
 	takenByPerson: z.string().nullable().optional(), // Person suffix from dose ID (e.g., "Daniel")
 });
@@ -364,6 +365,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					scheduledTime: scheduledTimeIso,
 					takenAt: takenAtIso,
 					markedBy: dose.markedBy,
+					takenSource: dose.takenSource === "automatic" ? "automatic" : "manual",
 					dismissed: dose.dismissed ?? false,
 					takenByPerson: parsed.person,
 				};
@@ -625,6 +627,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					doseId,
 					takenAt: new Date(dose.takenAt),
 					markedBy: dose.markedBy || null,
+					takenSource: dose.takenSource ?? "manual",
 					dismissed: dose.dismissed ?? false,
 				});
 			}

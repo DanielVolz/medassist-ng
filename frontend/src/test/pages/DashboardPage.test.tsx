@@ -181,6 +181,7 @@ const createMockAppContext = (overrides = {}) => ({
 	missedPastDoseIds: [],
 	getDayStockStatus: vi.fn(() => "success"),
 	getDoseId: vi.fn((id, person) => (person ? `${id}-${person}` : id)),
+	isDoseTakenAutomatically: vi.fn(() => false),
 	showClearMissedConfirm: false,
 	setShowClearMissedConfirm: vi.fn(),
 	clearingMissed: false,

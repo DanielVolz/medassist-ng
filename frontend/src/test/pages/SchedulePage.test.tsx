@@ -111,6 +111,7 @@ const createMockContext = (overrides = {}) => ({
 	manuallyExpandedDays: new Set(),
 	toggleDayCollapse: vi.fn(),
 	openUserFilter: vi.fn(),
+	isDoseTakenAutomatically: vi.fn(() => false),
 	missedPastDoseIds: [],
 	...overrides,
 });

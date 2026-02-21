@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, useShare } from "../hooks";
-import type { Coverage, Medication, ScheduleEvent, StockThresholds } from "../types";
+import type { Coverage, FormState, Medication, ScheduleEvent, StockThresholds } from "../types";
 import { getSystemLocale } from "../utils/formatters";
 import { log } from "../utils/logger";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds } from "../utils/schedule";
@@ -72,6 +72,7 @@ export interface AppContextValue {
 	showClearMissedConfirm: boolean;
 	setShowClearMissedConfirm: (show: boolean) => void;
 	getDoseId: (baseDoseId: string, person: string | null) => string;
+	isDoseTakenAutomatically: (doseId: string) => boolean;
 	countTakenDoses: (doses: Array<{ id: string; takenBy: string[] }>) => { total: number; taken: number };
 	markDoseTaken: (doseId: string) => Promise<void>;
 	undoDoseTaken: (doseId: string) => Promise<void>;
@@ -127,7 +128,7 @@ export interface AppContextValue {
 	submitRefill: (
 		medId: number,
 		editingId: number | null,
-		setForm: React.Dispatch<React.SetStateAction<any>>,
+		setForm: React.Dispatch<React.SetStateAction<FormState>>,
 		loadMeds: () => void,
 		usePrescription?: boolean
 	) => Promise<void>;
@@ -742,6 +743,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			showClearMissedConfirm: doses.showClearMissedConfirm,
 			setShowClearMissedConfirm: doses.setShowClearMissedConfirm,
 			getDoseId: doses.getDoseId,
+			isDoseTakenAutomatically: doses.isDoseTakenAutomatically,
 			countTakenDoses: doses.countTakenDoses,
 			markDoseTaken: doses.markDoseTaken,
 			undoDoseTaken: doses.undoDoseTaken,

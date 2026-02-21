@@ -56,6 +56,7 @@ export async function doseRoutes(app: FastifyInstance) {
 				doseId: d.doseId,
 				takenAt: d.takenAt?.getTime() ?? Date.now(),
 				markedBy: d.markedBy,
+				takenSource: d.takenSource ?? "manual",
 				dismissed: d.dismissed ?? false,
 			})),
 		};
@@ -94,6 +95,7 @@ export async function doseRoutes(app: FastifyInstance) {
 				userId,
 				doseId,
 				markedBy: null, // Marked by the user themselves
+				takenSource: "manual",
 			});
 
 			return { success: true };
@@ -227,6 +229,7 @@ export async function doseRoutes(app: FastifyInstance) {
 				doseId: d.doseId,
 				takenAt: d.takenAt?.getTime() ?? Date.now(),
 				markedBy: d.markedBy,
+				takenSource: d.takenSource ?? "manual",
 				dismissed: d.dismissed ?? false,
 			})),
 		};
@@ -270,6 +273,7 @@ export async function doseRoutes(app: FastifyInstance) {
 				userId: share.userId,
 				doseId,
 				markedBy: share.takenBy, // e.g. "Daniel"
+				takenSource: "manual",
 			});
 
 			return { success: true };

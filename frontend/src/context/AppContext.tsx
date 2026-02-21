@@ -212,7 +212,17 @@ export interface AppContextValue {
 // Context
 // =============================================================================
 
-const AppContext = createContext<AppContextValue | null>(null);
+const APP_CONTEXT_SINGLETON_KEY = "__MEDASSIST_APP_CONTEXT_SINGLETON__";
+
+const AppContext = (() => {
+	const globalRef = globalThis as typeof globalThis & {
+		[APP_CONTEXT_SINGLETON_KEY]?: React.Context<AppContextValue | null>;
+	};
+	if (!globalRef[APP_CONTEXT_SINGLETON_KEY]) {
+		globalRef[APP_CONTEXT_SINGLETON_KEY] = createContext<AppContextValue | null>(null);
+	}
+	return globalRef[APP_CONTEXT_SINGLETON_KEY];
+})();
 
 // Helper for user-specific localStorage keys
 function userStorageKey(userId: number | undefined, key: string): string {

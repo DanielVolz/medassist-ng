@@ -201,7 +201,7 @@ describe("getBlisterStock", () => {
 
 		const result = getBlisterStock(med);
 		expect(result.fullBlisters).toBe(2); // 25 / 10 = 2
-		expect(result.openBlisterPills).toBe(5); // 25 % 10 = 5
+		expect(result.openBlisterPills).toBe(0); // 20 % 10 = 0 after preserving loose tablets
 		expect(result.loosePills).toBe(5);
 	});
 

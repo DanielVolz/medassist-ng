@@ -626,7 +626,7 @@ export function MedDetailModal({
 
 					<div className="modal-footer">
 						<button className="ghost" onClick={onCloseEditStockModal}>
-							{t("common.cancel")}
+							{t("common.close")}
 						</button>
 						<button className="info" onClick={() => onSubmitStockCorrection(selectedMed.id)} disabled={editStockSaving}>
 							{editStockSaving ? t("editStock.saving") : t("editStock.save")}
@@ -803,6 +803,58 @@ export function MedDetailModal({
 						</div>
 					</div>
 
+					{/* Intake Schedule Section */}
+					{selectedMed.blisters.length > 0 && (
+						<div className="med-detail-section">
+							<h3>
+								{t("modal.intakeSchedule")}{" "}
+								{selectedMed.intakeRemindersEnabled && (
+									<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
+										<Bell size={14} aria-hidden="true" />
+									</span>
+								)}
+							</h3>
+							<div className="med-detail-schedules">
+								{selectedMed.blisters.map((blister, idx) => {
+									// When using new intakes format with per-intake takenBy,
+									// each intake already represents one person's dose — don't multiply.
+									// For legacy intakes (no per-intake takenBy), multiply by personCount.
+									const intake = selectedMed.intakes?.[idx];
+									const hasPerIntakeTakenBy = !!intake?.takenBy;
+									const personCount = hasPerIntakeTakenBy ? 1 : Math.max(1, selectedMed.takenBy?.length || 1);
+									const totalUsage = blister.usage * personCount;
+									return (
+										<div key={idx} className="med-schedule-item">
+											<span className="med-schedule-usage">
+												{totalUsage} {totalUsage !== 1 ? t("common.pills") : t("common.pill")}
+												{selectedMed.pillWeightMg &&
+													` (${totalUsage * selectedMed.pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
+											</span>
+											<span className="med-schedule-freq">
+												{blister.every === 1 ? t("common.daily") : t("common.everyNDays", { count: blister.every })}
+											</span>
+											{hasPerIntakeTakenBy && intake.takenBy && (
+												<span className="med-schedule-person">{intake.takenBy}</span>
+											)}
+											{intake?.intakeRemindersEnabled && (
+												<span className="med-schedule-bell" role="img" aria-label={t("tooltips.intakeReminders")}>
+													<Bell size={13} aria-hidden="true" />
+												</span>
+											)}
+											<span className="med-schedule-time">
+												{t("modal.at")}{" "}
+												{new Date(blister.start).toLocaleTimeString(getSystemLocale(i18n.language), {
+													hour: "2-digit",
+													minute: "2-digit",
+												})}
+											</span>
+										</div>
+									);
+								})}
+							</div>
+						</div>
+					)}
+
 					{/* Prescription Details Section */}
 					{selectedMed.prescriptionEnabled && (
 						<div className="med-detail-section">
@@ -839,50 +891,6 @@ export function MedDetailModal({
 						</div>
 					)}
 
-					{/* Intake Schedule Section */}
-					{selectedMed.blisters.length > 0 && (
-						<div className="med-detail-section">
-							<h3>
-								{t("modal.intakeSchedule")}{" "}
-								{selectedMed.intakeRemindersEnabled && (
-									<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
-										<Bell size={14} aria-hidden="true" />
-									</span>
-								)}
-							</h3>
-							<div className="med-detail-schedules">
-								{selectedMed.blisters.map((blister, idx) => {
-									// When using new intakes format with per-intake takenBy,
-									// each intake already represents one person's dose — don't multiply.
-									// For legacy intakes (no per-intake takenBy), multiply by personCount.
-									const intake = selectedMed.intakes?.[idx];
-									const hasPerIntakeTakenBy = !!intake?.takenBy;
-									const personCount = hasPerIntakeTakenBy ? 1 : Math.max(1, selectedMed.takenBy?.length || 1);
-									const totalUsage = blister.usage * personCount;
-									return (
-										<div key={idx} className="med-schedule-item">
-											<span className="med-schedule-usage">
-												{totalUsage} {totalUsage !== 1 ? t("common.pills") : t("common.pill")}
-												{selectedMed.pillWeightMg &&
-													` (${totalUsage * selectedMed.pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
-											</span>
-											<span className="med-schedule-freq">
-												{blister.every === 1 ? t("common.daily") : t("common.everyNDays", { count: blister.every })}
-											</span>
-											<span className="med-schedule-time">
-												{t("modal.at")}{" "}
-												{new Date(blister.start).toLocaleTimeString(getSystemLocale(i18n.language), {
-													hour: "2-digit",
-													minute: "2-digit",
-												})}
-											</span>
-										</div>
-									);
-								})}
-							</div>
-						</div>
-					)}
-
 					{/* Coverage Status Section */}
 					{medCoverage && status && (
 						<div className="med-detail-section">
@@ -909,10 +917,10 @@ export function MedDetailModal({
 					{selectedMed.notes && (
 						<div className="med-detail-section">
 							<h3>
+								{t("modal.notes")}{" "}
 								<span className="notes-icon notes-icon-static" aria-hidden="true">
 									<NotebookPen size={14} />
-								</span>{" "}
-								{t("modal.notes")}
+								</span>
 							</h3>
 							<div className="med-notes-content">{selectedMed.notes}</div>
 						</div>
@@ -1111,7 +1119,7 @@ export function MedDetailModal({
 
 						<div className="modal-footer">
 							<button className="ghost" onClick={onCloseRefillModal}>
-								{t("common.cancel")}
+								{t("common.close")}
 							</button>
 							<div className="refill-footer-right">
 								<button

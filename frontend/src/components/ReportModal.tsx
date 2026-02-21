@@ -256,7 +256,7 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 				{/* Actions */}
 				<div className="report-actions">
 					<button type="button" className="ghost" onClick={onClose}>
-						{t("common.cancel")}
+						{t("common.close")}
 					</button>
 					<button
 						type="button"

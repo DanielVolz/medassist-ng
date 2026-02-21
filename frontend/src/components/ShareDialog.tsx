@@ -145,7 +145,7 @@ export function ShareDialog({
 
 							<div className="share-dialog-footer">
 								<button className="ghost" onClick={onClose}>
-									{t("common.cancel")}
+									{t("common.close")}
 								</button>
 								<button onClick={onGenerateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
 									{shareGenerating ? t("share.generating") : t("share.generateLink")}

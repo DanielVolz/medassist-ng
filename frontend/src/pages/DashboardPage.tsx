@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
+import { useModalHistory } from "../hooks";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
 import { expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
 import {
@@ -74,6 +75,8 @@ export function DashboardPage() {
 		stockThresholds,
 		loadSettings,
 	} = useAppContext();
+
+	useModalHistory(showClearMissedConfirm, "clearMissed", () => setShowClearMissedConfirm(false));
 
 	// Get structured reminder data
 	const reminderData = getReminderStatusData(

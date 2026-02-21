@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import { ConfirmModal, DateInput, Lightbox, MedicationAvatar, MobileEditModal, ReportModal } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext, useUnsavedChanges } from "../context";
-import { useMedicationForm, useUnsavedChangesWarning } from "../hooks";
+import { useMedicationForm, useModalHistory, useUnsavedChangesWarning } from "../hooks";
 import type { DoseUnit, Medication } from "../types";
 import { DOSE_UNITS, FIELD_LIMITS, getMedTotal, getPackageSize } from "../types";
 import { combineDateAndTime, formatDate, formatDateTime, formatNumber } from "../utils/formatters";
@@ -125,6 +125,7 @@ export function MedicationsPage() {
 	const [showObsolete, setShowObsolete] = useState(true);
 	const [readOnlyView, setReadOnlyView] = useState(false);
 	const [showReportModal, setShowReportModal] = useState(false);
+	useModalHistory(showReportModal, "report", () => setShowReportModal(false));
 	const [showNameValidation, setShowNameValidation] = useState(false);
 
 	useEffect(() => {
@@ -463,6 +464,20 @@ export function MedicationsPage() {
 
 			// Reset form after successful save
 			if (!editingId) {
+				const shouldCloseMobileModal = showEditModal && window.innerWidth <= 768;
+				if (shouldCloseMobileModal) {
+					// Treat post-save close as confirmed so popstate does not trigger unsaved guards.
+					closeConfirmedRef.current = true;
+					clearEditMedIdParam();
+					setShowEditModal(false);
+					setReadOnlyView(false);
+					setActiveTab("general");
+					setViewMode("grid");
+					resetForm();
+					window.history.back();
+					setSaving(false);
+					return;
+				}
 				resetForm();
 				setViewMode("grid");
 			} else {
@@ -480,6 +495,8 @@ export function MedicationsPage() {
 	// Handle browser back button for modals and unsaved changes
 	useEffect(() => {
 		const handlePopState = () => {
+			const currentEditMedId = new URLSearchParams(window.location.search).get("editMedId");
+
 			// Obsolete confirmation is open — dismiss it and stay where we are
 			if (showObsoleteConfirm) {
 				setShowObsoleteConfirm(false);
@@ -497,6 +514,11 @@ export function MedicationsPage() {
 			// If close was already confirmed programmatically, allow navigation
 			if (closeConfirmedRef.current) {
 				closeConfirmedRef.current = false;
+				if (currentEditMedId) {
+					// Prevent URL popstate from immediately reopening mobile edit for the same id.
+					processedEditMedIdRef.current = currentEditMedId;
+					clearEditMedIdParam();
+				}
 				if (showEditModal) {
 					setShowEditModal(false);
 					resetForm();
@@ -514,6 +536,10 @@ export function MedicationsPage() {
 					setUnsavedConfirmSource("mobile-edit");
 					setShowUnsavedConfirm(true);
 					return;
+				}
+				if (currentEditMedId) {
+					// Mark as handled before URL cleanup to avoid same-tick re-open races.
+					processedEditMedIdRef.current = currentEditMedId;
 				}
 				clearEditMedIdParam();
 				setShowEditModal(false);

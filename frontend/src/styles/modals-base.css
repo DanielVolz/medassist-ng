@@ -41,6 +41,19 @@
 	padding: 1.5rem;
 }
 
+.modal-content.confirm-modal {
+	margin: 0 auto;
+	width: min(100%, 450px);
+}
+
+@media (max-width: 500px) {
+	.modal-content.confirm-modal {
+		margin: 0 auto;
+		border-radius: 12px;
+		max-height: min(85dvh, 85vh);
+	}
+}
+
 @keyframes slideUp {
 	from {
 		opacity: 0;

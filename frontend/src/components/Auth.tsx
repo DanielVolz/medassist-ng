@@ -756,7 +756,7 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
 				<div className="profile-actions">
 					<button type="button" className="btn btn-ghost" onClick={onClose}>
-						{t("common.cancel", "Cancel")}
+						{t("common.close", "Close")}
 					</button>
 					<button type="submit" className="btn btn-primary" disabled={loading || !hasChanges}>
 						{loading ? t("common.saving", "Saving...") : t("auth.updatePassword", "Update Password")}

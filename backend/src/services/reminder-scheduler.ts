@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/db-utils.js";
-import { medications, userSettings } from "../db/schema.js";
+import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { getFooterHtml, getFooterPlain, getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 import type { ServiceLogger } from "../utils/logger.js";
@@ -19,8 +19,10 @@ import {
 	getNextScheduledTime,
 	getTimezone,
 	getTodayInTimezone,
-	parseBlisters,
+	parseIntakesJson,
+	parseLocalDateTime,
 	parseReminderState,
+	parseTakenByJson,
 	type ReminderState,
 } from "../utils/scheduler-utils.js";
 
@@ -119,10 +121,6 @@ export async function updateUserReminderSentTime(
 	}
 }
 
-function parseBlistersFromRow(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
-	return parseBlisters(row);
-}
-
 type LowStockItem = {
 	name: string;
 	medsLeft: number;
@@ -142,7 +140,8 @@ async function getMedicationsNeedingReminder(
 	userId: number,
 	reminderDaysBefore: number,
 	lowStockDays: number,
-	language: Language
+	language: Language,
+	stockCalculationMode: "automatic" | "manual"
 ): Promise<LowStockItem[]> {
 	const rows = await db
 		.select()
@@ -150,15 +149,144 @@ async function getMedicationsNeedingReminder(
 		.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)))
 		.orderBy(medications.id);
 
+	const takenDoseRows = await db
+		.select()
+		.from(doseTracking)
+		.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, false)));
+
+	const takenDoseIdsByMed = new Map<number, Set<string>>();
+	const takenDoseTimestamps = new Map<string, number>();
+	for (const dose of takenDoseRows) {
+		const parts = dose.doseId.split("-");
+		if (parts.length < 3) continue;
+		const medId = parseInt(parts[0], 10);
+		if (Number.isNaN(medId)) continue;
+
+		if (!takenDoseIdsByMed.has(medId)) {
+			takenDoseIdsByMed.set(medId, new Set());
+		}
+		takenDoseIdsByMed.get(medId)!.add(dose.doseId);
+		const rawTakenAt = Number(dose.takenAt);
+		const takenAtMs = Number.isFinite(rawTakenAt)
+			? rawTakenAt < 1_000_000_000_000
+				? rawTakenAt * 1000
+				: rawTakenAt
+			: new Date(dose.takenAt).getTime();
+		takenDoseTimestamps.set(dose.doseId, takenAtMs);
+	}
+
 	const lowStock: LowStockItem[] = [];
+	const now = Date.now();
+	const msPerDay = 86_400_000;
 
 	for (const row of rows) {
-		const blisters = parseBlistersFromRow(row);
-		const totalPills =
+		const intakes = parseIntakesJson(
+			row.intakesJson,
+			{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
+			row.intakeRemindersEnabled ?? false
+		);
+		const blisters: Blister[] = intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
+
+		const originalTotalPills =
 			(row.packageType ?? "blister") === "bottle"
 				? row.looseTablets + (row.stockAdjustment ?? 0)
 				: row.packCount * row.blistersPerPack * row.pillsPerBlister + row.looseTablets + (row.stockAdjustment ?? 0);
-		const { daysLeft, depletionDate } = calculateDepletionInfo({ count: totalPills, blisters }, language);
+
+		const stockCorrectionCutoff = row.lastStockCorrectionAt ? new Date(row.lastStockCorrectionAt).getTime() : 0;
+		const takenDoseIds = takenDoseIdsByMed.get(row.id) ?? new Set<string>();
+
+		let consumed = 0;
+
+		if (stockCalculationMode === "automatic") {
+			blisters.forEach((blister, blisterIdx) => {
+				const blisterStart = parseLocalDateTime(blister.start).getTime();
+				if (Number.isNaN(blisterStart)) return;
+
+				const period = Math.max(1, blister.every) * msPerDay;
+
+				let effectiveStart: number;
+				if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
+					const elapsedSinceStart = stockCorrectionCutoff - blisterStart;
+					const periodsElapsed = Math.floor(elapsedSinceStart / period);
+					effectiveStart = blisterStart + (periodsElapsed + 1) * period;
+				} else {
+					effectiveStart = blisterStart;
+				}
+
+				const intake = intakes[blisterIdx];
+				const intakePerson = intake?.takenBy;
+				const fallbackPeople = parseTakenByJson(row.takenByJson);
+				const peopleForThisIntake = intakePerson ? [intakePerson] : fallbackPeople.length > 0 ? fallbackPeople : [null];
+
+				let timeBasedConsumed = 0;
+				let lastAutoConsumedDateMs = 0;
+
+				if (effectiveStart <= now) {
+					const occurrences = Math.floor((now - effectiveStart) / period) + 1;
+					timeBasedConsumed = occurrences * blister.usage * peopleForThisIntake.length;
+
+					const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
+					lastAutoConsumedDateMs = new Date(
+						lastDoseTime.getFullYear(),
+						lastDoseTime.getMonth(),
+						lastDoseTime.getDate()
+					).getTime();
+				}
+
+				const stockCorrectionDateOnly =
+					stockCorrectionCutoff > 0
+						? new Date(
+								new Date(stockCorrectionCutoff).getFullYear(),
+								new Date(stockCorrectionCutoff).getMonth(),
+								new Date(stockCorrectionCutoff).getDate()
+							).getTime()
+						: 0;
+				const earlyCutoff = Math.max(lastAutoConsumedDateMs, stockCorrectionDateOnly);
+
+				let earlyTakenConsumed = 0;
+				for (const doseId of takenDoseIds) {
+					const parts = doseId.split("-");
+					if (parts.length < 3) continue;
+					const bIdx = parseInt(parts[1], 10);
+					const timestamp = parseInt(parts[2], 10);
+					if (!Number.isNaN(bIdx) && !Number.isNaN(timestamp) && bIdx === blisterIdx && timestamp > earlyCutoff) {
+						earlyTakenConsumed += blister.usage;
+					}
+				}
+
+				consumed += timeBasedConsumed + earlyTakenConsumed;
+			});
+		} else {
+			blisters.forEach((blister, blisterIdx) => {
+				const blisterStart = parseLocalDateTime(blister.start);
+				const blisterStartDateOnly = new Date(
+					blisterStart.getFullYear(),
+					blisterStart.getMonth(),
+					blisterStart.getDate()
+				).getTime();
+				if (Number.isNaN(blisterStartDateOnly)) return;
+
+				for (const doseId of takenDoseIds) {
+					const parts = doseId.split("-");
+					if (parts.length < 3) continue;
+
+					const parsedBlisterIdx = parseInt(parts[1], 10);
+					const doseTimestamp = parseInt(parts[2], 10);
+					if (Number.isNaN(parsedBlisterIdx) || Number.isNaN(doseTimestamp) || parsedBlisterIdx !== blisterIdx) {
+						continue;
+					}
+
+					const takenAt = takenDoseTimestamps.get(doseId) ?? 0;
+					const afterCorrectionOrNoCorrection = stockCorrectionCutoff === 0 || takenAt > stockCorrectionCutoff;
+					if (doseTimestamp >= blisterStartDateOnly && afterCorrectionOrNoCorrection) {
+						consumed += blister.usage;
+					}
+				}
+			});
+		}
+
+		const currentPills = Math.max(0, originalTotalPills - consumed);
+		const { daysLeft, depletionDate } = calculateDepletionInfo({ count: currentPills, blisters }, language);
 
 		if (daysLeft === null) continue;
 
@@ -168,7 +296,7 @@ async function getMedicationsNeedingReminder(
 		if (isCritical || isLow) {
 			lowStock.push({
 				name: row.name,
-				medsLeft: totalPills,
+				medsLeft: currentPills,
 				daysLeft,
 				depletionDate,
 				isCritical,
@@ -198,6 +326,25 @@ async function getMedicationsNeedingPrescriptionReminder(userId: number): Promis
 			lowThreshold: row.prescriptionLowRefillThreshold ?? 1,
 			expiryDate: row.prescriptionExpiryDate ?? null,
 		}));
+}
+
+// Test-only hook to validate scheduler stock semantics against planner/coverage behavior.
+export async function getMedicationsNeedingReminderForTests(
+	userId: number,
+	reminderDaysBefore: number,
+	lowStockDays: number,
+	language: Language,
+	stockCalculationMode: "automatic" | "manual"
+): Promise<
+	Array<{
+		name: string;
+		medsLeft: number;
+		daysLeft: number | null;
+		depletionDate: string | null;
+		isCritical: boolean;
+	}>
+> {
+	return getMedicationsNeedingReminder(userId, reminderDaysBefore, lowStockDays, language, stockCalculationMode);
 }
 
 async function sendReminderEmail(
@@ -403,7 +550,8 @@ async function checkAndSendReminderForUser(
 		settings.userId,
 		settings.reminderDaysBefore,
 		settings.lowStockDays,
-		language
+		language,
+		settings.stockCalculationMode
 	);
 	const allPrescriptionLow = await getMedicationsNeedingPrescriptionReminder(settings.userId);
 

@@ -1,15 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DashboardPage } from "../../pages/DashboardPage";
 import {
-	DashboardPage,
 	formatFullBlisters,
 	formatOpenBlisterAndLoose,
 	getBlisterStock,
 	getMedTotal,
 	getReminderStatusData,
 	userStorageKey,
-} from "../../pages/DashboardPage";
+} from "../../pages/dashboard-helpers";
 
 // Mock data for tests with medications
 const mockMeds = [
@@ -198,7 +198,7 @@ describe("DashboardPage helper functions", () => {
 	});
 
 	it("calculates blister stock breakdown", () => {
-		expect(getBlisterStock(27, 10, 0, 27)).toEqual({ fullBlisters: 2, openBlisterPills: 7, loosePills: 7 });
+		expect(getBlisterStock(27, 10, 0, 27)).toEqual({ fullBlisters: 2, openBlisterPills: 7, loosePills: 0 });
 	});
 
 	it("formats blister and open blister labels", () => {
@@ -206,7 +206,7 @@ describe("DashboardPage helper functions", () => {
 		expect(formatFullBlisters(1, t)).toBe("1 common.blister");
 		expect(formatFullBlisters(3, t)).toBe("3 common.blisters");
 		expect(formatOpenBlisterAndLoose(0, 0, 10, t)).toBe("-");
-		expect(formatOpenBlisterAndLoose(4, 4, 10, t)).toBe("4 common.of 10 common.pills");
+		expect(formatOpenBlisterAndLoose(4, 4, 10, t)).toBe("4 common.of 10 common.pills + 4 modal.loosePills");
 	});
 
 	it("computes total pills for blister and bottle types", () => {

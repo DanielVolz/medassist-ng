@@ -6,7 +6,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/db-utils.js";
-import { doseTracking, medications } from "../db/schema.js";
+import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -792,26 +792,37 @@ export async function medicationRoutes(app: FastifyInstance) {
 			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)))
 			.orderBy(medications.id);
 
+		const [settingsRow] = await db
+			.select({ stockCalculationMode: userSettings.stockCalculationMode })
+			.from(userSettings)
+			.where(eq(userSettings.userId, userId));
+		const stockCalculationMode = settingsRow?.stockCalculationMode === "manual" ? "manual" : "automatic";
+
 		// Get all taken doses for this user to calculate actual consumption
 		const takenDoses = await db
 			.select()
 			.from(doseTracking)
 			.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, false)));
 
-		// Create a map of medication ID to taken dose count
-		const takenDosesMap = new Map<number, { blisterIdx: number; usage: number }[]>();
+		const takenDoseIdsByMed = new Map<number, Set<string>>();
+		const takenDoseTimestamps = new Map<string, number>();
 		takenDoses.forEach((dose) => {
 			const parts = dose.doseId.split("-");
-			if (parts.length >= 3) {
-				const medId = parseInt(parts[0], 10);
-				const blisterIdx = parseInt(parts[1], 10);
-				if (!Number.isNaN(medId) && !Number.isNaN(blisterIdx)) {
-					if (!takenDosesMap.has(medId)) {
-						takenDosesMap.set(medId, []);
-					}
-					takenDosesMap.get(medId)!.push({ blisterIdx, usage: 0 }); // usage filled later
-				}
+			if (parts.length < 3) return;
+			const medId = parseInt(parts[0], 10);
+			if (Number.isNaN(medId)) return;
+
+			if (!takenDoseIdsByMed.has(medId)) {
+				takenDoseIdsByMed.set(medId, new Set());
 			}
+			takenDoseIdsByMed.get(medId)!.add(dose.doseId);
+			const rawTakenAt = Number(dose.takenAt);
+			const takenAtMs = Number.isFinite(rawTakenAt)
+				? rawTakenAt < 1_000_000_000_000
+					? rawTakenAt * 1000
+					: rawTakenAt
+				: new Date(dose.takenAt).getTime();
+			takenDoseTimestamps.set(dose.doseId, takenAtMs);
 		});
 
 		// Use current time as the reference point for "available" stock
@@ -838,66 +849,106 @@ export async function medicationRoutes(app: FastifyInstance) {
 					? looseTablets + stockAdjustment
 					: packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
 
-			// Calculate consumption based on ACTUAL taken doses from dose_tracking
-			// This ensures Planner shows the same "current stock" as the Dashboard/Modal
-			// Use the same logic as frontend: generate expected doses and check which are marked
+			// Calculate consumption with the same automatic/manual behavior as frontend coverage.
 			const stockCorrectionCutoff = row.lastStockCorrectionAt ? new Date(row.lastStockCorrectionAt).getTime() : 0;
-
-			// Build a Set of taken dose IDs for quick lookup
-			const takenDoseIds = new Set(
-				takenDoses
-					.filter((dose) => {
-						const parts = dose.doseId.split("-");
-						return parts.length >= 3 && parseInt(parts[0], 10) === row.id;
-					})
-					.map((dose) => dose.doseId)
-			);
+			const takenDoseIds = takenDoseIdsByMed.get(row.id) ?? new Set<string>();
 
 			// Count consumed pills by generating expected doses and checking if they're taken
 			let consumedUntilNow = 0;
 			const msPerDay = 86400000;
 
-			blisters.forEach((blister, blisterIdx) => {
-				const blisterStart = parseLocalDateTime(blister.start);
-				if (Number.isNaN(blisterStart.getTime())) return;
+			if (stockCalculationMode === "automatic") {
+				blisters.forEach((blister, blisterIdx) => {
+					const blisterStart = parseLocalDateTime(blister.start).getTime();
+					if (Number.isNaN(blisterStart)) return;
 
-				const period = Math.max(1, blister.every) * msPerDay;
+					const period = Math.max(1, blister.every) * msPerDay;
 
-				// After a stock correction, start counting from the NEXT scheduled
-				// dose, because the user's pill count already reflects all
-				// consumption up to the correction time.
-				let effectiveStart: number;
-				if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart.getTime()) {
-					effectiveStart = stockCorrectionCutoff + period;
-				} else {
-					effectiveStart = blisterStart.getTime();
-				}
-				if (effectiveStart > now.getTime()) return;
+					let effectiveStart: number;
+					if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
+						const elapsedSinceStart = stockCorrectionCutoff - blisterStart;
+						const periodsElapsed = Math.floor(elapsedSinceStart / period);
+						effectiveStart = blisterStart + (periodsElapsed + 1) * period;
+					} else {
+						effectiveStart = blisterStart;
+					}
 
-				const occurrences = Math.floor((now.getTime() - effectiveStart) / period) + 1;
+					const intake = intakes[blisterIdx];
+					const intakePerson = intake?.takenBy;
+					const fallbackPeople = parseTakenByJson(row.takenByJson);
+					const peopleForThisIntake = intakePerson
+						? [intakePerson]
+						: fallbackPeople.length > 0
+							? fallbackPeople
+							: [null];
 
-				// Get the people for this intake (from intakes array or medication takenBy)
-				const takenByJson = row.takenByJson ? JSON.parse(row.takenByJson) : [];
-				const intake = intakes[blisterIdx];
-				const intakePerson = intake?.takenBy;
-				const takenByFallback: (string | null)[] = takenByJson.length > 0 ? takenByJson : [null];
-				const peopleForThisIntake: (string | null)[] = intakePerson ? [intakePerson] : takenByFallback;
+					let timeBasedConsumed = 0;
+					let lastAutoConsumedDateMs = 0;
 
-				// Generate expected dose IDs and check if they're taken
-				for (let i = 0; i < occurrences; i++) {
-					const doseDate = new Date(effectiveStart + i * period);
-					const dateOnlyMs = new Date(doseDate.getFullYear(), doseDate.getMonth(), doseDate.getDate()).getTime();
-					const baseDoseId = `${row.id}-${blisterIdx}-${dateOnlyMs}`;
+					if (effectiveStart <= now.getTime()) {
+						const occurrences = Math.floor((now.getTime() - effectiveStart) / period) + 1;
+						timeBasedConsumed = occurrences * blister.usage * peopleForThisIntake.length;
 
-					// Check if each person has taken this dose
-					for (const person of peopleForThisIntake) {
-						const doseId = person ? `${baseDoseId}-${person}` : baseDoseId;
-						if (takenDoseIds.has(doseId)) {
+						const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
+						lastAutoConsumedDateMs = new Date(
+							lastDoseTime.getFullYear(),
+							lastDoseTime.getMonth(),
+							lastDoseTime.getDate()
+						).getTime();
+					}
+
+					const stockCorrectionDateOnly =
+						stockCorrectionCutoff > 0
+							? new Date(
+									new Date(stockCorrectionCutoff).getFullYear(),
+									new Date(stockCorrectionCutoff).getMonth(),
+									new Date(stockCorrectionCutoff).getDate()
+								).getTime()
+							: 0;
+					const earlyCutoff = Math.max(lastAutoConsumedDateMs, stockCorrectionDateOnly);
+
+					let earlyTakenConsumed = 0;
+					for (const doseId of takenDoseIds) {
+						const parts = doseId.split("-");
+						if (parts.length < 3) continue;
+						const bIdx = parseInt(parts[1], 10);
+						const timestamp = parseInt(parts[2], 10);
+						if (!Number.isNaN(bIdx) && !Number.isNaN(timestamp) && bIdx === blisterIdx && timestamp > earlyCutoff) {
+							earlyTakenConsumed += blister.usage;
+						}
+					}
+
+					consumedUntilNow += timeBasedConsumed + earlyTakenConsumed;
+				});
+			} else {
+				blisters.forEach((blister, blisterIdx) => {
+					const blisterStart = parseLocalDateTime(blister.start);
+					const blisterStartDateOnly = new Date(
+						blisterStart.getFullYear(),
+						blisterStart.getMonth(),
+						blisterStart.getDate()
+					).getTime();
+					if (Number.isNaN(blisterStartDateOnly)) return;
+
+					for (const doseId of takenDoseIds) {
+						const parts = doseId.split("-");
+						if (parts.length < 3) continue;
+
+						const parsedBlisterIdx = parseInt(parts[1], 10);
+						const doseTimestamp = parseInt(parts[2], 10);
+						if (Number.isNaN(parsedBlisterIdx) || Number.isNaN(doseTimestamp) || parsedBlisterIdx !== blisterIdx) {
+							continue;
+						}
+
+						const takenAt = takenDoseTimestamps.get(doseId) ?? 0;
+						const afterCorrectionOrNoCorrection = stockCorrectionCutoff === 0 || takenAt > stockCorrectionCutoff;
+
+						if (doseTimestamp >= blisterStartDateOnly && afterCorrectionOrNoCorrection) {
 							consumedUntilNow += blister.usage;
 						}
 					}
-				}
-			});
+				});
+			}
 
 			const currentStock = Math.max(0, originalTotalPills - consumedUntilNow);
 
@@ -943,6 +994,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				medicationId: row.id,
 				medicationName: row.name,
 				totalPills: currentStock,
+				currentPills: currentStock,
 				plannerUsage: usageTotal,
 				blisterSize: pillsPerBlister,
 				blistersNeeded,

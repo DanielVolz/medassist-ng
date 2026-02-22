@@ -5,7 +5,15 @@ import { Bell, Eye, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import { ConfirmModal, DateInput, Lightbox, MedicationAvatar, MobileEditModal, ReportModal } from "../components";
+import {
+	ConfirmModal,
+	DateInput,
+	FormNumberStepper,
+	Lightbox,
+	MedicationAvatar,
+	MobileEditModal,
+	ReportModal,
+} from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useMedicationForm, useModalHistory, useUnsavedChangesWarning } from "../hooks";
@@ -175,6 +183,8 @@ export function MedicationsPage() {
 		const pillsPerBlister = Number(form.pillsPerBlister) || 1;
 		return packCount * blistersPerPack * pillsPerBlister;
 	}, [form.packageType, form.packCount, form.blistersPerPack, form.pillsPerBlister, form.looseTablets]);
+	const decrementValueLabel = t("editStock.decreaseValue");
+	const incrementValueLabel = t("editStock.increaseValue");
 
 	const dateConsistencyError = useMemo(() => {
 		const medicationStartDate = form.medicationStartDate;
@@ -969,20 +979,20 @@ export function MedicationsPage() {
 							<button
 								type="button"
 								role="tab"
-								aria-selected={activeTab === "prescription"}
-								className={`form-tab${activeTab === "prescription" ? " active" : ""}`}
-								onClick={() => setActiveTab("prescription")}
-							>
-								{t("form.sections.prescription")}
-							</button>
-							<button
-								type="button"
-								role="tab"
 								aria-selected={activeTab === "schedule"}
 								className={`form-tab${activeTab === "schedule" ? " active" : ""}`}
 								onClick={() => setActiveTab("schedule")}
 							>
 								{t("form.sections.schedule")}
+							</button>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={activeTab === "prescription"}
+								className={`form-tab${activeTab === "prescription" ? " active" : ""}`}
+								onClick={() => setActiveTab("prescription")}
+							>
+								{t("form.sections.prescription")}
 							</button>
 						</div>
 						<fieldset className="readonly-fieldset" disabled={readOnlyView}>
@@ -1157,32 +1167,32 @@ export function MedicationsPage() {
 										<>
 											<label>
 												{t("form.packs")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
+												<FormNumberStepper
 													value={form.packCount}
-													onChange={(e) => handleValueChange("packCount", e.target.value)}
+													onChange={(nextValue) => handleValueChange("packCount", nextValue)}
+													min={0}
+													decrementLabel={decrementValueLabel}
+													incrementLabel={incrementValueLabel}
 												/>
 											</label>
 											<label>
 												{t("form.blistersPerPack")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
+												<FormNumberStepper
 													value={form.blistersPerPack}
-													onChange={(e) => handleValueChange("blistersPerPack", e.target.value)}
+													onChange={(nextValue) => handleValueChange("blistersPerPack", nextValue)}
+													min={1}
+													decrementLabel={decrementValueLabel}
+													incrementLabel={incrementValueLabel}
 												/>
 											</label>
 											<label>
 												{t("form.pillsPerBlister")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
+												<FormNumberStepper
 													value={form.pillsPerBlister}
-													onChange={(e) => handleValueChange("pillsPerBlister", e.target.value)}
+													onChange={(nextValue) => handleValueChange("pillsPerBlister", nextValue)}
+													min={1}
+													decrementLabel={decrementValueLabel}
+													incrementLabel={incrementValueLabel}
 												/>
 											</label>
 											<label>
@@ -1194,22 +1204,22 @@ export function MedicationsPage() {
 										<>
 											<label>
 												{t("form.totalCapacity")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
+												<FormNumberStepper
 													value={form.totalPills}
-													onChange={(e) => handleValueChange("totalPills", e.target.value)}
+													onChange={(nextValue) => handleValueChange("totalPills", nextValue)}
+													min={0}
+													decrementLabel={decrementValueLabel}
+													incrementLabel={incrementValueLabel}
 												/>
 											</label>
 											<label>
 												{t("form.currentPills")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
+												<FormNumberStepper
 													value={form.looseTablets}
-													onChange={(e) => handleValueChange("looseTablets", e.target.value)}
+													onChange={(nextValue) => handleValueChange("looseTablets", nextValue)}
+													min={0}
+													decrementLabel={decrementValueLabel}
+													incrementLabel={incrementValueLabel}
 												/>
 											</label>
 										</>
@@ -1300,32 +1310,32 @@ export function MedicationsPage() {
 										<>
 											<label className="prescription-field">
 												{t("prescription.authorizedRefills")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
+												<FormNumberStepper
 													value={form.prescriptionAuthorizedRefills}
-													onChange={(e) => handleValueChange("prescriptionAuthorizedRefills", e.target.value)}
+													onChange={(nextValue) => handleValueChange("prescriptionAuthorizedRefills", nextValue)}
+													min={0}
+													decrementLabel={decrementValueLabel}
+													incrementLabel={incrementValueLabel}
 												/>
 											</label>
 											<label className="prescription-field">
 												{t("prescription.remainingRefills")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
+												<FormNumberStepper
 													value={form.prescriptionRemainingRefills}
-													onChange={(e) => handleValueChange("prescriptionRemainingRefills", e.target.value)}
+													onChange={(nextValue) => handleValueChange("prescriptionRemainingRefills", nextValue)}
+													min={0}
+													decrementLabel={decrementValueLabel}
+													incrementLabel={incrementValueLabel}
 												/>
 											</label>
 											<label className="prescription-field">
 												{t("prescription.lowThreshold")}
-												<input
-													type="text"
-													inputMode="numeric"
-													pattern="[0-9]*"
+												<FormNumberStepper
 													value={form.prescriptionLowRefillThreshold}
-													onChange={(e) => handleValueChange("prescriptionLowRefillThreshold", e.target.value)}
+													onChange={(nextValue) => handleValueChange("prescriptionLowRefillThreshold", nextValue)}
+													min={0}
+													decrementLabel={decrementValueLabel}
+													incrementLabel={incrementValueLabel}
 												/>
 											</label>
 											<label className="prescription-field">
@@ -1362,22 +1372,24 @@ export function MedicationsPage() {
 											<div className="blister-inputs">
 												<label>
 													{t("form.blisters.usage")}
-													<input
-														type="text"
-														inputMode="decimal"
-														pattern="[0-9]*\.?[0-9]*"
+													<FormNumberStepper
 														value={intake.usage}
-														onChange={(e) => setIntakeValue(idx, "usage", e.target.value)}
+														onChange={(nextValue) => setIntakeValue(idx, "usage", nextValue)}
+														min={0.5}
+														step={0.5}
+														allowDecimal={true}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label>
 													{t("form.blisters.everyDays")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={intake.every}
-														onChange={(e) => setIntakeValue(idx, "every", e.target.value)}
+														onChange={(nextValue) => setIntakeValue(idx, "every", nextValue)}
+														min={1}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label>

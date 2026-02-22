@@ -11,6 +11,7 @@ import type { DoseUnit, FieldErrors, FormBlister, FormIntake, FormState, Medicat
 import { DOSE_UNITS } from "../types";
 import { deriveTotal } from "../utils";
 import { DateInput } from "./DateInput";
+import { FormNumberStepper } from "./FormNumberStepper";
 
 // Field limits for validation
 const FIELD_LIMITS = {
@@ -107,6 +108,8 @@ export function MobileEditModal({
 	onSaveMedication,
 }: MobileEditModalProps) {
 	const { t } = useTranslation();
+	const decrementValueLabel = t("editStock.decreaseValue");
+	const incrementValueLabel = t("editStock.increaseValue");
 	const [activeTab, setActiveTab] = useState<MobileTab>("general");
 	const fieldsetRef = useRef<HTMLFieldSetElement | null>(null);
 	const tabStripRef = useRef<HTMLDivElement | null>(null);
@@ -499,32 +502,32 @@ export function MobileEditModal({
 											<>
 												<label>
 													{t("form.packs")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={form.packCount}
-														onChange={(e) => onHandleValueChange("packCount", e.target.value)}
+														onChange={(nextValue) => onHandleValueChange("packCount", nextValue)}
+														min={0}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label>
 													{t("form.blistersPerPack")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={form.blistersPerPack}
-														onChange={(e) => onHandleValueChange("blistersPerPack", e.target.value)}
+														onChange={(nextValue) => onHandleValueChange("blistersPerPack", nextValue)}
+														min={1}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label>
 													{t("form.pillsPerBlister")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={form.pillsPerBlister}
-														onChange={(e) => onHandleValueChange("pillsPerBlister", e.target.value)}
+														onChange={(nextValue) => onHandleValueChange("pillsPerBlister", nextValue)}
+														min={1}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label>
@@ -536,22 +539,22 @@ export function MobileEditModal({
 											<>
 												<label>
 													{t("form.totalCapacity")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={form.totalPills}
-														onChange={(e) => onHandleValueChange("totalPills", e.target.value)}
+														onChange={(nextValue) => onHandleValueChange("totalPills", nextValue)}
+														min={0}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label>
 													{t("form.currentPills")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={form.looseTablets}
-														onChange={(e) => onHandleValueChange("looseTablets", e.target.value)}
+														onChange={(nextValue) => onHandleValueChange("looseTablets", nextValue)}
+														min={0}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 											</>
@@ -646,22 +649,24 @@ export function MobileEditModal({
 											>
 												<label className="compact">
 													<span>{t("form.blisters.usage")}</span>
-													<input
-														type="text"
-														inputMode="decimal"
-														pattern="[0-9]*\.?[0-9]*"
+													<FormNumberStepper
 														value={intake.usage}
-														onChange={(e) => onSetIntakeValue(idx, "usage", e.target.value)}
+														onChange={(nextValue) => onSetIntakeValue(idx, "usage", nextValue)}
+														min={0.5}
+														step={0.5}
+														allowDecimal={true}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label className="compact">
 													<span>{t("form.blisters.everyDays")}</span>
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={intake.every}
-														onChange={(e) => onSetIntakeValue(idx, "every", e.target.value)}
+														onChange={(nextValue) => onSetIntakeValue(idx, "every", nextValue)}
+														min={1}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label className="compact full-row">
@@ -740,32 +745,32 @@ export function MobileEditModal({
 											<>
 												<label className="prescription-field">
 													{t("prescription.authorizedRefills")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={form.prescriptionAuthorizedRefills}
-														onChange={(e) => onHandleValueChange("prescriptionAuthorizedRefills", e.target.value)}
+														onChange={(nextValue) => onHandleValueChange("prescriptionAuthorizedRefills", nextValue)}
+														min={0}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label className="prescription-field">
 													{t("prescription.remainingRefills")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={form.prescriptionRemainingRefills}
-														onChange={(e) => onHandleValueChange("prescriptionRemainingRefills", e.target.value)}
+														onChange={(nextValue) => onHandleValueChange("prescriptionRemainingRefills", nextValue)}
+														min={0}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label className="prescription-field">
 													{t("prescription.lowThreshold")}
-													<input
-														type="text"
-														inputMode="numeric"
-														pattern="[0-9]*"
+													<FormNumberStepper
 														value={form.prescriptionLowRefillThreshold}
-														onChange={(e) => onHandleValueChange("prescriptionLowRefillThreshold", e.target.value)}
+														onChange={(nextValue) => onHandleValueChange("prescriptionLowRefillThreshold", nextValue)}
+														min={0}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
 												</label>
 												<label className="prescription-field">

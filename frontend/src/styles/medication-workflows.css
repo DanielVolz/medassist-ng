@@ -461,6 +461,7 @@
 
 .refill-number-stepper .stepper-btn.decrement {
 	order: initial;
+	background: color-mix(in srgb, var(--danger) 22%, var(--bg-tertiary));
 	color: var(--danger);
 }
 
@@ -468,13 +469,20 @@
 	order: initial;
 	border-right: none;
 	border-left: 1px solid var(--border-primary);
-	background: color-mix(in srgb, var(--bg-tertiary) 85%, transparent);
+	background: color-mix(in srgb, var(--success) 22%, var(--bg-tertiary));
 	color: var(--success);
 }
 
 .refill-number-stepper .stepper-btn:hover:not(:disabled) {
 	filter: none;
-	background: color-mix(in srgb, var(--accent) 14%, var(--bg-tertiary));
+}
+
+.refill-number-stepper .stepper-btn.decrement:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--danger) 36%, var(--bg-tertiary));
+}
+
+.refill-number-stepper .stepper-btn.increment:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--success) 36%, var(--bg-tertiary));
 }
 
 @media (min-width: 641px) {
@@ -488,12 +496,12 @@
 	}
 
 	[data-theme="light"] .refill-number-stepper .stepper-btn.decrement {
-		background: color-mix(in srgb, var(--bg-tertiary) 90%, transparent);
+		background: color-mix(in srgb, #dc2626 18%, white);
 		color: #b91c1c;
 	}
 
 	[data-theme="light"] .refill-number-stepper .stepper-btn.increment {
-		background: color-mix(in srgb, var(--bg-tertiary) 90%, transparent);
+		background: color-mix(in srgb, #0f766e 18%, white);
 		color: #0f766e;
 	}
 }
@@ -501,6 +509,111 @@
 @media (max-width: 640px) {
 	.refill-number-stepper {
 		grid-template-columns: 3rem minmax(0, 1fr) 3rem;
+	}
+}
+
+/* Form stepper keeps symmetric - value + layout in all contexts (desktop/mobile). */
+.form-number-stepper {
+	display: grid;
+	grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+}
+
+.form-number-stepper input {
+	order: 0;
+	text-align: center;
+	padding: 0.75rem 0.5rem;
+	min-width: 0;
+	width: 100%;
+	color: var(--text-primary);
+}
+
+.form-number-stepper .stepper-btn {
+	flex: 0 0 auto;
+	border-right: 1px solid var(--border-primary);
+	border-left: none;
+	background: color-mix(in srgb, var(--bg-tertiary) 85%, transparent);
+	color: var(--text-secondary);
+}
+
+.form-number-stepper .stepper-btn.decrement {
+	order: -1;
+	background: color-mix(in srgb, var(--danger) 22%, var(--bg-tertiary));
+	color: var(--danger);
+}
+
+.form-number-stepper .stepper-btn.increment {
+	order: 1;
+	border-right: none;
+	border-left: 1px solid var(--border-primary);
+	background: color-mix(in srgb, var(--success) 22%, var(--bg-tertiary));
+	color: var(--success);
+}
+
+.form-number-stepper .stepper-btn:hover:not(:disabled) {
+	filter: none;
+}
+
+.form-number-stepper .stepper-btn.decrement:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--danger) 36%, var(--bg-tertiary));
+}
+
+.form-number-stepper .stepper-btn.increment:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--success) 36%, var(--bg-tertiary));
+}
+
+/* Highlight both controls when the center value field is focused (keyboard/click). */
+.form-number-stepper:has(input:focus) .stepper-btn.decrement:not(:disabled),
+.form-number-stepper:has(input:focus-visible) .stepper-btn.decrement:not(:disabled) {
+	background: color-mix(in srgb, var(--danger) 36%, var(--bg-tertiary));
+}
+
+.form-number-stepper:has(input:focus) .stepper-btn.increment:not(:disabled),
+.form-number-stepper:has(input:focus-visible) .stepper-btn.increment:not(:disabled) {
+	background: color-mix(in srgb, var(--success) 36%, var(--bg-tertiary));
+}
+
+/* Dense schedule grids need a compact variant so the middle value stays visible. */
+.blister-inputs .form-number-stepper,
+.mobile-edit-form .blister-row .form-number-stepper {
+	grid-template-columns: 2.35rem minmax(2rem, 1fr) 2.35rem;
+}
+
+.blister-inputs .form-number-stepper input,
+.mobile-edit-form .blister-row .form-number-stepper input {
+	min-height: 2.35rem;
+	padding: 0.5rem 0.35rem;
+}
+
+.blister-inputs .form-number-stepper .stepper-btn,
+.mobile-edit-form .blister-row .form-number-stepper .stepper-btn {
+	min-width: 2.35rem;
+	min-height: 2.35rem;
+}
+
+@media (min-width: 641px) {
+	.form-number-stepper {
+		display: grid;
+		grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+	}
+
+	.form-number-stepper input {
+		padding-left: 0.5rem;
+	}
+
+	[data-theme="light"] .form-number-stepper .stepper-btn.decrement {
+		background: color-mix(in srgb, #dc2626 18%, white);
+		color: #b91c1c;
+	}
+
+	[data-theme="light"] .form-number-stepper .stepper-btn.increment {
+		background: color-mix(in srgb, #0f766e 18%, white);
+		color: #0f766e;
+	}
+}
+
+@media (max-width: 640px) {
+	.form-number-stepper {
+		grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
 	}
 }
 

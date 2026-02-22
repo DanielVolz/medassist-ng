@@ -245,6 +245,57 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			expect(response.json().code).toBe("VALIDATION_ERROR");
 		});
 
+		it("should register with trimmed username when input has whitespace", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "  trimuser  ",
+					password: "TestPassword123",
+				},
+			});
+
+			expect(response.statusCode).toBe(201);
+			expect(response.json().user.username).toBe("trimuser");
+		});
+
+		it("should reject whitespace-only username on registration", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "   ",
+					password: "TestPassword123",
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json().code).toBe("VALIDATION_ERROR");
+		});
+
+		it("should reject duplicate username even with surrounding whitespace", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "spacedupe",
+					password: "TestPassword123",
+				},
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "  spacedupe  ",
+					password: "AnotherPassword123",
+				},
+			});
+
+			expect(response.statusCode).toBe(409);
+			expect(response.json().code).toBe("USERNAME_EXISTS");
+		});
+
 		it("should reject invalid username characters", async () => {
 			const response = await app.inject({
 				method: "POST",
@@ -339,6 +390,35 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 
 			expect(response.statusCode).toBe(401);
 			expect(response.json().code).toBe("INVALID_CREDENTIALS");
+		});
+
+		it("should login successfully when username has leading/trailing whitespace", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "  loginuser  ",
+					password: "TestPassword123",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().ok).toBe(true);
+			expect(response.json().user.username).toBe("loginuser");
+		});
+
+		it("should reject whitespace-only username on login", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "   ",
+					password: "TestPassword123",
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json().code).toBe("VALIDATION_ERROR");
 		});
 
 		it("should support rememberMe option", async () => {

@@ -132,10 +132,10 @@ export function MobileEditModal({
 	}, [show]);
 
 	useEffect(() => {
-		if (show && hasValidationErrors) {
+		if (show && (hasValidationErrors || !!fieldErrors.name)) {
 			setShowNameValidation(true);
 		}
-	}, [show, hasValidationErrors]);
+	}, [show, hasValidationErrors, fieldErrors.name]);
 
 	useEscapeKey(show, onClose);
 

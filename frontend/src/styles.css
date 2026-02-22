@@ -4549,7 +4549,7 @@ button.has-validation-error {
 }
 
 .med-detail-body {
-	padding: 1.5rem 2rem 0;
+	padding: 1.5rem 2rem 2rem;
 	background: var(--bg-primary);
 }
 

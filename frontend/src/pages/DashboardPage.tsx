@@ -512,7 +512,21 @@ export function DashboardPage() {
 									>
 										<span data-label={t("table.name")} className="cell-with-avatar">
 											<span className="med-name-line">
-												<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
+												<span
+													className={med?.imageUrl ? "med-avatar-clickable" : undefined}
+													onClick={(e) => {
+														e.stopPropagation();
+														if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
+													}}
+													onKeyDown={(e) => {
+														e.stopPropagation();
+														if (e.key === "Enter" || e.key === " ") {
+															if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
+														}
+													}}
+												>
+													<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
+												</span>
 												<span className="med-name-block-dash">
 													<span className="med-name-text">
 														{row.name}

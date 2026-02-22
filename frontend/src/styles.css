@@ -2212,6 +2212,9 @@ button.has-validation-error {
 .time-main .med-name span.clickable {
 	cursor: pointer;
 }
+.time-main .med-name .med-name-stack.clickable {
+	cursor: pointer;
+}
 .time-main .med-name span.clickable:hover .med-avatar {
 	transform: scale(1.1);
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);

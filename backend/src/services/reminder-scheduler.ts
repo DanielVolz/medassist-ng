@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { and, eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
@@ -40,6 +40,56 @@ function escapeHtml(text: string): string {
 const REMINDER_HOUR = parseInt(process.env.REMINDER_HOUR ?? "6", 10); // Default 6:00 AM local time
 
 const reminderStateFile = resolve(getDataDir(), "reminder-state.json");
+const reminderLocksDir = resolve(getDataDir(), "scheduler-locks");
+const LOCK_STALE_MS = 15 * 60 * 1000;
+
+function ensureReminderLocksDir(): void {
+	if (!existsSync(reminderLocksDir)) {
+		mkdirSync(reminderLocksDir, { recursive: true });
+	}
+}
+
+function acquireReminderSendLock(lockKey: string): string | null {
+	ensureReminderLocksDir();
+	const lockFilePath = resolve(reminderLocksDir, `${lockKey}.lock`);
+
+	const tryCreateLock = (): boolean => {
+		try {
+			const fd = openSync(lockFilePath, "wx");
+			closeSync(fd);
+			return true;
+		} catch {
+			return false;
+		}
+	};
+
+	if (tryCreateLock()) {
+		return lockFilePath;
+	}
+
+	try {
+		const stats = statSync(lockFilePath);
+		if (Date.now() - stats.mtimeMs > LOCK_STALE_MS) {
+			unlinkSync(lockFilePath);
+			if (tryCreateLock()) {
+				return lockFilePath;
+			}
+		}
+	} catch {
+		// ignore; lock acquisition fails safely
+	}
+
+	return null;
+}
+
+function releaseReminderSendLock(lockFilePath: string | null): void {
+	if (!lockFilePath) return;
+	try {
+		unlinkSync(lockFilePath);
+	} catch {
+		// ignore release errors
+	}
+}
 
 function loadReminderState(): ReminderState {
 	try {
@@ -565,166 +615,184 @@ async function checkAndSendReminderForUser(
 
 	if (allLowStock.length > 0 && (stockEmailEnabled || stockPushEnabled)) {
 		if (!state.notifiedMedications.includes(userStockNotifiedKey) || settings.repeatDailyReminders) {
-			logger.info(
-				`[Reminder] User ${settings.userId}: Sending stock reminder for ${allLowStock.length} medications...`
-			);
-
-			let emailSuccess = false;
-			let shoutrrrSuccess = false;
-
-			if (stockEmailEnabled) {
-				const result = await sendReminderEmail(
-					settings.notificationEmail!,
-					allLowStock,
-					language,
-					settings.repeatDailyReminders
-				);
-				emailSuccess = result.success;
-				if (!result.success) {
-					logger.error(`[Reminder] User ${settings.userId}: Failed to send stock email: ${result.error}`);
-				}
-			}
-
-			if (stockPushEnabled) {
-				const emptyMeds = allLowStock.filter((m) => m.medsLeft <= 0);
-				const criticalMeds = allLowStock.filter((m) => m.medsLeft > 0 && m.isCritical);
-				const lowStockMeds = allLowStock.filter((m) => m.medsLeft > 0 && !m.isCritical);
-
-				const titleParts: string[] = [];
-				if (emptyMeds.length > 0) titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty}`);
-				if (criticalMeds.length > 0) titleParts.push(`🚨 ${criticalMeds.length} ${tr.push.critical}`);
-				if (lowStockMeds.length > 0) titleParts.push(`⚠️ ${lowStockMeds.length} ${tr.push.lowStock}`);
-				const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
-
-				const messageParts: string[] = [];
-				if (emptyMeds.length > 0) {
-					messageParts.push(`🚨 ${tr.push.emptySection}:`);
-					emptyMeds.forEach((m) => messageParts.push(`  • ${m.name}`));
-				}
-				if (criticalMeds.length > 0) {
-					if (messageParts.length > 0) messageParts.push("");
-					messageParts.push(`🚨 ${tr.push.criticalSection}:`);
-					criticalMeds.forEach((m) =>
-						messageParts.push(
-							`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
-						)
+			const stockSendLock = acquireReminderSendLock(userStockNotifiedKey);
+			if (!stockSendLock) {
+				logger.debug(`[Reminder] User ${settings.userId}: stock reminder lock already held, skipping duplicate send`);
+			} else {
+				try {
+					logger.info(
+						`[Reminder] User ${settings.userId}: Sending stock reminder for ${allLowStock.length} medications...`
 					);
-				}
-				if (lowStockMeds.length > 0) {
-					if (messageParts.length > 0) messageParts.push("");
-					messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
-					lowStockMeds.forEach((m) =>
-						messageParts.push(
-							`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
-						)
-					);
-				}
-				const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
-				const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
-				shoutrrrSuccess = result.success;
-				if (!result.success) {
-					logger.error(`[Reminder] User ${settings.userId}: Failed to send stock push: ${result.error}`);
-				}
-			}
 
-			if (emailSuccess || shoutrrrSuccess) {
-				const currentState = loadReminderState();
-				const singleChannel = emailSuccess ? "email" : "push";
-				const channel = emailSuccess && shoutrrrSuccess ? "both" : singleChannel;
-				saveReminderState({
-					lastAutoEmailSent: new Date().toISOString(),
-					lastAutoEmailDate: today,
-					notifiedMedications: [...new Set([...currentState.notifiedMedications, userStockNotifiedKey])],
-					nextScheduledCheck: currentState.nextScheduledCheck,
-					lastNotificationType: "stock",
-					lastNotificationChannel: channel,
-				});
+					let emailSuccess = false;
+					let shoutrrrSuccess = false;
 
-				const medNames = allLowStock.map((m) => m.name).join(", ");
-				await updateUserReminderSentTime(settings.userId, "stock", channel, medNames);
+					if (stockEmailEnabled) {
+						const result = await sendReminderEmail(
+							settings.notificationEmail!,
+							allLowStock,
+							language,
+							settings.repeatDailyReminders
+						);
+						emailSuccess = result.success;
+						if (!result.success) {
+							logger.error(`[Reminder] User ${settings.userId}: Failed to send stock email: ${result.error}`);
+						}
+					}
+
+					if (stockPushEnabled) {
+						const emptyMeds = allLowStock.filter((m) => m.medsLeft <= 0);
+						const criticalMeds = allLowStock.filter((m) => m.medsLeft > 0 && m.isCritical);
+						const lowStockMeds = allLowStock.filter((m) => m.medsLeft > 0 && !m.isCritical);
+
+						const titleParts: string[] = [];
+						if (emptyMeds.length > 0) titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty}`);
+						if (criticalMeds.length > 0) titleParts.push(`🚨 ${criticalMeds.length} ${tr.push.critical}`);
+						if (lowStockMeds.length > 0) titleParts.push(`⚠️ ${lowStockMeds.length} ${tr.push.lowStock}`);
+						const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
+
+						const messageParts: string[] = [];
+						if (emptyMeds.length > 0) {
+							messageParts.push(`🚨 ${tr.push.emptySection}:`);
+							emptyMeds.forEach((m) => messageParts.push(`  • ${m.name}`));
+						}
+						if (criticalMeds.length > 0) {
+							if (messageParts.length > 0) messageParts.push("");
+							messageParts.push(`🚨 ${tr.push.criticalSection}:`);
+							criticalMeds.forEach((m) =>
+								messageParts.push(
+									`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
+								)
+							);
+						}
+						if (lowStockMeds.length > 0) {
+							if (messageParts.length > 0) messageParts.push("");
+							messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
+							lowStockMeds.forEach((m) =>
+								messageParts.push(
+									`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
+								)
+							);
+						}
+						const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+						const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
+						shoutrrrSuccess = result.success;
+						if (!result.success) {
+							logger.error(`[Reminder] User ${settings.userId}: Failed to send stock push: ${result.error}`);
+						}
+					}
+
+					if (emailSuccess || shoutrrrSuccess) {
+						const currentState = loadReminderState();
+						const singleChannel = emailSuccess ? "email" : "push";
+						const channel = emailSuccess && shoutrrrSuccess ? "both" : singleChannel;
+						saveReminderState({
+							lastAutoEmailSent: new Date().toISOString(),
+							lastAutoEmailDate: today,
+							notifiedMedications: [...new Set([...currentState.notifiedMedications, userStockNotifiedKey])],
+							nextScheduledCheck: currentState.nextScheduledCheck,
+							lastNotificationType: "stock",
+							lastNotificationChannel: channel,
+						});
+
+						const medNames = allLowStock.map((m) => m.name).join(", ");
+						await updateUserReminderSentTime(settings.userId, "stock", channel, medNames);
+					}
+				} finally {
+					releaseReminderSendLock(stockSendLock);
+				}
 			}
 		}
 	}
 
 	if (allPrescriptionLow.length > 0 && (prescriptionEmailEnabled || prescriptionPushEnabled)) {
 		if (!state.notifiedMedications.includes(userPrescriptionNotifiedKey) || settings.repeatDailyReminders) {
-			logger.info(
-				`[Reminder] User ${settings.userId}: Sending prescription reminder for ${allPrescriptionLow.length} medications...`
-			);
+			const prescriptionSendLock = acquireReminderSendLock(userPrescriptionNotifiedKey);
+			if (!prescriptionSendLock) {
+				logger.debug(
+					`[Reminder] User ${settings.userId}: prescription reminder lock already held, skipping duplicate send`
+				);
+			} else {
+				try {
+					logger.info(
+						`[Reminder] User ${settings.userId}: Sending prescription reminder for ${allPrescriptionLow.length} medications...`
+					);
 
-			const emptyRx = allPrescriptionLow.filter((m) => m.remainingRefills <= 0);
-			const lowRx = allPrescriptionLow.filter((m) => m.remainingRefills > 0);
-			const lines = allPrescriptionLow.map((m) => {
-				const expirySuffix = m.expiryDate ? t(tr.prescriptionReminder.expiresSuffix, { date: m.expiryDate }) : "";
-				if (m.remainingRefills <= 0) {
-					return `- ${t(tr.prescriptionReminder.lineEmpty, {
-						name: m.name,
-						expirySuffix,
-					})}`;
-				}
-				return `- ${t(tr.prescriptionReminder.line, {
-					name: m.name,
-					refills: m.remainingRefills,
-					expirySuffix,
-				})}`;
-			});
+					const emptyRx = allPrescriptionLow.filter((m) => m.remainingRefills <= 0);
+					const lowRx = allPrescriptionLow.filter((m) => m.remainingRefills > 0);
+					const lines = allPrescriptionLow.map((m) => {
+						const expirySuffix = m.expiryDate ? t(tr.prescriptionReminder.expiresSuffix, { date: m.expiryDate }) : "";
+						if (m.remainingRefills <= 0) {
+							return `- ${t(tr.prescriptionReminder.lineEmpty, {
+								name: m.name,
+								expirySuffix,
+							})}`;
+						}
+						return `- ${t(tr.prescriptionReminder.line, {
+							name: m.name,
+							refills: m.remainingRefills,
+							expirySuffix,
+						})}`;
+					});
 
-			let emailSuccess = false;
-			let shoutrrrSuccess = false;
+					let emailSuccess = false;
+					let shoutrrrSuccess = false;
 
-			if (prescriptionEmailEnabled) {
-				const smtpHost = process.env.SMTP_HOST;
-				const smtpUser = process.env.SMTP_USER;
-				const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
-				const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-				const smtpSecure = process.env.SMTP_SECURE === "true";
-				const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+					if (prescriptionEmailEnabled) {
+						const smtpHost = process.env.SMTP_HOST;
+						const smtpUser = process.env.SMTP_USER;
+						const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
+						const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
+						const smtpSecure = process.env.SMTP_SECURE === "true";
+						const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
 
-				if (smtpHost && smtpUser) {
-					try {
-						const transporter = nodemailer.createTransport({
-							host: smtpHost,
-							port: smtpPort,
-							secure: smtpSecure,
-							auth: { user: smtpUser, pass: smtpPass ?? "" },
-						});
+						if (smtpHost && smtpUser) {
+							try {
+								const transporter = nodemailer.createTransport({
+									host: smtpHost,
+									port: smtpPort,
+									secure: smtpSecure,
+									auth: { user: smtpUser, pass: smtpPass ?? "" },
+								});
 
-						const subject =
-							allPrescriptionLow.length === 1
-								? tr.prescriptionReminder.subjectSingle
-								: t(tr.prescriptionReminder.subjectMultiple, { count: allPrescriptionLow.length });
+								const subject =
+									allPrescriptionLow.length === 1
+										? tr.prescriptionReminder.subjectSingle
+										: t(tr.prescriptionReminder.subjectMultiple, { count: allPrescriptionLow.length });
 
-						const bodyText =
-							emptyRx.length > 0 ? tr.prescriptionReminder.descriptionEmpty : tr.prescriptionReminder.descriptionLow;
-						const emptyAlert =
-							emptyRx.length === 1
-								? tr.prescriptionReminder.alertEmptySingle
-								: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length });
-						const lowAlert =
-							lowRx.length === 1
-								? tr.prescriptionReminder.alertLowSingle
-								: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
-						const alertText = emptyRx.length > 0 ? emptyAlert : lowAlert;
+								const bodyText =
+									emptyRx.length > 0
+										? tr.prescriptionReminder.descriptionEmpty
+										: tr.prescriptionReminder.descriptionLow;
+								const emptyAlert =
+									emptyRx.length === 1
+										? tr.prescriptionReminder.alertEmptySingle
+										: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length });
+								const lowAlert =
+									lowRx.length === 1
+										? tr.prescriptionReminder.alertLowSingle
+										: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
+								const alertText = emptyRx.length > 0 ? emptyAlert : lowAlert;
 
-						const tableRows = allPrescriptionLow
-							.map((item) => {
-								const isEmpty = item.remainingRefills <= 0;
-								const safeName = escapeHtml(item.name);
-								const safeRefills = Number(item.remainingRefills) || 0;
-								const safeThreshold = Number(item.lowThreshold) || 0;
-								const safeExpiry = item.expiryDate ? escapeHtml(String(item.expiryDate)) : "-";
-								const rowBg = isEmpty ? "#fef2f2" : "white";
-								return `
+								const tableRows = allPrescriptionLow
+									.map((item) => {
+										const isEmpty = item.remainingRefills <= 0;
+										const safeName = escapeHtml(item.name);
+										const safeRefills = Number(item.remainingRefills) || 0;
+										const safeThreshold = Number(item.lowThreshold) || 0;
+										const safeExpiry = item.expiryDate ? escapeHtml(String(item.expiryDate)) : "-";
+										const rowBg = isEmpty ? "#fef2f2" : "white";
+										return `
       <tr style="background: ${rowBg};">
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${isEmpty ? "🚨" : "⚠️"} ${safeName}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${safeRefills}</strong></td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeThreshold}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeExpiry}</td>
       </tr>`;
-							})
-							.join("");
+									})
+									.join("");
 
-						const html = `
+								const html = `
     <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
       <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
         <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${emptyRx.length > 0 ? tr.prescriptionReminder.titleEmpty : tr.prescriptionReminder.title}</h2>
@@ -764,80 +832,85 @@ async function checkAndSendReminderForUser(
       </div>
     </div>
   `;
-						const text = `${emptyRx.length > 0 ? tr.prescriptionReminder.titleEmpty : tr.prescriptionReminder.title}\n\n${bodyText}\n\n${lines.join("\n")}\n\n---\n${getFooterPlain(language)}${settings.repeatDailyReminders ? `\n\n${tr.prescriptionReminder.repeatDailyNote}` : ""}`;
+								const text = `${emptyRx.length > 0 ? tr.prescriptionReminder.titleEmpty : tr.prescriptionReminder.title}\n\n${bodyText}\n\n${lines.join("\n")}\n\n---\n${getFooterPlain(language)}${settings.repeatDailyReminders ? `\n\n${tr.prescriptionReminder.repeatDailyNote}` : ""}`;
 
-						await transporter.sendMail({
-							from: smtpFrom,
-							to: settings.notificationEmail!,
-							subject,
-							text,
-							html,
+								await transporter.sendMail({
+									from: smtpFrom,
+									to: settings.notificationEmail!,
+									subject,
+									text,
+									html,
+								});
+								emailSuccess = true;
+							} catch (error) {
+								const errorMessage = error instanceof Error ? error.message : "Unknown error";
+								logger.error(`[Reminder] User ${settings.userId}: Failed to send prescription email: ${errorMessage}`);
+							}
+						}
+					}
+
+					if (prescriptionPushEnabled) {
+						const titleParts: string[] = [];
+						if (emptyRx.length > 0)
+							titleParts.push(
+								`🚨 ${emptyRx.length} ${emptyRx.length === 1 ? tr.prescriptionReminder.pushEmptySingle : tr.prescriptionReminder.pushEmpty}`
+							);
+						if (lowRx.length > 0)
+							titleParts.push(
+								`🚨 ${lowRx.length} ${lowRx.length === 1 ? tr.prescriptionReminder.pushLowSingle : tr.prescriptionReminder.pushLow}`
+							);
+						const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.prescriptionReminder.pushRenewNow}`;
+
+						const messageParts: string[] = [];
+						if (emptyRx.length > 0) {
+							messageParts.push(`🚨 ${tr.prescriptionReminder.pushEmptySection}:`);
+							for (const m of emptyRx) {
+								messageParts.push(`  • ${m.name}`);
+							}
+						}
+						if (lowRx.length > 0) {
+							if (emptyRx.length > 0) messageParts.push("");
+							messageParts.push(`🚨 ${tr.prescriptionReminder.pushLowSection}:`);
+							for (const m of lowRx) {
+								messageParts.push(
+									`  • ${m.name}: ${t(tr.prescriptionReminder.pushRefillsLeft, { count: m.remainingRefills })}`
+								);
+							}
+						}
+						const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+						const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
+						shoutrrrSuccess = result.success;
+						if (!result.success) {
+							logger.error(`[Reminder] User ${settings.userId}: Failed to send prescription push: ${result.error}`);
+						}
+					}
+
+					if (emailSuccess || shoutrrrSuccess) {
+						const currentState = loadReminderState();
+						const singleChannel = emailSuccess ? "email" : "push";
+						const channel = emailSuccess && shoutrrrSuccess ? "both" : singleChannel;
+						saveReminderState({
+							lastAutoEmailSent: new Date().toISOString(),
+							lastAutoEmailDate: today,
+							notifiedMedications: [...new Set([...currentState.notifiedMedications, userPrescriptionNotifiedKey])],
+							nextScheduledCheck: currentState.nextScheduledCheck,
+							lastNotificationType: "prescription",
+							lastNotificationChannel: channel,
 						});
-						emailSuccess = true;
-					} catch (error) {
-						const errorMessage = error instanceof Error ? error.message : "Unknown error";
-						logger.error(`[Reminder] User ${settings.userId}: Failed to send prescription email: ${errorMessage}`);
+
+						const medNames = allPrescriptionLow.map((m) => m.name).join(", ");
+						await updateUserReminderSentTime(settings.userId, "prescription", channel, medNames);
 					}
+				} finally {
+					releaseReminderSendLock(prescriptionSendLock);
 				}
-			}
-
-			if (prescriptionPushEnabled) {
-				const titleParts: string[] = [];
-				if (emptyRx.length > 0)
-					titleParts.push(
-						`🚨 ${emptyRx.length} ${emptyRx.length === 1 ? tr.prescriptionReminder.pushEmptySingle : tr.prescriptionReminder.pushEmpty}`
-					);
-				if (lowRx.length > 0)
-					titleParts.push(
-						`🚨 ${lowRx.length} ${lowRx.length === 1 ? tr.prescriptionReminder.pushLowSingle : tr.prescriptionReminder.pushLow}`
-					);
-				const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.prescriptionReminder.pushRenewNow}`;
-
-				const messageParts: string[] = [];
-				if (emptyRx.length > 0) {
-					messageParts.push(`🚨 ${tr.prescriptionReminder.pushEmptySection}:`);
-					for (const m of emptyRx) {
-						messageParts.push(`  • ${m.name}`);
-					}
-				}
-				if (lowRx.length > 0) {
-					if (emptyRx.length > 0) messageParts.push("");
-					messageParts.push(`🚨 ${tr.prescriptionReminder.pushLowSection}:`);
-					for (const m of lowRx) {
-						messageParts.push(
-							`  • ${m.name}: ${t(tr.prescriptionReminder.pushRefillsLeft, { count: m.remainingRefills })}`
-						);
-					}
-				}
-				const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
-				const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
-				shoutrrrSuccess = result.success;
-				if (!result.success) {
-					logger.error(`[Reminder] User ${settings.userId}: Failed to send prescription push: ${result.error}`);
-				}
-			}
-
-			if (emailSuccess || shoutrrrSuccess) {
-				const currentState = loadReminderState();
-				const singleChannel = emailSuccess ? "email" : "push";
-				const channel = emailSuccess && shoutrrrSuccess ? "both" : singleChannel;
-				saveReminderState({
-					lastAutoEmailSent: new Date().toISOString(),
-					lastAutoEmailDate: today,
-					notifiedMedications: [...new Set([...currentState.notifiedMedications, userPrescriptionNotifiedKey])],
-					nextScheduledCheck: currentState.nextScheduledCheck,
-					lastNotificationType: "prescription",
-					lastNotificationChannel: channel,
-				});
-
-				const medNames = allPrescriptionLow.map((m) => m.name).join(", ");
-				await updateUserReminderSentTime(settings.userId, "prescription", channel, medNames);
 			}
 		}
 	}
 }
 
 let schedulerTimeout: NodeJS.Timeout | null = null;
+let schedulerStarted = false;
 
 function scheduleNextCheck(logger: ServiceLogger): void {
 	const msUntilNext = getMsUntilNextCheck(REMINDER_HOUR);
@@ -862,6 +935,11 @@ function scheduleNextCheck(logger: ServiceLogger): void {
 }
 
 export function startReminderScheduler(logger: ServiceLogger): void {
+	if (schedulerStarted) {
+		logger.info(`[Reminder] Scheduler already started, skipping duplicate start call`);
+		return;
+	}
+	schedulerStarted = true;
 	logger.info(`[Reminder] Starting reminder scheduler (timezone: ${getTimezone()})...`);
 
 	// Check if we need to run immediately (missed today's check)
@@ -881,9 +959,15 @@ export function startReminderScheduler(logger: ServiceLogger): void {
 	logger.info(`[Reminder] Scheduler started - daily check at ${REMINDER_HOUR}:00 ${getTimezone()}`);
 }
 
+export async function runReminderSchedulerNow(logger: ServiceLogger): Promise<void> {
+	logger.info(`[Reminder] Manual trigger: running reminder check now (${getTimezone()})`);
+	await checkAndSendReminder(logger);
+}
+
 export function stopReminderScheduler(): void {
 	if (schedulerTimeout) {
 		clearTimeout(schedulerTimeout);
 		schedulerTimeout = null;
 	}
+	schedulerStarted = false;
 }

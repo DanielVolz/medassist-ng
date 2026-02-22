@@ -730,7 +730,15 @@ export function DashboardPage() {
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
-																	<div className="med-name-stack">
+																	<div
+																		className="med-name-stack clickable"
+																		onClick={() => med && openMedDetail(med)}
+																		onKeyDown={(e) => {
+																			if (e.key === "Enter" || e.key === " ") {
+																				if (med) openMedDetail(med);
+																			}
+																		}}
+																	>
 																		<span className="med-name-text">{item.medName}</span>
 																		{med?.genericName && <span className="med-generic-inline">{med.genericName}</span>}
 																	</div>
@@ -982,7 +990,15 @@ export function DashboardPage() {
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
-																	<div className="med-name-stack">
+																	<div
+																		className="med-name-stack clickable"
+																		onClick={() => med && openMedDetail(med)}
+																		onKeyDown={(e) => {
+																			if (e.key === "Enter" || e.key === " ") {
+																				if (med) openMedDetail(med);
+																			}
+																		}}
+																	>
 																		<span className="med-name-text">{item.medName}</span>
 																		{med?.genericName && <span className="med-generic-inline">{med.genericName}</span>}
 																	</div>
@@ -1205,7 +1221,15 @@ export function DashboardPage() {
 																	>
 																		<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																	</div>
-																	<div className="med-name-stack">
+																	<div
+																		className="med-name-stack clickable"
+																		onClick={() => med && openMedDetail(med)}
+																		onKeyDown={(e) => {
+																			if (e.key === "Enter" || e.key === " ") {
+																				if (med) openMedDetail(med);
+																			}
+																		}}
+																	>
 																		<span className="med-name-text">{item.medName}</span>
 																		{med?.genericName && <span className="med-generic-inline">{med.genericName}</span>}
 																	</div>

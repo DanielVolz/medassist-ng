@@ -3,7 +3,6 @@
 // =============================================================================
 
 import type { MouseEvent } from "react";
-import { useEffect } from "react";
 
 export interface LightboxProps {
 	src: string;
@@ -12,17 +11,6 @@ export interface LightboxProps {
 }
 
 export function Lightbox({ src, alt, onClose }: LightboxProps) {
-	useEffect(() => {
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				onClose();
-			}
-		};
-
-		document.addEventListener("keydown", handleKeyDown);
-		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [onClose]);
-
 	function handleOverlayClick(e: MouseEvent) {
 		e.stopPropagation();
 		if (e.target === e.currentTarget) {
@@ -36,6 +24,7 @@ export function Lightbox({ src, alt, onClose }: LightboxProps) {
 			onClick={handleOverlayClick}
 			onKeyDown={(e) => {
 				if (e.key === "Escape") {
+					e.stopPropagation();
 					onClose();
 				}
 			}}

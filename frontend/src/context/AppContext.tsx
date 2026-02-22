@@ -467,12 +467,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	// Modal helpers with browser history support
 	const openMedDetail = useCallback(
 		(med: Medication) => {
+			if (selectedMed?.id === med.id) return;
 			setSelectedMed(med);
 			refill.setRefillHistoryExpanded(false);
 			refill.loadRefillHistory(med.id);
 			window.history.pushState({ modal: "medDetail", medId: med.id }, "");
 		},
-		[refill]
+		[refill, selectedMed]
 	);
 
 	const closeMedDetail = useCallback(() => {
@@ -482,9 +483,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	}, [selectedMed]);
 
 	const openImageLightbox = useCallback(() => {
+		if (showImageLightbox) return;
 		setShowImageLightbox(true);
 		window.history.pushState({ modal: "imageLightbox" }, "");
-	}, []);
+	}, [showImageLightbox]);
 
 	const closeImageLightbox = useCallback(() => {
 		if (showImageLightbox) {
@@ -492,10 +494,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [showImageLightbox]);
 
-	const openScheduleLightbox = useCallback((imageUrl: string) => {
-		setScheduleLightboxImage(imageUrl);
-		window.history.pushState({ modal: "scheduleLightbox" }, "");
-	}, []);
+	const openScheduleLightbox = useCallback(
+		(imageUrl: string) => {
+			if (scheduleLightboxImage) return;
+			setScheduleLightboxImage(imageUrl);
+			window.history.pushState({ modal: "scheduleLightbox" }, "");
+		},
+		[scheduleLightboxImage]
+	);
 
 	const closeScheduleLightbox = useCallback(() => {
 		if (scheduleLightboxImage) {
@@ -503,10 +509,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [scheduleLightboxImage]);
 
-	const openUserFilter = useCallback((person: string) => {
-		setSelectedUser(person);
-		window.history.pushState({ modal: "userFilter", person }, "");
-	}, []);
+	const openUserFilter = useCallback(
+		(person: string) => {
+			if (selectedUser === person) return;
+			setSelectedUser(person);
+			window.history.pushState({ modal: "userFilter", person }, "");
+		},
+		[selectedUser]
+	);
 
 	const closeUserFilter = useCallback(() => {
 		if (selectedUser) {

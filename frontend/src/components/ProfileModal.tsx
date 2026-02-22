@@ -1,3 +1,4 @@
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { UserProfile } from "./Auth";
 
 interface ProfileModalProps {
@@ -6,16 +7,12 @@ interface ProfileModalProps {
 }
 
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
+	useEscapeKey(isOpen, onClose);
+
 	if (!isOpen) return null;
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key === "Escape") onClose();
-			}}
-		>
+		<div className="modal-overlay" onClick={onClose}>
 			<div
 				className="modal-content profile-modal"
 				onClick={(e) => e.stopPropagation()}

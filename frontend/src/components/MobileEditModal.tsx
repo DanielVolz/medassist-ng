@@ -7,6 +7,7 @@
 import { Bell, Minus, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useScrollLock } from "../hooks/useScrollLock";
 import type { DoseUnit, FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
 import { DOSE_UNITS } from "../types";
@@ -126,17 +127,7 @@ export function MobileEditModal({
 		if (show) setActiveTab("general");
 	}, [show]);
 
-	// Close on Escape key
-	useEffect(() => {
-		if (!show) return;
-		function handleKeyDown(e: KeyboardEvent) {
-			if (e.key === "Escape") {
-				onClose();
-			}
-		}
-		document.addEventListener("keydown", handleKeyDown);
-		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [show, onClose]);
+	useEscapeKey(show, onClose);
 
 	// Lock background scroll while modal is open.
 	useScrollLock(show);
@@ -256,13 +247,7 @@ export function MobileEditModal({
 	})();
 
 	return (
-		<div
-			className="modal-overlay mobile-edit-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key === "Escape") onClose();
-			}}
-		>
+		<div className="modal-overlay mobile-edit-overlay" onClick={onClose}>
 			<div
 				className="modal-content edit-modal"
 				onClick={(e) => e.stopPropagation()}

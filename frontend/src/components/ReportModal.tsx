@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useScrollLock } from "../hooks/useScrollLock";
 import type { Medication } from "../types";
 import { getPackageSize } from "../types";
 import { MedicationAvatar } from "./MedicationAvatar";
@@ -30,6 +32,9 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 	const [format, setFormat] = useState<ReportFormat>("pdf");
 	const [generating, setGenerating] = useState(false);
 	const [takenByFilter, setTakenByFilter] = useState<Set<string>>(new Set());
+
+	useScrollLock(isOpen);
+	useEscapeKey(isOpen, onClose);
 
 	// Collect all unique "taken by" people across all medications
 	const allPeople = useMemo(() => {
@@ -134,13 +139,7 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 	if (!isOpen) return null;
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key === "Escape") onClose();
-			}}
-		>
+		<div className="modal-overlay" onClick={onClose}>
 			<div
 				className="modal-content report-modal"
 				onClick={(e) => e.stopPropagation()}

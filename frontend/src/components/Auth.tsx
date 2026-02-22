@@ -1,6 +1,7 @@
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: auth refresh callbacks intentionally coordinate via refs/guards */
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { log } from "../utils/logger";
 import { ConfirmModal } from "./ConfirmModal";
 import { PasswordInput } from "./PasswordInput";
@@ -581,16 +582,7 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 	const [deleteLoading, setDeleteLoading] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
-	// Close on Escape key
-	useEffect(() => {
-		const handleEscape = (e: KeyboardEvent) => {
-			if (e.key === "Escape" && onClose) {
-				onClose();
-			}
-		};
-		document.addEventListener("keydown", handleEscape);
-		return () => document.removeEventListener("keydown", handleEscape);
-	}, [onClose]);
+	useEscapeKey(!!onClose, onClose ?? (() => {}));
 
 	async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
 		const file = e.target.files?.[0];

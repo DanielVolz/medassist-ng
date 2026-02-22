@@ -13,6 +13,7 @@ import { Bell, Calendar, ClipboardList, FilePenLine, Minus, NotebookPen, Pencil,
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lightbox, MedicationAvatar } from "../components";
+import { useEscapeKey } from "../hooks";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
 import { getMedTotal, getPackageSize } from "../types";
 import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
@@ -155,21 +156,11 @@ export function MedDetailModal({
 		}
 	}, [showEditStockModal, editStockFullBlisters, editStockPartialBlisterPills, editStockLoosePills]);
 
-	useEffect(() => {
-		if (!showEditStockModal) return;
-		const handleEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.stopPropagation();
-				if (typeof event.stopImmediatePropagation === "function") {
-					event.stopImmediatePropagation();
-				}
-				event.preventDefault();
-				onCloseEditStockModal();
-			}
-		};
-		document.addEventListener("keydown", handleEscape, true);
-		return () => document.removeEventListener("keydown", handleEscape, true);
-	}, [showEditStockModal, onCloseEditStockModal]);
+	// Escape key: only one handler is active at a time (sub-modal states are mutually exclusive).
+	// Lightbox has its own useEscapeKey internally.
+	useEscapeKey(!showEditStockModal && !showImageLightbox && !showRefillModal, onClose);
+	useEscapeKey(showEditStockModal, onCloseEditStockModal);
+	useEscapeKey(showRefillModal, onCloseRefillModal);
 
 	useEffect(() => {
 		if (showEditStockModal) return;
@@ -368,21 +359,10 @@ export function MedDetailModal({
 					e.stopPropagation();
 					onCloseEditStockModal();
 				}}
-				onKeyDown={(e) => {
-					e.stopPropagation();
-					if (e.key === "Escape") onCloseEditStockModal();
-				}}
 			>
 				<div
 					className="modal-content edit-stock-modal"
 					onClick={(e) => e.stopPropagation()}
-					onKeyDownCapture={(e) => {
-						if (e.key === "Escape") {
-							e.preventDefault();
-							e.stopPropagation();
-							onCloseEditStockModal();
-						}
-					}}
 					onKeyDown={(e) => e.stopPropagation()}
 				>
 					<button
@@ -644,29 +624,12 @@ export function MedDetailModal({
 	}
 
 	return (
-		<div
-			className="modal-overlay med-detail-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (showEditStockModal || showImageLightbox || showRefillModal) return;
-				if (e.key === "Escape") {
-					e.stopPropagation();
-					onClose();
-				}
-			}}
-		>
+		<div className="modal-overlay med-detail-overlay" onClick={onClose}>
 			<div
 				className="modal-content med-detail-modal"
 				ref={detailModalRef}
 				tabIndex={-1}
 				onClick={(e) => e.stopPropagation()}
-				onKeyDownCapture={(e) => {
-					if (e.key === "Escape") {
-						e.preventDefault();
-						e.stopPropagation();
-						onClose();
-					}
-				}}
 				onKeyDown={(e) => e.stopPropagation()}
 			>
 				<button
@@ -1051,10 +1014,6 @@ export function MedDetailModal({
 					onClick={(e) => {
 						e.stopPropagation();
 						onCloseRefillModal();
-					}}
-					onKeyDown={(e) => {
-						e.stopPropagation();
-						if (e.key === "Escape") onCloseRefillModal();
 					}}
 				>
 					<div

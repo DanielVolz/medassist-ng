@@ -4,6 +4,7 @@
  */
 import { useTranslation } from "react-i18next";
 import { MedicationAvatar } from "../components";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, Medication, StockThresholds } from "../types";
 import { getMedTotal, getPackageSize } from "../types";
 import { formatNumber } from "../utils";
@@ -31,18 +32,14 @@ export function UserFilterModal({
 }: UserFilterModalProps) {
 	const { t, i18n } = useTranslation();
 
+	useEscapeKey(!!selectedUser, onClose);
+
 	if (!selectedUser) return null;
 
 	const userMeds = meds.filter((m) => !m.isObsolete && (m.takenBy || []).includes(selectedUser));
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key === "Escape") onClose();
-			}}
-		>
+		<div className="modal-overlay" onClick={onClose}>
 			<div
 				className="modal-content user-meds-modal"
 				onClick={(e) => e.stopPropagation()}

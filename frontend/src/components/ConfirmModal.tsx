@@ -2,7 +2,8 @@
 // ConfirmModal Component - Simple confirmation dialog
 // =============================================================================
 
-import { type ReactNode, useEffect } from "react";
+import type { ReactNode } from "react";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export interface ConfirmModalProps {
 	title: string;
@@ -27,25 +28,10 @@ export function ConfirmModal({
 	confirmVariant = "primary",
 	overlayClassName,
 }: ConfirmModalProps) {
-	// Close on Escape key
-	useEffect(() => {
-		function handleKeyDown(e: KeyboardEvent) {
-			if (e.key === "Escape") {
-				onCancel();
-			}
-		}
-		document.addEventListener("keydown", handleKeyDown);
-		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [onCancel]);
+	useEscapeKey(true, onCancel);
 
 	return (
-		<div
-			className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`}
-			onClick={onCancel}
-			onKeyDown={(e) => {
-				if (e.key === "Escape") onCancel();
-			}}
-		>
+		<div className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`} onClick={onCancel}>
 			<div
 				className="modal-content confirm-modal"
 				onClick={(e) => e.stopPropagation()}

@@ -143,10 +143,7 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 			className="modal-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					e.preventDefault();
-					onClose();
-				}
+				if (e.key !== "Escape") e.stopPropagation();
 			}}
 		>
 			<div

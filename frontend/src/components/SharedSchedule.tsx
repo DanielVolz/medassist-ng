@@ -1276,10 +1276,7 @@ export function SharedSchedule() {
 					className="lightbox-overlay"
 					onClick={closeLightbox}
 					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault();
-							closeLightbox();
-						}
+						if (e.key !== "Escape") e.stopPropagation();
 					}}
 				>
 					<button className="lightbox-close" onClick={closeLightbox}>

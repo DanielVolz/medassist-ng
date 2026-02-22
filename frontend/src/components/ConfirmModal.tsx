@@ -35,10 +35,7 @@ export function ConfirmModal({
 			className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`}
 			onClick={onCancel}
 			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					e.preventDefault();
-					onCancel();
-				}
+				if (e.key !== "Escape") e.stopPropagation();
 			}}
 		>
 			<div

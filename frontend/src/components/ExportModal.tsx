@@ -22,10 +22,7 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 			className="modal-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					e.preventDefault();
-					onClose();
-				}
+				if (e.key !== "Escape") e.stopPropagation();
 			}}
 		>
 			<div

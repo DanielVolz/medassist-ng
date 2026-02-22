@@ -360,11 +360,7 @@ export function MedDetailModal({
 					onCloseEditStockModal();
 				}}
 				onKeyDown={(e) => {
-					if (e.key === "Enter" || e.key === " ") {
-						e.preventDefault();
-						e.stopPropagation();
-						onCloseEditStockModal();
-					}
+					if (e.key !== "Escape") e.stopPropagation();
 				}}
 			>
 				<div
@@ -637,10 +633,7 @@ export function MedDetailModal({
 			className="modal-overlay med-detail-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					e.preventDefault();
-					onClose();
-				}
+				if (e.key !== "Escape") e.stopPropagation();
 			}}
 		>
 			<div
@@ -1036,11 +1029,7 @@ export function MedDetailModal({
 						onCloseRefillModal();
 					}}
 					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault();
-							e.stopPropagation();
-							onCloseRefillModal();
-						}
+						if (e.key !== "Escape") e.stopPropagation();
 					}}
 				>
 					<div

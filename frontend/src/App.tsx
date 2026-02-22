@@ -302,12 +302,12 @@ function AppContent() {
 		const handleEscape = (e: KeyboardEvent) => {
 			if (e.key !== "Escape") return;
 
-			if (showImageLightbox) {
-				closeImageLightbox();
-				return;
-			}
 			if (scheduleLightboxImage) {
 				closeScheduleLightbox();
+				return;
+			}
+			if (showImageLightbox) {
+				closeImageLightbox();
 				return;
 			}
 			if (showEditStockModal) {

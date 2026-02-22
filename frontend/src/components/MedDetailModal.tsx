@@ -141,20 +141,6 @@ export function MedDetailModal({
 	const [showStockCapNotice, setShowStockCapNotice] = useState(false);
 	const detailModalRef = useRef<HTMLDivElement | null>(null);
 
-	// Guard: ignore overlay clicks immediately after the modal mounts.
-	// Prevents rapid double-click on a table row from dismissing the modal
-	// (the second click lands on the newly-rendered overlay).
-	const overlayReadyRef = useRef(false);
-	const medId = selectedMed?.id;
-	// biome-ignore lint/correctness/useExhaustiveDependencies: medId intentionally triggers reset
-	useEffect(() => {
-		overlayReadyRef.current = false;
-		const frame = requestAnimationFrame(() => {
-			overlayReadyRef.current = true;
-		});
-		return () => cancelAnimationFrame(frame);
-	}, [medId]);
-
 	const parseStockInput = (value: string): number => {
 		const parsed = Number.parseInt(value, 10);
 		return Number.isNaN(parsed) ? 0 : parsed;
@@ -660,10 +646,7 @@ export function MedDetailModal({
 	return (
 		<div
 			className="modal-overlay med-detail-overlay"
-			onClick={() => {
-				if (!overlayReadyRef.current) return;
-				onClose();
-			}}
+			onClick={onClose}
 			onKeyDown={(e) => {
 				if (showEditStockModal || showImageLightbox || showRefillModal) return;
 				if (e.key === "Escape") {

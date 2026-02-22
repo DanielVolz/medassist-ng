@@ -275,6 +275,14 @@ export function MedDetailModal({
 
 		return (
 			<div className="number-stepper refill-number-stepper">
+				<input
+					type="number"
+					min={min}
+					max={max}
+					value={value}
+					onChange={(e) => onChange(e.target.value)}
+					onBlur={onBlur}
+				/>
 				<button
 					type="button"
 					className="stepper-btn decrement"
@@ -284,14 +292,6 @@ export function MedDetailModal({
 				>
 					<Minus size={16} aria-hidden="true" />
 				</button>
-				<input
-					type="number"
-					min={min}
-					max={max}
-					value={value}
-					onChange={(e) => onChange(e.target.value)}
-					onBlur={onBlur}
-				/>
 				<button
 					type="button"
 					className="stepper-btn increment"
@@ -321,16 +321,7 @@ export function MedDetailModal({
 		const canIncrement = clamped < max;
 
 		return (
-			<div className="number-stepper">
-				<button
-					type="button"
-					className="stepper-btn decrement"
-					onClick={() => onChange(Math.max(min, clamped - 1))}
-					disabled={!canDecrement}
-					aria-label={decrementLabel}
-				>
-					<Minus size={16} aria-hidden="true" />
-				</button>
+			<div className="number-stepper refill-number-stepper">
 				<input
 					type="number"
 					min={min}
@@ -341,6 +332,15 @@ export function MedDetailModal({
 						onChange(Number.isNaN(parsed) ? min : Math.min(max, Math.max(min, parsed)));
 					}}
 				/>
+				<button
+					type="button"
+					className="stepper-btn decrement"
+					onClick={() => onChange(Math.max(min, clamped - 1))}
+					disabled={!canDecrement}
+					aria-label={decrementLabel}
+				>
+					<Minus size={16} aria-hidden="true" />
+				</button>
 				<button
 					type="button"
 					className="stepper-btn increment"

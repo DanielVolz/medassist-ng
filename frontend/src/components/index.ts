@@ -6,6 +6,7 @@ export { ConfirmModal } from "./ConfirmModal";
 export { DateInput } from "./DateInput";
 export { DateTimeInput } from "./DateTimeInput";
 export { default as ExportModal } from "./ExportModal";
+export { FormNumberStepper } from "./FormNumberStepper";
 export type { LightboxProps } from "./Lightbox";
 
 export { Lightbox } from "./Lightbox";

@@ -1127,9 +1127,13 @@ body.modal-open {
 }
 .blister-row .blister-inputs {
 	display: grid;
-	grid-template-columns: 1fr 1fr 1fr 1fr;
+	grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.05fr) minmax(10.75rem, 1fr) minmax(7.25rem, 0.8fr);
 	gap: 0.75rem;
 	align-items: end;
+}
+
+.blister-row .blister-inputs > label {
+	min-width: 0;
 }
 
 .blister-row .blister-inputs label.taken-by-field {
@@ -1150,6 +1154,17 @@ body.modal-open {
 	}
 
 	.blister-row .blister-inputs label.taken-by-field {
+		grid-column: 1 / -1;
+	}
+}
+
+/* Desktop edit sidebar can be narrow; avoid clipping right-side controls. */
+@media (min-width: 769px) {
+	.edit-sidebar .blister-row .blister-inputs {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.edit-sidebar .blister-row .blister-inputs label.taken-by-field {
 		grid-column: 1 / -1;
 	}
 }
@@ -3376,7 +3391,7 @@ button.has-validation-error {
 	transition:
 		opacity 0.15s,
 		visibility 0.15s;
-	z-index: 100;
+	z-index: 1100;
 	pointer-events: none;
 }
 
@@ -3394,7 +3409,7 @@ button.has-validation-error {
 	transition:
 		opacity 0.15s,
 		visibility 0.15s;
-	z-index: 101;
+	z-index: 1101;
 }
 
 /* Tooltip aligned to left edge of icon (prevents clipping inside modals) */
@@ -4335,7 +4350,7 @@ button.has-validation-error {
 	overscroll-behavior: contain;
 	display: flex;
 	flex-direction: column;
-	overflow: hidden;
+	overflow: visible;
 }
 
 .med-detail-modal .med-detail-body {
@@ -4701,7 +4716,7 @@ button.has-validation-error {
 	background: var(--bg-primary);
 	border-radius: 0 0 12px 12px;
 	flex-shrink: 0;
-	overflow: hidden;
+	overflow: visible;
 	position: relative;
 	z-index: 1;
 	padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));

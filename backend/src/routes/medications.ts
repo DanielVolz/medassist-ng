@@ -817,11 +817,12 @@ export async function medicationRoutes(app: FastifyInstance) {
 			}
 			takenDoseIdsByMed.get(medId)!.add(dose.doseId);
 			const rawTakenAt = Number(dose.takenAt);
-			const takenAtMs = Number.isFinite(rawTakenAt)
-				? rawTakenAt < 1_000_000_000_000
-					? rawTakenAt * 1000
-					: rawTakenAt
-				: new Date(dose.takenAt).getTime();
+			let takenAtMs: number;
+			if (Number.isFinite(rawTakenAt)) {
+				takenAtMs = rawTakenAt < 1_000_000_000_000 ? rawTakenAt * 1000 : rawTakenAt;
+			} else {
+				takenAtMs = new Date(dose.takenAt).getTime();
+			}
 			takenDoseTimestamps.set(dose.doseId, takenAtMs);
 		});
 
@@ -876,11 +877,14 @@ export async function medicationRoutes(app: FastifyInstance) {
 					const intake = intakes[blisterIdx];
 					const intakePerson = intake?.takenBy;
 					const fallbackPeople = parseTakenByJson(row.takenByJson);
-					const peopleForThisIntake = intakePerson
-						? [intakePerson]
-						: fallbackPeople.length > 0
-							? fallbackPeople
-							: [null];
+					let peopleForThisIntake: Array<string | null>;
+					if (intakePerson) {
+						peopleForThisIntake = [intakePerson];
+					} else if (fallbackPeople.length > 0) {
+						peopleForThisIntake = fallbackPeople;
+					} else {
+						peopleForThisIntake = [null];
+					}
 
 					let timeBasedConsumed = 0;
 					let lastAutoConsumedDateMs = 0;

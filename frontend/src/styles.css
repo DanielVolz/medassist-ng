@@ -4605,9 +4605,6 @@ button.has-validation-error {
 	align-items: start;
 }
 
-.prescription-detail-grid .med-detail-value {
-}
-
 .med-detail-item {
 	background: var(--bg-secondary);
 	padding: 0.75rem;
@@ -4650,8 +4647,8 @@ button.has-validation-error {
 .med-schedule-item {
 	display: flex;
 	align-items: center;
-	justify-content: flex-start;
-	gap: 1rem;
+	flex-wrap: wrap;
+	gap: 0.35rem 0.75rem;
 	background: var(--bg-secondary);
 	padding: 0.75rem 1rem;
 	border-radius: 8px;
@@ -4665,22 +4662,26 @@ button.has-validation-error {
 
 .med-schedule-freq {
 	color: var(--text-secondary);
+	white-space: nowrap;
 }
 
 .med-schedule-time {
 	font-weight: 500;
 	margin-left: auto;
+	white-space: nowrap;
 }
 
 .med-schedule-person {
 	color: var(--text-secondary);
 	font-size: 0.85rem;
+	white-space: nowrap;
 }
 
 .med-schedule-bell {
 	color: var(--warning);
 	display: inline-flex;
 	align-items: center;
+	margin-left: 0.35rem;
 }
 
 [data-theme="light"] .med-schedule-bell {

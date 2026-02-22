@@ -6,6 +6,8 @@
  * 1. Context mode: Uses useAppContext() for all state (when no props provided)
  * 2. Props mode: Accepts all required data as props (for gradual adoption)
  */
+/* biome-ignore-all lint/a11y/noLabelWithoutControl: modal uses label-styled wrappers with custom interactive rows */
+/* biome-ignore-all lint/style/noNestedTernary: stock/preview rendering keeps explicit branch mapping */
 
 import { Bell, Calendar, ClipboardList, FilePenLine, Minus, NotebookPen, Pencil, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -474,7 +476,7 @@ export function MedDetailModal({
 														const rawFull = raw === "" ? 0 : Math.max(0, parseStockInput(raw));
 														const rawPartial = Math.max(0, parseStockInput(editStockPartialInput));
 														const rawLoose = Math.max(0, parseStockInput(editStockLooseInput));
-														const rawTotal = rawFull * selectedMed.pillsPerBlister + rawPartial + rawLoose;
+														const _rawTotal = rawFull * selectedMed.pillsPerBlister + rawPartial + rawLoose;
 														setEditStockFullInput(raw);
 														const normalized = normalizeBlisterStock(rawFull, rawPartial, rawLoose);
 														onEditStockFullBlistersChange(normalized.full);
@@ -503,7 +505,7 @@ export function MedDetailModal({
 														const rawFull = Math.max(0, parseStockInput(editStockFullInput) + delta);
 														const rawPartial = Math.max(0, parseStockInput(editStockPartialInput));
 														const rawLoose = Math.max(0, parseStockInput(editStockLooseInput));
-														const rawTotal = rawFull * selectedMed.pillsPerBlister + rawPartial + rawLoose;
+														const _rawTotal = rawFull * selectedMed.pillsPerBlister + rawPartial + rawLoose;
 														const normalized = normalizeBlisterStock(rawFull, rawPartial, rawLoose);
 														onEditStockFullBlistersChange(normalized.full);
 														onEditStockPartialBlisterPillsChange(normalized.partial);
@@ -560,7 +562,7 @@ export function MedDetailModal({
 														const nextPartial = Math.max(0, parseStockInput(editStockPartialInput) + delta);
 														const nextFull = Math.max(0, parseStockInput(editStockFullInput));
 														const nextLoose = Math.max(0, parseStockInput(editStockLooseInput));
-														const rawTotal = nextFull * selectedMed.pillsPerBlister + nextPartial + nextLoose;
+														const _rawTotal = nextFull * selectedMed.pillsPerBlister + nextPartial + nextLoose;
 														const normalized = normalizeBlisterStock(nextFull, nextPartial, nextLoose);
 														onEditStockFullBlistersChange(normalized.full);
 														onEditStockPartialBlisterPillsChange(normalized.partial);
@@ -815,35 +817,49 @@ export function MedDetailModal({
 								)}
 							</h3>
 							<div className="med-detail-schedules">
-								{selectedMed.blisters.map((blister, idx) => {
-									// When using new intakes format with per-intake takenBy,
-									// each intake already represents one person's dose — don't multiply.
-									// For legacy intakes (no per-intake takenBy), multiply by personCount.
-									const intake = selectedMed.intakes?.[idx];
-									const hasPerIntakeTakenBy = !!intake?.takenBy;
-									const personCount = hasPerIntakeTakenBy ? 1 : Math.max(1, selectedMed.takenBy?.length || 1);
-									const totalUsage = blister.usage * personCount;
+								{(selectedMed.intakes && selectedMed.intakes.length > 0
+									? selectedMed.intakes
+									: selectedMed.blisters.map((blister) => ({
+											usage: blister.usage,
+											every: blister.every,
+											start: blister.start,
+											takenBy: null,
+											intakeRemindersEnabled: selectedMed.intakeRemindersEnabled ?? false,
+										}))
+								).map((intake, idx) => {
+									const hasPerIntakeTakenBy = !!intake.takenBy;
+									const personCount = Math.max(1, selectedMed.takenBy?.length ?? 0);
+									const totalUsage = hasPerIntakeTakenBy ? intake.usage : intake.usage * personCount;
+									const showIntakeBell = intake.intakeRemindersEnabled ?? selectedMed.intakeRemindersEnabled ?? false;
+
 									return (
-										<div key={idx} className="med-schedule-item">
+										<div key={`${intake.start}-${intake.usage}-${intake.every}-${idx}`} className="med-schedule-item">
 											<span className="med-schedule-usage">
 												{totalUsage} {totalUsage !== 1 ? t("common.pills") : t("common.pill")}
 												{selectedMed.pillWeightMg &&
 													` (${totalUsage * selectedMed.pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
 											</span>
 											<span className="med-schedule-freq">
-												{blister.every === 1 ? t("common.daily") : t("common.everyNDays", { count: blister.every })}
+												{intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every })}
 											</span>
-											{hasPerIntakeTakenBy && intake.takenBy && (
-												<span className="med-schedule-person">{intake.takenBy}</span>
+											{hasPerIntakeTakenBy && (
+												<span className="med-schedule-person">
+													{intake.takenBy}
+													{showIntakeBell && (
+														<span className="med-schedule-bell" role="img" aria-label={t("tooltips.intakeReminders")}>
+															<Bell size={13} aria-hidden="true" />
+														</span>
+													)}
+												</span>
 											)}
-											{intake?.intakeRemindersEnabled && (
+											{!hasPerIntakeTakenBy && showIntakeBell && (
 												<span className="med-schedule-bell" role="img" aria-label={t("tooltips.intakeReminders")}>
 													<Bell size={13} aria-hidden="true" />
 												</span>
 											)}
 											<span className="med-schedule-time">
 												{t("modal.at")}{" "}
-												{new Date(blister.start).toLocaleTimeString(getSystemLocale(i18n.language), {
+												{new Date(intake.start).toLocaleTimeString(getSystemLocale(i18n.language), {
 													hour: "2-digit",
 													minute: "2-digit",
 												})}

@@ -31,7 +31,15 @@ export function Lightbox({ src, alt, onClose }: LightboxProps) {
 	}
 
 	return (
-		<div className="lightbox-overlay" onClick={handleOverlayClick}>
+		<div
+			className="lightbox-overlay"
+			onClick={handleOverlayClick}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") {
+					onClose();
+				}
+			}}
+		>
 			<div className="lightbox-container">
 				<button className="lightbox-close" onClick={onClose}>
 					×

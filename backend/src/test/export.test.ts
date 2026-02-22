@@ -152,8 +152,8 @@ async function registerExportRoutes(ctx: TestContext) {
 	});
 
 	// POST /import
-	// biome-ignore lint/suspicious/noExplicitAny: test helper with dynamic import data shape
 	app.post("/import", async (request, reply) => {
+		// biome-ignore lint/suspicious/noExplicitAny: test helper with dynamic import data shape
 		const importData = request.body as any;
 
 		// Basic validation

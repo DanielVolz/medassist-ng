@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/style/noNestedTernary: schedule timeline branches are intentionally explicit */
 import { Bell } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MedicationAvatar } from "../components";

@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/a11y/noLabelWithoutControl: planner uses custom DateTimeInput control wrappers */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DateTimeInput, MedicationAvatar } from "../components";

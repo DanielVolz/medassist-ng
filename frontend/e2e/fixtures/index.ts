@@ -70,7 +70,7 @@ async function setupAuthMeMock(page: Page): Promise<void> {
  * auth.spec.ts should keep importing from `@playwright/test` directly
  * since it tests the unauthenticated flow.
  */
-export const test = base.extend<{}>({
+export const test = base.extend<object>({
 	page: async ({ page }, use) => {
 		await setupAuthMeMock(page);
 		await use(page);

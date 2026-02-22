@@ -77,7 +77,10 @@ export async function refillRoutes(app: FastifyInstance) {
 		const newPackCount = med.packCount + effectivePacksAdded;
 		const newLooseTablets = med.looseTablets + effectiveLoosePillsAdded;
 
-		const consumedRefills = usePrescription ? (isBottle ? 1 : effectivePacksAdded) : 0;
+		let consumedRefills = 0;
+		if (usePrescription) {
+			consumedRefills = isBottle ? 1 : effectivePacksAdded;
+		}
 		const newRemainingRefills = usePrescription
 			? Math.max(0, remainingPrescriptionRefills - consumedRefills)
 			: (med.prescriptionRemainingRefills ?? null);

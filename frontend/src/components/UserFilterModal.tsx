@@ -98,13 +98,14 @@ export function UserFilterModal({
 									{med.genericName && <span className="user-med-generic">{med.genericName}</span>}
 									{personIntakes.length > 0 && (
 										<div className="user-med-intakes">
-											{personIntakes.map((intake, idx) => {
+											{personIntakes.map((intake) => {
 												const timeStr = new Date(intake.start).toLocaleTimeString(getSystemLocale(i18n.language), {
 													hour: "2-digit",
 													minute: "2-digit",
 												});
+												const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}`;
 												return (
-													<span key={idx} className="user-med-intake-item">
+													<span key={intakeKey} className="user-med-intake-item">
 														{intake.usage} {intake.usage !== 1 ? t("common.pills") : t("common.pill")}
 														{med.pillWeightMg != null &&
 															` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}

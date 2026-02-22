@@ -151,7 +151,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			if (error) errors[f] = error;
 		});
 		setFieldErrors(errors);
-	}, [form.name, form.genericName, form.notes, validateField]);
+	}, [form.name, form.genericName, form.notes, validateField, form]);
 
 	const setBlisterValue = useCallback((idx: number, field: keyof FormBlister, value: string) => {
 		setForm((prev) => {

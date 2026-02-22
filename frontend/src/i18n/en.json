@@ -353,6 +353,7 @@
     "intakeReminders": "Intake reminders enabled",
     "automaticTaken": "Automatically taken",
     "hasNotes": "Has notes",
+    "hasPrescription": "Prescription tracking enabled",
     "stockExceedsCapacity": "Stock exceeds package capacity — consider updating pack count",
     "lightMode": "Switch to light mode",
     "darkMode": "Switch to dark mode"
@@ -452,6 +453,7 @@
     "loose": "loose",
     "none": "None",
     "daily": "daily",
+    "and": "and",
     "everyNDays": "every {{count}} days",
     "day": "day",
     "days": "days",

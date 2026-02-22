@@ -359,11 +359,20 @@ export function MedDetailModal({
 					e.stopPropagation();
 					onCloseEditStockModal();
 				}}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						e.stopPropagation();
+						onCloseEditStockModal();
+					}
+				}}
 			>
 				<div
 					className="modal-content edit-stock-modal"
 					onClick={(e) => e.stopPropagation()}
-					onKeyDown={(e) => e.stopPropagation()}
+					onKeyDown={(e) => {
+						if (e.key !== "Escape") e.stopPropagation();
+					}}
 				>
 					<button
 						type="button"
@@ -624,13 +633,24 @@ export function MedDetailModal({
 	}
 
 	return (
-		<div className="modal-overlay med-detail-overlay" onClick={onClose}>
+		<div
+			className="modal-overlay med-detail-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onClose();
+				}
+			}}
+		>
 			<div
 				className="modal-content med-detail-modal"
 				ref={detailModalRef}
 				tabIndex={-1}
 				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
+				}}
 			>
 				<button
 					type="button"
@@ -664,8 +684,8 @@ export function MedDetailModal({
 								<span className="med-taken-by">
 									{t("modal.for")}{" "}
 									{selectedMed.takenBy.map((person, index) => (
-										<span key={person}>
-											{index > 0 && ", "}
+										<span key={person} style={{ whiteSpace: "nowrap" }}>
+											{index > 0 && (index === selectedMed.takenBy.length - 1 ? ` ${t("common.and")} ` : ", ")}
 											{person}
 											{selectedMed.intakes?.some(
 												(intake) => intake.takenBy === person && intake.intakeRemindersEnabled
@@ -1015,11 +1035,20 @@ export function MedDetailModal({
 						e.stopPropagation();
 						onCloseRefillModal();
 					}}
+					onKeyDown={(e) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							e.stopPropagation();
+							onCloseRefillModal();
+						}
+					}}
 				>
 					<div
 						className="modal-content refill-modal"
 						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key !== "Escape") e.stopPropagation();
+						}}
 					>
 						<button
 							type="button"

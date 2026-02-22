@@ -49,11 +49,22 @@ export function ShareDialog({
 	if (!show) return null;
 
 	return (
-		<div className="modal-overlay" onClick={onClose}>
+		<div
+			className="modal-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onClose();
+				}
+			}}
+		>
 			<div
 				className="modal-content share-dialog-modal"
 				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
+				}}
 			>
 				<button
 					type="button"

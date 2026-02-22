@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
 	AboutModal,
 	Lightbox,
@@ -114,6 +114,7 @@ function AppRouter() {
 
 function AppContent() {
 	const navigate = useNavigate();
+	const location = useLocation();
 	// Get shared state from AppContext
 	const ctx = useAppContext();
 	const {
@@ -189,6 +190,9 @@ function AppContent() {
 	// Local-only state (not shared across components)
 	const [showProfile, setShowProfile] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
+	const [routeTransitionMaskActive, setRouteTransitionMaskActive] = useState(false);
+	const routeTransitionMinEndRef = useRef(0);
+	const routeTransitionFallbackTimerRef = useRef<number | null>(null);
 	const closeProfile = useCallback(() => {
 		if (showProfile) {
 			window.history.back();
@@ -203,55 +207,6 @@ function AppContent() {
 
 	// Get centralized stockThresholds from context
 	const { stockThresholds } = ctx;
-
-	// Close modal on Escape key
-	useEffect(() => {
-		const handleEscape = (e: KeyboardEvent) => {
-			if (e.key === "Escape") {
-				// Close modals in order of priority (topmost first)
-				if (scheduleLightboxImage) {
-					closeScheduleLightbox();
-				} else if (showImageLightbox) {
-					closeImageLightbox();
-				} else if (showEditStockModal) {
-					closeEditStockModal();
-				} else if (showRefillModal) {
-					closeRefillModal();
-				} else if (showShareDialog) {
-					closeShareDialog();
-				} else if (showAbout) {
-					closeAbout();
-				} else if (showProfile) {
-					closeProfile();
-				} else if (selectedUser) {
-					closeUserFilter();
-				} else if (selectedMed) {
-					closeMedDetail();
-				}
-			}
-		};
-		document.addEventListener("keydown", handleEscape);
-		return () => document.removeEventListener("keydown", handleEscape);
-	}, [
-		selectedMed,
-		showImageLightbox,
-		scheduleLightboxImage,
-		selectedUser,
-		showProfile,
-		showAbout,
-		showShareDialog,
-		showRefillModal,
-		showEditStockModal,
-		closeAbout,
-		closeEditStockModal,
-		closeImageLightbox,
-		closeMedDetail,
-		closeProfile,
-		closeRefillModal,
-		closeScheduleLightbox,
-		closeShareDialog,
-		closeUserFilter,
-	]);
 
 	// Handle browser back button to close modals (in priority order)
 	useEffect(() => {
@@ -383,9 +338,57 @@ function AppContent() {
 		await ctx.submitRefill(medId, null, () => {}, loadMeds, usePrescription);
 	};
 
+	useEffect(() => {
+		if (!routeTransitionMaskActive) return;
+		if (location.pathname !== "/medications") return;
+
+		const hasEditMedIdParam = new URLSearchParams(location.search).has("editMedId");
+		if (hasEditMedIdParam) return;
+
+		const remaining = Math.max(0, routeTransitionMinEndRef.current - performance.now());
+		const timer = window.setTimeout(() => setRouteTransitionMaskActive(false), remaining);
+		return () => window.clearTimeout(timer);
+	}, [location.pathname, location.search, routeTransitionMaskActive]);
+
+	useEffect(() => {
+		const handleEditTransitionReady = () => {
+			if (!routeTransitionMaskActive) return;
+			const remaining = Math.max(0, routeTransitionMinEndRef.current - performance.now());
+			window.setTimeout(() => {
+				setRouteTransitionMaskActive(false);
+				if (routeTransitionFallbackTimerRef.current !== null) {
+					window.clearTimeout(routeTransitionFallbackTimerRef.current);
+					routeTransitionFallbackTimerRef.current = null;
+				}
+			}, remaining);
+		};
+
+		window.addEventListener("medassist:edit-transition-ready", handleEditTransitionReady);
+		return () => {
+			window.removeEventListener("medassist:edit-transition-ready", handleEditTransitionReady);
+		};
+	}, [routeTransitionMaskActive]);
+
+	useEffect(() => {
+		return () => {
+			if (routeTransitionFallbackTimerRef.current !== null) {
+				window.clearTimeout(routeTransitionFallbackTimerRef.current);
+			}
+		};
+	}, []);
+
 	const handleOpenMedicationEdit = () => {
 		if (!selectedMed) return;
 		const medId = selectedMed.id;
+		routeTransitionMinEndRef.current = performance.now() + 80;
+		setRouteTransitionMaskActive(true);
+		if (routeTransitionFallbackTimerRef.current !== null) {
+			window.clearTimeout(routeTransitionFallbackTimerRef.current);
+		}
+		routeTransitionFallbackTimerRef.current = window.setTimeout(() => {
+			setRouteTransitionMaskActive(false);
+			routeTransitionFallbackTimerRef.current = null;
+		}, 700);
 		setShowImageLightbox(false);
 		setShowRefillModal(false);
 		setShowEditStockModal(false);
@@ -508,6 +511,8 @@ function AppContent() {
 			{scheduleLightboxImage && (
 				<Lightbox src={scheduleLightboxImage} alt="Medication" onClose={closeScheduleLightbox} />
 			)}
+
+			<div className={`route-transition-mask${routeTransitionMaskActive ? " active" : ""}`} aria-hidden="true" />
 		</main>
 	);
 }

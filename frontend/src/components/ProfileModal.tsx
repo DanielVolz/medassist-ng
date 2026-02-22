@@ -12,11 +12,22 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 	if (!isOpen) return null;
 
 	return (
-		<div className="modal-overlay" onClick={onClose}>
+		<div
+			className="modal-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onClose();
+				}
+			}}
+		>
 			<div
 				className="modal-content profile-modal"
 				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
+				}}
 			>
 				<button className="modal-close" onClick={onClose}>
 					×

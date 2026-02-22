@@ -1,5 +1,5 @@
 /* biome-ignore-all lint/style/noNestedTernary: timeline rendering uses explicit UI-state branching */
-import { Bell, NotebookPen, Share2 } from "lucide-react";
+import { Bell, ClipboardList, NotebookPen, Share2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
@@ -535,6 +535,17 @@ export function DashboardPage() {
 																{" "}
 																<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
 																	<NotebookPen size={13} aria-hidden="true" />
+																</span>
+															</>
+														)}
+														{med?.prescriptionEnabled && (
+															<>
+																{" "}
+																<span
+																	className="prescription-icon info-tooltip"
+																	data-tooltip={t("tooltips.hasPrescription")}
+																>
+																	<ClipboardList size={13} aria-hidden="true" />
 																</span>
 															</>
 														)}

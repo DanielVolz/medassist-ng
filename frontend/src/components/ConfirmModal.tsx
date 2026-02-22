@@ -31,11 +31,22 @@ export function ConfirmModal({
 	useEscapeKey(true, onCancel);
 
 	return (
-		<div className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`} onClick={onCancel}>
+		<div
+			className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`}
+			onClick={onCancel}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onCancel();
+				}
+			}}
+		>
 			<div
 				className="modal-content confirm-modal"
 				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
+				}}
 				style={{ maxWidth: "450px" }}
 			>
 				<button className="modal-close" onClick={onCancel}>

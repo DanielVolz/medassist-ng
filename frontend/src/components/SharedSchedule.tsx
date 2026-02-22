@@ -1272,7 +1272,16 @@ export function SharedSchedule() {
 
 			{/* Image Lightbox */}
 			{lightboxImage && (
-				<div className="lightbox-overlay" onClick={closeLightbox}>
+				<div
+					className="lightbox-overlay"
+					onClick={closeLightbox}
+					onKeyDown={(e) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							closeLightbox();
+						}
+					}}
+				>
 					<button className="lightbox-close" onClick={closeLightbox}>
 						×
 					</button>
@@ -1281,7 +1290,9 @@ export function SharedSchedule() {
 						alt={lightboxImage.name}
 						className="lightbox-image"
 						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key !== "Escape") e.stopPropagation();
+						}}
 					/>
 				</div>
 			)}

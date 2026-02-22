@@ -120,12 +120,22 @@ export function MobileEditModal({
 	const swipeAxisRef = useRef<"x" | "y" | null>(null);
 	const [swipeDeltaX, setSwipeDeltaX] = useState(0);
 	const [isHorizontalSwiping, setIsHorizontalSwiping] = useState(false);
+	const [showNameValidation, setShowNameValidation] = useState(false);
 	const activeTabIndexRef = useRef(0);
 
 	// Reset tab when modal opens
 	useEffect(() => {
-		if (show) setActiveTab("general");
+		if (show) {
+			setActiveTab("general");
+			setShowNameValidation(false);
+		}
 	}, [show]);
+
+	useEffect(() => {
+		if (show && hasValidationErrors) {
+			setShowNameValidation(true);
+		}
+	}, [show, hasValidationErrors]);
 
 	useEscapeKey(show, onClose);
 
@@ -247,11 +257,22 @@ export function MobileEditModal({
 	})();
 
 	return (
-		<div className="modal-overlay mobile-edit-overlay" onClick={onClose}>
+		<div
+			className="modal-overlay mobile-edit-overlay"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onClose();
+				}
+			}}
+		>
 			<div
 				className="modal-content edit-modal"
 				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
+				}}
 			>
 				<div className="edit-modal-header">
 					<button type="button" className="ghost small btn-nav" onClick={onClose}>
@@ -328,16 +349,24 @@ export function MobileEditModal({
 								<div className={`form-tab-panel${activeTab === "general" ? " active" : ""}`}>
 									<div className="full form-category">
 										<h4 className="form-category-title">{t("form.sections.general")}</h4>
-										<label className={`full ${!readOnlyMode && fieldErrors.name ? "has-error" : ""}`}>
+										<label
+											className={`full ${!readOnlyMode && showNameValidation && fieldErrors.name ? "has-error" : ""}`}
+										>
 											{t("form.commercialName")}
 											<input
 												value={form.name}
-												onChange={(e) => onFormChange({ ...form, name: e.target.value })}
+												onChange={(e) => {
+													setShowNameValidation(true);
+													onFormChange({ ...form, name: e.target.value });
+												}}
+												onBlur={() => setShowNameValidation(true)}
 												placeholder={t("form.placeholders.commercial")}
 												maxLength={FIELD_LIMITS.name.max}
 												required={!readOnlyMode}
 											/>
-											{!readOnlyMode && fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
+											{!readOnlyMode && showNameValidation && fieldErrors.name && (
+												<span className="field-error">{fieldErrors.name}</span>
+											)}
 										</label>
 										<label className={`full ${fieldErrors.genericName ? "has-error" : ""}`}>
 											{t("form.genericName")}

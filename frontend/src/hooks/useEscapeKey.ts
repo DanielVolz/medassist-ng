@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Close a modal/overlay when the user presses Escape.
@@ -16,15 +16,21 @@ import { useEffect } from "react";
  */
 export function useEscapeKey(active: boolean, onClose: () => void, options?: { capture?: boolean }): void {
 	const capture = options?.capture ?? false;
+	const activeRef = useRef(active);
+	const onCloseRef = useRef(onClose);
+
+	// Keep refs in sync without re-registering the listener
+	activeRef.current = active;
+	onCloseRef.current = onClose;
 
 	useEffect(() => {
 		if (!active) return;
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "Escape") {
-				onClose();
+			if (e.key === "Escape" && activeRef.current) {
+				onCloseRef.current();
 			}
 		};
 		document.addEventListener("keydown", handleKeyDown, capture);
 		return () => document.removeEventListener("keydown", handleKeyDown, capture);
-	}, [active, onClose, capture]);
+	}, [active, capture]);
 }

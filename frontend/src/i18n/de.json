@@ -353,6 +353,7 @@
     "intakeReminders": "Einnahme-Erinnerungen aktiviert",
     "automaticTaken": "Automatisch eingenommen",
     "hasNotes": "Hat Notizen",
+    "hasPrescription": "Rezeptverfolgung aktiviert",
     "stockExceedsCapacity": "Bestand überschreitet Packungskapazität — Packungsanzahl anpassen",
     "lightMode": "Zum hellen Modus wechseln",
     "darkMode": "Zum dunklen Modus wechseln"
@@ -452,6 +453,7 @@
     "loose": "lose",
     "none": "Kein",
     "daily": "täglich",
+    "and": "und",
     "everyNDays": "alle {{count}} Tage",
     "day": "Tag",
     "days": "Tage",

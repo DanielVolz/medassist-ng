@@ -74,6 +74,10 @@ export function MedicationsPage() {
 
 	// Mobile modal state (declared early because it's used in useEffect below)
 	const [showEditModal, setShowEditModal] = useState(false);
+	const showEditModalRef = useRef(false);
+	useEffect(() => {
+		showEditModalRef.current = showEditModal;
+	}, [showEditModal]);
 	const processedEditMedIdRef = useRef<string | null>(null);
 	const hasDesktopFormHistoryState = useRef(false);
 
@@ -199,6 +203,8 @@ export function MedicationsPage() {
 
 	// Open mobile edit modal
 	function openEditModal() {
+		if (showEditModalRef.current) return;
+		showEditModalRef.current = true;
 		setShowEditModal(true);
 		window.history.pushState({ modal: "edit" }, "");
 	}

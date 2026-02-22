@@ -48,9 +48,10 @@ describe("Lightbox", () => {
 
 	it("calls onClose when Escape key is pressed", () => {
 		const onClose = vi.fn();
-		render(<Lightbox {...defaultProps} onClose={onClose} />);
+		const { container } = render(<Lightbox {...defaultProps} onClose={onClose} />);
 
-		fireEvent.keyDown(document, { key: "Escape" });
+		const overlay = container.querySelector(".lightbox-overlay");
+		fireEvent.keyDown(overlay!, { key: "Escape" });
 
 		expect(onClose).toHaveBeenCalled();
 	});

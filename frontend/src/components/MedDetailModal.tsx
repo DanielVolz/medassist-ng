@@ -648,8 +648,11 @@ export function MedDetailModal({
 			className="modal-overlay med-detail-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
-				if (showEditStockModal) return;
-				if (e.key === "Escape") onClose();
+				if (showEditStockModal || showImageLightbox || showRefillModal) return;
+				if (e.key === "Escape") {
+					e.stopPropagation();
+					onClose();
+				}
 			}}
 		>
 			<div

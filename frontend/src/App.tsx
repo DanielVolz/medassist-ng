@@ -12,6 +12,7 @@ import {
 import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
 import { AppProvider, UnsavedChangesProvider, useAppContext } from "./context";
+import { useScrollLock } from "./hooks/useScrollLock";
 import { DashboardPage, MedicationsPage, PlannerPage, SchedulePage, SettingsPage } from "./pages";
 
 // Vite injects this at build time from package.json
@@ -340,21 +341,20 @@ function AppContent() {
 		};
 	}, []);
 
-	// Prevent background scroll when modal is open
-	useEffect(() => {
-		const isModalOpen = selectedMed || selectedUser || showProfile || showAbout || showShareDialog;
-		if (isModalOpen) {
-			document.documentElement.classList.add("modal-open");
-			document.body.classList.add("modal-open");
-		} else {
-			document.documentElement.classList.remove("modal-open");
-			document.body.classList.remove("modal-open");
-		}
-		return () => {
-			document.documentElement.classList.remove("modal-open");
-			document.body.classList.remove("modal-open");
-		};
-	}, [selectedMed, selectedUser, showProfile, showAbout, showShareDialog]);
+	// Prevent background scroll when any modal is open
+	useScrollLock(
+		!!(
+			selectedMed ||
+			selectedUser ||
+			showProfile ||
+			showAbout ||
+			showShareDialog ||
+			showRefillModal ||
+			showEditStockModal ||
+			showImageLightbox ||
+			scheduleLightboxImage
+		)
+	);
 
 	// Update selectedMed when meds change (e.g., after refill)
 	useEffect(() => {

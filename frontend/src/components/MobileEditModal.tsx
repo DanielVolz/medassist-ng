@@ -7,6 +7,7 @@
 import { Bell, Minus, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useScrollLock } from "../hooks/useScrollLock";
 import type { DoseUnit, FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
 import { DOSE_UNITS } from "../types";
 import { deriveTotal } from "../utils";
@@ -138,54 +139,7 @@ export function MobileEditModal({
 	}, [show, onClose]);
 
 	// Lock background scroll while modal is open.
-	useEffect(() => {
-		if (!show) return;
-		const html = document.documentElement;
-		const body = document.body;
-		const scrollY = window.scrollY;
-
-		const hadHtmlModalClass = html.classList.contains("modal-open");
-		const hadBodyModalClass = body.classList.contains("modal-open");
-
-		const previousHtmlOverflow = html.style.overflow;
-		const previousHtmlOverscrollBehavior = html.style.overscrollBehavior;
-		const previousBodyOverflow = body.style.overflow;
-		const previousBodyPosition = body.style.position;
-		const previousBodyTop = body.style.top;
-		const previousBodyLeft = body.style.left;
-		const previousBodyRight = body.style.right;
-		const previousBodyWidth = body.style.width;
-		const previousBodyOverscrollBehavior = body.style.overscrollBehavior;
-
-		html.classList.add("modal-open");
-		body.classList.add("modal-open");
-		html.style.overflow = "hidden";
-		html.style.overscrollBehavior = "none";
-		body.style.overflow = "hidden";
-		body.style.position = "fixed";
-		body.style.top = `-${scrollY}px`;
-		body.style.left = "0";
-		body.style.right = "0";
-		body.style.width = "100%";
-		body.style.overscrollBehavior = "none";
-
-		return () => {
-			if (!hadHtmlModalClass) html.classList.remove("modal-open");
-			if (!hadBodyModalClass) body.classList.remove("modal-open");
-
-			html.style.overflow = previousHtmlOverflow;
-			html.style.overscrollBehavior = previousHtmlOverscrollBehavior;
-			body.style.overflow = previousBodyOverflow;
-			body.style.position = previousBodyPosition;
-			body.style.top = previousBodyTop;
-			body.style.left = previousBodyLeft;
-			body.style.right = previousBodyRight;
-			body.style.width = previousBodyWidth;
-			body.style.overscrollBehavior = previousBodyOverscrollBehavior;
-
-			window.scrollTo(0, scrollY);
-		};
-	}, [show]);
+	useScrollLock(show);
 
 	// Keep activeTabIndex ref in sync for native listeners
 	const activeTabIndex = MOBILE_TAB_ORDER.indexOf(activeTab);

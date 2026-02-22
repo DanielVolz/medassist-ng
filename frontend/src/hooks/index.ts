@@ -11,6 +11,7 @@ export { useMedications } from "./useMedications";
 export { useModalHistory } from "./useModalHistory";
 export type { UseRefillReturn } from "./useRefill";
 export { useRefill } from "./useRefill";
+export { useScrollLock } from "./useScrollLock";
 export type { Settings, UseSettingsReturn } from "./useSettings";
 export { useSettings } from "./useSettings";
 export type { UseShareReturn } from "./useShare";

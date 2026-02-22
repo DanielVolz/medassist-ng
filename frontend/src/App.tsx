@@ -296,6 +296,72 @@ function AppContent() {
 		};
 	}, []);
 
+	// Global Escape handling in priority order.
+	// This keeps behavior consistent even when child modals are mocked in tests.
+	useEffect(() => {
+		const handleEscape = (e: KeyboardEvent) => {
+			if (e.key !== "Escape") return;
+
+			if (showImageLightbox) {
+				closeImageLightbox();
+				return;
+			}
+			if (scheduleLightboxImage) {
+				closeScheduleLightbox();
+				return;
+			}
+			if (showEditStockModal) {
+				closeEditStockModal();
+				return;
+			}
+			if (showRefillModal) {
+				closeRefillModal();
+				return;
+			}
+			if (showShareDialog) {
+				closeShareDialog();
+				return;
+			}
+			if (showAbout) {
+				closeAbout();
+				return;
+			}
+			if (showProfile) {
+				closeProfile();
+				return;
+			}
+			if (selectedUser) {
+				closeUserFilter();
+				return;
+			}
+			if (selectedMed) {
+				closeMedDetail();
+			}
+		};
+
+		document.addEventListener("keydown", handleEscape);
+		return () => document.removeEventListener("keydown", handleEscape);
+	}, [
+		showImageLightbox,
+		scheduleLightboxImage,
+		showEditStockModal,
+		showRefillModal,
+		showShareDialog,
+		showAbout,
+		showProfile,
+		selectedUser,
+		selectedMed,
+		closeImageLightbox,
+		closeScheduleLightbox,
+		closeEditStockModal,
+		closeRefillModal,
+		closeShareDialog,
+		closeAbout,
+		closeProfile,
+		closeUserFilter,
+		closeMedDetail,
+	]);
+
 	// Prevent background scroll when any modal is open
 	useScrollLock(
 		!!(

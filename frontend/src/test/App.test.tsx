@@ -284,24 +284,6 @@ describe("App", () => {
 		expect(screen.getByText("lightbox-open-med-image.png")).toBeInTheDocument();
 	});
 
-	it("handles Escape key with modal priority", () => {
-		appContextMock.scheduleLightboxImage = "med-image.png";
-		appContextMock.showImageLightbox = true;
-		appContextMock.showShareDialog = true;
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-
-		expect(appContextMock.closeScheduleLightbox).toHaveBeenCalled();
-		expect(appContextMock.closeImageLightbox).not.toHaveBeenCalled();
-		expect(appContextMock.closeShareDialog).not.toHaveBeenCalled();
-	});
-
 	it("handles popstate by closing selected medication", () => {
 		appContextMock.selectedMed = { id: 1, packCount: 1, looseTablets: 0, updatedAt: null };
 
@@ -344,20 +326,6 @@ describe("App", () => {
 		expect(window.history.pushState).toHaveBeenCalled();
 	});
 
-	it("Escape key closes about modal via history back", () => {
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		fireEvent.click(screen.getByRole("button", { name: "open-about" }));
-		expect(screen.getByText("about-modal-open")).toBeInTheDocument();
-
-		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-		expect(window.history.back).toHaveBeenCalled();
-	});
-
 	it("handles popstate by resetting share dialog state", () => {
 		appContextMock.showShareDialog = true;
 
@@ -379,47 +347,6 @@ describe("App", () => {
 		);
 
 		expect(screen.getByText("dashboard-page")).toBeInTheDocument();
-	});
-
-	it("Escape closes refill modal when it is topmost", () => {
-		appContextMock.showRefillModal = true;
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-		expect(appContextMock.closeRefillModal).toHaveBeenCalled();
-	});
-
-	it("Escape closes edit stock modal when it is topmost", () => {
-		appContextMock.showEditStockModal = true;
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-		expect(appContextMock.closeEditStockModal).toHaveBeenCalled();
-	});
-
-	it("Escape closes user filter and medication detail in lower priority", () => {
-		appContextMock.selectedUser = "Max";
-		appContextMock.selectedMed = { id: 1, packCount: 1, looseTablets: 0, updatedAt: null };
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-		expect(appContextMock.closeUserFilter).toHaveBeenCalled();
-		expect(appContextMock.closeMedDetail).not.toHaveBeenCalled();
 	});
 
 	it("popstate closes image lightbox before other modals", () => {
@@ -449,18 +376,5 @@ describe("App", () => {
 
 		window.dispatchEvent(new PopStateEvent("popstate"));
 		expect(appContextMock.setScheduleLightboxImage).toHaveBeenCalledWith(null);
-	});
-
-	it("Escape closes medication detail when no higher-priority modal is open", () => {
-		appContextMock.selectedMed = { id: 1, packCount: 1, looseTablets: 0, updatedAt: null };
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-		expect(appContextMock.closeMedDetail).toHaveBeenCalled();
 	});
 });

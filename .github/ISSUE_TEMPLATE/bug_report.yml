@@ -7,6 +7,10 @@ body:
       value: |
         Thanks for taking the time to report a bug! Please fill out the sections below.
 
+        Before submitting, please reproduce the issue on the latest released version.
+        Even better: verify it on the current `main` image/tag.
+        The issue may already be fixed in newer builds.
+
   - type: textarea
     id: description
     attributes:
@@ -54,6 +58,18 @@ body:
         - Docker Compose (Development)
         - Local development (npm run dev)
         - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: version_info
+    attributes:
+      label: Version / Image Information
+      description: Provide the app version and, if using Docker, the exact image tag you are running.
+      placeholder: |
+        App version (Settings -> About): vX.Y.Z
+        Docker image tag (if applicable): latest or main
+        Tag guidance: use `latest` for the newest release, or `main` for the newest changes from the main branch (`main` is always as new as or newer than `latest`).
     validations:
       required: true
 

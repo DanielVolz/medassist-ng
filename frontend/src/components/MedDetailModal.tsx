@@ -13,6 +13,7 @@ import { Bell, Calendar, ClipboardList, FilePenLine, Minus, NotebookPen, Pencil,
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lightbox, MedicationAvatar } from "../components";
+import { useEscapeKey } from "../hooks";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
 import { getMedTotal, getPackageSize } from "../types";
 import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
@@ -155,21 +156,11 @@ export function MedDetailModal({
 		}
 	}, [showEditStockModal, editStockFullBlisters, editStockPartialBlisterPills, editStockLoosePills]);
 
-	useEffect(() => {
-		if (!showEditStockModal) return;
-		const handleEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.stopPropagation();
-				if (typeof event.stopImmediatePropagation === "function") {
-					event.stopImmediatePropagation();
-				}
-				event.preventDefault();
-				onCloseEditStockModal();
-			}
-		};
-		document.addEventListener("keydown", handleEscape, true);
-		return () => document.removeEventListener("keydown", handleEscape, true);
-	}, [showEditStockModal, onCloseEditStockModal]);
+	// Escape key: only one handler is active at a time (sub-modal states are mutually exclusive).
+	// Lightbox has its own useEscapeKey internally.
+	useEscapeKey(!showEditStockModal && !showImageLightbox && !showRefillModal, onClose);
+	useEscapeKey(showEditStockModal, onCloseEditStockModal);
+	useEscapeKey(showRefillModal, onCloseRefillModal);
 
 	useEffect(() => {
 		if (showEditStockModal) return;
@@ -369,21 +360,15 @@ export function MedDetailModal({
 					onCloseEditStockModal();
 				}}
 				onKeyDown={(e) => {
-					e.stopPropagation();
-					if (e.key === "Escape") onCloseEditStockModal();
+					if (e.key !== "Escape") e.stopPropagation();
 				}}
 			>
 				<div
 					className="modal-content edit-stock-modal"
 					onClick={(e) => e.stopPropagation()}
-					onKeyDownCapture={(e) => {
-						if (e.key === "Escape") {
-							e.preventDefault();
-							e.stopPropagation();
-							onCloseEditStockModal();
-						}
+					onKeyDown={(e) => {
+						if (e.key !== "Escape") e.stopPropagation();
 					}}
-					onKeyDown={(e) => e.stopPropagation()}
 				>
 					<button
 						type="button"
@@ -648,11 +633,7 @@ export function MedDetailModal({
 			className="modal-overlay med-detail-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
-				if (showEditStockModal || showImageLightbox || showRefillModal) return;
-				if (e.key === "Escape") {
-					e.stopPropagation();
-					onClose();
-				}
+				if (e.key !== "Escape") e.stopPropagation();
 			}}
 		>
 			<div
@@ -660,14 +641,9 @@ export function MedDetailModal({
 				ref={detailModalRef}
 				tabIndex={-1}
 				onClick={(e) => e.stopPropagation()}
-				onKeyDownCapture={(e) => {
-					if (e.key === "Escape") {
-						e.preventDefault();
-						e.stopPropagation();
-						onClose();
-					}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
 				}}
-				onKeyDown={(e) => e.stopPropagation()}
 			>
 				<button
 					type="button"
@@ -701,8 +677,8 @@ export function MedDetailModal({
 								<span className="med-taken-by">
 									{t("modal.for")}{" "}
 									{selectedMed.takenBy.map((person, index) => (
-										<span key={person}>
-											{index > 0 && ", "}
+										<span key={person} style={{ whiteSpace: "nowrap" }}>
+											{index > 0 && (index === selectedMed.takenBy.length - 1 ? ` ${t("common.and")} ` : ", ")}
 											{person}
 											{selectedMed.intakes?.some(
 												(intake) => intake.takenBy === person && intake.intakeRemindersEnabled
@@ -1053,14 +1029,15 @@ export function MedDetailModal({
 						onCloseRefillModal();
 					}}
 					onKeyDown={(e) => {
-						e.stopPropagation();
-						if (e.key === "Escape") onCloseRefillModal();
+						if (e.key !== "Escape") e.stopPropagation();
 					}}
 				>
 					<div
 						className="modal-content refill-modal"
 						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key !== "Escape") e.stopPropagation();
+						}}
 					>
 						<button
 							type="button"

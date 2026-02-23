@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FRONTEND_VERSION, GITHUB_URL } from "../App";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 interface UpdateCheckResult {
 	status: "up-to-date" | "update-available" | "error";
@@ -16,6 +17,8 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 	const { t } = useTranslation();
 	const [isChecking, setIsChecking] = useState(false);
 	const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
+
+	useEscapeKey(isOpen, onClose);
 
 	// Reset check result when modal opens so stale results are never shown
 	useEffect(() => {
@@ -55,13 +58,15 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 			className="modal-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
-				if (e.key === "Escape") onClose();
+				if (e.key !== "Escape") e.stopPropagation();
 			}}
 		>
 			<div
 				className="modal-content about-modal"
 				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
+				}}
 			>
 				<button className="modal-close" onClick={onClose}>
 					×

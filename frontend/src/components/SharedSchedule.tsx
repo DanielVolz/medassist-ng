@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
+import { useEscapeKey } from "../hooks";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
 import { getMedTotal } from "../types";
 import { getSystemLocale } from "../utils/formatters";
@@ -151,15 +152,7 @@ export function SharedSchedule() {
 	}
 
 	// Close lightbox on Escape key
-	useEffect(() => {
-		function handleKeyDown(e: KeyboardEvent) {
-			if (e.key === "Escape" && lightboxImage) {
-				closeLightbox();
-			}
-		}
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [lightboxImage, closeLightbox]);
+	useEscapeKey(!!lightboxImage, closeLightbox);
 
 	// Handle browser back button to close lightbox
 	useEffect(() => {
@@ -1283,7 +1276,7 @@ export function SharedSchedule() {
 					className="lightbox-overlay"
 					onClick={closeLightbox}
 					onKeyDown={(e) => {
-						if (e.key === "Escape") closeLightbox();
+						if (e.key !== "Escape") e.stopPropagation();
 					}}
 				>
 					<button className="lightbox-close" onClick={closeLightbox}>
@@ -1294,7 +1287,9 @@ export function SharedSchedule() {
 						alt={lightboxImage.name}
 						className="lightbox-image"
 						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key !== "Escape") e.stopPropagation();
+						}}
 					/>
 				</div>
 			)}

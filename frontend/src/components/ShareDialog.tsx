@@ -5,6 +5,7 @@
 
 import { Check, Copy, Link2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export interface ShareDialogProps {
 	show: boolean;
@@ -43,6 +44,8 @@ export function ShareDialog({
 	const closeLabel = t("common.close");
 	const copyLabel = shareCopied ? t("share.copied") : t("share.copyLink");
 
+	useEscapeKey(show, onClose);
+
 	if (!show) return null;
 
 	return (
@@ -50,13 +53,15 @@ export function ShareDialog({
 			className="modal-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
-				if (e.key === "Escape") onClose();
+				if (e.key !== "Escape") e.stopPropagation();
 			}}
 		>
 			<div
 				className="modal-content share-dialog-modal"
 				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
+				}}
 			>
 				<button
 					type="button"

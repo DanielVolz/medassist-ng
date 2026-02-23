@@ -26,6 +26,16 @@ Use `medassist-frontend-polish` only after these guardrails are satisfied.
 - Avoid custom inline modal/button patterns that diverge from project design.
 - Prefer extending existing CSS classes/styles instead of introducing parallel styling systems.
 
+### Modal requirements (non-negotiable)
+
+Every modal/overlay **must** follow these rules:
+
+1. **Escape key**: Call `useEscapeKey(active, onClose)` from `hooks/useEscapeKey`. This registers a document-level `keydown` listener that works regardless of focus. **Never** rely on `onKeyDown` on an overlay div — it only fires when the overlay has focus, which almost never happens.
+2. **Scroll lock**: Call `useScrollLock(active)` from `hooks/useScrollLock` if the modal is **not** already covered by App.tsx's centralized `useScrollLock` call. Page-local modals (e.g. `ReportModal`, `ExportModal`) must call it themselves.
+3. **Click-outside close**: The overlay div gets `onClick={onClose}`, and `.modal-content` gets `onClick={(e) => e.stopPropagation()}`.
+4. **Key event containment**: `.modal-content` gets `onKeyDown={(e) => { if (e.key !== "Escape") e.stopPropagation(); }}` — this prevents non-Escape keys from leaking out while still allowing Escape to propagate to the document-level handler.
+5. **Nested sub-modals** (e.g. edit-stock inside MedDetailModal): Use `useEscapeKey` with `{ capture: true }` so the innermost modal intercepts Escape before the parent's handler fires.
+
 ## Decision Heuristics
 
 1. If an equivalent component exists, reuse it.

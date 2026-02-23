@@ -4,6 +4,7 @@ export type { UseCollapsedDaysReturn } from "./useCollapsedDays";
 export { useCollapsedDays } from "./useCollapsedDays";
 export type { UseDosesReturn } from "./useDoses";
 export { useDoses } from "./useDoses";
+export { useEscapeKey } from "./useEscapeKey";
 export type { UseMedicationFormReturn } from "./useMedicationForm";
 export { defaultBlister, defaultForm, useMedicationForm } from "./useMedicationForm";
 export type { UseMedicationsReturn } from "./useMedications";

@@ -76,12 +76,14 @@ export function MedicationsPage() {
 	useUnsavedChangesWarning(formChanged);
 
 	// View mode: grid (default) or form (edit/new)
-	const [viewMode, setViewMode] = useState<"grid" | "form">("grid");
+	// If navigating in with editMedId, suppress rendering until the edit form is ready
+	const [pendingEditTransition, setPendingEditTransition] = useState(() => searchParams.has("editMedId"));
+	const [viewMode, setViewMode] = useState<"grid" | "form">(pendingEditTransition ? "form" : "grid");
 	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
 	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
 
 	// Mobile modal state (declared early because it's used in useEffect below)
-	const [showEditModal, setShowEditModal] = useState(false);
+	const [showEditModal, setShowEditModal] = useState(pendingEditTransition && window.innerWidth <= 768);
 	const showEditModalRef = useRef(false);
 	useEffect(() => {
 		showEditModalRef.current = showEditModal;
@@ -705,6 +707,8 @@ export function MedicationsPage() {
 		setActiveTab("general");
 		startEdit(medicationToEdit, openEditModal);
 		setViewMode("form");
+		setPendingEditTransition(false);
+		window.dispatchEvent(new Event("medassist:edit-transition-ready"));
 
 		const nextParams = new URLSearchParams(searchParams);
 		nextParams.delete("editMedId");
@@ -715,6 +719,11 @@ export function MedicationsPage() {
 		if (!editingId) return null;
 		return allMeds.find((med) => med.id === editingId) ?? null;
 	}, [allMeds, editingId]);
+
+	// While navigating from detail modal to edit, render nothing until form is populated
+	if (pendingEditTransition) {
+		return null;
+	}
 
 	return (
 		<section className={`med-grid-wrapper${viewMode === "form" ? " desktop-edit-open" : ""}`}>

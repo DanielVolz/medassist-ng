@@ -1,4 +1,6 @@
 import { useTranslation } from "react-i18next";
+import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useScrollLock } from "../hooks/useScrollLock";
 
 interface ExportModalProps {
 	isOpen: boolean;
@@ -10,6 +12,9 @@ interface ExportModalProps {
 export default function ExportModal({ isOpen, onClose, onExport, exporting }: ExportModalProps) {
 	const { t } = useTranslation();
 
+	useScrollLock(isOpen);
+	useEscapeKey(isOpen, onClose);
+
 	if (!isOpen) return null;
 
 	return (
@@ -17,13 +22,15 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 			className="modal-overlay"
 			onClick={onClose}
 			onKeyDown={(e) => {
-				if (e.key === "Escape") onClose();
+				if (e.key !== "Escape") e.stopPropagation();
 			}}
 		>
 			<div
 				className="modal-content"
 				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key !== "Escape") e.stopPropagation();
+				}}
 				style={{ maxWidth: "450px" }}
 			>
 				<button className="modal-close" onClick={onClose}>

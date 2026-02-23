@@ -108,6 +108,22 @@ body.modal-open {
 	overflow-x: hidden;
 }
 
+.route-transition-mask {
+	position: fixed;
+	inset: 0;
+	background: var(--bg-primary);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 140ms ease-out;
+	z-index: 1500;
+}
+
+.route-transition-mask.active {
+	transition: none;
+	opacity: 1;
+	pointer-events: auto;
+}
+
 .hero {
 	background: linear-gradient(135deg, rgba(67, 106, 255, 0.08), rgba(115, 195, 255, 0.06));
 	border: 1px solid var(--border-primary);
@@ -4397,6 +4413,7 @@ button.has-validation-error {
 	color: white;
 	font-weight: 600;
 	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+	text-align: center;
 }
 
 .taken-by-badge {
@@ -5012,7 +5029,8 @@ button.has-validation-error {
 
 /* Reminder icon indicator */
 .reminder-icon.info-tooltip,
-.notes-icon.info-tooltip {
+.notes-icon.info-tooltip,
+.prescription-icon.info-tooltip {
 	width: auto;
 	height: auto;
 	margin: 0 !important;
@@ -5025,6 +5043,10 @@ button.has-validation-error {
 	justify-content: center;
 	line-height: 1;
 	vertical-align: baseline;
+}
+
+.prescription-icon.info-tooltip {
+	color: var(--success);
 }
 
 .reminder-icon.info-tooltip,
@@ -5041,8 +5063,13 @@ button.has-validation-error {
 	color: #1d4ed8; /* darker blue — strong contrast on light backgrounds */
 }
 
+[data-theme="light"] .prescription-icon.info-tooltip {
+	color: #047857; /* dark emerald — strong contrast on light backgrounds */
+}
+
 .reminder-icon.info-tooltip:hover,
-.notes-icon.info-tooltip:hover {
+.notes-icon.info-tooltip:hover,
+.prescription-icon.info-tooltip:hover {
 	opacity: 1;
 }
 

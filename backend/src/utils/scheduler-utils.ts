@@ -483,6 +483,7 @@ export function getUpcomingIntakes(
 export type ReminderState = {
 	lastAutoEmailSent: string | null;
 	lastAutoEmailDate: string | null;
+	lastStockSchedulerCheckDate: string | null;
 	notifiedMedications: string[];
 	nextScheduledCheck: string | null;
 	lastNotificationType: "stock" | "intake" | "prescription" | null;
@@ -505,6 +506,7 @@ export function createDefaultReminderState(): ReminderState {
 	return {
 		lastAutoEmailSent: null,
 		lastAutoEmailDate: null,
+		lastStockSchedulerCheckDate: null,
 		notifiedMedications: [],
 		nextScheduledCheck: null,
 		lastNotificationType: null,
@@ -524,6 +526,7 @@ export function parseReminderState(json: string): ReminderState {
 		return {
 			lastAutoEmailSent: saved.lastAutoEmailSent ?? null,
 			lastAutoEmailDate: saved.lastAutoEmailDate ?? null,
+			lastStockSchedulerCheckDate: saved.lastStockSchedulerCheckDate ?? null,
 			notifiedMedications: saved.notifiedMedications ?? [],
 			nextScheduledCheck: saved.nextScheduledCheck ?? null,
 			lastNotificationType: saved.lastNotificationType ?? null,

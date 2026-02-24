@@ -698,6 +698,7 @@ async function checkAndSendReminderForUser(
 						saveReminderState({
 							lastAutoEmailSent: new Date().toISOString(),
 							lastAutoEmailDate: today,
+							lastStockSchedulerCheckDate: currentState.lastStockSchedulerCheckDate,
 							notifiedMedications: [...new Set([...currentState.notifiedMedications, userStockNotifiedKey])],
 							nextScheduledCheck: currentState.nextScheduledCheck,
 							lastNotificationType: "stock",
@@ -901,6 +902,7 @@ async function checkAndSendReminderForUser(
 						saveReminderState({
 							lastAutoEmailSent: new Date().toISOString(),
 							lastAutoEmailDate: today,
+							lastStockSchedulerCheckDate: currentState.lastStockSchedulerCheckDate,
 							notifiedMedications: [...new Set([...currentState.notifiedMedications, userPrescriptionNotifiedKey])],
 							nextScheduledCheck: currentState.nextScheduledCheck,
 							lastNotificationType: "prescription",

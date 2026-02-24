@@ -79,6 +79,7 @@ Thumbs.db
 .turbo/
 .roo/
 .roomodes
+.claude/
 AGENTS.md
 docs/TECH_STACK.md
 doku

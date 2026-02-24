@@ -14,5 +14,7 @@ export async function healthRoutes(app: FastifyInstance) {
 	app.get("/health", { config: { rateLimit: false } }, async () => ({
 		status: "ok",
 		version: backendVersion,
+		smtpConfigured: Boolean(process.env.SMTP_HOST),
+		shoutrrrConfigured: Boolean(process.env.SHOUTRRR_URL),
 	}));
 }

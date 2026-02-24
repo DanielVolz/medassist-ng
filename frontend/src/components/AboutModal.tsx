@@ -73,7 +73,7 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 				</button>
 				<div className="about-header">
 					<div className="about-logo">
-						<img src="/favicon.svg" alt="MedAssist-ng" />
+						<img src="/app-logo.png" alt="MedAssist-ng" />
 					</div>
 					<h2>{t("about.appName", "MedAssist-ng")}</h2>
 					<p className="about-tagline">{t("about.description", "Personal medication tracking and reminder app")}</p>

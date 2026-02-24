@@ -73,7 +73,7 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 	return (
 		<header className="hero">
 			<div className="hero-title">
-				<img src="/favicon.svg" alt="MedAssist-ng" className="hero-logo" />
+				<img src="/app-logo.png" alt="MedAssist-ng" className="hero-logo" />
 				<div>
 					<p className="eyebrow">{pageInfo.eyebrow}</p>
 					<h1>{pageInfo.title}</h1>

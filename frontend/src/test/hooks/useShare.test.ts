@@ -14,7 +14,7 @@ describe("useShare", () => {
 		mockAlert = vi.fn();
 		global.alert = mockAlert;
 
-		mockClipboard = { writeText: vi.fn() };
+		mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
 		Object.defineProperty(navigator, "clipboard", {
 			value: mockClipboard,
 			writable: true,
@@ -237,7 +237,7 @@ describe("useShare", () => {
 			result.current.setShareLink("http://localhost:5173/share/test-token");
 		});
 
-		act(() => {
+		await act(async () => {
 			result.current.copyShareLink();
 		});
 

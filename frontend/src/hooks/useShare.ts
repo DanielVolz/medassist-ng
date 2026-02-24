@@ -106,10 +106,40 @@ export function useShare(): UseShareReturn {
 
 	const copyShareLink = useCallback(() => {
 		if (shareLink) {
-			navigator.clipboard.writeText(shareLink);
-			setShareCopied(true);
-			log.debug("[ShareDialog] Share link copied to clipboard");
-			setTimeout(() => setShareCopied(false), 2000);
+			if (navigator.clipboard?.writeText) {
+				navigator.clipboard.writeText(shareLink).then(
+					() => {
+						setShareCopied(true);
+						log.debug("[ShareDialog] Share link copied to clipboard");
+						setTimeout(() => setShareCopied(false), 2000);
+					},
+					() => {
+						// Clipboard API blocked (non-secure context / permissions)
+						fallbackCopyToClipboard(shareLink);
+					}
+				);
+			} else {
+				fallbackCopyToClipboard(shareLink);
+			}
+		}
+
+		function fallbackCopyToClipboard(text: string) {
+			const textarea = document.createElement("textarea");
+			textarea.value = text;
+			textarea.style.position = "fixed";
+			textarea.style.opacity = "0";
+			document.body.appendChild(textarea);
+			textarea.select();
+			try {
+				document.execCommand("copy");
+				setShareCopied(true);
+				log.debug("[ShareDialog] Share link copied via fallback");
+				setTimeout(() => setShareCopied(false), 2000);
+			} catch {
+				log.warn("[ShareDialog] Clipboard copy failed — not in secure context");
+			} finally {
+				document.body.removeChild(textarea);
+			}
 		}
 	}, [shareLink]);
 

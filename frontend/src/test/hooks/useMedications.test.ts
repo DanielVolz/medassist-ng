@@ -170,9 +170,11 @@ describe("useMedications", () => {
 		const { result } = renderHook(() => useMedications());
 		const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
 
-		await act(async () => {
-			await result.current.uploadMedImage(1, file);
-		});
+		await expect(
+			act(async () => {
+				await result.current.uploadMedImage(1, file);
+			})
+		).rejects.toThrow("Upload failed");
 
 		expect(result.current.uploadingImage).toBe(false);
 	});

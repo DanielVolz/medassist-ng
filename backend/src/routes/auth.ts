@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { resolve } from "node:path";
 import argon2 from "argon2";
 import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -8,6 +9,12 @@ import { getDataDir } from "../db/db-utils.js";
 import { refreshTokens, users } from "../db/schema.js";
 import { getAuthState, requireAuth } from "../plugins/auth.js";
 import type { AuthUser } from "../types/fastify.js";
+import {
+	ALLOWED_IMAGE_MIME_TYPES,
+	removeImageFiles,
+	streamToBuffer,
+	writeOptimizedImageSet,
+} from "../utils/image-upload.js";
 
 // =============================================================================
 // Argon2id Configuration - State of the Art Password Hashing
@@ -82,6 +89,8 @@ const updateProfileSchema = z.object({
 // Auth Routes
 // =============================================================================
 export async function authRoutes(app: FastifyInstance) {
+	const IMAGES_DIR = resolve(getDataDir(), "images");
+
 	// Token TTLs
 	const accessTtlMinutes = 15;
 	const refreshTtlDays = 14;
@@ -462,36 +471,35 @@ export async function authRoutes(app: FastifyInstance) {
 
 			const data = await request.file();
 			if (!data) {
-				return reply.status(400).send({ error: "No file uploaded" });
+				return reply.status(400).send({ error: "No file uploaded", code: "NO_FILE" });
 			}
 
 			// Validate file type
-			const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-			if (!allowedTypes.includes(data.mimetype)) {
-				return reply.status(400).send({ error: "Invalid file type. Allowed: JPEG, PNG, WebP, GIF" });
+			if (!ALLOWED_IMAGE_MIME_TYPES.includes(data.mimetype)) {
+				return reply.status(400).send({ error: "Invalid file type", code: "INVALID_TYPE" });
 			}
 
-			// Generate unique filename
-			const ext = data.filename.split(".").pop() || "jpg";
-			const filename = `avatar_${authUser.id}_${Date.now()}.${ext}`;
+			let uploadBuffer: Buffer;
+			try {
+				uploadBuffer = await streamToBuffer(data.file);
+			} catch (error) {
+				if (error instanceof Error && error.message === "IMAGE_TOO_LARGE") {
+					return reply.status(400).send({ error: "Image too large", code: "IMAGE_TOO_LARGE" });
+				}
+				throw error;
+			}
 
-			// Save file
-			const fs = await import("node:fs/promises");
-			const path = await import("node:path");
-			const imagesDir = path.join(getDataDir(), "images");
-			await fs.mkdir(imagesDir, { recursive: true });
-
-			const buffer = await data.toBuffer();
-			await fs.writeFile(path.join(imagesDir, filename), buffer);
+			let filename: string;
+			try {
+				({ filename } = await writeOptimizedImageSet(IMAGES_DIR, `avatar_${authUser.id}`, uploadBuffer));
+			} catch {
+				return reply.status(400).send({ error: "Invalid image", code: "INVALID_IMAGE" });
+			}
 
 			// Delete old avatar if exists
 			const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
 			if (user?.avatarUrl) {
-				try {
-					await fs.unlink(path.join(imagesDir, user.avatarUrl));
-				} catch {
-					// Ignore if file doesn't exist
-				}
+				removeImageFiles(IMAGES_DIR, user.avatarUrl);
 			}
 
 			// Update user
@@ -522,13 +530,7 @@ export async function authRoutes(app: FastifyInstance) {
 			}
 
 			// Delete file
-			const fs = await import("node:fs/promises");
-			const path = await import("node:path");
-			try {
-				await fs.unlink(path.join(getDataDir(), "images", user.avatarUrl));
-			} catch {
-				// Ignore if file doesn't exist
-			}
+			removeImageFiles(IMAGES_DIR, user.avatarUrl);
 
 			// Update user
 			await db.update(users).set({ avatarUrl: null, updatedAt: new Date() }).where(eq(users.id, authUser.id));
@@ -555,13 +557,7 @@ export async function authRoutes(app: FastifyInstance) {
 			// Delete avatar file if exists
 			const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
 			if (user?.avatarUrl) {
-				const fs = await import("node:fs/promises");
-				const path = await import("node:path");
-				try {
-					await fs.unlink(path.join(getDataDir(), "images", user.avatarUrl));
-				} catch {
-					// Ignore if file doesn't exist
-				}
+				removeImageFiles(IMAGES_DIR, user.avatarUrl);
 			}
 
 			// Delete user - cascade delete handles all related data

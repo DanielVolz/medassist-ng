@@ -896,7 +896,7 @@ describe("AuthProvider methods", () => {
 		});
 
 		const file = new File(["avatar"], "avatar.png", { type: "image/png" });
-		await expect(result.current.uploadAvatar(file)).rejects.toThrow("Upload failed");
+		await expect(result.current.uploadAvatar(file)).rejects.toThrow("UNKNOWN");
 	});
 
 	it("deleteAvatar succeeds and refreshes user", async () => {

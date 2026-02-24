@@ -59,6 +59,7 @@ export interface MobileEditModalProps {
 	meds: Medication[];
 	onUploadMedImage: (medId: number, file: File) => Promise<void>;
 	onDeleteMedImage: (medId: number) => Promise<void>;
+	imageUploadError: string | null;
 	// Actions
 	onClose: () => void;
 	onResetForm: () => void;
@@ -105,6 +106,7 @@ export function MobileEditModal({
 	meds,
 	onUploadMedImage,
 	onDeleteMedImage,
+	imageUploadError,
 	onClose,
 	_onResetForm,
 	onSaveMedication,
@@ -454,9 +456,14 @@ export function MobileEditModal({
 												<input
 													type="file"
 													accept="image/*"
-													onChange={(e) => e.target.files?.[0] && onUploadMedImage(editingId, e.target.files[0])}
+													onChange={(e) => {
+														const file = e.target.files?.[0];
+														e.target.value = "";
+														if (file) void onUploadMedImage(editingId, file);
+													}}
 												/>
 											)}
+											{imageUploadError && <span className="field-error">{imageUploadError}</span>}
 										</div>
 									)}
 								</div>

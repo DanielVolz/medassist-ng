@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -14,9 +14,6 @@ import {
 	personTakesMedication,
 } from "../utils/scheduler-utils.js";
 
-// Share token validity: 1 year in milliseconds
-const SHARE_TOKEN_VALIDITY_MS = 365 * 24 * 60 * 60 * 1000;
-
 // =============================================================================
 // Validation Schemas
 // =============================================================================
@@ -24,6 +21,11 @@ const createShareSchema = z.object({
 	takenBy: z.string().min(1, "takenBy is required"),
 	scheduleDays: z.number().int().min(1).max(365).default(30),
 });
+
+function maskToken(token: string): string {
+	if (token.length <= 8) return token;
+	return `${token.slice(0, 4)}...${token.slice(-4)}`;
+}
 
 // Helper to get user ID from request
 // Returns anonymous user ID when auth is disabled
@@ -54,6 +56,7 @@ export async function shareRoutes(app: FastifyInstance) {
 		// Find share token
 		const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
 		if (!share) {
+			request.log.warn(`[Share] Invalid share token requested: ${maskToken(token)}`);
 			return reply.status(404).send({
 				error: "Share link not found",
 				code: "NOT_FOUND",
@@ -62,6 +65,9 @@ export async function shareRoutes(app: FastifyInstance) {
 
 		// Check if token has expired
 		if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
+			request.log.warn(
+				`[Share] Expired token requested: ${maskToken(token)} (owner=${share.userId}, takenBy=${share.takenBy})`
+			);
 			// Get the username of the owner to show in the expired message
 			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
 			return reply.status(410).send({
@@ -197,25 +203,47 @@ export async function shareRoutes(app: FastifyInstance) {
 				});
 			}
 
-			// Generate unique token (8 bytes = 16 hex chars)
+			// Keep exactly one active share link per person/user.
+			// If a link already exists, return the same token and only update settings.
+			const [existingShare] = await db
+				.select()
+				.from(shareTokens)
+				.where(and(eq(shareTokens.userId, userId), eq(shareTokens.takenBy, takenBy)));
+
+			if (existingShare) {
+				await db.update(shareTokens).set({ scheduleDays, expiresAt: null }).where(eq(shareTokens.id, existingShare.id));
+
+				request.log.info(
+					`[Share] Reused existing share token (owner=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays})`
+				);
+
+				return {
+					reused: true,
+					token: existingShare.token,
+					shareUrl: `/share/${existingShare.token}`,
+					expiresAt: null,
+				};
+			}
+
 			const token = randomBytes(8).toString("hex");
 
-			// Set expiration date (1 year from now)
-			const expiresAt = new Date(Date.now() + SHARE_TOKEN_VALIDITY_MS);
-
-			// Create share token
 			await db.insert(shareTokens).values({
-				userId: userId,
+				userId,
 				token,
 				takenBy,
 				scheduleDays,
-				expiresAt,
+				expiresAt: null,
 			});
 
+			request.log.info(
+				`[Share] Created new share token (owner=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays})`
+			);
+
 			return {
+				reused: false,
 				token,
 				shareUrl: `/share/${token}`,
-				expiresAt: expiresAt.toISOString(),
+				expiresAt: null,
 			};
 		}
 	);

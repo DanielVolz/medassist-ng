@@ -4,6 +4,8 @@
 
 import { useCallback, useState } from "react";
 import type { Medication } from "../types";
+import { withCorrelation } from "../utils/correlation";
+import { log } from "../utils/logger";
 
 export interface UseShareReturn {
 	showShareDialog: boolean;
@@ -45,36 +47,57 @@ export function useShare(): UseShareReturn {
 		const allPeople = meds.flatMap((m) => m.takenBy || []);
 		const uniquePeople = [...new Set(allPeople)].filter(Boolean).sort();
 		setSharePeople(uniquePeople);
+		log.info("[ShareDialog] Opened", { medicationCount: meds.length, personCount: uniquePeople.length });
 		if (uniquePeople.length > 0) {
 			setShareSelectedPerson(uniquePeople[0]);
 		}
 	}, []);
 
 	const generateShareLink = useCallback(async () => {
-		if (!shareSelectedPerson) return;
+		if (!shareSelectedPerson) {
+			log.warn("[ShareDialog] Attempted to generate link without selected person");
+			return;
+		}
 		setShareGenerating(true);
 		setShareCopied(false);
 
 		try {
-			const res = await fetch("/api/share", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify({
-					takenBy: shareSelectedPerson,
-					scheduleDays: shareSelectedDays,
-				}),
-			});
+			const { correlationId, init } = withCorrelation(
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "include",
+					body: JSON.stringify({
+						takenBy: shareSelectedPerson,
+						scheduleDays: shareSelectedDays,
+					}),
+				},
+				"fe-share"
+			);
+			const res = await fetch("/api/share", init);
 
 			if (res.ok) {
 				const data = await res.json();
 				const fullUrl = `${window.location.origin}/share/${data.token}`;
 				setShareLink(fullUrl);
+				log.info("[ShareDialog] Share link ready", {
+					person: shareSelectedPerson,
+					days: shareSelectedDays,
+					reused: Boolean(data.reused),
+					correlationId,
+				});
 			} else {
 				const err = await res.json();
+				log.error("[ShareDialog] Failed to generate share link", {
+					status: res.status,
+					person: shareSelectedPerson,
+					error: err.error,
+					correlationId,
+				});
 				alert(err.error || "Failed to generate share link");
 			}
-		} catch {
+		} catch (error) {
+			log.error("[ShareDialog] Share link request threw error", { person: shareSelectedPerson, error });
 			alert("Failed to generate share link");
 		} finally {
 			setShareGenerating(false);
@@ -85,18 +108,21 @@ export function useShare(): UseShareReturn {
 		if (shareLink) {
 			navigator.clipboard.writeText(shareLink);
 			setShareCopied(true);
+			log.debug("[ShareDialog] Share link copied to clipboard");
 			setTimeout(() => setShareCopied(false), 2000);
 		}
 	}, [shareLink]);
 
 	const closeShareDialog = useCallback(() => {
 		if (showShareDialog) {
+			log.debug("[ShareDialog] Closing dialog");
 			window.history.back();
 		}
 	}, [showShareDialog]);
 
 	// Internal function to reset share dialog state (called by popstate handler)
 	const resetShareDialogState = useCallback(() => {
+		log.debug("[ShareDialog] Reset dialog state");
 		setShowShareDialog(false);
 		setShareLink(null);
 		setShareCopied(false);

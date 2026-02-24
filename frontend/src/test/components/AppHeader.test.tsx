@@ -370,10 +370,13 @@ describe("AppHeader", () => {
 		fireEvent.click(userMenuBtn);
 		fireEvent.click(screen.getByText(/auth\.signOut/i));
 		await waitFor(() => {
-			expect(fetch).toHaveBeenCalledWith("/api/auth/logout", {
-				method: "POST",
-				credentials: "include",
-			});
+			expect(fetch).toHaveBeenCalledWith(
+				"/api/auth/logout",
+				expect.objectContaining({
+					method: "POST",
+					credentials: "include",
+				})
+			);
 		});
 	});
 });

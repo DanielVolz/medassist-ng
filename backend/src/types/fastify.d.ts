@@ -22,6 +22,7 @@ declare module "fastify" {
 
 	interface FastifyRequest {
 		user?: AuthUser | null;
+		correlationId?: string;
 	}
 }
 

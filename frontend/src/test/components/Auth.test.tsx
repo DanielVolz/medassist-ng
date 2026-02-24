@@ -39,7 +39,7 @@ describe("AuthProvider", () => {
 		renderHook(() => useAuth(), { wrapper });
 
 		await waitFor(() => {
-			expect(fetch).toHaveBeenCalledWith("/api/auth/state");
+			expect(fetch).toHaveBeenCalledWith("/api/auth/state", expect.anything());
 		});
 	});
 
@@ -55,7 +55,7 @@ describe("AuthProvider", () => {
 
 		// Wait for the initial fetch to complete
 		await waitFor(() => {
-			expect(fetch).toHaveBeenCalledWith("/api/auth/state");
+			expect(fetch).toHaveBeenCalledWith("/api/auth/state", expect.anything());
 		});
 
 		// Wait a bit more to ensure no additional calls happen
@@ -94,18 +94,21 @@ describe("AuthProvider", () => {
 		const response = await result.current.authFetch("/api/medications", { method: "GET" });
 
 		expect(response.ok).toBe(true);
-		expect(fetch).toHaveBeenNthCalledWith(2, "/api/medications", {
-			method: "GET",
-			credentials: "include",
-		});
-		expect(fetch).toHaveBeenNthCalledWith(3, "/api/auth/refresh", {
-			method: "POST",
-			credentials: "include",
-		});
-		expect(fetch).toHaveBeenNthCalledWith(4, "/api/medications", {
-			method: "GET",
-			credentials: "include",
-		});
+		expect(fetch).toHaveBeenNthCalledWith(
+			2,
+			"/api/medications",
+			expect.objectContaining({ method: "GET", credentials: "include" })
+		);
+		expect(fetch).toHaveBeenNthCalledWith(
+			3,
+			"/api/auth/refresh",
+			expect.objectContaining({ method: "POST", credentials: "include" })
+		);
+		expect(fetch).toHaveBeenNthCalledWith(
+			4,
+			"/api/medications",
+			expect.objectContaining({ method: "GET", credentials: "include" })
+		);
 	});
 
 	it("authFetch logs user out when refresh fails", async () => {

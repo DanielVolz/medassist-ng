@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import type { IncomingHttpHeaders } from "node:http";
 import { resolve } from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
@@ -45,6 +47,16 @@ import {
 	parseCorsOrigins,
 } from "./utils/server-config.js";
 
+function sanitizeCorrelationId(headers: IncomingHttpHeaders): string | null {
+	const rawHeader = headers["x-correlation-id"];
+	if (typeof rawHeader !== "string") return null;
+	const trimmed = rawHeader.trim();
+	if (!trimmed) return null;
+	if (trimmed.length > 128) return null;
+	if (!/^[A-Za-z0-9._:-]+$/.test(trimmed)) return null;
+	return trimmed;
+}
+
 /** Create and configure Fastify app (without starting) */
 export async function createApp(options?: {
 	logLevel?: string;
@@ -73,6 +85,13 @@ export async function createApp(options?: {
 
 	const app = Fastify({
 		logger: { level: opts.logLevel },
+		genReqId: (request) => sanitizeCorrelationId(request.headers) ?? randomUUID(),
+	});
+
+	app.addHook("onRequest", (request, reply, done) => {
+		request.correlationId = request.id;
+		reply.header("x-correlation-id", request.id);
+		done();
 	});
 
 	// Build config
@@ -141,6 +160,13 @@ const app = Fastify({
 	logger: {
 		level: env.LOG_LEVEL,
 	},
+	genReqId: (request) => sanitizeCorrelationId(request.headers) ?? randomUUID(),
+});
+
+app.addHook("onRequest", (request, reply, done) => {
+	request.correlationId = request.id;
+	reply.header("x-correlation-id", request.id);
+	done();
 });
 
 const origins = parseCorsOrigins(env.CORS_ORIGINS);

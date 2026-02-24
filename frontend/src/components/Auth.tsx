@@ -2,6 +2,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { withCorrelation } from "../utils/correlation";
 import { log } from "../utils/logger";
 import { ConfirmModal } from "./ConfirmModal";
 import { PasswordInput } from "./PasswordInput";
@@ -62,7 +63,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const [authState, setAuthState] = useState<AuthState | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [authError, setAuthError] = useState<string | null>(null);
-
 	// Track if initial fetch has been done to prevent duplicate calls
 	const initialFetchDone = useRef(false);
 
@@ -96,10 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	async function fetchAuthState(retryCount = 0) {
 		const maxRetries = 3;
 		const retryDelay = 1000; // 1 second
+		let correlationId: string | null = null;
 
 		try {
 			setAuthError(null);
-			const res = await fetch("/api/auth/state");
+			const correlated = withCorrelation(undefined, "fe-auth-state");
+			correlationId = correlated.correlationId;
+			const res = await fetch("/api/auth/state", correlated.init);
 			if (!res.ok) {
 				throw new Error(`Server error: ${res.status}`);
 			}
@@ -112,7 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			}
 			setLoading(false);
 		} catch (err) {
-			log.error(`Failed to fetch auth state (attempt ${retryCount + 1}/${maxRetries + 1}):`, err);
+			log.error(`Failed to fetch auth state (attempt ${retryCount + 1}/${maxRetries + 1}):`, err, {
+				correlationId,
+			});
 
 			// Retry on connection errors or 5xx errors (server might be restarting)
 			if (retryCount < maxRetries) {
@@ -127,27 +132,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 	async function refreshUser() {
 		try {
-			const res = await fetch("/api/auth/me", { credentials: "include" });
+			const { correlationId, init } = withCorrelation({ credentials: "include" }, "fe-auth-me");
+			const res = await fetch("/api/auth/me", init);
 			if (res.ok) {
 				const userData = await res.json();
 				setUser(userData);
+				log.debug("[Auth] Session user loaded", { userId: userData.id, correlationId });
 			} else if (res.status === 401) {
 				// Access token expired - try to refresh it
+				log.info("[Auth] Access token invalid, attempting refresh", { correlationId });
 				const refreshed = await tryRefreshToken();
 				if (refreshed) {
 					// Retry /auth/me with new token
-					const retryRes = await fetch("/api/auth/me", { credentials: "include" });
+					const retry = withCorrelation({ credentials: "include" }, "fe-auth-me-retry");
+					const retryRes = await fetch("/api/auth/me", retry.init);
 					if (retryRes.ok) {
 						const userData = await retryRes.json();
 						setUser(userData);
+						log.info("[Auth] Session restored after token refresh", {
+							userId: userData.id,
+							correlationId: retry.correlationId,
+						});
 						return;
 					}
 				}
+				log.warn("[Auth] Session refresh failed, clearing local user state", { correlationId });
 				setUser(null);
 			} else {
+				log.warn("[Auth] Unexpected /auth/me response", { status: res.status, correlationId });
 				setUser(null);
 			}
-		} catch {
+		} catch (error) {
+			log.error("[Auth] Failed to refresh user", { error });
 			setUser(null);
 		}
 	}
@@ -155,31 +171,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	// Try to refresh the access token using the refresh token
 	async function tryRefreshToken(): Promise<boolean> {
 		try {
-			const res = await fetch("/api/auth/refresh", {
-				method: "POST",
-				credentials: "include",
-			});
+			const { correlationId, init } = withCorrelation(
+				{
+					method: "POST",
+					credentials: "include",
+				},
+				"fe-auth-refresh"
+			);
+			const res = await fetch("/api/auth/refresh", init);
+			if (!res.ok) {
+				log.warn("[Auth] Token refresh rejected", { status: res.status, correlationId });
+			}
 			return res.ok;
-		} catch {
+		} catch (error) {
+			log.error("[Auth] Token refresh request failed", { error });
 			return false;
 		}
 	}
 
 	async function login(username: string, password: string, rememberMe: boolean = false) {
-		const res = await fetch("/api/auth/login", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			credentials: "include",
-			body: JSON.stringify({ username, password, rememberMe }),
-		});
+		const { correlationId, init } = withCorrelation(
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ username, password, rememberMe }),
+			},
+			"fe-auth-login"
+		);
+		log.info("[Auth] Login requested", { username, rememberMe, correlationId });
+		const res = await fetch("/api/auth/login", init);
 
 		if (!res.ok) {
 			const data = await res.json();
+			log.warn("[Auth] Login failed", { username, status: res.status, code: data.code, correlationId });
 			throw new Error(data.error || "Login failed");
 		}
 
 		const data = await res.json();
 		setUser(data.user);
+		log.info("[Auth] Login successful", { userId: data.user?.id, username: data.user?.username, correlationId });
 	}
 
 	async function register(username: string, password: string) {
@@ -203,11 +234,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	}
 
 	async function logout() {
-		await fetch("/api/auth/logout", {
-			method: "POST",
-			credentials: "include",
-		});
+		const { correlationId, init } = withCorrelation(
+			{
+				method: "POST",
+				credentials: "include",
+			},
+			"fe-auth-logout"
+		);
+		log.info("[Auth] Logout requested", { userId: user?.id ?? null, correlationId });
+		await fetch("/api/auth/logout", init);
 		setUser(null);
+		log.info("[Auth] Logout completed", { correlationId });
 	}
 
 	async function updateProfile(data: { currentPassword?: string; newPassword?: string }) {

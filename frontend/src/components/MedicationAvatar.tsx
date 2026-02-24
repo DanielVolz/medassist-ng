@@ -2,6 +2,8 @@
 // MedicationAvatar Component
 // =============================================================================
 
+import { useEffect, useState } from "react";
+
 export type MedicationAvatarProps = {
 	name: string;
 	imageUrl?: string | null;
@@ -9,6 +11,12 @@ export type MedicationAvatarProps = {
 };
 
 export function MedicationAvatar({ name, imageUrl, size = "sm" }: MedicationAvatarProps) {
+	const [thumbFailed, setThumbFailed] = useState(false);
+
+	useEffect(() => {
+		setThumbFailed(false);
+	}, [imageUrl]);
+
 	const initials =
 		name
 			.split(" ")
@@ -19,7 +27,26 @@ export function MedicationAvatar({ name, imageUrl, size = "sm" }: MedicationAvat
 	const sizeClass = `med-avatar med-avatar-${size}`;
 
 	if (imageUrl) {
-		return <img src={`/api/images/${imageUrl}`} alt={name} className={sizeClass} />;
+		const normalizedImageUrl = imageUrl.toLowerCase();
+		const shouldUseThumbFirst = normalizedImageUrl.endsWith(".webp");
+		const extIndex = imageUrl.lastIndexOf(".");
+		const baseName = extIndex > 0 ? imageUrl.slice(0, extIndex) : imageUrl;
+		const thumbSrc = `/api/images/${baseName}-thumb.webp`;
+		const fullSrc = `/api/images/${imageUrl}`;
+		const resolvedSrc = shouldUseThumbFirst && !thumbFailed ? thumbSrc : fullSrc;
+
+		return (
+			<img
+				src={resolvedSrc}
+				alt={name}
+				className={sizeClass}
+				loading="lazy"
+				decoding="async"
+				onError={() => {
+					if (shouldUseThumbFirst && !thumbFailed) setThumbFailed(true);
+				}}
+			/>
+		);
 	}
 	return <div className={`${sizeClass} med-avatar-initials`}>{initials}</div>;
 }

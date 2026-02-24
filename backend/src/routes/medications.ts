@@ -1,6 +1,4 @@
-import { createWriteStream, existsSync, unlinkSync } from "node:fs";
-import { extname, resolve } from "node:path";
-import { pipeline } from "node:stream/promises";
+import { resolve } from "node:path";
 import { and, eq, like } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -10,6 +8,12 @@ import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import {
+	ALLOWED_IMAGE_MIME_TYPES,
+	removeImageFiles,
+	streamToBuffer,
+	writeOptimizedImageSet,
+} from "../utils/image-upload.js";
 import { type Intake, parseIntakesJson, parseLocalDateTime, parseTakenByJson } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(getDataDir(), "images");
@@ -693,10 +697,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
 		if (!existing) return reply.notFound();
 
-		if (existing.imageUrl) {
-			const imagePath = resolve(IMAGES_DIR, existing.imageUrl);
-			if (existsSync(imagePath)) unlinkSync(imagePath);
-		}
+		if (existing.imageUrl) removeImageFiles(IMAGES_DIR, existing.imageUrl);
 
 		const deleted = await db
 			.delete(medications)
@@ -719,24 +720,31 @@ export async function medicationRoutes(app: FastifyInstance) {
 		if (!existing) return reply.notFound();
 
 		const data = await req.file();
-		if (!data) return reply.badRequest("No file uploaded");
+		if (!data) return reply.status(400).send({ error: "No file uploaded", code: "NO_FILE" });
 
-		const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-		if (!allowedTypes.includes(data.mimetype)) {
-			return reply.badRequest("Invalid file type. Allowed: JPEG, PNG, WebP, GIF");
+		if (!ALLOWED_IMAGE_MIME_TYPES.includes(data.mimetype)) {
+			return reply.status(400).send({ error: "Invalid file type", code: "INVALID_TYPE" });
 		}
 
-		const ext = extname(data.filename) || ".jpg";
-		const filename = `med-${idNum}-${Date.now()}${ext}`;
-		const filepath = resolve(IMAGES_DIR, filename);
+		let uploadBuffer: Buffer;
+		try {
+			uploadBuffer = await streamToBuffer(data.file);
+		} catch (error) {
+			if (error instanceof Error && error.message === "IMAGE_TOO_LARGE") {
+				return reply.status(400).send({ error: "Image too large", code: "IMAGE_TOO_LARGE" });
+			}
+			throw error;
+		}
 
-		await pipeline(data.file, createWriteStream(filepath));
+		let filename: string;
+		try {
+			({ filename } = await writeOptimizedImageSet(IMAGES_DIR, `med-${idNum}`, uploadBuffer));
+		} catch {
+			return reply.status(400).send({ error: "Invalid image", code: "INVALID_IMAGE" });
+		}
 
 		// Delete old image if exists
-		if (existing.imageUrl) {
-			const oldPath = resolve(IMAGES_DIR, existing.imageUrl);
-			if (existsSync(oldPath)) unlinkSync(oldPath);
-		}
+		if (existing.imageUrl) removeImageFiles(IMAGES_DIR, existing.imageUrl);
 
 		await db
 			.update(medications)
@@ -758,10 +766,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
 		if (!existing) return reply.notFound();
 
-		if (existing.imageUrl) {
-			const filepath = resolve(IMAGES_DIR, existing.imageUrl);
-			if (existsSync(filepath)) unlinkSync(filepath);
-		}
+		if (existing.imageUrl) removeImageFiles(IMAGES_DIR, existing.imageUrl);
 
 		await db
 			.update(medications)

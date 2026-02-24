@@ -20,6 +20,7 @@ import { useMedicationForm, useModalHistory, useUnsavedChangesWarning } from "..
 import type { DoseUnit, Medication } from "../types";
 import { DOSE_UNITS, FIELD_LIMITS, getPackageSize } from "../types";
 import { combineDateAndTime, formatDate, formatDateTime, formatNumber } from "../utils/formatters";
+import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
 
 function userStorageKey(userId: number | undefined, key: string): string {
@@ -51,6 +52,7 @@ export function MedicationsPage() {
 		setForm,
 		setOriginalForm,
 		editingId,
+		setEditingId,
 		formSaved,
 		setFormSaved,
 		formChanged,
@@ -138,6 +140,32 @@ export function MedicationsPage() {
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<Medication | null>(null);
 	const [allMeds, setAllMeds] = useState<Medication[]>(meds);
+	const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+
+	const handlePendingMedicationImageSelection = useCallback(
+		(event: React.ChangeEvent<HTMLInputElement>) => {
+			const file = event.target.files?.[0];
+			event.target.value = "";
+			if (!file) return;
+			if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+				setImageUploadError(t("form.imageUploadErrors.tooLarge"));
+				setPendingImage(null);
+				setPendingImagePreview(null);
+				return;
+			}
+
+			setImageUploadError(null);
+			setPendingImage(file);
+			const reader = new FileReader();
+			reader.onload = (ev) => setPendingImagePreview(ev.target?.result as string);
+			reader.readAsDataURL(file);
+		},
+		[t]
+	);
+
+	useEffect(() => {
+		setImageUploadError(null);
+	}, [editingId]);
 	const [showObsolete, setShowObsolete] = useState(true);
 	const [readOnlyView, setReadOnlyView] = useState(false);
 	const [showReportModal, setShowReportModal] = useState(false);
@@ -172,6 +200,42 @@ export function MedicationsPage() {
 	useEffect(() => {
 		void loadAllMeds();
 	}, [loadAllMeds]);
+
+	const tryUploadMedImage = useCallback(
+		async (medId: number, file: File) => {
+			setImageUploadError(null);
+			if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+				setImageUploadError(t("form.imageUploadErrors.tooLarge"));
+				return false;
+			}
+			try {
+				await uploadMedImage(medId, file);
+				void loadAllMeds();
+				setImageUploadError(null);
+				return true;
+			} catch (error) {
+				const code = error instanceof Error ? error.message : "UNKNOWN";
+				setImageUploadError(resolveImageUploadError(code, t));
+				return false;
+			}
+		},
+		[t, uploadMedImage, loadAllMeds]
+	);
+
+	const handleUploadMedImage = useCallback(
+		async (medId: number, file: File) => {
+			await tryUploadMedImage(medId, file);
+		},
+		[tryUploadMedImage]
+	);
+
+	const handleDeleteMedImage = useCallback(
+		async (medId: number) => {
+			await deleteMedImage(medId);
+			void loadAllMeds();
+		},
+		[deleteMedImage, loadAllMeds]
+	);
 
 	// Calculate total tablets
 	const totalTablets = useMemo(() => {
@@ -467,7 +531,19 @@ export function MedicationsPage() {
 
 			// Upload image if pending (for new medications)
 			if (!editingId && pendingImage && saved.id) {
-				await uploadMedImage(saved.id, pendingImage);
+				const uploaded = await tryUploadMedImage(saved.id, pendingImage);
+				if (!uploaded) {
+					// Keep user in edit mode so upload error stays visible and retry is immediate.
+					setEditingId(saved.id);
+					setFormSaved(true);
+					setOriginalForm(form);
+					setPendingImage(null);
+					setPendingImagePreview(null);
+					loadMeds();
+					void loadAllMeds();
+					setSaving(false);
+					return;
+				}
 				setPendingImage(null);
 				setPendingImagePreview(null);
 			}
@@ -608,6 +684,13 @@ export function MedicationsPage() {
 		return () => document.removeEventListener("keydown", handleEscape);
 	}, [showEditModal, closeEditModal]);
 
+	function scrollToTopForDesktopEdit() {
+		if (window.innerWidth <= 768) return;
+		window.requestAnimationFrame(() => {
+			window.scrollTo({ top: 0, behavior: "smooth" });
+		});
+	}
+
 	function handleEditClick(med: Medication) {
 		if (formChanged) {
 			pendingActionRef.current = () => {
@@ -615,6 +698,7 @@ export function MedicationsPage() {
 				setReadOnlyView(false);
 				startEdit(med, openEditModal);
 				setViewMode("form");
+				scrollToTopForDesktopEdit();
 			};
 			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
 			setShowUnsavedConfirm(true);
@@ -625,6 +709,7 @@ export function MedicationsPage() {
 		setActiveTab("general");
 		startEdit(med, openEditModal);
 		setViewMode("form");
+		scrollToTopForDesktopEdit();
 	}
 
 	function handleViewClick(med: Medication) {
@@ -847,8 +932,10 @@ export function MedicationsPage() {
 												{s.usage} {s.usage === 1 ? t("common.pill") : t("common.pills")} ·{" "}
 												{s.every === 1 ? t("common.daily") : t("common.everyNDays", { count: s.every })} ·{" "}
 												{t("form.blisters.from")} {formatDateTime(s.start)}
-												{"takenBy" in s && s.takenBy && <span className="blister-taken-by"> · {s.takenBy}</span>}
-												{"intakeRemindersEnabled" in s && s.intakeRemindersEnabled && (
+												{"takenBy" in s && (s as import("../types").Intake).takenBy && (
+													<span className="blister-taken-by"> · {(s as import("../types").Intake).takenBy}</span>
+												)}
+												{"intakeRemindersEnabled" in s && (s as import("../types").Intake).intakeRemindersEnabled && (
 													<span className="blister-reminder-icon" title={t("form.blisters.remindTooltip")}>
 														{" "}
 														<Bell size={12} aria-hidden="true" />
@@ -1050,7 +1137,9 @@ export function MedicationsPage() {
 										<select
 											className="package-type-select"
 											value={form.packageType}
-											onChange={(e) => handleValueChange("packageType", e.target.value)}
+											onChange={(e) =>
+												handleValueChange("packageType", e.target.value as import("../types").PackageType)
+											}
 										>
 											<option value="blister">{t("form.packageTypeBlister")}</option>
 											<option value="bottle">{t("form.packageTypeBottle")}</option>
@@ -1112,7 +1201,7 @@ export function MedicationsPage() {
 														<button
 															type="button"
 															className="danger icon-only tooltip-trigger"
-															onClick={() => deleteMedImage(editingId)}
+															onClick={() => handleDeleteMedImage(editingId)}
 															aria-label={t("form.removeImage")}
 															data-tooltip={t("form.removeImage")}
 														>
@@ -1125,7 +1214,11 @@ export function MedicationsPage() {
 												<input
 													type="file"
 													accept="image/jpeg,image/png,image/webp,image/gif"
-													onChange={(e) => e.target.files?.[0] && uploadMedImage(editingId, e.target.files[0])}
+													onChange={(e) => {
+														const file = e.target.files?.[0];
+														e.target.value = "";
+														if (file) void tryUploadMedImage(editingId, file);
+													}}
 													disabled={uploadingImage}
 												/>
 											);
@@ -1153,18 +1246,11 @@ export function MedicationsPage() {
 											<input
 												type="file"
 												accept="image/jpeg,image/png,image/webp,image/gif"
-												onChange={(e) => {
-													const file = e.target.files?.[0];
-													if (file) {
-														setPendingImage(file);
-														const reader = new FileReader();
-														reader.onload = (ev) => setPendingImagePreview(ev.target?.result as string);
-														reader.readAsDataURL(file);
-													}
-												}}
+												onChange={handlePendingMedicationImageSelection}
 											/>
 										);
 									})()}
+									{imageUploadError && <span className="field-error">{imageUploadError}</span>}
 								</div>
 							</div>
 							{/* end general tab */}
@@ -1507,8 +1593,9 @@ export function MedicationsPage() {
 				onRemoveIntake={removeIntake}
 				onHandleValueChange={handleValueChange}
 				meds={allMeds}
-				onUploadMedImage={uploadMedImage}
-				onDeleteMedImage={deleteMedImage}
+				onUploadMedImage={handleUploadMedImage}
+				onDeleteMedImage={handleDeleteMedImage}
+				imageUploadError={imageUploadError}
 				onClose={() => {
 					closeEditModal();
 				}}

@@ -183,6 +183,13 @@
     "notes": "Notizen",
     "medicationImage": "Medikamentenbild",
     "removeImage": "Bild entfernen",
+    "imageUploadErrors": {
+      "tooLarge": "Das Bild ist zu groß. Die maximale Upload-Größe beträgt 10 MB.",
+      "invalidType": "Ungültiger Dateityp. Erlaubte Formate: JPEG, PNG, WebP, GIF.",
+      "invalidImage": "Ungültige oder nicht unterstützte Bilddatei.",
+      "noFile": "Es wurde keine Datei zum Hochladen ausgewählt.",
+      "generic": "Bild-Upload fehlgeschlagen. Bitte versuche es erneut."
+    },
     "placeholders": {
       "commercial": "z.B. Ozempic",
       "generic": "z.B. Semaglutid (optional)",

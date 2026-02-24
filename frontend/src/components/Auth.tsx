@@ -3,6 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useR
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { withCorrelation } from "../utils/correlation";
+import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
 import { ConfirmModal } from "./ConfirmModal";
 import { PasswordInput } from "./PasswordInput";
@@ -275,8 +276,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		});
 
 		if (!res.ok) {
-			const err = await res.json().catch(() => ({ error: "Upload failed" }));
-			throw new Error(err.error || "Upload failed");
+			let code = "UNKNOWN";
+			try {
+				const body = (await res.json()) as { code?: string };
+				if (typeof body?.code === "string" && body.code.trim().length > 0) {
+					code = body.code;
+				}
+			} catch {
+				// No JSON body
+			}
+			throw new Error(code);
 		}
 
 		await refreshUser();
@@ -613,6 +622,7 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
+	const [avatarError, setAvatarError] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [avatarLoading, setAvatarLoading] = useState(false);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -624,14 +634,20 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 	async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
 		const file = e.target.files?.[0];
 		if (!file) return;
+		if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+			setAvatarError(t("form.imageUploadErrors.tooLarge"));
+			if (fileInputRef.current) fileInputRef.current.value = "";
+			return;
+		}
 
 		setAvatarLoading(true);
-		setError("");
+		setAvatarError("");
 		try {
 			await uploadAvatar(file);
-			setSuccess(t("auth.avatarUpdated", "Avatar updated"));
+			setAvatarError("");
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Upload failed");
+			const code = err instanceof Error ? err.message : "UNKNOWN";
+			setAvatarError(resolveImageUploadError(code, t));
 		} finally {
 			setAvatarLoading(false);
 			if (fileInputRef.current) fileInputRef.current.value = "";
@@ -640,12 +656,13 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
 	async function handleAvatarDelete() {
 		setAvatarLoading(true);
-		setError("");
+		setAvatarError("");
 		try {
 			await deleteAvatar();
-			setSuccess(t("auth.avatarRemoved", "Avatar removed"));
+			setAvatarError("");
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Delete failed");
+			const code = err instanceof Error ? err.message : "UNKNOWN";
+			setAvatarError(resolveImageUploadError(code, t));
 		} finally {
 			setAvatarLoading(false);
 		}
@@ -740,6 +757,7 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 					</div>
 				</div>
 				<span className="profile-username">{user.username}</span>
+				{avatarError && <span className="field-error">{avatarError}</span>}
 			</div>
 
 			<form onSubmit={handleUpdate} className="profile-form">

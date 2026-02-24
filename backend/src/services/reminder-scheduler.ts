@@ -567,6 +567,15 @@ ${getFooterPlain(language)}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDaily
 }
 
 async function checkAndSendReminder(logger: ServiceLogger): Promise<void> {
+	// Track stock-scheduler daily execution separately from intake updates.
+	// This prevents intake reminders from suppressing stock catch-up after restarts.
+	const state = loadReminderState();
+	const today = getTodayInTimezone();
+	saveReminderState({
+		...state,
+		lastStockSchedulerCheckDate: today,
+	});
+
 	// Get all user settings to iterate over each user
 	const allUserSettings = await getAllUserSettings();
 
@@ -689,6 +698,7 @@ async function checkAndSendReminderForUser(
 						saveReminderState({
 							lastAutoEmailSent: new Date().toISOString(),
 							lastAutoEmailDate: today,
+							lastStockSchedulerCheckDate: currentState.lastStockSchedulerCheckDate,
 							notifiedMedications: [...new Set([...currentState.notifiedMedications, userStockNotifiedKey])],
 							nextScheduledCheck: currentState.nextScheduledCheck,
 							lastNotificationType: "stock",
@@ -892,6 +902,7 @@ async function checkAndSendReminderForUser(
 						saveReminderState({
 							lastAutoEmailSent: new Date().toISOString(),
 							lastAutoEmailDate: today,
+							lastStockSchedulerCheckDate: currentState.lastStockSchedulerCheckDate,
 							notifiedMedications: [...new Set([...currentState.notifiedMedications, userPrescriptionNotifiedKey])],
 							nextScheduledCheck: currentState.nextScheduledCheck,
 							lastNotificationType: "prescription",
@@ -947,9 +958,10 @@ export function startReminderScheduler(logger: ServiceLogger): void {
 	const today = getTodayInTimezone();
 	const currentHour = getCurrentHourInTimezone();
 
-	// If it's past REMINDER_HOUR today in the configured timezone and we haven't checked today, run immediately
-	if (currentHour >= REMINDER_HOUR && state.lastAutoEmailDate !== today) {
-		logger.info("[Reminder] Missed today's check, running now...");
+	// If it's past REMINDER_HOUR today in the configured timezone and we haven't checked today, run one catch-up.
+	// This is intentionally a single current-state snapshot (no replay of missed days).
+	if (currentHour >= REMINDER_HOUR && state.lastStockSchedulerCheckDate !== today) {
+		logger.info("[Reminder] Missed today's check, running one catch-up snapshot (no historical replay)...");
 		checkAndSendReminder(logger).catch((err) => logger.error(`[Reminder] Error: ${err}`));
 	}
 

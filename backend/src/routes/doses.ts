@@ -6,12 +6,7 @@ import { doseTracking, medications, shareTokens } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
-import {
-	parseIntakesJson,
-	parseLocalDateTime,
-	parseTakenByJson,
-	personTakesMedication,
-} from "../utils/scheduler-utils.js";
+import { parseIntakesJson, parseTakenByJson, personTakesMedication } from "../utils/scheduler-utils.js";
 
 // =============================================================================
 // Validation Schemas
@@ -29,7 +24,6 @@ const dismissDosesSchema = z.object({
 });
 
 const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
-const MAX_SCHEDULE_VALIDATION_STEPS = 40000;
 
 function maskToken(token: string): string {
 	if (token.length <= 8) return token;
@@ -80,35 +74,6 @@ function parseDoseId(doseId: string): ParsedDoseId | null {
 	};
 }
 
-function isSameDate(a: Date, b: Date): boolean {
-	return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function isScheduledDate(timestampMs: number, startLocal: string, everyDays: number): boolean {
-	if (!Number.isFinite(timestampMs) || everyDays < 1) return false;
-
-	const targetDate = new Date(timestampMs);
-	if (Number.isNaN(targetDate.getTime())) return false;
-
-	const targetDateOnly = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-	const startDate = parseLocalDateTime(startLocal);
-	const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-
-	if (targetDateOnly < startDateOnly) return false;
-
-	const cursor = new Date(startDateOnly);
-	let steps = 0;
-	while (cursor <= targetDateOnly && steps < MAX_SCHEDULE_VALIDATION_STEPS) {
-		if (isSameDate(cursor, targetDateOnly)) {
-			return true;
-		}
-		cursor.setDate(cursor.getDate() + everyDays);
-		steps += 1;
-	}
-
-	return false;
-}
-
 async function getActiveShareToken(token: string): Promise<{
 	share: typeof shareTokens.$inferSelect | null;
 	reason: "not_found" | "expired" | "ok";
@@ -154,17 +119,13 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 		return false;
 	}
 
-	if (!isScheduledDate(parsedDose.timestampMs, intake.start, intake.every)) {
-		return false;
-	}
-
 	const expectedPersons = intake.takenBy ? [intake.takenBy] : medTakenBy;
 	if (expectedPersons.length === 0) {
 		return parsedDose.personSuffix === null;
 	}
 
 	if (!parsedDose.personSuffix) {
-		return false;
+		return true;
 	}
 
 	return expectedPersons.includes(parsedDose.personSuffix);

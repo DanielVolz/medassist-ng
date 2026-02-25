@@ -745,7 +745,7 @@ export async function sendShoutrrrNotification(
 			const priorityRaw = parsedGotify.searchParams.get("priority");
 			const priority = priorityRaw && /^-?\d+$/.test(priorityRaw) ? Number(priorityRaw) : 0;
 
-			// codeql[js/request-forgery]: hostname is validated against localhost/private/internal targets.
+			// lgtm [js/request-forgery] host is validated by validateNotificationHostname() and redirects are blocked.
 			const response = await fetch(targetUrl, {
 				method: "POST",
 				headers: {

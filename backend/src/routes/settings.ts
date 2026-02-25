@@ -667,20 +667,27 @@ export async function sendShoutrrrNotification(
 			}
 
 			const parseModeRaw = parsedTelegram.searchParams.get("parseMode")?.toLowerCase();
-			const parseMode =
-				parseModeRaw === "html"
-					? "HTML"
-					: parseModeRaw === "markdown"
-						? "Markdown"
-						: parseModeRaw === "markdownv2"
-							? "MarkdownV2"
-							: undefined;
+			let parseMode: "HTML" | "Markdown" | "MarkdownV2" | undefined;
+			if (parseModeRaw === "html") {
+				parseMode = "HTML";
+			} else if (parseModeRaw === "markdown") {
+				parseMode = "Markdown";
+			} else if (parseModeRaw === "markdownv2") {
+				parseMode = "MarkdownV2";
+			}
 
 			const notificationRaw = parsedTelegram.searchParams.get("notification")?.toLowerCase();
 			const disableNotification = notificationRaw === "no" || notificationRaw === "false";
 
 			const previewRaw = parsedTelegram.searchParams.get("preview")?.toLowerCase();
 			const disablePreview = previewRaw === "no" || previewRaw === "false";
+
+			if (!/^\d+:[A-Za-z0-9_-]+$/.test(token)) {
+				return { success: false, error: "Invalid Telegram token format" };
+			}
+
+			const telegramSendMessageUrl = new URL("/bot/sendMessage", "https://api.telegram.org");
+			telegramSendMessageUrl.pathname = `/bot${token}/sendMessage`;
 
 			for (const chatId of chats) {
 				const payload: Record<string, string | boolean> = {
@@ -693,7 +700,8 @@ export async function sendShoutrrrNotification(
 					payload.parse_mode = parseMode;
 				}
 
-				const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+				// codeql[js/request-forgery]: host is fixed to api.telegram.org and token is pattern-validated.
+				const response = await fetch(telegramSendMessageUrl.toString(), {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(payload),
@@ -737,6 +745,7 @@ export async function sendShoutrrrNotification(
 			const priorityRaw = parsedGotify.searchParams.get("priority");
 			const priority = priorityRaw && /^-?\d+$/.test(priorityRaw) ? Number(priorityRaw) : 0;
 
+			// codeql[js/request-forgery]: hostname is validated against localhost/private/internal targets.
 			const response = await fetch(targetUrl, {
 				method: "POST",
 				headers: {

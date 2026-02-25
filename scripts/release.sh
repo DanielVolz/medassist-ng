@@ -33,16 +33,36 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
-# Detect git remote name (prefer 'origin', fall back to 'github')
+# Detect git remote name for the configured GitHub repository.
+# This avoids accidentally pulling from a non-GitHub origin in multi-remote setups.
 detect_remote() {
-    if git remote | grep -q '^origin$'; then
-        echo "origin"
-    elif git remote | grep -q '^github$'; then
+    local target_repo_lower
+    target_repo_lower=$(echo "${GITHUB_REPO}" | tr '[:upper:]' '[:lower:]')
+
+    local remote
+    while read -r remote; do
+        local url
+        url=$(git remote get-url "$remote" 2>/dev/null || true)
+        local url_lower
+        url_lower=$(echo "$url" | tr '[:upper:]' '[:lower:]')
+
+        if [[ "$url_lower" == *"github.com"* && "$url_lower" == *"${target_repo_lower}.git"* ]]; then
+            echo "$remote"
+            return 0
+        fi
+        if [[ "$url_lower" == *"github.com"* && "$url_lower" == *"${target_repo_lower}" ]]; then
+            echo "$remote"
+            return 0
+        fi
+    done < <(git remote)
+
+    if git remote | grep -q '^github$'; then
         echo "github"
-    else
-        echo -e "${RED}Error: No 'origin' or 'github' remote found.${NC}" >&2
-        exit 1
+        return 0
     fi
+
+    echo -e "${RED}Error: No git remote points to github.com/${GITHUB_REPO}.${NC}" >&2
+    exit 1
 }
 
 GIT_REMOTE=$(detect_remote)
@@ -180,6 +200,8 @@ This PR was created by the release script.")
 echo -e "${GREEN}PR created: ${YELLOW}${PR_URL}${NC}"
 PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
 
+MERGED_SHA=""
+
 # ─── Wait for CI and merge ────────────────────────────────────────────────────
 
 if ! wait_for_ci "${PR_NUMBER}"; then
@@ -191,9 +213,35 @@ fi
 echo -e "${BLUE}Merging PR #${PR_NUMBER}...${NC}"
 gh pr merge "${PR_NUMBER}" --repo "${GITHUB_REPO}" --squash --delete-branch
 
+MERGED_SHA=$(gh pr view "${PR_NUMBER}" --repo "${GITHUB_REPO}" --json mergeCommit --jq '.mergeCommit.oid')
+if [[ -z "${MERGED_SHA}" || "${MERGED_SHA}" == "null" ]]; then
+    echo -e "${RED}Error: Could not resolve merge commit SHA for PR #${PR_NUMBER}.${NC}"
+    exit 1
+fi
+echo -e "${BLUE}Resolved merge commit: ${YELLOW}${MERGED_SHA}${NC}"
+
 echo -e "${BLUE}Updating main branch...${NC}"
 git checkout main
-git pull "${GIT_REMOTE}" main
+git fetch "${GIT_REMOTE}" main
+git pull --ff-only "${GIT_REMOTE}" main
+
+if ! git cat-file -e "${MERGED_SHA}^{commit}" 2>/dev/null; then
+    echo -e "${BLUE}Fetching merge commit from ${GIT_REMOTE}...${NC}"
+    git fetch "${GIT_REMOTE}" "${MERGED_SHA}"
+fi
+
+HEAD_SHA=$(git rev-parse HEAD)
+if [[ "${HEAD_SHA}" != "${MERGED_SHA}" ]]; then
+    echo -e "${YELLOW}Local main is at ${HEAD_SHA}, expected merge commit ${MERGED_SHA}.${NC}"
+    echo -e "${YELLOW}Tag will be created on the merge commit SHA to avoid stale tags.${NC}"
+fi
+
+MERGED_VERSION=$(git show "${MERGED_SHA}:backend/package.json" | sed -n 's/.*"version": "\([^"]*\)".*/\1/p')
+if [[ "${MERGED_VERSION}" != "${NEW_VERSION}" ]]; then
+    echo -e "${RED}Error: merge commit backend/package.json version is '${MERGED_VERSION}', expected '${NEW_VERSION}'.${NC}"
+    echo -e "${RED}Aborting to prevent creating a tag on the wrong release commit.${NC}"
+    exit 1
+fi
 
 # ─── Create and push signed tag ──────────────────────────────────────────────
 
@@ -208,7 +256,7 @@ if git ls-remote --tags "${GIT_REMOTE}" "v${NEW_VERSION}" 2>/dev/null | grep -q 
 fi
 
 echo -e "${BLUE}Creating signed tag v${NEW_VERSION}...${NC}"
-git tag -s "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
+git tag -s "v${NEW_VERSION}" "${MERGED_SHA}" -m "Release v${NEW_VERSION}"
 
 echo -e "${BLUE}Pushing tag...${NC}"
 git push "${GIT_REMOTE}" "v${NEW_VERSION}"

@@ -57,6 +57,13 @@ function sanitizeCorrelationId(headers: IncomingHttpHeaders): string | null {
 	return trimmed;
 }
 
+function buildLoggerOptions(level: string) {
+	return {
+		level,
+		timestamp: () => `,"time":"${new Date().toISOString()}"`,
+	};
+}
+
 /** Create and configure Fastify app (without starting) */
 export async function createApp(options?: {
 	logLevel?: string;
@@ -84,7 +91,7 @@ export async function createApp(options?: {
 	};
 
 	const app = Fastify({
-		logger: { level: opts.logLevel },
+		logger: buildLoggerOptions(opts.logLevel),
 		genReqId: (request) => sanitizeCorrelationId(request.headers) ?? randomUUID(),
 	});
 
@@ -157,9 +164,7 @@ log.info("[DB] Migrations complete, starting server...");
 const imagesDir = ensureImagesDirectory();
 
 const app = Fastify({
-	logger: {
-		level: env.LOG_LEVEL,
-	},
+	logger: buildLoggerOptions(env.LOG_LEVEL),
 	genReqId: (request) => sanitizeCorrelationId(request.headers) ?? randomUUID(),
 });
 

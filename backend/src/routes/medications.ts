@@ -66,10 +66,10 @@ const medicationSchema = z
 		intakes: z.array(intakeSchema).min(1).max(12).optional(),
 		blisters: z.array(blisterSchema).min(1).max(12).optional(), // Legacy format
 	})
-	.refine(
-		(data) => (data.name && data.name.length > 0) || (data.genericName && data.genericName.length > 0),
-		{ message: "Either 'name' or 'genericName' must be provided", path: ["name"] }
-	)
+	.refine((data) => (data.name && data.name.length > 0) || (data.genericName && data.genericName.length > 0), {
+		message: "Either 'name' or 'genericName' must be provided",
+		path: ["name"],
+	})
 	.refine((data) => data.intakes || data.blisters, { message: "Either 'intakes' or 'blisters' must be provided" })
 	.refine(
 		(data) => {

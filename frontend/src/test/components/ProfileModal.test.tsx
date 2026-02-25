@@ -66,27 +66,7 @@ describe("ProfileModal", () => {
 		expect(onClose).not.toHaveBeenCalled();
 	});
 
-	it("calls onClose when Escape is pressed on overlay", () => {
-		const onClose = vi.fn();
-		render(<ProfileModal isOpen={true} onClose={onClose} />);
-
-		const overlay = document.querySelector(".modal-overlay");
-		if (overlay) {
-			fireEvent.keyDown(overlay, { key: "Escape" });
-		}
-
-		expect(onClose).toHaveBeenCalledTimes(1);
-	});
-
-	it("does not close on non-escape keydown", () => {
-		const onClose = vi.fn();
-		render(<ProfileModal isOpen={true} onClose={onClose} />);
-
-		const overlay = document.querySelector(".modal-overlay");
-		if (overlay) {
-			fireEvent.keyDown(overlay, { key: "Enter" });
-		}
-
-		expect(onClose).not.toHaveBeenCalled();
-	});
+	// ESC key handling is tested at the App level — the global handler in
+	// App.tsx manages Escape for all modals, so per-component ESC tests are
+	// not applicable here.
 });

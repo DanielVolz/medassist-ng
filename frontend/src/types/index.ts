@@ -230,11 +230,16 @@ export type ExpiredLinkData = {
 // Field Validation Limits (must match backend)
 // =============================================================================
 export const FIELD_LIMITS = {
-	name: { min: 1, max: 100 },
+	name: { min: 0, max: 100 },
 	genericName: { max: 100 },
 	takenBy: { max: 100 },
 	notes: { max: 2000 },
 } as const;
+
+/** Returns the best display name for a medication: commercial name, or generic name as fallback */
+export function getMedDisplayName(med: { name: string; genericName?: string | null }): string {
+	return med.name || med.genericName || "";
+}
 
 // =============================================================================
 // Helper Functions for Medication Calculations

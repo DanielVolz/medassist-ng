@@ -18,7 +18,7 @@ import { useAuth } from "../components/Auth";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useMedicationForm, useModalHistory, useUnsavedChangesWarning } from "../hooks";
 import type { DoseUnit, Medication } from "../types";
-import { DOSE_UNITS, FIELD_LIMITS, getPackageSize } from "../types";
+import { DOSE_UNITS, FIELD_LIMITS, getPackageSize, getMedDisplayName } from "../types";
 import { combineDateAndTime, formatDate, formatDateTime, formatNumber } from "../utils/formatters";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
@@ -836,19 +836,19 @@ export function MedicationsPage() {
 												<span
 													className={med.imageUrl ? "med-avatar-clickable" : undefined}
 													onClick={() =>
-														med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name })
+														med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) })
 													}
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === " ") {
-															if (med.imageUrl) setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name });
+															if (med.imageUrl) setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) });
 														}
 													}}
 												>
-													<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
+													<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="lg" />
 												</span>
 												<div className="med-name-block">
-													<div className="med-name">{med.name}</div>
-													{med.genericName && <div className="med-generic-name">{med.genericName}</div>}
+													<div className="med-name">{getMedDisplayName(med)}</div>
+													{med.name && med.genericName && <div className="med-generic-name">{med.genericName}</div>}
 												</div>
 											</div>
 											<div className="med-actions">
@@ -910,10 +910,10 @@ export function MedicationsPage() {
 											)}
 											<div className="med-total">
 												{t("medications.details.stock")}:{" "}
-												{coverageByMed[med.name] ? Math.round(coverageByMed[med.name].medsLeft) : getPackageSize(med)} /{" "}
+												{coverageByMed[getMedDisplayName(med)] ? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft) : getPackageSize(med)} /{" "}
 												{getPackageSize(med)} {getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}
-												{(coverageByMed[med.name]
-													? Math.round(coverageByMed[med.name].medsLeft)
+												{(coverageByMed[getMedDisplayName(med)]
+													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
 													: getPackageSize(med)) > getPackageSize(med) && (
 													<span
 														className="info-tooltip tooltip-align-left warning-text"
@@ -970,20 +970,20 @@ export function MedicationsPage() {
 														<span
 															className={med.imageUrl ? "med-avatar-clickable" : undefined}
 															onClick={() =>
-																med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name })
+																med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) })
 															}
 															onKeyDown={(e) => {
 																if (e.key === "Enter" || e.key === " ") {
 																	if (med.imageUrl)
-																		setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: med.name });
+																		setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) });
 																}
 															}}
 														>
-															<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="lg" />
+															<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="lg" />
 														</span>
 														<div className="med-name-block">
-															<div className="med-name">{med.name}</div>
-															{med.genericName && <div className="med-generic-name">{med.genericName}</div>}
+															<div className="med-name">{getMedDisplayName(med)}</div>
+															{med.name && med.genericName && <div className="med-generic-name">{med.genericName}</div>}
 														</div>
 													</div>
 													<div className="med-actions">
@@ -1106,21 +1106,26 @@ export function MedicationsPage() {
 											onBlur={() => setShowNameValidation(true)}
 											placeholder={t("form.placeholders.commercial")}
 											maxLength={FIELD_LIMITS.name.max}
-											required={!readOnlyView}
 										/>
 										{!readOnlyView && showNameValidation && fieldErrors.name && (
 											<span className="field-error">{fieldErrors.name}</span>
 										)}
 									</label>
-									<label className={fieldErrors.genericName ? "has-error" : ""}>
+									<label className={!readOnlyView && showNameValidation && fieldErrors.genericName ? "has-error" : ""}>
 										{t("form.genericName")}
 										<input
 											value={form.genericName}
-											onChange={(e) => setForm({ ...form, genericName: e.target.value })}
+											onChange={(e) => {
+												setShowNameValidation(true);
+												setForm({ ...form, genericName: e.target.value });
+											}}
+											onBlur={() => setShowNameValidation(true)}
 											placeholder={t("form.placeholders.generic")}
 											maxLength={FIELD_LIMITS.genericName.max}
 										/>
-										{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
+										{!readOnlyView && showNameValidation && fieldErrors.genericName && (
+											<span className="field-error">{fieldErrors.genericName}</span>
+										)}
 									</label>
 									<label>
 										{t("form.medicationStartDate")}

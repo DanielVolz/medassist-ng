@@ -253,7 +253,7 @@ export function MobileEditModal({
 	const mobileTitle = (() => {
 		if (!editingId) return t("form.newEntry");
 		if (readOnlyMode) return t("form.viewEntry");
-		const medicationName = currentMed?.name?.trim() || form.name.trim();
+		const medicationName = (currentMed ? (currentMed.name?.trim() || currentMed.genericName?.trim()) : null) || form.name.trim() || form.genericName.trim();
 		if (!medicationName) return t("form.editEntry");
 		return t("form.editEntryWithName", { name: medicationName });
 	})();
@@ -361,21 +361,26 @@ export function MobileEditModal({
 												onBlur={() => setShowNameValidation(true)}
 												placeholder={t("form.placeholders.commercial")}
 												maxLength={FIELD_LIMITS.name.max}
-												required={!readOnlyMode}
 											/>
 											{!readOnlyMode && showNameValidation && fieldErrors.name && (
 												<span className="field-error">{fieldErrors.name}</span>
 											)}
 										</label>
-										<label className={`full ${fieldErrors.genericName ? "has-error" : ""}`}>
+										<label className={`full ${!readOnlyMode && showNameValidation && fieldErrors.genericName ? "has-error" : ""}`}>
 											{t("form.genericName")}
 											<input
 												value={form.genericName}
-												onChange={(e) => onFormChange({ ...form, genericName: e.target.value })}
+												onChange={(e) => {
+													setShowNameValidation(true);
+													onFormChange({ ...form, genericName: e.target.value });
+												}}
+												onBlur={() => setShowNameValidation(true)}
 												placeholder={t("form.placeholders.generic")}
 												maxLength={FIELD_LIMITS.genericName.max}
 											/>
-											{fieldErrors.genericName && <span className="field-error">{fieldErrors.genericName}</span>}
+											{!readOnlyMode && showNameValidation && fieldErrors.genericName && (
+												<span className="field-error">{fieldErrors.genericName}</span>
+											)}
 										</label>
 										<label className="full">
 											{t("form.medicationStartDate")}

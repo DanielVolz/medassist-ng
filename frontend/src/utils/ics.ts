@@ -3,6 +3,7 @@
 // =============================================================================
 
 import type { Medication } from "../types";
+import { getMedDisplayName } from "../types";
 
 /**
  * Format a Date for ICS format (YYYYMMDDTHHMMSSZ)
@@ -18,6 +19,7 @@ function formatICSDate(date: Date): string {
  * Generate and download an ICS calendar file for a medication's schedule
  */
 export function generateICS(med: Medication): void {
+	const displayName = getMedDisplayName(med);
 	const events = med.blisters
 		.map((blister, idx) => {
 			const start = new Date(blister.start);
@@ -25,9 +27,9 @@ export function generateICS(med: Medication): void {
 			const interval = blister.every;
 
 			const pillInfo = `${blister.usage} pill${blister.usage !== 1 ? "s" : ""}${med.pillWeightMg ? ` (${blister.usage * med.pillWeightMg} mg)` : ""}`;
-			const summary = `💊 ${med.name} - ${pillInfo}`;
+			const summary = `💊 ${displayName} - ${pillInfo}`;
 			const description = [
-				`Medication: ${med.name}`,
+				`Medication: ${displayName}`,
 				med.genericName ? `Generic: ${med.genericName}` : "",
 				med.takenBy && med.takenBy.length > 0 ? `For: ${med.takenBy.join(", ")}` : "",
 				`Dosage: ${pillInfo}`,
@@ -48,7 +50,7 @@ DESCRIPTION:${description}
 BEGIN:VALARM
 TRIGGER:-PT5M
 ACTION:DISPLAY
-DESCRIPTION:Time to take ${med.name}
+DESCRIPTION:Time to take ${displayName}
 END:VALARM
 END:VEVENT`;
 		})
@@ -59,7 +61,7 @@ VERSION:2.0
 PRODID:-//MedAssist-ng//Medication Schedule//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
-X-WR-CALNAME:${med.name} Schedule
+X-WR-CALNAME:${displayName} Schedule
 ${events}
 END:VCALENDAR`;
 
@@ -67,7 +69,7 @@ END:VCALENDAR`;
 	const url = URL.createObjectURL(blob);
 	const link = document.createElement("a");
 	link.href = url;
-	link.download = `${med.name.replace(/[^a-zA-Z0-9]/g, "_")}_schedule.ics`;
+	link.download = `${displayName.replace(/[^a-zA-Z0-9]/g, "_")}_schedule.ics`;
 	document.body.appendChild(link);
 	link.click();
 	document.body.removeChild(link);

@@ -371,10 +371,10 @@ ${getFooterPlain(language)}`;
 		// Load user settings
 		const userId = await getUserId(request);
 		const activeMeds = await db
-			.select({ name: medications.name })
+			.select({ name: medications.name, genericName: medications.genericName })
 			.from(medications)
 			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
-		const activeMedNames = new Set(activeMeds.map((med) => med.name));
+		const activeMedNames = new Set(activeMeds.map((med) => med.name || med.genericName || ""));
 		const filteredLowStock = lowStock.filter((item) => activeMedNames.has(item.name));
 		if (filteredLowStock.length === 0) {
 			return reply.status(400).send({ error: "No active medications to notify" });
@@ -641,10 +641,10 @@ ${getFooterPlain(language)}`;
 
 		const userId = await getUserId(request);
 		const activeMeds = await db
-			.select({ name: medications.name })
+			.select({ name: medications.name, genericName: medications.genericName })
 			.from(medications)
 			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
-		const activeMedNames = new Set(activeMeds.map((med) => med.name));
+		const activeMedNames = new Set(activeMeds.map((med) => med.name || med.genericName || ""));
 		const filteredPrescriptionLow = prescriptionLow.filter((item) => activeMedNames.has(item.name));
 		if (filteredPrescriptionLow.length === 0) {
 			return reply.status(400).send({ error: "No active medications to notify" });

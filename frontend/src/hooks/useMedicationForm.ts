@@ -115,9 +115,6 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			// Skip validation for takenBy array (individual items validated on add)
 			if (field === "takenBy") return undefined;
 			const strValue = typeof value === "string" ? value : "";
-			if (field === "name" && (!strValue || strValue.trim().length === 0)) {
-				return t("common.validation.required");
-			}
 			if ("max" in limits && strValue.length > limits.max) {
 				return t("common.validation.maxLength", { max: limits.max, current: strValue.length });
 			}
@@ -150,8 +147,16 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			const error = validateField(f, form[f]);
 			if (error) errors[f] = error;
 		});
+		// Cross-field validation: at least one of name or genericName is required
+		const hasName = form.name && form.name.trim().length > 0;
+		const hasGenericName = form.genericName && form.genericName.trim().length > 0;
+		if (!hasName && !hasGenericName) {
+			const msg = t("common.validation.nameOrGenericRequired");
+			errors.name = errors.name || msg;
+			errors.genericName = errors.genericName || msg;
+		}
 		setFieldErrors(errors);
-	}, [form.name, form.genericName, form.notes, validateField, form]);
+	}, [form.name, form.genericName, form.notes, validateField, form, t]);
 
 	const setBlisterValue = useCallback((idx: number, field: keyof FormBlister, value: string) => {
 		setForm((prev) => {

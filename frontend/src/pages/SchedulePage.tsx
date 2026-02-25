@@ -5,6 +5,7 @@ import { MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
+import { getMedDisplayName } from "../types";
 import { expandDoseIds, isDoseDismissed } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
@@ -116,7 +117,7 @@ export function SchedulePage() {
 
 							// Count missed doses that are NOT dismissed (for warning icon)
 							const missedNotDismissedCount = day.meds.reduce((count, item) => {
-								const med = meds.find((m) => m.name === item.medName);
+								const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 								const dismissedUntilDate = med?.dismissedUntil ?? undefined;
 								return (
 									count +
@@ -171,7 +172,7 @@ export function SchedulePage() {
 									</div>
 									{!isCollapsed &&
 										day.meds.map((item) => {
-											const med = meds.find((m) => m.name === item.medName);
+											const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 											const medCov = coverageByMed[item.medName];
 											const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
 											const itemDoseIds = expandDoseIds(item.doses);
@@ -333,7 +334,7 @@ export function SchedulePage() {
 								{day.meds.map((item) => {
 									const medCoverage = coverageByMed[item.medName];
 									const isEmpty = medCoverage ? medCoverage.medsLeft <= 0 : false;
-									const med = meds.find((m) => m.name === item.medName);
+									const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 									const depletionTime = depletionByMed[item.medName];
 									// Check if this dose is scheduled after medication runs out
 									const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;

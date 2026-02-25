@@ -192,7 +192,7 @@
     },
     "placeholders": {
       "commercial": "e.g. Ozempic",
-      "generic": "e.g. Semaglutide (optional)",
+      "generic": "e.g. Semaglutide",
       "takenBy": "Type name and press Enter",
       "addPerson": "Add another person...",
       "weight": "e.g. 240",
@@ -436,6 +436,7 @@
     },
     "validation": {
       "required": "This field is required",
+      "nameOrGenericRequired": "Either commercial name or generic name is required",
       "maxLength": "Maximum {{max}} characters ({{current}}/{{max}})",
       "tooLong": "{{current}}/{{max}} characters"
     },

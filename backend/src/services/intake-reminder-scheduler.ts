@@ -106,8 +106,9 @@ async function autoMarkDueIntakesAsTaken(
 		}
 
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
+		const medDisplayName = med.name || med.genericName || "";
 		const todaysIntakes = getTodaysIntakes(
-			med.name,
+			medDisplayName,
 			intakes,
 			medicationTakenBy,
 			med.pillWeightMg,
@@ -415,9 +416,10 @@ async function checkAndSendIntakeRemindersForUser(
 		);
 		// Medication-level takenBy (for fallback/display purposes)
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
+		const medDisplayName = med.name || med.genericName || "";
 
 		logger.debug(
-			`[IntakeReminder] User ${settings.userId}: Processing medication "${med.name}" with ${intakes.length} intakes`
+			`[IntakeReminder] User ${settings.userId}: Processing medication "${medDisplayName}" with ${intakes.length} intakes`
 		);
 
 		// Filter intakes that have reminders enabled (per-intake setting or medication-level)
@@ -438,7 +440,7 @@ async function checkAndSendIntakeRemindersForUser(
 
 			// Always get upcoming intakes (15 min before) for first reminders
 			const upcomingIntakes = getUpcomingIntakes(
-				med.name,
+				medDisplayName,
 				[intake],
 				REMINDER_MINUTES_BEFORE,
 				medicationTakenBy,
@@ -465,7 +467,7 @@ async function checkAndSendIntakeRemindersForUser(
 			// If repeat reminders enabled, also check for missed intakes (past the intake time)
 			if (settings.repeatRemindersEnabled) {
 				const allTodaysIntakes = getTodaysIntakes(
-					med.name,
+					medDisplayName,
 					[intake],
 					medicationTakenBy,
 					med.pillWeightMg,

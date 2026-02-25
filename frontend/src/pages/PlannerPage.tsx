@@ -5,6 +5,7 @@ import { DateTimeInput, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { PlannerRow } from "../types";
+import { getMedDisplayName } from "../types";
 import { toInputValue } from "../utils/formatters";
 
 // Date helpers
@@ -204,7 +205,7 @@ export function PlannerPage() {
 							</div>
 							{plannerRows.map((row) => {
 								const med =
-									meds.find((m) => m.id === row.medicationId) || meds.find((m) => m.name === row.medicationName);
+									meds.find((m) => m.id === row.medicationId) || meds.find((m) => getMedDisplayName(m) === row.medicationName);
 								const remainingRefills = med?.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? 0) : null;
 								return (
 									<div

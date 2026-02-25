@@ -3,7 +3,7 @@
 // =============================================================================
 
 import type { Blister, Coverage, Intake, Medication, ScheduleEvent, StockStatus, StockThresholds } from "../types";
-import { getMedTotal } from "../types";
+import { getMedDisplayName, getMedTotal } from "../types";
 
 /**
  * Get intakes for a medication, preferring new intakes format over legacy blisters
@@ -63,7 +63,7 @@ export function buildSchedulePreview(
 				const dateOnlyMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 				events.push({
 					id: `${med.id}-${idx}-${dateOnlyMs}`,
-					medName: med.name,
+					medName: getMedDisplayName(med),
 					takenBy: intake.takenBy, // Per-intake takenBy (string | null)
 					usage: intake.usage,
 					when: whenMs,
@@ -267,10 +267,11 @@ export function calculateCoverage(
 			depletionMs !== null
 				? new Date(depletionMs).toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" })
 				: null;
-		const nextEvent = events.find((e) => e.medName === m.name);
+		const displayName = getMedDisplayName(m);
+		const nextEvent = events.find((e) => e.medName === displayName);
 
 		return {
-			name: m.name,
+			name: displayName,
 			medsLeft: Number(medsLeft.toFixed(1)),
 			daysLeft,
 			depletionDate,

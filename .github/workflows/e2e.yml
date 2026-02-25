@@ -50,6 +50,8 @@ jobs:
         run: npx playwright test --project=chromium
         env:
           CI: true
+          PLAYWRIGHT_WORKERS: 1
+          PLAYWRIGHT_HTML_OPEN: never
           JWT_SECRET: e2e-test-secret-that-is-long-enough
           SESSION_SECRET: e2e-test-session-secret-long-enough
 

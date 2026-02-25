@@ -61,6 +61,29 @@ async function setupAuthMeMock(page: Page): Promise<void> {
 }
 
 /**
+ * Reduce visual flashing in recorded videos by forcing a dark first paint and
+ * disabling most animations/transitions in test mode.
+ */
+export async function applyVideoSafetyMode(page: Page): Promise<void> {
+	await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
+	await page.addInitScript(() => {
+		const style = document.createElement("style");
+		style.id = "pw-video-safety-style";
+		style.textContent = `
+			html, body {
+				background: #111111 !important;
+				color-scheme: dark !important;
+			}
+			*, *::before, *::after {
+				animation: none !important;
+				transition: none !important;
+			}
+		`;
+		document.documentElement.appendChild(style);
+	});
+}
+
+/**
  * Extended test fixture that automatically mocks /auth/me on every page
  * using user data from the JWT in the stored auth file.
  *
@@ -72,6 +95,7 @@ async function setupAuthMeMock(page: Page): Promise<void> {
  */
 export const test = base.extend<object>({
 	page: async ({ page }, use) => {
+		await applyVideoSafetyMode(page);
 		await setupAuthMeMock(page);
 		await use(page);
 	},

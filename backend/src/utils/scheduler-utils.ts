@@ -122,7 +122,11 @@ export function getNextScheduledTime(reminderHour: number, tz?: string): Date {
 /** Calculate milliseconds until next check at the given reminder hour */
 export function getMsUntilNextCheck(reminderHour: number, tz?: string): number {
 	const next = getNextScheduledTime(reminderHour, tz);
-	return next.getTime() - Date.now();
+	const msUntilNext = next.getTime() - Date.now();
+	if (msUntilNext <= 0) {
+		return msUntilNext + 24 * 60 * 60 * 1000;
+	}
+	return msUntilNext;
 }
 
 // =============================================================================

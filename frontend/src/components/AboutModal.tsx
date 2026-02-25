@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FRONTEND_VERSION, GITHUB_URL } from "../App";
-import { useEscapeKey } from "../hooks/useEscapeKey";
 
 interface UpdateCheckResult {
 	status: "up-to-date" | "update-available" | "error";
@@ -18,7 +17,7 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 	const [isChecking, setIsChecking] = useState(false);
 	const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
 
-	useEscapeKey(isOpen, onClose);
+	// ESC is handled by the global handler in App.tsx to avoid double history.back()
 
 	// Reset check result when modal opens so stale results are never shown
 	useEffect(() => {

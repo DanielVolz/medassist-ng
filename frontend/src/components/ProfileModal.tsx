@@ -1,4 +1,3 @@
-import { useEscapeKey } from "../hooks/useEscapeKey";
 import { UserProfile } from "./Auth";
 
 interface ProfileModalProps {
@@ -7,7 +6,7 @@ interface ProfileModalProps {
 }
 
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
-	useEscapeKey(isOpen, onClose);
+	// ESC is handled by the global handler in App.tsx to avoid double history.back()
 
 	if (!isOpen) return null;
 

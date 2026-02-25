@@ -5,7 +5,6 @@
 
 import { Check, Copy, Link2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export interface ShareDialogProps {
 	show: boolean;
@@ -44,7 +43,7 @@ export function ShareDialog({
 	const closeLabel = t("common.close");
 	const copyLabel = shareCopied ? t("share.copied") : t("share.copyLink");
 
-	useEscapeKey(show, onClose);
+	// ESC is handled by the global handler in App.tsx to avoid double history.back()
 
 	if (!show) return null;
 

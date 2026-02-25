@@ -436,6 +436,7 @@
     },
     "validation": {
       "required": "This field is required",
+      "nameOrGenericRequired": "Either commercial name or generic name is required",
       "maxLength": "Maximum {{max}} characters ({{current}}/{{max}})",
       "tooLong": "{{current}}/{{max}} characters"
     },

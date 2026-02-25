@@ -436,6 +436,7 @@
     },
     "validation": {
       "required": "Dieses Feld ist erforderlich",
+      "nameOrGenericRequired": "Handelsname oder Wirkstoff ist erforderlich",
       "maxLength": "Maximal {{max}} Zeichen ({{current}}/{{max}})",
       "tooLong": "{{current}}/{{max}} Zeichen"
     },

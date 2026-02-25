@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import { Lightbox, MedicationAvatar } from "../components";
 import { useEscapeKey } from "../hooks";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
-import { getMedTotal, getPackageSize } from "../types";
+import { getMedDisplayName, getMedTotal, getPackageSize } from "../types";
 import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
 import { getStockStatus } from "../utils/schedule";
 import { splitCurrentBlisterStock } from "../utils/stock";
@@ -193,7 +193,7 @@ export function MedDetailModal({
 
 	if (!selectedMed) return null;
 
-	const medCoverage = coverage.all.find((c) => c.name === selectedMed.name);
+	const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(selectedMed));
 	const packageSize = getPackageSize(selectedMed);
 	// Structural max = sealed package capacity only (excludes pre-existing looseTablets).
 	const structuralMax =
@@ -380,7 +380,7 @@ export function MedDetailModal({
 						<X size={18} aria-hidden="true" />
 					</button>
 					<h2>{t("editStock.title")}</h2>
-					<p className="edit-stock-med-name">{selectedMed.name}</p>
+					<p className="edit-stock-med-name">{getMedDisplayName(selectedMed)}</p>
 					<p className="edit-stock-hint">{t("editStock.hint")}</p>
 					{selectedMed.packageType === "blister" && (
 						<p className="edit-stock-cap-info edit-stock-live-breakdown">
@@ -667,12 +667,12 @@ export function MedDetailModal({
 								}
 							}}
 						>
-							<MedicationAvatar name={selectedMed.name} imageUrl={selectedMed.imageUrl} size="lg" />
+							<MedicationAvatar name={getMedDisplayName(selectedMed)} imageUrl={selectedMed.imageUrl} size="lg" />
 							{selectedMed.imageUrl && <span className="expand-icon">🔍</span>}
 						</div>
 						<div className="med-detail-titles">
-							<h2>{selectedMed.name}</h2>
-							{selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
+							<h2>{getMedDisplayName(selectedMed)}</h2>
+							{selectedMed.name && selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
 							{selectedMed.takenBy && (selectedMed.takenBy || []).length > 0 && (
 								<span className="med-taken-by">
 									{t("modal.for")}{" "}
@@ -1017,7 +1017,7 @@ export function MedDetailModal({
 
 			{/* Image Lightbox */}
 			{showImageLightbox && selectedMed.imageUrl && (
-				<Lightbox src={`/api/images/${selectedMed.imageUrl}`} alt={selectedMed.name} onClose={onCloseImageLightbox} />
+				<Lightbox src={`/api/images/${selectedMed.imageUrl}`} alt={getMedDisplayName(selectedMed)} onClose={onCloseImageLightbox} />
 			)}
 
 			{/* Refill Modal */}
@@ -1049,7 +1049,7 @@ export function MedDetailModal({
 							<X size={18} aria-hidden="true" />
 						</button>
 						<h2>{t("refill.title")}</h2>
-						<p className="refill-med-name">{selectedMed.name}</p>
+						<p className="refill-med-name">{getMedDisplayName(selectedMed)}</p>
 
 						<div className="refill-form">
 							{selectedMed.packageType === "blister" ? (

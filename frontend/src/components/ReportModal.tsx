@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useScrollLock } from "../hooks/useScrollLock";
 import type { Medication } from "../types";
-import { getPackageSize } from "../types";
+import { getMedDisplayName, getPackageSize } from "../types";
 import { MedicationAvatar } from "./MedicationAvatar";
 
 type ReportFormat = "txt" | "md" | "pdf";
@@ -200,10 +200,10 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 								{activeMeds.map((med) => (
 									<label key={med.id} className="report-med-item">
 										<input type="checkbox" checked={selectedIds.has(med.id)} onChange={() => toggleMed(med.id)} />
-										<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="sm" />
+										<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
 										<span className="report-med-name">
-											{med.name}
-											{med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
+											{getMedDisplayName(med)}
+											{med.name && med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
 										</span>
 									</label>
 								))}
@@ -218,10 +218,10 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 								{obsoleteMeds.map((med) => (
 									<label key={med.id} className="report-med-item">
 										<input type="checkbox" checked={selectedIds.has(med.id)} onChange={() => toggleMed(med.id)} />
-										<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="sm" />
+										<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
 										<span className="report-med-name obsolete-name">
-											{med.name}
-											{med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
+											{getMedDisplayName(med)}
+											{med.name && med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
 										</span>
 									</label>
 								))}
@@ -320,13 +320,13 @@ function generateTextReport(
 	for (const med of meds) {
 		lines.push(sep);
 		lines.push("");
-		const title = med.isObsolete ? `${med.name} (${t("report.docStatusObsolete")})` : med.name;
+		const title = med.isObsolete ? `${getMedDisplayName(med)} (${t("report.docStatusObsolete")})` : getMedDisplayName(med);
 		lines.push(h2(title));
 		lines.push("");
 
 		// General
 		lines.push(h3(t("report.docGeneral")));
-		lines.push(item(t("report.docCommercialName"), med.name));
+		if (med.name) lines.push(item(t("report.docCommercialName"), med.name));
 		if (med.genericName) lines.push(item(t("report.docGenericName"), med.genericName));
 		if (med.takenBy?.length) lines.push(item(t("report.docTakenBy"), med.takenBy.join(", ")));
 		lines.push(
@@ -489,22 +489,24 @@ function buildPrintHtml(
 	for (const med of meds) {
 		const data = reportData[med.id];
 		const intakes = med.intakes ?? med.blisters;
+		const displayName = getMedDisplayName(med);
 		const title = med.isObsolete
-			? `${escHtml(med.name)} <span class="obsolete-badge">${escHtml(t("report.docStatusObsolete"))}</span>`
-			: escHtml(med.name);
+			? `${escHtml(displayName)} <span class="obsolete-badge">${escHtml(t("report.docStatusObsolete"))}</span>`
+			: escHtml(displayName);
 
 		let s = `<div class="med-section">`;
 		const imgDataUrl = imageMap[med.id];
 
 		// Title with generic name subtitle
 		s += `<h2>${title}</h2>`;
-		if (med.genericName) s += `<p class="generic-subtitle">${escHtml(med.genericName)}</p>`;
+		if (med.name && med.genericName) s += `<p class="generic-subtitle">${escHtml(med.genericName)}</p>`;
 
 		// Build general info table rows
 		const generalRows: string[] = [];
-		generalRows.push(
-			`<tr><td class="label">${escHtml(t("report.docCommercialName"))}</td><td>${escHtml(med.name)}</td></tr>`
-		);
+		if (med.name)
+			generalRows.push(
+				`<tr><td class="label">${escHtml(t("report.docCommercialName"))}</td><td>${escHtml(med.name)}</td></tr>`
+			);
 		if (med.genericName)
 			generalRows.push(
 				`<tr><td class="label">${escHtml(t("report.docGenericName"))}</td><td>${escHtml(med.genericName)}</td></tr>`
@@ -527,7 +529,7 @@ function buildPrintHtml(
 		const generalTable = `<h3>${escHtml(t("report.docGeneral"))}</h3><table><tbody>${generalRows.join("")}</tbody></table>`;
 
 		if (imgDataUrl) {
-			s += `<div class="med-overview"><img class="med-img" src="${imgDataUrl}" alt="${escHtml(med.name)}" /><div class="med-overview-info">${generalTable}</div></div>`;
+			s += `<div class="med-overview"><img class="med-img" src="${imgDataUrl}" alt="${escHtml(displayName)}" /><div class="med-overview-info">${generalTable}</div></div>`;
 		} else {
 			s += generalTable;
 		}

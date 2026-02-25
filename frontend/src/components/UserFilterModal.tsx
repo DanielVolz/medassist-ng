@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { MedicationAvatar } from "../components";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, Medication, StockThresholds } from "../types";
-import { getMedTotal, getPackageSize } from "../types";
+import { getMedDisplayName, getMedTotal, getPackageSize } from "../types";
 import { formatNumber } from "../utils";
 import { getSystemLocale } from "../utils/formatters";
 import { getStockStatus } from "../utils/schedule";
@@ -64,7 +64,7 @@ export function UserFilterModal({
 
 				<div className="user-meds-list">
 					{userMeds.map((med) => {
-						const medCoverage = coverage.all.find((c) => c.name === med.name);
+						const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(med));
 						// Fallback: if no coverage data (e.g. obsolete med), compute basic status from total pills
 						const status = medCoverage
 							? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings)
@@ -97,10 +97,10 @@ export function UserFilterModal({
 									}
 								}}
 							>
-								<MedicationAvatar name={med.name} imageUrl={med.imageUrl} size="sm" />
+								<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
 								<div className="user-med-info">
-									<span className="user-med-name">{med.name}</span>
-									{med.genericName && <span className="user-med-generic">{med.genericName}</span>}
+									<span className="user-med-name">{getMedDisplayName(med)}</span>
+									{med.name && med.genericName && <span className="user-med-generic">{med.genericName}</span>}
 									{personIntakes.length > 0 && (
 										<div className="user-med-intakes">
 											{personIntakes.map((intake) => {

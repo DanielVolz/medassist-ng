@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { useEscapeKey } from "../hooks";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
-import { getMedTotal } from "../types";
+import { getMedDisplayName, getMedTotal } from "../types";
 import { getSystemLocale } from "../utils/formatters";
 import { isDoseDismissed } from "../utils/schedule";
 import { loadCollapsedDaysFromStorage } from "../utils/storage";
@@ -343,7 +343,7 @@ export function SharedSchedule() {
 					doses.push({
 						id: doseId,
 						when: t,
-						medName: med.name,
+						medName: getMedDisplayName(med),
 						usage: intake.usage,
 						isPast,
 						takenBy: intake.takenBy, // Per-intake takenBy (string | null)
@@ -547,8 +547,8 @@ export function SharedSchedule() {
 			const daysLeft = rawDaysLeft !== null ? Math.max(0, Math.floor(rawDaysLeft)) : null;
 			const depletionMs = daysLeft !== null ? now + daysLeft * MS_PER_DAY : null;
 
-			coverage[med.name] = { daysLeft, medsLeft: Number(medsLeft.toFixed(1)), dailyUsage: dailyRate };
-			depletion[med.name] = depletionMs;
+			coverage[getMedDisplayName(med)] = { daysLeft, medsLeft: Number(medsLeft.toFixed(1)), dailyUsage: dailyRate };
+			depletion[getMedDisplayName(med)] = depletionMs;
 		}
 		return { coverageByMed: coverage, depletionByMed: depletion };
 	}, [data, takenDoses]);
@@ -746,7 +746,7 @@ export function SharedSchedule() {
 
 									// Count missed doses that are NOT dismissed (for warning icon)
 									const missedNotDismissedCount = day.meds.reduce((count, item) => {
-										const med = data.medications.find((m) => m.name === item.medName);
+										const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 										const dismissedUntilDate = med?.dismissedUntil ?? undefined;
 										return (
 											count +
@@ -800,7 +800,7 @@ export function SharedSchedule() {
 											</div>
 											{!isCollapsed &&
 												day.meds.map((item) => {
-													const med = data.medications.find((m) => m.name === item.medName);
+													const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 													const medCoverage = coverageByMed[item.medName];
 													const isEmpty = showStock && medCoverage ? medCoverage.medsLeft <= 0 : false;
 													const depletionTime = depletionByMed[item.medName];
@@ -825,10 +825,10 @@ export function SharedSchedule() {
 																<div className="med-name">
 																	<div
 																		className={med?.imageUrl ? "med-avatar clickable" : ""}
-																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
+																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, getMedDisplayName(med))}
 																		onKeyDown={(e) => {
 																			if (e.key === "Enter" || e.key === " ") {
-																				if (med?.imageUrl) openLightbox(med.imageUrl, med.name);
+																				if (med?.imageUrl) openLightbox(med.imageUrl, getMedDisplayName(med));
 																			}
 																		}}
 																	>
@@ -984,7 +984,7 @@ export function SharedSchedule() {
 											</div>
 											{!isCollapsed &&
 												day.meds.map((item) => {
-													const med = data.medications.find((m) => m.name === item.medName);
+													const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 													const medCoverage = coverageByMed[item.medName];
 													const isEmpty = showStock && medCoverage ? medCoverage.medsLeft <= 0 : false;
 													const depletionTime = depletionByMed[item.medName];
@@ -1008,10 +1008,10 @@ export function SharedSchedule() {
 																<div className="med-name">
 																	<div
 																		className={med?.imageUrl ? "med-avatar clickable" : ""}
-																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
+																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, getMedDisplayName(med))}
 																		onKeyDown={(e) => {
 																			if (e.key === "Enter" || e.key === " ") {
-																				if (med?.imageUrl) openLightbox(med.imageUrl, med.name);
+																				if (med?.imageUrl) openLightbox(med.imageUrl, getMedDisplayName(med));
 																			}
 																		}}
 																	>
@@ -1161,7 +1161,7 @@ export function SharedSchedule() {
 											</div>
 											{!isCollapsed &&
 												day.meds.map((item) => {
-													const med = data.medications.find((m) => m.name === item.medName);
+													const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 													const medCoverage = coverageByMed[item.medName];
 													const depletionTime = depletionByMed[item.medName];
 													const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
@@ -1184,10 +1184,10 @@ export function SharedSchedule() {
 																<div className="med-name">
 																	<div
 																		className={med?.imageUrl ? "med-avatar clickable" : ""}
-																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, med.name)}
+																		onClick={() => med?.imageUrl && openLightbox(med.imageUrl, getMedDisplayName(med))}
 																		onKeyDown={(e) => {
 																			if (e.key === "Enter" || e.key === " ") {
-																				if (med?.imageUrl) openLightbox(med.imageUrl, med.name);
+																				if (med?.imageUrl) openLightbox(med.imageUrl, getMedDisplayName(med));
 																			}
 																		}}
 																	>

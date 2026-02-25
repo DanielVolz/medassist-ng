@@ -8,6 +8,7 @@ import { useAppContext } from "../context";
 import { useModalHistory } from "../hooks";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
 import { expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
+import { getMedDisplayName } from "../types";
 import {
 	formatFullBlisters,
 	formatOpenBlisterAndLoose,
@@ -118,7 +119,7 @@ export function DashboardPage() {
 		})
 		.map((med) => ({
 			id: med.id,
-			name: med.name,
+			name: getMedDisplayName(med),
 			remainingRefills: med.prescriptionRemainingRefills ?? 0,
 			threshold: med.prescriptionLowRefillThreshold ?? 1,
 		}))
@@ -250,7 +251,7 @@ export function DashboardPage() {
 									<span className="reminder-status-label">{t("dashboard.reminders.needsRefill")}:</span>
 									<span className="reminder-status-value">
 										{reminderData.lowStockMeds.map((med, idx) => {
-											const medication = meds.find((m) => m.name === med.name);
+											const medication = meds.find((m) => getMedDisplayName(m) === med.name);
 											const cov = coverage.all.find((c) => c.name === med.name);
 											const status = cov ? getStockStatus(cov.daysLeft, cov.medsLeft, stockThresholds) : null;
 											const textClass =
@@ -322,7 +323,7 @@ export function DashboardPage() {
 											(() => {
 												const names = reminderData.lastStockSent!.medNames!.split(", ");
 												return names.map((name, idx) => {
-													const medication = meds.find((m) => m.name === name);
+													const medication = meds.find((m) => getMedDisplayName(m) === name);
 													return (
 														<span key={name}>
 															{idx > 0 && ", "}
@@ -353,7 +354,7 @@ export function DashboardPage() {
 									<span className="reminder-status-value">
 										{reminderData.lastIntakeSent.medName &&
 											(() => {
-												const medication = meds.find((m) => m.name === reminderData.lastIntakeSent!.medName);
+												const medication = meds.find((m) => getMedDisplayName(m) === reminderData.lastIntakeSent!.medName);
 												return medication ? (
 													<span
 														className="med-link clickable"
@@ -428,7 +429,7 @@ export function DashboardPage() {
 								<p>
 									{t("dashboard.reorder.lowWarningPrefix")}{" "}
 									{lowStockMeds.map((c, idx) => {
-										const med = meds.find((m) => m.name === c.name);
+										const med = meds.find((m) => getMedDisplayName(m) === c.name);
 										const status = getStockStatus(c.daysLeft, c.medsLeft, stockThresholds);
 										const textClass =
 											status.className === "danger"
@@ -485,7 +486,7 @@ export function DashboardPage() {
 							</div>
 							{coverage.all.map((row) => {
 								const status = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds);
-								const med = meds.find((m) => m.name === row.name);
+								const med = meds.find((m) => getMedDisplayName(m) === row.name);
 								const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
 								const textClass =
 									status.className === "danger"
@@ -673,7 +674,7 @@ export function DashboardPage() {
 
 									// Count missed doses that are NOT dismissed (for warning icon)
 									const missedNotDismissedCount = day.meds.reduce((count, item) => {
-										const med = meds.find((m) => m.name === item.medName);
+										const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 										const dismissedUntilDate = med?.dismissedUntil ?? undefined;
 										return (
 											count +
@@ -729,7 +730,7 @@ export function DashboardPage() {
 											</div>
 											{!isCollapsed &&
 												day.meds.map((item) => {
-													const med = meds.find((m) => m.name === item.medName);
+													const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 													const medCov = coverageByMed[item.medName];
 													const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
 													const status = medCov
@@ -986,7 +987,7 @@ export function DashboardPage() {
 											{!isCollapsed &&
 												day.meds.map((item) => {
 													const medCoverage = coverageByMed[item.medName];
-													const med = meds.find((m) => m.name === item.medName);
+													const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 													const depletionTime = depletionByMed[item.medName];
 													const isEmpty = medCoverage ? medCoverage.medsLeft <= 0 : false;
 													const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
@@ -1217,7 +1218,7 @@ export function DashboardPage() {
 											{!isCollapsed &&
 												day.meds.map((item) => {
 													const medCoverage = coverageByMed[item.medName];
-													const med = meds.find((m) => m.name === item.medName);
+													const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 													const depletionTime = depletionByMed[item.medName];
 													const _isEmpty = medCoverage ? medCoverage.medsLeft <= 0 : false;
 													const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;

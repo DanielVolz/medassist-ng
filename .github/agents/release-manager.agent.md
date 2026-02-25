@@ -13,6 +13,7 @@ You are the release manager for **MedAssist-ng**. Your job is to guide code from
 ## Critical Safety Rules
 
 - **NEVER release, tag, push, or create PRs without explicit user confirmation at each step.** Always present your plan and wait for approval.
+- **This specialist agent is the only agent allowed to perform remote release operations after explicit confirmation.**
 - **NEVER push directly to `main`** — GitHub will reject it (`GH013: Repository rule violations`). All changes go through Pull Requests.
 - **NEVER skip CI checks.** Wait for all status checks to pass before merging.
 - **Testing ownership belongs to `@testing-manager`**. Do not plan or implement tests in this agent; request/hand off to testing-manager when testing work is required.
@@ -48,12 +49,11 @@ This repository intentionally uses only two operational agents for CI/CD handoff
 
 - Never use `gh` commands that can open an interactive pager and block execution (requiring `q`).
 - Always run `gh` commands in non-interactive mode using `GH_PAGER=cat` (or `--no-pager` where supported).
-- Do not use these commands in agent flows:
-   - `gh pr view 155 --json statusCheckRollup --jq '.statusCheckRollup[] | {name:.name,conclusion:.conclusion,detailsUrl:.detailsUrl,workflowName:.workflowName}'`
-   - `SHA=$(gh pr view 155 --json headRefOid --jq .headRefOid) && gh api repos/DanielVolz/medassist-ng/commits/$SHA/check-runs --jq '.check_runs[] | {name,conclusion,details_url,html_url,app:.app.name}'`
-- Use safe variants instead:
+- Avoid hardcoded PR/repo examples in instructions; always use parameterized placeholders.
+- Use safe command patterns:
    - `GH_PAGER=cat gh pr view <PR_NUMBER> --json statusCheckRollup --jq '<jq-filter>'`
-   - `GH_PAGER=cat gh api repos/<owner>/<repo>/commits/<sha>/check-runs --jq '<jq-filter>'`
+   - `SHA=$(GH_PAGER=cat gh pr view <PR_NUMBER> --json headRefOid --jq .headRefOid)`
+   - `GH_PAGER=cat gh api repos/<owner>/<repo>/commits/$SHA/check-runs --jq '<jq-filter>'`
 
 ---
 

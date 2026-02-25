@@ -250,7 +250,9 @@ Generate secrets with: `openssl rand -hex 32`
 
 MedAssist uses [Shoutrrr](https://containrrr.dev/shoutrrr/) for push notifications, supporting many services with a single URL format.
 
-**Supported services:** ntfy, Pushover, Gotify, Discord, Telegram, Slack, Matrix, and [many more](https://containrrr.dev/shoutrrr/v0.8/services/overview/).
+**Implemented URL schemes in MedAssist:** `ntfy://`, `discord://`, `pushover://`, `gotify://`, `telegram://`, plus direct `https://` webhooks.
+
+This covers common providers like ntfy, Discord, Pushover, Gotify, Telegram, Slack webhooks, and many others via webhook URLs.
 
 Configure push notifications in Settings → Push, or set defaults via environment variables:
 
@@ -288,6 +290,7 @@ Get your keys at [pushover.net](https://pushover.net/):
 **Gotify** (self-hosted):
 ```
 gotify://your-server.com/TOKEN
+gotify://your-server.com:443/path/to/gotify/TOKEN?priority=1
 ```
 
 **Discord**:
@@ -298,6 +301,7 @@ discord://TOKEN@WEBHOOK_ID
 **Telegram**:
 ```
 telegram://TOKEN@telegram?chats=CHAT_ID
+telegram://TOKEN@telegram?chats=@your_channel,-1001234567890
 ```
 
 For all services and options, see the [Shoutrrr documentation](https://containrrr.dev/shoutrrr/v0.8/services/overview/).
@@ -310,6 +314,17 @@ docker compose -f docker-compose.dev.yml up
 
 - Frontend: `http://localhost:5173` (hot reload)
 - Backend: `http://localhost:3000`
+
+Playwright E2E recommendations:
+
+```bash
+cd frontend
+npm run test:e2e:local      # local run with PLAYWRIGHT_WORKERS=4
+npm run test:e2e:all:local  # local all-browser run with PLAYWRIGHT_WORKERS=4
+```
+
+- CI stays at `PLAYWRIGHT_WORKERS=1` for stability.
+- Data-heavy specs remain sequential via the `chromium-data` project config.
 
 # Acknowledgements
 

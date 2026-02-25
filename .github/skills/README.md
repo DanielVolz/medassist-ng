@@ -13,7 +13,7 @@ Use one governance source to avoid duplicated or conflicting policy text.
 
 ## Skills
 
-- `medassist-karpathy-core` — enforce assumption clarity, simplicity, surgical diffs, and verifiable execution.
+- `medassist-karpathy-core` — enforce think-before-coding, simplicity-first changes, surgical diffs, and goal-driven verification.
 - `medassist-architecture-guard` — enforce frontend/backend boundary and `/api/*` data-flow conventions.
 - `medassist-db-compat-check` — enforce backward-compatible SQLite/Drizzle schema changes.
 - `medassist-i18n-enforcer` — enforce translation-key-only UI copy with EN/DE parity.

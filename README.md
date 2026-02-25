@@ -24,7 +24,7 @@
 
 ### 🤖 AI-Generated Code
 
-> This app was 100% coded with Claude Opus 4.5. Use at your own risk.
+> This app was 100% coded with [Claude Opus 4.6](https://www.anthropic.com/claude) and [GPT-5.3 Codex](https://openai.com/index/gpt-5/). Use at your own risk.
 
 ### ⚠️ Disclaimer
 

@@ -152,7 +152,7 @@ describe("getPackageSize", () => {
 
 describe("FIELD_LIMITS", () => {
 	it("has correct limits for name field", () => {
-		expect(FIELD_LIMITS.name.min).toBe(1);
+		expect(FIELD_LIMITS.name.min).toBe(0);
 		expect(FIELD_LIMITS.name.max).toBe(100);
 	});
 

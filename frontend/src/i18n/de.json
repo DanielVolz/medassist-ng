@@ -192,7 +192,7 @@
     },
     "placeholders": {
       "commercial": "z.B. Ozempic",
-      "generic": "z.B. Semaglutid (optional)",
+      "generic": "z.B. Semaglutid",
       "takenBy": "Name eingeben und Enter drücken",
       "addPerson": "Weitere Person hinzufügen...",
       "weight": "z.B. 240",

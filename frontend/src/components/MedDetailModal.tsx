@@ -672,7 +672,9 @@ export function MedDetailModal({
 						</div>
 						<div className="med-detail-titles">
 							<h2>{getMedDisplayName(selectedMed)}</h2>
-							{selectedMed.name && selectedMed.genericName && <span className="med-generic-name">{selectedMed.genericName}</span>}
+							{selectedMed.name && selectedMed.genericName && (
+								<span className="med-generic-name">{selectedMed.genericName}</span>
+							)}
 							{selectedMed.takenBy && (selectedMed.takenBy || []).length > 0 && (
 								<span className="med-taken-by">
 									{t("modal.for")}{" "}
@@ -1017,7 +1019,11 @@ export function MedDetailModal({
 
 			{/* Image Lightbox */}
 			{showImageLightbox && selectedMed.imageUrl && (
-				<Lightbox src={`/api/images/${selectedMed.imageUrl}`} alt={getMedDisplayName(selectedMed)} onClose={onCloseImageLightbox} />
+				<Lightbox
+					src={`/api/images/${selectedMed.imageUrl}`}
+					alt={getMedDisplayName(selectedMed)}
+					onClose={onCloseImageLightbox}
+				/>
 			)}
 
 			{/* Refill Modal */}

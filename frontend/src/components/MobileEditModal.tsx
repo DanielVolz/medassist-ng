@@ -253,7 +253,10 @@ export function MobileEditModal({
 	const mobileTitle = (() => {
 		if (!editingId) return t("form.newEntry");
 		if (readOnlyMode) return t("form.viewEntry");
-		const medicationName = (currentMed ? (currentMed.name?.trim() || currentMed.genericName?.trim()) : null) || form.name.trim() || form.genericName.trim();
+		const medicationName =
+			(currentMed ? currentMed.name?.trim() || currentMed.genericName?.trim() : null) ||
+			form.name.trim() ||
+			form.genericName.trim();
 		if (!medicationName) return t("form.editEntry");
 		return t("form.editEntryWithName", { name: medicationName });
 	})();
@@ -366,7 +369,9 @@ export function MobileEditModal({
 												<span className="field-error">{fieldErrors.name}</span>
 											)}
 										</label>
-										<label className={`full ${!readOnlyMode && showNameValidation && fieldErrors.genericName ? "has-error" : ""}`}>
+										<label
+											className={`full ${!readOnlyMode && showNameValidation && fieldErrors.genericName ? "has-error" : ""}`}
+										>
 											{t("form.genericName")}
 											<input
 												value={form.genericName}

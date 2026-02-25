@@ -6,9 +6,9 @@ import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import { useModalHistory } from "../hooks";
+import { getMedDisplayName } from "../types";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
 import { expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
-import { getMedDisplayName } from "../types";
 import {
 	formatFullBlisters,
 	formatOpenBlisterAndLoose,
@@ -354,7 +354,9 @@ export function DashboardPage() {
 									<span className="reminder-status-value">
 										{reminderData.lastIntakeSent.medName &&
 											(() => {
-												const medication = meds.find((m) => getMedDisplayName(m) === reminderData.lastIntakeSent!.medName);
+												const medication = meds.find(
+													(m) => getMedDisplayName(m) === reminderData.lastIntakeSent!.medName
+												);
 												return medication ? (
 													<span
 														className="med-link clickable"

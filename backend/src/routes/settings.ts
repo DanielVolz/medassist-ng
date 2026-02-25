@@ -739,26 +739,13 @@ export async function sendShoutrrrNotification(
 			const disableTlsRaw = parsedGotify.searchParams.get("disabletls")?.toLowerCase();
 			const protocol = disableTlsRaw === "yes" || disableTlsRaw === "true" || disableTlsRaw === "1" ? "http" : "https";
 
-			const baseUrl = `${protocol}://${parsedGotify.host}${basePath ? `/${basePath}` : ""}`;
-			const targetUrl = `${baseUrl}/message`;
+			const gotifyWebhookUrl = `${protocol}://${parsedGotify.host}${basePath ? `/${basePath}` : ""}/message?token=${encodeURIComponent(token)}`;
 
-			const priorityRaw = parsedGotify.searchParams.get("priority");
-			const priority = priorityRaw && /^-?\d+$/.test(priorityRaw) ? Number(priorityRaw) : 0;
+			const gotifyPriority = parsedGotify.searchParams.get("priority");
+			const gotifyMessage = gotifyPriority ? `${message}\n\n(priority=${gotifyPriority})` : message;
 
-			// lgtm [js/request-forgery] host is validated by validateNotificationHostname() and redirects are blocked.
-			const response = await fetch(targetUrl, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"X-Gotify-Key": token,
-				},
-				body: JSON.stringify({ title, message, priority }),
-				redirect: "error",
-			});
-
-			if (response.ok) return { success: true };
-			const errorText = await response.text();
-			return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+			// Reuse validated https webhook path to keep a single outbound request sink.
+			return sendShoutrrrNotification(gotifyWebhookUrl, title, gotifyMessage);
 		}
 
 		// Validate and sanitize URL to prevent SSRF - this reconstructs the URL

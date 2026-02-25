@@ -85,6 +85,21 @@ type TestShoutrrrBody = {
 	url: string;
 };
 
+function getNotificationProvider(url: string): string {
+	if (url.startsWith("discord://")) return "discord";
+	if (url.startsWith("telegram://")) return "telegram";
+	if (url.startsWith("gotify://")) return "gotify";
+	if (url.startsWith("pushover://")) return "pushover";
+	if (url.startsWith("ntfy://")) return "ntfy";
+
+	try {
+		const parsed = new URL(url);
+		return parsed.hostname || "https";
+	} catch {
+		return "unknown";
+	}
+}
+
 // Helper to parse boolean env vars
 function envBool(key: string, defaultVal: boolean): boolean {
 	const val = process.env[key];
@@ -467,6 +482,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 		}
 
 		try {
+			const provider = getNotificationProvider(url);
 			const result = await sendShoutrrrNotification(
 				url,
 				"MedAssist-ng Test",
@@ -474,11 +490,17 @@ export async function settingsRoutes(app: FastifyInstance) {
 			);
 
 			if (result.success) {
+				request.log.info({ provider }, "[Settings] Test push notification sent");
 				return reply.send({ success: true, message: "Test notification sent successfully" });
 			} else {
+				request.log.warn({ provider, error: result.error ?? "unknown" }, "[Settings] Test push notification failed");
 				return reply.status(500).send({ error: result.error });
 			}
 		} catch (error) {
+			request.log.error(
+				{ provider: getNotificationProvider(url), error },
+				"[Settings] Unexpected error while sending test push notification"
+			);
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";
 			return reply.status(500).send({ error: `Failed to send notification: ${errorMessage}` });
 		}
@@ -491,6 +513,28 @@ function sanitizeNotificationUrl(
 	urlStr: string
 ): { url: string; isNtfy: boolean; auth?: { user: string; pass: string } } | { error: string } {
 	try {
+		// Support Shoutrrr Discord format: discord://TOKEN@WEBHOOK_ID
+		if (urlStr.startsWith("discord://")) {
+			const parsedDiscord = new URL(urlStr);
+			const webhookId = parsedDiscord.hostname;
+			const webhookToken = parsedDiscord.username;
+
+			if (!webhookId || !webhookToken) {
+				return { error: "Invalid Discord URL format" };
+			}
+
+			if (!/^\d+$/.test(webhookId)) {
+				return { error: "Invalid Discord webhook ID" };
+			}
+
+			if (!/^[A-Za-z0-9._-]+$/.test(webhookToken)) {
+				return { error: "Invalid Discord webhook token" };
+			}
+
+			const discordWebhookUrl = `https://discord.com/api/webhooks/${webhookId}/${webhookToken}`;
+			return { url: discordWebhookUrl, isNtfy: false };
+		}
+
 		// Convert ntfy:// to https:// for parsing, track if it was ntfy
 		const isNtfy = urlStr.startsWith("ntfy://");
 		const normalizedUrl = isNtfy ? urlStr.replace("ntfy://", "https://") : urlStr;
@@ -502,38 +546,9 @@ function sanitizeNotificationUrl(
 			return { error: "Only HTTP/HTTPS protocols are allowed" };
 		}
 
-		// Block private/internal IP addresses
-		const hostname = parsed.hostname.toLowerCase();
-
-		// Block localhost
-		if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
-			return { error: "Localhost URLs are not allowed" };
-		}
-
-		// Block private IP ranges (basic check)
-		const ipMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-		if (ipMatch) {
-			const [, a, b] = ipMatch.map(Number);
-			// 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x (link-local)
-			if (
-				a === 10 ||
-				a === 127 ||
-				(a === 172 && b >= 16 && b <= 31) ||
-				(a === 192 && b === 168) ||
-				(a === 169 && b === 254)
-			) {
-				return { error: "Private IP addresses are not allowed" };
-			}
-		}
-
-		// Block common internal hostnames
-		if (
-			hostname.endsWith(".local") ||
-			hostname.endsWith(".internal") ||
-			hostname.endsWith(".lan") ||
-			hostname === "metadata.google.internal"
-		) {
-			return { error: "Internal hostnames are not allowed" };
+		const hostValidationError = validateNotificationHostname(parsed.hostname);
+		if (hostValidationError) {
+			return { error: hostValidationError };
 		}
 
 		// Reconstruct URL from validated components - this breaks taint tracking
@@ -550,6 +565,39 @@ function sanitizeNotificationUrl(
 	}
 }
 
+function validateNotificationHostname(hostnameRaw: string): string | null {
+	const hostname = hostnameRaw.toLowerCase();
+
+	if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+		return "Localhost URLs are not allowed";
+	}
+
+	const ipMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+	if (ipMatch) {
+		const [, a, b] = ipMatch.map(Number);
+		if (
+			a === 10 ||
+			a === 127 ||
+			(a === 172 && b >= 16 && b <= 31) ||
+			(a === 192 && b === 168) ||
+			(a === 169 && b === 254)
+		) {
+			return "Private IP addresses are not allowed";
+		}
+	}
+
+	if (
+		hostname.endsWith(".local") ||
+		hostname.endsWith(".internal") ||
+		hostname.endsWith(".lan") ||
+		hostname === "metadata.google.internal"
+	) {
+		return "Internal hostnames are not allowed";
+	}
+
+	return null;
+}
+
 // Send notification via Shoutrrr-compatible URL (supports ntfy, Discord, Telegram, etc.)
 export async function sendShoutrrrNotification(
 	urlStr: string,
@@ -557,6 +605,149 @@ export async function sendShoutrrrNotification(
 	message: string
 ): Promise<{ success: boolean; error?: string }> {
 	try {
+		if (urlStr.startsWith("pushover://")) {
+			const pushoverAuthority = urlStr.slice("pushover://".length).split("/")[0] ?? "";
+			const atIndex = pushoverAuthority.lastIndexOf("@");
+			const credentialPart = atIndex >= 0 ? pushoverAuthority.slice(0, atIndex) : "";
+			const userKey = atIndex >= 0 ? pushoverAuthority.slice(atIndex + 1) : "";
+
+			const tokenSeparatorIndex = credentialPart.indexOf(":");
+			const apiToken = tokenSeparatorIndex >= 0 ? credentialPart.slice(tokenSeparatorIndex + 1) : "";
+
+			const parsedPushover = new URL(urlStr);
+
+			if (!apiToken || !userKey) {
+				return { success: false, error: "Invalid Pushover URL format" };
+			}
+
+			const pushoverBody = new URLSearchParams({
+				token: apiToken,
+				user: userKey,
+				title,
+				message,
+			});
+
+			const devices = parsedPushover.searchParams.get("devices");
+			if (devices) {
+				pushoverBody.set("device", devices);
+			}
+
+			const priority = parsedPushover.searchParams.get("priority");
+			if (priority && /^-?\d+$/.test(priority)) {
+				pushoverBody.set("priority", priority);
+			}
+
+			const response = await fetch("https://api.pushover.net/1/messages.json", {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: pushoverBody.toString(),
+				redirect: "error",
+			});
+
+			if (response.ok) return { success: true };
+			const errorText = await response.text();
+			return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+		}
+
+		if (urlStr.startsWith("telegram://")) {
+			const parsedTelegram = new URL(urlStr);
+			const token = parsedTelegram.username;
+			if (!token || parsedTelegram.hostname !== "telegram") {
+				return { success: false, error: "Invalid Telegram URL format" };
+			}
+
+			const chatsRaw = parsedTelegram.searchParams.get("chats") ?? parsedTelegram.searchParams.get("channels") ?? "";
+			const chats = chatsRaw
+				.split(",")
+				.map((chat) => chat.trim())
+				.filter(Boolean);
+
+			if (chats.length === 0) {
+				return { success: false, error: "Telegram URL requires chats parameter" };
+			}
+
+			const parseModeRaw = parsedTelegram.searchParams.get("parseMode")?.toLowerCase();
+			let parseMode: "HTML" | "Markdown" | "MarkdownV2" | undefined;
+			if (parseModeRaw === "html") {
+				parseMode = "HTML";
+			} else if (parseModeRaw === "markdown") {
+				parseMode = "Markdown";
+			} else if (parseModeRaw === "markdownv2") {
+				parseMode = "MarkdownV2";
+			}
+
+			const notificationRaw = parsedTelegram.searchParams.get("notification")?.toLowerCase();
+			const disableNotification = notificationRaw === "no" || notificationRaw === "false";
+
+			const previewRaw = parsedTelegram.searchParams.get("preview")?.toLowerCase();
+			const disablePreview = previewRaw === "no" || previewRaw === "false";
+
+			if (!/^\d+:[A-Za-z0-9_-]+$/.test(token)) {
+				return { success: false, error: "Invalid Telegram token format" };
+			}
+
+			const telegramSendMessageUrl = new URL("/bot/sendMessage", "https://api.telegram.org");
+			telegramSendMessageUrl.pathname = `/bot${token}/sendMessage`;
+
+			for (const chatId of chats) {
+				const payload: Record<string, string | boolean> = {
+					chat_id: chatId,
+					text: `${title}\n\n${message}`,
+					disable_notification: disableNotification,
+					disable_web_page_preview: disablePreview,
+				};
+				if (parseMode) {
+					payload.parse_mode = parseMode;
+				}
+
+				// codeql[js/request-forgery]: host is fixed to api.telegram.org and token is pattern-validated.
+				const response = await fetch(telegramSendMessageUrl.toString(), {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(payload),
+					redirect: "error",
+				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+				}
+			}
+
+			return { success: true };
+		}
+
+		if (urlStr.startsWith("gotify://")) {
+			const parsedGotify = new URL(urlStr);
+			const hostValidationError = validateNotificationHostname(parsedGotify.hostname);
+			if (hostValidationError) {
+				return { success: false, error: hostValidationError };
+			}
+
+			const pathParts = parsedGotify.pathname
+				.split("/")
+				.map((part) => part.trim())
+				.filter(Boolean);
+
+			if (pathParts.length === 0) {
+				return { success: false, error: "Invalid Gotify URL format" };
+			}
+
+			const token = pathParts[pathParts.length - 1];
+			const basePath = pathParts.slice(0, -1).join("/");
+
+			const disableTlsRaw = parsedGotify.searchParams.get("disabletls")?.toLowerCase();
+			const protocol = disableTlsRaw === "yes" || disableTlsRaw === "true" || disableTlsRaw === "1" ? "http" : "https";
+
+			const gotifyWebhookUrl = `${protocol}://${parsedGotify.host}${basePath ? `/${basePath}` : ""}/message?token=${encodeURIComponent(token)}`;
+
+			const gotifyPriority = parsedGotify.searchParams.get("priority");
+			const gotifyMessage = gotifyPriority ? `${message}\n\n(priority=${gotifyPriority})` : message;
+
+			// Reuse validated https webhook path to keep a single outbound request sink.
+			return sendShoutrrrNotification(gotifyWebhookUrl, title, gotifyMessage);
+		}
+
 		// Validate and sanitize URL to prevent SSRF - this reconstructs the URL
 		// from validated components, breaking taint tracking
 		const validation = sanitizeNotificationUrl(urlStr);
@@ -584,14 +775,17 @@ export async function sendShoutrrrNotification(
 		// Use JSON format only for known webhook services that require it
 		// Use proper URL parsing to prevent bypass attacks (e.g., evil.com?hooks.slack.com)
 		let isJsonWebhook = false;
+		let isDiscordWebhook = false;
 		try {
 			const parsedUrl = new URL(sanitizedUrl);
 			const hostname = parsedUrl.hostname.toLowerCase();
 			const pathname = parsedUrl.pathname.toLowerCase();
+			isDiscordWebhook =
+				(hostname === "discord.com" || hostname === "discordapp.com") && pathname.startsWith("/api/webhooks");
 
 			isJsonWebhook =
 				// Discord webhooks
-				((hostname === "discord.com" || hostname === "discordapp.com") && pathname.startsWith("/api/webhooks")) ||
+				isDiscordWebhook ||
 				// Slack webhooks
 				hostname === "hooks.slack.com" ||
 				hostname.endsWith(".hooks.slack.com") ||
@@ -621,9 +815,16 @@ export async function sendShoutrrrNotification(
 		} else if (sanitizedUrl.startsWith("http://") || sanitizedUrl.startsWith("https://")) {
 			targetUrl = sanitizedUrl;
 			headers = { "Content-Type": "application/json" };
-			body = JSON.stringify({ title, message, text: `${title}\n\n${message}` });
+			if (isDiscordWebhook) {
+				body = JSON.stringify({ content: `${title}\n\n${message}` });
+			} else {
+				body = JSON.stringify({ title, message, text: `${title}\n\n${message}` });
+			}
 		} else {
-			return { success: false, error: "Unsupported URL format. Use ntfy:// or https:// URL" };
+			return {
+				success: false,
+				error: "Unsupported URL format. Use ntfy://, discord://, pushover://, gotify://, telegram://, or https:// URL",
+			};
 		}
 
 		// SSRF protection: targetUrl is reconstructed from sanitizeNotificationUrl() which validates:

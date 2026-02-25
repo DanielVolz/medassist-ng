@@ -123,7 +123,7 @@ describe("useMedicationForm", () => {
 		expect(result.current.formChanged).toBe(false);
 
 		await waitFor(() => {
-			expect(result.current.fieldErrors.name).toBe("common.validation.required");
+			expect(result.current.fieldErrors.name).toBe("common.validation.nameOrGenericRequired");
 			expect(result.current.hasValidationErrors).toBe(true);
 		});
 	});
@@ -131,7 +131,8 @@ describe("useMedicationForm", () => {
 	it("validates name required and max length fields", () => {
 		const { result } = renderHook(() => useMedicationForm());
 
-		expect(result.current.validateField("name", "")).toBe("common.validation.required");
+		// Cross-field validation: empty name alone returns no per-field error
+		expect(result.current.validateField("name", "")).toBeUndefined();
 		expect(result.current.validateField("takenBy", ["Alice"])).toBeUndefined();
 
 		const tooLongGeneric = "a".repeat(101);

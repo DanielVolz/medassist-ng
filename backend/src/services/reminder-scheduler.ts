@@ -353,7 +353,7 @@ async function getMedicationsNeedingReminder(
 
 		if (isCritical || isLow) {
 			lowStock.push({
-				name: row.name,
+				name: row.name || row.genericName || "",
 				medsLeft: currentPills,
 				daysLeft,
 				depletionDate,
@@ -379,7 +379,7 @@ async function getMedicationsNeedingPrescriptionReminder(userId: number): Promis
 				(row.prescriptionRemainingRefills ?? 0) <= (row.prescriptionLowRefillThreshold ?? 1)
 		)
 		.map((row) => ({
-			name: row.name,
+			name: row.name || row.genericName || "",
 			remainingRefills: row.prescriptionRemainingRefills ?? 0,
 			lowThreshold: row.prescriptionLowRefillThreshold ?? 1,
 			expiryDate: row.prescriptionExpiryDate ?? null,

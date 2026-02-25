@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { expect, test as setup } from "@playwright/test";
-import { TEST_USER } from "./fixtures";
+import { applyVideoSafetyMode, TEST_USER } from "./fixtures";
 
 const authFile = path.join(import.meta.dirname, ".auth", "user.json");
 
@@ -33,6 +33,8 @@ function isTokenValid(token: string): boolean {
  * 4. Log in via the UI.
  */
 setup("authenticate", async ({ page }) => {
+	await applyVideoSafetyMode(page);
+
 	// Create .auth directory if it doesn't exist
 	const authDir = path.dirname(authFile);
 	if (!fs.existsSync(authDir)) {

@@ -18,7 +18,7 @@ import { useAuth } from "../components/Auth";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useMedicationForm, useModalHistory, useUnsavedChangesWarning } from "../hooks";
 import type { DoseUnit, Medication } from "../types";
-import { DOSE_UNITS, FIELD_LIMITS, getPackageSize, getMedDisplayName } from "../types";
+import { DOSE_UNITS, FIELD_LIMITS, getMedDisplayName, getPackageSize } from "../types";
 import { combineDateAndTime, formatDate, formatDateTime, formatNumber } from "../utils/formatters";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
@@ -836,11 +836,13 @@ export function MedicationsPage() {
 												<span
 													className={med.imageUrl ? "med-avatar-clickable" : undefined}
 													onClick={() =>
-														med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) })
+														med.imageUrl &&
+														setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) })
 													}
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === " ") {
-															if (med.imageUrl) setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) });
+															if (med.imageUrl)
+																setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) });
 														}
 													}}
 												>
@@ -910,8 +912,10 @@ export function MedicationsPage() {
 											)}
 											<div className="med-total">
 												{t("medications.details.stock")}:{" "}
-												{coverageByMed[getMedDisplayName(med)] ? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft) : getPackageSize(med)} /{" "}
-												{getPackageSize(med)} {getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}
+												{coverageByMed[getMedDisplayName(med)]
+													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
+													: getPackageSize(med)}{" "}
+												/ {getPackageSize(med)} {getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}
 												{(coverageByMed[getMedDisplayName(med)]
 													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
 													: getPackageSize(med)) > getPackageSize(med) && (
@@ -970,12 +974,16 @@ export function MedicationsPage() {
 														<span
 															className={med.imageUrl ? "med-avatar-clickable" : undefined}
 															onClick={() =>
-																med.imageUrl && setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) })
+																med.imageUrl &&
+																setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) })
 															}
 															onKeyDown={(e) => {
 																if (e.key === "Enter" || e.key === " ") {
 																	if (med.imageUrl)
-																		setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) });
+																		setLightboxImage({
+																			src: `/api/images/${med.imageUrl}`,
+																			alt: getMedDisplayName(med),
+																		});
 																}
 															}}
 														>

@@ -320,7 +320,9 @@ function generateTextReport(
 	for (const med of meds) {
 		lines.push(sep);
 		lines.push("");
-		const title = med.isObsolete ? `${getMedDisplayName(med)} (${t("report.docStatusObsolete")})` : getMedDisplayName(med);
+		const title = med.isObsolete
+			? `${getMedDisplayName(med)} (${t("report.docStatusObsolete")})`
+			: getMedDisplayName(med);
 		lines.push(h2(title));
 		lines.push("");
 

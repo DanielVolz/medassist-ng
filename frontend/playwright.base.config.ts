@@ -6,6 +6,8 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			? ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {})
 			: {};
 	const baseURL = env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
+	const parsedWorkers = Number.parseInt(env.PLAYWRIGHT_WORKERS ?? "", 10);
+	const workers = Number.isFinite(parsedWorkers) && parsedWorkers > 0 ? parsedWorkers : env.CI ? 1 : 4;
 
 	const projects: NonNullable<PlaywrightTestConfig["projects"]> = [
 		{
@@ -64,7 +66,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		fullyParallel: true,
 		forbidOnly: !!env.CI,
 		retries: env.CI ? 2 : 0,
-		workers: 1,
+		workers,
 		reporter: env.CI
 			? [["html", { outputFolder: "playwright-report" }], ["github"]]
 			: [["html", { outputFolder: "playwright-report" }], ["list"]],

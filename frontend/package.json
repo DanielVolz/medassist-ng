@@ -16,6 +16,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "rm -rf test-results && playwright test --config=playwright.stable.config.ts",
     "test:e2e:all": "rm -rf test-results && playwright test --config=playwright.all.config.ts",
+    "test:e2e:local": "PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=4 npm run test:e2e",
+    "test:e2e:all:local": "PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=4 npm run test:e2e:all",
     "test:e2e:with-video": "npm run test:e2e && npm run test:e2e:video",
     "test:e2e:all:with-video": "npm run test:e2e:all && npm run test:e2e:video",
     "test:e2e:video": "find \"$PWD/test-results\" -name video.webm -not -path '*retry*' -print0 | xargs -0 ls -tr > /tmp/e2e-videos.list && if [ -s /tmp/e2e-videos.list ]; then sed \"s/^/file '/\" /tmp/e2e-videos.list | sed \"s/$/'/\" > /tmp/e2e-videos.txt && ffmpeg -y -f concat -safe 0 -i /tmp/e2e-videos.txt -c copy test-results/all-tests.webm; else echo 'No videos found to merge'; fi",

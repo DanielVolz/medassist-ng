@@ -205,7 +205,8 @@ export function PlannerPage() {
 							</div>
 							{plannerRows.map((row) => {
 								const med =
-									meds.find((m) => m.id === row.medicationId) || meds.find((m) => getMedDisplayName(m) === row.medicationName);
+									meds.find((m) => m.id === row.medicationId) ||
+									meds.find((m) => getMedDisplayName(m) === row.medicationName);
 								const remainingRefills = med?.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? 0) : null;
 								return (
 									<div

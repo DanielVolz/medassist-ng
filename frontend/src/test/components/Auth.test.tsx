@@ -11,7 +11,7 @@ describe("AuthProvider", () => {
 		vi.resetAllMocks();
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ authEnabled: true, localAuthEnabled: true }),
+			json: () => Promise.resolve({ authEnabled: true, formLoginEnabled: true }),
 		});
 	});
 
@@ -79,7 +79,7 @@ describe("AuthProvider", () => {
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({
 				ok: true,
-				json: () => Promise.resolve({ authEnabled: false, localAuthEnabled: true }),
+				json: () => Promise.resolve({ authEnabled: false, formLoginEnabled: true }),
 			})
 			.mockResolvedValueOnce({ ok: false, status: 401 })
 			.mockResolvedValueOnce({ ok: true, status: 200 })
@@ -116,7 +116,7 @@ describe("AuthProvider", () => {
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({
 				ok: true,
-				json: () => Promise.resolve({ authEnabled: true, localAuthEnabled: true }),
+				json: () => Promise.resolve({ authEnabled: true, formLoginEnabled: true }),
 			})
 			.mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ id: 1, username: "tester" }) })
 			.mockResolvedValueOnce({ ok: false, status: 401 })
@@ -141,7 +141,7 @@ describe("AuthProvider", () => {
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({
 				ok: true,
-				json: () => Promise.resolve({ authEnabled: true, localAuthEnabled: true }),
+				json: () => Promise.resolve({ authEnabled: true, formLoginEnabled: true }),
 			})
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 1, username: "timer-user" }) })
 			.mockResolvedValueOnce({ ok: true, status: 200 });
@@ -167,7 +167,7 @@ describe("AuthProvider", () => {
 describe("LoginForm", () => {
 	const mockAuthState = {
 		authEnabled: true,
-		localAuthEnabled: true,
+		formLoginEnabled: true,
 		oidcEnabled: false,
 		registrationEnabled: true,
 		hasUsers: true,
@@ -281,7 +281,7 @@ describe("LoginForm", () => {
 				json: () =>
 					Promise.resolve({
 						authEnabled: false,
-						localAuthEnabled: true,
+						formLoginEnabled: true,
 						oidcEnabled: false,
 						registrationEnabled: true,
 						hasUsers: true,
@@ -317,7 +317,7 @@ describe("LoginForm", () => {
 describe("RegisterForm", () => {
 	const mockAuthState = {
 		authEnabled: true,
-		localAuthEnabled: true,
+		formLoginEnabled: true,
 		oidcEnabled: false,
 		registrationEnabled: true,
 		hasUsers: false,
@@ -404,7 +404,7 @@ describe("RegisterForm", () => {
 			json: () =>
 				Promise.resolve({
 					authEnabled: true,
-					localAuthEnabled: true,
+					formLoginEnabled: true,
 					oidcEnabled: false,
 					registrationEnabled: true,
 					hasUsers: false,
@@ -439,7 +439,7 @@ describe("RegisterForm", () => {
 describe("AuthPage", () => {
 	const mockAuthState = {
 		authEnabled: true,
-		localAuthEnabled: true,
+		formLoginEnabled: true,
 		oidcEnabled: false,
 		registrationEnabled: true,
 		hasUsers: true,
@@ -504,7 +504,7 @@ describe("UserProfile", () => {
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({
 				ok: true,
-				json: () => Promise.resolve({ authEnabled: true, localAuthEnabled: true }),
+				json: () => Promise.resolve({ authEnabled: true, formLoginEnabled: true }),
 			})
 			.mockResolvedValueOnce({
 				ok: true,
@@ -724,7 +724,7 @@ describe("AuthProvider methods", () => {
 	it("refreshUser retries after token refresh on 401", async () => {
 		vi.clearAllMocks();
 		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ authEnabled: false, localAuthEnabled: true }) })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ authEnabled: false, formLoginEnabled: true }) })
 			.mockResolvedValueOnce({ ok: false, status: 401 })
 			.mockResolvedValueOnce({ ok: true })
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 1, username: "refreshed-user" }) });

@@ -47,7 +47,7 @@ export async function getAnonymousUserId(): Promise<number> {
 export interface AuthState {
 	authEnabled: boolean;
 	registrationEnabled: boolean;
-	localAuthEnabled: boolean;
+	formLoginEnabled: boolean;
 	oidcEnabled: boolean;
 	oidcProviderName: string;
 	hasUsers: boolean;
@@ -59,15 +59,18 @@ export async function getAuthState(): Promise<AuthState> {
 	const [result] = await db.select({ count: count() }).from(users).where(sql`${users.id} != ${ANONYMOUS_USER_ID}`);
 	const hasUsers = result.count > 0;
 
+	const needsSetup = env.AUTH_ENABLED && !hasUsers;
+
 	return {
 		authEnabled: env.AUTH_ENABLED,
 		// Registration: enabled via ENV OR no users exist (first-time setup)
 		registrationEnabled: env.REGISTRATION_ENABLED || !hasUsers,
-		localAuthEnabled: env.AUTH_ENABLED, // Password auth available when auth is enabled
+		// Form login: enabled when auth + form login are both on, or forced on for first-user setup
+		formLoginEnabled: needsSetup || (env.AUTH_ENABLED && env.FORM_LOGIN_ENABLED),
 		oidcEnabled: env.OIDC_ENABLED,
 		oidcProviderName: env.OIDC_PROVIDER_NAME,
 		hasUsers,
-		needsSetup: env.AUTH_ENABLED && !hasUsers,
+		needsSetup,
 	};
 }
 

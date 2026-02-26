@@ -28,7 +28,7 @@ vi.mock("../db/client.js", () => ({
 vi.mock("../plugins/env.js", () => ({
 	env: {
 		AUTH_ENABLED: true,
-		LOCAL_AUTH_ENABLED: true,
+		FORM_LOGIN_ENABLED: true,
 		REGISTRATION_ENABLED: true,
 		OIDC_ENABLED: false,
 		NODE_ENV: "test",
@@ -144,7 +144,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			const data = response.json();
 			expect(data.authEnabled).toBe(true);
 			expect(data.registrationEnabled).toBe(true);
-			expect(data.localAuthEnabled).toBe(true);
+			expect(data.formLoginEnabled).toBe(true);
 		});
 	});
 

@@ -20,7 +20,7 @@ export interface User {
 export interface AuthState {
 	authEnabled: boolean;
 	registrationEnabled: boolean;
-	localAuthEnabled: boolean;
+	formLoginEnabled: boolean;
 	oidcEnabled: boolean;
 	oidcProviderName: string;
 	hasUsers: boolean;
@@ -425,7 +425,7 @@ export function LoginForm({
 							</svg>
 							{t("auth.loginWithSSO", "Login with {{provider}}", { provider: authState.oidcProviderName || "SSO" })}
 						</button>
-						{authState?.localAuthEnabled && (
+						{authState?.formLoginEnabled && (
 							<div className="auth-divider">
 								<span>{t("auth.or", "or")}</span>
 							</div>
@@ -434,7 +434,7 @@ export function LoginForm({
 				)}
 
 				{/* Local Login Form - only show if local auth is enabled */}
-				{authState?.localAuthEnabled && (
+				{authState?.formLoginEnabled && (
 					<form onSubmit={handleSubmit} className="auth-form">
 						{error && <div className="auth-error">{error}</div>}
 
@@ -474,7 +474,7 @@ export function LoginForm({
 					</form>
 				)}
 
-				{authState?.registrationEnabled && authState?.localAuthEnabled && onSwitchToRegister && (
+				{authState?.registrationEnabled && authState?.formLoginEnabled && onSwitchToRegister && (
 					<div className="auth-links">
 						<button type="button" className="auth-link-btn" onClick={onSwitchToRegister}>
 							{t("auth.createAccount", "Create account")}
@@ -540,7 +540,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 							</svg>
 							{t("auth.loginWithSSO", "Login with {{provider}}", { provider: authState.oidcProviderName || "SSO" })}
 						</button>
-						{authState?.localAuthEnabled && (
+						{authState?.formLoginEnabled && (
 							<div className="auth-divider">
 								<span>{t("auth.or", "or")}</span>
 							</div>
@@ -549,7 +549,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 				)}
 
 				{/* Local Registration Form - only show if local auth is enabled */}
-				{authState?.localAuthEnabled && (
+				{authState?.formLoginEnabled && (
 					<form onSubmit={handleSubmit} className="auth-form">
 						{error && <div className="auth-error">{error}</div>}
 

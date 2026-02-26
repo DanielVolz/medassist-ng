@@ -10,11 +10,10 @@ const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
 const backendVersion = packageJson.version || "unknown";
 
 export async function healthRoutes(app: FastifyInstance) {
-	// Exempt from rate limit - lightweight health check
-	app.get("/health", { config: { rateLimit: false } }, async () => ({
+	// Exempt from rate limit + suppress request logs (called every 30s by Docker healthcheck)
+	app.get("/health", { config: { rateLimit: false }, logLevel: "warn" }, async () => ({
 		status: "ok",
 		version: backendVersion,
 		smtpConfigured: Boolean(process.env.SMTP_HOST),
-		shoutrrrConfigured: Boolean(process.env.SHOUTRRR_URL),
 	}));
 }

@@ -23,18 +23,22 @@ function shouldLog(level: string): boolean {
 	return LOG_LEVELS[level] >= getLevel();
 }
 
+function ts(): string {
+	return new Date().toISOString();
+}
+
 export const log = {
 	debug(msg: string): void {
-		if (shouldLog("debug")) console.log(msg);
+		if (shouldLog("debug")) console.log(`[${ts()}] [DEBUG] ${msg}`);
 	},
 	info(msg: string): void {
-		if (shouldLog("info")) console.log(msg);
+		if (shouldLog("info")) console.log(`[${ts()}] [INFO] ${msg}`);
 	},
 	warn(msg: string): void {
-		if (shouldLog("warn")) console.warn(msg);
+		if (shouldLog("warn")) console.warn(`[${ts()}] [WARN] ${msg}`);
 	},
 	error(msg: string): void {
-		if (shouldLog("error")) console.error(msg);
+		if (shouldLog("error")) console.error(`[${ts()}] [ERROR] ${msg}`);
 	},
 };
 

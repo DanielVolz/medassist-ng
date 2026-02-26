@@ -58,10 +58,18 @@ function sanitizeCorrelationId(headers: IncomingHttpHeaders): string | null {
 }
 
 function buildLoggerOptions(level: string) {
-	return {
+	const base = {
 		level,
 		timestamp: () => `,"time":"${new Date().toISOString()}"`,
 	};
+	// Human-readable logs in development; structured JSON in production/test
+	if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
+		return {
+			...base,
+			transport: { target: "pino-pretty", options: { translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l" } },
+		};
+	}
+	return base;
 }
 
 /** Create and configure Fastify app (without starting) */

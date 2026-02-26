@@ -88,13 +88,12 @@ export async function runDrizzleMigrations(
 		await migrate(database, { migrationsFolder });
 		return { success: true };
 	} catch (err: unknown) {
-		// If the error is about existing schema objects, the DB is already up-to-date
-		// This happens when ALTER migrations in client.ts have already added the columns,
-		// or when tables were created before drizzle migrations were introduced
-		if ((err as Error).message?.includes("duplicate column") || (err as Error).message?.includes("already exists")) {
-			return { success: true, warning: `Schema already up-to-date: ${(err as Error).message}` };
+		const msg = (err as Error).message ?? "";
+		// Duplicate column / already exists = DB is already up-to-date (expected for existing DBs)
+		if (msg.includes("duplicate column") || msg.includes("already exists")) {
+			return { success: true };
 		}
-		return { success: false, error: (err as Error).message };
+		return { success: false, error: msg };
 	}
 }
 

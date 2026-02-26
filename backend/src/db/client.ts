@@ -78,10 +78,6 @@ async function runMigrations() {
 	const migrateResult = await runDrizzleMigrations(db);
 	if (!migrateResult.success) {
 		log.error(`[DB] Migration error: ${migrateResult.error}`);
-	} else if (migrateResult.warning) {
-		log.warn(`[DB] Migration warning: ${migrateResult.warning}`);
-	} else {
-		log.debug(`[DB] Drizzle migrations completed`);
 	}
 
 	// Run ALTER TABLE migrations for backward compatibility

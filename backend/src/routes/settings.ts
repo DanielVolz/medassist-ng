@@ -284,7 +284,8 @@ export async function settingsRoutes(app: FastifyInstance) {
 	}
 
 	// Get settings for current user
-	app.get("/settings", async (request, reply) => {
+	// Suppress request logs — polled every 30s for reminder status refresh
+	app.get("/settings", { logLevel: "warn" }, async (request, reply) => {
 		const userId = await getUserId(request, reply);
 
 		const settings = await getOrCreateUserSettings(userId);

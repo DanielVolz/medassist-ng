@@ -137,8 +137,9 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	// GET /doses/taken - PROTECTED: Get all taken doses for the user
+	// Suppress request logs — polled every 5s by frontend
 	// ---------------------------------------------------------------------------
-	app.get("/doses/taken", { preHandler: requireAuth }, async (request, reply) => {
+	app.get("/doses/taken", { preHandler: requireAuth, logLevel: "warn" }, async (request, reply) => {
 		const userId = await getUserId(request, reply);
 
 		// Get all taken doses for this user (no time limit)
@@ -304,8 +305,9 @@ export async function doseRoutes(app: FastifyInstance) {
 
 	// ---------------------------------------------------------------------------
 	// GET /share/:token/doses - PUBLIC: Get taken doses for a share link
+	// Suppress request logs — polled every 5s by SharedSchedule
 	// ---------------------------------------------------------------------------
-	app.get<{ Params: { token: string } }>("/share/:token/doses", async (request, reply) => {
+	app.get<{ Params: { token: string } }>("/share/:token/doses", { logLevel: "warn" }, async (request, reply) => {
 		const { token } = request.params;
 
 		const { share, reason } = await getActiveShareToken(token);

@@ -868,7 +868,6 @@ describe("E2E Tests with Real Routes", () => {
 			const json = response.json();
 			expect(json.status).toBe("ok");
 			expect(typeof json.smtpConfigured).toBe("boolean");
-			expect(typeof json.shoutrrrConfigured).toBe("boolean");
 		});
 	});
 
@@ -1289,7 +1288,6 @@ describe("E2E Tests with Real Routes", () => {
 			const json = response.json();
 			expect(json.status).toBe("ok");
 			expect(typeof json.smtpConfigured).toBe("boolean");
-			expect(typeof json.shoutrrrConfigured).toBe("boolean");
 		});
 	});
 

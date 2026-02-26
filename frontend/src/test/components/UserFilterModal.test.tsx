@@ -15,6 +15,7 @@ const mockMedication: Medication = {
 	id: 1,
 	name: "Test Med",
 	genericName: "Generic Name",
+	packageType: "blister",
 	packCount: 1,
 	blistersPerPack: 1,
 	pillsPerBlister: 30,

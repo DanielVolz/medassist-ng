@@ -281,13 +281,13 @@ describe("useSettings", () => {
 	it("refreshes reminder status on interval", async () => {
 		let refreshCallback: (() => void) | null = null;
 		const nativeSetInterval = global.setInterval;
-		vi.spyOn(global, "setInterval").mockImplementation((handler: TimerHandler, timeout?: number) => {
+		vi.spyOn(global, "setInterval").mockImplementation(((handler: TimerHandler, timeout?: number) => {
 			if (timeout === 30000) {
 				refreshCallback = handler as () => void;
 				return 1 as unknown as ReturnType<typeof setInterval>;
 			}
 			return nativeSetInterval(handler, timeout);
-		});
+		}) as typeof setInterval);
 
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })

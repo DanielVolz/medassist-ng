@@ -1,4 +1,4 @@
-import type { Coverage } from "../types";
+import type { Coverage, PackageType } from "../types";
 import { getMedTotal as getMedTotalFromTypes } from "../types";
 import { splitCurrentBlisterStock } from "../utils/stock";
 
@@ -43,9 +43,12 @@ export function getMedTotal(med: {
 	pillsPerBlister: number;
 	looseTablets: number;
 	stockAdjustment?: number | null;
-	packageType?: string;
+	packageType?: PackageType;
 }): number {
-	return getMedTotalFromTypes(med);
+	return getMedTotalFromTypes({
+		...med,
+		stockAdjustment: med.stockAdjustment ?? undefined,
+	});
 }
 
 export function getReminderStatusData(

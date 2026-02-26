@@ -190,6 +190,7 @@ describe("getBlisterStock", () => {
 		const med: Medication = {
 			id: 1,
 			name: "Test Med",
+			packageType: "blister",
 			packCount: 1,
 			blistersPerPack: 2,
 			pillsPerBlister: 10,
@@ -209,6 +210,7 @@ describe("getBlisterStock", () => {
 		const med: Medication = {
 			id: 1,
 			name: "Test Med",
+			packageType: "blister",
 			packCount: 1,
 			blistersPerPack: 1,
 			pillsPerBlister: 10,

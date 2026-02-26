@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { FormEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MobileEditModal } from "../../components/MobileEditModal";
 import type { FormState } from "../../types";
@@ -78,6 +79,7 @@ const defaultProps = {
 	meds: [],
 	onUploadMedImage: vi.fn(),
 	onDeleteMedImage: vi.fn(),
+	imageUploadError: null,
 	onClose: vi.fn(),
 	onResetForm: vi.fn(),
 	onSaveMedication: vi.fn(),
@@ -383,7 +385,7 @@ describe("MobileEditModal form submission", () => {
 	});
 
 	it("calls onSaveMedication when form submitted", () => {
-		const onSaveMedication = vi.fn((e: Event) => e.preventDefault());
+		const onSaveMedication = vi.fn((e: FormEvent) => e.preventDefault());
 		const validForm = { ...defaultForm, name: "TestMed" };
 
 		render(<MobileEditModal {...defaultProps} form={validForm} onSaveMedication={onSaveMedication} />);

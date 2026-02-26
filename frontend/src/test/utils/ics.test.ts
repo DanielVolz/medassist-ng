@@ -17,22 +17,22 @@ describe("generateICS", () => {
 		mockRemoveChild = vi.fn();
 		mockClick = vi.fn();
 
-		global.URL.createObjectURL = mockCreateObjectURL;
-		global.URL.revokeObjectURL = mockRevokeObjectURL;
+		global.URL.createObjectURL = mockCreateObjectURL as unknown as typeof URL.createObjectURL;
+		global.URL.revokeObjectURL = mockRevokeObjectURL as unknown as typeof URL.revokeObjectURL;
 
 		vi.spyOn(document.body, "appendChild").mockImplementation((node) => {
-			mockAppendChild(node);
+			(mockAppendChild as unknown as (child: Node) => void)(node);
 			createdLink = node as HTMLAnchorElement;
 			return node;
 		});
-		vi.spyOn(document.body, "removeChild").mockImplementation(mockRemoveChild);
+		vi.spyOn(document.body, "removeChild").mockImplementation(mockRemoveChild as unknown as (child: Node) => Node);
 
 		// Mock createElement to track the created anchor
 		const originalCreateElement = document.createElement.bind(document);
 		vi.spyOn(document, "createElement").mockImplementation((tag) => {
 			const element = originalCreateElement(tag);
 			if (tag === "a") {
-				element.click = mockClick;
+				element.click = mockClick as unknown as () => void;
 			}
 			return element;
 		});
@@ -63,6 +63,7 @@ describe("generateICS", () => {
 		notes: "Take with food",
 		updatedAt: null,
 		...overrides,
+		packageType: overrides?.packageType ?? "blister",
 	});
 
 	it("creates and downloads ICS file", () => {

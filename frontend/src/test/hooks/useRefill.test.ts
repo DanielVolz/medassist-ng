@@ -184,6 +184,7 @@ describe("useRefill", () => {
 			pillsPerBlister: 10,
 			looseTablets: 5,
 			takenBy: [],
+			packageType: "blister",
 			blisters: [],
 			updatedAt: null,
 		};
@@ -241,6 +242,7 @@ describe("useRefill", () => {
 			pillsPerBlister: 10,
 			looseTablets: 5,
 			takenBy: [],
+			packageType: "blister",
 			blisters: [],
 			updatedAt: null,
 		};
@@ -267,6 +269,7 @@ describe("useRefill", () => {
 			pillsPerBlister: 10,
 			looseTablets: 5,
 			takenBy: [],
+			packageType: "blister",
 			blisters: [],
 			updatedAt: null,
 		};
@@ -300,6 +303,7 @@ describe("useRefill", () => {
 			pillsPerBlister: 10,
 			looseTablets: 5,
 			takenBy: [],
+			packageType: "blister",
 			blisters: [],
 			updatedAt: null,
 		};
@@ -368,7 +372,7 @@ describe("useRefill", () => {
 		// newStockAdjustment = 149 - 150 = -1
 		// → getMedTotal = 150 + (-1) = 149 ✓
 		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-			(call: [string, RequestInit]) => call[0] === "/api/medications/4/stock-adjustment"
+			(call) => call[0] === "/api/medications/4/stock-adjustment"
 		);
 		expect(fetchCall).toBeDefined();
 		const body = JSON.parse(fetchCall![1].body as string);
@@ -420,7 +424,7 @@ describe("useRefill", () => {
 		// baseTotal = getPackageSize(blister) = 25
 		// newStockAdjustment = 25 - 25 = 0
 		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-			(call: [string, RequestInit]) => call[0] === "/api/medications/2/stock-adjustment"
+			(call) => call[0] === "/api/medications/2/stock-adjustment"
 		);
 		expect(fetchCall).toBeDefined();
 		const body = JSON.parse(fetchCall![1].body as string);
@@ -462,7 +466,7 @@ describe("useRefill", () => {
 		});
 
 		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-			(call: [string, RequestInit]) => call[0] === "/api/medications/5/stock-adjustment"
+			(call) => call[0] === "/api/medications/5/stock-adjustment"
 		);
 		expect(fetchCall).toBeDefined();
 		const body = JSON.parse(fetchCall![1].body as string);
@@ -507,7 +511,7 @@ describe("useRefill", () => {
 		});
 
 		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-			(call: [string, RequestInit]) => call[0] === "/api/medications/6/stock-adjustment"
+			(call) => call[0] === "/api/medications/6/stock-adjustment"
 		);
 		expect(fetchCall).toBeDefined();
 		const body = JSON.parse(fetchCall![1].body as string);

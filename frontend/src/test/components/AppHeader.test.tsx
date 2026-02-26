@@ -36,7 +36,7 @@ describe("AppHeader", () => {
 				json: () =>
 					Promise.resolve({
 						authEnabled: false,
-						localAuthEnabled: true,
+						formLoginEnabled: true,
 						hasUsers: false,
 						needsSetup: false,
 					}),
@@ -171,7 +171,7 @@ describe("AppHeader", () => {
 				json: () =>
 					Promise.resolve({
 						authEnabled: false,
-						localAuthEnabled: true,
+						formLoginEnabled: true,
 						hasUsers: false,
 						needsSetup: false,
 					}),
@@ -205,7 +205,7 @@ describe("AppHeader", () => {
 				json: () =>
 					Promise.resolve({
 						authEnabled: false,
-						localAuthEnabled: true,
+						formLoginEnabled: true,
 						hasUsers: false,
 						needsSetup: false,
 					}),
@@ -239,7 +239,7 @@ describe("AppHeader", () => {
 				json: () =>
 					Promise.resolve({
 						authEnabled: false,
-						localAuthEnabled: true,
+						formLoginEnabled: true,
 						hasUsers: false,
 						needsSetup: false,
 					}),
@@ -322,7 +322,7 @@ describe("AppHeader", () => {
 					Promise.resolve({
 						authEnabled: true,
 						registrationEnabled: true,
-						localAuthEnabled: true,
+						formLoginEnabled: true,
 						oidcEnabled: false,
 						oidcProviderName: "",
 						hasUsers: true,

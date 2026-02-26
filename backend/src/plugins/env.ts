@@ -28,7 +28,11 @@ const EnvSchema = z.object({
 		.string()
 		.transform((v) => v === "true")
 		.default("false"),
-	// Disable local auth when using SSO only
+	// Disable username/password form login (useful for OIDC-only setups)
+	FORM_LOGIN_ENABLED: z
+		.string()
+		.transform((v) => v === "true")
+		.default("true"),
 
 	// JWT Secrets - only required when AUTH_ENABLED=true
 	JWT_SECRET: z.string().min(10).optional(),
@@ -126,6 +130,28 @@ if (parsed.OIDC_ENABLED) {
 		console.error("=".repeat(60));
 		process.exit(1);
 	}
+}
+
+// Validate that at least one login method is available when auth is enabled
+if (parsed.AUTH_ENABLED && !parsed.FORM_LOGIN_ENABLED && !parsed.OIDC_ENABLED) {
+	console.error("=".repeat(60));
+	console.error("AUTHENTICATION CONFIGURATION ERROR");
+	console.error("=".repeat(60));
+	console.error("AUTH_ENABLED=true but no login method is available.");
+	console.error("FORM_LOGIN_ENABLED=false and OIDC_ENABLED=false means users cannot log in.");
+	console.error("");
+	console.error("To fix this, either:");
+	console.error("  1. Set FORM_LOGIN_ENABLED=true to allow username/password login");
+	console.error("  2. Set OIDC_ENABLED=true to allow SSO login");
+	console.error("=".repeat(60));
+	process.exit(1);
+}
+
+// Warn about ineffective registration when form login is disabled
+if (parsed.REGISTRATION_ENABLED && !parsed.FORM_LOGIN_ENABLED) {
+	console.warn(
+		"[config] REGISTRATION_ENABLED=true has no effect when FORM_LOGIN_ENABLED=false (no registration form available)"
+	);
 }
 
 export const env = parsed;

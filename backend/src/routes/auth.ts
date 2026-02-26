@@ -123,8 +123,8 @@ export async function authRoutes(app: FastifyInstance) {
 				return reply.status(400).send({ error: "Registration is disabled", code: "REGISTRATION_DISABLED" });
 			}
 
-			if (!state.localAuthEnabled) {
-				return reply.status(400).send({ error: "Local authentication is disabled", code: "LOCAL_AUTH_DISABLED" });
+			if (!state.formLoginEnabled) {
+				return reply.status(400).send({ error: "Form login is disabled", code: "FORM_LOGIN_DISABLED" });
 			}
 
 			// Validate input
@@ -185,8 +185,8 @@ export async function authRoutes(app: FastifyInstance) {
 				return reply.status(400).send({ error: "Authentication is disabled", code: "AUTH_DISABLED" });
 			}
 
-			if (!state.localAuthEnabled) {
-				return reply.status(400).send({ error: "Local authentication is disabled", code: "LOCAL_AUTH_DISABLED" });
+			if (!state.formLoginEnabled) {
+				return reply.status(400).send({ error: "Form login is disabled", code: "FORM_LOGIN_DISABLED" });
 			}
 
 			const parsed = loginSchema.safeParse(request.body);

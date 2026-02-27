@@ -433,7 +433,7 @@ export function LoginForm({
 					</div>
 				)}
 
-				{/* Local Login Form - only show if local auth is enabled */}
+				{/* Local login form - only show if form login is enabled */}
 				{authState?.formLoginEnabled && (
 					<form onSubmit={handleSubmit} className="auth-form">
 						{error && <div className="auth-error">{error}</div>}

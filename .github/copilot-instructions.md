@@ -1,5 +1,11 @@
 # MedAssist-ng - Copilot Entry Point
 
+## VERY IMPORTANT
+
+- Always keep agent work memory updated in `doku/memory_notes.md` so progress and decisions remain recoverable across context loss.
+- Always keep a user-facing work report updated in `doku/report.md` so completed work is easy to review.
+- This memory/report rule replaces the previous `doku/APP_BEHAVIOR.md` persistence requirement.
+
 Use `AGENTS.md` as the single source of truth for all governance, workflow, and skill rules.
 
 ## Required Startup Steps

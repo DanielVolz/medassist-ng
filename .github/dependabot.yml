@@ -7,9 +7,11 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "06:20"
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+      - "backend"
     groups:
       minor-and-patch:
         update-types:
@@ -22,9 +24,11 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "06:10"
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+      - "frontend"
     groups:
       minor-and-patch:
         update-types:
@@ -37,9 +41,16 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "06:00"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+      - "root"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -47,7 +58,13 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "06:30"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "ci"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

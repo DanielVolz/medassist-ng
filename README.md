@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React 18" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Fastify-5-000000?logo=fastify" alt="Fastify" />
   <img src="https://img.shields.io/badge/SQLite-Database-003B57?logo=sqlite" alt="SQLite" />
@@ -194,7 +194,7 @@ All configuration is done via environment variables in `.env`. Copy `.env.exampl
 | `PGID` | `1000` | Group ID for container file permissions |
 | `PORT` | `3000` | Backend API port |
 | `CORS_ORIGINS` | `http://localhost:4174` | Allowed origins for CORS |
-| `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`) |
+| `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`, `silent`). At `info` (default), high-frequency polling endpoints are suppressed. Set `debug` to see all requests. |
 | `TZ` | `Europe/Berlin` | Timezone for scheduled reminders |
 
 ### Authentication
@@ -325,6 +325,13 @@ npm run test:e2e:all:local  # local all-browser run with PLAYWRIGHT_WORKERS=4
 
 - CI stays at `PLAYWRIGHT_WORKERS=1` for stability.
 - Data-heavy specs remain sequential via the `chromium-data` project config.
+
+# Dependency Updates
+
+- Dependabot checks dependencies weekly for `frontend`, `backend`, repository root tooling, and GitHub Actions.
+- Minor and patch updates are grouped to reduce PR noise.
+- Dependabot minor/patch PRs are configured for auto-merge after required CI checks pass.
+- Major updates still require manual review before merge.
 
 # Acknowledgements
 

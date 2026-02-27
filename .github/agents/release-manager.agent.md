@@ -18,6 +18,8 @@ You are the release manager for **MedAssist-ng**. Your job is to guide code from
 - **NEVER push directly to `main`** — GitHub will reject it (`GH013: Repository rule violations`). All changes go through Pull Requests.
 - **NEVER skip CI checks.** Wait for all status checks to pass before merging.
 - **Testing ownership belongs to `@testing-manager`**. Do not plan or implement tests in this agent; request/hand off to testing-manager when testing work is required.
+- **Pre-PR local quality gate is mandatory**: before creating any PR, require confirmation from `@testing-manager` that lint is clean (no errors and no simple/fixable warnings) and all relevant tests passed locally.
+- **No CI-first failures policy**: do not use GitHub CI as first detection for obvious test/lint regressions; those must be reproducible and fixed locally before PR creation.
 - **Track all work in the GitHub Project board.** Every PR should reference an issue. Move issues through the board as work progresses.
 - **ALWAYS verify Project board status after merge.** The `project-auto-done.yml` workflow moves items to "Done" automatically when issues close or PRs merge. Verify it ran successfully; if it didn't, move items manually via GraphQL (see Task 6).
 
@@ -120,7 +122,9 @@ When code changes (features or bug fixes) are complete:
 ### Step 1: Verify Readiness
 
 1. Check for uncommitted changes: `git status`
-2. Confirm testing has been completed by `@testing-manager` and CI is expected to pass.
+2. Confirm testing has been completed by `@testing-manager`.
+3. Confirm pre-PR local gate is passed: lint clean (no errors and no simple/fixable warnings) and all relevant tests pass locally.
+4. Only after local gate is confirmed, proceed to push/create PR and then monitor CI.
 
 ### Step 2: Create Feature Branch
 
@@ -141,11 +145,12 @@ When code changes (features or bug fixes) are complete:
 
 ### Step 3: Push and Create PR
 
-1. Push the branch:
+1. Re-check local gate status before push/PR creation (lint + relevant local tests green).
+2. Push the branch:
    ```bash
    git push -u origin feat/short-description
    ```
-2. Create a Pull Request via GitHub CLI with **all metadata fields populated**:
+3. Create a Pull Request via GitHub CLI with **all metadata fields populated**:
    ```bash
    gh pr create \
      --title "fix: short description" \
@@ -159,7 +164,7 @@ When code changes (features or bug fixes) are complete:
    - Use `--label enhancement` for `feat/` branches, `--label bug` for `fix/` branches, `--label documentation` for `docs/` branches.
    - Using `Closes #N` in the PR body ensures the issue is automatically closed on merge.
    - The `--project` flag links the PR to the Project board.
-3. **Present the PR URL to the user and wait for confirmation.**
+4. **Present the PR URL to the user and wait for confirmation.**
 
 ### Step 4: Wait for CI and Merge
 

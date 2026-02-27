@@ -62,7 +62,7 @@ function buildLoggerOptions(level: string) {
 		level,
 		timestamp: () => `,"time":"${new Date().toISOString()}"`,
 	};
-	// Human readable logs in development, structured JSON in production/test
+	// Human-readable logs in development, structured JSON in production/test
 	if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
 		return {
 			...base,

@@ -12,7 +12,7 @@ describe("useShare", () => {
 		vi.useFakeTimers();
 
 		mockAlert = vi.fn();
-		global.alert = mockAlert;
+		global.alert = mockAlert as unknown as typeof global.alert;
 
 		mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
 		Object.defineProperty(navigator, "clipboard", {
@@ -59,6 +59,7 @@ describe("useShare", () => {
 				id: 1,
 				name: "Med1",
 				takenBy: ["Alice", "Bob"],
+				packageType: "blister",
 				packCount: 1,
 				blistersPerPack: 1,
 				pillsPerBlister: 10,
@@ -70,6 +71,7 @@ describe("useShare", () => {
 				id: 2,
 				name: "Med2",
 				takenBy: ["Bob", "Charlie"],
+				packageType: "blister",
 				packCount: 1,
 				blistersPerPack: 1,
 				pillsPerBlister: 10,
@@ -103,6 +105,7 @@ describe("useShare", () => {
 				id: 1,
 				name: "Med1",
 				takenBy: ["Alice"],
+				packageType: "blister",
 				packCount: 1,
 				blistersPerPack: 1,
 				pillsPerBlister: 10,
@@ -128,6 +131,7 @@ describe("useShare", () => {
 				id: 1,
 				name: "Med1",
 				takenBy: ["Alice"],
+				packageType: "blister",
 				packCount: 1,
 				blistersPerPack: 1,
 				pillsPerBlister: 10,
@@ -168,6 +172,7 @@ describe("useShare", () => {
 				id: 1,
 				name: "Med1",
 				takenBy: ["Alice"],
+				packageType: "blister",
 				packCount: 1,
 				blistersPerPack: 1,
 				pillsPerBlister: 10,
@@ -199,6 +204,7 @@ describe("useShare", () => {
 				id: 1,
 				name: "Med1",
 				takenBy: ["Alice"],
+				packageType: "blister",
 				packCount: 1,
 				blistersPerPack: 1,
 				pillsPerBlister: 10,
@@ -270,6 +276,7 @@ describe("useShare", () => {
 				id: 1,
 				name: "Med1",
 				takenBy: ["Alice"],
+				packageType: "blister",
 				packCount: 1,
 				blistersPerPack: 1,
 				pillsPerBlister: 10,
@@ -308,6 +315,7 @@ describe("useShare", () => {
 				id: 1,
 				name: "Med1",
 				takenBy: ["Alice"],
+				packageType: "blister",
 				packCount: 1,
 				blistersPerPack: 1,
 				pillsPerBlister: 10,

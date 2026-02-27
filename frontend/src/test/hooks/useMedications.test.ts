@@ -196,7 +196,20 @@ describe("useMedications", () => {
 	it("allows setting meds directly", () => {
 		const { result } = renderHook(() => useMedications());
 
-		const newMeds: Array<Pick<Medication, "id" | "name">> = [{ id: 1, name: "NewMed" }];
+		const newMeds: Medication[] = [
+			{
+				id: 1,
+				name: "NewMed",
+				packageType: "blister",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				blisters: [],
+				updatedAt: null,
+			},
+		];
 
 		act(() => {
 			result.current.setMeds(newMeds);

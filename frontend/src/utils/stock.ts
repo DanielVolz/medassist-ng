@@ -35,9 +35,9 @@ export function splitCurrentBlisterStock(
  */
 export function getBlisterStockFromMedication(med: Medication): BlisterStockSplit {
 	const total =
-		(med.packageType === "bottle"
+		med.packageType === "bottle"
 			? med.looseTablets + (med.stockAdjustment ?? 0)
-			: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0)) ?? 0;
+			: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
 
 	return splitCurrentBlisterStock(total, med.pillsPerBlister, med.looseTablets);
 }

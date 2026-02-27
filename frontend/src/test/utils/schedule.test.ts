@@ -42,6 +42,7 @@ describe("buildSchedulePreview", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: ["John"],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -68,6 +69,7 @@ describe("buildSchedulePreview", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -95,6 +97,7 @@ describe("buildSchedulePreview", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -121,6 +124,7 @@ describe("buildSchedulePreview", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -138,6 +142,7 @@ describe("buildSchedulePreview", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -167,6 +172,7 @@ describe("buildSchedulePreview", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-10T09:00:00" }],
 				updatedAt: null,
 			},
@@ -181,6 +187,7 @@ describe("buildSchedulePreview", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-10T21:00:00" }],
 				updatedAt: new Date("2024-03-15T10:00:00Z").toISOString(),
 			},
@@ -208,6 +215,7 @@ describe("buildSchedulePreview", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-14T15:30:00" }],
 				updatedAt: null,
 			},
@@ -249,6 +257,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -260,7 +269,7 @@ describe("calculateCoverage", () => {
 			},
 		];
 
-		const events = [{ medName: "TestMed", when: Date.now() }];
+		const events = [{ medName: "TestMed", when: Date.now(), id: "test-dose-id" }];
 		const result = calculateCoverage(meds, events, "en", 7, "automatic", new Set());
 
 		expect(result.all).toHaveLength(1);
@@ -278,6 +287,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [],
 				updatedAt: null,
 			},
@@ -301,6 +311,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [], // Empty blisters — intakes should be used instead
 				intakes: [
 					{
@@ -334,6 +345,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 60,
 				looseTablets: 0,
 				takenBy: ["Alice", "Bob"],
+				packageType: "blister",
 				blisters: [],
 				intakes: [
 					{
@@ -377,6 +389,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -406,6 +419,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 5,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -431,6 +445,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -458,6 +473,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: ["Alice", "Bob"],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -495,6 +511,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -83, // 196 - 83 = 113 pills
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -533,6 +550,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -7, // 30 - 7 = 23 pills
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -576,6 +594,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -7, // 30 - 7 = 23 pills
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -615,6 +634,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -5, // 30 - 5 = 25 pills
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -652,6 +672,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -5,
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -685,6 +706,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -727,6 +749,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -766,6 +789,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -808,6 +832,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -85, // 196 - 85 = 111 pills
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -848,6 +873,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -85, // 196 - 85 = 111 pills
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -888,6 +914,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -7, // 30 - 7 = 23 pills
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -926,6 +953,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -971,6 +999,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -85, // 196 - 85 = 111
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-01-01T08:00:00" }],
 				updatedAt: correctionTime.toISOString(),
 			},
@@ -984,6 +1013,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -10, // 30 - 10 = 20
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00" }],
 				updatedAt: correctionTime.toISOString(),
 			},
@@ -997,6 +1027,7 @@ describe("calculateCoverage", () => {
 				stockAdjustment: -2, // 10 - 2 = 8
 				lastStockCorrectionAt: correctionTime.toISOString(),
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 7, start: "2024-01-05T10:00:00" }],
 				updatedAt: correctionTime.toISOString(),
 			},
@@ -1040,6 +1071,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: ["Daniel"],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -1083,6 +1115,7 @@ describe("calculateCoverage", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: ["Daniel"],
+				packageType: "blister",
 				blisters: [
 					{
 						usage: 1,
@@ -1114,8 +1147,10 @@ describe("calculateCoverage", () => {
 describe("getStockStatus", () => {
 	const thresholds: StockThresholds = {
 		lowStockDays: 30,
+		criticalStockDays: 7,
 		normalStockDays: 90,
 		highStockDays: 180,
+		expiryWarningDays: 30,
 	};
 
 	it("returns out-of-stock when medsLeft is 0", () => {
@@ -1160,6 +1195,7 @@ describe("getStockStatus", () => {
 			criticalStockDays: 7,
 			normalStockDays: 90,
 			highStockDays: 180,
+			expiryWarningDays: 30,
 		};
 
 		const result = getStockStatus(5, 10, thresholdsWithCritical);
@@ -1603,6 +1639,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-10T09:00:00" }],
 				updatedAt: null,
 			},
@@ -1636,6 +1673,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-10T21:00:00" }],
 				updatedAt: new Date("2024-03-15T10:00:00Z").toISOString(),
 			},
@@ -1667,6 +1705,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-10T09:00:00" }],
 				updatedAt: new Date("2024-03-15T10:00:00Z").toISOString(), // Just edited!
 			},
@@ -1694,6 +1733,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-15T09:00:00" }],
 				updatedAt: null,
 			},
@@ -1724,6 +1764,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-10T09:00:00" }],
 				updatedAt: new Date("2024-03-15T10:00:00Z").toISOString(),
 				dismissedUntil: "2024-03-14", // Dismissed through yesterday
@@ -1751,6 +1792,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-10T09:00:00" }],
 				updatedAt: new Date("2024-03-15T10:00:00Z").toISOString(), // Just edited!
 			},
@@ -1762,6 +1804,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: [],
+				packageType: "blister",
 				blisters: [{ usage: 1, every: 1, start: "2024-03-10T08:00:00" }],
 				updatedAt: null,
 			},
@@ -1799,6 +1842,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: ["Alice", "Bob"],
+				packageType: "blister",
 				blisters: [],
 				intakes: [
 					{ usage: 1, every: 1, start: "2024-03-10T09:00:00", takenBy: "Alice", intakeRemindersEnabled: false },
@@ -1836,6 +1880,7 @@ describe("dose tracking survives medication edits (regression)", () => {
 				pillsPerBlister: 30,
 				looseTablets: 0,
 				takenBy: ["Alice", "Bob"],
+				packageType: "blister",
 				blisters: [],
 				intakes: [
 					{ usage: 1, every: 1, start: "2024-03-10T21:00:00", takenBy: "Alice", intakeRemindersEnabled: false },

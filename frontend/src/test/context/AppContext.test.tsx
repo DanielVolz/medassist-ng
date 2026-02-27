@@ -51,6 +51,7 @@ const meds: Medication[] = [
 		id: 11,
 		name: "Aspirin",
 		takenBy: ["Max", "Anna"],
+		packageType: "blister",
 		packCount: 1,
 		blistersPerPack: 1,
 		pillsPerBlister: 10,

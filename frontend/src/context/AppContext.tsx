@@ -665,7 +665,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 			// Get the response text first to handle non-JSON responses
 			const text = await res.text();
-			let data: { error?: string; message?: string; imported?: number } = {};
+			let data: {
+				error?: string;
+				message?: string;
+				imported?:
+					| {
+							medications?: number;
+							doseHistory?: number;
+							refillHistory?: number;
+							shareLinks?: number;
+					  }
+					| number;
+			} = {};
 			try {
 				data = text ? JSON.parse(text) : {};
 			} catch {
@@ -680,11 +691,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			// Show success message in UI instead of browser alert
+			const importedCounts = typeof data.imported === "object" && data.imported !== null ? data.imported : null;
 			setImportResult({
-				medications: data.imported?.medications || 0,
-				doses: data.imported?.doseHistory || 0,
-				refills: data.imported?.refillHistory || 0,
-				shares: data.imported?.shareLinks || 0,
+				medications: importedCounts?.medications || 0,
+				doses: importedCounts?.doseHistory || 0,
+				refills: importedCounts?.refillHistory || 0,
+				shares: importedCounts?.shareLinks || 0,
 			});
 
 			// Reload all data

@@ -719,6 +719,7 @@ export function MedicationsPage() {
 				setReadOnlyView(true);
 				startEdit(med, openEditModal);
 				setViewMode("form");
+				scrollToTopForDesktopEdit();
 			};
 			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
 			setShowUnsavedConfirm(true);
@@ -729,6 +730,7 @@ export function MedicationsPage() {
 		setActiveTab("general");
 		startEdit(med, openEditModal);
 		setViewMode("form");
+		scrollToTopForDesktopEdit();
 	}
 
 	function handleNewEntryClick() {
@@ -792,6 +794,7 @@ export function MedicationsPage() {
 		setActiveTab("general");
 		startEdit(medicationToEdit, openEditModal);
 		setViewMode("form");
+		scrollToTopForDesktopEdit();
 		setPendingEditTransition(false);
 		window.dispatchEvent(new Event("medassist:edit-transition-ready"));
 

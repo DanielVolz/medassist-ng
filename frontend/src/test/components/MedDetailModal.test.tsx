@@ -55,6 +55,8 @@ const defaultProps = {
 	onRefillPacksChange: vi.fn(),
 	refillLoose: 0,
 	onRefillLooseChange: vi.fn(),
+	usePrescriptionRefill: false,
+	onUsePrescriptionRefillChange: vi.fn(),
 	refillSaving: false,
 	refillHistory: [] as RefillEntry[],
 	refillHistoryExpanded: false,
@@ -324,7 +326,7 @@ describe("MedDetailModal with refill modal", () => {
 
 		const submitBtn = document.querySelector(".refill-modal .modal-footer .success") as HTMLButtonElement;
 		fireEvent.click(submitBtn);
-		expect(onSubmitRefill).toHaveBeenCalledWith(mockMedication.id, undefined);
+		expect(onSubmitRefill).toHaveBeenCalledWith(mockMedication.id, false);
 	});
 
 	it("disables refill submit button when no pills are entered", () => {
@@ -589,7 +591,7 @@ describe("MedDetailModal with refill history", () => {
 
 	it("shows refill history when expanded", () => {
 		const refillHistory: RefillEntry[] = [
-			{ id: 1, medicationId: 1, timestamp: new Date().toISOString(), packsAdded: 1, looseAdded: 0 },
+			{ id: 1, refillDate: new Date().toISOString(), packsAdded: 1, loosePillsAdded: 0 },
 		];
 
 		render(<MedDetailModal {...defaultProps} refillHistory={refillHistory} refillHistoryExpanded={true} />);
@@ -602,7 +604,7 @@ describe("MedDetailModal with refill history", () => {
 	it("calls onRefillHistoryExpandedChange when toggle clicked", () => {
 		const onRefillHistoryExpandedChange = vi.fn();
 		const refillHistory: RefillEntry[] = [
-			{ id: 1, medicationId: 1, timestamp: new Date().toISOString(), packsAdded: 1, looseAdded: 0 },
+			{ id: 1, refillDate: new Date().toISOString(), packsAdded: 1, loosePillsAdded: 0 },
 		];
 
 		render(

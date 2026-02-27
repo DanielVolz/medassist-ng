@@ -96,9 +96,9 @@ export function MobileEditModal({
 	onAddTakenByPerson,
 	onRemoveTakenByPerson,
 	onTakenByKeyDown,
-	_onSetBlisterValue,
-	_onAddBlister,
-	_onRemoveBlister,
+	onSetBlisterValue: _onSetBlisterValue,
+	onAddBlister: _onAddBlister,
+	onRemoveBlister: _onRemoveBlister,
 	onSetIntakeValue,
 	onAddIntake,
 	onRemoveIntake,
@@ -108,7 +108,7 @@ export function MobileEditModal({
 	onDeleteMedImage,
 	imageUploadError,
 	onClose,
-	_onResetForm,
+	onResetForm: _onResetForm,
 	onSaveMedication,
 }: MobileEditModalProps) {
 	const { t } = useTranslation();
@@ -402,7 +402,7 @@ export function MobileEditModal({
 											<select
 												className="package-type-select"
 												value={form.packageType}
-												onChange={(e) => onHandleValueChange("packageType", e.target.value)}
+												onChange={(e) => onHandleValueChange("packageType", e.target.value as FormState["packageType"])}
 											>
 												<option value="blister">{t("form.packageTypeBlister")}</option>
 												<option value="bottle">{t("form.packageTypeBottle")}</option>

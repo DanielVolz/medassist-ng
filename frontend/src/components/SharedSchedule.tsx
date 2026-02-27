@@ -21,11 +21,11 @@ import { MedicationAvatar } from "./MedicationAvatar";
 function getStockStatus(
 	daysLeft: number | null,
 	medsLeft: number,
-	thresholds: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number }
+	thresholds: { lowStockDays: number; normalStockDays: number; highStockDays: number; criticalStockDays: number }
 ) {
 	if (medsLeft <= 0 || daysLeft === 0) return { className: "danger", label: "status.outOfStock" };
 	if (daysLeft === null) return { className: "success", label: "status.noSchedule" };
-	if (daysLeft <= thresholds.reminderDaysBefore) return { className: "danger", label: "status.criticalStock" };
+	if (daysLeft <= thresholds.criticalStockDays) return { className: "danger", label: "status.criticalStock" };
 	if (daysLeft < thresholds.lowStockDays) return { className: "warning", label: "status.lowStock" };
 	if (daysLeft >= thresholds.highStockDays) return { className: "high", label: "status.highStock" };
 	return { className: "success", label: "status.normal" };

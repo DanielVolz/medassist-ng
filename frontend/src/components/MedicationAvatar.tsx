@@ -2,7 +2,7 @@
 // MedicationAvatar Component
 // =============================================================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type MedicationAvatarProps = {
 	name: string;
@@ -12,8 +12,11 @@ export type MedicationAvatarProps = {
 
 export function MedicationAvatar({ name, imageUrl, size = "sm" }: MedicationAvatarProps) {
 	const [thumbFailed, setThumbFailed] = useState(false);
+	const previousImageUrlRef = useRef(imageUrl);
 
 	useEffect(() => {
+		if (previousImageUrlRef.current === imageUrl) return;
+		previousImageUrlRef.current = imageUrl;
 		setThumbFailed(false);
 	}, [imageUrl]);
 

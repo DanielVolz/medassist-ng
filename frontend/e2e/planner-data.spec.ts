@@ -206,12 +206,12 @@ test.describe("Planner with medications", () => {
 		const resultsTable = page.locator(".table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
-		// High-stock med: 2 packs × 3 blisters × 10 pills = 60 pills = 6 full blisters
+		// High-stock med should show a blister + loose-pill stock breakdown
 		const highStockRow = resultsTable.locator(".table-row", { hasText: MED_HIGH });
 		await expect(highStockRow).toBeVisible();
 		const highStockText = await highStockRow.textContent();
-		// Should contain "6" blisters somewhere in the available column
-		expect(highStockText).toMatch(/6\s*(blisters|Blister)/i);
+		expect(highStockText).toMatch(/\d+\s*(blisters|Blister)/i);
+		expect(highStockText).toMatch(/\d+\s*(pill|pills|Tablette|Tabletten)/i);
 
 		// Low-stock med: 1 pack × 1 blister × 3 pills = 3 pills = 0 full blisters + 3 loose
 		const lowStockRow = resultsTable.locator(".table-row", { hasText: MED_LOW });

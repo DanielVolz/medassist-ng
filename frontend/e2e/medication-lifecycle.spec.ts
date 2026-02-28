@@ -1,4 +1,3 @@
-import type { Page } from "@playwright/test";
 import { authFile, createMedicationViaAPI, deleteAllMedicationsViaAPI, expect, navigateTo, test } from "./fixtures";
 
 /**
@@ -44,7 +43,7 @@ test.describe("Medication lifecycle", () => {
 
 		// Step 2: Verify on medications page
 		await navigateTo(page, "/medications");
-		await expect(page.getByText(MED_NAME)).toBeVisible({ timeout: 10000 });
+		await expect(page.getByText(MED_NAME).first()).toBeVisible({ timeout: 10000 });
 
 		// Step 3: Verify in planner
 		await navigateTo(page, "/planner");
@@ -55,10 +54,12 @@ test.describe("Medication lifecycle", () => {
 
 		// Step 4: Verify in schedule
 		await navigateTo(page, "/schedule");
-		await expect(page.getByText(MED_NAME)).toBeVisible({ timeout: 10000 });
+		await expect(page.getByText(MED_NAME).first()).toBeVisible({ timeout: 10000 });
 	});
 
 	test("edit medication name via UI and verify update propagates", async ({ page }) => {
+		await deleteAllMedicationsViaAPI();
+
 		const todayMorning = (() => {
 			const d = new Date();
 			d.setHours(8, 0, 0, 0);
@@ -79,31 +80,34 @@ test.describe("Medication lifecycle", () => {
 
 		// Navigate to medications page
 		await navigateTo(page, "/medications");
-		await expect(page.getByText(MED_NAME)).toBeVisible({ timeout: 10000 });
+		await expect(page.getByText(MED_NAME).first()).toBeVisible({ timeout: 10000 });
 
-		// Click on the medication to open detail
-		await page.getByText(MED_NAME).first().click();
-		const modal = page.locator(".modal-overlay");
-		await expect(modal).toBeVisible({ timeout: 5000 });
-
-		// Click edit button
-		await modal.locator("button.edit, button:has-text('Edit')").first().click();
+		// Open edit view from medication row actions
+		const medRow = page.locator(".med-row").filter({ hasText: MED_NAME });
+		await expect(medRow.first()).toBeVisible({ timeout: 10000 });
+		await medRow.first().locator("button.info").click();
+		await expect(page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })).toBeVisible({
+			timeout: 5000,
+		});
 
 		// Update the name
-		const nameInput = page.locator('input[name="name"], input#name, input[placeholder*="name" i]').first();
+		const form = page.locator("form.form-grid:visible").first();
+		const nameInput = form.getByLabel(/(Commercial Name|Name|form\.name)/i).first();
 		await nameInput.fill(MED_EDITED);
 
 		// Save
-		await page.locator('button[type="submit"], button:has-text("Save")').first().click();
+		const submitButton = form.locator('button[type="submit"]').first();
+		await expect(submitButton).toBeEnabled({ timeout: 5000 });
+		await submitButton.click();
 
 		// Wait for modal to close or save to complete
 		await page.waitForLoadState("networkidle");
 
 		// Verify edited name appears on medications page
 		await navigateTo(page, "/medications");
-		await expect(page.getByText(MED_EDITED)).toBeVisible({ timeout: 10000 });
+		await expect(page.getByText(MED_EDITED).first()).toBeVisible({ timeout: 10000 });
 		// Old name should no longer appear
-		await expect(page.getByText(MED_NAME)).not.toBeVisible({ timeout: 3000 });
+		await expect(page.locator(".med-row").filter({ hasText: MED_NAME })).toHaveCount(0, { timeout: 5000 });
 	});
 
 	test("delete medication via API and verify it disappears from all pages", async ({ page }) => {
@@ -116,7 +120,7 @@ test.describe("Medication lifecycle", () => {
 
 		// Create and then delete
 		await deleteAllMedicationsViaAPI();
-		const med = await createMedicationViaAPI({
+		await createMedicationViaAPI({
 			name: MED_NAME,
 			packageType: "blister",
 			packCount: 1,

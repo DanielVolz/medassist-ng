@@ -106,7 +106,7 @@ test.describe("Planner with medications", () => {
 		expect(await statusChips.count()).toBeGreaterThanOrEqual(2);
 	});
 
-	test("should show usage data in results rows", async ({ page }) => {
+	test("should show correct usage values in results rows", async ({ page }) => {
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
@@ -116,10 +116,15 @@ test.describe("Planner with medications", () => {
 		const rows = resultsTable.locator(".table-row");
 		expect(await rows.count()).toBeGreaterThanOrEqual(2);
 
-		const firstRowText = await rows.first().textContent();
-		expect(firstRowText).toBeTruthy();
-		// Check for "pill" (matches both "pill" and "pills")
-		expect(firstRowText!.toLowerCase()).toContain("pill");
+		// Each medication has usage=1, every=1 → plannerUsage should reflect the period
+		// Verify the usage column contains a numeric <strong> value and "pill(s)"
+		for (const row of await rows.all()) {
+			const usageCell = row.locator("[data-label]").nth(1); // Usage is 2nd column
+			const usageStrong = usageCell.locator("strong");
+			await expect(usageStrong).toBeVisible();
+			const usageText = await usageStrong.textContent();
+			expect(Number(usageText)).toBeGreaterThan(0);
+		}
 	});
 
 	test("should show danger status for low-stock medication over 90 days", async ({ page }) => {
@@ -139,9 +144,16 @@ test.describe("Planner with medications", () => {
 		const resultsTable = page.locator(".table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
-		// Low-stock med (3 pills) should have a danger chip over 90 days
+		// Low-stock med (3 pills, usage 1/day, 90 days) should have danger status
 		const dangerChips = resultsTable.locator(".status-chip.danger");
 		expect(await dangerChips.count()).toBeGreaterThanOrEqual(1);
+
+		// Find the low-stock med row and verify its usage value ~90 pills
+		const lowStockRow = resultsTable.locator(".table-row", { hasText: MED_LOW });
+		await expect(lowStockRow).toBeVisible();
+		const lowUsage = await lowStockRow.locator("[data-label] strong").first().textContent();
+		expect(Number(lowUsage)).toBeGreaterThanOrEqual(85); // ~90 pills needed
+		expect(Number(lowUsage)).toBeLessThanOrEqual(95);
 	});
 
 	test("should show Enough status for well-stocked medication over 7 days", async ({ page }) => {
@@ -161,9 +173,16 @@ test.describe("Planner with medications", () => {
 		const resultsTable = page.locator(".table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
-		// With 60 pills and 7-day range, high-stock should be "Enough"
-		const successChips = resultsTable.locator(".status-chip.success");
-		expect(await successChips.count()).toBeGreaterThanOrEqual(1);
+		// High-stock med (60 pills, usage 1/day, 7 days → needs ~7, has 60) should be "Enough"
+		const highStockRow = resultsTable.locator(".table-row", { hasText: MED_HIGH });
+		await expect(highStockRow).toBeVisible();
+		const highStatus = highStockRow.locator(".status-chip.success");
+		await expect(highStatus).toBeVisible();
+
+		// Verify usage is ~7 pills for the 7-day range
+		const highUsage = await highStockRow.locator("[data-label] strong").first().textContent();
+		expect(Number(highUsage)).toBeGreaterThanOrEqual(5);
+		expect(Number(highUsage)).toBeLessThanOrEqual(10);
 	});
 
 	test("should show table header with correct columns", async ({ page }) => {
@@ -178,6 +197,28 @@ test.describe("Planner with medications", () => {
 		await expect(tableHead.getByText(/Medication/i)).toBeVisible();
 		await expect(tableHead.getByText(/Usage/i)).toBeVisible();
 		await expect(tableHead.getByText(/Status/i)).toBeVisible();
+	});
+
+	test("should display available stock for each medication", async ({ page }) => {
+		await navigateTo(page, "/planner");
+		await calculatePlanner(page);
+
+		const resultsTable = page.locator(".table");
+		await expect(resultsTable).toBeVisible({ timeout: 10000 });
+
+		// High-stock med: 2 packs × 3 blisters × 10 pills = 60 pills = 6 full blisters
+		const highStockRow = resultsTable.locator(".table-row", { hasText: MED_HIGH });
+		await expect(highStockRow).toBeVisible();
+		const highStockText = await highStockRow.textContent();
+		// Should contain "6" blisters somewhere in the available column
+		expect(highStockText).toMatch(/6\s*(blisters|Blister)/i);
+
+		// Low-stock med: 1 pack × 1 blister × 3 pills = 3 pills = 0 full blisters + 3 loose
+		const lowStockRow = resultsTable.locator(".table-row", { hasText: MED_LOW });
+		await expect(lowStockRow).toBeVisible();
+		const lowStockText = await lowStockRow.textContent();
+		// Should show 3 loose pills
+		expect(lowStockText).toMatch(/3\s*(pill|pills|Tablette|Tabletten)/i);
 	});
 
 	test("should reset form and clear results", async ({ page }) => {

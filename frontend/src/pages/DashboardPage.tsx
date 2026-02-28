@@ -129,6 +129,42 @@ export function DashboardPage() {
 	const showOnlyToday = settings.upcomingTodayOnly;
 
 	const prescriptionEmptyCount = prescriptionLowMeds.filter((med) => med.remainingRefills <= 0).length;
+
+	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined) =>
+		med?.packageType === "liquid_container" || med?.medicationForm === "liquid"
+			? t("form.ml")
+			: t("blisters.applications");
+
+	const formatStockLabel = (med: (typeof meds)[number] | undefined, medsLeft: number) => {
+		if (med?.packageType === "liquid_container") {
+			return `${formatNumber(medsLeft)} ${t("form.ml")}`;
+		}
+		if (med?.packageType === "tube") {
+			return `${formatNumber(medsLeft)} ${getTubeUnitLabel(med)}`;
+		}
+		return t("table.pillsCount", { count: Math.round(medsLeft) });
+	};
+
+	const formatDoseUsageLabel = (med: (typeof meds)[number] | undefined, usage: number) => {
+		if (med?.packageType === "liquid_container") {
+			return `${usage} ${t("form.ml")}`;
+		}
+		if (med?.packageType === "tube") {
+			return `${usage} ${getTubeUnitLabel(med)}`;
+		}
+		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+	};
+
+	const formatTotalUsageLabel = (med: (typeof meds)[number] | undefined, total: number) => {
+		if (med?.packageType === "liquid_container") {
+			return `${total} ${t("form.ml")}`;
+		}
+		if (med?.packageType === "tube") {
+			return `${total} ${getTubeUnitLabel(med)}`;
+		}
+		return t("common.pillsTotal", { count: total });
+	};
+
 	const prescriptionStatus =
 		prescriptionRemindersEnabled && prescriptionLowMeds.length > 0
 			? {
@@ -587,15 +623,19 @@ export function DashboardPage() {
 											</span>
 										</span>
 										<span data-label={t("table.stock")} className={textClass}>
-											{med?.packageType === "bottle"
-												? t("table.pillsCount", { count: Math.round(row.medsLeft) })
+											{med?.packageType === "bottle" ||
+											med?.packageType === "tube" ||
+											med?.packageType === "liquid_container"
+												? formatStockLabel(med, row.medsLeft)
 												: formatFullBlisters(stock.fullBlisters, t)}
 										</span>
 										<span
 											data-label={t("table.stockDetails")}
-											className={`${textClass}${med?.packageType === "bottle" ? " hide-on-card" : ""}`}
+											className={`${textClass}${med?.packageType === "bottle" || med?.packageType === "tube" || med?.packageType === "liquid_container" ? " hide-on-card" : ""}`}
 										>
-											{med?.packageType === "bottle"
+											{med?.packageType === "bottle" ||
+											med?.packageType === "tube" ||
+											med?.packageType === "liquid_container"
 												? "—"
 												: formatOpenBlisterAndLoose(
 														stock.openBlisterPills,
@@ -772,7 +812,7 @@ export function DashboardPage() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
+																	<span className="tag subtle">{formatTotalUsageLabel(med, item.total)}</span>
 																	{status && (
 																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
 																	)}
@@ -786,12 +826,12 @@ export function DashboardPage() {
 																		<div key={dose.id} className="dose-item past">
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">
-																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				</span>
-																				{med?.pillWeightMg && (
-																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																				)}
+																				<span className="dose-usage-main">{formatDoseUsageLabel(med, dose.usage)}</span>
+																				{med?.packageType !== "tube" &&
+																					med?.packageType !== "liquid_container" &&
+																					med?.pillWeightMg && (
+																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																					)}
 																			</span>
 																			{dose.intakeRemindersEnabled && (
 																				<span
@@ -1032,7 +1072,7 @@ export function DashboardPage() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
+																	<span className="tag subtle">{formatTotalUsageLabel(med, item.total)}</span>
 																	{status && (
 																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
 																	)}
@@ -1050,12 +1090,12 @@ export function DashboardPage() {
 																		>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">
-																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				</span>
-																				{med?.pillWeightMg && (
-																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																				)}
+																				<span className="dose-usage-main">{formatDoseUsageLabel(med, dose.usage)}</span>
+																				{med?.packageType !== "tube" &&
+																					med?.packageType !== "liquid_container" &&
+																					med?.pillWeightMg && (
+																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																					)}
 																			</span>
 																			{dose.intakeRemindersEnabled && (
 																				<span
@@ -1263,7 +1303,7 @@ export function DashboardPage() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
+																	<span className="tag subtle">{formatTotalUsageLabel(med, item.total)}</span>
 																	{status && (
 																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
 																	)}
@@ -1277,12 +1317,12 @@ export function DashboardPage() {
 																		<div key={dose.id} className={`dose-item future ${allTaken ? "all-taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">
-																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				</span>
-																				{med?.pillWeightMg && (
-																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																				)}
+																				<span className="dose-usage-main">{formatDoseUsageLabel(med, dose.usage)}</span>
+																				{med?.packageType !== "tube" &&
+																					med?.packageType !== "liquid_container" &&
+																					med?.pillWeightMg && (
+																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																					)}
 																			</span>
 																			{dose.intakeRemindersEnabled && (
 																				<span

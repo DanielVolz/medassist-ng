@@ -19,13 +19,13 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			use: {
 				...devices["Desktop Chrome"],
 			},
-			testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
+			testIgnore: /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/,
 			dependencies: ["setup"],
 			retries: 1,
 		},
 		{
 			name: "chromium-data",
-			testMatch: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
+			testMatch: /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/,
 			use: {
 				...devices["Desktop Chrome"],
 			},
@@ -42,7 +42,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 				use: {
 					...devices["Desktop Firefox"],
 				},
-				testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
+				testIgnore: /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/,
 				dependencies: ["setup"],
 			},
 			{
@@ -50,7 +50,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 				use: {
 					...devices["Desktop Safari"],
 				},
-				testIgnore: /.*-(?:data|crud|edit|status|schedule)\.spec\.ts/,
+				testIgnore: /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/,
 				dependencies: ["setup"],
 			},
 		);

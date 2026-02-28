@@ -70,40 +70,82 @@ setup("authenticate", async ({ page }) => {
 	// Wait for auth container
 	await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-	// ---- 3. Ensure the test user exists ----
+	// ---- 3. Query auth state to determine login method ----
 	const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
-	await page.request
-		.post(`${baseURL}/api/auth/register`, {
-			data: { username: TEST_USER.username, password: TEST_USER.password },
-		})
-		.catch(() => {});
-
-	// ---- 4. Log in via UI ----
-	const usernameField = page.locator("#username");
-	const passwordField = page.locator("#password");
-
-	// Make sure we're on the login form (not register)
-	const isOnRegister = await page
-		.locator(".auth-subtitle")
-		.filter({ hasText: /Create Account/i })
-		.isVisible()
-		.catch(() => false);
-
-	if (isOnRegister) {
-		const switchBtn = page.locator("button.auth-link-btn");
-		if (await switchBtn.isVisible().catch(() => false)) {
-			await switchBtn.click();
-			await page.waitForTimeout(500);
+	let formLoginEnabled = true;
+	let oidcEnabled = false;
+	try {
+		const stateRes = await page.request.get(`${baseURL}/api/auth/state`);
+		if (stateRes.ok()) {
+			const state = await stateRes.json();
+			formLoginEnabled = state.formLoginEnabled !== false;
+			oidcEnabled = state.oidcEnabled === true;
 		}
+	} catch {
+		// Fallback: assume form login is available
 	}
 
-	await usernameField.clear();
-	await usernameField.fill(TEST_USER.username);
-	await passwordField.clear();
-	await passwordField.fill(TEST_USER.password);
+	// ---- 4. Ensure the test user exists (only if form login is available) ----
+	if (formLoginEnabled) {
+		await page.request
+			.post(`${baseURL}/api/auth/register`, {
+				data: { username: TEST_USER.username, password: TEST_USER.password },
+			})
+			.catch(() => {});
+	}
 
-	// Click the submit button (not the SSO button)
-	await page.locator('button.auth-submit[type="submit"]').click();
+	// ---- 5. Log in via the appropriate method ----
+	if (formLoginEnabled) {
+		// Form login path: username/password
+		const usernameField = page.locator("#username");
+		const passwordField = page.locator("#password");
+
+		// Make sure we're on the login form (not register)
+		const isOnRegister = await page
+			.locator(".auth-subtitle")
+			.filter({ hasText: /Create Account/i })
+			.isVisible()
+			.catch(() => false);
+
+		if (isOnRegister) {
+			const switchBtn = page.locator("button.auth-link-btn");
+			if (await switchBtn.isVisible().catch(() => false)) {
+				await switchBtn.click();
+				await page.waitForTimeout(500);
+			}
+		}
+
+		await usernameField.clear();
+		await usernameField.fill(TEST_USER.username);
+		await passwordField.clear();
+		await passwordField.fill(TEST_USER.password);
+
+		// Click the submit button (not the SSO button)
+		await page.locator('button.auth-submit[type="submit"]').click();
+	} else if (oidcEnabled) {
+		// SSO-only path: click the SSO button and let the OIDC provider handle login.
+		// This requires the OIDC provider to be configured with test credentials
+		// (e.g. via PLAYWRIGHT_OIDC_USERNAME / PLAYWRIGHT_OIDC_PASSWORD env vars)
+		// or to auto-approve the test user.
+		await page.locator("button.sso-btn").click();
+
+		// Wait for OIDC redirect and callback — the provider may show its own login form
+		const oidcUsername = process.env.PLAYWRIGHT_OIDC_USERNAME;
+		const oidcPassword = process.env.PLAYWRIGHT_OIDC_PASSWORD;
+		if (oidcUsername && oidcPassword) {
+			// Fill OIDC provider login form (generic selectors — override if needed)
+			await page.waitForURL(/.*/, { timeout: 15000 });
+			const oidcUserField = page.locator('input[name="username"], input[name="login"], input[type="email"]').first();
+			const oidcPassField = page.locator('input[name="password"], input[type="password"]').first();
+			if (await oidcUserField.isVisible({ timeout: 10000 }).catch(() => false)) {
+				await oidcUserField.fill(oidcUsername);
+				await oidcPassField.fill(oidcPassword);
+				await page.locator('button[type="submit"]').first().click();
+			}
+		}
+	} else {
+		throw new Error("No login method available: form login and OIDC are both disabled");
+	}
 
 	// Wait for successful auth — app header should appear
 	await expect(page.locator("header.hero")).toBeVisible({ timeout: 15000 });

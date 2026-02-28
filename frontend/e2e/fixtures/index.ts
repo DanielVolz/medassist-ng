@@ -103,25 +103,43 @@ export const test = base.extend<object>({
 
 /**
  * Wait for the app to be fully loaded past any loading/initializing screens.
- * Includes a single retry with page reload to handle transient auth failures
- * (e.g. brief race between context setup and cookie application).
+ * Retries up to 2 times with page reload to handle transient auth or
+ * rate-limit failures.
  */
 export async function waitForAppReady(page: Page): Promise<void> {
 	const hero = page.locator("header.hero");
-	try {
-		await expect(hero).toBeVisible({ timeout: 15000 });
-	} catch {
-		// Auth might have failed transiently — reload and retry once
-		await page.reload();
-		await expect(hero).toBeVisible({ timeout: 15000 });
+	for (let attempt = 0; attempt < 3; attempt++) {
+		try {
+			await expect(hero).toBeVisible({ timeout: 15000 });
+			return;
+		} catch {
+			if (attempt === 2) throw new Error("App failed to become ready after 3 attempts");
+			// Check for rate-limit error displayed in UI
+			const rateLimited = await page
+				.locator("text=rate limit, text=429, text=too many")
+				.first()
+				.isVisible()
+				.catch(() => false);
+			if (rateLimited) {
+				// Wait longer before retrying if rate-limited
+				await page.waitForTimeout(5000);
+			}
+			await page.reload();
+		}
 	}
 }
 
 /**
  * Navigate to a page and wait for it to be ready.
+ * Handles transient navigation failures with a single retry.
  */
 export async function navigateTo(page: Page, path: string): Promise<void> {
-	await page.goto(path);
+	const response = await page.goto(path);
+	if (response && response.status() === 429) {
+		// Rate-limited — wait and retry once
+		await page.waitForTimeout(5000);
+		await page.goto(path);
+	}
 	await waitForAppReady(page);
 	await page.waitForLoadState("networkidle");
 }
@@ -259,13 +277,21 @@ export async function createMedicationViaAPI(data: {
 
 /**
  * Delete a medication via the backend API.
+ * Includes retry for rate-limited responses.
  */
 export async function deleteMedicationViaAPI(id: number): Promise<void> {
 	const token = getAuthCookie();
-	await fetch(`${API_BASE}/api/medications/${id}`, {
-		method: "DELETE",
-		headers: token ? { Cookie: `access_token=${token}` } : {},
-	});
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const res = await fetch(`${API_BASE}/api/medications/${id}`, {
+			method: "DELETE",
+			headers: token ? { Cookie: `access_token=${token}` } : {},
+		});
+		if (res.status === 429) {
+			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			continue;
+		}
+		return;
+	}
 }
 
 /**

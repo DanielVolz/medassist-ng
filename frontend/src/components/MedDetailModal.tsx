@@ -192,12 +192,20 @@ export function MedDetailModal({
 	]);
 
 	if (!selectedMed) return null;
+	const isTube = selectedMed.packageType === "tube" || selectedMed.packageType === "liquid_container";
+	const stockUnitLabel = isTube
+		? selectedMed.packageType === "liquid_container" || selectedMed.medicationForm === "liquid"
+			? "ml"
+			: t("form.blisters.applications")
+		: null;
 
 	const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(selectedMed));
 	const packageSize = getPackageSize(selectedMed);
 	// Structural max = sealed package capacity only (excludes pre-existing looseTablets).
 	const structuralMax =
-		selectedMed.packageType === "bottle"
+		selectedMed.packageType === "bottle" ||
+		selectedMed.packageType === "tube" ||
+		selectedMed.packageType === "liquid_container"
 			? (selectedMed.totalPills ?? packageSize)
 			: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
 	const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
@@ -209,7 +217,11 @@ export function MedDetailModal({
 	const currentPartialPills = Math.max(0, stock.openBlisterPills);
 	const currentLoosePills = Math.max(0, stock.loosePills);
 	const stockDisplayTotal =
-		selectedMed.packageType === "bottle" ? (selectedMed.totalPills ?? packageSize) : Math.max(0, structuralMax);
+		selectedMed.packageType === "bottle" ||
+		selectedMed.packageType === "tube" ||
+		selectedMed.packageType === "liquid_container"
+			? (selectedMed.totalPills ?? packageSize)
+			: Math.max(0, structuralMax);
 	const maxPartialPills = Math.min(
 		Math.max(0, selectedMed.pillsPerBlister),
 		Math.max(0, structuralMax - Math.max(0, editStockFullBlisters) * selectedMed.pillsPerBlister)
@@ -392,7 +404,9 @@ export function MedDetailModal({
 							})}
 						</p>
 					)}
-					{selectedMed.packageType === "bottle" && (
+					{(selectedMed.packageType === "bottle" ||
+						selectedMed.packageType === "tube" ||
+						selectedMed.packageType === "liquid_container") && (
 						<p className="edit-stock-cap-info">{t("editStock.packageSize", { count: structuralMax })}</p>
 					)}
 					{showStockCapNotice && (
@@ -402,7 +416,10 @@ export function MedDetailModal({
 					{(() => {
 						const dbTotal = getMedTotal(selectedMed);
 						const currentTotal = medCoverage ? Math.round(medCoverage.medsLeft) : dbTotal;
-						const isBottle = selectedMed.packageType === "bottle";
+						const isBottle =
+							selectedMed.packageType === "bottle" ||
+							selectedMed.packageType === "tube" ||
+							selectedMed.packageType === "liquid_container";
 						const enteredTotal = isBottle
 							? editStockPartialBlisterPills
 							: editStockFullBlisters * selectedMed.pillsPerBlister +
@@ -590,20 +607,25 @@ export function MedDetailModal({
 									<div className="summary-row">
 										<span>{t("editStock.currentTotal")}:</span>
 										<span>
-											{currentTotal} {currentTotal === 1 ? t("common.pill") : t("common.pills")}
+											{currentTotal}
+											{isTube ? ` ${stockUnitLabel}` : ` ${currentTotal === 1 ? t("common.pill") : t("common.pills")}`}
 										</span>
 									</div>
 									<div className="summary-row">
 										<span>{t("editStock.newTotal")}:</span>
 										<span>
-											{newTotal} {newTotal === 1 ? t("common.pill") : t("common.pills")}
+											{newTotal}
+											{isTube ? ` ${stockUnitLabel}` : ` ${newTotal === 1 ? t("common.pill") : t("common.pills")}`}
 										</span>
 									</div>
 									<div className={`summary-row difference ${differenceClass}`}>
 										<span>{t("editStock.difference")}:</span>
 										<span>
 											{difference > 0 ? "+" : ""}
-											{difference} {Math.abs(difference) === 1 ? t("common.pill") : t("common.pills")}
+											{difference}
+											{isTube
+												? ` ${stockUnitLabel}`
+												: ` ${Math.abs(difference) === 1 ? t("common.pill") : t("common.pills")}`}
 										</span>
 									</div>
 								</div>
@@ -737,7 +759,14 @@ export function MedDetailModal({
 					<div className="med-detail-section">
 						<h3>
 							{t("modal.packageDetails")} (
-							{selectedMed.packageType === "bottle" ? t("form.packageTypeBottle") : t("form.packageTypeBlister")})
+							{selectedMed.packageType === "bottle"
+								? t("form.packageTypeBottle")
+								: selectedMed.packageType === "tube"
+									? t("form.packageTypeTube")
+									: selectedMed.packageType === "liquid_container"
+										? t("form.packageTypeLiquidContainer")
+										: t("form.packageTypeBlister")}
+							)
 						</h3>
 						<div className="med-detail-grid">
 							{selectedMed.packageType === "blister" ? (
@@ -757,7 +786,7 @@ export function MedDetailModal({
 								</>
 							) : (
 								<div className="med-detail-item">
-									<span className="med-detail-label">{t("form.totalCapacity")}</span>
+									<span className="med-detail-label">{isTube ? t("form.totalAmount") : t("form.totalCapacity")}</span>
 									<span className="med-detail-value">{(selectedMed.totalPills ?? packageSize) || "—"}</span>
 								</div>
 							)}
@@ -816,7 +845,8 @@ export function MedDetailModal({
 									return (
 										<div key={`${intake.start}-${intake.usage}-${intake.every}-${idx}`} className="med-schedule-item">
 											<span className="med-schedule-usage">
-												{totalUsage} {totalUsage !== 1 ? t("common.pills") : t("common.pill")}
+												{totalUsage}
+												{isTube ? ` ${stockUnitLabel}` : ` ${totalUsage !== 1 ? t("common.pills") : t("common.pill")}`}
 												{selectedMed.pillWeightMg &&
 													` (${totalUsage * selectedMed.pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
 											</span>
@@ -955,11 +985,13 @@ export function MedDetailModal({
 											<span className="refill-amount">
 												{(() => {
 													const total =
-														selectedMed.packageType === "bottle"
+														selectedMed.packageType === "bottle" ||
+														selectedMed.packageType === "tube" ||
+														selectedMed.packageType === "liquid_container"
 															? entry.loosePillsAdded
 															: entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister +
 																entry.loosePillsAdded;
-													return `+${total} ${total === 1 ? t("common.pill") : t("common.pills")}`;
+													return `+${total}${isTube ? ` ${stockUnitLabel}` : ` ${total === 1 ? t("common.pill") : t("common.pills")}`}`;
 												})()}
 												{entry.usedPrescription && (
 													<span className="refill-prescription-badge" title={t("refill.viaPrescription")}>
@@ -1128,7 +1160,9 @@ export function MedDetailModal({
 									className="success"
 									onClick={() => onSubmitRefill(selectedMed.id, usePrescriptionRefill)}
 									disabled={
-										(selectedMed.packageType === "bottle"
+										(selectedMed.packageType === "bottle" ||
+										selectedMed.packageType === "tube" ||
+										selectedMed.packageType === "liquid_container"
 											? refillLoose < 1
 											: cappedRefillPacks < 1 && refillLoose < 1) ||
 										exceedsPrescriptionPackLimit ||
@@ -1144,7 +1178,8 @@ export function MedDetailModal({
 											: refillLoose;
 									return totalRefill > 0 ? (
 										<span className="refill-preview">
-											+{totalRefill} {totalRefill === 1 ? t("common.pill") : t("common.pills")}
+											+{totalRefill}
+											{isTube ? ` ${stockUnitLabel}` : ` ${totalRefill === 1 ? t("common.pill") : t("common.pills")}`}
 										</span>
 									) : null;
 								})()}

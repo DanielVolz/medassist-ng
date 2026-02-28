@@ -86,6 +86,8 @@ async function createSchema(client: Client) {
 		    pill_form text,
 		    lifecycle_category text NOT NULL DEFAULT 'refill_when_empty',
 		    package_type text NOT NULL DEFAULT 'blister',
+		    package_amount_value integer NOT NULL DEFAULT 0,
+		    package_amount_unit text NOT NULL DEFAULT 'ml',
 		    pack_count integer NOT NULL DEFAULT 1,
 		    blisters_per_pack integer NOT NULL DEFAULT 1,
 		    pills_per_blister integer NOT NULL DEFAULT 1,

@@ -99,7 +99,7 @@ async function autoMarkDueIntakesAsTaken(
 		const intakes = parseIntakesJson(
 			med.intakesJson,
 			{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-			med.intakeRemindersEnabled ?? false
+			false
 		);
 		if (intakes.length === 0) {
 			continue;
@@ -380,8 +380,18 @@ async function checkAndSendIntakeRemindersForUser(
 		`[IntakeReminder] User ${settings.userId}: Notifications enabled (email:${emailEnabled}, shoutrrr:${shoutrrrEnabled})`
 	);
 
-	// Get all medications with intake reminders enabled for this user
-	const medsWithReminders = rows.filter((row) => row.intakeRemindersEnabled);
+	// Parse intakes per medication and keep only medications with at least one intake-level reminder enabled.
+	// Intentionally no medication-level fallback: reminders are controlled strictly per intake.
+	const medsWithReminders = rows
+		.map((row) => ({
+			med: row,
+			intakes: parseIntakesJson(
+				row.intakesJson,
+				{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
+				false
+			),
+		}))
+		.filter(({ intakes }) => intakes.some((intake) => intake.intakeRemindersEnabled));
 
 	if (medsWithReminders.length === 0) {
 		logger.debug(`[IntakeReminder] User ${settings.userId}: No medications have reminders enabled`);
@@ -389,7 +399,7 @@ async function checkAndSendIntakeRemindersForUser(
 	}
 
 	logger.debug(
-		`[IntakeReminder] User ${settings.userId}: Found ${medsWithReminders.length} medications with reminders`
+		`[IntakeReminder] User ${settings.userId}: Found ${medsWithReminders.length} medications with intake-level reminders`
 	);
 
 	const state = loadIntakeReminderState();
@@ -407,13 +417,7 @@ async function checkAndSendIntakeRemindersForUser(
 	);
 
 	// Find intakes: upcoming ones in reminder window + past ones for repeat reminders
-	for (const med of medsWithReminders) {
-		// Parse intakes using new format (with per-intake takenBy), falling back to legacy
-		const intakes = parseIntakesJson(
-			med.intakesJson,
-			{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-			med.intakeRemindersEnabled ?? false
-		);
+	for (const { med, intakes } of medsWithReminders) {
 		// Medication-level takenBy (for fallback/display purposes)
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
 		const medDisplayName = med.name || med.genericName || "";
@@ -422,9 +426,9 @@ async function checkAndSendIntakeRemindersForUser(
 			`[IntakeReminder] User ${settings.userId}: Processing medication "${medDisplayName}" with ${intakes.length} intakes`
 		);
 
-		// Filter intakes that have reminders enabled (per-intake setting or medication-level)
+		// Filter intakes that have reminders enabled at intake level only.
 		const intakesWithReminders = intakes.filter((intake, idx) => {
-			const hasReminder = intake.intakeRemindersEnabled || med.intakeRemindersEnabled;
+			const hasReminder = intake.intakeRemindersEnabled;
 			if (!hasReminder) {
 				logger.debug(`[IntakeReminder] User ${settings.userId}: Intake ${idx} has reminders disabled, skipping`);
 			}

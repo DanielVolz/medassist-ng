@@ -179,6 +179,11 @@ type TranslationKeys = {
 	common: {
 		pill: string;
 		pills: string;
+		unit: string;
+		units: string;
+		ml: string;
+		application: string;
+		applications: string;
 		blister: string;
 		blisters: string;
 		day: string;
@@ -299,6 +304,11 @@ const translations: Record<Language, TranslationKeys> = {
 		common: {
 			pill: "pill",
 			pills: "pills",
+			unit: "unit",
+			units: "units",
+			ml: "ml",
+			application: "application",
+			applications: "applications",
 			blister: "blister",
 			blisters: "blisters",
 			day: "day",
@@ -420,6 +430,11 @@ const translations: Record<Language, TranslationKeys> = {
 		common: {
 			pill: "Tablette",
 			pills: "Tabletten",
+			unit: "Einheit",
+			units: "Einheiten",
+			ml: "ml",
+			application: "Anwendung",
+			applications: "Anwendungen",
 			blister: "Blister",
 			blisters: "Blister",
 			day: "Tag",

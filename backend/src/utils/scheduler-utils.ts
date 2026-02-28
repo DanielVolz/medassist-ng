@@ -15,22 +15,27 @@ export type Intake = {
 	start: string;
 	takenBy: string | null; // Person taking this specific intake (null = use medication-level takenBy)
 	intakeRemindersEnabled: boolean;
+	intakeUnit?: "ml" | "tsp" | "tbsp" | null;
 };
 
-/**
- * Normalize intake usage for stock math.
- *
- * Stock semantics currently treat numeric usage as-is for all supported
- * medication forms/package types. The helper centralizes this behavior so route
- * logic can depend on a single validated numeric value.
- */
+export function toLiquidMl(usage: number, intakeUnit: "ml" | "tsp" | "tbsp" | null | undefined): number {
+	if (intakeUnit === "tsp") return usage * 5;
+	if (intakeUnit === "tbsp") return usage * 15;
+	return usage;
+}
+
 export function normalizeIntakeUsageForStock(
-	intake: Pick<Intake, "usage">,
-	_medicationForm?: string | null,
-	_packageType?: string | null
+	intake: Intake,
+	medicationForm: string | null | undefined,
+	packageType: string | null | undefined
 ): number {
 	const usage = Number(intake.usage);
-	return Number.isFinite(usage) && usage > 0 ? usage : 0;
+	if (!Number.isFinite(usage) || usage <= 0) return 0;
+
+	if (medicationForm === "liquid" || packageType === "liquid_container") {
+		return toLiquidMl(usage, intake.intakeUnit);
+	}
+	return usage;
 }
 
 // =============================================================================
@@ -218,6 +223,10 @@ export function parseIntakesJson(
 					takenBy: typeof intake.takenBy === "string" && intake.takenBy.trim() ? intake.takenBy.trim() : null,
 					intakeRemindersEnabled:
 						typeof intake.intakeRemindersEnabled === "boolean" ? intake.intakeRemindersEnabled : false,
+					intakeUnit:
+						intake.intakeUnit === "ml" || intake.intakeUnit === "tsp" || intake.intakeUnit === "tbsp"
+							? intake.intakeUnit
+							: null,
 				}));
 			}
 		} catch {
@@ -234,6 +243,7 @@ export function parseIntakesJson(
 			start: b.start,
 			takenBy: null, // Legacy format has no per-intake takenBy
 			intakeRemindersEnabled: medicationIntakeRemindersEnabled ?? false,
+			intakeUnit: null,
 		}));
 	}
 

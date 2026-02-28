@@ -2,7 +2,10 @@
 // Core Types for MedAssist
 // =============================================================================
 
-export type PackageType = "blister" | "bottle";
+export type PackageType = "blister" | "bottle" | "tube" | "liquid_container";
+export type MedicationForm = "capsule" | "tablet" | "liquid" | "topical";
+export type PillForm = "capsule" | "tablet";
+export type LifecycleCategory = "refill_when_empty" | "treatment_period";
 
 // Common medication dose units
 export type DoseUnit = "mg" | "g" | "mcg" | "ml";
@@ -28,6 +31,7 @@ export type Intake = {
 	usage: number;
 	every: number;
 	start: string;
+	intakeUnit?: "ml" | "tsp" | "tbsp" | null;
 	takenBy: string | null; // Per-intake user assignment (single person or null)
 	intakeRemindersEnabled: boolean;
 };
@@ -37,10 +41,15 @@ export type Medication = {
 	name: string;
 	genericName?: string | null;
 	takenBy: string[]; // Medication-level takenBy (legacy, still used for filtering)
+	medicationForm?: MedicationForm;
+	pillForm?: PillForm | null;
+	lifecycleCategory?: LifecycleCategory;
 	packageType: PackageType;
 	packCount: number;
 	blistersPerPack: number;
 	pillsPerBlister: number;
+	packageAmountValue?: number;
+	packageAmountUnit?: "ml" | "g";
 	totalPills?: number | null; // For bottle type: total capacity of the container
 	looseTablets: number; // For blister: extra loose pills; for bottle: current stock
 	stockAdjustment?: number;
@@ -48,6 +57,8 @@ export type Medication = {
 	pillWeightMg?: number | null;
 	doseUnit?: DoseUnit | null; // Unit for the dose (mg, g, mcg, ml, IU, etc.)
 	medicationStartDate?: string | null;
+	medicationEndDate?: string | null;
+	autoMarkObsoleteAfterEndDate?: boolean;
 	blisters: Blister[]; // Legacy array format
 	intakes?: Intake[]; // New intake format with per-intake takenBy
 	imageUrl?: string | null;
@@ -102,6 +113,7 @@ export type FormIntake = {
 	every: string;
 	startDate: string;
 	startTime: string;
+	intakeUnit?: "ml" | "tsp" | "tbsp";
 	takenBy: string; // Single person or empty string (empty = null for everyone)
 	intakeRemindersEnabled: boolean;
 };
@@ -110,15 +122,22 @@ export type FormState = {
 	name: string;
 	genericName: string;
 	takenBy: string[]; // Medication-level takenBy (legacy/compatibility)
+	medicationForm: MedicationForm;
+	pillForm: PillForm;
+	lifecycleCategory: LifecycleCategory;
 	packageType: PackageType;
 	packCount: string;
 	blistersPerPack: string;
 	pillsPerBlister: string;
+	packageAmountValue?: string;
+	packageAmountUnit?: "ml" | "g";
 	totalPills: string; // For bottle type: total capacity
 	looseTablets: string; // For blister: extra loose pills; for bottle: current stock
 	pillWeightMg: string;
 	doseUnit: DoseUnit; // Unit for the dose (mg, g, mcg, ml, IU, etc.)
 	medicationStartDate: string;
+	medicationEndDate: string;
+	autoMarkObsoleteAfterEndDate: boolean;
 	expiryDate: string;
 	notes: string;
 	prescriptionEnabled: boolean;
@@ -252,8 +271,8 @@ type MedLike = Pick<Medication, "packCount" | "blistersPerPack" | "pillsPerBlist
 
 /** Calculate total pills including stockAdjustment */
 export function getMedTotal(med: MedLike): number {
-	// For bottle type, looseTablets IS the current stock
-	if (med.packageType === "bottle") {
+	// For container types, looseTablets IS the current stock
+	if (med.packageType === "bottle" || med.packageType === "tube" || med.packageType === "liquid_container") {
 		return med.looseTablets + (med.stockAdjustment ?? 0);
 	}
 	// For blister type, calculate from packs + loose
@@ -262,8 +281,8 @@ export function getMedTotal(med: MedLike): number {
 
 /** Get the base package size (without stockAdjustment) */
 export function getPackageSize(med: MedLike): number {
-	// For bottle type, looseTablets IS the current stock
-	if (med.packageType === "bottle") {
+	// For container types, looseTablets IS the current stock
+	if (med.packageType === "bottle" || med.packageType === "tube" || med.packageType === "liquid_container") {
 		return med.looseTablets;
 	}
 	// For blister type, calculate from packs + loose

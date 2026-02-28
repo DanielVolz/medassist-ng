@@ -80,6 +80,29 @@ export function SchedulePage() {
 		missedPastDoseIds,
 	} = useAppContext();
 
+	const getDoseUnitLabel = (medicationName: string, usage: number): string => {
+		const med = meds.find((m) => getMedDisplayName(m) === medicationName);
+		if (med?.packageType === "liquid_container") {
+			return t("form.ml");
+		}
+		if (med?.packageType === "tube") {
+			return med.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
+		}
+		return usage !== 1 ? t("common.pills") : t("common.pill");
+	};
+
+	const getTotalUnitLabel = (medicationName: string, total: number): string => {
+		const med = meds.find((m) => getMedDisplayName(m) === medicationName);
+		if (med?.packageType === "liquid_container") {
+			return `${total} ${t("form.ml")}`;
+		}
+		if (med?.packageType === "tube") {
+			const unit = med.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
+			return `${total} ${unit}`;
+		}
+		return t("common.pillsTotal", { count: total });
+	};
+
 	return (
 		<section className="grid">
 			<article className="card schedule-full">
@@ -185,7 +208,7 @@ export function SchedulePage() {
 															<span className="med-name-text">{item.medName}</span>
 														</div>
 														<div className="tag-row">
-															<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
+															<span className="tag subtle">{getTotalUnitLabel(item.medName, item.total)}</span>
 														</div>
 													</div>
 													<div className="doses-col">
@@ -197,11 +220,13 @@ export function SchedulePage() {
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">
 																		<span className="dose-usage-main">
-																			{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																			{dose.usage} {getDoseUnitLabel(item.medName, dose.usage)}
 																		</span>
-																		{med?.pillWeightMg && (
-																			<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																		)}
+																		{med?.packageType !== "tube" &&
+																			med?.packageType !== "liquid_container" &&
+																			med?.pillWeightMg && (
+																				<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																			)}
 																	</span>{" "}
 																	{dose.intakeRemindersEnabled && (
 																		<span
@@ -353,7 +378,7 @@ export function SchedulePage() {
 													<span className="med-name-text">{item.medName}</span>
 												</div>
 												<div className="tag-row">
-													<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
+													<span className="tag subtle">{getTotalUnitLabel(item.medName, item.total)}</span>
 													{status && <span className={`tag ${status.className}`}>{t(status.label)}</span>}
 												</div>
 											</div>
@@ -368,11 +393,13 @@ export function SchedulePage() {
 															<span className="dose-time">{dose.timeStr}</span>
 															<span className="dose-usage">
 																<span className="dose-usage-main">
-																	{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																	{dose.usage} {getDoseUnitLabel(item.medName, dose.usage)}
 																</span>
-																{med?.pillWeightMg && (
-																	<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																)}
+																{med?.packageType !== "tube" &&
+																	med?.packageType !== "liquid_container" &&
+																	med?.pillWeightMg && (
+																		<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																	)}
 															</span>
 															{dose.intakeRemindersEnabled && (
 																<span

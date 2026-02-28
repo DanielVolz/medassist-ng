@@ -52,7 +52,10 @@ export async function refillRoutes(app: FastifyInstance) {
 		if (!med) return reply.notFound("Medication not found");
 
 		const { packsAdded, loosePillsAdded, usePrescription } = parsed.data;
-		const isBottle = (med.packageType ?? "blister") === "bottle";
+		const isBottle =
+			(med.packageType ?? "blister") === "bottle" ||
+			(med.packageType ?? "blister") === "tube" ||
+			(med.packageType ?? "blister") === "liquid_container";
 		const effectivePacksAdded = isBottle ? 0 : packsAdded;
 		const effectiveLoosePillsAdded = loosePillsAdded;
 		const remainingPrescriptionRefills = med.prescriptionRemainingRefills ?? 0;
@@ -161,7 +164,10 @@ export async function refillRoutes(app: FastifyInstance) {
 			.where(eq(refillHistory.medicationId, medId))
 			.orderBy(desc(refillHistory.refillDate));
 
-		const isBottle = (med.packageType ?? "blister") === "bottle";
+		const isBottle =
+			(med.packageType ?? "blister") === "bottle" ||
+			(med.packageType ?? "blister") === "tube" ||
+			(med.packageType ?? "blister") === "liquid_container";
 		const pillsPerPack = isBottle ? 0 : med.blistersPerPack * med.pillsPerBlister;
 
 		return refills.map((r) => ({

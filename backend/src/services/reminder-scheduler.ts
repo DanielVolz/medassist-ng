@@ -19,6 +19,7 @@ import {
 	getNextScheduledTime,
 	getTimezone,
 	getTodayInTimezone,
+	normalizeIntakeUsageForStock,
 	parseIntakesJson,
 	parseLocalDateTime,
 	parseReminderState,
@@ -177,6 +178,8 @@ type LowStockItem = {
 	daysLeft: number | null;
 	depletionDate: string | null;
 	isCritical: boolean;
+	packageType?: string | null;
+	medicationForm?: string | null;
 };
 
 type PrescriptionReminderItem = {
@@ -185,6 +188,16 @@ type PrescriptionReminderItem = {
 	lowThreshold: number;
 	expiryDate: string | null;
 };
+
+function getMedicationUnitLabel(
+	packageType: string | null | undefined,
+	medicationForm: string | null | undefined,
+	tr: ReturnType<typeof getTranslations>
+): string {
+	if (packageType === "liquid_container" || medicationForm === "liquid") return tr.common.ml;
+	if (packageType === "tube") return tr.common.applications;
+	return tr.common.pills;
+}
 
 async function getMedicationsNeedingReminder(
 	userId: number,
@@ -236,10 +249,16 @@ async function getMedicationsNeedingReminder(
 			{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
 			row.intakeRemindersEnabled ?? false
 		);
-		const blisters: Blister[] = intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
+		const medForm = row.medicationForm ?? "tablet";
+		const blisters: Blister[] = intakes.map((i) => ({
+			usage: normalizeIntakeUsageForStock(i, medForm, row.packageType),
+			every: i.every,
+			start: i.start,
+		}));
+		const isTopical = medForm === "topical" || (row.packageType ?? "blister") === "tube";
 
 		const originalTotalPills =
-			(row.packageType ?? "blister") === "bottle"
+			(row.packageType ?? "blister") === "bottle" || (row.packageType ?? "blister") === "liquid_container"
 				? row.looseTablets + (row.stockAdjustment ?? 0)
 				: row.packCount * row.blistersPerPack * row.pillsPerBlister + row.looseTablets + (row.stockAdjustment ?? 0);
 
@@ -248,7 +267,9 @@ async function getMedicationsNeedingReminder(
 
 		let consumed = 0;
 
-		if (stockCalculationMode === "automatic") {
+		if (isTopical) {
+			consumed = 0;
+		} else if (stockCalculationMode === "automatic") {
 			blisters.forEach((blister, blisterIdx) => {
 				const blisterStart = parseLocalDateTime(blister.start).getTime();
 				if (Number.isNaN(blisterStart)) return;
@@ -343,7 +364,7 @@ async function getMedicationsNeedingReminder(
 			});
 		}
 
-		const currentPills = Math.max(0, originalTotalPills - consumed);
+		const currentPills = isTopical ? originalTotalPills : Math.max(0, originalTotalPills - consumed);
 		const { daysLeft, depletionDate } = calculateDepletionInfo({ count: currentPills, blisters }, language);
 
 		if (daysLeft === null) continue;
@@ -358,6 +379,8 @@ async function getMedicationsNeedingReminder(
 				daysLeft,
 				depletionDate,
 				isCritical,
+				packageType: row.packageType,
+				medicationForm: row.medicationForm,
 			});
 		}
 	}
@@ -484,10 +507,11 @@ async function sendReminderEmail(
 			const statusIcon = isEmpty ? "🚨" : nonEmptyIcon;
 			const nonEmptyBg = isCritical ? "#fff7ed" : "white";
 			const rowBg = isEmpty ? "#fef2f2" : nonEmptyBg;
+			const unit = getMedicationUnitLabel(row.packageType, row.medicationForm, tr);
 			return `
       <tr style="background: ${rowBg};">
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${row.name}</td>
-        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${row.medsLeft}</strong></td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${row.medsLeft}</strong> ${unit}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.daysLeft ?? 0}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? `<strong>${tr.stockReminder.now ?? "-"}</strong>` : (row.depletionDate ?? "-")}</td>
       </tr>`;
@@ -507,7 +531,7 @@ async function sendReminderEmail(
             <thead>
               <tr style="background: #f3f4f6;">
                 <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.medication}</th>
-                <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.pills}</th>
+				<th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.pills}/${tr.common.units}</th>
                 <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.days}</th>
                 <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; white-space: nowrap;">${tr.stockReminder.tableHeaders.runsOut}</th>
               </tr>
@@ -531,7 +555,7 @@ async function sendReminderEmail(
 
 ${tr.stockReminder.description}
 
-${lowStock.map((r) => `${r.name}: ${r.medsLeft} ${tr.common.pills}, ${r.daysLeft ?? 0} ${tr.common.days}, ${tr.stockReminder.tableHeaders.runsOut}: ${r.depletionDate ?? tr.common.soon}`).join("\n")}
+${lowStock.map((r) => `${r.name}: ${r.medsLeft} ${getMedicationUnitLabel(r.packageType, r.medicationForm, tr)}, ${r.daysLeft ?? 0} ${tr.common.days}, ${tr.stockReminder.tableHeaders.runsOut}: ${r.depletionDate ?? tr.common.soon}`).join("\n")}
 
 ---
 ${getFooterPlain(language)}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyNote}` : ""}`;
@@ -670,7 +694,7 @@ async function checkAndSendReminderForUser(
 							messageParts.push(`🚨 ${tr.push.criticalSection}:`);
 							criticalMeds.forEach((m) =>
 								messageParts.push(
-									`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
+									`  • ${m.name}: ${m.medsLeft} ${getMedicationUnitLabel(m.packageType, m.medicationForm, tr)}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
 								)
 							);
 						}
@@ -679,7 +703,7 @@ async function checkAndSendReminderForUser(
 							messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
 							lowStockMeds.forEach((m) =>
 								messageParts.push(
-									`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
+									`  • ${m.name}: ${m.medsLeft} ${getMedicationUnitLabel(m.packageType, m.medicationForm, tr)}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
 								)
 							);
 						}

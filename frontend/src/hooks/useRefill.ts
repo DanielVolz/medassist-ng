@@ -140,27 +140,33 @@ export function useRefill(): UseRefillReturn {
 				// Clamp all fields to non-negative values.
 				let finalFullBlisters = Math.max(0, editStockFullBlisters);
 				let finalPartialPills =
-					selectedMed.packageType === "bottle"
+					selectedMed.packageType === "bottle" ||
+					selectedMed.packageType === "tube" ||
+					selectedMed.packageType === "liquid_container"
 						? Math.max(0, editStockPartialBlisterPills)
 						: Math.max(0, editStockPartialBlisterPills);
 				const finalLoosePills = Math.max(0, editStockLoosePills);
 
 				// Canonicalize blister values: partial overflow becomes additional full blisters.
-				if (selectedMed.packageType !== "bottle" && selectedMed.pillsPerBlister > 0) {
+				if (selectedMed.packageType === "blister" && selectedMed.pillsPerBlister > 0) {
 					finalFullBlisters += Math.floor(finalPartialPills / selectedMed.pillsPerBlister);
 					finalPartialPills %= selectedMed.pillsPerBlister;
 				}
 
 				// Structural max = sealed package capacity only (no looseTablets offset).
 				const structuralMax =
-					selectedMed.packageType === "bottle"
+					selectedMed.packageType === "bottle" ||
+					selectedMed.packageType === "tube" ||
+					selectedMed.packageType === "liquid_container"
 						? (selectedMed.totalPills ?? getPackageSize(selectedMed))
 						: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
 
 				// For blister meds, only sealed pills are capped to package size.
 				// Loose pills are extra and can be above package size.
 				const desiredTotal =
-					selectedMed.packageType === "bottle"
+					selectedMed.packageType === "bottle" ||
+					selectedMed.packageType === "tube" ||
+					selectedMed.packageType === "liquid_container"
 						? Math.min(structuralMax, Math.max(0, finalPartialPills))
 						: Math.min(structuralMax, finalFullBlisters * selectedMed.pillsPerBlister + finalPartialPills) +
 							finalLoosePills;
@@ -170,7 +176,9 @@ export function useRefill(): UseRefillReturn {
 				// - Blister: use structuralMax + finalLoosePills as the new base so that
 				//   updating looseTablets in the DB doesn't cause a stale-split display bug.
 				const baseTotal =
-					selectedMed.packageType === "bottle"
+					selectedMed.packageType === "bottle" ||
+					selectedMed.packageType === "tube" ||
+					selectedMed.packageType === "liquid_container"
 						? getPackageSize(selectedMed) // bottle: stockAdjustment relative to fixed looseTablets base
 						: structuralMax + finalLoosePills; // blister: base = sealed capacity + NEW loose pills
 				// stockAdjustment = what we need to make getMedTotal() return desiredTotal
@@ -181,7 +189,7 @@ export function useRefill(): UseRefillReturn {
 				const patchBody: { stockAdjustment: number; looseTablets?: number } = {
 					stockAdjustment: newStockAdjustment,
 				};
-				if (selectedMed.packageType !== "bottle") {
+				if (selectedMed.packageType === "blister") {
 					patchBody.looseTablets = finalLoosePills;
 				}
 
@@ -232,14 +240,14 @@ export function useRefill(): UseRefillReturn {
 		const knownLoose = Math.min(currentStock, Math.max(0, selectedMed.looseTablets));
 		const sealedPills = Math.max(0, currentStock - knownLoose);
 		const fullBlisters =
-			selectedMed.packageType === "bottle" ? 0 : Math.floor(sealedPills / selectedMed.pillsPerBlister);
+			selectedMed.packageType === "blister" ? Math.floor(sealedPills / selectedMed.pillsPerBlister) : 0;
 		const partialPills =
-			selectedMed.packageType === "bottle" ? Math.max(0, currentStock) : sealedPills % selectedMed.pillsPerBlister;
+			selectedMed.packageType === "blister" ? sealedPills % selectedMed.pillsPerBlister : Math.max(0, currentStock);
 
 		// Pre-fill with current values
 		setEditStockFullBlisters(fullBlisters);
 		setEditStockPartialBlisterPills(partialPills);
-		setEditStockLoosePills(selectedMed.packageType === "bottle" ? 0 : knownLoose);
+		setEditStockLoosePills(selectedMed.packageType === "blister" ? knownLoose : 0);
 		setShowEditStockModal(true);
 		window.history.pushState({ modal: "editStock" }, "");
 	}, []);

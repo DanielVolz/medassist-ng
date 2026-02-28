@@ -5,6 +5,19 @@
 import type { Blister, Coverage, Intake, Medication, ScheduleEvent, StockStatus, StockThresholds } from "../types";
 import { getMedDisplayName, getMedTotal } from "../types";
 
+function toLiquidMl(usage: number, intakeUnit: "ml" | "tsp" | "tbsp" | null | undefined): number {
+	if (intakeUnit === "tsp") return usage * 5;
+	if (intakeUnit === "tbsp") return usage * 15;
+	return usage;
+}
+
+function normalizeUsageForStock(med: Medication, intake: Intake): number {
+	if (med.medicationForm === "liquid" || med.packageType === "liquid_container") {
+		return toLiquidMl(intake.usage, intake.intakeUnit);
+	}
+	return intake.usage;
+}
+
 /**
  * Get intakes for a medication, preferring new intakes format over legacy blisters
  */
@@ -28,7 +41,7 @@ function getIntakesForMed(med: Medication): Intake[] {
  */
 function getBlistersForMed(med: Medication): Blister[] {
 	if (med.intakes && med.intakes.length > 0) {
-		return med.intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
+		return med.intakes.map((i) => ({ usage: normalizeUsageForStock(med, i), every: i.every, start: i.start }));
 	}
 	return med.blisters;
 }
@@ -108,6 +121,7 @@ export function calculateCoverage(
 	const now = Date.now();
 
 	const coverage: Coverage[] = meds.map((m) => {
+		const isTopical = m.medicationForm === "topical" || m.packageType === "tube";
 		const intakes = getIntakesForMed(m);
 		const blisters = getBlistersForMed(m);
 		// Count unique people from all intakes (for per-intake takenBy)
@@ -135,11 +149,16 @@ export function calculateCoverage(
 				dailyRate += baseRate * personCount;
 			}
 		});
+		if (isTopical) {
+			dailyRate = 0;
+		}
 
 		let consumed = 0;
 		const stockCorrectionCutoff = m.lastStockCorrectionAt ? new Date(m.lastStockCorrectionAt).getTime() : 0;
 
-		if (stockCalculationMode === "automatic") {
+		if (isTopical) {
+			consumed = 0;
+		} else if (stockCalculationMode === "automatic") {
 			// In automatic mode, stock is reduced automatically based on the schedule.
 			// Every scheduled dose counts as consumed once its time has passed.
 			// Additionally, if a user marks a future dose as taken BEFORE the scheduled

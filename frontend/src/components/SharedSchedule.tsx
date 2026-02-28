@@ -426,12 +426,26 @@ export function SharedSchedule() {
 		const MS_PER_DAY = 86_400_000;
 		const now = Date.now();
 		const calcMode = data.stockCalculationMode ?? "automatic";
+		const toLiquidMl = (usage: number, intakeUnit: "ml" | "tsp" | "tbsp" | null | undefined) => {
+			if (intakeUnit === "tsp") return usage * 5;
+			if (intakeUnit === "tbsp") return usage * 15;
+			return usage;
+		};
 		const coverage: Record<string, { daysLeft: number | null; medsLeft: number; dailyUsage: number }> = {};
 		const depletion: Record<string, number | null> = {};
 
 		for (const med of data.medications) {
-			const intakes = med.intakes || med.blisters.map((b) => ({ ...b, takenBy: null as string | null }));
-			const blisters = med.blisters;
+			const intakes =
+				med.intakes || med.blisters.map((b) => ({ ...b, takenBy: null as string | null, intakeUnit: null }));
+			const isTopical = med.medicationForm === "topical" || med.packageType === "tube";
+			const blisters = intakes.map((intake) => ({
+				usage:
+					med.medicationForm === "liquid" || med.packageType === "liquid_container"
+						? toLiquidMl(intake.usage, intake.intakeUnit)
+						: intake.usage,
+				every: intake.every,
+				start: intake.start,
+			}));
 
 			// Count unique people from all intakes (for per-intake takenBy)
 			const uniquePeople = new Set<string>();
@@ -452,11 +466,16 @@ export function SharedSchedule() {
 					dailyRate += baseRate * personCount; // Legacy: all people
 				}
 			});
+			if (isTopical) {
+				dailyRate = 0;
+			}
 
 			let consumed = 0;
 			const stockCorrectionCutoff = med.lastStockCorrectionAt ? med.lastStockCorrectionAt : 0;
 
-			if (calcMode === "automatic") {
+			if (isTopical) {
+				consumed = 0;
+			} else if (calcMode === "automatic") {
 				// Time-based: every scheduled dose counts as consumed once its time has passed
 				blisters.forEach((s, blisterIdx) => {
 					const blisterStart = new Date(s.start).getTime();

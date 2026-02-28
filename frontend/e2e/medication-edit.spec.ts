@@ -233,7 +233,7 @@ test.describe("Medication Editing", () => {
 
 		// Change intake from 1 pill daily to 2 pills every 7 days
 		const intakeRow = page.locator(".blister-row").first();
-		const usageField = intakeRow.getByLabel(/(Usage \(pills\)|form\.blisters\.usage)/i);
+		const usageField = intakeRow.getByLabel(/(Usage|form\.blisters\.usage)/i);
 		const everyField = intakeRow.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i);
 
 		await usageField.fill("2");
@@ -247,7 +247,7 @@ test.describe("Medication Editing", () => {
 		// Verify the changes persisted
 		await clickEditMed(page, "Edit Intake Med");
 		const savedRow = page.locator(".blister-row").first();
-		await expect(savedRow.getByLabel(/(Usage \(pills\)|form\.blisters\.usage)/i)).toHaveValue("2");
+		await expect(savedRow.getByLabel(/(Usage|form\.blisters\.usage)/i)).toHaveValue("2");
 		await expect(savedRow.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i)).toHaveValue("7");
 	});
 
@@ -279,7 +279,7 @@ test.describe("Medication Editing", () => {
 
 		// Fill the new intake row
 		const secondRow = page.locator(".blister-row").nth(1);
-		await secondRow.getByLabel(/(Usage \(pills\)|form\.blisters\.usage)/i).fill("0.5");
+		await secondRow.getByLabel(/(Usage|form\.blisters\.usage)/i).fill("0.5");
 		await secondRow.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i).fill("7");
 
 		await saveEditAndVerify(page, "Add Intake Med");

@@ -42,6 +42,16 @@ type PlannerRow = {
 	packageType?: string;
 };
 
+function isContainerPackage(packageType?: string): boolean {
+	return packageType === "bottle" || packageType === "tube" || packageType === "liquid_container";
+}
+
+function getPlannerUnit(packageType: string | undefined, tr: ReturnType<typeof getTranslations>): string {
+	if (packageType === "tube") return tr.common.units;
+	if (packageType === "liquid_container") return tr.common.ml;
+	return tr.common.pills;
+}
+
 type SendEmailBody = {
 	email: string;
 	from: string;
@@ -168,16 +178,18 @@ ${summaryText}
 
 ${activeRows
 	.map((r) => {
-		const isBottle = r.packageType === "bottle";
-		const usage = `${r.plannerUsage} ${tr.common.pills}`;
+		const isBottle = isContainerPackage(r.packageType);
+		const usageUnit = getPlannerUnit(r.packageType, tr);
+		const usage = `${r.plannerUsage} ${usageUnit}`;
 		const needed = isBottle ? "–" : `${r.blistersNeeded} × ${r.blisterSize}`;
 		const medPrescription = prescriptionMap.get(r.medicationId);
 		const rxRefills = medPrescription?.prescriptionEnabled
 			? String(medPrescription.prescriptionRemainingRefills ?? 0)
 			: dc.prescriptionNotApplicable;
 		const loosePills = Math.round((Number(r.loosePills) || 0) * 10) / 10;
+		const availableUnit = getPlannerUnit(r.packageType, tr);
 		const available = isBottle
-			? `${loosePills} ${tr.common.pills}`
+			? `${loosePills} ${availableUnit}`
 			: `${r.fullBlisters} ${tr.common.blisters}${loosePills > 0 ? ` + ${loosePills} ${tr.common.pills}` : ""}`;
 		const status = r.enough ? dc.statusEnough : dc.statusEmpty;
 		return `${r.medicationName}: ${usage}, ${needed}, ${dc.tableHeaders.prescriptionRefills}: ${rxRefills}, ${available} - ${status}`;
@@ -209,7 +221,7 @@ ${getFooterPlain(language)}`;
 						const safeBlisterSize = Number(row.blisterSize) || 0;
 						const safeFullBlisters = Number(row.fullBlisters) || 0;
 						const safeLoosePills = Math.round((Number(row.loosePills) || 0) * 10) / 10;
-						const isBottle = row.packageType === "bottle";
+						const isBottle = isContainerPackage(row.packageType);
 
 						// "Blisters needed" column: dash for bottles
 						const neededCell = isBottle ? "–" : `${safeBlistersNeeded} × ${safeBlisterSize}`;
@@ -223,7 +235,8 @@ ${getFooterPlain(language)}`;
 						// "Available" column: match frontend format
 						let availableCell: string;
 						if (isBottle) {
-							availableCell = `${safeLoosePills} ${tr.common.pills}`;
+							const availableUnit = getPlannerUnit(row.packageType, tr);
+							availableCell = `${safeLoosePills} ${availableUnit}`;
 						} else {
 							availableCell = `${safeFullBlisters} ${tr.common.blisters}`;
 							if (safeLoosePills > 0) {
@@ -236,7 +249,7 @@ ${getFooterPlain(language)}`;
 						return `
         <tr style="${rowBg}">
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${safeName}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safePlannerUsage}</strong> ${tr.common.pills}</td>
+					<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safePlannerUsage}</strong> ${getPlannerUnit(row.packageType, tr)}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${neededCell}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${rxCell}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${availableCell}</td>
@@ -324,7 +337,7 @@ ${getFooterPlain(language)}`;
 			const pushTitle = t(dc.subject, { from: fromDate, until: untilDate });
 			const pushMessage = `${summaryText}\n\n${activeRows
 				.map((r) => {
-					const usage = `${r.plannerUsage} ${tr.common.pills}`;
+					const usage = `${r.plannerUsage} ${getPlannerUnit(r.packageType, tr)}`;
 					const status = r.enough ? dc.statusEnough : dc.statusEmpty;
 					return `${r.enough ? "✓" : "✗"} ${r.medicationName}: ${usage} - ${status}`;
 				})

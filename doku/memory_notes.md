@@ -23,6 +23,21 @@ Use this block for each meaningful task:
 
 ## Entries
 
+### 2026-02-28 (PR #359 backend CI failure triage)
+
+- 🧩 Task: Reproduce and fix failing backend CI check on `feat/topical-no-depletion-planner`.
+- ✅ Decisions:
+	- Reproduced CI sequence locally (`lint`, `tsc --noEmit`, `test:coverage`) and identified TypeScript failure in `backend/src/routes/planner.ts`.
+	- Root cause: route referenced `tr.common.units` and `tr.common.ml`, but these keys were missing from `TranslationKeys.common` and both language dictionaries.
+	- Applied minimal backend-only fix by adding `units` and `ml` to `backend/src/i18n/translations.ts` type + EN/DE values.
+	- Revalidated backend CI steps locally: lint pass, typecheck pass, full coverage suite pass.
+- 📁 Files touched:
+	- `backend/src/i18n/translations.ts`
+	- `doku/memory_notes.md`
+	- `doku/report.md`
+- 🔜 Follow-up/open points:
+	- Branch is ready for release-manager handoff for remote push/PR operations (not performed by this agent).
+
 ### 2026-02-28 (CI triage: Backend Tests failure on PR #356)
 
 - 🧩 Task: Reproduce and fix `Backend Tests` CI failure on `feat/package-amount-backend`.

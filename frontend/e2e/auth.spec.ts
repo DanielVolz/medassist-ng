@@ -1,14 +1,26 @@
 import { expect, type Page, test } from "@playwright/test";
 
-async function isAuthEnabled(page: Page): Promise<boolean> {
+interface AuthStateResponse {
+	authEnabled: boolean;
+	formLoginEnabled: boolean;
+	oidcEnabled: boolean;
+	oidcProviderName: string;
+	registrationEnabled: boolean;
+}
+
+async function getAuthState(page: Page): Promise<AuthStateResponse | null> {
 	try {
 		const response = await page.request.get("/api/auth/state");
-		if (!response.ok()) return true;
-		const state = await response.json();
-		return state?.authEnabled !== false;
+		if (!response.ok()) return null;
+		return (await response.json()) as AuthStateResponse;
 	} catch {
-		return true;
+		return null;
 	}
+}
+
+async function isAuthEnabled(page: Page): Promise<boolean> {
+	const state = await getAuthState(page);
+	return state?.authEnabled !== false;
 }
 
 /**
@@ -109,5 +121,49 @@ test.describe("Authentication", () => {
 		// Subtitle should change
 		const newText = await subtitle.textContent();
 		expect(newText).not.toBe(initialText);
+	});
+
+	test("should show SSO button when OIDC is enabled", async ({ page }) => {
+		const state = await getAuthState(page);
+		test.skip(!state?.authEnabled, "Auth is disabled in this environment");
+		test.skip(!state?.oidcEnabled, "OIDC is not enabled in this environment");
+
+		await page.goto("/");
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
+
+		const ssoButton = page.locator("button.sso-btn");
+		await expect(ssoButton).toBeVisible();
+		await expect(ssoButton).toContainText(state.oidcProviderName || "SSO");
+	});
+
+	test("should hide form login when formLoginEnabled is false", async ({ page }) => {
+		const state = await getAuthState(page);
+		test.skip(!state?.authEnabled, "Auth is disabled in this environment");
+		test.skip(state?.formLoginEnabled !== false, "Form login is enabled — cannot test hidden state");
+
+		await page.goto("/");
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
+
+		// Username/password fields should not be visible
+		await expect(page.locator("#username")).not.toBeVisible();
+		await expect(page.locator("#password")).not.toBeVisible();
+
+		// SSO button should be the only login method
+		await expect(page.locator("button.sso-btn")).toBeVisible();
+	});
+
+	test("should show both login methods when OIDC and form login are enabled", async ({ page }) => {
+		const state = await getAuthState(page);
+		test.skip(!state?.authEnabled, "Auth is disabled in this environment");
+		test.skip(!state?.oidcEnabled, "OIDC is not enabled");
+		test.skip(!state?.formLoginEnabled, "Form login is not enabled");
+
+		await page.goto("/");
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
+
+		// Both login methods visible
+		await expect(page.locator("#username")).toBeVisible();
+		await expect(page.locator("#password")).toBeVisible();
+		await expect(page.locator("button.sso-btn")).toBeVisible();
 	});
 });

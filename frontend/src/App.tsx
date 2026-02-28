@@ -37,13 +37,29 @@ export default function App() {
 	);
 }
 
+function getInitialAuthTheme(): "light" | "dark" {
+	if (typeof window === "undefined") return "dark";
+
+	const stored = localStorage.getItem("theme");
+	if (stored === "light" || stored === "dark") {
+		return stored;
+	}
+
+	if (stored === "system") {
+		return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+	}
+
+	return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
 function AppRouter() {
 	const { user, authState, loading, authError } = useAuth();
+	const authTheme = getInitialAuthTheme();
 
 	// Show loading while checking auth state
 	if (loading) {
 		return (
-			<div className="auth-container">
+			<div className="auth-container" data-theme={authTheme}>
 				<div className="auth-card" style={{ textAlign: "center" }}>
 					<h1 className="auth-title">💊 MedAssist-ng</h1>
 					<p>Loading...</p>
@@ -55,7 +71,7 @@ function AppRouter() {
 	// Show error if we couldn't connect to the server
 	if (authError) {
 		return (
-			<div className="auth-container">
+			<div className="auth-container" data-theme={authTheme}>
 				<div className="auth-card" style={{ textAlign: "center" }}>
 					<h1 className="auth-title">💊 MedAssist-ng</h1>
 					<div className="auth-error" style={{ marginBottom: "1rem" }}>
@@ -77,7 +93,7 @@ function AppRouter() {
 	// If auth state is null (shouldn't happen after loading, but be safe)
 	if (!authState) {
 		return (
-			<div className="auth-container">
+			<div className="auth-container" data-theme={authTheme}>
 				<div className="auth-card" style={{ textAlign: "center" }}>
 					<h1 className="auth-title">💊 MedAssist-ng</h1>
 					<p>Initializing...</p>

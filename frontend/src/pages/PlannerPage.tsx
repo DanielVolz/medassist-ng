@@ -122,6 +122,30 @@ export function PlannerPage() {
 	const canSendNotification =
 		(settings.emailEnabled && settings.notificationEmail) || (settings.shoutrrrEnabled && settings.shoutrrrUrl);
 
+	const getUsageUnitLabel = (medicationId: number, count: number): string => {
+		const med = meds.find((m) => m.id === medicationId);
+		if (med?.packageType === "liquid_container") {
+			return t("form.ml");
+		}
+		if (med?.packageType === "tube") {
+			return med.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
+		}
+		return count === 1 ? t("common.pill") : t("common.pills");
+	};
+
+	const getAvailableLabel = (medicationId: number, loosePills: number): string => {
+		const med = meds.find((m) => m.id === medicationId);
+		const roundedLoose = Math.round(loosePills * 10) / 10;
+		if (med?.packageType === "liquid_container") {
+			return `${roundedLoose} ${t("form.ml")}`;
+		}
+		if (med?.packageType === "tube") {
+			const unit = med.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
+			return `${roundedLoose} ${unit}`;
+		}
+		return `${roundedLoose} ${roundedLoose === 1 ? t("common.pill") : t("common.pills")}`;
+	};
+
 	async function sendPlannerNotification() {
 		if (!canSendNotification || plannerRows.length === 0) return;
 		setSendingPlannerEmail(true);
@@ -226,16 +250,22 @@ export function PlannerPage() {
 										<span data-label={t("planner.table.usage")}>
 											<span>
 												<strong>{row.plannerUsage}</strong>&nbsp;
-												{row.plannerUsage === 1 ? t("common.pill") : t("common.pills")}
+												{getUsageUnitLabel(row.medicationId, row.plannerUsage)}
 											</span>
 										</span>
 										<span data-label={t("planner.table.blisters")}>
-											{row.packageType === "bottle" ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`}
+											{row.packageType === "bottle" ||
+											row.packageType === "tube" ||
+											row.packageType === "liquid_container"
+												? "–"
+												: `${row.blistersNeeded} × ${row.blisterSize}`}
 										</span>
 										<span data-label={t("planner.table.prescriptionRefills")}>{remainingRefills ?? "–"}</span>
 										<span data-label={t("planner.table.available")}>
-											{row.packageType === "bottle" ? (
-												`${Math.round(row.loosePills * 10) / 10} ${Math.round(row.loosePills * 10) / 10 === 1 ? t("common.pill") : t("common.pills")}`
+											{row.packageType === "bottle" ||
+											row.packageType === "tube" ||
+											row.packageType === "liquid_container" ? (
+												getAvailableLabel(row.medicationId, row.loosePills)
 											) : (
 												<>
 													{row.fullBlisters} {t("common.blisters")}

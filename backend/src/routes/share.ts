@@ -120,7 +120,9 @@ export async function shareRoutes(app: FastifyInstance) {
 			const takenByArray = parseTakenByJson(med.takenByJson);
 
 			const totalPills =
-				(med.packageType ?? "blister") === "bottle"
+				(med.packageType ?? "blister") === "bottle" ||
+				(med.packageType ?? "blister") === "tube" ||
+				(med.packageType ?? "blister") === "liquid_container"
 					? med.looseTablets + (med.stockAdjustment ?? 0)
 					: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
 			return {

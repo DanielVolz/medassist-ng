@@ -14,7 +14,13 @@ import {
 	streamToBuffer,
 	writeOptimizedImageSet,
 } from "../utils/image-upload.js";
-import { type Intake, parseIntakesJson, parseLocalDateTime, parseTakenByJson } from "../utils/scheduler-utils.js";
+import {
+	type Intake,
+	normalizeIntakeUsageForStock,
+	parseIntakesJson,
+	parseLocalDateTime,
+	parseTakenByJson,
+} from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(getDataDir(), "images");
 
@@ -23,6 +29,7 @@ const intakeSchema = z.object({
 	usage: z.number().nonnegative(),
 	every: z.number().int().min(1),
 	start: z.string().datetime({ local: true }),
+	intakeUnit: z.enum(["ml", "tsp", "tbsp"]).nullable().optional(),
 	takenBy: z.string().trim().max(100).nullable().optional(), // Person for this specific intake
 	intakeRemindersEnabled: z.boolean().default(false), // Per-intake reminder setting
 });
@@ -34,26 +41,37 @@ const blisterSchema = z.object({
 	start: z.string().datetime({ local: true }),
 });
 
-const packageTypeSchema = z.enum(["blister", "bottle"]).default("blister");
+const packageTypeSchema = z.enum(["blister", "bottle", "tube", "liquid_container"]).default("blister");
+const medicationFormSchema = z.enum(["capsule", "tablet", "liquid", "topical"]).default("tablet");
+const pillFormSchema = z.enum(["capsule", "tablet"]);
+const lifecycleCategorySchema = z.enum(["refill_when_empty", "treatment_period"]).default("refill_when_empty");
 const doseUnitSchema = z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"]).default("mg");
 const medicationStartDateSchema = z
 	.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()])
 	.optional();
+const medicationEndDateSchema = z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional();
 
 const medicationSchema = z
 	.object({
 		name: z.string().trim().max(100).default(""),
 		genericName: z.string().trim().max(100).nullable().optional(),
 		takenBy: z.array(z.string().trim().max(100)).default([]), // Medication-level takenBy (fallback)
+		medicationForm: medicationFormSchema,
+		pillForm: pillFormSchema.nullable().optional(),
+		lifecycleCategory: lifecycleCategorySchema,
 		packageType: packageTypeSchema,
 		packCount: z.number().int().min(0).default(1),
 		blistersPerPack: z.number().int().min(1).default(1),
 		pillsPerBlister: z.number().int().min(1).default(1),
+		packageAmountValue: z.number().int().min(0).default(0),
+		packageAmountUnit: z.enum(["ml", "g"]).default("ml"),
 		totalPills: z.number().int().min(1).nullable().optional(), // For bottle type: total capacity
 		looseTablets: z.number().int().min(0).default(0),
 		pillWeightMg: z.number().nonnegative().nullable().optional(),
 		doseUnit: doseUnitSchema,
 		medicationStartDate: medicationStartDateSchema,
+		medicationEndDate: medicationEndDateSchema,
+		autoMarkObsoleteAfterEndDate: z.boolean().default(true),
 		expiryDate: z.string().nullable().optional(),
 		notes: z.string().max(2000).nullable().optional(),
 		prescriptionEnabled: z.boolean().default(false),
@@ -82,6 +100,77 @@ const medicationSchema = z
 		{
 			message: "Medication start date must be on or before all intake dates",
 			path: ["medicationStartDate"],
+		}
+	)
+	.refine(
+		(data) => {
+			const startDate = data.medicationStartDate ?? "";
+			const endDate = data.medicationEndDate ?? "";
+			if (!startDate || !endDate) return true;
+			return startDate <= endDate;
+		},
+		{
+			message: "Medication end date must be on or after medication start date",
+			path: ["medicationEndDate"],
+		}
+	)
+	.refine(
+		(data) => {
+			if (data.medicationForm === "capsule" || data.medicationForm === "tablet") {
+				return data.pillForm == null || data.pillForm === "capsule" || data.pillForm === "tablet";
+			}
+			return true;
+		},
+		{
+			message: "pillForm must be capsule or tablet for capsule/tablet medications",
+			path: ["pillForm"],
+		}
+	)
+	.refine(
+		(data) => {
+			if (data.medicationForm === "topical") {
+				return data.packageType === "tube";
+			}
+			return true;
+		},
+		{
+			message: "Topical medications must use tube package type",
+			path: ["packageType"],
+		}
+	)
+	.refine(
+		(data) => {
+			if (data.medicationForm === "liquid") {
+				return data.packageType === "liquid_container";
+			}
+			return true;
+		},
+		{
+			message: "Liquid medications must use liquid_container package type",
+			path: ["packageType"],
+		}
+	)
+	.refine(
+		(data) => {
+			if (data.medicationForm === "capsule" || data.medicationForm === "tablet") {
+				return data.packageType !== "tube" && data.packageType !== "liquid_container";
+			}
+			return true;
+		},
+		{
+			message: "Capsule and tablet medications cannot use tube or liquid_container package type",
+			path: ["packageType"],
+		}
+	)
+	.refine(
+		(data) => {
+			const schedules = data.intakes ?? data.blisters ?? [];
+			if (data.pillForm !== "capsule") return true;
+			return schedules.every((entry) => Number.isInteger(entry.usage));
+		},
+		{
+			message: "Fractional intake is not allowed for capsule",
+			path: ["intakes"],
 		}
 	)
 	.refine(
@@ -131,6 +220,26 @@ export async function medicationRoutes(app: FastifyInstance) {
 	app.get<{ Querystring: { includeObsolete?: string } }>("/medications", async (request, reply) => {
 		const userId = await getUserId(request, reply);
 		const includeObsolete = request.query.includeObsolete === "true";
+		const initialRows = await db
+			.select()
+			.from(medications)
+			.where(eq(medications.userId, userId))
+			.orderBy(medications.id);
+		const todayDate = new Date().toISOString().slice(0, 10);
+
+		for (const row of initialRows) {
+			if (row.isObsolete) continue;
+			if (!(row.autoMarkObsoleteAfterEndDate ?? true)) continue;
+			const endDate = row.medicationEndDate?.slice(0, 10);
+			if (!endDate) continue;
+			if (endDate > todayDate) continue;
+
+			await db
+				.update(medications)
+				.set({ isObsolete: true, obsoleteAt: new Date(), updatedAt: new Date() })
+				.where(and(eq(medications.id, row.id), eq(medications.userId, userId)));
+		}
+
 		const whereClause = includeObsolete
 			? eq(medications.userId, userId)
 			: and(eq(medications.userId, userId), eq(medications.isObsolete, false));
@@ -148,10 +257,15 @@ export async function medicationRoutes(app: FastifyInstance) {
 				name: row.name,
 				genericName: row.genericName,
 				takenBy: parseTakenByJson(row.takenByJson),
+				medicationForm: row.medicationForm ?? "tablet",
+				pillForm: row.pillForm ?? null,
+				lifecycleCategory: row.lifecycleCategory ?? "refill_when_empty",
 				packageType: row.packageType ?? "blister",
 				packCount: row.packCount ?? 1,
 				blistersPerPack: row.blistersPerPack ?? 1,
 				pillsPerBlister: row.pillsPerBlister ?? 1,
+				packageAmountValue: row.packageAmountValue ?? 0,
+				packageAmountUnit: (row.packageAmountUnit ?? "ml") as "ml" | "g",
 				totalPills: row.totalPills ?? null,
 				looseTablets: row.looseTablets ?? 0,
 				stockAdjustment: row.stockAdjustment ?? 0,
@@ -159,6 +273,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 				pillWeightMg: row.pillWeightMg,
 				doseUnit: row.doseUnit ?? "mg",
 				medicationStartDate: row.medicationStartDate || null,
+				medicationEndDate: row.medicationEndDate || null,
+				autoMarkObsoleteAfterEndDate: row.autoMarkObsoleteAfterEndDate ?? true,
 				intakes, // New unified format with per-intake takenBy
 				// Legacy blisters format (for backward compat with frontend during transition)
 				blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
@@ -188,15 +304,22 @@ export async function medicationRoutes(app: FastifyInstance) {
 			name,
 			genericName,
 			takenBy,
+			medicationForm,
+			pillForm,
+			lifecycleCategory,
 			packageType,
 			packCount,
 			blistersPerPack,
 			pillsPerBlister,
+			packageAmountValue,
+			packageAmountUnit,
 			totalPills,
 			looseTablets,
 			pillWeightMg,
 			doseUnit,
 			medicationStartDate,
+			medicationEndDate,
+			autoMarkObsoleteAfterEndDate,
 			expiryDate,
 			notes,
 			prescriptionEnabled,
@@ -209,6 +332,9 @@ export async function medicationRoutes(app: FastifyInstance) {
 			blisters: inputBlisters,
 		} = parsed.data;
 
+		const normalizedPillForm =
+			medicationForm === "capsule" || medicationForm === "tablet" ? (pillForm ?? medicationForm) : null;
+
 		// Convert to unified intakes format
 		let intakes: Intake[];
 		if (inputIntakes) {
@@ -217,6 +343,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				usage: i.usage,
 				every: i.every,
 				start: i.start,
+				intakeUnit: i.intakeUnit ?? null,
 				takenBy: i.takenBy || null,
 				intakeRemindersEnabled: i.intakeRemindersEnabled ?? false,
 			}));
@@ -226,6 +353,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				usage: b.usage,
 				every: b.every,
 				start: b.start,
+				intakeUnit: null,
 				takenBy: null, // No per-intake takenBy from legacy
 				intakeRemindersEnabled: intakeRemindersEnabled ?? false,
 			}));
@@ -247,15 +375,22 @@ export async function medicationRoutes(app: FastifyInstance) {
 				name,
 				genericName: genericName || null,
 				takenByJson,
+				medicationForm: medicationForm ?? "tablet",
+				pillForm: normalizedPillForm,
+				lifecycleCategory: lifecycleCategory ?? "refill_when_empty",
 				packageType: packageType ?? "blister",
 				packCount,
 				blistersPerPack,
 				pillsPerBlister,
+				packageAmountValue,
+				packageAmountUnit,
 				totalPills: totalPills || null,
 				looseTablets,
 				pillWeightMg: pillWeightMg || null,
 				doseUnit: doseUnit ?? "mg",
 				medicationStartDate: medicationStartDate ?? "",
+				medicationEndDate: medicationEndDate || null,
+				autoMarkObsoleteAfterEndDate: autoMarkObsoleteAfterEndDate ?? true,
 				expiryDate: expiryDate || null,
 				notes: notes || null,
 				prescriptionEnabled: prescriptionEnabled ?? false,
@@ -276,10 +411,15 @@ export async function medicationRoutes(app: FastifyInstance) {
 			name: inserted.name,
 			genericName: inserted.genericName,
 			takenBy: parseTakenByJson(inserted.takenByJson),
+			medicationForm: inserted.medicationForm ?? "tablet",
+			pillForm: inserted.pillForm ?? null,
+			lifecycleCategory: inserted.lifecycleCategory ?? "refill_when_empty",
 			packageType: inserted.packageType ?? "blister",
 			packCount: inserted.packCount,
 			blistersPerPack: inserted.blistersPerPack,
 			pillsPerBlister: inserted.pillsPerBlister,
+			packageAmountValue: inserted.packageAmountValue ?? 0,
+			packageAmountUnit: (inserted.packageAmountUnit ?? "ml") as "ml" | "g",
 			totalPills: inserted.totalPills ?? null,
 			looseTablets: inserted.looseTablets,
 			stockAdjustment: inserted.stockAdjustment ?? 0,
@@ -287,6 +427,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 			pillWeightMg: inserted.pillWeightMg,
 			doseUnit: inserted.doseUnit ?? "mg",
 			medicationStartDate: inserted.medicationStartDate || null,
+			medicationEndDate: inserted.medicationEndDate || null,
+			autoMarkObsoleteAfterEndDate: inserted.autoMarkObsoleteAfterEndDate ?? true,
 			intakes,
 			blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
 			imageUrl: inserted.imageUrl,
@@ -323,15 +465,22 @@ export async function medicationRoutes(app: FastifyInstance) {
 			name,
 			genericName,
 			takenBy,
+			medicationForm,
+			pillForm,
+			lifecycleCategory,
 			packageType,
 			packCount,
 			blistersPerPack,
 			pillsPerBlister,
+			packageAmountValue,
+			packageAmountUnit,
 			totalPills,
 			looseTablets,
 			pillWeightMg,
 			doseUnit,
 			medicationStartDate,
+			medicationEndDate,
+			autoMarkObsoleteAfterEndDate,
 			expiryDate,
 			notes,
 			prescriptionEnabled,
@@ -344,6 +493,9 @@ export async function medicationRoutes(app: FastifyInstance) {
 			blisters: inputBlisters,
 		} = parsed.data;
 
+		const normalizedPillForm =
+			medicationForm === "capsule" || medicationForm === "tablet" ? (pillForm ?? medicationForm) : null;
+
 		// Convert to unified intakes format
 		let intakes: Intake[];
 		if (inputIntakes) {
@@ -352,6 +504,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				usage: i.usage,
 				every: i.every,
 				start: i.start,
+				intakeUnit: i.intakeUnit ?? null,
 				takenBy: i.takenBy || null,
 				intakeRemindersEnabled: i.intakeRemindersEnabled ?? false,
 			}));
@@ -361,6 +514,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				usage: b.usage,
 				every: b.every,
 				start: b.start,
+				intakeUnit: null,
 				takenBy: null, // No per-intake takenBy from legacy
 				intakeRemindersEnabled: intakeRemindersEnabled ?? false,
 			}));
@@ -392,15 +546,22 @@ export async function medicationRoutes(app: FastifyInstance) {
 				name,
 				genericName: genericName || null,
 				takenByJson,
+				medicationForm: medicationForm ?? "tablet",
+				pillForm: normalizedPillForm,
+				lifecycleCategory: lifecycleCategory ?? "refill_when_empty",
 				packageType: packageType ?? "blister",
 				packCount,
 				blistersPerPack,
 				pillsPerBlister,
 				totalPills: totalPills || null,
+				packageAmountValue,
+				packageAmountUnit,
 				looseTablets,
 				pillWeightMg: pillWeightMg || null,
 				doseUnit: doseUnit ?? "mg",
 				medicationStartDate: medicationStartDate ?? "",
+				medicationEndDate: medicationEndDate || null,
+				autoMarkObsoleteAfterEndDate: autoMarkObsoleteAfterEndDate ?? true,
 				expiryDate: expiryDate || null,
 				notes: notes || null,
 				prescriptionEnabled: prescriptionEnabled ?? false,
@@ -545,10 +706,15 @@ export async function medicationRoutes(app: FastifyInstance) {
 			name: result[0].name,
 			genericName: result[0].genericName,
 			takenBy: parseTakenByJson(result[0].takenByJson),
+			medicationForm: result[0].medicationForm ?? "tablet",
+			pillForm: result[0].pillForm ?? null,
+			lifecycleCategory: result[0].lifecycleCategory ?? "refill_when_empty",
 			packageType: result[0].packageType ?? "blister",
 			packCount: result[0].packCount,
 			blistersPerPack: result[0].blistersPerPack,
 			pillsPerBlister: result[0].pillsPerBlister,
+			packageAmountValue: result[0].packageAmountValue ?? 0,
+			packageAmountUnit: (result[0].packageAmountUnit ?? "ml") as "ml" | "g",
 			totalPills: result[0].totalPills ?? null,
 			looseTablets: result[0].looseTablets,
 			stockAdjustment: result[0].stockAdjustment ?? 0,
@@ -556,6 +722,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 			pillWeightMg: result[0].pillWeightMg,
 			doseUnit: result[0].doseUnit ?? "mg",
 			medicationStartDate: result[0].medicationStartDate || null,
+			medicationEndDate: result[0].medicationEndDate || null,
+			autoMarkObsoleteAfterEndDate: result[0].autoMarkObsoleteAfterEndDate ?? true,
 			intakes,
 			blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
 			imageUrl: result[0].imageUrl,
@@ -845,7 +1013,12 @@ export async function medicationRoutes(app: FastifyInstance) {
 				{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
 				row.intakeRemindersEnabled ?? false
 			);
-			const blisters = intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
+			const medForm = row.medicationForm ?? "tablet";
+			const blisters = intakes.map((i) => ({
+				usage: normalizeIntakeUsageForStock(i, medForm, row.packageType),
+				every: i.every,
+				start: i.start,
+			}));
 			const pillsPerBlister = row.pillsPerBlister ?? 1;
 			const packCount = row.packCount ?? 1;
 			const blistersPerPack = row.blistersPerPack ?? 1;
@@ -854,8 +1027,9 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const packageType = row.packageType ?? "blister";
 
 			// For bottle type, looseTablets IS the current stock (no blister math)
+			const isTopical = medForm === "topical" || packageType === "tube";
 			const originalTotalPills =
-				packageType === "bottle"
+				packageType === "bottle" || packageType === "liquid_container"
 					? looseTablets + stockAdjustment
 					: packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
 
@@ -867,7 +1041,9 @@ export async function medicationRoutes(app: FastifyInstance) {
 			let consumedUntilNow = 0;
 			const msPerDay = 86400000;
 
-			if (stockCalculationMode === "automatic") {
+			if (isTopical) {
+				consumedUntilNow = 0;
+			} else if (stockCalculationMode === "automatic") {
 				blisters.forEach((blister, blisterIdx) => {
 					const blisterStart = parseLocalDateTime(blister.start).getTime();
 					if (Number.isNaN(blisterStart)) return;
@@ -963,7 +1139,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				});
 			}
 
-			const currentStock = Math.max(0, originalTotalPills - consumedUntilNow);
+			const currentStock = isTopical ? originalTotalPills : Math.max(0, originalTotalPills - consumedUntilNow);
 
 			// Calculate usage for the planning period
 			// Always use the user-selected start date for the usage calculation.
@@ -973,7 +1149,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			// The stock already reflects consumed doses, so no double-counting occurs.
 			// When includeUntilStart is true, calculate from now to end (useful for trip planning)
 			const effectivePlannerStart = includeUntilStart ? now : start;
-			const usageTotal = calculateUsageInRange(blisters, effectivePlannerStart, end);
+			const usageTotal = isTopical ? 0 : calculateUsageInRange(blisters, effectivePlannerStart, end);
 
 			const blistersNeeded = pillsPerBlister > 0 ? Math.ceil(usageTotal / pillsPerBlister) : 0;
 
@@ -983,7 +1159,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			let fullBlisters: number;
 			let loosePills: number;
 
-			if (packageType === "bottle") {
+			if (packageType === "bottle" || packageType === "tube" || packageType === "liquid_container") {
 				// Bottle type: no blisters, everything is loose pills
 				fullBlisters = 0;
 				loosePills = availableAfterPeriod;

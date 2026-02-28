@@ -125,6 +125,14 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE medications ADD COLUMN obsolete_at integer`,
 		// Added for explicit medication lifecycle start date
 		`ALTER TABLE medications ADD COLUMN medication_start_date text NOT NULL DEFAULT ''`,
+		// Added for form/lifecycle modeling (V1 medication forms)
+		`ALTER TABLE medications ADD COLUMN medication_form text NOT NULL DEFAULT 'tablet'`,
+		`ALTER TABLE medications ADD COLUMN pill_form text`,
+		`ALTER TABLE medications ADD COLUMN lifecycle_category text NOT NULL DEFAULT 'refill_when_empty'`,
+		`ALTER TABLE medications ADD COLUMN medication_end_date text`,
+		`ALTER TABLE medications ADD COLUMN auto_mark_obsolete_after_end_date integer NOT NULL DEFAULT 1`,
+		`ALTER TABLE medications ADD COLUMN package_amount_value integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE medications ADD COLUMN package_amount_unit text NOT NULL DEFAULT 'ml'`,
 		// Added for more detailed reminder info display
 		`ALTER TABLE user_settings ADD COLUMN last_reminder_med_name text`,
 		`ALTER TABLE user_settings ADD COLUMN last_reminder_taken_by text`,

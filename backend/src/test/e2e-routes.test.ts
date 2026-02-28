@@ -82,6 +82,9 @@ async function createSchema(client: Client) {
 		    name text NOT NULL,
 		    generic_name text,
 		    taken_by_json text NOT NULL DEFAULT '[]',
+		    medication_form text NOT NULL DEFAULT 'tablet',
+		    pill_form text,
+		    lifecycle_category text NOT NULL DEFAULT 'refill_when_empty',
 		    package_type text NOT NULL DEFAULT 'blister',
 		    pack_count integer NOT NULL DEFAULT 1,
 		    blisters_per_pack integer NOT NULL DEFAULT 1,
@@ -101,6 +104,8 @@ async function createSchema(client: Client) {
 		    notes text,
 		    intake_reminders_enabled integer NOT NULL DEFAULT 0,
 		    medication_start_date text NOT NULL DEFAULT '',
+		    medication_end_date text,
+		    auto_mark_obsolete_after_end_date integer NOT NULL DEFAULT 1,
 		    is_obsolete integer NOT NULL DEFAULT 0,
 		    obsolete_at integer,
 		    prescription_enabled integer NOT NULL DEFAULT 0,
@@ -2499,10 +2504,10 @@ describe("E2E Tests with Real Routes", () => {
 	});
 
 	// ---------------------------------------------------------------------------
-	// Package Type (bottle vs blister) Tests
+	// Package Type (blister, bottle, liquid_container) Tests
 	// ---------------------------------------------------------------------------
 
-	describe("Package type handling (bottle vs blister)", () => {
+	describe("Package type handling (blister, bottle, liquid_container)", () => {
 		const bottleMedication = {
 			name: "Vitamin D Drops",
 			packageType: "bottle",
@@ -2521,6 +2526,18 @@ describe("E2E Tests with Real Routes", () => {
 			pillsPerBlister: 10,
 			looseTablets: 5,
 			blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+		};
+
+		const liquidContainerMedication = {
+			name: "Cough Syrup",
+			medicationForm: "liquid",
+			packageType: "liquid_container",
+			doseUnit: "ml",
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 180,
+			blisters: [{ usage: 5, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 		};
 
 		it("should create and return bottle type medication", async () => {
@@ -2565,6 +2582,49 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.medications[0].packageType).toBe("bottle");
 			// Bottle totalPills = looseTablets + stockAdjustment (no blister math)
 			expect(data.medications[0].totalPills).toBe(120);
+		});
+
+		it("should create and return liquid_container type medication", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: liquidContainerMedication,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.packageType).toBe("liquid_container");
+			expect(data.medicationForm).toBe("liquid");
+			expect(data.doseUnit).toBe("ml");
+			expect(data.looseTablets).toBe(180);
+		});
+
+		it("should return packageType and ml-based stock semantics in shared schedule for liquid_container", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: { ...liquidContainerMedication, takenBy: ["Daniel"] },
+			});
+
+			const shareResponse = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: { takenBy: "Daniel", scheduleDays: 30 },
+			});
+			expect(shareResponse.statusCode).toBe(200);
+			const { token } = shareResponse.json();
+
+			const scheduleResponse = await app.inject({
+				method: "GET",
+				url: `/share/${token}`,
+			});
+
+			expect(scheduleResponse.statusCode).toBe(200);
+			const data = scheduleResponse.json();
+			expect(data.medications).toHaveLength(1);
+			expect(data.medications[0].packageType).toBe("liquid_container");
+			// Liquid container follows container semantics (stock from looseTablets only).
+			expect(data.medications[0].totalPills).toBe(180);
 		});
 
 		it("should calculate correct totalPills for shared blister medication", async () => {
@@ -2741,6 +2801,19 @@ describe("E2E Tests with Real Routes", () => {
 
 			expect(medsResponse.json()).toHaveLength(1);
 			expect(medsResponse.json()[0].packageType).toBe("blister");
+		});
+
+		it("should reject liquid medication form with non-liquid package type", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					...liquidContainerMedication,
+					packageType: "bottle",
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
 		});
 	});
 });

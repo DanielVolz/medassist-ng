@@ -29,6 +29,11 @@ export const medications = sqliteTable("medications", {
 	genericName: text("generic_name", { length: 100 }),
 	takenByJson: text("taken_by_json").notNull().default("[]"), // JSON array of person names
 	packageType: text("package_type", { length: 20 }).notNull().default("blister"), // 'blister' or 'bottle'
+	medicationForm: text("medication_form", { length: 20 }).notNull().default("tablet"), // 'capsule' | 'tablet' | 'liquid' | 'topical'
+	pillForm: text("pill_form", { length: 20 }), // Only for blister/bottle with pill-based medications: 'tablet' | 'capsule'
+	lifecycleCategory: text("lifecycle_category", { length: 30 }).notNull().default("refill_when_empty"), // 'refill_when_empty' | 'treatment_period'
+	packageAmountValue: integer("package_amount_value").notNull().default(0), // Informational package quantity (ml/g)
+	packageAmountUnit: text("package_amount_unit", { length: 10 }).notNull().default("ml"), // 'ml' | 'g'
 	packCount: integer("pack_count").notNull().default(1),
 	blistersPerPack: integer("blisters_per_pack").notNull().default(1),
 	pillsPerBlister: integer("pills_per_blister").notNull().default(1),
@@ -48,6 +53,10 @@ export const medications = sqliteTable("medications", {
 	notes: text("notes"),
 	intakeRemindersEnabled: integer("intake_reminders_enabled", { mode: "boolean" }).notNull().default(false),
 	medicationStartDate: text("medication_start_date").notNull().default(""),
+	medicationEndDate: text("medication_end_date"),
+	autoMarkObsoleteAfterEndDate: integer("auto_mark_obsolete_after_end_date", { mode: "boolean" })
+		.notNull()
+		.default(true),
 	isObsolete: integer("is_obsolete", { mode: "boolean" }).notNull().default(false),
 	obsoleteAt: integer("obsolete_at", { mode: "timestamp" }),
 	prescriptionEnabled: integer("prescription_enabled", { mode: "boolean" }).notNull().default(false),

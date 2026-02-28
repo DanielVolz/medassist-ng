@@ -182,7 +182,7 @@ function parseIntakesForExport(row: typeof medications.$inferSelect): Array<{
 		usage: intake.usage,
 		every: intake.every,
 		start: intake.start,
-		intakeUnit: intake.intakeUnit ?? null,
+		intakeUnit: null,
 		remind: intake.intakeRemindersEnabled,
 		takenBy: intake.takenBy, // Per-intake takenBy
 	}));

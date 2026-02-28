@@ -24,6 +24,7 @@ export const defaultIntake = (takenBy: string = ""): FormIntake => {
 		every: "1",
 		startDate: toDateValue(now),
 		startTime: toTimeValue(now),
+		intakeUnit: "ml",
 		takenBy, // Per-intake user assignment (empty string = null/everyone)
 		intakeRemindersEnabled: false,
 	};
@@ -33,15 +34,22 @@ export const defaultForm = (): FormState => ({
 	name: "",
 	genericName: "",
 	takenBy: [],
+	medicationForm: "tablet",
+	pillForm: "tablet",
+	lifecycleCategory: "refill_when_empty",
 	packageType: "blister",
 	packCount: "1",
 	blistersPerPack: "1",
 	pillsPerBlister: "1",
+	packageAmountValue: "0",
+	packageAmountUnit: "ml",
 	totalPills: "",
 	looseTablets: "0",
 	pillWeightMg: "",
 	doseUnit: "mg",
 	medicationStartDate: "",
+	medicationEndDate: "",
+	autoMarkObsoleteAfterEndDate: true,
 	expiryDate: "",
 	notes: "",
 	prescriptionEnabled: false,
@@ -205,6 +213,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 						every: String(i.every),
 						startDate: toDateValue(i.start),
 						startTime: toTimeValue(i.start),
+						intakeUnit: i.intakeUnit ?? "ml",
 						takenBy: i.takenBy ?? "", // Convert null to empty string for form
 						intakeRemindersEnabled: i.intakeRemindersEnabled,
 					}))
@@ -213,6 +222,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 						every: String(s.every),
 						startDate: toDateValue(s.start),
 						startTime: toTimeValue(s.start),
+						intakeUnit: "ml",
 						takenBy: "", // Legacy blisters have no per-intake takenBy
 						intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
 					}));
@@ -221,20 +231,48 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		const remainingRefills = Math.min(Math.max(0, med.prescriptionRemainingRefills ?? 0), authorizedRefills);
 		const lowRefillThreshold = Math.min(Math.max(0, med.prescriptionLowRefillThreshold ?? 1), authorizedRefills);
 
-		const bottleTotalPills = med.packageType === "bottle" && med.looseTablets ? String(med.looseTablets) : "";
+		const bottleTotalPills =
+			(med.packageType === "bottle" || med.packageType === "tube" || med.packageType === "liquid_container") &&
+			med.looseTablets
+				? String(med.looseTablets)
+				: "";
+		let resolvedForm = med.medicationForm;
+		if (!resolvedForm) {
+			if (med.packageType === "tube") {
+				resolvedForm = "topical";
+			} else if (med.packageType === "liquid_container") {
+				resolvedForm = "liquid";
+			} else {
+				resolvedForm = med.pillForm ?? "tablet";
+			}
+		}
+		const resolvedPillForm = med.pillForm ?? (resolvedForm === "capsule" ? "capsule" : "tablet");
+		let normalizedPackageAmountUnit = med.packageAmountUnit ?? "ml";
+		if (med.packageType === "tube") {
+			normalizedPackageAmountUnit = "g";
+		} else if (med.packageType === "liquid_container") {
+			normalizedPackageAmountUnit = "ml";
+		}
 		const editForm: FormState = {
 			name: med.name,
 			genericName: med.genericName ?? "",
 			takenBy: med.takenBy || [], // Already an array from API
+			medicationForm: resolvedForm,
+			pillForm: resolvedPillForm,
+			lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
 			packageType: med.packageType ?? "blister",
 			packCount: String(med.packCount),
 			blistersPerPack: String(med.blistersPerPack),
 			pillsPerBlister: String(med.pillsPerBlister),
+			packageAmountValue: String(med.packageAmountValue ?? 0),
+			packageAmountUnit: normalizedPackageAmountUnit,
 			totalPills: med.totalPills ? String(med.totalPills) : bottleTotalPills,
 			looseTablets: String(med.looseTablets),
 			pillWeightMg: med.pillWeightMg ? String(med.pillWeightMg) : "",
 			doseUnit: med.doseUnit ?? "mg",
 			medicationStartDate: med.medicationStartDate ?? "",
+			medicationEndDate: med.medicationEndDate ?? "",
+			autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
 			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
 			notes: med.notes ?? "",
 			prescriptionEnabled: med.prescriptionEnabled ?? false,
@@ -276,6 +314,58 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		<K extends keyof FormState>(key: K, value: FormState[K]) => {
 			setForm((prev) => {
 				const next = { ...prev, [key]: value } as FormState;
+
+				if (key === "packageType") {
+					if (value === "tube") {
+						next.medicationForm = "topical";
+						next.lifecycleCategory = "treatment_period";
+						next.doseUnit = "units";
+						next.packageAmountUnit = "g";
+					} else if (value === "liquid_container") {
+						next.medicationForm = "liquid";
+						next.lifecycleCategory = "refill_when_empty";
+						next.doseUnit = "ml";
+						next.packageAmountUnit = "ml";
+						next.intakes = next.intakes.map((intake) => ({ ...intake, intakeUnit: intake.intakeUnit || "ml" }));
+					} else {
+						next.medicationForm = next.pillForm;
+						next.lifecycleCategory = "refill_when_empty";
+					}
+				}
+
+				if (key === "medicationForm") {
+					if (next.packageType === "tube") {
+						next.medicationForm = "topical";
+						next.lifecycleCategory = "treatment_period";
+						next.doseUnit = "units";
+						next.packageAmountUnit = "g";
+					} else if (next.packageType === "liquid_container") {
+						next.medicationForm = "liquid";
+						next.lifecycleCategory = "refill_when_empty";
+						next.doseUnit = "ml";
+						next.packageAmountUnit = "ml";
+						next.intakes = next.intakes.map((intake) => ({ ...intake, intakeUnit: intake.intakeUnit || "ml" }));
+					}
+				}
+
+				if (next.packageType === "tube") {
+					next.packageAmountUnit = "g";
+				} else if (next.packageType === "liquid_container") {
+					next.packageAmountUnit = "ml";
+				}
+
+				if (key === "pillForm" && value === "capsule") {
+					next.medicationForm = "capsule";
+					next.intakes = next.intakes.map((intake) => {
+						const parsedUsage = Number.parseFloat(intake.usage);
+						const rounded = Number.isFinite(parsedUsage) ? Math.max(0, Math.round(parsedUsage)) : 1;
+						return { ...intake, usage: String(rounded || 1) };
+					});
+				}
+
+				if (key === "pillForm" && value === "tablet") {
+					next.medicationForm = "tablet";
+				}
 
 				if (key === "prescriptionAuthorizedRefills") {
 					const raw = String(value);

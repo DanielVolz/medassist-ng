@@ -8,6 +8,9 @@ const defaultForm: FormState = {
 	name: "",
 	genericName: "",
 	takenBy: [],
+	medicationForm: "tablet",
+	pillForm: "tablet",
+	lifecycleCategory: "refill_when_empty",
 	packageType: "blister",
 	packCount: "1",
 	blistersPerPack: "1",
@@ -17,6 +20,8 @@ const defaultForm: FormState = {
 	pillWeightMg: "",
 	doseUnit: "mg",
 	medicationStartDate: "",
+	medicationEndDate: "",
+	autoMarkObsoleteAfterEndDate: true,
 	expiryDate: "",
 	notes: "",
 	intakeRemindersEnabled: false,
@@ -234,6 +239,54 @@ describe("MobileEditModal", () => {
 
 		const header = document.querySelector(".edit-modal-header");
 		expect(header).toBeInTheDocument();
+	});
+
+	it("uses plain numeric input for tube amount without stepper controls", () => {
+		render(
+			<MobileEditModal
+				{...defaultProps}
+				form={{
+					...defaultForm,
+					packageType: "tube",
+					medicationForm: "topical",
+					packageAmountValue: "150",
+					packageAmountUnit: "g",
+				}}
+			/>
+		);
+
+		const amountInput = screen.getByLabelText("form.packageAmountPerTube") as HTMLInputElement;
+		expect(amountInput).toBeInTheDocument();
+		expect(amountInput.tagName).toBe("INPUT");
+		expect(amountInput).toHaveAttribute("inputmode", "decimal");
+
+		const unitSelect = screen.getByLabelText("form.packageAmountUnitG") as HTMLSelectElement;
+		expect(unitSelect).toBeDisabled();
+		expect(unitSelect.value).toBe("g");
+	});
+
+	it("uses plain numeric input for liquid container package amount", () => {
+		render(
+			<MobileEditModal
+				{...defaultProps}
+				form={{
+					...defaultForm,
+					packageType: "liquid_container",
+					medicationForm: "liquid",
+					packageAmountValue: "250",
+					packageAmountUnit: "ml",
+				}}
+			/>
+		);
+
+		const amountInput = screen.getByLabelText("form.packageAmount") as HTMLInputElement;
+		expect(amountInput).toBeInTheDocument();
+		expect(amountInput.tagName).toBe("INPUT");
+		expect(amountInput).toHaveAttribute("inputmode", "decimal");
+
+		const unitSelect = screen.getByLabelText("form.packageAmountUnitMl") as HTMLSelectElement;
+		expect(unitSelect).toBeDisabled();
+		expect(unitSelect.value).toBe("ml");
 	});
 });
 

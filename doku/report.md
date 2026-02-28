@@ -28,6 +28,26 @@ For each task, add:
 
 ## Entries
 
+### 2026-02-28 (PR #359 backend CI fix)
+
+- **🧩 Scope**: Triage and resolve failing backend CI check on branch `feat/topical-no-depletion-planner` with minimal change scope.
+- **🛠️ What changed**:
+  - Reproduced backend CI locally with the same command sequence as `.github/workflows/test.yml`.
+  - Identified TypeScript compile failure:
+    - `backend/src/routes/planner.ts` references `tr.common.units` and `tr.common.ml`.
+    - `backend/src/i18n/translations.ts` did not define those keys in `common`.
+  - Added missing `common.units` and `common.ml` keys to the translation type and both language maps (`en`, `de`).
+- **📁 Files touched**:
+  - `backend/src/i18n/translations.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - `cd backend && npm run lint` -> passed
+  - `cd backend && npx tsc --noEmit` -> passed
+  - `cd backend && CI=true npm run test:coverage` -> **21 files passed, 572 tests passed**
+- **🔜 Follow-ups**:
+  - Remote push/PR update must be performed by `@release-manager` per repository governance.
+
 ### 2026-02-28 (PR #356 backend CI failure triage)
 
 - **🧩 Scope**: Reproduce and fix failing `Backend Tests` check on branch `feat/package-amount-backend`.

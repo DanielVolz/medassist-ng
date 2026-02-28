@@ -155,6 +155,78 @@ describe("useMedicationForm", () => {
 		});
 	});
 
+	it("enforces liquid defaults when packageType is liquid_container", () => {
+		const { result } = renderHook(() => useMedicationForm());
+
+		act(() => {
+			result.current.handleValueChange("packageType", "liquid_container");
+		});
+
+		expect(result.current.form.packageType).toBe("liquid_container");
+		expect(result.current.form.medicationForm).toBe("liquid");
+		expect(result.current.form.lifecycleCategory).toBe("refill_when_empty");
+		expect(result.current.form.doseUnit).toBe("ml");
+		expect(result.current.form.packageAmountUnit).toBe("ml");
+	});
+
+	it("keeps liquid settings locked when editing medicationForm under liquid_container", () => {
+		const { result } = renderHook(() => useMedicationForm());
+
+		act(() => {
+			result.current.handleValueChange("packageType", "liquid_container");
+			result.current.handleValueChange("medicationForm", "tablet");
+		});
+
+		expect(result.current.form.packageType).toBe("liquid_container");
+		expect(result.current.form.medicationForm).toBe("liquid");
+		expect(result.current.form.doseUnit).toBe("ml");
+		expect(result.current.form.packageAmountUnit).toBe("ml");
+	});
+
+	it("enforces tube defaults and locks amount unit to grams", () => {
+		const { result } = renderHook(() => useMedicationForm());
+
+		act(() => {
+			result.current.handleValueChange("packageType", "tube");
+			result.current.handleValueChange("medicationForm", "liquid");
+			result.current.handleValueChange("packageAmountUnit", "ml");
+		});
+
+		expect(result.current.form.packageType).toBe("tube");
+		expect(result.current.form.medicationForm).toBe("topical");
+		expect(result.current.form.lifecycleCategory).toBe("treatment_period");
+		expect(result.current.form.doseUnit).toBe("units");
+		expect(result.current.form.packageAmountUnit).toBe("g");
+	});
+
+	it("normalizes legacy tube records to grams in startEdit", () => {
+		const { result } = renderHook(() => useMedicationForm());
+		const openEditModal = vi.fn();
+		Object.defineProperty(window, "innerWidth", { value: 1024, writable: true });
+
+		const med: Medication = {
+			id: 12,
+			name: "Topical Gel",
+			takenBy: [],
+			packageType: "tube",
+			packageAmountUnit: "ml",
+			packageAmountValue: 150,
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 0,
+			blisters: [{ usage: 1, every: 1, start: "2026-01-01T08:00:00.000Z" }],
+			updatedAt: null,
+		};
+
+		act(() => {
+			result.current.startEdit(med, openEditModal);
+		});
+
+		expect(result.current.form.packageType).toBe("tube");
+		expect(result.current.form.packageAmountUnit).toBe("g");
+	});
+
 	it("adds, edits and removes blister rows", () => {
 		const { result } = renderHook(() => useMedicationForm());
 

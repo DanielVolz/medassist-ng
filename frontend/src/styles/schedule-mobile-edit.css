@@ -500,6 +500,8 @@
 	color: var(--text-primary);
 	font-size: 0.95rem;
 	font-family: inherit;
+	text-transform: none;
+	letter-spacing: normal;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;

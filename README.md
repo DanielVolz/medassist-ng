@@ -19,7 +19,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Backend_Tests-572%2F572-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
-  <img src="https://img.shields.io/badge/Frontend_Tests-769%2F769-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
+  <img src="https://img.shields.io/badge/Frontend_Tests-775%2F775-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
 </p>
 
 ### 🤖 AI-Generated Code

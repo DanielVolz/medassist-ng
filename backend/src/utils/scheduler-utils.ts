@@ -17,6 +17,22 @@ export type Intake = {
 	intakeRemindersEnabled: boolean;
 };
 
+/**
+ * Normalize intake usage for stock math.
+ *
+ * Stock semantics currently treat numeric usage as-is for all supported
+ * medication forms/package types. The helper centralizes this behavior so route
+ * logic can depend on a single validated numeric value.
+ */
+export function normalizeIntakeUsageForStock(
+	intake: Pick<Intake, "usage">,
+	_medicationForm?: string | null,
+	_packageType?: string | null
+): number {
+	const usage = Number(intake.usage);
+	return Number.isFinite(usage) && usage > 0 ? usage : 0;
+}
+
 // =============================================================================
 // Timezone utilities
 // =============================================================================

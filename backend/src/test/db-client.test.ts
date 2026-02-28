@@ -32,8 +32,8 @@ async function loadDbClientModule(options: ClientTestOptions = {}) {
 		.mockReturnValue(dirWritable ? { success: true } : { success: false, error: "permission denied" });
 	const getDbPaths = vi.fn().mockReturnValue({
 		dataDir: "/tmp/medassist-data",
-		dbPath: "/tmp/medassist-data/medassist.db",
-		url: "file:/tmp/medassist-data/medassist.db",
+		dbPath: "/tmp/medassist-data/medassist-ng.db",
+		url: "file:/tmp/medassist-data/medassist-ng.db",
 	});
 	const runDrizzleMigrations = vi.fn().mockResolvedValue({ success: true });
 	const runAlterMigrations = vi.fn().mockResolvedValue({ errors: [] });
@@ -102,7 +102,7 @@ describe("db/client bootstrap", () => {
 		await mod.migrationsReady;
 
 		expect(mocks.ensureDataDirectory).toHaveBeenCalledWith("/tmp/medassist-data");
-		expect(mocks.createClient).toHaveBeenCalledWith({ url: "file:/tmp/medassist-data/medassist.db" });
+		expect(mocks.createClient).toHaveBeenCalledWith({ url: "file:/tmp/medassist-data/medassist-ng.db" });
 		expect(mocks.runDrizzleMigrations).toHaveBeenCalledTimes(1);
 		expect(mocks.runAlterMigrations).toHaveBeenCalledTimes(1);
 		expect(mocks.repairTrailingHyphenDoseIds).toHaveBeenCalledTimes(1);

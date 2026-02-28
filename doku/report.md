@@ -28,6 +28,728 @@ For each task, add:
 
 ## Entries
 
+### 2026-02-28 (PR #356 backend CI failure triage)
+
+- **🧩 Scope**: Reproduce and fix failing `Backend Tests` check on branch `feat/package-amount-backend`.
+- **🛠️ What changed**:
+  - Reproduced failure locally with `CI=true npm run test:run` in `backend` (`15` failing tests, all returning `500` from planner usage endpoint paths).
+  - Root cause: missing utility export used at runtime by `POST /medications/usage`.
+    - Caller: `backend/src/routes/medications.ts` (`normalizeIntakeUsageForStock(...)`)
+    - Missing implementation/export in: `backend/src/utils/scheduler-utils.ts`
+  - Added minimal `normalizeIntakeUsageForStock(...)` helper to return a validated finite positive numeric usage value.
+- **📁 Files touched**:
+  - `backend/src/utils/scheduler-utils.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - `cd backend && CI=true npx vitest run src/test/integration.test.ts src/test/stock-semantics-parity.test.ts src/test/e2e-routes.test.ts` -> **3 files passed, 143 tests passed**
+  - `cd backend && CI=true npm run test:run` -> **21 files passed, 572 tests passed**
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-02-28 (Stacked Branch Validation + Compatibility Fixes)
+
+- **🧩 Scope**: Validate stacked commits for package amount, liquid intake units, and topical no-depletion behavior; fix test compatibility blockers.
+- **🛠️ What changed**:
+  - Verified stack lineage on current branch:
+    - `7ebd253` (`feat/package-amount-backend`)
+    - `3954ed2` (`feat/tube-ui-simplification`)
+    - `e689720` (`feat/liquid-intake-units-conversion`)
+    - `f9deb1b` (`feat/topical-no-depletion-planner`)
+  - Fixed backend integration fixture drift by updating in-memory `medications` schemas to current column set (including medication form + package amount fields), which removed widespread `500` failures in backend tests.
+  - Updated focused Playwright specs to match current UI semantics:
+    - usage label selectors now support dynamic usage labels (not pills-only)
+    - lifecycle edit flow now uses robust row/action selectors and current `Commercial Name` label
+    - planner stock assertion now validates blister+loose-pill breakdown format
+  - Removed fixable E2E lint warnings in lifecycle spec (unused import/variable).
+- **📁 Files touched**:
+  - `backend/src/test/integration.test.ts`
+  - `backend/src/test/planner.test.ts`
+  - `backend/src/test/e2e-routes.test.ts`
+  - `frontend/e2e/medication-edit.spec.ts`
+  - `frontend/e2e/medication-lifecycle.spec.ts`
+  - `frontend/e2e/planner-data.spec.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - `npm run lint` (root): backend clean; frontend reports 12 pre-existing `noNestedTernary` warnings in `MedicationsPage.tsx`/`ReportModal.tsx`; no new warning introduced by this change.
+  - `cd backend && CI=true npm run test:run`: **21 files passed, 572 tests passed**.
+  - `cd frontend && CI=true npm run test:run`: **42 files passed, 775 tests passed**.
+  - `cd frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npm run test:e2e -- --workers=1 e2e/medication-edit.spec.ts e2e/medication-lifecycle.spec.ts e2e/planner-data.spec.ts`: **25 passed, 0 failed**.
+- **🔜 Follow-ups**:
+  - Optional dedicated cleanup PR for remaining frontend `noNestedTernary` warnings.
+
+### 2026-02-28 (UX update: no +/- for tube/liquid package amount)
+
+- **🧩 Scope**: Simplify package amount input for non-tablet package types.
+- **🛠️ What changed**:
+  - Replaced `+/-` stepper controls with a single numeric input field for:
+    - `Tube -> Amount per tube`
+    - `Liquid container -> Package amount`
+  - Units remain fixed and non-editable:
+    - `Tube -> g`
+    - `Liquid container -> ml`
+  - Added mobile modal regression tests to verify plain input behavior and fixed unit selectors.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/test/components/MobileEditModal.test.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - `runTests`: `frontend/src/test/components/MobileEditModal.test.tsx` -> `59 passed, 0 failed`
+  - `get_errors`: no diagnostics errors on touched files
+- **🔜 Follow-ups**:
+  - Optional: refactor pre-existing `noNestedTernary` warnings in `MedicationsPage.tsx` in a dedicated cleanup task.
+
+### 2026-02-28 (Tests updated for strict tube/liquid unit behavior)
+
+- **🧩 Scope**: Ensure automated tests cover the new unit rules (`tube -> g`, `liquid_container -> ml`).
+- **🛠️ What changed**:
+  - Updated existing `useMedicationForm` tests to explicitly check `packageAmountUnit="ml"` for liquid-container defaults and lock behavior.
+  - Added new regression test: `tube` always enforces `packageAmountUnit="g"`, even if an `ml` change is attempted.
+  - Added new regression test: legacy `tube` records with `packageAmountUnit="ml"` are normalized to `g` during edit mapping.
+  - Refactored touched source code for lint compliance (`noNestedTernary`) in modified files.
+- **📁 Files touched**:
+  - `frontend/src/test/hooks/useMedicationForm.test.ts`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - `runTests`: `frontend/src/test/hooks/useMedicationForm.test.ts` -> `25 passed, 0 failed`
+  - `biome check` (focused): touched files -> clean
+- **🔜 Follow-ups**:
+  - Optional backend guard to reject `tube+ml` payloads server-side.
+
+### 2026-02-28 (Domain fix: tube can no longer use `ml`)
+
+- **🧩 Scope**: Enforce correct measurement semantics for tube medications.
+- **🛠️ What changed**:
+  - Tube forms no longer allow selecting `ml`.
+  - Tube amount unit is now fixed to `g` in desktop and mobile edit flows.
+  - Existing tube records are normalized to `g` when opened in edit mode.
+  - Save payload now enforces:
+    - `tube -> packageAmountUnit = g`
+    - `liquid_container -> packageAmountUnit = ml`
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Optional: add backend route-level guard to reject `tube+ml` for full server-side protection.
+
+### 2026-02-28 (Tube package made simple: `1 x 150 g`)
+
+- **🧩 Scope**: Remove confusing/duplicated stock inputs for tube medications.
+- **🛠️ What changed**:
+  - Tube stock section was simplified in desktop and mobile forms.
+  - For `Package Type = Tube`, the form now shows:
+    - `Tubes`
+    - `Amount per tube` (`g`/`ml`)
+    - computed total amount (`Tubes * Amount per tube`)
+  - Removed tube-specific `Total Amount` / `Current Amount` stepper inputs that allowed conflicting values.
+  - Save logic now persists tube amounts consistently from the simple model (`packCount * packageAmountValue`).
+  - Added new localized labels in EN/DE for tube-specific fields.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Optional: adjust read-only views to always surface the same multiplication format for tube medications.
+
+### 2026-02-28 (UI consistency: start date now shows optional)
+
+- **🧩 Scope**: Align date-input hint text for medication dates.
+- **🛠️ What changed**:
+  - Added `optional` placeholder to `Medication Start Date` in desktop and mobile edit forms.
+  - This is a display-only consistency fix; start date validation behavior is unchanged (still optional).
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-02-28 (Implemented: liquid intake units, topical stock rule, package amount metadata)
+
+- **🧩 Scope**: Fully implement the approved behavior across backend/frontend for liquid measurements, topical stock handling, and package content metadata.
+- **🛠️ What changed**:
+  - Added backend persistence + compatibility for package amount fields:
+    - `packageAmountValue`
+    - `packageAmountUnit` (`ml|g`)
+  - Extended intake model with `intakeUnit` (`ml|tsp|tbsp`) and applied stock conversion:
+    - `1 tsp = 5 ml`
+    - `1 tbsp = 15 ml`
+  - Updated stock/depletion logic so topical (`tube`) does not auto-deplete stock (metadata-only behavior), while liquid remains measurable and depleting.
+  - Updated export/import to carry new fields and bumped export format version to `1.3`.
+  - Added desktop + mobile UI controls for:
+    - intake unit selection on liquid-container schedules
+    - package amount metadata (`value + unit`) for tube/liquid-container
+  - Updated frontend coverage logic (including shared schedule view) to match backend conversion and topical no-depletion behavior.
+  - Added EN/DE translation keys for the new form labels.
+- **📁 Files touched**:
+  - `backend/src/routes/medications.ts`
+  - `backend/src/services/reminder-scheduler.ts`
+  - `backend/src/routes/export.ts`
+  - `frontend/src/types/index.ts`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/utils/schedule.ts`
+  - `frontend/src/components/SharedSchedule.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Execute test plan via `@testing-manager` (ownership rule).
+
+### 2026-02-28 (Topical vs Liquid Stock Behavior Clarified)
+
+- **🧩 Scope**: Define practical stock behavior for topical vs liquid medications and add intake conversion for tablespoon dosing.
+- **🛠️ What changed**:
+  - Updated `doku/package_types.md` with explicit behavior split:
+    - `topical`: package content is informational only (no stock depletion math in V1/V1.1)
+    - `liquid`: measurable stock, always deducted in canonical `ml`
+  - Added liquid intake conversion model:
+    - `ml`, `tsp`, `tbsp` intake units
+    - fixed conversion: `1 tsp = 5 ml`, `1 tbsp = 15 ml`
+  - Added implementation guidance to use metric medical conversion (`tbsp=15 ml`) and avoid regional kitchen variants.
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Implement intake-unit enum + conversion pipeline in API/frontend if this concept is approved.
+
+### 2026-02-28 (Packaging Quantity Units Clarified)
+
+- **🧩 Scope**: Define how package amount should be measured for liquid and topical medications.
+- **🛠️ What changed**:
+  - Added a new recommendation section in `doku/package_types.md` for explicit package quantity fields:
+    - `packageAmountValue` (number)
+    - `packageAmountUnit` (`ml|g`)
+  - Documented practical unit mapping:
+    - oral liquids (`liquid_container`) -> `ml`
+    - topical cream/ointment/gel (`tube`) -> `g`
+    - topical lotions/solutions -> `ml`
+  - Clarified that `packageAmountUnit` is separate from `doseUnit` and `strengthUnit`.
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Implement model fields/migration/UI in a dedicated PR if this recommendation is approved.
+
+### 2026-02-28 (Liquid Container Regression Tests Executed)
+
+- **🧩 Scope**: Turn the `liquid_container` handoff checklist into real automated regression tests and validate the new behavior.
+- **🛠️ What changed**:
+  - Added backend real-route tests in `backend/src/test/e2e-routes.test.ts` for:
+    - creating a `liquid_container` medication
+    - validating shared schedule stock semantics for `liquid_container`
+    - rejecting invalid `liquid` + non-`liquid_container` combinations
+  - Added frontend hook tests in `frontend/src/test/hooks/useMedicationForm.test.ts` for:
+    - automatic form derivation when switching to `packageType=liquid_container`
+    - enforcing lock behavior that keeps `medicationForm=liquid` and `doseUnit=ml`
+  - Fixed the in-memory backend test schema in `e2e-routes.test.ts` so current route inserts can run against the test DB without false `500` errors.
+  - Executed targeted test names for the new scenarios; all targeted tests passed.
+- **📁 Files touched**:
+  - `backend/src/test/e2e-routes.test.ts`
+  - `frontend/src/test/hooks/useMedicationForm.test.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Expand the package/form matrix tests in backend route suites if broader hardening is desired.
+
+### 2026-02-28 (Testing Handoff Checklist Added)
+
+- **🧩 Scope**: Provide a concrete `@testing-manager` handoff for validating `liquid_container` rollout quality.
+- **🛠️ What changed**:
+  - Added a dedicated testing section in `doku/package_types.md` with executable checks for:
+    - backend package/form validation matrix
+    - frontend desktop/mobile parity
+    - planner/schedule/dashboard/detail/report unit semantics (`ml` for liquid container)
+    - export/import/share/refill behavior
+    - minimum E2E scenarios and pass criteria
+  - Checklist is explicitly scoped to prevent regressions back to pill-only assumptions.
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Execute this checklist through `@testing-manager` per repository governance.
+
+### 2026-02-28 (Dedicated Liquid Package Type Implemented)
+
+- **🧩 Scope**: Implement missing package type for liquid medications using `liquid_container` and propagate it across backend/frontend.
+- **🛠️ What changed**:
+  - Added `liquid_container` to API/frontend package type unions and import/export validation.
+  - Enforced domain rules centrally:
+    - `liquid` must use `liquid_container`
+    - `topical` must use `tube`
+    - `capsule/tablet` cannot use `tube` or `liquid_container`
+  - Updated desktop + mobile medication edit flows to expose `liquid_container` and enforce correct form locking.
+  - Updated planner/schedule/dashboard/detail/report unit rendering so liquid container values use `ml` instead of pill wording.
+  - Updated refill/share/reminder/planner backend branches so container calculations include `liquid_container`.
+  - Added i18n labels:
+    - EN: `Liquid Container`
+    - DE: `Fluessigbehaeltnis`
+  - Updated `doku/package_types.md` to make `liquid_container` mapping explicit.
+- **📁 Files touched**:
+  - `backend/src/routes/medications.ts`
+  - `backend/src/routes/export.ts`
+  - `backend/src/routes/refills.ts`
+  - `backend/src/routes/share.ts`
+  - `backend/src/routes/planner.ts`
+  - `backend/src/services/reminder-scheduler.ts`
+  - `frontend/src/types/index.ts`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/pages/PlannerPage.tsx`
+  - `frontend/src/pages/SchedulePage.tsx`
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/components/ReportModal.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Test execution/triage remains delegated to `@testing-manager`.
+
+### 2026-02-28 (Logic fix: Liquid is no longer allowed in Tube)
+
+- **🧩 Scope**: Correct package/form logic after identifying that `liquid` in `tube` is invalid.
+- **🛠️ What changed**:
+  - Backend validation rules updated:
+    - `topical` must use `tube`
+    - `liquid` cannot use `tube`
+  - Desktop and mobile medication edit forms updated:
+    - when `Package Type = Tube`, only `Topical` is selectable
+    - `Liquid` option removed from tube-specific selector
+  - Form-state logic updated to keep tube selections deterministic:
+    - tube now forces `medicationForm=topical`
+    - tube defaults to `doseUnit=units`
+  - `doku/package_types.md` updated to reflect the corrected compatibility rules.
+- **📁 Files touched**:
+  - `backend/src/routes/medications.ts`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Decide in master-plan phase how `liquid` should be modeled operationally (explicit non-tube path with full UX and stock semantics).
+
+### 2026-02-28 (Package-type hardening implementation pass)
+
+- **🧩 Scope**: Implement high-impact package-type fixes immediately and reduce risk before the later master-plan rollout.
+- **🛠️ What changed**:
+  - Hardened backend compatibility rules in `medications.ts`:
+    - `liquid/topical -> tube` (already present)
+    - added inverse guard `capsule/tablet != tube`
+  - Updated frontend planner/schedule wording for non-pill forms:
+    - usage and totals now render form-aware units for `tube` flows
+    - pill-weight helper is suppressed for tube flows
+  - Updated backend planner/reminder messaging:
+    - no pill-only assumption for `tube` package type
+    - unit labels are now package/form aware in plain-text and email table content
+  - Extended backend translation keys to support the updated unit terminology.
+  - Updated `doku/package_types.md` status snapshot to reflect this implementation progress.
+- **📁 Files touched**:
+  - `backend/src/routes/medications.ts`
+  - `frontend/src/pages/PlannerPage.tsx`
+  - `frontend/src/pages/SchedulePage.tsx`
+  - `backend/src/routes/planner.ts`
+  - `backend/src/services/reminder-scheduler.ts`
+  - `backend/src/i18n/translations.ts`
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Full regression suite expansion for all four forms remains open and should be handled by `@testing-manager`.
+
+### 2026-02-28 (Full package_types plan synchronized with current code state)
+
+- **🧩 Scope**: Review the complete package-types plan and update it to the latest implementation reality.
+- **🛠️ What changed**:
+  - Added a new dated status snapshot (`2026-02-28`) with clear separation of:
+    - already implemented behavior
+    - still-open implementation gaps
+  - Updated scope section from generic "implement now" wording to:
+    - `V1 baseline (already implemented)`
+    - `V1 remaining work`
+  - Added an explicit lifecycle storage note that current persisted values are `refill_when_empty|treatment_period`, while `ongoing` is runtime-derived.
+  - Added progress interpretation for the 1:1 remediation sequence so already-delivered steps are handled as verify-and-align checks.
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Prioritize planner/schedule/reminder wording cleanup and enforce full four-form regression coverage.
+
+### 2026-02-28 (1:1 remediation sequence added to package type plan)
+
+- **🧩 Scope**: Add the complete execution-ready implementation order directly into `doku/package_types.md`.
+- **🛠️ What changed**:
+  - Added a new section with strict `file -> exact change -> acceptance criterion` sequencing.
+  - Expanded this sequence across all relevant implementation surfaces:
+    - backend schema/routes/services
+    - frontend runtime and parity-critical screens
+    - i18n
+    - backend tests, frontend tests, and e2e tests
+    - documentation tracking files
+  - Added an explicit execution gate so skipped files must be justified; otherwise the rollout is marked incomplete.
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Apply the remediation sequence in code and validate each acceptance criterion per file group.
+
+### 2026-02-28 (Package type plan aligned and fully enumerated)
+
+- **🧩 Scope**: Make `doku/package_types.md` internally consistent and explicitly enumerate all impacted areas.
+- **🛠️ What changed**:
+  - Corrected plan context to current container reality (`blister|bottle|tube`) to remove ambiguity.
+  - Added a full affected-file inventory grouped by:
+    - backend schema/routes/services
+    - frontend runtime surfaces
+    - i18n files
+    - backend tests
+    - frontend tests
+    - e2e specs
+    - documentation synchronization files
+  - This converts the plan into a practical implementation checklist so no affected area is accidentally skipped.
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Execute code remediation based on this inventory and close gaps in planner/schedule/backend planner messaging first.
+
+### 2026-02-28 (Package type plan made implementation-safe)
+
+- **🧩 Scope**: Improve `doku/package_types.md` to prevent incomplete package/form rollouts.
+- **🛠️ What changed**:
+  - Added a mandatory implementation coverage checklist spanning backend, frontend desktop/mobile parity, read views, i18n, import/export/share, and tests.
+  - Added a strict definition-of-done rule: package/form changes are incomplete unless all affected areas are updated (or explicitly marked not impacted with rationale).
+  - This turns the plan from descriptive guidance into an execution gate against partial implementations.
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Run a targeted remediation pass for remaining pill-only wording in planner/schedule and backend planner notifications, plus matching tests.
+
+### 2026-02-28 (Release manager instructions cleaned up)
+
+- **🧩 Scope**: Remove app-feature text from release-manager agent instructions and keep the file process-oriented.
+- **🛠️ What changed**:
+  - Replaced the concrete medication-feature release-notes example with a neutral template.
+  - New template keeps the expected section structure, commit-hash usage, and full-changelog format, but avoids product-specific content.
+- **📁 Files touched**:
+  - `.github/agents/release-manager.agent.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Optional: standardize the Breaking Changes example heading to remove emoji for full consistency with style rules.
+
+### 2026-02-27 (Dashboard tube stock wording correction)
+
+- **🧩 Scope**: Correct dashboard overview and timeline wording for `tube` medications.
+- **🛠️ What changed**:
+  - Fixed medication overview stock cell so `tube` no longer renders as `pill/pills`.
+  - Tube values now render with amount units:
+    - `liquid` -> `ml`
+    - `topical` -> `applications`
+  - Updated timeline dose usage and total tags to use the same tube-aware units.
+  - Suppressed pill-weight (`mg`) helper text for tube dose rows.
+- **📁 Files touched**:
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-02-27 (Lowercase optional placeholder in date fields)
+
+- **🧩 Scope**: Make date-field placeholder text less aggressive by preventing automatic uppercase rendering.
+- **🛠️ What changed**:
+  - Fixed inherited uppercase styling on custom date input display.
+  - Added explicit CSS override so placeholders like `optional` render lowercase as intended.
+  - Normalized letter spacing for that display text to keep the visual tone calmer.
+- **📁 Files touched**:
+  - `frontend/src/styles/schedule-mobile-edit.css`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-02-27 (Tube semantics in report exports)
+
+- **🧩 Scope**: Ensure generated medication reports do not use pill-centric wording when package type is `tube`.
+- **🛠️ What changed**:
+  - Updated text export (`txt`/`md`) and print/PDF report generation to use amount-based wording for `tube`.
+  - Current stock in reports now uses tube units (`ml` or `applications`) instead of `pill/pills`.
+  - Total capacity row label for `tube` now uses unit-aware amount wording.
+  - Intake schedule rows for `tube` now render usage with amount units.
+  - Refill history rows for `tube` now render added quantities with amount units.
+  - `Dose per pill` row is now omitted for `tube` in report outputs.
+- **📁 Files touched**:
+  - `frontend/src/components/ReportModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Optional: run a final app-wide wording pass for dashboard/planner/schedule if complete tube terminology harmonization is desired beyond reports.
+
+### 2026-02-27 (Holistic package adaptation for Tube)
+
+- **🧩 Scope**: Ensure package UI reflects package semantics, especially for `tube` (liquid/topical), without pill-centric wording.
+- **🛠️ What changed**:
+  - Package tab now uses amount terminology for `tube` instead of pill terminology.
+  - For `tube`, removed pill-specific dose field from package tab (`Dose per pill (mg)` is no longer shown).
+  - Total display for `tube` no longer appends `pill/pills` wording.
+  - Added i18n labels for amount-based stock fields (EN/DE).
+  - Added sensible unit defaults when choosing tube forms:
+    - `liquid` -> `ml`
+    - `topical` -> `units`
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Optional: implement distinct backend depletion math for `tube+liquid` versus `tube+topical` for full end-to-end semantic parity.
+
+### 2026-02-27 (Documentation correction: Liquid/Topical + Tube constraints)
+
+- **🧩 Scope**: Fix mismatch between implementation reality and `doku/package_types.md` constraints section.
+- **🛠️ What changed**:
+  - Replaced outdated statement that backend/export only support `blister|bottle`.
+  - Documented actual supported package types: `blister|bottle|tube`.
+  - Documented current UI split clearly:
+    - `blister`/`bottle`: `pillForm` (`tablet`/`capsule`)
+    - `tube`: `medicationForm` (`liquid`/`topical`)
+  - Clarified that export/import now include tube and related metadata.
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Continue updating this document together with any future model/UI changes in the same PR.
+
+### 2026-02-27 (Tube form distinction restored: Liquid vs Topical)
+
+- **🧩 Scope**: Restore meaningful separation between liquid and cream/topical while keeping the previous pillForm simplification.
+- **🛠️ What changed**:
+  - Reintroduced a dedicated `Medication Form` selector only when `Package Type = Tube`.
+  - Tube selector now offers exactly `Liquid` and `Topical` (no capsule/tablet overlap).
+  - Kept `Pill Form` as the only form selector for `blister`/`bottle`.
+  - Updated intake behavior to reflect tube form:
+    - `Liquid`: fractional intake enabled and ml-oriented usage label.
+    - `Topical`: application-oriented usage label and non-fractional behavior.
+  - Updated form-state logic so switching to tube defaults to `Liquid` unless an existing tube form is already set.
+- **📁 Files touched**:
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Optional: introduce explicit liquid volume stock policy in backend for stronger liquid-vs-topical operational differences.
+
+### 2026-02-27 (PillForm-first simplification)
+
+- **🧩 Scope**: Remove semantically confusing dual form selection and align UI with meaningful domain choices.
+- **🛠️ What changed**:
+  - Removed `Medication Form` selector from desktop and mobile edit forms.
+  - Kept `Pill Form` as the primary form control for non-tube packages.
+  - Kept explicit package selection (`blister`, `bottle`, `tube`) and use it to control whether `Pill Form` is shown.
+  - Updated intake behavior logic in UI to use `packageType` + `pillForm` (fraction handling and usage label decision).
+  - Backend payload remains compatible by deriving `medicationForm` internally at save time.
+- **📁 Files touched**:
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - If liquid/topical must become user-selectable again, add a dedicated control only together with visible behavior differences.
+
+### 2026-02-27 (Removed non-functional lifecycle option from UI)
+
+- **🧩 Scope**: Align medication form UX with product rule that users should only see controls that have concrete application effects.
+- **🛠️ What changed**:
+  - Removed lifecycle dropdown (`Refill when empty` / `Treatment period`) from desktop medication form.
+  - Removed the same lifecycle dropdown from mobile edit modal to keep desktop/mobile parity.
+  - Updated package-type design doc to state lifecycle selector is intentionally hidden until lifecycle values produce distinct behavior in planner/reminder/stock logic.
+  - No DB/API migration changes in this step; this is a focused UX correction to remove non-functional user choice.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Re-introduce lifecycle as visible user control only after implementing clear, user-visible behavior differences per option.
+
+### 2026-02-27 (Liquid/Topical packaging correction: dedicated tube type)
+
+- **🧩 Scope**: Apply user-requested domain correction so liquid/topical medications are not modeled as pill bottles and instead use a dedicated `tube` package type.
+- **🛠️ What changed**:
+  - Completed backend enum/validation propagation for `tube` in medication CRUD and import/export contracts.
+  - Updated backend stock/planner/share/refill/scheduler logic to treat `tube` with container semantics (same stock math branch as bottle where appropriate).
+  - Updated frontend shared types and medication-form logic so liquid/topical default to `tube`.
+  - Updated desktop and mobile medication edit UIs to show tube option for liquid/topical and keep bottle option for capsule/tablet.
+  - Updated dashboard/planner/detail/refill/report displays and stock helpers to render/calculate tube correctly.
+  - Added missing translation keys for tube labels in EN/DE (`form.packageTypeTube`, `report.docTube`).
+  - Checked workspace diagnostics after edits: no compile/lint errors reported by VS Code diagnostics.
+- **📁 Files touched**:
+  - `backend/src/routes/medications.ts`
+  - `backend/src/routes/export.ts`
+  - `backend/src/routes/refills.ts`
+  - `backend/src/routes/planner.ts`
+  - `backend/src/routes/share.ts`
+  - `backend/src/services/reminder-scheduler.ts`
+  - `frontend/src/types/index.ts`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/hooks/useRefill.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/pages/PlannerPage.tsx`
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/components/ReportModal.tsx`
+  - `frontend/src/utils/stock.ts`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Delegate targeted regression test execution (frontend/unit/e2e as needed) to `@testing-manager` per repository governance.
+
+### 2026-02-27 (Plan update: tokenized medication overview API)
+
+- **🧩 Scope**: Improve `doku/feat/rest_api_med_overview.md` to close completeness and execution gaps.
+- **🛠️ What changed**:
+  - Added a dedicated test section with concrete required coverage for backend, frontend, and e2e.
+  - Fixed architecture ambiguity for rate limiting:
+    - use route-level limits in `backend/src/routes/share.ts`
+    - rely on already-registered plugin in `backend/src/index.ts`
+  - Tightened API contract details:
+    - token format validation (`^[a-f0-9]{16}$`)
+    - `Cache-Control: no-store`
+    - deterministic date format (`YYYY-MM-DD`)
+    - explicit `shareStockStatus=false` behavior (stock-derived fields set to `null`)
+  - Clarified image strategy for phase 1 (reuse existing `/api/images/...` behavior, no new share-image endpoint).
+  - Updated changed-files estimate and added recommendation to split implementation into 3 PRs due to size.
+- **📁 Files touched**:
+  - `doku/feat/rest_api_med_overview.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Implement in split PRs (backend -> frontend -> e2e/docs) to stay reviewable.
+
+### 2026-02-27 (Review: shared overview API plan)
+
+- **🧩 Scope**: Quality/completeness review of `doku/feat/rest_api_med_overview.md`.
+- **🛠️ What changed**:
+  - Reviewed plan against current backend/frontend architecture and share-token implementation.
+  - Found high-impact gaps to fix before implementation:
+    - Missing explicit test plan (backend route tests + frontend page tests + e2e flow).
+    - Ambiguous/non-existent target file for rate-limit setup (`backend/src/app.ts` in plan, but project uses `backend/src/index.ts`).
+    - Image URL contract in response example is not aligned with currently visible share routes and needs explicit endpoint/policy definition.
+  - Verified helpful strengths:
+    - Reuse of existing `share_tokens` is consistent.
+    - Token-format expectation (`hex`, 16 chars) matches current generator.
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Update plan with concrete test tasks, precise file targets, and final image-delivery strategy before starting implementation.
+
+### 2026-02-27 (Loading/Error screen theme parity)
+
+- **🧩 Scope**: Make pre-auth loading and connection-error screens follow the selected light/dark theme.
+- **🛠️ What changed**:
+  - Added early theme resolution in `AppRouter` for screens rendered before `AppHeader`/`useTheme` setup.
+  - Supports `localStorage` values `light`, `dark`, and `system` (system resolved via `prefers-color-scheme`).
+  - Applied `data-theme` on auth container during `loading`, `authError`, and `!authState` states.
+- **📁 Files touched**:
+  - `frontend/src/App.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-02-27 (Playwright request triage + auth env dependency check)
+
+- **🧩 Scope**: Assess requested Playwright improvements and clarify whether login/registration behavior is controlled by `.env` flags.
+- **🛠️ What changed**:
+  - Applied repository governance: test planning/writing/execution must be delegated to `@testing-manager`.
+  - Verified backend auth-state logic and confirmed env-driven behavior:
+    - `AUTH_ENABLED` controls global auth mode.
+    - `REGISTRATION_ENABLED` controls registration unless first-user bootstrap path (`!hasUsers`) is active.
+    - `FORM_LOGIN_ENABLED` controls username/password form availability (with first-user setup override).
+    - `OIDC_ENABLED` controls SSO route/button availability (with OIDC config requirements).
+  - Confirmed E2E auth setup failure mode in SSO-only environments is caused by unconditional username/password field usage in setup.
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - `@testing-manager` should implement the requested Playwright changes (auth fallback, planner calculation assertions, lifecycle integration flow, resilient retries/waits, timeline performance scenario).
+
+### 2026-02-27 (Intake reminder consistency fix)
+
+- **🧩 Scope**: Ensure reminders are sent only when explicitly enabled on the specific intake.
+- **🛠️ What changed**:
+  - Removed medication-level reminder fallback from intake reminder scheduling.
+  - Previous behavior: `intake.intakeRemindersEnabled || med.intakeRemindersEnabled` could remind disabled intakes.
+  - New behavior: only `intake.intakeRemindersEnabled` qualifies an intake for reminder sending.
+  - Updated prefilter logic so medications are considered only when at least one intake has reminders enabled.
+  - Backend lint verified clean after change.
+- **📁 Files touched**:
+  - `backend/src/services/intake-reminder-scheduler.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Existing legacy medications using only medication-level reminder flags must enable reminders at intake level to continue receiving reminders.
+
+### 2026-02-27 (Legacy DB cleanup)
+
+- **🧩 Scope**: Remove obsolete `medassist.db` leftovers from old storage paths and clean stale code references.
+- **🛠️ What changed**:
+  - Verified active runtime DB path is `medassist-ng.db` (`backend/src/db/db-utils.ts`).
+  - Searched repository for `medassist.db` and found only legacy test references in `backend/src/test/db-client.test.ts`.
+  - Updated test mock/expectation paths from `medassist.db` to `medassist-ng.db`.
+  - Deleted obsolete local files:
+    - `backend/data/medassist.db`
+    - `data/medassist.db`
+  - Confirmed no remaining code references to `medassist.db`.
+- **📁 Files touched**:
+  - `backend/src/test/db-client.test.ts`
+  - `backend/data/medassist.db` (removed)
+  - `data/medassist.db` (removed)
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - None.
+
 ### 2026-02-27 (All pending local changes split and merged)
 
 - **🧩 Scope**: Take the full pending local change set, split into meaningful PRs, and merge everything into `main`.
@@ -476,3 +1198,72 @@ For each task, add:
   - `doku/report.md`
 - **🔜 Follow-ups**:
   - Resolve remaining unrelated `frontend` TypeScript errors before rerunning full `npm run check` and then the targeted MedDetailModal test command.
+
+### 2026-02-27 (Package types plan decisions finalized)
+
+- **🧩 Scope**: Integrate final product decisions into `doku/package_types.md` so the V1 concept is implementation-ready.
+- **🛠️ What changed**:
+  - Locked lifecycle handling:
+    - `ongoing` is a derived state (`endDate == null`), not a stored explicit lifecycle value.
+    - Clarified precedence that `endDate` overrides `ongoing` behavior.
+  - Locked V1 form scope:
+    - Keep exactly 4 forms (`Capsule`, `Tablet`, `Liquid`, `Topical`).
+    - No subforms in V1; users map variants like cream/gel to these forms.
+  - Locked end-date behavior:
+    - `autoMarkObsoleteAfterEndDate` default set to `true`.
+  - Improved wording quality:
+    - renamed lifecycle section title from "restore" to neutral "categorization".
+- **📁 Files touched**:
+  - `doku/package_types.md`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Use these locked rules as acceptance criteria when creating implementation tasks (backend validation, frontend parity, export/import compatibility).
+
+### 2026-02-27 (Website implementation: V1 medication forms + lifecycle fields)
+
+- **🧩 Scope**: Implement approved package-type plan decisions directly in the web product (backend persistence + desktop/mobile UI).
+- **🛠️ What changed**:
+  - Backend data model extended with new medication metadata:
+    - `medicationForm` (`capsule|tablet|liquid|topical`)
+    - `pillForm` (`tablet|capsule`)
+    - `lifecycleCategory` (`refill_when_empty|treatment_period`)
+    - `medicationEndDate`
+    - `autoMarkObsoleteAfterEndDate` (default `true`)
+  - Backward-compatible DB rollout implemented:
+    - schema update in `backend/src/db/schema.ts`
+    - alter-migration compatibility statements in `backend/src/db/db-utils.ts`
+    - generated Drizzle migration: `backend/drizzle/0011_stiff_randall_flagg.sql`
+  - API validation and DTO mapping updated in `backend/src/routes/medications.ts`:
+    - `pillForm` required for capsule/tablet medication forms
+    - fractional intake rejected for capsule
+    - liquid/topical constrained to bottle container
+    - end-date/start-date consistency validation
+  - Auto-obsolete behavior implemented:
+    - medications are auto-marked obsolete when end date is reached and `autoMarkObsoleteAfterEndDate=true`
+  - Export/import now includes new metadata (`backend/src/routes/export.ts`, export format version `1.2`).
+  - Frontend desktop + mobile parity implemented:
+    - new form controls in `frontend/src/pages/MedicationsPage.tsx`
+    - same controls in `frontend/src/components/MobileEditModal.tsx`
+    - dynamic intake usage labels by form (`tablet/capsule/ml/application`)
+    - capsule intake now blocks fractional values in UI
+  - Frontend typing + defaults updated (`frontend/src/types/index.ts`, `frontend/src/hooks/useMedicationForm.ts`) and i18n keys added in both languages (`frontend/src/i18n/en.json`, `frontend/src/i18n/de.json`).
+- **📁 Files touched**:
+  - `backend/src/db/schema.ts`
+  - `backend/src/db/db-utils.ts`
+  - `backend/src/routes/medications.ts`
+  - `backend/src/routes/export.ts`
+  - `backend/drizzle/0011_stiff_randall_flagg.sql`
+  - `backend/drizzle/meta/_journal.json`
+  - `backend/drizzle/meta/0011_snapshot.json`
+  - `frontend/src/types/index.ts`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `frontend/src/test/components/MobileEditModal.test.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - Optional: run full repo-wide frontend check after existing unrelated E2E formatting diffs are cleaned up.

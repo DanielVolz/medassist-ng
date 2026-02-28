@@ -17,7 +17,7 @@ const IMAGES_DIR = resolve(getDataDir(), "images");
 // =============================================================================
 // Export Format Version (bump this when format changes)
 // =============================================================================
-const EXPORT_VERSION = "1.1";
+const EXPORT_VERSION = "1.3";
 
 // =============================================================================
 // Zod Schemas for Import Validation
@@ -27,6 +27,7 @@ const scheduleSchema = z.object({
 	usage: z.number().nonnegative(),
 	every: z.number().int().min(1),
 	start: z.string(), // ISO datetime string
+	intakeUnit: z.enum(["ml", "tsp", "tbsp"]).nullable().optional(),
 	remind: z.boolean().optional().default(false),
 	takenBy: z.string().nullable().optional(), // Per-intake takenBy (new field)
 });
@@ -38,7 +39,9 @@ const inventorySchema = z.object({
 	totalPills: z.number().int().nullable().optional(), // For bottle type: total capacity
 	looseTablets: z.number().int().min(0).default(0),
 	stockAdjustment: z.number().int().default(0), // Manual stock correction
-	packageType: z.enum(["blister", "bottle"]).default("blister"),
+	packageType: z.enum(["blister", "bottle", "tube", "liquid_container"]).default("blister"),
+	packageAmountValue: z.number().int().min(0).default(0),
+	packageAmountUnit: z.enum(["ml", "g"]).default("ml"),
 });
 
 const medicationExportSchema = z.object({
@@ -46,11 +49,16 @@ const medicationExportSchema = z.object({
 	name: z.string().min(1),
 	genericName: z.string().nullable().optional(),
 	takenBy: z.array(z.string()).default([]),
+	medicationForm: z.enum(["capsule", "tablet", "liquid", "topical"]).default("tablet"),
+	pillForm: z.enum(["capsule", "tablet"]).nullable().optional(),
+	lifecycleCategory: z.enum(["refill_when_empty", "treatment_period"]).default("refill_when_empty"),
 	inventory: inventorySchema,
 	pillWeightMg: z.number().int().nullable().optional(),
 	doseUnit: z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"]).default("mg"),
 	schedules: z.array(scheduleSchema).default([]),
 	medicationStartDate: z.string().nullable().optional(),
+	medicationEndDate: z.string().nullable().optional(),
+	autoMarkObsoleteAfterEndDate: z.boolean().default(true),
 	expiryDate: z.string().nullable().optional(),
 	notes: z.string().nullable().optional(),
 	intakeRemindersEnabled: z.boolean().default(false),
@@ -155,9 +163,14 @@ async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<
 }
 
 // Parse intakes from DB format to export format (with per-intake takenBy)
-function parseIntakesForExport(
-	row: typeof medications.$inferSelect
-): Array<{ usage: number; every: number; start: string; remind: boolean; takenBy: string | null }> {
+function parseIntakesForExport(row: typeof medications.$inferSelect): Array<{
+	usage: number;
+	every: number;
+	start: string;
+	intakeUnit: "ml" | "tsp" | "tbsp" | null;
+	remind: boolean;
+	takenBy: string | null;
+}> {
 	// Use the new parseIntakesJson which falls back to legacy format
 	const intakes = parseIntakesJson(
 		row.intakesJson,
@@ -169,6 +182,7 @@ function parseIntakesForExport(
 		usage: intake.usage,
 		every: intake.every,
 		start: intake.start,
+		intakeUnit: null,
 		remind: intake.intakeRemindersEnabled,
 		takenBy: intake.takenBy, // Per-intake takenBy
 	}));
@@ -295,6 +309,9 @@ export async function exportRoutes(app: FastifyInstance) {
 				name: med.name,
 				genericName: med.genericName,
 				takenBy: parseTakenByJson(med.takenByJson),
+				medicationForm: med.medicationForm ?? "tablet",
+				pillForm: med.pillForm ?? null,
+				lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
 				inventory: {
 					packCount: med.packCount ?? 1,
 					blistersPerPack: med.blistersPerPack ?? 1,
@@ -303,11 +320,15 @@ export async function exportRoutes(app: FastifyInstance) {
 					looseTablets: med.looseTablets ?? 0,
 					stockAdjustment: med.stockAdjustment ?? 0,
 					packageType: med.packageType ?? "blister",
+					packageAmountValue: med.packageAmountValue ?? 0,
+					packageAmountUnit: (med.packageAmountUnit ?? "ml") as "ml" | "g",
 				},
 				pillWeightMg: med.pillWeightMg,
 				doseUnit: med.doseUnit ?? "mg",
 				schedules: parseIntakesForExport(med),
 				medicationStartDate: med.medicationStartDate || null,
+				medicationEndDate: med.medicationEndDate || null,
+				autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
 				expiryDate: med.expiryDate,
 				notes: med.notes,
 				intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
@@ -555,6 +576,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						usage: s.usage,
 						every: s.every,
 						start: s.start,
+						intakeUnit: s.intakeUnit ?? null,
 						takenBy: s.takenBy || null,
 						intakeRemindersEnabled: s.remind ?? false,
 					}))
@@ -570,7 +592,12 @@ export async function exportRoutes(app: FastifyInstance) {
 						name: med.name,
 						genericName: med.genericName || null,
 						takenByJson,
+						medicationForm: med.medicationForm ?? "tablet",
+						pillForm: med.pillForm || null,
+						lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
 						packageType: med.inventory.packageType ?? "blister",
+						packageAmountValue: med.inventory.packageAmountValue ?? 0,
+						packageAmountUnit: med.inventory.packageAmountUnit ?? "ml",
 						packCount: med.inventory.packCount,
 						blistersPerPack: med.inventory.blistersPerPack,
 						pillsPerBlister: med.inventory.pillsPerBlister,
@@ -581,6 +608,8 @@ export async function exportRoutes(app: FastifyInstance) {
 						pillWeightMg: med.pillWeightMg || null,
 						doseUnit: med.doseUnit ?? "mg",
 						medicationStartDate: med.medicationStartDate || "",
+						medicationEndDate: med.medicationEndDate || null,
+						autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
 						intakesJson,
 						usageJson,
 						everyJson,

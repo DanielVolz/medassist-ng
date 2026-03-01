@@ -13,24 +13,37 @@ export type Intake = {
 	usage: number;
 	every: number;
 	start: string;
+	intakeUnit?: "ml" | "tsp" | "tbsp" | null;
 	takenBy: string | null; // Person taking this specific intake (null = use medication-level takenBy)
 	intakeRemindersEnabled: boolean;
 };
 
+const isValidIntakeUnit = (value: unknown): value is "ml" | "tsp" | "tbsp" =>
+	value === "ml" || value === "tsp" || value === "tbsp";
+
 /**
  * Normalize intake usage for stock math.
  *
- * Stock semantics currently treat numeric usage as-is for all supported
- * medication forms/package types. The helper centralizes this behavior so route
- * logic can depend on a single validated numeric value.
+ * Stock semantics:
+ * - tube: no automatic depletion (unknown per-application amount)
+ * - liquid_container/liquid forms: convert tsp/tbsp to ml
+ * - others: usage as-is
  */
 export function normalizeIntakeUsageForStock(
-	intake: Pick<Intake, "usage">,
-	_medicationForm?: string | null,
-	_packageType?: string | null
+	intake: Pick<Intake, "usage" | "intakeUnit">,
+	medicationForm?: string | null,
+	packageType?: string | null
 ): number {
 	const usage = Number(intake.usage);
-	return Number.isFinite(usage) && usage > 0 ? usage : 0;
+	if (!Number.isFinite(usage) || usage <= 0) return 0;
+	if (packageType === "tube") return 0;
+
+	const isLiquidStock = packageType === "liquid_container" || medicationForm === "liquid";
+	if (!isLiquidStock) return usage;
+
+	if (intake.intakeUnit === "tsp") return usage * 5;
+	if (intake.intakeUnit === "tbsp") return usage * 15;
+	return usage;
 }
 
 // =============================================================================
@@ -215,6 +228,7 @@ export function parseIntakesJson(
 					usage: typeof intake.usage === "number" ? intake.usage : 0,
 					every: typeof intake.every === "number" ? intake.every : 1,
 					start: typeof intake.start === "string" ? intake.start : new Date().toISOString(),
+					intakeUnit: isValidIntakeUnit(intake.intakeUnit) ? intake.intakeUnit : null,
 					takenBy: typeof intake.takenBy === "string" && intake.takenBy.trim() ? intake.takenBy.trim() : null,
 					intakeRemindersEnabled:
 						typeof intake.intakeRemindersEnabled === "boolean" ? intake.intakeRemindersEnabled : false,
@@ -232,6 +246,7 @@ export function parseIntakesJson(
 			usage: b.usage,
 			every: b.every,
 			start: b.start,
+			intakeUnit: null,
 			takenBy: null, // Legacy format has no per-intake takenBy
 			intakeRemindersEnabled: medicationIntakeRemindersEnabled ?? false,
 		}));

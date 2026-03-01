@@ -207,7 +207,12 @@ describe("Real route coverage: settings/export/report", () => {
 		process.env.SMTP_HOST = "smtp.example.com";
 		process.env.SMTP_USER = "mailer@example.com";
 		process.env.SMTP_TOKEN = "secret";
-		nodemailerSendMail.mockResolvedValue(undefined);
+		nodemailerSendMail.mockResolvedValue({
+			accepted: ["person@example.com"],
+			rejected: [],
+			response: "250 2.0.0 OK",
+			messageId: "test-message-id",
+		});
 
 		const response = await app.inject({
 			method: "POST",

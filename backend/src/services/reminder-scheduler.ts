@@ -19,6 +19,7 @@ import {
 	getNextScheduledTime,
 	getTimezone,
 	getTodayInTimezone,
+	normalizeIntakeUsageForStock,
 	parseIntakesJson,
 	parseLocalDateTime,
 	parseReminderState,
@@ -35,6 +36,36 @@ function escapeHtml(text: string): string {
 		"'": "&#39;",
 	};
 	return text.replace(/[&<>"']/g, (char) => htmlEscapes[char] || char);
+}
+
+type MailDeliveryInfo = {
+	accepted?: unknown;
+	rejected?: unknown;
+	response?: unknown;
+};
+
+function normalizeRecipients(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "")))
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
+function getDeliveryError(info: MailDeliveryInfo): string | null {
+	const accepted = normalizeRecipients(info.accepted);
+	const rejected = normalizeRecipients(info.rejected);
+
+	if (accepted.length > 0) return null;
+	if (rejected.length > 0) {
+		return `SMTP rejected all recipients: ${rejected.join(", ")}`;
+	}
+
+	if (typeof info.response === "string" && info.response.trim()) {
+		return `SMTP did not confirm accepted recipients. Response: ${info.response}`;
+	}
+
+	return "SMTP did not confirm accepted recipients.";
 }
 
 const REMINDER_HOUR = parseInt(process.env.REMINDER_HOUR ?? "6", 10); // Default 6:00 AM local time
@@ -179,6 +210,12 @@ type LowStockItem = {
 	isCritical: boolean;
 };
 
+function getLiquidReminderThresholds(baselineDays: number): { lowDays: number; criticalDays: number } {
+	const lowDays = Math.max(1, Math.floor(baselineDays));
+	const criticalDays = Math.max(1, Math.ceil(lowDays / 2));
+	return { lowDays, criticalDays };
+}
+
 type PrescriptionReminderItem = {
 	name: string;
 	remainingRefills: number;
@@ -231,12 +268,20 @@ async function getMedicationsNeedingReminder(
 	const msPerDay = 86_400_000;
 
 	for (const row of rows) {
+		// Tube stock reminders are intentionally disabled:
+		// topical usage in grams cannot be mapped reliably to schedule events.
+		if ((row.packageType ?? "blister") === "tube") continue;
+
 		const intakes = parseIntakesJson(
 			row.intakesJson,
 			{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
 			row.intakeRemindersEnabled ?? false
 		);
-		const blisters: Blister[] = intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
+		const blisters: Blister[] = intakes.map((i) => ({
+			usage: normalizeIntakeUsageForStock(i, row.medicationForm, row.packageType),
+			every: i.every,
+			start: i.start,
+		}));
 
 		const originalTotalPills =
 			(row.packageType ?? "blister") === "bottle"
@@ -348,8 +393,13 @@ async function getMedicationsNeedingReminder(
 
 		if (daysLeft === null) continue;
 
-		const isCritical = daysLeft <= reminderDaysBefore;
-		const isLow = daysLeft < lowStockDays;
+		const isLiquid = (row.packageType ?? "blister") === "liquid_container";
+		const { lowDays, criticalDays } = isLiquid
+			? getLiquidReminderThresholds(reminderDaysBefore)
+			: { lowDays: lowStockDays, criticalDays: reminderDaysBefore };
+
+		const isCritical = daysLeft <= criticalDays;
+		const isLow = isLiquid ? daysLeft <= lowDays : daysLeft < lowDays;
 
 		if (isCritical || isLow) {
 			lowStock.push({
@@ -551,13 +601,18 @@ ${getFooterPlain(language)}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDaily
 			},
 		});
 
-		await transporter.sendMail({
+		const mailResult = await transporter.sendMail({
 			from: smtpFrom,
 			to: email,
 			subject,
 			text: plainText,
 			html,
 		});
+
+		const deliveryError = getDeliveryError(mailResult);
+		if (deliveryError) {
+			throw new Error(deliveryError);
+		}
 
 		return { success: true };
 	} catch (error) {
@@ -872,13 +927,17 @@ async function checkAndSendReminderForUser(
   `;
 									const text = `${emptyRx.length > 0 ? tr.prescriptionReminder.titleEmpty : tr.prescriptionReminder.title}\n\n${bodyText}\n\n${lines.join("\n")}\n\n---\n${getFooterPlain(language)}${settings.repeatDailyReminders ? `\n\n${tr.prescriptionReminder.repeatDailyNote}` : ""}`;
 
-									await transporter.sendMail({
+									const mailResult = await transporter.sendMail({
 										from: smtpFrom,
 										to: settings.notificationEmail!,
 										subject,
 										text,
 										html,
 									});
+									const deliveryError = getDeliveryError(mailResult);
+									if (deliveryError) {
+										throw new Error(deliveryError);
+									}
 									emailSuccess = true;
 								} catch (error) {
 									const errorMessage = error instanceof Error ? error.message : "Unknown error";

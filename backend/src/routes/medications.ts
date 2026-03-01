@@ -24,6 +24,40 @@ import {
 
 const IMAGES_DIR = resolve(getDataDir(), "images");
 
+function isIntakeUnit(value: unknown): value is "ml" | "tsp" | "tbsp" {
+	return value === "ml" || value === "tsp" || value === "tbsp";
+}
+
+function parseRawIntakeUnits(intakesJson: string | null | undefined): Array<"ml" | "tsp" | "tbsp" | null> {
+	if (!intakesJson) return [];
+	try {
+		const parsed = JSON.parse(intakesJson);
+		if (!Array.isArray(parsed)) return [];
+		return parsed.map((item: unknown) => {
+			if (!item || typeof item !== "object") return null;
+			const unit = (item as Record<string, unknown>).intakeUnit;
+			return isIntakeUnit(unit) ? unit : null;
+		});
+	} catch {
+		return [];
+	}
+}
+
+function parseIntakesWithUnits(
+	intakesJson: string | null | undefined,
+	legacyRow: { usageJson: string; everyJson: string; startJson: string },
+	medicationIntakeRemindersEnabled?: boolean
+): Intake[] {
+	const intakes = parseIntakesJson(intakesJson, legacyRow, medicationIntakeRemindersEnabled);
+	const rawUnits = parseRawIntakeUnits(intakesJson);
+	if (rawUnits.length === 0) return intakes;
+
+	return intakes.map((intake, idx) => ({
+		...intake,
+		intakeUnit: rawUnits[idx] ?? intake.intakeUnit ?? null,
+	}));
+}
+
 // New intake schema with per-intake takenBy
 const intakeSchema = z.object({
 	usage: z.number().nonnegative(),
@@ -246,7 +280,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 		const rows = await db.select().from(medications).where(whereClause).orderBy(medications.id);
 		return rows.map((row) => {
 			// Parse intakes from new format, falling back to legacy
-			const intakes = parseIntakesJson(
+			const intakes = parseIntakesWithUnits(
 				row.intakesJson,
 				{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
 				row.intakeRemindersEnabled ?? false
@@ -586,7 +620,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 		// Migrate dose tracking IDs when intake schedule changes
 		// ---------------------------------------------------------------
 		// Parse old intakes from the existing medication row
-		const oldIntakes = parseIntakesJson(
+		const oldIntakes = parseIntakesWithUnits(
 			existing.intakesJson,
 			{ usageJson: existing.usageJson, everyJson: existing.everyJson, startJson: existing.startJson },
 			existing.intakeRemindersEnabled
@@ -799,62 +833,101 @@ export async function medicationRoutes(app: FastifyInstance) {
 		};
 	});
 
-	// Stock correction endpoint - updates stockAdjustment and optionally looseTablets (for blister type)
+	// Stock correction endpoint - updates stockAdjustment and optionally base amount fields for amount-based corrections
 	// Also sets lastStockCorrectionAt so consumed doses before this point don't count
-	app.patch<{ Params: { id: string }; Body: { stockAdjustment: number; looseTablets?: number } }>(
-		"/medications/:id/stock-adjustment",
-		async (req, reply) => {
-			const idNum = Number(req.params.id);
-			if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
+	app.patch<{
+		Params: { id: string };
+		Body: {
+			stockAdjustment: number;
+			looseTablets?: number;
+			totalPills?: number;
+			packageAmountValue?: number;
+			packCount?: number;
+		};
+	}>("/medications/:id/stock-adjustment", async (req, reply) => {
+		const idNum = Number(req.params.id);
+		if (Number.isNaN(idNum)) return reply.badRequest("Invalid id");
 
-			const userId = await getUserId(req, reply);
+		const userId = await getUserId(req, reply);
 
-			// Verify ownership
-			const [existing] = await db
-				.select()
-				.from(medications)
-				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
-			if (!existing) return reply.notFound();
+		// Verify ownership
+		const [existing] = await db
+			.select()
+			.from(medications)
+			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+		if (!existing) return reply.notFound();
 
-			const { stockAdjustment, looseTablets } = req.body as { stockAdjustment: number; looseTablets?: number };
-			if (typeof stockAdjustment !== "number") return reply.badRequest("stockAdjustment must be a number");
-			if (
-				looseTablets !== undefined &&
-				(typeof looseTablets !== "number" || !Number.isInteger(looseTablets) || looseTablets < 0)
-			) {
-				return reply.badRequest("looseTablets must be a non-negative integer");
-			}
-
-			const updateFields: {
-				stockAdjustment: number;
-				lastStockCorrectionAt: Date;
-				updatedAt: Date;
-				looseTablets?: number;
-			} = {
-				stockAdjustment,
-				lastStockCorrectionAt: new Date(),
-				updatedAt: new Date(),
-			};
-			if (looseTablets !== undefined) {
-				updateFields.looseTablets = looseTablets;
-			}
-
-			const result = await db
-				.update(medications)
-				.set(updateFields)
-				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
-				.returning();
-
-			if (!result.length) return reply.notFound();
-
-			return {
-				id: result[0].id,
-				stockAdjustment: result[0].stockAdjustment ?? 0,
-				lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
-				updatedAt: result[0].updatedAt,
-			};
+		const { stockAdjustment, looseTablets, totalPills, packageAmountValue, packCount } = req.body as {
+			stockAdjustment: number;
+			looseTablets?: number;
+			totalPills?: number;
+			packageAmountValue?: number;
+			packCount?: number;
+		};
+		if (typeof stockAdjustment !== "number") return reply.badRequest("stockAdjustment must be a number");
+		if (
+			looseTablets !== undefined &&
+			(typeof looseTablets !== "number" || !Number.isInteger(looseTablets) || looseTablets < 0)
+		) {
+			return reply.badRequest("looseTablets must be a non-negative integer");
 		}
-	);
+		if (
+			totalPills !== undefined &&
+			(typeof totalPills !== "number" || !Number.isInteger(totalPills) || totalPills < 0)
+		) {
+			return reply.badRequest("totalPills must be a non-negative integer");
+		}
+		if (
+			packageAmountValue !== undefined &&
+			(typeof packageAmountValue !== "number" || !Number.isInteger(packageAmountValue) || packageAmountValue < 0)
+		) {
+			return reply.badRequest("packageAmountValue must be a non-negative integer");
+		}
+		if (packCount !== undefined && (typeof packCount !== "number" || !Number.isInteger(packCount) || packCount < 1)) {
+			return reply.badRequest("packCount must be an integer >= 1");
+		}
+
+		const updateFields: {
+			stockAdjustment: number;
+			lastStockCorrectionAt: Date;
+			updatedAt: Date;
+			looseTablets?: number;
+			totalPills?: number | null;
+			packageAmountValue?: number;
+			packCount?: number;
+		} = {
+			stockAdjustment,
+			lastStockCorrectionAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		const packageType = existing.packageType ?? "blister";
+		const allowsAmountBaseUpdate = packageType === "tube" || packageType === "liquid_container";
+		if (allowsAmountBaseUpdate) {
+			if (totalPills !== undefined) updateFields.totalPills = totalPills;
+			if (looseTablets !== undefined) updateFields.looseTablets = looseTablets;
+			if (packageAmountValue !== undefined) updateFields.packageAmountValue = packageAmountValue;
+			if (packCount !== undefined) updateFields.packCount = packCount;
+		}
+		if (looseTablets !== undefined) {
+			updateFields.looseTablets = looseTablets;
+		}
+
+		const result = await db
+			.update(medications)
+			.set(updateFields)
+			.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
+			.returning();
+
+		if (!result.length) return reply.notFound();
+
+		return {
+			id: result[0].id,
+			stockAdjustment: result[0].stockAdjustment ?? 0,
+			lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
+			updatedAt: result[0].updatedAt,
+		};
+	});
 
 	app.delete<{ Params: { id: string } }>("/medications/:id", async (req, reply) => {
 		const idNum = Number(req.params.id);
@@ -1008,7 +1081,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 		const payload = rows.map((row) => {
 			// Parse intakes from new format, falling back to legacy
-			const intakes = parseIntakesJson(
+			const intakes = parseIntakesWithUnits(
 				row.intakesJson,
 				{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
 				row.intakeRemindersEnabled ?? false

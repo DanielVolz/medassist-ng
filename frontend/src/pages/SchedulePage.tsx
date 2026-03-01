@@ -6,6 +6,7 @@ import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
 import { getMedDisplayName } from "../types";
+import { formatNumber } from "../utils/formatters";
 import { expandDoseIds, isDoseDismissed } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
@@ -17,12 +18,21 @@ function userStorageKey(userId: number | undefined, key: string): string {
 function getStockStatus(
 	daysLeft: number | null,
 	medsLeft: number,
-	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number }
+	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number },
+	packageType?: string
 ) {
+	if (packageType === "tube") return { className: "success", label: "status.noSchedule" };
 	// Out of stock or completely depleted = danger (red)
 	if (medsLeft <= 0 || daysLeft === 0) return { className: "danger", label: "status.outOfStock" };
 	// No schedule, but has stock = normal
 	if (daysLeft === null) return { className: "success", label: "status.noSchedule" };
+	if (packageType === "liquid_container") {
+		const lowDays = Math.max(1, Math.floor(settings.reminderDaysBefore));
+		const criticalDays = Math.max(1, Math.ceil(lowDays / 2));
+		if (daysLeft <= criticalDays) return { className: "danger", label: "status.criticalStock" };
+		if (daysLeft <= lowDays) return { className: "warning", label: "status.lowStock" };
+		return { className: "success", label: "status.normal" };
+	}
 	// Critical: at or below reminder threshold = danger (red)
 	if (daysLeft <= settings.reminderDaysBefore) return { className: "danger", label: "status.criticalStock" };
 	// Low: below low stock threshold = warning (yellow)
@@ -37,13 +47,15 @@ function getStockStatus(
 function getDayStockStatus(
 	dayMeds: Array<{ medName: string }>,
 	coverageByMed: Record<string, Coverage>,
-	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number }
+	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number },
+	meds: Array<{ name: string; genericName?: string | null; packageType?: string }>
 ): string {
 	let worstLevel = 3; // 3=success, 2=warning, 1=danger
 	for (const item of dayMeds) {
 		const cov = coverageByMed[item.medName];
 		if (!cov) continue;
-		const status = getStockStatus(cov.daysLeft, cov.medsLeft, settings);
+		const med = meds.find((m) => getMedDisplayName(m) === item.medName);
+		const status = getStockStatus(cov.daysLeft, cov.medsLeft, settings, med?.packageType);
 		if (status.className === "danger") worstLevel = Math.min(worstLevel, 1);
 		else if (status.className === "warning") worstLevel = Math.min(worstLevel, 2);
 	}
@@ -79,6 +91,87 @@ export function SchedulePage() {
 		openUserFilter,
 		missedPastDoseIds,
 	} = useAppContext();
+
+	const shouldHideNoScheduleStatusForTube = (
+		med: (typeof meds)[number] | undefined,
+		status: { className: string; label: string } | null
+	) => med?.packageType === "tube" && status?.label === "status.noSchedule";
+
+	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
+		med?.packageType === "liquid_container" || med?.medicationForm === "liquid"
+			? t("form.packageAmountUnitMl")
+			: t("form.blisters.applications", { count: Math.abs(value) });
+
+	const convertLiquidUsageToMl = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): number => {
+		if (unit === "tsp") return usage * 5;
+		if (unit === "tbsp") return usage * 15;
+		return usage;
+	};
+
+	const getLiquidCountUnitLabel = (unit: "ml" | "tsp" | "tbsp" | null | undefined, usage: number): string => {
+		if (unit === "tsp") return t("form.blisters.teaspoons", { count: Math.abs(usage) });
+		if (unit === "tbsp") return t("form.blisters.tablespoons", { count: Math.abs(usage) });
+		return t("form.packageAmountUnitMl");
+	};
+
+	const formatLiquidUsageLabel = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): string => {
+		const normalizedUsage = Number(usage);
+		if (!Number.isFinite(normalizedUsage) || normalizedUsage <= 0) {
+			return `0 ${t("form.packageAmountUnitMl")}`;
+		}
+
+		if (unit === "ml" || unit == null) {
+			return `${formatNumber(normalizedUsage)} ${t("form.packageAmountUnitMl")}`;
+		}
+
+		const mlTotal = convertLiquidUsageToMl(normalizedUsage, unit);
+		return `${formatNumber(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage)} ${formatNumber(mlTotal)} ${t("form.packageAmountUnitMl")}`;
+	};
+
+	const formatDoseUsageLabel = (
+		med: (typeof meds)[number] | undefined,
+		usage: number,
+		intakeUnit?: "ml" | "tsp" | "tbsp" | null
+	) => {
+		if (med?.packageType === "liquid_container") {
+			return formatLiquidUsageLabel(usage, intakeUnit);
+		}
+		if (med?.packageType === "tube") {
+			return `${usage} ${getTubeUnitLabel(med, usage)}`;
+		}
+		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+	};
+
+	const formatTotalUsageLabel = (
+		med: (typeof meds)[number] | undefined,
+		total: number,
+		doses?: Array<{ usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }>
+	) => {
+		if (med?.packageType === "liquid_container") {
+			if (doses && doses.length > 0) {
+				const normalizedDoses = doses.filter((dose) => Number.isFinite(Number(dose.usage)) && Number(dose.usage) > 0);
+				if (normalizedDoses.length > 0) {
+					const allUnits = new Set(normalizedDoses.map((dose) => dose.intakeUnit ?? "ml"));
+					if (allUnits.size === 1) {
+						const onlyUnit = normalizedDoses[0]?.intakeUnit ?? "ml";
+						const totalUsageInUnit = normalizedDoses.reduce((sum, dose) => sum + Number(dose.usage), 0);
+						return formatLiquidUsageLabel(totalUsageInUnit, onlyUnit);
+					}
+
+					const totalMl = normalizedDoses.reduce(
+						(sum, dose) => sum + convertLiquidUsageToMl(Number(dose.usage), dose.intakeUnit ?? "ml"),
+						0
+					);
+					return `${formatNumber(totalMl)} ${t("form.packageAmountUnitMl")}`;
+				}
+			}
+			return `${formatNumber(total)} ${t("form.packageAmountUnitMl")}`;
+		}
+		if (med?.packageType === "tube") {
+			return `${total} ${getTubeUnitLabel(med, total)}`;
+		}
+		return t("common.pillsTotal", { count: total });
+	};
 
 	return (
 		<section className="grid">
@@ -133,7 +226,7 @@ export function SchedulePage() {
 
 							const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 							const isCollapsed = !isManuallyExpanded;
-							const _worstStatus = getDayStockStatus(day.meds, coverageByMed, settings);
+							const _worstStatus = getDayStockStatus(day.meds, coverageByMed, settings, meds);
 
 							return (
 								<div
@@ -185,7 +278,7 @@ export function SchedulePage() {
 															<span className="med-name-text">{item.medName}</span>
 														</div>
 														<div className="tag-row">
-															<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
+															<span className="tag subtle">{formatTotalUsageLabel(med, item.total, item.doses)}</span>
 														</div>
 													</div>
 													<div className="doses-col">
@@ -197,7 +290,7 @@ export function SchedulePage() {
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">
 																		<span className="dose-usage-main">
-																			{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																			{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
 																		</span>
 																		{med?.pillWeightMg && (
 																			<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
@@ -341,8 +434,9 @@ export function SchedulePage() {
 									const status = willBeOutOfStock
 										? { className: "danger", label: "status.outOfStock" }
 										: medCoverage
-											? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings)
+											? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med?.packageType)
 											: null;
+									const visibleStatus = shouldHideNoScheduleStatusForTube(med, status) ? null : status;
 									const itemDoseIds = expandDoseIds(item.doses);
 									const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 									return (
@@ -353,8 +447,10 @@ export function SchedulePage() {
 													<span className="med-name-text">{item.medName}</span>
 												</div>
 												<div className="tag-row">
-													<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
-													{status && <span className={`tag ${status.className}`}>{t(status.label)}</span>}
+													<span className="tag subtle">{formatTotalUsageLabel(med, item.total, item.doses)}</span>
+													{visibleStatus && (
+														<span className={`tag ${visibleStatus.className}`}>{t(visibleStatus.label)}</span>
+													)}
 												</div>
 											</div>
 											<div className="doses-col">
@@ -368,7 +464,7 @@ export function SchedulePage() {
 															<span className="dose-time">{dose.timeStr}</span>
 															<span className="dose-usage">
 																<span className="dose-usage-main">
-																	{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
+																	{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
 																</span>
 																{med?.pillWeightMg && (
 																	<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>

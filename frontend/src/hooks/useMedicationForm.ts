@@ -230,6 +230,31 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		const authorizedRefills = Math.max(0, med.prescriptionAuthorizedRefills ?? 0);
 		const remainingRefills = Math.min(Math.max(0, med.prescriptionRemainingRefills ?? 0), authorizedRefills);
 		const lowRefillThreshold = Math.min(Math.max(0, med.prescriptionLowRefillThreshold ?? 1), authorizedRefills);
+		const isTubeOrLiquidPackage = med.packageType === "tube" || med.packageType === "liquid_container";
+		let normalizedPackCount = String(med.packCount);
+		let normalizedPackageAmountValue = String(med.packageAmountValue ?? 0);
+
+		if (isTubeOrLiquidPackage) {
+			const safePackCount = med.packageType === "tube" ? 1 : Math.max(1, med.packCount || 1);
+			normalizedPackCount = String(safePackCount);
+
+			const rawPackageAmount = Number(med.packageAmountValue ?? 0);
+			const legacyKnownAmount = Math.max(0, Number(med.totalPills ?? 0), Number(med.looseTablets ?? 0));
+
+			if (med.packageType === "tube") {
+				normalizedPackageAmountValue = String(
+					legacyKnownAmount > 0 ? legacyKnownAmount : Math.max(1, rawPackageAmount)
+				);
+			} else if (rawPackageAmount > 0) {
+				normalizedPackageAmountValue = String(rawPackageAmount);
+			} else {
+				normalizedPackageAmountValue = String(legacyKnownAmount);
+			}
+		}
+
+		const normalizedDerivedTotal = isTubeOrLiquidPackage
+			? Math.max(0, (Number(normalizedPackCount) || 0) * (Number(normalizedPackageAmountValue) || 0))
+			: null;
 
 		const bottleTotalPills =
 			(med.packageType === "bottle" || med.packageType === "tube" || med.packageType === "liquid_container") &&
@@ -253,6 +278,12 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		} else if (med.packageType === "liquid_container") {
 			normalizedPackageAmountUnit = "ml";
 		}
+		let resolvedTotalPills = bottleTotalPills;
+		if (normalizedDerivedTotal != null) {
+			resolvedTotalPills = String(normalizedDerivedTotal);
+		} else if (med.totalPills) {
+			resolvedTotalPills = String(med.totalPills);
+		}
 		const editForm: FormState = {
 			name: med.name,
 			genericName: med.genericName ?? "",
@@ -261,13 +292,13 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			pillForm: resolvedPillForm,
 			lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
 			packageType: med.packageType ?? "blister",
-			packCount: String(med.packCount),
+			packCount: normalizedPackCount,
 			blistersPerPack: String(med.blistersPerPack),
 			pillsPerBlister: String(med.pillsPerBlister),
-			packageAmountValue: String(med.packageAmountValue ?? 0),
+			packageAmountValue: normalizedPackageAmountValue,
 			packageAmountUnit: normalizedPackageAmountUnit,
-			totalPills: med.totalPills ? String(med.totalPills) : bottleTotalPills,
-			looseTablets: String(med.looseTablets),
+			totalPills: resolvedTotalPills,
+			looseTablets: normalizedDerivedTotal != null ? String(normalizedDerivedTotal) : String(med.looseTablets),
 			pillWeightMg: med.pillWeightMg ? String(med.pillWeightMg) : "",
 			doseUnit: med.doseUnit ?? "mg",
 			medicationStartDate: med.medicationStartDate ?? "",
@@ -317,11 +348,15 @@ export function useMedicationForm(): UseMedicationFormReturn {
 
 				if (key === "packageType") {
 					if (value === "tube") {
+						next.packCount = "1";
+						next.packageAmountValue = String(Math.max(1, Number(next.packageAmountValue) || 0));
 						next.medicationForm = "topical";
 						next.lifecycleCategory = "treatment_period";
 						next.doseUnit = "units";
 						next.packageAmountUnit = "g";
 					} else if (value === "liquid_container") {
+						next.packCount = String(Math.max(1, Number(next.packCount) || 1));
+						next.packageAmountValue = String(Math.max(1, Number(next.packageAmountValue) || 0));
 						next.medicationForm = "liquid";
 						next.lifecycleCategory = "refill_when_empty";
 						next.doseUnit = "ml";
@@ -349,6 +384,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 				}
 
 				if (next.packageType === "tube") {
+					next.packCount = "1";
 					next.packageAmountUnit = "g";
 				} else if (next.packageType === "liquid_container") {
 					next.packageAmountUnit = "ml";

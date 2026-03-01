@@ -21,10 +21,19 @@ import { MedicationAvatar } from "./MedicationAvatar";
 function getStockStatus(
 	daysLeft: number | null,
 	medsLeft: number,
-	thresholds: { lowStockDays: number; normalStockDays: number; highStockDays: number; criticalStockDays: number }
+	thresholds: { lowStockDays: number; normalStockDays: number; highStockDays: number; criticalStockDays: number },
+	packageType?: string
 ) {
+	if (packageType === "tube") return { className: "success", label: "status.noSchedule" };
 	if (medsLeft <= 0 || daysLeft === 0) return { className: "danger", label: "status.outOfStock" };
 	if (daysLeft === null) return { className: "success", label: "status.noSchedule" };
+	if (packageType === "liquid_container") {
+		const lowDays = Math.max(1, Math.floor(thresholds.criticalStockDays));
+		const criticalDays = Math.max(1, Math.ceil(lowDays / 2));
+		if (daysLeft <= criticalDays) return { className: "danger", label: "status.criticalStock" };
+		if (daysLeft <= lowDays) return { className: "warning", label: "status.lowStock" };
+		return { className: "success", label: "status.normal" };
+	}
 	if (daysLeft <= thresholds.criticalStockDays) return { className: "danger", label: "status.criticalStock" };
 	if (daysLeft < thresholds.lowStockDays) return { className: "warning", label: "status.lowStock" };
 	if (daysLeft >= thresholds.highStockDays) return { className: "high", label: "status.highStock" };
@@ -43,6 +52,100 @@ export function SharedSchedule() {
 	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [showFutureDays, setShowFutureDays] = useState(false);
+
+	const isLiquidContainerMed = (med: SharedScheduleData["medications"][number] | undefined) =>
+		med?.packageType === "liquid_container";
+
+	const convertLiquidUsageToMl = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): number => {
+		if (unit === "tsp") return usage * 5;
+		if (unit === "tbsp") return usage * 15;
+		return usage;
+	};
+
+	const convertUsageForStock = (
+		usage: number,
+		med: SharedScheduleData["medications"][number] | undefined,
+		unit: "ml" | "tsp" | "tbsp" | null | undefined
+	): number => {
+		if (med?.packageType === "tube") return 0;
+		if (!isLiquidContainerMed(med)) return usage;
+		return convertLiquidUsageToMl(usage, unit);
+	};
+
+	const formatAmount = (value: number) => {
+		const rounded = Math.round(value * 100) / 100;
+		return String(rounded);
+	};
+
+	const getLiquidCountUnitLabel = (unit: "ml" | "tsp" | "tbsp" | null | undefined, usage: number): string => {
+		if (unit === "tsp") return t("form.blisters.teaspoons", { count: Math.abs(usage) });
+		if (unit === "tbsp") return t("form.blisters.tablespoons", { count: Math.abs(usage) });
+		return t("form.packageAmountUnitMl");
+	};
+
+	const formatLiquidUsageLabel = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): string => {
+		const normalizedUsage = Number(usage);
+		if (!Number.isFinite(normalizedUsage) || normalizedUsage <= 0) {
+			return `0 ${t("form.packageAmountUnitMl")}`;
+		}
+
+		if (unit === "ml" || unit == null) {
+			return `${formatAmount(normalizedUsage)} ${t("form.packageAmountUnitMl")}`;
+		}
+
+		const mlTotal = convertLiquidUsageToMl(normalizedUsage, unit);
+		return `${formatAmount(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage)} ${formatAmount(mlTotal)} ${t("form.packageAmountUnitMl")}`;
+	};
+
+	const formatDoseUsageLabel = (
+		med: SharedScheduleData["medications"][number] | undefined,
+		usage: number,
+		intakeUnit?: "ml" | "tsp" | "tbsp" | null
+	) => {
+		if (isLiquidContainerMed(med)) {
+			return formatLiquidUsageLabel(usage, intakeUnit);
+		}
+		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+	};
+
+	const formatTotalUsageLabel = (
+		med: SharedScheduleData["medications"][number] | undefined,
+		total: number,
+		doses?: Array<{ usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }>
+	) => {
+		if (isLiquidContainerMed(med)) {
+			if (doses && doses.length > 0) {
+				const normalizedDoses = doses.filter((dose) => Number.isFinite(Number(dose.usage)) && Number(dose.usage) > 0);
+				if (normalizedDoses.length > 0) {
+					const allUnits = new Set(normalizedDoses.map((dose) => dose.intakeUnit ?? "ml"));
+					if (allUnits.size === 1) {
+						const onlyUnit = normalizedDoses[0]?.intakeUnit ?? "ml";
+						const totalUsageInUnit = normalizedDoses.reduce((sum, dose) => sum + Number(dose.usage), 0);
+						return formatLiquidUsageLabel(totalUsageInUnit, onlyUnit);
+					}
+
+					const totalMl = normalizedDoses.reduce(
+						(sum, dose) => sum + convertLiquidUsageToMl(Number(dose.usage), dose.intakeUnit ?? "ml"),
+						0
+					);
+					return `${formatAmount(totalMl)} ${t("form.packageAmountUnitMl")}`;
+				}
+			}
+			return `${formatAmount(total)} ${t("form.packageAmountUnitMl")}`;
+		}
+
+		return t("common.pillsTotal", { count: total });
+	};
+
+	const shouldHideNoScheduleStatusForTube = (
+		med: SharedScheduleData["medications"][number] | undefined,
+		status: { className: string; label: string } | null
+	) => med?.packageType === "tube" && status?.label === "status.noSchedule";
+
+	const getVisibleStockStatus = (
+		med: SharedScheduleData["medications"][number] | undefined,
+		status: { className: string; label: string } | null
+	) => (shouldHideNoScheduleStatusForTube(med, status) ? null : status);
 
 	// Theme preference: light, dark, or system
 	type ThemePreference = "light" | "dark" | "system";
@@ -309,6 +412,7 @@ export function SharedSchedule() {
 			when: number;
 			medName: string;
 			usage: number;
+			intakeUnit?: "ml" | "tsp" | "tbsp" | null;
 			timeStr: string;
 			isPast: boolean;
 			takenBy: string | null; // Per-intake takenBy (single person or null)
@@ -345,6 +449,7 @@ export function SharedSchedule() {
 						when: t,
 						medName: getMedDisplayName(med),
 						usage: intake.usage,
+						intakeUnit: intake.intakeUnit ?? null,
 						isPast,
 						takenBy: intake.takenBy, // Per-intake takenBy (string | null)
 						timeStr: d.toLocaleTimeString(getSystemLocale(i18n.language), { hour: "2-digit", minute: "2-digit" }),
@@ -431,7 +536,6 @@ export function SharedSchedule() {
 
 		for (const med of data.medications) {
 			const intakes = med.intakes || med.blisters.map((b) => ({ ...b, takenBy: null as string | null }));
-			const blisters = med.blisters;
 
 			// Count unique people from all intakes (for per-intake takenBy)
 			const uniquePeople = new Set<string>();
@@ -443,9 +547,9 @@ export function SharedSchedule() {
 
 			// Calculate daily consumption rate accounting for per-intake takenBy
 			let dailyRate = 0;
-			blisters.forEach((s, idx) => {
-				const baseRate = s.every > 0 ? s.usage / s.every : 0;
-				const intake = intakes[idx];
+			intakes.forEach((intake) => {
+				const usageForStock = convertUsageForStock(intake.usage, med, intake.intakeUnit ?? "ml");
+				const baseRate = intake.every > 0 ? usageForStock / intake.every : 0;
 				if (intake?.takenBy) {
 					dailyRate += baseRate; // Per-intake takenBy: 1 person
 				} else {
@@ -458,9 +562,10 @@ export function SharedSchedule() {
 
 			if (calcMode === "automatic") {
 				// Time-based: every scheduled dose counts as consumed once its time has passed
-				blisters.forEach((s, blisterIdx) => {
-					const blisterStart = new Date(s.start).getTime();
-					const period = Math.max(1, s.every) * MS_PER_DAY;
+				intakes.forEach((intake, blisterIdx) => {
+					const usageForStock = convertUsageForStock(intake.usage, med, intake.intakeUnit ?? "ml");
+					const blisterStart = new Date(intake.start).getTime();
+					const period = Math.max(1, intake.every) * MS_PER_DAY;
 
 					let effectiveStart: number;
 					if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
@@ -472,7 +577,6 @@ export function SharedSchedule() {
 					}
 					if (Number.isNaN(effectiveStart)) return;
 
-					const intake = intakes[blisterIdx];
 					const intakePerson = intake?.takenBy;
 					const fallbackPeople = med.takenBy?.length > 0 ? med.takenBy : [null];
 					const peopleForThisIntake = intakePerson ? [intakePerson] : fallbackPeople;
@@ -482,7 +586,7 @@ export function SharedSchedule() {
 
 					if (effectiveStart <= now) {
 						const occurrences = Math.floor((now - effectiveStart) / period) + 1;
-						timeBasedConsumed = occurrences * s.usage * peopleForThisIntake.length;
+						timeBasedConsumed = occurrences * usageForStock * peopleForThisIntake.length;
 						const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
 						lastAutoConsumedDateMs = new Date(
 							lastDoseTime.getFullYear(),
@@ -510,7 +614,7 @@ export function SharedSchedule() {
 							const bIdx = parseInt(parts[1], 10);
 							const timestamp = parseInt(parts[2], 10);
 							if (medId === med.id && bIdx === blisterIdx && timestamp > earlyCutoff) {
-								earlyTakenConsumed += s.usage;
+								earlyTakenConsumed += usageForStock;
 							}
 						}
 					}
@@ -525,8 +629,8 @@ export function SharedSchedule() {
 						const medId = parseInt(parts[0], 10);
 						const blisterIdx = parseInt(parts[1], 10);
 						const doseTimestamp = parseInt(parts[2], 10);
-						if (medId === med.id && blisters[blisterIdx]) {
-							const blisterStartDate = new Date(blisters[blisterIdx].start);
+						if (medId === med.id && intakes[blisterIdx]) {
+							const blisterStartDate = new Date(intakes[blisterIdx].start);
 							const blisterStartDateOnly = new Date(
 								blisterStartDate.getFullYear(),
 								blisterStartDate.getMonth(),
@@ -534,7 +638,11 @@ export function SharedSchedule() {
 							).getTime();
 							const afterCorrection = stockCorrectionCutoff === 0 || doseTimestamp > stockCorrectionCutoff;
 							if (!Number.isNaN(blisterStartDateOnly) && doseTimestamp >= blisterStartDateOnly && afterCorrection) {
-								consumed += blisters[blisterIdx].usage;
+								consumed += convertUsageForStock(
+									intakes[blisterIdx].usage,
+									med,
+									intakes[blisterIdx].intakeUnit ?? "ml"
+								);
 							}
 						}
 					}
@@ -569,11 +677,13 @@ export function SharedSchedule() {
 	function getDayStockStatus(meds: { medName: string; lastWhen: number }[]) {
 		const statuses = meds.map((item) => {
 			const coverage = coverageByMed[item.medName];
+			const med = data?.medications.find((m) => getMedDisplayName(m) === item.medName);
 			const depletionTime = depletionByMed[item.medName];
 			if (typeof depletionTime === "number" && item.lastWhen > depletionTime) return "danger";
 			if (!coverage) return "success";
-			const status = getStockStatus(coverage.daysLeft, coverage.medsLeft, stockThresholds);
-			return status.className;
+			const rawStatus = getStockStatus(coverage.daysLeft, coverage.medsLeft, stockThresholds, med?.packageType);
+			const status = getVisibleStockStatus(med, rawStatus);
+			return status?.className ?? "success";
 		});
 		const fallbackStatus = statuses.includes("warning") ? "warning" : "success";
 		return statuses.includes("danger") ? "danger" : fallbackStatus;
@@ -582,6 +692,11 @@ export function SharedSchedule() {
 	// Whether to show stock status indicators on the shared schedule
 	const showStock = data?.shareStockStatus !== false;
 	const showOnlyToday = data?.shareScheduleTodayOnly === true && (data?.upcomingTodayOnly ?? true);
+
+	const renderDoseUsage = (
+		med: SharedScheduleData["medications"][number] | undefined,
+		dose: { usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }
+	) => formatDoseUsageLabel(med, dose.usage, dose.intakeUnit);
 
 	// Helper: check if a dose is "done" (taken, per-dose dismissed, or med-level dismissed)
 	function isDoseIdDone(doseId: string): boolean {
@@ -809,9 +924,15 @@ export function SharedSchedule() {
 														? willBeOutOfStock
 															? { className: "danger", label: "status.outOfStock" }
 															: medCoverage
-																? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
+																? getStockStatus(
+																		medCoverage.daysLeft,
+																		medCoverage.medsLeft,
+																		stockThresholds,
+																		med?.packageType
+																	)
 																: null
 														: null;
+													const visibleStatus = getVisibleStockStatus(med, status);
 
 													const itemDoseIds = item.doses.map((d) => d.id);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
@@ -840,9 +961,13 @@ export function SharedSchedule() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
-																	{status && (
-																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																	<span className="tag subtle">
+																		{formatTotalUsageLabel(med, item.total, item.doses)}
+																	</span>
+																	{visibleStatus && (
+																		<span className={`status-chip small ${visibleStatus.className}`}>
+																			{t(visibleStatus.label)}
+																		</span>
 																	)}
 																</div>
 															</div>
@@ -853,9 +978,7 @@ export function SharedSchedule() {
 																		<div key={dose.id} className="dose-item past">
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">
-																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				</span>
+																				<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>
 																				{med?.pillWeightMg && (
 																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
 																				)}
@@ -993,9 +1116,15 @@ export function SharedSchedule() {
 														? willBeOutOfStock
 															? { className: "danger", label: "status.outOfStock" }
 															: medCoverage
-																? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
+																? getStockStatus(
+																		medCoverage.daysLeft,
+																		medCoverage.medsLeft,
+																		stockThresholds,
+																		med?.packageType
+																	)
 																: null
 														: null;
+													const visibleStatus = getVisibleStockStatus(med, status);
 
 													const itemDoseIds = item.doses.map((d) => d.id);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
@@ -1023,9 +1152,13 @@ export function SharedSchedule() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
-																	{status && (
-																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																	<span className="tag subtle">
+																		{formatTotalUsageLabel(med, item.total, item.doses)}
+																	</span>
+																	{visibleStatus && (
+																		<span className={`status-chip small ${visibleStatus.className}`}>
+																			{t(visibleStatus.label)}
+																		</span>
 																	)}
 																</div>
 															</div>
@@ -1040,9 +1173,7 @@ export function SharedSchedule() {
 																		>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">
-																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				</span>
+																				<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>
 																				{med?.pillWeightMg && (
 																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
 																				)}
@@ -1169,9 +1300,15 @@ export function SharedSchedule() {
 														? willBeOutOfStock
 															? { className: "danger", label: "status.outOfStock" }
 															: medCoverage
-																? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
+																? getStockStatus(
+																		medCoverage.daysLeft,
+																		medCoverage.medsLeft,
+																		stockThresholds,
+																		med?.packageType
+																	)
 																: null
 														: null;
+													const visibleStatus = getVisibleStockStatus(med, status);
 
 													const itemDoseIds = item.doses.map((d) => d.id);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
@@ -1199,9 +1336,13 @@ export function SharedSchedule() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{t("common.pillsTotal", { count: item.total })}</span>
-																	{status && (
-																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																	<span className="tag subtle">
+																		{formatTotalUsageLabel(med, item.total, item.doses)}
+																	</span>
+																	{visibleStatus && (
+																		<span className={`status-chip small ${visibleStatus.className}`}>
+																			{t(visibleStatus.label)}
+																		</span>
 																	)}
 																</div>
 															</div>
@@ -1212,9 +1353,7 @@ export function SharedSchedule() {
 																		<div key={dose.id} className={`dose-item future ${isTaken ? "all-taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">
-																					{dose.usage} {dose.usage !== 1 ? t("common.pills") : t("common.pill")}
-																				</span>
+																				<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>
 																				{med?.pillWeightMg && (
 																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
 																				)}

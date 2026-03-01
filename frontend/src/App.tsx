@@ -317,6 +317,7 @@ function AppContent() {
 	useEffect(() => {
 		const handleEscape = (e: KeyboardEvent) => {
 			if (e.key !== "Escape") return;
+			if (e.defaultPrevented) return;
 
 			if (scheduleLightboxImage) {
 				closeScheduleLightbox();

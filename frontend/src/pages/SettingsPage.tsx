@@ -663,6 +663,9 @@ export function SettingsPage() {
 								settings.lowStockDays >= settings.highStockDays) && (
 								<p className="threshold-validation-error">{t("settings.stock.thresholdValidation")}</p>
 							)}
+							<p className="hint-text" style={{ marginTop: "12px" }}>
+								ℹ️ {t("settings.stock.packageTypesNote")}
+							</p>
 						</div>
 					</article>
 

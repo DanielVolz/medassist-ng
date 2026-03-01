@@ -27,6 +27,12 @@ export function useEscapeKey(active: boolean, onClose: () => void, options?: { c
 		if (!active) return;
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape" && activeRef.current) {
+				if (capture) {
+					// In nested modals, consume Escape so parent/global handlers
+					// do not process the same key press again.
+					e.preventDefault();
+					e.stopPropagation();
+				}
 				onCloseRef.current();
 			}
 		};

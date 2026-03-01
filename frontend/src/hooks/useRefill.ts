@@ -137,51 +137,97 @@ export function useRefill(): UseRefillReturn {
 			if (!selectedMed) return;
 			setEditStockSaving(true);
 			try {
+				const isTubePackage = selectedMed.packageType === "tube";
+				const isBottlePackage = selectedMed.packageType === "bottle";
+				const isLiquidPackage = selectedMed.packageType === "liquid_container";
+				const isAmountPackage = isBottlePackage || isTubePackage || isLiquidPackage;
+				const liquidAmountPerBottle = Math.max(
+					1,
+					Number.isFinite(Number(selectedMed.packageAmountValue)) && Number(selectedMed.packageAmountValue) > 0
+						? Number(selectedMed.packageAmountValue)
+						: Math.max(
+								1,
+								Math.round(Number(getPackageSize(selectedMed) || 0) / Math.max(1, Number(selectedMed.packCount || 1)))
+							)
+				);
+
 				// Clamp all fields to non-negative values.
 				let finalFullBlisters = Math.max(0, editStockFullBlisters);
-				let finalPartialPills =
-					selectedMed.packageType === "bottle"
-						? Math.max(0, editStockPartialBlisterPills)
-						: Math.max(0, editStockPartialBlisterPills);
+				let finalPartialPills = isAmountPackage
+					? Math.max(0, editStockPartialBlisterPills)
+					: Math.max(0, editStockPartialBlisterPills);
 				const finalLoosePills = Math.max(0, editStockLoosePills);
 
 				// Canonicalize blister values: partial overflow becomes additional full blisters.
-				if (selectedMed.packageType !== "bottle" && selectedMed.pillsPerBlister > 0) {
+				if (!isAmountPackage && selectedMed.pillsPerBlister > 0) {
 					finalFullBlisters += Math.floor(finalPartialPills / selectedMed.pillsPerBlister);
 					finalPartialPills %= selectedMed.pillsPerBlister;
 				}
 
 				// Structural max = sealed package capacity only (no looseTablets offset).
-				const structuralMax =
-					selectedMed.packageType === "bottle"
-						? (selectedMed.totalPills ?? getPackageSize(selectedMed))
-						: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
+				const structuralMax = isAmountPackage
+					? (selectedMed.totalPills ?? getPackageSize(selectedMed))
+					: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
+				const correctedLiquidBottleCount = isLiquidPackage
+					? Math.max(1, finalFullBlisters)
+					: Math.max(1, selectedMed.packCount);
+				const liquidStructuralMax = isLiquidPackage
+					? correctedLiquidBottleCount * liquidAmountPerBottle
+					: structuralMax;
 
 				// For blister meds, only sealed pills are capped to package size.
 				// Loose pills are extra and can be above package size.
-				const desiredTotal =
-					selectedMed.packageType === "bottle"
-						? Math.min(structuralMax, Math.max(0, finalPartialPills))
-						: Math.min(structuralMax, finalFullBlisters * selectedMed.pillsPerBlister + finalPartialPills) +
-							finalLoosePills;
+				let desiredTotal: number;
+				if (isTubePackage) {
+					desiredTotal = Math.max(0, finalPartialPills);
+				} else if (isAmountPackage) {
+					desiredTotal = Math.min(liquidStructuralMax, Math.max(0, finalPartialPills));
+				} else {
+					desiredTotal =
+						Math.min(structuralMax, finalFullBlisters * selectedMed.pillsPerBlister + finalPartialPills) +
+						finalLoosePills;
+				}
 
 				// The "base" from DB structure used to compute stockAdjustment differs by type:
 				// - Bottle: looseTablets is the base (not changed during correction)
 				// - Blister: use structuralMax + finalLoosePills as the new base so that
 				//   updating looseTablets in the DB doesn't cause a stale-split display bug.
-				const baseTotal =
-					selectedMed.packageType === "bottle"
-						? getPackageSize(selectedMed) // bottle: stockAdjustment relative to fixed looseTablets base
-						: structuralMax + finalLoosePills; // blister: base = sealed capacity + NEW loose pills
+				let baseTotal: number;
+				if (isLiquidPackage) {
+					baseTotal = liquidStructuralMax;
+				} else if (isAmountPackage) {
+					baseTotal = getPackageSize(selectedMed); // bottle: stockAdjustment relative to fixed looseTablets base
+				} else {
+					baseTotal = structuralMax + finalLoosePills; // blister: base = sealed capacity + NEW loose pills
+				}
 				// stockAdjustment = what we need to make getMedTotal() return desiredTotal
 				const newStockAdjustment = desiredTotal - baseTotal;
 
 				// For blister corrections also send the new looseTablets value so the DB
 				// reflects the actual loose count (avoids stale-split display on reload).
-				const patchBody: { stockAdjustment: number; looseTablets?: number } = {
+				const patchBody: {
+					stockAdjustment: number;
+					looseTablets?: number;
+					totalPills?: number;
+					packageAmountValue?: number;
+					packCount?: number;
+				} = {
 					stockAdjustment: newStockAdjustment,
 				};
-				if (selectedMed.packageType !== "bottle") {
+				if (isTubePackage) {
+					// Tube has fixed count=1 and no automatic depletion.
+					// Correction must update the base amount fields directly.
+					patchBody.stockAdjustment = 0;
+					patchBody.packCount = 1;
+					patchBody.totalPills = desiredTotal;
+					patchBody.looseTablets = desiredTotal;
+					patchBody.packageAmountValue = desiredTotal;
+				} else if (isLiquidPackage) {
+					// Liquid correction supports bottle-count updates.
+					// Keep packageAmountValue (ml per bottle) and update capacity base by bottle count.
+					patchBody.packCount = correctedLiquidBottleCount;
+					patchBody.totalPills = liquidStructuralMax;
+				} else if (!isAmountPackage) {
 					patchBody.looseTablets = finalLoosePills;
 				}
 
@@ -222,6 +268,10 @@ export function useRefill(): UseRefillReturn {
 	const openEditStockModal = useCallback((selectedMed: Medication, coverage: { all: Coverage[] }) => {
 		if (!selectedMed) return;
 		setEditStockMedication(selectedMed);
+		const isAmountPackage =
+			selectedMed.packageType === "bottle" ||
+			selectedMed.packageType === "tube" ||
+			selectedMed.packageType === "liquid_container";
 		// Get current stock from coverage (after consumption)
 		const medCoverage = coverage.all.find((c) => c.name === selectedMed.name);
 		const dbTotal = getMedTotal(selectedMed);
@@ -231,15 +281,20 @@ export function useRefill(): UseRefillReturn {
 		// For blister, keep loose pills separated from sealed blister/partial counts.
 		const knownLoose = Math.min(currentStock, Math.max(0, selectedMed.looseTablets));
 		const sealedPills = Math.max(0, currentStock - knownLoose);
-		const fullBlisters =
-			selectedMed.packageType === "bottle" ? 0 : Math.floor(sealedPills / selectedMed.pillsPerBlister);
-		const partialPills =
-			selectedMed.packageType === "bottle" ? Math.max(0, currentStock) : sealedPills % selectedMed.pillsPerBlister;
+		let fullBlisters: number;
+		if (selectedMed.packageType === "liquid_container") {
+			fullBlisters = Math.max(1, selectedMed.packCount);
+		} else if (isAmountPackage) {
+			fullBlisters = 0;
+		} else {
+			fullBlisters = Math.floor(sealedPills / selectedMed.pillsPerBlister);
+		}
+		const partialPills = isAmountPackage ? Math.max(0, currentStock) : sealedPills % selectedMed.pillsPerBlister;
 
 		// Pre-fill with current values
 		setEditStockFullBlisters(fullBlisters);
 		setEditStockPartialBlisterPills(partialPills);
-		setEditStockLoosePills(selectedMed.packageType === "bottle" ? 0 : knownLoose);
+		setEditStockLoosePills(isAmountPackage ? 0 : knownLoose);
 		setShowEditStockModal(true);
 		window.history.pushState({ modal: "editStock" }, "");
 	}, []);

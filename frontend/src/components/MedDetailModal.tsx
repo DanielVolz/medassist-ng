@@ -159,8 +159,8 @@ export function MedDetailModal({
 	// Escape key: only one handler is active at a time (sub-modal states are mutually exclusive).
 	// Lightbox has its own useEscapeKey internally.
 	useEscapeKey(!showEditStockModal && !showImageLightbox && !showRefillModal, onClose);
-	useEscapeKey(showEditStockModal, onCloseEditStockModal);
-	useEscapeKey(showRefillModal, onCloseRefillModal);
+	useEscapeKey(showEditStockModal, onCloseEditStockModal, { capture: true });
+	useEscapeKey(showRefillModal, onCloseRefillModal, { capture: true });
 
 	useEffect(() => {
 		if (showEditStockModal) return;
@@ -192,12 +192,12 @@ export function MedDetailModal({
 	]);
 
 	if (!selectedMed) return null;
-	const isTube = selectedMed.packageType === "tube" || selectedMed.packageType === "liquid_container";
-	const stockUnitLabel = isTube
-		? selectedMed.packageType === "liquid_container" || selectedMed.medicationForm === "liquid"
-			? "ml"
-			: t("form.blisters.applications")
-		: null;
+	const isAmountPackage = selectedMed.packageType === "tube" || selectedMed.packageType === "liquid_container";
+	const amountUnitLabel =
+		selectedMed.packageType === "liquid_container" || selectedMed.medicationForm === "liquid"
+			? t("form.packageAmountUnitMl")
+			: t("form.packageAmountUnitG");
+	const stockUnitLabel = isAmountPackage ? amountUnitLabel : null;
 
 	const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(selectedMed));
 	const packageSize = getPackageSize(selectedMed);
@@ -222,6 +222,18 @@ export function MedDetailModal({
 		selectedMed.packageType === "liquid_container"
 			? (selectedMed.totalPills ?? packageSize)
 			: Math.max(0, structuralMax);
+	const packageCount = Math.max(1, Number(selectedMed.packCount) || 1);
+	const amountPerPackage = (() => {
+		const configured = Number(selectedMed.packageAmountValue ?? 0);
+		if (Number.isFinite(configured) && configured > 0) return configured;
+
+		const totalAmount = Number(stockDisplayTotal ?? 0);
+		if (Number.isFinite(totalAmount) && totalAmount > 0) {
+			return Math.max(0, totalAmount / packageCount);
+		}
+
+		return 0;
+	})();
 	const maxPartialPills = Math.min(
 		Math.max(0, selectedMed.pillsPerBlister),
 		Math.max(0, structuralMax - Math.max(0, editStockFullBlisters) * selectedMed.pillsPerBlister)
@@ -231,6 +243,35 @@ export function MedDetailModal({
 	const closeLabel = t("common.close");
 	const decrementLabel = t("editStock.decreaseValue");
 	const incrementLabel = t("editStock.increaseValue");
+	const getScheduleUsageLabel = (usage: number, intakeUnit?: "ml" | "tsp" | "tbsp" | null) => {
+		if (selectedMed.packageType === "liquid_container") {
+			if (intakeUnit === "tsp") {
+				return `${usage} ${t("form.blisters.teaspoons", { count: Math.abs(usage) })}`;
+			}
+			if (intakeUnit === "tbsp") {
+				return `${usage} ${t("form.blisters.tablespoons", { count: Math.abs(usage) })}`;
+			}
+			return `${usage} ${t("form.packageAmountUnitMl")}`;
+		}
+		if (selectedMed.packageType === "tube") {
+			return `${usage} ${t("form.blisters.applications", { count: Math.abs(usage) })}`;
+		}
+		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+	};
+	const scheduleIntakes =
+		selectedMed.intakes && selectedMed.intakes.length > 0
+			? selectedMed.intakes
+			: selectedMed.blisters.map((blister) => ({
+					usage: blister.usage,
+					every: blister.every,
+					start: blister.start,
+					takenBy: null,
+					intakeRemindersEnabled: selectedMed.intakeRemindersEnabled ?? false,
+					intakeUnit: null,
+				}));
+	const hasAnyIntakeReminder = scheduleIntakes.some(
+		(intake) => (intake.intakeRemindersEnabled ?? selectedMed.intakeRemindersEnabled ?? false) === true
+	);
 	const normalizeBlisterStock = (nextFull: number, nextPartial: number, nextLoose: number) => {
 		let normalizedFull = Math.max(0, nextFull);
 		let normalizedPartial = Math.max(0, nextPartial);
@@ -359,6 +400,10 @@ export function MedDetailModal({
 
 	const renderEditStockModal = () => {
 		if (!showEditStockModal) return null;
+		const isLiquidPackage = selectedMed.packageType === "liquid_container";
+		const liquidBottleCount = Math.max(1, editStockFullBlisters);
+		const liquidAmountPerBottle = Math.max(1, Number.isFinite(amountPerPackage) ? amountPerPackage : 1);
+		const liquidCapacity = Math.max(1, Math.round(liquidBottleCount * liquidAmountPerBottle));
 		const fullInputMax = Math.min(
 			maxFullBlisters,
 			Math.floor(Math.max(0, structuralMax - Math.max(0, editStockPartialBlisterPills)) / selectedMed.pillsPerBlister)
@@ -372,14 +417,14 @@ export function MedDetailModal({
 					onCloseEditStockModal();
 				}}
 				onKeyDown={(e) => {
-					if (e.key !== "Escape") e.stopPropagation();
+					e.stopPropagation();
 				}}
 			>
 				<div
 					className="modal-content edit-stock-modal"
 					onClick={(e) => e.stopPropagation()}
 					onKeyDown={(e) => {
-						if (e.key !== "Escape") e.stopPropagation();
+						e.stopPropagation();
 					}}
 				>
 					<button
@@ -404,10 +449,14 @@ export function MedDetailModal({
 							})}
 						</p>
 					)}
-					{(selectedMed.packageType === "bottle" ||
-						selectedMed.packageType === "tube" ||
-						selectedMed.packageType === "liquid_container") && (
+					{selectedMed.packageType === "bottle" && (
 						<p className="edit-stock-cap-info">{t("editStock.packageSize", { count: structuralMax })}</p>
+					)}
+					{(selectedMed.packageType === "tube" || selectedMed.packageType === "liquid_container") && (
+						<p className="edit-stock-cap-info">
+							{t("form.totalAmount")}: {formatNumber(isLiquidPackage ? liquidCapacity : structuralMax)}{" "}
+							{amountUnitLabel}
+						</p>
 					)}
 					{showStockCapNotice && (
 						<p className="edit-stock-cap-warning">{t("editStock.maxExceeded", { count: structuralMax })}</p>
@@ -420,11 +469,13 @@ export function MedDetailModal({
 							selectedMed.packageType === "bottle" ||
 							selectedMed.packageType === "tube" ||
 							selectedMed.packageType === "liquid_container";
-						const enteredTotal = isBottle
-							? editStockPartialBlisterPills
-							: editStockFullBlisters * selectedMed.pillsPerBlister +
-								editStockPartialBlisterPills +
-								editStockLoosePills;
+						const enteredTotal = isLiquidPackage
+							? Math.min(liquidCapacity, editStockPartialBlisterPills)
+							: isBottle
+								? editStockPartialBlisterPills
+								: editStockFullBlisters * selectedMed.pillsPerBlister +
+									editStockPartialBlisterPills +
+									editStockLoosePills;
 						const newTotal = Math.max(0, enteredTotal);
 						const difference = newTotal - currentTotal;
 						const differenceClass = difference > 0 ? "positive" : difference < 0 ? "negative" : "";
@@ -434,36 +485,39 @@ export function MedDetailModal({
 								<div className="edit-stock-form">
 									{isBottle ? (
 										<label>
-											{t("editStock.totalPills")}
+											{isAmountPackage ? t("form.currentAmount") : t("editStock.totalPills")}
 											{renderStepperInput({
 												value: editStockPartialInput,
 												min: 0,
-												max: structuralMax,
+												max: isLiquidPackage ? liquidCapacity : structuralMax,
 												onChange: (raw) => {
 													const parsed = raw === "" ? 0 : Math.max(0, parseStockInput(raw));
 													setEditStockPartialInput(raw);
-													onEditStockPartialBlisterPillsChange(raw === "" ? 0 : Math.min(structuralMax, parsed));
-													setShowStockCapNotice(parsed > structuralMax);
+													const maxTotal = isLiquidPackage ? liquidCapacity : structuralMax;
+													onEditStockPartialBlisterPillsChange(raw === "" ? 0 : Math.min(maxTotal, parsed));
+													setShowStockCapNotice(parsed > maxTotal);
 												},
 												onBlur: () => {
-													const normalized = Math.min(
-														structuralMax,
-														Math.max(0, parseStockInput(editStockPartialInput))
-													);
+													const maxTotal = isLiquidPackage ? liquidCapacity : structuralMax;
+													const normalized = Math.min(maxTotal, Math.max(0, parseStockInput(editStockPartialInput)));
 													onEditStockPartialBlisterPillsChange(normalized);
 													setEditStockPartialInput(String(normalized));
 													setShowStockCapNotice(false);
 												},
 												onStep: (delta) => {
-													const next = Math.min(
-														structuralMax,
-														Math.max(0, parseStockInput(editStockPartialInput) + delta)
-													);
+													const maxTotal = isLiquidPackage ? liquidCapacity : structuralMax;
+													const next = Math.min(maxTotal, Math.max(0, parseStockInput(editStockPartialInput) + delta));
 													onEditStockPartialBlisterPillsChange(next);
 													setEditStockPartialInput(String(next));
 													setShowStockCapNotice(false);
 												},
 											})}
+											{isLiquidPackage && (
+												<p className="edit-stock-cap-info" style={{ marginTop: "0.35rem" }}>
+													{t("form.currentAmount")}: {Math.max(0, editStockPartialBlisterPills)} {amountUnitLabel} /{" "}
+													{liquidCapacity} {amountUnitLabel}
+												</p>
+											)}
 										</label>
 									) : (
 										<>
@@ -601,6 +655,43 @@ export function MedDetailModal({
 											</label>
 										</>
 									)}
+									{isLiquidPackage && (
+										<label>
+											{t("form.bottles")}
+											{renderStepperInput({
+												value: editStockFullInput,
+												min: 1,
+												max: Number.MAX_SAFE_INTEGER,
+												onChange: (raw) => {
+													const nextBottleCount = raw === "" ? 1 : Math.max(1, parseStockInput(raw));
+													setEditStockFullInput(raw === "" ? "1" : raw);
+													onEditStockFullBlistersChange(nextBottleCount);
+													const syncedTotal = Math.round(nextBottleCount * liquidAmountPerBottle);
+													onEditStockPartialBlisterPillsChange(syncedTotal);
+													setEditStockPartialInput(String(syncedTotal));
+													setShowStockCapNotice(false);
+												},
+												onBlur: () => {
+													const normalized = Math.max(1, parseStockInput(editStockFullInput));
+													onEditStockFullBlistersChange(normalized);
+													setEditStockFullInput(String(normalized));
+													const syncedTotal = Math.round(normalized * liquidAmountPerBottle);
+													onEditStockPartialBlisterPillsChange(syncedTotal);
+													setEditStockPartialInput(String(syncedTotal));
+													setShowStockCapNotice(false);
+												},
+												onStep: (delta) => {
+													const next = Math.max(1, parseStockInput(editStockFullInput) + delta);
+													onEditStockFullBlistersChange(next);
+													setEditStockFullInput(String(next));
+													const syncedTotal = Math.round(next * liquidAmountPerBottle);
+													onEditStockPartialBlisterPillsChange(syncedTotal);
+													setEditStockPartialInput(String(syncedTotal));
+													setShowStockCapNotice(false);
+												},
+											})}
+										</label>
+									)}
 								</div>
 
 								<div className="edit-stock-summary">
@@ -608,14 +699,18 @@ export function MedDetailModal({
 										<span>{t("editStock.currentTotal")}:</span>
 										<span>
 											{currentTotal}
-											{isTube ? ` ${stockUnitLabel}` : ` ${currentTotal === 1 ? t("common.pill") : t("common.pills")}`}
+											{isAmountPackage
+												? ` ${stockUnitLabel}`
+												: ` ${currentTotal === 1 ? t("common.pill") : t("common.pills")}`}
 										</span>
 									</div>
 									<div className="summary-row">
 										<span>{t("editStock.newTotal")}:</span>
 										<span>
 											{newTotal}
-											{isTube ? ` ${stockUnitLabel}` : ` ${newTotal === 1 ? t("common.pill") : t("common.pills")}`}
+											{isAmountPackage
+												? ` ${stockUnitLabel}`
+												: ` ${newTotal === 1 ? t("common.pill") : t("common.pills")}`}
 										</span>
 									</div>
 									<div className={`summary-row difference ${differenceClass}`}>
@@ -623,7 +718,7 @@ export function MedDetailModal({
 										<span>
 											{difference > 0 ? "+" : ""}
 											{difference}
-											{isTube
+											{isAmountPackage
 												? ` ${stockUnitLabel}`
 												: ` ${Math.abs(difference) === 1 ? t("common.pill") : t("common.pills")}`}
 										</span>
@@ -738,9 +833,13 @@ export function MedDetailModal({
 								</>
 							)}
 							<div className={`med-detail-item ${selectedMed.packageType === "bottle" ? "full-width" : "full-width"}`}>
-								<span className="med-detail-label">{t("modal.currentStock")}</span>
+								<span className="med-detail-label">
+									{isAmountPackage ? t("form.currentAmount") : t("modal.currentStock")}
+								</span>
 								<span className={`med-detail-value ${textClass}`}>
-									{currentStock} / {stockDisplayTotal}
+									{isAmountPackage
+										? `${formatNumber(currentStock)} / ${formatNumber(stockDisplayTotal)} ${amountUnitLabel}`
+										: `${currentStock} / ${stockDisplayTotal}`}
 									{currentStock > stockDisplayTotal && (
 										<span
 											className="info-tooltip tooltip-align-left warning-text"
@@ -767,6 +866,16 @@ export function MedDetailModal({
 										? t("form.packageTypeLiquidContainer")
 										: t("form.packageTypeBlister")}
 							)
+							{selectedMed.packageType === "tube" && (
+								<span className="info-tooltip small" data-tooltip={t("modal.packageTypeTubeHint")}>
+									ℹ️
+								</span>
+							)}
+							{selectedMed.packageType === "liquid_container" && (
+								<span className="info-tooltip small" data-tooltip={t("modal.packageTypeLiquidHint")}>
+									ℹ️
+								</span>
+							)}
 						</h3>
 						<div className="med-detail-grid">
 							{selectedMed.packageType === "blister" ? (
@@ -784,9 +893,47 @@ export function MedDetailModal({
 										<span className="med-detail-value">{selectedMed.pillsPerBlister}</span>
 									</div>
 								</>
+							) : selectedMed.packageType === "liquid_container" ? (
+								<>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("form.bottles")}</span>
+										<span className="med-detail-value">{packageCount}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("form.packageAmountPerBottle")}</span>
+										<span className="med-detail-value">
+											{formatNumber(amountPerPackage)} {amountUnitLabel}
+										</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("form.totalAmount")}</span>
+										<span className="med-detail-value">
+											{formatNumber(stockDisplayTotal)} {amountUnitLabel}
+										</span>
+									</div>
+								</>
+							) : selectedMed.packageType === "tube" ? (
+								<>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("form.tubes")}</span>
+										<span className="med-detail-value">{packageCount}</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("form.packageAmountPerTube")}</span>
+										<span className="med-detail-value">
+											{formatNumber(amountPerPackage)} {amountUnitLabel}
+										</span>
+									</div>
+									<div className="med-detail-item">
+										<span className="med-detail-label">{t("form.totalAmount")}</span>
+										<span className="med-detail-value">
+											{formatNumber(stockDisplayTotal)} {amountUnitLabel}
+										</span>
+									</div>
+								</>
 							) : (
 								<div className="med-detail-item">
-									<span className="med-detail-label">{isTube ? t("form.totalAmount") : t("form.totalCapacity")}</span>
+									<span className="med-detail-label">{t("form.totalCapacity")}</span>
 									<span className="med-detail-value">{(selectedMed.totalPills ?? packageSize) || "—"}</span>
 								</div>
 							)}
@@ -820,54 +967,33 @@ export function MedDetailModal({
 						<div className="med-detail-section">
 							<h3>
 								{t("modal.intakeSchedule")}{" "}
-								{selectedMed.intakeRemindersEnabled && (
+								{(selectedMed.intakeRemindersEnabled || hasAnyIntakeReminder) && (
 									<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
 										<Bell size={14} aria-hidden="true" />
 									</span>
 								)}
 							</h3>
 							<div className="med-detail-schedules">
-								{(selectedMed.intakes && selectedMed.intakes.length > 0
-									? selectedMed.intakes
-									: selectedMed.blisters.map((blister) => ({
-											usage: blister.usage,
-											every: blister.every,
-											start: blister.start,
-											takenBy: null,
-											intakeRemindersEnabled: selectedMed.intakeRemindersEnabled ?? false,
-										}))
-								).map((intake, idx) => {
+								{scheduleIntakes.map((intake, idx) => {
 									const hasPerIntakeTakenBy = !!intake.takenBy;
 									const personCount = Math.max(1, selectedMed.takenBy?.length ?? 0);
 									const totalUsage = hasPerIntakeTakenBy ? intake.usage : intake.usage * personCount;
 									const showIntakeBell = intake.intakeRemindersEnabled ?? selectedMed.intakeRemindersEnabled ?? false;
 
 									return (
-										<div key={`${intake.start}-${intake.usage}-${intake.every}-${idx}`} className="med-schedule-item">
+										<div
+											key={`${intake.start}-${intake.usage}-${intake.every}-${idx}`}
+											className="med-schedule-row blister-row-simple"
+										>
 											<span className="med-schedule-usage">
-												{totalUsage}
-												{isTube ? ` ${stockUnitLabel}` : ` ${totalUsage !== 1 ? t("common.pills") : t("common.pill")}`}
+												{getScheduleUsageLabel(totalUsage, intake.intakeUnit)}
 												{selectedMed.pillWeightMg &&
 													` (${totalUsage * selectedMed.pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
 											</span>
 											<span className="med-schedule-freq">
 												{intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every })}
 											</span>
-											{hasPerIntakeTakenBy && (
-												<span className="med-schedule-person">
-													{intake.takenBy}
-													{showIntakeBell && (
-														<span className="med-schedule-bell" role="img" aria-label={t("tooltips.intakeReminders")}>
-															<Bell size={13} aria-hidden="true" />
-														</span>
-													)}
-												</span>
-											)}
-											{!hasPerIntakeTakenBy && showIntakeBell && (
-												<span className="med-schedule-bell" role="img" aria-label={t("tooltips.intakeReminders")}>
-													<Bell size={13} aria-hidden="true" />
-												</span>
-											)}
+											{hasPerIntakeTakenBy && <span className="med-schedule-person">{intake.takenBy}</span>}
 											<span className="med-schedule-time">
 												{t("modal.at")}{" "}
 												{new Date(intake.start).toLocaleTimeString(getSystemLocale(i18n.language), {
@@ -875,6 +1001,11 @@ export function MedDetailModal({
 													minute: "2-digit",
 												})}
 											</span>
+											{showIntakeBell && (
+												<span className="med-schedule-bell" title={t("form.blisters.remindTooltip")}>
+													<Bell size={12} aria-hidden="true" />
+												</span>
+											)}
 										</div>
 									);
 								})}
@@ -991,7 +1122,7 @@ export function MedDetailModal({
 															? entry.loosePillsAdded
 															: entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister +
 																entry.loosePillsAdded;
-													return `+${total}${isTube ? ` ${stockUnitLabel}` : ` ${total === 1 ? t("common.pill") : t("common.pills")}`}`;
+													return `+${total}${isAmountPackage ? ` ${stockUnitLabel}` : ` ${total === 1 ? t("common.pill") : t("common.pills")}`}`;
 												})()}
 												{entry.usedPrescription && (
 													<span className="refill-prescription-badge" title={t("refill.viaPrescription")}>
@@ -1179,7 +1310,9 @@ export function MedDetailModal({
 									return totalRefill > 0 ? (
 										<span className="refill-preview">
 											+{totalRefill}
-											{isTube ? ` ${stockUnitLabel}` : ` ${totalRefill === 1 ? t("common.pill") : t("common.pills")}`}
+											{isAmountPackage
+												? ` ${stockUnitLabel}`
+												: ` ${totalRefill === 1 ? t("common.pill") : t("common.pills")}`}
 										</span>
 									) : null;
 								})()}

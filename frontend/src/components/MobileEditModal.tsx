@@ -5,7 +5,7 @@
 
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: modal uses custom DateInput and static value fields */
 import { Bell, Minus, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useScrollLock } from "../hooks/useScrollLock";
@@ -131,16 +131,21 @@ export function MobileEditModal({
 		return form.pillForm === "tablet";
 	}, [form.packageType, form.medicationForm, form.pillForm]);
 
-	const usageLabel = useMemo(() => {
-		if (form.packageType === "liquid_container") {
-			return t("form.blisters.usageMl");
-		}
-		if (form.packageType === "tube") {
-			return form.medicationForm === "liquid" ? t("form.blisters.usageMl") : t("form.blisters.usageApplication");
-		}
-		if (form.pillForm === "capsule") return t("form.blisters.usageCapsules");
-		return t("form.blisters.usageTablets");
-	}, [form.packageType, form.medicationForm, form.pillForm, t]);
+	const getUsageLabel = useCallback(
+		(intake: (typeof form.intakes)[number]) => {
+			if (form.packageType === "liquid_container") {
+				if (intake.intakeUnit === "tsp") return t("form.blisters.usageTsp");
+				if (intake.intakeUnit === "tbsp") return t("form.blisters.usageTbsp");
+				return t("form.blisters.usageMl");
+			}
+			if (form.packageType === "tube") {
+				return form.medicationForm === "liquid" ? t("form.blisters.usageMl") : t("form.blisters.usageApplication");
+			}
+			if (form.pillForm === "capsule") return t("form.blisters.usageCapsules");
+			return t("form.blisters.usageTablets");
+		},
+		[form.packageType, form.medicationForm, form.pillForm, t]
+	);
 
 	const usesAmountLabels = form.packageType === "tube" || form.packageType === "liquid_container";
 	const totalCapacityLabel = usesAmountLabels ? t("form.totalAmount") : t("form.totalCapacity");
@@ -433,6 +438,14 @@ export function MobileEditModal({
 												<option value="liquid_container">{t("form.packageTypeLiquidContainer")}</option>
 											</select>
 										</label>
+										<label className="full">
+											{t("form.medicationEndDate")}
+											<DateInput
+												value={form.medicationEndDate}
+												onChange={(e) => onHandleValueChange("medicationEndDate", e.target.value)}
+												placeholder={t("common.optional")}
+											/>
+										</label>
 										{form.packageType !== "tube" && form.packageType !== "liquid_container" && (
 											<label className="full">
 												{t("form.pillForm")}
@@ -461,14 +474,6 @@ export function MobileEditModal({
 												</select>
 											</label>
 										)}
-										<label className="full">
-											{t("form.medicationEndDate")}
-											<DateInput
-												value={form.medicationEndDate}
-												onChange={(e) => onHandleValueChange("medicationEndDate", e.target.value)}
-												placeholder={t("common.optional")}
-											/>
-										</label>
 										{form.medicationEndDate && (
 											<label className="full">
 												{t("form.autoMarkObsoleteAfterEndDate")}
@@ -601,13 +606,7 @@ export function MobileEditModal({
 													<>
 														<label>
 															{t("form.tubes")}
-															<FormNumberStepper
-																value={form.packCount}
-																onChange={(nextValue) => onHandleValueChange("packCount", nextValue)}
-																min={1}
-																decrementLabel={decrementValueLabel}
-																incrementLabel={incrementValueLabel}
-															/>
+															<div className="static-value">1</div>
 														</label>
 														<label className="full">
 															{t("form.packageAmountPerTube")}
@@ -641,6 +640,51 @@ export function MobileEditModal({
 												);
 											}
 
+											if (form.packageType === "liquid_container") {
+												return (
+													<>
+														<label>
+															{t("form.bottles")}
+															<FormNumberStepper
+																value={form.packCount}
+																onChange={(nextValue) => onHandleValueChange("packCount", nextValue)}
+																min={1}
+																decrementLabel={decrementValueLabel}
+																incrementLabel={incrementValueLabel}
+															/>
+														</label>
+														<label className="full">
+															{t("form.packageAmountPerBottle")}
+															<div className="dose-input-group">
+																<input
+																	type="text"
+																	inputMode="decimal"
+																	pattern="[0-9]*\.?[0-9]*"
+																	value={form.packageAmountValue ?? "0"}
+																	onChange={(e) => onHandleValueChange("packageAmountValue", e.target.value)}
+																	placeholder="0"
+																/>
+																<select
+																	value="ml"
+																	disabled
+																	className="dose-unit-select"
+																	aria-label={t("form.packageAmountUnitMl")}
+																>
+																	<option value="ml">{t("form.packageAmountUnitMl")}</option>
+																</select>
+															</div>
+														</label>
+														<label>
+															{t("form.totalAmount")}
+															<div className="static-value">
+																{(Number(form.packCount) || 0) * (Number(form.packageAmountValue ?? 0) || 0)}{" "}
+																{t("form.packageAmountUnitMl")}
+															</div>
+														</label>
+													</>
+												);
+											}
+
 											return (
 												<>
 													<label>
@@ -666,7 +710,7 @@ export function MobileEditModal({
 												</>
 											);
 										})()}
-										{(form.packageType === "bottle" || form.packageType === "liquid_container") && (
+										{form.packageType === "bottle" && (
 											<div className="full stock-total-row">
 												<div className="stock-total-field">
 													<p className="sub">
@@ -677,29 +721,6 @@ export function MobileEditModal({
 													</p>
 												</div>
 											</div>
-										)}
-										{form.packageType === "liquid_container" && (
-											<label className="full">
-												{t("form.packageAmount")}
-												<div className="dose-input-group">
-													<input
-														type="text"
-														inputMode="decimal"
-														pattern="[0-9]*\.?[0-9]*"
-														value={form.packageAmountValue ?? "0"}
-														onChange={(e) => onHandleValueChange("packageAmountValue", e.target.value)}
-														placeholder="0"
-													/>
-													<select
-														value="ml"
-														disabled
-														className="dose-unit-select"
-														aria-label={t("form.packageAmountUnitMl")}
-													>
-														<option value="ml">{t("form.packageAmountUnitMl")}</option>
-													</select>
-												</div>
-											</label>
 										)}
 										{form.packageType !== "tube" && form.packageType !== "liquid_container" && (
 											<label className="full">
@@ -778,11 +799,11 @@ export function MobileEditModal({
 										</div>
 										{form.intakes.map((intake, idx) => (
 											<div
-												key={`${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}`}
+												key={`${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}-${idx}`}
 												className="blister-row"
 											>
 												<label className="compact">
-													<span>{usageLabel}</span>
+													<span>{getUsageLabel(intake)}</span>
 													<FormNumberStepper
 														value={intake.usage}
 														onChange={(nextValue) => onSetIntakeValue(idx, "usage", nextValue)}

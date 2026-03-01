@@ -279,7 +279,7 @@ describe("MobileEditModal", () => {
 			/>
 		);
 
-		const amountInput = screen.getByLabelText("form.packageAmount") as HTMLInputElement;
+		const amountInput = screen.getByLabelText("form.packageAmountPerBottle") as HTMLInputElement;
 		expect(amountInput).toBeInTheDocument();
 		expect(amountInput.tagName).toBe("INPUT");
 		expect(amountInput).toHaveAttribute("inputmode", "decimal");

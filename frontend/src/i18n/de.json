@@ -110,6 +110,7 @@
     "fullBlisters": "Volle Blister",
     "openBlister": "Offener Blister",
     "stock": "Bestand",
+    "dailyConsumption": "Taeglicher Verbrauch",
     "stockDetails": "Details",
     "daysLeft": "Tage übrig",
     "status": "Status",
@@ -118,7 +119,8 @@
     "expiry": "Ablaufdatum",
     "pillsCount": "{{count}} Tabletten",
     "pillsCount_one": "{{count}} Tablette",
-    "pillsCount_other": "{{count}} Tabletten"
+    "pillsCount_other": "{{count}} Tabletten",
+    "perDayWithUnit": "{{value}} {{unit}}"
   },
   "medications": {
     "list": {
@@ -130,7 +132,8 @@
       "reactivate": "Reaktivieren",
       "obsoleteTitle": "Obsolet ({{count}})",
       "obsoleteSince": "Beendet",
-      "started": "Gestartet"
+      "started": "Gestartet",
+      "emptyState": "Noch keine Medikamente. Fuege dein erstes Medikament hinzu."
     },
     "details": {
       "packs": "Packungen",
@@ -139,6 +142,7 @@
       "loose": "Lose",
       "total": "Gesamt",
       "stock": "Bestand",
+      "capacityPerPackage": "Kapazitaet pro Packung",
       "totalCapacity": "Kapazität",
       "type": "Typ"
     },
@@ -182,6 +186,7 @@
     "packageTypeTube": "Tube",
     "packageTypeLiquidContainer": "Fluessigbehaeltnis",
     "packs": "Packungen",
+    "bottles": "Flaschen",
     "tubes": "Tuben",
     "blistersPerPack": "Blister pro Packung",
     "pillsPerBlister": "Tabletten pro Blister",
@@ -191,6 +196,7 @@
     "currentAmount": "Aktuelle Menge",
     "totalAmountLabel": "Gesamt (Menge)",
     "packageAmount": "Packungsinhalt",
+    "packageAmountPerBottle": "Inhalt pro Flasche",
     "packageAmountPerTube": "Inhalt pro Tube",
     "packageAmountUnitMl": "ml",
     "packageAmountUnitG": "g",
@@ -232,12 +238,25 @@
       "usageTablets": "Dosis (Tabletten)",
       "usageCapsules": "Dosis (Kapseln)",
       "usageMl": "Dosis (ml)",
+      "usageTsp": "Dosis (tsp)",
+      "usageTbsp": "Dosis (tbsp)",
       "usageApplication": "Dosis (Anwendungen)",
       "intakeUnit": "Einnahmeeinheit",
       "intakeUnitMl": "Milliliter (ml)",
       "intakeUnitTsp": "Teeloeffel (5 ml)",
       "intakeUnitTbsp": "Essloeffel (15 ml)",
+      "intakes": "Einnahmen",
+      "intakes_one": "Einnahme",
+      "intakes_other": "Einnahmen",
+      "teaspoons": "Teeloeffel",
+      "teaspoons_one": "Teeloeffel",
+      "teaspoons_other": "Teeloeffel",
+      "tablespoons": "Essloeffel",
+      "tablespoons_one": "Essloeffel",
+      "tablespoons_other": "Essloeffel",
       "applications": "Anwendungen",
+      "applications_one": "Anwendung",
+      "applications_other": "Anwendungen",
       "everyDays": "Alle (Tage)",
       "every": "alle",
       "from": "ab",
@@ -330,7 +349,8 @@
       "highStockTooltip": "Bestand über diesem Wert bedeutet, dass du gut versorgt bist",
       "thresholdValidation": "Werte müssen wie folgt sein: Kritisch < Niedrig < Hoch",
       "shareStockStatus": "Bestand auf geteilten Links anzeigen",
-      "shareStockStatusDesc": "Bestandsstatus (Normal/Niedrig/Kritisch) und farbige Rahmen auf geteilten Zeitplan-Links für Einnahme-Nutzer anzeigen"
+      "shareStockStatusDesc": "Bestandsstatus (Normal/Niedrig/Kritisch) und farbige Rahmen auf geteilten Zeitplan-Links für Einnahme-Nutzer anzeigen",
+      "packageTypesNote": "Hinweis: Tubenmedikamente sind von Bestands-Erinnerungen ausgeschlossen. Flüssigbehälter-Medikamente verwenden einen einzelnen Reminder-Basiswert (Niedrig und Kritisch werden automatisch von diesem Wert abgeleitet)."
     },
     "timeline": {
       "title": "Allgemeine UI",
@@ -347,7 +367,7 @@
     "stockReminder": {
       "title": "Bestands-Erinnerung",
       "description": "Bestands-Erinnerungen aktivieren",
-      "infoTooltip": "Benachrichtigungen umfassen alle Medikamente mit Niedrig- oder Kritisch-Status. Niedrig: Bestand wird knapp. Kritisch: Bestand ist kritisch niedrig — bald nachbestellen.",
+      "infoTooltip": "Benachrichtigungen umfassen alle Medikamente mit Niedrig- oder Kritisch-Status. Hinweis: Tubenmedikamente sind ausgeschlossen; Flüssigbehälter verwenden einen einzelnen Basiswert (Niedrig und Kritisch werden abgeleitet).",
       "repeatDaily": "Täglich wiederholen",
       "repeatTooltip": "Wenn aktiviert, wird täglich eine Erinnerung gesendet solange der Bestand kritisch ist. Andernfalls nur einmal pro Medikament bis zum Auffüllen."
     },
@@ -358,6 +378,8 @@
     "at": "um",
     "stockInfo": "Aktueller Bestand",
     "packageDetails": "Packungsdetails",
+    "packageTypeTubeHint": "Tubenmedikamente enthalten feste Mengen (z. B. Cremes, Gele). Der Bestand wird nicht verfolgt und Erinnerungen werden nicht gesendet.",
+    "packageTypeLiquidHint": "Flüssigbehälter verwenden ein vereinfachtes Erinnerungsmodell. Niedrig- und Kritisch-Stufen werden automatisch von einem einzelnen Basiswert abgeleitet.",
     "currentStock": "Tabletten",
     "packs": "Packungen",
     "blistersPerPack": "Blister/Packung",
@@ -608,9 +630,11 @@
     "loosePills": "Lose Tabletten",
     "pillsPerBlister": "(je {{count}} Tabletten)",
     "packageSize": "Packungsgröße: {{count}} Tabletten",
+    "packageSizeAmount": "Packungsgroesse: {{count}} {{unit}}",
     "packageSizeBreakdown": "{{packCount}} x {{sizePerPack}} Tabletten Packung = {{total}} Tabletten",
     "currentComposition": "Aktueller Bestand: {{fullBlisters}} volle Blister + {{partialPills}} angebrochen + {{loosePills}} lose = {{total}} Tabletten",
     "maxExceeded": "Die maximale Packungsgröße beträgt {{count}} Tabletten. Werte wurden begrenzt.",
+    "maxExceededAmount": "Die maximale Packungsgroesse betraegt {{count}} {{unit}}. Werte wurden begrenzt.",
     "decreaseValue": "Wert verringern",
     "increaseValue": "Wert erhöhen",
     "currentTotal": "Aktueller Bestand",

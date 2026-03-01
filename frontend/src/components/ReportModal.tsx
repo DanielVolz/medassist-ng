@@ -324,6 +324,13 @@ function getCurrentStockText(med: Medication, t: TFn): string {
 	return `${getPackageSize(med)} ${t("common.pills")}`;
 }
 
+function getReportPackageTypeLabel(med: Medication, t: TFn): string {
+	if (med.packageType === "bottle") return t("report.docBottle");
+	if (med.packageType === "tube") return t("report.docTube");
+	if (med.packageType === "liquid_container") return t("form.packageTypeLiquidContainer");
+	return t("report.docBlister");
+}
+
 function generateTextReport(
 	meds: Medication[],
 	reportData: ReportData,
@@ -366,18 +373,7 @@ function generateTextReport(
 
 		// Package / Stock
 		lines.push(h3(t("report.docPackage")));
-		lines.push(
-			item(
-				t("report.docPackageType"),
-				med.packageType === "bottle"
-					? t("report.docBottle")
-					: med.packageType === "tube"
-						? t("report.docTube")
-						: med.packageType === "liquid_container"
-							? t("form.packageTypeLiquidContainer")
-							: t("report.docBlister")
-			)
-		);
+		lines.push(item(t("report.docPackageType"), getReportPackageTypeLabel(med, t)));
 		if (med.packageType === "blister") {
 			lines.push(item(t("report.docPacks"), String(med.packCount)));
 			lines.push(item(t("report.docBlistersPerPack"), String(med.blistersPerPack)));
@@ -575,15 +571,7 @@ function buildPrintHtml(
 		// Package / Stock
 		s += `<h3>${escHtml(t("report.docPackage"))}</h3>`;
 		s += `<table><tbody>`;
-		s += `<tr><td class="label">${escHtml(t("report.docPackageType"))}</td><td>${escHtml(
-			med.packageType === "bottle"
-				? t("report.docBottle")
-				: med.packageType === "tube"
-					? t("report.docTube")
-					: med.packageType === "liquid_container"
-						? t("form.packageTypeLiquidContainer")
-						: t("report.docBlister")
-		)}</td></tr>`;
+		s += `<tr><td class="label">${escHtml(t("report.docPackageType"))}</td><td>${escHtml(getReportPackageTypeLabel(med, t))}</td></tr>`;
 		if (med.packageType === "blister") {
 			s += `<tr><td class="label">${escHtml(t("report.docPacks"))}</td><td>${med.packCount}</td></tr>`;
 			s += `<tr><td class="label">${escHtml(t("report.docBlistersPerPack"))}</td><td>${med.blistersPerPack}</td></tr>`;

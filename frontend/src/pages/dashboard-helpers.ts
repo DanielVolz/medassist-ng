@@ -1,4 +1,4 @@
-import type { Coverage, PackageType } from "../types";
+import type { Coverage, Medication, PackageType } from "../types";
 import { getMedTotal as getMedTotalFromTypes } from "../types";
 import { splitCurrentBlisterStock } from "../utils/stock";
 
@@ -56,6 +56,7 @@ export function getReminderStatusData(
 	lowStockDays: number,
 	_allLowCoverage: Coverage[],
 	allCoverage: Coverage[],
+	meds: Medication[],
 	lastAutoEmailSent: string | null,
 	_lastNotificationType: string | null,
 	_lastNotificationChannel: string | null,
@@ -73,8 +74,12 @@ export function getReminderStatusData(
 	lastIntakeSent: { date: string; medName: string | null; takenBy: string | null } | null;
 } {
 	const lowStockMap = new Map<string, { name: string; daysLeft: number; isCritical: boolean }>();
+	const medByName = new Map(meds.map((med) => [med.name || med.genericName || "", med] as const));
 
 	for (const c of allCoverage) {
+		const med = medByName.get(c.name);
+		if (med?.packageType === "tube") continue;
+
 		if (c.medsLeft <= 0) {
 			lowStockMap.set(c.name, { name: c.name, daysLeft: 0, isCritical: true });
 			continue;
@@ -83,8 +88,11 @@ export function getReminderStatusData(
 		if (c.daysLeft === null) continue;
 
 		const roundedDaysLeft = Math.round(c.daysLeft);
-		const isCritical = c.daysLeft <= reminderDaysBefore;
-		const isLow = c.daysLeft < lowStockDays;
+		const isLiquid = med?.packageType === "liquid_container";
+		const liquidLowDays = Math.max(1, Math.floor(reminderDaysBefore));
+		const liquidCriticalDays = Math.max(1, Math.ceil(liquidLowDays / 2));
+		const isCritical = isLiquid ? c.daysLeft <= liquidCriticalDays : c.daysLeft <= reminderDaysBefore;
+		const isLow = isLiquid ? c.daysLeft <= liquidLowDays : c.daysLeft < lowStockDays;
 		if (!isCritical && !isLow) continue;
 
 		const existing = lowStockMap.get(c.name);

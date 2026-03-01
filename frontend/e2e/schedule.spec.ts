@@ -150,8 +150,7 @@ test.describe("Schedule Timeline", () => {
 	test("should show overview table with stock status", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// Overview table has class .table.table-7
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible();
 		await expect(overviewTable.locator(".table-head")).toBeVisible();
 	});

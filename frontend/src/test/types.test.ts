@@ -97,6 +97,29 @@ describe("getMedTotal", () => {
 		// Should use looseTablets only, NOT 5*10*20 + 80 = 1080
 		expect(getMedTotal(med)).toBe(80);
 	});
+
+	it("calculates tube/liquid totals from amount fields, not blister math", () => {
+		const tube = {
+			packageType: "tube" as const,
+			packCount: 4,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 600,
+			looseTablets: 600,
+			stockAdjustment: 4,
+		};
+		const liquid = {
+			packageType: "liquid_container" as const,
+			packCount: 3,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 450,
+			looseTablets: 450,
+		};
+
+		expect(getMedTotal(tube)).toBe(604);
+		expect(getMedTotal(liquid)).toBe(450);
+	});
 });
 
 describe("getPackageSize", () => {
@@ -147,6 +170,28 @@ describe("getPackageSize", () => {
 
 		// Should use looseTablets only, ignore stockAdjustment and blister math
 		expect(getPackageSize(med)).toBe(80);
+	});
+
+	it("returns totalPills for tube/liquid container package size", () => {
+		const tube = {
+			packageType: "tube" as const,
+			packCount: 4,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 600,
+			looseTablets: 600,
+		};
+		const liquid = {
+			packageType: "liquid_container" as const,
+			packCount: 3,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 450,
+			looseTablets: 450,
+		};
+
+		expect(getPackageSize(tube)).toBe(600);
+		expect(getPackageSize(liquid)).toBe(450);
 	});
 });
 

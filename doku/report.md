@@ -8,9 +8,9 @@ For each task, add:
 
 - Date
 - Scope
+
 - What changed
-- Files touched
-- Follow-ups (if any)
+
 
 ## How to maintain (1-minute template)
 
@@ -19,14 +19,1279 @@ For each task, add:
 
 - **🧩 Scope**:
 - **🛠️ What changed**:
-  -
 - **📁 Files touched**:
   -
-- **🔜 Follow-ups**:
   -
 ```
-
 ## Entries
+
+### 2026-03-02 (PR #364: fix failing Frontend Build + Playwright Stable checks)
+
+- **🧩 Scope**: Diagnose and fix CI failures on branch `fix/frontend-tube-liquid-semantics-parity` for:
+  - `Test/Frontend Build (pull_request)`
+  - `E2E Tests/Playwright E2E Stable (pull_request)`
+- **🛠️ What changed**:
+  - Retrieved failing job logs via `gh` and reproduced both failures locally.
+  - `frontend/src/test/context/AppContext.test.tsx`:
+    - replaced full `../../utils/schedule` mock with partial mock using `vi.importActual(...)` so `getStockStatus` remains exported,
+    - aligned warning fixture data (`daysLeft: 8`) with current stock-threshold semantics.
+  - `frontend/e2e/schedule.spec.ts`:
+    - replaced brittle selector `.table.table-7` with stable selector `.dashboard-overview-section .table`.
+- **📁 Files touched**:
+  - `frontend/src/test/context/AppContext.test.tsx`
+  - `frontend/e2e/schedule.spec.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Verification (exact commands)**:
+  - `cd /Users/danielvolz/git/medassist && GH_PAGER=cat gh pr checks 364 --repo DanielVolz/medassist-ng`
+  - `cd /Users/danielvolz/git/medassist && gh run view 22555005272 --repo DanielVolz/medassist-ng --job 65330821624 --log | rg -n "error|Error|FAILED|failed|TS\d+|vite|build"`
+  - `cd /Users/danielvolz/git/medassist && gh run view 22555005306 --repo DanielVolz/medassist-ng --job 65330817331 --log | rg -n "error|Error|FAILED|failed|Timeout|expect\(|AssertionError|not.to|toBe|toHave|x"`
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run test:run -- src/test/context/AppContext.test.tsx` (**PASS**)
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npx playwright test --config=playwright.stable.config.ts --project=chromium e2e/schedule.spec.ts -g "should show overview table with stock status"` (**PASS**)
+  - `cd /Users/danielvolz/git/medassist/frontend && npm run lint` (**PASS**)
+  - `cd /Users/danielvolz/git/medassist/frontend && npm run build` (**PASS**)
+
+### 2026-03-01 (Backend CI fix: `Test/Backend Tests` failing on test-email route test)
+
+- **🧩 Scope**: Reproduce failing backend CI test locally and apply the smallest fix in backend code/tests.
+- **🛠️ What changed**:
+  - Reproduced the failure with CI-equivalent backend test command: `cd backend && CI=true npm run test:coverage`.
+  - Diagnosed root cause in `routes-real.test.ts`: mocked SMTP success path returned `undefined`, while current `settings` route expects delivery metadata (`accepted` recipients) and otherwise returns `500`.
+  - Updated the single failing test mock to return a realistic success object (`accepted`, `rejected`, `response`, `messageId`).
+  - No frontend files were modified for this task.
+- **📁 Files touched**:
+  - `backend/src/test/routes-real.test.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Verification (exact commands)**:
+  - `cd backend && CI=true npm run test:coverage`: **PASS** (`21/21` files, `577/577` tests)
+  - `cd backend && CI=true npm run test:run -- src/test/routes-real.test.ts`: **PASS** (`13/13` tests)
+  - `cd backend && npm run lint`: **PASS**
+  - `cd backend && npx tsc --noEmit`: **PASS**
+
+### 2026-03-01 (Frontend lint cleanup: noNestedTernary + unused + format)
+
+- **🧩 Scope**: Make lint fully clean for the current working tree with behavior-preserving frontend refactors.
+- **🛠️ What changed**:
+  - Removed unused variable in `MedDetailModal` and unused helper in `DashboardPage`.
+  - Removed unused loop parameter in `frontend/src/utils/schedule.ts` and unused import in `frontend/src/test/utils/schedule.test.ts`.
+  - Replaced nested ternary chains with explicit logic in:
+    - `frontend/src/components/ReportModal.tsx`
+    - `frontend/src/hooks/useMedicationForm.ts`
+    - `frontend/src/hooks/useRefill.ts`
+    - `frontend/src/pages/MedicationsPage.tsx`
+  - Applied Biome formatting fixes to lint-failing frontend files.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/components/ReportModal.tsx`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/hooks/useRefill.ts`
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/pages/SchedulePage.tsx`
+  - `frontend/src/test/utils/schedule.test.ts`
+  - `frontend/src/utils/schedule.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Verification**:
+  - `npm run lint` (repo root): **PASS**
+
+### 2026-03-01 (Gate fix: planner/settings lint + planner targeted tests)
+
+- **🧩 Scope**: Resolve requested local gate failures in backend planner/settings and rerun exact verification commands.
+- **🛠️ What changed**:
+  - Fixed formatting-only lint issues in:
+    - `backend/src/routes/planner.ts`
+    - `backend/src/routes/settings.ts`
+  - Aligned planner success test mocks with current SMTP delivery semantics by including accepted recipients in `sendMail` mock results.
+  - Kept current backend semantics intact (no rollback of intentional planner/settings behavior).
+- **📁 Files touched**:
+  - `backend/src/routes/planner.ts`
+  - `backend/src/routes/settings.ts`
+  - `backend/src/test/planner.test.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Verification (exact commands)**:
+  - `npm run lint` (repo root): **FAIL**
+    - backend route formatting errors are fixed.
+    - command still fails on pre-existing frontend lint findings outside this scope.
+  - `cd backend && CI=true npm run test:run -- src/test/planner.test.ts src/test/stock-semantics-parity.test.ts`: **PASS** (`40/40` tests passed).
+
+### 2026-03-01 (Validation: pre-PR local quality gate on current uncommitted changes)
+
+- **🧩 Scope**: Run requested local gate checks before PR handoff.
+- **🛠️ What changed**:
+  - No product code changes in this pass.
+  - Executed required lint gate from repo root:
+    - `npm run lint` (runs backend + frontend lint)
+  - Executed requested backend tests:
+    - `CI=true npm run test:run -- src/test/planner.test.ts src/test/stock-semantics-parity.test.ts`
+  - Executed requested frontend tests:
+    - `CI=true npm run test:run -- src/test/components/MedDetailModal.test.tsx src/test/components/MobileEditModal.test.tsx src/test/pages/DashboardPage.test.tsx src/test/utils/schedule.test.ts src/test/types.test.ts`
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation result**:
+  - **FAIL** (lint and backend planner tests failing; frontend targeted tests passed).
+
+### 2026-03-01 (UI: flat-text intake rows matching blister reference)
+
+- **🧩 Scope**: Rewrite MedDetailModal intake schedule rows to render as flat inline text, visually identical to blister rows on MedicationsPage.
+- **🛠️ What changed**:
+  - Intake rows now render as `{usage} · {freq} · at {time}` flat text inside `.blister-row-simple` — exactly like blister rows on the medications page.
+  - Removed previous grid/flex structure (`.med-schedule-item`, `.med-schedule-main`, etc.) that caused the visual mismatch.
+  - Container uses `.blister-list` (same as MedicationsPage) instead of `.med-detail-schedules`.
+  - Cleaned up ~80 lines of now-unused CSS (all `med-schedule-*` classes).
+  - Updated 4 unit test selectors to match new DOM structure.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/styles.css`
+  - `frontend/src/test/components/MedDetailModal.test.tsx`
+- **✅ Validation**:
+  - 61/61 unit tests pass.
+  - Visual verification: browser screenshot confirms intake row is visually identical to blister row.
+
+### 2026-03-01 (UI: exact blister style reuse for bottle/tube/liquid intake rows)
+
+- **🧩 Scope**: Eliminate style mismatch complaints by using the exact blister row visual class for intake rows in `Medication Details`.
+- **🛠️ What changed**:
+  - Added `blister-row-simple` to detail schedule rows in `MedDetailModal` so bottle/tube/liquid rows inherit the same visual tokens as blister rows.
+  - Simplified `.med-schedule-item` to layout-only rules (grid columns + alignment); visual values now come from shared blister class.
+  - Intake section bell in heading now appears with `selectedMed.intakeRemindersEnabled || hasAnyIntakeReminder`.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/styles.css`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics: no errors in touched files.
+  - Live modal snapshot confirms the updated schedule structure remains active for `Liquid Mix E2E`.
+
+### 2026-03-01 (UI: strict blister parity for bottle/tube/liquid intake rows)
+
+- **🧩 Scope**: Apply a clearly visible alignment pass so `bottle`, `tube`, and `liquid_container` intake rows match the blister reference layout.
+- **🛠️ What changed**:
+  - `MedDetailModal` intake rows now use a fixed two-column structure:
+    - left: dose/frequency/person/reminder cluster
+    - right: stable time column (`at HH:mm`)
+  - `styles.css` updates for `.med-schedule-item`/`.med-schedule-main`:
+    - switched to grid-based row alignment,
+    - tightened spacing/typography,
+    - increased row corner radius,
+    - mobile fallback keeps hierarchy while stacking cleanly.
+  - Section header reminder icon now appears when any intake has reminders (not only global flag).
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/styles.css`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics: no errors in touched files.
+  - Live browser check on `Tube E2E` and `Liquid Mix E2E`: both render the same left-content/right-time schedule row structure.
+
+### 2026-03-01 (UI: tube/liquid intake rows now structurally match blister layout)
+
+- **🧩 Scope**: Apply a visible structural formatting update for `Medication Details` intake rows so tube and liquid render like blister rows.
+- **🛠️ What changed**:
+  - Updated `MedDetailModal` intake-row markup to a structured two-zone row:
+    - left content cluster (`usage`, `daily/interval`, optional person/bell tags)
+    - right aligned time label (`at HH:mm`)
+  - Added new layout class `.med-schedule-main` and refined `.med-schedule-item` alignment/gap behavior.
+  - Added mobile fallback behavior (`max-width: 700px`) so rows stack cleanly without losing hierarchy.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/styles.css`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched files: **no errors**.
+  - Live browser verification on both medications:
+    - `Liquid Mix E2E` intake rows show left info cluster + right time.
+    - `Tube E2E` intake rows show the same structure.
+- **🔜 Follow-ups**:
+  - Optional: propagate the same structural row pattern to other schedule surfaces for complete global parity.
+
+### 2026-03-01 (UI: Intake rows in Medication Details now match blister style)
+
+- **🧩 Scope**: Improve visual consistency of intake rows in `Medication Details` to match the existing blister-row look.
+- **🛠️ What changed**:
+  - Updated `MedDetailModal` intake-row styles to align with blister-row aesthetics:
+    - gradient row background,
+    - border + accent left strip,
+    - hover highlight in the same visual language.
+  - Preserved existing layout/behavior while improving hierarchy and readability.
+  - Adjusted intake time text contrast for better legibility.
+- **📁 Files touched**:
+  - `frontend/src/styles.css`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched stylesheet: **no errors**.
+- **🔜 Follow-ups**:
+  - Optional: apply the same row treatment to additional schedule views for full cross-page visual parity.
+
+### 2026-03-01 (Validation: broader regression sweep for tube/liquid_container flows)
+
+- **🧩 Scope**: Validate latest fixes across requested tube/liquid_container user flows:
+  - MobileEditModal liquid intake add/remove with identical defaults
+  - MedDetailModal Correct Stock wording for amount packages
+  - Dashboard overview stock + daily-consumption labeling
+  - Schedule usage labels without inappropriate pill fallback
+- **🛠️ What changed**:
+  - No product code changes in this pass.
+  - Executed focused frontend tests:
+    - `src/test/components/MobileEditModal.test.tsx`
+    - `src/test/components/MedDetailModal.test.tsx`
+    - `src/test/pages/DashboardPage.test.tsx`
+    - `src/test/pages/SchedulePage.test.tsx`
+    - `src/test/utils/schedule.test.ts`
+    - `src/test/types.test.ts`
+    - `src/test/hooks/useMedicationForm.test.ts`
+  - Result: **336 passed, 0 failed**.
+  - Executed quick browser-level Playwright validation:
+    - `e2e/medication-edit.spec.ts`
+    - `e2e/dashboard.spec.ts`
+    - `e2e/dashboard-data.spec.ts`
+  - Result: **9 passed, 0 failed**.
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **⚠️ Residual validation gaps**:
+  - Existing page-test suites currently contain explicit `bottle` assertions, but not dedicated explicit tube/liquid label assertions in DashboardPage/SchedulePage.
+  - MedDetailModal has broad stock-correction coverage but lacks a dedicated explicit assertion for tube/liquid `Current Amount` wording in Correct Stock.
+
+### 2026-03-01 (Fix: implemented remaining tube/liquid E2E findings)
+
+- **🧩 Scope**: Implement and verify the two remaining E2E findings for tube/liquid flows.
+- **🛠️ What changed**:
+  - `MobileEditModal`: fixed liquid-intake row key collision risk by ensuring unique row keys even when intake defaults are identical.
+  - `MedDetailModal` (`Correct Stock`): fixed amount-package input label so tube/liquid uses amount wording (`Current Amount`) instead of pill wording.
+  - `MobileEditModal.test.tsx`: updated outdated liquid amount label expectation (`form.packageAmountPerBottle`).
+- **📁 Files touched**:
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/test/components/MobileEditModal.test.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics: no errors on touched files.
+  - Focused component tests via `@testing-manager`:
+    - `MobileEditModal.test.tsx`: 59 passed
+    - `MedDetailModal.test.tsx`: 61 passed
+    - Total: 120 passed, 0 failed
+- **🔜 Follow-ups**:
+  - Optional: dedicated assertions for duplicate-key warning prevention and tube Correct Stock label copy.
+
+### 2026-03-01 (Validation: focused component tests after latest fixes)
+
+- **🧩 Scope**: Run focused frontend component tests requested for:
+  - `frontend/src/test/components/MobileEditModal.test.tsx`
+  - `frontend/src/test/components/MedDetailModal.test.tsx`
+- **🛠️ What changed**:
+  - Executed targeted test runs per file.
+  - Results:
+    - `MobileEditModal.test.tsx`: **59 passed, 0 failed**
+    - `MedDetailModal.test.tsx`: **61 passed, 0 failed**
+    - Combined: **120 passed, 0 failed**
+  - Requested regression checks in this focused scope:
+    - Duplicate intake key regression risk: **no failing tests**
+    - Tube correct-stock label wording: **no failing tests**
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔜 Follow-ups**:
+  - None for this focused test request.
+
+### 2026-03-01 (Validation: Mobile duplicate keys + Correct Stock tube wording)
+
+- **🧩 Scope**: Focused verification of two frontend fixes:
+  - Mobile intake row key collisions in `MobileEditModal`
+  - Tube/liquid Correct Stock label wording (amount-based instead of total pills)
+- **🛠️ What changed**:
+  - No product code changed in this validation pass.
+  - Verified static code paths:
+    - `MobileEditModal` intake-row `key` now includes index suffix to prevent duplicate React key collisions for identical intake values.
+    - `MedDetailModal` Correct Stock amount-package input now renders `form.currentAmount` for tube/liquid packages.
+  - Ran focused tests:
+    - `CI=true npm run test:run -- src/test/components/MobileEditModal.test.tsx src/test/components/MedDetailModal.test.tsx`
+  - Result summary:
+    - `MedDetailModal.test.tsx`: passed
+    - `MobileEditModal.test.tsx`: 1 failing test (`uses plain numeric input for liquid container package amount`) due outdated expected label key (`form.packageAmount`).
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation evidence**:
+  - Diff evidence confirms key change to include `-${idx}` in `MobileEditModal` intake map key.
+  - Diff evidence confirms Correct Stock label switch to `form.currentAmount` for amount packages in `MedDetailModal`.
+- **🔜 Follow-ups**:
+  - Update/add focused tests for tube/liquid Correct Stock wording and liquid package-amount labeling.
+  - Optional manual browser sanity check on tube medication: open Correct Stock and confirm amount label text in live UI.
+
+### 2026-03-01 (Feature: Daily consumption column in Medication Overview)
+
+- **🧩 Scope**: Add a new overview table column after `Stock` to show daily medication consumption.
+- **🛠️ What changed**:
+  - Added `Daily consumption` column in `Dashboard` -> `Medication Overview` directly after `Stock`.
+  - Added daily-consumption calculation per medication based on configured intakes:
+    - uses `usage / every` per intake,
+    - applies person multiplier where intake is not person-specific,
+    - supports mixed liquid units by converting `tsp`/`tbsp` to `ml`.
+  - Render output by package type:
+    - pills -> `x pills`
+    - liquid container -> `x ml`
+    - tube -> `x applications` (or `x ml` for liquid tube form)
+  - Removed explicit `/day` suffix from values because the column title (`Daily consumption`) already provides that context.
+  - Extended table layout from 7 to 8 columns for proper spacing.
+  - Added EN/DE i18n keys for new header and per-day formatter.
+- **📁 Files touched**:
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/styles.css`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched files: **no errors**.
+- **🔜 Follow-ups**:
+  - Optional: add regression test coverage for mixed liquid units and person-multiplied daily totals.
+
+
+- **🧩 Scope**: Correct unit display in medication detail intake schedule for liquid medications.
+
+- **🛠️ What changed**:
+  - `MedDetailModal` intake usage label now uses `intakeUnit` for `liquid_container` entries.
+  - For `tsp`/`tbsp`, schedule rows now render teaspoon/tablespoon labels.
+  - `ml` is now only shown for ml/default liquid unit.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched file: **no errors**.
+- **🔜 Follow-ups**:
+  - Optional: add a focused UI test asserting `tbsp` display in med-detail schedule.
+
+### 2026-03-01 (Fix: liquid correction controls + Escape in nested correction modal)
+
+- **🧩 Scope**: Resolve correction modal regressions for liquid medications and nested Escape handling.
+- **🛠️ What changed**:
+  - Re-enabled editable liquid container count (`Bottles`) inside `Correct Stock`.
+  - Container count now synchronizes correction amount to `bottles * amount per bottle`.
+  - Amount input remains editable but is constrained by current bottle-derived capacity.
+  - Nested Escape handling now uses capture-phase close handling for correction/refill sub-modals, preventing parent detail modal from closing on the same Escape press.
+  - Correction modal keydown propagation was tightened to prevent bubbling into parent modal handlers.
+  - Residual copy issue in correction header was corrected for amount packages: no more `... pills` wording for liquid/tube, now amount-based text (`Total Amount: ... ml/g`).
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched files: **no errors**.
+- **🔜 Follow-ups**:
+  - Optional: run quick interactive browser check for Escape behavior and liquid correction workflow.
+
+### 2026-03-01 (Fix: Schedule page no longer shows pill wording for liquid/tube entries)
+
+- **🧩 Scope**: Remove remaining package-type wording regression in schedule timeline rows.
+- **🛠️ What changed**:
+  - Added package-type-aware label helpers in `SchedulePage` for dose and total usage display.
+  - Replaced hardcoded `pill/pills` and `pillsTotal` in both past-day and current/future-day rows.
+  - `liquid_container` now renders amount-based labels (`ml`, `tsp`, `tbsp`, including ml conversion when needed).
+  - `tube` now renders amount/application labels based on medication form instead of pill labels.
+- **📁 Files touched**:
+  - `frontend/src/pages/SchedulePage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched files: **no errors**.
+- **🔜 Follow-ups**:
+  - Optional: run a quick UI pass on shared/user-filter surfaces to confirm full wording parity.
+
+### 2026-03-01 (Fix: liquid/tube detail modal no longer falls back to pill wording)
+
+- **🧩 Scope**: Restore correct amount-based detail rendering for `liquid_container` and `tube` in medication detail modal.
+- **🛠️ What changed**:
+  - In `MedDetailModal`, amount packages no longer use the pill-oriented stock label.
+  - Current stock label now switches to `Current Amount` and displays units (`ml`/`g`) for amount packages.
+  - Package details for amount packages now render the full structure again:
+    - package count (`Bottles`/`Tubes`)
+    - amount per package
+    - total amount with unit
+  - Blister and bottle rendering paths were kept unchanged.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched file: **no errors**.
+  - Vite HMR after change: clean update, no new frontend compile errors.
+- **🔜 Follow-ups**:
+  - Optional: run a quick UI sweep for remaining amount-package wording drift in other views.
+
+### 2026-03-01 (Fix: no more false success when SMTP rejects reminder recipients)
+
+- **🧩 Scope**: Investigate "reminder email not arriving" and fix success detection in reminder email flows.
+- **🛠️ What changed**:
+  - Live repro confirmed `/api/reminder/send-email` can return `200` while delivery may still fail downstream.
+  - Added recipient-acceptance validation after `nodemailer.sendMail(...)`:
+    - if SMTP returns no accepted recipients, request is now treated as failed.
+    - explicit errors now surface when all recipients are rejected.
+  - Applied consistently to:
+    - manual demand/stock/prescription reminder routes
+    - scheduler stock reminder email path
+    - scheduler prescription reminder email path
+    - settings test-email endpoint
+  - Runtime finding documented: container had `LOG_LEVEL=warn`, so `info` diagnostics are hidden unless level is raised.
+- **📁 Files touched**:
+  - `backend/src/routes/planner.ts`
+  - `backend/src/services/reminder-scheduler.ts`
+  - `backend/src/routes/settings.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched backend files: **no errors**.
+- **🔜 Follow-ups**:
+  - Optional: switch `.env` `LOG_LEVEL` to `info` during debugging to see structured send-attempt/success logs.
+
+### 2026-03-01 (UI fix: no unnecessary scroll on empty medications page)
+
+- **🧩 Scope**: Remove unnecessary vertical scroll and large empty block when there are no medications.
+- **🛠️ What changed**:
+  - Added a compact empty state in `MedicationsPage` instead of rendering a visually empty medication grid container.
+  - Added localized empty-state copy in EN + DE.
+  - Reduced global page bottom padding to avoid extra empty vertical space that can trigger scrolling on sparse pages.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/styles.css`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched files: **no errors**.
+- **🔜 Follow-ups**:
+  - Optional: if desired, tune empty-state spacing further for very short laptop viewports.
+
+### 2026-03-01 (Debug: structured logs for email sending paths)
+
+- **🧩 Scope**: Make email send attempts observable in backend logs for manual sending flows.
+- **🛠️ What changed**:
+  - Added structured `request.log` entries in planner/manual reminder email endpoints:
+    - `/planner/send-email`
+    - `/reminder/send-email`
+    - `/reminder/send-prescription`
+  - Added structured `request.log` entries in settings test endpoint:
+    - `/settings/test-email`
+  - Added logs for: request start, channel/SMTP readiness, send attempt, send success (`messageId`), and send failure.
+  - Added recipient masking helper to avoid logging full email addresses.
+- **📁 Files touched**:
+  - `backend/src/routes/planner.ts`
+  - `backend/src/routes/settings.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on touched backend files: **no errors**.
+- **🔜 Follow-ups**:
+  - Trigger one manual test send and inspect backend container logs for `[Planner]`, `[ReminderManual]`, and `[Settings]` log prefixes.
+
+### 2026-03-01 (Complete: UI hints and deployment prep for package-type stock reminders)
+
+- **🧩 Scope**: Add user-facing UI hints explaining liquid and tube package-type semantics; prepare deployment documentation.
+- **🛠️ What changed**:
+  - **i18n enhancements** (EN + DE):
+    - `settings.stock.packageTypesNote`: New key explaining tube exclusion + liquid single-baseline model.
+    - `settings.stockReminder.infoTooltip`: Enhanced to mention tube/liquid semantics.
+    - `modal.packageTypeHint`: New key for med-detail tooltip explaining tube vs liquid behavior.
+  - **Settings page hint**: Added infomational note below stock thresholds explaining:
+    - Tube medications are excluded from stock reminders.
+    - Liquid containers use a single reminder baseline (Low and Critical are auto-derived).
+  - **Med detail modal tooltip**: Added info icon next to "Package Details" heading that triggers tooltip for tubes and liquid containers explaining stock reminder behavior and lack of tracking.
+  - **Documentation**: Updated `doku/report.md` and `doku/memory_notes.md` to record full feature completion.
+- **✅ Test coverage** (previously delegated):
+  - Backend `/reminder/send-email` endpoint test for tube-only rejection (30/30 tests passed).
+  - Backend `getLiquidReminderThresholds` boundary tests (10/10 passed, 4 new tests).
+  - Frontend `getStockStatus` explicit package-type tests (82/82 passed, 5 new tests).
+  - **Total: 122 backend + frontend tests, 0 failures.**
+- **📁 Files touched**:
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `frontend/src/pages/SettingsPage.tsx`
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Validation**:
+  - Editor diagnostics on all touched files: **no errors**
+  - i18n JSON syntax validation: **valid (both EN + DE)**
+  - All referenced translation keys resolve correctly
+- **🚀 Deployment readiness**:
+  - Feature complete with end-to-end implementation: backend logic, frontend rendering, UI hints, and focused test coverage.
+  - Ready for staging deployment and user-facing release notes.
+  - Existing CI/CD pipelines should pass (run full test suite before production release).
+- **📋 Release notes ready** (for user communication):
+  - Stock reminders for tube medications are no longer sent (tubes track fixed amounts, not consumption).
+  - Liquid container reminders now use a single baseline threshold — Low and Critical levels are automatically derived for simplicity.
+  - New hints in Settings and Med Details explain these changes.
+  - All existing reminders for blister/bottle types remain unchanged.
+
+### 2026-03-01 (Tests: focused coverage for package-type stock reminder semantics)
+
+- **🧩 Scope**: Add focused test cases to verify package-type enforcement for stock reminders (tube exclusion, liquid threshold derivation).
+- **🛠️ What changed**:
+  - **Backend `/reminder/send-email` test**: Added test case verifying that endpoint returns `400 "No active medications to notify"` when only `packageType=tube` medications are in active meds list.
+  - **Backend liquid threshold tests**: Added `describe("getLiquidReminderThresholds")` suite with 4 test cases validating threshold derivation formula:
+    - `low = floor(baseline)`
+    - `critical = ceil(low / 2)`
+    - Tests cover typical baseline (7), boundary baseline (1), even baseline (14), and odd baseline (15).
+  - **Frontend `getStockStatus` tests**: Added 4 explicit test cases in `getStockStatus` suite:
+    - Tube packageType always returns `"normal"` (no thresholds) except when truly empty.
+    - Liquid container applies derived thresholds without triggering high/low/normal multi-tier logic.
+    - Liquid boundary cases (critical=1) handled correctly.
+- **📁 Files touched**:
+  - `backend/src/test/planner.test.ts`
+  - `backend/src/test/stock-semantics-parity.test.ts`
+  - `frontend/src/test/utils/schedule.test.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Test results**:
+  - Backend planner: **30/30 passed** (includes new tube endpoint test)
+  - Backend stock semantics: **10/10 passed** (includes 4 new liquid threshold tests)
+  - Frontend schedule: **82/82 passed** (includes 5 new getStockStatus tests for package types)
+  - All 3 suites: **0 failures**
+  - Lint: no new errors introduced
+- **🔜 Follow-ups**:
+  - None; test coverage gaps closed for core package-type semantics.
+
+### 2026-03-01 (Validation: package-type stock reminder changes)
+
+- **🧩 Scope**: Validate recent tube/liquid reminder behavior updates in backend and frontend.
+- **🔬 What was validated**:
+  - Backend scheduler path excludes `packageType=tube` candidates.
+  - Manual reminder route (`/api/reminder/send-email`, backend `/reminder/send-email`) filters out tube medications from payload-derived lists.
+  - Liquid thresholds are derived from one baseline (`reminderDaysBefore`):
+    - `low = floor(baseline)`
+    - `critical = ceil(low / 2)`
+  - Frontend status logic paths for Dashboard/Schedule/Shared/helper use package-type-aware status classification.
+- **🧪 Focused test runs**:
+  - Backend: `backend/src/test/planner.test.ts`, `backend/src/test/stock-semantics-parity.test.ts`.
+    - Result: **35 passed, 0 failed**.
+  - Frontend: `frontend/src/test/utils/schedule.test.ts`, `frontend/src/test/pages/DashboardPage.test.tsx`, `frontend/src/test/pages/SchedulePage.test.tsx`, `frontend/src/test/components/SharedScheduleTodayOnly.test.tsx`.
+    - First run: **172 passed, 2 failed** (outdated helper test signature).
+    - Fix applied: updated `DashboardPage.test.tsx` calls to `getReminderStatusData(...)` with new `meds` argument.
+    - Re-run result: **174 passed, 0 failed**.
+- **⚠️ Coverage gaps**:
+  - No dedicated backend assertion that manual reminder endpoint returns `No active medications to notify` when payload contains tube-only meds.
+  - No dedicated backend assertion for liquid critical/low split derived from baseline threshold.
+  - Frontend `getStockStatus` tests currently do not explicitly cover `tube` and `liquid_container` branches.
+- **📁 Files touched**:
+  - `frontend/src/test/pages/DashboardPage.test.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
+### 2026-03-01 (Feature: stock reminder logic adapted for tube and liquid)
+
+- **🧩 Scope**: Align reminder behavior with new package-type semantics while keeping liquid configuration simple.
+- **🛠️ What changed**:
+  - `tube` is now explicitly excluded from stock reminders in backend auto-reminder selection.
+  - Manual reminder API (`/api/reminder/send-email`) now also filters out `tube` medications server-side.
+  - `liquid_container` now uses a single days-based baseline threshold (no extra liquid threshold fields):
+    - baseline = existing reminder threshold (`reminderDaysBefore`, default 7 days)
+    - `critical` derived as `ceil(baseline / 2)`
+    - `low` derived as `baseline`
+  - Frontend stock status rendering was aligned to the same package-type logic across Dashboard, Shared Schedule, Schedule page, Med detail and filter modal.
+  - Reminder status aggregation in dashboard helper now respects tube exclusion and liquid derived thresholds.
+- **📁 Files touched**:
+  - `backend/src/services/reminder-scheduler.ts`
+  - `backend/src/routes/planner.ts`
+  - `frontend/src/utils/schedule.ts`
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/pages/dashboard-helpers.ts`
+  - `frontend/src/pages/SchedulePage.tsx`
+  - `frontend/src/components/SharedSchedule.tsx`
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/components/UserFilterModal.tsx`
+  - `frontend/src/context/AppContext.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on all touched files: no errors
+- **🔜 Follow-ups**:
+  - Delegate focused reminder regression tests to `@testing-manager` for backend candidate selection and frontend status parity.
+
+### 2026-03-01 (Fix: liquid correction total now auto-updates from bottle count)
+
+- **🧩 Scope**: Ensure `Total Amount` in liquid `Correct Stock` follows bottle-count changes immediately.
+- **🛠️ What changed**:
+  - Updated liquid bottle stepper handlers so changing `Bottles` always recalculates correction total to:
+    - `bottles * amount per bottle`
+  - Applied this for typing, blur normalization, and +/- step actions.
+  - Result: correction values stay aligned with bottle configuration without manual recalculation.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched component: no errors
+- **🔜 Follow-ups**:
+  - Optional: make `Total Amount` read-only when bottle count is the primary correction driver.
+
+### 2026-03-01 (Fix: liquid correction now supports changing bottle count)
+
+- **🧩 Scope**: Make `Correct Stock` for `liquid_container` actually editable at bottle level.
+- **🛠️ What changed**:
+  - Added an editable `Bottles` field (stepper) in the correction modal.
+  - Package size/cap in correction now updates live from `bottles * amount per bottle`.
+  - Save logic now persists:
+    - updated `packCount` (bottles)
+    - updated `totalPills` (capacity base in ml)
+    - stock adjustment for the corrected current total
+  - Backend `/medications/:id/stock-adjustment` now allows these base updates for `liquid_container`.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/hooks/useRefill.ts`
+  - `backend/src/routes/medications.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: add regression test coverage for liquid correction with bottle-count edits.
+
+### 2026-03-01 (UI: liquid correction modal now shows bottles context)
+
+- **🧩 Scope**: Improve `liquid_container` stock correction clarity by showing container semantics, not just total amount.
+- **🛠️ What changed**:
+  - Kept the correction field as total amount (existing behavior).
+  - Added a second helper line in the correction modal for liquid containers that shows:
+    - number of bottles
+    - amount per bottle (`ml`)
+  - This now makes it explicit how total amount relates to bottle configuration.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched component: no errors
+- **🔜 Follow-ups**:
+  - Optional: replace composed helper text with a dedicated i18n sentence key if product wants stricter copy control.
+
+### 2026-03-01 (Fix: tube correction now persists new amount in medication detail)
+
+- **🧩 Scope**: Fix stock-correction behavior where tube detail still showed old amount after correction.
+- **🛠️ What changed**:
+  - Updated frontend correction submit path so `tube` corrections persist base amount fields instead of only `stockAdjustment`.
+  - Extended backend stock-adjustment route to accept/persist optional tube base fields (`totalPills`, `looseTablets`, `packageAmountValue`, `packCount`).
+  - Tube correction now updates package/detail amount values correctly after reload.
+  - Correction modal wording for amount packages now includes both `tube` and `liquid_container` (no pill wording for tube corrections).
+  - Liquid correction logic remains stock-adjustment based (as intended for liquid container capacity model).
+- **📁 Files touched**:
+  - `frontend/src/hooks/useRefill.ts`
+  - `backend/src/routes/medications.ts`
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: add explicit automated regression tests for tube correction persistence.
+
+### 2026-03-01 (UI: capacity label unified for tube and liquid cards)
+
+- **🧩 Scope**: Align tube/liquid medication card label wording with blister/bottle style.
+- **🛠️ What changed**:
+  - Replaced `Capacity per package` label with `Capacity` for tube/liquid cards.
+  - Value and units remain unchanged.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-03-01 (Fix: tube count is now fixed to read-only 1)
+
+- **🧩 Scope**: Prevent editing tube count above 1 because tube stock is not consumed automatically.
+- **🛠️ What changed**:
+  - In desktop and mobile edit forms, `Tubes` now shows a read-only value `1`.
+  - Form/update logic enforces `packCount=1` for `packageType=tube`.
+  - Save payload normalization also forces `packCount=1` for tube.
+  - Legacy tube edit normalization now maps `Amount per tube` to current total stock to avoid unintended stock reduction on save.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: add server-side validation guard for tube pack count parity.
+
+### 2026-03-01 (Cleanup: removed redundant tube stock block)
+
+- **🧩 Scope**: Remove redundant stock section in tube medication detail modal.
+- **🛠️ What changed**:
+  - `Stock Info` section is no longer rendered for `tube` medications.
+  - Tube detail view now relies on `Package Details` only (`Tubes`, `Amount per tube`, `Total amount`).
+  - Non-tube package types keep the existing stock section.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-03-01 (Fix: tube detail modal now shows packages + grams per package)
+
+- **🧩 Scope**: Correct tube detail modal semantics to match package-based amount model (like liquid, but without current-amount pattern).
+- **🛠️ What changed**:
+  - Tube package details now show:
+    - `Tubes`
+    - `Amount per tube` (`g`)
+    - `Total amount` (`g`)
+  - Tube stock info row now shows a single stock value (`X g`) instead of `X / Y`.
+  - Tube intake schedule wording remains `applications` and no longer reuses stock-unit labels.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: audit remaining read-only views for any leftover tube pill/application stock semantics.
+
+### 2026-03-01 (Fix: remove misleading "No Schedule" status for tube)
+
+- **🧩 Scope**: Eliminate confusing `No Schedule` status chips shown for `tube` medications after fixed-stock behavior.
+- **🛠️ What changed**:
+  - Added tube-specific filtering so `status.noSchedule` is not rendered as a chip.
+  - Applied in Dashboard overview/schedule rows, Shared schedule rows, and Schedule page timeline rows.
+  - Other package types keep existing stock-status behavior.
+- **📁 Files touched**:
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/components/SharedSchedule.tsx`
+  - `frontend/src/pages/SchedulePage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: add explicit UI hint for tube stock semantics if needed.
+
+### 2026-03-01 (Fix: tube stock card now shows single value)
+
+- **🧩 Scope**: Adjust medication card stock formatting for `tube` to remove denominator display.
+- **🛠️ What changed**:
+  - Changed tube card stock from `X / Y g` to `X g`.
+  - Kept denominator-style stock display unchanged for non-tube package types.
+  - Removed tube stock over-capacity warning in that card row since denominator is no longer rendered.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: align tube stock display format in additional views if product wants full UI parity.
+
+### 2026-03-01 (Fix: tube stock remains fixed and is no longer auto-consumed)
+
+- **🧩 Scope**: Stop automatic stock depletion for `tube` medications because per-application amount is undefined.
+- **🛠️ What changed**:
+  - Changed stock normalization so `tube` always contributes `0` automatic consumption.
+  - Applied this consistently in frontend coverage calculations and shared schedule coverage.
+  - Applied same rule in backend scheduler/planner stock math path to keep server/client behavior aligned.
+  - Result: stock for tube now stays fixed (for example remains `600` based on configured amount) unless manually corrected/refilled.
+- **📁 Files touched**:
+  - `backend/src/utils/scheduler-utils.ts`
+  - `frontend/src/utils/schedule.ts`
+  - `frontend/src/components/SharedSchedule.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: add automated regression test for fixed tube coverage over time.
+
+### 2026-03-01 (Fix: shared schedule now matches liquid-container semantics)
+
+- **🧩 Scope**: Align public shared schedule rendering and stock math for `liquid_container` with dashboard/detail behavior.
+- **🛠️ What changed**:
+  - Replaced pill-based shared timeline labels for liquid meds with intake-unit-aware amount labels.
+  - Dose rows now render liquid usage using configured intake unit (`ml`, `tsp`, `tbsp`) and converted `ml` context where applicable.
+  - Total badge in each shared day row now uses liquid amount semantics for liquid meds instead of `pills total`.
+  - Shared stock coverage/depletion calculations now convert `tsp/tbsp` intake usage to `ml` before computing daily usage and consumed amount.
+- **📁 Files touched**:
+  - `frontend/src/components/SharedSchedule.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched component: no errors
+- **🔜 Follow-ups**:
+  - Optional: add automated regression test for shared liquid labels and coverage.
+
+### 2026-03-01 (Hotfix: frontend build error in `useEscapeKey.ts`)
+
+- **🧩 Scope**: Resolve Vite/esbuild transform error (`Expected ';' but found 'process'`).
+- **🛠️ What changed**:
+  - Fixed malformed multiline comment in `frontend/src/hooks/useEscapeKey.ts`.
+  - No behavior change; parser hotfix only.
+- **📁 Files touched**:
+  - `frontend/src/hooks/useEscapeKey.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-03-01 (Fix: Escape closes only stock-correction sub-modal)
+
+- **🧩 Scope**: Resolve nested modal behavior where pressing `Escape` in `Correct Stock` also closed parent medication detail modal.
+- **🛠️ What changed**:
+  - Prevented duplicate Escape handling between nested modal and global app-level key handler.
+  - Nested sub-modals now capture and consume Escape first.
+  - Global Escape handler now ignores already-consumed key events.
+  - Result: pressing `Escape` in stock-correction closes only that sub-modal.
+- **📁 Files touched**:
+  - `frontend/src/hooks/useEscapeKey.ts`
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/App.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: add regression UI test for nested modal Escape sequence.
+
+### 2026-03-01 (Fix: `Correct Stock` opens with current amount for liquid container)
+
+- **🧩 Scope**: Resolve issue where stock-correction input started at `0` for `liquid_container`.
+- **🛠️ What changed**:
+  - Fixed `useRefill` logic to treat all amount package types uniformly:
+    - `bottle`
+    - `tube`
+    - `liquid_container`
+  - `openEditStockModal` now pre-fills amount packages with current stock amount (not blister split logic).
+  - `submitStockCorrection` now uses matching amount-package math for these package types.
+- **📁 Files touched**:
+  - `frontend/src/hooks/useRefill.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: add regression tests for amount-package stock-correction defaults.
+
+### 2026-03-01 (Fix: `Correct Stock` modal for liquid container uses amount labels)
+
+- **🧩 Scope**: Correct stock-correction dialog wording for `liquid_container` so it is not pill-based.
+- **🛠️ What changed**:
+  - In `Correct Stock` modal, liquid-container input label now uses amount wording (`Total amount`) instead of `Total pills`.
+  - Package-size info and max-cap warning now use amount units (`ml`) for liquid containers instead of `pills`.
+  - Added dedicated i18n keys for amount-based package-size/cap messages.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: update refill-modal wording for liquid container (`Pills to add`) to amount wording.
+
+### 2026-03-01 (Fix: medication detail for liquid container no longer pill-based)
+
+- **🧩 Scope**: Correct `MedDetailModal` rendering for `liquid_container` medications.
+- **🛠️ What changed**:
+  - Updated stock section to amount semantics for liquid container:
+    - label uses amount wording
+    - values include `ml` unit (for example `335 / 450 ml`)
+  - Updated package details section to show liquid-specific information:
+    - `Bottles`
+    - `Amount per bottle (ml)`
+    - `Total amount (ml)`
+  - Updated intake schedule rows for liquid to use intake-unit-aware amount text (instead of pill-style output), including `tsp/tbsp` conversion context.
+  - Hidden pill-weight line for amount package types in this modal.
+- **📁 Files touched**:
+  - `frontend/src/components/MedDetailModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: adjust refill modal wording for liquid container (`Pills to add` -> amount wording).
+
+### 2026-03-01 (Fix: raw i18n keys in liquid schedule rows)
+
+- **🧩 Scope**: Correct display where schedule rows showed translation keys (for example `form.blisters.teaspoons`) instead of real text.
+- **🛠️ What changed**:
+  - Added missing i18n keys for teaspoon/tablespoon labels in both locales:
+    - `form.blisters.teaspoons(_one/_other)`
+    - `form.blisters.tablespoons(_one/_other)`
+  - This restores proper rendered labels in dashboard schedule/check-off rows.
+- **📁 Files touched**:
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-03-01 (Rollback: dashboard no longer shows `X intakes`)
+
+- **🧩 Scope**: Revert the recent liquid check-off wording change per user request.
+- **🛠️ What changed**:
+  - Removed the `X intakes` display style in dashboard liquid schedule rows.
+  - Restored the previous unit-based liquid rendering path (using `ml/tsp/tbsp` with converted `ml` context for liquid doses).
+- **📁 Files touched**:
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-03-01 (Adjustment: dashboard check-off uses intake count only)
+
+- **🧩 Scope**: Apply user-requested simplification for liquid schedule/check-off labels.
+- **🛠️ What changed**:
+  - Removed spoon/ml annotation format in this area (no more strings like `Teaspoon (5 ml)` / `Tablespoon (15 ml)`).
+  - Liquid usage labels now show only intake counts:
+    - EN: `2 intakes`, `47 intakes`
+    - DE: `2 Einnahmen`, `47 Einnahmen`
+  - Added/used pluralized i18n key `form.blisters.intakes`.
+- **📁 Files touched**:
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-03-01 (Fix: intake label in check-off area now pluralized + total `ml`)
+
+- **🧩 Scope**: Correct liquid intake display format in dashboard schedule/check-off rows.
+- **🛠️ What changed**:
+  - Replaced old format like `2 Teaspoon (5 ml)`.
+  - New format now shows pluralized unit + total converted amount:
+    - `2 teaspoons 10 ml`
+    - `2 tablespoons 30 ml`
+  - Removed parentheses in this view.
+  - Updated daily total badge calculation for liquid meds to derive from dose rows and show converted `ml` totals.
+- **📁 Files touched**:
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-03-01 (Hardening: intake unit loaded directly from `intakesJson`)
+
+- **🧩 Scope**: Resolve remaining regression where `tbsp`/`tsp` sometimes reappeared as `ml` after save.
+- **🛠️ What changed**:
+  - Confirmed database persistence is correct (`intakes_json` contains `intakeUnit` values).
+  - Added a defensive parse+overlay in `backend/src/routes/medications.ts`:
+    - reads `intakeUnit` directly from raw `intakesJson`
+    - overlays it onto parsed intakes by index before returning API responses
+  - Applied this in the medication GET path and related intake parsing paths used during update/planner calculations.
+  - Restarted `backend-dev` so the patch is active.
+- **📁 Files touched**:
+  - `backend/src/routes/medications.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched backend route: no errors
+  - local DB check: record keeps `intakeUnit="tbsp"` in `intakes_json`
+- **🔜 Follow-ups**:
+  - If still reproducible, capture and inspect live `/api/medications?includeObsolete=true` response for the same medication ID.
+
+### 2026-03-01 (Fix: `tbsp`/`tsp` now persist and render correctly in Upcoming Schedule)
+
+- **🧩 Scope**: Resolve intake-unit regression where changing liquid intake unit to `tbsp`/`tsp` reverted to `ml` after save/reload.
+- **🛠️ What changed**:
+  - Fixed backend intake parser to preserve `intakeUnit` when reading `intakesJson`.
+  - Added intake-unit validation on parse (`ml`, `tsp`, `tbsp`) with safe fallback for legacy rows.
+  - Propagated `intakeUnit` through frontend schedule event flow so UI receives the saved unit.
+  - Updated Dashboard upcoming dose labels for liquid container meds to render per-intake unit (`ml`/`tsp`/`tbsp`) instead of forcing `ml`.
+- **📁 Files touched**:
+  - `backend/src/utils/scheduler-utils.ts`
+  - `frontend/src/types/index.ts`
+  - `frontend/src/utils/schedule.ts`
+  - `frontend/src/context/AppContext.tsx`
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on all touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: if mixed intake units are configured in one day for a single medication, refine total badge rendering to show a normalized unit summary.
+
+### 2026-03-01 (Medication cards: bottle count shown for Pill Bottle)
+
+- **🧩 Scope**: Add package-count visibility for `Pill Bottle` cards.
+- **🛠️ What changed**:
+  - Added `Bottles: <packCount>` to bottle card details.
+  - Kept bottle capacity display (`Capacity: <value>`) and stock line unchanged.
+  - Result matches requested format:
+    - `Type: Pill Bottle`
+    - `Bottles: <count>`
+    - `Capacity: <value>`
+    - `Stock: <current> / <capacity> pills`
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: mirror bottle count in detail/report views for full read-only parity.
+
+### 2026-03-01 (Hotfix: MobileEditModal `useCallback` runtime error)
+
+- **🧩 Scope**: Resolve dashboard/mobile form crash caused by missing React hook import.
+- **🛠️ What changed**:
+  - Added missing `useCallback` import in `MobileEditModal`.
+  - Fixes runtime error: `Uncaught ReferenceError: useCallback is not defined`.
+- **📁 Files touched**:
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - None.
+
+### 2026-03-01 (Liquid intake units now affect stock math end-to-end)
+
+- **🧩 Scope**: Make `Intake unit` (`ml`, `tsp`, `tbsp`) impact consumption calculations and align schedule form labels with selected unit.
+- **🛠️ What changed**:
+  - Implemented real conversion for liquid stock usage:
+    - `ml` -> `usage`
+    - `tsp` -> `usage * 5`
+    - `tbsp` -> `usage * 15`
+  - Applied conversion in backend stock-consumption paths and frontend coverage calculation so both sides behave consistently.
+  - Updated Desktop + Mobile schedule forms for `liquid_container` so usage label follows selected intake unit:
+    - `Usage (ml)`, `Usage (tsp)`, `Usage (tbsp)`.
+  - Added i18n keys in EN/DE for new usage labels.
+- **📁 Files touched**:
+  - `backend/src/utils/scheduler-utils.ts`
+  - `backend/src/services/reminder-scheduler.ts`
+  - `frontend/src/utils/schedule.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on all touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: show selected intake unit in read-only schedule lines/cards for complete visual parity.
+
+### 2026-03-01 (Medication cards: package count shown for tube/liquid)
+
+- **🧩 Scope**: Show number of packages directly in medication cards for `tube` and `liquid_container`.
+- **🛠️ What changed**:
+  - Added package-count line in the card details section for amount-based package types.
+  - Type-specific labels are used:
+    - `tube` -> `Tubes`
+    - `liquid_container` -> `Bottles`
+  - Existing `Capacity per package` line remains and now appears together with the package count.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: mirror package-count detail in other read views (detail modal/report) for full parity.
+
+### 2026-03-01 (Fix: singular/plural for tube labels in Upcoming Schedules)
+
+- **🧩 Scope**: Correct singular/plural wording for tube usage labels in dashboard upcoming schedule rows and badges.
+- **🛠️ What changed**:
+  - Updated dashboard formatters to use count-aware translation for application units:
+    - `t("form.blisters.applications", { count })`
+  - Added pluralization keys in i18n:
+    - EN: `applications_one`, `applications_other`
+    - DE: `applications_one`, `applications_other`
+  - Result examples:
+    - `1 application` / `1 Anwendung`
+    - `2 applications` / `2 Anwendungen`
+- **📁 Files touched**:
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: review additional screens for any remaining non-count-aware unit labels.
+
+### 2026-03-01 (Fix: Upcoming Schedule labels for tube/liquid)
+
+- **🧩 Scope**: Correct broken text rendering in dashboard upcoming schedule rows for `tube` and `liquid_container`.
+- **🛠️ What changed**:
+  - Fixed wrong i18n key paths in `DashboardPage` formatters.
+  - Replaced invalid keys:
+    - `blisters.applications` -> `form.blisters.applications`
+    - `form.ml` -> `form.packageAmountUnitMl`
+  - This fixes outputs like `1 blisters.applications` and `1 form.ml` in upcoming rows.
+- **📁 Files touched**:
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: run a wider i18n key-path scan to catch other legacy raw-key references.
+
+### 2026-03-01 (Root fix: recurring `Stock > Capacity` artifact removed)
+
+- **🧩 Scope**: Remove recurring over-capacity display (`453/450`, `604/600`) for `liquid_container` and `tube`.
+- **🛠️ What changed**:
+  - Added a new section with strict `file -> exact change -> acceptance criterion` sequencing.
+  - Expanded this sequence across all relevant implementation surfaces:
+    - backend schema/routes/services
+    - frontend runtime and parity-critical screens
+    - i18n
+    - backend tests, frontend tests, and e2e tests
+    - documentation tracking files
+  - Added an explicit execution gate so skipped files must be justified; otherwise the rollout is marked incomplete.
+- **📁 Files touched**:
+  - `frontend/src/types/index.ts`
+  - `frontend/src/test/types.test.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: add focused `calculateCoverage` unit test coverage for amount package types.
+
+### 2026-03-01 (Fix: tube/topical save no longer fails with generic error)
+
+- **🧩 Scope**: Resolve save failures for amount-based package types (`tube`, `liquid_container`), especially `tube/topical`.
+- **🛠️ What changed**:
+  - Added payload normalization before save for amount packages:
+    - `packCount` is forced to `>= 1`
+    - `packageAmountValue` is coerced to integer `>= 1`
+    - derived totals (`totalPills`, `looseTablets`) are based on normalized values
+  - On package switch to `tube`/`liquid_container`, form now initializes `packageAmountValue` to at least `1`.
+  - Improved frontend error extraction to read Fastify/Zod `_errors` payloads and show the first concrete validation message instead of only `Failed to save`.
+- **📁 Files touched**:
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: add explicit inline form validation hint for amount packages when user enters invalid/non-integer values.
+
+### 2026-03-01 (Follow-up: fixed `+2` stock artifact for amount packages)
+
+- **🧩 Scope**: Correct medication-card stock fallback for `tube` and `liquid_container`.
+- **🛠️ What changed**:
+  - Fixed card stock fallback that incorrectly used `getPackageSize` for amount packages.
+  - For `tube`/`liquid_container`, card stock now uses amount totals (`totalPills ?? looseTablets`) and no longer adds `packCount`.
+  - This removes artifacts like `Stock: 302 / 302 ml` when true total amount is `300 ml`.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: unify amount stock calculations in shared utility to avoid duplicate logic.
+
+### 2026-03-01 (Follow-up: fixed wrong amount values in medication cards)
+
+- **🧩 Scope**: Correct wrong `Capacity per package` and missing `Stock` unit in card view for amount-based package types.
+- **🛠️ What changed**:
+  - Card capacity for `tube` and `liquid_container` no longer reads from `pillsPerBlister` (which caused `1 ml` / `1 g` in many records).
+  - Capacity now uses this fallback chain:
+    - `packageAmountValue`
+    - `totalPills / packCount`
+    - `totalPills` (or `looseTablets` as final fallback)
+  - `Stock` for `tube` now includes unit suffix (`g` or `ml`) instead of showing unitless values.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched file: no errors
+- **🔜 Follow-ups**:
+  - Optional: dedicated pass to align stock semantics as container counts in card view.
+
+### 2026-03-01 (Capacity now shows per-package unit for amount packages)
+
+- **🧩 Scope**: Correct medication-card capacity display for `liquid_container` and `tube`.
+- **🛠️ What changed**:
+  - In medication cards, `Capacity` for amount-based package types is now shown as **per package** instead of total.
+  - `liquid_container` capacity now displays with `ml` (for example `150 ml` per container).
+  - `tube` capacity now displays with unit by form:
+    - liquid tube -> `ml`
+    - non-liquid tube -> `g`
+  - Added dedicated i18n label key `medications.details.capacityPerPackage` (EN/DE).
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on touched files: no errors
+- **🔜 Follow-ups**:
+  - Optional: align `Stock` card wording/semantics in a separate UI pass.
+
+### 2026-03-01 (Liquid Container Package UX now follows Tube pattern)
+
+- **🧩 Scope**: Simplify `liquid_container` package editing by removing pill-style stock fields and using the same pattern as `tube`.
+- **🛠️ What changed**:
+  - Desktop and mobile package tabs for `liquid_container` now show only:
+    - `Flaschen` / `Bottles` (count)
+    - `Inhalt pro Flasche` / `Amount per bottle` (ml)
+    - derived `Gesamtmenge` / `Total amount`
+  - Removed manual liquid package inputs for `Current Amount` and `Total Amount` steppers from edit forms.
+  - Removed the extra liquid-specific package amount row in package tabs (now integrated in the same 3-field structure as tube).
+  - Save payload logic now derives liquid stock fields from count × amount-per-bottle:
+    - `packCount >= 1`
+    - `blistersPerPack = 1`
+    - `pillsPerBlister = 1`
+    - `totalPills = packCount * packageAmountValue`
+    - `looseTablets = packCount * packageAmountValue`
+  - Added legacy-safe edit mapping so older liquid records are normalized for the new UI model without destructive reset.
+  - Added new i18n keys:
+    - `form.bottles`
+    - `form.packageAmountPerBottle`
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/i18n/en.json`
+  - `frontend/src/i18n/de.json`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **🔬 Validation run**:
+  - editor diagnostics (`get_errors`) on all touched frontend files: no errors
+- **🔜 Follow-ups**:
+  - Automated test execution/CI validation is delegated to `@testing-manager` per repository rules.
 
 ### 2026-02-28 (PR #359 backend CI fix)
 

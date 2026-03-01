@@ -6,7 +6,7 @@ import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, use
 import type { Coverage, FormState, Medication, ScheduleEvent, StockThresholds } from "../types";
 import { getSystemLocale } from "../utils/formatters";
 import { log } from "../utils/logger";
-import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds } from "../utils/schedule";
+import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, getStockStatus } from "../utils/schedule";
 
 // =============================================================================
 // Types
@@ -17,6 +17,7 @@ export type DoseInfo = {
 	timeStr: string;
 	when: number;
 	usage: number;
+	intakeUnit?: "ml" | "tsp" | "tbsp" | null;
 	takenBy: string[];
 	intakeRemindersEnabled: boolean;
 };
@@ -384,6 +385,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		(dayMeds: { medName: string; lastWhen: number }[]): "success" | "warning" | "danger" => {
 			const statuses = dayMeds.map((item) => {
 				const cov = coverageByMed[item.medName];
+				const med = activeMeds.find((m) => m.name === item.medName || m.genericName === item.medName);
 				const depletionTime = depletionByMed[item.medName];
 
 				// Will be out of stock by this day?
@@ -392,21 +394,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				}
 
 				if (!cov) return "success";
-				const { daysLeft, medsLeft } = cov;
-
-				// Currently out of stock
-				if (medsLeft <= 0 || daysLeft === 0) return "danger";
-				// No schedule (can't calculate)
-				if (daysLeft === null) return "success";
-				// Low stock: < lowStockDays (warning)
-				if (daysLeft < settingsHook.settings.lowStockDays) return "warning";
-				// Normal/High stock
+				const status = getStockStatus(cov.daysLeft, cov.medsLeft, stockThresholds, med?.packageType);
+				if (status.className === "danger") return "danger";
+				if (status.className === "warning") return "warning";
 				return "success";
 			});
 			const fallbackStatus = statuses.includes("warning") ? "warning" : "success";
 			return statuses.includes("danger") ? "danger" : fallbackStatus;
 		},
-		[coverageByMed, depletionByMed, settingsHook.settings.lowStockDays]
+		[coverageByMed, depletionByMed, activeMeds, stockThresholds]
 	);
 
 	const groupedSchedule = useMemo(() => {
@@ -439,6 +435,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 					timeStr: event.timeStr,
 					when: event.when,
 					usage: event.usage,
+					intakeUnit: event.intakeUnit ?? null,
 					takenBy: event.takenBy ? [event.takenBy] : [],
 					intakeRemindersEnabled: event.intakeRemindersEnabled,
 				});

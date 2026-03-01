@@ -39,12 +39,16 @@ vi.mock("../../utils/formatters", () => ({
 	getSystemLocale: () => "en-US",
 }));
 
-vi.mock("../../utils/schedule", () => ({
-	buildSchedulePreview: (...args: unknown[]) => mockBuildSchedulePreview(...args),
-	calculateCoverage: (...args: unknown[]) => mockCalculateCoverage(...args),
-	computeMissedPastDoseIds: (...args: unknown[]) => mockComputeMissedPastDoseIds(...args),
-	isDoseDismissed: vi.fn(() => false),
-}));
+vi.mock("../../utils/schedule", async () => {
+	const actual = await vi.importActual<typeof import("../../utils/schedule")>("../../utils/schedule");
+	return {
+		...actual,
+		buildSchedulePreview: (...args: unknown[]) => mockBuildSchedulePreview(...args),
+		calculateCoverage: (...args: unknown[]) => mockCalculateCoverage(...args),
+		computeMissedPastDoseIds: (...args: unknown[]) => mockComputeMissedPastDoseIds(...args),
+		isDoseDismissed: vi.fn(() => false),
+	};
+});
 
 const meds: Medication[] = [
 	{
@@ -464,7 +468,7 @@ describe("useAppContext", () => {
 			all: [
 				{
 					name: "Aspirin",
-					daysLeft: 2,
+					daysLeft: 8,
 					medsLeft: 5,
 					depletionTime: Date.now() + 100000,
 				},

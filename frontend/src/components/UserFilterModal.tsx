@@ -67,8 +67,8 @@ export function UserFilterModal({
 						const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(med));
 						// Fallback: if no coverage data (e.g. obsolete med), compute basic status from total pills
 						const status = medCoverage
-							? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings)
-							: getStockStatus(null, getMedTotal(med), settings);
+							? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med.packageType)
+							: getStockStatus(null, getMedTotal(med), settings, med.packageType);
 						const packageSize = getPackageSize(med);
 						const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(getMedTotal(med));
 

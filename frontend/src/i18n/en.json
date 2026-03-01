@@ -110,6 +110,7 @@
     "fullBlisters": "Full blisters",
     "openBlister": "Open blister",
     "stock": "Stock",
+    "dailyConsumption": "Daily consumption",
     "stockDetails": "Details",
     "daysLeft": "Days left",
     "status": "Status",
@@ -118,7 +119,8 @@
     "expiry": "Expiry",
     "pillsCount": "{{count}} pills",
     "pillsCount_one": "{{count}} pill",
-    "pillsCount_other": "{{count}} pills"
+    "pillsCount_other": "{{count}} pills",
+    "perDayWithUnit": "{{value}} {{unit}}"
   },
   "medications": {
     "list": {
@@ -130,7 +132,8 @@
       "reactivate": "Reactivate",
       "obsoleteTitle": "Obsolete ({{count}})",
       "obsoleteSince": "Stopped",
-      "started": "Started"
+      "started": "Started",
+      "emptyState": "No medications yet. Add your first medication to get started."
     },
     "details": {
       "packs": "Packs",
@@ -139,6 +142,7 @@
       "loose": "Loose",
       "total": "Total",
       "stock": "Stock",
+      "capacityPerPackage": "Capacity per package",
       "totalCapacity": "Capacity",
       "type": "Type"
     },
@@ -182,6 +186,7 @@
     "packageTypeTube": "Tube",
     "packageTypeLiquidContainer": "Liquid Container",
     "packs": "Packs",
+    "bottles": "Bottles",
     "tubes": "Tubes",
     "blistersPerPack": "Blisters per pack",
     "pillsPerBlister": "Pills per blister",
@@ -191,6 +196,7 @@
     "currentAmount": "Current Amount",
     "totalAmountLabel": "Total (amount)",
     "packageAmount": "Package amount",
+    "packageAmountPerBottle": "Amount per bottle",
     "packageAmountPerTube": "Amount per tube",
     "packageAmountUnitMl": "ml",
     "packageAmountUnitG": "g",
@@ -232,12 +238,25 @@
       "usageTablets": "Usage (tablets)",
       "usageCapsules": "Usage (capsules)",
       "usageMl": "Usage (ml)",
+      "usageTsp": "Usage (tsp)",
+      "usageTbsp": "Usage (tbsp)",
       "usageApplication": "Usage (applications)",
       "intakeUnit": "Intake unit",
       "intakeUnitMl": "Milliliters (ml)",
       "intakeUnitTsp": "Teaspoon (5 ml)",
       "intakeUnitTbsp": "Tablespoon (15 ml)",
+      "intakes": "intakes",
+      "intakes_one": "intake",
+      "intakes_other": "intakes",
+      "teaspoons": "teaspoons",
+      "teaspoons_one": "teaspoon",
+      "teaspoons_other": "teaspoons",
+      "tablespoons": "tablespoons",
+      "tablespoons_one": "tablespoon",
+      "tablespoons_other": "tablespoons",
       "applications": "applications",
+      "applications_one": "application",
+      "applications_other": "applications",
       "everyDays": "Every (days)",
       "every": "every",
       "from": "from",
@@ -330,7 +349,8 @@
       "highStockTooltip": "Stock above this value means you are well supplied",
       "thresholdValidation": "Values must be: Critical < Low < High",
       "shareStockStatus": "Show Stock on Shared Links",
-      "shareStockStatusDesc": "Show stock status (Normal/Low/Critical) and colored borders on shared schedule links for intake users"
+      "shareStockStatusDesc": "Show stock status (Normal/Low/Critical) and colored borders on shared schedule links for intake users",
+      "packageTypesNote": "Note: Tube medications are excluded from stock reminders. Liquid container medications use a single reminder baseline (Low and Critical are automatically derived from this value)."
     },
     "timeline": {
       "title": "General UI",
@@ -347,7 +367,7 @@
     "stockReminder": {
       "title": "Stock Reminder",
       "description": "Enable stock reminders",
-      "infoTooltip": "Notifications include all medications with Low or Critical stock status. Low: stock is running low. Critical: stock is critically low — reorder soon.",
+      "infoTooltip": "Notifications include all medications with Low or Critical stock status. Note: Tube medications are excluded; Liquid containers use a single baseline threshold (Low and Critical are derived).",
       "repeatDaily": "Repeat daily",
       "repeatTooltip": "When enabled, sends reminders every day while stock is critical. Otherwise, only notifies once per medication until restocked."
     },
@@ -358,6 +378,8 @@
     "at": "at",
     "stockInfo": "Current Stock",
     "packageDetails": "Package Details",
+    "packageTypeTubeHint": "Tube medications contain fixed amounts (e.g., creams, gels). Stock is not tracked and reminders are not sent.",
+    "packageTypeLiquidHint": "Liquid containers use a simplified reminder model. Low and Critical levels are automatically derived from a single baseline threshold for simplicity.",
     "currentStock": "Pills",
     "packs": "Packs",
     "blistersPerPack": "Blisters/Pack",
@@ -608,9 +630,11 @@
     "loosePills": "Loose pills",
     "pillsPerBlister": "({{count}} pills each)",
     "packageSize": "Package size: {{count}} pills",
+    "packageSizeAmount": "Package size: {{count}} {{unit}}",
     "packageSizeBreakdown": "{{packCount}} x {{sizePerPack}} pills Pack = {{total}} pills",
     "currentComposition": "Current stock: {{fullBlisters}} full blisters + {{partialPills}} partial + {{loosePills}} loose = {{total}} pills",
     "maxExceeded": "Maximum package size is {{count}} pills. Values were capped.",
+    "maxExceededAmount": "Maximum package size is {{count}} {{unit}}. Values were capped.",
     "decreaseValue": "Decrease value",
     "increaseValue": "Increase value",
     "currentTotal": "Current total",

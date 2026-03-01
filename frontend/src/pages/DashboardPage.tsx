@@ -87,6 +87,7 @@ export function DashboardPage() {
 		settings.lowStockDays,
 		coverage.low,
 		coverage.all,
+		meds,
 		settings.lastAutoEmailSent,
 		settings.lastNotificationType,
 		settings.lastNotificationChannel,
@@ -130,40 +131,156 @@ export function DashboardPage() {
 
 	const prescriptionEmptyCount = prescriptionLowMeds.filter((med) => med.remainingRefills <= 0).length;
 
-	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined) =>
+	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
 		med?.packageType === "liquid_container" || med?.medicationForm === "liquid"
-			? t("form.ml")
-			: t("blisters.applications");
+			? t("form.packageAmountUnitMl")
+			: t("form.blisters.applications", { count: Math.abs(value) });
 
 	const formatStockLabel = (med: (typeof meds)[number] | undefined, medsLeft: number) => {
 		if (med?.packageType === "liquid_container") {
-			return `${formatNumber(medsLeft)} ${t("form.ml")}`;
+			return `${formatNumber(medsLeft)} ${t("form.packageAmountUnitMl")}`;
 		}
 		if (med?.packageType === "tube") {
-			return `${formatNumber(medsLeft)} ${getTubeUnitLabel(med)}`;
+			return `${formatNumber(medsLeft)} ${getTubeUnitLabel(med, medsLeft)}`;
 		}
 		return t("table.pillsCount", { count: Math.round(medsLeft) });
 	};
 
-	const formatDoseUsageLabel = (med: (typeof meds)[number] | undefined, usage: number) => {
+	const convertLiquidUsageToMl = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): number => {
+		if (unit === "tsp") return usage * 5;
+		if (unit === "tbsp") return usage * 15;
+		return usage;
+	};
+
+	const getLiquidCountUnitLabel = (unit: "ml" | "tsp" | "tbsp" | null | undefined, usage: number): string => {
+		if (unit === "tsp") return t("form.blisters.teaspoons", { count: Math.abs(usage) });
+		if (unit === "tbsp") return t("form.blisters.tablespoons", { count: Math.abs(usage) });
+		return t("form.packageAmountUnitMl");
+	};
+
+	const formatLiquidUsageLabel = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): string => {
+		const normalizedUsage = Number(usage);
+		if (!Number.isFinite(normalizedUsage) || normalizedUsage <= 0) {
+			return `0 ${t("form.packageAmountUnitMl")}`;
+		}
+
+		if (unit === "ml" || unit == null) {
+			return `${formatNumber(normalizedUsage)} ${t("form.packageAmountUnitMl")}`;
+		}
+
+		const mlTotal = convertLiquidUsageToMl(normalizedUsage, unit);
+		return `${formatNumber(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage)} ${formatNumber(mlTotal)} ${t("form.packageAmountUnitMl")}`;
+	};
+
+	const formatDoseUsageLabel = (
+		med: (typeof meds)[number] | undefined,
+		usage: number,
+		intakeUnit?: "ml" | "tsp" | "tbsp" | null
+	) => {
 		if (med?.packageType === "liquid_container") {
-			return `${usage} ${t("form.ml")}`;
+			return formatLiquidUsageLabel(usage, intakeUnit);
 		}
 		if (med?.packageType === "tube") {
-			return `${usage} ${getTubeUnitLabel(med)}`;
+			return `${usage} ${getTubeUnitLabel(med, usage)}`;
 		}
 		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
 	};
 
-	const formatTotalUsageLabel = (med: (typeof meds)[number] | undefined, total: number) => {
+	const formatTotalUsageLabel = (
+		med: (typeof meds)[number] | undefined,
+		total: number,
+		intakeUnit?: "ml" | "tsp" | "tbsp" | null,
+		doses?: Array<{ usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }>
+	) => {
 		if (med?.packageType === "liquid_container") {
-			return `${total} ${t("form.ml")}`;
+			if (doses && doses.length > 0) {
+				const normalizedDoses = doses.filter((dose) => Number.isFinite(Number(dose.usage)) && Number(dose.usage) > 0);
+				if (normalizedDoses.length > 0) {
+					const allUnits = new Set(normalizedDoses.map((dose) => dose.intakeUnit ?? "ml"));
+					const totalMl = normalizedDoses.reduce(
+						(sum, dose) => sum + convertLiquidUsageToMl(Number(dose.usage), dose.intakeUnit ?? "ml"),
+						0
+					);
+
+					if (allUnits.size === 1) {
+						const onlyUnit = normalizedDoses[0]?.intakeUnit ?? "ml";
+						const totalUsageInUnit = normalizedDoses.reduce((sum, dose) => sum + Number(dose.usage), 0);
+						return formatLiquidUsageLabel(totalUsageInUnit, onlyUnit);
+					}
+
+					return `${formatNumber(totalMl)} ${t("form.packageAmountUnitMl")}`;
+				}
+			}
+
+			return formatLiquidUsageLabel(total, intakeUnit);
 		}
 		if (med?.packageType === "tube") {
-			return `${total} ${getTubeUnitLabel(med)}`;
+			return `${total} ${getTubeUnitLabel(med, total)}`;
 		}
 		return t("common.pillsTotal", { count: total });
 	};
+
+	const formatDailyConsumption = (med: (typeof meds)[number] | undefined) => {
+		if (!med) return "-";
+
+		const intakes =
+			med.intakes && med.intakes.length > 0
+				? med.intakes
+				: med.blisters.map((blister) => ({
+						usage: blister.usage,
+						every: blister.every,
+						intakeUnit: null as "ml" | "tsp" | "tbsp" | null,
+						takenBy: null as string | null,
+					}));
+
+		if (intakes.length === 0) return "-";
+
+		let dailyTotal = 0;
+		for (const intake of intakes) {
+			const usage = Number(intake.usage);
+			const every = Math.max(1, Number(intake.every) || 1);
+			if (!Number.isFinite(usage) || usage <= 0) continue;
+
+			const hasPerIntakeTakenBy = typeof intake.takenBy === "string" && intake.takenBy.trim().length > 0;
+			const personMultiplier = hasPerIntakeTakenBy ? 1 : Math.max(1, med.takenBy?.length ?? 0);
+			const normalizedUsage = (usage * personMultiplier) / every;
+
+			if (med.packageType === "liquid_container") {
+				dailyTotal += convertLiquidUsageToMl(normalizedUsage, intake.intakeUnit ?? "ml");
+			} else {
+				dailyTotal += normalizedUsage;
+			}
+		}
+
+		if (dailyTotal <= 0) return "-";
+
+		if (med.packageType === "liquid_container") {
+			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: t("form.packageAmountUnitMl") });
+		}
+
+		if (med.packageType === "tube") {
+			const tubeUnit =
+				med.medicationForm === "liquid"
+					? t("form.packageAmountUnitMl")
+					: t("form.blisters.applications", { count: Math.abs(dailyTotal) });
+			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: tubeUnit });
+		}
+
+		const pillUnit = dailyTotal === 1 ? t("common.pill") : t("common.pills");
+		return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: pillUnit });
+	};
+
+	const shouldHideNoScheduleStatusForTube = (
+		med: (typeof meds)[number] | undefined,
+		status: { className: string; label: string } | null
+	) => med?.packageType === "tube" && status?.label === "status.noSchedule";
+
+	const getVisibleStockStatus = (
+		med: (typeof meds)[number] | undefined,
+		status: { className: string; label: string } | null
+	) => (shouldHideNoScheduleStatusForTube(med, status) ? null : status);
+
+	const getMedByName = (name: string) => meds.find((m) => getMedDisplayName(m) === name);
 
 	const prescriptionStatus =
 		prescriptionRemindersEnabled && prescriptionLowMeds.length > 0
@@ -289,7 +406,9 @@ export function DashboardPage() {
 										{reminderData.lowStockMeds.map((med, idx) => {
 											const medication = meds.find((m) => getMedDisplayName(m) === med.name);
 											const cov = coverage.all.find((c) => c.name === med.name);
-											const status = cov ? getStockStatus(cov.daysLeft, cov.medsLeft, stockThresholds) : null;
+											const status = cov
+												? getStockStatus(cov.daysLeft, cov.medsLeft, stockThresholds, medication?.packageType)
+												: null;
 											const textClass =
 												status?.className === "danger"
 													? "danger-text"
@@ -447,7 +566,9 @@ export function DashboardPage() {
 							const lowStockMap = new Map<string, Coverage>();
 							for (const c of coverage.all) {
 								if (c.daysLeft === null && c.medsLeft > 0) continue; // no schedule, has stock
-								if (c.medsLeft <= 0 || c.daysLeft === null || c.daysLeft < settings.lowStockDays) {
+								const med = getMedByName(c.name);
+								const status = getStockStatus(c.daysLeft, c.medsLeft, stockThresholds, med?.packageType);
+								if (status.className === "danger" || status.className === "warning") {
 									const existing = lowStockMap.get(c.name);
 									if (!existing || (c.daysLeft ?? 0) < (existing.daysLeft ?? 0)) {
 										lowStockMap.set(c.name, c);
@@ -468,7 +589,7 @@ export function DashboardPage() {
 									{t("dashboard.reorder.lowWarningPrefix")}{" "}
 									{lowStockMeds.map((c, idx) => {
 										const med = meds.find((m) => getMedDisplayName(m) === c.name);
-										const status = getStockStatus(c.daysLeft, c.medsLeft, stockThresholds);
+										const status = getStockStatus(c.daysLeft, c.medsLeft, stockThresholds, med?.packageType);
 										const textClass =
 											status.className === "danger"
 												? "danger-text"
@@ -512,10 +633,11 @@ export function DashboardPage() {
 						<div className="card-head">
 							<h2>{t("dashboard.overview.title")}</h2>
 						</div>
-						<div className="table table-7">
+						<div className="table table-8">
 							<div className="table-head">
 								<span>{t("table.name")}</span>
 								<span>{t("table.stock")}</span>
+								<span>{t("table.dailyConsumption")}</span>
 								<span>{t("table.stockDetails")}</span>
 								<span>{t("table.daysLeft")}</span>
 								<span>{t("table.runsOut")}</span>
@@ -523,13 +645,14 @@ export function DashboardPage() {
 								<span>{t("table.status")}</span>
 							</div>
 							{coverage.all.map((row) => {
-								const status = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds);
 								const med = meds.find((m) => getMedDisplayName(m) === row.name);
+								const rawStatus = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds, med?.packageType);
+								const status = getVisibleStockStatus(med, rawStatus);
 								const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
 								const textClass =
-									status.className === "danger"
+									rawStatus.className === "danger"
 										? "danger-text"
-										: status.className === "warning"
+										: rawStatus.className === "warning"
 											? "warning-text"
 											: "success-text";
 								const stock = getBlisterStock(
@@ -629,6 +752,9 @@ export function DashboardPage() {
 												? formatStockLabel(med, row.medsLeft)
 												: formatFullBlisters(stock.fullBlisters, t)}
 										</span>
+										<span data-label={t("table.dailyConsumption")} className={textClass}>
+											{formatDailyConsumption(med)}
+										</span>
 										<span
 											data-label={t("table.stockDetails")}
 											className={`${textClass}${med?.packageType === "bottle" || med?.packageType === "tube" || med?.packageType === "liquid_container" ? " hide-on-card" : ""}`}
@@ -657,8 +783,8 @@ export function DashboardPage() {
 													})
 												: "-"}
 										</span>
-										<span data-label={t("table.status")} className={`status-chip ${status.className}`}>
-											{t(status.label)}
+										<span data-label={t("table.status")} className={status ? `status-chip ${status.className}` : ""}>
+											{status ? t(status.label) : "-"}
 										</span>
 									</div>
 								);
@@ -775,9 +901,10 @@ export function DashboardPage() {
 													const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 													const medCov = coverageByMed[item.medName];
 													const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
-													const status = medCov
-														? getStockStatus(medCov.daysLeft, medCov.medsLeft, stockThresholds)
+													const rawStatus = medCov
+														? getStockStatus(medCov.daysLeft, medCov.medsLeft, stockThresholds, med?.packageType)
 														: null;
+													const status = getVisibleStockStatus(med, rawStatus);
 													const itemDoseIds = expandDoseIds(item.doses);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 													return (
@@ -812,7 +939,9 @@ export function DashboardPage() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{formatTotalUsageLabel(med, item.total)}</span>
+																	<span className="tag subtle">
+																		{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
+																	</span>
 																	{status && (
 																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
 																	)}
@@ -826,7 +955,9 @@ export function DashboardPage() {
 																		<div key={dose.id} className="dose-item past">
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">{formatDoseUsageLabel(med, dose.usage)}</span>
+																				<span className="dose-usage-main">
+																					{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																				</span>
 																				{med?.packageType !== "tube" &&
 																					med?.packageType !== "liquid_container" &&
 																					med?.pillWeightMg && (
@@ -986,7 +1117,13 @@ export function DashboardPage() {
 										const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
 										if (willBeOutOfStock) return "danger";
 										if (!medCoverage) return "success";
-										const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds);
+										const med = getMedByName(item.medName);
+										const status = getStockStatus(
+											medCoverage.daysLeft,
+											medCoverage.medsLeft,
+											stockThresholds,
+											med?.packageType
+										);
 										return status.className;
 									});
 									const worstStatus = dayStockStatuses.includes("danger")
@@ -1036,8 +1173,14 @@ export function DashboardPage() {
 													const status = willBeOutOfStock
 														? { className: "danger", label: "status.outOfStock" }
 														: medCoverage
-															? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
+															? getStockStatus(
+																	medCoverage.daysLeft,
+																	medCoverage.medsLeft,
+																	stockThresholds,
+																	med?.packageType
+																)
 															: null;
+													const visibleStatus = getVisibleStockStatus(med, status);
 													const itemDoseIds = expandDoseIds(item.doses);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 													return (
@@ -1072,9 +1215,13 @@ export function DashboardPage() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{formatTotalUsageLabel(med, item.total)}</span>
-																	{status && (
-																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																	<span className="tag subtle">
+																		{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
+																	</span>
+																	{visibleStatus && (
+																		<span className={`status-chip small ${visibleStatus.className}`}>
+																			{t(visibleStatus.label)}
+																		</span>
 																	)}
 																</div>
 															</div>
@@ -1090,7 +1237,9 @@ export function DashboardPage() {
 																		>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">{formatDoseUsageLabel(med, dose.usage)}</span>
+																				<span className="dose-usage-main">
+																					{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																				</span>
 																				{med?.packageType !== "tube" &&
 																					med?.packageType !== "liquid_container" &&
 																					med?.pillWeightMg && (
@@ -1218,7 +1367,13 @@ export function DashboardPage() {
 										const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
 										if (willBeOutOfStock) return "danger";
 										if (!medCoverage) return "success";
-										const status = getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds);
+										const med = getMedByName(item.medName);
+										const status = getStockStatus(
+											medCoverage.daysLeft,
+											medCoverage.medsLeft,
+											stockThresholds,
+											med?.packageType
+										);
 										return status.className;
 									});
 									const worstStatus = dayStockStatuses.includes("danger")
@@ -1267,8 +1422,14 @@ export function DashboardPage() {
 													const status = willBeOutOfStock
 														? { className: "danger", label: "status.outOfStock" }
 														: medCoverage
-															? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, stockThresholds)
+															? getStockStatus(
+																	medCoverage.daysLeft,
+																	medCoverage.medsLeft,
+																	stockThresholds,
+																	med?.packageType
+																)
 															: null;
+													const visibleStatus = getVisibleStockStatus(med, status);
 													const itemDoseIds = expandDoseIds(item.doses);
 													const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 													return (
@@ -1303,9 +1464,13 @@ export function DashboardPage() {
 																	</div>
 																</div>
 																<div className="tag-row">
-																	<span className="tag subtle">{formatTotalUsageLabel(med, item.total)}</span>
-																	{status && (
-																		<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																	<span className="tag subtle">
+																		{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
+																	</span>
+																	{visibleStatus && (
+																		<span className={`status-chip small ${visibleStatus.className}`}>
+																			{t(visibleStatus.label)}
+																		</span>
 																	)}
 																</div>
 															</div>
@@ -1317,7 +1482,9 @@ export function DashboardPage() {
 																		<div key={dose.id} className={`dose-item future ${allTaken ? "all-taken" : ""}`}>
 																			<span className="dose-time">{dose.timeStr}</span>
 																			<span className="dose-usage">
-																				<span className="dose-usage-main">{formatDoseUsageLabel(med, dose.usage)}</span>
+																				<span className="dose-usage-main">
+																					{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																				</span>
 																				{med?.packageType !== "tube" &&
 																					med?.packageType !== "liquid_container" &&
 																					med?.pillWeightMg && (

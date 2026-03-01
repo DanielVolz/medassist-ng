@@ -104,7 +104,7 @@ body.modal-open {
 .page {
 	max-width: 1200px;
 	margin: 0 auto;
-	padding: 2.5rem 1.5rem 3rem;
+	padding: 2.5rem 1.5rem 1.5rem;
 	overflow-x: hidden;
 }
 
@@ -667,6 +667,16 @@ body.modal-open {
 	border-radius: 12px;
 	padding: 0.9rem;
 	background: color-mix(in srgb, var(--bg-secondary) 75%, var(--bg-tertiary));
+}
+
+.med-grid-wrapper.is-empty .med-group-active {
+	padding: 0.7rem 0.85rem;
+}
+
+.med-empty-state {
+	color: var(--text-secondary);
+	font-size: 0.92rem;
+	padding: 0.35rem 0.1rem;
 }
 
 .med-group-head {
@@ -2660,6 +2670,11 @@ button.has-validation-error {
 	grid-template-columns: minmax(140px, 1.5fr) 90px 70px 100px 100px 90px 90px;
 }
 
+.table-8 .table-head,
+.table-8 .table-row {
+	grid-template-columns: minmax(130px, 1.4fr) 90px 130px 70px 95px 95px 90px 95px;
+}
+
 .email-sent-status {
 	font-size: 0.8rem;
 	color: var(--success);
@@ -2842,7 +2857,7 @@ button.has-validation-error {
 
 @media (max-width: 600px) {
 	.page {
-		padding: 0.75rem 0.4rem 2rem;
+		padding: 0.75rem 0.4rem 1rem;
 	}
 
 	.grid {
@@ -4674,53 +4689,76 @@ button.has-validation-error {
 }
 
 .med-detail-schedules {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
+	display: grid;
+	grid-template-columns: auto auto 1fr auto auto auto;
+	gap: 0.45rem 0;
 }
 
-.med-schedule-item {
-	display: flex;
+.med-schedule-row {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: subgrid;
 	align-items: center;
-	flex-wrap: wrap;
-	gap: 0.35rem 0.75rem;
-	background: var(--bg-secondary);
-	padding: 0.75rem 1rem;
-	border-radius: 8px;
-	font-size: 0.9rem;
+	column-gap: 0.75rem;
 }
 
 .med-schedule-usage {
 	font-weight: 600;
 	color: var(--accent);
+	white-space: nowrap;
+	grid-column: 1;
 }
 
 .med-schedule-freq {
 	color: var(--text-secondary);
 	white-space: nowrap;
-}
-
-.med-schedule-time {
-	font-weight: 500;
-	margin-left: auto;
-	white-space: nowrap;
+	grid-column: 2;
 }
 
 .med-schedule-person {
 	color: var(--text-secondary);
-	font-size: 0.85rem;
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	grid-column: 4;
+}
+
+.med-schedule-time {
+	font-weight: 700;
+	white-space: nowrap;
+	color: var(--text-primary);
+	text-align: right;
+	grid-column: 5;
 }
 
 .med-schedule-bell {
 	color: var(--warning);
 	display: inline-flex;
 	align-items: center;
-	margin-left: 0.35rem;
+	grid-column: 6;
 }
 
 [data-theme="light"] .med-schedule-bell {
 	color: #b45309;
+}
+
+@media (max-width: 700px) {
+	.med-detail-schedules {
+		grid-template-columns: 1fr;
+	}
+
+	.med-schedule-row {
+		grid-template-columns: 1fr;
+		row-gap: 0.25rem;
+	}
+
+	.med-schedule-usage,
+	.med-schedule-freq,
+	.med-schedule-person,
+	.med-schedule-time,
+	.med-schedule-bell {
+		grid-column: auto;
+	}
 }
 
 .med-detail-footer {

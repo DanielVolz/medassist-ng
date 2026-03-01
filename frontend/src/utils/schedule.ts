@@ -2,8 +2,30 @@
 // Schedule Building and Coverage Calculations
 // =============================================================================
 
-import type { Blister, Coverage, Intake, Medication, ScheduleEvent, StockStatus, StockThresholds } from "../types";
+import type {
+	Blister,
+	Coverage,
+	Intake,
+	Medication,
+	PackageType,
+	ScheduleEvent,
+	StockStatus,
+	StockThresholds,
+} from "../types";
 import { getMedDisplayName, getMedTotal } from "../types";
+
+function normalizeIntakeUsageForStock(intake: Intake, med: Medication): number {
+	const usage = Number(intake.usage);
+	if (!Number.isFinite(usage) || usage <= 0) return 0;
+	if (med.packageType === "tube") return 0;
+
+	const isLiquidStock = med.packageType === "liquid_container" || med.medicationForm === "liquid";
+	if (!isLiquidStock) return usage;
+
+	if (intake.intakeUnit === "tsp") return usage * 5;
+	if (intake.intakeUnit === "tbsp") return usage * 15;
+	return usage;
+}
 
 /**
  * Get intakes for a medication, preferring new intakes format over legacy blisters
@@ -18,6 +40,7 @@ function getIntakesForMed(med: Medication): Intake[] {
 		usage: b.usage,
 		every: b.every,
 		start: b.start,
+		intakeUnit: null,
 		takenBy: null, // Legacy format has no per-intake takenBy
 		intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
 	}));
@@ -66,6 +89,7 @@ export function buildSchedulePreview(
 					medName: getMedDisplayName(med),
 					takenBy: intake.takenBy, // Per-intake takenBy (string | null)
 					usage: intake.usage,
+					intakeUnit: intake.intakeUnit ?? null,
 					when: whenMs,
 					isPast,
 					timeStr: d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
@@ -124,9 +148,11 @@ export function calculateCoverage(
 		// one person's dose — do NOT multiply by personCount again.
 		// For legacy intakes (no takenBy), the intake applies to ALL people.
 		let dailyRate = 0;
-		blisters.forEach((s, idx) => {
-			const baseRate = s.every > 0 ? s.usage / s.every : 0;
+		blisters.forEach((_s, idx) => {
 			const intake = intakes[idx];
+			if (!intake) return;
+			const usageForStock = normalizeIntakeUsageForStock(intake, m);
+			const baseRate = intake.every > 0 ? usageForStock / intake.every : 0;
 			if (intake?.takenBy) {
 				// Per-intake takenBy: this intake is for exactly 1 person
 				dailyRate += baseRate;
@@ -149,6 +175,9 @@ export function calculateCoverage(
 			blisters.forEach((s, blisterIdx) => {
 				const blisterStart = new Date(s.start).getTime();
 				const period = Math.max(1, s.every) * MS_PER_DAY;
+				const intake = intakes[blisterIdx];
+				if (!intake) return;
+				const usageForStock = normalizeIntakeUsageForStock(intake, m);
 
 				// After a stock correction, start counting consumption from the NEXT
 				// scheduled dose on this blister's grid, because the user's pill count
@@ -166,7 +195,6 @@ export function calculateCoverage(
 				}
 				if (Number.isNaN(effectiveStart)) return;
 
-				const intake = intakes[blisterIdx];
 				const intakePerson = intake?.takenBy;
 
 				// For per-intake takenBy, only count for that person
@@ -180,7 +208,7 @@ export function calculateCoverage(
 
 				if (effectiveStart <= now) {
 					const occurrences = Math.floor((now - effectiveStart) / period) + 1;
-					timeBasedConsumed = occurrences * s.usage * peopleForThisIntake.length;
+					timeBasedConsumed = occurrences * usageForStock * peopleForThisIntake.length;
 
 					// Date-only timestamp of the last auto-consumed dose
 					const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
@@ -212,7 +240,7 @@ export function calculateCoverage(
 						const bIdx = parseInt(parts[1], 10);
 						const timestamp = parseInt(parts[2], 10);
 						if (medId === m.id && bIdx === blisterIdx && timestamp > earlyCutoff) {
-							earlyTakenConsumed += s.usage;
+							earlyTakenConsumed += usageForStock;
 						}
 					}
 				}
@@ -232,6 +260,9 @@ export function calculateCoverage(
 					const blisterIdx = parseInt(parts[1], 10);
 					const doseTimestamp = parseInt(parts[2], 10);
 					if (medId === m.id && blisters[blisterIdx]) {
+						const intake = intakes[blisterIdx];
+						if (!intake) return;
+						const usageForStock = normalizeIntakeUsageForStock(intake, m);
 						// Convert blister start to date-only for comparison (dose timestamps are date-only)
 						const blisterStartDate = new Date(blisters[blisterIdx].start);
 						const blisterStartDateOnly = new Date(
@@ -251,7 +282,7 @@ export function calculateCoverage(
 							doseTimestamp >= blisterStartDateOnly &&
 							afterCorrectionOrNoCorrectionMs
 						) {
-							consumed += blisters[blisterIdx].usage;
+							consumed += usageForStock;
 						}
 					}
 				}
@@ -292,18 +323,45 @@ export function calculateCoverage(
 	return { low, all: coverage };
 }
 
+function getLiquidDerivedThresholds(baselineDays: number): { lowDays: number; criticalDays: number } {
+	const lowDays = Math.max(1, Math.floor(baselineDays));
+	const criticalDays = Math.max(1, Math.ceil(lowDays / 2));
+	return { lowDays, criticalDays };
+}
+
 /**
  * Get stock status based on days left and thresholds
  */
-export function getStockStatus(daysLeft: number | null, medsLeft: number, thresholds: StockThresholds): StockStatus {
+export function getStockStatus(
+	daysLeft: number | null,
+	medsLeft: number,
+	thresholds: StockThresholds,
+	packageType?: PackageType
+): StockStatus {
 	// Out of stock or completely depleted = danger (red)
 	if (medsLeft <= 0 || daysLeft === 0) {
 		return { level: "out-of-stock", className: "danger", label: "status.outOfStock" };
 	}
 
+	// Tube has no stock reminder semantics.
+	if (packageType === "tube") {
+		return { level: "normal", className: "success", label: "status.noSchedule" };
+	}
+
 	// No schedule, but has stock = normal
 	if (daysLeft === null) {
 		return { level: "normal", className: "success", label: "status.noSchedule" };
+	}
+
+	if (packageType === "liquid_container") {
+		const liquidThresholds = getLiquidDerivedThresholds(thresholds.criticalStockDays);
+		if (daysLeft <= liquidThresholds.criticalDays) {
+			return { level: "critical", className: "danger", label: "status.criticalStock" };
+		}
+		if (daysLeft <= liquidThresholds.lowDays) {
+			return { level: "low", className: "warning", label: "status.lowStock" };
+		}
+		return { level: "normal", className: "success", label: "status.normal" };
 	}
 
 	// High stock

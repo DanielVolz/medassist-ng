@@ -5,7 +5,6 @@ import {
 	calculateCoverage,
 	computeMissedPastDoseIds,
 	expandDoseIds,
-	getNextReminderForMed,
 	getReminderStatusText,
 	getStockStatus,
 	isDoseDismissed,
@@ -1202,6 +1201,80 @@ describe("getStockStatus", () => {
 		expect(result.level).toBe("critical");
 		expect(result.className).toBe("danger");
 	});
+
+	it("returns normal (no stock reminder semantics) for tube packageType regardless of stock thresholds", () => {
+		// Tubes have no stock reminder semantics: thresholds (low, critical, high) do not apply.
+		// However, if truly empty or exhausted, out-of-stock is still returned.
+		const resultWithMeds = getStockStatus(100, 50, thresholds, "tube");
+		expect(resultWithMeds.level).toBe("normal");
+		expect(resultWithMeds.className).toBe("success");
+		expect(resultWithMeds.label).toBe("status.noSchedule");
+
+		// Even with low days remaining (would be critical for non-tube)
+		const resultLow = getStockStatus(2, 50, thresholds, "tube");
+		expect(resultLow.level).toBe("normal");
+		expect(resultLow.className).toBe("success");
+
+		// Exhausted/empty tubes still show as out-of-stock
+		const resultEmpty = getStockStatus(0, 0, thresholds, "tube");
+		expect(resultEmpty.level).toBe("out-of-stock");
+		expect(resultEmpty.className).toBe("danger");
+	});
+
+	it("applies liquid_container thresholds: low=critical(threshold), critical=ceil(critical/2)", () => {
+		// For liquid_container, baseline is criticalStockDays (7)
+		// low = 7, critical = ceil(7/2) = 4
+		const thresholdsLiquid: StockThresholds = {
+			lowStockDays: 30,
+			criticalStockDays: 7,
+			normalStockDays: 90,
+			highStockDays: 180,
+			expiryWarningDays: 30,
+		};
+
+		// daysLeft = 8 (above low threshold of 7)
+		const resultNormal = getStockStatus(8, 100, thresholdsLiquid, "liquid_container");
+		expect(resultNormal.level).toBe("normal");
+		expect(resultNormal.className).toBe("success");
+
+		// daysLeft = 7 (at low threshold, below normal)
+		const resultLow = getStockStatus(7, 100, thresholdsLiquid, "liquid_container");
+		expect(resultLow.level).toBe("low");
+		expect(resultLow.className).toBe("warning");
+
+		// daysLeft = 4 (at critical threshold)
+		const resultCritical = getStockStatus(4, 100, thresholdsLiquid, "liquid_container");
+		expect(resultCritical.level).toBe("critical");
+		expect(resultCritical.className).toBe("danger");
+
+		// daysLeft = 2 (below critical threshold)
+		const resultVeryCritical = getStockStatus(2, 100, thresholdsLiquid, "liquid_container");
+		expect(resultVeryCritical.level).toBe("critical");
+		expect(resultVeryCritical.className).toBe("danger");
+	});
+
+	it("handles liquid_container with boundary baseline (criticalStockDays=1)", () => {
+		// Boundary case: criticalStockDays=1, so low=1, critical=ceil(1/2)=1
+		const boundaryThresholds: StockThresholds = {
+			lowStockDays: 30,
+			criticalStockDays: 1,
+			normalStockDays: 90,
+			highStockDays: 180,
+			expiryWarningDays: 30,
+		};
+
+		// daysLeft = 2 (above low threshold)
+		const resultNormal = getStockStatus(2, 100, boundaryThresholds, "liquid_container");
+		expect(resultNormal.level).toBe("normal");
+
+		// daysLeft = 1 (at low and critical thresholds)
+		const resultCritical = getStockStatus(1, 100, boundaryThresholds, "liquid_container");
+		expect(resultCritical.level).toBe("critical");
+
+		// daysLeft = 0 (out of stock)
+		const resultEmpty = getStockStatus(0, 100, boundaryThresholds, "liquid_container");
+		expect(resultEmpty.level).toBe("out-of-stock");
+	});
 });
 
 describe("getNextReminderForMed", () => {
@@ -1213,53 +1286,7 @@ describe("getNextReminderForMed", () => {
 		vi.useRealTimers();
 	});
 
-	it('returns "—" when no depletion time', () => {
-		const med: Coverage = {
-			name: "Test",
-			medsLeft: 100,
-			daysLeft: null,
-			depletionDate: null,
-			depletionTime: null,
-			nextDose: null,
-		};
-
-		expect(getNextReminderForMed(med, 7, "en")).toBe("—");
-	});
-
-	it('returns "Due now" when reminder time is past', () => {
-		const now = Date.now();
-		const med: Coverage = {
-			name: "Test",
-			medsLeft: 5,
-			daysLeft: 3,
-			depletionDate: null,
-			depletionTime: now + 3 * 86400000,
-			nextDose: null,
-		};
-
-		// Reminder 7 days before = already past
-		expect(getNextReminderForMed(med, 7, "en")).toBe("Due now");
-	});
-
-	it("returns formatted date for future reminder", () => {
-		const now = Date.now();
-		const med: Coverage = {
-			name: "Test",
-			medsLeft: 100,
-			daysLeft: 30,
-			depletionDate: null,
-			depletionTime: now + 30 * 86400000,
-			nextDose: null,
-		};
-
-		const result = getNextReminderForMed(med, 7, "en-US");
-		expect(result).not.toBe("—");
-		expect(result).not.toBe("Due now");
-	});
-});
-
-describe("getReminderStatusText", () => {
-	const mockT = (key: string, options?: Record<string, unknown>) => {
+	const mockT = (key: string, options?: Record<string, number>) => {
 		if (options?.count) return `${key} (${options.count})`;
 		if (options?.days) return `${key} (${options.days})`;
 		return key;

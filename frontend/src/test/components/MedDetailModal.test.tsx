@@ -644,9 +644,9 @@ describe("MedDetailModal intake schedule usage display", () => {
 		};
 		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
 
-		const usageElements = document.querySelectorAll(".med-schedule-usage");
-		// Each intake should show "1 pill" (not "2 pills")
-		usageElements.forEach((el) => {
+		const rows = document.querySelectorAll(".med-schedule-row .med-schedule-usage");
+		// Each intake should show "1" in usage (not "2")
+		rows.forEach((el) => {
 			expect(el.textContent).toContain("1");
 			expect(el.textContent).not.toMatch(/^2\b/);
 		});
@@ -662,10 +662,10 @@ describe("MedDetailModal intake schedule usage display", () => {
 		};
 		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
 
-		const usageElements = document.querySelectorAll(".med-schedule-usage");
+		const rows = document.querySelectorAll(".med-schedule-row .med-schedule-usage");
 		// Legacy: 1 pill * 2 people = "2 pills"
-		expect(usageElements.length).toBe(1);
-		expect(usageElements[0].textContent).toContain("2");
+		expect(rows.length).toBe(1);
+		expect(rows[0].textContent).toContain("2");
 	});
 
 	it("shows correct usage for single person with per-intake takenBy", () => {
@@ -678,11 +678,11 @@ describe("MedDetailModal intake schedule usage display", () => {
 		};
 		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
 
-		const usageElements = document.querySelectorAll(".med-schedule-usage");
-		expect(usageElements.length).toBe(1);
+		const rows = document.querySelectorAll(".med-schedule-row .med-schedule-usage");
+		expect(rows.length).toBe(1);
 		// Should show "2 pills (1000 mg)" - usage=2, not multiplied
-		expect(usageElements[0].textContent).toContain("2");
-		expect(usageElements[0].textContent).toContain("1000");
+		expect(rows[0].textContent).toContain("2");
+		expect(rows[0].textContent).toContain("1000");
 	});
 });
 

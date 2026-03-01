@@ -295,6 +295,37 @@ export function MedicationsPage() {
 	const currentStockLabel = usesAmountLabels ? t("form.currentAmount") : t("form.currentPills");
 	const totalLabel = usesAmountLabels ? t("form.totalAmountLabel") : t("form.total");
 
+	const getMedicationPackageTypeLabel = useCallback(
+		(med: Medication) => {
+			if (med.packageType === "bottle") return t("form.packageTypeBottle");
+			if (med.packageType === "tube") return t("form.packageTypeTube");
+			if (med.packageType === "liquid_container") return t("form.packageTypeLiquidContainer");
+			return t("form.packageTypeBlister");
+		},
+		[t]
+	);
+
+	const getMedicationStockSuffix = useCallback(
+		(med: Medication) => {
+			if (med.packageType === "tube") return "";
+			if (med.packageType === "liquid_container") return " ml";
+			return ` ${getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}`;
+		},
+		[t]
+	);
+
+	const getMedicationUsageUnitLabel = useCallback(
+		(med: Medication, usage: number) => {
+			if (med.packageType === "tube") {
+				return med.medicationForm === "liquid" ? "ml" : t("form.blisters.usageApplication");
+			}
+			if (med.packageType === "liquid_container") return "ml";
+			if (usage === 1) return t("common.pill");
+			return t("common.pills");
+		},
+		[t]
+	);
+
 	const clearEditMedIdParam = useCallback(() => {
 		setSearchParams(
 			(prevParams) => {
@@ -507,17 +538,25 @@ export function MedicationsPage() {
 		const remainingRefills = Math.min(Number(form.prescriptionRemainingRefills || 0), authorizedRefills);
 		const lowRefillThreshold = Math.min(Number(form.prescriptionLowRefillThreshold || 1), authorizedRefills);
 
-		const derivedMedicationForm =
-			form.packageType === "tube"
-				? form.medicationForm === "liquid" || form.medicationForm === "topical"
-					? form.medicationForm
-					: "topical"
-				: form.packageType === "liquid_container"
-					? "liquid"
-					: form.pillForm;
+		let derivedMedicationForm: string;
+		if (form.packageType === "tube") {
+			derivedMedicationForm =
+				form.medicationForm === "liquid" || form.medicationForm === "topical" ? form.medicationForm : "topical";
+		} else if (form.packageType === "liquid_container") {
+			derivedMedicationForm = "liquid";
+		} else {
+			derivedMedicationForm = form.pillForm;
+		}
 
 		const tubeTotalAmount =
 			form.packageType === "tube" ? (Number(form.packCount) || 0) * (Number(form.packageAmountValue ?? 0) || 0) : null;
+
+		let packageAmountUnit = form.packageAmountUnit ?? "ml";
+		if (form.packageType === "tube") {
+			packageAmountUnit = "g";
+		} else if (form.packageType === "liquid_container") {
+			packageAmountUnit = "ml";
+		}
 
 		const body = {
 			name: form.name.trim(),
@@ -531,12 +570,7 @@ export function MedicationsPage() {
 			blistersPerPack: form.packageType === "tube" ? 1 : Number(form.blistersPerPack) || 1,
 			pillsPerBlister: form.packageType === "tube" ? 1 : Number(form.pillsPerBlister) || 1,
 			packageAmountValue: Number(form.packageAmountValue ?? 0) || 0,
-			packageAmountUnit:
-				form.packageType === "tube"
-					? "g"
-					: form.packageType === "liquid_container"
-						? "ml"
-						: (form.packageAmountUnit ?? "ml"),
+			packageAmountUnit,
 			totalPills: form.packageType === "tube" ? tubeTotalAmount : Number(form.totalPills) || null,
 			looseTablets: form.packageType === "tube" ? tubeTotalAmount || 0 : Number(form.looseTablets) || 0,
 			pillWeightMg: Number(form.pillWeightMg) || null,
@@ -940,16 +974,7 @@ export function MedicationsPage() {
 											</div>
 											<div className="med-details">
 												<span>
-													{t("medications.details.type")}:{" "}
-													<strong>
-														{med.packageType === "bottle"
-															? t("form.packageTypeBottle")
-															: med.packageType === "tube"
-																? t("form.packageTypeTube")
-																: med.packageType === "liquid_container"
-																	? t("form.packageTypeLiquidContainer")
-																	: t("form.packageTypeBlister")}
-													</strong>
+													{t("medications.details.type")}: <strong>{getMedicationPackageTypeLabel(med)}</strong>
 												</span>
 												{med.packageType === "blister" ? (
 													<>
@@ -984,11 +1009,7 @@ export function MedicationsPage() {
 													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
 													: getPackageSize(med)}{" "}
 												/ {getPackageSize(med)}
-												{med.packageType === "tube"
-													? ""
-													: med.packageType === "liquid_container"
-														? " ml"
-														: ` ${getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}`}
+												{med.packageType === "tube" ? "" : getMedicationStockSuffix(med)}
 												{(coverageByMed[getMedDisplayName(med)]
 													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
 													: getPackageSize(med)) > getPackageSize(med) && (
@@ -1006,17 +1027,8 @@ export function MedicationsPage() {
 									<div className="blister-list">
 										{(med.intakes ?? med.blisters).map((s, idx) => (
 											<div key={`${med.id}-${idx}`} className="blister-row-simple">
-												{s.usage}{" "}
-												{med.packageType === "tube"
-													? med.medicationForm === "liquid"
-														? "ml"
-														: t("form.blisters.usageApplication")
-													: med.packageType === "liquid_container"
-														? "ml"
-														: s.usage === 1
-															? t("common.pill")
-															: t("common.pills")}{" "}
-												· {s.every === 1 ? t("common.daily") : t("common.everyNDays", { count: s.every })} ·{" "}
+												{s.usage} {getMedicationUsageUnitLabel(med, s.usage)} ·{" "}
+												{s.every === 1 ? t("common.daily") : t("common.everyNDays", { count: s.every })} ·{" "}
 												{t("form.blisters.from")} {formatDateTime(s.start)}
 												{"takenBy" in s && (s as import("../types").Intake).takenBy && (
 													<span className="blister-taken-by"> · {(s as import("../types").Intake).takenBy}</span>
@@ -1405,108 +1417,120 @@ export function MedicationsPage() {
 							<div className={`form-tab-panel${activeTab === "stock" ? " active" : ""}`}>
 								<div className="full form-category">
 									<h4 className="form-category-title">{t("form.sections.stock")}</h4>
-									{form.packageType === "blister" ? (
-										<>
-											<label>
-												{t("form.packs")}
-												<FormNumberStepper
-													value={form.packCount}
-													onChange={(nextValue) => handleValueChange("packCount", nextValue)}
-													min={0}
-													decrementLabel={decrementValueLabel}
-													incrementLabel={incrementValueLabel}
-												/>
-											</label>
-											<label>
-												{t("form.blistersPerPack")}
-												<FormNumberStepper
-													value={form.blistersPerPack}
-													onChange={(nextValue) => handleValueChange("blistersPerPack", nextValue)}
-													min={1}
-													decrementLabel={decrementValueLabel}
-													incrementLabel={incrementValueLabel}
-												/>
-											</label>
-											<label>
-												{t("form.pillsPerBlister")}
-												<FormNumberStepper
-													value={form.pillsPerBlister}
-													onChange={(nextValue) => handleValueChange("pillsPerBlister", nextValue)}
-													min={1}
-													decrementLabel={decrementValueLabel}
-													incrementLabel={incrementValueLabel}
-												/>
-											</label>
-											<label>
-												{t("form.total")}
-												<div className="static-value">{formatNumber(totalTablets)}</div>
-											</label>
-										</>
-									) : form.packageType === "tube" ? (
-										<>
-											<label>
-												{t("form.tubes")}
-												<FormNumberStepper
-													value={form.packCount}
-													onChange={(nextValue) => handleValueChange("packCount", nextValue)}
-													min={1}
-													decrementLabel={decrementValueLabel}
-													incrementLabel={incrementValueLabel}
-												/>
-											</label>
-											<label className="full">
-												{t("form.packageAmountPerTube")}
-												<div className="dose-input-group">
-													<input
-														type="text"
-														inputMode="decimal"
-														pattern="[0-9]*\.?[0-9]*"
-														value={form.packageAmountValue ?? "0"}
-														onChange={(e) => handleValueChange("packageAmountValue", e.target.value)}
-														placeholder="0"
+									{(() => {
+										if (form.packageType === "blister") {
+											return (
+												<>
+													<label>
+														{t("form.packs")}
+														<FormNumberStepper
+															value={form.packCount}
+															onChange={(nextValue) => handleValueChange("packCount", nextValue)}
+															min={0}
+															decrementLabel={decrementValueLabel}
+															incrementLabel={incrementValueLabel}
+														/>
+													</label>
+													<label>
+														{t("form.blistersPerPack")}
+														<FormNumberStepper
+															value={form.blistersPerPack}
+															onChange={(nextValue) => handleValueChange("blistersPerPack", nextValue)}
+															min={1}
+															decrementLabel={decrementValueLabel}
+															incrementLabel={incrementValueLabel}
+														/>
+													</label>
+													<label>
+														{t("form.pillsPerBlister")}
+														<FormNumberStepper
+															value={form.pillsPerBlister}
+															onChange={(nextValue) => handleValueChange("pillsPerBlister", nextValue)}
+															min={1}
+															decrementLabel={decrementValueLabel}
+															incrementLabel={incrementValueLabel}
+														/>
+													</label>
+													<label>
+														{t("form.total")}
+														<div className="static-value">{formatNumber(totalTablets)}</div>
+													</label>
+												</>
+											);
+										}
+
+										if (form.packageType === "tube") {
+											return (
+												<>
+													<label>
+														{t("form.tubes")}
+														<FormNumberStepper
+															value={form.packCount}
+															onChange={(nextValue) => handleValueChange("packCount", nextValue)}
+															min={1}
+															decrementLabel={decrementValueLabel}
+															incrementLabel={incrementValueLabel}
+														/>
+													</label>
+													<label className="full">
+														{t("form.packageAmountPerTube")}
+														<div className="dose-input-group">
+															<input
+																type="text"
+																inputMode="decimal"
+																pattern="[0-9]*\.?[0-9]*"
+																value={form.packageAmountValue ?? "0"}
+																onChange={(e) => handleValueChange("packageAmountValue", e.target.value)}
+																placeholder="0"
+															/>
+															<select
+																value="g"
+																disabled
+																className="dose-unit-select"
+																aria-label={t("form.packageAmountUnitG")}
+															>
+																<option value="g">{t("form.packageAmountUnitG")}</option>
+															</select>
+														</div>
+													</label>
+													<label>
+														{t("form.totalAmount")}
+														<div className="static-value">
+															{formatNumber(
+																(Number(form.packCount) || 0) * (Number(form.packageAmountValue ?? 0) || 0)
+															)}
+															{t("form.packageAmountUnitG")}
+														</div>
+													</label>
+												</>
+											);
+										}
+
+										return (
+											<>
+												<label>
+													{totalCapacityLabel}
+													<FormNumberStepper
+														value={form.totalPills}
+														onChange={(nextValue) => handleValueChange("totalPills", nextValue)}
+														min={0}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
 													/>
-													<select
-														value="g"
-														disabled
-														className="dose-unit-select"
-														aria-label={t("form.packageAmountUnitG")}
-													>
-														<option value="g">{t("form.packageAmountUnitG")}</option>
-													</select>
-												</div>
-											</label>
-											<label>
-												{t("form.totalAmount")}
-												<div className="static-value">
-													{formatNumber((Number(form.packCount) || 0) * (Number(form.packageAmountValue ?? 0) || 0))}
-													{t("form.packageAmountUnitG")}
-												</div>
-											</label>
-										</>
-									) : (
-										<>
-											<label>
-												{totalCapacityLabel}
-												<FormNumberStepper
-													value={form.totalPills}
-													onChange={(nextValue) => handleValueChange("totalPills", nextValue)}
-													min={0}
-													decrementLabel={decrementValueLabel}
-													incrementLabel={incrementValueLabel}
-												/>
-											</label>
-											<label>
-												{currentStockLabel}
-												<FormNumberStepper
-													value={form.looseTablets}
-													onChange={(nextValue) => handleValueChange("looseTablets", nextValue)}
-													min={0}
-													decrementLabel={decrementValueLabel}
-													incrementLabel={incrementValueLabel}
-												/>
-											</label>
-										</>
-									)}
+												</label>
+												<label>
+													{currentStockLabel}
+													<FormNumberStepper
+														value={form.looseTablets}
+														onChange={(nextValue) => handleValueChange("looseTablets", nextValue)}
+														min={0}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
+													/>
+												</label>
+											</>
+										);
+									})()}
 									{form.packageType !== "tube" && form.packageType !== "liquid_container" && (
 										<label className="full">
 											{t("form.pillWeight")} ({form.doseUnit})

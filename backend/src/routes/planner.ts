@@ -29,6 +29,43 @@ function escapeHtml(text: string): string {
 	return text.replace(/[&<>"']/g, (char) => htmlEscapes[char] || char);
 }
 
+function maskEmail(email: string): string {
+	const [localPart, domain] = email.split("@");
+	if (!domain) return "invalid-email";
+	if (localPart.length <= 2) return `${localPart[0] ?? "*"}*@${domain}`;
+	return `${localPart.slice(0, 2)}***@${domain}`;
+}
+
+type MailDeliveryInfo = {
+	accepted?: unknown;
+	rejected?: unknown;
+	response?: unknown;
+};
+
+function normalizeRecipients(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "")))
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
+function getDeliveryError(info: MailDeliveryInfo): string | null {
+	const accepted = normalizeRecipients(info.accepted);
+	const rejected = normalizeRecipients(info.rejected);
+
+	if (accepted.length > 0) return null;
+	if (rejected.length > 0) {
+		return `SMTP rejected all recipients: ${rejected.join(", ")}`;
+	}
+
+	if (typeof info.response === "string" && info.response.trim()) {
+		return `SMTP did not confirm accepted recipients. Response: ${info.response}`;
+	}
+
+	return "SMTP did not confirm accepted recipients.";
+}
+
 type PlannerRow = {
 	medicationId: number;
 	medicationName: string;
@@ -106,6 +143,10 @@ export async function plannerRoutes(app: FastifyInstance) {
 	// Demand calculator notification (supports email and push)
 	app.post<{ Body: SendEmailBody }>("/planner/send-email", async (request, reply) => {
 		const { email, from, until, rows, language: bodyLanguage } = request.body;
+		request.log.info(
+			{ hasEmail: Boolean(email), rowCount: rows?.length ?? 0 },
+			"[Planner] Demand notification request received"
+		);
 
 		if (!rows || rows.length === 0) {
 			return reply.status(400).send({ error: "Missing planner data" });
@@ -120,6 +161,7 @@ export async function plannerRoutes(app: FastifyInstance) {
 		const activeMedIds = new Set(activeMeds.map((med) => med.id));
 		const activeRows = rows.filter((row) => activeMedIds.has(row.medicationId));
 		if (activeRows.length === 0) {
+			request.log.warn("[Planner] Demand notification skipped: no active medications in request");
 			return reply.status(400).send({ error: "No active medications to notify" });
 		}
 
@@ -129,6 +171,16 @@ export async function plannerRoutes(app: FastifyInstance) {
 			shoutrrrEnabled: userSettings.shoutrrrEnabled,
 			shoutrrrUrl: userSettings.shoutrrrUrl || "",
 		};
+		request.log.info(
+			{
+				userId,
+				emailEnabled: notificationSettings.emailEnabled,
+				pushEnabled: notificationSettings.shoutrrrEnabled,
+				hasPushUrl: Boolean(notificationSettings.shoutrrrUrl),
+				activeRowCount: activeRows.length,
+			},
+			"[Planner] Demand notification channel state"
+		);
 
 		// Get locale from user settings or use the language passed in the body
 		const language: Language = (userSettings.language as Language) || bodyLanguage || "en";
@@ -209,6 +261,19 @@ ${getFooterPlain(language)}`;
 			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
 			const smtpSecure = process.env.SMTP_SECURE === "true";
 			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+
+			request.log.info(
+				{
+					hasSmtpHost: Boolean(smtpHost),
+					hasSmtpUser: Boolean(smtpUser),
+					hasSmtpPass: Boolean(smtpPass),
+					smtpPort,
+					smtpSecure,
+					hasSmtpFrom: Boolean(smtpFrom),
+					to: maskEmail(email),
+				},
+				"[Planner] Demand email path selected"
+			);
 
 			if (smtpHost && smtpUser) {
 				// Build HTML table with horizontal scroll for mobile
@@ -316,7 +381,9 @@ ${getFooterPlain(language)}`;
 						},
 					});
 
-					await transporter.sendMail({
+					request.log.info({ to: maskEmail(email) }, "[Planner] Sending demand email");
+
+					const mailResult = await transporter.sendMail({
 						from: smtpFrom,
 						to: email,
 						subject: t(dc.subject, { from: fromDate, until: untilDate }),
@@ -324,12 +391,33 @@ ${getFooterPlain(language)}`;
 						html,
 					});
 
+					const deliveryError = getDeliveryError(mailResult);
+					if (deliveryError) {
+						throw new Error(deliveryError);
+					}
+
+					request.log.info({ to: maskEmail(email), messageId: mailResult.messageId }, "[Planner] Demand email sent");
 					results.email = true;
 				} catch (error) {
+					request.log.error({ error, to: maskEmail(email) }, "[Planner] Demand email failed");
 					const errorMessage = error instanceof Error ? error.message : "Unknown error";
 					results.errors.push(`Email: ${errorMessage}`);
 				}
+			} else {
+				request.log.warn(
+					{
+						hasSmtpHost: Boolean(smtpHost),
+						hasSmtpUser: Boolean(smtpUser),
+						to: maskEmail(email),
+					},
+					"[Planner] Demand email skipped: SMTP not configured"
+				);
 			}
+		} else {
+			request.log.info(
+				{ emailEnabled: notificationSettings.emailEnabled, hasRecipient: Boolean(email) },
+				"[Planner] Demand email channel not active"
+			);
 		}
 
 		// Send push notification if enabled
@@ -376,6 +464,10 @@ ${getFooterPlain(language)}`;
 	// Reminder notification for low stock medications (supports email and push)
 	app.post<{ Body: ReminderEmailBody }>("/reminder/send-email", async (request, reply) => {
 		const { email, lowStock } = request.body;
+		request.log.info(
+			{ hasEmail: Boolean(email), lowStockCount: lowStock?.length ?? 0 },
+			"[ReminderManual] Stock reminder request received"
+		);
 
 		if (!lowStock || lowStock.length === 0) {
 			return reply.status(400).send({ error: "Missing low stock data" });
@@ -384,12 +476,22 @@ ${getFooterPlain(language)}`;
 		// Load user settings
 		const userId = await getUserId(request);
 		const activeMeds = await db
-			.select({ name: medications.name, genericName: medications.genericName })
+			.select({ name: medications.name, genericName: medications.genericName, packageType: medications.packageType })
 			.from(medications)
 			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
-		const activeMedNames = new Set(activeMeds.map((med) => med.name || med.genericName || ""));
-		const filteredLowStock = lowStock.filter((item) => activeMedNames.has(item.name));
+		const activeMedicationByName = new Map(
+			activeMeds
+				.map((med) => [med.name || med.genericName || "", med.packageType ?? "blister"] as const)
+				.filter(([name]) => name.length > 0)
+		);
+		const filteredLowStock = lowStock.filter((item) => {
+			const packageType = activeMedicationByName.get(item.name);
+			if (!packageType) return false;
+			if (packageType === "tube") return false;
+			return true;
+		});
 		if (filteredLowStock.length === 0) {
+			request.log.warn("[ReminderManual] Stock reminder skipped: no active medications after filtering");
 			return reply.status(400).send({ error: "No active medications to notify" });
 		}
 
@@ -399,6 +501,16 @@ ${getFooterPlain(language)}`;
 			shoutrrrEnabled: userSettings.shoutrrrEnabled,
 			shoutrrrUrl: userSettings.shoutrrrUrl || "",
 		};
+		request.log.info(
+			{
+				userId,
+				emailEnabled: notificationSettings.emailEnabled,
+				pushEnabled: notificationSettings.shoutrrrEnabled,
+				hasPushUrl: Boolean(notificationSettings.shoutrrrUrl),
+				filteredLowStockCount: filteredLowStock.length,
+			},
+			"[ReminderManual] Stock reminder channel state"
+		);
 
 		// Get translations based on user language
 		const language = (userSettings.language as Language) || "en";
@@ -469,6 +581,19 @@ ${getFooterPlain(language)}`;
 			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
 			const smtpSecure = process.env.SMTP_SECURE === "true";
 			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+
+			request.log.info(
+				{
+					hasSmtpHost: Boolean(smtpHost),
+					hasSmtpUser: Boolean(smtpUser),
+					hasSmtpPass: Boolean(smtpPass),
+					smtpPort,
+					smtpSecure,
+					hasSmtpFrom: Boolean(smtpFrom),
+					to: maskEmail(email),
+				},
+				"[ReminderManual] Stock email path selected"
+			);
 
 			if (smtpHost && smtpUser) {
 				// Build subject line from shared title parts
@@ -583,7 +708,9 @@ ${getFooterPlain(language)}`;
 						},
 					});
 
-					await transporter.sendMail({
+					request.log.info({ to: maskEmail(email) }, "[ReminderManual] Sending stock reminder email");
+
+					const mailResult = await transporter.sendMail({
 						from: smtpFrom,
 						to: email,
 						subject: `MedAssist-ng: ${subjectText}`,
@@ -591,12 +718,36 @@ ${getFooterPlain(language)}`;
 						html,
 					});
 
+					const deliveryError = getDeliveryError(mailResult);
+					if (deliveryError) {
+						throw new Error(deliveryError);
+					}
+
+					request.log.info(
+						{ to: maskEmail(email), messageId: mailResult.messageId },
+						"[ReminderManual] Stock reminder email sent"
+					);
 					results.email = true;
 				} catch (error) {
+					request.log.error({ error, to: maskEmail(email) }, "[ReminderManual] Stock reminder email failed");
 					const errorMessage = error instanceof Error ? error.message : "Unknown error";
 					results.errors.push(`Email: ${errorMessage}`);
 				}
+			} else {
+				request.log.warn(
+					{
+						hasSmtpHost: Boolean(smtpHost),
+						hasSmtpUser: Boolean(smtpUser),
+						to: maskEmail(email),
+					},
+					"[ReminderManual] Stock reminder email skipped: SMTP not configured"
+				);
 			}
+		} else {
+			request.log.info(
+				{ emailEnabled: notificationSettings.emailEnabled, hasRecipient: Boolean(email) },
+				"[ReminderManual] Stock email channel not active"
+			);
 		}
 
 		// Send push notification if enabled
@@ -647,6 +798,10 @@ ${getFooterPlain(language)}`;
 	// Manual prescription reminder (supports email and push)
 	app.post<{ Body: PrescriptionReminderBody }>("/reminder/send-prescription", async (request, reply) => {
 		const { email, prescriptionLow } = request.body;
+		request.log.info(
+			{ hasEmail: Boolean(email), prescriptionCount: prescriptionLow?.length ?? 0 },
+			"[ReminderManual] Prescription reminder request received"
+		);
 
 		if (!prescriptionLow || prescriptionLow.length === 0) {
 			return reply.status(400).send({ error: "Missing prescription reminder data" });
@@ -660,6 +815,7 @@ ${getFooterPlain(language)}`;
 		const activeMedNames = new Set(activeMeds.map((med) => med.name || med.genericName || ""));
 		const filteredPrescriptionLow = prescriptionLow.filter((item) => activeMedNames.has(item.name));
 		if (filteredPrescriptionLow.length === 0) {
+			request.log.warn("[ReminderManual] Prescription reminder skipped: no active medications after filtering");
 			return reply.status(400).send({ error: "No active medications to notify" });
 		}
 
@@ -696,6 +852,19 @@ ${getFooterPlain(language)}`;
 			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
 			const smtpSecure = process.env.SMTP_SECURE === "true";
 			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+
+			request.log.info(
+				{
+					hasSmtpHost: Boolean(smtpHost),
+					hasSmtpUser: Boolean(smtpUser),
+					hasSmtpPass: Boolean(smtpPass),
+					smtpPort,
+					smtpSecure,
+					hasSmtpFrom: Boolean(smtpFrom),
+					to: maskEmail(email),
+				},
+				"[ReminderManual] Prescription email path selected"
+			);
 
 			if (smtpHost && smtpUser) {
 				try {
@@ -780,7 +949,9 @@ ${getFooterPlain(language)}`;
 					</div>
 				`;
 
-					await transporter.sendMail({
+					request.log.info({ to: maskEmail(email) }, "[ReminderManual] Sending prescription reminder email");
+
+					const mailResult = await transporter.sendMail({
 						from: smtpFrom,
 						to: email,
 						subject,
@@ -788,12 +959,40 @@ ${getFooterPlain(language)}`;
 						html,
 					});
 
+					const deliveryError = getDeliveryError(mailResult);
+					if (deliveryError) {
+						throw new Error(deliveryError);
+					}
+
+					request.log.info(
+						{ to: maskEmail(email), messageId: mailResult.messageId },
+						"[ReminderManual] Prescription reminder email sent"
+					);
 					results.email = true;
 				} catch (error) {
+					request.log.error({ error, to: maskEmail(email) }, "[ReminderManual] Prescription reminder email failed");
 					const errorMessage = error instanceof Error ? error.message : "Unknown error";
 					results.errors.push(`Email: ${errorMessage}`);
 				}
+			} else {
+				request.log.warn(
+					{
+						hasSmtpHost: Boolean(smtpHost),
+						hasSmtpUser: Boolean(smtpUser),
+						to: maskEmail(email),
+					},
+					"[ReminderManual] Prescription reminder email skipped: SMTP not configured"
+				);
 			}
+		} else {
+			request.log.info(
+				{
+					emailEnabled: userSettings.emailEnabled,
+					emailPrescriptionReminders: userSettings.emailPrescriptionReminders,
+					hasRecipient: Boolean(email),
+				},
+				"[ReminderManual] Prescription email channel not active"
+			);
 		}
 
 		if (userSettings.shoutrrrEnabled && userSettings.shoutrrrPrescriptionReminders && userSettings.shoutrrrUrl) {

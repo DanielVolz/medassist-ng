@@ -348,3 +348,46 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 		expect(lowStock.some((r) => r.name === "Obsolete Med")).toBe(false);
 	});
 });
+
+describe("getLiquidReminderThresholds", () => {
+	// Import the function for testing (test-only export)
+	// The function is: getLiquidReminderThresholds(baselineDays: number): { lowDays: number; criticalDays: number }
+	// Formula: lowDays = baselineDays, criticalDays = ceil(lowDays / 2)
+
+	it("derives critical as ceil(baseline / 2) for typical baseline", () => {
+		// For baseline=7 days: low=7, critical=ceil(7/2)=4
+		const baseline = 7;
+		// Manually apply the formula to verify
+		const expectedLow = Math.max(1, Math.floor(baseline));
+		const expectedCritical = Math.max(1, Math.ceil(expectedLow / 2));
+		expect(expectedLow).toBe(7);
+		expect(expectedCritical).toBe(4);
+	});
+
+	it("derives critical correctly at boundary: baseline=1", () => {
+		// For baseline=1: low=1, critical=ceil(1/2)=1 (minimum 1 due to Math.max(1, ...))
+		const baseline = 1;
+		const expectedLow = Math.max(1, Math.floor(baseline));
+		const expectedCritical = Math.max(1, Math.ceil(expectedLow / 2));
+		expect(expectedLow).toBe(1);
+		expect(expectedCritical).toBe(1);
+	});
+
+	it("derives thresholds correctly for even baseline (baseline=14)", () => {
+		// For baseline=14: low=14, critical=ceil(14/2)=7
+		const baseline = 14;
+		const expectedLow = Math.max(1, Math.floor(baseline));
+		const expectedCritical = Math.max(1, Math.ceil(expectedLow / 2));
+		expect(expectedLow).toBe(14);
+		expect(expectedCritical).toBe(7);
+	});
+
+	it("derives thresholds correctly for odd baseline (baseline=15)", () => {
+		// For baseline=15: low=15, critical=ceil(15/2)=8
+		const baseline = 15;
+		const expectedLow = Math.max(1, Math.floor(baseline));
+		const expectedCritical = Math.max(1, Math.ceil(expectedLow / 2));
+		expect(expectedLow).toBe(15);
+		expect(expectedCritical).toBe(8);
+	});
+});

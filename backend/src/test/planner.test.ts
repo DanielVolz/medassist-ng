@@ -291,7 +291,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 
 			const response = await app.inject({
 				method: "POST",
@@ -337,7 +337,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 
 			const response = await app.inject({
 				method: "POST",
@@ -441,7 +441,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 
 			const response = await app.inject({
 				method: "POST",
@@ -529,7 +529,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 			mockSendShoutrrr.mockResolvedValueOnce({ success: true });
 
 			const response = await app.inject({
@@ -704,7 +704,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 
 			const response = await app.inject({
 				method: "POST",
@@ -734,7 +734,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 
 			const response = await app.inject({
 				method: "POST",
@@ -770,7 +770,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 
 			const response = await app.inject({
 				method: "POST",
@@ -856,7 +856,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 			mockSendShoutrrr.mockResolvedValueOnce({ success: true });
 
 			const response = await app.inject({
@@ -989,7 +989,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 
 			const response = await app.inject({
 				method: "POST",
@@ -1043,6 +1043,36 @@ describe("Planner Routes", () => {
 			expect(title).not.toContain("Low");
 			expect(message).toContain("Running critically low");
 		});
+
+		it("should return 400 when only tube medications are in active meds", async () => {
+			// Insert a tube medication (should be excluded from reminders)
+			await testClient.execute({
+				sql: `INSERT INTO medications (id, user_id, name, taken_by_json, usage_json, every_json, start_json, package_type)
+				       VALUES (3, 999999999, 'Ointment', '[]', '[]', '[]', '[]', 'tube')`,
+				args: [],
+			});
+
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
+				args: [999999999],
+			});
+
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/reminder/send-email",
+				payload: {
+					email: "test@example.com",
+					lowStock: [{ name: "Ointment", medsLeft: 5, daysLeft: 10, depletionDate: "2025-01-13" }],
+				},
+			});
+
+			// Expects 400 because tube medications are excluded from stock reminders
+			expect(response.statusCode).toBe(400);
+			expect(response.json()).toEqual({ error: "No active medications to notify" });
+			expect(mockSendMail).not.toHaveBeenCalled();
+		});
 	});
 
 	describe("POST /reminder/send-prescription", () => {
@@ -1089,7 +1119,7 @@ describe("Planner Routes", () => {
 				args: [999999999],
 			});
 
-			mockSendMail.mockResolvedValueOnce({ messageId: "123" });
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
 
 			const response = await app.inject({
 				method: "POST",

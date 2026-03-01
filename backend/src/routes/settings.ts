@@ -85,6 +85,43 @@ type TestShoutrrrBody = {
 	url: string;
 };
 
+function maskEmail(email: string): string {
+	const [localPart, domain] = email.split("@");
+	if (!domain) return "invalid-email";
+	if (localPart.length <= 2) return `${localPart[0] ?? "*"}*@${domain}`;
+	return `${localPart.slice(0, 2)}***@${domain}`;
+}
+
+type MailDeliveryInfo = {
+	accepted?: unknown;
+	rejected?: unknown;
+	response?: unknown;
+};
+
+function normalizeRecipients(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "")))
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
+function getDeliveryError(info: MailDeliveryInfo): string | null {
+	const accepted = normalizeRecipients(info.accepted);
+	const rejected = normalizeRecipients(info.rejected);
+
+	if (accepted.length > 0) return null;
+	if (rejected.length > 0) {
+		return `SMTP rejected all recipients: ${rejected.join(", ")}`;
+	}
+
+	if (typeof info.response === "string" && info.response.trim()) {
+		return `SMTP did not confirm accepted recipients. Response: ${info.response}`;
+	}
+
+	return "SMTP did not confirm accepted recipients.";
+}
+
 function getNotificationProvider(url: string): string {
 	if (url.startsWith("discord://")) return "discord";
 	if (url.startsWith("telegram://")) return "telegram";
@@ -436,7 +473,24 @@ export async function settingsRoutes(app: FastifyInstance) {
 		const smtpSecure = process.env.SMTP_SECURE === "true";
 		const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
 
+		request.log.info(
+			{
+				to: maskEmail(email),
+				hasSmtpHost: Boolean(smtpHost),
+				hasSmtpUser: Boolean(smtpUser),
+				hasSmtpPass: Boolean(smtpPass),
+				hasSmtpFrom: Boolean(smtpFrom),
+				smtpPort,
+				smtpSecure,
+			},
+			"[Settings] Test email request received"
+		);
+
 		if (!smtpHost || !smtpUser) {
+			request.log.warn(
+				{ to: maskEmail(email), hasSmtpHost: Boolean(smtpHost), hasSmtpUser: Boolean(smtpUser) },
+				"[Settings] Test email skipped: SMTP not configured"
+			);
 			return reply.status(400).send({ error: "SMTP not configured" });
 		}
 
@@ -451,7 +505,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 				},
 			});
 
-			await transporter.sendMail({
+			request.log.info({ to: maskEmail(email) }, "[Settings] Sending test email");
+
+			const mailResult = await transporter.sendMail({
 				from: smtpFrom,
 				to: email,
 				subject: "MedAssist-ng - Test Email",
@@ -467,8 +523,16 @@ export async function settingsRoutes(app: FastifyInstance) {
         `,
 			});
 
+			const deliveryError = getDeliveryError(mailResult);
+			if (deliveryError) {
+				throw new Error(deliveryError);
+			}
+
+			request.log.info({ to: maskEmail(email), messageId: mailResult.messageId }, "[Settings] Test email sent");
+
 			return reply.send({ success: true, message: "Test email sent successfully" });
 		} catch (error) {
+			request.log.error({ error, to: maskEmail(email) }, "[Settings] Test email failed");
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";
 			return reply.status(500).send({ error: `Failed to send email: ${errorMessage}` });
 		}

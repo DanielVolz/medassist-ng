@@ -279,16 +279,21 @@ export function MedicationsPage() {
 		return form.pillForm === "tablet";
 	}, [form.packageType, form.medicationForm, form.pillForm]);
 
-	const usageLabel = useMemo(() => {
-		if (form.packageType === "liquid_container") {
-			return t("form.blisters.usageMl");
-		}
-		if (form.packageType === "tube") {
-			return form.medicationForm === "liquid" ? t("form.blisters.usageMl") : t("form.blisters.usageApplication");
-		}
-		if (form.pillForm === "capsule") return t("form.blisters.usageCapsules");
-		return t("form.blisters.usageTablets");
-	}, [form.packageType, form.medicationForm, form.pillForm, t]);
+	const getUsageLabel = useCallback(
+		(intakeUnit: "ml" | "tsp" | "tbsp") => {
+			if (form.packageType === "liquid_container") {
+				if (intakeUnit === "tsp") return t("form.blisters.usageTsp");
+				if (intakeUnit === "tbsp") return t("form.blisters.usageTbsp");
+				return t("form.blisters.usageMl");
+			}
+			if (form.packageType === "tube") {
+				return form.medicationForm === "liquid" ? t("form.blisters.usageMl") : t("form.blisters.usageApplication");
+			}
+			if (form.pillForm === "capsule") return t("form.blisters.usageCapsules");
+			return t("form.blisters.usageTablets");
+		},
+		[form.packageType, form.medicationForm, form.pillForm, t]
+	);
 
 	const usesAmountLabels = form.packageType === "tube" || form.packageType === "liquid_container";
 	const totalCapacityLabel = usesAmountLabels ? t("form.totalAmount") : t("form.totalCapacity");
@@ -1255,6 +1260,14 @@ export function MedicationsPage() {
 											<option value="liquid_container">{t("form.packageTypeLiquidContainer")}</option>
 										</select>
 									</label>
+									<label>
+										{t("form.medicationEndDate")}
+										<DateInput
+											value={form.medicationEndDate}
+											onChange={(e) => handleValueChange("medicationEndDate", e.target.value)}
+											placeholder={t("common.optional")}
+										/>
+									</label>
 									{form.packageType !== "tube" && form.packageType !== "liquid_container" && (
 										<label>
 											{t("form.pillForm")}
@@ -1283,14 +1296,6 @@ export function MedicationsPage() {
 											</select>
 										</label>
 									)}
-									<label>
-										{t("form.medicationEndDate")}
-										<DateInput
-											value={form.medicationEndDate}
-											onChange={(e) => handleValueChange("medicationEndDate", e.target.value)}
-											placeholder={t("common.optional")}
-										/>
-									</label>
 									{form.medicationEndDate && (
 										<label className="full">
 											{t("form.autoMarkObsoleteAfterEndDate")}
@@ -1703,7 +1708,7 @@ export function MedicationsPage() {
 										<div key={idx} className="blister-row">
 											<div className="blister-inputs">
 												<label>
-													{usageLabel}
+													{getUsageLabel(intake.intakeUnit)}
 													<FormNumberStepper
 														value={intake.usage}
 														onChange={(nextValue) => setIntakeValue(idx, "usage", nextValue)}

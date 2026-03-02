@@ -23,6 +23,37 @@ Use this block for each meaningful task:
 
 ## Entries
 
+### 2026-03-02 (schedule usage label follows selected intake unit)
+
+- 🧩 Task: Ensure liquid intake schedule label switches from ml to tsp/tbsp when intake unit is changed.
+- ✅ Decisions:
+	- Desktop schedule tab in `MedicationsPage` used a static `usageMl` label for `liquid_container`.
+	- Replaced static usage label with per-intake unit mapping (`ml`, `tsp`, `tbsp`) using existing i18n keys.
+	- Kept parity with `MobileEditModal`, which already had the correct per-intake label logic.
+- 📁 Files touched:
+	- `frontend/src/pages/MedicationsPage.tsx`
+	- `doku/memory_notes.md`
+	- `doku/report.md`
+- 🔜 Follow-up/open points:
+	- Optional: add/extend UI tests that assert label text updates after switching intake unit in desktop edit form.
+
+### 2026-03-02 (recover missing desktop form detail: date/package field alignment)
+
+- 🧩 Task: Restore missing desktop medication-form detail where date fields and package/form fields should be vertically paired.
+- ✅ Decisions:
+	- Confirmed secondary worktree had no frontend form edits; relevant data-loss signal was not from that worktree.
+	- Searched stash inventory and validated missing detail should be restored directly on `main`.
+	- Reordered `MedicationsPage` general-tab field sequence so layout pairs are stable in the two-column grid:
+		- left column: `Medication Start Date` then `Medication End Date`
+		- right column: `Package Type` then `Pill Form`/`Medication Form`
+	- Kept labels/i18n keys and behavior unchanged; this is layout-order only.
+- 📁 Files touched:
+	- `frontend/src/pages/MedicationsPage.tsx`
+	- `doku/memory_notes.md`
+	- `doku/report.md`
+- 🔜 Follow-up/open points:
+	- If desired, mirror identical visual grouping hints in mobile form (functional order is already consistent there).
+
 ### 2026-03-02 (PR #364 CI triage: frontend build + Playwright stable)
 
 - 🧩 Task: Diagnose and fix failing checks on `fix/frontend-tube-liquid-semantics-parity` for `Test/Frontend Build` and `E2E Tests/Playwright E2E Stable`.
@@ -3474,6 +3505,16 @@ Use this block for each meaningful task:
 	- `doku/report.md`
 - 🔜 Follow-up/open points:
 	- Full repo-wide frontend `npm run check` still reports unrelated pre-existing e2e formatting issues outside this scope.
+
+### 2026-03-02 (pre-PR frontend MedicationsPage label/order gate)
+
+- 🧩 Task: Validate local pre-PR quality gate for `frontend/src/pages/MedicationsPage.tsx` UI label/order updates.
+- ✅ Validation run:
+	- `cd frontend && npm run lint` -> passed (`npx biome check .` reported no issues).
+	- `cd frontend && CI=true npm run test:run -- src/test/utils/schedule.test.ts` -> passed (82/82).
+	- `cd frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npx playwright test e2e/medication-edit.spec.ts e2e/schedule.spec.ts --config=playwright.stable.config.ts --workers=1` -> passed (23/23).
+- 📌 Outcome:
+	- Local pre-PR gate for this scoped frontend change is PASS.
 
 ### 2026-02-27 (package types plan decision lock)
 

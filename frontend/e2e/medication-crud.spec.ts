@@ -83,7 +83,7 @@ async function fillAndSaveMedication(
 			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
 		}
 		const row = form.locator(".blister-row").nth(i);
-		await row.getByLabel(/(Usage \(pills\)|form\.blisters\.usage)/i).fill(intakes[i].usage);
+		await row.getByLabel(/(Usage \((pills|tablets)\)|form\.blisters\.usage)/i).fill(intakes[i].usage);
 		await row.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i).fill(intakes[i].every);
 	}
 

@@ -423,7 +423,12 @@ export function SharedSchedule() {
 			// Use intakes (with per-intake takenBy) if available, fallback to blisters (legacy)
 			const intakes =
 				med.intakes ||
-				med.blisters.map((b) => ({ ...b, takenBy: null as string | null, intakeRemindersEnabled: false }));
+				med.blisters.map((b) => ({
+					...b,
+					intakeUnit: null,
+					takenBy: null as string | null,
+					intakeRemindersEnabled: false,
+				}));
 
 			intakes.forEach((intake, intakeIdx) => {
 				// Filter: only include intakes for this person (null = everyone, or matches share's takenBy)
@@ -535,7 +540,14 @@ export function SharedSchedule() {
 		const depletion: Record<string, number | null> = {};
 
 		for (const med of data.medications) {
-			const intakes = med.intakes || med.blisters.map((b) => ({ ...b, takenBy: null as string | null }));
+			const intakes =
+				med.intakes ||
+				med.blisters.map((b) => ({
+					...b,
+					intakeUnit: null,
+					takenBy: null as string | null,
+					intakeRemindersEnabled: false,
+				}));
 
 			// Count unique people from all intakes (for per-intake takenBy)
 			const uniquePeople = new Set<string>();

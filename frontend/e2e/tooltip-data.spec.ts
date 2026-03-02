@@ -54,7 +54,7 @@ test.describe("MedDetail footer tooltip visibility", () => {
 	 */
 	async function openMedDetailModal(page: import("@playwright/test").Page) {
 		await navigateTo(page, "/dashboard");
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		const medRow = overviewTable.locator(".table-row").filter({ hasText: MED_NAME }).first();

@@ -157,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 						return;
 					}
 				}
-				log.warn("[Auth] Session refresh failed, clearing local user state", { correlationId });
+				log.debug("[Auth] Session refresh unavailable, clearing local user state", { correlationId });
 				setUser(null);
 			} else {
 				log.warn("[Auth] Unexpected /auth/me response", { status: res.status, correlationId });
@@ -181,7 +181,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			);
 			const res = await fetch("/api/auth/refresh", init);
 			if (!res.ok) {
-				log.warn("[Auth] Token refresh rejected", { status: res.status, correlationId });
+				if (res.status === 401) {
+					log.debug("[Auth] Token refresh rejected (unauthenticated)", { status: res.status, correlationId });
+				} else {
+					log.warn("[Auth] Token refresh rejected", { status: res.status, correlationId });
+				}
 			}
 			return res.ok;
 		} catch (error) {

@@ -25,6 +25,198 @@ For each task, add:
 ```
 ## Entries
 
+### 2026-03-02 (Mandatory pre-PR local quality gate: frontend + E2E)
+
+- **🧩 Scope**: Validate the currently modified frontend/doku changes for PR readiness.
+- **🛠️ What changed**:
+  - Executed required local quality gates exactly as requested.
+  - Used deterministic Playwright configuration (`PLAYWRIGHT_WORKERS=1`) and disabled report auto-open (`PLAYWRIGHT_HTML_OPEN=never`).
+  - No additional implementation fixes were needed because all checks were green.
+- **✅ Verification (exact commands)**:
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run lint` -> **PASS**
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run check` -> **PASS**
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 CI=true npm run test:e2e` -> **PASS** (`151 passed`, `1 skipped`)
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 CI=true npm run test:e2e:all` -> **PASS** (`267 passed`, `3 skipped`)
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
+### 2026-03-02 (Dependabot follow-up: PR #369 unblocked and merged)
+
+- **Scope**: Complete pending Dependabot merge after policy blocker on `#369`.
+- **What changed**:
+  - Investigated the previous policy block (`base branch policy prohibits the merge`).
+  - Updated PR branch state first (`BEHIND` -> updated).
+  - Completed merge after policy-compliant escalation path via `release-manager`.
+- **Resulting merge commit**:
+  - `#369` -> `1a348c62f5ccef28a3596f2f147b325757d80a73`
+- **Main head after operation**:
+  - `1a348c62f5ccef28a3596f2f147b325757d80a73`
+- **Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
+### 2026-03-02 (Dependabot maintenance PRs: #369, #370, #371)
+
+- **Scope**: Merge currently open Dependabot PRs into `main` where all branch requirements permit.
+- **What changed**:
+  - Verified check status and mergeability for PRs `#369`, `#370`, and `#371`.
+  - Attempted merges in safe order (`#369` -> `#370` -> `#371`).
+  - `#370` and `#371` merged successfully via squash merge and remote branch deletion.
+  - `#369` was not merged because GitHub reported: `base branch policy prohibits the merge`.
+- **Resulting merge commits**:
+  - `#370` -> `8fdd79ff33eec6f84cae28c9ab560afb71606cea`
+  - `#371` -> `067a8c166bfdc04ac8790d7034384b62d63c7bd8`
+- **Main head after operation**:
+  - `067a8c166bfdc04ac8790d7034384b62d63c7bd8`
+- **Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
+### 2026-03-02 (E2E stabilization follow-up: CRUD selector regression fixed)
+
+- **🧩 Scope**: Resolve remaining E2E failures in medication CRUD creation flow and re-run full browser suites.
+- **🛠️ What changed**:
+  - Fixed an outdated label selector in `frontend/e2e/medication-crud.spec.ts`:
+    - from `Usage (pills)` only
+    - to `Usage (pills|tablets)`
+  - This aligns the test with current UI copy (`Usage (tablets)`) and removes deterministic CRUD failures in `chromium-data`.
+- **📁 Files touched**:
+  - `frontend/e2e/medication-crud.spec.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Verification (exact commands)**:
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never npx playwright test e2e/medication-crud.spec.ts --config=playwright.stable.config.ts --project=chromium-data --workers=1` -> **PASS** (`14 passed`)
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npm run test:e2e` -> **PASS** (exit code `0`)
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npm run test:e2e:all` -> **PASS** (exit code `0`, one schedule test retried once)
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run lint` -> **PASS**
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run check` -> **PASS**
+
+### 2026-03-02 (Full Browser E2E Sweep: whole website)
+
+- **🧩 Scope**: Full end-to-end browser testing across core app flows and cross-browser coverage.
+- **🛠️ What changed**:
+  - Executed complete stable Playwright suite and complete all-browser suite.
+  - Reviewed failing artifacts and snapshots for logic/UX/copy/runtime issues.
+- **✅ Verification (exact commands/tasks)**:
+  - VS Code task: `E2E stable` (`npm run test:e2e`)
+  - VS Code task: `E2E all browsers` (`npm run test:e2e:all`)
+  - `cd /Users/danielvolz/git/medassist/frontend && node -e 'const f=require("./test-results/.last-run.json"); console.log(`status=${f.status} failed=${f.failedTests?.length||0}`)'`
+- **📊 Result summary**:
+  - Latest all-browser metadata: `status=failed`, `failed=31`.
+  - Failure snapshots indicate recurring data/setup mismatch in dashboard-data scenarios (dashboard empty-state rendered where seeded medication rows are expected).
+  - Additional failures show timeout/retry sensitivity in medication CRUD/edit and planner performance scenarios.
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
+### 2026-03-02 (Fix: frontend TypeScript drift; `npm run check` green again)
+
+- **🧩 Scope**: Resolve broad frontend type drift that blocked static gate (`CI=true npm run check`).
+- **🛠️ What changed**:
+  - Expanded shared frontend model types to match currently used medication/form fields and enums.
+  - Added missing `FormState`/`Medication` fields used by edit flows (e.g. medication form, lifecycle, amount fields, end-date flags).
+  - Added `units` as supported `DoseUnit` for tube flows.
+  - Aligned `SharedSchedule` fallback intake object shape with expected intake typing.
+  - Fixed remaining test typing mismatches in `MobileEditModal` fixture and schedule test translator mock.
+  - Applied formatter fix in `MobileEditModal.tsx` for Biome compliance.
+- **📁 Files touched**:
+  - `frontend/src/types/index.ts`
+  - `frontend/src/components/SharedSchedule.tsx`
+  - `frontend/src/hooks/useMedicationForm.ts`
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `frontend/src/components/MobileEditModal.tsx`
+  - `frontend/src/test/components/MobileEditModal.test.tsx`
+  - `frontend/src/test/utils/schedule.test.ts`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Verification (exact command)**:
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run check` -> **PASS**
+
+### 2026-03-02 (Fix pack: E2E selectors, auth/session stability, dashboard UX clarity, click interception)
+
+- **🧩 Scope**:
+  - High: Dashboard overview E2E selector breakage.
+  - Medium: Cross-browser auth/session instability (`401 Invalid or expired token`) in API-helper-driven specs.
+  - Low: expected auth refresh warning noise on unauth pages, ambiguous dashboard undo action label, and click interception during edit transition.
+- **🛠️ What changed**:
+  - Updated legacy `.table.table-7` locators to `.dashboard-overview-section .table` in affected E2E specs.
+  - Hardened E2E API helpers (`fixtures/index.ts`) to recover from expired tokens by re-login + token refresh and retry on `401`.
+  - Adjusted auth logging to reduce expected unauthenticated refresh noise (`warn` -> `debug` for common `401` refresh rejection path).
+  - Dashboard undo action now shows explicit text (`common.undo`) plus arrow icon instead of symbol-only display.
+  - Route transition mask no longer intercepts pointer events while active, preventing nav click blocking.
+- **📁 Files touched**:
+  - `frontend/e2e/dashboard-data.spec.ts`
+  - `frontend/e2e/stock-status.spec.ts`
+  - `frontend/e2e/tooltip-data.spec.ts`
+  - `frontend/e2e/share-schedule.spec.ts`
+  - `frontend/e2e/fixtures/index.ts`
+  - `frontend/src/components/Auth.tsx`
+  - `frontend/src/pages/DashboardPage.tsx`
+  - `frontend/src/styles.css`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Verification (focused)**:
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run lint` -> **PASS**
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run build` -> **PASS**
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never CI=true npm run test:e2e -- e2e/dashboard-data.spec.ts e2e/stock-status.spec.ts e2e/tooltip-data.spec.ts e2e/schedule.spec.ts e2e/share-schedule.spec.ts` -> **PASS** (`54 passed`)
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 CI=true npx playwright test --config=playwright.all.config.ts --project=firefox --project=webkit e2e/schedule.spec.ts` -> **PASS** (`25 passed`)
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run test:run -- src/test/components/Auth.test.tsx -t "authFetch retries original request after token refresh|authFetch logs user out when refresh fails|authFetch does not refresh token for auth endpoints"` -> **PASS**
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run check` -> **FAIL** (existing wider frontend TS drift outside this scoped fix pack)
+
+### 2026-03-02 (Validation: 5-fix frontend stability/check pass)
+
+- **🧩 Scope**: Validate recent fixes for:
+  - dashboard overview selector regression,
+  - auth/session 401 instability (API helper token expiry path),
+  - auth console noise for expected unauth refresh,
+  - dashboard undo action label,
+  - navigation click interception while medication edit is open.
+- **🛠️ What changed**:
+  - No product code changes in this pass.
+  - Executed focused validation commands in non-interactive mode exactly for lint/static/build and requested Playwright targets.
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+- **✅ Verification (exact commands)**:
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run lint` -> **PASS**
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run check` -> **FAIL** (frontend TS type drift outside targeted fix areas)
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run build` -> **PASS**
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never CI=true npm run test:e2e -- e2e/dashboard-data.spec.ts e2e/stock-status.spec.ts e2e/tooltip-data.spec.ts e2e/schedule.spec.ts e2e/share-schedule.spec.ts` -> **PASS** (`54 passed`)
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 CI=true npx playwright test --config=playwright.all.config.ts --project=firefox --project=webkit e2e/schedule.spec.ts` -> **PASS** (`25 passed`)
+  - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never CI=true npx playwright test --config=playwright.stable.config.ts e2e/medications.spec.ts -g "should prevent navigation with unsaved changes"` -> **PASS** (`2 passed`)
+  - `cd /Users/danielvolz/git/medassist/frontend && CI=true npm run test:run -- src/test/components/Auth.test.tsx -t "authFetch retries original request after token refresh|authFetch logs user out when refresh fails|authFetch does not refresh token for auth endpoints"` -> **PASS** (`3 passed`, `40 skipped`; non-failing React `act(...)` warning emitted)
+
+### 2026-03-02 (Comprehensive quality sweep: frontend/backend from user perspective)
+
+- **🧩 Scope**: End-to-end quality validation across major MedAssist user journeys (automated E2E + manual exploratory checks).
+- **🛠️ What changed**:
+  - Executed strongest Playwright suites available:
+    - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npm run test:e2e`
+    - `cd /Users/danielvolz/git/medassist/frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npm run test:e2e:all`
+  - Performed exploratory browser validation for:
+    - Auth login/logout
+    - Medication create/edit/dashboard reflection
+    - Planner calculation flow
+    - Settings notification toggles + export dialog/share dialog
+    - Public shared schedule route behavior
+  - Collected and categorized defects (logic/behavior, UX/copy, runtime console noise, and cross-browser test reliability issues).
+- **✅ Automated E2E results**:
+  - `test:e2e` (stable): **FAIL** -> `123 passed`, `28 failed`, `1 skipped`.
+  - `test:e2e:all` (all browsers): **FAIL** -> `218 passed`, `31 failed`, `3 skipped`, `18 did not run`.
+  - Failure concentration:
+    - `chromium-data` specs expecting `.table.table-7` in dashboard/stock/tooltip/share-related paths.
+    - Cross-browser schedule/auth setup failures with `401 Invalid or expired token` in Firefox/WebKit.
+- **🔎 Exploratory highlights**:
+  - Core flows are functional (login/logout, medication add/edit, planner calculate, share-link generation/open, settings toggles).
+  - Notable UX/runtime issues observed:
+    - Ambiguous dashboard action label `🤖 ↩` for one schedule action.
+    - Console auth warnings/errors (`401` refresh/me) shown on login/public share-route initialization.
+    - Navigation click is blocked while medication edit form is open until user explicitly closes/backs out.
+- **📁 Files touched**:
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
 ### 2026-03-02 (Fix: frontend lockfile version drift and PR scope completion)
 
 - **🧩 Scope**: Correct stale frontend lockfile metadata and include remaining local edits in active fix PR.

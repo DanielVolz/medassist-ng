@@ -125,7 +125,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show all medications in overview table", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// All 5 medications should appear
@@ -139,7 +139,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show High status chip for well-stocked medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// High stock med row should have a .status-chip.high
@@ -151,7 +151,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show Normal status chip for moderate stock medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		const normalRow = overviewTable.locator(".table-row").filter({ hasText: MED_NORMAL });
@@ -162,7 +162,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show Warning status chip for low stock medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		const lowRow = overviewTable.locator(".table-row").filter({ hasText: MED_LOW });
@@ -173,7 +173,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show Danger status chip for critical stock medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		const criticalRow = overviewTable.locator(".table-row").filter({ hasText: MED_CRITICAL });
@@ -184,7 +184,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show Danger status chip for depleted medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		const depletedRow = overviewTable.locator(".table-row").filter({ hasText: MED_DEPLETED });
@@ -195,7 +195,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show days-left and runs-out date in overview", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// High stock should show many days (around 299)
@@ -227,7 +227,7 @@ test.describe("Stock Status Levels", () => {
 	test("should color-code stock values depending on status", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// High stock row should have success-text class on stock cells
@@ -255,7 +255,7 @@ test.describe("Stock Status Levels", () => {
 	test("should open medication detail modal showing stock info", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Click on the critical stock medication row
@@ -278,7 +278,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show generic name in overview for medications that have one", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Click on the normal stock med (has generic name "Ibuprofen 400mg")

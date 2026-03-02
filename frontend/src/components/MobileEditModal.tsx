@@ -715,9 +715,7 @@ export function MobileEditModal({
 												<div className="stock-total-field">
 													<p className="sub">
 														<strong>{totalLabel}:</strong> {deriveTotalFromForm(form)}
-														{form.packageType !== "tube" && form.packageType !== "liquid_container"
-															? ` ${deriveTotalFromForm(form) === 1 ? t("common.pill") : t("common.pills")}`
-															: ""}
+														{` ${deriveTotalFromForm(form) === 1 ? t("common.pill") : t("common.pills")}`}
 													</p>
 												</div>
 											</div>

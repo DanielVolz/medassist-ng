@@ -177,13 +177,58 @@ export { expect };
 // ---------------------------------------------------------------------------
 const API_BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
 
-function getAuthCookie(): string | null {
+let cachedAuthCookie: string | null = null;
+
+function readAuthCookieFromFile(): string | null {
 	try {
 		const state = JSON.parse(fs.readFileSync(authFile, "utf-8"));
 		return state.cookies?.find((c: { name: string }) => c.name === "access_token")?.value ?? null;
 	} catch {
 		return null;
 	}
+}
+
+function extractCookieValue(setCookieHeaders: string[], name: string): string | null {
+	for (const header of setCookieHeaders) {
+		const [pair] = header.split(";");
+		if (!pair) continue;
+		const [cookieName, ...valueParts] = pair.split("=");
+		if (cookieName?.trim() !== name) continue;
+		const value = valueParts.join("=").trim();
+		if (value) return value;
+	}
+	return null;
+}
+
+async function refreshAuthCookieViaLogin(): Promise<string | null> {
+	const res = await fetch(`${API_BASE}/api/auth/login`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			username: TEST_USER.username,
+			password: TEST_USER.password,
+			rememberMe: false,
+		}),
+	});
+
+	if (!res.ok) return null;
+
+	const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+	const setCookieHeaders = typeof getSetCookie === "function" ? getSetCookie.call(res.headers) : [];
+	const fallback = res.headers.get("set-cookie");
+	if (fallback) setCookieHeaders.push(fallback);
+
+	const accessToken = extractCookieValue(setCookieHeaders, "access_token");
+	if (accessToken) {
+		cachedAuthCookie = accessToken;
+	}
+	return accessToken;
+}
+
+function getAuthCookie(): string | null {
+	if (cachedAuthCookie) return cachedAuthCookie;
+	cachedAuthCookie = readAuthCookieFromFile();
+	return cachedAuthCookie;
 }
 
 /** Typed medication response (subset of fields we care about) */
@@ -229,7 +274,7 @@ export async function createMedicationViaAPI(data: {
 		takenBy?: string | null;
 	}[];
 }): Promise<TestMedication> {
-	const token = getAuthCookie();
+	let token = getAuthCookie();
 	const isBottle = data.packageType === "bottle";
 	const body = {
 		packageType: isBottle ? "bottle" : "blister",
@@ -261,6 +306,10 @@ export async function createMedicationViaAPI(data: {
 			},
 			body: JSON.stringify(body),
 		});
+		if (res.status === 401) {
+			token = await refreshAuthCookieViaLogin();
+			if (token) continue;
+		}
 		if (res.status === 429) {
 			// Rate limited — exponential backoff: 3s, 6s, 9s, 12s, 15s
 			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
@@ -280,12 +329,16 @@ export async function createMedicationViaAPI(data: {
  * Includes retry for rate-limited responses.
  */
 export async function deleteMedicationViaAPI(id: number): Promise<void> {
-	const token = getAuthCookie();
+	let token = getAuthCookie();
 	for (let attempt = 0; attempt < 3; attempt++) {
 		const res = await fetch(`${API_BASE}/api/medications/${id}`, {
 			method: "DELETE",
 			headers: token ? { Cookie: `access_token=${token}` } : {},
 		});
+		if (res.status === 401) {
+			token = await refreshAuthCookieViaLogin();
+			if (token) continue;
+		}
 		if (res.status === 429) {
 			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
 			continue;
@@ -299,11 +352,15 @@ export async function deleteMedicationViaAPI(id: number): Promise<void> {
  * Includes retry logic for rate-limited responses.
  */
 export async function deleteAllMedicationsViaAPI(): Promise<void> {
-	const token = getAuthCookie();
+	let token = getAuthCookie();
 	for (let attempt = 0; attempt < 3; attempt++) {
 		const res = await fetch(`${API_BASE}/api/medications`, {
 			headers: token ? { Cookie: `access_token=${token}` } : {},
 		});
+		if (res.status === 401) {
+			token = await refreshAuthCookieViaLogin();
+			if (token) continue;
+		}
 		if (res.status === 429) {
 			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
 			continue;
@@ -316,6 +373,10 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
 					method: "DELETE",
 					headers: token ? { Cookie: `access_token=${token}` } : {},
 				});
+				if (delRes.status === 401) {
+					token = await refreshAuthCookieViaLogin();
+					if (token) continue;
+				}
 				if (delRes.status === 429) {
 					await new Promise((r) => setTimeout(r, 3000));
 					continue;
@@ -332,7 +393,7 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
  * Requires a medication with takenBy to exist first.
  */
 export async function createShareTokenViaAPI(takenBy: string, scheduleDays = 30): Promise<TestShareToken> {
-	const token = getAuthCookie();
+	let token = getAuthCookie();
 	for (let attempt = 0; attempt < 5; attempt++) {
 		const res = await fetch(`${API_BASE}/api/share`, {
 			method: "POST",
@@ -342,6 +403,10 @@ export async function createShareTokenViaAPI(takenBy: string, scheduleDays = 30)
 			},
 			body: JSON.stringify({ takenBy, scheduleDays }),
 		});
+		if (res.status === 401) {
+			token = await refreshAuthCookieViaLogin();
+			if (token) continue;
+		}
 		if (res.status === 429) {
 			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
 			continue;

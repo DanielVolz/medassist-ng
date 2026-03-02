@@ -1005,7 +1005,8 @@ export function DashboardPage() {
 																											🤖
 																										</span>
 																									)}
-																									↩
+																									<span className="dose-btn-label">{t("common.undo")}</span>
+																									<span aria-hidden="true">↩</span>
 																								</button>
 																							) : (
 																								<button
@@ -1287,7 +1288,8 @@ export function DashboardPage() {
 																											🤖
 																										</span>
 																									)}
-																									↩
+																									<span className="dose-btn-label">{t("common.undo")}</span>
+																									<span aria-hidden="true">↩</span>
 																								</button>
 																							) : (
 																								<button
@@ -1532,7 +1534,8 @@ export function DashboardPage() {
 																											🤖
 																										</span>
 																									)}
-																									↩
+																									<span className="dose-btn-label">{t("common.undo")}</span>
+																									<span aria-hidden="true">↩</span>
 																								</button>
 																							) : (
 																								<button

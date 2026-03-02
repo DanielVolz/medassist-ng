@@ -65,7 +65,7 @@ test.describe("Dashboard with medications", () => {
 	test("should show medication overview table with medications", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 		await expect(overviewTable.locator(".table-head")).toBeVisible();
 
@@ -77,7 +77,7 @@ test.describe("Dashboard with medications", () => {
 	test("should show status chips in overview table", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Each medication row should have a status chip
@@ -88,7 +88,7 @@ test.describe("Dashboard with medications", () => {
 	test("should show stock information in overview", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// The Ibuprofen row should show stock info (60 pills minus today's usage = 59)
@@ -202,7 +202,7 @@ test.describe("Dashboard with medications", () => {
 	test("should open medication detail modal from overview table", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		const medRow = overviewTable.locator(".table-row").filter({ hasText: MED_1 }).first();

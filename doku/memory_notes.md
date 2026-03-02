@@ -23,6 +23,20 @@ Use this block for each meaningful task:
 
 ## Entries
 
+### 2026-03-02 (lockfile version alignment + include remaining local changes in PR #368)
+
+- 🧩 Task: Fix accidental frontend lockfile version drift and include remaining local changes in the active PR.
+- ✅ Decisions:
+	- Corrected `frontend/package-lock.json` root/package version from `1.17.1` to `1.18.0` to match `frontend/package.json`.
+	- Kept `.gitignore` local diff and lockfile diff in the same active branch `fix/desktop-intake-label-parity` so they can be added to PR #368 together.
+- 📁 Files touched:
+	- `frontend/package-lock.json`
+	- `.gitignore`
+	- `doku/memory_notes.md`
+	- `doku/report.md`
+- 🔜 Follow-up/open points:
+	- Push updated commit to PR #368 and verify updated file set in the PR.
+
 ### 2026-03-02 (schedule usage label follows selected intake unit)
 
 - 🧩 Task: Ensure liquid intake schedule label switches from ml to tsp/tbsp when intake unit is changed.

@@ -25,6 +25,18 @@ For each task, add:
 ```
 ## Entries
 
+### 2026-03-02 (Fix: frontend lockfile version drift and PR scope completion)
+
+- **🧩 Scope**: Correct stale frontend lockfile metadata and include remaining local edits in active fix PR.
+- **🛠️ What changed**:
+  - Fixed `frontend/package-lock.json` root/package version from `1.17.1` to `1.18.0` to match `frontend/package.json`.
+  - Prepared remaining local edits (`.gitignore` trailing slash normalization and lockfile correction) to be added to PR `#368`.
+- **📁 Files touched**:
+  - `frontend/package-lock.json`
+  - `.gitignore`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
 ### 2026-03-02 (Fix: liquid usage label follows selected intake unit)
 
 - **🧩 Scope**: Medication edit schedule label for liquid intakes.

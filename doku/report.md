@@ -25,6 +25,45 @@ For each task, add:
 ```
 ## Entries
 
+### 2026-03-02 (Fix: frontend lockfile version drift and PR scope completion)
+
+- **🧩 Scope**: Correct stale frontend lockfile metadata and include remaining local edits in active fix PR.
+- **🛠️ What changed**:
+  - Fixed `frontend/package-lock.json` root/package version from `1.17.1` to `1.18.0` to match `frontend/package.json`.
+  - Prepared remaining local edits (`.gitignore` trailing slash normalization and lockfile correction) to be added to PR `#368`.
+- **📁 Files touched**:
+  - `frontend/package-lock.json`
+  - `.gitignore`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
+### 2026-03-02 (Fix: liquid usage label follows selected intake unit)
+
+- **🧩 Scope**: Medication edit schedule label for liquid intakes.
+- **🛠️ What changed**:
+  - Updated desktop intake schedule label logic in `MedicationsPage` so `Usage (...)` follows the selected intake unit:
+    - `ml` -> `Usage (ml)`
+    - `tsp` -> `Usage (tsp)`
+    - `tbsp` -> `Usage (tbsp)`
+  - This now matches existing mobile behavior and keeps allowed units exactly as requested (`ml`, `teaspoon`, `tablespoon`).
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
+### 2026-03-02 (Recovery: desktop form field alignment restored)
+
+- **🧩 Scope**: Restore missing detail in desktop medication form layout.
+- **🛠️ What changed**:
+  - In `MedicationsPage` general tab, reordered form fields to enforce vertical pairing in the 2-column layout:
+    - left column: `Medication Start Date` above `Medication End Date`
+    - right column: `Package Type` above `Pill Form` (or `Medication Form` for tube/liquid container)
+  - No behavior or i18n text changes; order-only UI recovery.
+- **📁 Files touched**:
+  - `frontend/src/pages/MedicationsPage.tsx`
+  - `doku/memory_notes.md`
+  - `doku/report.md`
+
 ### 2026-03-02 (PR #364: fix failing Frontend Build + Playwright Stable checks)
 
 - **🧩 Scope**: Diagnose and fix CI failures on branch `fix/frontend-tube-liquid-semantics-parity` for:
@@ -2552,3 +2591,16 @@ For each task, add:
   - `doku/report.md`
 - **🔜 Follow-ups**:
   - Optional: run full repo-wide frontend check after existing unrelated E2E formatting diffs are cleaned up.
+
+## 2026-03-02 - Pre-PR Gate Validation (MedicationsPage label/order UI update)
+
+- Scope validated: `frontend/src/pages/MedicationsPage.tsx` (usage label selection by intake unit and medication end-date field order adjustment).
+- Commands executed:
+  - `cd frontend && npm run lint`
+  - `cd frontend && CI=true npm run test:run -- src/test/utils/schedule.test.ts`
+  - `cd frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npx playwright test e2e/medication-edit.spec.ts e2e/schedule.spec.ts --config=playwright.stable.config.ts --workers=1`
+- Results:
+  - Lint: PASS (`biome check` clean).
+  - Targeted frontend unit test: PASS (82 passed).
+  - Targeted frontend E2E tests: PASS (23 passed).
+- Gate decision: PASS for pre-PR local quality gate on this change scope.

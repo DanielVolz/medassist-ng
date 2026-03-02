@@ -15,6 +15,8 @@ const defaultForm: FormState = {
 	packCount: "1",
 	blistersPerPack: "1",
 	pillsPerBlister: "1",
+	packageAmountValue: "0",
+	packageAmountUnit: "ml",
 	looseTablets: "0",
 	totalPills: "",
 	pillWeightMg: "",

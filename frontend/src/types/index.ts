@@ -5,13 +5,19 @@
 export type PackageType = "blister" | "bottle" | "tube" | "liquid_container";
 
 // Common medication dose units
-export type DoseUnit = "mg" | "g" | "mcg" | "ml";
+export type DoseUnit = "mg" | "g" | "mcg" | "ml" | "units";
+
+export type MedicationForm = "tablet" | "capsule" | "topical" | "liquid";
+export type PillForm = "tablet" | "capsule";
+export type LifecycleCategory = "refill_when_empty" | "treatment_period";
+export type PackageAmountUnit = "ml" | "g";
 
 export const DOSE_UNITS: { value: DoseUnit; label: string }[] = [
 	{ value: "mg", label: "mg" },
 	{ value: "g", label: "g" },
 	{ value: "mcg", label: "mcg (µg)" },
 	{ value: "ml", label: "ml" },
+	{ value: "units", label: "units" },
 ];
 
 export type Blister = {
@@ -50,7 +56,14 @@ export type Medication = {
 	lastStockCorrectionAt?: string | null;
 	pillWeightMg?: number | null;
 	doseUnit?: DoseUnit | null; // Unit for the dose (mg, g, mcg, ml, IU, etc.)
+	medicationForm?: MedicationForm | null;
+	pillForm?: PillForm | null;
+	lifecycleCategory?: LifecycleCategory | null;
+	packageAmountValue?: number | null;
+	packageAmountUnit?: PackageAmountUnit | null;
 	medicationStartDate?: string | null;
+	medicationEndDate?: string | null;
+	autoMarkObsoleteAfterEndDate?: boolean;
 	blisters: Blister[]; // Legacy array format
 	intakes?: Intake[]; // New intake format with per-intake takenBy
 	imageUrl?: string | null;
@@ -114,15 +127,22 @@ export type FormState = {
 	name: string;
 	genericName: string;
 	takenBy: string[]; // Medication-level takenBy (legacy/compatibility)
+	medicationForm: MedicationForm;
+	pillForm: PillForm;
+	lifecycleCategory: LifecycleCategory;
 	packageType: PackageType;
 	packCount: string;
 	blistersPerPack: string;
 	pillsPerBlister: string;
+	packageAmountValue: string;
+	packageAmountUnit: PackageAmountUnit;
 	totalPills: string; // For bottle type: total capacity
 	looseTablets: string; // For blister: extra loose pills; for bottle: current stock
 	pillWeightMg: string;
 	doseUnit: DoseUnit; // Unit for the dose (mg, g, mcg, ml, IU, etc.)
 	medicationStartDate: string;
+	medicationEndDate: string;
+	autoMarkObsoleteAfterEndDate: boolean;
 	expiryDate: string;
 	notes: string;
 	prescriptionEnabled: boolean;

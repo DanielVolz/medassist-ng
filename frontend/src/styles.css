@@ -121,7 +121,7 @@ body.modal-open {
 .route-transition-mask.active {
 	transition: none;
 	opacity: 1;
-	pointer-events: auto;
+	pointer-events: none;
 }
 
 .hero {

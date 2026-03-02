@@ -72,7 +72,7 @@ test.describe("Share Schedule", () => {
 	test("should show taken-by badges on dashboard overview table", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Alice's medication should show "Alice" badge
@@ -253,7 +253,7 @@ test.describe("Share Schedule", () => {
 	test("should show notes icon on dashboard for medication with notes", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Alice's med has notes — should show the 📝 icon
@@ -265,7 +265,7 @@ test.describe("Share Schedule", () => {
 	test("should show notes in medication detail modal", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".table.table-7");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Click on Alice's med to open detail modal

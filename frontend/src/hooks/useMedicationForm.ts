@@ -213,7 +213,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 						every: String(i.every),
 						startDate: toDateValue(i.start),
 						startTime: toTimeValue(i.start),
-						intakeUnit: i.intakeUnit ?? "ml",
+						intakeUnit: (i.intakeUnit ?? "ml") as FormIntake["intakeUnit"],
 						takenBy: i.takenBy ?? "", // Convert null to empty string for form
 						intakeRemindersEnabled: i.intakeRemindersEnabled,
 					}))
@@ -222,7 +222,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 						every: String(s.every),
 						startDate: toDateValue(s.start),
 						startTime: toTimeValue(s.start),
-						intakeUnit: "ml",
+						intakeUnit: "ml" as const,
 						takenBy: "", // Legacy blisters have no per-intake takenBy
 						intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
 					}));

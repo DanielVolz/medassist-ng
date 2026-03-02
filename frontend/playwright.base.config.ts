@@ -7,7 +7,9 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			: {};
 	const baseURL = env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
 	const parsedWorkers = Number.parseInt(env.PLAYWRIGHT_WORKERS ?? "", 10);
-	const workers = Number.isFinite(parsedWorkers) && parsedWorkers > 0 ? parsedWorkers : env.CI ? 1 : 4;
+	// Default to single-worker execution to keep API-seeded E2E suites deterministic.
+	// Still allow explicit local overrides via PLAYWRIGHT_WORKERS.
+	const workers = Number.isFinite(parsedWorkers) && parsedWorkers > 0 ? parsedWorkers : 1;
 
 	const projects: NonNullable<PlaywrightTestConfig["projects"]> = [
 		{

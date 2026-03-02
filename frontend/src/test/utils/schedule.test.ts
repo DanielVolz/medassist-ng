@@ -1286,9 +1286,9 @@ describe("getNextReminderForMed", () => {
 		vi.useRealTimers();
 	});
 
-	const mockT = (key: string, options?: Record<string, number>) => {
-		if (options?.count) return `${key} (${options.count})`;
-		if (options?.days) return `${key} (${options.days})`;
+	const mockT = (key: string, options?: Record<string, unknown>) => {
+		if (typeof options?.count === "number") return `${key} (${options.count})`;
+		if (typeof options?.days === "number") return `${key} (${options.days})`;
 		return key;
 	};
 

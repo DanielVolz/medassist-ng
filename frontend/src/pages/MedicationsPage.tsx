@@ -1708,7 +1708,7 @@ export function MedicationsPage() {
 										<div key={idx} className="blister-row">
 											<div className="blister-inputs">
 												<label>
-													{getUsageLabel(intake.intakeUnit)}
+													{getUsageLabel(intake.intakeUnit ?? "ml")}
 													<FormNumberStepper
 														value={intake.usage}
 														onChange={(nextValue) => setIntakeValue(idx, "usage", nextValue)}

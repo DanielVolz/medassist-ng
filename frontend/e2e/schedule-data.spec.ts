@@ -224,5 +224,4 @@ test.describe("Schedule with medications", () => {
 			expect(await takeButtons.count()).toBeGreaterThanOrEqual(1);
 		}
 	});
-
 });

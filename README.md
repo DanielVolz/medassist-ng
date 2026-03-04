@@ -120,10 +120,10 @@ Share your medication schedule with others via a public link.
 </details>
 
 ### Smart Inventory
-- Track exact stock: packs, blisters, bottles, and loose pills
+- Track exact stock with package profiles (blister, bottle, tube, liquid container)
 - Display remaining days of supply
 - Automatic calculation based on intake schedule
-- Manual stock correction supports partial blisters and loose pills
+- Manual stock correction supports profile-specific stock semantics (sealed units + loose stock for blister, amount-based stock for bottle/tube/liquid)
 
 ### Medication Refill
 - One-click refill with pack or loose pill options
@@ -141,7 +141,7 @@ Share your medication schedule with others via a public link.
 - Intake reminders via push notifications
 
 ### Trip Planner
-- Calculate how many pills you need for a trip or date range
+- Calculate medication demand for a trip or date range with package-aware units
 - Plan ahead for vacations, business trips, or hospital stays
 - Send demand reports via email or push notification
 

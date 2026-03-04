@@ -17,8 +17,20 @@ import {
 import { useAuth } from "../components/Auth";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useMedicationForm, useModalHistory, useUnsavedChangesWarning } from "../hooks";
-import type { DoseUnit, FormState, Medication } from "../types";
-import { DOSE_UNITS, FIELD_LIMITS, getMedDisplayName, getPackageSize } from "../types";
+import type { DoseUnit, FormState, Medication, PackageType } from "../types";
+import {
+	allowsPillFormSelection,
+	DOSE_UNITS,
+	FIELD_LIMITS,
+	getMedDisplayName,
+	getPackageProfile,
+	getPackageSize,
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+	normalizePackageType,
+	PACKAGE_PROFILES,
+} from "../types";
 import { combineDateAndTime, formatDate, formatDateTime, formatNumber } from "../utils/formatters";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
@@ -239,7 +251,7 @@ export function MedicationsPage() {
 
 	// Calculate total tablets
 	const totalTablets = useMemo(() => {
-		if (form.packageType === "bottle" || form.packageType === "tube" || form.packageType === "liquid_container") {
+		if (isAmountBasedPackageType(form.packageType)) {
 			// For bottle type, looseTablets is the current stock
 			return Number(form.looseTablets) || 0;
 		}
@@ -274,19 +286,19 @@ export function MedicationsPage() {
 	}, [form.medicationStartDate, form.medicationEndDate, form.intakes, t]);
 
 	const allowFractionalIntake = useMemo(() => {
-		if (form.packageType === "liquid_container") return true;
-		if (form.packageType === "tube") return form.medicationForm === "liquid";
+		if (isLiquidContainerPackageType(form.packageType)) return true;
+		if (isTubePackageType(form.packageType)) return form.medicationForm === "liquid";
 		return form.pillForm === "tablet";
 	}, [form.packageType, form.medicationForm, form.pillForm]);
 
 	const getUsageLabel = useCallback(
 		(intakeUnit: "ml" | "tsp" | "tbsp") => {
-			if (form.packageType === "liquid_container") {
+			if (isLiquidContainerPackageType(form.packageType)) {
 				if (intakeUnit === "tsp") return t("form.blisters.usageTsp");
 				if (intakeUnit === "tbsp") return t("form.blisters.usageTbsp");
 				return t("form.blisters.usageMl");
 			}
-			if (form.packageType === "tube") {
+			if (isTubePackageType(form.packageType)) {
 				return form.medicationForm === "liquid" ? t("form.blisters.usageMl") : t("form.blisters.usageApplication");
 			}
 			if (form.pillForm === "capsule") return t("form.blisters.usageCapsules");
@@ -295,25 +307,22 @@ export function MedicationsPage() {
 		[form.packageType, form.medicationForm, form.pillForm, t]
 	);
 
-	const usesAmountLabels = form.packageType === "tube" || form.packageType === "liquid_container";
+	const usesAmountLabels = isTubePackageType(form.packageType) || isLiquidContainerPackageType(form.packageType);
 	const totalCapacityLabel = usesAmountLabels ? t("form.totalAmount") : t("form.totalCapacity");
 	const currentStockLabel = usesAmountLabels ? t("form.currentAmount") : t("form.currentPills");
 	const totalLabel = usesAmountLabels ? t("form.totalAmountLabel") : t("form.total");
 
 	const getMedicationPackageTypeLabel = useCallback(
 		(med: Medication) => {
-			if (med.packageType === "bottle") return t("form.packageTypeBottle");
-			if (med.packageType === "tube") return t("form.packageTypeTube");
-			if (med.packageType === "liquid_container") return t("form.packageTypeLiquidContainer");
-			return t("form.packageTypeBlister");
+			return t(getPackageProfile(med.packageType).labelKey);
 		},
 		[t]
 	);
 
 	const getMedicationStockSuffix = useCallback(
 		(med: Medication) => {
-			if (med.packageType === "tube") return "";
-			if (med.packageType === "liquid_container") return " ml";
+			if (isTubePackageType(med.packageType)) return "";
+			if (isLiquidContainerPackageType(med.packageType)) return " ml";
 			return ` ${getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}`;
 		},
 		[t]
@@ -321,10 +330,10 @@ export function MedicationsPage() {
 
 	const getMedicationUsageUnitLabel = useCallback(
 		(med: Medication, usage: number) => {
-			if (med.packageType === "tube") {
+			if (isTubePackageType(med.packageType)) {
 				return med.medicationForm === "liquid" ? "ml" : t("form.blisters.usageApplication");
 			}
-			if (med.packageType === "liquid_container") return "ml";
+			if (isLiquidContainerPackageType(med.packageType)) return "ml";
 			if (usage === 1) return t("common.pill");
 			return t("common.pills");
 		},
@@ -527,7 +536,7 @@ export function MedicationsPage() {
 			usage: Number(intake.usage) || 1,
 			every: Number(intake.every) || 1,
 			start: combineDateAndTime(intake.startDate, intake.startTime),
-			intakeUnit: form.packageType === "liquid_container" ? intake.intakeUnit : null,
+			intakeUnit: isLiquidContainerPackageType(form.packageType) ? intake.intakeUnit : null,
 			takenBy: intake.takenBy.trim() || null, // Empty string becomes null
 			intakeRemindersEnabled: intake.intakeRemindersEnabled,
 		}));
@@ -544,22 +553,23 @@ export function MedicationsPage() {
 		const lowRefillThreshold = Math.min(Number(form.prescriptionLowRefillThreshold || 1), authorizedRefills);
 
 		let derivedMedicationForm: string;
-		if (form.packageType === "tube") {
+		if (isTubePackageType(form.packageType)) {
 			derivedMedicationForm =
 				form.medicationForm === "liquid" || form.medicationForm === "topical" ? form.medicationForm : "topical";
-		} else if (form.packageType === "liquid_container") {
+		} else if (isLiquidContainerPackageType(form.packageType)) {
 			derivedMedicationForm = "liquid";
 		} else {
 			derivedMedicationForm = form.pillForm;
 		}
 
-		const tubeTotalAmount =
-			form.packageType === "tube" ? (Number(form.packCount) || 0) * (Number(form.packageAmountValue ?? 0) || 0) : null;
+		const tubeTotalAmount = isTubePackageType(form.packageType)
+			? (Number(form.packCount) || 0) * (Number(form.packageAmountValue ?? 0) || 0)
+			: null;
 
 		let packageAmountUnit = form.packageAmountUnit ?? "ml";
-		if (form.packageType === "tube") {
+		if (isTubePackageType(form.packageType)) {
 			packageAmountUnit = "g";
-		} else if (form.packageType === "liquid_container") {
+		} else if (isLiquidContainerPackageType(form.packageType)) {
 			packageAmountUnit = "ml";
 		}
 
@@ -568,16 +578,19 @@ export function MedicationsPage() {
 			genericName: form.genericName.trim() || null,
 			takenBy: form.takenBy.length > 0 ? form.takenBy : [],
 			medicationForm: derivedMedicationForm,
-			pillForm: form.packageType === "tube" || form.packageType === "liquid_container" ? null : form.pillForm,
+			pillForm:
+				isTubePackageType(form.packageType) || isLiquidContainerPackageType(form.packageType) ? null : form.pillForm,
 			lifecycleCategory: form.lifecycleCategory,
-			packageType: form.packageType,
-			packCount: form.packageType === "tube" ? Math.max(1, Number(form.packCount) || 1) : Number(form.packCount) || 0,
-			blistersPerPack: form.packageType === "tube" ? 1 : Number(form.blistersPerPack) || 1,
-			pillsPerBlister: form.packageType === "tube" ? 1 : Number(form.pillsPerBlister) || 1,
+			packageType: normalizePackageType(form.packageType),
+			packCount: isTubePackageType(form.packageType)
+				? Math.max(1, Number(form.packCount) || 1)
+				: Number(form.packCount) || 0,
+			blistersPerPack: isTubePackageType(form.packageType) ? 1 : Number(form.blistersPerPack) || 1,
+			pillsPerBlister: isTubePackageType(form.packageType) ? 1 : Number(form.pillsPerBlister) || 1,
 			packageAmountValue: Number(form.packageAmountValue ?? 0) || 0,
 			packageAmountUnit,
-			totalPills: form.packageType === "tube" ? tubeTotalAmount : Number(form.totalPills) || null,
-			looseTablets: form.packageType === "tube" ? tubeTotalAmount || 0 : Number(form.looseTablets) || 0,
+			totalPills: isTubePackageType(form.packageType) ? tubeTotalAmount : Number(form.totalPills) || null,
+			looseTablets: isTubePackageType(form.packageType) ? tubeTotalAmount || 0 : Number(form.looseTablets) || 0,
 			pillWeightMg: Number(form.pillWeightMg) || null,
 			doseUnit: form.doseUnit,
 			medicationStartDate: form.medicationStartDate || null,
@@ -981,7 +994,7 @@ export function MedicationsPage() {
 												<span>
 													{t("medications.details.type")}: <strong>{getMedicationPackageTypeLabel(med)}</strong>
 												</span>
-												{med.packageType === "blister" ? (
+												{!isAmountBasedPackageType(med.packageType) ? (
 													<>
 														<span>
 															{t("medications.details.packs")}: <strong>{med.packCount}</strong>
@@ -1014,7 +1027,7 @@ export function MedicationsPage() {
 													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
 													: getPackageSize(med)}{" "}
 												/ {getPackageSize(med)}
-												{med.packageType === "tube" ? "" : getMedicationStockSuffix(med)}
+												{getMedicationStockSuffix(med)}
 												{(coverageByMed[getMedDisplayName(med)]
 													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
 													: getPackageSize(med)) > getPackageSize(med) && (
@@ -1250,14 +1263,13 @@ export function MedicationsPage() {
 										<select
 											className="package-type-select"
 											value={form.packageType}
-											onChange={(e) =>
-												handleValueChange("packageType", e.target.value as import("../types").PackageType)
-											}
+											onChange={(e) => handleValueChange("packageType", e.target.value as PackageType)}
 										>
-											<option value="blister">{t("form.packageTypeBlister")}</option>
-											<option value="bottle">{t("form.packageTypeBottle")}</option>
-											<option value="tube">{t("form.packageTypeTube")}</option>
-											<option value="liquid_container">{t("form.packageTypeLiquidContainer")}</option>
+											{PACKAGE_PROFILES.map((profile) => (
+												<option key={profile.value} value={profile.value}>
+													{t(profile.labelKey)}
+												</option>
+											))}
 										</select>
 									</label>
 									<label>
@@ -1268,7 +1280,7 @@ export function MedicationsPage() {
 											placeholder={t("common.optional")}
 										/>
 									</label>
-									{form.packageType !== "tube" && form.packageType !== "liquid_container" && (
+									{allowsPillFormSelection(form.packageType) && (
 										<label>
 											{t("form.pillForm")}
 											<select
@@ -1280,7 +1292,7 @@ export function MedicationsPage() {
 											</select>
 										</label>
 									)}
-									{form.packageType === "tube" && (
+									{isTubePackageType(form.packageType) && (
 										<label>
 											{t("form.medicationForm")}
 											<select value={"topical"} onChange={() => handleValueChange("medicationForm", "topical")}>
@@ -1288,7 +1300,7 @@ export function MedicationsPage() {
 											</select>
 										</label>
 									)}
-									{form.packageType === "liquid_container" && (
+									{isLiquidContainerPackageType(form.packageType) && (
 										<label>
 											{t("form.medicationForm")}
 											<select value={"liquid"} onChange={() => handleValueChange("medicationForm", "liquid")}>
@@ -1423,7 +1435,7 @@ export function MedicationsPage() {
 								<div className="full form-category">
 									<h4 className="form-category-title">{t("form.sections.stock")}</h4>
 									{(() => {
-										if (form.packageType === "blister") {
+										if (!isAmountBasedPackageType(form.packageType)) {
 											return (
 												<>
 													<label>
@@ -1464,7 +1476,7 @@ export function MedicationsPage() {
 											);
 										}
 
-										if (form.packageType === "tube") {
+										if (isTubePackageType(form.packageType)) {
 											return (
 												<>
 													<label>
@@ -1536,7 +1548,7 @@ export function MedicationsPage() {
 											</>
 										);
 									})()}
-									{form.packageType !== "tube" && form.packageType !== "liquid_container" && (
+									{allowsPillFormSelection(form.packageType) && (
 										<label className="full">
 											{t("form.pillWeight")} ({form.doseUnit})
 											<div className="dose-input-group">
@@ -1562,7 +1574,7 @@ export function MedicationsPage() {
 											</div>
 										</label>
 									)}
-									{(form.packageType === "bottle" || form.packageType === "liquid_container") && (
+									{isAmountBasedPackageType(form.packageType) && !isTubePackageType(form.packageType) && (
 										<div className="full stock-total-row">
 											<label className="stock-total-field">
 												{totalLabel}
@@ -1570,7 +1582,7 @@ export function MedicationsPage() {
 											</label>
 										</div>
 									)}
-									{form.packageType === "liquid_container" && (
+									{isLiquidContainerPackageType(form.packageType) && (
 										<label className="full">
 											{t("form.packageAmount")}
 											<div className="dose-input-group">
@@ -1744,7 +1756,7 @@ export function MedicationsPage() {
 														onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
 													/>
 												</label>
-												{form.packageType === "liquid_container" && (
+												{isLiquidContainerPackageType(form.packageType) && (
 													<label>
 														{t("form.blisters.intakeUnit")}
 														<select

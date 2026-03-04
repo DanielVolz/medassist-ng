@@ -6,7 +6,14 @@ import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import { useModalHistory } from "../hooks";
-import { type Coverage, getMedDisplayName } from "../types";
+import {
+	allowsPillFormSelection,
+	type Coverage,
+	getMedDisplayName,
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+} from "../types";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
 import { expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
 import {
@@ -132,15 +139,15 @@ export function DashboardPage() {
 	const prescriptionEmptyCount = prescriptionLowMeds.filter((med) => med.remainingRefills <= 0).length;
 
 	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
-		med?.packageType === "liquid_container" || med?.medicationForm === "liquid"
+		isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid"
 			? t("form.packageAmountUnitMl")
 			: t("form.blisters.applications", { count: Math.abs(value) });
 
 	const formatStockLabel = (med: (typeof meds)[number] | undefined, medsLeft: number) => {
-		if (med?.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(med?.packageType)) {
 			return `${formatNumber(medsLeft)} ${t("form.packageAmountUnitMl")}`;
 		}
-		if (med?.packageType === "tube") {
+		if (isTubePackageType(med?.packageType)) {
 			return `${formatNumber(medsLeft)} ${getTubeUnitLabel(med, medsLeft)}`;
 		}
 		return t("table.pillsCount", { count: Math.round(medsLeft) });
@@ -177,10 +184,10 @@ export function DashboardPage() {
 		usage: number,
 		intakeUnit?: "ml" | "tsp" | "tbsp" | null
 	) => {
-		if (med?.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(med?.packageType)) {
 			return formatLiquidUsageLabel(usage, intakeUnit);
 		}
-		if (med?.packageType === "tube") {
+		if (isTubePackageType(med?.packageType)) {
 			return `${usage} ${getTubeUnitLabel(med, usage)}`;
 		}
 		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
@@ -192,7 +199,7 @@ export function DashboardPage() {
 		intakeUnit?: "ml" | "tsp" | "tbsp" | null,
 		doses?: Array<{ usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }>
 	) => {
-		if (med?.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(med?.packageType)) {
 			if (doses && doses.length > 0) {
 				const normalizedDoses = doses.filter((dose) => Number.isFinite(Number(dose.usage)) && Number(dose.usage) > 0);
 				if (normalizedDoses.length > 0) {
@@ -214,7 +221,7 @@ export function DashboardPage() {
 
 			return formatLiquidUsageLabel(total, intakeUnit);
 		}
-		if (med?.packageType === "tube") {
+		if (isTubePackageType(med?.packageType)) {
 			return `${total} ${getTubeUnitLabel(med, total)}`;
 		}
 		return t("common.pillsTotal", { count: total });
@@ -245,7 +252,7 @@ export function DashboardPage() {
 			const personMultiplier = hasPerIntakeTakenBy ? 1 : Math.max(1, med.takenBy?.length ?? 0);
 			const normalizedUsage = (usage * personMultiplier) / every;
 
-			if (med.packageType === "liquid_container") {
+			if (isLiquidContainerPackageType(med.packageType)) {
 				dailyTotal += convertLiquidUsageToMl(normalizedUsage, intake.intakeUnit ?? "ml");
 			} else {
 				dailyTotal += normalizedUsage;
@@ -254,11 +261,11 @@ export function DashboardPage() {
 
 		if (dailyTotal <= 0) return "-";
 
-		if (med.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(med.packageType)) {
 			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: t("form.packageAmountUnitMl") });
 		}
 
-		if (med.packageType === "tube") {
+		if (isTubePackageType(med.packageType)) {
 			const tubeUnit =
 				med.medicationForm === "liquid"
 					? t("form.packageAmountUnitMl")
@@ -273,7 +280,7 @@ export function DashboardPage() {
 	const shouldHideNoScheduleStatusForTube = (
 		med: (typeof meds)[number] | undefined,
 		status: { className: string; label: string } | null
-	) => med?.packageType === "tube" && status?.label === "status.noSchedule";
+	) => isTubePackageType(med?.packageType) && status?.label === "status.noSchedule";
 
 	const getVisibleStockStatus = (
 		med: (typeof meds)[number] | undefined,
@@ -746,9 +753,7 @@ export function DashboardPage() {
 											</span>
 										</span>
 										<span data-label={t("table.stock")} className={textClass}>
-											{med?.packageType === "bottle" ||
-											med?.packageType === "tube" ||
-											med?.packageType === "liquid_container"
+											{isAmountBasedPackageType(med?.packageType)
 												? formatStockLabel(med, row.medsLeft)
 												: formatFullBlisters(stock.fullBlisters, t)}
 										</span>
@@ -757,11 +762,9 @@ export function DashboardPage() {
 										</span>
 										<span
 											data-label={t("table.stockDetails")}
-											className={`${textClass}${med?.packageType === "bottle" || med?.packageType === "tube" || med?.packageType === "liquid_container" ? " hide-on-card" : ""}`}
+											className={`${textClass}${isAmountBasedPackageType(med?.packageType) ? " hide-on-card" : ""}`}
 										>
-											{med?.packageType === "bottle" ||
-											med?.packageType === "tube" ||
-											med?.packageType === "liquid_container"
+											{isAmountBasedPackageType(med?.packageType)
 												? "—"
 												: formatOpenBlisterAndLoose(
 														stock.openBlisterPills,
@@ -958,11 +961,9 @@ export function DashboardPage() {
 																				<span className="dose-usage-main">
 																					{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
 																				</span>
-																				{med?.packageType !== "tube" &&
-																					med?.packageType !== "liquid_container" &&
-																					med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																					)}
+																				{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
+																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				)}
 																			</span>
 																			{dose.intakeRemindersEnabled && (
 																				<span
@@ -1241,11 +1242,9 @@ export function DashboardPage() {
 																				<span className="dose-usage-main">
 																					{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
 																				</span>
-																				{med?.packageType !== "tube" &&
-																					med?.packageType !== "liquid_container" &&
-																					med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																					)}
+																				{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
+																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				)}
 																			</span>
 																			{dose.intakeRemindersEnabled && (
 																				<span
@@ -1487,11 +1486,9 @@ export function DashboardPage() {
 																				<span className="dose-usage-main">
 																					{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
 																				</span>
-																				{med?.packageType !== "tube" &&
-																					med?.packageType !== "liquid_container" &&
-																					med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																					)}
+																				{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
+																					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				)}
 																			</span>
 																			{dose.intakeRemindersEnabled && (
 																				<span

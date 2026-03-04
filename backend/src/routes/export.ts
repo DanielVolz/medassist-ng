@@ -10,6 +10,7 @@ import { doseTracking, medications, refillHistory, shareTokens, userSettings } f
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { normalizePackageType, PACKAGE_TYPES } from "../utils/package-profiles.js";
 import { parseIntakesJson, parseTakenByJson } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(getDataDir(), "images");
@@ -39,7 +40,7 @@ const inventorySchema = z.object({
 	totalPills: z.number().int().nullable().optional(), // For bottle type: total capacity
 	looseTablets: z.number().int().min(0).default(0),
 	stockAdjustment: z.number().int().default(0), // Manual stock correction
-	packageType: z.enum(["blister", "bottle", "tube", "liquid_container"]).default("blister"),
+	packageType: z.enum(PACKAGE_TYPES).default("blister"),
 	packageAmountValue: z.number().int().min(0).default(0),
 	packageAmountUnit: z.enum(["ml", "g"]).default("ml"),
 });
@@ -319,7 +320,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					totalPills: med.totalPills ?? null,
 					looseTablets: med.looseTablets ?? 0,
 					stockAdjustment: med.stockAdjustment ?? 0,
-					packageType: med.packageType ?? "blister",
+					packageType: normalizePackageType(med.packageType),
 					packageAmountValue: med.packageAmountValue ?? 0,
 					packageAmountUnit: (med.packageAmountUnit ?? "ml") as "ml" | "g",
 				},
@@ -595,7 +596,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						medicationForm: med.medicationForm ?? "tablet",
 						pillForm: med.pillForm || null,
 						lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
-						packageType: med.inventory.packageType ?? "blister",
+						packageType: normalizePackageType(med.inventory.packageType),
 						packageAmountValue: med.inventory.packageAmountValue ?? 0,
 						packageAmountUnit: med.inventory.packageAmountUnit ?? "ml",
 						packCount: med.inventory.packCount,

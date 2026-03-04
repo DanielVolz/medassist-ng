@@ -8,6 +8,12 @@ import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { getFooterHtml, getFooterPlain, getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
 import type { ServiceLogger } from "../utils/logger.js";
+import {
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+	normalizePackageType,
+} from "../utils/package-profiles.js";
 // Import shared utilities
 import {
 	type Blister,
@@ -268,9 +274,10 @@ async function getMedicationsNeedingReminder(
 	const msPerDay = 86_400_000;
 
 	for (const row of rows) {
+		const packageType = normalizePackageType(row.packageType);
 		// Tube stock reminders are intentionally disabled:
 		// topical usage in grams cannot be mapped reliably to schedule events.
-		if ((row.packageType ?? "blister") === "tube") continue;
+		if (isTubePackageType(packageType)) continue;
 
 		const intakes = parseIntakesJson(
 			row.intakesJson,
@@ -283,10 +290,9 @@ async function getMedicationsNeedingReminder(
 			start: i.start,
 		}));
 
-		const originalTotalPills =
-			(row.packageType ?? "blister") === "bottle"
-				? row.looseTablets + (row.stockAdjustment ?? 0)
-				: row.packCount * row.blistersPerPack * row.pillsPerBlister + row.looseTablets + (row.stockAdjustment ?? 0);
+		const originalTotalPills = isAmountBasedPackageType(packageType)
+			? row.looseTablets + (row.stockAdjustment ?? 0)
+			: row.packCount * row.blistersPerPack * row.pillsPerBlister + row.looseTablets + (row.stockAdjustment ?? 0);
 
 		const stockCorrectionCutoff = row.lastStockCorrectionAt ? new Date(row.lastStockCorrectionAt).getTime() : 0;
 		const takenDoseIds = takenDoseIdsByMed.get(row.id) ?? new Set<string>();
@@ -393,7 +399,7 @@ async function getMedicationsNeedingReminder(
 
 		if (daysLeft === null) continue;
 
-		const isLiquid = (row.packageType ?? "blister") === "liquid_container";
+		const isLiquid = isLiquidContainerPackageType(packageType);
 		const { lowDays, criticalDays } = isLiquid
 			? getLiquidReminderThresholds(reminderDaysBefore)
 			: { lowDays: lowStockDays, criticalDays: reminderDaysBefore };

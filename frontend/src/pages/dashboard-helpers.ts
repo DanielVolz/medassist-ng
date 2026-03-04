@@ -1,5 +1,5 @@
 import type { Coverage, Medication, PackageType } from "../types";
-import { getMedTotal as getMedTotalFromTypes } from "../types";
+import { getMedTotal as getMedTotalFromTypes, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { splitCurrentBlisterStock } from "../utils/stock";
 
 export function userStorageKey(userId: number | undefined, key: string): string {
@@ -78,7 +78,7 @@ export function getReminderStatusData(
 
 	for (const c of allCoverage) {
 		const med = medByName.get(c.name);
-		if (med?.packageType === "tube") continue;
+		if (isTubePackageType(med?.packageType)) continue;
 
 		if (c.medsLeft <= 0) {
 			lowStockMap.set(c.name, { name: c.name, daysLeft: 0, isCritical: true });
@@ -88,7 +88,7 @@ export function getReminderStatusData(
 		if (c.daysLeft === null) continue;
 
 		const roundedDaysLeft = Math.round(c.daysLeft);
-		const isLiquid = med?.packageType === "liquid_container";
+		const isLiquid = isLiquidContainerPackageType(med?.packageType);
 		const liquidLowDays = Math.max(1, Math.floor(reminderDaysBefore));
 		const liquidCriticalDays = Math.max(1, Math.ceil(liquidLowDays / 2));
 		const isCritical = isLiquid ? c.daysLeft <= liquidCriticalDays : c.daysLeft <= reminderDaysBefore;

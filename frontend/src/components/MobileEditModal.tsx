@@ -10,7 +10,14 @@ import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useScrollLock } from "../hooks/useScrollLock";
 import type { DoseUnit, FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
-import { DOSE_UNITS } from "../types";
+import {
+	allowsPillFormSelection,
+	DOSE_UNITS,
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+	PACKAGE_PROFILES,
+} from "../types";
 import { deriveTotal } from "../utils";
 import { DateInput } from "./DateInput";
 import { FormNumberStepper } from "./FormNumberStepper";
@@ -68,7 +75,7 @@ export interface MobileEditModalProps {
 
 /** Calculate total pills from form state */
 function deriveTotalFromForm(form: FormState) {
-	if (form.packageType === "bottle" || form.packageType === "tube" || form.packageType === "liquid_container") {
+	if (isAmountBasedPackageType(form.packageType)) {
 		// For bottle type, looseTablets is the current stock
 		return Number(form.looseTablets) || 0;
 	}
@@ -126,19 +133,19 @@ export function MobileEditModal({
 	const activeTabIndexRef = useRef(0);
 
 	const allowFractionalIntake = useMemo(() => {
-		if (form.packageType === "liquid_container") return true;
-		if (form.packageType === "tube") return form.medicationForm === "liquid";
+		if (isLiquidContainerPackageType(form.packageType)) return true;
+		if (isTubePackageType(form.packageType)) return form.medicationForm === "liquid";
 		return form.pillForm === "tablet";
 	}, [form.packageType, form.medicationForm, form.pillForm]);
 
 	const getUsageLabel = useCallback(
 		(intake: (typeof form.intakes)[number]) => {
-			if (form.packageType === "liquid_container") {
+			if (isLiquidContainerPackageType(form.packageType)) {
 				if (intake.intakeUnit === "tsp") return t("form.blisters.usageTsp");
 				if (intake.intakeUnit === "tbsp") return t("form.blisters.usageTbsp");
 				return t("form.blisters.usageMl");
 			}
-			if (form.packageType === "tube") {
+			if (isTubePackageType(form.packageType)) {
 				return form.medicationForm === "liquid" ? t("form.blisters.usageMl") : t("form.blisters.usageApplication");
 			}
 			if (form.pillForm === "capsule") return t("form.blisters.usageCapsules");
@@ -147,7 +154,7 @@ export function MobileEditModal({
 		[form.packageType, form.medicationForm, form.pillForm, t]
 	);
 
-	const usesAmountLabels = form.packageType === "tube" || form.packageType === "liquid_container";
+	const usesAmountLabels = isTubePackageType(form.packageType) || isLiquidContainerPackageType(form.packageType);
 	const totalCapacityLabel = usesAmountLabels ? t("form.totalAmount") : t("form.totalCapacity");
 	const currentStockLabel = usesAmountLabels ? t("form.currentAmount") : t("form.currentPills");
 	const totalLabel = usesAmountLabels ? t("form.totalAmountLabel") : t("form.total");
@@ -432,10 +439,11 @@ export function MobileEditModal({
 												value={form.packageType}
 												onChange={(e) => onHandleValueChange("packageType", e.target.value as FormState["packageType"])}
 											>
-												<option value="blister">{t("form.packageTypeBlister")}</option>
-												<option value="bottle">{t("form.packageTypeBottle")}</option>
-												<option value="tube">{t("form.packageTypeTube")}</option>
-												<option value="liquid_container">{t("form.packageTypeLiquidContainer")}</option>
+												{PACKAGE_PROFILES.map((profile) => (
+													<option key={profile.value} value={profile.value}>
+														{t(profile.labelKey)}
+													</option>
+												))}
 											</select>
 										</label>
 										<label className="full">
@@ -446,7 +454,7 @@ export function MobileEditModal({
 												placeholder={t("common.optional")}
 											/>
 										</label>
-										{form.packageType !== "tube" && form.packageType !== "liquid_container" && (
+										{allowsPillFormSelection(form.packageType) && (
 											<label className="full">
 												{t("form.pillForm")}
 												<select
@@ -458,7 +466,7 @@ export function MobileEditModal({
 												</select>
 											</label>
 										)}
-										{form.packageType === "tube" && (
+										{isTubePackageType(form.packageType) && (
 											<label className="full">
 												{t("form.medicationForm")}
 												<select value={"topical"} onChange={() => onHandleValueChange("medicationForm", "topical")}>
@@ -466,7 +474,7 @@ export function MobileEditModal({
 												</select>
 											</label>
 										)}
-										{form.packageType === "liquid_container" && (
+										{isLiquidContainerPackageType(form.packageType) && (
 											<label className="full">
 												{t("form.medicationForm")}
 												<select value={"liquid"} onChange={() => onHandleValueChange("medicationForm", "liquid")}>
@@ -560,7 +568,7 @@ export function MobileEditModal({
 									<div className="full form-category">
 										<h4 className="form-category-title">{t("form.sections.stock")}</h4>
 										{(() => {
-											if (form.packageType === "blister") {
+											if (!isAmountBasedPackageType(form.packageType)) {
 												return (
 													<>
 														<label>
@@ -601,7 +609,7 @@ export function MobileEditModal({
 												);
 											}
 
-											if (form.packageType === "tube") {
+											if (isTubePackageType(form.packageType)) {
 												return (
 													<>
 														<label>
@@ -640,7 +648,7 @@ export function MobileEditModal({
 												);
 											}
 
-											if (form.packageType === "liquid_container") {
+											if (isLiquidContainerPackageType(form.packageType)) {
 												return (
 													<>
 														<label>
@@ -710,7 +718,7 @@ export function MobileEditModal({
 												</>
 											);
 										})()}
-										{form.packageType === "bottle" && (
+										{isAmountBasedPackageType(form.packageType) && !isTubePackageType(form.packageType) && (
 											<div className="full stock-total-row">
 												<div className="stock-total-field">
 													<p className="sub">
@@ -720,7 +728,7 @@ export function MobileEditModal({
 												</div>
 											</div>
 										)}
-										{form.packageType !== "tube" && form.packageType !== "liquid_container" && (
+										{allowsPillFormSelection(form.packageType) && (
 											<label className="full">
 												{t("form.pillWeight")} ({form.doseUnit})
 												<div className="dose-input-group">
@@ -837,7 +845,7 @@ export function MobileEditModal({
 														onChange={(e) => onSetIntakeValue(idx, "startTime", e.target.value)}
 													/>
 												</label>
-												{form.packageType === "liquid_container" && (
+												{isLiquidContainerPackageType(form.packageType) && (
 													<label className="compact full-row">
 														<span>{t("form.blisters.intakeUnit")}</span>
 														<select

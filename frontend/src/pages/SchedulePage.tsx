@@ -5,7 +5,7 @@ import { MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
-import { getMedDisplayName } from "../types";
+import { getMedDisplayName, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { formatNumber } from "../utils/formatters";
 import { expandDoseIds, isDoseDismissed } from "../utils/schedule";
 
@@ -21,12 +21,12 @@ function getStockStatus(
 	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number },
 	packageType?: string
 ) {
-	if (packageType === "tube") return { className: "success", label: "status.noSchedule" };
+	if (isTubePackageType(packageType)) return { className: "success", label: "status.noSchedule" };
 	// Out of stock or completely depleted = danger (red)
 	if (medsLeft <= 0 || daysLeft === 0) return { className: "danger", label: "status.outOfStock" };
 	// No schedule, but has stock = normal
 	if (daysLeft === null) return { className: "success", label: "status.noSchedule" };
-	if (packageType === "liquid_container") {
+	if (isLiquidContainerPackageType(packageType)) {
 		const lowDays = Math.max(1, Math.floor(settings.reminderDaysBefore));
 		const criticalDays = Math.max(1, Math.ceil(lowDays / 2));
 		if (daysLeft <= criticalDays) return { className: "danger", label: "status.criticalStock" };
@@ -95,10 +95,10 @@ export function SchedulePage() {
 	const shouldHideNoScheduleStatusForTube = (
 		med: (typeof meds)[number] | undefined,
 		status: { className: string; label: string } | null
-	) => med?.packageType === "tube" && status?.label === "status.noSchedule";
+	) => isTubePackageType(med?.packageType) && status?.label === "status.noSchedule";
 
 	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
-		med?.packageType === "liquid_container" || med?.medicationForm === "liquid"
+		isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid"
 			? t("form.packageAmountUnitMl")
 			: t("form.blisters.applications", { count: Math.abs(value) });
 
@@ -133,10 +133,10 @@ export function SchedulePage() {
 		usage: number,
 		intakeUnit?: "ml" | "tsp" | "tbsp" | null
 	) => {
-		if (med?.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(med?.packageType)) {
 			return formatLiquidUsageLabel(usage, intakeUnit);
 		}
-		if (med?.packageType === "tube") {
+		if (isTubePackageType(med?.packageType)) {
 			return `${usage} ${getTubeUnitLabel(med, usage)}`;
 		}
 		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
@@ -147,7 +147,7 @@ export function SchedulePage() {
 		total: number,
 		doses?: Array<{ usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }>
 	) => {
-		if (med?.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(med?.packageType)) {
 			if (doses && doses.length > 0) {
 				const normalizedDoses = doses.filter((dose) => Number.isFinite(Number(dose.usage)) && Number(dose.usage) > 0);
 				if (normalizedDoses.length > 0) {
@@ -167,7 +167,7 @@ export function SchedulePage() {
 			}
 			return `${formatNumber(total)} ${t("form.packageAmountUnitMl")}`;
 		}
-		if (med?.packageType === "tube") {
+		if (isTubePackageType(med?.packageType)) {
 			return `${total} ${getTubeUnitLabel(med, total)}`;
 		}
 		return t("common.pillsTotal", { count: total });

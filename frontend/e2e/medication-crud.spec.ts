@@ -96,7 +96,9 @@ async function fillAndSaveMedication(
 		}
 		const row = form.locator(".blister-row").nth(i);
 		await row
-			.getByLabel(/(Usage \((pills|tablets|capsules|ml|applications)\)|form\.blisters\.(usage|usageTablets|usageCapsules|usageMl|usageApplication))/i)
+			.getByLabel(
+				/(Usage \((pills|tablets|capsules|ml|applications)\)|form\.blisters\.(usage|usageTablets|usageCapsules|usageMl|usageApplication))/i
+			)
 			.fill(intakes[i].usage);
 		await row.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i).fill(intakes[i].every);
 	}

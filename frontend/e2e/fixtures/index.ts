@@ -279,8 +279,13 @@ export async function createMedicationViaAPI(data: {
 	let token = getAuthCookie();
 	const packageType = data.packageType ?? "blister";
 	const isAmountBased = packageType === "bottle" || packageType === "tube" || packageType === "liquid_container";
-	const medicationForm =
-		data.medicationForm ?? (packageType === "tube" ? "topical" : packageType === "liquid_container" ? "liquid" : "tablet");
+	let defaultMedicationForm: "capsule" | "tablet" | "liquid" | "topical" = "tablet";
+	if (packageType === "tube") {
+		defaultMedicationForm = "topical";
+	} else if (packageType === "liquid_container") {
+		defaultMedicationForm = "liquid";
+	}
+	const medicationForm = data.medicationForm ?? defaultMedicationForm;
 	const packageAmountValue =
 		data.packageAmountValue ??
 		(packageType === "tube" || packageType === "liquid_container" ? Math.max(1, data.totalPills ?? 30) : 0);

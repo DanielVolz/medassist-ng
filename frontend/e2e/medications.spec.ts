@@ -93,9 +93,9 @@ test.describe("Medications Page", () => {
 		const packageSelect = form.locator("select.package-type-select");
 		await expect(packageSelect).toBeVisible();
 
-		const optionValues = await packageSelect.locator("option").evaluateAll((options) =>
-			options.map((option) => (option as HTMLOptionElement).value)
-		);
+		const optionValues = await packageSelect
+			.locator("option")
+			.evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
 
 		expect(optionValues).toEqual(expect.arrayContaining(["blister", "bottle", "tube", "liquid_container"]));
 	});

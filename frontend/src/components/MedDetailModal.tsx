@@ -15,7 +15,14 @@ import { useTranslation } from "react-i18next";
 import { Lightbox, MedicationAvatar } from "../components";
 import { useEscapeKey } from "../hooks";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
-import { getMedDisplayName, getMedTotal, getPackageSize } from "../types";
+import {
+	getMedDisplayName,
+	getMedTotal,
+	getPackageSize,
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+} from "../types";
 import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
 import { getStockStatus } from "../utils/schedule";
 import { splitCurrentBlisterStock } from "../utils/stock";
@@ -170,7 +177,7 @@ export function MedDetailModal({
 	}, [showEditStockModal]);
 
 	const remainingPrescriptionRefills = Math.max(0, Number(selectedMed?.prescriptionRemainingRefills) || 0);
-	const prescriptionPackCapEnabled = selectedMed?.packageType === "blister" && usePrescriptionRefill;
+	const prescriptionPackCapEnabled = !isAmountBasedPackageType(selectedMed?.packageType) && usePrescriptionRefill;
 	const cappedRefillPacks = prescriptionPackCapEnabled
 		? Math.min(refillPacks, remainingPrescriptionRefills)
 		: refillPacks;
@@ -179,7 +186,7 @@ export function MedDetailModal({
 	useEffect(() => {
 		if (!selectedMed) return;
 		if (!showRefillModal) return;
-		if (selectedMed.packageType !== "blister" || !usePrescriptionRefill) return;
+		if (isAmountBasedPackageType(selectedMed.packageType) || !usePrescriptionRefill) return;
 		if (refillPacks <= remainingPrescriptionRefills) return;
 		onRefillPacksChange(remainingPrescriptionRefills);
 	}, [
@@ -192,9 +199,10 @@ export function MedDetailModal({
 	]);
 
 	if (!selectedMed) return null;
-	const isAmountPackage = selectedMed.packageType === "tube" || selectedMed.packageType === "liquid_container";
+	const isAmountPackage =
+		isTubePackageType(selectedMed.packageType) || isLiquidContainerPackageType(selectedMed.packageType);
 	const amountUnitLabel =
-		selectedMed.packageType === "liquid_container" || selectedMed.medicationForm === "liquid"
+		isLiquidContainerPackageType(selectedMed.packageType) || selectedMed.medicationForm === "liquid"
 			? t("form.packageAmountUnitMl")
 			: t("form.packageAmountUnitG");
 	const stockUnitLabel = isAmountPackage ? amountUnitLabel : null;
@@ -202,12 +210,9 @@ export function MedDetailModal({
 	const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(selectedMed));
 	const packageSize = getPackageSize(selectedMed);
 	// Structural max = sealed package capacity only (excludes pre-existing looseTablets).
-	const structuralMax =
-		selectedMed.packageType === "bottle" ||
-		selectedMed.packageType === "tube" ||
-		selectedMed.packageType === "liquid_container"
-			? (selectedMed.totalPills ?? packageSize)
-			: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
+	const structuralMax = isAmountBasedPackageType(selectedMed.packageType)
+		? (selectedMed.totalPills ?? packageSize)
+		: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
 	const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
 	const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 	const fallbackTextClass = status?.className === "warning" ? "warning-text" : "success-text";
@@ -216,12 +221,9 @@ export function MedDetailModal({
 	const currentFullBlisters = Math.max(0, stock.fullBlisters);
 	const currentPartialPills = Math.max(0, stock.openBlisterPills);
 	const currentLoosePills = Math.max(0, stock.loosePills);
-	const stockDisplayTotal =
-		selectedMed.packageType === "bottle" ||
-		selectedMed.packageType === "tube" ||
-		selectedMed.packageType === "liquid_container"
-			? (selectedMed.totalPills ?? packageSize)
-			: Math.max(0, structuralMax);
+	const stockDisplayTotal = isAmountBasedPackageType(selectedMed.packageType)
+		? (selectedMed.totalPills ?? packageSize)
+		: Math.max(0, structuralMax);
 	const packageCount = Math.max(1, Number(selectedMed.packCount) || 1);
 	const amountPerPackage = (() => {
 		const configured = Number(selectedMed.packageAmountValue ?? 0);
@@ -244,7 +246,7 @@ export function MedDetailModal({
 	const decrementLabel = t("editStock.decreaseValue");
 	const incrementLabel = t("editStock.increaseValue");
 	const getScheduleUsageLabel = (usage: number, intakeUnit?: "ml" | "tsp" | "tbsp" | null) => {
-		if (selectedMed.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(selectedMed.packageType)) {
 			if (intakeUnit === "tsp") {
 				return `${usage} ${t("form.blisters.teaspoons", { count: Math.abs(usage) })}`;
 			}
@@ -253,7 +255,7 @@ export function MedDetailModal({
 			}
 			return `${usage} ${t("form.packageAmountUnitMl")}`;
 		}
-		if (selectedMed.packageType === "tube") {
+		if (isTubePackageType(selectedMed.packageType)) {
 			return `${usage} ${t("form.blisters.applications", { count: Math.abs(usage) })}`;
 		}
 		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
@@ -400,7 +402,7 @@ export function MedDetailModal({
 
 	const renderEditStockModal = () => {
 		if (!showEditStockModal) return null;
-		const isLiquidPackage = selectedMed.packageType === "liquid_container";
+		const isLiquidPackage = isLiquidContainerPackageType(selectedMed.packageType);
 		const liquidBottleCount = Math.max(1, editStockFullBlisters);
 		const liquidAmountPerBottle = Math.max(1, Number.isFinite(amountPerPackage) ? amountPerPackage : 1);
 		const liquidCapacity = Math.max(1, Math.round(liquidBottleCount * liquidAmountPerBottle));
@@ -439,7 +441,7 @@ export function MedDetailModal({
 					<h2>{t("editStock.title")}</h2>
 					<p className="edit-stock-med-name">{getMedDisplayName(selectedMed)}</p>
 					<p className="edit-stock-hint">{t("editStock.hint")}</p>
-					{selectedMed.packageType === "blister" && (
+					{!isAmountBasedPackageType(selectedMed.packageType) && (
 						<p className="edit-stock-cap-info edit-stock-live-breakdown">
 							{t("editStock.currentComposition", {
 								fullBlisters: currentFullBlisters,
@@ -449,10 +451,10 @@ export function MedDetailModal({
 							})}
 						</p>
 					)}
-					{selectedMed.packageType === "bottle" && (
+					{isAmountBasedPackageType(selectedMed.packageType) && !isTubePackageType(selectedMed.packageType) && (
 						<p className="edit-stock-cap-info">{t("editStock.packageSize", { count: structuralMax })}</p>
 					)}
-					{(selectedMed.packageType === "tube" || selectedMed.packageType === "liquid_container") && (
+					{(isTubePackageType(selectedMed.packageType) || isLiquidContainerPackageType(selectedMed.packageType)) && (
 						<p className="edit-stock-cap-info">
 							{t("form.totalAmount")}: {formatNumber(isLiquidPackage ? liquidCapacity : structuralMax)}{" "}
 							{amountUnitLabel}
@@ -465,10 +467,7 @@ export function MedDetailModal({
 					{(() => {
 						const dbTotal = getMedTotal(selectedMed);
 						const currentTotal = medCoverage ? Math.round(medCoverage.medsLeft) : dbTotal;
-						const isBottle =
-							selectedMed.packageType === "bottle" ||
-							selectedMed.packageType === "tube" ||
-							selectedMed.packageType === "liquid_container";
+						const isBottle = isAmountBasedPackageType(selectedMed.packageType);
 						const enteredTotal = isLiquidPackage
 							? Math.min(liquidCapacity, editStockPartialBlisterPills)
 							: isBottle
@@ -813,7 +812,7 @@ export function MedDetailModal({
 					<div className="med-detail-section">
 						<h3>{t("modal.stockInfo")}</h3>
 						<div className="med-detail-grid">
-							{selectedMed.packageType === "blister" && (
+							{!isAmountBasedPackageType(selectedMed.packageType) && (
 								<>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t("table.fullBlisters")}</span>
@@ -832,7 +831,7 @@ export function MedDetailModal({
 									</div>
 								</>
 							)}
-							<div className={`med-detail-item ${selectedMed.packageType === "bottle" ? "full-width" : "full-width"}`}>
+							<div className="med-detail-item full-width">
 								<span className="med-detail-label">
 									{isAmountPackage ? t("form.currentAmount") : t("modal.currentStock")}
 								</span>
@@ -858,27 +857,27 @@ export function MedDetailModal({
 					<div className="med-detail-section">
 						<h3>
 							{t("modal.packageDetails")} (
-							{selectedMed.packageType === "bottle"
-								? t("form.packageTypeBottle")
-								: selectedMed.packageType === "tube"
-									? t("form.packageTypeTube")
-									: selectedMed.packageType === "liquid_container"
-										? t("form.packageTypeLiquidContainer")
+							{isTubePackageType(selectedMed.packageType)
+								? t("form.packageTypeTube")
+								: isLiquidContainerPackageType(selectedMed.packageType)
+									? t("form.packageTypeLiquidContainer")
+									: isAmountBasedPackageType(selectedMed.packageType)
+										? t("form.packageTypeBottle")
 										: t("form.packageTypeBlister")}
 							)
-							{selectedMed.packageType === "tube" && (
+							{isTubePackageType(selectedMed.packageType) && (
 								<span className="info-tooltip small" data-tooltip={t("modal.packageTypeTubeHint")}>
 									ℹ️
 								</span>
 							)}
-							{selectedMed.packageType === "liquid_container" && (
+							{isLiquidContainerPackageType(selectedMed.packageType) && (
 								<span className="info-tooltip small" data-tooltip={t("modal.packageTypeLiquidHint")}>
 									ℹ️
 								</span>
 							)}
 						</h3>
 						<div className="med-detail-grid">
-							{selectedMed.packageType === "blister" ? (
+							{!isAmountBasedPackageType(selectedMed.packageType) ? (
 								<>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t("modal.packs")}</span>
@@ -893,7 +892,7 @@ export function MedDetailModal({
 										<span className="med-detail-value">{selectedMed.pillsPerBlister}</span>
 									</div>
 								</>
-							) : selectedMed.packageType === "liquid_container" ? (
+							) : isLiquidContainerPackageType(selectedMed.packageType) ? (
 								<>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t("form.bottles")}</span>
@@ -912,7 +911,7 @@ export function MedDetailModal({
 										</span>
 									</div>
 								</>
-							) : selectedMed.packageType === "tube" ? (
+							) : isTubePackageType(selectedMed.packageType) ? (
 								<>
 									<div className="med-detail-item">
 										<span className="med-detail-label">{t("form.tubes")}</span>
@@ -1115,13 +1114,10 @@ export function MedDetailModal({
 											</span>
 											<span className="refill-amount">
 												{(() => {
-													const total =
-														selectedMed.packageType === "bottle" ||
-														selectedMed.packageType === "tube" ||
-														selectedMed.packageType === "liquid_container"
-															? entry.loosePillsAdded
-															: entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister +
-																entry.loosePillsAdded;
+													const total = isAmountBasedPackageType(selectedMed.packageType)
+														? entry.loosePillsAdded
+														: entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister +
+															entry.loosePillsAdded;
 													return `+${total}${isAmountPackage ? ` ${stockUnitLabel}` : ` ${total === 1 ? t("common.pill") : t("common.pills")}`}`;
 												})()}
 												{entry.usedPrescription && (
@@ -1221,7 +1217,7 @@ export function MedDetailModal({
 						<p className="refill-med-name">{getMedDisplayName(selectedMed)}</p>
 
 						<div className="refill-form">
-							{selectedMed.packageType === "blister" ? (
+							{!isAmountBasedPackageType(selectedMed.packageType) ? (
 								<>
 									<label>
 										{t("refill.packs")}
@@ -1265,7 +1261,7 @@ export function MedDetailModal({
 												onUsePrescriptionRefillChange(checked);
 												if (
 													checked &&
-													selectedMed.packageType === "blister" &&
+													!isAmountBasedPackageType(selectedMed.packageType) &&
 													refillPacks > remainingPrescriptionRefills
 												) {
 													onRefillPacksChange(remainingPrescriptionRefills);
@@ -1291,9 +1287,7 @@ export function MedDetailModal({
 									className="success"
 									onClick={() => onSubmitRefill(selectedMed.id, usePrescriptionRefill)}
 									disabled={
-										(selectedMed.packageType === "bottle" ||
-										selectedMed.packageType === "tube" ||
-										selectedMed.packageType === "liquid_container"
+										(isAmountBasedPackageType(selectedMed.packageType)
 											? refillLoose < 1
 											: cappedRefillPacks < 1 && refillLoose < 1) ||
 										exceedsPrescriptionPackLimit ||
@@ -1303,10 +1297,9 @@ export function MedDetailModal({
 									{refillSaving ? t("common.saving") : t("refill.button")}
 								</button>
 								{(() => {
-									const totalRefill =
-										selectedMed.packageType === "blister"
-											? cappedRefillPacks * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + refillLoose
-											: refillLoose;
+									const totalRefill = !isAmountBasedPackageType(selectedMed.packageType)
+										? cappedRefillPacks * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + refillLoose
+										: refillLoose;
 									return totalRefill > 0 ? (
 										<span className="refill-preview">
 											+{totalRefill}

@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { useEscapeKey } from "../hooks";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
-import { getMedDisplayName, getMedTotal } from "../types";
+import { getMedDisplayName, getMedTotal, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { getSystemLocale } from "../utils/formatters";
 import { isDoseDismissed } from "../utils/schedule";
 import { loadCollapsedDaysFromStorage } from "../utils/storage";
@@ -24,10 +24,10 @@ function getStockStatus(
 	thresholds: { lowStockDays: number; normalStockDays: number; highStockDays: number; criticalStockDays: number },
 	packageType?: string
 ) {
-	if (packageType === "tube") return { className: "success", label: "status.noSchedule" };
+	if (isTubePackageType(packageType)) return { className: "success", label: "status.noSchedule" };
 	if (medsLeft <= 0 || daysLeft === 0) return { className: "danger", label: "status.outOfStock" };
 	if (daysLeft === null) return { className: "success", label: "status.noSchedule" };
-	if (packageType === "liquid_container") {
+	if (isLiquidContainerPackageType(packageType)) {
 		const lowDays = Math.max(1, Math.floor(thresholds.criticalStockDays));
 		const criticalDays = Math.max(1, Math.ceil(lowDays / 2));
 		if (daysLeft <= criticalDays) return { className: "danger", label: "status.criticalStock" };
@@ -54,7 +54,7 @@ export function SharedSchedule() {
 	const [showFutureDays, setShowFutureDays] = useState(false);
 
 	const isLiquidContainerMed = (med: SharedScheduleData["medications"][number] | undefined) =>
-		med?.packageType === "liquid_container";
+		isLiquidContainerPackageType(med?.packageType);
 
 	const convertLiquidUsageToMl = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): number => {
 		if (unit === "tsp") return usage * 5;
@@ -67,7 +67,7 @@ export function SharedSchedule() {
 		med: SharedScheduleData["medications"][number] | undefined,
 		unit: "ml" | "tsp" | "tbsp" | null | undefined
 	): number => {
-		if (med?.packageType === "tube") return 0;
+		if (isTubePackageType(med?.packageType)) return 0;
 		if (!isLiquidContainerMed(med)) return usage;
 		return convertLiquidUsageToMl(usage, unit);
 	};
@@ -140,7 +140,7 @@ export function SharedSchedule() {
 	const shouldHideNoScheduleStatusForTube = (
 		med: SharedScheduleData["medications"][number] | undefined,
 		status: { className: string; label: string } | null
-	) => med?.packageType === "tube" && status?.label === "status.noSchedule";
+	) => isTubePackageType(med?.packageType) && status?.label === "status.noSchedule";
 
 	const getVisibleStockStatus = (
 		med: SharedScheduleData["medications"][number] | undefined,

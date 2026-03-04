@@ -5,7 +5,7 @@ import { DateTimeInput, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { PlannerRow } from "../types";
-import { getMedDisplayName } from "../types";
+import { getMedDisplayName, isAmountBasedPackageType, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { toInputValue } from "../utils/formatters";
 
 // Date helpers
@@ -124,10 +124,10 @@ export function PlannerPage() {
 
 	const getUsageUnitLabel = (medicationId: number, count: number): string => {
 		const med = meds.find((m) => m.id === medicationId);
-		if (med?.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(med?.packageType)) {
 			return t("form.ml");
 		}
-		if (med?.packageType === "tube") {
+		if (isTubePackageType(med?.packageType)) {
 			return med.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
 		}
 		return count === 1 ? t("common.pill") : t("common.pills");
@@ -136,10 +136,10 @@ export function PlannerPage() {
 	const getAvailableLabel = (medicationId: number, loosePills: number): string => {
 		const med = meds.find((m) => m.id === medicationId);
 		const roundedLoose = Math.round(loosePills * 10) / 10;
-		if (med?.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(med?.packageType)) {
 			return `${roundedLoose} ${t("form.ml")}`;
 		}
-		if (med?.packageType === "tube") {
+		if (isTubePackageType(med?.packageType)) {
 			const unit = med.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
 			return `${roundedLoose} ${unit}`;
 		}
@@ -254,17 +254,11 @@ export function PlannerPage() {
 											</span>
 										</span>
 										<span data-label={t("planner.table.blisters")}>
-											{row.packageType === "bottle" ||
-											row.packageType === "tube" ||
-											row.packageType === "liquid_container"
-												? "–"
-												: `${row.blistersNeeded} × ${row.blisterSize}`}
+											{isAmountBasedPackageType(row.packageType) ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`}
 										</span>
 										<span data-label={t("planner.table.prescriptionRefills")}>{remainingRefills ?? "–"}</span>
 										<span data-label={t("planner.table.available")}>
-											{row.packageType === "bottle" ||
-											row.packageType === "tube" ||
-											row.packageType === "liquid_container" ? (
+											{isAmountBasedPackageType(row.packageType) ? (
 												getAvailableLabel(row.medicationId, row.loosePills)
 											) : (
 												<>

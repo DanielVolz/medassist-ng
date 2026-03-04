@@ -2,7 +2,20 @@
 // Core Types for MedAssist
 // =============================================================================
 
-export type PackageType = "blister" | "bottle" | "tube" | "liquid_container";
+export type { PackageProfile, PackageType } from "./package-profiles";
+export {
+	allowsPillFormSelection,
+	getPackageProfile,
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+	normalizePackageType,
+	PACKAGE_PROFILES,
+	PACKAGE_TYPES,
+} from "./package-profiles";
+
+import type { PackageType } from "./package-profiles";
+import { isAmountBasedPackageType } from "./package-profiles";
 
 // Common medication dose units
 export type DoseUnit = "mg" | "g" | "mcg" | "ml" | "units";
@@ -280,7 +293,7 @@ type MedLike = Pick<Medication, "packCount" | "blistersPerPack" | "pillsPerBlist
 export function getMedTotal(med: MedLike): number {
 	// Amount-based package types store their current base stock directly
 	// in totalPills (fallback looseTablets for legacy rows).
-	if (med.packageType === "bottle" || med.packageType === "tube" || med.packageType === "liquid_container") {
+	if (isAmountBasedPackageType(med.packageType)) {
 		const baseStock = med.totalPills ?? med.looseTablets;
 		return baseStock + (med.stockAdjustment ?? 0);
 	}
@@ -291,7 +304,7 @@ export function getMedTotal(med: MedLike): number {
 /** Get the base package size (without stockAdjustment) */
 export function getPackageSize(med: MedLike): number {
 	// Amount-based package types use totalPills as base capacity
-	if (med.packageType === "bottle" || med.packageType === "tube" || med.packageType === "liquid_container") {
+	if (isAmountBasedPackageType(med.packageType)) {
 		return med.totalPills ?? med.looseTablets;
 	}
 	// For blister type, calculate from packs + loose

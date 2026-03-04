@@ -12,14 +12,14 @@ import type {
 	StockStatus,
 	StockThresholds,
 } from "../types";
-import { getMedDisplayName, getMedTotal } from "../types";
+import { getMedDisplayName, getMedTotal, isLiquidContainerPackageType, isTubePackageType } from "../types";
 
 function normalizeIntakeUsageForStock(intake: Intake, med: Medication): number {
 	const usage = Number(intake.usage);
 	if (!Number.isFinite(usage) || usage <= 0) return 0;
-	if (med.packageType === "tube") return 0;
+	if (isTubePackageType(med.packageType)) return 0;
 
-	const isLiquidStock = med.packageType === "liquid_container" || med.medicationForm === "liquid";
+	const isLiquidStock = isLiquidContainerPackageType(med.packageType) || med.medicationForm === "liquid";
 	if (!isLiquidStock) return usage;
 
 	if (intake.intakeUnit === "tsp") return usage * 5;
@@ -344,7 +344,7 @@ export function getStockStatus(
 	}
 
 	// Tube has no stock reminder semantics.
-	if (packageType === "tube") {
+	if (isTubePackageType(packageType)) {
 		return { level: "normal", className: "success", label: "status.noSchedule" };
 	}
 
@@ -353,7 +353,7 @@ export function getStockStatus(
 		return { level: "normal", className: "success", label: "status.noSchedule" };
 	}
 
-	if (packageType === "liquid_container") {
+	if (isLiquidContainerPackageType(packageType)) {
 		const liquidThresholds = getLiquidDerivedThresholds(thresholds.criticalStockDays);
 		if (daysLeft <= liquidThresholds.criticalDays) {
 			return { level: "critical", className: "danger", label: "status.criticalStock" };

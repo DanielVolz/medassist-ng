@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Coverage, FormState, Medication, RefillEntry } from "../types";
-import { getMedTotal, getPackageSize } from "../types";
+import {
+	getMedTotal,
+	getPackageSize,
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+} from "../types";
 
 export interface UseRefillReturn {
 	// Refill state
@@ -137,10 +143,9 @@ export function useRefill(): UseRefillReturn {
 			if (!selectedMed) return;
 			setEditStockSaving(true);
 			try {
-				const isTubePackage = selectedMed.packageType === "tube";
-				const isBottlePackage = selectedMed.packageType === "bottle";
-				const isLiquidPackage = selectedMed.packageType === "liquid_container";
-				const isAmountPackage = isBottlePackage || isTubePackage || isLiquidPackage;
+				const isTubePackage = isTubePackageType(selectedMed.packageType);
+				const isLiquidPackage = isLiquidContainerPackageType(selectedMed.packageType);
+				const isAmountPackage = isAmountBasedPackageType(selectedMed.packageType);
 				const liquidAmountPerBottle = Math.max(
 					1,
 					Number.isFinite(Number(selectedMed.packageAmountValue)) && Number(selectedMed.packageAmountValue) > 0
@@ -268,10 +273,7 @@ export function useRefill(): UseRefillReturn {
 	const openEditStockModal = useCallback((selectedMed: Medication, coverage: { all: Coverage[] }) => {
 		if (!selectedMed) return;
 		setEditStockMedication(selectedMed);
-		const isAmountPackage =
-			selectedMed.packageType === "bottle" ||
-			selectedMed.packageType === "tube" ||
-			selectedMed.packageType === "liquid_container";
+		const isAmountPackage = isAmountBasedPackageType(selectedMed.packageType);
 		// Get current stock from coverage (after consumption)
 		const medCoverage = coverage.all.find((c) => c.name === selectedMed.name);
 		const dbTotal = getMedTotal(selectedMed);
@@ -282,7 +284,7 @@ export function useRefill(): UseRefillReturn {
 		const knownLoose = Math.min(currentStock, Math.max(0, selectedMed.looseTablets));
 		const sealedPills = Math.max(0, currentStock - knownLoose);
 		let fullBlisters: number;
-		if (selectedMed.packageType === "liquid_container") {
+		if (isLiquidContainerPackageType(selectedMed.packageType)) {
 			fullBlisters = Math.max(1, selectedMed.packCount);
 		} else if (isAmountPackage) {
 			fullBlisters = 0;

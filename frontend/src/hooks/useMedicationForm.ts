@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
-import { FIELD_LIMITS } from "../types";
+import {
+	FIELD_LIMITS,
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+	normalizePackageType,
+} from "../types";
 import { toDateValue, toTimeValue } from "../utils/formatters";
 
 export const defaultBlister = (): FormBlister => {
@@ -230,18 +236,19 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		const authorizedRefills = Math.max(0, med.prescriptionAuthorizedRefills ?? 0);
 		const remainingRefills = Math.min(Math.max(0, med.prescriptionRemainingRefills ?? 0), authorizedRefills);
 		const lowRefillThreshold = Math.min(Math.max(0, med.prescriptionLowRefillThreshold ?? 1), authorizedRefills);
-		const isTubeOrLiquidPackage = med.packageType === "tube" || med.packageType === "liquid_container";
+		const packageType = normalizePackageType(med.packageType);
+		const isTubeOrLiquidPackage = isTubePackageType(packageType) || isLiquidContainerPackageType(packageType);
 		let normalizedPackCount = String(med.packCount);
 		let normalizedPackageAmountValue = String(med.packageAmountValue ?? 0);
 
 		if (isTubeOrLiquidPackage) {
-			const safePackCount = med.packageType === "tube" ? 1 : Math.max(1, med.packCount || 1);
+			const safePackCount = isTubePackageType(packageType) ? 1 : Math.max(1, med.packCount || 1);
 			normalizedPackCount = String(safePackCount);
 
 			const rawPackageAmount = Number(med.packageAmountValue ?? 0);
 			const legacyKnownAmount = Math.max(0, Number(med.totalPills ?? 0), Number(med.looseTablets ?? 0));
 
-			if (med.packageType === "tube") {
+			if (isTubePackageType(packageType)) {
 				normalizedPackageAmountValue = String(
 					legacyKnownAmount > 0 ? legacyKnownAmount : Math.max(1, rawPackageAmount)
 				);
@@ -256,16 +263,12 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			? Math.max(0, (Number(normalizedPackCount) || 0) * (Number(normalizedPackageAmountValue) || 0))
 			: null;
 
-		const bottleTotalPills =
-			(med.packageType === "bottle" || med.packageType === "tube" || med.packageType === "liquid_container") &&
-			med.looseTablets
-				? String(med.looseTablets)
-				: "";
+		const bottleTotalPills = isAmountBasedPackageType(packageType) && med.looseTablets ? String(med.looseTablets) : "";
 		let resolvedForm = med.medicationForm;
 		if (!resolvedForm) {
-			if (med.packageType === "tube") {
+			if (isTubePackageType(packageType)) {
 				resolvedForm = "topical";
-			} else if (med.packageType === "liquid_container") {
+			} else if (isLiquidContainerPackageType(packageType)) {
 				resolvedForm = "liquid";
 			} else {
 				resolvedForm = med.pillForm ?? "tablet";
@@ -273,9 +276,9 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		}
 		const resolvedPillForm = med.pillForm ?? (resolvedForm === "capsule" ? "capsule" : "tablet");
 		let normalizedPackageAmountUnit = med.packageAmountUnit ?? "ml";
-		if (med.packageType === "tube") {
+		if (isTubePackageType(packageType)) {
 			normalizedPackageAmountUnit = "g";
-		} else if (med.packageType === "liquid_container") {
+		} else if (isLiquidContainerPackageType(packageType)) {
 			normalizedPackageAmountUnit = "ml";
 		}
 		let resolvedTotalPills = bottleTotalPills;
@@ -291,7 +294,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			medicationForm: resolvedForm,
 			pillForm: resolvedPillForm,
 			lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
-			packageType: med.packageType ?? "blister",
+			packageType,
 			packCount: normalizedPackCount,
 			blistersPerPack: String(med.blistersPerPack),
 			pillsPerBlister: String(med.pillsPerBlister),
@@ -347,14 +350,14 @@ export function useMedicationForm(): UseMedicationFormReturn {
 				const next = { ...prev, [key]: value } as FormState;
 
 				if (key === "packageType") {
-					if (value === "tube") {
+					if (isTubePackageType(value)) {
 						next.packCount = "1";
 						next.packageAmountValue = String(Math.max(1, Number(next.packageAmountValue) || 0));
 						next.medicationForm = "topical";
 						next.lifecycleCategory = "treatment_period";
 						next.doseUnit = "units";
 						next.packageAmountUnit = "g";
-					} else if (value === "liquid_container") {
+					} else if (isLiquidContainerPackageType(value)) {
 						next.packCount = String(Math.max(1, Number(next.packCount) || 1));
 						next.packageAmountValue = String(Math.max(1, Number(next.packageAmountValue) || 0));
 						next.medicationForm = "liquid";
@@ -369,12 +372,12 @@ export function useMedicationForm(): UseMedicationFormReturn {
 				}
 
 				if (key === "medicationForm") {
-					if (next.packageType === "tube") {
+					if (isTubePackageType(next.packageType)) {
 						next.medicationForm = "topical";
 						next.lifecycleCategory = "treatment_period";
 						next.doseUnit = "units";
 						next.packageAmountUnit = "g";
-					} else if (next.packageType === "liquid_container") {
+					} else if (isLiquidContainerPackageType(next.packageType)) {
 						next.medicationForm = "liquid";
 						next.lifecycleCategory = "refill_when_empty";
 						next.doseUnit = "ml";
@@ -383,10 +386,10 @@ export function useMedicationForm(): UseMedicationFormReturn {
 					}
 				}
 
-				if (next.packageType === "tube") {
+				if (isTubePackageType(next.packageType)) {
 					next.packCount = "1";
 					next.packageAmountUnit = "g";
-				} else if (next.packageType === "liquid_container") {
+				} else if (isLiquidContainerPackageType(next.packageType)) {
 					next.packageAmountUnit = "ml";
 				}
 

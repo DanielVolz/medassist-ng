@@ -4,6 +4,7 @@
  */
 
 import { getDateLocale, type Language } from "../i18n/translations.js";
+import { isLiquidContainerPackageType, isTubePackageType } from "./package-profiles.js";
 
 // Legacy type - individual blister schedule (DEPRECATED: use Intake instead)
 export type Blister = { usage: number; every: number; start: string };
@@ -36,9 +37,9 @@ export function normalizeIntakeUsageForStock(
 ): number {
 	const usage = Number(intake.usage);
 	if (!Number.isFinite(usage) || usage <= 0) return 0;
-	if (packageType === "tube") return 0;
+	if (isTubePackageType(packageType)) return 0;
 
-	const isLiquidStock = packageType === "liquid_container" || medicationForm === "liquid";
+	const isLiquidStock = isLiquidContainerPackageType(packageType) || medicationForm === "liquid";
 	if (!isLiquidStock) return usage;
 
 	if (intake.intakeUnit === "tsp") return usage * 5;

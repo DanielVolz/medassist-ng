@@ -15,6 +15,12 @@ import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
 import type { AuthUser } from "../types/fastify.js";
+import {
+	getPlannerUnitKind,
+	isAmountBasedPackageType,
+	isTubePackageType,
+	normalizePackageType,
+} from "../utils/package-profiles.js";
 import { loadUserSettings, sendShoutrrrNotification } from "./settings.js";
 
 // Escape HTML to prevent XSS in email templates
@@ -80,12 +86,13 @@ type PlannerRow = {
 };
 
 function isContainerPackage(packageType?: string): boolean {
-	return packageType === "bottle" || packageType === "tube" || packageType === "liquid_container";
+	return isAmountBasedPackageType(packageType);
 }
 
 function getPlannerUnit(packageType: string | undefined, tr: ReturnType<typeof getTranslations>): string {
-	if (packageType === "tube") return tr.common.units;
-	if (packageType === "liquid_container") return tr.common.ml;
+	const unitKind = getPlannerUnitKind(packageType);
+	if (unitKind === "units") return tr.common.units;
+	if (unitKind === "ml") return tr.common.ml;
 	return tr.common.pills;
 }
 
@@ -481,13 +488,13 @@ ${getFooterPlain(language)}`;
 			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
 		const activeMedicationByName = new Map(
 			activeMeds
-				.map((med) => [med.name || med.genericName || "", med.packageType ?? "blister"] as const)
+				.map((med) => [med.name || med.genericName || "", normalizePackageType(med.packageType)] as const)
 				.filter(([name]) => name.length > 0)
 		);
 		const filteredLowStock = lowStock.filter((item) => {
 			const packageType = activeMedicationByName.get(item.name);
 			if (!packageType) return false;
-			if (packageType === "tube") return false;
+			if (isTubePackageType(packageType)) return false;
 			return true;
 		});
 		if (filteredLowStock.length === 0) {

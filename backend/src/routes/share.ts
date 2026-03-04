@@ -7,6 +7,7 @@ import { medications, shareTokens, userSettings, users } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { isAmountBasedPackageType, normalizePackageType } from "../utils/package-profiles.js";
 import {
 	getAllTakenByForMedication,
 	parseIntakesJson,
@@ -119,12 +120,9 @@ export async function shareRoutes(app: FastifyInstance) {
 			// Parse takenBy JSON array
 			const takenByArray = parseTakenByJson(med.takenByJson);
 
-			const totalPills =
-				(med.packageType ?? "blister") === "bottle" ||
-				(med.packageType ?? "blister") === "tube" ||
-				(med.packageType ?? "blister") === "liquid_container"
-					? med.looseTablets + (med.stockAdjustment ?? 0)
-					: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
+			const totalPills = isAmountBasedPackageType(med.packageType)
+				? med.looseTablets + (med.stockAdjustment ?? 0)
+				: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
 			return {
 				id: med.id,
 				name: med.name,
@@ -133,7 +131,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				doseUnit: med.doseUnit ?? "mg",
 				imageUrl: med.imageUrl,
 				totalPills,
-				packageType: med.packageType ?? "blister",
+				packageType: normalizePackageType(med.packageType),
 				packCount: med.packCount,
 				blistersPerPack: med.blistersPerPack,
 				looseTablets: med.looseTablets,

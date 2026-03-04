@@ -15,6 +15,13 @@ import {
 	writeOptimizedImageSet,
 } from "../utils/image-upload.js";
 import {
+	isAmountBasedPackageType,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+	normalizePackageType,
+	PACKAGE_TYPES,
+} from "../utils/package-profiles.js";
+import {
 	type Intake,
 	normalizeIntakeUsageForStock,
 	parseIntakesJson,
@@ -75,7 +82,7 @@ const blisterSchema = z.object({
 	start: z.string().datetime({ local: true }),
 });
 
-const packageTypeSchema = z.enum(["blister", "bottle", "tube", "liquid_container"]).default("blister");
+const packageTypeSchema = z.enum(PACKAGE_TYPES).default("blister");
 const medicationFormSchema = z.enum(["capsule", "tablet", "liquid", "topical"]).default("tablet");
 const pillFormSchema = z.enum(["capsule", "tablet"]);
 const lifecycleCategorySchema = z.enum(["refill_when_empty", "treatment_period"]).default("refill_when_empty");
@@ -163,7 +170,7 @@ const medicationSchema = z
 	.refine(
 		(data) => {
 			if (data.medicationForm === "topical") {
-				return data.packageType === "tube";
+				return isTubePackageType(data.packageType);
 			}
 			return true;
 		},
@@ -175,7 +182,7 @@ const medicationSchema = z
 	.refine(
 		(data) => {
 			if (data.medicationForm === "liquid") {
-				return data.packageType === "liquid_container";
+				return isLiquidContainerPackageType(data.packageType);
 			}
 			return true;
 		},
@@ -187,7 +194,7 @@ const medicationSchema = z
 	.refine(
 		(data) => {
 			if (data.medicationForm === "capsule" || data.medicationForm === "tablet") {
-				return data.packageType !== "tube" && data.packageType !== "liquid_container";
+				return !isTubePackageType(data.packageType) && !isLiquidContainerPackageType(data.packageType);
 			}
 			return true;
 		},
@@ -294,7 +301,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				medicationForm: row.medicationForm ?? "tablet",
 				pillForm: row.pillForm ?? null,
 				lifecycleCategory: row.lifecycleCategory ?? "refill_when_empty",
-				packageType: row.packageType ?? "blister",
+				packageType: normalizePackageType(row.packageType),
 				packCount: row.packCount ?? 1,
 				blistersPerPack: row.blistersPerPack ?? 1,
 				pillsPerBlister: row.pillsPerBlister ?? 1,
@@ -412,7 +419,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				medicationForm: medicationForm ?? "tablet",
 				pillForm: normalizedPillForm,
 				lifecycleCategory: lifecycleCategory ?? "refill_when_empty",
-				packageType: packageType ?? "blister",
+				packageType: normalizePackageType(packageType),
 				packCount,
 				blistersPerPack,
 				pillsPerBlister,
@@ -448,7 +455,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			medicationForm: inserted.medicationForm ?? "tablet",
 			pillForm: inserted.pillForm ?? null,
 			lifecycleCategory: inserted.lifecycleCategory ?? "refill_when_empty",
-			packageType: inserted.packageType ?? "blister",
+			packageType: normalizePackageType(inserted.packageType),
 			packCount: inserted.packCount,
 			blistersPerPack: inserted.blistersPerPack,
 			pillsPerBlister: inserted.pillsPerBlister,
@@ -583,7 +590,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				medicationForm: medicationForm ?? "tablet",
 				pillForm: normalizedPillForm,
 				lifecycleCategory: lifecycleCategory ?? "refill_when_empty",
-				packageType: packageType ?? "blister",
+				packageType: normalizePackageType(packageType),
 				packCount,
 				blistersPerPack,
 				pillsPerBlister,
@@ -743,7 +750,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			medicationForm: result[0].medicationForm ?? "tablet",
 			pillForm: result[0].pillForm ?? null,
 			lifecycleCategory: result[0].lifecycleCategory ?? "refill_when_empty",
-			packageType: result[0].packageType ?? "blister",
+			packageType: normalizePackageType(result[0].packageType),
 			packCount: result[0].packCount,
 			blistersPerPack: result[0].blistersPerPack,
 			pillsPerBlister: result[0].pillsPerBlister,
@@ -901,8 +908,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 			updatedAt: new Date(),
 		};
 
-		const packageType = existing.packageType ?? "blister";
-		const allowsAmountBaseUpdate = packageType === "tube" || packageType === "liquid_container";
+		const packageType = normalizePackageType(existing.packageType);
+		const allowsAmountBaseUpdate = isTubePackageType(packageType) || isLiquidContainerPackageType(packageType);
 		if (allowsAmountBaseUpdate) {
 			if (totalPills !== undefined) updateFields.totalPills = totalPills;
 			if (looseTablets !== undefined) updateFields.looseTablets = looseTablets;
@@ -1097,14 +1104,13 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const blistersPerPack = row.blistersPerPack ?? 1;
 			const looseTablets = row.looseTablets ?? 0;
 			const stockAdjustment = row.stockAdjustment ?? 0;
-			const packageType = row.packageType ?? "blister";
+			const packageType = normalizePackageType(row.packageType);
 
 			// For bottle type, looseTablets IS the current stock (no blister math)
-			const isTopical = medForm === "topical" || packageType === "tube";
-			const originalTotalPills =
-				packageType === "bottle" || packageType === "liquid_container"
-					? looseTablets + stockAdjustment
-					: packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
+			const isTopical = medForm === "topical" || isTubePackageType(packageType);
+			const originalTotalPills = isAmountBasedPackageType(packageType)
+				? looseTablets + stockAdjustment
+				: packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
 
 			// Calculate consumption with the same automatic/manual behavior as frontend coverage.
 			const stockCorrectionCutoff = row.lastStockCorrectionAt ? new Date(row.lastStockCorrectionAt).getTime() : 0;
@@ -1232,7 +1238,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			let fullBlisters: number;
 			let loosePills: number;
 
-			if (packageType === "bottle" || packageType === "tube" || packageType === "liquid_container") {
+			if (isAmountBasedPackageType(packageType)) {
 				// Bottle type: no blisters, everything is loose pills
 				fullBlisters = 0;
 				loosePills = availableAfterPeriod;

@@ -259,12 +259,14 @@ export async function createMedicationViaAPI(data: {
 	takenBy?: string[];
 	notes?: string;
 	expiryDate?: string;
-	packageType?: "blister" | "bottle";
+	packageType?: "blister" | "bottle" | "tube" | "liquid_container";
+	medicationForm?: "capsule" | "tablet" | "liquid" | "topical";
 	packCount?: number;
 	blistersPerPack?: number;
 	pillsPerBlister?: number;
 	looseTablets?: number;
 	totalPills?: number;
+	packageAmountValue?: number;
 	intakeRemindersEnabled?: boolean;
 	intakes?: {
 		usage: number;
@@ -275,15 +277,29 @@ export async function createMedicationViaAPI(data: {
 	}[];
 }): Promise<TestMedication> {
 	let token = getAuthCookie();
-	const isBottle = data.packageType === "bottle";
+	const packageType = data.packageType ?? "blister";
+	const isAmountBased = packageType === "bottle" || packageType === "tube" || packageType === "liquid_container";
+	let defaultMedicationForm: "capsule" | "tablet" | "liquid" | "topical" = "tablet";
+	if (packageType === "tube") {
+		defaultMedicationForm = "topical";
+	} else if (packageType === "liquid_container") {
+		defaultMedicationForm = "liquid";
+	}
+	const medicationForm = data.medicationForm ?? defaultMedicationForm;
+	const packageAmountValue =
+		data.packageAmountValue ??
+		(packageType === "tube" || packageType === "liquid_container" ? Math.max(1, data.totalPills ?? 30) : 0);
 	const body = {
-		packageType: isBottle ? "bottle" : "blister",
-		packCount: isBottle ? 1 : (data.packCount ?? 1),
-		blistersPerPack: isBottle ? 1 : (data.blistersPerPack ?? 1),
-		pillsPerBlister: isBottle ? 1 : (data.pillsPerBlister ?? 10),
-		// For bottles: looseTablets IS the current stock. Default to totalPills if not specified.
-		looseTablets: isBottle ? (data.looseTablets ?? data.totalPills ?? 0) : (data.looseTablets ?? 0),
-		totalPills: isBottle ? (data.totalPills ?? null) : null,
+		packageType,
+		medicationForm,
+		packCount: packageType === "tube" ? 1 : (data.packCount ?? 1),
+		blistersPerPack: isAmountBased ? 1 : (data.blistersPerPack ?? 1),
+		pillsPerBlister: isAmountBased ? 1 : (data.pillsPerBlister ?? 10),
+		// Amount-based packages use looseTablets as current stock.
+		looseTablets: isAmountBased ? (data.looseTablets ?? data.totalPills ?? 0) : (data.looseTablets ?? 0),
+		totalPills: isAmountBased ? (data.totalPills ?? null) : null,
+		packageAmountValue,
+		packageAmountUnit: packageType === "tube" ? "g" : "ml",
 		intakes: [
 			{
 				usage: 1,

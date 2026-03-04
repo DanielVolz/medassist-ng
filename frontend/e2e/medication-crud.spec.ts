@@ -26,7 +26,7 @@ async function fillAndSaveMedication(
 	opts: {
 		name: string;
 		genericName?: string;
-		packageType?: "blister" | "bottle";
+		packageType?: "blister" | "bottle" | "tube" | "liquid_container";
 		packs?: string;
 		blistersPerPack?: string;
 		pillsPerBlister?: string;
@@ -56,6 +56,18 @@ async function fillAndSaveMedication(
 		if (opts.totalCapacity)
 			await form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\))/i).fill(opts.totalCapacity);
 		if (opts.currentPills) await form.getByLabel(/(Current Pills|form\.currentPills)/i).fill(opts.currentPills);
+	} else if (opts.packageType === "tube") {
+		await packageTypeSelect.selectOption("tube");
+		await page.getByRole("tab", { name: /Package/i }).click();
+		if (opts.totalCapacity) {
+			await form.getByLabel(/(Amount per tube|form\.packageAmountPerTube)/i).fill(opts.totalCapacity);
+		}
+	} else if (opts.packageType === "liquid_container") {
+		await packageTypeSelect.selectOption("liquid_container");
+		await page.getByRole("tab", { name: /Package/i }).click();
+		if (opts.totalCapacity) {
+			await form.getByLabel(/(Package amount|form\.packageAmount)/i).fill(opts.totalCapacity);
+		}
 	} else {
 		await packageTypeSelect.selectOption("blister");
 		await page.getByRole("tab", { name: /Package/i }).click();
@@ -83,7 +95,9 @@ async function fillAndSaveMedication(
 			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
 		}
 		const row = form.locator(".blister-row").nth(i);
-		await row.getByLabel(/(Usage \((pills|tablets)\)|form\.blisters\.usage)/i).fill(intakes[i].usage);
+		await row
+			.getByLabel(/(Usage \((pills|tablets|capsules|ml|applications)\)|form\.blisters\.(usage|usageTablets|usageCapsules|usageMl|usageApplication))/i)
+			.fill(intakes[i].usage);
 		await row.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i).fill(intakes[i].every);
 	}
 
@@ -191,6 +205,26 @@ test.describe("Medication CRUD", () => {
 					{ usage: "1", every: "1" },
 					{ usage: "0.5", every: "7" },
 				],
+			});
+		});
+
+		test("should create a tube medication via the form", async ({ page }) => {
+			await navigateTo(page, "/medications");
+
+			await fillAndSaveMedication(page, {
+				name: "Test Tube Cream",
+				packageType: "tube",
+				totalCapacity: "50",
+			});
+		});
+
+		test("should create a liquid-container medication via the form", async ({ page }) => {
+			await navigateTo(page, "/medications");
+
+			await fillAndSaveMedication(page, {
+				name: "Test Liquid Syrup",
+				packageType: "liquid_container",
+				totalCapacity: "120",
 			});
 		});
 

@@ -87,25 +87,17 @@ test.describe("Medications Page", () => {
 		expect(hasPacks || hasTotal).toBeTruthy();
 	});
 
-	test("should toggle package type between blister and bottle", async ({ page }) => {
+	test("should expose all supported package type options", async ({ page }) => {
 		await openMedicationForm(page);
 		const form = visibleMedForm(page);
-		await page.getByRole("tab", { name: /Package/i }).click();
+		const packageSelect = form.locator("select.package-type-select");
+		await expect(packageSelect).toBeVisible();
 
-		// Find the package type radio buttons or selector
-		const blisterOption = form.getByText(/(Blister Pack|form\.packageType\.blister)/i);
-		const bottleOption = form.getByText(/(Pill Bottle|form\.packageType\.bottle)/i);
+		const optionValues = await packageSelect.locator("option").evaluateAll((options) =>
+			options.map((option) => (option as HTMLOptionElement).value)
+		);
 
-		if (await blisterOption.isVisible().catch(() => false)) {
-			// Switch to bottle
-			await bottleOption.click();
-			// Bottle-specific fields should appear
-			await expect(form.getByLabel(/(Total Capacity|form\.totalCapacity)/i)).toBeVisible();
-
-			// Switch back to blister
-			await blisterOption.click();
-			await expect(form.getByLabel(/(Blisters per pack|form\.blistersPerPack)/i)).toBeVisible();
-		}
+		expect(optionValues).toEqual(expect.arrayContaining(["blister", "bottle", "tube", "liquid_container"]));
 	});
 
 	test("should have intake schedule with add button", async ({ page }) => {

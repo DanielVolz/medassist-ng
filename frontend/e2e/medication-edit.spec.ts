@@ -329,7 +329,7 @@ test.describe("Medication Editing", () => {
 		}
 	});
 
-	test("should change package type between blister and bottle", async ({ page }) => {
+	test("should change package type across all supported profiles", async ({ page }) => {
 		createdMeds.push(
 			await createMedicationViaAPI({
 				name: "PackType Change Med",
@@ -357,15 +357,24 @@ test.describe("Medication Editing", () => {
 		await packageSelect.selectOption("bottle");
 		await page.getByRole("tab", { name: /Package/i }).click();
 		await expect(form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\))/i)).toBeVisible();
+		await page.getByRole("tab", { name: /General/i }).click();
 
-		// Fill bottle-specific fields
-		await form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\))/i).fill("120");
+		// Switch to tube
+		await packageSelect.selectOption("tube");
+		await page.getByRole("tab", { name: /Package/i }).click();
+		await expect(form.getByLabel(/(Amount per tube|form\.packageAmountPerTube)/i)).toBeVisible();
+		await page.getByRole("tab", { name: /General/i }).click();
+
+		// Switch to liquid container and persist this final state
+		await packageSelect.selectOption("liquid_container");
+		await page.getByRole("tab", { name: /Package/i }).click();
+		await expect(form.getByLabel(/(Package amount|form\.packageAmount)/i)).toBeVisible();
 
 		await saveEditAndVerify(page, "PackType Change Med");
 
-		// Verify it's still a bottle after reload
+		// Verify final package type persisted
 		await clickEditMed(page, "PackType Change Med");
-		await expect(page.locator("select.package-type-select")).toHaveValue("bottle");
+		await expect(page.locator("select.package-type-select")).toHaveValue("liquid_container");
 	});
 
 	test("should edit multiple fields at once (name, notes, generic, taken-by)", async ({ page }) => {

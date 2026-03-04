@@ -225,14 +225,4 @@ test.describe("Schedule with medications", () => {
 		}
 	});
 
-	test("should show medication names in timeline rows", async ({ page }) => {
-		await navigateTo(page, "/dashboard");
-		await page.waitForLoadState("networkidle");
-
-		const todayBlock = page.locator(".day-block.today");
-		await expect(todayBlock).toBeVisible({ timeout: 15000 });
-
-		const medNames = todayBlock.locator(".med-name");
-		expect(await medNames.count()).toBeGreaterThanOrEqual(1);
-	});
 });

@@ -163,6 +163,7 @@ When code changes (features or bug fixes) are complete:
    ```
    - Use `--label enhancement` for `feat/` branches, `--label bug` for `fix/` branches, `--label documentation` for `docs/` branches.
    - Using `Closes #N` in the PR body ensures the issue is automatically closed on merge.
+   - Always add an explicit issue comment with the PR link and short fix summary (do not rely on auto-close event only).
    - The `--project` flag links the PR to the Project board.
 4. **Present the PR URL to the user and wait for confirmation.**
 
@@ -451,6 +452,7 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
    Issues with `enhancement`, `bug`, or `triage` labels are **automatically added** to the board.
 
 2. **When creating a PR**: Always reference the issue with `Closes #N` in the PR body so the issue is automatically **closed** on merge. Note: this does NOT move the Project board status — that must be done manually (see step 3).
+   Also add a direct issue comment with the PR link and a one-line summary for clear issue-thread traceability.
 
 3. **After merge — verify automation**: The `project-auto-done.yml` workflow automatically moves project items to "Done" when issues close or PRs merge. After merge, verify it ran:
    ```bash

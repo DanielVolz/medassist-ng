@@ -50,6 +50,36 @@ function saveIntakeReminderState(state: IntakeReminderState): void {
 	writeFileSync(intakeReminderStateFile, JSON.stringify(state, null, 2));
 }
 
+type MailDeliveryInfo = {
+	accepted?: unknown;
+	rejected?: unknown;
+	response?: unknown;
+};
+
+function normalizeRecipients(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "")))
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
+function getDeliveryError(info: MailDeliveryInfo): string | null {
+	const accepted = normalizeRecipients(info.accepted);
+	const rejected = normalizeRecipients(info.rejected);
+
+	if (accepted.length > 0) return null;
+	if (rejected.length > 0) {
+		return `SMTP rejected all recipients: ${rejected.join(", ")}`;
+	}
+
+	if (typeof info.response === "string" && info.response.trim()) {
+		return `SMTP did not confirm accepted recipients. Response: ${info.response}`;
+	}
+
+	return "SMTP did not confirm accepted recipients.";
+}
+
 function buildDoseIdForIntake(intake: UpcomingIntake & { medicationId: number; blisterIndex: number }): string {
 	const intakeDate = intake.intakeTime;
 	const dateOnlyMs = new Date(intakeDate.getFullYear(), intakeDate.getMonth(), intakeDate.getDate()).getTime();
@@ -166,7 +196,7 @@ async function sendIntakeReminderEmail(
 	repeatIntervalMinutes?: number,
 	currentCount?: number,
 	maxCount?: number
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; messageId?: string; smtpResponse?: string }> {
 	const smtpHost = process.env.SMTP_HOST;
 	const smtpUser = process.env.SMTP_USER;
 	const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
@@ -310,7 +340,7 @@ ${getFooterPlain(language)}`;
 			},
 		});
 
-		await transporter.sendMail({
+		const mailResult = await transporter.sendMail({
 			from: smtpFrom,
 			to: email,
 			subject: `💊 ${subject}`,
@@ -318,7 +348,16 @@ ${getFooterPlain(language)}`;
 			html,
 		});
 
-		return { success: true };
+		const deliveryError = getDeliveryError(mailResult);
+		if (deliveryError) {
+			return { success: false, error: deliveryError };
+		}
+
+		return {
+			success: true,
+			messageId: mailResult.messageId,
+			smtpResponse: typeof mailResult.response === "string" ? mailResult.response : undefined,
+		};
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
 		return { success: false, error: errorMessage };
@@ -380,17 +419,26 @@ async function checkAndSendIntakeRemindersForUser(
 		`[IntakeReminder] User ${settings.userId}: Notifications enabled (email:${emailEnabled}, shoutrrr:${shoutrrrEnabled})`
 	);
 
-	// Get all medications with intake reminders enabled for this user
-	const medsWithReminders = rows.filter((row) => row.intakeRemindersEnabled);
+	// Build medication entries that have at least one reminder-enabled intake.
+	// Intake-level reminders are the single source of truth.
+	const reminderEntries = rows
+		.map((med) => {
+			const intakes = parseIntakesJson(
+				med.intakesJson,
+				{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+				false
+			);
+			const intakesWithReminders = intakes.filter((intake) => intake.intakeRemindersEnabled === true);
+			return { med, intakes, intakesWithReminders };
+		})
+		.filter((entry) => entry.intakesWithReminders.length > 0);
 
-	if (medsWithReminders.length === 0) {
+	if (reminderEntries.length === 0) {
 		logger.debug(`[IntakeReminder] User ${settings.userId}: No medications have reminders enabled`);
 		return; // No medications have reminders enabled for this user
 	}
 
-	logger.debug(
-		`[IntakeReminder] User ${settings.userId}: Found ${medsWithReminders.length} medications with reminders`
-	);
+	logger.debug(`[IntakeReminder] User ${settings.userId}: Found ${reminderEntries.length} medications with reminders`);
 
 	const state = loadIntakeReminderState();
 	const allUpcoming: (UpcomingIntake & { medicationId: number; blisterIndex: number })[] = [];
@@ -407,13 +455,7 @@ async function checkAndSendIntakeRemindersForUser(
 	);
 
 	// Find intakes: upcoming ones in reminder window + past ones for repeat reminders
-	for (const med of medsWithReminders) {
-		// Parse intakes using new format (with per-intake takenBy), falling back to legacy
-		const intakes = parseIntakesJson(
-			med.intakesJson,
-			{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-			med.intakeRemindersEnabled ?? false
-		);
+	for (const { med, intakes, intakesWithReminders } of reminderEntries) {
 		// Medication-level takenBy (for fallback/display purposes)
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
 		const medDisplayName = med.name || med.genericName || "";
@@ -421,15 +463,6 @@ async function checkAndSendIntakeRemindersForUser(
 		logger.debug(
 			`[IntakeReminder] User ${settings.userId}: Processing medication "${medDisplayName}" with ${intakes.length} intakes`
 		);
-
-		// Filter intakes that have reminders enabled (per-intake setting or medication-level)
-		const intakesWithReminders = intakes.filter((intake, idx) => {
-			const hasReminder = intake.intakeRemindersEnabled || med.intakeRemindersEnabled;
-			if (!hasReminder) {
-				logger.debug(`[IntakeReminder] User ${settings.userId}: Intake ${idx} has reminders disabled, skipping`);
-			}
-			return hasReminder;
-		});
 
 		// Process each intake separately to track blisterIndex
 		intakesWithReminders.forEach((intake, _blisterIndex) => {
@@ -670,7 +703,9 @@ async function checkAndSendIntakeRemindersForUser(
 		);
 		emailSuccess = result.success;
 		if (result.success) {
-			logger.info(`[IntakeReminder] User ${settings.userId}: Email sent successfully`);
+			logger.info(
+				`[IntakeReminder] User ${settings.userId}: Email sent successfully (to: ${settings.notificationEmail}, messageId: ${result.messageId}, smtp: ${result.smtpResponse})`
+			);
 		} else {
 			logger.error(`[IntakeReminder] User ${settings.userId}: Failed to send email: ${result.error}`);
 		}

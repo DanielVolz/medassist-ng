@@ -268,12 +268,10 @@ export function MedDetailModal({
 					every: blister.every,
 					start: blister.start,
 					takenBy: null,
-					intakeRemindersEnabled: selectedMed.intakeRemindersEnabled ?? false,
+					intakeRemindersEnabled: false,
 					intakeUnit: null,
 				}));
-	const hasAnyIntakeReminder = scheduleIntakes.some(
-		(intake) => (intake.intakeRemindersEnabled ?? selectedMed.intakeRemindersEnabled ?? false) === true
-	);
+	const hasAnyIntakeReminder = scheduleIntakes.some((intake) => intake.intakeRemindersEnabled === true);
 	const normalizeBlisterStock = (nextFull: number, nextPartial: number, nextLoose: number) => {
 		let normalizedFull = Math.max(0, nextFull);
 		let normalizedPartial = Math.max(0, nextPartial);
@@ -966,7 +964,7 @@ export function MedDetailModal({
 						<div className="med-detail-section">
 							<h3>
 								{t("modal.intakeSchedule")}{" "}
-								{(selectedMed.intakeRemindersEnabled || hasAnyIntakeReminder) && (
+								{hasAnyIntakeReminder && (
 									<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
 										<Bell size={14} aria-hidden="true" />
 									</span>
@@ -977,7 +975,7 @@ export function MedDetailModal({
 									const hasPerIntakeTakenBy = !!intake.takenBy;
 									const personCount = Math.max(1, selectedMed.takenBy?.length ?? 0);
 									const totalUsage = hasPerIntakeTakenBy ? intake.usage : intake.usage * personCount;
-									const showIntakeBell = intake.intakeRemindersEnabled ?? selectedMed.intakeRemindersEnabled ?? false;
+									const showIntakeBell = intake.intakeRemindersEnabled === true;
 
 									return (
 										<div

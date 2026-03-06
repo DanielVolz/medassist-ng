@@ -29,7 +29,7 @@
     "argon2": "^0.44.0",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
-    "fastify": "^5.7.4",
+    "fastify": "^5.8.1",
     "nodemailer": "^8.0.1",
     "openid-client": "^6.8.2",
     "sharp": "^0.34.5",

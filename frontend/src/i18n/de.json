@@ -323,9 +323,9 @@
     "schedule": {
       "title": "Erinnerungsplan",
       "stockCheck": "Bestands- & Rezeptprüfung",
-      "dailyAt6": "Täglich um 6:00 Uhr",
+      "dailyAtHour": "Täglich um {{hour}}:00 Uhr",
       "intakeCheck": "Einnahmeprüfung",
-      "15minBefore": "15 Min. vor geplanter Zeit",
+      "minutesBefore": "{{minutes}} Min. vor geplanter Zeit",
       "nextCheck": "Nächste Bestandsprüfung",
       "lastSent": "Letzte Benachrichtigung",
       "lastStockSent": "Letzte Bestands-Erinnerung",

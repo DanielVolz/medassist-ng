@@ -49,6 +49,8 @@ export interface Settings {
 	upcomingTodayOnly: boolean;
 	shareScheduleTodayOnly: boolean;
 	swapDashboardMainSections: boolean;
+	reminderHour: number;
+	reminderMinutesBefore: number;
 	expiryWarningDays: number;
 }
 
@@ -96,6 +98,8 @@ const defaultSettings: Settings = {
 	upcomingTodayOnly: false,
 	shareScheduleTodayOnly: false,
 	swapDashboardMainSections: false,
+	reminderHour: 6,
+	reminderMinutesBefore: 15,
 	expiryWarningDays: 30,
 };
 

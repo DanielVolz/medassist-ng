@@ -323,9 +323,9 @@
     "schedule": {
       "title": "Reminder Schedule",
       "stockCheck": "Stock & prescription check",
-      "dailyAt6": "Daily at 6:00 AM",
+      "dailyAtHour": "Daily at {{hour}}:00",
       "intakeCheck": "Intake check",
-      "15minBefore": "15 min before scheduled time",
+      "minutesBefore": "{{minutes}} min before scheduled time",
       "nextCheck": "Next stock check",
       "lastSent": "Last notification sent",
       "lastStockSent": "Last stock reminder",

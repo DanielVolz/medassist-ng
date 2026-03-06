@@ -326,6 +326,8 @@ export async function settingsRoutes(app: FastifyInstance) {
 		const userId = await getUserId(request, reply);
 
 		const settings = await getOrCreateUserSettings(userId);
+		const reminderHour = envInt("REMINDER_HOUR", 6);
+		const reminderMinutesBefore = envInt("REMINDER_MINUTES_BEFORE", 15);
 
 		return reply.send({
 			// User notification settings (from DB)
@@ -376,6 +378,8 @@ export async function settingsRoutes(app: FastifyInstance) {
 			lastPrescriptionReminderChannel: settings.lastPrescriptionReminderChannel ?? null,
 			lastPrescriptionReminderMedNames: settings.lastPrescriptionReminderMedNames ?? null,
 			// Server settings (from .env, read-only)
+			reminderHour,
+			reminderMinutesBefore,
 			expiryWarningDays: parseInt(process.env.EXPIRY_WARNING_DAYS ?? "30", 10),
 		});
 	});

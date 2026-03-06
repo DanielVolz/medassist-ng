@@ -479,11 +479,15 @@ export function SettingsPage() {
 							</div>
 							<div className="schedule-row">
 								<span className="schedule-label">{t("settings.schedule.stockCheck")}</span>
-								<span className="schedule-value">{t("settings.schedule.dailyAt6")}</span>
+								<span className="schedule-value">
+									{t("settings.schedule.dailyAtHour", { hour: settings.reminderHour })}
+								</span>
 							</div>
 							<div className="schedule-row">
 								<span className="schedule-label">{t("settings.schedule.intakeCheck")}</span>
-								<span className="schedule-value">{t("settings.schedule.15minBefore")}</span>
+								<span className="schedule-value">
+									{t("settings.schedule.minutesBefore", { minutes: settings.reminderMinutesBefore })}
+								</span>
 							</div>
 							{settings.nextScheduledCheck && (
 								<div className="schedule-row">

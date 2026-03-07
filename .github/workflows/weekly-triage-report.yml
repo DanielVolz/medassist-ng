@@ -1,0 +1,77 @@
+name: Weekly Triage Report
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  weekly-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build weekly summary
+        id: summary
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const weekLabel = new Date().toISOString().split('T')[0];
+
+            const q = async (query) => {
+              const res = await github.rest.search.issuesAndPullRequests({ q: query, per_page: 1 });
+              return res.data.total_count;
+            };
+
+            const openIssues = await q(`repo:${owner}/${repo} is:issue is:open`);
+            const newIssues = await q(`repo:${owner}/${repo} is:issue created:>=${since}`);
+            const bugs = await q(`repo:${owner}/${repo} is:issue is:open label:bug`);
+            const enhancements = await q(`repo:${owner}/${repo} is:issue is:open label:enhancement`);
+            const triage = await q(`repo:${owner}/${repo} is:issue is:open label:triage`);
+            const stale = await q(`repo:${owner}/${repo} is:issue is:open label:stale`);
+            const unassigned = await q(`repo:${owner}/${repo} is:issue is:open no:assignee`);
+
+            const body = [
+              `## Weekly Triage Report (${weekLabel})`,
+              '',
+              `- Open issues: **${openIssues}**`,
+              `- New issues (last 7 days): **${newIssues}**`,
+              `- Open bugs: **${bugs}**`,
+              `- Open enhancements: **${enhancements}**`,
+              `- In triage: **${triage}**`,
+              `- Stale: **${stale}**`,
+              `- Unassigned: **${unassigned}**`,
+              '',
+              '### Quick Links',
+              `- Triage queue: https://github.com/${owner}/${repo}/issues?q=is%3Aissue+is%3Aopen+label%3Atriage`,
+              `- Stale issues: https://github.com/${owner}/${repo}/issues?q=is%3Aissue+is%3Aopen+label%3Astale`,
+              `- Unassigned issues: https://github.com/${owner}/${repo}/issues?q=is%3Aissue+is%3Aopen+no%3Aassignee`,
+            ].join('\n');
+
+            core.setOutput('title', `Weekly Triage Report - ${weekLabel}`);
+            core.setOutput('body', body);
+
+      - name: Publish report issue
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const title = `${{ steps.summary.outputs.title }}`;
+            const body = `${{ steps.summary.outputs.body }}`;
+
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ['triage']
+            });

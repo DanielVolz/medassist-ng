@@ -13,9 +13,18 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Image tag (leave empty for "latest")'
+        description: 'Image/release tag (e.g. v1.19.1 or latest)'
         required: false
         default: ''
+      create_release:
+        description: 'Create GitHub release entry (requires tag starting with v)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
 
 # Default minimal permissions
 permissions:
@@ -89,12 +98,12 @@ jobs:
           sbom: false
 
   # =============================================================================
-  # Create GitHub Release (only on tag push)
+  # Create GitHub Release (on tag push or manual dispatch with create_release)
   # =============================================================================
   create-release:
     runs-on: ubuntu-latest
     needs: build-and-push
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
     permissions:
       contents: write
     
@@ -104,10 +113,31 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for changelog generation
 
+      - name: Resolve current tag
+        id: current_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CURRENT_TAG="${{ github.event.inputs.tag }}"
+          else
+            CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
+          if [ -z "$CURRENT_TAG" ]; then
+            echo "Release tag is required. Provide workflow_dispatch input 'tag'."
+            exit 1
+          fi
+
+          if [[ "$CURRENT_TAG" != v* ]]; then
+            echo "Release tag must start with 'v' (example: v1.19.1)."
+            exit 1
+          fi
+
+          echo "value=$CURRENT_TAG" >> "$GITHUB_OUTPUT"
+
       - name: Check if release exists
         id: check_release
         run: |
-          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          CURRENT_TAG="${{ steps.current_tag.outputs.value }}"
           if gh release view "$CURRENT_TAG" &>/dev/null; then
             echo "exists=true" >> $GITHUB_OUTPUT
             echo "Release $CURRENT_TAG already exists, skipping creation"
@@ -121,25 +151,36 @@ jobs:
         if: steps.check_release.outputs.exists == 'false'
         id: prev_tag
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG="${{ steps.current_tag.outputs.value }}"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | grep -vx "$CURRENT_TAG" | head -1 || true)
+          else
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          fi
+
           echo "tag=${PREV_TAG}" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
         if: steps.check_release.outputs.exists == 'false'
         id: changelog
         run: |
-          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          CURRENT_TAG="${{ steps.current_tag.outputs.value }}"
           PREV_TAG="${{ steps.prev_tag.outputs.tag }}"
           
-          echo "## What's Changed" > changelog.md
+          echo "## What's New" > changelog.md
+          echo "" >> changelog.md
+          echo "This release includes updates and fixes shipped with ${CURRENT_TAG}." >> changelog.md
+          echo "" >> changelog.md
+          echo "### Highlights" >> changelog.md
           echo "" >> changelog.md
           
           if [ -n "$PREV_TAG" ]; then
-            # Get commits between tags
-            git log ${PREV_TAG}..${CURRENT_TAG} --pretty=format:"* %s (%h)" --no-merges >> changelog.md
+            echo "Changes from ${PREV_TAG} to ${CURRENT_TAG}:" >> changelog.md
+            git log ${PREV_TAG}..${CURRENT_TAG} --pretty=format:"- %s (%h)" --no-merges >> changelog.md
           else
-            # First release - get recent commits
-            git log -20 --pretty=format:"* %s (%h)" --no-merges >> changelog.md
+            echo "Recent shipped commits:" >> changelog.md
+            git log -20 --pretty=format:"- %s (%h)" --no-merges >> changelog.md
           fi
           
           echo "" >> changelog.md
@@ -157,6 +198,8 @@ jobs:
         if: steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.current_tag.outputs.value }}
+          target_commitish: ${{ github.sha }}
           body_path: changelog.md
           generate_release_notes: false
           draft: false

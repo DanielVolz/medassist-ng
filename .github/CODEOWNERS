@@ -1,0 +1,11 @@
+# MedAssist ownership
+# This routes review requests automatically to the maintainer.
+
+* @DanielVolz
+
+# Explicit domains for clarity
+/backend/ @DanielVolz
+/frontend/ @DanielVolz
+/.github/ @DanielVolz
+/doku/ @DanielVolz
+/docs/ @DanielVolz

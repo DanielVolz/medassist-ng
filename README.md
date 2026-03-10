@@ -317,9 +317,9 @@ Configure push notifications in Settings → Push, or set defaults via environme
 
 These defaults are applied when a new user is created. Once a user saves settings in the app, their values take precedence.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DEFAULT_SHARE_STOCK_STATUS` | `true` | Show stock status (Normal/Low/Critical) on shared schedule links |
+Complete list and details:
+
+- [docs/DEFAULT_USER_SETTINGS.md](docs/DEFAULT_USER_SETTINGS.md)
 
 #### URL Examples
 

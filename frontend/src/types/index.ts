@@ -264,6 +264,35 @@ export type ExpiredLinkData = {
 	expiredAt: string;
 };
 
+export type SharedMedicationOverviewItem = {
+	name: string;
+	genericName: string | null;
+	imageUrl: string | null;
+	packageType: PackageType;
+	packCount: number;
+	blistersPerPack: number;
+	pillsPerBlister: number;
+	totalPills: number | null;
+	looseTablets: number;
+	currentStock: number | null;
+	capacity: number | null;
+	daysLeft: number | null;
+	nextIntakeDate: string | null;
+	depletionDate: string | null;
+	priority: "normal" | "high" | null;
+	expiryDate: string | null;
+	medicationStartDate: string | null;
+	prescriptionEnabled: boolean;
+	prescriptionRemainingRefills: number | null;
+};
+
+export type SharedMedicationOverviewResponse = {
+	takenBy: string;
+	sharedBy: string | null;
+	generatedAt: string;
+	medications: SharedMedicationOverviewItem[];
+};
+
 // =============================================================================
 // Field Validation Limits (must match backend)
 // =============================================================================

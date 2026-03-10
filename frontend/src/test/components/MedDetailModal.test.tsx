@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MedDetailModal } from "../../components/MedDetailModal";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../../types";
@@ -409,6 +409,112 @@ describe("MedDetailModal with refill modal", () => {
 		render(<MedDetailModal {...defaultProps} selectedMed={bottleMed} showEditStockModal={true} />);
 
 		expect(screen.getByText("editStock.packageSize_150")).toBeInTheDocument();
+	});
+
+	it("shows bottles-based refill input for liquid container and preview in ml package amount", () => {
+		const liquidMed: Medication = {
+			...mockMedication,
+			name: "Liquid Med",
+			packageType: "liquid_container",
+			packCount: 1,
+			packageAmountValue: 150,
+			packageAmountUnit: "ml",
+			totalPills: 150,
+			looseTablets: 150,
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={liquidMed} showRefillModal={true} refillLoose={150} />);
+
+		const refillModal = document.querySelector(".refill-modal");
+		expect(refillModal).not.toBeNull();
+		expect(within(refillModal as HTMLElement).getByText(/form\.bottles/i)).toBeInTheDocument();
+		expect(screen.queryByText(/refill\.pillsToAdd/i)).not.toBeInTheDocument();
+		expect(screen.getByText(/\+150 form\.packageAmountUnitMl/i)).toBeInTheDocument();
+	});
+
+	it("maps liquid refill bottle input to package amount in ml", () => {
+		const liquidMed: Medication = {
+			...mockMedication,
+			name: "Liquid Med",
+			packageType: "liquid_container",
+			packCount: 1,
+			packageAmountValue: 150,
+			packageAmountUnit: "ml",
+			totalPills: 150,
+			looseTablets: 150,
+		};
+		const onRefillLooseChange = vi.fn();
+		const onRefillPacksChange = vi.fn();
+
+		render(
+			<MedDetailModal
+				{...defaultProps}
+				selectedMed={liquidMed}
+				showRefillModal={true}
+				onRefillLooseChange={onRefillLooseChange}
+				onRefillPacksChange={onRefillPacksChange}
+				refillLoose={0}
+			/>
+		);
+
+		const input = document.querySelector(".refill-modal input[type='number']") as HTMLInputElement;
+		fireEvent.change(input, { target: { value: "2" } });
+
+		expect(onRefillPacksChange).toHaveBeenCalledWith(2);
+		expect(onRefillLooseChange).toHaveBeenCalledWith(300);
+	});
+
+	it("shows tubes-based refill input for tube package and preview in g package amount", () => {
+		const tubeMed: Medication = {
+			...mockMedication,
+			name: "Tube Med",
+			packageType: "tube",
+			packCount: 4,
+			packageAmountValue: 150,
+			packageAmountUnit: "g",
+			totalPills: 600,
+			looseTablets: 600,
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={tubeMed} showRefillModal={true} refillLoose={150} />);
+
+		const refillModal = document.querySelector(".refill-modal");
+		expect(refillModal).not.toBeNull();
+		expect(within(refillModal as HTMLElement).getByText(/form\.tubes/i)).toBeInTheDocument();
+		expect(screen.queryByText(/refill\.pillsToAdd/i)).not.toBeInTheDocument();
+		expect(screen.getByText(/\+150 form\.packageAmountUnitG/i)).toBeInTheDocument();
+	});
+
+	it("maps tube refill count input to package amount in g", () => {
+		const tubeMed: Medication = {
+			...mockMedication,
+			name: "Tube Med",
+			packageType: "tube",
+			packCount: 4,
+			packageAmountValue: 150,
+			packageAmountUnit: "g",
+			totalPills: 600,
+			looseTablets: 600,
+		};
+		const onRefillLooseChange = vi.fn();
+		const onRefillPacksChange = vi.fn();
+
+		render(
+			<MedDetailModal
+				{...defaultProps}
+				selectedMed={tubeMed}
+				showRefillModal={true}
+				onRefillLooseChange={onRefillLooseChange}
+				onRefillPacksChange={onRefillPacksChange}
+				refillLoose={0}
+			/>
+		);
+
+		const input = document.querySelector(".refill-modal input[type='number']") as HTMLInputElement;
+		fireEvent.change(input, { target: { value: "2" } });
+
+		expect(onRefillPacksChange).toHaveBeenCalledWith(2);
+		expect(onRefillLooseChange).toHaveBeenCalledWith(300);
 	});
 });
 

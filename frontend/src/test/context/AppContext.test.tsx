@@ -88,6 +88,7 @@ describe("useAppContext", () => {
 			saving: false,
 			setSaving: vi.fn(),
 			uploadingImage: false,
+			clearMedicationsState: vi.fn(),
 			loadMeds,
 			deleteMed: vi.fn(),
 			uploadMedImage: vi.fn(),
@@ -173,6 +174,7 @@ describe("useAppContext", () => {
 				expiryWarningDays: 30,
 			},
 			settingsLoading: false,
+			settingsLoadError: null,
 			settingsSaving: false,
 			settingsSaved: false,
 			testingEmail: false,
@@ -186,6 +188,7 @@ describe("useAppContext", () => {
 			testEmail: vi.fn(),
 			testShoutrrr: vi.fn(),
 			hasUnsavedChanges: false,
+			resetSettingsState: vi.fn(),
 		});
 
 		mockUseDoses.mockReturnValue({
@@ -195,7 +198,9 @@ describe("useAppContext", () => {
 			dismissedDoses: new Set<string>(),
 			showClearMissedConfirm: true,
 			setShowClearMissedConfirm: vi.fn(),
+			clearDosesState: vi.fn(),
 			getDoseId: vi.fn((base: string, person: string | null) => (person ? `${base}-${person}` : base)),
+			isDoseTakenAutomatically: vi.fn(() => false),
 			countTakenDoses: vi.fn(() => ({ total: 0, taken: 0 })),
 			markDoseTaken: vi.fn(),
 			undoDoseTaken: vi.fn(),
@@ -234,6 +239,8 @@ describe("useAppContext", () => {
 			setRefillPacks: vi.fn(),
 			refillLoose: 0,
 			setRefillLoose: vi.fn(),
+			usePrescriptionRefill: false,
+			setUsePrescriptionRefill: vi.fn(),
 			refillSaving: false,
 			refillHistory: [],
 			refillHistoryExpanded: false,
@@ -244,7 +251,11 @@ describe("useAppContext", () => {
 			setEditStockFullBlisters: vi.fn(),
 			editStockPartialBlisterPills: 0,
 			setEditStockPartialBlisterPills: vi.fn(),
+			editStockLoosePills: 0,
+			setEditStockLoosePills: vi.fn(),
 			editStockSaving: false,
+			editStockMedication: null,
+			clearRefillState: vi.fn(),
 			loadRefillHistory: vi.fn(),
 			submitRefill: vi.fn(),
 			submitStockCorrection: vi.fn(),
@@ -281,6 +292,55 @@ describe("useAppContext", () => {
 		expect(result.current.existingPeople).toEqual(["Anna", "Max"]);
 		expect(result.current.stockThresholds.lowStockDays).toBe(10);
 		expect(result.current.settingsChanged).toBe(false);
+	});
+
+	it("exposes the settings load error from useSettings", async () => {
+		const settingsValue = mockUseSettings();
+		mockUseSettings.mockReturnValue({
+			...settingsValue,
+			settingsLoadError: "forbidden",
+		});
+
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.settingsLoadError).toBe("forbidden");
+		});
+	});
+
+	it("clears user-scoped state and reloads data when authenticated user changes", async () => {
+		const { result, rerender } = renderHook(() => useAppContext(), { wrapper });
+
+		act(() => {
+			result.current.openImageLightbox();
+			result.current.openUserFilter("Max");
+			result.current.setShowImportConfirm(true);
+			result.current.setPendingImportData({ version: "1" });
+			result.current.setImportResult({ medications: 1, doses: 1, refills: 0, shares: 0 });
+		});
+
+		const clearMedicationsStateBefore = mockUseMedications().clearMedicationsState.mock.calls.length;
+		const resetSettingsStateBefore = mockUseSettings().resetSettingsState.mock.calls.length;
+		const clearDosesStateBefore = mockUseDoses().clearDosesState.mock.calls.length;
+		const clearRefillStateBefore = mockUseRefill().clearRefillState.mock.calls.length;
+		const resetShareDialogStateBefore = mockUseShare().resetShareDialogState.mock.calls.length;
+
+		mockUseAuth.mockReturnValue({ user: { id: 8, username: "other-user" } });
+		rerender();
+
+		await waitFor(() => {
+			expect(mockUseMedications().clearMedicationsState).toHaveBeenCalledTimes(clearMedicationsStateBefore + 1);
+			expect(mockUseSettings().resetSettingsState).toHaveBeenCalledTimes(resetSettingsStateBefore + 1);
+			expect(mockUseDoses().clearDosesState).toHaveBeenCalledTimes(clearDosesStateBefore + 1);
+			expect(mockUseRefill().clearRefillState).toHaveBeenCalledTimes(clearRefillStateBefore + 1);
+			expect(mockUseShare().resetShareDialogState).toHaveBeenCalledTimes(resetShareDialogStateBefore + 1);
+		});
+
+		expect(result.current.selectedUser).toBeNull();
+		expect(result.current.showImageLightbox).toBe(false);
+		expect(result.current.showImportConfirm).toBe(false);
+		expect(result.current.pendingImportData).toBeNull();
+		expect(result.current.importResult).toBeNull();
 	});
 
 	it("wraps share dialog opener with current medications", async () => {

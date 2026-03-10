@@ -12,6 +12,7 @@ export interface UseDosesReturn {
 	dismissedDoses: Set<string>;
 	showClearMissedConfirm: boolean;
 	setShowClearMissedConfirm: (show: boolean) => void;
+	clearDosesState: () => void;
 	getDoseId: (baseDoseId: string, person: string | null) => string;
 	isDoseTakenAutomatically: (doseId: string) => boolean;
 	countTakenDoses: (doses: Array<{ id: string; takenBy: string[] }>) => { total: number; taken: number };
@@ -29,6 +30,15 @@ export function useDoses(): UseDosesReturn {
 
 	// Track in-flight mutations to prevent polling from overwriting optimistic updates
 	const mutationInFlightRef = useRef(0);
+
+	const clearDosesState = useCallback(() => {
+		setTakenDoses(new Set());
+		setTakenDoseTimestamps(new Map());
+		setTakenDoseSources(new Map());
+		setDismissedDoses(new Set());
+		setShowClearMissedConfirm(false);
+		mutationInFlightRef.current = 0;
+	}, []);
 
 	// Load taken doses from server
 	const loadTakenDoses = useCallback(async () => {
@@ -60,12 +70,15 @@ export function useDoses(): UseDosesReturn {
 				setTakenDoseTimestamps(timestamps);
 				setTakenDoseSources(sources);
 				setDismissedDoses(dismissed);
+			} else if (res.status === 401 || res.status === 403) {
+				// Prevent showing previous user's dose state after auth/session changes.
+				clearDosesState();
 			}
 			// Don't reset on error - keep current state
 		} catch {
 			// Don't reset on error - keep current state
 		}
-	}, []);
+	}, [clearDosesState]);
 
 	// Poll for taken doses from server (works with or without auth)
 	useEffect(() => {
@@ -209,6 +222,7 @@ export function useDoses(): UseDosesReturn {
 		dismissedDoses,
 		showClearMissedConfirm,
 		setShowClearMissedConfirm,
+		clearDosesState,
 		getDoseId,
 		isDoseTakenAutomatically,
 		countTakenDoses,

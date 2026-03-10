@@ -435,7 +435,7 @@ export function MobileEditModal({
 										<label className="full">
 											{t("form.packageType")}
 											<select
-												className="package-type-select"
+												className="select-field package-type-select"
 												value={form.packageType}
 												onChange={(e) => onHandleValueChange("packageType", e.target.value as FormState["packageType"])}
 											>
@@ -458,6 +458,7 @@ export function MobileEditModal({
 											<label className="full">
 												{t("form.pillForm")}
 												<select
+													className="select-field"
 													value={form.pillForm}
 													onChange={(e) => onHandleValueChange("pillForm", e.target.value as FormState["pillForm"])}
 												>
@@ -469,7 +470,11 @@ export function MobileEditModal({
 										{isTubePackageType(form.packageType) && (
 											<label className="full">
 												{t("form.medicationForm")}
-												<select value={"topical"} onChange={() => onHandleValueChange("medicationForm", "topical")}>
+												<select
+													className="select-field"
+													value={"topical"}
+													onChange={() => onHandleValueChange("medicationForm", "topical")}
+												>
 													<option value="topical">{t("form.medicationFormTopical")}</option>
 												</select>
 											</label>
@@ -477,7 +482,11 @@ export function MobileEditModal({
 										{isLiquidContainerPackageType(form.packageType) && (
 											<label className="full">
 												{t("form.medicationForm")}
-												<select value={"liquid"} onChange={() => onHandleValueChange("medicationForm", "liquid")}>
+												<select
+													className="select-field"
+													value={"liquid"}
+													onChange={() => onHandleValueChange("medicationForm", "liquid")}
+												>
 													<option value="liquid">{t("form.medicationFormLiquid")}</option>
 												</select>
 											</label>
@@ -630,7 +639,7 @@ export function MobileEditModal({
 																<select
 																	value="g"
 																	disabled
-																	className="dose-unit-select"
+																	className="select-field dose-unit-select"
 																	aria-label={t("form.packageAmountUnitG")}
 																>
 																	<option value="g">{t("form.packageAmountUnitG")}</option>
@@ -675,7 +684,7 @@ export function MobileEditModal({
 																<select
 																	value="ml"
 																	disabled
-																	className="dose-unit-select"
+																	className="select-field dose-unit-select"
 																	aria-label={t("form.packageAmountUnitMl")}
 																>
 																	<option value="ml">{t("form.packageAmountUnitMl")}</option>
@@ -743,7 +752,7 @@ export function MobileEditModal({
 													<select
 														value={form.doseUnit}
 														onChange={(e) => onFormChange({ ...form, doseUnit: e.target.value as DoseUnit })}
-														className="dose-unit-select"
+														className="select-field dose-unit-select"
 													>
 														{DOSE_UNITS.map((unit) => (
 															<option key={unit.value} value={unit.value}>
@@ -849,6 +858,7 @@ export function MobileEditModal({
 													<label className="compact full-row">
 														<span>{t("form.blisters.intakeUnit")}</span>
 														<select
+															className="select-field"
 															value={intake.intakeUnit}
 															onChange={(e) =>
 																onSetIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")
@@ -864,6 +874,7 @@ export function MobileEditModal({
 													<label className="compact full-row taken-by-field">
 														<span>{t("form.blisters.takenByIntake")}</span>
 														<select
+															className="select-field"
 															value={intake.takenBy}
 															onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}
 														>

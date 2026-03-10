@@ -292,6 +292,18 @@
       "title": "Language",
       "select": "Select language"
     },
+    "apiKey": {
+      "title": "API Access",
+      "generateTitle": "Generate API key",
+      "generateDesc": "Creates a new write-capable API key. The previous key becomes invalid automatically.",
+      "generateButton": "Generate key",
+      "generating": "Generating...",
+      "currentToken": "New API key",
+      "copyButton": "Copy",
+      "copied": "Copied",
+      "copyHint": "Copy this key now. It is shown only once and cannot be retrieved later.",
+      "generateError": "Failed to generate API key"
+    },
     "notifications": {
       "title": "Notifications",
       "channels": "Channels",
@@ -312,7 +324,11 @@
     },
     "email": {
       "recipient": "Recipient",
-      "notConfigured": "Not configured"
+        "notConfigured": "Not configured",
+        "serverNotConfigured": "Email notifications stay unavailable until SMTP is configured on the backend.",
+        "loadErrorAuth": "Email settings could not be loaded because your session is no longer valid. Please sign in again.",
+        "loadErrorForbidden": "Email settings could not be loaded because this session is not allowed to read them.",
+        "loadErrorGeneric": "Email availability could not be verified because loading settings failed."
     },
     "push": {
       "url": "URL",
@@ -541,7 +557,10 @@
     "generating": "Generating...",
     "generateAnother": "Generate another link",
     "linkGenerated": "Share link generated!",
+    "scheduleLink": "Schedule link",
+    "overviewLink": "Overview link",
     "copyLink": "Copy Link",
+    "copyOverviewLink": "Copy Overview Link",
     "copied": "Copied to clipboard!",
     "noPeople": "No medications with 'Taken by' assigned. Add a person to a medication first.",
     "scheduleFor": "Schedule for",
@@ -555,6 +574,34 @@
       "message": "This share link for {{takenBy}}'s medication schedule has expired.",
       "contact": "Please contact {{username}} to request a new link.",
       "expiredOn": "Expired on: {{date}}"
+    }
+  },
+  "sharedOverview": {
+    "title": "Medication Overview for {{person}}",
+    "sharedBy": "Shared by {{user}}",
+    "expiredOn": "Expired on: {{date}}",
+    "noMedications": "No medications available for this share link.",
+    "columns": {
+      "name": "Name",
+      "package": "Package",
+      "stock": "Stock",
+      "daysLeft": "Days left",
+      "nextIntake": "Next intake",
+      "depletion": "Depletion",
+      "priority": "Priority"
+    },
+    "priority": {
+      "normal": "Normal",
+      "high": "High"
+    },
+    "stock": {
+      "of": "{{current}} of {{capacity}}"
+    },
+    "error": {
+      "notFound": "Share link not found",
+      "expired": "This shared overview link has expired",
+      "rateLimit": "Too many requests. Please try again in a moment.",
+      "generic": "Failed to load medication overview"
     }
   },
   "exportImport": {

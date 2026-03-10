@@ -48,14 +48,21 @@
 	color: var(--text-primary);
 }
 
-.share-dialog-form select {
+.share-dialog-form .select-field {
 	width: 100%;
-	padding: 0.75rem;
+	padding: 0.6rem 2rem 0.6rem 0.75rem;
 	border: 1px solid var(--border-primary);
 	border-radius: 8px;
-	background-color: var(--bg-input);
+	background-color: var(--bg-secondary);
 	color: var(--text-primary);
-	font-size: 1rem;
+	font-size: 0.9rem;
+	cursor: pointer;
+	background-position: right 0.9rem center;
+}
+
+.share-dialog-form .select-field:focus {
+	outline: none;
+	border-color: var(--accent);
 }
 
 .share-dialog-footer {
@@ -84,6 +91,14 @@
 	color: var(--success);
 	font-weight: 500;
 	margin-bottom: 1rem;
+}
+
+.share-link-label {
+	margin: 0.75rem 0 0.4rem;
+	text-align: left;
+	font-size: 0.8rem;
+	color: var(--text-secondary);
+	font-weight: 600;
 }
 
 .share-link-box {

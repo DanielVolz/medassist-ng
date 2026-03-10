@@ -1261,7 +1261,7 @@ export function MedicationsPage() {
 									<label>
 										{t("form.packageType")}
 										<select
-											className="package-type-select"
+											className="select-field package-type-select"
 											value={form.packageType}
 											onChange={(e) => handleValueChange("packageType", e.target.value as PackageType)}
 										>
@@ -1284,6 +1284,7 @@ export function MedicationsPage() {
 										<label>
 											{t("form.pillForm")}
 											<select
+												className="select-field"
 												value={form.pillForm}
 												onChange={(e) => handleValueChange("pillForm", e.target.value as FormState["pillForm"])}
 											>
@@ -1295,7 +1296,11 @@ export function MedicationsPage() {
 									{isTubePackageType(form.packageType) && (
 										<label>
 											{t("form.medicationForm")}
-											<select value={"topical"} onChange={() => handleValueChange("medicationForm", "topical")}>
+											<select
+												className="select-field"
+												value={"topical"}
+												onChange={() => handleValueChange("medicationForm", "topical")}
+											>
 												<option value="topical">{t("form.medicationFormTopical")}</option>
 											</select>
 										</label>
@@ -1303,7 +1308,11 @@ export function MedicationsPage() {
 									{isLiquidContainerPackageType(form.packageType) && (
 										<label>
 											{t("form.medicationForm")}
-											<select value={"liquid"} onChange={() => handleValueChange("medicationForm", "liquid")}>
+											<select
+												className="select-field"
+												value={"liquid"}
+												onChange={() => handleValueChange("medicationForm", "liquid")}
+											>
 												<option value="liquid">{t("form.medicationFormLiquid")}</option>
 											</select>
 										</label>
@@ -1503,7 +1512,7 @@ export function MedicationsPage() {
 															<select
 																value="g"
 																disabled
-																className="dose-unit-select"
+																className="select-field dose-unit-select"
 																aria-label={t("form.packageAmountUnitG")}
 															>
 																<option value="g">{t("form.packageAmountUnitG")}</option>
@@ -1563,7 +1572,7 @@ export function MedicationsPage() {
 												<select
 													value={form.doseUnit}
 													onChange={(e) => handleValueChange("doseUnit", e.target.value as DoseUnit)}
-													className="dose-unit-select"
+													className="select-field dose-unit-select"
 												>
 													{DOSE_UNITS.map((unit) => (
 														<option key={unit.value} value={unit.value}>
@@ -1597,7 +1606,7 @@ export function MedicationsPage() {
 												<select
 													value="ml"
 													disabled
-													className="dose-unit-select"
+													className="select-field dose-unit-select"
 													aria-label={t("form.packageAmountUnitMl")}
 												>
 													<option value="ml">{t("form.packageAmountUnitMl")}</option>
@@ -1760,6 +1769,7 @@ export function MedicationsPage() {
 													<label>
 														{t("form.blisters.intakeUnit")}
 														<select
+															className="select-field"
 															value={intake.intakeUnit}
 															onChange={(e) =>
 																setIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")
@@ -1775,6 +1785,7 @@ export function MedicationsPage() {
 													<label className="taken-by-field" title={t("form.blisters.takenByTooltip")}>
 														{t("form.blisters.takenByIntake")}
 														<select
+															className="select-field"
 															value={intake.takenBy}
 															onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}
 														>

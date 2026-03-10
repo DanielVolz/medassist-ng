@@ -117,6 +117,9 @@ test.describe("Dashboard with medications", () => {
 
 	test("should show day summary with dose progress", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		await expect(overviewTable).toBeVisible({ timeout: 10000 });
+		await expect(overviewTable.getByText(MED_1)).toBeVisible({ timeout: 10000 });
 
 		const todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 10000 });

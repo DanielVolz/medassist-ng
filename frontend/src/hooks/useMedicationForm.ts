@@ -350,14 +350,15 @@ export function useMedicationForm(): UseMedicationFormReturn {
 				const next = { ...prev, [key]: value } as FormState;
 
 				if (key === "packageType") {
-					if (isTubePackageType(value)) {
+					const nextPackageType = value as FormState["packageType"];
+					if (isTubePackageType(nextPackageType)) {
 						next.packCount = "1";
 						next.packageAmountValue = String(Math.max(1, Number(next.packageAmountValue) || 0));
 						next.medicationForm = "topical";
 						next.lifecycleCategory = "treatment_period";
 						next.doseUnit = "units";
 						next.packageAmountUnit = "g";
-					} else if (isLiquidContainerPackageType(value)) {
+					} else if (isLiquidContainerPackageType(nextPackageType)) {
 						next.packCount = String(Math.max(1, Number(next.packCount) || 1));
 						next.packageAmountValue = String(Math.max(1, Number(next.packageAmountValue) || 0));
 						next.medicationForm = "liquid";

@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { log } from "../utils/logger";
 
 export interface Settings {
 	emailEnabled: boolean;
@@ -53,6 +54,8 @@ export interface Settings {
 	reminderMinutesBefore: number;
 	expiryWarningDays: number;
 }
+
+export type SettingsLoadError = "auth" | "forbidden" | "request" | null;
 
 const defaultSettings: Settings = {
 	emailEnabled: false,
@@ -108,6 +111,7 @@ export interface UseSettingsReturn {
 	setSettings: React.Dispatch<React.SetStateAction<Settings>>;
 	savedSettings: Settings;
 	settingsLoading: boolean;
+	settingsLoadError: SettingsLoadError;
 	settingsSaving: boolean;
 	settingsSaved: boolean;
 	testingEmail: boolean;
@@ -121,6 +125,7 @@ export interface UseSettingsReturn {
 	testEmail: () => Promise<void>;
 	testShoutrrr: () => Promise<void>;
 	hasUnsavedChanges: boolean;
+	resetSettingsState: () => void;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -128,6 +133,7 @@ export function useSettings(): UseSettingsReturn {
 	const [settings, setSettings] = useState<Settings>(defaultSettings);
 	const [savedSettings, setSavedSettings] = useState<Settings>(defaultSettings);
 	const [settingsLoading, setSettingsLoading] = useState(false);
+	const [settingsLoadError, setSettingsLoadError] = useState<SettingsLoadError>(null);
 	const [settingsSaving, setSettingsSaving] = useState(false);
 	const [settingsSaved, setSettingsSaved] = useState(false);
 	const [testingEmail, setTestingEmail] = useState(false);
@@ -135,20 +141,123 @@ export function useSettings(): UseSettingsReturn {
 	const [testingShoutrrr, setTestingShoutrrr] = useState(false);
 	const [testShoutrrrResult, setTestShoutrrrResult] = useState<{ success: boolean; message: string } | null>(null);
 
+	// Generation counter: incremented on every resetSettingsState call.
+	// loadSettings captures the current generation; if it changes before
+	// the fetch completes, the stale response is silently discarded.
+	const loadGenerationRef = useRef(0);
+
+	const resetSettingsState = useCallback(() => {
+		loadGenerationRef.current += 1; // Invalidate any in-flight loadSettings
+		setSettings(defaultSettings);
+		setSavedSettings(defaultSettings);
+		setSettingsLoading(false);
+		setSettingsLoadError(null);
+		setSettingsSaving(false);
+		setSettingsSaved(false);
+		setTestingEmail(false);
+		setTestEmailResult(null);
+		setTestingShoutrrr(false);
+		setTestShoutrrrResult(null);
+	}, []);
+
+	const clearReminderMetadata = useCallback(() => {
+		setSettings((prev) => ({
+			...prev,
+			lastAutoEmailSent: null,
+			lastNotificationType: null,
+			lastNotificationChannel: null,
+			lastReminderMedName: null,
+			lastReminderTakenBy: null,
+			lastStockReminderSent: null,
+			lastStockReminderChannel: null,
+			lastStockReminderMedNames: null,
+			lastPrescriptionReminderSent: null,
+			lastPrescriptionReminderChannel: null,
+			lastPrescriptionReminderMedNames: null,
+		}));
+		setSavedSettings((prev) => ({
+			...prev,
+			lastAutoEmailSent: null,
+			lastNotificationType: null,
+			lastNotificationChannel: null,
+			lastReminderMedName: null,
+			lastReminderTakenBy: null,
+			lastStockReminderSent: null,
+			lastStockReminderChannel: null,
+			lastStockReminderMedNames: null,
+			lastPrescriptionReminderSent: null,
+			lastPrescriptionReminderChannel: null,
+			lastPrescriptionReminderMedNames: null,
+		}));
+	}, []);
+
+	const fetchWithRefresh = useCallback(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+		const requestInit: RequestInit = {
+			credentials: "include",
+			...init,
+		};
+
+		let response = await fetch(input, requestInit);
+		if (response.status !== 401) {
+			return response;
+		}
+
+		const refreshResponse = await fetch("/api/auth/refresh", {
+			method: "POST",
+			credentials: "include",
+		});
+		if (!refreshResponse.ok) {
+			return response;
+		}
+
+		response = await fetch(input, requestInit);
+		return response;
+	}, []);
+
 	// Load settings function - exposed for manual refresh (e.g., after auth)
 	const loadSettings = useCallback(() => {
 		setSettingsLoading(true);
-		fetch("/api/settings", { credentials: "include" })
-			.then((res) => (res.ok ? res.json() : Promise.reject()))
+		const generation = loadGenerationRef.current;
+		fetchWithRefresh("/api/settings")
+			.then((res) => {
+				// Discard result if a newer loadSettings call (or resetSettingsState) has fired
+				if (loadGenerationRef.current !== generation) return Promise.reject("stale");
+				if (!res.ok) {
+					log.warn("[useSettings] loadSettings failed", { status: res.status });
+					if (res.status === 401 || res.status === 403) {
+						resetSettingsState();
+					}
+					return Promise.reject({ status: res.status });
+				}
+				return res.json();
+			})
 			.then((data) => {
+				if (!data || loadGenerationRef.current !== generation) return;
+				log.debug("[useSettings] settings loaded", { smtpConfigured: !!data.smtpHost });
 				const newSettings = { ...defaultSettings, ...data, smtpPass: "" };
 				setSettings(newSettings);
 				setSavedSettings(newSettings);
+				setSettingsLoadError(null);
 				setSettingsSaved(false);
 			})
-			.catch(() => {})
-			.finally(() => setSettingsLoading(false));
-	}, []);
+			.catch((error: unknown) => {
+				if (error === "stale") return;
+				const status =
+					typeof error === "object" && error !== null && "status" in error ? (error.status as number) : undefined;
+				if (status === 401) {
+					setSettingsLoadError("auth");
+					return;
+				}
+				if (status === 403) {
+					setSettingsLoadError("forbidden");
+					return;
+				}
+				setSettingsLoadError("request");
+			})
+			.finally(() => {
+				if (loadGenerationRef.current === generation) setSettingsLoading(false);
+			});
+	}, [fetchWithRefresh, resetSettingsState]);
 
 	// Load settings on mount
 	useEffect(() => {
@@ -158,41 +267,59 @@ export function useSettings(): UseSettingsReturn {
 	// Auto-refresh reminder status (last sent timestamp) every 30 seconds
 	useEffect(() => {
 		const refreshReminderStatus = () => {
-			fetch("/api/settings", { credentials: "include" })
-				.then((res) => (res.ok ? res.json() : Promise.reject()))
+			fetchWithRefresh("/api/settings")
+				.then((res) => {
+					if (!res.ok) {
+						if (res.status === 401 || res.status === 403) {
+							clearReminderMetadata();
+						}
+						return Promise.reject();
+					}
+					return res.json();
+				})
 				.then((data) => {
+					const pick = <T>(key: string, fallback: T): T => (Object.hasOwn(data, key) ? (data[key] as T) : fallback);
+
 					// Only update the reminder-related fields without triggering unsaved changes
 					setSettings((prev) => ({
 						...prev,
-						lastAutoEmailSent: data.lastAutoEmailSent ?? prev.lastAutoEmailSent,
-						lastNotificationType: data.lastNotificationType ?? prev.lastNotificationType,
-						lastNotificationChannel: data.lastNotificationChannel ?? prev.lastNotificationChannel,
-						lastReminderMedName: data.lastReminderMedName ?? prev.lastReminderMedName,
-						lastReminderTakenBy: data.lastReminderTakenBy ?? prev.lastReminderTakenBy,
-						lastStockReminderSent: data.lastStockReminderSent ?? prev.lastStockReminderSent,
-						lastStockReminderChannel: data.lastStockReminderChannel ?? prev.lastStockReminderChannel,
-						lastStockReminderMedNames: data.lastStockReminderMedNames ?? prev.lastStockReminderMedNames,
-						lastPrescriptionReminderSent: data.lastPrescriptionReminderSent ?? prev.lastPrescriptionReminderSent,
-						lastPrescriptionReminderChannel:
-							data.lastPrescriptionReminderChannel ?? prev.lastPrescriptionReminderChannel,
-						lastPrescriptionReminderMedNames:
-							data.lastPrescriptionReminderMedNames ?? prev.lastPrescriptionReminderMedNames,
+						lastAutoEmailSent: pick("lastAutoEmailSent", prev.lastAutoEmailSent),
+						lastNotificationType: pick("lastNotificationType", prev.lastNotificationType),
+						lastNotificationChannel: pick("lastNotificationChannel", prev.lastNotificationChannel),
+						lastReminderMedName: pick("lastReminderMedName", prev.lastReminderMedName),
+						lastReminderTakenBy: pick("lastReminderTakenBy", prev.lastReminderTakenBy),
+						lastStockReminderSent: pick("lastStockReminderSent", prev.lastStockReminderSent),
+						lastStockReminderChannel: pick("lastStockReminderChannel", prev.lastStockReminderChannel),
+						lastStockReminderMedNames: pick("lastStockReminderMedNames", prev.lastStockReminderMedNames),
+						lastPrescriptionReminderSent: pick("lastPrescriptionReminderSent", prev.lastPrescriptionReminderSent),
+						lastPrescriptionReminderChannel: pick(
+							"lastPrescriptionReminderChannel",
+							prev.lastPrescriptionReminderChannel
+						),
+						lastPrescriptionReminderMedNames: pick(
+							"lastPrescriptionReminderMedNames",
+							prev.lastPrescriptionReminderMedNames
+						),
 					}));
 					setSavedSettings((prev) => ({
 						...prev,
-						lastAutoEmailSent: data.lastAutoEmailSent ?? prev.lastAutoEmailSent,
-						lastNotificationType: data.lastNotificationType ?? prev.lastNotificationType,
-						lastNotificationChannel: data.lastNotificationChannel ?? prev.lastNotificationChannel,
-						lastReminderMedName: data.lastReminderMedName ?? prev.lastReminderMedName,
-						lastReminderTakenBy: data.lastReminderTakenBy ?? prev.lastReminderTakenBy,
-						lastStockReminderSent: data.lastStockReminderSent ?? prev.lastStockReminderSent,
-						lastStockReminderChannel: data.lastStockReminderChannel ?? prev.lastStockReminderChannel,
-						lastStockReminderMedNames: data.lastStockReminderMedNames ?? prev.lastStockReminderMedNames,
-						lastPrescriptionReminderSent: data.lastPrescriptionReminderSent ?? prev.lastPrescriptionReminderSent,
-						lastPrescriptionReminderChannel:
-							data.lastPrescriptionReminderChannel ?? prev.lastPrescriptionReminderChannel,
-						lastPrescriptionReminderMedNames:
-							data.lastPrescriptionReminderMedNames ?? prev.lastPrescriptionReminderMedNames,
+						lastAutoEmailSent: pick("lastAutoEmailSent", prev.lastAutoEmailSent),
+						lastNotificationType: pick("lastNotificationType", prev.lastNotificationType),
+						lastNotificationChannel: pick("lastNotificationChannel", prev.lastNotificationChannel),
+						lastReminderMedName: pick("lastReminderMedName", prev.lastReminderMedName),
+						lastReminderTakenBy: pick("lastReminderTakenBy", prev.lastReminderTakenBy),
+						lastStockReminderSent: pick("lastStockReminderSent", prev.lastStockReminderSent),
+						lastStockReminderChannel: pick("lastStockReminderChannel", prev.lastStockReminderChannel),
+						lastStockReminderMedNames: pick("lastStockReminderMedNames", prev.lastStockReminderMedNames),
+						lastPrescriptionReminderSent: pick("lastPrescriptionReminderSent", prev.lastPrescriptionReminderSent),
+						lastPrescriptionReminderChannel: pick(
+							"lastPrescriptionReminderChannel",
+							prev.lastPrescriptionReminderChannel
+						),
+						lastPrescriptionReminderMedNames: pick(
+							"lastPrescriptionReminderMedNames",
+							prev.lastPrescriptionReminderMedNames
+						),
 					}));
 				})
 				.catch(() => {});
@@ -200,7 +327,7 @@ export function useSettings(): UseSettingsReturn {
 
 		const interval = setInterval(refreshReminderStatus, 30000);
 		return () => clearInterval(interval);
-	}, []);
+	}, [clearReminderMetadata, fetchWithRefresh]);
 
 	// Internal save function (no event needed)
 	const performSave = useCallback(
@@ -246,20 +373,30 @@ export function useSettings(): UseSettingsReturn {
 				smtpSecure: settingsToSave.smtpSecure,
 			};
 
-			await fetch("/api/settings", {
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify(payload),
-			}).catch(() => null);
+			try {
+				const response = await fetchWithRefresh("/api/settings", {
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(payload),
+				});
 
-			const updatedSettings = { ...settingsToSave };
-			setSettings(updatedSettings);
-			setSettingsSaving(false);
-			setSavedSettings(updatedSettings);
-			setSettingsSaved(true);
+				if (!response.ok) {
+					throw new Error(`SETTINGS_SAVE_FAILED_${response.status}`);
+				}
+
+				const updatedSettings = { ...settingsToSave };
+				setSettings(updatedSettings);
+				setSavedSettings(updatedSettings);
+				setSettingsSaved(true);
+			} catch {
+				setSettingsSaved(false);
+				// Keep UI aligned with backend truth if save failed (auth/session/network/server error).
+				loadSettings();
+			} finally {
+				setSettingsSaving(false);
+			}
 		},
-		[i18n.language]
+		[fetchWithRefresh, i18n.language, loadSettings]
 	);
 
 	// Debounced auto-save: fires whenever settings change
@@ -321,10 +458,9 @@ export function useSettings(): UseSettingsReturn {
 		setTestingEmail(true);
 		setTestEmailResult(null);
 		try {
-			const res = await fetch("/api/settings/test-email", {
+			const res = await fetchWithRefresh("/api/settings/test-email", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				credentials: "include",
 				body: JSON.stringify({ email: settings.notificationEmail }),
 			});
 			const data = await res.json();
@@ -337,16 +473,15 @@ export function useSettings(): UseSettingsReturn {
 		} finally {
 			setTestingEmail(false);
 		}
-	}, [settings.notificationEmail]);
+	}, [fetchWithRefresh, settings.notificationEmail]);
 
 	const testShoutrrr = useCallback(async () => {
 		setTestingShoutrrr(true);
 		setTestShoutrrrResult(null);
 		try {
-			const res = await fetch("/api/settings/test-shoutrrr", {
+			const res = await fetchWithRefresh("/api/settings/test-shoutrrr", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				credentials: "include",
 				body: JSON.stringify({ url: settings.shoutrrrUrl }),
 			});
 			const data = await res.json();
@@ -359,7 +494,7 @@ export function useSettings(): UseSettingsReturn {
 		} finally {
 			setTestingShoutrrr(false);
 		}
-	}, [settings.shoutrrrUrl]);
+	}, [fetchWithRefresh, settings.shoutrrrUrl]);
 
 	// Check for unsaved changes
 	const hasUnsavedChanges = JSON.stringify(settings) !== JSON.stringify(savedSettings);
@@ -369,6 +504,7 @@ export function useSettings(): UseSettingsReturn {
 		setSettings,
 		savedSettings,
 		settingsLoading,
+		settingsLoadError,
 		settingsSaving,
 		settingsSaved,
 		testingEmail,
@@ -382,5 +518,6 @@ export function useSettings(): UseSettingsReturn {
 		testEmail,
 		testShoutrrr,
 		hasUnsavedChanges,
+		resetSettingsState,
 	};
 }

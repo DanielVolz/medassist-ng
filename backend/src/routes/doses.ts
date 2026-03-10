@@ -6,6 +6,7 @@ import { doseTracking, medications, shareTokens } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 import { parseIntakesJson, parseTakenByJson, personTakesMedication } from "../utils/scheduler-utils.js";
 
 // =============================================================================
@@ -22,6 +23,11 @@ const shareDoseSchema = z.object({
 const dismissDosesSchema = z.object({
 	doseIds: z.array(z.string().min(1)).min(1, "At least one doseId is required"),
 });
+
+const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>> = [
+	{ bearerAuth: [] },
+	{ cookieAuth: [] },
+];
 
 const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
 
@@ -135,33 +141,43 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 // Dose Tracking Routes
 // =============================================================================
 export async function doseRoutes(app: FastifyInstance) {
+	applyOpenApiRouteStandards(app, {
+		tag: "doses",
+		protectedByDefault: false,
+		protectedPaths: [/^\/doses\/taken$/, /^\/doses\/taken\/:doseId$/, /^\/doses\/dismiss$/],
+	});
+
 	// ---------------------------------------------------------------------------
 	// GET /doses/taken - PROTECTED: Get all taken doses for the user
 	// Suppress request logs — polled every 5s by frontend
 	// ---------------------------------------------------------------------------
-	app.get("/doses/taken", { preHandler: requireAuth, logLevel: "warn" }, async (request, reply) => {
-		const userId = await getUserId(request, reply);
+	app.get(
+		"/doses/taken",
+		{ preHandler: requireAuth, logLevel: "warn", schema: { tags: ["doses"], security: protectedEndpointSecurity } },
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
 
-		// Get all taken doses for this user (no time limit)
-		const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
+			// Get all taken doses for this user (no time limit)
+			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
 
-		return {
-			doses: doses.map((d) => ({
-				doseId: d.doseId,
-				takenAt: d.takenAt?.getTime() ?? Date.now(),
-				markedBy: d.markedBy,
-				takenSource: d.takenSource ?? "manual",
-				dismissed: d.dismissed ?? false,
-			})),
-		};
-	});
+			return {
+				doses: doses.map((d) => ({
+					doseId: d.doseId,
+					takenAt: d.takenAt?.getTime() ?? Date.now(),
+					markedBy: d.markedBy,
+					takenSource: d.takenSource ?? "manual",
+					dismissed: d.dismissed ?? false,
+				})),
+			};
+		}
+	);
 
 	// ---------------------------------------------------------------------------
 	// POST /doses/taken - PROTECTED: Mark a dose as taken
 	// ---------------------------------------------------------------------------
 	app.post<{ Body: z.infer<typeof markDoseSchema> }>(
 		"/doses/taken",
-		{ preHandler: requireAuth },
+		{ preHandler: requireAuth, schema: { tags: ["doses"], security: protectedEndpointSecurity } },
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -201,7 +217,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.delete<{ Params: { doseId: string } }>(
 		"/doses/taken/:doseId",
-		{ preHandler: requireAuth },
+		{ preHandler: requireAuth, schema: { tags: ["doses"], security: protectedEndpointSecurity } },
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -230,7 +246,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.post<{ Body: z.infer<typeof dismissDosesSchema> }>(
 		"/doses/dismiss",
-		{ preHandler: requireAuth },
+		{ preHandler: requireAuth, schema: { tags: ["doses"], security: protectedEndpointSecurity } },
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -281,30 +297,34 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	// DELETE /doses/dismiss - PROTECTED: Clear all dismissed doses (un-dismiss)
 	// ---------------------------------------------------------------------------
-	app.delete("/doses/dismiss", { preHandler: requireAuth }, async (request, reply) => {
-		const userId = await getUserId(request, reply);
+	app.delete(
+		"/doses/dismiss",
+		{ preHandler: requireAuth, schema: { tags: ["doses"], security: protectedEndpointSecurity } },
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
 
-		// Delete all dismissed-only records (not taken ones)
-		// For taken+dismissed, just remove the dismissed flag
-		const dismissed = await db
-			.select()
-			.from(doseTracking)
-			.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, true)));
+			// Delete all dismissed-only records (not taken ones)
+			// For taken+dismissed, just remove the dismissed flag
+			const dismissed = await db
+				.select()
+				.from(doseTracking)
+				.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, true)));
 
-		for (const d of dismissed) {
-			const hasRealTakenTimestamp = d.takenAt instanceof Date ? d.takenAt.getTime() > 0 : Boolean(d.takenAt);
+			for (const d of dismissed) {
+				const hasRealTakenTimestamp = d.takenAt instanceof Date ? d.takenAt.getTime() > 0 : Boolean(d.takenAt);
 
-			if (d.markedBy !== null || hasRealTakenTimestamp) {
-				// This was also marked as taken - just remove dismissed flag
-				await db.update(doseTracking).set({ dismissed: false }).where(eq(doseTracking.id, d.id));
-			} else {
-				// This was only dismissed - delete it
-				await db.delete(doseTracking).where(eq(doseTracking.id, d.id));
+				if (d.markedBy !== null || hasRealTakenTimestamp) {
+					// This was also marked as taken - just remove dismissed flag
+					await db.update(doseTracking).set({ dismissed: false }).where(eq(doseTracking.id, d.id));
+				} else {
+					// This was only dismissed - delete it
+					await db.delete(doseTracking).where(eq(doseTracking.id, d.id));
+				}
 			}
-		}
 
-		return { success: true, clearedCount: dismissed.length };
-	});
+			return { success: true, clearedCount: dismissed.length };
+		}
+	);
 
 	// ---------------------------------------------------------------------------
 	// GET /share/:token/doses - PUBLIC: Get taken doses for a share link

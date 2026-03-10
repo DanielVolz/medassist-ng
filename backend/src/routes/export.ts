@@ -10,6 +10,7 @@ import { doseTracking, medications, refillHistory, shareTokens, userSettings } f
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 import { normalizePackageType, PACKAGE_TYPES } from "../utils/package-profiles.js";
 import { parseIntakesJson, parseTakenByJson } from "../utils/scheduler-utils.js";
 
@@ -272,6 +273,7 @@ function buildDoseId(medicationId: number, blisterIndex: number, timestampMs: nu
 export async function exportRoutes(app: FastifyInstance) {
 	// All export routes require auth
 	app.addHook("preHandler", requireAuth);
+	applyOpenApiRouteStandards(app, { tag: "export", protectedByDefault: true });
 
 	// ---------------------------------------------------------------------------
 	// GET /export - Export all user data

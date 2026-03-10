@@ -8,6 +8,7 @@ import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { buildSharedMedicationOverview } from "../services/coverage.js";
 import type { AuthUser } from "../types/fastify.js";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 import { isAmountBasedPackageType, normalizePackageType } from "../utils/package-profiles.js";
 import {
 	getAllTakenByForMedication,
@@ -23,6 +24,11 @@ const createShareSchema = z.object({
 	takenBy: z.string().min(1, "takenBy is required"),
 	scheduleDays: z.number().int().min(1).max(365).default(30),
 });
+
+const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>> = [
+	{ bearerAuth: [] },
+	{ cookieAuth: [] },
+];
 
 const shareTokenPattern = /^[a-f0-9]{16}$/;
 
@@ -51,6 +57,12 @@ async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<
 // Share Routes
 // =============================================================================
 export async function shareRoutes(app: FastifyInstance) {
+	applyOpenApiRouteStandards(app, {
+		tag: "share",
+		protectedByDefault: false,
+		protectedPaths: [/^\/share$/, /^\/share\/people$/],
+	});
+
 	// ---------------------------------------------------------------------------
 	// GET /share/:token - PUBLIC: Get shared schedule by token
 	// ---------------------------------------------------------------------------
@@ -256,7 +268,7 @@ export async function shareRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.post<{ Body: z.infer<typeof createShareSchema> }>(
 		"/share",
-		{ preHandler: requireAuth },
+		{ preHandler: requireAuth, schema: { tags: ["share"], security: protectedEndpointSecurity } },
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -337,37 +349,41 @@ export async function shareRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	// GET /share/people - PROTECTED: Get list of unique takenBy values
 	// ---------------------------------------------------------------------------
-	app.get("/share/people", { preHandler: requireAuth }, async (request, reply) => {
-		const userId = await getUserId(request, reply);
+	app.get(
+		"/share/people",
+		{ preHandler: requireAuth, schema: { tags: ["share"], security: protectedEndpointSecurity } },
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
 
-		// Get all unique takenBy values for this user (from both medication-level and intake-level)
-		const meds = await db
-			.select({
-				takenByJson: medications.takenByJson,
-				intakesJson: medications.intakesJson,
-				usageJson: medications.usageJson,
-				everyJson: medications.everyJson,
-				startJson: medications.startJson,
-				intakeRemindersEnabled: medications.intakeRemindersEnabled,
-			})
-			.from(medications)
-			.where(eq(medications.userId, userId));
+			// Get all unique takenBy values for this user (from both medication-level and intake-level)
+			const meds = await db
+				.select({
+					takenByJson: medications.takenByJson,
+					intakesJson: medications.intakesJson,
+					usageJson: medications.usageJson,
+					everyJson: medications.everyJson,
+					startJson: medications.startJson,
+					intakeRemindersEnabled: medications.intakeRemindersEnabled,
+				})
+				.from(medications)
+				.where(eq(medications.userId, userId));
 
-		// Collect all unique person names from medication-level AND intake-level takenBy
-		const allPeople = new Set<string>();
-		for (const med of meds) {
-			const takenByArray = parseTakenByJson(med.takenByJson);
-			const intakes = parseIntakesJson(
-				med.intakesJson,
-				{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-				med.intakeRemindersEnabled ?? false
-			);
-			const allForMed = getAllTakenByForMedication(takenByArray, intakes);
-			for (const person of allForMed) {
-				if (person) allPeople.add(person);
+			// Collect all unique person names from medication-level AND intake-level takenBy
+			const allPeople = new Set<string>();
+			for (const med of meds) {
+				const takenByArray = parseTakenByJson(med.takenByJson);
+				const intakes = parseIntakesJson(
+					med.intakesJson,
+					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+					med.intakeRemindersEnabled ?? false
+				);
+				const allForMed = getAllTakenByForMedication(takenByArray, intakes);
+				for (const person of allForMed) {
+					if (person) allPeople.add(person);
+				}
 			}
-		}
 
-		return { people: [...allPeople].sort() };
-	});
+			return { people: [...allPeople].sort() };
+		}
+	);
 }

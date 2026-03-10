@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 
 // Read version from package.json at startup
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -10,6 +11,8 @@ const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
 const backendVersion = packageJson.version || "unknown";
 
 export async function healthRoutes(app: FastifyInstance) {
+	applyOpenApiRouteStandards(app, { tag: "health", protectedByDefault: false });
+
 	// Exempt from rate limit + suppress request logs (called every 30s by Docker healthcheck)
 	app.get("/health", { config: { rateLimit: false }, logLevel: "warn" }, async () => ({
 		status: "ok",

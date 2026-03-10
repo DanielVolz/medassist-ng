@@ -6,6 +6,7 @@ import { doseTracking, medications, refillHistory } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 
 const reportDataSchema = z.object({
 	medicationIds: z.array(z.number().int().positive()).min(1).max(100),
@@ -13,6 +14,7 @@ const reportDataSchema = z.object({
 
 export async function reportRoutes(app: FastifyInstance) {
 	app.addHook("preHandler", requireAuth);
+	applyOpenApiRouteStandards(app, { tag: "report", protectedByDefault: true });
 
 	async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
 		if (!env.AUTH_ENABLED) {

@@ -5,6 +5,7 @@ import * as client from "openid-client";
 import { db } from "../db/client.js";
 import { refreshTokens, users } from "../db/schema.js";
 import { env } from "../plugins/env.js";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 
 // =============================================================================
 // OIDC Configuration Cache
@@ -49,6 +50,8 @@ function getFrontendUrl(): string {
 // OIDC Routes
 // =============================================================================
 export async function oidcRoutes(app: FastifyInstance) {
+	applyOpenApiRouteStandards(app, { tag: "auth", protectedByDefault: false });
+
 	if (!env.OIDC_ENABLED) {
 		// Register a disabled route that returns an error
 		app.get("/auth/oidc/login", async (_request, reply) => {

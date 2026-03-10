@@ -427,6 +427,15 @@ export async function createShareTokenViaAPI(takenBy: string, scheduleDays = 30)
 			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
 			continue;
 		}
+		if (res.status === 400) {
+			const text = await res.text();
+			if (text.includes('"code":"NO_MEDICATIONS"') && attempt < 4) {
+				// Freshly seeded E2E medication data can lag briefly behind the share lookup.
+				await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+				continue;
+			}
+			throw new Error(`Failed to create share token: ${res.status} ${text}`);
+		}
 		if (!res.ok) {
 			const text = await res.text();
 			throw new Error(`Failed to create share token: ${res.status} ${text}`);

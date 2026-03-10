@@ -1,3 +1,5 @@
+name: medassist-ng
+
 services:
   backend:
     image: ghcr.io/danielvolz/medassist-ng-backend:latest

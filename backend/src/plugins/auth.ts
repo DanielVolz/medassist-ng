@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { pbkdf2Sync } from "node:crypto";
 import { and, count, eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
@@ -94,7 +94,7 @@ function getApiKeyPepper(): string {
 }
 
 export function hashApiKeyToken(token: string): string {
-	return createHash("sha256").update(`${getApiKeyPepper()}:${token}`).digest("hex");
+	return pbkdf2Sync(token, getApiKeyPepper(), 120_000, 64, "sha512").toString("hex");
 }
 
 function getBearerToken(request: FastifyRequest): string | null {

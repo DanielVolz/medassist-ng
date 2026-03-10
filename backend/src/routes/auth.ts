@@ -85,6 +85,38 @@ const updateProfileSchema = z.object({
 		.optional(),
 });
 
+const authEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>> = [{ bearerAuth: [] }, { cookieAuth: [] }];
+const authErrorSchema = {
+	type: "object",
+	properties: {
+		error: { type: "string" },
+		code: { type: "string" },
+	},
+};
+
+function normalizeDateTime(value: unknown): string | null {
+	if (value == null) {
+		return null;
+	}
+
+	if (value instanceof Date) {
+		return Number.isNaN(value.getTime()) ? null : value.toISOString();
+	}
+
+	if (typeof value === "number") {
+		const timestampMs = value < 1_000_000_000_000 ? value * 1000 : value;
+		const date = new Date(timestampMs);
+		return Number.isNaN(date.getTime()) ? null : date.toISOString();
+	}
+
+	if (typeof value === "string") {
+		const date = new Date(value);
+		return Number.isNaN(date.getTime()) ? null : date.toISOString();
+	}
+
+	return null;
+}
+
 // =============================================================================
 // Auth Routes
 // =============================================================================
@@ -99,9 +131,33 @@ export async function authRoutes(app: FastifyInstance) {
 	// GET /auth/state - Public auth state (needed before login)
 	// Exempt from rate limit - lightweight state check called frequently
 	// ---------------------------------------------------------------------------
-	app.get("/auth/state", { config: { rateLimit: false } }, async () => {
-		return getAuthState();
-	});
+	app.get(
+		"/auth/state",
+		{
+			config: { rateLimit: false },
+			schema: {
+				tags: ["auth"],
+				summary: "Get authentication state",
+				description: "Returns auth and login mode state before user login.",
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							authEnabled: { type: "boolean" },
+							registrationEnabled: { type: "boolean" },
+							formLoginEnabled: { type: "boolean" },
+							oidcEnabled: { type: "boolean" },
+							hasUsers: { type: "boolean" },
+							oidcProviderName: { type: "string" },
+						},
+					},
+				},
+			},
+		},
+		async () => {
+			return getAuthState();
+		}
+	);
 
 	// ---------------------------------------------------------------------------
 	// POST /auth/register - User registration
@@ -110,6 +166,36 @@ export async function authRoutes(app: FastifyInstance) {
 		"/auth/register",
 		{
 			config: { rateLimit: sensitiveRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Register local user",
+				body: {
+					type: "object",
+					required: ["username", "password"],
+					properties: {
+						username: { type: "string", minLength: 3, maxLength: 50 },
+						password: { type: "string", minLength: 8, maxLength: 128 },
+					},
+				},
+				response: {
+					201: {
+						type: "object",
+						properties: {
+							ok: { type: "boolean" },
+							user: {
+								type: "object",
+								properties: {
+									id: { type: "number" },
+									username: { type: "string" },
+								},
+							},
+							message: { type: "string" },
+						},
+					},
+					400: authErrorSchema,
+					409: authErrorSchema,
+				},
+			},
 		},
 		async (request, reply) => {
 			// Check auth state
@@ -177,6 +263,37 @@ export async function authRoutes(app: FastifyInstance) {
 		"/auth/login",
 		{
 			config: { rateLimit: sensitiveRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Login with username and password",
+				body: {
+					type: "object",
+					required: ["username", "password"],
+					properties: {
+						username: { type: "string" },
+						password: { type: "string" },
+						rememberMe: { type: "boolean" },
+					},
+				},
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							ok: { type: "boolean" },
+							user: {
+								type: "object",
+								properties: {
+									id: { type: "number" },
+									username: { type: "string" },
+									avatarUrl: { type: ["string", "null"] },
+								},
+							},
+						},
+					},
+					400: authErrorSchema,
+					401: authErrorSchema,
+				},
+			},
 		},
 		async (request, reply) => {
 			const state = await getAuthState();
@@ -281,6 +398,15 @@ export async function authRoutes(app: FastifyInstance) {
 		"/auth/refresh",
 		{
 			config: { rateLimit: authRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Refresh access token",
+				description: "Requires refresh token cookie context.",
+				response: {
+					200: { type: "object", properties: { ok: { type: "boolean" } } },
+					401: authErrorSchema,
+				},
+			},
 		},
 		async (request, reply) => {
 			const refreshTokenCookie = request.cookies.refresh_token;
@@ -350,6 +476,13 @@ export async function authRoutes(app: FastifyInstance) {
 		"/auth/logout",
 		{
 			config: { rateLimit: authRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Logout and clear auth cookies",
+				response: {
+					200: { type: "object", properties: { ok: { type: "boolean" } } },
+				},
+			},
 		},
 		async (request, reply) => {
 			const refreshTokenCookie = request.cookies.refresh_token;
@@ -375,26 +508,56 @@ export async function authRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	// GET /auth/me - Get current user profile
 	// ---------------------------------------------------------------------------
-	app.get("/auth/me", { preHandler: requireAuth }, async (request, reply) => {
-		const authUser = request.user as unknown as AuthUser | null;
-		if (!authUser) {
-			return reply.status(401).send({ error: "Not authenticated" });
-		}
+	app.get(
+		"/auth/me",
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["auth"],
+				summary: "Get current user profile",
+				security: authEndpointSecurity,
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							id: { type: "number" },
+							username: { type: "string" },
+							avatarUrl: { type: ["string", "null"] },
+							authProvider: { type: "string" },
+							createdAt: { type: "string", format: "date-time" },
+							lastLoginAt: { type: ["string", "null"], format: "date-time" },
+						},
+					},
+					401: authErrorSchema,
+					404: authErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const authUser = request.user as unknown as AuthUser | null;
+			if (!authUser) {
+				return reply.status(401).send({ error: "Not authenticated" });
+			}
 
-		const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
-		if (!user) {
-			return reply.status(404).send({ error: "User not found" });
-		}
+			const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
+			if (!user) {
+				return reply.status(404).send({ error: "User not found" });
+			}
 
-		return {
-			id: user.id,
-			username: user.username,
-			avatarUrl: user.avatarUrl,
-			authProvider: user.authProvider,
-			createdAt: user.createdAt,
-			lastLoginAt: user.lastLoginAt,
-		};
-	});
+			const createdAt =
+				normalizeDateTime(user.createdAt) ?? normalizeDateTime(user.updatedAt) ?? new Date(0).toISOString();
+			const lastLoginAt = normalizeDateTime(user.lastLoginAt);
+
+			return {
+				id: user.id,
+				username: user.username,
+				avatarUrl: user.avatarUrl,
+				authProvider: user.authProvider ?? "local",
+				createdAt,
+				lastLoginAt,
+			};
+		}
+	);
 
 	// ---------------------------------------------------------------------------
 	// PUT /auth/me - Update current user profile
@@ -404,6 +567,30 @@ export async function authRoutes(app: FastifyInstance) {
 		{
 			preHandler: requireAuth,
 			config: { rateLimit: authRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Update current user profile",
+				security: authEndpointSecurity,
+				body: {
+					type: "object",
+					properties: {
+						currentPassword: { type: "string" },
+						newPassword: { type: "string", minLength: 8, maxLength: 128 },
+					},
+				},
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							ok: { type: "boolean" },
+							message: { type: "string" },
+						},
+					},
+					400: authErrorSchema,
+					401: authErrorSchema,
+					404: authErrorSchema,
+				},
+			},
 		},
 		async (request, reply) => {
 			const authUser = request.user as unknown as AuthUser | null;
@@ -462,6 +649,24 @@ export async function authRoutes(app: FastifyInstance) {
 		{
 			preHandler: requireAuth,
 			config: { rateLimit: authRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Upload user avatar",
+				description: "Uploads and optimizes a profile image using multipart/form-data.",
+				security: authEndpointSecurity,
+				consumes: ["multipart/form-data"],
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							ok: { type: "boolean" },
+							avatarUrl: { type: "string" },
+						},
+					},
+					400: authErrorSchema,
+					401: authErrorSchema,
+				},
+			},
 		},
 		async (request, reply) => {
 			const authUser = request.user as unknown as AuthUser | null;
@@ -517,6 +722,16 @@ export async function authRoutes(app: FastifyInstance) {
 		{
 			preHandler: requireAuth,
 			config: { rateLimit: authRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Delete user avatar",
+				security: authEndpointSecurity,
+				response: {
+					200: { type: "object", properties: { ok: { type: "boolean" } } },
+					401: authErrorSchema,
+					404: authErrorSchema,
+				},
+			},
 		},
 		async (request, reply) => {
 			const authUser = request.user as unknown as AuthUser | null;
@@ -547,6 +762,22 @@ export async function authRoutes(app: FastifyInstance) {
 		{
 			preHandler: requireAuth,
 			config: { rateLimit: sensitiveRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Delete current user account",
+				description: "Deletes the current account and related data (cascade delete).",
+				security: authEndpointSecurity,
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							ok: { type: "boolean" },
+							message: { type: "string" },
+						},
+					},
+					401: authErrorSchema,
+				},
+			},
 		},
 		async (request, reply) => {
 			const authUser = request.user as unknown as AuthUser | null;

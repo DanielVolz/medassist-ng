@@ -3,9 +3,10 @@ import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { medications, shareTokens, userSettings, users } from "../db/schema.js";
+import { doseTracking, medications, shareTokens, userSettings, users } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { buildSharedMedicationOverview } from "../services/coverage.js";
 import type { AuthUser } from "../types/fastify.js";
 import { isAmountBasedPackageType, normalizePackageType } from "../utils/package-profiles.js";
 import {
@@ -22,6 +23,8 @@ const createShareSchema = z.object({
 	takenBy: z.string().min(1, "takenBy is required"),
 	scheduleDays: z.number().int().min(1).max(365).default(30),
 });
+
+const shareTokenPattern = /^[a-f0-9]{16}$/;
 
 function maskToken(token: string): string {
 	if (token.length <= 8) return token;
@@ -51,119 +54,202 @@ export async function shareRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	// GET /share/:token - PUBLIC: Get shared schedule by token
 	// ---------------------------------------------------------------------------
-	app.get<{ Params: { token: string } }>("/share/:token", async (request, reply) => {
-		const { token } = request.params;
-
-		// Find share token
-		const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
-		if (!share) {
-			request.log.warn(`[Share] Invalid share token requested: ${maskToken(token)}`);
-			return reply.status(404).send({
-				error: "Share link not found",
-				code: "NOT_FOUND",
-			});
-		}
-
-		// Check if token has expired
-		if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
-			request.log.warn(
-				`[Share] Expired token requested: ${maskToken(token)} (owner=${share.userId}, takenBy=${share.takenBy})`
-			);
-			// Get the username of the owner to show in the expired message
-			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
-			return reply.status(410).send({
-				error: "Share link has expired",
-				code: "EXPIRED",
-				ownerUsername: owner?.username ?? "the owner",
-				takenBy: share.takenBy,
-				expiredAt: share.expiresAt.toISOString(),
-			});
-		}
-
-		// Get user settings for stock thresholds
-		const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
-
-		// Get the username of the owner who created this share link
-		const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
-
-		// Get medications for this user filtered by takenBy (search in JSON array)
-		// Use SQLite JSON function to check if takenBy is in the array
-		const allMeds = await db.select().from(medications).where(eq(medications.userId, share.userId));
-
-		// Filter medications where takenBy matches either medication-level OR any intake-level takenBy
-		const meds = allMeds.filter((med) => {
-			const takenByArray = parseTakenByJson(med.takenByJson);
-			const intakes = parseIntakesJson(
-				med.intakesJson,
-				{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-				med.intakeRemindersEnabled ?? false
-			);
-			return personTakesMedication(share.takenBy, takenByArray, intakes);
-		});
-
-		// Parse blisters and build schedule data
-		const medicationsWithBlisters = meds.map((med) => {
-			// Parse intakes from new format, falling back to legacy
-			const intakes = parseIntakesJson(
-				med.intakesJson,
-				{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-				med.intakeRemindersEnabled ?? false
-			);
-
-			// Convert to legacy blisters format for backward compat
-			const blisters = intakes.map((i) => ({
-				usage: i.usage,
-				every: i.every,
-				start: i.start,
-			}));
-
-			// Parse takenBy JSON array
-			const takenByArray = parseTakenByJson(med.takenByJson);
-
-			const totalPills = isAmountBasedPackageType(med.packageType)
-				? med.looseTablets + (med.stockAdjustment ?? 0)
-				: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
-			return {
-				id: med.id,
-				name: med.name,
-				genericName: med.genericName,
-				pillWeightMg: med.pillWeightMg,
-				doseUnit: med.doseUnit ?? "mg",
-				imageUrl: med.imageUrl,
-				totalPills,
-				packageType: normalizePackageType(med.packageType),
-				packCount: med.packCount,
-				blistersPerPack: med.blistersPerPack,
-				looseTablets: med.looseTablets,
-				pillsPerBlister: med.pillsPerBlister,
-				takenBy: takenByArray,
-				intakes, // New unified format with per-intake takenBy
-				blisters, // Legacy format for backward compat
-				dismissedUntil: med.dismissedUntil,
-				updatedAt: med.updatedAt, // For filtering out doses from previous schedule configurations
-				lastStockCorrectionAt: med.lastStockCorrectionAt?.getTime() ?? null,
-				stockAdjustment: med.stockAdjustment ?? 0,
-			};
-		});
-
-		return {
-			takenBy: share.takenBy,
-			sharedBy: owner?.username ?? null,
-			scheduleDays: share.scheduleDays,
-			medications: medicationsWithBlisters,
-			stockThresholds: {
-				lowStockDays: settings?.lowStockDays ?? 30,
-				normalStockDays: settings?.normalStockDays ?? 60,
-				highStockDays: settings?.highStockDays ?? 90,
-				reminderDaysBefore: settings?.reminderDaysBefore ?? 7,
-				expiryWarningDays: settings?.expiryWarningDays ?? 90,
+	app.get<{ Params: { token: string } }>(
+		"/share/:token",
+		{
+			config: {
+				rateLimit: {
+					max: 60,
+					timeWindow: "1 minute",
+					errorResponseBuilder: () => ({ error: "rate_limited" }),
+				},
 			},
-			stockCalculationMode: (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic",
-			shareStockStatus: settings?.shareStockStatus ?? true,
-			upcomingTodayOnly: settings?.upcomingTodayOnly ?? false,
-			shareScheduleTodayOnly: settings?.shareScheduleTodayOnly ?? false,
-		};
-	});
+		},
+		async (request, reply) => {
+			const { token } = request.params;
+
+			// Find share token
+			const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
+			if (!share) {
+				request.log.warn(`[Share] Invalid share token requested: ${maskToken(token)}`);
+				return reply.status(404).send({
+					error: "Share link not found",
+					code: "NOT_FOUND",
+				});
+			}
+
+			// Check if token has expired
+			if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
+				request.log.warn(
+					`[Share] Expired token requested: ${maskToken(token)} (owner=${share.userId}, takenBy=${share.takenBy})`
+				);
+				// Get the username of the owner to show in the expired message
+				const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
+				return reply.status(410).send({
+					error: "Share link has expired",
+					code: "EXPIRED",
+					ownerUsername: owner?.username ?? "the owner",
+					takenBy: share.takenBy,
+					expiredAt: share.expiresAt.toISOString(),
+				});
+			}
+
+			// Get user settings for stock thresholds
+			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
+
+			// Get the username of the owner who created this share link
+			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
+
+			// Get medications for this user filtered by takenBy (search in JSON array)
+			// Use SQLite JSON function to check if takenBy is in the array
+			const allMeds = await db.select().from(medications).where(eq(medications.userId, share.userId));
+
+			// Filter medications where takenBy matches either medication-level OR any intake-level takenBy
+			const meds = allMeds.filter((med) => {
+				const takenByArray = parseTakenByJson(med.takenByJson);
+				const intakes = parseIntakesJson(
+					med.intakesJson,
+					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+					med.intakeRemindersEnabled ?? false
+				);
+				return personTakesMedication(share.takenBy, takenByArray, intakes);
+			});
+
+			// Parse blisters and build schedule data
+			const medicationsWithBlisters = meds.map((med) => {
+				// Parse intakes from new format, falling back to legacy
+				const intakes = parseIntakesJson(
+					med.intakesJson,
+					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+					med.intakeRemindersEnabled ?? false
+				);
+
+				// Convert to legacy blisters format for backward compat
+				const blisters = intakes.map((i) => ({
+					usage: i.usage,
+					every: i.every,
+					start: i.start,
+				}));
+
+				// Parse takenBy JSON array
+				const takenByArray = parseTakenByJson(med.takenByJson);
+
+				const totalPills = isAmountBasedPackageType(med.packageType)
+					? med.looseTablets + (med.stockAdjustment ?? 0)
+					: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
+				return {
+					id: med.id,
+					name: med.name,
+					genericName: med.genericName,
+					pillWeightMg: med.pillWeightMg,
+					doseUnit: med.doseUnit ?? "mg",
+					imageUrl: med.imageUrl,
+					totalPills,
+					packageType: normalizePackageType(med.packageType),
+					packCount: med.packCount,
+					blistersPerPack: med.blistersPerPack,
+					looseTablets: med.looseTablets,
+					pillsPerBlister: med.pillsPerBlister,
+					takenBy: takenByArray,
+					intakes, // New unified format with per-intake takenBy
+					blisters, // Legacy format for backward compat
+					dismissedUntil: med.dismissedUntil,
+					updatedAt: med.updatedAt, // For filtering out doses from previous schedule configurations
+					lastStockCorrectionAt: med.lastStockCorrectionAt?.getTime() ?? null,
+					stockAdjustment: med.stockAdjustment ?? 0,
+				};
+			});
+
+			return {
+				takenBy: share.takenBy,
+				sharedBy: owner?.username ?? null,
+				scheduleDays: share.scheduleDays,
+				medications: medicationsWithBlisters,
+				stockThresholds: {
+					lowStockDays: settings?.lowStockDays ?? 30,
+					normalStockDays: settings?.normalStockDays ?? 60,
+					highStockDays: settings?.highStockDays ?? 90,
+					reminderDaysBefore: settings?.reminderDaysBefore ?? 7,
+					expiryWarningDays: settings?.expiryWarningDays ?? 90,
+				},
+				stockCalculationMode: (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic",
+				shareStockStatus: settings?.shareStockStatus ?? true,
+				upcomingTodayOnly: settings?.upcomingTodayOnly ?? false,
+				shareScheduleTodayOnly: settings?.shareScheduleTodayOnly ?? false,
+			};
+		}
+	);
+
+	// ---------------------------------------------------------------------------
+	// GET /share/:token/overview - PUBLIC: Read-only medication overview by token
+	// ---------------------------------------------------------------------------
+	app.get<{ Params: { token: string } }>(
+		"/share/:token/overview",
+		{
+			config: {
+				rateLimit: {
+					max: 60,
+					timeWindow: "1 minute",
+					errorResponseBuilder: () => ({ error: "rate_limited" }),
+				},
+			},
+		},
+		async (request, reply) => {
+			reply.header("Cache-Control", "no-store");
+
+			const { token } = request.params;
+			if (!shareTokenPattern.test(token)) {
+				request.log.warn(`[ShareOverview] Rejected invalid token format: ${maskToken(token)}`);
+				return reply.status(404).send({ error: "not_found" });
+			}
+
+			const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
+			if (!share) {
+				request.log.warn(`[ShareOverview] Unknown token requested: ${maskToken(token)}`);
+				return reply.status(404).send({ error: "not_found" });
+			}
+
+			if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
+				request.log.warn(
+					`[ShareOverview] Expired token requested: ${maskToken(token)} (owner=${share.userId}, takenBy=${share.takenBy})`
+				);
+				return reply.status(410).send({
+					error: "expired",
+					expiredAt: share.expiresAt.toISOString(),
+				});
+			}
+
+			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
+			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
+
+			const allMeds = await db.select().from(medications).where(eq(medications.userId, share.userId));
+			const meds = allMeds.filter((med) => {
+				const takenByArray = parseTakenByJson(med.takenByJson);
+				const intakes = parseIntakesJson(
+					med.intakesJson,
+					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
+					med.intakeRemindersEnabled ?? false
+				);
+				return personTakesMedication(share.takenBy, takenByArray, intakes);
+			});
+
+			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
+
+			const overview = buildSharedMedicationOverview({
+				medications: meds,
+				doses,
+				thresholdDays: settings?.lowStockDays ?? 30,
+				shareStockStatus: settings?.shareStockStatus ?? true,
+			});
+
+			return {
+				takenBy: share.takenBy,
+				sharedBy: owner?.username ?? null,
+				generatedAt: new Date().toISOString(),
+				medications: overview,
+			};
+		}
+	);
 
 	// ---------------------------------------------------------------------------
 	// POST /share - PROTECTED: Create a new share link

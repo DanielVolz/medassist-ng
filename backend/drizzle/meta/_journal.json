@@ -76,14 +76,21 @@
       "idx": 10,
       "version": "6",
       "when": 1771694832866,
-      "tag": "0010_mean_spot",
+      "tag": "0010_add_dose_tracking_taken_source",
       "breakpoints": true
     },
     {
       "idx": 11,
       "version": "6",
       "when": 1772219947541,
-      "tag": "0011_stiff_randall_flagg",
+      "tag": "0011_add_medication_form_lifecycle_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1772881208026,
+      "tag": "0012_add_api_keys_and_package_amount_columns",
       "breakpoints": true
     }
   ]

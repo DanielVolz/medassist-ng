@@ -14,6 +14,10 @@ const EnvSchema = z.object({
 		.default("3000"),
 	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
 	LOG_LEVEL: z.string().default("info"),
+	OPENAPI_DOCS_ENABLED: z
+		.string()
+		.transform((v) => v === "true")
+		.optional(),
 
 	// ==========================================================================
 	// Auth Configuration
@@ -69,10 +73,13 @@ const EnvSchema = z.object({
 	OIDC_PROVIDER_NAME: z.string().default("SSO"), // Display name for UI button
 });
 
-export type Env = z.infer<typeof EnvSchema>;
+type ParsedEnv = z.infer<typeof EnvSchema>;
+export type Env = ParsedEnv & {
+	OPENAPI_DOCS_ENABLED: boolean;
+};
 
 // Parse and validate
-let parsed: z.infer<typeof EnvSchema>;
+let parsed: ParsedEnv;
 try {
 	parsed = EnvSchema.parse(process.env);
 } catch (err) {
@@ -154,4 +161,8 @@ if (parsed.REGISTRATION_ENABLED && !parsed.FORM_LOGIN_ENABLED) {
 	);
 }
 
-export const env = parsed;
+export const env: Env = {
+	...parsed,
+	// Docs UI/spec are enabled in non-production by default.
+	OPENAPI_DOCS_ENABLED: parsed.OPENAPI_DOCS_ENABLED ?? parsed.NODE_ENV !== "production",
+};

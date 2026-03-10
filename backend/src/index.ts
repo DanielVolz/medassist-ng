@@ -10,10 +10,13 @@ import fastifyMultipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import fastifyStatic from "@fastify/static";
+import fastifySwagger from "@fastify/swagger";
+import fastifySwaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyInstance } from "fastify";
 import { migrationsReady } from "./db/client.js";
 import { getDataDir } from "./db/db-utils.js";
 import { env } from "./plugins/env.js";
+import { apiKeyRoutes } from "./routes/api-keys.js";
 import { authRoutes } from "./routes/auth.js";
 import { doseRoutes } from "./routes/doses.js";
 import { exportRoutes } from "./routes/export.js";
@@ -58,18 +61,68 @@ function sanitizeCorrelationId(headers: IncomingHttpHeaders): string | null {
 }
 
 function buildLoggerOptions(level: string) {
+	const runtimeEnv = process.env.NODE_ENV ?? "production";
 	const base = {
 		level,
 		timestamp: () => `,"time":"${new Date().toISOString()}"`,
 	};
 	// Human-readable logs in development, structured JSON in production/test
-	if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
+	if (runtimeEnv === "development") {
 		return {
 			...base,
 			transport: { target: "pino-pretty", options: { translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l" } },
 		};
 	}
 	return base;
+}
+
+async function registerApiDocs(app: FastifyInstance, enabled: boolean) {
+	if (!enabled) return;
+
+	await app.register(fastifySwagger, {
+		openapi: {
+			openapi: "3.0.3",
+			info: {
+				title: "MedAssist-ng API",
+				description: "MedAssist-ng backend API",
+				version: process.env.npm_package_version ?? "dev",
+			},
+			servers: [{ url: "/", description: "Current server" }],
+			tags: [
+				{ name: "health", description: "Service health endpoints" },
+				{ name: "auth", description: "Authentication and profile endpoints" },
+				{ name: "api-keys", description: "Programmatic API key management" },
+				{ name: "settings", description: "User settings and notification test endpoints" },
+			],
+			components: {
+				securitySchemes: {
+					bearerAuth: {
+						type: "http",
+						scheme: "bearer",
+						bearerFormat: "API key or JWT",
+						description: "Use Authorization: Bearer ma_... (API key) or a JWT token.",
+					},
+					cookieAuth: {
+						type: "apiKey",
+						in: "cookie",
+						name: "access_token",
+						description: "Session cookie set by login.",
+					},
+				},
+			},
+		},
+		hideUntagged: false,
+	});
+
+	await app.register(fastifySwaggerUi, {
+		routePrefix: "/docs",
+		staticCSP: true,
+		transformSpecificationClone: true,
+		uiConfig: {
+			docExpansion: "list",
+			deepLinking: false,
+		},
+	});
 }
 
 /** Create and configure Fastify app (without starting) */
@@ -84,6 +137,7 @@ export async function createApp(options?: {
 	refreshTtlDays?: number;
 	isProduction?: boolean;
 	imagesDir?: string;
+	openApiDocsEnabled?: boolean;
 }): Promise<FastifyInstance> {
 	const opts = {
 		logLevel: options?.logLevel ?? "info",
@@ -96,6 +150,7 @@ export async function createApp(options?: {
 		refreshTtlDays: options?.refreshTtlDays ?? 7,
 		isProduction: options?.isProduction ?? false,
 		imagesDir: options?.imagesDir ?? resolve(getDataDir(), "images"),
+		openApiDocsEnabled: options?.openApiDocsEnabled ?? false,
 	};
 
 	const app = Fastify({
@@ -132,6 +187,7 @@ export async function createApp(options?: {
 	await app.register(jwt, jwtConfig);
 
 	await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+	await registerApiDocs(app, opts.openApiDocsEnabled);
 
 	// Only register static if directory exists
 	if (existsSync(opts.imagesDir)) {
@@ -145,6 +201,7 @@ export async function createApp(options?: {
 	// Register routes
 	await app.register(healthRoutes);
 	await app.register(authRoutes);
+	await app.register(apiKeyRoutes);
 	await app.register(oidcRoutes);
 	await app.register(medicationRoutes);
 	await app.register(settingsRoutes);
@@ -215,6 +272,7 @@ const jwtConfig = getJwtConfig(env.AUTH_ENABLED, env.JWT_SECRET);
 await app.register(jwt, jwtConfig);
 
 await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
+await registerApiDocs(app, env.OPENAPI_DOCS_ENABLED);
 await app.register(fastifyStatic, {
 	root: imagesDir,
 	prefix: "/images/",
@@ -223,6 +281,7 @@ await app.register(fastifyStatic, {
 
 await app.register(healthRoutes);
 await app.register(authRoutes);
+await app.register(apiKeyRoutes);
 await app.register(oidcRoutes);
 await app.register(medicationRoutes);
 await app.register(settingsRoutes);

@@ -228,7 +228,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			});
 
 			expect(response.statusCode).toBe(400);
-			expect(response.json().code).toBe("VALIDATION_ERROR");
+			expect(response.json().code).toBe("FST_ERR_VALIDATION");
 		});
 
 		it("should reject short username", async () => {
@@ -242,7 +242,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			});
 
 			expect(response.statusCode).toBe(400);
-			expect(response.json().code).toBe("VALIDATION_ERROR");
+			expect(response.json().code).toBe("FST_ERR_VALIDATION");
 		});
 
 		it("should register with trimmed username when input has whitespace", async () => {

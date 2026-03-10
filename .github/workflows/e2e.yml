@@ -25,7 +25,6 @@ jobs:
             e2e_relevant:
               - 'frontend/**'
               - 'backend/**'
-              - '.github/workflows/e2e.yml'
 
   e2e:
     name: Playwright E2E

@@ -3,18 +3,34 @@ name: E2E Tests
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'frontend/**'
-      - 'backend/**'
-      - '.github/workflows/e2e.yml'
 
 # Minimal permissions for security
 permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect E2E relevance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      e2e_relevant: ${{ steps.filter.outputs.e2e_relevant }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            e2e_relevant:
+              - 'frontend/**'
+              - 'backend/**'
+              - '.github/workflows/e2e.yml'
+
   e2e:
     name: Playwright E2E
+    needs: changes
+    if: needs.changes.outputs.e2e_relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

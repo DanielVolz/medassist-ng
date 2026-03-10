@@ -85,6 +85,18 @@ type TestShoutrrrBody = {
 	url: string;
 };
 
+const settingsEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>> = [
+	{ bearerAuth: [] },
+	{ cookieAuth: [] },
+];
+const settingsErrorSchema = {
+	type: "object",
+	properties: {
+		error: { type: "string" },
+		code: { type: "string" },
+	},
+};
+
 function maskEmail(email: string): string {
 	const [localPart, domain] = email.split("@");
 	if (!domain) return "invalid-email";
@@ -120,6 +132,38 @@ function getDeliveryError(info: MailDeliveryInfo): string | null {
 	}
 
 	return "SMTP did not confirm accepted recipients.";
+}
+
+function classifyTestEmailFailure(error: unknown): { status: number; code: string; message: string } {
+	const errorMessage = error instanceof Error ? error.message : "Unknown error";
+	const normalizedMessage = errorMessage.toLowerCase();
+
+	if (
+		normalizedMessage.includes("smtp rejected all recipients") ||
+		normalizedMessage.includes("all recipients were rejected") ||
+		normalizedMessage.includes("recipient address rejected") ||
+		normalizedMessage.includes("nullmx")
+	) {
+		return {
+			status: 400,
+			code: "EMAIL_RECIPIENT_REJECTED",
+			message: `Failed to send email: ${errorMessage}`,
+		};
+	}
+
+	if (errorMessage.includes("SMTP did not confirm accepted recipients")) {
+		return {
+			status: 502,
+			code: "SMTP_DELIVERY_UNCONFIRMED",
+			message: `Failed to send email: ${errorMessage}`,
+		};
+	}
+
+	return {
+		status: 500,
+		code: "TEST_EMAIL_FAILED",
+		message: `Failed to send email: ${errorMessage}`,
+	};
 }
 
 function getNotificationProvider(url: string): string {
@@ -322,201 +366,313 @@ export async function settingsRoutes(app: FastifyInstance) {
 
 	// Get settings for current user
 	// Suppress request logs — polled every 30s for reminder status refresh
-	app.get("/settings", { logLevel: "warn" }, async (request, reply) => {
-		const userId = await getUserId(request, reply);
+	app.get(
+		"/settings",
+		{
+			logLevel: "warn",
+			schema: {
+				tags: ["settings"],
+				summary: "Get current user settings",
+				security: settingsEndpointSecurity,
+				response: {
+					200: { type: "object", additionalProperties: true },
+					401: settingsErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
 
-		const settings = await getOrCreateUserSettings(userId);
-		const reminderHour = envInt("REMINDER_HOUR", 6);
-		const reminderMinutesBefore = envInt("REMINDER_MINUTES_BEFORE", 15);
+			const settings = await getOrCreateUserSettings(userId);
+			const reminderHour = envInt("REMINDER_HOUR", 6);
+			const reminderMinutesBefore = envInt("REMINDER_MINUTES_BEFORE", 15);
 
-		return reply.send({
-			// User notification settings (from DB)
-			emailEnabled: settings.emailEnabled,
-			notificationEmail: settings.notificationEmail ?? "",
-			reminderDaysBefore: settings.reminderDaysBefore,
-			repeatDailyReminders: settings.repeatDailyReminders,
-			lowStockDays: settings.lowStockDays,
-			normalStockDays: settings.normalStockDays,
-			highStockDays: settings.highStockDays,
-			shoutrrrEnabled: settings.shoutrrrEnabled,
-			shoutrrrUrl: settings.shoutrrrUrl ?? "",
-			emailStockReminders: settings.emailStockReminders,
-			emailIntakeReminders: settings.emailIntakeReminders,
-			emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
-			shoutrrrStockReminders: settings.shoutrrrStockReminders,
-			shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
-			shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
-			skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
-			repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
-			reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
-			maxNaggingReminders: settings.maxNaggingReminders ?? 5,
-			language: settings.language,
-			stockCalculationMode: settings.stockCalculationMode ?? "automatic",
-			shareStockStatus: settings.shareStockStatus ?? true,
-			upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
-			shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
-			swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
-			// SMTP settings (from .env - shared/server-configured)
-			smtpHost: process.env.SMTP_HOST ?? "",
-			smtpPort: parseInt(process.env.SMTP_PORT ?? "587", 10),
-			smtpUser: process.env.SMTP_USER ?? "",
-			smtpFrom: process.env.SMTP_FROM ?? "",
-			smtpSecure: process.env.SMTP_SECURE === "true",
-			hasSmtpPassword: !!(process.env.SMTP_TOKEN || process.env.SMTP_PASS),
-			// Reminder state for this user
-			lastAutoEmailSent: settings.lastAutoEmailSent,
-			lastNotificationType: settings.lastNotificationType,
-			lastNotificationChannel: settings.lastNotificationChannel,
-			lastReminderMedName: settings.lastReminderMedName ?? null,
-			lastReminderTakenBy: settings.lastReminderTakenBy ?? null,
-			// Stock reminder tracking (separate from intake)
-			lastStockReminderSent: settings.lastStockReminderSent ?? null,
-			lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
-			lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
-			// Prescription reminder tracking (separate from stock/intake)
-			lastPrescriptionReminderSent: settings.lastPrescriptionReminderSent ?? null,
-			lastPrescriptionReminderChannel: settings.lastPrescriptionReminderChannel ?? null,
-			lastPrescriptionReminderMedNames: settings.lastPrescriptionReminderMedNames ?? null,
-			// Server settings (from .env, read-only)
-			reminderHour,
-			reminderMinutesBefore,
-			expiryWarningDays: parseInt(process.env.EXPIRY_WARNING_DAYS ?? "30", 10),
-		});
-	});
+			return reply.send({
+				// User notification settings (from DB)
+				emailEnabled: settings.emailEnabled,
+				notificationEmail: settings.notificationEmail ?? "",
+				reminderDaysBefore: settings.reminderDaysBefore,
+				repeatDailyReminders: settings.repeatDailyReminders,
+				lowStockDays: settings.lowStockDays,
+				normalStockDays: settings.normalStockDays,
+				highStockDays: settings.highStockDays,
+				shoutrrrEnabled: settings.shoutrrrEnabled,
+				shoutrrrUrl: settings.shoutrrrUrl ?? "",
+				emailStockReminders: settings.emailStockReminders,
+				emailIntakeReminders: settings.emailIntakeReminders,
+				emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
+				shoutrrrStockReminders: settings.shoutrrrStockReminders,
+				shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+				shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
+				skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
+				repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
+				reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
+				maxNaggingReminders: settings.maxNaggingReminders ?? 5,
+				language: settings.language,
+				stockCalculationMode: settings.stockCalculationMode ?? "automatic",
+				shareStockStatus: settings.shareStockStatus ?? true,
+				upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
+				shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
+				swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
+				// SMTP settings (from .env - shared/server-configured)
+				smtpHost: process.env.SMTP_HOST ?? "",
+				smtpPort: parseInt(process.env.SMTP_PORT ?? "587", 10),
+				smtpUser: process.env.SMTP_USER ?? "",
+				smtpFrom: process.env.SMTP_FROM ?? "",
+				smtpSecure: process.env.SMTP_SECURE === "true",
+				hasSmtpPassword: !!(process.env.SMTP_TOKEN || process.env.SMTP_PASS),
+				// Reminder state for this user
+				lastAutoEmailSent: settings.lastAutoEmailSent,
+				lastNotificationType: settings.lastNotificationType,
+				lastNotificationChannel: settings.lastNotificationChannel,
+				lastReminderMedName: settings.lastReminderMedName ?? null,
+				lastReminderTakenBy: settings.lastReminderTakenBy ?? null,
+				// Stock reminder tracking (separate from intake)
+				lastStockReminderSent: settings.lastStockReminderSent ?? null,
+				lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
+				lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
+				// Prescription reminder tracking (separate from stock/intake)
+				lastPrescriptionReminderSent: settings.lastPrescriptionReminderSent ?? null,
+				lastPrescriptionReminderChannel: settings.lastPrescriptionReminderChannel ?? null,
+				lastPrescriptionReminderMedNames: settings.lastPrescriptionReminderMedNames ?? null,
+				// Server settings (from .env, read-only)
+				reminderHour,
+				reminderMinutesBefore,
+				expiryWarningDays: parseInt(process.env.EXPIRY_WARNING_DAYS ?? "30", 10),
+			});
+		}
+	);
 
 	// Update settings for current user
-	app.put<{ Body: SettingsBody }>("/settings", async (request, reply) => {
-		const userId = await getUserId(request, reply);
+	app.put<{ Body: SettingsBody }>(
+		"/settings",
+		{
+			schema: {
+				tags: ["settings"],
+				summary: "Update current user settings",
+				security: settingsEndpointSecurity,
+				body: {
+					type: "object",
+					required: ["emailEnabled", "notificationEmail", "reminderDaysBefore", "language"],
+					properties: {
+						emailEnabled: { type: "boolean" },
+						notificationEmail: { type: "string" },
+						reminderDaysBefore: { type: "number" },
+						repeatDailyReminders: { type: "boolean" },
+						lowStockDays: { type: "number" },
+						normalStockDays: { type: "number" },
+						highStockDays: { type: "number" },
+						shoutrrrEnabled: { type: "boolean" },
+						shoutrrrUrl: { type: "string" },
+						emailStockReminders: { type: "boolean" },
+						emailIntakeReminders: { type: "boolean" },
+						emailPrescriptionReminders: { type: "boolean" },
+						shoutrrrStockReminders: { type: "boolean" },
+						shoutrrrIntakeReminders: { type: "boolean" },
+						shoutrrrPrescriptionReminders: { type: "boolean" },
+						skipRemindersForTakenDoses: { type: "boolean" },
+						repeatRemindersEnabled: { type: "boolean" },
+						reminderRepeatIntervalMinutes: { type: "number" },
+						maxNaggingReminders: { type: "number" },
+						language: { type: "string", enum: ["en", "de"] },
+						stockCalculationMode: { type: "string", enum: ["automatic", "manual"] },
+						shareStockStatus: { type: "boolean" },
+						upcomingTodayOnly: { type: "boolean" },
+						shareScheduleTodayOnly: { type: "boolean" },
+						swapDashboardMainSections: { type: "boolean" },
+					},
+				},
+				response: {
+					200: { type: "object", properties: { success: { type: "boolean" } } },
+					401: settingsErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
 
-		const body = request.body;
+			const body = request.body;
 
-		// Check if any stock reminders are configured
-		const hasEmailStock = body.emailEnabled && body.emailStockReminders && body.notificationEmail;
-		const hasShoutrrrStock = body.shoutrrrEnabled && body.shoutrrrStockReminders && body.shoutrrrUrl;
-		const hasAnyStockReminder = hasEmailStock || hasShoutrrrStock;
+			// Check if any stock reminders are configured
+			const hasEmailStock = body.emailEnabled && body.emailStockReminders && body.notificationEmail;
+			const hasShoutrrrStock = body.shoutrrrEnabled && body.shoutrrrStockReminders && body.shoutrrrUrl;
+			const hasAnyStockReminder = hasEmailStock || hasShoutrrrStock;
 
-		// Disable repeatDailyReminders if no stock reminders are configured
-		const repeatDailyReminders = hasAnyStockReminder ? (body.repeatDailyReminders ?? false) : false;
+			// Disable repeatDailyReminders if no stock reminders are configured
+			const repeatDailyReminders = hasAnyStockReminder ? (body.repeatDailyReminders ?? false) : false;
 
-		// Update or insert user settings
-		const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+			// Update or insert user settings
+			const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
 
-		const settingsData = {
-			emailEnabled: body.emailEnabled,
-			notificationEmail: body.notificationEmail || null,
-			emailStockReminders: body.emailStockReminders ?? true,
-			emailIntakeReminders: body.emailIntakeReminders ?? true,
-			emailPrescriptionReminders: body.emailPrescriptionReminders ?? true,
-			shoutrrrEnabled: body.shoutrrrEnabled ?? false,
-			shoutrrrUrl: body.shoutrrrUrl || null,
-			shoutrrrStockReminders: body.shoutrrrStockReminders ?? true,
-			shoutrrrIntakeReminders: body.shoutrrrIntakeReminders ?? true,
-			shoutrrrPrescriptionReminders: body.shoutrrrPrescriptionReminders ?? true,
-			reminderDaysBefore: body.reminderDaysBefore,
-			repeatDailyReminders,
-			skipRemindersForTakenDoses: body.skipRemindersForTakenDoses ?? false,
-			repeatRemindersEnabled: body.repeatRemindersEnabled ?? false,
-			reminderRepeatIntervalMinutes: body.reminderRepeatIntervalMinutes ?? 30,
-			maxNaggingReminders: body.maxNaggingReminders ?? 5,
-			lowStockDays: body.lowStockDays ?? 30,
-			normalStockDays: body.normalStockDays ?? 90,
-			highStockDays: body.highStockDays ?? 180,
-			language: body.language ?? "en",
-			stockCalculationMode: body.stockCalculationMode ?? "automatic",
-			shareStockStatus: body.shareStockStatus ?? true,
-			upcomingTodayOnly: body.upcomingTodayOnly ?? false,
-			shareScheduleTodayOnly: body.shareScheduleTodayOnly ?? false,
-			swapDashboardMainSections: body.swapDashboardMainSections ?? false,
-			updatedAt: new Date(),
-		};
+			const settingsData = {
+				emailEnabled: body.emailEnabled,
+				notificationEmail: body.notificationEmail || null,
+				emailStockReminders: body.emailStockReminders ?? true,
+				emailIntakeReminders: body.emailIntakeReminders ?? true,
+				emailPrescriptionReminders: body.emailPrescriptionReminders ?? true,
+				shoutrrrEnabled: body.shoutrrrEnabled ?? false,
+				shoutrrrUrl: body.shoutrrrUrl || null,
+				shoutrrrStockReminders: body.shoutrrrStockReminders ?? true,
+				shoutrrrIntakeReminders: body.shoutrrrIntakeReminders ?? true,
+				shoutrrrPrescriptionReminders: body.shoutrrrPrescriptionReminders ?? true,
+				reminderDaysBefore: body.reminderDaysBefore,
+				repeatDailyReminders,
+				skipRemindersForTakenDoses: body.skipRemindersForTakenDoses ?? false,
+				repeatRemindersEnabled: body.repeatRemindersEnabled ?? false,
+				reminderRepeatIntervalMinutes: body.reminderRepeatIntervalMinutes ?? 30,
+				maxNaggingReminders: body.maxNaggingReminders ?? 5,
+				lowStockDays: body.lowStockDays ?? 30,
+				normalStockDays: body.normalStockDays ?? 90,
+				highStockDays: body.highStockDays ?? 180,
+				language: body.language ?? "en",
+				stockCalculationMode: body.stockCalculationMode ?? "automatic",
+				shareStockStatus: body.shareStockStatus ?? true,
+				upcomingTodayOnly: body.upcomingTodayOnly ?? false,
+				shareScheduleTodayOnly: body.shareScheduleTodayOnly ?? false,
+				swapDashboardMainSections: body.swapDashboardMainSections ?? false,
+				updatedAt: new Date(),
+			};
 
-		if (existingSettings.length > 0) {
-			await db.update(userSettings).set(settingsData).where(eq(userSettings.userId, userId));
-		} else {
-			await db.insert(userSettings).values({
-				userId: userId,
-				...settingsData,
-			});
+			if (existingSettings.length > 0) {
+				await db.update(userSettings).set(settingsData).where(eq(userSettings.userId, userId));
+			} else {
+				await db.insert(userSettings).values({
+					userId: userId,
+					...settingsData,
+				});
+			}
+
+			return reply.send({ success: true });
 		}
-
-		return reply.send({ success: true });
-	});
+	);
 
 	// Update only the language setting (lightweight, called on dropdown change)
-	app.put<{ Body: { language: string } }>("/settings/language", async (request, reply) => {
-		const userId = await getUserId(request, reply);
-		const { language } = request.body;
+	app.put<{ Body: { language: string } }>(
+		"/settings/language",
+		{
+			schema: {
+				tags: ["settings"],
+				summary: "Update UI language",
+				security: settingsEndpointSecurity,
+				body: {
+					type: "object",
+					required: ["language"],
+					properties: {
+						language: { type: "string", enum: ["en", "de"] },
+					},
+				},
+				response: {
+					200: { type: "object", properties: { success: { type: "boolean" } } },
+					400: settingsErrorSchema,
+					401: settingsErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
+			const { language } = request.body;
 
-		if (!language || !["en", "de"].includes(language)) {
-			return reply.status(400).send({ error: "Invalid language" });
+			if (!language || !["en", "de"].includes(language)) {
+				return reply.status(400).send({ error: "Invalid language" });
+			}
+
+			const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+
+			if (existingSettings.length > 0) {
+				await db.update(userSettings).set({ language, updatedAt: new Date() }).where(eq(userSettings.userId, userId));
+			} else {
+				await db.insert(userSettings).values({
+					userId,
+					...getDefaultSettings(),
+					language,
+				});
+			}
+
+			return reply.send({ success: true });
 		}
-
-		const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
-
-		if (existingSettings.length > 0) {
-			await db.update(userSettings).set({ language, updatedAt: new Date() }).where(eq(userSettings.userId, userId));
-		} else {
-			await db.insert(userSettings).values({
-				userId,
-				...getDefaultSettings(),
-				language,
-			});
-		}
-
-		return reply.send({ success: true });
-	});
+	);
 
 	// Test email - use SMTP settings from process.env
-	app.post<{ Body: TestEmailBody }>("/settings/test-email", async (request, reply) => {
-		const { email } = request.body;
-
-		const smtpHost = process.env.SMTP_HOST;
-		const smtpUser = process.env.SMTP_USER;
-		const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
-		const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-		const smtpSecure = process.env.SMTP_SECURE === "true";
-		const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
-
-		request.log.info(
-			{
-				to: maskEmail(email),
-				hasSmtpHost: Boolean(smtpHost),
-				hasSmtpUser: Boolean(smtpUser),
-				hasSmtpPass: Boolean(smtpPass),
-				hasSmtpFrom: Boolean(smtpFrom),
-				smtpPort,
-				smtpSecure,
-			},
-			"[Settings] Test email request received"
-		);
-
-		if (!smtpHost || !smtpUser) {
-			request.log.warn(
-				{ to: maskEmail(email), hasSmtpHost: Boolean(smtpHost), hasSmtpUser: Boolean(smtpUser) },
-				"[Settings] Test email skipped: SMTP not configured"
-			);
-			return reply.status(400).send({ error: "SMTP not configured" });
-		}
-
-		try {
-			const transporter = nodemailer.createTransport({
-				host: smtpHost,
-				port: smtpPort,
-				secure: smtpSecure,
-				auth: {
-					user: smtpUser,
-					pass: smtpPass ?? "",
+	app.post<{ Body: TestEmailBody }>(
+		"/settings/test-email",
+		{
+			schema: {
+				tags: ["settings"],
+				summary: "Send test email",
+				description: "Sends a test message using configured SMTP settings.",
+				security: settingsEndpointSecurity,
+				body: {
+					type: "object",
+					required: ["email"],
+					properties: {
+						email: { type: "string", format: "email" },
+					},
 				},
-			});
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							success: { type: "boolean" },
+							message: { type: "string" },
+						},
+					},
+					400: settingsErrorSchema,
+					401: settingsErrorSchema,
+					500: settingsErrorSchema,
+					502: settingsErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { email } = request.body;
 
-			request.log.info({ to: maskEmail(email) }, "[Settings] Sending test email");
+			const smtpHost = process.env.SMTP_HOST;
+			const smtpUser = process.env.SMTP_USER;
+			const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
+			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
+			const smtpSecure = process.env.SMTP_SECURE === "true";
+			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
 
-			const mailResult = await transporter.sendMail({
-				from: smtpFrom,
-				to: email,
-				subject: "MedAssist-ng - Test Email",
-				text: "This is a test email from MedAssist-ng. If you received this, your email configuration is working correctly!",
-				html: `
+			request.log.info(
+				{
+					to: maskEmail(email),
+					hasSmtpHost: Boolean(smtpHost),
+					hasSmtpUser: Boolean(smtpUser),
+					hasSmtpPass: Boolean(smtpPass),
+					hasSmtpFrom: Boolean(smtpFrom),
+					smtpPort,
+					smtpSecure,
+				},
+				"[Settings] Test email request received"
+			);
+
+			if (!smtpHost || !smtpUser) {
+				request.log.warn(
+					{ to: maskEmail(email), hasSmtpHost: Boolean(smtpHost), hasSmtpUser: Boolean(smtpUser) },
+					"[Settings] Test email skipped: SMTP not configured"
+				);
+				return reply.status(400).send({ error: "SMTP not configured" });
+			}
+
+			try {
+				const transporter = nodemailer.createTransport({
+					host: smtpHost,
+					port: smtpPort,
+					secure: smtpSecure,
+					auth: {
+						user: smtpUser,
+						pass: smtpPass ?? "",
+					},
+				});
+
+				request.log.info({ to: maskEmail(email) }, "[Settings] Sending test email");
+
+				const mailResult = await transporter.sendMail({
+					from: smtpFrom,
+					to: email,
+					subject: "MedAssist-ng - Test Email",
+					text: "This is a test email from MedAssist-ng. If you received this, your email configuration is working correctly!",
+					html: `
           <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <h2 style="color: #2563eb;">MedAssist-ng - Test Email</h2>
             <p>This is a test email from MedAssist-ng.</p>
@@ -525,55 +681,86 @@ export async function settingsRoutes(app: FastifyInstance) {
             <p style="color: #6b7280; font-size: 14px;">Sent from MedAssist-ng Medication Planner</p>
           </div>
         `,
-			});
+				});
 
-			const deliveryError = getDeliveryError(mailResult);
-			if (deliveryError) {
-				throw new Error(deliveryError);
+				const deliveryError = getDeliveryError(mailResult);
+				if (deliveryError) {
+					throw new Error(deliveryError);
+				}
+
+				request.log.info({ to: maskEmail(email), messageId: mailResult.messageId }, "[Settings] Test email sent");
+
+				return reply.send({ success: true, message: "Test email sent successfully" });
+			} catch (error) {
+				request.log.error({ error, to: maskEmail(email) }, "[Settings] Test email failed");
+				const failure = classifyTestEmailFailure(error);
+				return reply.status(failure.status).send({ error: failure.message, code: failure.code });
 			}
-
-			request.log.info({ to: maskEmail(email), messageId: mailResult.messageId }, "[Settings] Test email sent");
-
-			return reply.send({ success: true, message: "Test email sent successfully" });
-		} catch (error) {
-			request.log.error({ error, to: maskEmail(email) }, "[Settings] Test email failed");
-			const errorMessage = error instanceof Error ? error.message : "Unknown error";
-			return reply.status(500).send({ error: `Failed to send email: ${errorMessage}` });
 		}
-	});
+	);
 
 	// Test Shoutrrr/ntfy notification
-	app.post<{ Body: TestShoutrrrBody }>("/settings/test-shoutrrr", async (request, reply) => {
-		const { url } = request.body;
+	app.post<{ Body: TestShoutrrrBody }>(
+		"/settings/test-shoutrrr",
+		{
+			schema: {
+				tags: ["settings"],
+				summary: "Send test push notification",
+				description: "Sends a test notification via a Shoutrrr-compatible URL.",
+				security: settingsEndpointSecurity,
+				body: {
+					type: "object",
+					required: ["url"],
+					properties: {
+						url: { type: "string" },
+					},
+				},
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							success: { type: "boolean" },
+							message: { type: "string" },
+						},
+					},
+					400: settingsErrorSchema,
+					401: settingsErrorSchema,
+					500: settingsErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { url } = request.body;
 
-		if (!url) {
-			return reply.status(400).send({ error: "Notification URL is required" });
-		}
-
-		try {
-			const provider = getNotificationProvider(url);
-			const result = await sendShoutrrrNotification(
-				url,
-				"MedAssist-ng Test",
-				"This is a test notification from MedAssist-ng. If you received this, your notification configuration is working correctly!"
-			);
-
-			if (result.success) {
-				request.log.info({ provider }, "[Settings] Test push notification sent");
-				return reply.send({ success: true, message: "Test notification sent successfully" });
-			} else {
-				request.log.warn({ provider, error: result.error ?? "unknown" }, "[Settings] Test push notification failed");
-				return reply.status(500).send({ error: result.error });
+			if (!url) {
+				return reply.status(400).send({ error: "Notification URL is required" });
 			}
-		} catch (error) {
-			request.log.error(
-				{ provider: getNotificationProvider(url), error },
-				"[Settings] Unexpected error while sending test push notification"
-			);
-			const errorMessage = error instanceof Error ? error.message : "Unknown error";
-			return reply.status(500).send({ error: `Failed to send notification: ${errorMessage}` });
+
+			try {
+				const provider = getNotificationProvider(url);
+				const result = await sendShoutrrrNotification(
+					url,
+					"MedAssist-ng Test",
+					"This is a test notification from MedAssist-ng. If you received this, your notification configuration is working correctly!"
+				);
+
+				if (result.success) {
+					request.log.info({ provider }, "[Settings] Test push notification sent");
+					return reply.send({ success: true, message: "Test notification sent successfully" });
+				} else {
+					request.log.warn({ provider, error: result.error ?? "unknown" }, "[Settings] Test push notification failed");
+					return reply.status(500).send({ error: result.error });
+				}
+			} catch (error) {
+				request.log.error(
+					{ provider: getNotificationProvider(url), error },
+					"[Settings] Unexpected error while sending test push notification"
+				);
+				const errorMessage = error instanceof Error ? error.message : "Unknown error";
+				return reply.status(500).send({ error: `Failed to send notification: ${errorMessage}` });
+			}
 		}
-	});
+	);
 }
 
 // Validate and sanitize URL to prevent SSRF attacks

@@ -1,7 +1,8 @@
-import { count, eq, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, count, eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
-import { users } from "../db/schema.js";
+import { apiKeys, users } from "../db/schema.js";
 import { env } from "./env.js";
 
 // =============================================================================
@@ -82,6 +83,84 @@ export interface RequestUser {
 	username: string;
 }
 
+const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function isMutationMethod(method: string): boolean {
+	return !READ_ONLY_METHODS.has(method.toUpperCase());
+}
+
+function getApiKeyPepper(): string {
+	return env.JWT_SECRET || env.REFRESH_SECRET || "medassist-api-key-pepper";
+}
+
+export function hashApiKeyToken(token: string): string {
+	return createHash("sha256").update(`${getApiKeyPepper()}:${token}`).digest("hex");
+}
+
+function getBearerToken(request: FastifyRequest): string | null {
+	const authHeader = request.headers.authorization;
+	if (!authHeader) return null;
+
+	const [scheme, value] = authHeader.split(" ");
+	if (!scheme || !value) return null;
+	if (scheme.toLowerCase() !== "bearer") return null;
+
+	const token = value.trim();
+	return token.length > 0 ? token : null;
+}
+
+async function tryApiKeyAuth(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+	const bearerToken = getBearerToken(request);
+	if (!bearerToken) return false;
+
+	if (!bearerToken.startsWith("ma_")) {
+		reply.status(401).send({ error: "Invalid API key", code: "INVALID_API_KEY" });
+		throw new Error("INVALID_API_KEY");
+	}
+
+	const keyHash = hashApiKeyToken(bearerToken);
+	const [keyRow] = await db
+		.select()
+		.from(apiKeys)
+		.where(and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isActive, true)));
+
+	if (!keyRow) {
+		reply.status(401).send({ error: "Invalid API key", code: "INVALID_API_KEY" });
+		throw new Error("INVALID_API_KEY");
+	}
+
+	if (keyRow.expiresAt && keyRow.expiresAt.getTime() <= Date.now()) {
+		reply.status(401).send({ error: "API key expired", code: "API_KEY_EXPIRED" });
+		throw new Error("API_KEY_EXPIRED");
+	}
+
+	const [user] = await db.select().from(users).where(eq(users.id, keyRow.userId));
+	if (!user || !user.isActive) {
+		reply.status(401).send({ error: "User not found", code: "USER_NOT_FOUND" });
+		throw new Error("USER_NOT_FOUND");
+	}
+
+	const scope = keyRow.scope === "read" ? "read" : "write";
+	if (scope === "read" && isMutationMethod(request.method)) {
+		reply.status(403).send({ error: "API key scope does not allow this operation", code: "API_KEY_SCOPE_FORBIDDEN" });
+		throw new Error("API_KEY_SCOPE_FORBIDDEN");
+	}
+
+	request.user = { id: user.id, username: user.username };
+	request.authContext = {
+		method: "api_key",
+		scope,
+		apiKeyId: keyRow.id,
+	};
+
+	await db
+		.update(apiKeys)
+		.set({ lastUsedAt: new Date(), updatedAt: new Date() })
+		.where(and(eq(apiKeys.id, keyRow.id), eq(apiKeys.userId, user.id)));
+
+	return true;
+}
+
 // =============================================================================
 // Auth Middleware Functions
 // =============================================================================
@@ -91,6 +170,28 @@ export interface RequestUser {
  */
 export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply) {
 	if (!env.AUTH_ENABLED) {
+		return;
+	}
+
+	const bearerToken = getBearerToken(request);
+	if (bearerToken?.startsWith("ma_")) {
+		const keyHash = hashApiKeyToken(bearerToken);
+		const [keyRow] = await db
+			.select()
+			.from(apiKeys)
+			.where(and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isActive, true)));
+		if (!keyRow) return;
+		if (keyRow.expiresAt && keyRow.expiresAt.getTime() <= Date.now()) return;
+
+		const [userByKey] = await db.select().from(users).where(eq(users.id, keyRow.userId));
+		if (userByKey?.isActive) {
+			request.user = { id: userByKey.id, username: userByKey.username };
+			request.authContext = {
+				method: "api_key",
+				scope: keyRow.scope === "read" ? "read" : "write",
+				apiKeyId: keyRow.id,
+			};
+		}
 		return;
 	}
 
@@ -107,6 +208,10 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
 				id: user.id,
 				username: user.username,
 			};
+			request.authContext = {
+				method: "session",
+				scope: "write",
+			};
 		}
 	} catch {
 		// Invalid token, continue as anonymous
@@ -118,6 +223,10 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
  */
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
 	if (!env.AUTH_ENABLED) {
+		return;
+	}
+
+	if (await tryApiKeyAuth(request, reply)) {
 		return;
 	}
 
@@ -145,11 +254,20 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 			id: user.id,
 			username: user.username,
 		};
+		request.authContext = {
+			method: "session",
+			scope: "write",
+		};
 	} catch (err: unknown) {
 		// Re-throw our own errors
 		if (
 			err instanceof Error &&
-			(err.message === "AUTH_REQUIRED" || err.message === "USER_NOT_FOUND" || err.message === "ACCOUNT_DISABLED")
+			(err.message === "AUTH_REQUIRED" ||
+				err.message === "USER_NOT_FOUND" ||
+				err.message === "ACCOUNT_DISABLED" ||
+				err.message === "INVALID_API_KEY" ||
+				err.message === "API_KEY_EXPIRED" ||
+				err.message === "API_KEY_SCOPE_FORBIDDEN")
 		) {
 			throw err;
 		}

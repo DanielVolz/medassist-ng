@@ -345,6 +345,37 @@ describe("E2E Tests with Real Routes", () => {
 				usedPrescription: true,
 			});
 		});
+
+		it("should not include refill history entries from another user for the same medication", async () => {
+			const medId = await createMedication(testClient, userId, "Report Isolation Med", ["Daniel"]);
+			const otherUserId = await _createUser(testClient, "report-isolation-other-user");
+
+			await testClient.execute({
+				sql: `INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date)
+				      VALUES (?, ?, ?, ?, ?, ?)`,
+				args: [medId, userId, 1, 0, 0, 1735603200],
+			});
+			await testClient.execute({
+				sql: `INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date)
+				      VALUES (?, ?, ?, ?, ?, ?)`,
+				args: [medId, otherUserId, 9, 99, 1, 1735689600],
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/report-data",
+				payload: { medicationIds: [medId] },
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data[medId].refills).toHaveLength(1);
+			expect(data[medId].refills[0]).toMatchObject({
+				packsAdded: 1,
+				loosePillsAdded: 0,
+				usedPrescription: false,
+			});
+		});
 	});
 
 	afterAll(async () => {
@@ -502,6 +533,80 @@ describe("E2E Tests with Real Routes", () => {
 			});
 
 			expect(response.statusCode).toBe(404);
+		});
+
+		it("should return shared medication overview for a valid token", async () => {
+			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			const token = "abcdef0123456789";
+			await createShareToken(testClient, userId, "Daniel", token);
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/share/${token}/overview`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.headers["cache-control"]).toBe("no-store");
+
+			const data = response.json();
+			expect(data.takenBy).toBe("Daniel");
+			expect(data.sharedBy).toBe("__anonymous__");
+			expect(Array.isArray(data.medications)).toBe(true);
+			expect(data.medications).toHaveLength(1);
+			expect(data.medications[0].name).toBe("Aspirin");
+			expect(data.medications[0].currentStock).toBeTypeOf("number");
+		});
+
+		it("should return 404 for unknown overview token", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/share/abcdef0123456789/overview",
+			});
+
+			expect(response.statusCode).toBe(404);
+			expect(response.json()).toEqual({ error: "not_found" });
+		});
+
+		it("should return 410 for expired overview token", async () => {
+			const token = "fedcba9876543210";
+			await testClient.execute({
+				sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at) VALUES (?, ?, ?, 30, ?)",
+				args: [userId, token, "Daniel", Math.floor(Date.now() / 1000) - 60],
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/share/${token}/overview`,
+			});
+
+			expect(response.statusCode).toBe(410);
+			const data = response.json();
+			expect(data.error).toBe("expired");
+			expect(data.expiredAt).toBeTypeOf("string");
+		});
+
+		it("should hide stock fields in overview when share_stock_status is disabled", async () => {
+			await createMedication(testClient, userId, "Ibuprofen", ["Daniel"]);
+			const token = "0123456789abcdef";
+			await createShareToken(testClient, userId, "Daniel", token);
+
+			await testClient.execute({
+				sql: "INSERT INTO user_settings (user_id, share_stock_status, low_stock_days) VALUES (?, 0, 30)",
+				args: [userId],
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/share/${token}/overview`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const [medication] = response.json().medications;
+			expect(medication.currentStock).toBeNull();
+			expect(medication.capacity).toBeNull();
+			expect(medication.daysLeft).toBeNull();
+			expect(medication.depletionDate).toBeNull();
+			expect(medication.priority).toBeNull();
 		});
 	});
 
@@ -834,7 +939,7 @@ describe("E2E Tests with Real Routes", () => {
 			});
 
 			expect(response.statusCode).toBe(400);
-			expect(response.json().error).toBe("Invalid language");
+			expect(response.json().error).toMatch(/Invalid language|Bad Request/);
 		});
 
 		it("should create and update language via lightweight language endpoint", async () => {
@@ -1929,6 +2034,47 @@ describe("E2E Tests with Real Routes", () => {
 			expect(hasLooseRefill).toBe(true);
 		});
 
+		it("should not return refill history entries from another user for the same medication", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Refill Isolation Med",
+					packCount: 1,
+					blistersPerPack: 2,
+					pillsPerBlister: 10,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			const medId = createResponse.json().id;
+			const otherUserId = await _createUser(testClient, "refill-isolation-other-user");
+
+			await testClient.execute({
+				sql: `INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date)
+				      VALUES (?, ?, ?, ?, ?, ?)`,
+				args: [medId, userId, 2, 3, 0, 1735603200],
+			});
+			await testClient.execute({
+				sql: `INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date)
+				      VALUES (?, ?, ?, ?, ?, ?)`,
+				args: [medId, otherUserId, 8, 88, 1, 1735689600],
+			});
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/medications/${medId}/refills`,
+			});
+
+			expect(response.statusCode).toBe(200);
+			const refills = response.json();
+			expect(refills).toHaveLength(1);
+			expect(refills[0]).toMatchObject({
+				packsAdded: 2,
+				loosePillsAdded: 3,
+				usedPrescription: false,
+			});
+		});
+
 		it("should return 404 for non-existent medication", async () => {
 			const response = await app.inject({
 				method: "GET",
@@ -2302,6 +2448,29 @@ describe("E2E Tests with Real Routes", () => {
 				payload: {
 					emailEnabled: true,
 					notificationEmail: "test@example.com",
+					reminderDaysBefore: 7,
+					repeatDailyReminders: false,
+					lowStockDays: 30,
+					normalStockDays: 90,
+					highStockDays: 180,
+					shoutrrrEnabled: false,
+					shoutrrrUrl: "",
+					emailStockReminders: true,
+					emailIntakeReminders: true,
+					emailPrescriptionReminders: true,
+					shoutrrrStockReminders: true,
+					shoutrrrIntakeReminders: true,
+					shoutrrrPrescriptionReminders: true,
+					skipRemindersForTakenDoses: false,
+					repeatRemindersEnabled: false,
+					reminderRepeatIntervalMinutes: 30,
+					maxNaggingReminders: 5,
+					language: "en",
+					stockCalculationMode: "automatic",
+					shareStockStatus: true,
+					upcomingTodayOnly: false,
+					shareScheduleTodayOnly: false,
+					swapDashboardMainSections: false,
 				},
 			});
 
@@ -2506,10 +2675,10 @@ describe("E2E Tests with Real Routes", () => {
 	});
 
 	// ---------------------------------------------------------------------------
-	// Package Type (blister, bottle, liquid_container) Tests
+	// Package Type (blister, bottle, tube, liquid_container) Tests
 	// ---------------------------------------------------------------------------
 
-	describe("Package type handling (blister, bottle, liquid_container)", () => {
+	describe("Package type handling (blister, bottle, tube, liquid_container)", () => {
 		const bottleMedication = {
 			name: "Vitamin D Drops",
 			packageType: "bottle",
@@ -2540,6 +2709,21 @@ describe("E2E Tests with Real Routes", () => {
 			pillsPerBlister: 1,
 			looseTablets: 180,
 			blisters: [{ usage: 5, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+		};
+
+		const tubeMedication = {
+			name: "Topical Cream",
+			medicationForm: "topical",
+			packageType: "tube",
+			doseUnit: "units",
+			packCount: 2,
+			packageAmountValue: 40,
+			packageAmountUnit: "g",
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 80,
+			looseTablets: 80,
+			blisters: [{ usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 		};
 
 		it("should create and return bottle type medication", async () => {
@@ -2696,6 +2880,72 @@ describe("E2E Tests with Real Routes", () => {
 			expect(refillResponse.statusCode).toBe(200);
 			const data = refillResponse.json();
 			expect(data.refill.totalPillsAdded).toBe(35); // 1*30 + 5
+		});
+
+		it("should keep liquid_container refill additive and preserve amount baseline", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					...liquidContainerMedication,
+					packCount: 1,
+					packageAmountValue: 180,
+					totalPills: 180,
+					looseTablets: 180,
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 0 },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			expect(refillData.refill.packsAdded).toBe(1);
+			expect(refillData.refill.loosePillsAdded).toBe(180);
+			expect(refillData.refill.totalPillsAdded).toBe(180);
+			expect(refillData.newStock.totalPills).toBe(360);
+
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((m: Record<string, unknown>) => m.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.totalPills).toBe(360);
+			expect(med.looseTablets).toBe(360);
+		});
+
+		it("should keep tube refill additive and preserve amount baseline", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: tubeMedication,
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 0 },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			expect(refillData.refill.packsAdded).toBe(1);
+			expect(refillData.refill.loosePillsAdded).toBe(40);
+			expect(refillData.refill.totalPillsAdded).toBe(40);
+			expect(refillData.newStock.totalPills).toBe(120);
+
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((m: Record<string, unknown>) => m.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.totalPills).toBe(120);
+			expect(med.looseTablets).toBe(120);
 		});
 
 		it("should return correct totalPillsAdded in refill history for bottle type", async () => {

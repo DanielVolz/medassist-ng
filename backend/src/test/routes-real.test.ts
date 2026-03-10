@@ -45,7 +45,9 @@ vi.mock("nodemailer", () => ({
 	},
 }));
 
-const { settingsRoutes, sendShoutrrrNotification } = await import("../routes/settings.js");
+const { settingsRoutes, sendShoutrrrNotification, loadUserSettings, getAllUserSettings } = await import(
+	"../routes/settings.js"
+);
 const { exportRoutes } = await import("../routes/export.js");
 const { reportRoutes } = await import("../routes/report.js");
 
@@ -142,6 +144,73 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(body.shareScheduleTodayOnly).toBe(false);
 	});
 
+	it("GET /settings returns a non-empty serialized payload with SMTP fields", async () => {
+		process.env.SMTP_HOST = "smtp.example.com";
+		process.env.SMTP_PORT = "2525";
+		process.env.SMTP_USER = "mailer@example.com";
+		process.env.SMTP_FROM = "MedAssist <mailer@example.com>";
+		process.env.SMTP_PASS = "secret";
+
+		await app.inject({
+			method: "PUT",
+			url: "/settings",
+			payload: {
+				emailEnabled: true,
+				notificationEmail: "person@example.com",
+				reminderDaysBefore: 5,
+				repeatDailyReminders: true,
+				lowStockDays: 14,
+				normalStockDays: 45,
+				highStockDays: 90,
+				shoutrrrEnabled: false,
+				shoutrrrUrl: "",
+				emailStockReminders: true,
+				emailIntakeReminders: true,
+				emailPrescriptionReminders: true,
+				shoutrrrStockReminders: true,
+				shoutrrrIntakeReminders: true,
+				shoutrrrPrescriptionReminders: true,
+				skipRemindersForTakenDoses: false,
+				repeatRemindersEnabled: true,
+				reminderRepeatIntervalMinutes: 20,
+				maxNaggingReminders: 4,
+				language: "en",
+				stockCalculationMode: "manual",
+				shareStockStatus: true,
+				upcomingTodayOnly: true,
+				shareScheduleTodayOnly: true,
+				swapDashboardMainSections: true,
+			},
+		});
+
+		const response = await app.inject({ method: "GET", url: "/settings" });
+
+		expect(response.statusCode).toBe(200);
+		expect(response.body).not.toBe("{}");
+
+		const body = response.json();
+		expect(body).toEqual(
+			expect.objectContaining({
+				emailEnabled: true,
+				notificationEmail: "person@example.com",
+				reminderDaysBefore: 5,
+				repeatDailyReminders: true,
+				repeatRemindersEnabled: true,
+				reminderRepeatIntervalMinutes: 20,
+				maxNaggingReminders: 4,
+				stockCalculationMode: "manual",
+				upcomingTodayOnly: true,
+				shareScheduleTodayOnly: true,
+				swapDashboardMainSections: true,
+				smtpHost: "smtp.example.com",
+				smtpPort: 2525,
+				smtpUser: "mailer@example.com",
+				smtpFrom: "MedAssist <mailer@example.com>",
+				hasSmtpPassword: true,
+			})
+		);
+	});
+
 	it("PUT /settings disables repeatDailyReminders when no stock reminder channel exists", async () => {
 		const response = await app.inject({
 			method: "PUT",
@@ -190,7 +259,30 @@ describe("Real route coverage: settings/export/report", () => {
 			payload: { language: "fr" },
 		});
 		expect(response.statusCode).toBe(400);
-		expect(response.json().error).toBe("Invalid language");
+		expect(response.json().error).toMatch(/Invalid language|Bad Request/);
+	});
+
+	it("PUT /settings/language creates and updates the stored language", async () => {
+		let response = await app.inject({
+			method: "PUT",
+			url: "/settings/language",
+			payload: { language: "de" },
+		});
+
+		expect(response.statusCode).toBe(200);
+
+		response = await app.inject({
+			method: "PUT",
+			url: "/settings/language",
+			payload: { language: "en" },
+		});
+
+		expect(response.statusCode).toBe(200);
+
+		const stored = await testClient.execute({
+			sql: "SELECT language FROM user_settings WHERE user_id = 1",
+		});
+		expect(stored.rows[0].language).toBe("en");
 	});
 
 	it("POST /settings/test-email fails when SMTP is not configured", async () => {
@@ -224,6 +316,22 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(nodemailerSendMail).toHaveBeenCalledTimes(1);
 	});
 
+	it("POST /settings/test-email maps generic transport failures to HTTP 500", async () => {
+		process.env.SMTP_HOST = "smtp.example.com";
+		process.env.SMTP_USER = "mailer@example.com";
+		process.env.SMTP_PASS = "secret";
+		nodemailerSendMail.mockRejectedValue(new Error("socket hang up"));
+
+		const response = await app.inject({
+			method: "POST",
+			url: "/settings/test-email",
+			payload: { email: "person@example.com" },
+		});
+
+		expect(response.statusCode).toBe(500);
+		expect(response.json()).toMatchObject({ code: "TEST_EMAIL_FAILED" });
+	});
+
 	it("POST /settings/test-shoutrrr validates URL presence", async () => {
 		const response = await app.inject({
 			method: "POST",
@@ -231,6 +339,30 @@ describe("Real route coverage: settings/export/report", () => {
 			payload: { url: "" },
 		});
 		expect(response.statusCode).toBe(400);
+	});
+
+	it("POST /settings/test-shoutrrr returns 500 when notification delivery fails", async () => {
+		const response = await app.inject({
+			method: "POST",
+			url: "/settings/test-shoutrrr",
+			payload: { url: "ftp://invalid.example.com/topic" },
+		});
+
+		expect(response.statusCode).toBe(500);
+		expect(response.json().error).toMatch(/Only HTTP\/HTTPS protocols are allowed|Unsupported URL format/);
+	});
+
+	it("POST /settings/test-shoutrrr returns 200 for a valid ntfy target", async () => {
+		fetchMock.mockResolvedValue({ ok: true });
+
+		const response = await app.inject({
+			method: "POST",
+			url: "/settings/test-shoutrrr",
+			payload: { url: "ntfy://ntfy.sh/medassist" },
+		});
+
+		expect(response.statusCode).toBe(200);
+		expect(response.json()).toEqual({ success: true, message: "Test notification sent successfully" });
 	});
 
 	it("sendShoutrrrNotification blocks localhost/private targets", async () => {
@@ -264,6 +396,169 @@ describe("Real route coverage: settings/export/report", () => {
 		const call = fetchMock.mock.calls[0];
 		expect(call[1].headers["Content-Type"]).toBe("application/json");
 		expect(JSON.parse(call[1].body)).toMatchObject({ title: "Title", message: "Body" });
+	});
+
+	it("sendShoutrrrNotification returns HTTP response errors for ntfy-style endpoints", async () => {
+		fetchMock.mockResolvedValue({ ok: false, status: 429, text: () => Promise.resolve("rate limited") });
+
+		const result = await sendShoutrrrNotification("https://ntfy.sh/medassist", "Title", "Body");
+
+		expect(result).toEqual({ success: false, error: "HTTP 429: rate limited" });
+	});
+
+	it("sendShoutrrrNotification rejects invalid Discord webhook identifiers", async () => {
+		const result = await sendShoutrrrNotification("discord://bad-token@not-a-number", "Title", "Body");
+
+		expect(result).toEqual({ success: false, error: "Invalid Discord webhook ID" });
+	});
+
+	it("sendShoutrrrNotification validates Pushover URL credentials", async () => {
+		const result = await sendShoutrrrNotification("pushover://missing-token", "Title", "Body");
+
+		expect(result).toEqual({ success: false, error: "Invalid Pushover URL format" });
+	});
+
+	it("sendShoutrrrNotification requires Telegram chats and validates tokens", async () => {
+		let result = await sendShoutrrrNotification("telegram://123:abc@telegram", "Title", "Body");
+		expect(result).toEqual({ success: false, error: "Telegram URL requires chats parameter" });
+
+		result = await sendShoutrrrNotification("telegram://invalid@telegram?chats=123", "Title", "Body");
+		expect(result).toEqual({ success: false, error: "Invalid Telegram token format" });
+	});
+
+	it("sendShoutrrrNotification converts Gotify URLs and supports disabletls", async () => {
+		fetchMock.mockResolvedValue({ ok: true });
+
+		const result = await sendShoutrrrNotification(
+			"gotify://push.example.com/basepath/token123?disabletls=yes&priority=8",
+			"Title",
+			"Body"
+		);
+
+		expect(result).toEqual({ success: true });
+		const [targetUrl, requestInit] = fetchMock.mock.calls[0];
+		expect(targetUrl).toBe("http://push.example.com/basepath/message?token=token123");
+		expect(requestInit.body).toBe("Body\n\n(priority=8)");
+		expect(requestInit.headers).toMatchObject({ Tags: "pill" });
+	});
+
+	it("loadUserSettings creates defaults for users without settings", async () => {
+		const settings = await loadUserSettings(1);
+
+		expect(settings).toEqual(
+			expect.objectContaining({
+				userId: 1,
+				emailEnabled: false,
+				emailPrescriptionReminders: true,
+				shoutrrrPrescriptionReminders: true,
+				stockCalculationMode: "automatic",
+				shareStockStatus: true,
+			})
+		);
+	});
+
+	it("loadUserSettings maps persisted settings", async () => {
+		await testClient.execute({
+			sql: `INSERT INTO user_settings (
+				user_id, email_enabled, notification_email, email_stock_reminders, email_intake_reminders,
+				email_prescription_reminders, shoutrrr_enabled, shoutrrr_url, shoutrrr_stock_reminders,
+				shoutrrr_intake_reminders, shoutrrr_prescription_reminders, reminder_days_before,
+				repeat_daily_reminders, low_stock_days, normal_stock_days, high_stock_days, language,
+				stock_calculation_mode, share_stock_status, skip_reminders_for_taken_doses,
+				repeat_reminders_enabled, reminder_repeat_interval_minutes, max_nagging_reminders,
+				upcoming_today_only, share_schedule_today_only, swap_dashboard_main_sections
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			args: [
+				1,
+				1,
+				"person@example.com",
+				1,
+				1,
+				1,
+				0,
+				null,
+				1,
+				1,
+				1,
+				4,
+				0,
+				12,
+				30,
+				90,
+				"de",
+				"manual",
+				1,
+				0,
+				0,
+				30,
+				5,
+				0,
+				0,
+				0,
+			],
+		});
+
+		const settings = await loadUserSettings(1);
+
+		expect(settings).toEqual(
+			expect.objectContaining({
+				notificationEmail: "person@example.com",
+				skipRemindersForTakenDoses: false,
+				repeatRemindersEnabled: false,
+				reminderRepeatIntervalMinutes: 30,
+				maxNaggingReminders: 5,
+				stockCalculationMode: "manual",
+				shareStockStatus: true,
+				upcomingTodayOnly: false,
+				shareScheduleTodayOnly: false,
+				swapDashboardMainSections: false,
+			})
+		);
+	});
+
+	it("getAllUserSettings returns mapped entries for each persisted user", async () => {
+		await testClient.execute({
+			sql: "INSERT INTO users (id, username, auth_provider, is_active) VALUES (?, ?, ?, 1)",
+			args: [2, "second-user", "local"],
+		});
+		await testClient.execute({
+			sql: `INSERT INTO user_settings (
+				user_id, email_enabled, notification_email, email_stock_reminders, email_intake_reminders,
+				email_prescription_reminders, shoutrrr_enabled, shoutrrr_url, shoutrrr_stock_reminders,
+				shoutrrr_intake_reminders, shoutrrr_prescription_reminders, reminder_days_before,
+				repeat_daily_reminders, low_stock_days, normal_stock_days, high_stock_days, language,
+				stock_calculation_mode, share_stock_status, upcoming_today_only, share_schedule_today_only,
+				swap_dashboard_main_sections
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			args: [1, 0, null, 1, 1, 1, 1, "ntfy://ntfy.sh/topic", 1, 1, 1, 7, 1, 30, 60, 120, "en", "manual", 1, 1, 0, 1],
+		});
+		await testClient.execute({
+			sql: `INSERT INTO user_settings (
+				user_id, email_enabled, notification_email, email_stock_reminders, email_intake_reminders,
+				email_prescription_reminders, shoutrrr_enabled, shoutrrr_url, shoutrrr_stock_reminders,
+				shoutrrr_intake_reminders, shoutrrr_prescription_reminders, reminder_days_before,
+				repeat_daily_reminders, low_stock_days, normal_stock_days, high_stock_days, language,
+				stock_calculation_mode, share_stock_status, upcoming_today_only, share_schedule_today_only,
+				swap_dashboard_main_sections
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			args: [2, 1, "second@example.com", 0, 1, 1, 0, null, 1, 1, 1, 10, 0, 20, 50, 100, "de", "automatic", 1, 0, 0, 0],
+		});
+
+		const allSettings = await getAllUserSettings();
+
+		expect(allSettings).toHaveLength(2);
+		expect(allSettings).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ userId: 1, stockCalculationMode: "manual", upcomingTodayOnly: true }),
+				expect.objectContaining({
+					userId: 2,
+					emailPrescriptionReminders: true,
+					shoutrrrPrescriptionReminders: true,
+					stockCalculationMode: "automatic",
+					shareStockStatus: true,
+				}),
+			])
+		);
 	});
 
 	it("POST /medications/report-data returns 403 for meds not owned by user", async () => {

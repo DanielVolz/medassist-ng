@@ -8,6 +8,7 @@ export interface UseMedicationsReturn {
 	saving: boolean;
 	setSaving: React.Dispatch<React.SetStateAction<boolean>>;
 	uploadingImage: boolean;
+	clearMedicationsState: () => void;
 	loadMeds: () => void;
 	deleteMed: (id: number, editingId: number | null, resetForm: () => void) => Promise<void>;
 	uploadMedImage: (medId: number, file: File) => Promise<void>;
@@ -19,6 +20,13 @@ export function useMedications(): UseMedicationsReturn {
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [uploadingImage, setUploadingImage] = useState(false);
+
+	const clearMedicationsState = useCallback(() => {
+		setMeds([]);
+		setLoading(false);
+		setSaving(false);
+		setUploadingImage(false);
+	}, []);
 
 	const loadMeds = useCallback(() => {
 		setLoading(true);
@@ -96,6 +104,7 @@ export function useMedications(): UseMedicationsReturn {
 		saving,
 		setSaving,
 		uploadingImage,
+		clearMedicationsState,
 		loadMeds,
 		deleteMed,
 		uploadMedImage,

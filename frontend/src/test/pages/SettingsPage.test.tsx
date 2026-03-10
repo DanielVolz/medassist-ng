@@ -64,6 +64,7 @@ const createMockContext = (overrides = {}) => ({
 	},
 	setSettings: vi.fn(),
 	settingsLoading: false,
+	settingsLoadError: null,
 	settingsSaving: false,
 	settingsSaved: false,
 	saveSettings: vi.fn((e?: Event) => e?.preventDefault?.()),
@@ -290,6 +291,41 @@ describe("SettingsPage", () => {
 		renderPage();
 		fireEvent.click(screen.getByText("common.test"));
 		expect(testEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows the settings load failure reason in the email section", () => {
+		mockContextValue = createMockContext({
+			settingsLoadError: "forbidden",
+			settings: {
+				...createMockContext().settings,
+				smtpHost: "smtp.example.com",
+			},
+		});
+
+		renderPage();
+
+		expect(screen.getByText("settings.email.loadErrorForbidden")).toBeInTheDocument();
+		expect(screen.queryByText("settings.email.serverNotConfigured")).not.toBeInTheDocument();
+	});
+
+	it("keeps the email toggle enabled when SMTP host is present", () => {
+		mockContextValue = createMockContext({
+			settings: {
+				...createMockContext().settings,
+				smtpHost: "smtp.example.com",
+			},
+		});
+
+		renderPage();
+
+		expect(screen.queryByText("settings.email.serverNotConfigured")).not.toBeInTheDocument();
+		const emailHeading = screen
+			.getAllByText("settings.notifications.email")
+			.find((element) => element.tagName === "H3");
+		expect(emailHeading).toBeDefined();
+		const emailToggle = emailHeading?.parentElement?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+		expect(emailToggle).not.toBeNull();
+		expect(emailToggle).not.toBeDisabled();
 	});
 
 	it("calls testShoutrrr when push test button is clicked", () => {

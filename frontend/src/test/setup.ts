@@ -59,18 +59,22 @@ Object.defineProperty(window, "history", {
 });
 
 // Mock react-i18next globally
+const mockT = (key: string, options?: Record<string, unknown>) => {
+	if (options?.count !== undefined) return `${key}_${options.count}`;
+	if (options?.max !== undefined) return `Max ${options.max} chars`;
+	if (options?.days !== undefined) return `${key} (${options.days} days)`;
+	return key;
+};
+
+const mockI18n = {
+	language: "en",
+	changeLanguage: vi.fn(),
+};
+
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
-		t: (key: string, options?: Record<string, unknown>) => {
-			if (options?.count !== undefined) return `${key}_${options.count}`;
-			if (options?.max !== undefined) return `Max ${options.max} chars`;
-			if (options?.days !== undefined) return `${key} (${options.days} days)`;
-			return key;
-		},
-		i18n: {
-			language: "en",
-			changeLanguage: vi.fn(),
-		},
+		t: mockT,
+		i18n: mockI18n,
 	}),
 	I18nextProvider: ({ children }: { children: React.ReactNode }) => children,
 	initReactI18next: { type: "3rdParty", init: vi.fn() },

@@ -7,6 +7,7 @@ import { MedicationAvatar } from "../components";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, Medication, StockThresholds } from "../types";
 import { getMedDisplayName, getMedTotal, getPackageSize } from "../types";
+import { allowsPillFormSelection, isLiquidContainerPackageType, isTubePackageType } from "../types/package-profiles";
 import { formatNumber } from "../utils";
 import { getSystemLocale } from "../utils/formatters";
 import { getStockStatus } from "../utils/schedule";
@@ -31,6 +32,43 @@ export function UserFilterModal({
 	onOpenMedDetail,
 }: UserFilterModalProps) {
 	const { t, i18n } = useTranslation();
+
+	const isLiquidMedication = (med: Medication): boolean => {
+		const rawPackageType = med.packageType as unknown as string | null | undefined;
+		return (
+			isLiquidContainerPackageType(med.packageType) || rawPackageType === "liquid" || med.medicationForm === "liquid"
+		);
+	};
+
+	const getLiquidCountUnitLabel = (unit: "ml" | "tsp" | "tbsp" | null | undefined, usage: number): string => {
+		if (unit === "tsp") return t("form.blisters.teaspoons", { count: Math.abs(usage) });
+		if (unit === "tbsp") return t("form.blisters.tablespoons", { count: Math.abs(usage) });
+		return t("form.packageAmountUnitMl");
+	};
+
+	const formatIntakeUsageLabel = (
+		med: Medication,
+		usage: number,
+		intakeUnit?: "ml" | "tsp" | "tbsp" | null
+	): string => {
+		if (isLiquidMedication(med)) {
+			return `${formatNumber(usage)} ${getLiquidCountUnitLabel(intakeUnit, usage)}`;
+		}
+		if (isTubePackageType(med.packageType)) {
+			return `${formatNumber(usage)} ${t("form.blisters.applications", { count: usage })}`;
+		}
+		return `${formatNumber(usage)} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+	};
+
+	const formatStockSummaryLabel = (med: Medication, currentStock: number, packageSize: number): string => {
+		if (isLiquidMedication(med)) {
+			return `${formatNumber(currentStock)}/${formatNumber(packageSize)} ${t("form.packageAmountUnitMl")}`;
+		}
+		if (isTubePackageType(med.packageType)) {
+			return `${formatNumber(currentStock)}/${formatNumber(packageSize)} ${t("form.packageAmountUnitG")}`;
+		}
+		return `${formatNumber(currentStock)}/${formatNumber(packageSize)} ${packageSize === 1 ? t("common.pill") : t("common.pills")}`;
+	};
 
 	useEscapeKey(!!selectedUser, onClose);
 
@@ -70,7 +108,7 @@ export function UserFilterModal({
 							? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med.packageType)
 							: getStockStatus(null, getMedTotal(med), settings, med.packageType);
 						const packageSize = getPackageSize(med);
-						const currentStock = medCoverage ? formatNumber(medCoverage.medsLeft) : formatNumber(getMedTotal(med));
+						const currentStock = medCoverage ? medCoverage.medsLeft : getMedTotal(med);
 
 						// Get intakes relevant to this person
 						const personIntakes = (
@@ -109,10 +147,12 @@ export function UserFilterModal({
 													minute: "2-digit",
 												});
 												const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}`;
+												const intakeUnit = "intakeUnit" in intake ? intake.intakeUnit : undefined;
 												return (
 													<span key={intakeKey} className="user-med-intake-item">
-														{intake.usage} {intake.usage !== 1 ? t("common.pills") : t("common.pill")}
-														{med.pillWeightMg != null &&
+														{formatIntakeUsageLabel(med, intake.usage, intakeUnit)}
+														{allowsPillFormSelection(med.packageType) &&
+															med.pillWeightMg != null &&
 															` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}
 														{intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every })}{" "}
 														{t("modal.at")} {timeStr}
@@ -123,10 +163,7 @@ export function UserFilterModal({
 									)}
 								</div>
 								<div className="user-med-stats">
-									<span className="user-med-pills">
-										{currentStock}/{formatNumber(packageSize)}{" "}
-										{packageSize === 1 ? t("common.pill") : t("common.pills")}
-									</span>
+									<span className="user-med-pills">{formatStockSummaryLabel(med, currentStock, packageSize)}</span>
 									{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
 								</div>
 							</div>

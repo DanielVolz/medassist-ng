@@ -16,6 +16,7 @@ import { Lightbox, MedicationAvatar } from "../components";
 import { useEscapeKey } from "../hooks";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
 import {
+	allowsPillFormSelection,
 	getMedDisplayName,
 	getMedTotal,
 	getPackageSize,
@@ -245,6 +246,14 @@ export function MedDetailModal({
 	const closeLabel = t("common.close");
 	const decrementLabel = t("editStock.decreaseValue");
 	const incrementLabel = t("editStock.increaseValue");
+	const showPillWeightDetails = allowsPillFormSelection(selectedMed.packageType) && !!selectedMed.pillWeightMg;
+	const pillWeightMg = showPillWeightDetails ? (selectedMed.pillWeightMg ?? 0) : 0;
+	const isTubeRefillPackage = isTubePackageType(selectedMed.packageType);
+	const isLiquidRefillPackage =
+		isLiquidContainerPackageType(selectedMed.packageType) || selectedMed.medicationForm === "liquid";
+	const isCountBasedAmountRefillPackage = isLiquidRefillPackage || isTubeRefillPackage;
+	const liquidRefillAmountPerBottle = Math.max(1, Math.round(Number.isFinite(amountPerPackage) ? amountPerPackage : 1));
+	const amountRefillPackageCount = Math.max(0, Math.round(refillLoose / liquidRefillAmountPerBottle));
 	const getScheduleUsageLabel = (usage: number, intakeUnit?: "ml" | "tsp" | "tbsp" | null) => {
 		if (isLiquidContainerPackageType(selectedMed.packageType)) {
 			if (intakeUnit === "tsp") {
@@ -934,7 +943,7 @@ export function MedDetailModal({
 									<span className="med-detail-value">{(selectedMed.totalPills ?? packageSize) || "—"}</span>
 								</div>
 							)}
-							{selectedMed.pillWeightMg && (
+							{showPillWeightDetails && (
 								<div className="med-detail-item">
 									<span className="med-detail-label">{t("modal.pillWeight")}</span>
 									<span className="med-detail-value">
@@ -984,8 +993,7 @@ export function MedDetailModal({
 										>
 											<span className="med-schedule-usage">
 												{getScheduleUsageLabel(totalUsage, intake.intakeUnit)}
-												{selectedMed.pillWeightMg &&
-													` (${totalUsage * selectedMed.pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
+												{showPillWeightDetails && ` (${totalUsage * pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
 											</span>
 											<span className="med-schedule-freq">
 												{intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every })}
@@ -1236,6 +1244,23 @@ export function MedDetailModal({
 										})}
 									</label>
 								</>
+							) : isCountBasedAmountRefillPackage ? (
+								<label>
+									{isTubeRefillPackage ? t("form.tubes") : t("form.bottles")}
+									{renderRefillStepperInput({
+										value: amountRefillPackageCount,
+										min: 0,
+										max: Number.MAX_SAFE_INTEGER,
+										onChange: (nextPackages) => {
+											onRefillPacksChange(nextPackages);
+											onRefillLooseChange(nextPackages * liquidRefillAmountPerBottle);
+										},
+									})}
+									<p className="edit-stock-cap-info" style={{ marginTop: "0.35rem" }}>
+										{isTubeRefillPackage ? t("form.packageAmountPerTube") : t("form.packageAmountPerBottle")}:{" "}
+										{formatNumber(liquidRefillAmountPerBottle)} {amountUnitLabel}
+									</p>
+								</label>
 							) : (
 								<label>
 									{t("refill.pillsToAdd")}
@@ -1286,7 +1311,9 @@ export function MedDetailModal({
 									onClick={() => onSubmitRefill(selectedMed.id, usePrescriptionRefill)}
 									disabled={
 										(isAmountBasedPackageType(selectedMed.packageType)
-											? refillLoose < 1
+											? isCountBasedAmountRefillPackage
+												? amountRefillPackageCount < 1
+												: refillLoose < 1
 											: cappedRefillPacks < 1 && refillLoose < 1) ||
 										exceedsPrescriptionPackLimit ||
 										refillSaving
@@ -1297,7 +1324,9 @@ export function MedDetailModal({
 								{(() => {
 									const totalRefill = !isAmountBasedPackageType(selectedMed.packageType)
 										? cappedRefillPacks * selectedMed.blistersPerPack * selectedMed.pillsPerBlister + refillLoose
-										: refillLoose;
+										: isCountBasedAmountRefillPackage
+											? amountRefillPackageCount * liquidRefillAmountPerBottle
+											: refillLoose;
 									return totalRefill > 0 ? (
 										<span className="refill-preview">
 											+{totalRefill}

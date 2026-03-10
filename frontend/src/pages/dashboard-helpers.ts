@@ -102,11 +102,17 @@ export function getReminderStatusData(
 	}
 
 	const lowStockMeds = Array.from(lowStockMap.values()).sort((a, b) => a.daysLeft - b.daysLeft);
-	const criticalCount = lowStockMeds.filter((m) => m.isCritical).length;
+	const emptyCount = lowStockMeds.filter((m) => m.daysLeft <= 0).length;
+	const criticalCount = lowStockMeds.filter((m) => m.isCritical && m.daysLeft > 0).length;
 	const lowCount = lowStockMeds.filter((m) => !m.isCritical).length;
 
 	let status: { text: string; className: string };
-	if (criticalCount > 0) {
+	if (emptyCount > 0) {
+		status = {
+			text: t("dashboard.reminders.emptyStock", { count: emptyCount }),
+			className: "danger",
+		};
+	} else if (criticalCount > 0) {
 		status = {
 			text: t("dashboard.reminders.criticalMeds", { count: criticalCount }),
 			className: "danger",

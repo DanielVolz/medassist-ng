@@ -1,6 +1,10 @@
 import { expect } from "@playwright/test";
 import { authFile, navigateTo, test } from "./fixtures";
 
+const emailHeadingPattern = /Email|E-Mail/i;
+const settingsLoadErrorPattern = /could not be loaded|konnten nicht geladen werden/i;
+const smtpUnavailablePattern = /stay unavailable until SMTP is configured|bleiben deaktiviert, bis SMTP/i;
+
 /**
  * Settings Page E2E Tests
  *
@@ -53,6 +57,59 @@ test.describe("Settings Page", () => {
 		expect(await toggles.count()).toBeGreaterThanOrEqual(2);
 	});
 
+	test("should show an explicit email settings load error when settings request is forbidden", async ({ page }) => {
+		await page.route("**/api/settings", async (route) => {
+			if (route.request().method() !== "GET") {
+				await route.continue();
+				return;
+			}
+
+			await route.fulfill({
+				status: 403,
+				contentType: "application/json",
+				body: JSON.stringify({ error: "Forbidden", code: "FORBIDDEN" }),
+			});
+		});
+
+		await navigateTo(page, "/settings");
+
+		const emailSection = page
+			.locator(".setting-section")
+			.filter({ has: page.locator(".section-header h3").filter({ hasText: emailHeadingPattern }) })
+			.first();
+		const emailToggle = emailSection.locator('input[type="checkbox"]').first();
+
+		await expect(emailToggle).toBeDisabled();
+		await expect(emailSection.locator(".danger-text")).toContainText(settingsLoadErrorPattern);
+		await expect(emailSection.getByText(smtpUnavailablePattern)).toHaveCount(0);
+	});
+
+	test("should keep the email toggle enabled when the settings API returns smtp configuration", async ({ page }) => {
+		await navigateTo(page, "/settings");
+
+		const settingsResponse = await page.evaluate(async () => {
+			const response = await fetch("/api/settings", { credentials: "include" });
+			const body = await response.json().catch(() => null);
+			return {
+				ok: response.ok,
+				status: response.status,
+				body,
+			};
+		});
+
+		test.skip(!settingsResponse.ok, `Settings request failed with status ${settingsResponse.status}`);
+		test.skip(!settingsResponse.body?.smtpHost, "SMTP is not configured in this environment");
+
+		const emailSection = page
+			.locator(".setting-section")
+			.filter({ has: page.locator(".section-header h3").filter({ hasText: emailHeadingPattern }) })
+			.first();
+		const emailToggle = emailSection.locator('input[type="checkbox"]').first();
+
+		await expect(emailToggle).toBeEnabled();
+		await expect(emailSection.getByText(smtpUnavailablePattern)).toHaveCount(0);
+	});
+
 	test("should show stock settings section with threshold inputs", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
@@ -102,6 +159,22 @@ test.describe("Settings Page", () => {
 
 		const exportButton = page.getByRole("button", { name: /Export Data|Daten exportieren/i });
 		await expect(exportButton).toBeVisible();
+	});
+
+	test("should generate a new API key from the settings page", async ({ page }) => {
+		await navigateTo(page, "/settings");
+
+		const generateButton = page.getByRole("button", { name: /Generate key|Key erzeugen/i });
+		test.skip(
+			!(await generateButton.isVisible().catch(() => false)),
+			"API key action is unavailable in this environment"
+		);
+
+		await generateButton.click();
+
+		const tokenInput = page.locator(".api-key-token-input");
+		await expect(tokenInput).toBeVisible();
+		await expect(tokenInput).toHaveValue(/^ma_/);
 	});
 
 	test("should show export/import section", async ({ page }) => {

@@ -141,6 +141,7 @@ test.describe("Stock Status Levels", () => {
 
 		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
+		await expect(overviewTable.getByText(MED_HIGH)).toBeVisible({ timeout: 10000 });
 
 		// High stock med row should have a .status-chip.high
 		const highRow = overviewTable.locator(".table-row").filter({ hasText: MED_HIGH });
@@ -199,15 +200,17 @@ test.describe("Stock Status Levels", () => {
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// High stock should show many days (around 299)
+		await expect(overviewTable.getByText(MED_HIGH)).toBeVisible({ timeout: 10000 });
 		const highRow = overviewTable.locator(".table-row").filter({ hasText: MED_HIGH });
-		const highRowText = await highRow.textContent();
+		const highRowText = (await highRow.textContent()) ?? "";
 		// Should contain a 3-digit number for days
 		expect(highRowText).toMatch(/\d{2,3}/);
 
-		// Depleted should show 0 or very low number
+		// Depleted rows can now show either explicit zero days left or an em dash placeholder.
+		await expect(overviewTable.getByText(MED_DEPLETED)).toBeVisible({ timeout: 10000 });
 		const depletedRow = overviewTable.locator(".table-row").filter({ hasText: MED_DEPLETED });
-		const depletedText = await depletedRow.textContent();
-		expect(depletedText).toContain("0");
+		const depletedText = (await depletedRow.textContent()) ?? "";
+		expect(depletedText.includes("0") || depletedText.includes("—")).toBeTruthy();
 	});
 
 	test("should show reorder reminder card with low-stock medications", async ({ page }) => {

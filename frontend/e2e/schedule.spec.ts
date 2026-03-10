@@ -157,11 +157,10 @@ test.describe("Schedule Timeline", () => {
 
 	test("should display share button in schedules section", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
-		await expect(overviewTable).toBeVisible({ timeout: 10000 });
-		await expect(overviewTable.locator(".table-row").first()).toBeVisible({ timeout: 10000 });
+		const scheduleSection = page.locator(".dashboard-schedules-section .card").first();
+		await expect(scheduleSection.locator("select.schedule-days-select")).toBeVisible({ timeout: 10000 });
 
-		const shareBtn = page.locator("button.share-btn");
+		const shareBtn = scheduleSection.locator("button.share-btn");
 		await expect(shareBtn).toBeVisible();
 	});
 });

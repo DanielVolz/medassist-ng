@@ -170,8 +170,8 @@ test.describe("Settings Page", () => {
 
 		await generateButton.click();
 
-		const tokenInput = page.locator(".api-key-token-input");
-		await expect(tokenInput).toBeVisible();
+		const tokenInput = page.locator("input.api-key-token-input[readonly]");
+		await expect(tokenInput).toBeVisible({ timeout: 15000 });
 		await expect(tokenInput).toHaveValue(/^ma_/);
 	});
 

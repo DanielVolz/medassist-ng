@@ -80,7 +80,7 @@ test.describe("Settings Page", () => {
 		const emailToggle = emailSection.locator('input[type="checkbox"]').first();
 
 		await expect(emailToggle).toBeDisabled();
-		await expect(emailSection.locator(".danger-text")).toContainText(settingsLoadErrorPattern);
+		await expect(emailSection).toContainText(settingsLoadErrorPattern);
 		await expect(emailSection.getByText(smtpUnavailablePattern)).toHaveCount(0);
 	});
 

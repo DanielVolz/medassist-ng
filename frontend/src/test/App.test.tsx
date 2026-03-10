@@ -57,6 +57,7 @@ vi.mock("../pages", () => ({
 	PlannerPage: () => <div>planner-page</div>,
 	SchedulePage: () => <div>schedule-page</div>,
 	SettingsPage: () => <div>settings-page</div>,
+	SharedOverviewPage: () => <div>shared-overview-page</div>,
 }));
 
 describe("App", () => {

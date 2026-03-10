@@ -54,6 +54,7 @@ export interface AppContextValue {
 	setSettings: ReturnType<typeof useSettings>["setSettings"];
 	savedSettings: ReturnType<typeof useSettings>["savedSettings"];
 	settingsLoading: boolean;
+	settingsLoadError: ReturnType<typeof useSettings>["settingsLoadError"];
 	settingsSaving: boolean;
 	settingsSaved: boolean;
 	testingEmail: boolean;
@@ -299,14 +300,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		if (typeof window !== "undefined" && user?.id) {
 			const storedDays = localStorage.getItem(userStorageKey(user.id, "scheduleDays"));
 			setScheduleDays(storedDays ? Number(storedDays) : 30);
+		} else {
+			setScheduleDays(30);
 		}
 	}, [user?.id]);
 
-	// Load medications and settings when user changes
+	// Security boundary: clear user-scoped UI state immediately on user/session switches,
+	// then load fresh data for the active identity.
 	useEffect(() => {
+		if (!user?.id) {
+			setScheduleDays(30);
+		}
+
+		medications.clearMedicationsState();
+		settingsHook.resetSettingsState();
+		doses.clearDosesState();
+		refill.clearRefillState();
+		share.resetShareDialogState();
+
+		setSelectedMed(null);
+		setShowImageLightbox(false);
+		setScheduleLightboxImage(null);
+		setSelectedUser(null);
+		setShowPastDays(false);
+		setShowFutureDays(false);
+		setShowExportModal(false);
+		setShowImportConfirm(false);
+		setPendingImportData(null);
+		setImportResult(null);
+
 		medications.loadMeds();
 		settingsHook.loadSettings();
-	}, [medications.loadMeds, settingsHook.loadSettings]);
+		doses.loadTakenDoses();
+	}, [
+		user?.id,
+		medications.clearMedicationsState,
+		medications.loadMeds,
+		settingsHook.resetSettingsState,
+		settingsHook.loadSettings,
+		doses.clearDosesState,
+		doses.loadTakenDoses,
+		refill.clearRefillState,
+		share.resetShareDialogState,
+	]);
 
 	// Update selectedMed when meds change (e.g., after refill)
 	useEffect(() => {
@@ -801,6 +837,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setSettings: settingsHook.setSettings,
 			savedSettings: settingsHook.savedSettings,
 			settingsLoading: settingsHook.settingsLoading,
+			settingsLoadError: settingsHook.settingsLoadError,
 			settingsSaving: settingsHook.settingsSaving,
 			settingsSaved: settingsHook.settingsSaved,
 			testingEmail: settingsHook.testingEmail,

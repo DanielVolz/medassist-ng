@@ -24,6 +24,9 @@ export function useCollapsedDays(userId: number | undefined): UseCollapsedDaysRe
 			);
 			setManuallyCollapsedDays(collapsed);
 			setManuallyExpandedDays(expanded);
+		} else {
+			setManuallyCollapsedDays(new Set());
+			setManuallyExpandedDays(new Set());
 		}
 	}, [userId]);
 

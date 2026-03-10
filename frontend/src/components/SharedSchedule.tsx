@@ -736,9 +736,14 @@ export function SharedSchedule() {
 	if (loading) {
 		return (
 			<div className="shared-schedule-page">
-				<div className="shared-schedule-loading">
+				<div className="shared-schedule-loading shared-schedule-loading-skeleton" aria-busy="true">
 					<h1>💊 MedAssist-ng</h1>
-					<p>{t("common.loading")}</p>
+					<span className="screen-reader-only">{t("common.loading")}</span>
+					<div className="skeleton-card">
+						<span className="skeleton-line skeleton-line-long" />
+						<span className="skeleton-line skeleton-line-medium" />
+						<span className="skeleton-line skeleton-line-short" />
+					</div>
 				</div>
 			</div>
 		);

@@ -36,6 +36,7 @@ export interface UseRefillReturn {
 	editStockMedication: Medication | null;
 
 	// Actions
+	clearRefillState: () => void;
 	loadRefillHistory: (medId: number) => Promise<void>;
 	submitRefill: (
 		medId: number,
@@ -68,6 +69,22 @@ export function useRefill(): UseRefillReturn {
 	const [editStockLoosePills, setEditStockLoosePills] = useState(0);
 	const [editStockSaving, setEditStockSaving] = useState(false);
 	const [editStockMedication, setEditStockMedication] = useState<Medication | null>(null);
+
+	const clearRefillState = useCallback(() => {
+		setShowRefillModal(false);
+		setRefillPacks(1);
+		setRefillLoose(0);
+		setUsePrescriptionRefill(false);
+		setRefillSaving(false);
+		setRefillHistory([]);
+		setRefillHistoryExpanded(false);
+		setShowEditStockModal(false);
+		setEditStockFullBlisters(0);
+		setEditStockPartialBlisterPills(0);
+		setEditStockLoosePills(0);
+		setEditStockSaving(false);
+		setEditStockMedication(null);
+	}, []);
 
 	// Load refill history for a medication
 	const loadRefillHistory = useCallback(async (medId: number) => {
@@ -327,6 +344,7 @@ export function useRefill(): UseRefillReturn {
 	}, [showEditStockModal]);
 
 	return {
+		clearRefillState,
 		showRefillModal,
 		setShowRefillModal,
 		refillPacks,

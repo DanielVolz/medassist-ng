@@ -1,4 +1,5 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: settings rows use label-styled text with adjacent custom toggle controls */
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, ExportModal } from "../components";
 import { useAppContext } from "../context";
@@ -6,10 +7,15 @@ import { getSystemLocale } from "../utils/formatters";
 
 export function SettingsPage() {
 	const { t, i18n } = useTranslation();
+	const [apiKeyToken, setApiKeyToken] = useState("");
+	const [apiKeyGenerating, setApiKeyGenerating] = useState(false);
+	const [apiKeyCopied, setApiKeyCopied] = useState(false);
+	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
 	const {
 		settings,
 		setSettings,
 		settingsLoading,
+		settingsLoadError,
 		// Email testing
 		testEmail,
 		testingEmail,
@@ -35,10 +41,95 @@ export function SettingsPage() {
 	} = useAppContext();
 
 	const hasExistingData = meds.length > 0;
+	let emailUnavailableReason: string | null = null;
+	if (settingsLoadError === "auth") {
+		emailUnavailableReason = t("settings.email.loadErrorAuth");
+	} else if (settingsLoadError === "forbidden") {
+		emailUnavailableReason = t("settings.email.loadErrorForbidden");
+	} else if (settingsLoadError === "request") {
+		emailUnavailableReason = t("settings.email.loadErrorGeneric");
+	} else if (!settings.smtpHost) {
+		emailUnavailableReason = t("settings.email.serverNotConfigured");
+	}
+
+	const generateApiKey = async () => {
+		setApiKeyGenerating(true);
+		setApiKeyError(null);
+		setApiKeyCopied(false);
+
+		try {
+			const response = await fetch("/api/auth/api-keys", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({
+					name: "Default API Key",
+					scope: "write",
+				}),
+			});
+
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok || typeof data?.token !== "string" || !data.token) {
+				setApiKeyError(t("settings.apiKey.generateError"));
+				return;
+			}
+
+			setApiKeyToken(data.token);
+		} catch {
+			setApiKeyError(t("settings.apiKey.generateError"));
+		} finally {
+			setApiKeyGenerating(false);
+		}
+	};
+
+	const copyApiKeyToken = async () => {
+		if (!apiKeyToken) return;
+
+		const markCopied = () => {
+			setApiKeyCopied(true);
+			setTimeout(() => setApiKeyCopied(false), 2000);
+		};
+
+		if (navigator.clipboard?.writeText) {
+			try {
+				await navigator.clipboard.writeText(apiKeyToken);
+				markCopied();
+				return;
+			} catch {
+				// Fall back to textarea-based copy.
+			}
+		}
+
+		const textarea = document.createElement("textarea");
+		textarea.value = apiKeyToken;
+		textarea.style.position = "fixed";
+		textarea.style.opacity = "0";
+		document.body.appendChild(textarea);
+		textarea.select();
+		try {
+			document.execCommand("copy");
+			markCopied();
+		} finally {
+			document.body.removeChild(textarea);
+		}
+	};
+
 	return (
 		<section className="grid">
 			{settingsLoading ? (
-				<p>{t("settings.loading")}</p>
+				<div className="page-loading-skeleton" aria-busy="true">
+					<span className="screen-reader-only">{t("settings.loading")}</span>
+					<article className="card skeleton-card">
+						<span className="skeleton-line skeleton-line-short" />
+						<span className="skeleton-line skeleton-line-medium" />
+					</article>
+					<article className="card skeleton-card">
+						<span className="skeleton-line skeleton-line-short" />
+						<span className="skeleton-line skeleton-line-long" />
+						<span className="skeleton-line skeleton-line-medium" />
+						<span className="skeleton-line skeleton-line-long" />
+					</article>
+				</div>
 			) : (
 				<div className="settings-form">
 					{/* Language */}
@@ -60,12 +151,52 @@ export function SettingsPage() {
 										body: JSON.stringify({ language: lang }),
 									});
 								}}
-								className="language-select"
+								className="select-field language-select"
 							>
 								<option value="en">🇬🇧 English</option>
 								<option value="de">🇩🇪 Deutsch</option>
 							</select>
 						</label>
+					</article>
+
+					<article className="card">
+						<div className="card-head">
+							<h2>{t("settings.apiKey.title")}</h2>
+						</div>
+						<div className="setting-section">
+							<div className="setting-group" style={{ gridTemplateColumns: "1fr" }}>
+								<div className="action-card">
+									<div className="action-card-content">
+										<span className="action-card-title">{t("settings.apiKey.generateTitle")}</span>
+										<span className="action-card-desc">{t("settings.apiKey.generateDesc")}</span>
+									</div>
+									<button type="button" className="secondary" onClick={generateApiKey} disabled={apiKeyGenerating}>
+										{apiKeyGenerating ? t("settings.apiKey.generating") : t("settings.apiKey.generateButton")}
+									</button>
+								</div>
+
+								{apiKeyToken ? (
+									<div>
+										<span className="field-label">{t("settings.apiKey.currentToken")}</span>
+										<div className="setting-actions api-key-actions">
+											<input
+												type="text"
+												className="api-key-token-input"
+												value={apiKeyToken}
+												readOnly
+												onClick={(e) => (e.target as HTMLInputElement).select()}
+											/>
+											<button type="button" className="ghost" onClick={copyApiKeyToken}>
+												{apiKeyCopied ? t("settings.apiKey.copied") : t("settings.apiKey.copyButton")}
+											</button>
+										</div>
+										<p className="hint-text">{t("settings.apiKey.copyHint")}</p>
+									</div>
+								) : null}
+
+								{apiKeyError ? <p className="danger-text">{apiKeyError}</p> : null}
+							</div>
+						</div>
 					</article>
 
 					{/* Notifications */}
@@ -361,6 +492,11 @@ export function SettingsPage() {
 									<span className="toggle-slider"></span>
 								</label>
 							</div>
+							{emailUnavailableReason && (
+								<div className="setting-actions">
+									<span className={settingsLoadError ? "danger-text" : "info-text"}>{emailUnavailableReason}</span>
+								</div>
+							)}
 							{settings.emailEnabled && (
 								<>
 									<div className="setting-group">
@@ -375,12 +511,19 @@ export function SettingsPage() {
 												</span>
 											</span>
 											<input
-												type="email"
+												type="text"
 												value={settings.notificationEmail}
 												onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
-												placeholder="your@email.com"
+												placeholder="recipient address"
 												pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$"
-												autoComplete="email"
+												inputMode="email"
+												autoComplete="off"
+												autoCapitalize="none"
+												autoCorrect="off"
+												spellCheck={false}
+												data-bwignore="true"
+												data-lpignore="true"
+												data-1p-ignore="true"
 											/>
 										</div>
 									</div>

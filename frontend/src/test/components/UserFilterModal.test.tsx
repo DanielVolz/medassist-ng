@@ -294,4 +294,143 @@ describe("UserFilterModal", () => {
 		expect(screen.queryByText("Med2")).not.toBeInTheDocument();
 		expect(screen.getByText("Med3")).toBeInTheDocument();
 	});
+
+	it("renders tube intakes as applications and stock in g", () => {
+		const onClose = vi.fn();
+		const onOpenMedDetail = vi.fn();
+
+		const tubeMedication: Medication = {
+			...mockMedication,
+			id: 10,
+			name: "Tube Med",
+			genericName: "Tube Generic",
+			packageType: "tube",
+			totalPills: 600,
+			looseTablets: 600,
+			intakes: [
+				{
+					usage: 1,
+					every: 1,
+					start: "2024-01-01T21:04:00",
+					takenBy: "John",
+					intakeRemindersEnabled: true,
+				},
+			],
+		};
+
+		const tubeCoverage: Coverage = {
+			name: "Tube Med",
+			medsLeft: 600,
+			daysLeft: null,
+			depletionDate: null,
+			depletionTime: null,
+			nextDose: null,
+		};
+
+		render(
+			<UserFilterModal
+				selectedUser="John"
+				meds={[tubeMedication]}
+				coverage={{ all: [tubeCoverage] }}
+				settings={defaultSettings}
+				onClose={onClose}
+				onClearUser={vi.fn()}
+				onOpenMedDetail={onOpenMedDetail}
+			/>
+		);
+
+		expect(screen.getByText(/form\.blisters\.applications_1/)).toBeInTheDocument();
+		expect(screen.getByText("600/600 form.packageAmountUnitG")).toBeInTheDocument();
+		expect(screen.queryByText(/600\/600 .*common\.pills/)).not.toBeInTheDocument();
+	});
+
+	it("renders liquid container intakes and stock in ml", () => {
+		const onClose = vi.fn();
+		const onOpenMedDetail = vi.fn();
+
+		const liquidMedication: Medication = {
+			...mockMedication,
+			id: 11,
+			name: "Liquid Container",
+			genericName: "Liquid Generic",
+			packageType: "liquid_container",
+			totalPills: 150,
+			looseTablets: 150,
+			intakes: [
+				{
+					usage: 2,
+					every: 1,
+					start: "2024-01-01T09:32:00",
+					intakeUnit: "ml",
+					takenBy: "John",
+					intakeRemindersEnabled: true,
+				},
+			],
+		};
+
+		const liquidCoverage: Coverage = {
+			name: "Liquid Container",
+			medsLeft: 0,
+			daysLeft: 0,
+			depletionDate: null,
+			depletionTime: null,
+			nextDose: null,
+		};
+
+		render(
+			<UserFilterModal
+				selectedUser="John"
+				meds={[liquidMedication]}
+				coverage={{ all: [liquidCoverage] }}
+				settings={defaultSettings}
+				onClose={onClose}
+				onClearUser={vi.fn()}
+				onOpenMedDetail={onOpenMedDetail}
+			/>
+		);
+
+		expect(screen.getByText(/2 form\.packageAmountUnitMl common\.daily/)).toBeInTheDocument();
+		expect(screen.getByText("0/150 form.packageAmountUnitMl")).toBeInTheDocument();
+		expect(screen.queryByText(/0\/150 .*common\.pills/)).not.toBeInTheDocument();
+	});
+
+	it("renders medicationForm liquid as ml in modal fallback", () => {
+		const onClose = vi.fn();
+		const onOpenMedDetail = vi.fn();
+
+		const legacyLiquidMedication: Medication = {
+			...mockMedication,
+			id: 12,
+			name: "Legacy Liquid",
+			medicationForm: "liquid",
+			packageType: "bottle",
+			totalPills: 100,
+			looseTablets: 100,
+			blisters: [{ usage: 1, every: 1, start: "2024-01-01T10:00:00" }],
+		};
+
+		const legacyLiquidCoverage: Coverage = {
+			name: "Legacy Liquid",
+			medsLeft: 40,
+			daysLeft: 10,
+			depletionDate: null,
+			depletionTime: null,
+			nextDose: null,
+		};
+
+		render(
+			<UserFilterModal
+				selectedUser="John"
+				meds={[legacyLiquidMedication]}
+				coverage={{ all: [legacyLiquidCoverage] }}
+				settings={defaultSettings}
+				onClose={onClose}
+				onClearUser={vi.fn()}
+				onOpenMedDetail={onOpenMedDetail}
+			/>
+		);
+
+		expect(screen.getByText(/1 form\.packageAmountUnitMl common\.daily/)).toBeInTheDocument();
+		expect(screen.getByText("40/100 form.packageAmountUnitMl")).toBeInTheDocument();
+	});
 });

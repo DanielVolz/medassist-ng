@@ -292,6 +292,18 @@
       "title": "Sprache",
       "select": "Sprache auswählen"
     },
+    "apiKey": {
+      "title": "API-Zugriff",
+      "generateTitle": "API-Key erzeugen",
+      "generateDesc": "Erstellt einen neuen API-Key mit Schreibrechten. Der vorherige Key wird automatisch ungültig.",
+      "generateButton": "Key erzeugen",
+      "generating": "Wird erzeugt...",
+      "currentToken": "Neuer API-Key",
+      "copyButton": "Kopieren",
+      "copied": "Kopiert",
+      "copyHint": "Diesen Key jetzt kopieren. Er wird nur einmal angezeigt und kann später nicht erneut abgerufen werden.",
+      "generateError": "API-Key konnte nicht erzeugt werden"
+    },
     "notifications": {
       "title": "Benachrichtigungen",
       "channels": "Kanäle",
@@ -312,7 +324,11 @@
     },
     "email": {
       "recipient": "Empfänger",
-      "notConfigured": "Nicht konfiguriert"
+        "notConfigured": "Nicht konfiguriert",
+        "serverNotConfigured": "E-Mail-Benachrichtigungen bleiben deaktiviert, bis SMTP im Backend konfiguriert ist.",
+        "loadErrorAuth": "Die E-Mail-Einstellungen konnten nicht geladen werden, weil deine Sitzung nicht mehr gültig ist. Bitte melde dich erneut an.",
+        "loadErrorForbidden": "Die E-Mail-Einstellungen konnten nicht geladen werden, weil diese Sitzung sie nicht lesen darf.",
+        "loadErrorGeneric": "Die Verfügbarkeit von E-Mail konnte nicht geprüft werden, weil das Laden der Einstellungen fehlgeschlagen ist."
     },
     "push": {
       "url": "URL",
@@ -541,7 +557,10 @@
     "generating": "Wird generiert...",
     "generateAnother": "Weiteren Link generieren",
     "linkGenerated": "Teilen-Link erstellt!",
+    "scheduleLink": "Zeitplan-Link",
+    "overviewLink": "Übersichts-Link",
     "copyLink": "Link kopieren",
+    "copyOverviewLink": "Übersichts-Link kopieren",
     "copied": "In Zwischenablage kopiert!",
     "noPeople": "Keine Medikamente mit 'Eingenommen von' zugewiesen. Füge zuerst eine Person zu einem Medikament hinzu.",
     "scheduleFor": "Zeitplan für",
@@ -555,6 +574,34 @@
       "message": "Dieser Teilen-Link für den Medikamentenplan von {{takenBy}} ist abgelaufen.",
       "contact": "Bitte kontaktiere {{username}} um einen neuen Link anzufordern.",
       "expiredOn": "Abgelaufen am: {{date}}"
+    }
+  },
+  "sharedOverview": {
+    "title": "Medikamentenübersicht für {{person}}",
+    "sharedBy": "Geteilt von {{user}}",
+    "expiredOn": "Abgelaufen am: {{date}}",
+    "noMedications": "Für diesen Teilen-Link sind keine Medikamente verfügbar.",
+    "columns": {
+      "name": "Name",
+      "package": "Packung",
+      "stock": "Bestand",
+      "daysLeft": "Tage übrig",
+      "nextIntake": "Nächste Einnahme",
+      "depletion": "Aufgebraucht",
+      "priority": "Priorität"
+    },
+    "priority": {
+      "normal": "Normal",
+      "high": "Hoch"
+    },
+    "stock": {
+      "of": "{{current}} von {{capacity}}"
+    },
+    "error": {
+      "notFound": "Teilen-Link nicht gefunden",
+      "expired": "Dieser geteilte Übersichts-Link ist abgelaufen",
+      "rateLimit": "Zu viele Anfragen. Bitte versuche es in einem Moment erneut.",
+      "generic": "Die Medikamentenübersicht konnte nicht geladen werden"
     }
   },
   "exportImport": {

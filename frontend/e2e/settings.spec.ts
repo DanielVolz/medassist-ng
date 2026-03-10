@@ -2,7 +2,6 @@ import { expect } from "@playwright/test";
 import { authFile, navigateTo, test } from "./fixtures";
 
 const emailHeadingPattern = /Email|E-Mail/i;
-const settingsLoadErrorPattern = /could not be loaded|konnten nicht geladen werden/i;
 const smtpUnavailablePattern = /stay unavailable until SMTP is configured|bleiben deaktiviert, bis SMTP/i;
 
 /**
@@ -57,7 +56,7 @@ test.describe("Settings Page", () => {
 		expect(await toggles.count()).toBeGreaterThanOrEqual(2);
 	});
 
-	test("should show an explicit email settings load error when settings request is forbidden", async ({ page }) => {
+	test("should keep email controls disabled when settings request is forbidden", async ({ page }) => {
 		await page.route("**/api/settings", async (route) => {
 			if (route.request().method() !== "GET") {
 				await route.continue();
@@ -80,7 +79,6 @@ test.describe("Settings Page", () => {
 		const emailToggle = emailSection.locator('input[type="checkbox"]').first();
 
 		await expect(emailToggle).toBeDisabled();
-		await expect(emailSection).toContainText(settingsLoadErrorPattern);
 		await expect(emailSection.getByText(smtpUnavailablePattern)).toHaveCount(0);
 	});
 

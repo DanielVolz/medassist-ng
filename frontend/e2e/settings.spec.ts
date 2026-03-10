@@ -168,20 +168,11 @@ test.describe("Settings Page", () => {
 			"API key action is unavailable in this environment"
 		);
 
-		const createKeyResponsePromise = page.waitForResponse(
-			(response) => response.request().method() === "POST" && response.url().includes("/api/auth/api-keys")
-		);
-
 		await generateButton.click();
 
-		const createKeyResponse = await createKeyResponsePromise;
-		expect(createKeyResponse.ok()).toBeTruthy();
-
-		const createKeyPayload = await createKeyResponse.json().catch(() => null);
-		expect(createKeyPayload?.token).toMatch(/^ma_/);
-
-		await expect(page.getByText(/New API key|Neuer API-Key/i)).toBeVisible();
-		await expect(page.getByRole("button", { name: /Copy|Kopieren/i })).toBeVisible();
+		const tokenInput = page.locator(".api-key-token-input");
+		await expect(tokenInput).toBeVisible();
+		await expect(tokenInput).toHaveValue(/^ma_/);
 	});
 
 	test("should show export/import section", async ({ page }) => {

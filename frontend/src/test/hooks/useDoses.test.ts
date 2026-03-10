@@ -304,4 +304,30 @@ describe("useDoses", () => {
 
 		expect(fetch).toHaveBeenCalledWith("/api/doses/taken/dose%201%2Fa", expect.objectContaining({ method: "DELETE" }));
 	});
+
+	it("clears dose state when API returns 401", async () => {
+		const mockDoses = {
+			doses: [{ doseId: "dose-1", takenAt: Date.now(), dismissed: false }],
+		};
+
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDoses) })
+			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) });
+
+		const { result } = renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("dose-1")).toBe(true);
+		});
+
+		await act(async () => {
+			await result.current.loadTakenDoses();
+		});
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(0);
+			expect(result.current.dismissedDoses.size).toBe(0);
+			expect(result.current.takenDoseTimestamps.size).toBe(0);
+		});
+	});
 });

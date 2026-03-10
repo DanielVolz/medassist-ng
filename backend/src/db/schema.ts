@@ -147,6 +147,25 @@ export const refreshTokens = sqliteTable("refresh_tokens", {
 });
 
 // =============================================================================
+// API Keys - Personal access tokens for programmatic API access
+// =============================================================================
+export const apiKeys = sqliteTable("api_keys", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	userId: integer("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	name: text("name", { length: 100 }).notNull(),
+	keyHash: text("key_hash", { length: 128 }).notNull().unique(),
+	tokenPrefix: text("token_prefix", { length: 24 }).notNull().default(""),
+	scope: text("scope", { length: 10 }).notNull().default("write"), // 'read' | 'write'
+	isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+	lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+	expiresAt: integer("expires_at", { mode: "timestamp" }),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// =============================================================================
 // Share Tokens - For public schedule sharing by takenBy person
 // =============================================================================
 export const shareTokens = sqliteTable("share_tokens", {

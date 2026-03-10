@@ -1,487 +1,333 @@
-/**
- * Tests for /doses/taken API endpoints.
- * Tests marking doses as taken, listing taken doses, and unmarking.
- */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { buildTestApp, clearTestData, closeTestApp, createTestUser, type TestContext } from "./setup.js";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import cookie from "@fastify/cookie";
+import jwt from "@fastify/jwt";
+import { migrate } from "drizzle-orm/libsql/migrator";
+import Fastify, { type FastifyInstance } from "fastify";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { runAlterMigrations } from "../db/db-utils.js";
 
-// =============================================================================
-// Route Registration
-// Since we can't easily import routes that depend on the global db,
-// we'll create simplified route handlers for testing the core logic.
-// =============================================================================
+const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
+	const { createClient } = require("@libsql/client");
+	const { drizzle } = require("drizzle-orm/libsql");
+	const client = createClient({ url: ":memory:" });
+	const db = drizzle(client);
 
-async function registerDoseRoutes(ctx: TestContext) {
-	const { app, client } = ctx;
+	return {
+		testClient: client,
+		testDb: db,
+		mockedEnv: {
+			AUTH_ENABLED: true,
+			REGISTRATION_ENABLED: true,
+			FORM_LOGIN_ENABLED: true,
+			OIDC_ENABLED: false,
+			OIDC_PROVIDER_NAME: "SSO",
+			NODE_ENV: "test",
+			LOG_LEVEL: "silent",
+			PORT: 3000,
+			CORS_ORIGINS: "*",
+			JWT_SECRET: "test-jwt-secret",
+			REFRESH_SECRET: "test-refresh-secret",
+			COOKIE_SECRET: "test-cookie-secret",
+			ACCESS_TOKEN_TTL_MINUTES: 15,
+			REFRESH_TOKEN_TTL_DAYS: 7,
+			OPENAPI_DOCS_ENABLED: false,
+		},
+	};
+});
 
-	// GET /doses/taken - List all taken doses
-	app.get("/doses/taken", async (_request, _reply) => {
-		// In test mode, use user ID 1 (will be created in tests)
-		const userId = 1;
+vi.mock("../db/client.js", () => ({
+	db: testDb,
+	migrationsReady: Promise.resolve(),
+}));
 
-		const result = await client.execute({
-			sql: `SELECT dose_id, taken_at, marked_by FROM dose_tracking WHERE user_id = ?`,
-			args: [userId],
-		});
+vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
 
-		return {
-			doses: result.rows.map((d) => ({
-				doseId: d.dose_id,
-				takenAt: (d.taken_at as number) * 1000, // Convert to ms
-				markedBy: d.marked_by,
-			})),
-		};
+const { doseRoutes } = await import("../routes/doses.js");
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const migrationsFolder = resolve(__dirname, "../../drizzle");
+
+async function clearTables() {
+	await testClient.execute("DELETE FROM dose_tracking");
+	await testClient.execute("DELETE FROM share_tokens");
+	await testClient.execute("DELETE FROM api_keys");
+	await testClient.execute("DELETE FROM refresh_tokens");
+	await testClient.execute("DELETE FROM medications");
+	await testClient.execute("DELETE FROM user_settings");
+	await testClient.execute("DELETE FROM users");
+}
+
+async function createUser(username: string) {
+	const result = await testClient.execute({
+		sql: "INSERT INTO users (username, auth_provider, is_active) VALUES (?, 'local', 1) RETURNING id",
+		args: [username],
 	});
 
-	// POST /doses/taken - Mark a dose as taken
-	app.post<{ Body: { doseId: string } }>("/doses/taken", async (request, reply) => {
-		const userId = 1;
-		const { doseId } = request.body || {};
+	return Number(result.rows[0].id);
+}
 
-		if (!doseId || typeof doseId !== "string" || doseId.length === 0) {
-			return reply.status(400).send({ error: "doseId is required" });
-		}
+function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
+	const token = app.jwt.sign({ sub: userId, username });
+	return `access_token=${token}`;
+}
 
-		// Check if already marked
-		const existing = await client.execute({
-			sql: `SELECT id FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
-			args: [userId, doseId],
-		});
-
-		if (existing.rows.length > 0) {
-			return { success: true, message: "Already marked" };
-		}
-
-		// Insert new record
-		await client.execute({
-			sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by) VALUES (?, ?, NULL)`,
-			args: [userId, doseId],
-		});
-
-		return { success: true };
-	});
-
-	// DELETE /doses/taken/:doseId - Unmark a dose
-	app.delete<{ Params: { doseId: string } }>("/doses/taken/:doseId", async (request, _reply) => {
-		const userId = 1;
-		const { doseId } = request.params;
-
-		// Check if this dose was also dismissed
-		const existing = await client.execute({
-			sql: `SELECT id, dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
-			args: [userId, doseId],
-		});
-
-		if (existing.rows.length > 0 && existing.rows[0].dismissed) {
-			// Already dismissed - keep the record as-is (don't delete)
-			// The dose stays dismissed, we just ignore the undo request
-		} else {
-			// Not dismissed - delete the record entirely
-			await client.execute({
-				sql: `DELETE FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
-				args: [userId, doseId],
-			});
-		}
-
-		return { success: true };
-	});
-
-	// POST /doses/dismiss - Dismiss missed doses without deducting stock
-	app.post<{ Body: { doseIds: string[] } }>("/doses/dismiss", async (request, reply) => {
-		const userId = 1;
-		const { doseIds } = request.body || {};
-
-		if (!doseIds || !Array.isArray(doseIds) || doseIds.length === 0) {
-			return reply.status(400).send({ error: "doseIds array is required" });
-		}
-
-		let dismissedCount = 0;
-		for (const doseId of doseIds) {
-			// Check if already exists
-			const existing = await client.execute({
-				sql: `SELECT id, dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
-				args: [userId, doseId],
-			});
-
-			if (existing.rows.length > 0) {
-				// Update to dismissed if not already
-				if (!existing.rows[0].dismissed) {
-					await client.execute({
-						sql: `UPDATE dose_tracking SET dismissed = 1 WHERE id = ?`,
-						args: [existing.rows[0].id],
-					});
-					dismissedCount++;
-				}
-			} else {
-				// Insert new dismissed record
-				await client.execute({
-					sql: `INSERT INTO dose_tracking (user_id, dose_id, dismissed) VALUES (?, ?, 1)`,
-					args: [userId, doseId],
-				});
-				dismissedCount++;
-			}
-		}
-
-		return { success: true, dismissedCount };
+async function insertDose(options: {
+	userId: number;
+	doseId: string;
+	markedBy?: string | null;
+	dismissed?: boolean;
+	takenAt?: number | null;
+	takenSource?: "manual" | "automatic";
+}) {
+	await testClient.execute({
+		sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by, dismissed, taken_at, taken_source)
+		      VALUES (?, ?, ?, ?, ?, ?)`,
+		args: [
+			options.userId,
+			options.doseId,
+			options.markedBy ?? null,
+			options.dismissed ? 1 : 0,
+			options.takenAt === undefined ? Math.floor(Date.now() / 1000) : (options.takenAt ?? 0),
+			options.takenSource ?? "manual",
+		],
 	});
 }
 
-// =============================================================================
-// Tests
-// =============================================================================
-
 describe("Dose Tracking API", () => {
-	let ctx: TestContext;
+	let app: FastifyInstance;
 	let userId: number;
+	let cookieHeader: string;
 
 	beforeAll(async () => {
-		ctx = await buildTestApp();
-		await registerDoseRoutes(ctx);
-		await ctx.app.ready();
+		await migrate(testDb, { migrationsFolder });
+		await runAlterMigrations(testClient);
+
+		app = Fastify({ logger: false });
+		await app.register(cookie, { secret: "test-cookie-secret" });
+		await app.register(jwt, {
+			secret: "test-jwt-secret",
+			cookie: { cookieName: "access_token", signed: false },
+		});
+		await app.register(doseRoutes);
+		await app.ready();
 	});
 
 	afterAll(async () => {
-		await closeTestApp(ctx);
+		await app.close();
+		testClient.close();
 	});
 
 	beforeEach(async () => {
-		await clearTestData(ctx.client);
-		// Create test user - will get ID 1 since table is cleared
-		userId = await createTestUser(ctx.client, { username: "testuser" });
-		// Reset SQLite autoincrement so user gets ID 1
-		await ctx.client.execute("DELETE FROM sqlite_sequence WHERE name='users'");
-		await clearTestData(ctx.client);
-		userId = await createTestUser(ctx.client, { username: "testuser" });
+		await clearTables();
+		userId = await createUser("dose-test-user");
+		cookieHeader = buildSessionCookie(app, userId, "dose-test-user");
 	});
 
-	// ---------------------------------------------------------------------------
-	// POST /doses/taken
-	// ---------------------------------------------------------------------------
-
 	describe("POST /doses/taken", () => {
-		it("should mark a dose as taken", async () => {
+		it("marks a dose as taken", async () => {
 			const doseId = "1-0-1735344000000";
 
-			const response = await ctx.app.inject({
+			const response = await app.inject({
 				method: "POST",
 				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
 				payload: { doseId },
 			});
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json()).toEqual({ success: true });
 
-			// Verify in database
-			const result = await ctx.client.execute({
-				sql: `SELECT dose_id, marked_by FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
+			const result = await testClient.execute({
+				sql: "SELECT dose_id, marked_by, taken_source FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
 				args: [userId, doseId],
 			});
-			expect(result.rows.length).toBe(1);
-			expect(result.rows[0].dose_id).toBe(doseId);
-			expect(result.rows[0].marked_by).toBeNull();
+			expect(result.rows).toEqual([
+				expect.objectContaining({ dose_id: doseId, marked_by: null, taken_source: "manual" }),
+			]);
 		});
 
-		it("should return idempotent response when dose already marked", async () => {
+		it("returns an idempotent response when the dose is already marked", async () => {
 			const doseId = "1-0-1735344000000";
+			await insertDose({ userId, doseId });
 
-			// Mark once
-			await ctx.app.inject({
+			const response = await app.inject({
 				method: "POST",
 				url: "/doses/taken",
-				payload: { doseId },
-			});
-
-			// Mark again
-			const response = await ctx.app.inject({
-				method: "POST",
-				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
 				payload: { doseId },
 			});
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json()).toEqual({ success: true, message: "Already marked" });
 
-			// Should still only have one record
-			const result = await ctx.client.execute({
-				sql: `SELECT COUNT(*) as count FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
+			const countResult = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
 				args: [userId, doseId],
 			});
-			expect(result.rows[0].count).toBe(1);
+			expect(Number(countResult.rows[0].count)).toBe(1);
 		});
 
-		it("should reject request without doseId", async () => {
-			const response = await ctx.app.inject({
+		it("rejects requests without a doseId", async () => {
+			const response = await app.inject({
 				method: "POST",
 				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
 				payload: {},
 			});
 
 			expect(response.statusCode).toBe(400);
-			expect(response.json()).toEqual({ error: "doseId is required" });
+			expect(response.json()).toEqual({ error: "Required" });
 		});
 
-		it("should reject request with empty doseId", async () => {
-			const response = await ctx.app.inject({
+		it("accepts dose IDs with a person suffix and special characters", async () => {
+			const doseId = "5-0-1735344000000-Max Müller";
+
+			const response = await app.inject({
 				method: "POST",
 				url: "/doses/taken",
-				payload: { doseId: "" },
+				headers: { cookie: cookieHeader },
+				payload: { doseId },
 			});
 
-			expect(response.statusCode).toBe(400);
-			expect(response.json()).toEqual({ error: "doseId is required" });
+			expect(response.statusCode).toBe(200);
+
+			const getResponse = await app.inject({
+				method: "GET",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+			});
+
+			expect(getResponse.statusCode).toBe(200);
+			expect(getResponse.json().doses[0].doseId).toBe(doseId);
 		});
 	});
 
-	// ---------------------------------------------------------------------------
-	// GET /doses/taken
-	// ---------------------------------------------------------------------------
-
 	describe("GET /doses/taken", () => {
-		it("should return empty array when no doses taken", async () => {
-			const response = await ctx.app.inject({
+		it("returns an empty array when no doses were taken", async () => {
+			const response = await app.inject({
 				method: "GET",
 				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
 			});
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json()).toEqual({ doses: [] });
 		});
 
-		it("should return list of taken doses", async () => {
-			const doseId1 = "1-0-1735344000000";
-			const doseId2 = "1-0-1735430400000";
-
-			// Mark two doses
-			await ctx.app.inject({
-				method: "POST",
-				url: "/doses/taken",
-				payload: { doseId: doseId1 },
+		it("returns only the authenticated user's taken doses with metadata", async () => {
+			const otherUserId = await createUser("dose-other-user");
+			await insertDose({
+				userId,
+				doseId: "1-0-1735344000000",
+				markedBy: "Daniel",
+				takenSource: "automatic",
 			});
-			await ctx.app.inject({
-				method: "POST",
-				url: "/doses/taken",
-				payload: { doseId: doseId2 },
-			});
+			await insertDose({ userId, doseId: "1-0-1735430400000" });
+			await insertDose({ userId: otherUserId, doseId: "9-0-1735516800000" });
 
-			const response = await ctx.app.inject({
+			const response = await app.inject({
 				method: "GET",
 				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
 			});
 
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
 			expect(data.doses).toHaveLength(2);
-			expect(data.doses.map((d: { doseId: string }) => d.doseId).sort()).toEqual([doseId1, doseId2].sort());
-			// Each dose should have a takenAt timestamp
-			for (const dose of data.doses) {
-				expect(dose.takenAt).toBeTypeOf("number");
-				expect(dose.takenAt).toBeGreaterThan(0);
-				expect(dose.markedBy).toBeNull();
-			}
-		});
-
-		it("should include markedBy when present", async () => {
-			const doseId = "1-0-1735344000000";
-
-			// Insert directly with markedBy
-			await ctx.client.execute({
-				sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by) VALUES (?, ?, ?)`,
-				args: [userId, doseId, "Daniel"],
-			});
-
-			const response = await ctx.app.inject({
-				method: "GET",
-				url: "/doses/taken",
-			});
-
-			expect(response.statusCode).toBe(200);
-			const data = response.json();
-			expect(data.doses).toHaveLength(1);
-			expect(data.doses[0].markedBy).toBe("Daniel");
+			expect(data.doses.map((dose: { doseId: string }) => dose.doseId).sort()).toEqual([
+				"1-0-1735344000000",
+				"1-0-1735430400000",
+			]);
+			expect(data.doses).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ markedBy: "Daniel", takenSource: "automatic" }),
+					expect.objectContaining({ markedBy: null, takenSource: "manual" }),
+				])
+			);
 		});
 	});
-
-	// ---------------------------------------------------------------------------
-	// DELETE /doses/taken/:doseId
-	// ---------------------------------------------------------------------------
 
 	describe("DELETE /doses/taken/:doseId", () => {
-		it("should unmark a dose", async () => {
+		it("unmarks an existing dose", async () => {
 			const doseId = "1-0-1735344000000";
+			await insertDose({ userId, doseId });
 
-			// Mark first
-			await ctx.app.inject({
-				method: "POST",
-				url: "/doses/taken",
-				payload: { doseId },
-			});
-
-			// Verify marked
-			let result = await ctx.client.execute({
-				sql: `SELECT COUNT(*) as count FROM dose_tracking WHERE dose_id = ?`,
-				args: [doseId],
-			});
-			expect(result.rows[0].count).toBe(1);
-
-			// Unmark
-			const response = await ctx.app.inject({
+			const response = await app.inject({
 				method: "DELETE",
 				url: `/doses/taken/${encodeURIComponent(doseId)}`,
+				headers: { cookie: cookieHeader },
 			});
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json()).toEqual({ success: true });
 
-			// Verify unmarked
-			result = await ctx.client.execute({
-				sql: `SELECT COUNT(*) as count FROM dose_tracking WHERE dose_id = ?`,
-				args: [doseId],
+			const countResult = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
 			});
-			expect(result.rows[0].count).toBe(0);
+			expect(Number(countResult.rows[0].count)).toBe(0);
 		});
 
-		it("should succeed even if dose was not marked", async () => {
-			const doseId = "nonexistent-dose-id";
+		it("keeps the record when the dose is dismissed", async () => {
+			const doseId = "1-0-1735344000000";
+			await insertDose({ userId, doseId, dismissed: true });
 
-			const response = await ctx.app.inject({
+			const response = await app.inject({
 				method: "DELETE",
 				url: `/doses/taken/${encodeURIComponent(doseId)}`,
+				headers: { cookie: cookieHeader },
 			});
 
 			expect(response.statusCode).toBe(200);
-			expect(response.json()).toEqual({ success: true });
+
+			const result = await testClient.execute({
+				sql: "SELECT dose_id, dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(result.rows).toEqual([expect.objectContaining({ dose_id: doseId, dismissed: 1 })]);
 		});
 
-		it("should preserve dismissed status when unmarking a dose", async () => {
-			const doseId = "1-0-1735344000000";
-
-			// First dismiss the dose
-			await ctx.app.inject({
-				method: "POST",
-				url: "/doses/dismiss",
-				payload: { doseIds: [doseId] },
-			});
-
-			// Verify it's dismissed
-			let result = await ctx.client.execute({
-				sql: `SELECT dismissed, taken_at FROM dose_tracking WHERE dose_id = ?`,
-				args: [doseId],
-			});
-			expect(result.rows[0].dismissed).toBe(1);
-			const originalTakenAt = result.rows[0].taken_at;
-
-			// Now try to unmark it (undo) - should keep the dismissed record
-			const response = await ctx.app.inject({
+		it("still succeeds when the dose does not exist", async () => {
+			const response = await app.inject({
 				method: "DELETE",
-				url: `/doses/taken/${encodeURIComponent(doseId)}`,
+				url: "/doses/taken/nonexistent-dose-id",
+				headers: { cookie: cookieHeader },
 			});
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json()).toEqual({ success: true });
-
-			// Verify the record still exists and is still dismissed
-			result = await ctx.client.execute({
-				sql: `SELECT dose_id, dismissed, taken_at FROM dose_tracking WHERE dose_id = ?`,
-				args: [doseId],
-			});
-			expect(result.rows.length).toBe(1);
-			expect(result.rows[0].dismissed).toBe(1);
-			expect(result.rows[0].taken_at).toBe(originalTakenAt); // unchanged
 		});
 	});
-
-	// ---------------------------------------------------------------------------
-	// Dose ID Format Tests
-	// ---------------------------------------------------------------------------
-
-	describe("Dose ID Format", () => {
-		it("should handle standard dose ID format: {medId}-{blisterIdx}-{timestamp}", async () => {
-			const doseId = "5-0-1735344000000";
-
-			const response = await ctx.app.inject({
-				method: "POST",
-				url: "/doses/taken",
-				payload: { doseId },
-			});
-
-			expect(response.statusCode).toBe(200);
-			expect(response.json()).toEqual({ success: true });
-		});
-
-		it("should handle dose ID with person: {medId}-{blisterIdx}-{timestamp}-{person}", async () => {
-			const doseId = "5-0-1735344000000-Daniel";
-
-			const response = await ctx.app.inject({
-				method: "POST",
-				url: "/doses/taken",
-				payload: { doseId },
-			});
-
-			expect(response.statusCode).toBe(200);
-			expect(response.json()).toEqual({ success: true });
-		});
-
-		it("should handle special characters in dose ID", async () => {
-			// Dose ID with URL-unsafe characters (edge case)
-			const doseId = "5-0-1735344000000-Max Müller";
-
-			const response = await ctx.app.inject({
-				method: "POST",
-				url: "/doses/taken",
-				payload: { doseId },
-			});
-
-			expect(response.statusCode).toBe(200);
-
-			// Can retrieve it
-			const getResponse = await ctx.app.inject({
-				method: "GET",
-				url: "/doses/taken",
-			});
-
-			expect(getResponse.json().doses[0].doseId).toBe(doseId);
-		});
-	});
-
-	// ---------------------------------------------------------------------------
-	// Dismiss Doses Tests (POST /doses/dismiss)
-	// ---------------------------------------------------------------------------
 
 	describe("POST /doses/dismiss", () => {
-		it("should dismiss multiple doses", async () => {
-			const doseIds = ["1-0-1735344000000", "1-0-1735430400000"];
-
-			const response = await ctx.app.inject({
+		it("dismisses multiple doses", async () => {
+			const response = await app.inject({
 				method: "POST",
 				url: "/doses/dismiss",
-				payload: { doseIds },
+				headers: { cookie: cookieHeader },
+				payload: { doseIds: ["1-0-1735344000000", "1-0-1735430400000"] },
 			});
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json()).toEqual({ success: true, dismissedCount: 2 });
 
-			// Verify in database
-			const result = await ctx.client.execute({
-				sql: `SELECT dose_id, dismissed FROM dose_tracking WHERE user_id = ? AND dismissed = 1`,
+			const result = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dismissed = 1",
 				args: [userId],
 			});
-			expect(result.rows.length).toBe(2);
+			expect(Number(result.rows[0].count)).toBe(2);
 		});
 
-		it("should not double-count already dismissed doses", async () => {
+		it("does not double-count already dismissed doses", async () => {
 			const doseId = "1-0-1735344000000";
+			await insertDose({ userId, doseId, dismissed: true });
 
-			// Dismiss once
-			await ctx.app.inject({
+			const response = await app.inject({
 				method: "POST",
 				url: "/doses/dismiss",
-				payload: { doseIds: [doseId] },
-			});
-
-			// Dismiss again
-			const response = await ctx.app.inject({
-				method: "POST",
-				url: "/doses/dismiss",
+				headers: { cookie: cookieHeader },
 				payload: { doseIds: [doseId] },
 			});
 
@@ -489,54 +335,71 @@ describe("Dose Tracking API", () => {
 			expect(response.json()).toEqual({ success: true, dismissedCount: 0 });
 		});
 
-		it("should reject empty doseIds array", async () => {
-			const response = await ctx.app.inject({
-				method: "POST",
-				url: "/doses/dismiss",
-				payload: { doseIds: [] },
-			});
-
-			expect(response.statusCode).toBe(400);
-			expect(response.json()).toEqual({ error: "doseIds array is required" });
-		});
-
-		it("should reject missing doseIds", async () => {
-			const response = await ctx.app.inject({
-				method: "POST",
-				url: "/doses/dismiss",
-				payload: {},
-			});
-
-			expect(response.statusCode).toBe(400);
-			expect(response.json()).toEqual({ error: "doseIds array is required" });
-		});
-
-		it("should dismiss a dose that was already taken (convert to dismissed)", async () => {
+		it("converts a taken dose into a dismissed one", async () => {
 			const doseId = "1-0-1735344000000";
+			await insertDose({ userId, doseId, dismissed: false });
 
-			// First mark as taken
-			await ctx.app.inject({
-				method: "POST",
-				url: "/doses/taken",
-				payload: { doseId },
-			});
-
-			// Then dismiss it
-			const response = await ctx.app.inject({
+			const response = await app.inject({
 				method: "POST",
 				url: "/doses/dismiss",
+				headers: { cookie: cookieHeader },
 				payload: { doseIds: [doseId] },
 			});
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json()).toEqual({ success: true, dismissedCount: 1 });
 
-			// Verify it's now dismissed
-			const result = await ctx.client.execute({
-				sql: `SELECT dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?`,
+			const result = await testClient.execute({
+				sql: "SELECT dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
 				args: [userId, doseId],
 			});
-			expect(result.rows[0].dismissed).toBe(1);
+			expect(result.rows).toEqual([expect.objectContaining({ dismissed: 1 })]);
+		});
+
+		it("rejects missing or empty doseIds", async () => {
+			const emptyResponse = await app.inject({
+				method: "POST",
+				url: "/doses/dismiss",
+				headers: { cookie: cookieHeader },
+				payload: { doseIds: [] },
+			});
+
+			expect(emptyResponse.statusCode).toBe(400);
+			expect(emptyResponse.json()).toEqual({ error: "At least one doseId is required" });
+
+			const missingResponse = await app.inject({
+				method: "POST",
+				url: "/doses/dismiss",
+				headers: { cookie: cookieHeader },
+				payload: {},
+			});
+
+			expect(missingResponse.statusCode).toBe(400);
+			expect(missingResponse.json()).toEqual({ error: "Required" });
+		});
+	});
+
+	describe("DELETE /doses/dismiss", () => {
+		it("clears dismissed-only records and removes the dismissed flag from taken doses", async () => {
+			await insertDose({ userId, doseId: "1-0-1735344000000", dismissed: true, takenAt: null });
+			await insertDose({ userId, doseId: "1-0-1735430400000", dismissed: true, markedBy: "Daniel" });
+
+			const response = await app.inject({
+				method: "DELETE",
+				url: "/doses/dismiss",
+				headers: { cookie: cookieHeader },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true, clearedCount: 2 });
+
+			const rows = await testClient.execute({
+				sql: "SELECT dose_id, dismissed, marked_by FROM dose_tracking WHERE user_id = ? ORDER BY dose_id ASC",
+				args: [userId],
+			});
+			expect(rows.rows).toEqual([
+				expect.objectContaining({ dose_id: "1-0-1735430400000", dismissed: 0, marked_by: "Daniel" }),
+			]);
 		});
 	});
 });

@@ -26,5 +26,8 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
+    // On macOS Docker volume mounts, inotify events don't reach the
+    // Linux container reliably. Polling ensures HMR sees file edits.
+    watch: existsSync("/.dockerenv") ? { usePolling: true, interval: 300 } : undefined,
   },
 });

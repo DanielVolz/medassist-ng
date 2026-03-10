@@ -687,12 +687,10 @@ async function checkAndSendReminderForUser(
 		if (!state.notifiedMedications.includes(userStockNotifiedKey) || settings.repeatDailyReminders) {
 			const stockSendLock = acquireReminderSendLock(userStockNotifiedKey);
 			if (!stockSendLock) {
-				logger.debug(`[Reminder] User ${settings.userId}: stock reminder lock already held, skipping duplicate send`);
+				logger.debug("[Reminder] Stock reminder lock already held, skipping duplicate send");
 			} else {
 				try {
-					logger.info(
-						`[Reminder] User ${settings.userId}: Sending stock reminder for ${allLowStock.length} medications...`
-					);
+					logger.info(`[Reminder] Sending stock reminder for ${allLowStock.length} medications...`);
 
 					let emailSuccess = false;
 					let shoutrrrSuccess = false;
@@ -706,7 +704,7 @@ async function checkAndSendReminderForUser(
 						);
 						emailSuccess = result.success;
 						if (!result.success) {
-							logger.error(`[Reminder] User ${settings.userId}: Failed to send stock email: ${result.error}`);
+							logger.error(`[Reminder] Failed to send stock email: ${result.error}`);
 						}
 					}
 
@@ -748,7 +746,7 @@ async function checkAndSendReminderForUser(
 						const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
 						shoutrrrSuccess = result.success;
 						if (!result.success) {
-							logger.error(`[Reminder] User ${settings.userId}: Failed to send stock push: ${result.error}`);
+							logger.error(`[Reminder] Failed to send stock push: ${result.error}`);
 						}
 					}
 
@@ -780,9 +778,7 @@ async function checkAndSendReminderForUser(
 		if (!state.notifiedMedications.includes(userPrescriptionNotifiedKey) || settings.repeatDailyReminders) {
 			const prescriptionSendLock = acquireReminderSendLock(userPrescriptionNotifiedKey);
 			if (!prescriptionSendLock) {
-				logger.debug(
-					`[Reminder] User ${settings.userId}: prescription reminder lock already held, skipping duplicate send`
-				);
+				logger.debug("[Reminder] Prescription reminder lock already held, skipping duplicate send");
 			} else {
 				try {
 					// Re-check using fresh state after acquiring lock and pre-mark today as notified.
@@ -791,9 +787,7 @@ async function checkAndSendReminderForUser(
 					const alreadyNotified = lockedState.notifiedMedications.includes(userPrescriptionNotifiedKey);
 					const shouldSend = !alreadyNotified || settings.repeatDailyReminders;
 					if (!shouldSend) {
-						logger.debug(
-							`[Reminder] User ${settings.userId}: prescription reminder already marked as sent today, skipping`
-						);
+						logger.debug("[Reminder] Prescription reminder already marked as sent today, skipping");
 					}
 
 					const preMarkedNotified =
@@ -813,9 +807,7 @@ async function checkAndSendReminderForUser(
 					}
 
 					if (shouldSend) {
-						logger.info(
-							`[Reminder] User ${settings.userId}: Sending prescription reminder for ${allPrescriptionLow.length} medications...`
-						);
+						logger.info(`[Reminder] Sending prescription reminder for ${allPrescriptionLow.length} medications...`);
 
 						const emptyRx = allPrescriptionLow.filter((m) => m.remainingRefills <= 0);
 						const lowRx = allPrescriptionLow.filter((m) => m.remainingRefills > 0);
@@ -947,9 +939,7 @@ async function checkAndSendReminderForUser(
 									emailSuccess = true;
 								} catch (error) {
 									const errorMessage = error instanceof Error ? error.message : "Unknown error";
-									logger.error(
-										`[Reminder] User ${settings.userId}: Failed to send prescription email: ${errorMessage}`
-									);
+									logger.error(`[Reminder] Failed to send prescription email: ${errorMessage}`);
 								}
 							}
 						}
@@ -986,7 +976,7 @@ async function checkAndSendReminderForUser(
 							const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
 							shoutrrrSuccess = result.success;
 							if (!result.success) {
-								logger.error(`[Reminder] User ${settings.userId}: Failed to send prescription push: ${result.error}`);
+								logger.error(`[Reminder] Failed to send prescription push: ${result.error}`);
 							}
 						}
 

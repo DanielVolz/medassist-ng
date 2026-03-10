@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ShareDialog } from "../../components/ShareDialog";
 
@@ -68,8 +68,9 @@ describe("ShareDialog", () => {
 
 	it("shows generated link", () => {
 		render(<ShareDialog {...defaultProps} shareLink="http://example.com/share/abc123" />);
-		const input = screen.getByRole("textbox");
-		expect(input).toHaveValue("http://example.com/share/abc123");
+		const inputs = screen.getAllByRole("textbox") as HTMLInputElement[];
+		expect(inputs[0]).toHaveValue("http://example.com/share/abc123");
+		expect(inputs[1]).toHaveValue("http://example.com/share/abc123/overview");
 	});
 
 	it("calls onCopyShareLink when copy button is clicked", () => {
@@ -85,11 +86,21 @@ describe("ShareDialog", () => {
 
 	it("selects link text when input is clicked", () => {
 		render(<ShareDialog {...defaultProps} shareLink="http://example.com/share/abc123" />);
-		const input = screen.getByRole("textbox") as HTMLInputElement;
+		const input = screen.getAllByRole("textbox")[0] as HTMLInputElement;
 		const selectMock = vi.fn();
 		input.select = selectMock;
 		fireEvent.click(input);
 		expect(selectMock).toHaveBeenCalled();
+	});
+
+	it("copies overview link when overview copy button is clicked", async () => {
+		render(<ShareDialog {...defaultProps} shareLink="http://example.com/share/abc123" />);
+
+		fireEvent.click(screen.getByRole("button", { name: /share\.copyOverviewLink/i }));
+
+		await waitFor(() => {
+			expect(navigator.clipboard.writeText).toHaveBeenCalledWith("http://example.com/share/abc123/overview");
+		});
 	});
 
 	it("calls person and period change callbacks", () => {

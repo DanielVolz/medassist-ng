@@ -157,7 +157,9 @@ test.describe("Schedule Timeline", () => {
 
 	test("should display share button in schedules section", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
-		await expect(page.locator(".taken-by-badge").first()).toBeVisible();
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		await expect(overviewTable).toBeVisible({ timeout: 10000 });
+		await expect(overviewTable.locator(".table-row").first()).toBeVisible({ timeout: 10000 });
 
 		const shareBtn = page.locator("button.share-btn");
 		await expect(shareBtn).toBeVisible();

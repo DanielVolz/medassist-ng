@@ -128,7 +128,7 @@ export function PlannerPage() {
 			return t("form.ml");
 		}
 		if (isTubePackageType(med?.packageType)) {
-			return med.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
+			return med?.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
 		}
 		return count === 1 ? t("common.pill") : t("common.pills");
 	};
@@ -140,7 +140,7 @@ export function PlannerPage() {
 			return `${roundedLoose} ${t("form.ml")}`;
 		}
 		if (isTubePackageType(med?.packageType)) {
-			const unit = med.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
+			const unit = med?.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
 			return `${roundedLoose} ${unit}`;
 		}
 		return `${roundedLoose} ${roundedLoose === 1 ? t("common.pill") : t("common.pills")}`;

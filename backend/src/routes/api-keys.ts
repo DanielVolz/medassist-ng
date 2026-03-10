@@ -18,7 +18,10 @@ const idParamSchema = z.object({
 	id: z.string().regex(/^\d+$/),
 });
 
-const protectedEndpointSecurity = [{ bearerAuth: [] }];
+const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>> = [
+	{ bearerAuth: [] },
+	{ cookieAuth: [] },
+];
 const genericErrorSchema = {
 	type: "object",
 	properties: {

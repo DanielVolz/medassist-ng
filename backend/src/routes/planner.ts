@@ -15,6 +15,7 @@ import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
 import type { AuthUser } from "../types/fastify.js";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 import {
 	getPlannerUnitKind,
 	isAmountBasedPackageType,
@@ -134,6 +135,7 @@ type PrescriptionReminderBody = {
 export async function plannerRoutes(app: FastifyInstance) {
 	// Add auth hook for all planner routes
 	app.addHook("preHandler", requireAuth);
+	applyOpenApiRouteStandards(app, { tag: "planner", protectedByDefault: true });
 
 	// Helper to get user ID from request
 	async function getUserId(request: FastifyRequest): Promise<number> {

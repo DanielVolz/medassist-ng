@@ -6,6 +6,7 @@ import { medications, refillHistory } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 import { isAmountBasedPackageType, normalizePackageType } from "../utils/package-profiles.js";
 
 const refillSchema = z
@@ -21,6 +22,7 @@ const refillSchema = z
 export async function refillRoutes(app: FastifyInstance) {
 	// All refill routes require auth
 	app.addHook("preHandler", requireAuth);
+	applyOpenApiRouteStandards(app, { tag: "refills", protectedByDefault: true });
 
 	// Helper to get user ID from request
 	async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {

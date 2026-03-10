@@ -198,6 +198,19 @@ All configuration is done via environment variables in `.env`. Copy `.env.exampl
 | `OPENAPI_DOCS_ENABLED` | `auto` | Enables API docs in non-production by default. Set explicitly to `true`/`false` to override. |
 | `TZ` | `Europe/Berlin` | Timezone for scheduled reminders |
 
+Recommended values for API docs by environment:
+
+| Environment | Recommendation |
+|-------------|----------------|
+| Development | `OPENAPI_DOCS_ENABLED=true` |
+| Staging/Test | `OPENAPI_DOCS_ENABLED=true` |
+| Production | `OPENAPI_DOCS_ENABLED=false` (or keep `auto` with `NODE_ENV=production`) |
+
+Notes:
+
+- `auto` means: docs enabled when `NODE_ENV` is not `production`, disabled when `NODE_ENV=production`.
+- Explicitly setting `OPENAPI_DOCS_ENABLED` always overrides `auto` behavior.
+
 ### Authentication
 
 | Variable | Default | Description |

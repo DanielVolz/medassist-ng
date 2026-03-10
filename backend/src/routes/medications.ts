@@ -14,6 +14,7 @@ import {
 	streamToBuffer,
 	writeOptimizedImageSet,
 } from "../utils/image-upload.js";
+import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
 import {
 	isAmountBasedPackageType,
 	isLiquidContainerPackageType,
@@ -240,6 +241,7 @@ const medicationSchema = z
 export async function medicationRoutes(app: FastifyInstance) {
 	// All medication routes require auth
 	app.addHook("preHandler", requireAuth);
+	applyOpenApiRouteStandards(app, { tag: "medications", protectedByDefault: true });
 
 	// Helper to get user ID from request
 	// Returns anonymous user ID when auth is disabled

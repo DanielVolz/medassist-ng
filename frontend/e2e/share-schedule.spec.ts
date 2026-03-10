@@ -96,6 +96,10 @@ test.describe("Share Schedule", () => {
 
 	test("should open share dialog with person list", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		await expect(overviewTable).toBeVisible({ timeout: 10000 });
+		await expect(overviewTable.getByText(MED_ALICE)).toBeVisible({ timeout: 10000 });
+		await expect(overviewTable.getByText(MED_BOB)).toBeVisible({ timeout: 10000 });
 
 		// Click the share button
 		const shareBtn = page.locator("button.share-btn");
@@ -136,7 +140,7 @@ test.describe("Share Schedule", () => {
 		await generateBtn.click();
 
 		// Wait for link to be generated
-		const shareLinkInput = modal.locator("input.share-link-input");
+		const shareLinkInput = modal.locator("input.share-link-input").first();
 		await expect(shareLinkInput).toBeVisible({ timeout: 10000 });
 
 		// The share link should contain /share/
@@ -144,7 +148,7 @@ test.describe("Share Schedule", () => {
 		expect(linkValue).toContain("/share/");
 
 		// Copy button should be visible
-		await expect(modal.locator("button.btn-copy")).toBeVisible();
+		await expect(modal.locator("button.btn-copy").first()).toBeVisible();
 
 		// Close
 		await page.locator("button.modal-close").click();
@@ -178,18 +182,19 @@ test.describe("Share Schedule", () => {
 
 		await page.goto(`/share/${shareToken.token}`);
 		await page.waitForLoadState("networkidle");
-
-		// Wait for page content to load
-		await page.waitForTimeout(2000);
+		await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
+		const sharedSchedule = page.locator(".shared-schedule-container");
+		await expect(sharedSchedule).toBeVisible({ timeout: 10000 });
 
 		// The page should show Alice's medication name
-		const content = page.getByText(MED_ALICE);
+		const content = sharedSchedule.getByText(MED_ALICE);
 		try {
 			await expect(content).toBeVisible({ timeout: 10000 });
 		} catch {
 			// Reload and retry — sometimes the initial load misses
 			await page.reload();
 			await page.waitForLoadState("networkidle");
+			await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
 			await expect(content).toBeVisible({ timeout: 10000 });
 		}
 	});
@@ -226,27 +231,32 @@ test.describe("Share Schedule", () => {
 		// Visit Alice's share — should show Alice's med
 		await page.goto(`/share/${aliceToken.token}`);
 		await page.waitForLoadState("networkidle");
-		await page.waitForTimeout(2000);
+		await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
+		const sharedSchedule = page.locator(".shared-schedule-container");
+		await expect(sharedSchedule).toBeVisible({ timeout: 10000 });
 
 		try {
-			await expect(page.getByText(MED_ALICE)).toBeVisible({ timeout: 10000 });
+			await expect(sharedSchedule.getByText(MED_ALICE)).toBeVisible({ timeout: 10000 });
 		} catch {
 			await page.reload();
 			await page.waitForLoadState("networkidle");
-			await expect(page.getByText(MED_ALICE)).toBeVisible({ timeout: 10000 });
+			await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
+			await expect(sharedSchedule.getByText(MED_ALICE)).toBeVisible({ timeout: 10000 });
 		}
 
 		// Visit Bob's share — should show Bob's med
 		await page.goto(`/share/${bobToken.token}`);
 		await page.waitForLoadState("networkidle");
-		await page.waitForTimeout(2000);
+		await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
+		await expect(sharedSchedule).toBeVisible({ timeout: 10000 });
 
 		try {
-			await expect(page.getByText(MED_BOB)).toBeVisible({ timeout: 10000 });
+			await expect(sharedSchedule.getByText(MED_BOB)).toBeVisible({ timeout: 10000 });
 		} catch {
 			await page.reload();
 			await page.waitForLoadState("networkidle");
-			await expect(page.getByText(MED_BOB)).toBeVisible({ timeout: 10000 });
+			await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
+			await expect(sharedSchedule.getByText(MED_BOB)).toBeVisible({ timeout: 10000 });
 		}
 	});
 

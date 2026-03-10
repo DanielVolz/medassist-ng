@@ -267,6 +267,7 @@ export async function doseRoutes(app: FastifyInstance) {
 						userId,
 						doseId,
 						markedBy: null,
+						takenAt: new Date(0),
 						dismissed: true,
 					});
 					dismissedCount++;
@@ -291,7 +292,9 @@ export async function doseRoutes(app: FastifyInstance) {
 			.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, true)));
 
 		for (const d of dismissed) {
-			if (d.markedBy !== null || d.takenAt) {
+			const hasRealTakenTimestamp = d.takenAt instanceof Date ? d.takenAt.getTime() > 0 : Boolean(d.takenAt);
+
+			if (d.markedBy !== null || hasRealTakenTimestamp) {
 				// This was also marked as taken - just remove dismissed flag
 				await db.update(doseTracking).set({ dismissed: false }).where(eq(doseTracking.id, d.id));
 			} else {
@@ -307,28 +310,41 @@ export async function doseRoutes(app: FastifyInstance) {
 	// GET /share/:token/doses - PUBLIC: Get taken doses for a share link
 	// Suppress request logs — polled every 5s by SharedSchedule
 	// ---------------------------------------------------------------------------
-	app.get<{ Params: { token: string } }>("/share/:token/doses", { logLevel: "warn" }, async (request, reply) => {
-		const { token } = request.params;
+	app.get<{ Params: { token: string } }>(
+		"/share/:token/doses",
+		{
+			logLevel: "warn",
+			config: {
+				rateLimit: {
+					max: 60,
+					timeWindow: "1 minute",
+					errorResponseBuilder: () => ({ error: "rate_limited" }),
+				},
+			},
+		},
+		async (request, reply) => {
+			const { token } = request.params;
 
-		const { share, reason } = await getActiveShareToken(token);
-		if (!share) {
-			request.log.warn(`[ShareDose] Rejected read for token ${maskToken(token)} (reason=${reason})`);
-			return reply.notFound("Share link not found");
+			const { share, reason } = await getActiveShareToken(token);
+			if (!share) {
+				request.log.warn(`[ShareDose] Rejected read for token ${maskToken(token)} (reason=${reason})`);
+				return reply.notFound("Share link not found");
+			}
+
+			// Get all taken doses for this user (no time limit)
+			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
+
+			return {
+				doses: doses.map((d) => ({
+					doseId: d.doseId,
+					takenAt: d.takenAt?.getTime() ?? Date.now(),
+					markedBy: d.markedBy,
+					takenSource: d.takenSource ?? "manual",
+					dismissed: d.dismissed ?? false,
+				})),
+			};
 		}
-
-		// Get all taken doses for this user (no time limit)
-		const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
-
-		return {
-			doses: doses.map((d) => ({
-				doseId: d.doseId,
-				takenAt: d.takenAt?.getTime() ?? Date.now(),
-				markedBy: d.markedBy,
-				takenSource: d.takenSource ?? "manual",
-				dismissed: d.dismissed ?? false,
-			})),
-		};
-	});
+	);
 
 	// ---------------------------------------------------------------------------
 	// POST /share/:token/doses - PUBLIC: Mark a dose as taken via share link

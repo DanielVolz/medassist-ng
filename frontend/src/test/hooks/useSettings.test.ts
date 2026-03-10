@@ -14,6 +14,7 @@ describe("useSettings", () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it("initializes with default settings", () => {
@@ -53,8 +54,60 @@ describe("useSettings", () => {
 		const { result } = renderHook(() => useSettings());
 
 		await waitFor(() => {
+			expect(result.current.settingsLoadError).toBe("request");
+		});
+	});
+
+	it("maps a failed authenticated settings load to an auth error state", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) });
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoadError).toBe("auth");
+		});
+
+		expect(result.current.settings.emailEnabled).toBe(false);
+		expect(result.current.settings.notificationEmail).toBe("");
+	});
+
+	it("maps a forbidden settings load to a forbidden error state", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: false,
+			status: 403,
+			json: () => Promise.resolve({}),
+		});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoadError).toBe("forbidden");
+		});
+	});
+
+	it("retries loading settings after a successful refresh", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ emailEnabled: true, notificationEmail: "refreshed@example.com" }),
+			});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
 			expect(result.current.settingsLoading).toBe(false);
 		});
+
+		expect(result.current.settings.notificationEmail).toBe("refreshed@example.com");
+		expect(global.fetch).toHaveBeenNthCalledWith(
+			2,
+			"/api/auth/refresh",
+			expect.objectContaining({ method: "POST", credentials: "include" })
+		);
 	});
 
 	it("saves settings to API", async () => {
@@ -154,6 +207,28 @@ describe("useSettings", () => {
 		expect(result.current.testEmailResult?.success).toBe(false);
 	});
 
+	it("uses backend error messages for failed test email responses", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 400,
+				json: () => Promise.resolve({ message: "Recipient rejected" }),
+			});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		await act(async () => {
+			await result.current.testEmail();
+		});
+
+		expect(result.current.testEmailResult).toEqual({ success: false, message: "Recipient rejected" });
+	});
+
 	it("tests shoutrrr notification", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
@@ -174,6 +249,28 @@ describe("useSettings", () => {
 
 		expect(result.current.testShoutrrrResult?.success).toBe(true);
 		expect(result.current.testingShoutrrr).toBe(false);
+	});
+
+	it("uses backend error messages for failed test notifications", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				json: () => Promise.resolve({ message: "Push target rejected" }),
+			});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		await act(async () => {
+			await result.current.testShoutrrr();
+		});
+
+		expect(result.current.testShoutrrrResult).toEqual({ success: false, message: "Push target rejected" });
 	});
 
 	it("tracks unsaved changes", async () => {
@@ -278,6 +375,68 @@ describe("useSettings", () => {
 		expect(result.current.settings.shoutrrrEnabled).toBe(true);
 	});
 
+	it("reloads backend state when saving settings fails", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ lowStockDays: 14, notificationEmail: "server@example.com" }),
+			});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		act(() => {
+			result.current.setSettings((current) => ({ ...current, lowStockDays: 99 }));
+		});
+
+		await act(async () => {
+			await result.current.saveSettings();
+		});
+
+		await waitFor(() => {
+			expect(result.current.settings.lowStockDays).toBe(14);
+		});
+
+		expect(result.current.settingsSaved).toBe(false);
+		expect(result.current.settings.notificationEmail).toBe("server@example.com");
+	});
+
+	it("resets all transient state back to defaults", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ notificationEmail: "test@example.com" }) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ message: "Email sent!" }),
+			});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		await act(async () => {
+			await result.current.testEmail();
+		});
+
+		expect(result.current.testEmailResult).toEqual({ success: true, message: "Email sent!" });
+
+		act(() => {
+			result.current.resetSettingsState();
+		});
+
+		expect(result.current.settings.notificationEmail).toBe("");
+		expect(result.current.savedSettings.notificationEmail).toBe("");
+		expect(result.current.testEmailResult).toBeNull();
+		expect(result.current.settingsSaved).toBe(false);
+		expect(result.current.settingsLoadError).toBeNull();
+	});
+
 	it("refreshes reminder status on interval", async () => {
 		let refreshCallback: (() => void) | null = null;
 		const nativeSetInterval = global.setInterval;
@@ -323,5 +482,149 @@ describe("useSettings", () => {
 			expect(result.current.settings.lastNotificationType).toBe("stock");
 			expect(result.current.settings.lastStockReminderChannel).toBe("both");
 		});
+	});
+
+	it("clears reminder metadata when refresh returns explicit null values", async () => {
+		let refreshCallback: (() => void) | null = null;
+		const nativeSetInterval = global.setInterval;
+		vi.spyOn(global, "setInterval").mockImplementation(((handler: TimerHandler, timeout?: number) => {
+			if (timeout === 30000) {
+				refreshCallback = handler as () => void;
+				return 1 as unknown as ReturnType<typeof setInterval>;
+			}
+			return nativeSetInterval(handler, timeout);
+		}) as typeof setInterval);
+
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						lastAutoEmailSent: "2026-01-01T10:00:00.000Z",
+						lastNotificationType: "stock",
+						lastNotificationChannel: "email",
+						lastReminderMedName: "Aspirin",
+						lastReminderTakenBy: "Max",
+						lastStockReminderSent: "2026-01-01T09:00:00.000Z",
+						lastStockReminderChannel: "both",
+						lastStockReminderMedNames: "Aspirin",
+					}),
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						lastAutoEmailSent: null,
+						lastNotificationType: null,
+						lastNotificationChannel: null,
+						lastReminderMedName: null,
+						lastReminderTakenBy: null,
+						lastStockReminderSent: null,
+						lastStockReminderChannel: null,
+						lastStockReminderMedNames: null,
+						lastPrescriptionReminderSent: null,
+						lastPrescriptionReminderChannel: null,
+						lastPrescriptionReminderMedNames: null,
+					}),
+			});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		expect(result.current.settings.lastNotificationType).toBe("stock");
+		expect(refreshCallback).not.toBeNull();
+
+		act(() => {
+			refreshCallback?.();
+		});
+
+		await waitFor(() => {
+			expect(result.current.settings.lastAutoEmailSent).toBeNull();
+			expect(result.current.settings.lastNotificationType).toBeNull();
+			expect(result.current.settings.lastNotificationChannel).toBeNull();
+			expect(result.current.settings.lastReminderMedName).toBeNull();
+			expect(result.current.settings.lastStockReminderSent).toBeNull();
+		});
+	});
+
+	it("clears reminder metadata when refresh returns 401", async () => {
+		let refreshCallback: (() => void) | null = null;
+		const nativeSetInterval = global.setInterval;
+		vi.spyOn(global, "setInterval").mockImplementation(((handler: TimerHandler, timeout?: number) => {
+			if (timeout === 30000) {
+				refreshCallback = handler as () => void;
+				return 1 as unknown as ReturnType<typeof setInterval>;
+			}
+			return nativeSetInterval(handler, timeout);
+		}) as typeof setInterval);
+
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						lastAutoEmailSent: "2026-01-01T10:00:00.000Z",
+						lastNotificationType: "stock",
+						lastNotificationChannel: "email",
+						lastReminderMedName: "Aspirin",
+						lastReminderTakenBy: "Max",
+						lastStockReminderSent: "2026-01-01T09:00:00.000Z",
+						lastStockReminderChannel: "both",
+						lastStockReminderMedNames: "Aspirin",
+					}),
+			})
+			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) });
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		expect(result.current.settings.lastNotificationType).toBe("stock");
+		expect(refreshCallback).not.toBeNull();
+
+		act(() => {
+			refreshCallback?.();
+		});
+
+		await waitFor(() => {
+			expect(result.current.settings.lastAutoEmailSent).toBeNull();
+			expect(result.current.settings.lastNotificationType).toBeNull();
+			expect(result.current.settings.lastNotificationChannel).toBeNull();
+		});
+	});
+
+	it("resets to defaults when loadSettings gets 401", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ emailEnabled: true, notificationEmail: "test@example.com" }),
+			})
+			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) })
+			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) });
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		expect(result.current.settings.emailEnabled).toBe(true);
+
+		act(() => {
+			result.current.loadSettings();
+		});
+
+		await waitFor(() => {
+			expect(result.current.settingsLoadError).toBe("auth");
+		});
+
+		expect(result.current.settings.emailEnabled).toBe(false);
+		expect(result.current.settings.notificationEmail).toBe("");
 	});
 });

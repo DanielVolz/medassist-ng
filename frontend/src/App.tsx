@@ -13,7 +13,7 @@ import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
 import { AppProvider, UnsavedChangesProvider, useAppContext } from "./context";
 import { useScrollLock } from "./hooks/useScrollLock";
-import { DashboardPage, MedicationsPage, PlannerPage, SchedulePage, SettingsPage } from "./pages";
+import { DashboardPage, MedicationsPage, PlannerPage, SchedulePage, SettingsPage, SharedOverviewPage } from "./pages";
 
 // Vite injects this at build time from package.json
 declare const __APP_VERSION__: string;
@@ -29,6 +29,7 @@ export default function App() {
 		<AuthProvider>
 			<Routes>
 				{/* Public share route - accessible without auth */}
+				<Route path="/share/:token/overview" element={<SharedOverviewPage />} />
 				<Route path="/share/:token" element={<SharedSchedule />} />
 				{/* All other routes go through AppRouter */}
 				<Route path="*" element={<AppRouter />} />

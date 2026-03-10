@@ -179,7 +179,7 @@ export function SchedulePage() {
 				<div className="card-head">
 					<h2>{t("dashboard.schedules.title")}</h2>
 					<select
-						className="schedule-days-select"
+						className="select-field schedule-days-select"
 						value={scheduleDays}
 						onChange={(e) => {
 							const val = Number(e.target.value);

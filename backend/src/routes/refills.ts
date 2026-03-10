@@ -6,6 +6,7 @@ import { medications, refillHistory } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { isAmountBasedPackageType, normalizePackageType } from "../utils/package-profiles.js";
 
 const refillSchema = z
 	.object({
@@ -52,9 +53,34 @@ export async function refillRoutes(app: FastifyInstance) {
 		if (!med) return reply.notFound("Medication not found");
 
 		const { packsAdded, loosePillsAdded, usePrescription } = parsed.data;
-		const isBottle = (med.packageType ?? "blister") === "bottle";
-		const effectivePacksAdded = isBottle ? 0 : packsAdded;
-		const effectiveLoosePillsAdded = loosePillsAdded;
+		const packageType = normalizePackageType(med.packageType);
+		const isBottle = packageType === "bottle";
+		const isAmountBased = isAmountBasedPackageType(packageType);
+		const isCountBasedAmountPackage = isAmountBased && !isBottle;
+
+		const configuredAmountPerPackage = Number(med.packageAmountValue ?? 0);
+		const fallbackAmountPerPackage = Math.max(
+			1,
+			Math.round((med.totalPills ?? med.looseTablets ?? 0) / Math.max(1, med.packCount || 1))
+		);
+		const amountPerPackage =
+			Number.isFinite(configuredAmountPerPackage) && configuredAmountPerPackage > 0
+				? configuredAmountPerPackage
+				: fallbackAmountPerPackage;
+
+		const requestedPackAdds = Math.max(0, packsAdded);
+		const requestedAmountAdds = Math.max(0, loosePillsAdded);
+		const derivedCountFromAmount = Math.max(0, Math.round(requestedAmountAdds / amountPerPackage));
+
+		let effectivePacksAdded = requestedPackAdds;
+		if (isBottle) {
+			effectivePacksAdded = 0;
+		} else if (isCountBasedAmountPackage) {
+			effectivePacksAdded = Math.max(requestedPackAdds, derivedCountFromAmount);
+		}
+		const effectiveLoosePillsAdded = isCountBasedAmountPackage
+			? effectivePacksAdded * amountPerPackage
+			: requestedAmountAdds;
 		const remainingPrescriptionRefills = med.prescriptionRemainingRefills ?? 0;
 
 		if (effectivePacksAdded < 1 && effectiveLoosePillsAdded < 1) {
@@ -76,6 +102,8 @@ export async function refillRoutes(app: FastifyInstance) {
 		// Update medication stock
 		const newPackCount = med.packCount + effectivePacksAdded;
 		const newLooseTablets = med.looseTablets + effectiveLoosePillsAdded;
+		const previousAmountBase = med.totalPills ?? med.looseTablets;
+		const newTotalAmount = previousAmountBase + effectiveLoosePillsAdded;
 
 		let consumedRefills = 0;
 		if (usePrescription) {
@@ -85,14 +113,28 @@ export async function refillRoutes(app: FastifyInstance) {
 			? Math.max(0, remainingPrescriptionRefills - consumedRefills)
 			: (med.prescriptionRemainingRefills ?? null);
 
+		const updatePayload: {
+			packCount: number;
+			looseTablets: number;
+			totalPills?: number;
+			packageAmountValue?: number;
+			prescriptionRemainingRefills: number | null;
+			updatedAt: Date;
+		} = {
+			packCount: newPackCount,
+			looseTablets: newLooseTablets,
+			prescriptionRemainingRefills: newRemainingRefills,
+			updatedAt: new Date(),
+		};
+
+		if (isCountBasedAmountPackage) {
+			updatePayload.totalPills = newTotalAmount;
+			updatePayload.packageAmountValue = amountPerPackage;
+		}
+
 		await db
 			.update(medications)
-			.set({
-				packCount: newPackCount,
-				looseTablets: newLooseTablets,
-				prescriptionRemainingRefills: newRemainingRefills,
-				updatedAt: new Date(),
-			})
+			.set(updatePayload)
 			.where(and(eq(medications.id, medId), eq(medications.userId, userId)));
 
 		// Create refill history entry
@@ -109,12 +151,15 @@ export async function refillRoutes(app: FastifyInstance) {
 
 		// Calculate pills added for response (packageType-aware)
 		const pillsPerPack = isBottle ? 0 : med.blistersPerPack * med.pillsPerBlister;
-		const totalPillsAdded = isBottle
+		const totalPillsAdded = isAmountBased
 			? effectiveLoosePillsAdded
 			: effectivePacksAdded * pillsPerPack + effectiveLoosePillsAdded;
-		const newTotalPills = isBottle
-			? newLooseTablets + (med.stockAdjustment ?? 0)
-			: newPackCount * pillsPerPack + newLooseTablets + (med.stockAdjustment ?? 0);
+		let newTotalPills = newPackCount * pillsPerPack + newLooseTablets + (med.stockAdjustment ?? 0);
+		if (isCountBasedAmountPackage) {
+			newTotalPills = (newTotalAmount ?? 0) + (med.stockAdjustment ?? 0);
+		} else if (isBottle) {
+			newTotalPills = newLooseTablets + (med.stockAdjustment ?? 0);
+		}
 
 		return {
 			success: true,
@@ -158,17 +203,19 @@ export async function refillRoutes(app: FastifyInstance) {
 		const refills = await db
 			.select()
 			.from(refillHistory)
-			.where(eq(refillHistory.medicationId, medId))
+			.where(and(eq(refillHistory.medicationId, medId), eq(refillHistory.userId, userId)))
 			.orderBy(desc(refillHistory.refillDate));
 
-		const isBottle = (med.packageType ?? "blister") === "bottle";
+		const packageType = normalizePackageType(med.packageType);
+		const isBottle = packageType === "bottle";
+		const isAmountBased = isAmountBasedPackageType(packageType);
 		const pillsPerPack = isBottle ? 0 : med.blistersPerPack * med.pillsPerBlister;
 
 		return refills.map((r) => ({
 			id: r.id,
 			packsAdded: r.packsAdded,
 			loosePillsAdded: r.loosePillsAdded,
-			totalPillsAdded: isBottle ? r.loosePillsAdded : r.packsAdded * pillsPerPack + r.loosePillsAdded,
+			totalPillsAdded: isAmountBased ? r.loosePillsAdded : r.packsAdded * pillsPerPack + r.loosePillsAdded,
 			usedPrescription: r.usedPrescription ?? false,
 			refillDate: r.refillDate,
 		}));

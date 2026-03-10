@@ -5,7 +5,12 @@ import "@fastify/jwt";
 export interface AuthUser {
 	id: number;
 	username: string;
-	role: string;
+}
+
+export interface AuthContext {
+	method: "session" | "api_key";
+	scope: "read" | "write";
+	apiKeyId?: number;
 }
 
 declare module "fastify" {
@@ -22,6 +27,7 @@ declare module "fastify" {
 
 	interface FastifyRequest {
 		user?: AuthUser | null;
+		authContext?: AuthContext;
 		correlationId?: string;
 	}
 }

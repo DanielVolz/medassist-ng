@@ -18,8 +18,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Backend_Tests-577%2F577-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
-  <img src="https://img.shields.io/badge/Frontend_Tests-777%2F777-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
+  <img src="https://img.shields.io/badge/Backend_Tests-613%2F613-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
+  <img src="https://img.shields.io/badge/Frontend_Tests-804%2F804-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
 </p>
 
 ### 🤖 AI-Generated Code
@@ -177,7 +177,7 @@ The easiest way to deploy MedAssist-ng is with Docker Compose:
 git clone https://github.com/DanielVolz/medassist-ng.git
 cd medassist-ng
 cp .env.example .env
-docker compose up -d
+docker compose -p medassist-ng up -d
 ```
 
 Open `http://localhost:4174` and start tracking your medications.
@@ -195,6 +195,7 @@ All configuration is done via environment variables in `.env`. Copy `.env.exampl
 | `PORT` | `3000` | Backend API port |
 | `CORS_ORIGINS` | `http://localhost:4174` | Allowed origins for CORS |
 | `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`, `silent`). At `info` (default), high-frequency polling endpoints are suppressed. Set `debug` to see all requests. |
+| `OPENAPI_DOCS_ENABLED` | `auto` | Enables API docs in non-production by default. Set explicitly to `true`/`false` to override. |
 | `TZ` | `Europe/Berlin` | Timezone for scheduled reminders |
 
 ### Authentication
@@ -210,6 +211,42 @@ All configuration is done via environment variables in `.env`. Copy `.env.exampl
 | `REFRESH_TOKEN_TTL_DAYS` | `7` | Refresh token lifetime |
 
 Generate secrets with: `openssl rand -hex 32`
+
+### API Keys (Programmatic API Access)
+
+When `AUTH_ENABLED=true`, you can create personal API keys and call protected endpoints with:
+
+```bash
+Authorization: Bearer ma_...
+```
+
+Available scopes:
+
+- `read`: read-only access (`GET`, `HEAD`, `OPTIONS`)
+- `write`: read + write access
+
+Essential notes:
+
+- Create keys in the app when authentication is enabled.
+- The token is shown only once after creation.
+- Creating a new key automatically deactivates previously active keys for the same user.
+- API keys are stored hashed in the database.
+
+Example usage:
+
+```bash
+curl http://localhost:3000/settings \
+  -H "Authorization: Bearer ma_..."
+```
+
+API reference:
+
+- Interactive docs: `/docs`
+- OpenAPI JSON: `/docs/json`
+- Key management endpoints for authenticated users:
+  - `GET /auth/api-keys`
+  - `POST /auth/api-keys`
+  - `DELETE /auth/api-keys/:id`
 
 ### OIDC / SSO
 
@@ -309,29 +346,21 @@ For all services and options, see the [Shoutrrr documentation](https://containrr
 # Development
 
 ```bash
-docker compose -f docker-compose.dev.yml up
+docker compose -p medassist-dev -f docker-compose.dev.yml up
 ```
 
 - Frontend: `http://localhost:5173` (hot reload)
 - Backend: `http://localhost:3000`
+- API docs UI: `http://localhost:3000/docs` (when docs are enabled)
+- OpenAPI JSON: `http://localhost:3000/docs/json` (when docs are enabled)
 
-Playwright E2E recommendations:
+Useful local commands:
 
 ```bash
-cd frontend
-npm run test:e2e:local      # local run with PLAYWRIGHT_WORKERS=4
-npm run test:e2e:all:local  # local all-browser run with PLAYWRIGHT_WORKERS=4
+npm run lint
+cd backend && npm run test:run
+cd frontend && npm run test:run
 ```
-
-- CI stays at `PLAYWRIGHT_WORKERS=1` for stability.
-- Data-heavy specs remain sequential via the `chromium-data` project config.
-
-# Dependency Updates
-
-- Dependabot checks dependencies weekly for `frontend`, `backend`, repository root tooling, and GitHub Actions.
-- Minor and patch updates are grouped to reduce PR noise.
-- Dependabot minor/patch PRs are configured for auto-merge after required CI checks pass.
-- Major updates still require manual review before merge.
 
 # Acknowledgements
 

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -90,8 +90,11 @@ export async function reportRoutes(app: FastifyInstance) {
 
 			const sortedTaken = takenDoses.map((d) => d.takenAt.getTime()).sort((a, b) => a - b);
 
-			// Get refills for this medication
-			const refills = await db.select().from(refillHistory).where(eq(refillHistory.medicationId, medId));
+			// Get refills for this medication scoped to the authenticated user.
+			const refills = await db
+				.select()
+				.from(refillHistory)
+				.where(and(eq(refillHistory.medicationId, medId), eq(refillHistory.userId, userId)));
 
 			result[medId] = {
 				dosesTaken: takenDoses.length,

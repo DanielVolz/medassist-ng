@@ -1,3 +1,5 @@
+name: medassist-dev
+
 services:
   backend-dev:
     image: node:22-slim
@@ -10,6 +12,7 @@ services:
     env_file:
       - .env
     environment:
+      - NODE_ENV=development
       - DATA_DIR=/app/data
       - RATE_LIMIT_MAX=1000
     ports:
@@ -33,6 +36,7 @@ services:
     env_file:
       - .env
     environment:
+      - NODE_ENV=development
       - BACKEND_URL=http://backend-dev:3000
     ports:
       - "5173:5173"

@@ -195,8 +195,13 @@ test.describe("Schedule with medications", () => {
 		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
 		test.skip(!(await takeBtn.isVisible().catch(() => false)), "No actionable take-dose button is visible for today");
 
-		await takeBtn.click();
-		await page.waitForLoadState("networkidle");
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
+				{ timeout: 10000 }
+			),
+			takeBtn.click(),
+		]);
 		await expect(todayBlock.locator("button.dose-btn.undo").first()).toBeVisible({ timeout: 10000 });
 	});
 

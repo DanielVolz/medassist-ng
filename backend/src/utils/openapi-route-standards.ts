@@ -29,7 +29,7 @@ export const tokenParamsSchema = {
 	type: "object",
 	required: ["token"],
 	properties: {
-		token: { type: "string", pattern: "^[a-f0-9]{16}$" },
+		token: { type: "string", minLength: 1 },
 	},
 } as const;
 

@@ -39,9 +39,8 @@ const shareTokenPattern = /^[a-f0-9]{16}$/;
 
 const createShareBodyOpenApiSchema = {
 	type: "object",
-	required: ["takenBy"],
 	properties: {
-		takenBy: { type: "string", minLength: 1 },
+		takenBy: { type: "string" },
 		scheduleDays: { type: "integer", minimum: 1, maximum: 365, default: 30 },
 	},
 	example: {
@@ -62,6 +61,25 @@ const shareReadResponseSchema = {
 		shareStockStatus: { type: "boolean" },
 		upcomingTodayOnly: { type: "boolean" },
 		shareScheduleTodayOnly: { type: "boolean" },
+	},
+} as const;
+
+const shareExpiredResponseSchema = {
+	type: "object",
+	properties: {
+		error: { type: "string" },
+		code: { type: "string" },
+		ownerUsername: { type: "string" },
+		takenBy: { type: "string" },
+		expiredAt: { type: "string", format: "date-time" },
+	},
+} as const;
+
+const shareOverviewExpiredResponseSchema = {
+	type: "object",
+	properties: {
+		error: { type: "string" },
+		expiredAt: { type: "string", format: "date-time" },
 	},
 } as const;
 
@@ -117,7 +135,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				response: {
 					200: shareReadResponseSchema,
 					404: genericErrorSchema,
-					410: genericErrorSchema,
+					410: shareExpiredResponseSchema,
 				},
 			},
 			config: {
@@ -254,7 +272,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				response: {
 					200: shareOverviewResponseSchema,
 					404: genericErrorSchema,
-					410: genericErrorSchema,
+					410: shareOverviewExpiredResponseSchema,
 				},
 			},
 			config: {

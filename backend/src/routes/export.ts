@@ -174,7 +174,7 @@ const exportResponseSchema = {
 
 const importBodyOpenApiSchema = {
 	type: "object",
-	required: ["version", "exportedAt", "medications", "doseHistory", "refillHistory", "shareLinks"],
+	required: ["version", "exportedAt"],
 	properties: {
 		version: { type: "string" },
 		exportedAt: { type: "string", format: "date-time" },

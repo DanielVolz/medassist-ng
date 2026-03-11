@@ -72,6 +72,29 @@ function parseIntakesWithUnits(
 	}));
 }
 
+function normalizeDateTime(value: unknown): string | null {
+	if (value == null) {
+		return null;
+	}
+
+	if (value instanceof Date) {
+		return Number.isNaN(value.getTime()) ? null : value.toISOString();
+	}
+
+	if (typeof value === "number") {
+		const timestampMs = value < 1_000_000_000_000 ? value * 1000 : value;
+		const date = new Date(timestampMs);
+		return Number.isNaN(date.getTime()) ? null : date.toISOString();
+	}
+
+	if (typeof value === "string") {
+		const date = new Date(value);
+		return Number.isNaN(date.getTime()) ? null : date.toISOString();
+	}
+
+	return null;
+}
+
 // New intake schema with per-intake takenBy
 const intakeSchema = z.object({
 	usage: z.number().nonnegative(),
@@ -250,9 +273,9 @@ const intakeOpenApiSchema = {
 	properties: {
 		usage: { type: "number", minimum: 0 },
 		every: { type: "integer", minimum: 1 },
-		start: { type: "string", format: "date-time" },
-		intakeUnit: { type: "string", enum: ["ml", "tsp", "tbsp"] },
-		takenBy: { type: "string", maxLength: 100 },
+		start: { type: "string", description: "ISO datetime string; timezone suffix optional." },
+		intakeUnit: { type: ["string", "null"], enum: ["ml", "tsp", "tbsp", null] },
+		takenBy: { type: ["string", "null"], maxLength: 100 },
 		intakeRemindersEnabled: { type: "boolean" },
 	},
 } as const;
@@ -263,13 +286,12 @@ const blisterOpenApiSchema = {
 	properties: {
 		usage: { type: "number", minimum: 0 },
 		every: { type: "integer", minimum: 1 },
-		start: { type: "string", format: "date-time" },
+		start: { type: "string", description: "ISO datetime string; timezone suffix optional." },
 	},
 } as const;
 
 const medicationBodyOpenApiSchema = {
 	type: "object",
-	required: ["name", "packageType"],
 	properties: {
 		name: { type: "string", maxLength: 100 },
 		genericName: { type: "string", maxLength: 100 },
@@ -301,7 +323,8 @@ const medicationBodyOpenApiSchema = {
 		intakes: { type: "array", items: intakeOpenApiSchema },
 		blisters: { type: "array", items: blisterOpenApiSchema },
 	},
-	description: "Medication payload. Provide either intakes or legacy blisters.",
+	description:
+		"Medication payload. Runtime validation allows defaults and legacy shapes; provide either intakes or legacy blisters.",
 	example: {
 		name: "Ibuprofen 400",
 		genericName: "Ibuprofen",
@@ -344,10 +367,10 @@ const medicationResponseSchema = {
 	properties: {
 		id: { type: "number" },
 		name: { type: "string" },
-		genericName: { type: "string" },
+		genericName: { type: ["string", "null"] },
 		takenBy: { type: "array", items: { type: "string" } },
 		medicationForm: { type: "string" },
-		pillForm: { type: "string" },
+		pillForm: { type: ["string", "null"] },
 		lifecycleCategory: { type: "string" },
 		packageType: { type: "string" },
 		packCount: { type: "integer" },
@@ -355,30 +378,30 @@ const medicationResponseSchema = {
 		pillsPerBlister: { type: "integer" },
 		packageAmountValue: { type: "integer" },
 		packageAmountUnit: { type: "string" },
-		totalPills: { type: "number" },
+		totalPills: { type: ["number", "null"] },
 		looseTablets: { type: "number" },
 		stockAdjustment: { type: "number" },
-		lastStockCorrectionAt: { type: "string" },
-		pillWeightMg: { type: "number" },
+		lastStockCorrectionAt: { type: ["string", "null"] },
+		pillWeightMg: { type: ["number", "null"] },
 		doseUnit: { type: "string" },
-		medicationStartDate: { type: "string" },
-		medicationEndDate: { type: "string" },
+		medicationStartDate: { type: ["string", "null"] },
+		medicationEndDate: { type: ["string", "null"] },
 		autoMarkObsoleteAfterEndDate: { type: "boolean" },
 		intakes: { type: "array", items: intakeOpenApiSchema },
 		blisters: { type: "array", items: blisterOpenApiSchema },
-		imageUrl: { type: "string" },
-		expiryDate: { type: "string" },
-		notes: { type: "string" },
+		imageUrl: { type: ["string", "null"] },
+		expiryDate: { type: ["string", "null"] },
+		notes: { type: ["string", "null"] },
 		intakeRemindersEnabled: { type: "boolean" },
 		isObsolete: { type: "boolean" },
-		obsoleteAt: { type: "string" },
+		obsoleteAt: { type: ["string", "null"] },
 		prescriptionEnabled: { type: "boolean" },
-		prescriptionAuthorizedRefills: { type: "integer" },
-		prescriptionRemainingRefills: { type: "integer" },
+		prescriptionAuthorizedRefills: { type: ["integer", "null"] },
+		prescriptionRemainingRefills: { type: ["integer", "null"] },
 		prescriptionLowRefillThreshold: { type: "integer" },
-		prescriptionExpiryDate: { type: "string" },
-		dismissedUntil: { type: "string" },
-		updatedAt: { type: "string", format: "date-time" },
+		prescriptionExpiryDate: { type: ["string", "null"] },
+		dismissedUntil: { type: ["string", "null"] },
+		updatedAt: { type: ["string", "null"], format: "date-time" },
 	},
 } as const;
 
@@ -576,7 +599,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 					prescriptionLowRefillThreshold: row.prescriptionLowRefillThreshold ?? 1,
 					prescriptionExpiryDate: row.prescriptionExpiryDate ?? null,
 					dismissedUntil: row.dismissedUntil ?? null,
-					updatedAt: row.updatedAt,
+					updatedAt: normalizeDateTime(row.updatedAt),
 				};
 			});
 		}
@@ -741,7 +764,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				prescriptionRemainingRefills: inserted.prescriptionRemainingRefills ?? null,
 				prescriptionLowRefillThreshold: inserted.prescriptionLowRefillThreshold ?? 1,
 				prescriptionExpiryDate: inserted.prescriptionExpiryDate ?? null,
-				updatedAt: inserted.updatedAt,
+				updatedAt: normalizeDateTime(inserted.updatedAt),
 			};
 		}
 	);
@@ -1051,7 +1074,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				prescriptionRemainingRefills: result[0].prescriptionRemainingRefills ?? null,
 				prescriptionLowRefillThreshold: result[0].prescriptionLowRefillThreshold ?? 1,
 				prescriptionExpiryDate: result[0].prescriptionExpiryDate ?? null,
-				updatedAt: result[0].updatedAt,
+				updatedAt: normalizeDateTime(result[0].updatedAt),
 			};
 		}
 	);
@@ -1094,7 +1117,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				id: updated.id,
 				isObsolete: updated.isObsolete ?? false,
 				obsoleteAt: updated.obsoleteAt?.toISOString() ?? null,
-				updatedAt: updated.updatedAt,
+				updatedAt: normalizeDateTime(updated.updatedAt),
 			};
 		}
 	);
@@ -1137,7 +1160,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				id: updated.id,
 				isObsolete: updated.isObsolete ?? false,
 				obsoleteAt: updated.obsoleteAt?.toISOString() ?? null,
-				updatedAt: updated.updatedAt,
+				updatedAt: normalizeDateTime(updated.updatedAt),
 			};
 		}
 	);
@@ -1248,7 +1271,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				id: result[0].id,
 				stockAdjustment: result[0].stockAdjustment ?? 0,
 				lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
-				updatedAt: result[0].updatedAt,
+				updatedAt: normalizeDateTime(result[0].updatedAt),
 			};
 		}
 	);
@@ -1297,13 +1320,6 @@ export async function medicationRoutes(app: FastifyInstance) {
 			schema: {
 				params: idParamsSchema,
 				consumes: ["multipart/form-data"],
-				body: {
-					type: "object",
-					required: ["file"],
-					properties: {
-						file: { type: "string", format: "binary" },
-					},
-				},
 				response: {
 					200: {
 						type: "object",

@@ -1,6 +1,7 @@
 import type { Client } from "@libsql/client";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 // Create test database and mocks before anything else (hoisted)
 const {
@@ -214,7 +215,7 @@ describe("Planner Routes", () => {
 			args: [],
 		});
 
-		app = Fastify({ logger: false });
+		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(plannerRoutes);
 		await app.ready();
 

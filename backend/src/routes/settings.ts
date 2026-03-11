@@ -481,6 +481,33 @@ export async function settingsRoutes(app: FastifyInstance) {
 						shareScheduleTodayOnly: { type: "boolean" },
 						swapDashboardMainSections: { type: "boolean" },
 					},
+					example: {
+						emailEnabled: true,
+						notificationEmail: "daniel@example.com",
+						reminderDaysBefore: 7,
+						repeatDailyReminders: true,
+						lowStockDays: 14,
+						normalStockDays: 30,
+						highStockDays: 90,
+						shoutrrrEnabled: false,
+						shoutrrrUrl: "",
+						emailStockReminders: true,
+						emailIntakeReminders: true,
+						emailPrescriptionReminders: true,
+						shoutrrrStockReminders: false,
+						shoutrrrIntakeReminders: false,
+						shoutrrrPrescriptionReminders: false,
+						skipRemindersForTakenDoses: true,
+						repeatRemindersEnabled: true,
+						reminderRepeatIntervalMinutes: 30,
+						maxNaggingReminders: 5,
+						language: "en",
+						stockCalculationMode: "automatic",
+						shareStockStatus: true,
+						upcomingTodayOnly: false,
+						shareScheduleTodayOnly: false,
+						swapDashboardMainSections: false,
+					},
 				},
 				response: {
 					200: { type: "object", properties: { success: { type: "boolean" } } },
@@ -560,6 +587,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 					properties: {
 						language: { type: "string", enum: ["en", "de"] },
 					},
+					example: {
+						language: "de",
+					},
 				},
 				response: {
 					200: { type: "object", properties: { success: { type: "boolean" } } },
@@ -606,6 +636,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 					required: ["email"],
 					properties: {
 						email: { type: "string", format: "email" },
+					},
+					example: {
+						email: "daniel@example.com",
 					},
 				},
 				response: {
@@ -713,6 +746,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 					required: ["url"],
 					properties: {
 						url: { type: "string" },
+					},
+					example: {
+						url: "ntfy://user:token@push.example.com/medassist",
 					},
 				},
 				response: {

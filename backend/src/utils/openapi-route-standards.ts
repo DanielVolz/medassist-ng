@@ -4,6 +4,50 @@ type SecurityEntry = Readonly<Record<string, readonly string[]>>;
 
 const defaultProtectedSecurity: readonly SecurityEntry[] = [{ bearerAuth: [] }, { cookieAuth: [] }];
 
+export const genericErrorSchema = {
+	type: "object",
+	properties: {
+		error: { type: "string" },
+		code: { type: "string" },
+	},
+} as const;
+
+export const validationErrorSchema = {
+	type: "object",
+	additionalProperties: true,
+} as const;
+
+export const idParamsSchema = {
+	type: "object",
+	required: ["id"],
+	properties: {
+		id: { type: "string", pattern: "^\\d+$" },
+	},
+} as const;
+
+export const tokenParamsSchema = {
+	type: "object",
+	required: ["token"],
+	properties: {
+		token: { type: "string", minLength: 1 },
+	},
+} as const;
+
+export const successResponseSchema = {
+	type: "object",
+	properties: {
+		success: { type: "boolean" },
+	},
+} as const;
+
+export const messageResponseSchema = {
+	type: "object",
+	properties: {
+		success: { type: "boolean" },
+		message: { type: "string" },
+	},
+} as const;
+
 export type OpenApiRouteStandardsOptions = {
 	tag: string;
 	protectedByDefault: boolean;

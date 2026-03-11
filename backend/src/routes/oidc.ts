@@ -5,7 +5,7 @@ import * as client from "openid-client";
 import { db } from "../db/client.js";
 import { refreshTokens, users } from "../db/schema.js";
 import { env } from "../plugins/env.js";
-import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
+import { applyOpenApiRouteStandards, genericErrorSchema } from "../utils/openapi-route-standards.js";
 
 // =============================================================================
 // OIDC Configuration Cache
@@ -54,10 +54,10 @@ export async function oidcRoutes(app: FastifyInstance) {
 
 	if (!env.OIDC_ENABLED) {
 		// Register a disabled route that returns an error
-		app.get("/auth/oidc/login", async (_request, reply) => {
+		app.get("/auth/oidc/login", { schema: { response: { 400: genericErrorSchema } } }, async (_request, reply) => {
 			return reply.status(400).send({ error: "OIDC authentication is not enabled" });
 		});
-		app.get("/auth/oidc/callback", async (_request, reply) => {
+		app.get("/auth/oidc/callback", { schema: { response: { 400: genericErrorSchema } } }, async (_request, reply) => {
 			return reply.status(400).send({ error: "OIDC authentication is not enabled" });
 		});
 		return;
@@ -66,58 +66,85 @@ export async function oidcRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	// GET /auth/oidc/login - Initiates OIDC flow
 	// ---------------------------------------------------------------------------
-	app.get("/auth/oidc/login", async (request, reply) => {
-		try {
-			const config = await getOIDCConfig();
+	app.get(
+		"/auth/oidc/login",
+		{
+			schema: {
+				response: {
+					302: { type: "null", description: "Redirect to OIDC provider" },
+					500: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			try {
+				const config = await getOIDCConfig();
 
-			// Generate PKCE values
-			const codeVerifier = generateCodeVerifier();
-			const codeChallenge = generateCodeChallenge(codeVerifier);
-			const state = generateState();
+				// Generate PKCE values
+				const codeVerifier = generateCodeVerifier();
+				const codeChallenge = generateCodeChallenge(codeVerifier);
+				const state = generateState();
 
-			// Store PKCE verifier and state in signed cookies (short-lived)
-			reply.setCookie("oidc_code_verifier", codeVerifier, {
-				httpOnly: true,
-				secure: env.NODE_ENV === "production",
-				sameSite: "lax",
-				path: "/",
-				maxAge: 600, // 10 minutes
-				signed: true,
-			});
+				// Store PKCE verifier and state in signed cookies (short-lived)
+				reply.setCookie("oidc_code_verifier", codeVerifier, {
+					httpOnly: true,
+					secure: env.NODE_ENV === "production",
+					sameSite: "lax",
+					path: "/",
+					maxAge: 600, // 10 minutes
+					signed: true,
+				});
 
-			reply.setCookie("oidc_state", state, {
-				httpOnly: true,
-				secure: env.NODE_ENV === "production",
-				sameSite: "lax",
-				path: "/",
-				maxAge: 600,
-				signed: true,
-			});
+				reply.setCookie("oidc_state", state, {
+					httpOnly: true,
+					secure: env.NODE_ENV === "production",
+					sameSite: "lax",
+					path: "/",
+					maxAge: 600,
+					signed: true,
+				});
 
-			// Build authorization URL
-			const redirectUri = env.OIDC_REDIRECT_URI!;
-			const scope = env.OIDC_SCOPES;
+				// Build authorization URL
+				const redirectUri = env.OIDC_REDIRECT_URI!;
+				const scope = env.OIDC_SCOPES;
 
-			const authUrl = client.buildAuthorizationUrl(config, {
-				redirect_uri: redirectUri,
-				scope,
-				state,
-				code_challenge: codeChallenge,
-				code_challenge_method: "S256",
-			});
+				const authUrl = client.buildAuthorizationUrl(config, {
+					redirect_uri: redirectUri,
+					scope,
+					state,
+					code_challenge: codeChallenge,
+					code_challenge_method: "S256",
+				});
 
-			return reply.redirect(authUrl.href);
-		} catch (err: unknown) {
-			request.log.error({ err }, "[OIDC] Login initialization failed");
-			return reply.redirect(`${getFrontendUrl()}/?error=oidc_init_failed`);
+				return reply.redirect(authUrl.href);
+			} catch (err: unknown) {
+				request.log.error({ err }, "[OIDC] Login initialization failed");
+				return reply.redirect(`${getFrontendUrl()}/?error=oidc_init_failed`);
+			}
 		}
-	});
+	);
 
 	// ---------------------------------------------------------------------------
 	// GET /auth/oidc/callback - Handles callback from OIDC provider
 	// ---------------------------------------------------------------------------
 	app.get<{ Querystring: { code?: string; state?: string; error?: string; error_description?: string } }>(
 		"/auth/oidc/callback",
+		{
+			schema: {
+				querystring: {
+					type: "object",
+					properties: {
+						code: { type: "string" },
+						state: { type: "string" },
+						error: { type: "string" },
+						error_description: { type: "string" },
+					},
+				},
+				response: {
+					302: { type: "null", description: "Redirect back to frontend" },
+				},
+			},
+		},
 		async (request, reply) => {
 			const { code, state, error, error_description } = request.query;
 

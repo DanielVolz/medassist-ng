@@ -30,6 +30,7 @@ import { settingsRoutes } from "./routes/settings.js";
 import { shareRoutes } from "./routes/share.js";
 import { startIntakeReminderScheduler } from "./services/intake-reminder-scheduler.js";
 import { startReminderScheduler } from "./services/reminder-scheduler.js";
+import { documentationSchemaAjv } from "./utils/documentation-schema-keywords.js";
 
 // Re-export utilities from server-config for external use
 export {
@@ -156,6 +157,7 @@ export async function createApp(options?: {
 	const app = Fastify({
 		logger: buildLoggerOptions(opts.logLevel),
 		genReqId: (request) => sanitizeCorrelationId(request.headers) ?? randomUUID(),
+		ajv: documentationSchemaAjv,
 	});
 
 	app.addHook("onRequest", (request, reply, done) => {
@@ -231,6 +233,7 @@ const imagesDir = ensureImagesDirectory();
 const app = Fastify({
 	logger: buildLoggerOptions(env.LOG_LEVEL),
 	genReqId: (request) => sanitizeCorrelationId(request.headers) ?? randomUUID(),
+	ajv: documentationSchemaAjv,
 });
 
 app.addHook("onRequest", (request, reply, done) => {

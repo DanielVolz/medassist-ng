@@ -167,6 +167,11 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 						scope: { type: "string", enum: ["read", "write"], default: "write" },
 						expiresInDays: { type: "number", minimum: 1, maximum: 3650 },
 					},
+					example: {
+						name: "Home Assistant integration",
+						scope: "write",
+						expiresInDays: 365,
+					},
 				},
 				response: {
 					201: {

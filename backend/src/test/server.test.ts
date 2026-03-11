@@ -6,6 +6,7 @@ import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
+import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 // Import from utils to avoid index.ts import side effects (server start)
 import {
@@ -197,6 +198,7 @@ describe("Server Bootstrap", () => {
 				logger: {
 					level: "silent", // Disable logging for tests
 				},
+				ajv: documentationSchemaAjv,
 			});
 
 			expect(app).toBeDefined();
@@ -206,7 +208,7 @@ describe("Server Bootstrap", () => {
 		});
 
 		it("should register sensible plugin", async () => {
-			const app = Fastify({ logger: false });
+			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 			await app.register(sensible);
 
 			// Sensible adds error helpers
@@ -219,7 +221,7 @@ describe("Server Bootstrap", () => {
 		it("should register cors plugin with multiple origins", async () => {
 			const origins = ["http://localhost:5173", "http://localhost:4173"];
 
-			const app = Fastify({ logger: false });
+			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 			await app.register(cors, { origin: origins, credentials: true });
 
 			// Add a test route
@@ -243,7 +245,7 @@ describe("Server Bootstrap", () => {
 		});
 
 		it("should register cookie plugin", async () => {
-			const app = Fastify({ logger: false });
+			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 			await app.register(cookie, { secret: "test-cookie-secret" });
 
 			// Add a test route that sets a cookie
@@ -267,7 +269,7 @@ describe("Server Bootstrap", () => {
 
 	describe("Config Decorator", () => {
 		it("should create config with auth settings", async () => {
-			const app = Fastify({ logger: false });
+			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 
 			const accessTtlMinutes = 15;
 			const refreshTtlDays = 7;
@@ -369,7 +371,7 @@ describe("Server Bootstrap", () => {
 
 	describe("Route Registration", () => {
 		it("should register multiple route plugins", async () => {
-			const app = Fastify({ logger: false });
+			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 
 			// Mock route plugins
 			const healthRoutes = async (app: FastifyInstance) => {
@@ -402,7 +404,7 @@ describe("Server Bootstrap", () => {
 
 	describe("Server Startup", () => {
 		it("should listen on specified port", async () => {
-			const app = Fastify({ logger: false });
+			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 
 			app.get("/test", async () => ({ ok: true }));
 
@@ -415,7 +417,7 @@ describe("Server Bootstrap", () => {
 		});
 
 		it("should handle listen errors gracefully", async () => {
-			const app = Fastify({ logger: false });
+			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 
 			// Try to listen on an invalid port
 			await expect(app.listen({ port: -1, host: "127.0.0.1" })).rejects.toThrow();

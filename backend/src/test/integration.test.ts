@@ -10,6 +10,7 @@ import sensible from "@fastify/sensible";
 import type { Client } from "@libsql/client";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 // Use vi.hoisted to create the db BEFORE mocks are set up
 const { testClient, testDb } = vi.hoisted(() => {
@@ -203,7 +204,7 @@ describe("Integration Tests", () => {
 	beforeAll(async () => {
 		await createSchema(testClient);
 
-		app = Fastify({ logger: false });
+		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(sensible);
 		await app.register(cookie, { secret: "test-cookie-secret" });
 		await app.register(jwt, {

@@ -14,9 +14,28 @@ export async function healthRoutes(app: FastifyInstance) {
 	applyOpenApiRouteStandards(app, { tag: "health", protectedByDefault: false });
 
 	// Exempt from rate limit + suppress request logs (called every 30s by Docker healthcheck)
-	app.get("/health", { config: { rateLimit: false }, logLevel: "warn" }, async () => ({
-		status: "ok",
-		version: backendVersion,
-		smtpConfigured: Boolean(process.env.SMTP_HOST),
-	}));
+	app.get(
+		"/health",
+		{
+			config: { rateLimit: false },
+			logLevel: "warn",
+			schema: {
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							status: { type: "string", enum: ["ok"] },
+							version: { type: "string" },
+							smtpConfigured: { type: "boolean" },
+						},
+					},
+				},
+			},
+		},
+		async () => ({
+			status: "ok",
+			version: backendVersion,
+			smtpConfigured: Boolean(process.env.SMTP_HOST),
+		})
+	);
 }

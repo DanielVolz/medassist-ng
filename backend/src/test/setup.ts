@@ -13,6 +13,7 @@ import { type Client, createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import Fastify, { type FastifyInstance } from "fastify";
+import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 // Get migrations folder path
 const __filename = fileURLToPath(import.meta.url);
@@ -44,7 +45,7 @@ export async function buildTestApp(): Promise<TestContext> {
 	await runTestMigrations(client);
 
 	// Create Fastify app with minimal plugins
-	const app = Fastify({ logger: false });
+	const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 
 	await app.register(sensible);
 	await app.register(cookie, { secret: "test-cookie-secret" });

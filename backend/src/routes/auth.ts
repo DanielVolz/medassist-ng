@@ -176,6 +176,10 @@ export async function authRoutes(app: FastifyInstance) {
 						username: { type: "string", minLength: 3, maxLength: 50 },
 						password: { type: "string", minLength: 8, maxLength: 128 },
 					},
+					example: {
+						username: "daniel",
+						password: "correct-horse-battery-staple",
+					},
 				},
 				response: {
 					201: {
@@ -273,6 +277,11 @@ export async function authRoutes(app: FastifyInstance) {
 						username: { type: "string" },
 						password: { type: "string" },
 						rememberMe: { type: "boolean" },
+					},
+					example: {
+						username: "daniel",
+						password: "correct-horse-battery-staple",
+						rememberMe: true,
 					},
 				},
 				response: {
@@ -576,6 +585,10 @@ export async function authRoutes(app: FastifyInstance) {
 					properties: {
 						currentPassword: { type: "string" },
 						newPassword: { type: "string", minLength: 8, maxLength: 128 },
+					},
+					example: {
+						currentPassword: "current-password",
+						newPassword: "new-strong-password",
 					},
 				},
 				response: {

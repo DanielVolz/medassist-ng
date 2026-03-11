@@ -6,7 +6,12 @@ import { doseTracking, medications, shareTokens } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
-import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
+import {
+	applyOpenApiRouteStandards,
+	genericErrorSchema,
+	tokenParamsSchema,
+	validationErrorSchema,
+} from "../utils/openapi-route-standards.js";
 import { parseIntakesJson, parseTakenByJson, personTakesMedication } from "../utils/scheduler-utils.js";
 
 // =============================================================================
@@ -30,6 +35,25 @@ const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>
 ];
 
 const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
+
+const doseReadResponseSchema = {
+	type: "object",
+	properties: {
+		doses: {
+			type: "array",
+			items: {
+				type: "object",
+				properties: {
+					doseId: { type: "string" },
+					takenAt: { type: "number" },
+					markedBy: { type: ["string", "null"] },
+					takenSource: { type: "string" },
+					dismissed: { type: "boolean" },
+				},
+			},
+		},
+	},
+} as const;
 
 function maskToken(token: string): string {
 	if (token.length <= 8) return token;
@@ -153,7 +177,18 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.get(
 		"/doses/taken",
-		{ preHandler: requireAuth, logLevel: "warn", schema: { tags: ["doses"], security: protectedEndpointSecurity } },
+		{
+			preHandler: requireAuth,
+			logLevel: "warn",
+			schema: {
+				tags: ["doses"],
+				security: protectedEndpointSecurity,
+				response: {
+					200: doseReadResponseSchema,
+					401: genericErrorSchema,
+				},
+			},
+		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -177,7 +212,33 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.post<{ Body: z.infer<typeof markDoseSchema> }>(
 		"/doses/taken",
-		{ preHandler: requireAuth, schema: { tags: ["doses"], security: protectedEndpointSecurity } },
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["doses"],
+				security: protectedEndpointSecurity,
+				body: {
+					type: "object",
+					properties: {
+						doseId: { type: "string" },
+					},
+					example: {
+						doseId: "1:2026-03-11T08:00:00.000Z:Daniel",
+					},
+				},
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							success: { type: "boolean" },
+							message: { type: "string" },
+						},
+					},
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+				},
+			},
+		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -217,7 +278,24 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.delete<{ Params: { doseId: string } }>(
 		"/doses/taken/:doseId",
-		{ preHandler: requireAuth, schema: { tags: ["doses"], security: protectedEndpointSecurity } },
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["doses"],
+				security: protectedEndpointSecurity,
+				params: {
+					type: "object",
+					required: ["doseId"],
+					properties: {
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				response: {
+					200: { type: "object", properties: { success: { type: "boolean" } } },
+					401: genericErrorSchema,
+				},
+			},
+		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -246,7 +324,33 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.post<{ Body: z.infer<typeof dismissDosesSchema> }>(
 		"/doses/dismiss",
-		{ preHandler: requireAuth, schema: { tags: ["doses"], security: protectedEndpointSecurity } },
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["doses"],
+				security: protectedEndpointSecurity,
+				body: {
+					type: "object",
+					properties: {
+						doseIds: { type: "array", items: { type: "string" } },
+					},
+					example: {
+						doseIds: ["1:2026-03-11T08:00:00.000Z:Daniel", "1:2026-03-11T20:00:00.000Z:Daniel"],
+					},
+				},
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							success: { type: "boolean" },
+							dismissedCount: { type: "integer" },
+						},
+					},
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+				},
+			},
+		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -299,7 +403,23 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.delete(
 		"/doses/dismiss",
-		{ preHandler: requireAuth, schema: { tags: ["doses"], security: protectedEndpointSecurity } },
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["doses"],
+				security: protectedEndpointSecurity,
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							success: { type: "boolean" },
+							clearedCount: { type: "integer" },
+						},
+					},
+					401: genericErrorSchema,
+				},
+			},
+		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -333,6 +453,13 @@ export async function doseRoutes(app: FastifyInstance) {
 	app.get<{ Params: { token: string } }>(
 		"/share/:token/doses",
 		{
+			schema: {
+				params: tokenParamsSchema,
+				response: {
+					200: doseReadResponseSchema,
+					404: genericErrorSchema,
+				},
+			},
 			logLevel: "warn",
 			config: {
 				rateLimit: {
@@ -371,6 +498,25 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.post<{ Params: { token: string }; Body: z.infer<typeof shareDoseSchema> }>(
 		"/share/:token/doses",
+		{
+			schema: {
+				params: tokenParamsSchema,
+				body: {
+					type: "object",
+					properties: {
+						doseId: { type: "string" },
+					},
+					example: {
+						doseId: "1:2026-03-11T08:00:00.000Z:Daniel",
+					},
+				},
+				response: {
+					200: { type: "object", properties: { success: { type: "boolean" }, message: { type: "string" } } },
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					404: genericErrorSchema,
+				},
+			},
+		},
 		async (request, reply) => {
 			const { token } = request.params;
 
@@ -427,40 +573,62 @@ export async function doseRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	// DELETE /share/:token/doses/:doseId - PUBLIC: Unmark a dose via share link
 	// ---------------------------------------------------------------------------
-	app.delete<{ Params: { token: string; doseId: string } }>("/share/:token/doses/:doseId", async (request, reply) => {
-		const { token, doseId } = request.params;
+	app.delete<{ Params: { token: string; doseId: string } }>(
+		"/share/:token/doses/:doseId",
+		{
+			schema: {
+				params: {
+					type: "object",
+					required: ["token", "doseId"],
+					properties: {
+						token: tokenParamsSchema.properties.token,
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				response: {
+					200: { type: "object", properties: { success: { type: "boolean" } } },
+					400: genericErrorSchema,
+					404: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { token, doseId } = request.params;
 
-		const { share, reason } = await getActiveShareToken(token);
-		if (!share) {
-			request.log.warn(`[ShareDose] Rejected unmark for token ${maskToken(token)} (reason=${reason})`);
-			return reply.notFound("Share link not found");
+			const { share, reason } = await getActiveShareToken(token);
+			if (!share) {
+				request.log.warn(`[ShareDose] Rejected unmark for token ${maskToken(token)} (reason=${reason})`);
+				return reply.notFound("Share link not found");
+			}
+
+			const isValidShareDoseId = await validateShareDoseId(share, doseId);
+			if (!isValidShareDoseId) {
+				request.log.warn(
+					`[ShareDose] Rejected invalid doseId in unmark request (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
+				);
+				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
+			}
+
+			// Check if this dose was dismissed
+			const [existing] = await db
+				.select()
+				.from(doseTracking)
+				.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
+
+			if (existing?.dismissed) {
+				// Already dismissed - keep the record as-is
+				request.log.debug(`[ShareDose] Unmark ignored for dismissed dose (owner=${share.userId}, doseId=${doseId})`);
+			} else {
+				// Not dismissed - delete the record entirely
+				await db
+					.delete(doseTracking)
+					.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
+				request.log.info(
+					`[ShareDose] Dose unmarked via share link (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
+				);
+			}
+
+			return { success: true };
 		}
-
-		const isValidShareDoseId = await validateShareDoseId(share, doseId);
-		if (!isValidShareDoseId) {
-			request.log.warn(
-				`[ShareDose] Rejected invalid doseId in unmark request (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
-			);
-			return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
-		}
-
-		// Check if this dose was dismissed
-		const [existing] = await db
-			.select()
-			.from(doseTracking)
-			.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
-
-		if (existing?.dismissed) {
-			// Already dismissed - keep the record as-is
-			request.log.debug(`[ShareDose] Unmark ignored for dismissed dose (owner=${share.userId}, doseId=${doseId})`);
-		} else {
-			// Not dismissed - delete the record entirely
-			await db.delete(doseTracking).where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
-			request.log.info(
-				`[ShareDose] Dose unmarked via share link (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
-			);
-		}
-
-		return { success: true };
-	});
+	);
 }

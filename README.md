@@ -204,12 +204,13 @@ Recommended values for API docs by environment:
 |-------------|----------------|
 | Development | `OPENAPI_DOCS_ENABLED=true` |
 | Staging/Test | `OPENAPI_DOCS_ENABLED=true` |
-| Production | `OPENAPI_DOCS_ENABLED=false` (or keep `auto` with `NODE_ENV=production`) |
+| Production | leave it unset, or set `OPENAPI_DOCS_ENABLED=false` |
 
 Notes:
 
-- `auto` means: docs enabled when `NODE_ENV` is not `production`, disabled when `NODE_ENV=production`.
-- Explicitly setting `OPENAPI_DOCS_ENABLED` always overrides `auto` behavior.
+- If `OPENAPI_DOCS_ENABLED` is not set, docs are enabled outside production and disabled in production.
+- If `OPENAPI_DOCS_ENABLED=true`, docs are available on `/docs` and `/docs/json`.
+- If `OPENAPI_DOCS_ENABLED=false`, only the docs are disabled. The API still works normally.
 
 ### Authentication
 
@@ -256,6 +257,7 @@ API reference:
 
 - Interactive docs: `/docs`
 - OpenAPI JSON: `/docs/json`
+- With the bundled frontend ingress, these paths work on the normal app URL as well, for example `http://localhost:4174/docs` when docs are enabled.
 - Key management endpoints for authenticated users:
   - `GET /auth/api-keys`
   - `POST /auth/api-keys`

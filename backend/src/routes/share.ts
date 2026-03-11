@@ -50,17 +50,6 @@ const createShareBodyOpenApiSchema = {
 	},
 } as const;
 
-const sharedDoseSchema = {
-	type: "object",
-	properties: {
-		doseId: { type: "string" },
-		takenAt: { type: "number" },
-		markedBy: { type: "string" },
-		takenSource: { type: "string" },
-		dismissed: { type: "boolean" },
-	},
-} as const;
-
 const shareReadResponseSchema = {
 	type: "object",
 	properties: {

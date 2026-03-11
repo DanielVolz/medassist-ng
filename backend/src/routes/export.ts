@@ -10,7 +10,11 @@ import { doseTracking, medications, refillHistory, shareTokens, userSettings } f
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
-import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
+import {
+	applyOpenApiRouteStandards,
+	genericErrorSchema,
+	validationErrorSchema,
+} from "../utils/openapi-route-standards.js";
 import { normalizePackageType, PACKAGE_TYPES } from "../utils/package-profiles.js";
 import { parseIntakesJson, parseTakenByJson } from "../utils/scheduler-utils.js";
 
@@ -146,6 +150,69 @@ const importDataSchema = z.object({
 	shareLinks: z.array(shareLinkSchema).default([]),
 });
 
+const exportQuerystringSchema = {
+	type: "object",
+	properties: {
+		includeSensitive: { type: "string", enum: ["true", "false"] },
+		includeImages: { type: "string", enum: ["true", "false"] },
+	},
+} as const;
+
+const exportResponseSchema = {
+	type: "object",
+	properties: {
+		version: { type: "string" },
+		exportedAt: { type: "string", format: "date-time" },
+		includeSensitiveData: { type: "boolean" },
+		medications: { type: "array", items: { type: "object", additionalProperties: true } },
+		doseHistory: { type: "array", items: { type: "object", additionalProperties: true } },
+		refillHistory: { type: "array", items: { type: "object", additionalProperties: true } },
+		settings: { type: "object", additionalProperties: true },
+		shareLinks: { type: "array", items: { type: "object", additionalProperties: true } },
+	},
+} as const;
+
+const importBodyOpenApiSchema = {
+	type: "object",
+	required: ["version", "exportedAt", "medications", "doseHistory", "refillHistory", "shareLinks"],
+	properties: {
+		version: { type: "string" },
+		exportedAt: { type: "string", format: "date-time" },
+		includeSensitiveData: { type: "boolean" },
+		medications: { type: "array", items: { type: "object", additionalProperties: true } },
+		doseHistory: { type: "array", items: { type: "object", additionalProperties: true } },
+		refillHistory: { type: "array", items: { type: "object", additionalProperties: true } },
+		settings: { type: "object", additionalProperties: true },
+		shareLinks: { type: "array", items: { type: "object", additionalProperties: true } },
+	},
+	example: {
+		version: "1.8.0",
+		exportedAt: "2026-03-11T10:15:00.000Z",
+		includeSensitiveData: true,
+		medications: [
+			{
+				name: "Ibuprofen 400",
+				packageType: "box",
+				packCount: 1,
+				looseTablets: 8,
+				intakes: [
+					{
+						usage: 1,
+						every: 8,
+						start: "2026-03-11T08:00:00.000Z",
+						takenBy: "Daniel",
+						remind: true,
+					},
+				],
+			},
+		],
+		doseHistory: [{ doseId: "1:2026-03-11T08:00:00.000Z:Daniel", takenAt: 1773216000000 }],
+		refillHistory: [{ packsAdded: 1, loosePillsAdded: 4, refillDate: "2026-03-10T12:00:00.000Z" }],
+		settings: { language: "en", stockCalculationMode: "automatic" },
+		shareLinks: [{ takenBy: "Daniel", scheduleDays: 14 }],
+	},
+} as const;
+
 // =============================================================================
 // Helper Functions
 // =============================================================================
@@ -278,239 +345,251 @@ export async function exportRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	// GET /export - Export all user data
 	// ---------------------------------------------------------------------------
-	app.get<{ Querystring: { includeSensitive?: string; includeImages?: string } }>("/export", async (request, reply) => {
-		const userId = await getUserId(request, reply);
-		const includeSensitive = request.query.includeSensitive === "true";
-		const includeImages = request.query.includeImages !== "false"; // Default to true
-
-		// 1. Load all medications
-		const meds = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
-
-		// Build medication ID to export ID mapping
-		const medIdToExportId = new Map<number, string>();
-		const exportMedications = meds.map((med, index) => {
-			const exportId = `med-${index + 1}`;
-			medIdToExportId.set(med.id, exportId);
-
-			// Safely convert lastStockCorrectionAt to ISO string
-			let lastStockCorrectionAtIso: string | null = null;
-			if (med.lastStockCorrectionAt) {
-				try {
-					if (med.lastStockCorrectionAt instanceof Date && !Number.isNaN(med.lastStockCorrectionAt.getTime())) {
-						lastStockCorrectionAtIso = med.lastStockCorrectionAt.toISOString();
-					} else if (typeof med.lastStockCorrectionAt === "number" || typeof med.lastStockCorrectionAt === "string") {
-						const d = new Date(med.lastStockCorrectionAt);
-						lastStockCorrectionAtIso = !Number.isNaN(d.getTime()) ? d.toISOString() : null;
-					}
-				} catch {
-					lastStockCorrectionAtIso = null;
-				}
-			}
-
-			return {
-				_exportId: exportId,
-				name: med.name,
-				genericName: med.genericName,
-				takenBy: parseTakenByJson(med.takenByJson),
-				medicationForm: med.medicationForm ?? "tablet",
-				pillForm: med.pillForm ?? null,
-				lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
-				inventory: {
-					packCount: med.packCount ?? 1,
-					blistersPerPack: med.blistersPerPack ?? 1,
-					pillsPerBlister: med.pillsPerBlister ?? 1,
-					totalPills: med.totalPills ?? null,
-					looseTablets: med.looseTablets ?? 0,
-					stockAdjustment: med.stockAdjustment ?? 0,
-					packageType: normalizePackageType(med.packageType),
-					packageAmountValue: med.packageAmountValue ?? 0,
-					packageAmountUnit: (med.packageAmountUnit ?? "ml") as "ml" | "g",
+	app.get<{ Querystring: { includeSensitive?: string; includeImages?: string } }>(
+		"/export",
+		{
+			schema: {
+				querystring: exportQuerystringSchema,
+				response: {
+					200: exportResponseSchema,
+					401: genericErrorSchema,
 				},
-				pillWeightMg: med.pillWeightMg,
-				doseUnit: med.doseUnit ?? "mg",
-				schedules: parseIntakesForExport(med),
-				medicationStartDate: med.medicationStartDate || null,
-				medicationEndDate: med.medicationEndDate || null,
-				autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
-				expiryDate: med.expiryDate,
-				notes: med.notes,
-				intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
-				isObsolete: med.isObsolete ?? false,
-				obsoleteAt: med.obsoleteAt?.toISOString() ?? null,
-				prescriptionEnabled: med.prescriptionEnabled ?? false,
-				prescriptionAuthorizedRefills: med.prescriptionAuthorizedRefills ?? null,
-				prescriptionRemainingRefills: med.prescriptionRemainingRefills ?? null,
-				prescriptionLowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
-				prescriptionExpiryDate: med.prescriptionExpiryDate ?? null,
-				dismissedUntil: med.dismissedUntil ?? null,
-				image: includeImages ? imageToBase64(med.imageUrl) : null,
-				lastStockCorrectionAt: lastStockCorrectionAtIso,
-			};
-		});
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
+			const includeSensitive = request.query.includeSensitive === "true";
+			const includeImages = request.query.includeImages !== "false"; // Default to true
 
-		// 2. Load all dose tracking entries
-		const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
+			// 1. Load all medications
+			const meds = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
 
-		const exportDoseHistory = doses
-			.map((dose) => {
-				const parsed = parseDoseId(dose.doseId);
-				if (!parsed) return null;
+			// Build medication ID to export ID mapping
+			const medIdToExportId = new Map<number, string>();
+			const exportMedications = meds.map((med, index) => {
+				const exportId = `med-${index + 1}`;
+				medIdToExportId.set(med.id, exportId);
 
-				const exportId = medIdToExportId.get(parsed.medicationId);
-				if (!exportId) return null; // Orphaned dose, skip
+				// Safely convert lastStockCorrectionAt to ISO string
+				let lastStockCorrectionAtIso: string | null = null;
+				if (med.lastStockCorrectionAt) {
+					try {
+						if (med.lastStockCorrectionAt instanceof Date && !Number.isNaN(med.lastStockCorrectionAt.getTime())) {
+							lastStockCorrectionAtIso = med.lastStockCorrectionAt.toISOString();
+						} else if (typeof med.lastStockCorrectionAt === "number" || typeof med.lastStockCorrectionAt === "string") {
+							const d = new Date(med.lastStockCorrectionAt);
+							lastStockCorrectionAtIso = !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+						}
+					} catch {
+						lastStockCorrectionAtIso = null;
+					}
+				}
 
-				// Safely convert takenAt to ISO string
-				let takenAtIso: string;
-				try {
-					if (dose.takenAt instanceof Date && !Number.isNaN(dose.takenAt.getTime())) {
-						takenAtIso = dose.takenAt.toISOString();
-					} else if (typeof dose.takenAt === "number" || typeof dose.takenAt === "string") {
-						const d = new Date(dose.takenAt);
-						takenAtIso = !Number.isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
-					} else {
+				return {
+					_exportId: exportId,
+					name: med.name,
+					genericName: med.genericName,
+					takenBy: parseTakenByJson(med.takenByJson),
+					medicationForm: med.medicationForm ?? "tablet",
+					pillForm: med.pillForm ?? null,
+					lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
+					inventory: {
+						packCount: med.packCount ?? 1,
+						blistersPerPack: med.blistersPerPack ?? 1,
+						pillsPerBlister: med.pillsPerBlister ?? 1,
+						totalPills: med.totalPills ?? null,
+						looseTablets: med.looseTablets ?? 0,
+						stockAdjustment: med.stockAdjustment ?? 0,
+						packageType: normalizePackageType(med.packageType),
+						packageAmountValue: med.packageAmountValue ?? 0,
+						packageAmountUnit: (med.packageAmountUnit ?? "ml") as "ml" | "g",
+					},
+					pillWeightMg: med.pillWeightMg,
+					doseUnit: med.doseUnit ?? "mg",
+					schedules: parseIntakesForExport(med),
+					medicationStartDate: med.medicationStartDate || null,
+					medicationEndDate: med.medicationEndDate || null,
+					autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
+					expiryDate: med.expiryDate,
+					notes: med.notes,
+					intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
+					isObsolete: med.isObsolete ?? false,
+					obsoleteAt: med.obsoleteAt?.toISOString() ?? null,
+					prescriptionEnabled: med.prescriptionEnabled ?? false,
+					prescriptionAuthorizedRefills: med.prescriptionAuthorizedRefills ?? null,
+					prescriptionRemainingRefills: med.prescriptionRemainingRefills ?? null,
+					prescriptionLowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
+					prescriptionExpiryDate: med.prescriptionExpiryDate ?? null,
+					dismissedUntil: med.dismissedUntil ?? null,
+					image: includeImages ? imageToBase64(med.imageUrl) : null,
+					lastStockCorrectionAt: lastStockCorrectionAtIso,
+				};
+			});
+
+			// 2. Load all dose tracking entries
+			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
+
+			const exportDoseHistory = doses
+				.map((dose) => {
+					const parsed = parseDoseId(dose.doseId);
+					if (!parsed) return null;
+
+					const exportId = medIdToExportId.get(parsed.medicationId);
+					if (!exportId) return null; // Orphaned dose, skip
+
+					// Safely convert takenAt to ISO string
+					let takenAtIso: string;
+					try {
+						if (dose.takenAt instanceof Date && !Number.isNaN(dose.takenAt.getTime())) {
+							takenAtIso = dose.takenAt.toISOString();
+						} else if (typeof dose.takenAt === "number" || typeof dose.takenAt === "string") {
+							const d = new Date(dose.takenAt);
+							takenAtIso = !Number.isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+						} else {
+							takenAtIso = new Date().toISOString();
+						}
+					} catch {
 						takenAtIso = new Date().toISOString();
 					}
-				} catch {
-					takenAtIso = new Date().toISOString();
-				}
 
-				// Safely convert scheduled time
-				let scheduledTimeIso: string;
-				try {
-					const d = new Date(parsed.timestampMs);
-					scheduledTimeIso = !Number.isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
-				} catch {
-					scheduledTimeIso = new Date().toISOString();
+					// Safely convert scheduled time
+					let scheduledTimeIso: string;
+					try {
+						const d = new Date(parsed.timestampMs);
+						scheduledTimeIso = !Number.isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+					} catch {
+						scheduledTimeIso = new Date().toISOString();
+					}
+
+					return {
+						medicationRef: exportId,
+						scheduleIndex: parsed.blisterIndex,
+						scheduledTime: scheduledTimeIso,
+						takenAt: takenAtIso,
+						markedBy: dose.markedBy,
+						takenSource: dose.takenSource === "automatic" ? "automatic" : "manual",
+						dismissed: dose.dismissed ?? false,
+						takenByPerson: parsed.person,
+					};
+				})
+				.filter((d): d is NonNullable<typeof d> => d !== null);
+
+			// 3. Load user settings
+			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+
+			const exportSettings = settings
+				? {
+						emailEnabled: settings.emailEnabled,
+						notificationEmail: settings.notificationEmail,
+						emailStockReminders: settings.emailStockReminders,
+						emailIntakeReminders: settings.emailIntakeReminders,
+						emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
+						// Only include sensitive data if requested
+						shoutrrrEnabled: includeSensitive ? settings.shoutrrrEnabled : undefined,
+						shoutrrrUrl: includeSensitive ? settings.shoutrrrUrl : undefined,
+						shoutrrrStockReminders: settings.shoutrrrStockReminders,
+						shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
+						shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
+						reminderDaysBefore: settings.reminderDaysBefore,
+						repeatDailyReminders: settings.repeatDailyReminders,
+						skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
+						repeatRemindersEnabled: settings.repeatRemindersEnabled,
+						reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes,
+						maxNaggingReminders: settings.maxNaggingReminders,
+						lowStockDays: settings.lowStockDays,
+						normalStockDays: settings.normalStockDays,
+						highStockDays: settings.highStockDays,
+						expiryWarningDays: settings.expiryWarningDays,
+						language: settings.language,
+						stockCalculationMode: settings.stockCalculationMode,
+						shareStockStatus: settings.shareStockStatus,
+					}
+				: undefined;
+
+			// 4. Load share links
+			const shares = await db.select().from(shareTokens).where(eq(shareTokens.userId, userId));
+
+			const exportShareLinks = shares.map((share) => {
+				// Safely convert expiresAt to ISO string
+				let expiresAtIso: string | null = null;
+				if (share.expiresAt) {
+					try {
+						if (share.expiresAt instanceof Date && !Number.isNaN(share.expiresAt.getTime())) {
+							expiresAtIso = share.expiresAt.toISOString();
+						} else if (typeof share.expiresAt === "number" || typeof share.expiresAt === "string") {
+							const d = new Date(share.expiresAt);
+							expiresAtIso = !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+						}
+					} catch {
+						expiresAtIso = null;
+					}
 				}
 
 				return {
-					medicationRef: exportId,
-					scheduleIndex: parsed.blisterIndex,
-					scheduledTime: scheduledTimeIso,
-					takenAt: takenAtIso,
-					markedBy: dose.markedBy,
-					takenSource: dose.takenSource === "automatic" ? "automatic" : "manual",
-					dismissed: dose.dismissed ?? false,
-					takenByPerson: parsed.person,
+					takenBy: share.takenBy,
+					scheduleDays: share.scheduleDays,
+					expiresAt: expiresAtIso,
+					regenerateToken: true, // Always regenerate tokens on import for security
 				};
-			})
-			.filter((d): d is NonNullable<typeof d> => d !== null);
+			});
 
-		// 3. Load user settings
-		const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+			// 5. Load refill history
+			const refills = await db.select().from(refillHistory).where(eq(refillHistory.userId, userId));
 
-		const exportSettings = settings
-			? {
-					emailEnabled: settings.emailEnabled,
-					notificationEmail: settings.notificationEmail,
-					emailStockReminders: settings.emailStockReminders,
-					emailIntakeReminders: settings.emailIntakeReminders,
-					emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
-					// Only include sensitive data if requested
-					shoutrrrEnabled: includeSensitive ? settings.shoutrrrEnabled : undefined,
-					shoutrrrUrl: includeSensitive ? settings.shoutrrrUrl : undefined,
-					shoutrrrStockReminders: settings.shoutrrrStockReminders,
-					shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
-					shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
-					reminderDaysBefore: settings.reminderDaysBefore,
-					repeatDailyReminders: settings.repeatDailyReminders,
-					skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses,
-					repeatRemindersEnabled: settings.repeatRemindersEnabled,
-					reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes,
-					maxNaggingReminders: settings.maxNaggingReminders,
-					lowStockDays: settings.lowStockDays,
-					normalStockDays: settings.normalStockDays,
-					highStockDays: settings.highStockDays,
-					expiryWarningDays: settings.expiryWarningDays,
-					language: settings.language,
-					stockCalculationMode: settings.stockCalculationMode,
-					shareStockStatus: settings.shareStockStatus,
-				}
-			: undefined;
+			const exportRefillHistory = refills
+				.map((refill) => {
+					const exportId = medIdToExportId.get(refill.medicationId);
+					if (!exportId) return null; // Orphaned refill, skip
 
-		// 4. Load share links
-		const shares = await db.select().from(shareTokens).where(eq(shareTokens.userId, userId));
-
-		const exportShareLinks = shares.map((share) => {
-			// Safely convert expiresAt to ISO string
-			let expiresAtIso: string | null = null;
-			if (share.expiresAt) {
-				try {
-					if (share.expiresAt instanceof Date && !Number.isNaN(share.expiresAt.getTime())) {
-						expiresAtIso = share.expiresAt.toISOString();
-					} else if (typeof share.expiresAt === "number" || typeof share.expiresAt === "string") {
-						const d = new Date(share.expiresAt);
-						expiresAtIso = !Number.isNaN(d.getTime()) ? d.toISOString() : null;
-					}
-				} catch {
-					expiresAtIso = null;
-				}
-			}
-
-			return {
-				takenBy: share.takenBy,
-				scheduleDays: share.scheduleDays,
-				expiresAt: expiresAtIso,
-				regenerateToken: true, // Always regenerate tokens on import for security
-			};
-		});
-
-		// 5. Load refill history
-		const refills = await db.select().from(refillHistory).where(eq(refillHistory.userId, userId));
-
-		const exportRefillHistory = refills
-			.map((refill) => {
-				const exportId = medIdToExportId.get(refill.medicationId);
-				if (!exportId) return null; // Orphaned refill, skip
-
-				// Safely convert refillDate to ISO string
-				let refillDateIso: string;
-				try {
-					if (refill.refillDate instanceof Date && !Number.isNaN(refill.refillDate.getTime())) {
-						refillDateIso = refill.refillDate.toISOString();
-					} else if (typeof refill.refillDate === "number" || typeof refill.refillDate === "string") {
-						const d = new Date(refill.refillDate);
-						refillDateIso = !Number.isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
-					} else {
+					// Safely convert refillDate to ISO string
+					let refillDateIso: string;
+					try {
+						if (refill.refillDate instanceof Date && !Number.isNaN(refill.refillDate.getTime())) {
+							refillDateIso = refill.refillDate.toISOString();
+						} else if (typeof refill.refillDate === "number" || typeof refill.refillDate === "string") {
+							const d = new Date(refill.refillDate);
+							refillDateIso = !Number.isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+						} else {
+							refillDateIso = new Date().toISOString();
+						}
+					} catch {
 						refillDateIso = new Date().toISOString();
 					}
-				} catch {
-					refillDateIso = new Date().toISOString();
-				}
 
-				return {
-					medicationRef: exportId,
-					packsAdded: refill.packsAdded ?? 0,
-					loosePillsAdded: refill.loosePillsAdded ?? 0,
-					usedPrescription: refill.usedPrescription ?? false,
-					refillDate: refillDateIso,
-				};
-			})
-			.filter((r): r is NonNullable<typeof r> => r !== null);
+					return {
+						medicationRef: exportId,
+						packsAdded: refill.packsAdded ?? 0,
+						loosePillsAdded: refill.loosePillsAdded ?? 0,
+						usedPrescription: refill.usedPrescription ?? false,
+						refillDate: refillDateIso,
+					};
+				})
+				.filter((r): r is NonNullable<typeof r> => r !== null);
 
-		// Build export object
-		const exportData = {
-			version: EXPORT_VERSION,
-			exportedAt: new Date().toISOString(),
-			includeSensitiveData: includeSensitive,
-			medications: exportMedications,
-			doseHistory: exportDoseHistory,
-			refillHistory: exportRefillHistory,
-			settings: exportSettings,
-			shareLinks: exportShareLinks,
-		};
+			// Build export object
+			const exportData = {
+				version: EXPORT_VERSION,
+				exportedAt: new Date().toISOString(),
+				includeSensitiveData: includeSensitive,
+				medications: exportMedications,
+				doseHistory: exportDoseHistory,
+				refillHistory: exportRefillHistory,
+				settings: exportSettings,
+				shareLinks: exportShareLinks,
+			};
 
-		// Set download headers
-		const now = new Date();
-		const dateStr = now.toISOString().replace(/[-:]/g, "").replace(/T/, "-").slice(0, 13);
-		const authUser = env.AUTH_ENABLED ? (request.user as unknown as AuthUser | null) : null;
-		const userPart = authUser?.username ? `-${authUser.username}` : "";
-		const filename = `medassist-export${userPart}-${dateStr}.json`;
-		reply.header("Content-Type", "application/json");
-		reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+			// Set download headers
+			const now = new Date();
+			const dateStr = now.toISOString().replace(/[-:]/g, "").replace(/T/, "-").slice(0, 13);
+			const authUser = env.AUTH_ENABLED ? (request.user as unknown as AuthUser | null) : null;
+			const userPart = authUser?.username ? `-${authUser.username}` : "";
+			const filename = `medassist-export${userPart}-${dateStr}.json`;
+			reply.header("Content-Type", "application/json");
+			reply.header("Content-Disposition", `attachment; filename="${filename}"`);
 
-		return exportData;
-	});
+			return exportData;
+		}
+	);
 
 	// ---------------------------------------------------------------------------
 	// POST /import - Import user data (replaces all existing data!)
@@ -523,6 +602,29 @@ export async function exportRoutes(app: FastifyInstance) {
 				rawBody: true,
 			},
 			bodyLimit: 50 * 1024 * 1024, // 50 MB
+			schema: {
+				body: importBodyOpenApiSchema,
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							success: { type: "boolean" },
+							imported: {
+								type: "object",
+								properties: {
+									medications: { type: "integer" },
+									doseHistory: { type: "integer" },
+									refillHistory: { type: "integer" },
+									settings: { type: "integer" },
+									shareLinks: { type: "integer" },
+								},
+							},
+						},
+					},
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+				},
+			},
 		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);

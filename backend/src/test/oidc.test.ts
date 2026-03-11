@@ -1,6 +1,7 @@
 import cookie from "@fastify/cookie";
 import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 type OidcMocks = {
 	discovery: ReturnType<typeof vi.fn>;
@@ -54,7 +55,7 @@ async function buildOidcApp(envOverrides: Record<string, unknown>) {
 
 	const { oidcRoutes } = await import("../routes/oidc.js");
 
-	const app = Fastify({ logger: false });
+	const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 	await app.register(cookie, { secret: "test-cookie-secret" });
 	app.decorate("config", {
 		accessSecret: "test-jwt-secret-12345",

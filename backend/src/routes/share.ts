@@ -8,7 +8,12 @@ import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { buildSharedMedicationOverview } from "../services/coverage.js";
 import type { AuthUser } from "../types/fastify.js";
-import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
+import {
+	applyOpenApiRouteStandards,
+	genericErrorSchema,
+	tokenParamsSchema,
+	validationErrorSchema,
+} from "../utils/openapi-route-standards.js";
 import { isAmountBasedPackageType, normalizePackageType } from "../utils/package-profiles.js";
 import {
 	getAllTakenByForMedication,
@@ -31,6 +36,55 @@ const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>
 ];
 
 const shareTokenPattern = /^[a-f0-9]{16}$/;
+
+const createShareBodyOpenApiSchema = {
+	type: "object",
+	required: ["takenBy"],
+	properties: {
+		takenBy: { type: "string", minLength: 1 },
+		scheduleDays: { type: "integer", minimum: 1, maximum: 365, default: 30 },
+	},
+	example: {
+		takenBy: "Daniel",
+		scheduleDays: 14,
+	},
+} as const;
+
+const sharedDoseSchema = {
+	type: "object",
+	properties: {
+		doseId: { type: "string" },
+		takenAt: { type: "number" },
+		markedBy: { type: "string" },
+		takenSource: { type: "string" },
+		dismissed: { type: "boolean" },
+	},
+} as const;
+
+const shareReadResponseSchema = {
+	type: "object",
+	properties: {
+		takenBy: { type: "string" },
+		sharedBy: { type: "string" },
+		scheduleDays: { type: "integer" },
+		medications: { type: "array", items: { type: "object", additionalProperties: true } },
+		stockThresholds: { type: "object", additionalProperties: { type: "number" } },
+		stockCalculationMode: { type: "string", enum: ["automatic", "manual"] },
+		shareStockStatus: { type: "boolean" },
+		upcomingTodayOnly: { type: "boolean" },
+		shareScheduleTodayOnly: { type: "boolean" },
+	},
+} as const;
+
+const shareOverviewResponseSchema = {
+	type: "object",
+	properties: {
+		takenBy: { type: "string" },
+		sharedBy: { type: "string" },
+		generatedAt: { type: "string", format: "date-time" },
+		medications: { type: "array", items: { type: "object", additionalProperties: true } },
+	},
+} as const;
 
 function maskToken(token: string): string {
 	if (token.length <= 8) return token;
@@ -69,6 +123,14 @@ export async function shareRoutes(app: FastifyInstance) {
 	app.get<{ Params: { token: string } }>(
 		"/share/:token",
 		{
+			schema: {
+				params: tokenParamsSchema,
+				response: {
+					200: shareReadResponseSchema,
+					404: genericErrorSchema,
+					410: genericErrorSchema,
+				},
+			},
 			config: {
 				rateLimit: {
 					max: 60,
@@ -198,6 +260,14 @@ export async function shareRoutes(app: FastifyInstance) {
 	app.get<{ Params: { token: string } }>(
 		"/share/:token/overview",
 		{
+			schema: {
+				params: tokenParamsSchema,
+				response: {
+					200: shareOverviewResponseSchema,
+					404: genericErrorSchema,
+					410: genericErrorSchema,
+				},
+			},
 			config: {
 				rateLimit: {
 					max: 60,
@@ -268,7 +338,27 @@ export async function shareRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.post<{ Body: z.infer<typeof createShareSchema> }>(
 		"/share",
-		{ preHandler: requireAuth, schema: { tags: ["share"], security: protectedEndpointSecurity } },
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["share"],
+				security: protectedEndpointSecurity,
+				body: createShareBodyOpenApiSchema,
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							reused: { type: "boolean" },
+							token: { type: "string" },
+							shareUrl: { type: "string" },
+							expiresAt: { type: ["string", "null"] },
+						},
+					},
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+				},
+			},
+		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
@@ -351,7 +441,22 @@ export async function shareRoutes(app: FastifyInstance) {
 	// ---------------------------------------------------------------------------
 	app.get(
 		"/share/people",
-		{ preHandler: requireAuth, schema: { tags: ["share"], security: protectedEndpointSecurity } },
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["share"],
+				security: protectedEndpointSecurity,
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							people: { type: "array", items: { type: "string" } },
+						},
+					},
+					401: genericErrorSchema,
+				},
+			},
+		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 

@@ -6,6 +6,7 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAlterMigrations } from "../db/db-utils.js";
+import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -104,7 +105,7 @@ describe("Dose Tracking API", () => {
 		await migrate(testDb, { migrationsFolder });
 		await runAlterMigrations(testClient);
 
-		app = Fastify({ logger: false });
+		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(cookie, { secret: "test-cookie-secret" });
 		await app.register(jwt, {
 			secret: "test-jwt-secret",

@@ -15,7 +15,11 @@ import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
 import type { AuthUser } from "../types/fastify.js";
-import { applyOpenApiRouteStandards } from "../utils/openapi-route-standards.js";
+import {
+	applyOpenApiRouteStandards,
+	genericErrorSchema,
+	validationErrorSchema,
+} from "../utils/openapi-route-standards.js";
 import {
 	getPlannerUnitKind,
 	isAmountBasedPackageType,
@@ -132,6 +136,64 @@ type PrescriptionReminderBody = {
 	language?: Language;
 };
 
+const plannerRowSchema = {
+	type: "object",
+	required: [
+		"medicationId",
+		"medicationName",
+		"totalPills",
+		"plannerUsage",
+		"blisterSize",
+		"blistersNeeded",
+		"fullBlisters",
+		"loosePills",
+		"enough",
+	],
+	properties: {
+		medicationId: { type: "integer" },
+		medicationName: { type: "string" },
+		totalPills: { type: "number" },
+		plannerUsage: { type: "number" },
+		blisterSize: { type: "number" },
+		blistersNeeded: { type: "number" },
+		fullBlisters: { type: "number" },
+		loosePills: { type: "number" },
+		enough: { type: "boolean" },
+		packageType: { type: "string" },
+	},
+} as const;
+
+const lowStockItemSchema = {
+	type: "object",
+	required: ["name", "medsLeft"],
+	properties: {
+		name: { type: "string" },
+		medsLeft: { type: "number" },
+		daysLeft: { type: "number" },
+		depletionDate: { type: "string" },
+		isCritical: { type: "boolean" },
+	},
+} as const;
+
+const prescriptionReminderItemSchema = {
+	type: "object",
+	required: ["name", "remainingRefills", "threshold"],
+	properties: {
+		name: { type: "string" },
+		remainingRefills: { type: "integer" },
+		threshold: { type: "integer" },
+		expiryDate: { type: "string" },
+	},
+} as const;
+
+const notificationResponseSchema = {
+	type: "object",
+	properties: {
+		success: { type: "boolean" },
+		message: { type: "string" },
+	},
+} as const;
+
 export async function plannerRoutes(app: FastifyInstance) {
 	// Add auth hook for all planner routes
 	app.addHook("preHandler", requireAuth);
@@ -150,89 +212,131 @@ export async function plannerRoutes(app: FastifyInstance) {
 	}
 
 	// Demand calculator notification (supports email and push)
-	app.post<{ Body: SendEmailBody }>("/planner/send-email", async (request, reply) => {
-		const { email, from, until, rows, language: bodyLanguage } = request.body;
-		request.log.info(
-			{ hasEmail: Boolean(email), rowCount: rows?.length ?? 0 },
-			"[Planner] Demand notification request received"
-		);
-
-		if (!rows || rows.length === 0) {
-			return reply.status(400).send({ error: "Missing planner data" });
-		}
-
-		// Load user settings for notification channels
-		const userId = await getUserId(request);
-		const activeMeds = await db
-			.select({ id: medications.id })
-			.from(medications)
-			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
-		const activeMedIds = new Set(activeMeds.map((med) => med.id));
-		const activeRows = rows.filter((row) => activeMedIds.has(row.medicationId));
-		if (activeRows.length === 0) {
-			request.log.warn("[Planner] Demand notification skipped: no active medications in request");
-			return reply.status(400).send({ error: "No active medications to notify" });
-		}
-
-		const userSettings = await loadUserSettings(userId);
-		const notificationSettings = {
-			emailEnabled: userSettings.emailEnabled,
-			shoutrrrEnabled: userSettings.shoutrrrEnabled,
-			shoutrrrUrl: userSettings.shoutrrrUrl || "",
-		};
-		request.log.info(
-			{
-				userId,
-				emailEnabled: notificationSettings.emailEnabled,
-				pushEnabled: notificationSettings.shoutrrrEnabled,
-				hasPushUrl: Boolean(notificationSettings.shoutrrrUrl),
-				activeRowCount: activeRows.length,
+	app.post<{ Body: SendEmailBody }>(
+		"/planner/send-email",
+		{
+			schema: {
+				body: {
+					type: "object",
+					properties: {
+						email: { type: "string" },
+						from: { type: "string" },
+						until: { type: "string" },
+						language: { type: "string" },
+						rows: { type: "array", items: plannerRowSchema },
+					},
+					example: {
+						email: "daniel@example.com",
+						from: "2026-03-11",
+						until: "2026-04-11",
+						language: "en",
+						rows: [
+							{
+								medicationId: 1,
+								medicationName: "Ibuprofen 400",
+								totalPills: 20,
+								plannerUsage: 12,
+								blisterSize: 10,
+								blistersNeeded: 2,
+								fullBlisters: 1,
+								loosePills: 8,
+								enough: true,
+								packageType: "box",
+							},
+						],
+					},
+				},
+				response: {
+					200: notificationResponseSchema,
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+					500: genericErrorSchema,
+				},
 			},
-			"[Planner] Demand notification channel state"
-		);
+		},
+		async (request, reply) => {
+			const { email, from, until, rows, language: bodyLanguage } = request.body;
+			request.log.info(
+				{ hasEmail: Boolean(email), rowCount: rows?.length ?? 0 },
+				"[Planner] Demand notification request received"
+			);
 
-		// Get locale from user settings or use the language passed in the body
-		const language: Language = (userSettings.language as Language) || bodyLanguage || "en";
-		const locale = getDateLocale(language);
-		const tr = getTranslations(language);
-		const dc = tr.demandCalculator;
+			if (!rows || rows.length === 0) {
+				return reply.status(400).send({ error: "Missing planner data" });
+			}
 
-		// Format dates for display - escape to prevent XSS even though toLocaleDateString should be safe
-		const fromDate = escapeHtml(
-			new Date(from).toLocaleDateString(locale, {
-				year: "numeric",
-				month: "long",
-				day: "numeric",
-			})
-		);
-		const untilDate = escapeHtml(
-			new Date(until).toLocaleDateString(locale, {
-				year: "numeric",
-				month: "long",
-				day: "numeric",
-			})
-		);
+			// Load user settings for notification channels
+			const userId = await getUserId(request);
+			const activeMeds = await db
+				.select({ id: medications.id })
+				.from(medications)
+				.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
+			const activeMedIds = new Set(activeMeds.map((med) => med.id));
+			const activeRows = rows.filter((row) => activeMedIds.has(row.medicationId));
+			if (activeRows.length === 0) {
+				request.log.warn("[Planner] Demand notification skipped: no active medications in request");
+				return reply.status(400).send({ error: "No active medications to notify" });
+			}
 
-		const outOfStockCount = activeRows.filter((r) => !r.enough).length;
-		const summaryText = outOfStockCount > 0 ? t(dc.summaryOutOfStock, { count: outOfStockCount }) : dc.summaryAllOk;
+			const userSettings = await loadUserSettings(userId);
+			const notificationSettings = {
+				emailEnabled: userSettings.emailEnabled,
+				shoutrrrEnabled: userSettings.shoutrrrEnabled,
+				shoutrrrUrl: userSettings.shoutrrrUrl || "",
+			};
+			request.log.info(
+				{
+					userId,
+					emailEnabled: notificationSettings.emailEnabled,
+					pushEnabled: notificationSettings.shoutrrrEnabled,
+					hasPushUrl: Boolean(notificationSettings.shoutrrrUrl),
+					activeRowCount: activeRows.length,
+				},
+				"[Planner] Demand notification channel state"
+			);
 
-		// Load prescription data for medications referenced in planner rows
-		const medIds = activeRows.map((r) => r.medicationId).filter(Boolean);
-		const allMeds =
-			medIds.length > 0
-				? await db
-						.select({
-							id: medications.id,
-							prescriptionEnabled: medications.prescriptionEnabled,
-							prescriptionRemainingRefills: medications.prescriptionRemainingRefills,
-						})
-						.from(medications)
-						.where(eq(medications.userId, userId))
-				: [];
-		const prescriptionMap = new Map(allMeds.map((m) => [m.id, m]));
+			// Get locale from user settings or use the language passed in the body
+			const language: Language = (userSettings.language as Language) || bodyLanguage || "en";
+			const locale = getDateLocale(language);
+			const tr = getTranslations(language);
+			const dc = tr.demandCalculator;
 
-		// Build plain text (shared between email and push)
-		const plainText = `${dc.title}
+			// Format dates for display - escape to prevent XSS even though toLocaleDateString should be safe
+			const fromDate = escapeHtml(
+				new Date(from).toLocaleDateString(locale, {
+					year: "numeric",
+					month: "long",
+					day: "numeric",
+				})
+			);
+			const untilDate = escapeHtml(
+				new Date(until).toLocaleDateString(locale, {
+					year: "numeric",
+					month: "long",
+					day: "numeric",
+				})
+			);
+
+			const outOfStockCount = activeRows.filter((r) => !r.enough).length;
+			const summaryText = outOfStockCount > 0 ? t(dc.summaryOutOfStock, { count: outOfStockCount }) : dc.summaryAllOk;
+
+			// Load prescription data for medications referenced in planner rows
+			const medIds = activeRows.map((r) => r.medicationId).filter(Boolean);
+			const allMeds =
+				medIds.length > 0
+					? await db
+							.select({
+								id: medications.id,
+								prescriptionEnabled: medications.prescriptionEnabled,
+								prescriptionRemainingRefills: medications.prescriptionRemainingRefills,
+							})
+							.from(medications)
+							.where(eq(medications.userId, userId))
+					: [];
+			const prescriptionMap = new Map(allMeds.map((m) => [m.id, m]));
+
+			// Build plain text (shared between email and push)
+			const plainText = `${dc.title}
 ${t(dc.description, { from: fromDate, until: untilDate })}
 
 ${summaryText}
@@ -260,67 +364,67 @@ ${activeRows
 ---
 ${getFooterPlain(language)}`;
 
-		const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
+			const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
 
-		// Send email if enabled
-		if (notificationSettings.emailEnabled && email) {
-			const smtpHost = process.env.SMTP_HOST;
-			const smtpUser = process.env.SMTP_USER;
-			const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
-			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-			const smtpSecure = process.env.SMTP_SECURE === "true";
-			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+			// Send email if enabled
+			if (notificationSettings.emailEnabled && email) {
+				const smtpHost = process.env.SMTP_HOST;
+				const smtpUser = process.env.SMTP_USER;
+				const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
+				const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
+				const smtpSecure = process.env.SMTP_SECURE === "true";
+				const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
 
-			request.log.info(
-				{
-					hasSmtpHost: Boolean(smtpHost),
-					hasSmtpUser: Boolean(smtpUser),
-					hasSmtpPass: Boolean(smtpPass),
-					smtpPort,
-					smtpSecure,
-					hasSmtpFrom: Boolean(smtpFrom),
-					to: maskEmail(email),
-				},
-				"[Planner] Demand email path selected"
-			);
+				request.log.info(
+					{
+						hasSmtpHost: Boolean(smtpHost),
+						hasSmtpUser: Boolean(smtpUser),
+						hasSmtpPass: Boolean(smtpPass),
+						smtpPort,
+						smtpSecure,
+						hasSmtpFrom: Boolean(smtpFrom),
+						to: maskEmail(email),
+					},
+					"[Planner] Demand email path selected"
+				);
 
-			if (smtpHost && smtpUser) {
-				// Build HTML table with horizontal scroll for mobile
-				// Escape/coerce all user-provided values to prevent XSS
-				const tableRows = activeRows
-					.map((row) => {
-						const safeName = escapeHtml(row.medicationName);
-						const safePlannerUsage = Number(row.plannerUsage) || 0;
-						const safeBlistersNeeded = Number(row.blistersNeeded) || 0;
-						const safeBlisterSize = Number(row.blisterSize) || 0;
-						const safeFullBlisters = Number(row.fullBlisters) || 0;
-						const safeLoosePills = Math.round((Number(row.loosePills) || 0) * 10) / 10;
-						const isBottle = isContainerPackage(row.packageType);
+				if (smtpHost && smtpUser) {
+					// Build HTML table with horizontal scroll for mobile
+					// Escape/coerce all user-provided values to prevent XSS
+					const tableRows = activeRows
+						.map((row) => {
+							const safeName = escapeHtml(row.medicationName);
+							const safePlannerUsage = Number(row.plannerUsage) || 0;
+							const safeBlistersNeeded = Number(row.blistersNeeded) || 0;
+							const safeBlisterSize = Number(row.blisterSize) || 0;
+							const safeFullBlisters = Number(row.fullBlisters) || 0;
+							const safeLoosePills = Math.round((Number(row.loosePills) || 0) * 10) / 10;
+							const isBottle = isContainerPackage(row.packageType);
 
-						// "Blisters needed" column: dash for bottles
-						const neededCell = isBottle ? "–" : `${safeBlistersNeeded} × ${safeBlisterSize}`;
+							// "Blisters needed" column: dash for bottles
+							const neededCell = isBottle ? "–" : `${safeBlistersNeeded} × ${safeBlisterSize}`;
 
-						// "Prescription refills" column
-						const medPrescription = prescriptionMap.get(row.medicationId);
-						const rxCell = medPrescription?.prescriptionEnabled
-							? String(medPrescription.prescriptionRemainingRefills ?? 0)
-							: dc.prescriptionNotApplicable;
+							// "Prescription refills" column
+							const medPrescription = prescriptionMap.get(row.medicationId);
+							const rxCell = medPrescription?.prescriptionEnabled
+								? String(medPrescription.prescriptionRemainingRefills ?? 0)
+								: dc.prescriptionNotApplicable;
 
-						// "Available" column: match frontend format
-						let availableCell: string;
-						if (isBottle) {
-							const availableUnit = getPlannerUnit(row.packageType, tr);
-							availableCell = `${safeLoosePills} ${availableUnit}`;
-						} else {
-							availableCell = `${safeFullBlisters} ${tr.common.blisters}`;
-							if (safeLoosePills > 0) {
-								availableCell += ` + ${safeLoosePills} ${tr.common.pills}`;
+							// "Available" column: match frontend format
+							let availableCell: string;
+							if (isBottle) {
+								const availableUnit = getPlannerUnit(row.packageType, tr);
+								availableCell = `${safeLoosePills} ${availableUnit}`;
+							} else {
+								availableCell = `${safeFullBlisters} ${tr.common.blisters}`;
+								if (safeLoosePills > 0) {
+									availableCell += ` + ${safeLoosePills} ${tr.common.pills}`;
+								}
 							}
-						}
 
-						const rowBg = row.enough ? "" : " background: #fef2f2;";
+							const rowBg = row.enough ? "" : " background: #fef2f2;";
 
-						return `
+							return `
         <tr style="${rowBg}">
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${safeName}</td>
 					<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;"><strong>${safePlannerUsage}</strong> ${getPlannerUnit(row.packageType, tr)}</td>
@@ -336,10 +440,10 @@ ${getFooterPlain(language)}`;
           </td>
         </tr>
       `;
-					})
-					.join("");
+						})
+						.join("");
 
-				const html = `
+					const html = `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
         <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${dc.title}</h2>
@@ -379,303 +483,337 @@ ${getFooterPlain(language)}`;
       </div>
     `;
 
-				try {
-					const transporter = nodemailer.createTransport({
-						host: smtpHost,
-						port: smtpPort,
-						secure: smtpSecure,
-						auth: {
-							user: smtpUser,
-							pass: smtpPass ?? "",
-						},
-					});
+					try {
+						const transporter = nodemailer.createTransport({
+							host: smtpHost,
+							port: smtpPort,
+							secure: smtpSecure,
+							auth: {
+								user: smtpUser,
+								pass: smtpPass ?? "",
+							},
+						});
 
-					request.log.info({ to: maskEmail(email) }, "[Planner] Sending demand email");
+						request.log.info({ to: maskEmail(email) }, "[Planner] Sending demand email");
 
-					const mailResult = await transporter.sendMail({
-						from: smtpFrom,
-						to: email,
-						subject: t(dc.subject, { from: fromDate, until: untilDate }),
-						text: plainText,
-						html,
-					});
+						const mailResult = await transporter.sendMail({
+							from: smtpFrom,
+							to: email,
+							subject: t(dc.subject, { from: fromDate, until: untilDate }),
+							text: plainText,
+							html,
+						});
 
-					const deliveryError = getDeliveryError(mailResult);
-					if (deliveryError) {
-						throw new Error(deliveryError);
+						const deliveryError = getDeliveryError(mailResult);
+						if (deliveryError) {
+							throw new Error(deliveryError);
+						}
+
+						request.log.info({ to: maskEmail(email), messageId: mailResult.messageId }, "[Planner] Demand email sent");
+						results.email = true;
+					} catch (error) {
+						request.log.error({ error, to: maskEmail(email) }, "[Planner] Demand email failed");
+						const errorMessage = error instanceof Error ? error.message : "Unknown error";
+						results.errors.push(`Email: ${errorMessage}`);
 					}
-
-					request.log.info({ to: maskEmail(email), messageId: mailResult.messageId }, "[Planner] Demand email sent");
-					results.email = true;
-				} catch (error) {
-					request.log.error({ error, to: maskEmail(email) }, "[Planner] Demand email failed");
-					const errorMessage = error instanceof Error ? error.message : "Unknown error";
-					results.errors.push(`Email: ${errorMessage}`);
+				} else {
+					request.log.warn(
+						{
+							hasSmtpHost: Boolean(smtpHost),
+							hasSmtpUser: Boolean(smtpUser),
+							to: maskEmail(email),
+						},
+						"[Planner] Demand email skipped: SMTP not configured"
+					);
 				}
 			} else {
-				request.log.warn(
+				request.log.info(
+					{ emailEnabled: notificationSettings.emailEnabled, hasRecipient: Boolean(email) },
+					"[Planner] Demand email channel not active"
+				);
+			}
+
+			// Send push notification if enabled
+			if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
+				const pushTitle = t(dc.subject, { from: fromDate, until: untilDate });
+				const pushMessage = `${summaryText}\n\n${activeRows
+					.map((r) => {
+						const usage = `${r.plannerUsage} ${getPlannerUnit(r.packageType, tr)}`;
+						const status = r.enough ? dc.statusEnough : dc.statusEmpty;
+						return `${r.enough ? "✓" : "✗"} ${r.medicationName}: ${usage} - ${status}`;
+					})
+					.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+
+				try {
+					const pushResult = await sendShoutrrrNotification(notificationSettings.shoutrrrUrl, pushTitle, pushMessage);
+					if (pushResult.success) {
+						results.push = true;
+					} else {
+						results.errors.push(`Push: ${pushResult.error}`);
+					}
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : "Unknown error";
+					results.errors.push(`Push: ${errorMessage}`);
+				}
+			}
+
+			// Build response message
+			const sentChannels: string[] = [];
+			if (results.email) sentChannels.push("email");
+			if (results.push) sentChannels.push("push");
+
+			if (sentChannels.length > 0) {
+				return reply.send({
+					success: true,
+					message: `Notification sent via ${sentChannels.join(" and ")}`,
+				});
+			} else if (results.errors.length > 0) {
+				return reply.status(500).send({ error: results.errors.join("; ") });
+			} else {
+				return reply.status(400).send({ error: "No notification channels configured" });
+			}
+		}
+	);
+
+	// Reminder notification for low stock medications (supports email and push)
+	app.post<{ Body: ReminderEmailBody }>(
+		"/reminder/send-email",
+		{
+			schema: {
+				body: {
+					type: "object",
+					properties: {
+						email: { type: "string" },
+						language: { type: "string" },
+						lowStock: { type: "array", items: lowStockItemSchema },
+					},
+					example: {
+						email: "daniel@example.com",
+						language: "en",
+						lowStock: [
+							{
+								name: "Ibuprofen 400",
+								medsLeft: 4,
+								daysLeft: 2,
+								depletionDate: "2026-03-13",
+								isCritical: true,
+							},
+						],
+					},
+				},
+				response: {
+					200: notificationResponseSchema,
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+					500: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { email, lowStock } = request.body;
+			request.log.info(
+				{ hasEmail: Boolean(email), lowStockCount: lowStock?.length ?? 0 },
+				"[ReminderManual] Stock reminder request received"
+			);
+
+			if (!lowStock || lowStock.length === 0) {
+				return reply.status(400).send({ error: "Missing low stock data" });
+			}
+
+			// Load user settings
+			const userId = await getUserId(request);
+			const activeMeds = await db
+				.select({ name: medications.name, genericName: medications.genericName, packageType: medications.packageType })
+				.from(medications)
+				.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
+			const activeMedicationByName = new Map(
+				activeMeds
+					.map((med) => [med.name || med.genericName || "", normalizePackageType(med.packageType)] as const)
+					.filter(([name]) => name.length > 0)
+			);
+			const filteredLowStock = lowStock.filter((item) => {
+				const packageType = activeMedicationByName.get(item.name);
+				if (!packageType) return false;
+				if (isTubePackageType(packageType)) return false;
+				return true;
+			});
+			if (filteredLowStock.length === 0) {
+				request.log.warn("[ReminderManual] Stock reminder skipped: no active medications after filtering");
+				return reply.status(400).send({ error: "No active medications to notify" });
+			}
+
+			const userSettings = await loadUserSettings(userId);
+			const notificationSettings = {
+				emailEnabled: userSettings.emailEnabled,
+				shoutrrrEnabled: userSettings.shoutrrrEnabled,
+				shoutrrrUrl: userSettings.shoutrrrUrl || "",
+			};
+			request.log.info(
+				{
+					userId,
+					emailEnabled: notificationSettings.emailEnabled,
+					pushEnabled: notificationSettings.shoutrrrEnabled,
+					hasPushUrl: Boolean(notificationSettings.shoutrrrUrl),
+					filteredLowStockCount: filteredLowStock.length,
+				},
+				"[ReminderManual] Stock reminder channel state"
+			);
+
+			// Get translations based on user language
+			const language = (userSettings.language as Language) || "en";
+			const tr = getTranslations(language);
+
+			const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
+
+			// Separate into 3 categories: empty, critical, and low stock
+			const emptyMeds = filteredLowStock.filter((r) => r.medsLeft <= 0);
+			const criticalMeds = filteredLowStock.filter((r) => r.medsLeft > 0 && r.isCritical !== false);
+			const lowStockMeds = filteredLowStock.filter((r) => r.medsLeft > 0 && r.isCritical === false);
+
+			// Build shared notification content (method-agnostic)
+			const titleParts: string[] = [];
+			if (emptyMeds.length > 0) {
+				titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty}`);
+			}
+			if (criticalMeds.length > 0) {
+				titleParts.push(`🚨 ${criticalMeds.length} ${tr.push.critical}`);
+			}
+			if (lowStockMeds.length > 0) {
+				titleParts.push(`⚠️ ${lowStockMeds.length} ${tr.push.lowStock}`);
+			}
+			const notificationTitle = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
+
+			// Build description text
+			let descriptionText: string;
+			if (emptyMeds.length > 0 && (criticalMeds.length > 0 || lowStockMeds.length > 0)) {
+				descriptionText = tr.stockReminder.descriptionMixed;
+			} else if (emptyMeds.length > 0) {
+				descriptionText = tr.stockReminder.descriptionEmpty;
+			} else if (criticalMeds.length > 0) {
+				descriptionText = tr.stockReminder.description;
+			} else {
+				descriptionText = tr.stockReminder.descriptionLow;
+			}
+
+			// Build section-based message (shared between email plain text and push)
+			const messageParts: string[] = [];
+			if (emptyMeds.length > 0) {
+				messageParts.push(`🚨 ${tr.push.emptySection}:`);
+				emptyMeds.forEach((r) => messageParts.push(`  • ${r.name}`));
+			}
+			if (criticalMeds.length > 0) {
+				if (messageParts.length > 0) messageParts.push("");
+				messageParts.push(`🚨 ${tr.push.criticalSection}:`);
+				criticalMeds.forEach((r) =>
+					messageParts.push(
+						`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
+					)
+				);
+			}
+			if (lowStockMeds.length > 0) {
+				if (messageParts.length > 0) messageParts.push("");
+				messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
+				lowStockMeds.forEach((r) =>
+					messageParts.push(
+						`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
+					)
+				);
+			}
+
+			// Send email if enabled
+			if (notificationSettings.emailEnabled && email) {
+				const smtpHost = process.env.SMTP_HOST;
+				const smtpUser = process.env.SMTP_USER;
+				const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
+				const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
+				const smtpSecure = process.env.SMTP_SECURE === "true";
+				const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+
+				request.log.info(
 					{
 						hasSmtpHost: Boolean(smtpHost),
 						hasSmtpUser: Boolean(smtpUser),
+						hasSmtpPass: Boolean(smtpPass),
+						smtpPort,
+						smtpSecure,
+						hasSmtpFrom: Boolean(smtpFrom),
 						to: maskEmail(email),
 					},
-					"[Planner] Demand email skipped: SMTP not configured"
+					"[ReminderManual] Stock email path selected"
 				);
-			}
-		} else {
-			request.log.info(
-				{ emailEnabled: notificationSettings.emailEnabled, hasRecipient: Boolean(email) },
-				"[Planner] Demand email channel not active"
-			);
-		}
 
-		// Send push notification if enabled
-		if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
-			const pushTitle = t(dc.subject, { from: fromDate, until: untilDate });
-			const pushMessage = `${summaryText}\n\n${activeRows
-				.map((r) => {
-					const usage = `${r.plannerUsage} ${getPlannerUnit(r.packageType, tr)}`;
-					const status = r.enough ? dc.statusEnough : dc.statusEmpty;
-					return `${r.enough ? "✓" : "✗"} ${r.medicationName}: ${usage} - ${status}`;
-				})
-				.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+				if (smtpHost && smtpUser) {
+					// Build subject line from shared title parts
+					const subjectText = titleParts.join(", ");
 
-			try {
-				const pushResult = await sendShoutrrrNotification(notificationSettings.shoutrrrUrl, pushTitle, pushMessage);
-				if (pushResult.success) {
-					results.push = true;
-				} else {
-					results.errors.push(`Push: ${pushResult.error}`);
-				}
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : "Unknown error";
-				results.errors.push(`Push: ${errorMessage}`);
-			}
-		}
+					// Build alert boxes for each category
+					const alertParts: string[] = [];
 
-		// Build response message
-		const sentChannels: string[] = [];
-		if (results.email) sentChannels.push("email");
-		if (results.push) sentChannels.push("push");
-
-		if (sentChannels.length > 0) {
-			return reply.send({
-				success: true,
-				message: `Notification sent via ${sentChannels.join(" and ")}`,
-			});
-		} else if (results.errors.length > 0) {
-			return reply.status(500).send({ error: results.errors.join("; ") });
-		} else {
-			return reply.status(400).send({ error: "No notification channels configured" });
-		}
-	});
-
-	// Reminder notification for low stock medications (supports email and push)
-	app.post<{ Body: ReminderEmailBody }>("/reminder/send-email", async (request, reply) => {
-		const { email, lowStock } = request.body;
-		request.log.info(
-			{ hasEmail: Boolean(email), lowStockCount: lowStock?.length ?? 0 },
-			"[ReminderManual] Stock reminder request received"
-		);
-
-		if (!lowStock || lowStock.length === 0) {
-			return reply.status(400).send({ error: "Missing low stock data" });
-		}
-
-		// Load user settings
-		const userId = await getUserId(request);
-		const activeMeds = await db
-			.select({ name: medications.name, genericName: medications.genericName, packageType: medications.packageType })
-			.from(medications)
-			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
-		const activeMedicationByName = new Map(
-			activeMeds
-				.map((med) => [med.name || med.genericName || "", normalizePackageType(med.packageType)] as const)
-				.filter(([name]) => name.length > 0)
-		);
-		const filteredLowStock = lowStock.filter((item) => {
-			const packageType = activeMedicationByName.get(item.name);
-			if (!packageType) return false;
-			if (isTubePackageType(packageType)) return false;
-			return true;
-		});
-		if (filteredLowStock.length === 0) {
-			request.log.warn("[ReminderManual] Stock reminder skipped: no active medications after filtering");
-			return reply.status(400).send({ error: "No active medications to notify" });
-		}
-
-		const userSettings = await loadUserSettings(userId);
-		const notificationSettings = {
-			emailEnabled: userSettings.emailEnabled,
-			shoutrrrEnabled: userSettings.shoutrrrEnabled,
-			shoutrrrUrl: userSettings.shoutrrrUrl || "",
-		};
-		request.log.info(
-			{
-				userId,
-				emailEnabled: notificationSettings.emailEnabled,
-				pushEnabled: notificationSettings.shoutrrrEnabled,
-				hasPushUrl: Boolean(notificationSettings.shoutrrrUrl),
-				filteredLowStockCount: filteredLowStock.length,
-			},
-			"[ReminderManual] Stock reminder channel state"
-		);
-
-		// Get translations based on user language
-		const language = (userSettings.language as Language) || "en";
-		const tr = getTranslations(language);
-
-		const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
-
-		// Separate into 3 categories: empty, critical, and low stock
-		const emptyMeds = filteredLowStock.filter((r) => r.medsLeft <= 0);
-		const criticalMeds = filteredLowStock.filter((r) => r.medsLeft > 0 && r.isCritical !== false);
-		const lowStockMeds = filteredLowStock.filter((r) => r.medsLeft > 0 && r.isCritical === false);
-
-		// Build shared notification content (method-agnostic)
-		const titleParts: string[] = [];
-		if (emptyMeds.length > 0) {
-			titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty}`);
-		}
-		if (criticalMeds.length > 0) {
-			titleParts.push(`🚨 ${criticalMeds.length} ${tr.push.critical}`);
-		}
-		if (lowStockMeds.length > 0) {
-			titleParts.push(`⚠️ ${lowStockMeds.length} ${tr.push.lowStock}`);
-		}
-		const notificationTitle = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
-
-		// Build description text
-		let descriptionText: string;
-		if (emptyMeds.length > 0 && (criticalMeds.length > 0 || lowStockMeds.length > 0)) {
-			descriptionText = tr.stockReminder.descriptionMixed;
-		} else if (emptyMeds.length > 0) {
-			descriptionText = tr.stockReminder.descriptionEmpty;
-		} else if (criticalMeds.length > 0) {
-			descriptionText = tr.stockReminder.description;
-		} else {
-			descriptionText = tr.stockReminder.descriptionLow;
-		}
-
-		// Build section-based message (shared between email plain text and push)
-		const messageParts: string[] = [];
-		if (emptyMeds.length > 0) {
-			messageParts.push(`🚨 ${tr.push.emptySection}:`);
-			emptyMeds.forEach((r) => messageParts.push(`  • ${r.name}`));
-		}
-		if (criticalMeds.length > 0) {
-			if (messageParts.length > 0) messageParts.push("");
-			messageParts.push(`🚨 ${tr.push.criticalSection}:`);
-			criticalMeds.forEach((r) =>
-				messageParts.push(
-					`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
-				)
-			);
-		}
-		if (lowStockMeds.length > 0) {
-			if (messageParts.length > 0) messageParts.push("");
-			messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
-			lowStockMeds.forEach((r) =>
-				messageParts.push(
-					`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
-				)
-			);
-		}
-
-		// Send email if enabled
-		if (notificationSettings.emailEnabled && email) {
-			const smtpHost = process.env.SMTP_HOST;
-			const smtpUser = process.env.SMTP_USER;
-			const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
-			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-			const smtpSecure = process.env.SMTP_SECURE === "true";
-			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
-
-			request.log.info(
-				{
-					hasSmtpHost: Boolean(smtpHost),
-					hasSmtpUser: Boolean(smtpUser),
-					hasSmtpPass: Boolean(smtpPass),
-					smtpPort,
-					smtpSecure,
-					hasSmtpFrom: Boolean(smtpFrom),
-					to: maskEmail(email),
-				},
-				"[ReminderManual] Stock email path selected"
-			);
-
-			if (smtpHost && smtpUser) {
-				// Build subject line from shared title parts
-				const subjectText = titleParts.join(", ");
-
-				// Build alert boxes for each category
-				const alertParts: string[] = [];
-
-				if (emptyMeds.length > 0) {
-					const emptyAlert =
-						emptyMeds.length === 1
-							? tr.stockReminder.alertEmptySingle
-							: t(tr.stockReminder.alertEmptyMultiple, { count: emptyMeds.length });
-					alertParts.push(`
+					if (emptyMeds.length > 0) {
+						const emptyAlert =
+							emptyMeds.length === 1
+								? tr.stockReminder.alertEmptySingle
+								: t(tr.stockReminder.alertEmptyMultiple, { count: emptyMeds.length });
+						alertParts.push(`
             <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: #fef2f2; border: 1px solid #dc2626;">
               <p style="margin: 0; color: #dc2626; font-weight: 600; font-size: 13px;">
                 ${emptyAlert}
               </p>
             </div>`);
-				}
+					}
 
-				if (criticalMeds.length > 0) {
-					const criticalAlert =
-						criticalMeds.length === 1
-							? tr.stockReminder.alertLowSingle
-							: t(tr.stockReminder.alertLowMultiple, { count: criticalMeds.length });
-					alertParts.push(`
+					if (criticalMeds.length > 0) {
+						const criticalAlert =
+							criticalMeds.length === 1
+								? tr.stockReminder.alertLowSingle
+								: t(tr.stockReminder.alertLowMultiple, { count: criticalMeds.length });
+						alertParts.push(`
             <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: #fff7ed; border: 1px solid #ea580c;">
               <p style="margin: 0; color: #c2410c; font-weight: 600; font-size: 13px;">
                 ${criticalAlert}
               </p>
             </div>`);
-				}
+					}
 
-				if (lowStockMeds.length > 0) {
-					const lowAlert =
-						lowStockMeds.length === 1
-							? tr.stockReminder.alertLowStockSingle
-							: t(tr.stockReminder.alertLowStockMultiple, { count: lowStockMeds.length });
-					alertParts.push(`
+					if (lowStockMeds.length > 0) {
+						const lowAlert =
+							lowStockMeds.length === 1
+								? tr.stockReminder.alertLowStockSingle
+								: t(tr.stockReminder.alertLowStockMultiple, { count: lowStockMeds.length });
+						alertParts.push(`
             <div style="padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: #fffbeb; border: 1px solid #f59e0b;">
               <p style="margin: 0; color: #b45309; font-weight: 500; font-size: 13px;">
                 ${lowAlert}
               </p>
             </div>`);
-				}
+					}
 
-				const alertHtml = alertParts.join("");
+					const alertHtml = alertParts.join("");
 
-				// Build table rows with status indicator
-				const buildTableRow = (row: LowStockItem) => {
-					const isEmpty = row.medsLeft <= 0;
-					const isCritical = row.isCritical !== false;
-					const nonEmptyIcon = isCritical ? "🚨" : "⚠️";
-					const statusIcon = isEmpty ? "🚨" : nonEmptyIcon;
-					const nonEmptyBg = isCritical ? "#fff7ed" : "white";
-					const rowBg = isEmpty ? "#fef2f2" : nonEmptyBg;
-					const safeName = escapeHtml(row.name);
-					const safeMedsLeft = Number(row.medsLeft) || 0;
-					const safeDaysLeft = Number(row.daysLeft) || 0;
-					const safeDepletionDate = row.depletionDate ? escapeHtml(String(row.depletionDate)) : "-";
-					return `
+					// Build table rows with status indicator
+					const buildTableRow = (row: LowStockItem) => {
+						const isEmpty = row.medsLeft <= 0;
+						const isCritical = row.isCritical !== false;
+						const nonEmptyIcon = isCritical ? "🚨" : "⚠️";
+						const statusIcon = isEmpty ? "🚨" : nonEmptyIcon;
+						const nonEmptyBg = isCritical ? "#fff7ed" : "white";
+						const rowBg = isEmpty ? "#fef2f2" : nonEmptyBg;
+						const safeName = escapeHtml(row.name);
+						const safeMedsLeft = Number(row.medsLeft) || 0;
+						const safeDaysLeft = Number(row.daysLeft) || 0;
+						const safeDepletionDate = row.depletionDate ? escapeHtml(String(row.depletionDate)) : "-";
+						return `
           <tr style="background: ${rowBg};">
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${safeName}</td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${safeMedsLeft}</strong></td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeDaysLeft}</td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? `<strong>${tr.stockReminder.now}</strong>` : safeDepletionDate}</td>
           </tr>`;
-				};
+					};
 
-				const tableRows = filteredLowStock.map(buildTableRow).join("");
+					const tableRows = filteredLowStock.map(buildTableRow).join("");
 
-				const html = `
+					const html = `
           <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
             <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
               <h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${emptyMeds.length > 0 ? "🚨" : "⚠️"} MedAssist-ng - ${tr.push.reorderNow}</h2>
@@ -704,227 +842,264 @@ ${getFooterPlain(language)}`;
           </div>
         `;
 
-				const plainText = `MedAssist-ng - ${tr.push.reorderNow}\n\n${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+					const plainText = `MedAssist-ng - ${tr.push.reorderNow}\n\n${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 
-				try {
-					const transporter = nodemailer.createTransport({
-						host: smtpHost,
-						port: smtpPort,
-						secure: smtpSecure,
-						auth: {
-							user: smtpUser,
-							pass: smtpPass ?? "",
-						},
-					});
+					try {
+						const transporter = nodemailer.createTransport({
+							host: smtpHost,
+							port: smtpPort,
+							secure: smtpSecure,
+							auth: {
+								user: smtpUser,
+								pass: smtpPass ?? "",
+							},
+						});
 
-					request.log.info({ to: maskEmail(email) }, "[ReminderManual] Sending stock reminder email");
+						request.log.info({ to: maskEmail(email) }, "[ReminderManual] Sending stock reminder email");
 
-					const mailResult = await transporter.sendMail({
-						from: smtpFrom,
-						to: email,
-						subject: `MedAssist-ng: ${subjectText}`,
-						text: plainText,
-						html,
-					});
+						const mailResult = await transporter.sendMail({
+							from: smtpFrom,
+							to: email,
+							subject: `MedAssist-ng: ${subjectText}`,
+							text: plainText,
+							html,
+						});
 
-					const deliveryError = getDeliveryError(mailResult);
-					if (deliveryError) {
-						throw new Error(deliveryError);
+						const deliveryError = getDeliveryError(mailResult);
+						if (deliveryError) {
+							throw new Error(deliveryError);
+						}
+
+						request.log.info(
+							{ to: maskEmail(email), messageId: mailResult.messageId },
+							"[ReminderManual] Stock reminder email sent"
+						);
+						results.email = true;
+					} catch (error) {
+						request.log.error({ error, to: maskEmail(email) }, "[ReminderManual] Stock reminder email failed");
+						const errorMessage = error instanceof Error ? error.message : "Unknown error";
+						results.errors.push(`Email: ${errorMessage}`);
 					}
-
-					request.log.info(
-						{ to: maskEmail(email), messageId: mailResult.messageId },
-						"[ReminderManual] Stock reminder email sent"
+				} else {
+					request.log.warn(
+						{
+							hasSmtpHost: Boolean(smtpHost),
+							hasSmtpUser: Boolean(smtpUser),
+							to: maskEmail(email),
+						},
+						"[ReminderManual] Stock reminder email skipped: SMTP not configured"
 					);
-					results.email = true;
-				} catch (error) {
-					request.log.error({ error, to: maskEmail(email) }, "[ReminderManual] Stock reminder email failed");
-					const errorMessage = error instanceof Error ? error.message : "Unknown error";
-					results.errors.push(`Email: ${errorMessage}`);
 				}
 			} else {
-				request.log.warn(
+				request.log.info(
+					{ emailEnabled: notificationSettings.emailEnabled, hasRecipient: Boolean(email) },
+					"[ReminderManual] Stock email channel not active"
+				);
+			}
+
+			// Send push notification if enabled
+			if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
+				const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+
+				try {
+					const pushResult = await sendShoutrrrNotification(
+						notificationSettings.shoutrrrUrl,
+						notificationTitle,
+						message
+					);
+					if (pushResult.success) {
+						results.push = true;
+					} else {
+						results.errors.push(`Push: ${pushResult.error}`);
+					}
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : "Unknown error";
+					results.errors.push(`Push: ${errorMessage}`);
+				}
+			}
+
+			// Update the reminder state to record this notification was sent
+			if (results.email || results.push) {
+				const singleChannel = results.email ? "email" : "push";
+				const channel = results.email && results.push ? "both" : singleChannel;
+				updateReminderSentTime("stock", channel);
+
+				// Also update user settings in database so frontend can display the info
+				const medNames = filteredLowStock.map((m: { name: string }) => m.name).join(", ");
+				await updateUserReminderSentTime(userId, "stock", channel, medNames);
+			}
+
+			// Build response message
+			const sentChannels: string[] = [];
+			if (results.email) sentChannels.push("email");
+			if (results.push) sentChannels.push("push");
+
+			if (sentChannels.length > 0) {
+				return reply.send({
+					success: true,
+					message: `Reminder sent via ${sentChannels.join(" and ")}`,
+				});
+			} else if (results.errors.length > 0) {
+				return reply.status(500).send({ error: results.errors.join("; ") });
+			} else {
+				return reply.status(400).send({ error: "No notification channels configured" });
+			}
+		}
+	);
+
+	// Manual prescription reminder (supports email and push)
+	app.post<{ Body: PrescriptionReminderBody }>(
+		"/reminder/send-prescription",
+		{
+			schema: {
+				body: {
+					type: "object",
+					properties: {
+						email: { type: "string" },
+						language: { type: "string" },
+						prescriptionLow: { type: "array", items: prescriptionReminderItemSchema },
+					},
+					example: {
+						email: "daniel@example.com",
+						language: "en",
+						prescriptionLow: [
+							{
+								name: "Ibuprofen 400",
+								remainingRefills: 1,
+								threshold: 1,
+								expiryDate: "2026-06-30",
+							},
+						],
+					},
+				},
+				response: {
+					200: notificationResponseSchema,
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+					500: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { email, prescriptionLow } = request.body;
+			request.log.info(
+				{ hasEmail: Boolean(email), prescriptionCount: prescriptionLow?.length ?? 0 },
+				"[ReminderManual] Prescription reminder request received"
+			);
+
+			if (!prescriptionLow || prescriptionLow.length === 0) {
+				return reply.status(400).send({ error: "Missing prescription reminder data" });
+			}
+
+			const userId = await getUserId(request);
+			const activeMeds = await db
+				.select({ name: medications.name, genericName: medications.genericName })
+				.from(medications)
+				.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
+			const activeMedNames = new Set(activeMeds.map((med) => med.name || med.genericName || ""));
+			const filteredPrescriptionLow = prescriptionLow.filter((item) => activeMedNames.has(item.name));
+			if (filteredPrescriptionLow.length === 0) {
+				request.log.warn("[ReminderManual] Prescription reminder skipped: no active medications after filtering");
+				return reply.status(400).send({ error: "No active medications to notify" });
+			}
+
+			const userSettings = await loadUserSettings(userId);
+			const language = (userSettings.language as Language) || "en";
+			const tr = getTranslations(language);
+
+			const emptyRx = filteredPrescriptionLow.filter((item) => item.remainingRefills <= 0);
+			const lowRx = filteredPrescriptionLow.filter((item) => item.remainingRefills > 0);
+
+			const lines = filteredPrescriptionLow.map((item) => {
+				const expirySuffix = item.expiryDate ? t(tr.prescriptionReminder.expiresSuffix, { date: item.expiryDate }) : "";
+				if (item.remainingRefills <= 0) {
+					return `- ${t(tr.prescriptionReminder.lineEmpty, {
+						name: item.name,
+						expirySuffix,
+					})}`;
+				}
+				return `- ${t(tr.prescriptionReminder.line, {
+					name: item.name,
+					refills: item.remainingRefills,
+					expirySuffix,
+				})}`;
+			});
+
+			const medNames = filteredPrescriptionLow.map((m: { name: string }) => m.name).join(", ");
+
+			const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
+
+			if (userSettings.emailEnabled && userSettings.emailPrescriptionReminders && email) {
+				const smtpHost = process.env.SMTP_HOST;
+				const smtpUser = process.env.SMTP_USER;
+				const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
+				const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
+				const smtpSecure = process.env.SMTP_SECURE === "true";
+				const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+
+				request.log.info(
 					{
 						hasSmtpHost: Boolean(smtpHost),
 						hasSmtpUser: Boolean(smtpUser),
+						hasSmtpPass: Boolean(smtpPass),
+						smtpPort,
+						smtpSecure,
+						hasSmtpFrom: Boolean(smtpFrom),
 						to: maskEmail(email),
 					},
-					"[ReminderManual] Stock reminder email skipped: SMTP not configured"
+					"[ReminderManual] Prescription email path selected"
 				);
-			}
-		} else {
-			request.log.info(
-				{ emailEnabled: notificationSettings.emailEnabled, hasRecipient: Boolean(email) },
-				"[ReminderManual] Stock email channel not active"
-			);
-		}
 
-		// Send push notification if enabled
-		if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
-			const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+				if (smtpHost && smtpUser) {
+					try {
+						const transporter = nodemailer.createTransport({
+							host: smtpHost,
+							port: smtpPort,
+							secure: smtpSecure,
+							auth: {
+								user: smtpUser,
+								pass: smtpPass ?? "",
+							},
+						});
 
-			try {
-				const pushResult = await sendShoutrrrNotification(notificationSettings.shoutrrrUrl, notificationTitle, message);
-				if (pushResult.success) {
-					results.push = true;
-				} else {
-					results.errors.push(`Push: ${pushResult.error}`);
-				}
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : "Unknown error";
-				results.errors.push(`Push: ${errorMessage}`);
-			}
-		}
+						const subject =
+							filteredPrescriptionLow.length === 1
+								? tr.prescriptionReminder.subjectSingle
+								: t(tr.prescriptionReminder.subjectMultiple, { count: filteredPrescriptionLow.length });
 
-		// Update the reminder state to record this notification was sent
-		if (results.email || results.push) {
-			const singleChannel = results.email ? "email" : "push";
-			const channel = results.email && results.push ? "both" : singleChannel;
-			updateReminderSentTime("stock", channel);
+						const bodyText =
+							emptyRx.length > 0 ? tr.prescriptionReminder.descriptionEmpty : tr.prescriptionReminder.descriptionLow;
+						const emptyAlert =
+							emptyRx.length === 1
+								? tr.prescriptionReminder.alertEmptySingle
+								: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length });
+						const lowAlert =
+							lowRx.length === 1
+								? tr.prescriptionReminder.alertLowSingle
+								: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
+						const alertText = emptyRx.length > 0 ? emptyAlert : lowAlert;
 
-			// Also update user settings in database so frontend can display the info
-			const medNames = filteredLowStock.map((m: { name: string }) => m.name).join(", ");
-			await updateUserReminderSentTime(userId, "stock", channel, medNames);
-		}
-
-		// Build response message
-		const sentChannels: string[] = [];
-		if (results.email) sentChannels.push("email");
-		if (results.push) sentChannels.push("push");
-
-		if (sentChannels.length > 0) {
-			return reply.send({
-				success: true,
-				message: `Reminder sent via ${sentChannels.join(" and ")}`,
-			});
-		} else if (results.errors.length > 0) {
-			return reply.status(500).send({ error: results.errors.join("; ") });
-		} else {
-			return reply.status(400).send({ error: "No notification channels configured" });
-		}
-	});
-
-	// Manual prescription reminder (supports email and push)
-	app.post<{ Body: PrescriptionReminderBody }>("/reminder/send-prescription", async (request, reply) => {
-		const { email, prescriptionLow } = request.body;
-		request.log.info(
-			{ hasEmail: Boolean(email), prescriptionCount: prescriptionLow?.length ?? 0 },
-			"[ReminderManual] Prescription reminder request received"
-		);
-
-		if (!prescriptionLow || prescriptionLow.length === 0) {
-			return reply.status(400).send({ error: "Missing prescription reminder data" });
-		}
-
-		const userId = await getUserId(request);
-		const activeMeds = await db
-			.select({ name: medications.name, genericName: medications.genericName })
-			.from(medications)
-			.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
-		const activeMedNames = new Set(activeMeds.map((med) => med.name || med.genericName || ""));
-		const filteredPrescriptionLow = prescriptionLow.filter((item) => activeMedNames.has(item.name));
-		if (filteredPrescriptionLow.length === 0) {
-			request.log.warn("[ReminderManual] Prescription reminder skipped: no active medications after filtering");
-			return reply.status(400).send({ error: "No active medications to notify" });
-		}
-
-		const userSettings = await loadUserSettings(userId);
-		const language = (userSettings.language as Language) || "en";
-		const tr = getTranslations(language);
-
-		const emptyRx = filteredPrescriptionLow.filter((item) => item.remainingRefills <= 0);
-		const lowRx = filteredPrescriptionLow.filter((item) => item.remainingRefills > 0);
-
-		const lines = filteredPrescriptionLow.map((item) => {
-			const expirySuffix = item.expiryDate ? t(tr.prescriptionReminder.expiresSuffix, { date: item.expiryDate }) : "";
-			if (item.remainingRefills <= 0) {
-				return `- ${t(tr.prescriptionReminder.lineEmpty, {
-					name: item.name,
-					expirySuffix,
-				})}`;
-			}
-			return `- ${t(tr.prescriptionReminder.line, {
-				name: item.name,
-				refills: item.remainingRefills,
-				expirySuffix,
-			})}`;
-		});
-
-		const medNames = filteredPrescriptionLow.map((m: { name: string }) => m.name).join(", ");
-
-		const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
-
-		if (userSettings.emailEnabled && userSettings.emailPrescriptionReminders && email) {
-			const smtpHost = process.env.SMTP_HOST;
-			const smtpUser = process.env.SMTP_USER;
-			const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
-			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-			const smtpSecure = process.env.SMTP_SECURE === "true";
-			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
-
-			request.log.info(
-				{
-					hasSmtpHost: Boolean(smtpHost),
-					hasSmtpUser: Boolean(smtpUser),
-					hasSmtpPass: Boolean(smtpPass),
-					smtpPort,
-					smtpSecure,
-					hasSmtpFrom: Boolean(smtpFrom),
-					to: maskEmail(email),
-				},
-				"[ReminderManual] Prescription email path selected"
-			);
-
-			if (smtpHost && smtpUser) {
-				try {
-					const transporter = nodemailer.createTransport({
-						host: smtpHost,
-						port: smtpPort,
-						secure: smtpSecure,
-						auth: {
-							user: smtpUser,
-							pass: smtpPass ?? "",
-						},
-					});
-
-					const subject =
-						filteredPrescriptionLow.length === 1
-							? tr.prescriptionReminder.subjectSingle
-							: t(tr.prescriptionReminder.subjectMultiple, { count: filteredPrescriptionLow.length });
-
-					const bodyText =
-						emptyRx.length > 0 ? tr.prescriptionReminder.descriptionEmpty : tr.prescriptionReminder.descriptionLow;
-					const emptyAlert =
-						emptyRx.length === 1
-							? tr.prescriptionReminder.alertEmptySingle
-							: t(tr.prescriptionReminder.alertEmptyMultiple, { count: emptyRx.length });
-					const lowAlert =
-						lowRx.length === 1
-							? tr.prescriptionReminder.alertLowSingle
-							: t(tr.prescriptionReminder.alertLowMultiple, { count: lowRx.length });
-					const alertText = emptyRx.length > 0 ? emptyAlert : lowAlert;
-
-					const tableRows = filteredPrescriptionLow
-						.map((item) => {
-							const isEmpty = item.remainingRefills <= 0;
-							const safeName = escapeHtml(item.name);
-							const safeRefills = Number(item.remainingRefills) || 0;
-							const safeThreshold = Number(item.threshold) || 0;
-							const safeExpiry = item.expiryDate ? escapeHtml(String(item.expiryDate)) : "-";
-							const rowBg = isEmpty ? "#fef2f2" : "white";
-							return `
+						const tableRows = filteredPrescriptionLow
+							.map((item) => {
+								const isEmpty = item.remainingRefills <= 0;
+								const safeName = escapeHtml(item.name);
+								const safeRefills = Number(item.remainingRefills) || 0;
+								const safeThreshold = Number(item.threshold) || 0;
+								const safeExpiry = item.expiryDate ? escapeHtml(String(item.expiryDate)) : "-";
+								const rowBg = isEmpty ? "#fef2f2" : "white";
+								return `
 					<tr style="background: ${rowBg};">
 						<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${isEmpty ? "🚨" : "⚠️"} ${safeName}</td>
 						<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${safeRefills}</strong></td>
 						<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeThreshold}</td>
 						<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeExpiry}</td>
 					</tr>`;
-						})
-						.join("");
+							})
+							.join("");
 
-					const emailTitle = emptyRx.length > 0 ? tr.prescriptionReminder.titleEmpty : tr.prescriptionReminder.title;
-					const text = `${emailTitle}\n\n${bodyText}\n\n${lines.join("\n")}\n\n---\n${getFooterPlain(language)}`;
-					const html = `
+						const emailTitle = emptyRx.length > 0 ? tr.prescriptionReminder.titleEmpty : tr.prescriptionReminder.title;
+						const text = `${emailTitle}\n\n${bodyText}\n\n${lines.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+						const html = `
 					<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 100%; margin: 0 auto; padding: 12px; background: #f9fafb;">
 						<div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
 							<h2 style="color: #1f2937; margin: 0 0 8px; font-size: 18px;">${emailTitle}</h2>
@@ -958,117 +1133,118 @@ ${getFooterPlain(language)}`;
 					</div>
 				`;
 
-					request.log.info({ to: maskEmail(email) }, "[ReminderManual] Sending prescription reminder email");
+						request.log.info({ to: maskEmail(email) }, "[ReminderManual] Sending prescription reminder email");
 
-					const mailResult = await transporter.sendMail({
-						from: smtpFrom,
-						to: email,
-						subject,
-						text,
-						html,
-					});
+						const mailResult = await transporter.sendMail({
+							from: smtpFrom,
+							to: email,
+							subject,
+							text,
+							html,
+						});
 
-					const deliveryError = getDeliveryError(mailResult);
-					if (deliveryError) {
-						throw new Error(deliveryError);
+						const deliveryError = getDeliveryError(mailResult);
+						if (deliveryError) {
+							throw new Error(deliveryError);
+						}
+
+						request.log.info(
+							{ to: maskEmail(email), messageId: mailResult.messageId },
+							"[ReminderManual] Prescription reminder email sent"
+						);
+						results.email = true;
+					} catch (error) {
+						request.log.error({ error, to: maskEmail(email) }, "[ReminderManual] Prescription reminder email failed");
+						const errorMessage = error instanceof Error ? error.message : "Unknown error";
+						results.errors.push(`Email: ${errorMessage}`);
 					}
-
-					request.log.info(
-						{ to: maskEmail(email), messageId: mailResult.messageId },
-						"[ReminderManual] Prescription reminder email sent"
+				} else {
+					request.log.warn(
+						{
+							hasSmtpHost: Boolean(smtpHost),
+							hasSmtpUser: Boolean(smtpUser),
+							to: maskEmail(email),
+						},
+						"[ReminderManual] Prescription reminder email skipped: SMTP not configured"
 					);
-					results.email = true;
-				} catch (error) {
-					request.log.error({ error, to: maskEmail(email) }, "[ReminderManual] Prescription reminder email failed");
-					const errorMessage = error instanceof Error ? error.message : "Unknown error";
-					results.errors.push(`Email: ${errorMessage}`);
 				}
 			} else {
-				request.log.warn(
+				request.log.info(
 					{
-						hasSmtpHost: Boolean(smtpHost),
-						hasSmtpUser: Boolean(smtpUser),
-						to: maskEmail(email),
+						emailEnabled: userSettings.emailEnabled,
+						emailPrescriptionReminders: userSettings.emailPrescriptionReminders,
+						hasRecipient: Boolean(email),
 					},
-					"[ReminderManual] Prescription reminder email skipped: SMTP not configured"
+					"[ReminderManual] Prescription email channel not active"
 				);
 			}
-		} else {
-			request.log.info(
-				{
-					emailEnabled: userSettings.emailEnabled,
-					emailPrescriptionReminders: userSettings.emailPrescriptionReminders,
-					hasRecipient: Boolean(email),
-				},
-				"[ReminderManual] Prescription email channel not active"
-			);
-		}
 
-		if (userSettings.shoutrrrEnabled && userSettings.shoutrrrPrescriptionReminders && userSettings.shoutrrrUrl) {
-			const titleParts: string[] = [];
-			if (emptyRx.length > 0)
-				titleParts.push(
-					`🚨 ${emptyRx.length} ${emptyRx.length === 1 ? tr.prescriptionReminder.pushEmptySingle : tr.prescriptionReminder.pushEmpty}`
-				);
-			if (lowRx.length > 0)
-				titleParts.push(
-					`🚨 ${lowRx.length} ${lowRx.length === 1 ? tr.prescriptionReminder.pushLowSingle : tr.prescriptionReminder.pushLow}`
-				);
-			const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.prescriptionReminder.pushRenewNow}`;
-
-			const messageParts: string[] = [];
-			if (emptyRx.length > 0) {
-				messageParts.push(`🚨 ${tr.prescriptionReminder.pushEmptySection}:`);
-				for (const m of emptyRx) {
-					messageParts.push(`  • ${m.name}`);
-				}
-			}
-			if (lowRx.length > 0) {
-				if (emptyRx.length > 0) messageParts.push("");
-				messageParts.push(`🚨 ${tr.prescriptionReminder.pushLowSection}:`);
-				for (const m of lowRx) {
-					messageParts.push(
-						`  • ${m.name}: ${t(tr.prescriptionReminder.pushRefillsLeft, { count: m.remainingRefills })}`
+			if (userSettings.shoutrrrEnabled && userSettings.shoutrrrPrescriptionReminders && userSettings.shoutrrrUrl) {
+				const titleParts: string[] = [];
+				if (emptyRx.length > 0)
+					titleParts.push(
+						`🚨 ${emptyRx.length} ${emptyRx.length === 1 ? tr.prescriptionReminder.pushEmptySingle : tr.prescriptionReminder.pushEmpty}`
 					);
+				if (lowRx.length > 0)
+					titleParts.push(
+						`🚨 ${lowRx.length} ${lowRx.length === 1 ? tr.prescriptionReminder.pushLowSingle : tr.prescriptionReminder.pushLow}`
+					);
+				const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.prescriptionReminder.pushRenewNow}`;
+
+				const messageParts: string[] = [];
+				if (emptyRx.length > 0) {
+					messageParts.push(`🚨 ${tr.prescriptionReminder.pushEmptySection}:`);
+					for (const m of emptyRx) {
+						messageParts.push(`  • ${m.name}`);
+					}
+				}
+				if (lowRx.length > 0) {
+					if (emptyRx.length > 0) messageParts.push("");
+					messageParts.push(`🚨 ${tr.prescriptionReminder.pushLowSection}:`);
+					for (const m of lowRx) {
+						messageParts.push(
+							`  • ${m.name}: ${t(tr.prescriptionReminder.pushRefillsLeft, { count: m.remainingRefills })}`
+						);
+					}
+				}
+				const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+
+				try {
+					const pushResult = await sendShoutrrrNotification(userSettings.shoutrrrUrl, title, message);
+					if (pushResult.success) {
+						results.push = true;
+					} else {
+						results.errors.push(`Push: ${pushResult.error}`);
+					}
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : "Unknown error";
+					results.errors.push(`Push: ${errorMessage}`);
 				}
 			}
-			const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 
-			try {
-				const pushResult = await sendShoutrrrNotification(userSettings.shoutrrrUrl, title, message);
-				if (pushResult.success) {
-					results.push = true;
-				} else {
-					results.errors.push(`Push: ${pushResult.error}`);
-				}
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : "Unknown error";
-				results.errors.push(`Push: ${errorMessage}`);
+			if (results.email || results.push) {
+				const singleChannel = results.email ? "email" : "push";
+				const channel = results.email && results.push ? "both" : singleChannel;
+				updateReminderSentTime("prescription", channel);
+				await updateUserReminderSentTime(userId, "prescription", channel, medNames);
 			}
+
+			const sentChannels: string[] = [];
+			if (results.email) sentChannels.push("email");
+			if (results.push) sentChannels.push("push");
+
+			if (sentChannels.length > 0) {
+				return reply.send({
+					success: true,
+					message: `Prescription reminder sent via ${sentChannels.join(" and ")}`,
+				});
+			}
+
+			if (results.errors.length > 0) {
+				return reply.status(500).send({ error: results.errors.join("; ") });
+			}
+
+			return reply.status(400).send({ error: "No notification channels configured" });
 		}
-
-		if (results.email || results.push) {
-			const singleChannel = results.email ? "email" : "push";
-			const channel = results.email && results.push ? "both" : singleChannel;
-			updateReminderSentTime("prescription", channel);
-			await updateUserReminderSentTime(userId, "prescription", channel, medNames);
-		}
-
-		const sentChannels: string[] = [];
-		if (results.email) sentChannels.push("email");
-		if (results.push) sentChannels.push("push");
-
-		if (sentChannels.length > 0) {
-			return reply.send({
-				success: true,
-				message: `Prescription reminder sent via ${sentChannels.join(" and ")}`,
-			});
-		}
-
-		if (results.errors.length > 0) {
-			return reply.status(500).send({ error: results.errors.join("; ") });
-		}
-
-		return reply.status(400).send({ error: "No notification channels configured" });
-	});
+	);
 }

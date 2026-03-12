@@ -416,6 +416,33 @@ describe("DashboardPage", () => {
 		expect(screen.getByText(/table\.daysLeft/i)).toBeInTheDocument();
 	});
 
+	it("renders runs-out and expiry as a stacked date pair in overview rows", () => {
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const headerPair = document.querySelector(".table-head .date-pair-stack-header");
+		expect(headerPair).toBeInTheDocument();
+		expect(headerPair).toHaveTextContent("table.runsOut");
+		expect(headerPair).toHaveTextContent("table.expiry");
+
+		const rowPair = document.querySelector(".table-row .date-pair-stack");
+		expect(rowPair).toBeInTheDocument();
+
+		const rowEntries = Array.from(rowPair?.querySelectorAll(".date-pair-entry") ?? []);
+		expect(rowEntries).toHaveLength(2);
+		expect(rowEntries[0]).toHaveTextContent("table.runsOut");
+		expect(rowEntries[0]).toHaveTextContent("2025-02-15");
+		expect(rowEntries[1]).toHaveTextContent("table.expiry");
+	});
+
 	it("renders multiple cards", () => {
 		render(
 			<MemoryRouter>

@@ -8,7 +8,20 @@ import {
 	getReminderStatusText,
 	getStockStatus,
 	isDoseDismissed,
+	parseLocalDateTime,
 } from "../../utils/schedule";
+
+describe("parseLocalDateTime", () => {
+	it("treats Z-suffixed intake timestamps as local wall-clock times", () => {
+		const parsed = parseLocalDateTime("2026-01-23T20:55:00.000Z");
+
+		expect(parsed.getFullYear()).toBe(2026);
+		expect(parsed.getMonth()).toBe(0);
+		expect(parsed.getDate()).toBe(23);
+		expect(parsed.getHours()).toBe(20);
+		expect(parsed.getMinutes()).toBe(55);
+	});
+});
 
 describe("buildSchedulePreview", () => {
 	beforeEach(() => {
@@ -234,6 +247,36 @@ describe("buildSchedulePreview", () => {
 			expect(date.getSeconds()).toBe(0);
 			expect(date.getMilliseconds()).toBe(0);
 		}
+	});
+
+	it("keeps schedule IDs stable between local and Z-suffixed intake start strings", () => {
+		const medWithoutZ: Medication[] = [
+			{
+				id: 1,
+				name: "TestMed",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				packageType: "blister",
+				blisters: [{ usage: 1, every: 1, start: "2024-03-10T09:00:00" }],
+				updatedAt: null,
+			},
+		];
+
+		const medWithZ: Medication[] = [
+			{
+				...medWithoutZ[0],
+				blisters: [{ usage: 1, every: 1, start: "2024-03-10T09:00:00.000Z" }],
+			},
+		];
+
+		const localResult = buildSchedulePreview(medWithoutZ, "en", true);
+		const zResult = buildSchedulePreview(medWithZ, "en", true);
+
+		expect(zResult.events.map((event) => event.id)).toEqual(localResult.events.map((event) => event.id));
+		expect(zResult.events.map((event) => event.when)).toEqual(localResult.events.map((event) => event.when));
 	});
 });
 
@@ -619,8 +662,8 @@ describe("calculateCoverage", () => {
 		// time (15:40 + 24h = tomorrow 15:40), missing today's 15:42 dose entirely.
 		// FIX: Align effectiveStart to the blister's schedule grid so that the first
 		// dose counted is the next one on the schedule after the correction.
-		const correctionTime = new Date("2024-03-14T15:40:00Z"); // 2 min before dose
-		vi.setSystemTime(new Date("2024-03-14T15:45:00Z")); // 5 min after correction, 3 min after dose
+		const correctionTime = new Date(2024, 2, 14, 15, 40, 0); // 2 min before dose
+		vi.setSystemTime(new Date(2024, 2, 14, 15, 45, 0)); // 5 min after correction, 3 min after dose
 
 		const meds: Medication[] = [
 			{
@@ -638,7 +681,7 @@ describe("calculateCoverage", () => {
 					{
 						usage: 1,
 						every: 1,
-						start: "2024-03-01T15:42:00Z", // Daily at 15:42
+						start: "2024-03-01T15:42:00", // Daily at 15:42 local time
 					},
 				],
 				updatedAt: correctionTime.toISOString(),
@@ -657,8 +700,8 @@ describe("calculateCoverage", () => {
 	it("stock correction shortly after a dose does not count that dose again", () => {
 		// If correction happens shortly AFTER a dose, that dose is already reflected
 		// in the stock count and should NOT be counted again.
-		const correctionTime = new Date("2024-03-14T15:45:00Z"); // 3 min AFTER the 15:42 dose
-		vi.setSystemTime(new Date("2024-03-14T16:00:00Z")); // 15 min after correction
+		const correctionTime = new Date(2024, 2, 14, 15, 45, 0); // 3 min AFTER the 15:42 dose
+		vi.setSystemTime(new Date(2024, 2, 14, 16, 0, 0)); // 15 min after correction
 
 		const meds: Medication[] = [
 			{
@@ -676,7 +719,7 @@ describe("calculateCoverage", () => {
 					{
 						usage: 1,
 						every: 1,
-						start: "2024-03-01T15:42:00Z", // Daily at 15:42
+						start: "2024-03-01T15:42:00", // Daily at 15:42 local time
 					},
 				],
 				updatedAt: correctionTime.toISOString(),

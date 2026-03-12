@@ -390,25 +390,14 @@ async function checkAndSendIntakeReminders(logger: ServiceLogger): Promise<void>
 		return; // No users with settings
 	}
 
-	const intakeEligibleSettings = allUserSettings.filter((settings) => {
-		const emailEnabled = settings.emailEnabled && settings.notificationEmail && settings.emailIntakeReminders;
-		const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl && settings.shoutrrrIntakeReminders;
-		return Boolean(emailEnabled || shoutrrrEnabled);
-	});
+	logger.debug(`[IntakeReminder] Evaluating ${allUserSettings.length} intake profile(s) for auto-marking`);
 
-	if (intakeEligibleSettings.length === 0) {
-		logger.debug("[IntakeReminder] No intake notification channels enabled");
-		return;
-	}
-
-	logger.debug(`[IntakeReminder] Evaluating ${intakeEligibleSettings.length} intake reminder profile(s)`);
-
-	for (const userSettings of intakeEligibleSettings) {
+	for (const userSettings of allUserSettings) {
 		await checkAndSendIntakeRemindersForUser(userSettings, logger);
 	}
 }
 
-async function checkAndSendIntakeRemindersForUser(
+export async function checkAndSendIntakeRemindersForUser(
 	settings: UserSettings & { userId: number },
 	logger: ServiceLogger
 ): Promise<void> {

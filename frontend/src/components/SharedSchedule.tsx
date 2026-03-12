@@ -11,7 +11,7 @@ import { useEscapeKey } from "../hooks";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
 import { getMedDisplayName, getMedTotal, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { getSystemLocale } from "../utils/formatters";
-import { isDoseDismissed } from "../utils/schedule";
+import { isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
 import { loadCollapsedDaysFromStorage } from "../utils/storage";
 import { MedicationAvatar } from "./MedicationAvatar";
 
@@ -434,7 +434,7 @@ export function SharedSchedule() {
 				// Filter: only include intakes for this person (null = everyone, or matches share's takenBy)
 				if (intake.takenBy !== null && intake.takenBy !== data.takenBy) return;
 
-				const startDate = new Date(intake.start);
+				const startDate = parseLocalDateTime(intake.start);
 				if (Number.isNaN(startDate.getTime())) return;
 
 				// Use the same iteration method as buildSchedulePreview (setDate instead of adding ms)
@@ -576,7 +576,7 @@ export function SharedSchedule() {
 				// Time-based: every scheduled dose counts as consumed once its time has passed
 				intakes.forEach((intake, blisterIdx) => {
 					const usageForStock = convertUsageForStock(intake.usage, med, intake.intakeUnit ?? "ml");
-					const blisterStart = new Date(intake.start).getTime();
+					const blisterStart = parseLocalDateTime(intake.start).getTime();
 					const period = Math.max(1, intake.every) * MS_PER_DAY;
 
 					let effectiveStart: number;

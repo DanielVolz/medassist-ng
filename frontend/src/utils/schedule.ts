@@ -14,6 +14,23 @@ import type {
 } from "../types";
 import { getMedDisplayName, getMedTotal, isLiquidContainerPackageType, isTubePackageType } from "../types";
 
+export function parseLocalDateTime(isoString: string): Date {
+	const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):?(\d{2})?/);
+	if (!match) {
+		return new Date(isoString);
+	}
+
+	const [, year, month, day, hour, minute, second] = match;
+	return new Date(
+		parseInt(year, 10),
+		parseInt(month, 10) - 1,
+		parseInt(day, 10),
+		parseInt(hour, 10),
+		parseInt(minute, 10),
+		parseInt(second ?? "0", 10)
+	);
+}
+
 function normalizeIntakeUsageForStock(intake: Intake, med: Medication): number {
 	const usage = Number(intake.usage);
 	if (!Number.isFinite(usage) || usage <= 0) return 0;
@@ -75,7 +92,7 @@ export function buildSchedulePreview(
 	meds.forEach((med) => {
 		const intakes = getIntakesForMed(med);
 		intakes.forEach((intake, idx) => {
-			const start = new Date(intake.start);
+			const start = parseLocalDateTime(intake.start);
 			if (Number.isNaN(start.getTime())) return;
 			for (let d = new Date(start); d <= end; d.setDate(d.getDate() + intake.every)) {
 				const isPast = d < todayStart;
@@ -173,7 +190,7 @@ export function calculateCoverage(
 			// This prevents double-counting: once the scheduled time arrives, the dose
 			// was already counted via the early-taken path, not again via time.
 			blisters.forEach((s, blisterIdx) => {
-				const blisterStart = new Date(s.start).getTime();
+				const blisterStart = parseLocalDateTime(s.start).getTime();
 				const period = Math.max(1, s.every) * MS_PER_DAY;
 				const intake = intakes[blisterIdx];
 				if (!intake) return;

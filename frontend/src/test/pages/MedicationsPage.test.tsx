@@ -219,6 +219,19 @@ describe("MedicationsPage", () => {
 		expect(screen.getByText(/form\.genericName/i)).toBeInTheDocument();
 	});
 
+	it("renders medication start and end dates as one desktop date pair group", () => {
+		renderPage();
+		openNewMedicationForm();
+
+		const datePairGroup = document.querySelector(".date-pair-group");
+		expect(datePairGroup).toBeInTheDocument();
+
+		const dateFields = Array.from(datePairGroup?.querySelectorAll(".date-pair-field") ?? []);
+		expect(dateFields).toHaveLength(2);
+		expect(dateFields[0]).toHaveTextContent("form.medicationStartDate");
+		expect(dateFields[1]).toHaveTextContent("form.medicationEndDate");
+	});
+
 	it("shows submit button in form mode", () => {
 		renderPage();
 		openNewMedicationForm();

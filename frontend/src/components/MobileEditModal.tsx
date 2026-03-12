@@ -421,17 +421,27 @@ export function MobileEditModal({
 												<span className="field-error">{fieldErrors.genericName}</span>
 											)}
 										</label>
-										<label className="full">
-											{t("form.medicationStartDate")}
-											<DateInput
-												value={form.medicationStartDate}
-												onChange={(e) => onHandleValueChange("medicationStartDate", e.target.value)}
-												placeholder={t("common.optional")}
-											/>
-											{!readOnlyMode && dateConsistencyError && (
-												<span className="field-error">{dateConsistencyError}</span>
-											)}
-										</label>
+										<div className="full date-pair-group">
+											<label className="date-pair-field">
+												{t("form.medicationStartDate")}
+												<DateInput
+													value={form.medicationStartDate}
+													onChange={(e) => onHandleValueChange("medicationStartDate", e.target.value)}
+													placeholder={t("common.optional")}
+												/>
+												{!readOnlyMode && dateConsistencyError && (
+													<span className="field-error">{dateConsistencyError}</span>
+												)}
+											</label>
+											<label className="date-pair-field">
+												{t("form.medicationEndDate")}
+												<DateInput
+													value={form.medicationEndDate}
+													onChange={(e) => onHandleValueChange("medicationEndDate", e.target.value)}
+													placeholder={t("common.optional")}
+												/>
+											</label>
+										</div>
 										<label className="full">
 											{t("form.packageType")}
 											<select
@@ -445,14 +455,6 @@ export function MobileEditModal({
 													</option>
 												))}
 											</select>
-										</label>
-										<label className="full">
-											{t("form.medicationEndDate")}
-											<DateInput
-												value={form.medicationEndDate}
-												onChange={(e) => onHandleValueChange("medicationEndDate", e.target.value)}
-												placeholder={t("common.optional")}
-											/>
 										</label>
 										{allowsPillFormSelection(form.packageType) && (
 											<label className="full">

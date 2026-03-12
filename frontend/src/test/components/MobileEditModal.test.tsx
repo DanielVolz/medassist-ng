@@ -161,6 +161,18 @@ describe("MobileEditModal", () => {
 		expect(screen.getByText(/form\.genericName/i)).toBeInTheDocument();
 	});
 
+	it("groups medication start and end date fields in one stacked date pair", () => {
+		render(<MobileEditModal {...defaultProps} />);
+
+		const datePairGroup = document.querySelector(".date-pair-group");
+		expect(datePairGroup).toBeInTheDocument();
+
+		const dateFields = Array.from(datePairGroup?.querySelectorAll(".date-pair-field") ?? []);
+		expect(dateFields).toHaveLength(2);
+		expect(dateFields[0]).toHaveTextContent("form.medicationStartDate");
+		expect(dateFields[1]).toHaveTextContent("form.medicationEndDate");
+	});
+
 	it("renders packs input", () => {
 		render(<MobileEditModal {...defaultProps} />);
 

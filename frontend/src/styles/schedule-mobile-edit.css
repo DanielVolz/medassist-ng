@@ -153,7 +153,7 @@
 .shared-overview-table {
 	width: 100%;
 	border-collapse: collapse;
-	min-width: 860px;
+	min-width: 780px;
 }
 
 .shared-overview-table th,
@@ -266,6 +266,11 @@
 	font-size: 0.88rem;
 	font-weight: 600;
 	word-break: break-word;
+}
+
+.shared-overview-table .date-pair-stack-header,
+.shared-overview-table .date-pair-stack {
+	min-width: 150px;
 }
 
 @media (max-width: 600px) {

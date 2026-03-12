@@ -585,14 +585,14 @@
       "name": "Name",
       "package": "Package",
       "stock": "Stock",
-      "daysLeft": "Days left",
+      "daysLeft": "Estimated days left",
       "nextIntake": "Next intake",
       "depletion": "Depletion",
-      "priority": "Priority"
+      "priority": "Stock alert"
     },
     "priority": {
-      "normal": "Normal",
-      "high": "High"
+      "normal": "Stock OK",
+      "high": "Low stock"
     },
     "stock": {
       "of": "{{current}} of {{capacity}}"

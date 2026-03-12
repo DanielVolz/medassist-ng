@@ -244,8 +244,12 @@ export function SharedOverviewPage() {
 										<th>{t("sharedOverview.columns.package")}</th>
 										<th>{t("sharedOverview.columns.stock")}</th>
 										<th>{t("sharedOverview.columns.daysLeft")}</th>
-										<th>{t("sharedOverview.columns.nextIntake")}</th>
-										<th>{t("sharedOverview.columns.depletion")}</th>
+										<th>
+											<div className="date-pair-stack-header">
+												<span className="date-pair-label">{t("sharedOverview.columns.nextIntake")}</span>
+												<span className="date-pair-label">{t("sharedOverview.columns.depletion")}</span>
+											</div>
+										</th>
 										<th>{t("sharedOverview.columns.priority")}</th>
 									</tr>
 								</thead>
@@ -276,8 +280,18 @@ export function SharedOverviewPage() {
 															})}
 												</td>
 												<td>{medication.daysLeft === null ? "-" : medication.daysLeft}</td>
-												<td>{formatDate(medication.nextIntakeDate, locale)}</td>
-												<td>{formatDate(medication.depletionDate, locale)}</td>
+												<td>
+													<div className="date-pair-stack">
+														<div className="date-pair-entry">
+															<span className="date-pair-label">{t("sharedOverview.columns.nextIntake")}</span>
+															<span className="date-pair-value">{formatDate(medication.nextIntakeDate, locale)}</span>
+														</div>
+														<div className="date-pair-entry">
+															<span className="date-pair-label">{t("sharedOverview.columns.depletion")}</span>
+															<span className="date-pair-value">{formatDate(medication.depletionDate, locale)}</span>
+														</div>
+													</div>
+												</td>
 												<td>
 													{medication.priority === null ? (
 														"-"

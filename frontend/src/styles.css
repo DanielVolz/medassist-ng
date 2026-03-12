@@ -1668,6 +1668,46 @@ textarea.auto-resize {
 	grid-column: 1 / -1;
 }
 
+.date-pair-group {
+	display: grid;
+	gap: 0.9rem;
+}
+
+.date-pair-field {
+	min-width: 0;
+}
+
+.date-pair-stack,
+.date-pair-stack-header {
+	display: grid;
+	gap: 0.45rem;
+	min-width: 0;
+}
+
+.date-pair-entry {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	min-width: 0;
+}
+
+.date-pair-label {
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+	line-height: 1.2;
+}
+
+.date-pair-value {
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: var(--text-primary);
+	line-height: 1.3;
+	word-break: break-word;
+}
+
 .form-category {
 	grid-column: 1 / -1;
 	display: grid;
@@ -2785,7 +2825,7 @@ button.has-validation-error {
 
 .table-8 .table-head,
 .table-8 .table-row {
-	grid-template-columns: minmax(130px, 1.4fr) 90px 130px 70px 95px 95px 90px 95px;
+	grid-template-columns: minmax(130px, 1.4fr) 90px 130px 70px 95px minmax(130px, 1.15fr) 95px;
 }
 
 .email-sent-status {
@@ -2883,6 +2923,26 @@ button.has-validation-error {
 		margin-right: 1rem;
 		flex-shrink: 0;
 		text-align: left;
+	}
+	.table-row > .date-pair-stack {
+		gap: 0.45rem;
+	}
+	.table-row > .date-pair-stack::before {
+		display: none;
+		content: none;
+	}
+	.table-row > .date-pair-stack .date-pair-entry {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 0.75rem;
+	}
+	.table-row > .date-pair-stack .date-pair-label {
+		margin-right: 0.75rem;
+		flex-shrink: 0;
+	}
+	.table-row > .date-pair-stack .date-pair-value {
+		text-align: right;
 	}
 	/* First span (name cell) - centered horizontal layout */
 	.table-row > span:first-child {

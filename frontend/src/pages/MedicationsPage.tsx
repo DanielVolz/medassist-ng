@@ -1247,17 +1247,27 @@ export function MedicationsPage() {
 											<span className="field-error">{fieldErrors.genericName}</span>
 										)}
 									</label>
-									<label>
-										{t("form.medicationStartDate")}
-										<DateInput
-											value={form.medicationStartDate}
-											onChange={(e) => handleValueChange("medicationStartDate", e.target.value)}
-											placeholder={t("common.optional")}
-										/>
-										{!readOnlyView && dateConsistencyError && (
-											<span className="field-error">{dateConsistencyError}</span>
-										)}
-									</label>
+									<div className="full date-pair-group">
+										<label className="date-pair-field">
+											{t("form.medicationStartDate")}
+											<DateInput
+												value={form.medicationStartDate}
+												onChange={(e) => handleValueChange("medicationStartDate", e.target.value)}
+												placeholder={t("common.optional")}
+											/>
+											{!readOnlyView && dateConsistencyError && (
+												<span className="field-error">{dateConsistencyError}</span>
+											)}
+										</label>
+										<label className="date-pair-field">
+											{t("form.medicationEndDate")}
+											<DateInput
+												value={form.medicationEndDate}
+												onChange={(e) => handleValueChange("medicationEndDate", e.target.value)}
+												placeholder={t("common.optional")}
+											/>
+										</label>
+									</div>
 									<label>
 										{t("form.packageType")}
 										<select
@@ -1271,14 +1281,6 @@ export function MedicationsPage() {
 												</option>
 											))}
 										</select>
-									</label>
-									<label>
-										{t("form.medicationEndDate")}
-										<DateInput
-											value={form.medicationEndDate}
-											onChange={(e) => handleValueChange("medicationEndDate", e.target.value)}
-											placeholder={t("common.optional")}
-										/>
 									</label>
 									{allowsPillFormSelection(form.packageType) && (
 										<label>

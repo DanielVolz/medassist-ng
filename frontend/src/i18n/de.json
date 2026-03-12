@@ -585,14 +585,14 @@
       "name": "Name",
       "package": "Packung",
       "stock": "Bestand",
-      "daysLeft": "Tage übrig",
+      "daysLeft": "Geschätzte Resttage",
       "nextIntake": "Nächste Einnahme",
       "depletion": "Aufgebraucht",
-      "priority": "Priorität"
+      "priority": "Bestandswarnung"
     },
     "priority": {
-      "normal": "Normal",
-      "high": "Hoch"
+      "normal": "Bestand ok",
+      "high": "Niedriger Bestand"
     },
     "stock": {
       "of": "{{current}} von {{capacity}}"

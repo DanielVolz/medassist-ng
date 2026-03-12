@@ -677,8 +677,10 @@ export function DashboardPage() {
 									<span>{t("table.dailyConsumption")}</span>
 									<span>{t("table.stockDetails")}</span>
 									<span>{t("table.daysLeft")}</span>
-									<span>{t("table.runsOut")}</span>
-									<span>{t("table.expiry")}</span>
+									<span className="date-pair-stack-header">
+										<span className="date-pair-label">{t("table.runsOut")}</span>
+										<span className="date-pair-label">{t("table.expiry")}</span>
+									</span>
 									<span>{t("table.status")}</span>
 								</div>
 								{coverage.all.map((row) => {
@@ -806,15 +808,23 @@ export function DashboardPage() {
 											<span data-label={t("table.daysLeft")} className={textClass}>
 												{formatNumber(row.daysLeft)}
 											</span>
-											<span data-label={t("table.runsOut")}>{row.depletionDate ?? "-"}</span>
-											<span data-label={t("table.expiry")} className={expiryClass}>
-												{med?.expiryDate
-													? new Date(med.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), {
-															day: "2-digit",
-															month: "short",
-															year: "2-digit",
-														})
-													: "-"}
+											<span className="date-pair-stack">
+												<span className="date-pair-entry">
+													<span className="date-pair-label">{t("table.runsOut")}</span>
+													<span className="date-pair-value">{row.depletionDate ?? "-"}</span>
+												</span>
+												<span className="date-pair-entry">
+													<span className="date-pair-label">{t("table.expiry")}</span>
+													<span className={`date-pair-value ${expiryClass}`}>
+														{med?.expiryDate
+															? new Date(med.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), {
+																	day: "2-digit",
+																	month: "short",
+																	year: "2-digit",
+																})
+															: "-"}
+													</span>
+												</span>
 											</span>
 											<span data-label={t("table.status")} className={status ? `status-chip ${status.className}` : ""}>
 												{status ? t(status.label) : "-"}

@@ -193,6 +193,37 @@ test.describe("Stock Status Levels", () => {
 		await expect(depletedRow.locator(".status-chip.danger")).toBeVisible();
 	});
 
+	test("should keep the depleted take button visually dangerous while disabled", async ({ page }) => {
+		await navigateTo(page, "/dashboard");
+
+		const todayBlock = page.locator(".day-block.today");
+		await expect(todayBlock).toBeVisible({ timeout: 10000 });
+
+		const depletedRow = todayBlock.locator(".time-row").filter({ hasText: MED_DEPLETED });
+		await expect(depletedRow).toBeVisible();
+
+		const takeButton = depletedRow.locator("button.dose-btn.take.out-of-stock");
+		await expect(takeButton).toBeDisabled();
+
+		const expectedDangerStyles = await page.evaluate(() => {
+			const probe = document.createElement("button");
+			probe.style.backgroundColor = "var(--danger)";
+			probe.style.borderColor = "var(--danger)";
+			document.body.appendChild(probe);
+			const styles = getComputedStyle(probe);
+			const result = {
+				backgroundColor: styles.backgroundColor,
+				borderTopColor: styles.borderTopColor,
+			};
+			probe.remove();
+			return result;
+		});
+
+		await expect(takeButton).toHaveCSS("opacity", "1");
+		await expect(takeButton).toHaveCSS("background-color", expectedDangerStyles.backgroundColor);
+		await expect(takeButton).toHaveCSS("border-top-color", expectedDangerStyles.borderTopColor);
+	});
+
 	test("should show days-left and runs-out date in overview", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 

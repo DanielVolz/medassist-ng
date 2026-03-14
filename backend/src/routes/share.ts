@@ -251,6 +251,7 @@ export async function shareRoutes(app: FastifyInstance) {
 						medications: meds,
 						doses: await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId)),
 						thresholdDays: settings?.lowStockDays ?? 30,
+						showStockStatus: settings?.shareStockStatus ?? true,
 					})
 				: null;
 
@@ -343,6 +344,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				medications: meds,
 				doses,
 				thresholdDays: settings?.lowStockDays ?? 30,
+				showStockStatus: settings?.shareStockStatus ?? true,
 			});
 
 			return {

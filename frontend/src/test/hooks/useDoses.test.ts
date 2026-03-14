@@ -20,7 +20,6 @@ describe("useDoses", () => {
 
 		expect(result.current.takenDoses.size).toBe(0);
 		expect(result.current.dismissedDoses.size).toBe(0);
-		expect(result.current.showClearMissedConfirm).toBe(false);
 	});
 
 	it("loads taken doses from API on mount", async () => {
@@ -273,14 +272,32 @@ describe("useDoses", () => {
 		});
 	});
 
-	it("setShowClearMissedConfirm works", () => {
+	it("shows an out-of-stock alert and reverts the optimistic mark", async () => {
+		const alertMock = vi.fn();
+		global.alert = alertMock;
+
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
+			.mockResolvedValueOnce({
+				ok: false,
+				json: () => Promise.resolve({ code: "OUT_OF_STOCK" }),
+			})
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
+
 		const { result } = renderHook(() => useDoses());
 
-		act(() => {
-			result.current.setShowClearMissedConfirm(true);
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(0);
 		});
 
-		expect(result.current.showClearMissedConfirm).toBe(true);
+		await act(async () => {
+			await result.current.markDoseTaken("blocked-dose");
+		});
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("blocked-dose")).toBe(false);
+		});
+		expect(alertMock).toHaveBeenCalledWith("common.outOfStockTakeBlocked");
 	});
 
 	it("undoDoseTaken encodes special characters in dose ID", async () => {

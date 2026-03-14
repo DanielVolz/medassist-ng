@@ -1636,6 +1636,15 @@ describe("computeMissedPastDoseIds", () => {
 		expect(result).toEqual([`1-0-${march13}`, `1-0-${march14}`]);
 	});
 
+	it("matches medication dismissedUntil via display name when the schedule row uses genericName", () => {
+		const march10 = new Date("2024-03-10T00:00:00").getTime();
+		const pastDays = [makePastDay("Acetylsalicylic Acid", [{ id: `1-0-${march10}` }])];
+		const meds = [{ name: "", genericName: "Acetylsalicylic Acid", dismissedUntil: "2024-03-12" }];
+
+		const result = computeMissedPastDoseIds(pastDays, meds, new Set(), new Set());
+		expect(result).toEqual([]);
+	});
+
 	it("expands takenBy people into separate dose IDs", () => {
 		const march10 = new Date("2024-03-10T00:00:00").getTime();
 		const pastDays = [makePastDay("SharedMed", [{ id: `1-0-${march10}`, takenBy: ["Alice", "Bob"] }])];

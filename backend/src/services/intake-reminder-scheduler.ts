@@ -23,11 +23,13 @@ import {
 	getTodaysIntakes,
 	getUpcomingIntakes,
 	type IntakeReminderState,
+	normalizeIntakeUsageForStock,
 	parseIntakeReminderState,
 	parseIntakesJson,
 	parseTakenByJson,
 	type UpcomingIntake,
 } from "../utils/scheduler-utils.js";
+import { computeMedicationCurrentStock } from "./current-stock.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "./reminder-scheduler.js";
 
 const REMINDER_MINUTES_BEFORE = parseInt(process.env.REMINDER_MINUTES_BEFORE ?? "15", 10);
@@ -133,6 +135,10 @@ async function autoMarkDueIntakesAsTaken(
 			)
 		);
 	const existingDoseIds = new Set(existingToday.map((d) => d.doseId));
+	const trackedDoses = await db
+		.select()
+		.from(doseTracking)
+		.where(and(eq(doseTracking.userId, settings.userId), eq(doseTracking.dismissed, false)));
 
 	let inserted = 0;
 
@@ -152,6 +158,15 @@ async function autoMarkDueIntakesAsTaken(
 
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
 		const medDisplayName = med.name || med.genericName || "";
+		let remainingStock = computeMedicationCurrentStock({
+			medication: med,
+			doses: trackedDoses,
+			stockCalculationMode: settings.stockCalculationMode,
+			nowMs: now.getTime(),
+		});
+		if (remainingStock <= 0) {
+			continue;
+		}
 		const todaysIntakes = getTodaysIntakes(
 			medDisplayName,
 			intakes,
@@ -182,6 +197,14 @@ async function autoMarkDueIntakesAsTaken(
 				continue;
 			}
 
+			const intakeDefinition = intakes[intake.blisterIndex];
+			const usage = intakeDefinition
+				? normalizeIntakeUsageForStock(intakeDefinition, med.medicationForm, med.packageType)
+				: 0;
+			if (remainingStock <= 0) {
+				break;
+			}
+
 			await db.insert(doseTracking).values({
 				userId: settings.userId,
 				doseId,
@@ -192,6 +215,16 @@ async function autoMarkDueIntakesAsTaken(
 			});
 
 			existingDoseIds.add(doseId);
+			trackedDoses.push({
+				id: 0,
+				userId: settings.userId,
+				doseId,
+				takenAt: intake.intakeTime,
+				markedBy: null,
+				takenSource: "automatic",
+				dismissed: false,
+			});
+			remainingStock = Math.max(0, remainingStock - usage);
 			inserted++;
 		}
 	}

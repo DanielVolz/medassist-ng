@@ -69,6 +69,47 @@ async function createUser(username: string) {
 	return Number(result.rows[0].id);
 }
 
+async function insertMedication(options: {
+	id: number;
+	userId: number;
+	takenBy?: string[];
+	packCount?: number;
+	looseTablets?: number;
+	start?: string;
+}) {
+	const intakeStart = options.start ?? "2025-01-01T08:00:00.000Z";
+	await testClient.execute({
+		sql: `INSERT INTO medications (
+			id, user_id, name, taken_by_json, medication_form, package_type,
+			pack_count, blisters_per_pack, pills_per_blister, loose_tablets, stock_adjustment,
+			usage_json, every_json, start_json, intakes_json, intake_reminders_enabled
+		) VALUES (?, ?, 'Test Medication', ?, 'tablet', 'blister', ?, 1, 10, ?, 0, '[1]', '[1]', ?, '[]', 0)`,
+		args: [
+			options.id,
+			options.userId,
+			JSON.stringify(options.takenBy ?? []),
+			options.packCount ?? 1,
+			options.looseTablets ?? 0,
+			intakeStart,
+			"[]",
+		],
+	});
+}
+
+async function insertUserSettings(userId: number, stockCalculationMode: "automatic" | "manual" = "automatic") {
+	await testClient.execute({
+		sql: "INSERT INTO user_settings (user_id, stock_calculation_mode) VALUES (?, ?)",
+		args: [userId, stockCalculationMode],
+	});
+}
+
+async function _insertShareToken(userId: number, token: string, takenBy: string) {
+	await testClient.execute({
+		sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, 30)",
+		args: [userId, token, takenBy],
+	});
+}
+
 function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
 	const token = app.jwt.sign({ sub: userId, username });
 	return `access_token=${token}`;
@@ -202,6 +243,43 @@ describe("Dose Tracking API", () => {
 
 			expect(getResponse.statusCode).toBe(200);
 			expect(getResponse.json().doses[0].doseId).toBe(doseId);
+		});
+
+		it("rejects taking a dose when the medication is out of stock", async () => {
+			await insertMedication({ id: 5, userId, packCount: 0, looseTablets: 0 });
+			await insertUserSettings(userId, "automatic");
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+				payload: { doseId: "5-0-1735344000000" },
+			});
+
+			expect(response.statusCode).toBe(409);
+			expect(response.json()).toEqual({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
+		});
+
+		it("allows taking a historical dose when stock existed at that occurrence", async () => {
+			await insertMedication({
+				id: 6,
+				userId,
+				packCount: 1,
+				looseTablets: 0,
+				start: "2025-01-01T08:00:00.000Z",
+			});
+			await insertUserSettings(userId, "automatic");
+
+			const historicalDoseId = "6-0-1736064000000";
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+				payload: { doseId: historicalDoseId },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
 		});
 	});
 

@@ -182,10 +182,7 @@ const createMockAppContext = (overrides = {}) => ({
 	getDayStockStatus: vi.fn(() => "success"),
 	getDoseId: vi.fn((id, person) => (person ? `${id}-${person}` : id)),
 	isDoseTakenAutomatically: vi.fn(() => false),
-	showClearMissedConfirm: false,
-	setShowClearMissedConfirm: vi.fn(),
-	clearingMissed: false,
-	dismissMissedDoses: vi.fn(),
+	loadMeds: vi.fn(),
 	loadSettings: vi.fn(),
 	...overrides,
 });
@@ -977,26 +974,18 @@ describe("DashboardPage with past days", () => {
 		}
 	});
 
-	it("shows clear missed doses button when there are missed doses", () => {
-		render(
-			<MemoryRouter>
-				<DashboardPage />
-			</MemoryRouter>
-		);
+	it("posts the computed dismiss-until payload when clearing missed doses", async () => {
+		const loadMeds = vi.fn();
+		const alertMock = vi.fn();
+		global.alert = alertMock;
+		global.fetch = vi.fn().mockResolvedValue({ ok: true });
 
-		// Should show clear missed button
-		const clearBtn = document.querySelector(".clear-missed-btn");
-		expect(clearBtn).toBeInTheDocument();
-	});
-
-	it("opens clear missed confirmation modal and confirms action", () => {
-		const dismissMissedDoses = vi.fn();
 		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverageByMed: { Aspirin: { medsLeft: 25, daysLeft: 25 } },
 			pastDays: mockPastDays,
-			showPastDays: false,
-			missedPastDoseIds: ["1-0-1-John", "1-0-2-John"],
-			showClearMissedConfirm: true,
-			dismissMissedDoses,
+			missedPastDoseIds: [`${mockPastDays[0].meds[0].doses[0].id}-John`],
+			loadMeds,
 		});
 
 		render(
@@ -1005,9 +994,26 @@ describe("DashboardPage with past days", () => {
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText(/dashboard\.schedules\.clearMissedConfirmTitle/i)).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: /dashboard\.schedules\.clearMissed/i }));
 		fireEvent.click(screen.getByRole("button", { name: /dashboard\.schedules\.clearMissedConfirm/i }));
-		expect(dismissMissedDoses).toHaveBeenCalledWith(["1-0-1-John", "1-0-2-John"]);
+
+		await waitFor(() => {
+			expect(global.fetch).toHaveBeenCalledWith(
+				"/api/medications/dismiss-until",
+				expect.objectContaining({
+					method: "POST",
+					credentials: "include",
+				})
+			);
+		});
+
+		const body = JSON.parse(((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body as string) ?? "{}");
+		expect(body).toEqual({
+			medicationIds: [1],
+			until: mockPastDays[0].date.toISOString().slice(0, 10),
+		});
+		expect(loadMeds).toHaveBeenCalled();
+		expect(alertMock).toHaveBeenCalledWith(expect.stringContaining("dashboard.schedules.clearMissedSuccess"));
 	});
 });
 
@@ -1167,25 +1173,6 @@ describe("DashboardPage additional branches", () => {
 		expect(avatar).toBeInTheDocument();
 		fireEvent.click(avatar);
 		expect(openScheduleLightbox).toHaveBeenCalledWith("/api/images/aspirin.png");
-	});
-
-	it("clicking clear missed button opens confirmation", () => {
-		const setShowClearMissedConfirm = vi.fn();
-		mockContextValue = createMockAppContext({
-			pastDays: mockPastDays,
-			missedPastDoseIds: ["1-0-1-John"],
-			setShowClearMissedConfirm,
-		});
-
-		render(
-			<MemoryRouter>
-				<DashboardPage />
-			</MemoryRouter>
-		);
-
-		const clearBtn = document.querySelector(".clear-missed-btn") as HTMLButtonElement;
-		fireEvent.click(clearBtn);
-		expect(setShowClearMissedConfirm).toHaveBeenCalledWith(true);
 	});
 
 	it("renders and interacts with today day schedule block", () => {

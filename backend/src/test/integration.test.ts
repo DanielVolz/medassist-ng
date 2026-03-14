@@ -255,6 +255,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Test Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 				},
 			});
@@ -308,6 +311,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Test Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-01-10T08:00:00.000Z" }],
 				},
 			});
@@ -346,6 +352,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Test Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [
 						{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" },
 						{ usage: 0.5, every: 1, start: "2025-01-05T20:00:00.000Z" },
@@ -407,6 +416,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Weekly Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 7, start: "2025-10-17T08:00:00" }],
 				},
 			});
@@ -544,6 +556,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Interval Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-10-17T08:00:00" }],
 				},
 			});
@@ -598,6 +613,9 @@ describe("Integration Tests", () => {
 				payload: {
 					name: "Aspirin",
 					takenBy: ["Daniel"],
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 				},
 			});

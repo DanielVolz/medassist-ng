@@ -2618,6 +2618,22 @@ button.has-validation-error {
 	filter: none;
 }
 
+.dose-btn.take.out-of-stock,
+.dose-btn.take.out-of-stock:disabled,
+.dashboard-schedules-section .dose-btn.take.out-of-stock,
+.dashboard-schedules-section .dose-btn.take.out-of-stock:disabled,
+[data-theme="light"] .dashboard-schedules-section .dose-btn.take.out-of-stock,
+[data-theme="light"] .dashboard-schedules-section .dose-btn.take.out-of-stock:disabled,
+[data-theme="light"] .dose-btn.take.out-of-stock,
+[data-theme="light"] .dose-btn.take.out-of-stock:disabled {
+	opacity: 1;
+	background: var(--danger);
+	border-color: var(--danger);
+	color: white;
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 55%, transparent);
+	filter: none;
+}
+
 .dose-item.future {
 	opacity: 0.5;
 }
@@ -2747,15 +2763,6 @@ button.has-validation-error {
 
 [data-theme="light"] .dose-btn.take {
 	color: #0f172a;
-}
-
-.time-row.taken {
-	opacity: 0.6;
-}
-
-.time-row.taken .med-name {
-	text-decoration: line-through;
-	color: var(--text-secondary);
 }
 
 .highlights {

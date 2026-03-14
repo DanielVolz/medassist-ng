@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
-import { useModalHistory } from "../hooks";
 import {
 	allowsPillFormSelection,
 	type Coverage,
@@ -76,19 +75,28 @@ export function DashboardPage() {
 		getDayStockStatus,
 		getDoseId,
 		isDoseTakenAutomatically,
-		showClearMissedConfirm,
-		setShowClearMissedConfirm,
-		clearingMissed,
-		dismissMissedDoses,
 		openMedDetail,
 		openUserFilter,
 		openShareDialog,
 		openScheduleLightbox,
 		stockThresholds,
+		loadMeds,
 		loadSettings,
 	} = useAppContext();
+	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
+	const [clearingMissed, setClearingMissed] = useState(false);
 
-	useModalHistory(showClearMissedConfirm, "clearMissed", () => setShowClearMissedConfirm(false));
+	const outOfStockMedicationIds = new Set(
+		meds.filter((med) => (coverageByMed[getMedDisplayName(med)]?.medsLeft ?? 1) <= 0).map((med) => med.id)
+	);
+
+	const isDoseTakenForDisplay = (doseId: string) => {
+		const medId = Number.parseInt(doseId.split("-")[0] ?? "", 10);
+		if (!Number.isNaN(medId) && outOfStockMedicationIds.has(medId)) {
+			return false;
+		}
+		return takenDoses.has(doseId);
+	};
 
 	// Get structured reminder data
 	const reminderData = getReminderStatusData(
@@ -140,6 +148,67 @@ export function DashboardPage() {
 	const showOnlyToday = settings.upcomingTodayOnly;
 
 	const prescriptionEmptyCount = prescriptionLowMeds.filter((med) => med.remainingRefills <= 0).length;
+
+	const getClearMissedPayload = () => {
+		const medicationIds = new Set<number>();
+		let latestMissedDate: string | null = null;
+
+		for (const day of pastDays) {
+			for (const item of day.meds) {
+				const med = meds.find((candidate) => getMedDisplayName(candidate) === item.medName);
+				if (!med) continue;
+
+				const dismissedUntilDate = med.dismissedUntil ?? undefined;
+				const hasMissedDose = item.doses.some((dose) => {
+					if (isDoseDismissed(dose.id, dismissedUntilDate)) return false;
+					const takenByArray = Array.isArray(dose.takenBy) ? dose.takenBy : [];
+					const ids = takenByArray.length > 0 ? takenByArray.map((person) => `${dose.id}-${person}`) : [dose.id];
+					return ids.some((doseId) => !isDoseTakenForDisplay(doseId) && !dismissedDoses.has(doseId));
+				});
+
+				if (!hasMissedDose) continue;
+
+				medicationIds.add(med.id);
+				const dayDate = day.date.toISOString().slice(0, 10);
+				if (!latestMissedDate || dayDate > latestMissedDate) {
+					latestMissedDate = dayDate;
+				}
+			}
+		}
+
+		return {
+			medicationIds: [...medicationIds],
+			until: latestMissedDate,
+		};
+	};
+
+	const clearMissedDoses = async (missedCount: number) => {
+		const payload = getClearMissedPayload();
+		if (payload.medicationIds.length === 0 || !payload.until) {
+			setShowClearMissedConfirm(false);
+			return;
+		}
+
+		setClearingMissed(true);
+		try {
+			const res = await fetch("/api/medications/dismiss-until", {
+				method: "POST",
+				credentials: "include",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			if (!res.ok) {
+				throw new Error(`HTTP ${res.status}`);
+			}
+			await loadMeds();
+			setShowClearMissedConfirm(false);
+			alert(t("dashboard.schedules.clearMissedSuccess", { count: missedCount }));
+		} catch {
+			alert(t("common.saveFailed"));
+		} finally {
+			setClearingMissed(false);
+		}
+	};
 
 	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
 		isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid"
@@ -895,8 +964,8 @@ export function DashboardPage() {
 										);
 
 										// Really taken = all doses marked as taken by human (for green "All taken")
-										const allReallyTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
-										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+										const allReallyTaken = allDoseIds.length > 0 && allDoseIds.every((id) => isDoseTakenForDisplay(id));
+										const takenCount = allDoseIds.filter((id) => isDoseTakenForDisplay(id)).length;
 
 										// Count missed doses that are NOT dismissed (for warning icon)
 										const missedNotDismissedCount = day.meds.reduce((count, item) => {
@@ -908,7 +977,9 @@ export function DashboardPage() {
 													if (isDoseDismissed(d.id, dismissedUntilDate)) return doseCount;
 													const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
 													const ids = takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
-													return doseCount + ids.filter((id) => !takenDoses.has(id) && !dismissedDoses.has(id)).length;
+													return (
+														doseCount + ids.filter((id) => !isDoseTakenForDisplay(id) && !dismissedDoses.has(id)).length
+													);
 												}, 0)
 											);
 										}, 0);
@@ -963,13 +1034,8 @@ export function DashboardPage() {
 															? getStockStatus(medCov.daysLeft, medCov.medsLeft, stockThresholds, med?.packageType)
 															: null;
 														const status = getVisibleStockStatus(med, rawStatus);
-														const itemDoseIds = expandDoseIds(item.doses);
-														const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 														return (
-															<div
-																key={`${day.dateStr}-${item.medName}`}
-																className={`time-row ${allTaken ? "taken" : ""}`}
-															>
+															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1013,8 +1079,11 @@ export function DashboardPage() {
 																	{item.doses.map((dose) => {
 																		// If no takenBy, show single checkbox; otherwise show one per person
 																		const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+																		const allTaken = people.every((person) =>
+																			isDoseTakenForDisplay(getDoseId(dose.id, person))
+																		);
 																		return (
-																			<div key={dose.id} className="dose-item past">
+																			<div key={dose.id} className={`dose-item past ${allTaken ? "all-taken" : ""}`}>
 																				<span className="dose-time">{dose.timeStr}</span>
 																				<span className="dose-usage">
 																					<span className="dose-usage-main">
@@ -1035,7 +1104,7 @@ export function DashboardPage() {
 																				<div className="dose-checks">
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
-																						const isTaken = takenDoses.has(doseId);
+																						const isTaken = isDoseTakenForDisplay(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																						return (
@@ -1070,13 +1139,17 @@ export function DashboardPage() {
 																									</button>
 																								) : (
 																									<button
-																										className="dose-btn take"
+																										className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
 																										onClick={() => markDoseTaken(doseId)}
-																										title={t("dose.markAsTaken")}
+																										title={
+																											isEmpty
+																												? t("common.outOfStockTakeBlocked")
+																												: t("dose.markAsTaken")
+																										}
 																										disabled={isEmpty}
 																									>
 																										<span className="dose-btn-label">{t("dose.take")}</span>
-																										<span aria-hidden="true">✓</span>
+																										<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
 																									</button>
 																								)}
 																							</div>
@@ -1154,11 +1227,7 @@ export function DashboardPage() {
 													<button
 														type="button"
 														className="clear-missed-btn"
-														onClick={(e) => {
-															e.stopPropagation();
-															setShowClearMissedConfirm(true);
-														}}
-														title={t("dashboard.schedules.clearMissed")}
+														onClick={() => setShowClearMissedConfirm(true)}
 													>
 														{t("dashboard.schedules.clearMissed")}
 													</button>
@@ -1166,13 +1235,29 @@ export function DashboardPage() {
 											</div>
 										);
 									})()}
+								{showClearMissedConfirm && (
+									<ConfirmModal
+										title={t("dashboard.schedules.clearMissedConfirmTitle")}
+										message={t("dashboard.schedules.clearMissedConfirmMessage", {
+											count: missedPastDoseIds.length,
+										})}
+										confirmLabel={t("dashboard.schedules.clearMissedConfirm")}
+										cancelLabel={t("dashboard.schedules.clearMissedCancel")}
+										onConfirm={() => void clearMissedDoses(missedPastDoseIds.length)}
+										onCancel={() => {
+											if (!clearingMissed) setShowClearMissedConfirm(false);
+										}}
+										isLoading={clearingMissed}
+										confirmVariant="warning"
+									/>
+								)}
 								{/* Today - always visible */}
 								{todayDay &&
 									(() => {
 										const day = todayDay;
 										const allDoseIds = day.meds.flatMap((item) => expandDoseIds(item.doses));
-										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
-										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => isDoseTakenForDisplay(id));
+										const takenCount = allDoseIds.filter((id) => isDoseTakenForDisplay(id)).length;
 
 										const dayStockStatuses = day.meds.map((item) => {
 											const medCoverage = coverageByMed[item.medName];
@@ -1244,13 +1329,8 @@ export function DashboardPage() {
 																	)
 																: null;
 														const visibleStatus = getVisibleStockStatus(med, status);
-														const itemDoseIds = expandDoseIds(item.doses);
-														const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 														return (
-															<div
-																key={`${day.dateStr}-${item.medName}`}
-																className={`time-row ${allTaken ? "taken" : ""}`}
-															>
+															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1297,7 +1377,7 @@ export function DashboardPage() {
 																		const isOverdue = dose.when < Date.now();
 																		const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
 																		const allTaken = people.every((person) =>
-																			takenDoses.has(getDoseId(dose.id, person))
+																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
 																		return (
 																			<div
@@ -1324,7 +1404,7 @@ export function DashboardPage() {
 																				<div className="dose-checks">
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
-																						const isTaken = takenDoses.has(doseId);
+																						const isTaken = isDoseTakenForDisplay(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																						return (
@@ -1359,13 +1439,17 @@ export function DashboardPage() {
 																									</button>
 																								) : (
 																									<button
-																										className="dose-btn take"
+																										className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
 																										onClick={() => markDoseTaken(doseId)}
-																										title={t("dose.markAsTaken")}
+																										title={
+																											isEmpty
+																												? t("common.outOfStockTakeBlocked")
+																												: t("dose.markAsTaken")
+																										}
 																										disabled={isEmpty}
 																									>
 																										<span className="dose-btn-label">{t("dose.take")}</span>
-																										<span aria-hidden="true">✓</span>
+																										<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
 																									</button>
 																								)}
 																							</div>
@@ -1393,7 +1477,7 @@ export function DashboardPage() {
 												)
 											)
 										);
-										const takenFutureDoses = totalFutureDoses.filter((id) => takenDoses.has(id)).length;
+										const takenFutureDoses = totalFutureDoses.filter((id) => isDoseTakenForDisplay(id)).length;
 										return (
 											<div className="future-days-header">
 												<div
@@ -1426,8 +1510,8 @@ export function DashboardPage() {
 									showFutureDays &&
 									futureDays.map((day) => {
 										const allDoseIds = day.meds.flatMap((item) => expandDoseIds(item.doses));
-										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
-										const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+										const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => isDoseTakenForDisplay(id));
+										const takenCount = allDoseIds.filter((id) => isDoseTakenForDisplay(id)).length;
 
 										const dayStockStatuses = day.meds.map((item) => {
 											const medCoverage = coverageByMed[item.medName];
@@ -1498,13 +1582,8 @@ export function DashboardPage() {
 																	)
 																: null;
 														const visibleStatus = getVisibleStockStatus(med, status);
-														const itemDoseIds = expandDoseIds(item.doses);
-														const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 														return (
-															<div
-																key={`${day.dateStr}-${item.medName}`}
-																className={`time-row ${allTaken ? "taken" : ""}`}
-															>
+															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1550,7 +1629,7 @@ export function DashboardPage() {
 																	{item.doses.map((dose) => {
 																		const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
 																		const allTaken = people.every((person) =>
-																			takenDoses.has(getDoseId(dose.id, person))
+																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
 																		return (
 																			<div key={dose.id} className={`dose-item future ${allTaken ? "all-taken" : ""}`}>
@@ -1574,7 +1653,7 @@ export function DashboardPage() {
 																				<div className="dose-checks">
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
-																						const isTaken = takenDoses.has(doseId);
+																						const isTaken = isDoseTakenForDisplay(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																						return (
@@ -1609,13 +1688,13 @@ export function DashboardPage() {
 																									</button>
 																								) : (
 																									<button
-																										className="dose-btn take"
+																										className={`dose-btn take out-of-stock`}
 																										onClick={() => markDoseTaken(doseId)}
-																										title={t("dose.markAsTaken")}
+																										title={t("common.outOfStockTakeBlocked")}
 																										disabled={true}
 																									>
 																										<span className="dose-btn-label">{t("dose.take")}</span>
-																										<span aria-hidden="true">✓</span>
+																										<span aria-hidden="true">⊘</span>
 																									</button>
 																								)}
 																							</div>
@@ -1637,19 +1716,6 @@ export function DashboardPage() {
 					</article>
 				</section>
 			</div>
-
-			{/* Clear Missed Doses Confirmation Modal */}
-			{showClearMissedConfirm && (
-				<ConfirmModal
-					title={t("dashboard.schedules.clearMissedConfirmTitle")}
-					message={t("dashboard.schedules.clearMissedConfirmMessage", { count: missedPastDoseIds.length })}
-					confirmLabel={clearingMissed ? t("common.loading") : t("dashboard.schedules.clearMissedConfirm")}
-					cancelLabel={t("dashboard.schedules.clearMissedCancel")}
-					onConfirm={() => dismissMissedDoses(missedPastDoseIds)}
-					onCancel={() => setShowClearMissedConfirm(false)}
-					isLoading={clearingMissed}
-				/>
-			)}
 		</>
 	);
 }

@@ -597,13 +597,13 @@ export function computeMissedPastDoseIds(
 			doses: ReadonlyArray<{ id: string; takenBy: string[] }>;
 		}>;
 	}>,
-	medications: ReadonlyArray<{ name: string; dismissedUntil?: string | null }>,
+	medications: ReadonlyArray<{ name: string; genericName?: string | null; dismissedUntil?: string | null }>,
 	takenDoses: Set<string>,
 	dismissedDoses: Set<string>
 ): string[] {
 	const totalPastDoses = pastDays.flatMap((d) =>
 		d.meds.flatMap((m) => {
-			const med = medications.find((med) => med.name === m.medName);
+			const med = medications.find((medication) => getMedDisplayName(medication as Medication) === m.medName);
 			const dismissedUntilDate = med?.dismissedUntil ?? undefined;
 
 			return m.doses.flatMap((dose) => {

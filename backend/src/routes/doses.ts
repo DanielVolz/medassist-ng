@@ -2,9 +2,10 @@ import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { doseTracking, medications, shareTokens } from "../db/schema.js";
+import { doseTracking, medications, shareTokens, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { computeMedicationCurrentStock } from "../services/current-stock.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	applyOpenApiRouteStandards,
@@ -155,10 +156,39 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 	}
 
 	if (!parsedDose.personSuffix) {
-		return true;
+		return intake.takenBy === null;
 	}
 
 	return expectedPersons.includes(parsedDose.personSuffix);
+}
+
+async function isDoseOutOfStock(options: {
+	userId: number;
+	doseId: string;
+	stockCalculationMode: "automatic" | "manual";
+}): Promise<boolean> {
+	const parsedDose = parseDoseId(options.doseId);
+	if (!parsedDose) {
+		return false;
+	}
+
+	const [medication] = await db
+		.select()
+		.from(medications)
+		.where(and(eq(medications.id, parsedDose.medicationId), eq(medications.userId, options.userId)));
+
+	if (!medication) {
+		return false;
+	}
+
+	const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
+	return (
+		computeMedicationCurrentStock({
+			medication,
+			doses,
+			stockCalculationMode: options.stockCalculationMode,
+		}) <= 0
+	);
 }
 
 // =============================================================================
@@ -235,6 +265,7 @@ export async function doseRoutes(app: FastifyInstance) {
 						},
 					},
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					409: genericErrorSchema,
 					401: genericErrorSchema,
 				},
 			},
@@ -259,6 +290,16 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			if (existing) {
 				return { success: true, message: "Already marked" };
+			}
+
+			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+			const outOfStock = await isDoseOutOfStock({
+				userId,
+				doseId,
+				stockCalculationMode: (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic",
+			});
+			if (outOfStock) {
+				return reply.status(409).send({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
 			}
 
 			// Insert new record
@@ -513,6 +554,7 @@ export async function doseRoutes(app: FastifyInstance) {
 				response: {
 					200: { type: "object", properties: { success: { type: "boolean" }, message: { type: "string" } } },
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					409: genericErrorSchema,
 					404: genericErrorSchema,
 				},
 			},
@@ -554,11 +596,27 @@ export async function doseRoutes(app: FastifyInstance) {
 				return { success: true, message: "Already marked" };
 			}
 
-			// Insert new record - marked by the takenBy person
+			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
+			const outOfStock = await isDoseOutOfStock({
+				userId: share.userId,
+				doseId,
+				stockCalculationMode: (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic",
+			});
+			if (outOfStock) {
+				request.log.info(
+					`[ShareDose] Rejected out-of-stock mark request (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
+				);
+				return reply.status(409).send({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
+			}
+
+			// Insert new record - marked by the shared person, or the concrete intake person for an "all" link.
+			const parsedShareDose = parseDoseId(doseId);
+			const markedBy = share.takenBy === "all" ? (parsedShareDose?.personSuffix ?? share.takenBy) : share.takenBy;
+
 			await db.insert(doseTracking).values({
 				userId: share.userId,
 				doseId,
-				markedBy: share.takenBy, // e.g. "Daniel"
+				markedBy,
 				takenSource: "manual",
 			});
 

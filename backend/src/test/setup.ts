@@ -218,13 +218,20 @@ export interface UpdateUserSettingsOptions {
 	stockCalculationMode?: "automatic" | "manual";
 	lowStockDays?: number;
 	shareStockStatus?: boolean;
+	shareMedicationOverview?: boolean;
 }
 
 /**
  * Create or update user settings
  */
 export async function setUserSettings(client: Client, options: UpdateUserSettingsOptions): Promise<void> {
-	const { userId, stockCalculationMode = "automatic", lowStockDays = 30, shareStockStatus } = options;
+	const {
+		userId,
+		stockCalculationMode = "automatic",
+		lowStockDays = 30,
+		shareStockStatus,
+		shareMedicationOverview,
+	} = options;
 
 	// Check if settings exist
 	const existing = await client.execute({
@@ -233,20 +240,46 @@ export async function setUserSettings(client: Client, options: UpdateUserSetting
 	});
 
 	if (existing.rows.length > 0) {
+		const updateArgs = [stockCalculationMode, lowStockDays] as Array<string | number>;
+		let updateSql = "UPDATE user_settings SET stock_calculation_mode = ?, low_stock_days = ?";
+
+		if (shareStockStatus !== undefined) {
+			updateSql += ", share_stock_status = ?";
+			updateArgs.push(shareStockStatus ? 1 : 0);
+		}
+
+		if (shareMedicationOverview !== undefined) {
+			updateSql += ", share_medication_overview = ?";
+			updateArgs.push(shareMedicationOverview ? 1 : 0);
+		}
+
+		updateSql += " WHERE user_id = ?";
+		updateArgs.push(userId);
+
 		await client.execute({
-			sql: `UPDATE user_settings SET stock_calculation_mode = ?, low_stock_days = ?${shareStockStatus !== undefined ? ", share_stock_status = ?" : ""} WHERE user_id = ?`,
-			args:
-				shareStockStatus !== undefined
-					? [stockCalculationMode, lowStockDays, shareStockStatus ? 1 : 0, userId]
-					: [stockCalculationMode, lowStockDays, userId],
+			sql: updateSql,
+			args: updateArgs,
 		});
 	} else {
+		const insertColumns = ["user_id", "stock_calculation_mode", "low_stock_days"];
+		const insertPlaceholders = ["?", "?", "?"];
+		const insertArgs = [userId, stockCalculationMode, lowStockDays] as Array<string | number>;
+
+		if (shareStockStatus !== undefined) {
+			insertColumns.push("share_stock_status");
+			insertPlaceholders.push("?");
+			insertArgs.push(shareStockStatus ? 1 : 0);
+		}
+
+		if (shareMedicationOverview !== undefined) {
+			insertColumns.push("share_medication_overview");
+			insertPlaceholders.push("?");
+			insertArgs.push(shareMedicationOverview ? 1 : 0);
+		}
+
 		await client.execute({
-			sql: `INSERT INTO user_settings (user_id, stock_calculation_mode, low_stock_days${shareStockStatus !== undefined ? ", share_stock_status" : ""}) VALUES (?, ?, ?${shareStockStatus !== undefined ? ", ?" : ""})`,
-			args:
-				shareStockStatus !== undefined
-					? [userId, stockCalculationMode, lowStockDays, shareStockStatus ? 1 : 0]
-					: [userId, stockCalculationMode, lowStockDays],
+			sql: `INSERT INTO user_settings (${insertColumns.join(", ")}) VALUES (${insertPlaceholders.join(", ")})`,
+			args: insertArgs,
 		});
 	}
 }

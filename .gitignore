@@ -86,4 +86,5 @@ doku/
 doku/memory_notes.md
 doku/report.md
 plan/
-.copilot-tracking
+.copilot-tracking/
+.playwright-cli/

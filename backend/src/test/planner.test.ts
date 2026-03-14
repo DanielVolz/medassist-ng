@@ -157,6 +157,7 @@ async function createSchema(client: Client) {
       language text NOT NULL DEFAULT 'en',
       stock_calculation_mode text NOT NULL DEFAULT 'automatic',
       share_stock_status integer NOT NULL DEFAULT 1,
+	share_medication_overview integer NOT NULL DEFAULT 0,
 	upcoming_today_only integer NOT NULL DEFAULT 0,
 	share_schedule_today_only integer NOT NULL DEFAULT 0,
 	swap_dashboard_main_sections integer NOT NULL DEFAULT 0,

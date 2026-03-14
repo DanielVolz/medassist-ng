@@ -47,6 +47,7 @@ export interface Settings {
 	shoutrrrPrescriptionReminders: boolean;
 	stockCalculationMode: "automatic" | "manual";
 	shareStockStatus: boolean;
+	shareMedicationOverview: boolean;
 	upcomingTodayOnly: boolean;
 	shareScheduleTodayOnly: boolean;
 	swapDashboardMainSections: boolean;
@@ -98,6 +99,7 @@ const defaultSettings: Settings = {
 	shoutrrrPrescriptionReminders: true,
 	stockCalculationMode: "automatic",
 	shareStockStatus: true,
+	shareMedicationOverview: false,
 	upcomingTodayOnly: false,
 	shareScheduleTodayOnly: false,
 	swapDashboardMainSections: false,
@@ -145,6 +147,16 @@ export function useSettings(): UseSettingsReturn {
 	// loadSettings captures the current generation; if it changes before
 	// the fetch completes, the stale response is silently discarded.
 	const loadGenerationRef = useRef(0);
+	const latestSettingsRef = useRef(settings);
+	const latestSavedSettingsRef = useRef(savedSettings);
+
+	useEffect(() => {
+		latestSettingsRef.current = settings;
+	}, [settings]);
+
+	useEffect(() => {
+		latestSavedSettingsRef.current = savedSettings;
+	}, [savedSettings]);
 
 	const resetSettingsState = useCallback(() => {
 		loadGenerationRef.current += 1; // Invalidate any in-flight loadSettings
@@ -213,6 +225,69 @@ export function useSettings(): UseSettingsReturn {
 		response = await fetch(input, requestInit);
 		return response;
 	}, []);
+
+	const buildSettingsPayload = useCallback(
+		(settingsToSave: Settings) => {
+			const effectiveEmailEnabled = settingsToSave.emailEnabled && !!settingsToSave.notificationEmail?.trim();
+			const effectiveShoutrrrEnabled = settingsToSave.shoutrrrEnabled && !!settingsToSave.shoutrrrUrl?.trim();
+			const hasEmailStock =
+				effectiveEmailEnabled && settingsToSave.emailStockReminders && !!settingsToSave.notificationEmail?.trim();
+			const hasShoutrrrStock =
+				effectiveShoutrrrEnabled && settingsToSave.shoutrrrStockReminders && !!settingsToSave.shoutrrrUrl?.trim();
+			const hasAnyStockReminder = hasEmailStock || hasShoutrrrStock;
+			const repeatDailyReminders = hasAnyStockReminder ? settingsToSave.repeatDailyReminders : false;
+
+			return {
+				emailEnabled: effectiveEmailEnabled,
+				notificationEmail: settingsToSave.notificationEmail,
+				reminderDaysBefore: settingsToSave.reminderDaysBefore,
+				repeatDailyReminders,
+				skipRemindersForTakenDoses: settingsToSave.skipRemindersForTakenDoses,
+				repeatRemindersEnabled: settingsToSave.repeatRemindersEnabled,
+				reminderRepeatIntervalMinutes: settingsToSave.reminderRepeatIntervalMinutes,
+				maxNaggingReminders: settingsToSave.maxNaggingReminders ?? 5,
+				lowStockDays: settingsToSave.lowStockDays,
+				normalStockDays: settingsToSave.normalStockDays,
+				highStockDays: settingsToSave.highStockDays,
+				shoutrrrEnabled: effectiveShoutrrrEnabled,
+				shoutrrrUrl: settingsToSave.shoutrrrUrl,
+				emailStockReminders: settingsToSave.emailStockReminders,
+				emailIntakeReminders: settingsToSave.emailIntakeReminders,
+				emailPrescriptionReminders: settingsToSave.emailPrescriptionReminders,
+				shoutrrrStockReminders: settingsToSave.shoutrrrStockReminders,
+				shoutrrrIntakeReminders: settingsToSave.shoutrrrIntakeReminders,
+				shoutrrrPrescriptionReminders: settingsToSave.shoutrrrPrescriptionReminders,
+				stockCalculationMode: settingsToSave.stockCalculationMode,
+				shareStockStatus: settingsToSave.shareStockStatus,
+				shareMedicationOverview: settingsToSave.shareMedicationOverview,
+				upcomingTodayOnly: settingsToSave.upcomingTodayOnly,
+				shareScheduleTodayOnly: settingsToSave.shareScheduleTodayOnly,
+				swapDashboardMainSections: settingsToSave.swapDashboardMainSections,
+				language: i18n.language,
+				smtpHost: settingsToSave.smtpHost,
+				smtpPort: settingsToSave.smtpPort,
+				smtpUser: settingsToSave.smtpUser,
+				smtpPass: settingsToSave.smtpPass || undefined,
+				smtpFrom: settingsToSave.smtpFrom,
+				smtpSecure: settingsToSave.smtpSecure,
+			};
+		},
+		[i18n.language]
+	);
+
+	const flushSettingsWithKeepalive = useCallback(
+		(settingsToSave: Settings) => {
+			const payload = buildSettingsPayload(settingsToSave);
+			void fetch("/api/settings", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				keepalive: true,
+				body: JSON.stringify(payload),
+			}).catch(() => {});
+		},
+		[buildSettingsPayload]
+	);
 
 	// Load settings function - exposed for manual refresh (e.g., after auth)
 	const loadSettings = useCallback(() => {
@@ -331,52 +406,19 @@ export function useSettings(): UseSettingsReturn {
 
 	// Internal save function (no event needed)
 	const performSave = useCallback(
-		async (settingsToSave: Settings) => {
-			// Auto-disable email if no recipient is set
-			const effectiveEmailEnabled = settingsToSave.emailEnabled && !!settingsToSave.notificationEmail?.trim();
-			// Auto-disable push if no URL is set
-			const effectiveShoutrrrEnabled = settingsToSave.shoutrrrEnabled && !!settingsToSave.shoutrrrUrl?.trim();
+		async (settingsToSave: Settings, options?: { syncState?: boolean }) => {
+			const syncState = options?.syncState ?? true;
+			const payload = buildSettingsPayload(settingsToSave);
 
-			setSettingsSaving(true);
-
-			const payload = {
-				emailEnabled: effectiveEmailEnabled,
-				notificationEmail: settingsToSave.notificationEmail,
-				reminderDaysBefore: settingsToSave.reminderDaysBefore,
-				repeatDailyReminders: settingsToSave.repeatDailyReminders,
-				skipRemindersForTakenDoses: settingsToSave.skipRemindersForTakenDoses,
-				repeatRemindersEnabled: settingsToSave.repeatRemindersEnabled,
-				reminderRepeatIntervalMinutes: settingsToSave.reminderRepeatIntervalMinutes,
-				maxNaggingReminders: settingsToSave.maxNaggingReminders ?? 5,
-				lowStockDays: settingsToSave.lowStockDays,
-				normalStockDays: settingsToSave.normalStockDays,
-				highStockDays: settingsToSave.highStockDays,
-				shoutrrrEnabled: effectiveShoutrrrEnabled,
-				shoutrrrUrl: settingsToSave.shoutrrrUrl,
-				emailStockReminders: settingsToSave.emailStockReminders,
-				emailIntakeReminders: settingsToSave.emailIntakeReminders,
-				emailPrescriptionReminders: settingsToSave.emailPrescriptionReminders,
-				shoutrrrStockReminders: settingsToSave.shoutrrrStockReminders,
-				shoutrrrIntakeReminders: settingsToSave.shoutrrrIntakeReminders,
-				shoutrrrPrescriptionReminders: settingsToSave.shoutrrrPrescriptionReminders,
-				stockCalculationMode: settingsToSave.stockCalculationMode,
-				shareStockStatus: settingsToSave.shareStockStatus,
-				upcomingTodayOnly: settingsToSave.upcomingTodayOnly,
-				shareScheduleTodayOnly: settingsToSave.shareScheduleTodayOnly,
-				swapDashboardMainSections: settingsToSave.swapDashboardMainSections,
-				language: i18n.language,
-				smtpHost: settingsToSave.smtpHost,
-				smtpPort: settingsToSave.smtpPort,
-				smtpUser: settingsToSave.smtpUser,
-				smtpPass: settingsToSave.smtpPass || undefined,
-				smtpFrom: settingsToSave.smtpFrom,
-				smtpSecure: settingsToSave.smtpSecure,
-			};
+			if (syncState) {
+				setSettingsSaving(true);
+			}
 
 			try {
 				const response = await fetchWithRefresh("/api/settings", {
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
+					keepalive: true,
 					body: JSON.stringify(payload),
 				});
 
@@ -384,19 +426,27 @@ export function useSettings(): UseSettingsReturn {
 					throw new Error(`SETTINGS_SAVE_FAILED_${response.status}`);
 				}
 
-				const updatedSettings = { ...settingsToSave };
-				setSettings(updatedSettings);
-				setSavedSettings(updatedSettings);
-				setSettingsSaved(true);
+				if (syncState) {
+					const updatedSettings = { ...settingsToSave };
+					setSettings(updatedSettings);
+					setSavedSettings(updatedSettings);
+					setSettingsSaved(true);
+				} else {
+					latestSavedSettingsRef.current = { ...settingsToSave };
+				}
 			} catch {
-				setSettingsSaved(false);
-				// Keep UI aligned with backend truth if save failed (auth/session/network/server error).
-				loadSettings();
+				if (syncState) {
+					setSettingsSaved(false);
+					// Keep UI aligned with backend truth if save failed (auth/session/network/server error).
+					loadSettings();
+				}
 			} finally {
-				setSettingsSaving(false);
+				if (syncState) {
+					setSettingsSaving(false);
+				}
 			}
 		},
-		[fetchWithRefresh, i18n.language, loadSettings]
+		[buildSettingsPayload, fetchWithRefresh, loadSettings]
 	);
 
 	// Debounced auto-save: fires whenever settings change
@@ -424,8 +474,8 @@ export function useSettings(): UseSettingsReturn {
 		}
 
 		debounceRef.current = setTimeout(() => {
-			performSave(settings);
-		}, 600);
+			void performSave(settings);
+		}, 50);
 
 		return () => {
 			if (debounceRef.current) {
@@ -433,6 +483,32 @@ export function useSettings(): UseSettingsReturn {
 			}
 		};
 	}, [settings, savedSettings, performSave]);
+
+	useEffect(() => {
+		const flushPendingSettings = () => {
+			if (JSON.stringify(latestSettingsRef.current) === JSON.stringify(latestSavedSettingsRef.current)) {
+				return;
+			}
+
+			flushSettingsWithKeepalive(latestSettingsRef.current);
+		};
+
+		window.addEventListener("pagehide", flushPendingSettings);
+
+		return () => {
+			window.removeEventListener("pagehide", flushPendingSettings);
+
+			if (debounceRef.current) {
+				clearTimeout(debounceRef.current);
+			}
+
+			if (JSON.stringify(latestSettingsRef.current) === JSON.stringify(latestSavedSettingsRef.current)) {
+				return;
+			}
+
+			flushSettingsWithKeepalive(latestSettingsRef.current);
+		};
+	}, [flushSettingsWithKeepalive]);
 
 	// Mark initial load as done after first settings load completes
 	useEffect(() => {

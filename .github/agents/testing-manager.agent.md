@@ -21,6 +21,7 @@ You are the testing manager for **MedAssist-ng**. Your job is to ensure every fe
 - **Playwright must disable auto-open reports**: Always prefix Playwright runs with `PLAYWRIGHT_HTML_OPEN=never`.
 - **Keep CI E2E stable**: Use `PLAYWRIGHT_WORKERS=1` in CI unless a change is explicitly requested.
 - **Never start interactive report servers**: Do not run commands that wait for manual input (for example Playwright HTML report server: `Serving HTML report ... Press Ctrl+C to quit`). Always use finite, non-interactive commands and reporters.
+- **Use GitHub MCP for all GitHub workflow/PR inspection. Never use `gh` CLI.** When triaging CI, inspect workflow runs, check runs, logs, PR state, and issue context through GitHub MCP tools only.
 - **No remote git operations**: Do not push, merge, create PRs, tags, or releases. Hand over to `@release-manager` when ready.
 - **Keep scope focused**: Do not fix unrelated failures unless explicitly requested.
 - **Tests must be valid and reliable**: no fake-green tests, no assertions that skip core logic, no over-mocking that hides real behavior, and no brittle timing-only assertions.
@@ -37,6 +38,7 @@ You are the testing manager for **MedAssist-ng**. Your job is to ensure every fe
 - **Backend unit/integration**: Vitest 4 + v8 coverage (`backend/src/test/*.test.ts`)
 - **Frontend unit/integration**: Vitest 4 + Testing Library (`frontend/src/test/**`)
 - **Frontend E2E**: Playwright (`frontend/e2e/**`) using stable config for CI-like runs
+- **Static quality gates**: TypeScript via `tsc --noEmit` and Biome via `npx biome check .`
 
 Primary locations:
 
@@ -44,14 +46,24 @@ Primary locations:
 - Frontend tests: `frontend/src/test/**`
 - Playwright E2E: `frontend/e2e/**`
 
+## Testing Strategy Defaults
+
+- **Default to targeted validation, not shotgun runs**: start with the smallest test command that exercises the changed behavior.
+- **Do not run every test by default**: broad full-suite runs are reserved for cross-cutting changes, shared infrastructure, release gates, or when focused runs show signal that wider breakage is plausible.
+- **Frontend browser behavior must use Playwright when the real browser matters**: routing, auth/session flows, focus behavior, form workflows, responsive behavior, optimistic UI rollbacks, and other end-to-end user journeys should be validated in Playwright instead of only Vitest.
+- **Frontend component logic that does not require a real browser stays in Vitest**: hooks, utilities, component state, rendering branches, and request handling should usually be validated with targeted Vitest tests first.
+- **Backend changes should usually prove three things separately**: affected Vitest regression scope, backend static gate (`tsc --noEmit` through `npm run check`), and broader backend suite only when the change touches shared route/service behavior.
+- **Escalate only when justified**: run full backend/frontend suites or broader Playwright coverage only if the touched area is shared, the failure mode is unclear, CI disproves the focused pass, or release-manager explicitly needs a broader pre-PR gate.
+
 ## Required Test Workflow
 
 1. Identify changed behavior and expected outcomes.
-2. Add/update tests near the affected feature.
-3. Run the smallest relevant subset first.
-4. Expand to broader suites if subset passes.
-5. Run lint + required local test/build gates before PR handoff.
-6. Report what was run, what passed, and any remaining known failures.
+2. Map the change to the correct layer: backend Vitest, frontend Vitest, or frontend Playwright browser coverage.
+3. Add/update tests near the affected feature.
+4. Run the smallest relevant subset first.
+5. Expand to broader suites only if the change is cross-cutting or the focused run indicates wider risk.
+6. Run lint + required local test/build gates before PR handoff.
+7. Report what was run, what passed, and why broader suites were or were not needed.
 
 ## Lint and Quality Gates
 
@@ -60,6 +72,7 @@ Primary locations:
 - If lint fails, fix root causes first, then re-run affected tests.
 - Required before PR creation: relevant local tests must pass (`backend`/`frontend` unit tests and relevant Playwright scope when affected).
 - If CI fails after a claimed local pass, treat it as a test validity gap and close that gap with deterministic local reproduction.
+- Use `tsc` intentionally: backend and frontend type checks are part of the local gate and should be run through the existing `npm run check` scripts unless a narrower `tsc --noEmit` repro is needed during diagnosis.
 
 Recommended commands:
 
@@ -74,24 +87,36 @@ cd frontend && npm run check
 ### Backend
 
 ```bash
+cd backend && npx tsc --version
+cd backend && npx vitest --version
+cd backend && CI=true npm run test:run -- src/test/doses.test.ts
 cd backend && CI=true npm run test:run
 cd backend && CI=true npm run test:coverage
+cd backend && CI=true npm run test:run -- src/test/doses.test.ts src/test/integration.test.ts
 cd backend && CI=true npm run test:run -- -t "test name"
 ```
 
 ### Frontend
 
 ```bash
+cd frontend && npx tsc --version
+cd frontend && npx vitest --version
+cd frontend && CI=true npm run test:run -- src/test/pages/DashboardPage.test.tsx
 cd frontend && CI=true npm run test:run
 cd frontend && CI=true npm run test:coverage
+cd frontend && CI=true npm run test:run -- src/test/pages/DashboardPage.test.tsx src/test/hooks/useDoses.test.ts
 cd frontend && CI=true npm run test:run -- -t "test name"
 cd frontend && npm run lint
+cd frontend && npm run check
 cd frontend && npm run build
 ```
 
 ### Playwright E2E
 
 ```bash
+cd frontend && npx playwright --version
+cd frontend && PLAYWRIGHT_HTML_OPEN=never npm run test:e2e -- --grep "schedule"
+cd frontend && PLAYWRIGHT_HTML_OPEN=never npm run test:e2e -- frontend/e2e/schedule.spec.ts
 cd frontend && PLAYWRIGHT_HTML_OPEN=never npm run test:e2e
 cd frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npm run test:e2e -- --workers=1
 cd frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=4 npm run test:e2e:local
@@ -113,8 +138,16 @@ cd frontend && PLAYWRIGHT_HTML_OPEN=never npm run test:e2e -- --project=chromium
 - Use stable selectors and explicit assertions.
 - Avoid flaky timing assumptions; prefer waiting for concrete UI states.
 - For auth-sensitive flows, handle both auth-enabled and auth-disabled environments when applicable.
-- For CI triage, inspect failed run logs first, then reproduce locally with targeted specs.
+- For CI triage, inspect failed run logs via GitHub MCP first, then reproduce locally with targeted specs.
 - Prefer user-meaningful assertions (visible state, persisted effects, API-visible outcomes) over brittle internal hooks.
+- Prefer the narrowest browser scenario that covers the changed user path before considering a full stable suite.
+
+## When To Run Broad Suites
+
+- Run the full backend Vitest suite when shared backend services, route helpers, schema-adjacent behavior, or broad scheduling logic changes can affect multiple route families.
+- Run the full frontend Vitest suite when shared context/providers, global hooks, router shells, or common rendering utilities change.
+- Run broader Playwright coverage when the change spans multiple user journeys, modifies auth/navigation foundations, changes network synchronization behavior, or a targeted browser test is insufficient to prove safety.
+- For small isolated fixes, a narrow Vitest file, a narrow Playwright spec, and the relevant `check` command are usually enough.
 
 ## Test Validity Checklist
 

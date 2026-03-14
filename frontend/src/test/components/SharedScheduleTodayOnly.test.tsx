@@ -23,6 +23,7 @@ function createSharedData(overrides: Record<string, unknown> = {}) {
 		takenBy: "Max",
 		scheduleDays: 30,
 		shareStockStatus: true,
+		upcomingTodayOnly: false,
 		shareScheduleTodayOnly: true,
 		stockCalculationMode: "automatic",
 		stockThresholds: {
@@ -73,7 +74,7 @@ describe("SharedSchedule today-only", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("hides past and future sections when shareScheduleTodayOnly is enabled", async () => {
+	it("hides past and future sections when shareScheduleTodayOnly is enabled even if dashboard today-only is off", async () => {
 		const sharedData = createSharedData();
 
 		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {

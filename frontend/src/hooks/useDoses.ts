@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface UseDosesReturn {
 	takenDoses: Set<string>;
@@ -10,8 +11,6 @@ export interface UseDosesReturn {
 	takenDoseTimestamps: Map<string, number>;
 	takenDoseSources: Map<string, "manual" | "automatic">;
 	dismissedDoses: Set<string>;
-	showClearMissedConfirm: boolean;
-	setShowClearMissedConfirm: (show: boolean) => void;
 	clearDosesState: () => void;
 	getDoseId: (baseDoseId: string, person: string | null) => string;
 	isDoseTakenAutomatically: (doseId: string) => boolean;
@@ -22,11 +21,11 @@ export interface UseDosesReturn {
 }
 
 export function useDoses(): UseDosesReturn {
+	const { t } = useTranslation();
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [takenDoseTimestamps, setTakenDoseTimestamps] = useState<Map<string, number>>(new Map());
 	const [takenDoseSources, setTakenDoseSources] = useState<Map<string, "manual" | "automatic">>(new Map());
 	const [dismissedDoses, setDismissedDoses] = useState<Set<string>>(new Set());
-	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
 
 	// Track in-flight mutations to prevent polling from overwriting optimistic updates
 	const mutationInFlightRef = useRef(0);
@@ -36,7 +35,6 @@ export function useDoses(): UseDosesReturn {
 		setTakenDoseTimestamps(new Map());
 		setTakenDoseSources(new Map());
 		setDismissedDoses(new Set());
-		setShowClearMissedConfirm(false);
 		mutationInFlightRef.current = 0;
 	}, []);
 
@@ -118,6 +116,15 @@ export function useDoses(): UseDosesReturn {
 		[takenDoses, getDoseId]
 	);
 
+	const getErrorCode = useCallback(async (response: Response): Promise<string | null> => {
+		try {
+			const data = (await response.json()) as { code?: string };
+			return typeof data.code === "string" ? data.code : null;
+		} catch {
+			return null;
+		}
+	}, []);
+
 	const markDoseTaken = useCallback(
 		async (doseId: string) => {
 			// Optimistic update
@@ -140,12 +147,18 @@ export function useDoses(): UseDosesReturn {
 
 			// Send to server
 			try {
-				await fetch("/api/doses/taken", {
+				const response = await fetch("/api/doses/taken", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					credentials: "include",
 					body: JSON.stringify({ doseId }),
 				});
+				if (!response.ok) {
+					if ((await getErrorCode(response)) === "OUT_OF_STOCK") {
+						alert(t("common.outOfStockTakeBlocked"));
+					}
+					throw new Error("Failed to mark dose as taken");
+				}
 			} catch {
 				// Revert on error
 				setTakenDoses((prev) => {
@@ -169,7 +182,7 @@ export function useDoses(): UseDosesReturn {
 				loadTakenDoses();
 			}
 		},
-		[loadTakenDoses]
+		[getErrorCode, loadTakenDoses, t]
 	);
 
 	const undoDoseTaken = useCallback(
@@ -220,8 +233,6 @@ export function useDoses(): UseDosesReturn {
 		takenDoseTimestamps,
 		takenDoseSources,
 		dismissedDoses,
-		showClearMissedConfirm,
-		setShowClearMissedConfirm,
 		clearDosesState,
 		getDoseId,
 		isDoseTakenAutomatically,

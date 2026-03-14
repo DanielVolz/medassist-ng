@@ -292,6 +292,7 @@ export function getAllTakenByForMedication(medicationTakenBy: string[], intakes:
  * Check if a person takes this medication (either via medication-level or intake-level takenBy).
  */
 export function personTakesMedication(person: string, medicationTakenBy: string[], intakes: Intake[]): boolean {
+	if (person === "all") return medicationTakenBy.length > 0 || intakes.some((intake) => intake.takenBy !== null);
 	if (medicationTakenBy.includes(person)) return true;
 	return intakes.some((intake) => intake.takenBy === person);
 }

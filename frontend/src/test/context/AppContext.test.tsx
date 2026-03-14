@@ -132,6 +132,7 @@ describe("useAppContext", () => {
 				shoutrrrIntakeReminders: true,
 				stockCalculationMode: "automatic",
 				shareStockStatus: true,
+				shareMedicationOverview: false,
 				expiryWarningDays: 30,
 			},
 			setSettings: vi.fn(),
@@ -171,6 +172,7 @@ describe("useAppContext", () => {
 				shoutrrrIntakeReminders: true,
 				stockCalculationMode: "automatic",
 				shareStockStatus: true,
+				shareMedicationOverview: false,
 				expiryWarningDays: 30,
 			},
 			settingsLoading: false,
@@ -196,8 +198,6 @@ describe("useAppContext", () => {
 			setTakenDoses: vi.fn(),
 			takenDoseTimestamps: new Map<string, number>(),
 			dismissedDoses: new Set<string>(),
-			showClearMissedConfirm: true,
-			setShowClearMissedConfirm: vi.fn(),
 			clearDosesState: vi.fn(),
 			getDoseId: vi.fn((base: string, person: string | null) => (person ? `${base}-${person}` : base)),
 			isDoseTakenAutomatically: vi.fn(() => false),
@@ -294,6 +294,27 @@ describe("useAppContext", () => {
 		expect(result.current.settingsChanged).toBe(false);
 	});
 
+	it("marks settings as changed when shareMedicationOverview differs", async () => {
+		const settingsValue = mockUseSettings();
+		mockUseSettings.mockReturnValue({
+			...settingsValue,
+			settings: {
+				...settingsValue.settings,
+				shareMedicationOverview: true,
+			},
+			savedSettings: {
+				...settingsValue.savedSettings,
+				shareMedicationOverview: false,
+			},
+		});
+
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.settingsChanged).toBe(true);
+		});
+	});
+
 	it("exposes the settings load error from useSettings", async () => {
 		const settingsValue = mockUseSettings();
 		mockUseSettings.mockReturnValue({
@@ -374,38 +395,6 @@ describe("useAppContext", () => {
 		});
 
 		expect(window.history.back).toHaveBeenCalled();
-	});
-
-	it("dismisses missed doses and posts unique medication IDs", async () => {
-		const { result } = renderHook(() => useAppContext(), { wrapper });
-
-		await act(async () => {
-			await result.current.dismissMissedDoses(["11-0-1730000000000", "11-2-1730000100000", "12-0-1730000200000"]);
-		});
-
-		expect(fetch).toHaveBeenCalledWith(
-			"/api/medications/dismiss-until",
-			expect.objectContaining({
-				method: "POST",
-				credentials: "include",
-			})
-		);
-
-		const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string);
-		expect(body.medicationIds).toEqual([11, 12]);
-		expect(mockUseMedications().loadMeds).toHaveBeenCalled();
-		expect(mockUseDoses().setShowClearMissedConfirm).toHaveBeenCalledWith(false);
-	});
-
-	it("does not dismiss missed doses for empty/invalid IDs", async () => {
-		const { result } = renderHook(() => useAppContext(), { wrapper });
-
-		await act(async () => {
-			await result.current.dismissMissedDoses([]);
-			await result.current.dismissMissedDoses(["invalid-dose-id"]);
-		});
-
-		expect(fetch).not.toHaveBeenCalledWith("/api/medications/dismiss-until", expect.anything());
 	});
 
 	it("imports data and triggers reload plus import result state", async () => {
@@ -582,16 +571,5 @@ describe("useAppContext", () => {
 		});
 
 		expect(mockAlert).toHaveBeenCalledWith("exportImport.importError: Import failed");
-	});
-
-	it("keeps clear-missed confirm open when dismiss request fails", async () => {
-		(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("network"));
-		const { result } = renderHook(() => useAppContext(), { wrapper });
-
-		await act(async () => {
-			await result.current.dismissMissedDoses(["11-0-1730000000000"]);
-		});
-
-		expect(mockUseDoses().setShowClearMissedConfirm).not.toHaveBeenCalledWith(false);
 	});
 });

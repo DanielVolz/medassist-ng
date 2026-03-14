@@ -1,13 +1,14 @@
 /* biome-ignore-all lint/style/noNestedTernary: schedule timeline branches are intentionally explicit */
 import { Bell } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MedicationAvatar } from "../components";
+import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
 import type { Coverage } from "../types";
 import { getMedDisplayName, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { formatNumber } from "../utils/formatters";
-import { expandDoseIds, isDoseDismissed } from "../utils/schedule";
+import { isDoseDismissed } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
 function userStorageKey(userId: number | undefined, key: string): string {
@@ -90,12 +91,88 @@ export function SchedulePage() {
 		toggleDayCollapse,
 		openUserFilter,
 		missedPastDoseIds,
+		loadMeds,
 	} = useAppContext();
+	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
+	const [clearingMissed, setClearingMissed] = useState(false);
+
+	const outOfStockMedicationIds = new Set(
+		meds.filter((med) => (coverageByMed[getMedDisplayName(med)]?.medsLeft ?? 1) <= 0).map((med) => med.id)
+	);
+
+	const isDoseTakenForDisplay = (doseId: string) => {
+		const medId = Number.parseInt(doseId.split("-")[0] ?? "", 10);
+		if (!Number.isNaN(medId) && outOfStockMedicationIds.has(medId)) {
+			return false;
+		}
+		return takenDoses.has(doseId);
+	};
 
 	const shouldHideNoScheduleStatusForTube = (
 		med: (typeof meds)[number] | undefined,
 		status: { className: string; label: string } | null
 	) => isTubePackageType(med?.packageType) && status?.label === "status.noSchedule";
+
+	const getClearMissedPayload = () => {
+		const medicationIds = new Set<number>();
+		let latestMissedDate: string | null = null;
+
+		for (const day of pastDays) {
+			for (const item of day.meds) {
+				const med = meds.find((candidate) => getMedDisplayName(candidate) === item.medName);
+				if (!med) continue;
+
+				const dismissedUntilDate = med.dismissedUntil ?? undefined;
+				const hasMissedDose = item.doses.some((dose) => {
+					if (isDoseDismissed(dose.id, dismissedUntilDate)) return false;
+					const takenByArray = Array.isArray(dose.takenBy) ? dose.takenBy : [];
+					const ids = takenByArray.length > 0 ? takenByArray.map((person) => `${dose.id}-${person}`) : [dose.id];
+					return ids.some((doseId) => !isDoseTakenForDisplay(doseId) && !dismissedDoses.has(doseId));
+				});
+
+				if (!hasMissedDose) continue;
+
+				medicationIds.add(med.id);
+				const dayDate = day.date.toISOString().slice(0, 10);
+				if (!latestMissedDate || dayDate > latestMissedDate) {
+					latestMissedDate = dayDate;
+				}
+			}
+		}
+
+		return {
+			medicationIds: [...medicationIds],
+			until: latestMissedDate,
+		};
+	};
+
+	const clearMissedDoses = async (missedCount: number) => {
+		const payload = getClearMissedPayload();
+		if (payload.medicationIds.length === 0 || !payload.until) {
+			setShowClearMissedConfirm(false);
+			return;
+		}
+
+		setClearingMissed(true);
+		try {
+			const res = await fetch("/api/medications/dismiss-until", {
+				method: "POST",
+				credentials: "include",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			if (!res.ok) {
+				throw new Error(`HTTP ${res.status}`);
+			}
+			await loadMeds();
+			setShowClearMissedConfirm(false);
+			alert(t("dashboard.schedules.clearMissedSuccess", { count: missedCount }));
+		} catch {
+			alert(t("common.saveFailed"));
+		} finally {
+			setClearingMissed(false);
+		}
+	};
 
 	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
 		isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid"
@@ -205,8 +282,8 @@ export function SchedulePage() {
 							);
 
 							// Really taken = all doses marked as taken by human (for green "All taken")
-							const allReallyTaken = allDoseIds.length > 0 && allDoseIds.every((id) => takenDoses.has(id));
-							const takenCount = allDoseIds.filter((id) => takenDoses.has(id)).length;
+							const allReallyTaken = allDoseIds.length > 0 && allDoseIds.every((id) => isDoseTakenForDisplay(id));
+							const takenCount = allDoseIds.filter((id) => isDoseTakenForDisplay(id)).length;
 
 							// Count missed doses that are NOT dismissed (for warning icon)
 							const missedNotDismissedCount = day.meds.reduce((count, item) => {
@@ -218,7 +295,7 @@ export function SchedulePage() {
 										if (isDoseDismissed(d.id, dismissedUntilDate)) return doseCount;
 										const takenByArray = Array.isArray(d.takenBy) ? d.takenBy : [];
 										const ids = takenByArray.length > 0 ? takenByArray.map((p) => `${d.id}-${p}`) : [d.id];
-										return doseCount + ids.filter((id) => !takenDoses.has(id) && !dismissedDoses.has(id)).length;
+										return doseCount + ids.filter((id) => !isDoseTakenForDisplay(id) && !dismissedDoses.has(id)).length;
 									}, 0)
 								);
 							}, 0);
@@ -268,10 +345,8 @@ export function SchedulePage() {
 											const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 											const medCov = coverageByMed[item.medName];
 											const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
-											const itemDoseIds = expandDoseIds(item.doses);
-											const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 											return (
-												<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+												<div key={`${day.dateStr}-${item.medName}`} className="time-row">
 													<div className="time-main">
 														<div className="med-name">
 															<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
@@ -285,8 +360,11 @@ export function SchedulePage() {
 														{item.doses.map((dose) => {
 															// If no takenBy, show single checkbox; otherwise show one per person
 															const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+															const allTaken = people.every((person) =>
+																isDoseTakenForDisplay(getDoseId(dose.id, person))
+															);
 															return (
-																<div key={dose.id} className="dose-item past">
+																<div key={dose.id} className={`dose-item past ${allTaken ? "all-taken" : ""}`}>
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">
 																		<span className="dose-usage-main">
@@ -307,7 +385,7 @@ export function SchedulePage() {
 																	<div className="dose-checks">
 																		{people.map((person) => {
 																			const doseId = getDoseId(dose.id, person);
-																			const isTaken = takenDoses.has(doseId);
+																			const isTaken = isDoseTakenForDisplay(doseId);
 																			const isAutomaticallyTaken =
 																				isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																			return (
@@ -341,13 +419,15 @@ export function SchedulePage() {
 																						</button>
 																					) : (
 																						<button
-																							className="dose-btn take"
+																							className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
 																							onClick={() => markDoseTaken(doseId)}
 																							disabled={isEmpty}
-																							title={t("dose.markAsTaken")}
+																							title={
+																								isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")
+																							}
 																						>
 																							<span className="dose-btn-label">{t("dose.take")}</span>
-																							<span aria-hidden="true">✓</span>
+																							<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
 																						</button>
 																					)}
 																				</div>
@@ -369,21 +449,10 @@ export function SchedulePage() {
 						(() => {
 							const missedCount = missedPastDoseIds.length;
 							return (
-								<div
-									className={`past-days-toggle ${showPastDays ? "expanded" : ""} ${missedCount > 0 ? "has-missed" : ""}`}
-									onClick={() => {
-										const wasCollapsed = !showPastDays;
-										setShowPastDays(!showPastDays);
-										if (wasCollapsed) {
-											setTimeout(() => {
-												document
-													.querySelector(".day-block.today")
-													?.scrollIntoView({ behavior: "smooth", block: "center" });
-											}, 50);
-										}
-									}}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
+								<div className="past-days-header">
+									<div
+										className={`past-days-toggle ${showPastDays ? "expanded" : ""} ${missedCount > 0 ? "has-missed" : ""}`}
+										onClick={() => {
 											const wasCollapsed = !showPastDays;
 											setShowPastDays(!showPastDays);
 											if (wasCollapsed) {
@@ -393,27 +462,61 @@ export function SchedulePage() {
 														?.scrollIntoView({ behavior: "smooth", block: "center" });
 												}, 50);
 											}
-										}
-									}}
-								>
-									<span className="past-days-icon">{showPastDays ? "▼" : "▶"}</span>
-									<span className="past-days-label">
-										{showPastDays ? t("dashboard.schedules.hidePastDays") : t("dashboard.schedules.showPastDays")}
-									</span>
-									<span className="past-days-count">
-										({t("dashboard.schedules.pastDaysCount", { count: pastDays.length })})
-									</span>
-									{missedCount > 0 && (
-										<span
-											className="past-days-warning"
-											title={t("dashboard.schedules.missedDoses", { count: missedCount })}
-										>
-											⚠️ {missedCount}
+										}}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" || e.key === " ") {
+												const wasCollapsed = !showPastDays;
+												setShowPastDays(!showPastDays);
+												if (wasCollapsed) {
+													setTimeout(() => {
+														document
+															.querySelector(".day-block.today")
+															?.scrollIntoView({ behavior: "smooth", block: "center" });
+													}, 50);
+												}
+											}
+										}}
+									>
+										<span className="past-days-icon">{showPastDays ? "▼" : "▶"}</span>
+										<span className="past-days-label">
+											{showPastDays ? t("dashboard.schedules.hidePastDays") : t("dashboard.schedules.showPastDays")}
 										</span>
+										<span className="past-days-count">
+											({t("dashboard.schedules.pastDaysCount", { count: pastDays.length })})
+										</span>
+										{missedCount > 0 && (
+											<span
+												className="past-days-warning"
+												title={t("dashboard.schedules.missedDoses", { count: missedCount })}
+											>
+												⚠️ {missedCount}
+											</span>
+										)}
+									</div>
+									{missedCount > 0 && (
+										<button type="button" className="clear-missed-btn" onClick={() => setShowClearMissedConfirm(true)}>
+											{t("dashboard.schedules.clearMissed")}
+										</button>
 									)}
 								</div>
 							);
 						})()}
+					{showClearMissedConfirm && (
+						<ConfirmModal
+							title={t("dashboard.schedules.clearMissedConfirmTitle")}
+							message={t("dashboard.schedules.clearMissedConfirmMessage", {
+								count: missedPastDoseIds.length,
+							})}
+							confirmLabel={t("dashboard.schedules.clearMissedConfirm")}
+							cancelLabel={t("dashboard.schedules.clearMissedCancel")}
+							onConfirm={() => void clearMissedDoses(missedPastDoseIds.length)}
+							onCancel={() => {
+								if (!clearingMissed) setShowClearMissedConfirm(false);
+							}}
+							isLoading={clearingMissed}
+							confirmVariant="warning"
+						/>
+					)}
 					{/* Current and future days */}
 					{futureDays.map((day) => {
 						const today = new Date();
@@ -437,10 +540,8 @@ export function SchedulePage() {
 											? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med?.packageType)
 											: null;
 									const visibleStatus = shouldHideNoScheduleStatusForTube(med, status) ? null : status;
-									const itemDoseIds = expandDoseIds(item.doses);
-									const allTaken = itemDoseIds.every((id) => takenDoses.has(id));
 									return (
-										<div key={`${day.dateStr}-${item.medName}`} className={`time-row ${allTaken ? "taken" : ""}`}>
+										<div key={`${day.dateStr}-${item.medName}`} className="time-row">
 											<div className="time-main">
 												<div className="med-name">
 													<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
@@ -459,8 +560,9 @@ export function SchedulePage() {
 													const now = Date.now();
 													const dayStart = new Date(day.date).setHours(0, 0, 0, 0);
 													const isPastDay = dayStart < new Date().setHours(0, 0, 0, 0);
+													const allTaken = people.every((person) => isDoseTakenForDisplay(getDoseId(dose.id, person)));
 													return (
-														<div key={dose.id} className="dose-item">
+														<div key={dose.id} className={`dose-item ${allTaken ? "all-taken" : ""}`}>
 															<span className="dose-time">{dose.timeStr}</span>
 															<span className="dose-usage">
 																<span className="dose-usage-main">
@@ -481,7 +583,7 @@ export function SchedulePage() {
 															<div className="dose-checks">
 																{people.map((person) => {
 																	const doseId = getDoseId(dose.id, person);
-																	const isTaken = takenDoses.has(doseId);
+																	const isTaken = isDoseTakenForDisplay(doseId);
 																	const isAutomaticallyTaken =
 																		isTaken && isDoseTakenAutomatically(doseId) && dose.when <= now;
 																	const isOverdue = !isTaken && dose.when < now && !isPastDay;
@@ -516,13 +618,13 @@ export function SchedulePage() {
 																				</button>
 																			) : (
 																				<button
-																					className="dose-btn take"
+																					className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
 																					onClick={() => markDoseTaken(doseId)}
 																					disabled={isEmpty}
-																					title={t("dose.markAsTaken")}
+																					title={isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
 																				>
 																					<span className="dose-btn-label">{t("dose.take")}</span>
-																					<span aria-hidden="true">✓</span>
+																					<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
 																				</button>
 																			)}
 																		</div>

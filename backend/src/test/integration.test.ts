@@ -140,6 +140,7 @@ async function createSchema(client: Client) {
       language text NOT NULL DEFAULT 'en',
       stock_calculation_mode text NOT NULL DEFAULT 'automatic',
       share_stock_status integer NOT NULL DEFAULT 1,
+	share_medication_overview integer NOT NULL DEFAULT 0,
 	upcoming_today_only integer NOT NULL DEFAULT 0,
 	share_schedule_today_only integer NOT NULL DEFAULT 0,
 	swap_dashboard_main_sections integer NOT NULL DEFAULT 0,
@@ -254,6 +255,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Test Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 				},
 			});
@@ -307,6 +311,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Test Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-01-10T08:00:00.000Z" }],
 				},
 			});
@@ -345,6 +352,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Test Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [
 						{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" },
 						{ usage: 0.5, every: 1, start: "2025-01-05T20:00:00.000Z" },
@@ -406,6 +416,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Weekly Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 7, start: "2025-10-17T08:00:00" }],
 				},
 			});
@@ -543,6 +556,9 @@ describe("Integration Tests", () => {
 				url: "/medications",
 				payload: {
 					name: "Interval Med",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-10-17T08:00:00" }],
 				},
 			});
@@ -597,6 +613,9 @@ describe("Integration Tests", () => {
 				payload: {
 					name: "Aspirin",
 					takenBy: ["Daniel"],
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 				},
 			});

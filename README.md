@@ -18,8 +18,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Backend_Tests-614%2F614-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
-  <img src="https://img.shields.io/badge/Frontend_Tests-810%2F810-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
+  <img src="https://img.shields.io/badge/Backend_Tests-618%2F618-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
+  <img src="https://img.shields.io/badge/Frontend_Tests-807%2F807-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
 </p>
 
 ### 🤖 AI-Generated Code
@@ -152,6 +152,7 @@ Share your medication schedule with others via a public link.
 ### Multi-Person Support
 - Manage medications for multiple people
 - Share schedules via link. Recipients can mark doses as taken, you see it live
+- Optionally embed the medication overview directly on shared links via a settings toggle
 
 ### Data Export & Import
 - Export all your data (medications, dose history, settings) as JSON

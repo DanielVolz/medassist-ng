@@ -3,7 +3,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, useShare } from "../hooks";
-import type { Coverage, FormState, Medication, ScheduleEvent, StockThresholds } from "../types";
+import {
+	type Coverage,
+	type FormState,
+	getMedDisplayName,
+	type Medication,
+	type ScheduleEvent,
+	type StockThresholds,
+} from "../types";
 import { getSystemLocale } from "../utils/formatters";
 import { log } from "../utils/logger";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, getStockStatus } from "../utils/schedule";
@@ -70,15 +77,11 @@ export interface AppContextValue {
 	takenDoses: Set<string>;
 	setTakenDoses: React.Dispatch<React.SetStateAction<Set<string>>>;
 	dismissedDoses: Set<string>;
-	clearingMissed: boolean;
-	showClearMissedConfirm: boolean;
-	setShowClearMissedConfirm: (show: boolean) => void;
 	getDoseId: (baseDoseId: string, person: string | null) => string;
 	isDoseTakenAutomatically: (doseId: string) => boolean;
 	countTakenDoses: (doses: Array<{ id: string; takenBy: string[] }>) => { total: number; taken: number };
 	markDoseTaken: (doseId: string) => Promise<void>;
 	undoDoseTaken: (doseId: string) => Promise<void>;
-	dismissMissedDoses: (doseIds: string[]) => Promise<void>;
 
 	// From useCollapsedDays
 	manuallyCollapsedDays: Set<string>;
@@ -393,6 +396,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
 
+	const outOfStockMedicationIds = useMemo(
+		() =>
+			new Set(
+				activeMeds.filter((med) => (coverageByMed[getMedDisplayName(med)]?.medsLeft ?? 1) <= 0).map((med) => med.id)
+			),
+		[activeMeds, coverageByMed]
+	);
+
+	const effectiveTakenDoses = useMemo(
+		() =>
+			new Set(
+				Array.from(doses.takenDoses).filter((doseId) => {
+					const medId = Number.parseInt(doseId.split("-")[0] ?? "", 10);
+					return Number.isNaN(medId) || !outOfStockMedicationIds.has(medId);
+				})
+			),
+		[doses.takenDoses, outOfStockMedicationIds]
+	);
+
 	// Centralized stock thresholds for consistent status display across all components
 	const stockThresholds: StockThresholds = useMemo(
 		() => ({
@@ -516,8 +538,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	}, [groupedSchedule, scheduleDays]);
 
 	const missedPastDoseIds = useMemo(
-		() => computeMissedPastDoseIds(pastDays, activeMeds, doses.takenDoses, doses.dismissedDoses),
-		[pastDays, activeMeds, doses.takenDoses, doses.dismissedDoses]
+		() => computeMissedPastDoseIds(pastDays, activeMeds, effectiveTakenDoses, doses.dismissedDoses),
+		[pastDays, activeMeds, effectiveTakenDoses, doses.dismissedDoses]
 	);
 
 	// Modal helpers with browser history support
@@ -771,60 +793,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settings.maxNaggingReminders !== savedSettings.maxNaggingReminders ||
 			settings.stockCalculationMode !== savedSettings.stockCalculationMode ||
 			settings.shareStockStatus !== savedSettings.shareStockStatus ||
+			settings.shareMedicationOverview !== savedSettings.shareMedicationOverview ||
 			settings.upcomingTodayOnly !== savedSettings.upcomingTodayOnly ||
 			settings.shareScheduleTodayOnly !== savedSettings.shareScheduleTodayOnly ||
 			settings.expiryWarningDays !== savedSettings.expiryWarningDays
 		);
 	}, [settingsHook.settings, settingsHook.savedSettings]);
-
-	// New dismissMissedDoses that uses medication-level dismissedUntil dates
-	// This is robust against timestamp changes from schedule updates or timezone fixes
-	const [clearingMissedState, setClearingMissedState] = useState(false);
-
-	const dismissMissedDoses = useCallback(
-		async (doseIds: string[]) => {
-			if (doseIds.length === 0) return;
-
-			// Extract unique medication IDs from dose IDs (format: medId-blisterIdx-timestamp[-person])
-			const medIds = new Set<number>();
-			for (const doseId of doseIds) {
-				const parts = doseId.split("-");
-				if (parts.length >= 1) {
-					const medId = parseInt(parts[0], 10);
-					if (!Number.isNaN(medId)) {
-						medIds.add(medId);
-					}
-				}
-			}
-
-			if (medIds.size === 0) return;
-
-			// Get today's date in YYYY-MM-DD format
-			const today = new Date();
-			const until = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-			setClearingMissedState(true);
-			try {
-				const res = await fetch("/api/medications/dismiss-until", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					credentials: "include",
-					body: JSON.stringify({ medicationIds: Array.from(medIds), until }),
-				});
-
-				if (res.ok) {
-					// Reload medications to get updated dismissedUntil values
-					await medications.loadMeds();
-					doses.setShowClearMissedConfirm(false);
-				}
-			} catch {
-				// Error - dialog stays open
-			} finally {
-				setClearingMissedState(false);
-			}
-		},
-		[medications, doses]
-	);
 
 	// Build context value
 	const value: AppContextValue = useMemo(
@@ -853,15 +827,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			takenDoses: doses.takenDoses,
 			setTakenDoses: doses.setTakenDoses,
 			dismissedDoses: doses.dismissedDoses,
-			clearingMissed: clearingMissedState,
-			showClearMissedConfirm: doses.showClearMissedConfirm,
-			setShowClearMissedConfirm: doses.setShowClearMissedConfirm,
 			getDoseId: doses.getDoseId,
 			isDoseTakenAutomatically: doses.isDoseTakenAutomatically,
 			countTakenDoses: doses.countTakenDoses,
 			markDoseTaken: doses.markDoseTaken,
 			undoDoseTaken: doses.undoDoseTaken,
-			dismissMissedDoses,
 
 			// From useCollapsedDays
 			manuallyCollapsedDays: collapsed.manuallyCollapsedDays,
@@ -1020,8 +990,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			handleImportFileSelect,
 			handleImportConfirm,
 			settingsChanged,
-			clearingMissedState,
-			dismissMissedDoses,
 		]
 	);
 

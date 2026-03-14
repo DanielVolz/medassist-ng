@@ -109,6 +109,8 @@ export const userSettings = sqliteTable("user_settings", {
 	stockCalculationMode: text("stock_calculation_mode", { length: 20 }).notNull().default("automatic"),
 	// Whether shared schedule links show stock status (Critical/Low/Normal) to intake users
 	shareStockStatus: integer("share_stock_status", { mode: "boolean" }).notNull().default(true),
+	// Whether shared schedule links also embed the medication overview section
+	shareMedicationOverview: integer("share_medication_overview", { mode: "boolean" }).notNull().default(false),
 	// UI timeline visibility preferences
 	upcomingTodayOnly: integer("upcoming_today_only", { mode: "boolean" }).notNull().default(false),
 	shareScheduleTodayOnly: integer("share_schedule_today_only", { mode: "boolean" }).notNull().default(false),

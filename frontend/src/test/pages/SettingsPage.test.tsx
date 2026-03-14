@@ -200,44 +200,28 @@ describe("SettingsPage", () => {
 
 		const swapRow = screen.getByText("settings.timeline.swapDashboardSections").closest(".setting-row");
 		const upcomingRow = screen.getByText("settings.timeline.upcomingTodayOnly").closest(".setting-row");
+		const overviewRow = screen.getByText("settings.timeline.shareMedicationOverview").closest(".setting-row");
 		const sharedRow = screen.getByText("settings.timeline.shareScheduleTodayOnly").closest(".setting-row");
 
 		const swapToggle = swapRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
 		const upcomingToggle = upcomingRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+		const overviewToggle = overviewRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
 		const sharedToggle = sharedRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
 
 		expect(swapToggle).toBeInTheDocument();
 		expect(upcomingToggle).toBeInTheDocument();
+		expect(overviewToggle).toBeInTheDocument();
 		expect(sharedToggle).toBeInTheDocument();
 
 		fireEvent.click(swapToggle);
 		fireEvent.click(upcomingToggle);
+		fireEvent.click(overviewToggle);
 		fireEvent.click(sharedToggle);
 
 		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ swapDashboardMainSections: true }));
 		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ upcomingTodayOnly: true }));
+		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ shareMedicationOverview: true }));
 		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ shareScheduleTodayOnly: true }));
-	});
-
-	it("updates share stock status toggle through setSettings", () => {
-		const setSettings = vi.fn();
-		mockContextValue = createMockContext({
-			setSettings,
-			settings: {
-				...createMockContext().settings,
-				shareStockStatus: false,
-			},
-		});
-
-		renderPage();
-
-		const shareStockRow = screen.getByText("settings.stock.shareStockStatus").closest(".setting-row");
-		const shareStockToggle = shareStockRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
-		expect(shareStockToggle).toBeInTheDocument();
-
-		fireEvent.click(shareStockToggle);
-
-		expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ shareStockStatus: true }));
 	});
 
 	it("opens export modal when export action is clicked", () => {

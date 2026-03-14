@@ -136,6 +136,7 @@ const settingsExportSchema = z
 		language: z.string().default("en"),
 		stockCalculationMode: z.enum(["automatic", "manual"]).default("automatic"),
 		shareStockStatus: z.boolean().default(true),
+		shareMedicationOverview: z.boolean().default(false),
 	})
 	.optional();
 
@@ -503,6 +504,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						language: settings.language,
 						stockCalculationMode: settings.stockCalculationMode,
 						shareStockStatus: settings.shareStockStatus,
+						shareMedicationOverview: settings.shareMedicationOverview ?? false,
 					}
 				: undefined;
 
@@ -793,6 +795,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					language: importData.settings.language ?? "en",
 					stockCalculationMode: importData.settings.stockCalculationMode ?? "automatic",
 					shareStockStatus: importData.settings.shareStockStatus ?? true,
+					shareMedicationOverview: importData.settings.shareMedicationOverview ?? false,
 				});
 			}
 

@@ -17,13 +17,17 @@ describe("useSettings", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("initializes with default settings", () => {
+	it("initializes with default settings", async () => {
 		const { result } = renderHook(() => useSettings());
 
 		expect(result.current.settings.emailEnabled).toBe(false);
 		expect(result.current.settings.lowStockDays).toBe(30);
 		expect(result.current.settings.reminderDaysBefore).toBe(7);
 		expect(result.current.settingsLoading).toBe(true);
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
 	});
 
 	it("loads settings from API on mount", async () => {
@@ -135,6 +139,50 @@ describe("useSettings", () => {
 			})
 		);
 		expect(result.current.settingsSaved).toBe(true);
+	});
+
+	it("flushes unsaved settings on pagehide with keepalive including shareMedicationOverview", async () => {
+		const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ shareMedicationOverview: false }),
+		});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		vi.useFakeTimers();
+
+		act(() => {
+			result.current.setSettings((settings) => ({
+				...settings,
+				shareMedicationOverview: true,
+			}));
+		});
+
+		act(() => {
+			window.dispatchEvent(new Event("pagehide"));
+		});
+
+		const keepaliveCall = fetchMock.mock.calls.find(
+			([url, init]) => url === "/api/settings" && (init as RequestInit | undefined)?.keepalive === true
+		);
+
+		expect(keepaliveCall).toBeDefined();
+		expect(keepaliveCall?.[1]).toEqual(
+			expect.objectContaining({
+				method: "PUT",
+				keepalive: true,
+			})
+		);
+
+		const payload = JSON.parse(((keepaliveCall?.[1] as RequestInit).body as string) ?? "{}");
+		expect(payload.shareMedicationOverview).toBe(true);
+
+		vi.useRealTimers();
 	});
 
 	it("keeps email channel enabled when recipient is non-empty", async () => {

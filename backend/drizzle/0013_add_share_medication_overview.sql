@@ -1,0 +1,1 @@
+ALTER TABLE `user_settings` ADD `share_medication_overview` integer DEFAULT false NOT NULL;

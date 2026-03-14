@@ -870,18 +870,21 @@ export function SettingsPage() {
 							<div className="section-header">
 								<h3>{t("settings.timeline.sharedSection")}</h3>
 							</div>
-							<div className="setting-row compact">
+							<div className="setting-row compact" style={{ marginTop: "10px" }}>
 								<div className="setting-label">
-									<span>{t("settings.stock.shareStockStatus")}</span>
-									<span className="info-tooltip small" data-tooltip={t("settings.stock.shareStockStatusDesc")}>
+									<span>{t("settings.timeline.shareMedicationOverview")}</span>
+									<span
+										className="info-tooltip small"
+										data-tooltip={t("settings.timeline.shareMedicationOverviewDesc")}
+									>
 										ⓘ
 									</span>
 								</div>
 								<label className="toggle-switch small">
 									<input
 										type="checkbox"
-										checked={settings.shareStockStatus}
-										onChange={(e) => setSettings({ ...settings, shareStockStatus: e.target.checked })}
+										checked={settings.shareMedicationOverview}
+										onChange={(e) => setSettings({ ...settings, shareMedicationOverview: e.target.checked })}
 									/>
 									<span className="toggle-slider"></span>
 								</label>

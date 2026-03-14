@@ -86,7 +86,7 @@ describe("useShare", () => {
 		});
 
 		expect(result.current.showShareDialog).toBe(true);
-		expect(result.current.sharePeople).toEqual(["Alice", "Bob", "Charlie"]);
+		expect(result.current.sharePeople).toEqual(["all", "Alice", "Bob", "Charlie"]);
 		expect(result.current.shareSelectedPerson).toBe("Alice");
 		expect(window.history.pushState).toHaveBeenCalled();
 	});

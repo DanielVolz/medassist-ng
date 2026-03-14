@@ -254,6 +254,8 @@ export type SharedScheduleData = {
 	};
 	stockCalculationMode?: "automatic" | "manual";
 	shareStockStatus?: boolean;
+	shareMedicationOverview?: boolean;
+	medicationOverview?: SharedMedicationOverviewItem[] | null;
 	upcomingTodayOnly?: boolean;
 	shareScheduleTodayOnly?: boolean;
 };
@@ -279,7 +281,7 @@ export type SharedMedicationOverviewItem = {
 	daysLeft: number | null;
 	nextIntakeDate: string | null;
 	depletionDate: string | null;
-	priority: "normal" | "high" | null;
+	priority: "normal" | "high" | "out-of-stock" | null;
 	expiryDate: string | null;
 	medicationStartDate: string | null;
 	prescriptionEnabled: boolean;

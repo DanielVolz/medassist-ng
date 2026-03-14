@@ -56,6 +56,10 @@ const shareReadResponseSchema = {
 		sharedBy: { type: "string" },
 		scheduleDays: { type: "integer" },
 		medications: { type: "array", items: { type: "object", additionalProperties: true } },
+		shareMedicationOverview: { type: "boolean" },
+		medicationOverview: {
+			anyOf: [{ type: "array", items: { type: "object", additionalProperties: true } }, { type: "null" }],
+		},
 		stockThresholds: { type: "object", additionalProperties: { type: "number" } },
 		stockCalculationMode: { type: "string", enum: ["automatic", "manual"] },
 		shareStockStatus: { type: "boolean" },
@@ -241,11 +245,23 @@ export async function shareRoutes(app: FastifyInstance) {
 				};
 			});
 
+			const shareMedicationOverview = settings?.shareMedicationOverview ?? false;
+			const medicationOverview = shareMedicationOverview
+				? buildSharedMedicationOverview({
+						medications: meds,
+						doses: await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId)),
+						thresholdDays: settings?.lowStockDays ?? 30,
+						showStockStatus: settings?.shareStockStatus ?? true,
+					})
+				: null;
+
 			return {
 				takenBy: share.takenBy,
 				sharedBy: owner?.username ?? null,
 				scheduleDays: share.scheduleDays,
 				medications: medicationsWithBlisters,
+				shareMedicationOverview,
+				medicationOverview,
 				stockThresholds: {
 					lowStockDays: settings?.lowStockDays ?? 30,
 					normalStockDays: settings?.normalStockDays ?? 60,
@@ -328,7 +344,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				medications: meds,
 				doses,
 				thresholdDays: settings?.lowStockDays ?? 30,
-				shareStockStatus: settings?.shareStockStatus ?? true,
+				showStockStatus: settings?.shareStockStatus ?? true,
 			});
 
 			return {

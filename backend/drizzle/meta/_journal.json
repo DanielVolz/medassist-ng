@@ -92,6 +92,13 @@
       "when": 1772881208026,
       "tag": "0012_add_api_keys_and_package_amount_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1773348659979,
+      "tag": "0013_add_share_medication_overview",
+      "breakpoints": true
     }
   ]
 }

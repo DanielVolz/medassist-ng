@@ -364,8 +364,6 @@
       "highStockDays": "High (days)",
       "highStockTooltip": "Stock above this value means you are well supplied",
       "thresholdValidation": "Values must be: Critical < Low < High",
-      "shareStockStatus": "Show Stock on Shared Links",
-      "shareStockStatusDesc": "Show stock status (Normal/Low/Critical) and colored borders on shared schedule links for intake users",
       "packageTypesNote": "Note: Tube medications are excluded from stock reminders. Liquid container medications use a single reminder baseline (Low and Critical are automatically derived from this value)."
     },
     "timeline": {
@@ -377,6 +375,8 @@
       "swapDashboardSections": "Show Upcoming Schedules before Medication Overview",
       "swapDashboardSectionsDesc": "When enabled, the dashboard prioritizes the upcoming schedule section above the medication overview section.",
       "sharedSection": "Shared Schedule",
+      "shareMedicationOverview": "Show medication overview on shared links",
+      "shareMedicationOverviewDesc": "Embed the medication overview section on the normal shared page for intake users.",
       "shareScheduleTodayOnly": "Shared links show only today",
       "shareScheduleTodayOnlyDesc": "Hide past and future days on shared schedule links and show only today's entries."
     },
@@ -497,6 +497,7 @@
     "saveFailed": "Failed to save",
     "networkError": "Network error",
     "saving": "Saving...",
+    "outOfStockTakeBlocked": "This medication is empty. Intake cannot be marked as taken.",
     "unsavedChanges": {
       "title": "Unsaved Changes",
       "message": "You have unsaved changes. Are you sure you want to leave?",
@@ -551,6 +552,7 @@
     "button": "Share",
     "title": "Share Schedule",
     "description": "Generate a secret link to share the medication schedule for a specific person. Anyone with this link can view the schedule. When the person marks a dose as taken, it will also be marked as taken in your app.",
+    "allPeople": "Everyone",
     "selectPerson": "Select person",
     "selectPeriod": "Select time period",
     "generateLink": "Generate Link",
@@ -577,7 +579,7 @@
     }
   },
   "sharedOverview": {
-    "title": "Medication Overview for {{person}}",
+    "title": "Medication for {{person}}",
     "sharedBy": "Shared by {{user}}",
     "expiredOn": "Expired on: {{date}}",
     "noMedications": "No medications available for this share link.",

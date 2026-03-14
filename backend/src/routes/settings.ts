@@ -33,6 +33,7 @@ export type UserSettings = {
 	language: Language;
 	stockCalculationMode: "automatic" | "manual";
 	shareStockStatus: boolean;
+	shareMedicationOverview: boolean;
 	upcomingTodayOnly: boolean;
 	shareScheduleTodayOnly: boolean;
 	swapDashboardMainSections: boolean;
@@ -72,6 +73,7 @@ type SettingsBody = {
 	language: string;
 	stockCalculationMode: "automatic" | "manual";
 	shareStockStatus: boolean;
+	shareMedicationOverview: boolean;
 	upcomingTodayOnly: boolean;
 	shareScheduleTodayOnly: boolean;
 	swapDashboardMainSections: boolean;
@@ -221,6 +223,7 @@ function getDefaultSettings() {
 		language: (process.env.DEFAULT_LANGUAGE as "en" | "de") || "en",
 		stockCalculationMode: (process.env.DEFAULT_STOCK_CALCULATION_MODE as "automatic" | "manual") || "automatic",
 		shareStockStatus: envBool("DEFAULT_SHARE_STOCK_STATUS", true),
+		shareMedicationOverview: envBool("DEFAULT_SHARE_MEDICATION_OVERVIEW", false),
 		upcomingTodayOnly: envBool("DEFAULT_UPCOMING_TODAY_ONLY", false),
 		shareScheduleTodayOnly: envBool("DEFAULT_SHARE_SCHEDULE_TODAY_ONLY", false),
 		swapDashboardMainSections: false,
@@ -283,6 +286,7 @@ export async function loadUserSettings(userId: number): Promise<UserSettings> {
 		language: settings.language as Language,
 		stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
 		shareStockStatus: settings.shareStockStatus ?? true,
+		shareMedicationOverview: settings.shareMedicationOverview ?? false,
 		upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
 		shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
 		swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
@@ -327,6 +331,7 @@ export async function getAllUserSettings(): Promise<UserSettings[]> {
 		language: settings.language as Language,
 		stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
 		shareStockStatus: settings.shareStockStatus ?? true,
+		shareMedicationOverview: settings.shareMedicationOverview ?? false,
 		upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
 		shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
 		swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
@@ -411,6 +416,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 				language: settings.language,
 				stockCalculationMode: settings.stockCalculationMode ?? "automatic",
 				shareStockStatus: settings.shareStockStatus ?? true,
+				shareMedicationOverview: settings.shareMedicationOverview ?? false,
 				upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
 				shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
 				swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
@@ -477,6 +483,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 						language: { type: "string", enum: ["en", "de"] },
 						stockCalculationMode: { type: "string", enum: ["automatic", "manual"] },
 						shareStockStatus: { type: "boolean" },
+						shareMedicationOverview: { type: "boolean" },
 						upcomingTodayOnly: { type: "boolean" },
 						shareScheduleTodayOnly: { type: "boolean" },
 						swapDashboardMainSections: { type: "boolean" },
@@ -504,6 +511,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 						language: "en",
 						stockCalculationMode: "automatic",
 						shareStockStatus: true,
+						shareMedicationOverview: false,
 						upcomingTodayOnly: false,
 						shareScheduleTodayOnly: false,
 						swapDashboardMainSections: false,
@@ -554,6 +562,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 				language: body.language ?? "en",
 				stockCalculationMode: body.stockCalculationMode ?? "automatic",
 				shareStockStatus: body.shareStockStatus ?? true,
+				shareMedicationOverview: body.shareMedicationOverview ?? false,
 				upcomingTodayOnly: body.upcomingTodayOnly ?? false,
 				shareScheduleTodayOnly: body.shareScheduleTodayOnly ?? false,
 				swapDashboardMainSections: body.swapDashboardMainSections ?? false,

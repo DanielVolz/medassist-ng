@@ -152,6 +152,7 @@ Share your medication schedule with others via a public link.
 ### Multi-Person Support
 - Manage medications for multiple people
 - Share schedules via link. Recipients can mark doses as taken, you see it live
+- Optionally embed the medication overview directly on shared links via a settings toggle
 
 ### Data Export & Import
 - Export all your data (medications, dose history, settings) as JSON

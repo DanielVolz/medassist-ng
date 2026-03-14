@@ -7,6 +7,8 @@ import type { Medication } from "../types";
 import { withCorrelation } from "../utils/correlation";
 import { log } from "../utils/logger";
 
+const SHARE_ALL_VALUE = "all";
+
 export interface UseShareReturn {
 	showShareDialog: boolean;
 	sharePeople: string[];
@@ -43,10 +45,20 @@ export function useShare(): UseShareReturn {
 		setShareSelectedPerson("");
 		setShareSelectedDays(30);
 
-		// Get unique takenBy people from all medications (flatten arrays)
-		const allPeople = meds.flatMap((m) => m.takenBy || []);
-		const uniquePeople = [...new Set(allPeople)].filter(Boolean).sort();
-		setSharePeople(uniquePeople);
+		// Include both per-intake assignments and legacy medication-level assignments.
+		const uniquePeople = [
+			...new Set(
+				meds.flatMap((medication) => [
+					...(medication.intakes
+						?.map((intake) => intake.takenBy)
+						.filter((person): person is string => Boolean(person)) ?? []),
+					...(medication.takenBy || []),
+				])
+			),
+		]
+			.filter(Boolean)
+			.sort();
+		setSharePeople(uniquePeople.length > 0 ? [SHARE_ALL_VALUE, ...uniquePeople] : []);
 		log.info("[ShareDialog] Opened", { medicationCount: meds.length, personCount: uniquePeople.length });
 		if (uniquePeople.length > 0) {
 			setShareSelectedPerson(uniquePeople[0]);

@@ -29,7 +29,7 @@ export type SharedMedicationOverviewItem = {
 	daysLeft: number | null;
 	nextIntakeDate: string | null;
 	depletionDate: string | null;
-	priority: "normal" | "high" | null;
+	priority: "normal" | "high" | "out-of-stock" | null;
 	expiryDate: string | null;
 	medicationStartDate: string | null;
 	prescriptionEnabled: boolean;
@@ -135,13 +135,22 @@ function toNullableDate(value: string | null): string | null {
 	return value.trim() ? value : null;
 }
 
+function computeOverviewPriority(
+	currentStock: number,
+	daysLeft: number | null,
+	thresholdDays: number
+): "normal" | "high" | "out-of-stock" {
+	if (currentStock <= 0 || daysLeft === 0) return "out-of-stock";
+	if (daysLeft !== null && daysLeft <= thresholdDays) return "high";
+	return "normal";
+}
+
 export function buildSharedMedicationOverview(options: {
 	medications: MedicationRow[];
 	doses: DoseRow[];
 	thresholdDays: number;
-	shareStockStatus: boolean;
 }): SharedMedicationOverviewItem[] {
-	const { medications: medicationRows, doses, thresholdDays, shareStockStatus } = options;
+	const { medications: medicationRows, doses, thresholdDays } = options;
 
 	const dosesByMedication = new Map<number, DoseRow[]>();
 	for (const dose of doses) {
@@ -178,7 +187,7 @@ export function buildSharedMedicationOverview(options: {
 		const daysLeft = dailyDoseRate > 0 ? Math.floor(currentStock / dailyDoseRate) : null;
 		const depletionDate =
 			daysLeft === null ? null : toDateOnlyString(new Date(todayDate.getTime() + daysLeft * MS_PER_DAY));
-		const priority: "normal" | "high" = daysLeft !== null && daysLeft <= thresholdDays ? "high" : "normal";
+		const priority = computeOverviewPriority(currentStock, daysLeft, thresholdDays);
 
 		return {
 			name: medication.name,
@@ -190,12 +199,12 @@ export function buildSharedMedicationOverview(options: {
 			pillsPerBlister: medication.pillsPerBlister,
 			totalPills: medication.totalPills,
 			looseTablets: medication.looseTablets,
-			currentStock: shareStockStatus ? currentStock : null,
-			capacity: shareStockStatus ? capacity : null,
-			daysLeft: shareStockStatus ? daysLeft : null,
+			currentStock,
+			capacity,
+			daysLeft,
 			nextIntakeDate: computeNextIntakeDate(intakes, todayDateOnly),
-			depletionDate: shareStockStatus ? depletionDate : null,
-			priority: shareStockStatus ? priority : null,
+			depletionDate,
+			priority,
 			expiryDate: toNullableDate(medication.expiryDate),
 			medicationStartDate: toNullableDate(medication.medicationStartDate),
 			prescriptionEnabled: medication.prescriptionEnabled ?? false,

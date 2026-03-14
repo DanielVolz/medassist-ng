@@ -21,6 +21,7 @@ export { default as ProfileModal } from "./ProfileModal";
 export { default as ReportModal } from "./ReportModal";
 export type { ShareDialogProps } from "./ShareDialog";
 export { ShareDialog } from "./ShareDialog";
+export { SharedMedicationOverviewSection } from "./SharedMedicationOverviewSection";
 export { SharedSchedule } from "./SharedSchedule";
 export type { TagInputProps } from "./TagInput";
 export { TagInput } from "./TagInput";

@@ -364,8 +364,6 @@
       "highStockDays": "Hoch (Tage)",
       "highStockTooltip": "Bestand über diesem Wert bedeutet, dass du gut versorgt bist",
       "thresholdValidation": "Werte müssen wie folgt sein: Kritisch < Niedrig < Hoch",
-      "shareStockStatus": "Bestand auf geteilten Links anzeigen",
-      "shareStockStatusDesc": "Bestandsstatus (Normal/Niedrig/Kritisch) und farbige Rahmen auf geteilten Zeitplan-Links für Einnahme-Nutzer anzeigen",
       "packageTypesNote": "Hinweis: Tubenmedikamente sind von Bestands-Erinnerungen ausgeschlossen. Flüssigbehälter-Medikamente verwenden einen einzelnen Reminder-Basiswert (Niedrig und Kritisch werden automatisch von diesem Wert abgeleitet)."
     },
     "timeline": {
@@ -377,6 +375,8 @@
       "swapDashboardSections": "Bevorstehenden Zeitplan vor Medikamentenübersicht anzeigen",
       "swapDashboardSectionsDesc": "Wenn aktiviert, wird der Bereich mit bevorstehenden Einnahmen über der Medikamentenübersicht angezeigt.",
       "sharedSection": "Geteilter Zeitplan",
+      "shareMedicationOverview": "Medikamentenübersicht auf geteilten Links anzeigen",
+      "shareMedicationOverviewDesc": "Die Medikamentenübersicht im normalen geteilten Zeitplan für Einnahme-Nutzer einbetten.",
       "shareScheduleTodayOnly": "Geteilte Links zeigen nur heute",
       "shareScheduleTodayOnlyDesc": "Vergangene und zukünftige Tage in geteilten Zeitplänen ausblenden und nur heutige Einträge zeigen."
     },
@@ -497,6 +497,7 @@
     "saveFailed": "Speichern fehlgeschlagen",
     "networkError": "Netzwerkfehler",
     "saving": "Wird gespeichert...",
+    "outOfStockTakeBlocked": "Dieses Medikament ist leer. Die Einnahme kann nicht als eingenommen markiert werden.",
     "unsavedChanges": {
       "title": "Ungespeicherte Änderungen",
       "message": "Du hast ungespeicherte Änderungen. Möchtest du die Seite wirklich verlassen?",
@@ -551,6 +552,7 @@
     "button": "Teilen",
     "title": "Zeitplan teilen",
     "description": "Generiere einen geheimen Link, um den Medikamentenplan für eine bestimmte Person zu teilen. Jeder mit diesem Link kann den Zeitplan sehen. Wenn die Person eine Dosis als eingenommen markiert, wird sie auch in deiner App als eingenommen angezeigt.",
+    "allPeople": "Alle",
     "selectPerson": "Person auswählen",
     "selectPeriod": "Zeitraum auswählen",
     "generateLink": "Link generieren",
@@ -577,7 +579,7 @@
     }
   },
   "sharedOverview": {
-    "title": "Medikamentenübersicht für {{person}}",
+    "title": "Medikamente für {{person}}",
     "sharedBy": "Geteilt von {{user}}",
     "expiredOn": "Abgelaufen am: {{date}}",
     "noMedications": "Für diesen Teilen-Link sind keine Medikamente verfügbar.",

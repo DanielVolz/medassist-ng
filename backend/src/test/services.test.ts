@@ -21,6 +21,7 @@ import {
 	parseIntakeReminderState,
 	parseReminderState,
 	parseTakenByJson,
+	personTakesMedication,
 } from "../utils/scheduler-utils.js";
 
 // Helper to convert Blister to Intake for tests
@@ -148,6 +149,16 @@ describe("Scheduler Utils - Timezone Functions", () => {
 			const maxMs = 24 * 60 * 60 * 1000 + 60000; // 24h + 1min tolerance
 			expect(ms).toBeLessThanOrEqual(maxMs);
 		});
+	});
+});
+
+describe("Scheduler Utils - Sharing", () => {
+	it("treats the all-share sentinel as matching intake-specific assignees", () => {
+		const intakes = [blisterToIntake({ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }, "Max")];
+
+		expect(personTakesMedication("all", [], intakes)).toBe(true);
+		expect(personTakesMedication("Max", [], intakes)).toBe(true);
+		expect(personTakesMedication("Anna", [], intakes)).toBe(false);
 	});
 });
 

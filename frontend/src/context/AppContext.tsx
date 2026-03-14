@@ -793,6 +793,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			settings.maxNaggingReminders !== savedSettings.maxNaggingReminders ||
 			settings.stockCalculationMode !== savedSettings.stockCalculationMode ||
 			settings.shareStockStatus !== savedSettings.shareStockStatus ||
+			settings.shareMedicationOverview !== savedSettings.shareMedicationOverview ||
 			settings.upcomingTodayOnly !== savedSettings.upcomingTodayOnly ||
 			settings.shareScheduleTodayOnly !== savedSettings.shareScheduleTodayOnly ||
 			settings.expiryWarningDays !== savedSettings.expiryWarningDays

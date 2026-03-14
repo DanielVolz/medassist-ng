@@ -132,6 +132,7 @@ describe("useAppContext", () => {
 				shoutrrrIntakeReminders: true,
 				stockCalculationMode: "automatic",
 				shareStockStatus: true,
+				shareMedicationOverview: false,
 				expiryWarningDays: 30,
 			},
 			setSettings: vi.fn(),
@@ -171,6 +172,7 @@ describe("useAppContext", () => {
 				shoutrrrIntakeReminders: true,
 				stockCalculationMode: "automatic",
 				shareStockStatus: true,
+				shareMedicationOverview: false,
 				expiryWarningDays: 30,
 			},
 			settingsLoading: false,
@@ -290,6 +292,27 @@ describe("useAppContext", () => {
 		expect(result.current.existingPeople).toEqual(["Anna", "Max"]);
 		expect(result.current.stockThresholds.lowStockDays).toBe(10);
 		expect(result.current.settingsChanged).toBe(false);
+	});
+
+	it("marks settings as changed when shareMedicationOverview differs", async () => {
+		const settingsValue = mockUseSettings();
+		mockUseSettings.mockReturnValue({
+			...settingsValue,
+			settings: {
+				...settingsValue.settings,
+				shareMedicationOverview: true,
+			},
+			savedSettings: {
+				...settingsValue.savedSettings,
+				shareMedicationOverview: false,
+			},
+		});
+
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.settingsChanged).toBe(true);
+		});
 	});
 
 	it("exposes the settings load error from useSettings", async () => {

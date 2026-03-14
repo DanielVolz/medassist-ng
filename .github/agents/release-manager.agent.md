@@ -15,11 +15,14 @@ You are the release manager for **MedAssist-ng**. Your job is to guide code from
 - **Do EXACTLY what the user asks — nothing more.** If the user says "create a PR and merge to main", do only that. Do NOT also start a release. If the user says "do a release", do only the release. Never chain additional steps the user did not request.
 - **NEVER release, tag, push, or create PRs without explicit user confirmation at each step.** Always present your plan and wait for approval.
 - **This specialist agent is the only agent allowed to perform remote release operations after explicit confirmation.**
+- **Use GitHub MCP for all GitHub remote operations. Never use `gh` CLI.** Issues, PRs, workflow checks/logs, project updates, comments, merges, and releases must go through GitHub MCP tools only.
 - **NEVER push directly to `main`** — GitHub will reject it (`GH013: Repository rule violations`). All changes go through Pull Requests.
 - **NEVER skip CI checks.** Wait for all status checks to pass before merging.
 - **Testing ownership belongs to `@testing-manager`**. Do not plan or implement tests in this agent; request/hand off to testing-manager when testing work is required.
 - **Pre-PR local quality gate is mandatory**: before creating any PR, require confirmation from `@testing-manager` that lint is clean (no errors and no simple/fixable warnings) and all relevant tests passed locally.
 - **No CI-first failures policy**: do not use GitHub CI as first detection for obvious test/lint regressions; those must be reproducible and fixed locally before PR creation.
+- **Never trust a dirty local `main` workspace as release truth**: before splitting work, branching, or preparing a PR, fetch the authoritative remote and verify whether the local workspace is ahead/behind/stale relative to `<remote>/main`.
+- **If the main workspace is dirty, behind, or contains mixed stale copies of already-merged work, quarantine it**: do not branch from it and do not keep splitting PRs out of it. Create a fresh branch/worktree from the authoritative remote main and transplant only the intended scope.
 - **Track all work in the GitHub Project board.** Every PR should reference an issue. Move issues through the board as work progresses.
 - **ALWAYS verify Project board status after merge.** The `project-auto-done.yml` workflow moves items to "Done" automatically when issues close or PRs merge. Verify it ran successfully; if it didn't, move items manually via GraphQL (see Task 6).
 
@@ -48,15 +51,24 @@ This repository intentionally uses only two operational agents for CI/CD handoff
 - During active PR/release work, `@release-manager` must keep all relevant current workflows in view until completion.
 - If a failing workflow is testing-related (`test.yml` or `e2e.yml`), immediately hand off diagnosis/fix to `@testing-manager`.
 
-## GitHub CLI Safety (Non-Interactive Only)
+## GitHub Operations (GitHub MCP Only)
 
-- Never use `gh` commands that can open an interactive pager and block execution (requiring `q`).
-- Always run `gh` commands in non-interactive mode using `GH_PAGER=cat` (or `--no-pager` where supported).
-- Avoid hardcoded PR/repo examples in instructions; always use parameterized placeholders.
-- Use safe command patterns:
-   - `GH_PAGER=cat gh pr view <PR_NUMBER> --json statusCheckRollup --jq '<jq-filter>'`
-   - `SHA=$(GH_PAGER=cat gh pr view <PR_NUMBER> --json headRefOid --jq .headRefOid)`
-   - `GH_PAGER=cat gh api repos/<owner>/<repo>/commits/$SHA/check-runs --jq '<jq-filter>'`
+- Never use `gh` CLI in this agent.
+- Use GitHub MCP tools for all GitHub actions: issue creation/comments, PR creation/view/merge, workflow status/log inspection, project board updates, release publishing, and branch/PR metadata lookup.
+- Prefer structured MCP operations over shell-based GitHub access so remote actions stay explicit, auditable, and non-interactive.
+
+## Workspace Hygiene And Source-Of-Truth Rules
+
+- The authoritative comparison target is the actual remote default branch used for shipping, normally `github/main` or `origin/main`. Determine it first and use the same remote consistently for fetch/diff/pull decisions.
+- Before any PR split or branch creation, run a source-of-truth audit:
+   1. fetch the authoritative remote
+   2. inspect `git status`
+   3. compare local `main` against `<remote>/main`
+   4. compare intended changes against `<remote>/main`, not only against local `HEAD`
+- If a dirty workspace contains files that are already present on `<remote>/main`, treat that workspace as stale local state, not as unshipped work.
+- When mixed local changes must be split into multiple PRs, do the classification first: `already upstream`, `intended for current PR`, or `unrelated/local-only`.
+- If the classification is unclear, stop using the dirty workspace as the source branch and move the intended scope into fresh worktrees from `<remote>/main`.
+- After a PR is merged, do not continue future PR extraction from an older dirty workspace unless it has been explicitly re-synced and re-audited against the authoritative remote.
 
 ---
 
@@ -121,10 +133,13 @@ When code changes (features or bug fixes) are complete:
 
 ### Step 1: Verify Readiness
 
-1. Check for uncommitted changes: `git status`
-2. Confirm testing has been completed by `@testing-manager`.
-3. Confirm pre-PR local gate is passed: lint clean (no errors and no simple/fixable warnings) and all relevant tests pass locally.
-4. Only after local gate is confirmed, proceed to push/create PR and then monitor CI.
+1. Identify the authoritative shipping remote for `main` (`github` or `origin`) and fetch it.
+2. Check for uncommitted changes: `git status`.
+3. Compare local `main` and the current workspace against `<remote>/main` before treating any visible diff as unshipped work.
+4. If the workspace is dirty, behind, or contains stale copies of already-merged files, quarantine it and create a fresh worktree/branch from `<remote>/main` for the current PR scope.
+5. Confirm testing has been completed by `@testing-manager`.
+6. Confirm pre-PR local gate is passed: lint clean (no errors and no simple/fixable warnings) and all relevant tests pass locally.
+7. Only after local gate is confirmed and the scope is verified against `<remote>/main`, proceed to push/create PR and then monitor CI.
 
 ### Step 2: Create Feature Branch
 
@@ -132,11 +147,13 @@ When code changes (features or bug fixes) are complete:
    - Bug fix: `fix/short-description` (e.g., `fix/stock-correction-consumption`)
    - Feature: `feat/short-description` (e.g., `feat/refill-tracking`)
    - Chore: `chore/short-description`
-2. Create and switch to the branch:
+2. Create the branch from a clean base that matches `<remote>/main`. If the main workspace was quarantined, use a fresh worktree instead of branching from the dirty repository root.
+3. Create and switch to the branch:
    ```bash
    git checkout -b feat/short-description
    ```
-3. Stage and commit changes with a conventional commit message:
+4. Move only the intended scope into that branch/worktree. Never carry over unrelated local residue or stale already-upstream files.
+5. Stage and commit changes with a conventional commit message:
    ```bash
    git add .
    git commit -m "fix: short description of what was fixed"
@@ -150,36 +167,24 @@ When code changes (features or bug fixes) are complete:
    ```bash
    git push -u origin feat/short-description
    ```
-3. Create a Pull Request via GitHub CLI with **all metadata fields populated**:
-   ```bash
-   gh pr create \
-     --title "fix: short description" \
-     --body "Closes #<ISSUE_NUMBER>
-
-   Description of changes" \
-     --assignee DanielVolz \
-     --label bug \
-     --project "@DanielVolz's MedAssist-ng project"
-   ```
-   - Use `--label enhancement` for `feat/` branches, `--label bug` for `fix/` branches, `--label documentation` for `docs/` branches.
+3. Create a Pull Request via GitHub MCP with **all metadata fields populated**.
+    - Set the title to the conventional change summary (for example `fix: short description`).
+    - Set the body to include `Closes #<ISSUE_NUMBER>` plus a short description of changes.
+    - Set assignee to `DanielVolz`.
+    - Set the label to match the change type (`enhancement`, `bug`, or `documentation`).
+    - Link the PR to `@DanielVolz's MedAssist-ng project`.
    - Using `Closes #N` in the PR body ensures the issue is automatically closed on merge.
    - Always add an explicit issue comment with the PR link and short fix summary (do not rely on auto-close event only).
-   - The `--project` flag links the PR to the Project board.
 4. **Present the PR URL to the user and wait for confirmation.**
 
 ### Step 4: Wait for CI and Merge
 
-1. Monitor CI status:
-   ```bash
-   gh pr checks <PR_NUMBER> --watch
-   ```
+1. Monitor CI status via GitHub MCP until all required checks complete.
    Required checks: all repository-required checks must pass.
 2. If CI fails: analyze the failure, fix it, push again, and re-check.
-3. Once CI is green, **ask the user for merge confirmation**, then:
-   ```bash
-   gh pr merge <PR_NUMBER> --squash --delete-branch
-   ```
-4. Switch back to main and pull:
+3. Once CI is green, **ask the user for merge confirmation**, then merge the PR via GitHub MCP using squash merge and branch deletion.
+4. Re-sync the authoritative local `main` before using it again as a source of truth for any next PR or release step. Do not continue from a previously dirty workspace without another source-of-truth audit.
+5. Switch back to main and pull:
    ```bash
    git checkout main
    git pull origin main
@@ -247,6 +252,8 @@ The script performs these steps in order:
 5. Waits for CI checks (with retry logic — polls every 15s, waits up to 10 minutes)
 6. Merges the PR (squash + delete branch)
 7. Creates a signed tag `vX.Y.Z` and pushes it
+
+**Release precondition:** never start the release flow from a dirty or stale mixed workspace. If the repository root contains unrelated/stale diffs, first switch to a clean base that matches the authoritative remote main.
 
 **The script auto-detects the git remote** (`origin` or `github`) and uses it consistently.
 
@@ -392,10 +399,7 @@ Existing installations need to:
 
 ### Step 3: Publish
 
-Present the release notes to the user. They will copy them to the GitHub release page or ask you to publish via:
-```bash
-gh release create vX.Y.Z --title "vX.Y.Z" --notes "RELEASE_NOTES_HERE"
-```
+Present the release notes to the user. They will copy them to the GitHub release page or ask you to publish the release via GitHub MCP.
 
 ---
 
@@ -445,31 +449,15 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
 
 ### Workflow During PRs
 
-1. **Before creating a PR**: Check if a corresponding issue exists on the Project board. If not, create one:
-   ```bash
-   gh issue create --title "fix: description" --label bug
-   ```
+1. **Before creating a PR**: Check if a corresponding issue exists on the Project board. If not, create one via GitHub MCP with the appropriate label.
    Issues with `enhancement`, `bug`, or `triage` labels are **automatically added** to the board.
 
 2. **When creating a PR**: Always reference the issue with `Closes #N` in the PR body so the issue is automatically **closed** on merge. Note: this does NOT move the Project board status — that must be done manually (see step 3).
    Also add a direct issue comment with the PR link and a one-line summary for clear issue-thread traceability.
 
-3. **After merge — verify automation**: The `project-auto-done.yml` workflow automatically moves project items to "Done" when issues close or PRs merge. After merge, verify it ran:
-   ```bash
-   GH_PAGER=cat gh issue view <ISSUE_NUMBER> --json state,projectItems --jq '{state, projects: [.projectItems[] | {title: .title, status: .status.name}]}'
-   ```
+3. **After merge — verify automation**: The `project-auto-done.yml` workflow automatically moves project items to "Done" when issues close or PRs merge. After merge, verify issue/project status via GitHub MCP.
 
-   **Manual fallback** — if the workflow fails or the item wasn't moved, use GraphQL:
-   ```bash
-   GH_PAGER=cat gh api graphql -f query='mutation {
-     updateProjectV2ItemFieldValue(input: {
-       projectId: "PVT_kwHOADH82s4BO2OT"
-       itemId: "<ITEM_ID>"
-       fieldId: "PVTSSF_lAHOADH82s4BO2OTzg9bdkE"
-       value: { singleSelectOptionId: "ca45af98" }
-     }) { projectV2Item { id } }
-   }'
-   ```
+    **Manual fallback** — if the workflow fails or the item wasn't moved, use GitHub MCP GraphQL/project mutation support with the project/item/field IDs below.
 
    **Known Project field IDs (Status):**
    | Status | Option ID |

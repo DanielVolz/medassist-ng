@@ -63,6 +63,26 @@
 			"command": "cd frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npm run test:e2e -- --workers=1",
 			"isBackground": false,
 			"group": "test"
+		},
+		{
+			"label": "Targeted frontend vitest",
+			"type": "shell",
+			"command": "cd frontend && npm test -- --run src/test/context/AppContext.test.tsx src/test/utils/schedule.test.ts",
+			"isBackground": false,
+			"group": "test"
+		},
+		{
+			"label": "Focused frontend shared schedule test",
+			"type": "shell",
+			"command": "cd frontend && npm run test:run -- --maxWorkers=1 src/test/components/SharedSchedule.test.tsx",
+			"isBackground": false,
+			"group": "test"
+		},
+		{
+			"label": "PR3 targeted validation",
+			"type": "shell",
+			"command": "git --no-pager diff --check -- .github/agents/release-manager.agent.md .github/agents/testing-manager.agent.md .gitignore .vscode/tasks.json && node -e \"JSON.parse(require('fs').readFileSync('.vscode/tasks.json','utf8')); console.log('tasks.json valid')\"",
+			"isBackground": false
 		}
 	]
 }

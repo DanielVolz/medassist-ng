@@ -13,7 +13,12 @@ import {
 	tokenParamsSchema,
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
-import { parseIntakesJson, parseTakenByJson, personTakesMedication } from "../utils/scheduler-utils.js";
+import {
+	parseIntakesJson,
+	parseLocalDateTime,
+	parseTakenByJson,
+	personTakesMedication,
+} from "../utils/scheduler-utils.js";
 
 // =============================================================================
 // Validation Schemas
@@ -181,12 +186,37 @@ async function isDoseOutOfStock(options: {
 		return false;
 	}
 
+	const intakes = parseIntakesJson(
+		medication.intakesJson,
+		{ usageJson: medication.usageJson, everyJson: medication.everyJson, startJson: medication.startJson },
+		medication.intakeRemindersEnabled ?? false
+	);
+	const intake = intakes[parsedDose.intakeIndex];
+
+	const scheduledOccurrenceMs = intake
+		? (() => {
+				const doseDate = new Date(parsedDose.timestampMs);
+				const intakeStart = parseLocalDateTime(intake.start);
+				return new Date(
+					doseDate.getFullYear(),
+					doseDate.getMonth(),
+					doseDate.getDate(),
+					intakeStart.getHours(),
+					intakeStart.getMinutes(),
+					intakeStart.getSeconds(),
+					intakeStart.getMilliseconds()
+				).getTime();
+			})()
+		: parsedDose.timestampMs;
+
 	const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
+	const stockBeforeDoseMs = Math.max(0, scheduledOccurrenceMs - 1);
 	return (
 		computeMedicationCurrentStock({
 			medication,
 			doses,
 			stockCalculationMode: options.stockCalculationMode,
+			nowMs: stockBeforeDoseMs,
 		}) <= 0
 	);
 }

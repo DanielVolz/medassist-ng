@@ -259,6 +259,28 @@ describe("Dose Tracking API", () => {
 			expect(response.statusCode).toBe(409);
 			expect(response.json()).toEqual({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
 		});
+
+		it("allows taking a historical dose when stock existed at that occurrence", async () => {
+			await insertMedication({
+				id: 6,
+				userId,
+				packCount: 1,
+				looseTablets: 0,
+				start: "2025-01-01T08:00:00.000Z",
+			});
+			await insertUserSettings(userId, "automatic");
+
+			const historicalDoseId = "6-0-1736064000000";
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+				payload: { doseId: historicalDoseId },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+		});
 	});
 
 	describe("GET /doses/taken", () => {

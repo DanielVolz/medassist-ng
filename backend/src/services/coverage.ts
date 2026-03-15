@@ -149,9 +149,8 @@ export function buildSharedMedicationOverview(options: {
 	medications: MedicationRow[];
 	doses: DoseRow[];
 	thresholdDays: number;
-	showStockStatus?: boolean;
 }): SharedMedicationOverviewItem[] {
-	const { medications: medicationRows, doses, thresholdDays, showStockStatus = true } = options;
+	const { medications: medicationRows, doses, thresholdDays } = options;
 
 	const dosesByMedication = new Map<number, DoseRow[]>();
 	for (const dose of doses) {
@@ -189,12 +188,6 @@ export function buildSharedMedicationOverview(options: {
 		const depletionDate =
 			daysLeft === null ? null : toDateOnlyString(new Date(todayDate.getTime() + daysLeft * MS_PER_DAY));
 		const priority = computeOverviewPriority(currentStock, daysLeft, thresholdDays);
-		const visibleCurrentStock = showStockStatus ? currentStock : null;
-		const visibleCapacity = showStockStatus ? capacity : null;
-		const visibleDaysLeft = showStockStatus ? daysLeft : null;
-		const visibleDepletionDate = showStockStatus ? depletionDate : null;
-		const visiblePriority = showStockStatus ? priority : null;
-
 		return {
 			name: medication.name,
 			genericName: medication.genericName,
@@ -205,12 +198,12 @@ export function buildSharedMedicationOverview(options: {
 			pillsPerBlister: medication.pillsPerBlister,
 			totalPills: medication.totalPills,
 			looseTablets: medication.looseTablets,
-			currentStock: visibleCurrentStock,
-			capacity: visibleCapacity,
-			daysLeft: visibleDaysLeft,
+			currentStock,
+			capacity,
+			daysLeft,
 			nextIntakeDate: computeNextIntakeDate(intakes, todayDateOnly),
-			depletionDate: visibleDepletionDate,
-			priority: visiblePriority,
+			depletionDate,
+			priority,
 			expiryDate: toNullableDate(medication.expiryDate),
 			medicationStartDate: toNullableDate(medication.medicationStartDate),
 			prescriptionEnabled: medication.prescriptionEnabled ?? false,

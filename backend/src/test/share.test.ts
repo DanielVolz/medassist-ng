@@ -142,14 +142,6 @@ async function registerShareRoutes(ctx: TestContext) {
 
 		const lowStockDays = settingsResult.rows.length > 0 ? (settingsResult.rows[0].low_stock_days as number) : 30;
 
-		// Get shareStockStatus setting
-		const shareStockResult = await client.execute({
-			sql: `SELECT share_stock_status FROM user_settings WHERE user_id = ?`,
-			args: [share.user_id],
-		});
-		const shareStockStatus =
-			shareStockResult.rows.length > 0 ? Boolean(shareStockResult.rows[0].share_stock_status ?? 1) : true;
-
 		return {
 			takenBy: share.taken_by,
 			sharedBy: share.owner_username,
@@ -158,7 +150,6 @@ async function registerShareRoutes(ctx: TestContext) {
 			stockThresholds: {
 				lowStockDays,
 			},
-			shareStockStatus,
 		};
 	});
 
@@ -431,41 +422,6 @@ describe("Share Link API", () => {
 			expect(med.blisters).toHaveLength(1);
 			expect(med.blisters[0].usage).toBe(1);
 			expect(med.blisters[0].every).toBe(1);
-
-			// shareStockStatus should default to true
-			expect(data.shareStockStatus).toBe(true);
-		});
-
-		it("should respect shareStockStatus setting when disabled", async () => {
-			// Create medication
-			await createTestMedication(ctx.client, {
-				userId,
-				name: "TestMed",
-				takenBy: ["Daniel"],
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-			});
-
-			// Set shareStockStatus to false
-			await setUserSettings(ctx.client, { userId, shareStockStatus: false });
-
-			// Create share token
-			const token = await createTestShareToken(ctx.client, {
-				userId,
-				takenBy: "Daniel",
-				scheduleDays: 30,
-			});
-
-			const response = await ctx.app.inject({
-				method: "GET",
-				url: `/share/${token}`,
-			});
-
-			expect(response.statusCode).toBe(200);
-			expect(response.json().shareStockStatus).toBe(false);
 		});
 
 		it("should return 404 for invalid token", async () => {

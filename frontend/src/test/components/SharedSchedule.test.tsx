@@ -18,7 +18,6 @@ function createSharedData() {
 		sharedBy: "Owner",
 		takenBy: "Max",
 		scheduleDays: 30,
-		shareStockStatus: true,
 		medications: [],
 	};
 }
@@ -64,7 +63,6 @@ function createSharedDataWithTodayDose() {
 		takenBy: "Max",
 		scheduleDays: 30,
 		automaticDoseId: `1-0-${dateOnlyMs}`,
-		shareStockStatus: true,
 		medications: [
 			{
 				id: 1,

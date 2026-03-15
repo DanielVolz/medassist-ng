@@ -224,7 +224,6 @@ describe("Settings and API key security contracts", () => {
 				maxNaggingReminders: 5,
 				language: "en",
 				stockCalculationMode: "automatic",
-				shareStockStatus: true,
 				upcomingTodayOnly: false,
 				shareScheduleTodayOnly: false,
 				swapDashboardMainSections: false,

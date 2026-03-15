@@ -587,7 +587,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.expiredAt).toBeTypeOf("string");
 		});
 
-		it("should hide stock fields in overview when share_stock_status is disabled", async () => {
+		it("should always show stock fields in overview regardless of share_stock_status setting", async () => {
 			await createMedication(testClient, userId, "Ibuprofen", ["Daniel"]);
 			const token = "0123456789abcdef";
 			await createShareToken(testClient, userId, "Daniel", token);
@@ -604,11 +604,8 @@ describe("E2E Tests with Real Routes", () => {
 
 			expect(response.statusCode).toBe(200);
 			const [medication] = response.json().medications;
-			expect(medication.currentStock).toBeNull();
-			expect(medication.capacity).toBeNull();
-			expect(medication.daysLeft).toBeNull();
-			expect(medication.depletionDate).toBeNull();
-			expect(medication.priority).toBeNull();
+			expect(medication.currentStock).toBeTypeOf("number");
+			expect(medication.capacity).toBeTypeOf("number");
 		});
 	});
 
@@ -2469,7 +2466,6 @@ describe("E2E Tests with Real Routes", () => {
 					maxNaggingReminders: 5,
 					language: "en",
 					stockCalculationMode: "automatic",
-					shareStockStatus: true,
 					upcomingTodayOnly: false,
 					shareScheduleTodayOnly: false,
 					swapDashboardMainSections: false,
@@ -2513,7 +2509,6 @@ describe("E2E Tests with Real Routes", () => {
 					maxNaggingReminders: 5,
 					language: "en",
 					stockCalculationMode: "automatic",
-					shareStockStatus: true,
 					upcomingTodayOnly: false,
 					shareScheduleTodayOnly: false,
 					swapDashboardMainSections: false,

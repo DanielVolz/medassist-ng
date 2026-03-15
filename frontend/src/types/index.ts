@@ -253,7 +253,6 @@ export type SharedScheduleData = {
 		expiryWarningDays?: number;
 	};
 	stockCalculationMode?: "automatic" | "manual";
-	shareStockStatus?: boolean;
 	shareMedicationOverview?: boolean;
 	medicationOverview?: SharedMedicationOverviewItem[] | null;
 	upcomingTodayOnly?: boolean;

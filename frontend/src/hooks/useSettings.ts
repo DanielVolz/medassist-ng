@@ -46,7 +46,6 @@ export interface Settings {
 	shoutrrrIntakeReminders: boolean;
 	shoutrrrPrescriptionReminders: boolean;
 	stockCalculationMode: "automatic" | "manual";
-	shareStockStatus: boolean;
 	shareMedicationOverview: boolean;
 	upcomingTodayOnly: boolean;
 	shareScheduleTodayOnly: boolean;
@@ -98,7 +97,6 @@ const defaultSettings: Settings = {
 	shoutrrrIntakeReminders: true,
 	shoutrrrPrescriptionReminders: true,
 	stockCalculationMode: "automatic",
-	shareStockStatus: true,
 	shareMedicationOverview: false,
 	upcomingTodayOnly: false,
 	shareScheduleTodayOnly: false,
@@ -258,7 +256,6 @@ export function useSettings(): UseSettingsReturn {
 				shoutrrrIntakeReminders: settingsToSave.shoutrrrIntakeReminders,
 				shoutrrrPrescriptionReminders: settingsToSave.shoutrrrPrescriptionReminders,
 				stockCalculationMode: settingsToSave.stockCalculationMode,
-				shareStockStatus: settingsToSave.shareStockStatus,
 				shareMedicationOverview: settingsToSave.shareMedicationOverview,
 				upcomingTodayOnly: settingsToSave.upcomingTodayOnly,
 				shareScheduleTodayOnly: settingsToSave.shareScheduleTodayOnly,

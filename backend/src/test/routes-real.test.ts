@@ -140,7 +140,6 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(response.statusCode).toBe(200);
 		const body = response.json();
 		expect(body.language).toBe("en");
-		expect(body.shareStockStatus).toBe(true);
 		expect(body.upcomingTodayOnly).toBe(false);
 		expect(body.shareScheduleTodayOnly).toBe(false);
 	});
@@ -177,7 +176,6 @@ describe("Real route coverage: settings/export/report", () => {
 				maxNaggingReminders: 4,
 				language: "en",
 				stockCalculationMode: "manual",
-				shareStockStatus: true,
 				upcomingTodayOnly: true,
 				shareScheduleTodayOnly: true,
 				swapDashboardMainSections: true,
@@ -238,7 +236,6 @@ describe("Real route coverage: settings/export/report", () => {
 				maxNaggingReminders: 5,
 				language: "en",
 				stockCalculationMode: "automatic",
-				shareStockStatus: true,
 				upcomingTodayOnly: false,
 				shareScheduleTodayOnly: false,
 				swapDashboardMainSections: false,
@@ -453,7 +450,6 @@ describe("Real route coverage: settings/export/report", () => {
 				emailPrescriptionReminders: true,
 				shoutrrrPrescriptionReminders: true,
 				stockCalculationMode: "automatic",
-				shareStockStatus: true,
 			})
 		);
 	});
@@ -509,7 +505,6 @@ describe("Real route coverage: settings/export/report", () => {
 				reminderRepeatIntervalMinutes: 30,
 				maxNaggingReminders: 5,
 				stockCalculationMode: "manual",
-				shareStockStatus: true,
 				upcomingTodayOnly: false,
 				shareScheduleTodayOnly: false,
 				swapDashboardMainSections: false,
@@ -556,7 +551,6 @@ describe("Real route coverage: settings/export/report", () => {
 					emailPrescriptionReminders: true,
 					shoutrrrPrescriptionReminders: true,
 					stockCalculationMode: "automatic",
-					shareStockStatus: true,
 				}),
 			])
 		);

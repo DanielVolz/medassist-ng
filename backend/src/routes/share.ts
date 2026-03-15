@@ -62,7 +62,6 @@ const shareReadResponseSchema = {
 		},
 		stockThresholds: { type: "object", additionalProperties: { type: "number" } },
 		stockCalculationMode: { type: "string", enum: ["automatic", "manual"] },
-		shareStockStatus: { type: "boolean" },
 		upcomingTodayOnly: { type: "boolean" },
 		shareScheduleTodayOnly: { type: "boolean" },
 	},
@@ -251,7 +250,6 @@ export async function shareRoutes(app: FastifyInstance) {
 						medications: meds,
 						doses: await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId)),
 						thresholdDays: settings?.lowStockDays ?? 30,
-						showStockStatus: settings?.shareStockStatus ?? true,
 					})
 				: null;
 
@@ -270,7 +268,6 @@ export async function shareRoutes(app: FastifyInstance) {
 					expiryWarningDays: settings?.expiryWarningDays ?? 90,
 				},
 				stockCalculationMode: (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic",
-				shareStockStatus: settings?.shareStockStatus ?? true,
 				upcomingTodayOnly: settings?.upcomingTodayOnly ?? false,
 				shareScheduleTodayOnly: settings?.shareScheduleTodayOnly ?? false,
 			};
@@ -344,7 +341,6 @@ export async function shareRoutes(app: FastifyInstance) {
 				medications: meds,
 				doses,
 				thresholdDays: settings?.lowStockDays ?? 30,
-				showStockStatus: settings?.shareStockStatus ?? true,
 			});
 
 			return {

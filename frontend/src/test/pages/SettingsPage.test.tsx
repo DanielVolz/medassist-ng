@@ -43,7 +43,6 @@ const createMockContext = (overrides = {}) => ({
 		maxNaggingReminders: 5,
 		language: "en",
 		stockCalculationMode: "automatic",
-		shareStockStatus: true,
 		smtpHost: "",
 		smtpPort: 587,
 		smtpUser: "",

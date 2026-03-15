@@ -22,7 +22,6 @@ function createSharedData(overrides: Record<string, unknown> = {}) {
 		sharedBy: "Owner",
 		takenBy: "Max",
 		scheduleDays: 30,
-		shareStockStatus: true,
 		upcomingTodayOnly: false,
 		shareScheduleTodayOnly: true,
 		stockCalculationMode: "automatic",

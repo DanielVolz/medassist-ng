@@ -247,7 +247,7 @@ export async function authRoutes(app: FastifyInstance) {
 				})
 				.returning();
 
-			app.log.info(`User registered: ${username}`);
+			app.log.info(`[Auth] Account registered: username=${newUser.username}, userId=${newUser.id}`);
 
 			return reply.status(201).send({
 				ok: true,
@@ -376,7 +376,7 @@ export async function authRoutes(app: FastifyInstance) {
 				{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
 			);
 
-			app.log.info(`User logged in: ${username} (rememberMe: ${rememberMe})`);
+			app.log.info(`[Auth] Login succeeded: username=${user.username}, userId=${user.id}, rememberMe=${rememberMe}`);
 
 			// Cookie options: with maxAge for "remember me", without for session cookie
 			const accessCookieOptions = rememberMe
@@ -807,7 +807,7 @@ export async function authRoutes(app: FastifyInstance) {
 			// Delete user - cascade delete handles all related data
 			await db.delete(users).where(eq(users.id, authUser.id));
 
-			app.log.info(`User deleted account: ${authUser.username} (ID: ${authUser.id})`);
+			app.log.info(`[Auth] Account deleted: username=${authUser.username}, userId=${authUser.id}`);
 
 			// Clear auth cookies
 			return reply

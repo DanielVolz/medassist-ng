@@ -314,7 +314,7 @@
       "prescriptionReminders": "Prescription Reminders",
       "enableHint": "Enable at least one channel below to receive notifications.",
       "skipTakenDoses": "Skip reminders for taken doses",
-      "skipTakenDosesTooltip": "Don't send intake reminders for doses that have already been marked as taken today",
+      "skipTakenDosesTooltip": "Don't send intake reminders for doses that have already been marked as taken today. If this option and automatic intake are both enabled, no intake reminders will be sent.",
       "repeatReminders": "Repeat reminders for missed doses",
       "repeatRemindersTooltip": "Automatically send repeated reminders for doses that haven't been marked as taken",
       "reminderInterval": "Reminder interval (minutes)",

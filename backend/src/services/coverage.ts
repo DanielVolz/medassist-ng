@@ -20,6 +20,8 @@ export type SharedMedicationOverviewItem = {
 	imageUrl: string | null;
 	packageType: string;
 	packCount: number;
+	packageAmountValue: number | null;
+	packageAmountUnit: "ml" | "g" | null;
 	blistersPerPack: number;
 	pillsPerBlister: number;
 	totalPills: number | null;
@@ -194,6 +196,11 @@ export function buildSharedMedicationOverview(options: {
 			imageUrl: medication.imageUrl,
 			packageType: medication.packageType,
 			packCount: medication.packCount,
+			packageAmountValue: medication.packageAmountValue,
+			packageAmountUnit:
+				medication.packageAmountUnit === "g" || medication.packageAmountUnit === "ml"
+					? medication.packageAmountUnit
+					: null,
 			blistersPerPack: medication.blistersPerPack,
 			pillsPerBlister: medication.pillsPerBlister,
 			totalPills: medication.totalPills,

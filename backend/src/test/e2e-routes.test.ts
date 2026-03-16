@@ -539,6 +539,14 @@ describe("E2E Tests with Real Routes", () => {
 
 		it("should return shared medication overview for a valid token", async () => {
 			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			await testClient.execute({
+				sql: `INSERT INTO medications (
+					user_id, name, taken_by_json, package_type, pack_count, blisters_per_pack, pills_per_blister,
+					package_amount_value, package_amount_unit, total_pills, loose_tablets, medication_form,
+					usage_json, every_json, start_json
+				) VALUES (?, ?, ?, 'tube', 2, 1, 1, 40, 'g', 80, 80, 'topical', '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]')`,
+				args: [userId, "Hydrogel", JSON.stringify(["Daniel"])],
+			});
 			const token = "abcdef0123456789";
 			await createShareToken(testClient, userId, "Daniel", token);
 
@@ -554,9 +562,17 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.takenBy).toBe("Daniel");
 			expect(data.sharedBy).toBe("__anonymous__");
 			expect(Array.isArray(data.medications)).toBe(true);
-			expect(data.medications).toHaveLength(1);
+			expect(data.medications).toHaveLength(2);
 			expect(data.medications[0].name).toBe("Aspirin");
 			expect(data.medications[0].currentStock).toBeTypeOf("number");
+			const hydrogel = data.medications.find((med: { name: string }) => med.name === "Hydrogel");
+			expect(hydrogel).toMatchObject({
+				packageType: "tube",
+				packCount: 2,
+				packageAmountValue: 40,
+				packageAmountUnit: "g",
+				totalPills: 80,
+			});
 		});
 
 		it("should return 404 for unknown overview token", async () => {

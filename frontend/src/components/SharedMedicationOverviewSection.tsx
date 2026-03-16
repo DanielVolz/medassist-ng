@@ -1,18 +1,50 @@
 import { useTranslation } from "react-i18next";
-import type { SharedMedicationOverviewItem } from "../types";
+import {
+	getPackageSize,
+	isLiquidContainerPackageType,
+	isTubePackageType,
+	type SharedMedicationOverviewItem,
+} from "../types";
 import { formatDate } from "../utils/formatters";
 import { MedicationAvatar } from "./MedicationAvatar";
 
-function formatPackageInfo(medication: SharedMedicationOverviewItem): string {
+function formatPackageAmountUnit(medication: SharedMedicationOverviewItem, t: (key: string) => string): string | null {
+	if (isTubePackageType(medication.packageType)) {
+		return t("form.packageAmountUnitG");
+	}
+
+	if (isLiquidContainerPackageType(medication.packageType)) {
+		return t("form.packageAmountUnitMl");
+	}
+
+	if (medication.packageAmountUnit === "g") {
+		return t("form.packageAmountUnitG");
+	}
+
+	if (medication.packageAmountUnit === "ml") {
+		return t("form.packageAmountUnitMl");
+	}
+
+	return null;
+}
+
+function formatPackageInfo(medication: SharedMedicationOverviewItem, t: (key: string) => string): string {
 	if (medication.packageType === "blister") {
 		return `${medication.packCount} x ${medication.blistersPerPack} x ${medication.pillsPerBlister}`;
 	}
 
-	if (medication.totalPills !== null) {
-		return `${medication.packCount} x ${medication.totalPills}`;
+	const unitLabel = formatPackageAmountUnit(medication, t);
+	if (unitLabel && medication.packageAmountValue && medication.packageAmountValue > 0) {
+		const sizeLabel = `${medication.packageAmountValue} ${unitLabel}`;
+		return medication.packCount > 1 ? `${medication.packCount} x ${sizeLabel}` : sizeLabel;
 	}
 
-	return `${medication.packCount}`;
+	const packageSize = getPackageSize(medication);
+	if (packageSize > 0) {
+		return medication.packCount > 1 ? `${medication.packCount} x ${packageSize}` : `${packageSize}`;
+	}
+
+	return `${Math.max(medication.packCount, 1)}`;
 }
 
 function getOverviewStatus(
@@ -105,7 +137,7 @@ export function SharedMedicationOverviewSection({
 													</div>
 												</div>
 											</td>
-											<td>{formatPackageInfo(medication)}</td>
+											<td>{formatPackageInfo(medication, t)}</td>
 											<td>
 												<span className="shared-overview-stock-value">
 													{medication.currentStock === null || medication.capacity === null
@@ -158,7 +190,7 @@ export function SharedMedicationOverviewSection({
 									</div>
 									<div className="shared-overview-card-grid">
 										<span>{t("sharedOverview.columns.package")}</span>
-										<strong>{formatPackageInfo(medication)}</strong>
+										<strong>{formatPackageInfo(medication, t)}</strong>
 										<span>{t("sharedOverview.columns.stock")}</span>
 										<strong>
 											<span className="shared-overview-stock-value">

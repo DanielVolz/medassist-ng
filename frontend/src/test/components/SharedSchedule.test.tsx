@@ -53,10 +53,15 @@ function createSharedDataWithEmbeddedOverview() {
 	};
 }
 
-function createSharedDataWithTodayDose() {
-	const now = new Date();
-	now.setHours(10, 0, 0, 0);
-	const dateOnlyMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+function createSharedDataWithTodayDose(referenceNow: Date) {
+	const currentDay = new Date(referenceNow);
+	currentDay.setHours(12, 0, 0, 0);
+	const scheduledAt = new Date(currentDay);
+	scheduledAt.setHours(9, 0, 0, 0);
+	const dateOnlyMs = new Date(scheduledAt.getFullYear(), scheduledAt.getMonth(), scheduledAt.getDate()).getTime();
+	const start = `${scheduledAt.getFullYear()}-${String(scheduledAt.getMonth() + 1).padStart(2, "0")}-${String(
+		scheduledAt.getDate()
+	).padStart(2, "0")}T${String(scheduledAt.getHours()).padStart(2, "0")}:${String(scheduledAt.getMinutes()).padStart(2, "0")}:00`;
 
 	return {
 		sharedBy: "Owner",
@@ -79,8 +84,8 @@ function createSharedDataWithTodayDose() {
 				expiryDate: null,
 				notes: null,
 				intakeRemindersEnabled: false,
-				blisters: [{ usage: 1, every: 1, start: now.toISOString() }],
-				intakes: [{ usage: 1, every: 1, start: now.toISOString(), takenBy: null, intakeRemindersEnabled: false }],
+				blisters: [{ usage: 1, every: 1, start }],
+				intakes: [{ usage: 1, every: 1, start, takenBy: null, intakeRemindersEnabled: false }],
 				updatedAt: null,
 				dismissedUntil: null,
 				lastStockCorrectionAt: null,
@@ -185,7 +190,10 @@ describe("SharedSchedule", () => {
 	});
 
 	it("shows the robot marker for automatically taken shared doses", async () => {
-		const sharedData = createSharedDataWithTodayDose();
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
 
 		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
 			if (url === "/api/share/token-123/doses" && (!init || !init.method || init.method === "GET")) {

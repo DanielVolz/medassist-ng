@@ -15,9 +15,10 @@ import {
 	getMedTotal,
 	isLiquidContainerPackageType,
 	isTubePackageType,
+	type StockThresholds,
 } from "../types";
 import { getSystemLocale } from "../utils/formatters";
-import { isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
+import { getStockStatus, isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
 import { loadCollapsedDaysFromStorage } from "../utils/storage";
 import { MedicationAvatar } from "./MedicationAvatar";
 import { SharedMedicationOverviewSection } from "./SharedMedicationOverviewSection";
@@ -401,8 +402,7 @@ export function SharedSchedule() {
 		fetchData();
 	}, [token, t]);
 
-	// Build schedule from medications - matches buildSchedulePreview logic exactly
-	const schedule = useMemo(() => {
+	function buildGroupedSchedule() {
 		if (!data) return [];
 
 		// Use same logic as buildSchedulePreview in main app
@@ -514,6 +514,11 @@ export function SharedSchedule() {
 			isPast: d.isPast,
 			meds: Array.from(d.meds.values()),
 		}));
+	}
+
+	// Visible schedule respects share-person filtering.
+	const schedule = useMemo(() => {
+		return buildGroupedSchedule();
 	}, [data, i18n.language]);
 
 	// Split into past, today, and future - matches main app logic
@@ -676,26 +681,42 @@ export function SharedSchedule() {
 		return coverage;
 	}, [data, takenDoses]);
 
-	const outOfStockMedicationIds = useMemo(
-		() =>
-			new Set(
-				(data?.medications ?? [])
-					.filter((med) => (coverageByMed[getMedDisplayName(med)]?.medsLeft ?? 1) <= 0)
-					.map((med) => med.id)
-			),
-		[data, coverageByMed]
-	);
+	const sharedStockThresholds = useMemo<StockThresholds | null>(() => {
+		if (!data?.stockThresholds) return null;
+		return {
+			lowStockDays: data.stockThresholds.lowStockDays,
+			normalStockDays: data.stockThresholds.normalStockDays ?? data.stockThresholds.lowStockDays,
+			highStockDays:
+				data.stockThresholds.highStockDays ??
+				Math.max(
+					(data.stockThresholds.normalStockDays ?? data.stockThresholds.lowStockDays) + 1,
+					data.stockThresholds.lowStockDays + 1
+				),
+			criticalStockDays:
+				data.stockThresholds.reminderDaysBefore ?? Math.max(1, Math.ceil(data.stockThresholds.lowStockDays / 2)),
+			expiryWarningDays: data.stockThresholds.expiryWarningDays ?? 30,
+		};
+	}, [data?.stockThresholds]);
 
-	const isDoseTakenForDisplay = useCallback(
-		(doseId: string) => {
-			const medId = Number.parseInt(doseId.split("-")[0] ?? "", 10);
-			if (!Number.isNaN(medId) && outOfStockMedicationIds.has(medId)) {
-				return false;
+	const medicationOverviewByName = useMemo(() => {
+		const overview = new Map<string, NonNullable<SharedScheduleData["medicationOverview"]>[number]>();
+		for (const item of data?.medicationOverview ?? []) {
+			overview.set(item.name, item);
+		}
+		return overview;
+	}, [data?.medicationOverview]);
+
+	const emptyByOverviewName = useMemo(() => {
+		const emptyNames = new Set<string>();
+		for (const item of data?.medicationOverview ?? []) {
+			if ((item.currentStock ?? 0) <= 0) {
+				emptyNames.add(item.name);
 			}
-			return takenDoses.has(doseId);
-		},
-		[outOfStockMedicationIds, takenDoses]
-	);
+		}
+		return emptyNames;
+	}, [data?.medicationOverview]);
+
+	const isDoseTakenForDisplay = useCallback((doseId: string) => takenDoses.has(doseId), [takenDoses]);
 
 	const showMedicationOverview = data?.shareMedicationOverview === true && data?.medicationOverview !== null;
 	const showOnlyToday = data?.shareScheduleTodayOnly === true;
@@ -942,10 +963,35 @@ export function SharedSchedule() {
 													day.meds.map((item) => {
 														const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 														const medCoverage = coverageByMed[item.medName];
-														const isEmpty = medCoverage ? medCoverage.medsLeft <= 0 : false;
+														const isEmpty =
+															emptyByOverviewName.has(item.medName) ||
+															(medCoverage ? medCoverage.medsLeft <= 0 : false);
+														const medOverview = medicationOverviewByName.get(item.medName);
+														let stockStatus = null;
+														if (!isEmpty && sharedStockThresholds) {
+															if (medOverview && medOverview.currentStock !== null) {
+																stockStatus = getStockStatus(
+																	medOverview.daysLeft,
+																	medOverview.currentStock,
+																	sharedStockThresholds,
+																	med?.packageType
+																);
+															} else if (medCoverage) {
+																stockStatus = getStockStatus(
+																	medCoverage.daysLeft,
+																	medCoverage.medsLeft,
+																	sharedStockThresholds,
+																	med?.packageType
+																);
+															}
+														}
+														const isLowStock = stockStatus?.className === "warning";
+														const rowClasses = ["time-row"];
+														if (isEmpty) rowClasses.push("med-empty");
+														else if (isLowStock) rowClasses.push("med-low");
 
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -972,6 +1018,7 @@ export function SharedSchedule() {
 																		<span className="tag subtle">
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
 																		</span>
+																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
 																	</div>
 																</div>
 																<div className="doses-col">
@@ -979,8 +1026,12 @@ export function SharedSchedule() {
 																		const isTaken = isDoseTakenForDisplay(dose.id);
 																		const isAutomaticallyTaken =
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
+																		const doseClasses = ["dose-item", "past"];
+																		if (isTaken) doseClasses.push("all-taken");
+																		if (isEmpty) doseClasses.push("med-empty");
+																		else if (isLowStock) doseClasses.push("med-low");
 																		return (
-																			<div key={dose.id} className={`dose-item past ${isTaken ? "all-taken" : ""}`}>
+																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
 																				<span className="dose-usage">
 																					<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>
@@ -1128,9 +1179,34 @@ export function SharedSchedule() {
 													day.meds.map((item) => {
 														const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 														const medCoverage = coverageByMed[item.medName];
-														const isEmpty = medCoverage ? medCoverage.medsLeft <= 0 : false;
+														const isEmpty =
+															emptyByOverviewName.has(item.medName) ||
+															(medCoverage ? medCoverage.medsLeft <= 0 : false);
+														const medOverview = medicationOverviewByName.get(item.medName);
+														let stockStatus = null;
+														if (!isEmpty && sharedStockThresholds) {
+															if (medOverview && medOverview.currentStock !== null) {
+																stockStatus = getStockStatus(
+																	medOverview.daysLeft,
+																	medOverview.currentStock,
+																	sharedStockThresholds,
+																	med?.packageType
+																);
+															} else if (medCoverage) {
+																stockStatus = getStockStatus(
+																	medCoverage.daysLeft,
+																	medCoverage.medsLeft,
+																	sharedStockThresholds,
+																	med?.packageType
+																);
+															}
+														}
+														const isLowStock = stockStatus?.className === "warning";
+														const rowClasses = ["time-row"];
+														if (isEmpty) rowClasses.push("med-empty");
+														else if (isLowStock) rowClasses.push("med-low");
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1157,6 +1233,7 @@ export function SharedSchedule() {
 																		<span className="tag subtle">
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
 																		</span>
+																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
 																	</div>
 																</div>
 																<div className="doses-col">
@@ -1165,11 +1242,13 @@ export function SharedSchedule() {
 																		const isAutomaticallyTaken =
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
 																		const isOverdue = dose.when < Date.now() && !isTaken;
+																		const doseClasses = ["dose-item"];
+																		if (isOverdue) doseClasses.push("overdue");
+																		if (isTaken) doseClasses.push("all-taken");
+																		if (isEmpty) doseClasses.push("med-empty");
+																		else if (isLowStock) doseClasses.push("med-low");
 																		return (
-																			<div
-																				key={dose.id}
-																				className={`dose-item ${isOverdue ? "overdue" : ""} ${isTaken ? "all-taken" : ""}`}
-																			>
+																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
 																				<span className="dose-usage">
 																					<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>
@@ -1302,9 +1381,34 @@ export function SharedSchedule() {
 													day.meds.map((item) => {
 														const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 														const medCoverage = coverageByMed[item.medName];
-														const isEmpty = medCoverage ? medCoverage.medsLeft <= 0 : false;
+														const isEmpty =
+															emptyByOverviewName.has(item.medName) ||
+															(medCoverage ? medCoverage.medsLeft <= 0 : false);
+														const medOverview = medicationOverviewByName.get(item.medName);
+														let stockStatus = null;
+														if (!isEmpty && sharedStockThresholds) {
+															if (medOverview && medOverview.currentStock !== null) {
+																stockStatus = getStockStatus(
+																	medOverview.daysLeft,
+																	medOverview.currentStock,
+																	sharedStockThresholds,
+																	med?.packageType
+																);
+															} else if (medCoverage) {
+																stockStatus = getStockStatus(
+																	medCoverage.daysLeft,
+																	medCoverage.medsLeft,
+																	sharedStockThresholds,
+																	med?.packageType
+																);
+															}
+														}
+														const isLowStock = stockStatus?.className === "warning";
+														const rowClasses = ["time-row"];
+														if (isEmpty) rowClasses.push("med-empty");
+														else if (isLowStock) rowClasses.push("med-low");
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1331,6 +1435,7 @@ export function SharedSchedule() {
 																		<span className="tag subtle">
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
 																		</span>
+																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
 																	</div>
 																</div>
 																<div className="doses-col">
@@ -1338,8 +1443,12 @@ export function SharedSchedule() {
 																		const isTaken = isDoseTakenForDisplay(dose.id);
 																		const isAutomaticallyTaken =
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
+																		const doseClasses = ["dose-item", "future"];
+																		if (isTaken) doseClasses.push("all-taken");
+																		if (isEmpty) doseClasses.push("med-empty");
+																		else if (isLowStock) doseClasses.push("med-low");
 																		return (
-																			<div key={dose.id} className={`dose-item future ${isTaken ? "all-taken" : ""}`}>
+																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
 																				<span className="dose-usage">
 																					<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>

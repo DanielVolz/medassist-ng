@@ -238,7 +238,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 
 				// Set cookies (use app's centralized cookie options)
 				request.log.debug(
-					`[OIDC] Setting cookies for user ${user.username}, NODE_ENV=${env.NODE_ENV}, secure=${app.config.cookieOptions.secure}`
+					`[OIDC] Setting auth cookies for username=${user.username}, userId=${user.id}, NODE_ENV=${env.NODE_ENV}, secure=${app.config.cookieOptions.secure}`
 				);
 				setAuthCookies(app, reply, accessToken, refreshToken);
 

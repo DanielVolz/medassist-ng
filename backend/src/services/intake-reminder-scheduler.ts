@@ -91,19 +91,25 @@ function buildDoseIdForIntake(intake: UpcomingIntake & { medicationId: number; b
 	return `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}`;
 }
 
-async function resolveSchedulerUserDisplayName(userId: number): Promise<string> {
-	const [userRow] = await db.select({ username: users.username }).from(users).where(eq(users.id, userId)).limit(1);
-	return userRow?.username?.trim() || `unknown-user-${userId}`;
+async function getUsernameForLog(userId: number): Promise<string> {
+	const user = await db.select({ username: users.username }).from(users).where(eq(users.id, userId));
+	const username = user[0]?.username?.trim();
+	return username && username.length > 0 ? username : `unknown-user-${userId}`;
 }
 
-function formatIntakeDescriptor(
-	definitionIndex: number,
-	medicationName: string,
-	medicationId: number,
-	intake: { every: number; usage: number; start: string; intakeRemindersEnabled: boolean; takenBy: string | null }
-): string {
-	const takenByPart = intake.takenBy ? `, takenBy=${intake.takenBy}` : "";
-	return `Intake #${definitionIndex + 1} (index=${definitionIndex}, medication=${medicationName}, medicationId=${medicationId}, start=${intake.start}, every=${intake.every}d, usage=${intake.usage}, reminderEnabled=${intake.intakeRemindersEnabled}${takenByPart})`;
+function formatIntakeLog(intake: {
+	medName: string;
+	medicationId: number;
+	blisterIndex: number;
+	intakeTime: Date;
+	intakeTimeStr: string;
+	usage: number;
+	doseUnit?: string;
+	takenBy?: string | null;
+}): string {
+	const takenBy = intake.takenBy ? intake.takenBy : "none";
+	const doseUnit = intake.doseUnit ?? "mg";
+	return `${intake.medName} (medId=${intake.medicationId}, intakeIndex=${intake.blisterIndex}, time=${intake.intakeTime.toISOString()}, localTime=${intake.intakeTimeStr}, usage=${intake.usage} ${doseUnit}, takenBy=${takenBy})`;
 }
 
 async function autoMarkDueIntakesAsTaken(
@@ -114,6 +120,9 @@ async function autoMarkDueIntakesAsTaken(
 	logger: ServiceLogger
 ): Promise<number> {
 	if (settings.stockCalculationMode !== "automatic") {
+		logger.debug(
+			`[IntakeReminder] Auto-mark disabled for userId=${settings.userId} because stockCalculationMode=${settings.stockCalculationMode}`
+		);
 		return 0;
 	}
 
@@ -214,6 +223,19 @@ async function autoMarkDueIntakesAsTaken(
 				dismissed: false,
 			});
 
+			logger.info(
+				`[IntakeReminder] Auto-marked intake for userId=${settings.userId}: ${formatIntakeLog({
+					medName: intake.medName,
+					medicationId: intake.medicationId,
+					blisterIndex: intake.blisterIndex,
+					intakeTime: intake.intakeTime,
+					intakeTimeStr: intake.intakeTimeStr,
+					usage: intake.usage,
+					doseUnit: intake.doseUnit,
+					takenBy: intake.takenBy,
+				})}`
+			);
+
 			existingDoseIds.add(doseId);
 			trackedDoses.push({
 				id: 0,
@@ -229,8 +251,10 @@ async function autoMarkDueIntakesAsTaken(
 		}
 	}
 
-	if (inserted > 0) {
-		logger.info(`[IntakeReminder] Auto-marked ${inserted} due intake dose(s) as taken`);
+	if (inserted === 0) {
+		logger.debug(`[IntakeReminder] Auto-mark completed for userId=${settings.userId}: no due intakes`);
+	} else {
+		logger.info(`[IntakeReminder] Auto-mark completed for userId=${settings.userId}: inserted=${inserted}`);
 	}
 
 	return inserted;
@@ -417,55 +441,70 @@ async function checkAndSendIntakeReminders(logger: ServiceLogger): Promise<void>
 
 	// Get all user settings to iterate over each user
 	const allUserSettings = await getAllUserSettings();
+	logger.debug(`[IntakeReminder] Scheduler cycle loaded user settings count=${allUserSettings.length}`);
 
 	if (allUserSettings.length === 0) {
 		logger.debug(`[IntakeReminder] No users with settings found`);
 		return; // No users with settings
 	}
 
-	logger.debug(`[IntakeReminder] Evaluating ${allUserSettings.length} intake profile(s) for auto-marking`);
-
 	for (const userSettings of allUserSettings) {
 		await checkAndSendIntakeRemindersForUser(userSettings, logger);
 	}
+
+	logger.debug(`[IntakeReminder] Scheduler cycle finished`);
 }
 
 export async function checkAndSendIntakeRemindersForUser(
 	settings: UserSettings & { userId: number },
 	logger: ServiceLogger
 ): Promise<void> {
+	const username = await getUsernameForLog(settings.userId);
+	logger.info(
+		`[IntakeReminder] Evaluating intake reminders for user=${username} (userId=${settings.userId}, emailEnabled=${settings.emailEnabled}, pushEnabled=${settings.shoutrrrEnabled}, skipTaken=${settings.skipRemindersForTakenDoses}, repeat=${settings.repeatRemindersEnabled}, mode=${settings.stockCalculationMode})`
+	);
+
 	const language = settings.language;
 	const tr = getTranslations(language);
-	const schedulerUserName = await resolveSchedulerUserDisplayName(settings.userId);
-
-	logger.debug(`[IntakeReminder] Evaluating intake reminder profile for user '${schedulerUserName}'`);
 
 	const rows = await db
 		.select()
 		.from(medications)
-		.where(eq(medications.userId, settings.userId))
-		.orderBy(medications.id);
+		.where(and(eq(medications.userId, settings.userId), eq(medications.isObsolete, false)));
+
+	const activeRows = rows.filter((med) => med.isObsolete !== true).sort((left, right) => left.id - right.id);
 
 	const locale = getDateLocale(language);
 	const tz = getTimezone();
 
-	await autoMarkDueIntakesAsTaken(settings, rows, locale, tz, logger);
+	const autoMarkedCount = await autoMarkDueIntakesAsTaken(settings, activeRows, locale, tz, logger);
+	if (autoMarkedCount > 0) {
+		logger.info(
+			`[IntakeReminder] Auto-mark summary for user=${username} (userId=${settings.userId}): autoMarkedCount=${autoMarkedCount}`
+		);
+	}
+
+	if (settings.stockCalculationMode === "automatic" && settings.skipRemindersForTakenDoses) {
+		logger.info(
+			`[IntakeReminder] Reminder sending skipped for user=${username} (userId=${settings.userId}) because stockCalculationMode=automatic and skipRemindersForTakenDoses=true`
+		);
+		return;
+	}
 
 	// Check if any intake reminder notifications are enabled (granular check)
 	const emailEnabled = settings.emailEnabled && settings.notificationEmail && settings.emailIntakeReminders;
 	const shoutrrrEnabled = settings.shoutrrrEnabled && settings.shoutrrrUrl && settings.shoutrrrIntakeReminders;
 
 	if (!emailEnabled && !shoutrrrEnabled) {
+		logger.debug(
+			`[IntakeReminder] Notification sending disabled for user=${username} (userId=${settings.userId}): both email and push intake reminders are off`
+		);
 		return; // No intake reminder notifications enabled for this user
 	}
 
-	logger.debug(
-		`[IntakeReminder] Notifications enabled for current scheduler context (email:${emailEnabled}, shoutrrr:${shoutrrrEnabled})`
-	);
-
 	// Build medication entries that have at least one reminder-enabled intake.
 	// Intake-level reminders are the single source of truth.
-	const reminderEntries = rows
+	const reminderEntries = activeRows
 		.map((med) => {
 			const intakes = parseIntakesJson(
 				med.intakesJson,
@@ -478,26 +517,22 @@ export async function checkAndSendIntakeRemindersForUser(
 		.filter((entry) => entry.intakesWithReminders.length > 0);
 
 	if (reminderEntries.length === 0) {
-		logger.debug("[IntakeReminder] No medications have reminders enabled for current scheduler context");
+		logger.debug(
+			`[IntakeReminder] No reminder-enabled intake definitions for user=${username} (userId=${settings.userId})`
+		);
 		return; // No medications have reminders enabled for this user
 	}
-
-	logger.debug(`[IntakeReminder] Found ${reminderEntries.length} medications with reminders`);
 
 	const state = loadIntakeReminderState();
 	const allUpcoming: (UpcomingIntake & { medicationId: number; blisterIndex: number })[] = [];
 	let scheduledIntakesTodayCount = 0;
 	// Get start and end of today in user's timezone (for filtering today's doses only)
 	const now = new Date();
-	const checkMinuteStart = new Date(Math.floor(now.getTime() / 60000) * 60000);
-	const checkMinuteEnd = new Date(checkMinuteStart.getTime() + 60000);
 	const todayStart = new Date(now.toLocaleString("en-US", { timeZone: tz }));
 	todayStart.setHours(0, 0, 0, 0);
 
 	const todayEnd = new Date(now.toLocaleString("en-US", { timeZone: tz }));
 	todayEnd.setHours(23, 59, 59, 999);
-
-	logger.debug(`[IntakeReminder] Today range: ${todayStart.toISOString()} to ${todayEnd.toISOString()}`);
 
 	// Find intakes: upcoming ones in reminder window + past ones for repeat reminders
 	for (const { med, intakes, intakesWithReminders } of reminderEntries) {
@@ -505,15 +540,9 @@ export async function checkAndSendIntakeRemindersForUser(
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
 		const medDisplayName = med.name || med.genericName || "";
 
-		logger.debug(
-			`[IntakeReminder] Processing medication '${medDisplayName}' (id=${med.id}) with ${intakes.length} intake definition(s)`
-		);
-
 		// Process each intake separately to track blisterIndex
 		intakesWithReminders.forEach((intake, _blisterIndex) => {
 			const actualIndex = intakes.indexOf(intake); // Get the actual index in original array
-			const intakeDescriptor = formatIntakeDescriptor(actualIndex, medDisplayName, med.id, intake);
-			logger.debug(`[IntakeReminder] ${intakeDescriptor}`);
 
 			const todaysIntakesForThisDefinition = getTodaysIntakes(
 				medDisplayName,
@@ -540,12 +569,6 @@ export async function checkAndSendIntakeRemindersForUser(
 				med.id,
 				med.doseUnit ?? "mg"
 			);
-			logger.debug(
-				`[IntakeReminder] ${intakeDescriptor} -> ${upcomingIntakes.length} intake(s) currently due for advance reminder (default ${REMINDER_MINUTES_BEFORE} min before intake, with catch-up while intake is still in the future)`
-			);
-			logger.debug(
-				`[IntakeReminder] ${intakeDescriptor} -> ${todaysIntakesForThisDefinition.length} scheduled intake(s) today (independent of reminder window)`
-			);
 
 			// Add upcoming intakes for first reminders
 			allUpcoming.push(
@@ -558,14 +581,8 @@ export async function checkAndSendIntakeRemindersForUser(
 
 			// If repeat reminders enabled, also check for missed intakes (past the intake time)
 			if (settings.repeatRemindersEnabled) {
-				logger.debug(
-					`[IntakeReminder] ${intakeDescriptor} -> ${todaysIntakesForThisDefinition.length} candidate intake(s) for repeat reminders`
-				);
 				const missedIntakes = todaysIntakesForThisDefinition.filter(
 					(todayIntake) => todayIntake.intakeTime.getTime() < now.getTime()
-				);
-				logger.debug(
-					`[IntakeReminder] ${intakeDescriptor} -> ${missedIntakes.length} missed intake(s) (past intake time)`
 				);
 
 				// Add missed intakes for repeat reminders (only if not already in upcoming list)
@@ -583,15 +600,16 @@ export async function checkAndSendIntakeRemindersForUser(
 		});
 	}
 
-	logger.debug(`[IntakeReminder] Total scheduled intakes for today: ${scheduledIntakesTodayCount}`);
-	logger.debug(`[IntakeReminder] Total reminder candidates in current check: ${allUpcoming.length}`);
-
 	if (allUpcoming.length === 0) {
 		logger.debug(
-			`[IntakeReminder] No reminder due in this check window (minute=${checkMinuteStart.toISOString()}..${checkMinuteEnd.toISOString()}, advanceLead=${REMINDER_MINUTES_BEFORE}m, plus catch-up while intake is still future)`
+			`[IntakeReminder] No upcoming intakes in reminder window for user=${username} (userId=${settings.userId}, scheduledToday=${scheduledIntakesTodayCount})`
 		);
 		return; // No upcoming intakes for today
 	}
+
+	logger.info(
+		`[IntakeReminder] Candidate intakes for user=${username} (userId=${settings.userId}): scheduledToday=${scheduledIntakesTodayCount}, candidates=${allUpcoming.length}`
+	);
 
 	// Determine which doses need reminders (new or repeated)
 	const nowMs = Date.now();
@@ -620,9 +638,6 @@ export async function checkAndSendIntakeRemindersForUser(
 					// Recently missed — scheduler likely recovered from sleep/restart.
 					// Send a catch-up reminder (counts as first nagging reminder).
 					remindersToSend.push({ ...intake, currentSendCount: 1, maxReminders, isAdvanceReminder: false });
-					logger.info(
-						`[IntakeReminder] Catch-up reminder for recently missed intake (${Math.round(minutesSinceIntake)} min ago)`
-					);
 				} else {
 					// Long ago — seed state without notification (user likely already noticed)
 					state.reminders[key] = {
@@ -631,14 +646,10 @@ export async function checkAndSendIntakeRemindersForUser(
 						sendCount: 0,
 						advanceSent: false,
 					};
-					logger.debug(
-						`[IntakeReminder] Seeding state for old past intake (no notification — ${Math.round(minutesSinceIntake)} min ago)`
-					);
 				}
 			} else {
 				// Upcoming - this is advance reminder (no counter)
 				remindersToSend.push({ ...intake, currentSendCount: 0, maxReminders, isAdvanceReminder: true });
-				logger.debug("[IntakeReminder] Advance reminder candidate added");
 			}
 		} else if (settings.repeatRemindersEnabled && isIntakePast) {
 			// Intake time passed - check if we need to send nagging reminder
@@ -650,23 +661,41 @@ export async function checkAndSendIntakeRemindersForUser(
 			const currentNaggingCount = existingEntry.sendCount;
 
 			if (currentNaggingCount >= maxReminders) {
-				// Max nagging reminders reached - stop
-				logger.debug(`[IntakeReminder] Max nagging (${maxReminders}) reached for intake reminder key`);
 			} else if (timeSinceLastReminder >= intervalMs) {
 				const nextSendCount = currentNaggingCount + 1;
 				remindersToSend.push({ ...intake, currentSendCount: nextSendCount, maxReminders, isAdvanceReminder: false });
-				logger.debug(`[IntakeReminder] Nagging reminder candidate added (${nextSendCount}/${maxReminders})`);
 			}
 		}
 		// Else: Already sent and either repeats disabled or intake not yet past - skip
 	}
 
 	if (remindersToSend.length === 0) {
+		logger.debug(
+			`[IntakeReminder] No reminders to send for user=${username} (userId=${settings.userId}) after state/repeat evaluation`
+		);
 		return; // All reminders already sent and no repeats needed
 	}
 
+	logger.info(
+		`[IntakeReminder] Reminders selected for user=${username} (userId=${settings.userId}): count=${remindersToSend.length} :: ${remindersToSend
+			.map((intake) =>
+				formatIntakeLog({
+					medName: intake.medName,
+					medicationId: intake.medicationId,
+					blisterIndex: intake.blisterIndex,
+					intakeTime: intake.intakeTime,
+					intakeTimeStr: intake.intakeTimeStr,
+					usage: intake.usage,
+					doseUnit: intake.doseUnit,
+					takenBy: intake.takenBy,
+				})
+			)
+			.join(" | ")}`
+	);
+
 	// If skipRemindersForTakenDoses is enabled, filter out doses that were already taken today
 	if (settings.skipRemindersForTakenDoses) {
+		const beforeFilterCount = remindersToSend.length;
 		// Query doses marked as taken today (takenAt is timestamp, stored as seconds since epoch)
 		const takenToday = await db
 			.select()
@@ -692,28 +721,29 @@ export async function checkAndSendIntakeRemindersForUser(
 				// For person-specific intake, check if that person has taken it
 				const doseId = `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}-${intake.takenBy}`;
 				const isTaken = takenDoseIds.has(doseId);
-				if (isTaken) {
-					logger.debug("[IntakeReminder] Skipping reminder candidate - dose already taken");
-				}
 				return !isTaken;
 			} else {
 				// For non-person-specific intakes
 				const doseId = `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}`;
 				const isTaken = takenDoseIds.has(doseId);
-				if (isTaken) {
-					logger.debug("[IntakeReminder] Skipping reminder candidate - dose already taken");
-				}
 				return !isTaken;
 			}
 		});
 
+		const filteredOutCount = beforeFilterCount - remindersToSend.length;
+		if (filteredOutCount > 0) {
+			logger.info(
+				`[IntakeReminder] Removed reminders for already taken doses for user=${username} (userId=${settings.userId}): removed=${filteredOutCount}, remaining=${remindersToSend.length}`
+			);
+		}
+
 		if (remindersToSend.length === 0) {
-			logger.debug("[IntakeReminder] All doses taken, skipping reminders");
+			logger.info(
+				`[IntakeReminder] All candidate reminders already taken for user=${username} (userId=${settings.userId}); nothing to send`
+			);
 			return;
 		}
 	}
-
-	logger.info(`[IntakeReminder] Sending reminder for ${remindersToSend.length} intakes...`);
 
 	// Determine if this is a repeat reminder:
 	// - Any intake already has a state entry AND is past (repeat after first reminder)
@@ -744,10 +774,14 @@ export async function checkAndSendIntakeRemindersForUser(
 			hasNaggingReminder ? maxReminderCount : undefined
 		);
 		emailSuccess = result.success;
-		if (result.success) {
-			logger.info("[IntakeReminder] Email sent successfully");
+		if (!result.success) {
+			logger.error(
+				`[IntakeReminder] Email delivery failed for user=${username} (userId=${settings.userId}): ${result.error}`
+			);
 		} else {
-			logger.error(`[IntakeReminder] Failed to send email: ${result.error}`);
+			logger.info(
+				`[IntakeReminder] Email delivered for user=${username} (userId=${settings.userId}, recipient=${settings.notificationEmail}, reminders=${remindersToSend.length}, messageId=${result.messageId ?? "n/a"})`
+			);
 		}
 	}
 
@@ -810,10 +844,14 @@ export async function checkAndSendIntakeRemindersForUser(
 
 		const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
 		shoutrrrSuccess = result.success;
-		if (result.success) {
-			logger.info("[IntakeReminder] Push notification sent successfully");
+		if (!result.success) {
+			logger.error(
+				`[IntakeReminder] Push delivery failed for user=${username} (userId=${settings.userId}): ${result.error}`
+			);
 		} else {
-			logger.error(`[IntakeReminder] Failed to send push: ${result.error}`);
+			logger.info(
+				`[IntakeReminder] Push delivered for user=${username} (userId=${settings.userId}, reminders=${remindersToSend.length})`
+			);
 		}
 	}
 
@@ -880,6 +918,13 @@ export async function checkAndSendIntakeRemindersForUser(
 		const medName = firstReminder?.medName;
 		const takenBy = firstReminder?.takenBy || undefined;
 		await updateUserReminderSentTime(settings.userId, "intake", channel, medName, takenBy);
+		logger.info(
+			`[IntakeReminder] Reminder state persisted for user=${username} (userId=${settings.userId}, channel=${channel}, reminders=${remindersToSend.length}, firstMed=${medName ?? "n/a"}, firstTakenBy=${takenBy ?? "none"})`
+		);
+	} else {
+		logger.info(
+			`[IntakeReminder] No reminder channel succeeded for user=${username} (userId=${settings.userId}, remindersAttempted=${remindersToSend.length})`
+		);
 	}
 }
 

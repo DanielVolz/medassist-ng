@@ -814,106 +814,106 @@ export function MobileEditModal({
 												</button>
 											)}
 										</div>
-										{form.intakes.map((intake, idx) => (
-											<div
-												key={`${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}-${idx}`}
-												className="blister-row"
-											>
-												<label className="compact">
-													<span>{getUsageLabel(intake)}</span>
-													<FormNumberStepper
-														value={intake.usage}
-														onChange={(nextValue) => onSetIntakeValue(idx, "usage", nextValue)}
-														min={allowFractionalIntake ? 0.5 : 1}
-														step={allowFractionalIntake ? 0.5 : 1}
-														allowDecimal={allowFractionalIntake}
-														decrementLabel={decrementValueLabel}
-														incrementLabel={incrementValueLabel}
-													/>
-												</label>
-												<label className="compact">
-													<span>{t("form.blisters.everyDays")}</span>
-													<FormNumberStepper
-														value={intake.every}
-														onChange={(nextValue) => onSetIntakeValue(idx, "every", nextValue)}
-														min={1}
-														decrementLabel={decrementValueLabel}
-														incrementLabel={incrementValueLabel}
-													/>
-												</label>
-												<label className="compact full-row">
-													<span>{t("form.blisters.startDate")}</span>
-													<DateInput
-														value={intake.startDate}
-														onChange={(e) => onSetIntakeValue(idx, "startDate", e.target.value)}
-													/>
-												</label>
-												<label className="compact time-label">
-													<span>{t("form.blisters.startTime")}</span>
-													<input
-														type="time"
-														value={intake.startTime}
-														onChange={(e) => onSetIntakeValue(idx, "startTime", e.target.value)}
-													/>
-												</label>
-												{isLiquidContainerPackageType(form.packageType) && (
-													<label className="compact full-row">
-														<span>{t("form.blisters.intakeUnit")}</span>
-														<select
-															className="select-field"
-															value={intake.intakeUnit}
-															onChange={(e) =>
-																onSetIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")
-															}
-														>
-															<option value="ml">{t("form.blisters.intakeUnitMl")}</option>
-															<option value="tsp">{t("form.blisters.intakeUnitTsp")}</option>
-															<option value="tbsp">{t("form.blisters.intakeUnitTbsp")}</option>
-														</select>
-													</label>
-												)}
-												{form.takenBy.length === 0 ? null : (
-													<label className="compact full-row taken-by-field">
-														<span>{t("form.blisters.takenByIntake")}</span>
-														<select
-															className="select-field"
-															value={intake.takenBy}
-															onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}
-														>
-															{form.takenBy.map((person) => (
-																<option key={person} value={person}>
-																	{person}
-																</option>
-															))}
-														</select>
-													</label>
-												)}
-												<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
-													<span className="legend-hint">
-														<Bell size={14} aria-hidden="true" />
-													</span>
-													<label className="toggle-switch small">
-														<input
-															type="checkbox"
-															checked={intake.intakeRemindersEnabled}
-															onChange={(e) => onSetIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+										{form.intakes.map((intake, idx) => {
+											const intakeKey = `${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}-${intake.intakeUnit ?? "unit"}-${intake.intakeRemindersEnabled ? "reminder" : "silent"}`;
+											return (
+												<div key={intakeKey} className="blister-row">
+													<label className="compact">
+														<span>{getUsageLabel(intake)}</span>
+														<FormNumberStepper
+															value={intake.usage}
+															onChange={(nextValue) => onSetIntakeValue(idx, "usage", nextValue)}
+															min={allowFractionalIntake ? 0.5 : 1}
+															step={allowFractionalIntake ? 0.5 : 1}
+															allowDecimal={allowFractionalIntake}
+															decrementLabel={decrementValueLabel}
+															incrementLabel={incrementValueLabel}
 														/>
-														<span className="toggle-slider"></span>
 													</label>
+													<label className="compact">
+														<span>{t("form.blisters.everyDays")}</span>
+														<FormNumberStepper
+															value={intake.every}
+															onChange={(nextValue) => onSetIntakeValue(idx, "every", nextValue)}
+															min={1}
+															decrementLabel={decrementValueLabel}
+															incrementLabel={incrementValueLabel}
+														/>
+													</label>
+													<label className="compact full-row">
+														<span>{t("form.blisters.startDate")}</span>
+														<DateInput
+															value={intake.startDate}
+															onChange={(e) => onSetIntakeValue(idx, "startDate", e.target.value)}
+														/>
+													</label>
+													<label className="compact time-label">
+														<span>{t("form.blisters.startTime")}</span>
+														<input
+															type="time"
+															value={intake.startTime}
+															onChange={(e) => onSetIntakeValue(idx, "startTime", e.target.value)}
+														/>
+													</label>
+													{isLiquidContainerPackageType(form.packageType) && (
+														<label className="compact full-row">
+															<span>{t("form.blisters.intakeUnit")}</span>
+															<select
+																className="select-field"
+																value={intake.intakeUnit}
+																onChange={(e) =>
+																	onSetIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")
+																}
+															>
+																<option value="ml">{t("form.blisters.intakeUnitMl")}</option>
+																<option value="tsp">{t("form.blisters.intakeUnitTsp")}</option>
+																<option value="tbsp">{t("form.blisters.intakeUnitTbsp")}</option>
+															</select>
+														</label>
+													)}
+													{form.takenBy.length === 0 ? null : (
+														<label className="compact full-row taken-by-field">
+															<span>{t("form.blisters.takenByIntake")}</span>
+															<select
+																className="select-field"
+																value={intake.takenBy}
+																onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}
+															>
+																{form.takenBy.map((person) => (
+																	<option key={person} value={person}>
+																		{person}
+																	</option>
+																))}
+															</select>
+														</label>
+													)}
+													<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
+														<span className="legend-hint">
+															<Bell size={14} aria-hidden="true" />
+														</span>
+														<label className="toggle-switch small">
+															<input
+																type="checkbox"
+																checked={intake.intakeRemindersEnabled}
+																onChange={(e) => onSetIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+															/>
+															<span className="toggle-slider"></span>
+														</label>
+													</div>
+													{!readOnlyMode && form.intakes.length > 1 && (
+														<button
+															type="button"
+															className="danger remove-blister-btn icon-only tooltip-trigger"
+															onClick={() => onRemoveIntake(idx)}
+															aria-label={t("common.remove")}
+															data-tooltip={t("common.remove")}
+														>
+															<Minus size={18} aria-hidden="true" />
+														</button>
+													)}
 												</div>
-												{!readOnlyMode && form.intakes.length > 1 && (
-													<button
-														type="button"
-														className="danger remove-blister-btn icon-only tooltip-trigger"
-														onClick={() => onRemoveIntake(idx)}
-														aria-label={t("common.remove")}
-														data-tooltip={t("common.remove")}
-													>
-														<Minus size={18} aria-hidden="true" />
-													</button>
-												)}
-											</div>
-										))}
+											);
+										})}
 									</div>
 								</div>
 								<div className={`form-tab-panel${activeTab === "prescription" ? " active" : ""}`}>

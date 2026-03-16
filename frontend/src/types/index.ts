@@ -271,6 +271,8 @@ export type SharedMedicationOverviewItem = {
 	imageUrl: string | null;
 	packageType: PackageType;
 	packCount: number;
+	packageAmountValue: number | null;
+	packageAmountUnit: PackageAmountUnit | null;
 	blistersPerPack: number;
 	pillsPerBlister: number;
 	totalPills: number | null;

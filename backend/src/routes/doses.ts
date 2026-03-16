@@ -61,11 +61,6 @@ const doseReadResponseSchema = {
 	},
 } as const;
 
-function maskToken(token: string): string {
-	if (token.length <= 8) return token;
-	return `${token.slice(0, 4)}...${token.slice(-4)}`;
-}
-
 // Helper to get user ID from request
 // Returns anonymous user ID when auth is disabled
 async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
@@ -545,7 +540,7 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			const { share, reason } = await getActiveShareToken(token);
 			if (!share) {
-				request.log.warn(`[ShareDose] Rejected read for token ${maskToken(token)} (reason=${reason})`);
+				request.log.warn(`[ShareDose] Rejected read: token=${token}, reason=${reason}`);
 				return reply.notFound("Share link not found");
 			}
 
@@ -603,14 +598,14 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			const { share, reason } = await getActiveShareToken(token);
 			if (!share) {
-				request.log.warn(`[ShareDose] Rejected mark for token ${maskToken(token)} (reason=${reason})`);
+				request.log.warn(`[ShareDose] Rejected mark: token=${token}, doseId=${doseId}, reason=${reason}`);
 				return reply.notFound("Share link not found");
 			}
 
 			const isValidShareDoseId = await validateShareDoseId(share, doseId);
 			if (!isValidShareDoseId) {
 				request.log.warn(
-					`[ShareDose] Rejected invalid doseId in mark request (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
+					`[ShareDose] Rejected invalid doseId in mark request: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
@@ -622,7 +617,9 @@ export async function doseRoutes(app: FastifyInstance) {
 				.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
 
 			if (existing) {
-				request.log.debug(`[ShareDose] Duplicate mark ignored (owner=${share.userId}, doseId=${doseId})`);
+				request.log.debug(
+					`[ShareDose] Duplicate mark ignored: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+				);
 				return { success: true, message: "Already marked" };
 			}
 
@@ -634,7 +631,7 @@ export async function doseRoutes(app: FastifyInstance) {
 			});
 			if (outOfStock) {
 				request.log.info(
-					`[ShareDose] Rejected out-of-stock mark request (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
+					`[ShareDose] Rejected out-of-stock mark request: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 				return reply.status(409).send({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
 			}
@@ -651,7 +648,7 @@ export async function doseRoutes(app: FastifyInstance) {
 			});
 
 			request.log.info(
-				`[ShareDose] Dose marked via share link (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
+				`[ShareDose] Dose marked via share link: token=${token}, ownerUserId=${share.userId}, shareTakenBy=${share.takenBy}, markedBy=${markedBy}, doseId=${doseId}`
 			);
 
 			return { success: true };
@@ -685,14 +682,14 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			const { share, reason } = await getActiveShareToken(token);
 			if (!share) {
-				request.log.warn(`[ShareDose] Rejected unmark for token ${maskToken(token)} (reason=${reason})`);
+				request.log.warn(`[ShareDose] Rejected unmark: token=${token}, doseId=${doseId}, reason=${reason}`);
 				return reply.notFound("Share link not found");
 			}
 
 			const isValidShareDoseId = await validateShareDoseId(share, doseId);
 			if (!isValidShareDoseId) {
 				request.log.warn(
-					`[ShareDose] Rejected invalid doseId in unmark request (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
+					`[ShareDose] Rejected invalid doseId in unmark request: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
@@ -705,14 +702,16 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			if (existing?.dismissed) {
 				// Already dismissed - keep the record as-is
-				request.log.debug(`[ShareDose] Unmark ignored for dismissed dose (owner=${share.userId}, doseId=${doseId})`);
+				request.log.debug(
+					`[ShareDose] Unmark ignored for dismissed dose: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+				);
 			} else {
 				// Not dismissed - delete the record entirely
 				await db
 					.delete(doseTracking)
 					.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
 				request.log.info(
-					`[ShareDose] Dose unmarked via share link (owner=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId})`
+					`[ShareDose] Dose unmarked via share link: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 			}
 

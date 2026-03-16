@@ -61,7 +61,10 @@ function createSharedDataWithTodayDose(referenceNow: Date) {
 	const dateOnlyMs = new Date(scheduledAt.getFullYear(), scheduledAt.getMonth(), scheduledAt.getDate()).getTime();
 	const start = `${scheduledAt.getFullYear()}-${String(scheduledAt.getMonth() + 1).padStart(2, "0")}-${String(
 		scheduledAt.getDate()
-	).padStart(2, "0")}T${String(scheduledAt.getHours()).padStart(2, "0")}:${String(scheduledAt.getMinutes()).padStart(2, "0")}:00`;
+	).padStart(
+		2,
+		"0"
+	)}T${String(scheduledAt.getHours()).padStart(2, "0")}:${String(scheduledAt.getMinutes()).padStart(2, "0")}:00`;
 
 	return {
 		sharedBy: "Owner",

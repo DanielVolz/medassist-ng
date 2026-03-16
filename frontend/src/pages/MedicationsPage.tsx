@@ -1,7 +1,7 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: form uses custom inputs and display fields wrapped in label-like layout */
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: modal-history callbacks are intentionally managed outside hook deps */
 /* biome-ignore-all lint/suspicious/noArrayIndexKey: local draft intake rows do not have stable ids before persistence */
-import { Bell, Eye, Minus, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, Bell, Eye, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
@@ -979,15 +979,22 @@ export function MedicationsPage() {
 													</button>
 												)}
 												<button
+													type="button"
+													className="btn-obsolete"
+													onClick={() => requestMarkObsolete(med)}
+													aria-label={t("medications.list.markObsolete")}
+												>
+													<Archive size={16} aria-hidden="true" />
+													<span>{t("medications.list.markObsolete")}</span>
+												</button>
+												<button
+													type="button"
 													className="danger icon-only tooltip-trigger"
 													onClick={() => requestDeleteMed(med)}
 													aria-label={t("common.delete")}
 													data-tooltip={t("common.delete")}
 												>
 													<Trash2 size={18} aria-hidden="true" />
-												</button>
-												<button className="btn-obsolete" onClick={() => requestMarkObsolete(med)}>
-													{t("medications.list.markObsolete")}
 												</button>
 											</div>
 											<div className="med-details">

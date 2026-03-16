@@ -97,13 +97,6 @@ const settingsErrorSchema = {
 	},
 };
 
-function maskEmail(email: string): string {
-	const [localPart, domain] = email.split("@");
-	if (!domain) return "invalid-email";
-	if (localPart.length <= 2) return `${localPart[0] ?? "*"}*@${domain}`;
-	return `${localPart.slice(0, 2)}***@${domain}`;
-}
-
 type MailDeliveryInfo = {
 	accepted?: unknown;
 	rejected?: unknown;
@@ -668,7 +661,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
 			request.log.info(
 				{
-					to: maskEmail(email),
+					to: email,
 					hasSmtpHost: Boolean(smtpHost),
 					hasSmtpUser: Boolean(smtpUser),
 					hasSmtpPass: Boolean(smtpPass),
@@ -681,7 +674,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
 			if (!smtpHost || !smtpUser) {
 				request.log.warn(
-					{ to: maskEmail(email), hasSmtpHost: Boolean(smtpHost), hasSmtpUser: Boolean(smtpUser) },
+					{ to: email, hasSmtpHost: Boolean(smtpHost), hasSmtpUser: Boolean(smtpUser) },
 					"[Settings] Test email skipped: SMTP not configured"
 				);
 				return reply.status(400).send({ error: "SMTP not configured" });
@@ -698,7 +691,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 					},
 				});
 
-				request.log.info({ to: maskEmail(email) }, "[Settings] Sending test email");
+				request.log.info({ to: email }, "[Settings] Sending test email");
 
 				const mailResult = await transporter.sendMail({
 					from: smtpFrom,
@@ -721,11 +714,11 @@ export async function settingsRoutes(app: FastifyInstance) {
 					throw new Error(deliveryError);
 				}
 
-				request.log.info({ to: maskEmail(email), messageId: mailResult.messageId }, "[Settings] Test email sent");
+				request.log.info({ to: email, messageId: mailResult.messageId }, "[Settings] Test email sent");
 
 				return reply.send({ success: true, message: "Test email sent successfully" });
 			} catch (error) {
-				request.log.error({ error, to: maskEmail(email) }, "[Settings] Test email failed");
+				request.log.error({ to: email, error }, "[Settings] Test email failed");
 				const failure = classifyTestEmailFailure(error);
 				return reply.status(failure.status).send({ error: failure.message, code: failure.code });
 			}

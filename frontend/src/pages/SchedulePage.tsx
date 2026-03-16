@@ -1,5 +1,5 @@
 /* biome-ignore-all lint/style/noNestedTernary: schedule timeline branches are intentionally explicit */
-import { Bell } from "lucide-react";
+import { Archive, Bell } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
@@ -95,18 +95,10 @@ export function SchedulePage() {
 	} = useAppContext();
 	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
 	const [clearingMissed, setClearingMissed] = useState(false);
+	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
+	const [obsoleteCandidate, setObsoleteCandidate] = useState<{ id: number; name: string } | null>(null);
 
-	const outOfStockMedicationIds = new Set(
-		meds.filter((med) => (coverageByMed[getMedDisplayName(med)]?.medsLeft ?? 1) <= 0).map((med) => med.id)
-	);
-
-	const isDoseTakenForDisplay = (doseId: string) => {
-		const medId = Number.parseInt(doseId.split("-")[0] ?? "", 10);
-		if (!Number.isNaN(medId) && outOfStockMedicationIds.has(medId)) {
-			return false;
-		}
-		return takenDoses.has(doseId);
-	};
+	const isDoseTakenForDisplay = (doseId: string) => takenDoses.has(doseId);
 
 	const shouldHideNoScheduleStatusForTube = (
 		med: (typeof meds)[number] | undefined,
@@ -172,6 +164,32 @@ export function SchedulePage() {
 		} finally {
 			setClearingMissed(false);
 		}
+	};
+
+	const requestMarkObsolete = (med: { id: number; name: string }) => {
+		setObsoleteCandidate(med);
+		setShowObsoleteConfirm(true);
+	};
+
+	const handleConfirmMarkObsolete = async () => {
+		if (!obsoleteCandidate) return;
+		try {
+			const res = await fetch(`/api/medications/${obsoleteCandidate.id}/obsolete`, {
+				method: "POST",
+				credentials: "include",
+			});
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			await loadMeds();
+			setShowObsoleteConfirm(false);
+			setObsoleteCandidate(null);
+		} catch {
+			alert(t("common.saveFailed"));
+		}
+	};
+
+	const handleCancelMarkObsolete = () => {
+		setShowObsoleteConfirm(false);
+		setObsoleteCandidate(null);
 	};
 
 	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
@@ -345,8 +363,16 @@ export function SchedulePage() {
 											const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 											const medCov = coverageByMed[item.medName];
 											const isEmpty = medCov ? medCov.medsLeft <= 0 : false;
+											const rawStatus = medCov
+												? getStockStatus(medCov.daysLeft, medCov.medsLeft, settings, med?.packageType)
+												: null;
+											const visibleStatus = shouldHideNoScheduleStatusForTube(med, rawStatus) ? null : rawStatus;
+											const isLowStock = !isEmpty && visibleStatus?.className === "warning";
+											const rowClasses = ["time-row"];
+											if (isEmpty) rowClasses.push("med-empty");
+											else if (isLowStock) rowClasses.push("med-low");
 											return (
-												<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+												<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 													<div className="time-main">
 														<div className="med-name">
 															<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
@@ -363,8 +389,12 @@ export function SchedulePage() {
 															const allTaken = people.every((person) =>
 																isDoseTakenForDisplay(getDoseId(dose.id, person))
 															);
+															const doseClasses = ["dose-item", "past"];
+															if (allTaken) doseClasses.push("all-taken");
+															if (isEmpty) doseClasses.push("med-empty");
+															else if (isLowStock) doseClasses.push("med-low");
 															return (
-																<div key={dose.id} className={`dose-item past ${allTaken ? "all-taken" : ""}`}>
+																<div key={dose.id} className={doseClasses.join(" ")}>
 																	<span className="dose-time">{dose.timeStr}</span>
 																	<span className="dose-usage">
 																		<span className="dose-usage-main">
@@ -517,6 +547,17 @@ export function SchedulePage() {
 							confirmVariant="warning"
 						/>
 					)}
+					{showObsoleteConfirm && obsoleteCandidate && (
+						<ConfirmModal
+							title={t("medications.obsoleteModal.title")}
+							message={t("medications.obsoleteModal.message", { name: obsoleteCandidate.name })}
+							confirmLabel={t("medications.list.markObsolete")}
+							cancelLabel={t("common.cancel")}
+							onConfirm={() => void handleConfirmMarkObsolete()}
+							onCancel={handleCancelMarkObsolete}
+							confirmVariant="warning"
+						/>
+					)}
 					{/* Current and future days */}
 					{futureDays.map((day) => {
 						const today = new Date();
@@ -540,8 +581,12 @@ export function SchedulePage() {
 											? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med?.packageType)
 											: null;
 									const visibleStatus = shouldHideNoScheduleStatusForTube(med, status) ? null : status;
+									const isLowStock = !isEmpty && visibleStatus?.className === "warning";
+									const rowClasses = ["time-row"];
+									if (isEmpty) rowClasses.push("med-empty");
+									else if (isLowStock) rowClasses.push("med-low");
 									return (
-										<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+										<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 											<div className="time-main">
 												<div className="med-name">
 													<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
@@ -553,6 +598,18 @@ export function SchedulePage() {
 														<span className={`tag ${visibleStatus.className}`}>{t(visibleStatus.label)}</span>
 													)}
 												</div>
+												{isEmpty && med && !med.isObsolete && (
+													<div className="timeline-obsolete-row">
+														<button
+															type="button"
+															className="timeline-obsolete-btn btn-obsolete"
+															onClick={() => requestMarkObsolete({ id: med.id, name: getMedDisplayName(med) })}
+														>
+															<Archive size={16} aria-hidden="true" />
+															<span>{t("medications.list.markObsolete")}</span>
+														</button>
+													</div>
+												)}
 											</div>
 											<div className="doses-col">
 												{item.doses.map((dose) => {
@@ -561,8 +618,12 @@ export function SchedulePage() {
 													const dayStart = new Date(day.date).setHours(0, 0, 0, 0);
 													const isPastDay = dayStart < new Date().setHours(0, 0, 0, 0);
 													const allTaken = people.every((person) => isDoseTakenForDisplay(getDoseId(dose.id, person)));
+													const doseClasses = ["dose-item"];
+													if (allTaken) doseClasses.push("all-taken");
+													if (isEmpty) doseClasses.push("med-empty");
+													else if (isLowStock) doseClasses.push("med-low");
 													return (
-														<div key={dose.id} className={`dose-item ${allTaken ? "all-taken" : ""}`}>
+														<div key={dose.id} className={doseClasses.join(" ")}>
 															<span className="dose-time">{dose.timeStr}</span>
 															<span className="dose-usage">
 																<span className="dose-usage-main">

@@ -1,5 +1,5 @@
 /* biome-ignore-all lint/style/noNestedTernary: timeline rendering uses explicit UI-state branching */
-import { Bell, ClipboardList, NotebookPen, Share2 } from "lucide-react";
+import { Archive, Bell, ClipboardList, NotebookPen, Share2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
@@ -85,18 +85,10 @@ export function DashboardPage() {
 	} = useAppContext();
 	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
 	const [clearingMissed, setClearingMissed] = useState(false);
+	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
+	const [obsoleteCandidate, setObsoleteCandidate] = useState<{ id: number; name: string } | null>(null);
 
-	const outOfStockMedicationIds = new Set(
-		meds.filter((med) => (coverageByMed[getMedDisplayName(med)]?.medsLeft ?? 1) <= 0).map((med) => med.id)
-	);
-
-	const isDoseTakenForDisplay = (doseId: string) => {
-		const medId = Number.parseInt(doseId.split("-")[0] ?? "", 10);
-		if (!Number.isNaN(medId) && outOfStockMedicationIds.has(medId)) {
-			return false;
-		}
-		return takenDoses.has(doseId);
-	};
+	const isDoseTakenForDisplay = (doseId: string) => takenDoses.has(doseId);
 
 	// Get structured reminder data
 	const reminderData = getReminderStatusData(
@@ -208,6 +200,32 @@ export function DashboardPage() {
 		} finally {
 			setClearingMissed(false);
 		}
+	};
+
+	const requestMarkObsolete = (med: { id: number; name: string }) => {
+		setObsoleteCandidate(med);
+		setShowObsoleteConfirm(true);
+	};
+
+	const handleConfirmMarkObsolete = async () => {
+		if (!obsoleteCandidate) return;
+		try {
+			const res = await fetch(`/api/medications/${obsoleteCandidate.id}/obsolete`, {
+				method: "POST",
+				credentials: "include",
+			});
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			await loadMeds();
+			setShowObsoleteConfirm(false);
+			setObsoleteCandidate(null);
+		} catch {
+			alert(t("common.saveFailed"));
+		}
+	};
+
+	const handleCancelMarkObsolete = () => {
+		setShowObsoleteConfirm(false);
+		setObsoleteCandidate(null);
 	};
 
 	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
@@ -1034,8 +1052,12 @@ export function DashboardPage() {
 															? getStockStatus(medCov.daysLeft, medCov.medsLeft, stockThresholds, med?.packageType)
 															: null;
 														const status = getVisibleStockStatus(med, rawStatus);
+														const isLowStock = !isEmpty && status?.className === "warning";
+														const rowClasses = ["time-row"];
+														if (isEmpty) rowClasses.push("med-empty");
+														else if (isLowStock) rowClasses.push("med-low");
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1082,8 +1104,12 @@ export function DashboardPage() {
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
+																		const doseClasses = ["dose-item", "past"];
+																		if (allTaken) doseClasses.push("all-taken");
+																		if (isEmpty) doseClasses.push("med-empty");
+																		else if (isLowStock) doseClasses.push("med-low");
 																		return (
-																			<div key={dose.id} className={`dose-item past ${allTaken ? "all-taken" : ""}`}>
+																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
 																				<span className="dose-usage">
 																					<span className="dose-usage-main">
@@ -1251,6 +1277,17 @@ export function DashboardPage() {
 										confirmVariant="warning"
 									/>
 								)}
+								{showObsoleteConfirm && obsoleteCandidate && (
+									<ConfirmModal
+										title={t("medications.obsoleteModal.title")}
+										message={t("medications.obsoleteModal.message", { name: obsoleteCandidate.name })}
+										confirmLabel={t("medications.list.markObsolete")}
+										cancelLabel={t("common.cancel")}
+										onConfirm={() => void handleConfirmMarkObsolete()}
+										onCancel={handleCancelMarkObsolete}
+										confirmVariant="warning"
+									/>
+								)}
 								{/* Today - always visible */}
 								{todayDay &&
 									(() => {
@@ -1329,8 +1366,12 @@ export function DashboardPage() {
 																	)
 																: null;
 														const visibleStatus = getVisibleStockStatus(med, status);
+														const isLowStock = !isEmpty && visibleStatus?.className === "warning";
+														const rowClasses = ["time-row"];
+														if (isEmpty) rowClasses.push("med-empty");
+														else if (isLowStock) rowClasses.push("med-low");
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1371,6 +1412,20 @@ export function DashboardPage() {
 																			</span>
 																		)}
 																	</div>
+																	{isEmpty && med && !med.isObsolete && (
+																		<div className="timeline-obsolete-row">
+																			<button
+																				type="button"
+																				className="timeline-obsolete-btn btn-obsolete"
+																				onClick={() =>
+																					requestMarkObsolete({ id: med.id, name: getMedDisplayName(med) })
+																				}
+																			>
+																				<Archive size={16} aria-hidden="true" />
+																				<span>{t("medications.list.markObsolete")}</span>
+																			</button>
+																		</div>
+																	)}
 																</div>
 																<div className="doses-col">
 																	{item.doses.map((dose) => {
@@ -1379,11 +1434,13 @@ export function DashboardPage() {
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
+																		const doseClasses = ["dose-item"];
+																		if (isOverdue) doseClasses.push("overdue");
+																		if (allTaken) doseClasses.push("all-taken");
+																		if (isEmpty) doseClasses.push("med-empty");
+																		else if (isLowStock) doseClasses.push("med-low");
 																		return (
-																			<div
-																				key={dose.id}
-																				className={`dose-item ${isOverdue ? "overdue" : ""} ${allTaken ? "all-taken" : ""}`}
-																			>
+																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
 																				<span className="dose-usage">
 																					<span className="dose-usage-main">
@@ -1569,7 +1626,7 @@ export function DashboardPage() {
 														const medCoverage = coverageByMed[item.medName];
 														const med = meds.find((m) => getMedDisplayName(m) === item.medName);
 														const depletionTime = depletionByMed[item.medName];
-														const _isEmpty = medCoverage ? medCoverage.medsLeft <= 0 : false;
+														const isEmpty = medCoverage ? medCoverage.medsLeft <= 0 : false;
 														const willBeOutOfStock = typeof depletionTime === "number" && item.lastWhen > depletionTime;
 														const status = willBeOutOfStock
 															? { className: "danger", label: "status.outOfStock" }
@@ -1582,8 +1639,12 @@ export function DashboardPage() {
 																	)
 																: null;
 														const visibleStatus = getVisibleStockStatus(med, status);
+														const isLowStock = !isEmpty && visibleStatus?.className === "warning";
+														const rowClasses = ["time-row"];
+														if (isEmpty) rowClasses.push("med-empty");
+														else if (isLowStock) rowClasses.push("med-low");
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className="time-row">
+															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1624,6 +1685,20 @@ export function DashboardPage() {
 																			</span>
 																		)}
 																	</div>
+																	{isEmpty && med && !med.isObsolete && (
+																		<div className="timeline-obsolete-row">
+																			<button
+																				type="button"
+																				className="timeline-obsolete-btn btn-obsolete"
+																				onClick={() =>
+																					requestMarkObsolete({ id: med.id, name: getMedDisplayName(med) })
+																				}
+																			>
+																				<Archive size={16} aria-hidden="true" />
+																				<span>{t("medications.list.markObsolete")}</span>
+																			</button>
+																		</div>
+																	)}
 																</div>
 																<div className="doses-col">
 																	{item.doses.map((dose) => {
@@ -1631,8 +1706,12 @@ export function DashboardPage() {
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
+																		const doseClasses = ["dose-item", "future"];
+																		if (allTaken) doseClasses.push("all-taken");
+																		if (isEmpty) doseClasses.push("med-empty");
+																		else if (isLowStock) doseClasses.push("med-low");
 																		return (
-																			<div key={dose.id} className={`dose-item future ${allTaken ? "all-taken" : ""}`}>
+																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
 																				<span className="dose-usage">
 																					<span className="dose-usage-main">

@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/style/noDescendingSpecificity: legacy shared stylesheet relies on intentional cascade ordering across base and contextual selectors */
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 :root {
@@ -577,25 +578,6 @@ body.modal-open {
 	display: flex;
 	gap: 0.5rem;
 }
-.tabs .pill {
-	cursor: pointer;
-	transition:
-		background 150ms ease,
-		border-color 150ms ease;
-	background: transparent;
-	border: 1px solid var(--border-secondary);
-	color: var(--text-muted);
-	box-shadow: none;
-}
-.tabs .pill:hover {
-	background: var(--btn-ghost-hover);
-	border-color: var(--accent);
-}
-.tabs .pill.primary {
-	background: var(--accent-bg);
-	border-color: var(--accent);
-	color: var(--text-primary);
-}
 
 .stats {
 	display: grid;
@@ -732,6 +714,26 @@ body.modal-open {
 	background: rgba(0, 0, 0, 0.04);
 }
 
+.tabs .pill {
+	cursor: pointer;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease;
+	background: transparent;
+	border: 1px solid var(--border-secondary);
+	color: var(--text-muted);
+	box-shadow: none;
+}
+.tabs .pill:hover {
+	background: var(--btn-ghost-hover);
+	border-color: var(--accent);
+}
+.tabs .pill.primary {
+	background: var(--accent-bg);
+	border-color: var(--accent);
+	color: var(--text-primary);
+}
+
 .badges {
 	display: flex;
 	gap: 0.5rem;
@@ -804,10 +806,6 @@ body.modal-open {
 	background: var(--bg-tertiary);
 }
 
-.med-group-head-toggle:hover .med-group-title {
-	color: var(--text-primary);
-}
-
 .med-group-title {
 	margin: 0;
 	font-size: 0.92rem;
@@ -815,6 +813,10 @@ body.modal-open {
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 	color: var(--text-muted);
+}
+
+.med-group-head-toggle:hover .med-group-title {
+	color: var(--text-primary);
 }
 
 .med-group-obsolete {
@@ -830,17 +832,6 @@ body.modal-open {
 
 .obsolete-row {
 	border-color: var(--border-primary);
-}
-
-.obsolete-row .med-actions button {
-	opacity: 0.72;
-	filter: saturate(0.72);
-	box-shadow: none;
-}
-
-.obsolete-row .med-actions button:hover {
-	opacity: 0.9;
-	filter: saturate(0.85);
 }
 
 @media (max-width: 768px) {
@@ -1024,6 +1015,51 @@ body.modal-open {
 	flex-wrap: wrap;
 	margin-top: 0.25rem;
 }
+
+.timeline-obsolete-row {
+	margin-top: 0.15rem;
+	display: flex;
+	justify-content: flex-start;
+}
+
+.timeline-obsolete-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	padding: 0.55rem 0.9rem;
+	min-height: 2.5rem;
+	font-size: 0.85rem;
+	line-height: 1;
+	background: transparent;
+	border: 1px solid #f8e38a;
+	color: #ffd54a;
+	box-shadow: none;
+}
+
+.timeline-obsolete-btn:hover {
+	background: color-mix(in srgb, #facc15 12%, transparent);
+	border-color: #ffe27c;
+	color: #ffe27c;
+	box-shadow: none;
+}
+
+.timeline-obsolete-btn svg {
+	width: 1rem;
+	height: 1rem;
+	flex-shrink: 0;
+}
+
+[data-theme="light"] .timeline-obsolete-btn {
+	background: transparent;
+	border-color: #d97706;
+	color: #b45309;
+}
+
+[data-theme="light"] .timeline-obsolete-btn:hover {
+	background: color-mix(in srgb, #f59e0b 10%, transparent);
+	border-color: #b45309;
+	color: #92400e;
+}
 .danger-text {
 	color: var(--danger);
 	font-weight: 700;
@@ -1045,6 +1081,153 @@ body.modal-open {
 	font-size: 0.75rem;
 	color: var(--text-secondary);
 	font-weight: 400;
+}
+
+button {
+	padding: 0.7rem 1.25rem;
+	border-radius: var(--btn-radius);
+	border: none;
+	background: var(--btn-primary-bg);
+	color: white;
+	cursor: pointer;
+	font-weight: 600;
+	font-size: 0.9rem;
+	box-shadow: var(--btn-shadow);
+	transition:
+		background 150ms ease,
+		box-shadow 150ms ease,
+		opacity 150ms ease;
+}
+button:hover {
+	background: var(--btn-primary-hover);
+}
+button:active {
+	box-shadow: var(--btn-shadow);
+}
+
+button:focus-visible {
+	outline: 2px solid var(--accent-light);
+	outline-offset: 2px;
+}
+
+button.icon-only {
+	min-width: 2.75rem;
+	min-height: 2.75rem;
+	padding: 0.5rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+}
+
+button.icon-only svg,
+.modal-close svg,
+.btn-copy svg,
+.share-btn svg {
+	width: 1.1rem;
+	height: 1.1rem;
+	stroke-width: 2;
+	flex-shrink: 0;
+}
+
+/* Secondary button (Edit, etc.) */
+button.secondary {
+	background: var(--bg-tertiary);
+	color: var(--text-primary);
+	border: 1px solid var(--border-secondary);
+}
+button.secondary:hover {
+	background: var(--bg-secondary);
+	border-color: var(--accent);
+}
+[data-theme="light"] button.secondary {
+	background: var(--bg-tertiary);
+}
+[data-theme="light"] button.secondary:hover {
+	background: var(--bg-secondary);
+}
+
+/* Success button (Refill, etc.) */
+button.success {
+	background: var(--success);
+	color: var(--btn-success-text);
+	border: none;
+}
+button.success:hover {
+	filter: brightness(1.1);
+}
+button.success:disabled {
+	background: var(--bg-tertiary);
+	color: var(--text-tertiary);
+	cursor: not-allowed;
+}
+
+/* Primary/Accent button (New entry, Add intake, etc.) */
+button.primary {
+	background: var(--accent);
+	color: white;
+	border: none;
+}
+button.primary:hover {
+	background: var(--accent-light);
+}
+button.primary:disabled {
+	background: var(--bg-tertiary);
+	color: var(--text-tertiary);
+	cursor: not-allowed;
+}
+
+/* Info button (Edit, secondary actions) */
+button.info {
+	background: #3b82f6;
+	color: white;
+	border: none;
+}
+button.info:hover {
+	background: #60a5fa;
+}
+
+/* Ghost button (Cancel, etc.) */
+button.ghost {
+	background: transparent;
+	border: 1px solid var(--border-secondary);
+	color: var(--text-muted);
+	box-shadow: none;
+}
+button.ghost:hover {
+	background: var(--btn-ghost-hover);
+}
+[data-theme="light"] button.ghost:hover {
+	background: var(--btn-ghost-hover);
+}
+
+/* Navigation button (Back): neutral and low visual urgency */
+button.btn-nav {
+	background: var(--bg-secondary);
+	border: 1px solid var(--border-secondary);
+	color: var(--text-primary);
+	box-shadow: none;
+}
+button.btn-nav:hover {
+	background: var(--btn-ghost-hover);
+	border-color: var(--accent);
+}
+
+/* Reversible status-change button (Mark obsolete): warning, not destructive */
+button.btn-obsolete {
+	background: var(--btn-obsolete-bg);
+	border: 1px solid var(--btn-obsolete-border);
+	color: var(--btn-obsolete-text);
+	box-shadow: none;
+	font-weight: 700;
+}
+button.btn-obsolete:hover {
+	background: var(--btn-obsolete-hover);
+	transform: none;
+	box-shadow: none;
+}
+button.btn-obsolete:active {
+	transform: none;
 }
 
 .med-actions {
@@ -1102,6 +1285,8 @@ body.modal-open {
 	color: #ffd54a;
 	background: var(--bg-input);
 	border: 1px solid var(--border-secondary);
+	gap: 0.45rem;
+	white-space: nowrap;
 }
 
 .med-actions button.btn-obsolete:hover {
@@ -1353,151 +1538,42 @@ body.modal-open {
 	margin: 0;
 }
 
-button {
-	padding: 0.7rem 1.25rem;
-	border-radius: var(--btn-radius);
-	border: none;
-	background: var(--btn-primary-bg);
-	color: white;
-	cursor: pointer;
-	font-weight: 600;
-	font-size: 0.9rem;
-	box-shadow: var(--btn-shadow);
-	transition:
-		background 150ms ease,
-		box-shadow 150ms ease,
-		opacity 150ms ease;
-}
-button:hover {
-	background: var(--btn-primary-hover);
-}
-button:active {
-	box-shadow: var(--btn-shadow);
+.obsolete-row .med-actions button {
+	opacity: 0.72;
+	filter: saturate(0.72);
+	box-shadow: none;
 }
 
-button:focus-visible {
-	outline: 2px solid var(--accent-light);
-	outline-offset: 2px;
+.obsolete-row .med-actions button:hover {
+	opacity: 0.9;
+	filter: saturate(0.85);
 }
 
-button.icon-only {
-	min-width: 2.75rem;
-	min-height: 2.75rem;
-	padding: 0.5rem;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	line-height: 1;
-}
-
-button.icon-only svg,
-.modal-close svg,
-.btn-copy svg,
-.share-btn svg {
-	width: 1.1rem;
-	height: 1.1rem;
-	stroke-width: 2;
-	flex-shrink: 0;
-}
-
-/* Secondary button (Edit, etc.) */
-button.secondary {
-	background: var(--bg-tertiary);
-	color: var(--text-primary);
-	border: 1px solid var(--border-secondary);
-}
-button.secondary:hover {
-	background: var(--bg-secondary);
-	border-color: var(--accent);
-}
-[data-theme="light"] button.secondary {
-	background: var(--bg-tertiary);
-}
-[data-theme="light"] button.secondary:hover {
-	background: var(--bg-secondary);
-}
-
-/* Success button (Refill, etc.) */
-button.success {
-	background: var(--success);
-	color: var(--btn-success-text);
-	border: none;
-}
-button.success:hover {
-	filter: brightness(1.1);
-}
-button.success:disabled {
-	background: var(--bg-tertiary);
-	color: var(--text-tertiary);
-	cursor: not-allowed;
-}
-
-/* Primary/Accent button (New entry, Add intake, etc.) */
-button.primary {
-	background: var(--accent);
-	color: white;
-	border: none;
-}
-button.primary:hover {
-	background: var(--accent-light);
-}
-button.primary:disabled {
-	background: var(--bg-tertiary);
-	color: var(--text-tertiary);
-	cursor: not-allowed;
-}
-
-/* Info button (Edit, secondary actions) */
-button.info {
-	background: #3b82f6;
-	color: white;
-	border: none;
-}
-button.info:hover {
-	background: #60a5fa;
-}
-
-/* Ghost button (Cancel, etc.) */
-button.ghost {
+button.timeline-obsolete-btn.btn-obsolete {
 	background: transparent;
-	border: 1px solid var(--border-secondary);
-	color: var(--text-muted);
+	border: 1px solid #f8e38a;
+	color: #ffd54a;
 	box-shadow: none;
-}
-button.ghost:hover {
-	background: var(--btn-ghost-hover);
-}
-[data-theme="light"] button.ghost:hover {
-	background: var(--btn-ghost-hover);
 }
 
-/* Navigation button (Back): neutral and low visual urgency */
-button.btn-nav {
-	background: var(--bg-secondary);
-	border: 1px solid var(--border-secondary);
-	color: var(--text-primary);
+button.timeline-obsolete-btn.btn-obsolete:hover {
+	background: color-mix(in srgb, #facc15 12%, transparent);
+	border-color: #ffe27c;
+	color: #ffe27c;
 	box-shadow: none;
-}
-button.btn-nav:hover {
-	background: var(--btn-ghost-hover);
-	border-color: var(--accent);
 }
 
-/* Reversible status-change button (Mark obsolete): warning, not destructive */
-button.btn-obsolete {
-	background: var(--btn-obsolete-bg);
-	border: 1px solid var(--btn-obsolete-border);
-	color: var(--btn-obsolete-text);
-	box-shadow: none;
-	font-weight: 700;
+[data-theme="light"] button.timeline-obsolete-btn.btn-obsolete {
+	background: transparent;
+	border-color: #d97706;
+	color: #b45309;
 }
-button.btn-obsolete:hover {
-	background: var(--btn-obsolete-hover);
-	transform: none;
+
+[data-theme="light"] button.timeline-obsolete-btn.btn-obsolete:hover {
+	background: color-mix(in srgb, #f59e0b 10%, transparent);
+	border-color: #b45309;
+	color: #92400e;
 	box-shadow: none;
-}
-button.btn-obsolete:active {
-	transform: none;
 }
 
 /* Danger button (Delete, etc.) */
@@ -2392,6 +2468,42 @@ button.has-validation-error {
 	border-bottom: none;
 	padding-bottom: 0;
 }
+
+.time-row.med-empty {
+	border-left: 3px solid var(--danger);
+	padding-left: 0.6rem;
+	background: color-mix(in srgb, var(--danger) 8%, transparent);
+	border-radius: 8px;
+}
+
+.time-row.med-low {
+	border-left: 3px solid var(--warning);
+	padding-left: 0.6rem;
+	background: color-mix(in srgb, var(--warning) 10%, transparent);
+	border-radius: 8px;
+}
+
+.time-row.med-low .med-name-text {
+	color: color-mix(in srgb, var(--warning) 88%, white 12%);
+}
+
+.time-row.med-low .tag.subtle {
+	background: color-mix(in srgb, var(--warning) 16%, transparent);
+	border-color: color-mix(in srgb, var(--warning) 42%, transparent);
+	color: color-mix(in srgb, var(--warning) 82%, white 18%);
+}
+
+.time-row.med-empty .med-name-text {
+	color: var(--danger);
+	text-decoration: line-through;
+	text-decoration-thickness: 2px;
+}
+
+.time-row.med-empty .tag.subtle {
+	background: color-mix(in srgb, var(--danger) 16%, transparent);
+	border-color: color-mix(in srgb, var(--danger) 42%, transparent);
+	color: color-mix(in srgb, var(--danger) 82%, white 18%);
+}
 .time-main {
 	display: flex;
 	flex-direction: column;
@@ -2519,6 +2631,47 @@ button.has-validation-error {
 .dose-item.overdue.taken .dose-usage {
 	text-decoration: line-through;
 	color: var(--text-secondary);
+}
+
+.dose-item.med-low,
+.dose-item.med-low.all-taken,
+.dose-item.med-low.taken,
+.dose-item.med-low.future,
+.dose-item.med-low.overdue,
+.dose-item.med-low.overdue.taken {
+	border-color: rgba(252, 211, 77, 0.5);
+	box-shadow: inset 3px 0 0 color-mix(in srgb, var(--warning) 88%, black 12%);
+}
+
+.dose-item.med-low:not(.all-taken):not(.taken):not(.overdue):not(.med-empty) {
+	background: color-mix(in srgb, var(--warning) 9%, var(--accent-bg));
+}
+
+.dose-item.med-empty,
+.dose-item.med-empty.all-taken,
+.dose-item.med-empty.taken,
+.dose-item.med-empty.future,
+.dose-item.med-empty.overdue,
+.dose-item.med-empty.overdue.taken {
+	background: color-mix(in srgb, var(--danger) 13%, transparent);
+	border-color: color-mix(in srgb, var(--danger) 46%, transparent);
+	opacity: 1;
+}
+
+.dose-item.med-empty .dose-time,
+.dose-item.med-empty .dose-usage {
+	color: color-mix(in srgb, var(--danger) 82%, white 18%);
+	text-decoration: line-through;
+	text-decoration-thickness: 2px;
+}
+
+.dose-item.med-empty .dose-person {
+	background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.dose-item.med-empty .dose-person .person-name,
+.dose-item.med-empty .dose-person.taken .person-name {
+	color: color-mix(in srgb, var(--danger) 80%, white 20%);
 }
 
 .dose-time {

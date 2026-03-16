@@ -45,8 +45,39 @@
 	gap: 1rem;
 }
 
+.refill-preview {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 42px;
+	padding: 0 0.75rem;
+	background: transparent;
+	border: 1px dashed var(--success);
+	border-radius: 6px;
+	color: var(--success);
+	font-size: 0.85rem;
+	font-weight: 600;
+	flex-shrink: 0;
+	align-self: flex-end;
+	box-sizing: border-box;
+}
+
 .refill-footer-right .refill-preview {
 	height: 42px;
+}
+
+/* Refill: submit row (button + pill preview) */
+.refill-submit-row {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+.refill-submit-row button {
+	height: 42px;
+	padding: 0 2rem;
+	min-width: 120px;
+	flex-shrink: 0;
 }
 
 /* Refill modal footer mobile */
@@ -68,20 +99,6 @@
 	.refill-modal .modal-footer .refill-footer-right button {
 		flex: 1;
 	}
-}
-
-/* Refill: submit row (button + pill preview) */
-.refill-submit-row {
-	display: flex;
-	align-items: center;
-	gap: 1rem;
-}
-
-.refill-submit-row button {
-	height: 42px;
-	padding: 0 2rem;
-	min-width: 120px;
-	flex-shrink: 0;
 }
 
 /* Refill: prescription toggle row */
@@ -132,23 +149,6 @@
 	font-weight: 600;
 	color: var(--success);
 	margin-left: auto;
-}
-
-.refill-preview {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	height: 42px;
-	padding: 0 0.75rem;
-	background: transparent;
-	border: 1px dashed var(--success);
-	border-radius: 6px;
-	color: var(--success);
-	font-size: 0.85rem;
-	font-weight: 600;
-	flex-shrink: 0;
-	align-self: flex-end;
-	box-sizing: border-box;
 }
 
 .refill-section {

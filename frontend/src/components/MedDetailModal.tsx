@@ -980,17 +980,15 @@ export function MedDetailModal({
 								)}
 							</h3>
 							<div className="med-detail-schedules">
-								{scheduleIntakes.map((intake, idx) => {
+								{scheduleIntakes.map((intake) => {
 									const hasPerIntakeTakenBy = !!intake.takenBy;
 									const personCount = Math.max(1, selectedMed.takenBy?.length ?? 0);
 									const totalUsage = hasPerIntakeTakenBy ? intake.usage : intake.usage * personCount;
 									const showIntakeBell = intake.intakeRemindersEnabled === true;
+									const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}-${intake.intakeRemindersEnabled ? "reminder" : "silent"}`;
 
 									return (
-										<div
-											key={`${intake.start}-${intake.usage}-${intake.every}-${idx}`}
-											className="med-schedule-row blister-row-simple"
-										>
+										<div key={intakeKey} className="med-schedule-row blister-row-simple">
 											<span className="med-schedule-usage">
 												{getScheduleUsageLabel(totalUsage, intake.intakeUnit)}
 												{showPillWeightDetails && ` (${totalUsage * pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}

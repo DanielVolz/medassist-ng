@@ -96,11 +96,6 @@ const shareOverviewResponseSchema = {
 	},
 } as const;
 
-function maskToken(token: string): string {
-	if (token.length <= 8) return token;
-	return `${token.slice(0, 4)}...${token.slice(-4)}`;
-}
-
 // Helper to get user ID from request
 // Returns anonymous user ID when auth is disabled
 async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
@@ -155,7 +150,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			// Find share token
 			const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
 			if (!share) {
-				request.log.warn(`[Share] Invalid share token requested: ${maskToken(token)}`);
+				request.log.warn(`[Share] Invalid share token requested: token=${token}`);
 				return reply.status(404).send({
 					error: "Share link not found",
 					code: "NOT_FOUND",
@@ -165,7 +160,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			// Check if token has expired
 			if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
 				request.log.warn(
-					`[Share] Expired token requested: ${maskToken(token)} (owner=${share.userId}, takenBy=${share.takenBy})`
+					`[Share] Expired token requested: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}`
 				);
 				// Get the username of the owner to show in the expired message
 				const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
@@ -186,7 +181,10 @@ export async function shareRoutes(app: FastifyInstance) {
 
 			// Get medications for this user filtered by takenBy (search in JSON array)
 			// Use SQLite JSON function to check if takenBy is in the array
-			const allMeds = await db.select().from(medications).where(eq(medications.userId, share.userId));
+			const allMeds = await db
+				.select()
+				.from(medications)
+				.where(and(eq(medications.userId, share.userId), eq(medications.isObsolete, false)));
 
 			// Filter medications where takenBy matches either medication-level OR any intake-level takenBy
 			const meds = allMeds.filter((med) => {
@@ -301,19 +299,19 @@ export async function shareRoutes(app: FastifyInstance) {
 
 			const { token } = request.params;
 			if (!shareTokenPattern.test(token)) {
-				request.log.warn(`[ShareOverview] Rejected invalid token format: ${maskToken(token)}`);
+				request.log.warn(`[ShareOverview] Rejected invalid token format: token=${token}`);
 				return reply.status(404).send({ error: "not_found" });
 			}
 
 			const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
 			if (!share) {
-				request.log.warn(`[ShareOverview] Unknown token requested: ${maskToken(token)}`);
+				request.log.warn(`[ShareOverview] Unknown token requested: token=${token}`);
 				return reply.status(404).send({ error: "not_found" });
 			}
 
 			if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
 				request.log.warn(
-					`[ShareOverview] Expired token requested: ${maskToken(token)} (owner=${share.userId}, takenBy=${share.takenBy})`
+					`[ShareOverview] Expired token requested: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}`
 				);
 				return reply.status(410).send({
 					error: "expired",
@@ -324,7 +322,10 @@ export async function shareRoutes(app: FastifyInstance) {
 			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
 			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
 
-			const allMeds = await db.select().from(medications).where(eq(medications.userId, share.userId));
+			const allMeds = await db
+				.select()
+				.from(medications)
+				.where(and(eq(medications.userId, share.userId), eq(medications.isObsolete, false)));
 			const meds = allMeds.filter((med) => {
 				const takenByArray = parseTakenByJson(med.takenByJson);
 				const intakes = parseIntakesJson(
@@ -392,7 +393,10 @@ export async function shareRoutes(app: FastifyInstance) {
 			const { takenBy, scheduleDays } = parsed.data;
 
 			// Check if user has medications for this takenBy (search in both medication-level and intake-level)
-			const allMeds = await db.select().from(medications).where(eq(medications.userId, userId));
+			const allMeds = await db
+				.select()
+				.from(medications)
+				.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
 			const medsForPerson = allMeds.filter((med) => {
 				const takenByArray = parseTakenByJson(med.takenByJson);
 				const intakes = parseIntakesJson(
@@ -421,7 +425,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				await db.update(shareTokens).set({ scheduleDays, expiresAt: null }).where(eq(shareTokens.id, existingShare.id));
 
 				request.log.info(
-					`[Share] Reused existing share token (owner=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays})`
+					`[Share] Reused existing share token: token=${existingShare.token}, ownerUserId=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays}`
 				);
 
 				return {
@@ -443,7 +447,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			});
 
 			request.log.info(
-				`[Share] Created new share token (owner=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays})`
+				`[Share] Created new share token: token=${token}, ownerUserId=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays}`
 			);
 
 			return {
@@ -490,7 +494,7 @@ export async function shareRoutes(app: FastifyInstance) {
 					intakeRemindersEnabled: medications.intakeRemindersEnabled,
 				})
 				.from(medications)
-				.where(eq(medications.userId, userId));
+				.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
 
 			// Collect all unique person names from medication-level AND intake-level takenBy
 			const allPeople = new Set<string>();

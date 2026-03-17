@@ -1,7 +1,7 @@
 {
   "name": "medassist-ng-frontend",
   "private": true,
-  "version": "1.20.1",
+  "version": "1.20.2",
   "type": "module",
   "scripts": {
     "dev": "vite",

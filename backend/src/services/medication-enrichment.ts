@@ -204,10 +204,10 @@ function sanitizeText(value: unknown): string | null {
 	const trimmed = value
 		.replace(/<[^>]+>/g, " ")
 		.replace(/&nbsp;/gi, " ")
-		.replace(/&amp;/gi, "&")
 		.replace(/&quot;/gi, '"')
 		.replace(/&#039;/gi, "'")
 		.replace(/&apos;/gi, "'")
+		.replace(/&amp;/gi, "&")
 		.replace(/\s+/g, " ")
 		.trim();
 	return trimmed.length > 0 ? trimmed : null;

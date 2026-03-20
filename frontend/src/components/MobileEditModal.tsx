@@ -9,7 +9,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useScrollLock } from "../hooks/useScrollLock";
-import type { DoseUnit, FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
+import type {
+	DoseUnit,
+	FieldErrors,
+	FormBlister,
+	FormIntake,
+	FormState,
+	Medication,
+	MedicationEnrichmentSearchResult,
+	MedicationEnrichmentStrengthOption,
+} from "../types";
 import {
 	allowsPillFormSelection,
 	DOSE_UNITS,
@@ -28,6 +37,8 @@ import {
 } from "../utils/intake-schedule";
 import { DateInput } from "./DateInput";
 import { FormNumberStepper } from "./FormNumberStepper";
+import type { MedicationEnrichmentViewModel } from "./MedicationEnrichmentSection";
+import { MedicationEnrichmentSection } from "./MedicationEnrichmentSection";
 
 // Field limits for validation
 const FIELD_LIMITS = {
@@ -40,11 +51,33 @@ const FIELD_LIMITS = {
 const MOBILE_TAB_ORDER = ["general", "stock", "schedule", "prescription"] as const;
 type MobileTab = (typeof MOBILE_TAB_ORDER)[number];
 
+const EMPTY_MEDICATION_ENRICHMENT: MedicationEnrichmentViewModel = {
+	query: "",
+	results: [],
+	hasMoreResults: false,
+	isSearching: false,
+	hasSearched: false,
+	searchError: null,
+	applyingCode: null,
+	activeResultCode: null,
+	appliedSelection: null,
+	enrichError: null,
+	meta: null,
+	strengthOptions: [],
+	appliedStrengthLabel: null,
+};
+
 export interface MobileEditModalProps {
 	show: boolean;
 	editingId: number | null;
 	form: FormState;
 	onFormChange: (form: FormState) => void;
+	medicationEnrichment?: MedicationEnrichmentViewModel;
+	onMedicationEnrichmentQueryChange?: (value: string) => void;
+	onMedicationEnrichmentSearch?: () => void;
+	onMedicationEnrichmentLoadMore?: () => void;
+	onMedicationEnrichmentApply?: (result: MedicationEnrichmentSearchResult) => void;
+	onMedicationEnrichmentStrengthApply?: (option: MedicationEnrichmentStrengthOption) => void;
 	fieldErrors: FieldErrors;
 	saving: boolean;
 	formSaved: boolean;
@@ -97,6 +130,12 @@ export function MobileEditModal({
 	editingId,
 	form,
 	onFormChange,
+	medicationEnrichment = EMPTY_MEDICATION_ENRICHMENT,
+	onMedicationEnrichmentQueryChange = () => {},
+	onMedicationEnrichmentSearch = () => {},
+	onMedicationEnrichmentLoadMore = () => {},
+	onMedicationEnrichmentApply = () => {},
+	onMedicationEnrichmentStrengthApply = () => {},
 	fieldErrors,
 	saving,
 	formSaved,
@@ -446,6 +485,14 @@ export function MobileEditModal({
 												<span className="field-error">{fieldErrors.genericName}</span>
 											)}
 										</label>
+										<MedicationEnrichmentSection
+											state={medicationEnrichment}
+											onQueryChange={onMedicationEnrichmentQueryChange}
+											onSearch={onMedicationEnrichmentSearch}
+											onLoadMoreResults={onMedicationEnrichmentLoadMore}
+											onApplyResult={onMedicationEnrichmentApply}
+											onApplyStrength={onMedicationEnrichmentStrengthApply}
+										/>
 										<div className="full date-pair-group">
 											<label className="date-pair-field">
 												{t("form.medicationStartDate")}

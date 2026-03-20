@@ -492,4 +492,158 @@ describe("MedicationsPage form interactions", () => {
 		expect(resetForm).toHaveBeenCalledTimes(1);
 		expect(pushStateSpy).toHaveBeenCalledWith({ modal: "edit" }, "");
 	});
+
+	it("renders the shared medication enrichment section after generic name on desktop", () => {
+		renderPage();
+		openNewMedicationForm();
+
+		const genericNameLabel = screen.getByText("form.genericName");
+		const enrichmentTitle = screen.getByText("form.enrichment.title");
+
+		expect(genericNameLabel.compareDocumentPosition(enrichmentTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(screen.getByText("form.enrichment.collapsedHint")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "form.enrichment.toggleShow" })).toBeInTheDocument();
+	});
+
+	it("searches and applies medication enrichment suggestions through the desktop form", async () => {
+		const setForm = vi.fn();
+		mockFormHookValue = createMockFormHook({ setForm });
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Aspirin",
+						normalizedQuery: "aspirin",
+						hasMore: url.includes("limit=6"),
+						results: [
+							{
+								code: "RX-ASPIRIN",
+								name: "Aspirin",
+								genericName: "Acetylsalicylic acid",
+								authorisationHolder: null,
+								therapeuticArea: null,
+								matchType: "ingredient",
+								genericStatus: "unknown",
+								authorisationDate: null,
+								source: "rxnorm",
+							},
+							{
+								code: "EMA-ASPIRIN",
+								name: "Aspirin 500 mg tablets",
+								genericName: "Acetylsalicylic acid",
+								authorisationHolder: "Bayer",
+								therapeuticArea: "Pain",
+								matchType: "brand",
+								genericStatus: "original",
+								authorisationDate: "2024-02-01",
+								source: "ema",
+							},
+							...(url.includes("limit=12")
+								? [
+										{
+											code: "NDC-ASPIRIN",
+											name: "Bayer Aspirin",
+											genericName: "Acetylsalicylic acid",
+											authorisationHolder: null,
+											therapeuticArea: null,
+											matchType: "brand",
+											genericStatus: "unknown",
+											authorisationDate: null,
+											source: "openfda",
+										},
+									]
+								: []),
+						],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/enrich") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						selection: {
+							name: "Aspirin",
+							genericName: "Acetylsalicylic acid",
+							therapeuticArea: "Pain",
+							indication: "Pain relief",
+							atcCode: "N02BA01",
+							source: "rxnorm",
+						},
+						suggestions: {
+							name: "Aspirin",
+							genericName: "Acetylsalicylic acid",
+							medicationForm: "tablet",
+							strengthOptions: [{ label: "500 mg", pillWeightMg: 500, doseUnit: "mg" }],
+						},
+						meta: {
+							rxNormMatched: true,
+							openFdaMatched: false,
+							partial: false,
+							note: null,
+						},
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "  Aspirin  " },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=6", {
+				credentials: "include",
+			});
+		});
+
+		await screen.findByText("Aspirin 500 mg tablets");
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12", {
+				credentials: "include",
+			});
+		});
+
+		await screen.findByText("Bayer Aspirin");
+		expect(screen.queryByRole("button", { name: "form.enrichment.showMoreAction" })).not.toBeInTheDocument();
+		fireEvent.click(screen.getAllByRole("button", { name: "form.enrichment.applyAction" })[0]);
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					query: "Aspirin",
+					name: "Aspirin",
+					genericName: "Acetylsalicylic acid",
+					code: "RX-ASPIRIN",
+					source: "rxnorm",
+				}),
+				credentials: "include",
+			});
+			expect(setForm).toHaveBeenCalledWith(
+				expect.objectContaining({
+					name: "Aspirin",
+					genericName: "Acetylsalicylic acid",
+					medicationForm: "tablet",
+					pillForm: "tablet",
+					pillWeightMg: "500",
+					doseUnit: "mg",
+				})
+			);
+		});
+
+		expect(screen.getAllByText("form.enrichment.applied").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getByText("form.enrichment.appliedStrength")).toBeInTheDocument();
+	});
 });

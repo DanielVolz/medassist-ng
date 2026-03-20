@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { FormEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { MedicationEnrichmentViewModel } from "../../components/MedicationEnrichmentSection";
 import { MobileEditModal } from "../../components/MobileEditModal";
 import type { FormState, WeekdayCode } from "../../types";
 
@@ -92,6 +93,26 @@ const defaultProps = {
 	onSaveMedication: vi.fn(),
 };
 
+function createMedicationEnrichmentState(
+	overrides: Partial<MedicationEnrichmentViewModel> = {}
+): MedicationEnrichmentViewModel {
+	return {
+		query: "",
+		results: [],
+		isSearching: false,
+		hasSearched: false,
+		searchError: null,
+		applyingCode: null,
+		activeResultCode: null,
+		appliedSelection: null,
+		enrichError: null,
+		meta: null,
+		strengthOptions: [],
+		appliedStrengthLabel: null,
+		...overrides,
+	};
+}
+
 describe("MobileEditModal", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -159,6 +180,64 @@ describe("MobileEditModal", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
 		expect(screen.getByText(/form\.genericName/i)).toBeInTheDocument();
+	});
+
+	it("renders the shared medication enrichment section after generic name", () => {
+		render(<MobileEditModal {...defaultProps} />);
+
+		const genericNameLabel = screen.getByText("form.genericName");
+		const enrichmentTitle = screen.getByText("form.enrichment.title");
+
+		expect(genericNameLabel.compareDocumentPosition(enrichmentTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(screen.getByText("form.enrichment.collapsedHint")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "form.enrichment.toggleShow" })).toBeInTheDocument();
+	});
+
+	it("wires medication enrichment search and apply actions inside the mobile editor", () => {
+		const onMedicationEnrichmentQueryChange = vi.fn();
+		const onMedicationEnrichmentSearch = vi.fn();
+		const onMedicationEnrichmentApply = vi.fn();
+		const onMedicationEnrichmentStrengthApply = vi.fn();
+		const result = {
+			code: "RX-123",
+			name: "Wegovy",
+			genericName: "Semaglutide",
+			authorisationHolder: null,
+			therapeuticArea: null,
+			matchType: "brand" as const,
+			genericStatus: "unknown" as const,
+			authorisationDate: null,
+			source: "rxnorm" as const,
+		};
+		const strengthOption = { label: "0.25 mg", pillWeightMg: 0.25, doseUnit: "mg" as const };
+
+		render(
+			<MobileEditModal
+				{...defaultProps}
+				medicationEnrichment={createMedicationEnrichmentState({
+					query: "Wegovy",
+					results: [result],
+					strengthOptions: [strengthOption],
+				})}
+				onMedicationEnrichmentQueryChange={onMedicationEnrichmentQueryChange}
+				onMedicationEnrichmentSearch={onMedicationEnrichmentSearch}
+				onMedicationEnrichmentApply={onMedicationEnrichmentApply}
+				onMedicationEnrichmentStrengthApply={onMedicationEnrichmentStrengthApply}
+			/>
+		);
+
+		expect(screen.getByRole("button", { name: "form.enrichment.toggleHide" })).toBeInTheDocument();
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Ozempic" },
+		});
+		fireEvent.keyDown(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), { key: "Enter" });
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.applyAction" }));
+		fireEvent.click(screen.getByRole("button", { name: "0.25 mg" }));
+
+		expect(onMedicationEnrichmentQueryChange).toHaveBeenCalledWith("Ozempic");
+		expect(onMedicationEnrichmentSearch).toHaveBeenCalledTimes(1);
+		expect(onMedicationEnrichmentApply).toHaveBeenCalledWith(result);
+		expect(onMedicationEnrichmentStrengthApply).toHaveBeenCalledWith(strengthOption);
 	});
 
 	it("groups medication start and end date fields in one stacked date pair", () => {

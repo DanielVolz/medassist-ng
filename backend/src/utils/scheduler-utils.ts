@@ -6,14 +6,34 @@
 import { getDateLocale, type Language } from "../i18n/translations.js";
 import { isLiquidContainerPackageType, isTubePackageType } from "./package-profiles.js";
 
+export const CANONICAL_WEEKDAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
+export type Weekday = (typeof CANONICAL_WEEKDAY_ORDER)[number];
+export type IntakeScheduleMode = "interval" | "weekdays";
+
+type ScheduleLike = {
+	every: number;
+	start: string;
+	scheduleMode?: IntakeScheduleMode;
+	weekdays?: Weekday[];
+};
+
 // Legacy type - individual blister schedule (DEPRECATED: use Intake instead)
-export type Blister = { usage: number; every: number; start: string };
+export type Blister = {
+	usage: number;
+	every: number;
+	start: string;
+	scheduleMode?: IntakeScheduleMode;
+	weekdays?: Weekday[];
+};
 
 // New unified intake type with per-intake takenBy
 export type Intake = {
 	usage: number;
 	every: number;
 	start: string;
+	scheduleMode?: IntakeScheduleMode;
+	weekdays?: Weekday[];
 	intakeUnit?: "ml" | "tsp" | "tbsp" | null;
 	takenBy: string | null; // Person taking this specific intake (null = use medication-level takenBy)
 	intakeRemindersEnabled: boolean;
@@ -21,6 +41,278 @@ export type Intake = {
 
 const isValidIntakeUnit = (value: unknown): value is "ml" | "tsp" | "tbsp" =>
 	value === "ml" || value === "tsp" || value === "tbsp";
+
+const weekdayToJavascriptDay: Record<Weekday, number> = {
+	mon: 1,
+	tue: 2,
+	wed: 3,
+	thu: 4,
+	fri: 5,
+	sat: 6,
+	sun: 0,
+};
+
+function isWeekday(value: unknown): value is Weekday {
+	return typeof value === "string" && CANONICAL_WEEKDAY_ORDER.includes(value as Weekday);
+}
+
+function normalizeScheduleMode(value: unknown): IntakeScheduleMode {
+	return value === "weekdays" ? "weekdays" : "interval";
+}
+
+function toDateOnly(date: Date): Date {
+	return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+}
+
+export function getDateOnlyTimestamp(date: Date): number {
+	return toDateOnly(date).getTime();
+}
+
+export function getWeekdayFromDate(date: Date): Weekday {
+	const weekday = CANONICAL_WEEKDAY_ORDER.find((entry) => weekdayToJavascriptDay[entry] === date.getDay());
+	return weekday ?? "mon";
+}
+
+export function getWeekdayFromStart(start: string): Weekday {
+	const startDate = parseLocalDateTime(start);
+	if (Number.isNaN(startDate.getTime())) {
+		return "mon";
+	}
+	return getWeekdayFromDate(startDate);
+}
+
+export function normalizeWeekdays(value: unknown, start: string): Weekday[] {
+	if (!Array.isArray(value)) {
+		return [getWeekdayFromStart(start)];
+	}
+
+	const uniqueWeekdays = new Set<Weekday>();
+	for (const weekday of value) {
+		if (isWeekday(weekday)) {
+			uniqueWeekdays.add(weekday);
+		}
+	}
+
+	const normalized = CANONICAL_WEEKDAY_ORDER.filter((weekday) => uniqueWeekdays.has(weekday));
+	return normalized.length > 0 ? normalized : [getWeekdayFromStart(start)];
+}
+
+function createOccurrenceAtDate(date: Date, startDate: Date): number {
+	return new Date(
+		date.getFullYear(),
+		date.getMonth(),
+		date.getDate(),
+		startDate.getHours(),
+		startDate.getMinutes(),
+		startDate.getSeconds(),
+		startDate.getMilliseconds()
+	).getTime();
+}
+
+function getNormalizedWeekdays(schedule: ScheduleLike): Weekday[] {
+	if (schedule.scheduleMode !== "weekdays") {
+		return [];
+	}
+
+	if (schedule.weekdays && schedule.weekdays.length > 0) {
+		return schedule.weekdays;
+	}
+
+	return [getWeekdayFromStart(schedule.start)];
+}
+
+export function getAverageOccurrencesPerDay(
+	schedule: Pick<ScheduleLike, "every" | "start" | "scheduleMode" | "weekdays">
+): number {
+	if (schedule.scheduleMode === "weekdays") {
+		return getNormalizedWeekdays(schedule).length / 7;
+	}
+
+	return 1 / Math.max(1, schedule.every);
+}
+
+export function getMaxScheduledGapDays(
+	schedule: Pick<ScheduleLike, "every" | "start" | "scheduleMode" | "weekdays">
+): number {
+	if (schedule.scheduleMode !== "weekdays") {
+		return Math.max(1, schedule.every);
+	}
+
+	const weekdays = getNormalizedWeekdays(schedule).map((weekday) => CANONICAL_WEEKDAY_ORDER.indexOf(weekday));
+	if (weekdays.length === 0) {
+		return 7;
+	}
+
+	let maxGap = 0;
+	for (let index = 0; index < weekdays.length; index++) {
+		const current = weekdays[index];
+		const next = weekdays[(index + 1) % weekdays.length];
+		const gap = index === weekdays.length - 1 ? next + 7 - current : next - current;
+		if (gap > maxGap) {
+			maxGap = gap;
+		}
+	}
+
+	return maxGap || 7;
+}
+
+export function getScheduleMatchWindowMs(
+	schedule: Pick<ScheduleLike, "every" | "start" | "scheduleMode" | "weekdays">
+): number {
+	return (getMaxScheduledGapDays(schedule) * 86_400_000) / 2;
+}
+
+export function getNextScheduledOccurrenceTime(
+	schedule: Pick<ScheduleLike, "every" | "start" | "scheduleMode" | "weekdays">,
+	fromMs: number,
+	inclusive: boolean = true
+): number | null {
+	const startDate = parseLocalDateTime(schedule.start);
+	const startTime = startDate.getTime();
+	if (Number.isNaN(startTime)) {
+		return null;
+	}
+
+	const lowerBound = inclusive ? fromMs : fromMs + 1;
+	if (schedule.scheduleMode !== "weekdays") {
+		const period = Math.max(1, schedule.every) * 86_400_000;
+		if (startTime >= lowerBound) {
+			return startTime;
+		}
+
+		const intervals = Math.ceil((lowerBound - startTime) / period);
+		return startTime + intervals * period;
+	}
+
+	const candidateStart = Math.max(lowerBound, startTime);
+	const candidateDateOnly = toDateOnly(new Date(candidateStart));
+	let nextOccurrence: number | null = null;
+
+	for (const weekday of getNormalizedWeekdays(schedule)) {
+		const candidateDate = new Date(candidateDateOnly);
+		const offsetDays = (weekdayToJavascriptDay[weekday] - candidateDate.getDay() + 7) % 7;
+		candidateDate.setDate(candidateDate.getDate() + offsetDays);
+
+		let occurrenceMs = createOccurrenceAtDate(candidateDate, startDate);
+		if (occurrenceMs < candidateStart) {
+			candidateDate.setDate(candidateDate.getDate() + 7);
+			occurrenceMs = createOccurrenceAtDate(candidateDate, startDate);
+		}
+
+		if (nextOccurrence === null || occurrenceMs < nextOccurrence) {
+			nextOccurrence = occurrenceMs;
+		}
+	}
+
+	return nextOccurrence;
+}
+
+export function forEachScheduledOccurrenceInRange(
+	schedule: Pick<ScheduleLike, "every" | "start" | "scheduleMode" | "weekdays">,
+	rangeStartMs: number,
+	rangeEndMs: number,
+	callback: (occurrenceMs: number) => void
+): void {
+	if (!Number.isFinite(rangeStartMs) || !Number.isFinite(rangeEndMs) || rangeEndMs < rangeStartMs) {
+		return;
+	}
+
+	const startDate = parseLocalDateTime(schedule.start);
+	const startTime = startDate.getTime();
+	if (Number.isNaN(startTime) || rangeEndMs < startTime) {
+		return;
+	}
+
+	if (schedule.scheduleMode !== "weekdays") {
+		const period = Math.max(1, schedule.every) * 86_400_000;
+		let occurrenceMs = startTime;
+		if (occurrenceMs < rangeStartMs) {
+			const intervals = Math.ceil((rangeStartMs - occurrenceMs) / period);
+			occurrenceMs += intervals * period;
+		}
+
+		for (; occurrenceMs <= rangeEndMs; occurrenceMs += period) {
+			if (occurrenceMs >= rangeStartMs) {
+				callback(occurrenceMs);
+			}
+		}
+		return;
+	}
+
+	const lowerBound = Math.max(rangeStartMs, startTime);
+	const firstDateOnly = toDateOnly(new Date(lowerBound));
+
+	for (const weekday of getNormalizedWeekdays(schedule)) {
+		const occurrenceDate = new Date(firstDateOnly);
+		const offsetDays = (weekdayToJavascriptDay[weekday] - occurrenceDate.getDay() + 7) % 7;
+		occurrenceDate.setDate(occurrenceDate.getDate() + offsetDays);
+
+		let occurrenceMs = createOccurrenceAtDate(occurrenceDate, startDate);
+		if (occurrenceMs < lowerBound) {
+			occurrenceDate.setDate(occurrenceDate.getDate() + 7);
+			occurrenceMs = createOccurrenceAtDate(occurrenceDate, startDate);
+		}
+
+		while (occurrenceMs <= rangeEndMs) {
+			callback(occurrenceMs);
+			occurrenceDate.setDate(occurrenceDate.getDate() + 7);
+			occurrenceMs = createOccurrenceAtDate(occurrenceDate, startDate);
+		}
+	}
+}
+
+export function countScheduledOccurrencesInRange(
+	schedule: Pick<ScheduleLike, "every" | "start" | "scheduleMode" | "weekdays">,
+	rangeStartMs: number,
+	rangeEndMs: number
+): { count: number; lastOccurrenceMs: number | null } {
+	let count = 0;
+	let lastOccurrenceMs: number | null = null;
+
+	forEachScheduledOccurrenceInRange(schedule, rangeStartMs, rangeEndMs, (occurrenceMs) => {
+		count += 1;
+		if (lastOccurrenceMs === null || occurrenceMs > lastOccurrenceMs) {
+			lastOccurrenceMs = occurrenceMs;
+		}
+	});
+
+	return { count, lastOccurrenceMs };
+}
+
+export function normalizeIntake(
+	value: {
+		usage?: unknown;
+		every?: unknown;
+		start?: unknown;
+		scheduleMode?: unknown;
+		weekdays?: unknown;
+		intakeUnit?: unknown;
+		takenBy?: unknown;
+		intakeRemindersEnabled?: unknown;
+	},
+	defaultIntakeRemindersEnabled: boolean = false
+): Intake {
+	const start = typeof value.start === "string" ? value.start : new Date().toISOString();
+	const scheduleMode = normalizeScheduleMode(value.scheduleMode);
+	let every = 1;
+	if (scheduleMode !== "weekdays") {
+		if (typeof value.every === "number" && Number.isFinite(value.every) && value.every >= 1) {
+			every = value.every;
+		}
+	}
+
+	return {
+		usage: typeof value.usage === "number" && Number.isFinite(value.usage) ? value.usage : 0,
+		every,
+		start,
+		scheduleMode,
+		weekdays: scheduleMode === "weekdays" ? normalizeWeekdays(value.weekdays, start) : [],
+		intakeUnit: isValidIntakeUnit(value.intakeUnit) ? value.intakeUnit : null,
+		takenBy: typeof value.takenBy === "string" && value.takenBy.trim() ? value.takenBy.trim() : null,
+		intakeRemindersEnabled:
+			typeof value.intakeRemindersEnabled === "boolean" ? value.intakeRemindersEnabled : defaultIntakeRemindersEnabled,
+	};
+}
 
 /**
  * Normalize intake usage for stock math.
@@ -225,15 +517,7 @@ export function parseIntakesJson(
 		try {
 			const parsed = JSON.parse(intakesJson);
 			if (Array.isArray(parsed) && parsed.length > 0) {
-				return parsed.map((intake: Record<string, unknown>) => ({
-					usage: typeof intake.usage === "number" ? intake.usage : 0,
-					every: typeof intake.every === "number" ? intake.every : 1,
-					start: typeof intake.start === "string" ? intake.start : new Date().toISOString(),
-					intakeUnit: isValidIntakeUnit(intake.intakeUnit) ? intake.intakeUnit : null,
-					takenBy: typeof intake.takenBy === "string" && intake.takenBy.trim() ? intake.takenBy.trim() : null,
-					intakeRemindersEnabled:
-						typeof intake.intakeRemindersEnabled === "boolean" ? intake.intakeRemindersEnabled : false,
-				}));
+				return parsed.map((intake: Record<string, unknown>) => normalizeIntake(intake));
 			}
 		} catch {
 			// Fall through to legacy parsing
@@ -243,14 +527,18 @@ export function parseIntakesJson(
 	// Fallback to legacy parallel arrays
 	if (legacyRow) {
 		const blisters = parseBlisters(legacyRow);
-		return blisters.map((b) => ({
-			usage: b.usage,
-			every: b.every,
-			start: b.start,
-			intakeUnit: null,
-			takenBy: null, // Legacy format has no per-intake takenBy
-			intakeRemindersEnabled: medicationIntakeRemindersEnabled ?? false,
-		}));
+		return blisters.map((b) =>
+			normalizeIntake(
+				{
+					usage: b.usage,
+					every: b.every,
+					start: b.start,
+					intakeUnit: null,
+					takenBy: null,
+				},
+				medicationIntakeRemindersEnabled ?? false
+			)
+		);
 	}
 
 	return [];
@@ -303,7 +591,7 @@ export function personTakesMedication(person: string, medicationTakenBy: string[
 
 /** Calculate daily usage from blisters */
 export function calculateDailyUsage(blisters: Blister[]): number {
-	return blisters.reduce((sum, s) => sum + s.usage / s.every, 0);
+	return blisters.reduce((sum, blister) => sum + blister.usage * getAverageOccurrencesPerDay(blister), 0);
 }
 
 /** Calculate depletion information for a medication */
@@ -370,50 +658,31 @@ export function getTodaysIntakes(
 
 	for (let blisterIdx = 0; blisterIdx < intakes.length; blisterIdx++) {
 		const intake = intakes[blisterIdx];
-		const startTime = parseLocalDateTime(intake.start).getTime();
-		const intervalMs = intake.every * 24 * 60 * 60 * 1000;
-
-		if (intervalMs <= 0) continue;
-
 		// Determine takenBy for this intake
 		// If intake has its own takenBy, use it; otherwise null (no specific person)
 		const effectiveTakenBy = intake.takenBy || null;
 
-		// Find all occurrences that fall within today
-		let currentTime = startTime;
-
-		// If start is in the past, calculate the first occurrence on or after todayStart
-		if (currentTime < todayStart.getTime()) {
-			const elapsed = todayStart.getTime() - startTime;
-			const intervals = Math.floor(elapsed / intervalMs);
-			currentTime = startTime + intervals * intervalMs;
-		}
-
-		// Collect all intakes for today
-		while (currentTime <= todayEnd.getTime()) {
-			if (currentTime >= todayStart.getTime()) {
-				const intakeDate = new Date(currentTime);
-				result.push({
-					medName,
-					medicationId,
-					blisterIndex: blisterIdx,
-					usage: intake.usage,
-					intakeTime: intakeDate,
-					intakeTimeStr: intakeDate.toLocaleTimeString(locale, {
-						hour: "2-digit",
-						minute: "2-digit",
-						timeZone: timezone,
-					}),
-					takenBy: effectiveTakenBy,
-					pillWeightMg,
-					doseUnit,
-				});
-			}
-			currentTime += intervalMs;
-		}
+		forEachScheduledOccurrenceInRange(intake, todayStart.getTime(), todayEnd.getTime(), (occurrenceMs) => {
+			const intakeDate = new Date(occurrenceMs);
+			result.push({
+				medName,
+				medicationId,
+				blisterIndex: blisterIdx,
+				usage: intake.usage,
+				intakeTime: intakeDate,
+				intakeTimeStr: intakeDate.toLocaleTimeString(locale, {
+					hour: "2-digit",
+					minute: "2-digit",
+					timeZone: timezone,
+				}),
+				takenBy: effectiveTakenBy,
+				pillWeightMg,
+				doseUnit,
+			});
+		});
 	}
 
-	return result;
+	return result.sort((left, right) => left.intakeTime.getTime() - right.intakeTime.getTime());
 }
 
 /**
@@ -444,40 +713,11 @@ export function getUpcomingIntakes(
 
 	for (let blisterIdx = 0; blisterIdx < intakes.length; blisterIdx++) {
 		const intake = intakes[blisterIdx];
-		const startTime = parseLocalDateTime(intake.start).getTime();
-		const intervalMs = intake.every * 24 * 60 * 60 * 1000;
-
-		if (intervalMs <= 0) continue;
-
 		// Determine takenBy for this intake
 		const effectiveTakenBy = intake.takenBy || null;
 
-		// Find the next scheduled intake time (could be today or in the future)
-		let nextTime = startTime;
-
-		// If start is in the past, calculate occurrences
-		if (nextTime < now) {
-			const elapsed = now - startTime;
-			const intervals = Math.floor(elapsed / intervalMs);
-
-			// Check the current occurrence (today's scheduled time, even if past)
-			const currentOccurrence = startTime + intervals * intervalMs;
-			// And the next occurrence
-			const nextOccurrence = startTime + (intervals + 1) * intervalMs;
-
-			// If today's occurrence notification time falls in current minute and intake hasn't happened
-			const currentNotifyTime = currentOccurrence - minutesBefore * 60 * 1000;
-			if (currentNotifyTime >= currentMinuteStart && currentOccurrence > now) {
-				nextTime = currentOccurrence;
-			} else if (currentNotifyTime < currentMinuteStart && currentOccurrence > now) {
-				// CATCH-UP: The notify window was missed (e.g. due to system sleep/restart)
-				// but the intake time is still in the future — include it so the advance
-				// reminder can still be sent rather than falling into a dead zone.
-				nextTime = currentOccurrence;
-			} else {
-				nextTime = nextOccurrence;
-			}
-		}
+		const nextTime = getNextScheduledOccurrenceTime(intake, now, true);
+		if (nextTime === null) continue;
 
 		// Calculate when we should notify for this intake
 		const notifyTime = nextTime - minutesBefore * 60 * 1000;

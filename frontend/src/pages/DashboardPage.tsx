@@ -9,12 +9,15 @@ import {
 	allowsPillFormSelection,
 	type Coverage,
 	getMedDisplayName,
+	type IntakeUnit,
 	isAmountBasedPackageType,
 	isLiquidContainerPackageType,
 	isTubePackageType,
 } from "../types";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
-import { expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
+import { getIntakeDailyRate, getMedicationIntakes } from "../utils/intake-schedule";
+import { convertLiquidUsageToMl, getLiquidCountUnitLabel } from "../utils/intake-units";
+import { buildClearMissedPayload, expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
 import {
 	formatFullBlisters,
 	formatOpenBlisterAndLoose,
@@ -141,41 +144,8 @@ export function DashboardPage() {
 
 	const prescriptionEmptyCount = prescriptionLowMeds.filter((med) => med.remainingRefills <= 0).length;
 
-	const getClearMissedPayload = () => {
-		const medicationIds = new Set<number>();
-		let latestMissedDate: string | null = null;
-
-		for (const day of pastDays) {
-			for (const item of day.meds) {
-				const med = meds.find((candidate) => getMedDisplayName(candidate) === item.medName);
-				if (!med) continue;
-
-				const dismissedUntilDate = med.dismissedUntil ?? undefined;
-				const hasMissedDose = item.doses.some((dose) => {
-					if (isDoseDismissed(dose.id, dismissedUntilDate)) return false;
-					const takenByArray = Array.isArray(dose.takenBy) ? dose.takenBy : [];
-					const ids = takenByArray.length > 0 ? takenByArray.map((person) => `${dose.id}-${person}`) : [dose.id];
-					return ids.some((doseId) => !isDoseTakenForDisplay(doseId) && !dismissedDoses.has(doseId));
-				});
-
-				if (!hasMissedDose) continue;
-
-				medicationIds.add(med.id);
-				const dayDate = day.date.toISOString().slice(0, 10);
-				if (!latestMissedDate || dayDate > latestMissedDate) {
-					latestMissedDate = dayDate;
-				}
-			}
-		}
-
-		return {
-			medicationIds: [...medicationIds],
-			until: latestMissedDate,
-		};
-	};
-
 	const clearMissedDoses = async (missedCount: number) => {
-		const payload = getClearMissedPayload();
+		const payload = buildClearMissedPayload(pastDays, meds, takenDoses, dismissedDoses);
 		if (payload.medicationIds.length === 0 || !payload.until) {
 			setShowClearMissedConfirm(false);
 			return;
@@ -245,19 +215,7 @@ export function DashboardPage() {
 		return t("table.pillsCount", { count: Math.round(medsLeft) });
 	};
 
-	const convertLiquidUsageToMl = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): number => {
-		if (unit === "tsp") return usage * 5;
-		if (unit === "tbsp") return usage * 15;
-		return usage;
-	};
-
-	const getLiquidCountUnitLabel = (unit: "ml" | "tsp" | "tbsp" | null | undefined, usage: number): string => {
-		if (unit === "tsp") return t("form.blisters.teaspoons", { count: Math.abs(usage) });
-		if (unit === "tbsp") return t("form.blisters.tablespoons", { count: Math.abs(usage) });
-		return t("form.packageAmountUnitMl");
-	};
-
-	const formatLiquidUsageLabel = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): string => {
+	const formatLiquidUsageLabel = (usage: number, unit: IntakeUnit | null | undefined): string => {
 		const normalizedUsage = Number(usage);
 		if (!Number.isFinite(normalizedUsage) || normalizedUsage <= 0) {
 			return `0 ${t("form.packageAmountUnitMl")}`;
@@ -268,13 +226,13 @@ export function DashboardPage() {
 		}
 
 		const mlTotal = convertLiquidUsageToMl(normalizedUsage, unit);
-		return `${formatNumber(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage)} ${formatNumber(mlTotal)} ${t("form.packageAmountUnitMl")}`;
+		return `${formatNumber(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage, t)} ${formatNumber(mlTotal)} ${t("form.packageAmountUnitMl")}`;
 	};
 
 	const formatDoseUsageLabel = (
 		med: (typeof meds)[number] | undefined,
 		usage: number,
-		intakeUnit?: "ml" | "tsp" | "tbsp" | null
+		intakeUnit?: IntakeUnit | null
 	) => {
 		if (isLiquidContainerPackageType(med?.packageType)) {
 			return formatLiquidUsageLabel(usage, intakeUnit);
@@ -288,8 +246,8 @@ export function DashboardPage() {
 	const formatTotalUsageLabel = (
 		med: (typeof meds)[number] | undefined,
 		total: number,
-		intakeUnit?: "ml" | "tsp" | "tbsp" | null,
-		doses?: Array<{ usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }>
+		intakeUnit?: IntakeUnit | null,
+		doses?: Array<{ usage: number; intakeUnit?: IntakeUnit | null }>
 	) => {
 		if (isLiquidContainerPackageType(med?.packageType)) {
 			if (doses && doses.length > 0) {
@@ -322,27 +280,18 @@ export function DashboardPage() {
 	const formatDailyConsumption = (med: (typeof meds)[number] | undefined) => {
 		if (!med) return "-";
 
-		const intakes =
-			med.intakes && med.intakes.length > 0
-				? med.intakes
-				: med.blisters.map((blister) => ({
-						usage: blister.usage,
-						every: blister.every,
-						intakeUnit: null as "ml" | "tsp" | "tbsp" | null,
-						takenBy: null as string | null,
-					}));
+		const intakes = getMedicationIntakes(med);
 
 		if (intakes.length === 0) return "-";
 
 		let dailyTotal = 0;
 		for (const intake of intakes) {
 			const usage = Number(intake.usage);
-			const every = Math.max(1, Number(intake.every) || 1);
 			if (!Number.isFinite(usage) || usage <= 0) continue;
 
 			const hasPerIntakeTakenBy = typeof intake.takenBy === "string" && intake.takenBy.trim().length > 0;
 			const personMultiplier = hasPerIntakeTakenBy ? 1 : Math.max(1, med.takenBy?.length ?? 0);
-			const normalizedUsage = (usage * personMultiplier) / every;
+			const normalizedUsage = usage * personMultiplier * getIntakeDailyRate(intake);
 
 			if (isLiquidContainerPackageType(med.packageType)) {
 				dailyTotal += convertLiquidUsageToMl(normalizedUsage, intake.intakeUnit ?? "ml");

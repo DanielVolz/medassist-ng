@@ -20,11 +20,14 @@ import {
 	getMedDisplayName,
 	getMedTotal,
 	getPackageSize,
+	type IntakeUnit,
 	isAmountBasedPackageType,
 	isLiquidContainerPackageType,
 	isTubePackageType,
 } from "../types";
 import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
+import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
+import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { getStockStatus } from "../utils/schedule";
 import { splitCurrentBlisterStock } from "../utils/stock";
 
@@ -254,32 +257,16 @@ export function MedDetailModal({
 	const isCountBasedAmountRefillPackage = isLiquidRefillPackage || isTubeRefillPackage;
 	const liquidRefillAmountPerBottle = Math.max(1, Math.round(Number.isFinite(amountPerPackage) ? amountPerPackage : 1));
 	const amountRefillPackageCount = Math.max(0, Math.round(refillLoose / liquidRefillAmountPerBottle));
-	const getScheduleUsageLabel = (usage: number, intakeUnit?: "ml" | "tsp" | "tbsp" | null) => {
+	const getScheduleUsageLabel = (usage: number, intakeUnit?: IntakeUnit | null) => {
 		if (isLiquidContainerPackageType(selectedMed.packageType)) {
-			if (intakeUnit === "tsp") {
-				return `${usage} ${t("form.blisters.teaspoons", { count: Math.abs(usage) })}`;
-			}
-			if (intakeUnit === "tbsp") {
-				return `${usage} ${t("form.blisters.tablespoons", { count: Math.abs(usage) })}`;
-			}
-			return `${usage} ${t("form.packageAmountUnitMl")}`;
+			return `${usage} ${getLiquidCountUnitLabel(intakeUnit, usage, t)}`;
 		}
 		if (isTubePackageType(selectedMed.packageType)) {
 			return `${usage} ${t("form.blisters.applications", { count: Math.abs(usage) })}`;
 		}
 		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
 	};
-	const scheduleIntakes =
-		selectedMed.intakes && selectedMed.intakes.length > 0
-			? selectedMed.intakes
-			: selectedMed.blisters.map((blister) => ({
-					usage: blister.usage,
-					every: blister.every,
-					start: blister.start,
-					takenBy: null,
-					intakeRemindersEnabled: false,
-					intakeUnit: null,
-				}));
+	const scheduleIntakes = getMedicationIntakes(selectedMed);
 	const hasAnyIntakeReminder = scheduleIntakes.some((intake) => intake.intakeRemindersEnabled === true);
 	const normalizeBlisterStock = (nextFull: number, nextPartial: number, nextLoose: number) => {
 		let normalizedFull = Math.max(0, nextFull);
@@ -969,7 +956,7 @@ export function MedDetailModal({
 					</div>
 
 					{/* Intake Schedule Section */}
-					{selectedMed.blisters.length > 0 && (
+					{scheduleIntakes.length > 0 && (
 						<div className="med-detail-section">
 							<h3>
 								{t("modal.intakeSchedule")}{" "}
@@ -985,7 +972,7 @@ export function MedDetailModal({
 									const personCount = Math.max(1, selectedMed.takenBy?.length ?? 0);
 									const totalUsage = hasPerIntakeTakenBy ? intake.usage : intake.usage * personCount;
 									const showIntakeBell = intake.intakeRemindersEnabled === true;
-									const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}-${intake.intakeRemindersEnabled ? "reminder" : "silent"}`;
+									const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.scheduleMode ?? "interval"}-${(intake.weekdays ?? []).join("")}-${intake.takenBy ?? ""}-${intake.intakeRemindersEnabled ? "reminder" : "silent"}`;
 
 									return (
 										<div key={intakeKey} className="med-schedule-row blister-row-simple">
@@ -993,9 +980,7 @@ export function MedDetailModal({
 												{getScheduleUsageLabel(totalUsage, intake.intakeUnit)}
 												{showPillWeightDetails && ` (${totalUsage * pillWeightMg} ${selectedMed.doseUnit ?? "mg"})`}
 											</span>
-											<span className="med-schedule-freq">
-												{intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every })}
-											</span>
+											<span className="med-schedule-freq">{getIntakeFrequencyText(intake, t)}</span>
 											{hasPerIntakeTakenBy && <span className="med-schedule-person">{intake.takenBy}</span>}
 											<span className="med-schedule-time">
 												{t("modal.at")}{" "}
@@ -1166,7 +1151,7 @@ export function MedDetailModal({
 								<FilePenLine size={18} aria-hidden="true" />
 							</button>
 						)}
-						{selectedMed.blisters.length > 0 && (
+						{scheduleIntakes.length > 0 && (
 							<button
 								className="secondary icon-only tooltip-trigger"
 								onClick={() => generateICS(selectedMed)}

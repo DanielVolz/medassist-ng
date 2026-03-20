@@ -10,7 +10,6 @@ import {
 	createTestMedication,
 	createTestShareToken,
 	createTestUser,
-	setUserSettings,
 	type TestContext,
 } from "./setup.js";
 

@@ -253,6 +253,67 @@ describe("MedicationsPage", () => {
 		expect(scheduleTab).toHaveAttribute("aria-selected", "true");
 	});
 
+	it("shows weekday controls and validation error in the desktop schedule form", () => {
+		mockFormHookValue = createMockFormHook({
+			formChanged: true,
+			form: {
+				...createMockFormHook().form,
+				name: "Weekday Med",
+				intakes: [
+					{
+						usage: "1",
+						every: "1",
+						startDate: "2024-01-01",
+						startTime: "09:00",
+						scheduleMode: "weekdays" as const,
+						weekdays: [],
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
+				],
+			},
+		});
+
+		renderPage();
+		openNewMedicationForm();
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
+
+		expect(screen.getByText("form.blisters.weekdaysRequired")).toBeInTheDocument();
+		expect(screen.getByText("form.blisters.weekdays")).toBeInTheDocument();
+		expect(screen.queryByLabelText("form.blisters.everyDays")).not.toBeInTheDocument();
+		expect(document.querySelector('button[type="submit"]')).toHaveClass("has-validation-error");
+	});
+
+	it("toggles weekday selections in the desktop schedule form", () => {
+		const setIntakeValue = vi.fn();
+		mockFormHookValue = createMockFormHook({
+			setIntakeValue,
+			form: {
+				...createMockFormHook().form,
+				name: "Weekday Med",
+				intakes: [
+					{
+						usage: "1",
+						every: "1",
+						startDate: "2024-01-01",
+						startTime: "09:00",
+						scheduleMode: "weekdays" as const,
+						weekdays: ["wed"] as const,
+						takenBy: "",
+						intakeRemindersEnabled: false,
+					},
+				],
+			},
+		});
+
+		renderPage();
+		openNewMedicationForm();
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
+		fireEvent.click(screen.getByTitle("form.blisters.weekdaysLong.mon"));
+
+		expect(setIntakeValue).toHaveBeenCalledWith(0, "weekdays", ["mon", "wed"]);
+	});
+
 	it("opens report modal from list actions", () => {
 		renderPage();
 		fireEvent.click(screen.getByText("report.button"));

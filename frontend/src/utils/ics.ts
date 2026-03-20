@@ -4,6 +4,13 @@
 
 import type { Medication } from "../types";
 import { getMedDisplayName } from "../types";
+import {
+	getIntakeFrequencyText,
+	getIntakeScheduleMode,
+	getMedicationIntakes,
+	getWeekdayIcsCode,
+	normalizeWeekdays,
+} from "./intake-schedule";
 
 /**
  * Format a Date for ICS format (YYYYMMDDTHHMMSSZ)
@@ -20,20 +27,33 @@ function formatICSDate(date: Date): string {
  */
 export function generateICS(med: Medication): void {
 	const displayName = getMedDisplayName(med);
-	const events = med.blisters
-		.map((blister, idx) => {
-			const start = new Date(blister.start);
+	const events = getMedicationIntakes(med)
+		.map((intake, idx) => {
+			const start = new Date(intake.start);
 			const end = new Date(start.getTime() + 15 * 60 * 1000); // 15 min duration
-			const interval = blister.every;
+			const interval = intake.every;
 
-			const pillInfo = `${blister.usage} pill${blister.usage !== 1 ? "s" : ""}${med.pillWeightMg ? ` (${blister.usage * med.pillWeightMg} mg)` : ""}`;
+			const pillInfo = `${intake.usage} pill${intake.usage !== 1 ? "s" : ""}${med.pillWeightMg ? ` (${intake.usage * med.pillWeightMg} mg)` : ""}`;
 			const summary = `💊 ${displayName} - ${pillInfo}`;
+			const weekdayCodes = normalizeWeekdays(intake.weekdays);
+			const frequencyText =
+				getIntakeScheduleMode(intake) === "weekdays"
+					? weekdayCodes.map(getWeekdayIcsCode).join(", ")
+					: getIntakeFrequencyText(intake, (key, options) => {
+							if (key === "common.daily") return "daily";
+							if (key === "common.everyNDays") return `every ${options?.count ?? interval} days`;
+							return key;
+						});
+			const rrule =
+				getIntakeScheduleMode(intake) === "weekdays" && weekdayCodes.length > 0
+					? `RRULE:FREQ=WEEKLY;BYDAY=${weekdayCodes.map(getWeekdayIcsCode).join(",")}`
+					: `RRULE:FREQ=DAILY;INTERVAL=${interval}`;
 			const description = [
 				`Medication: ${displayName}`,
 				med.genericName ? `Generic: ${med.genericName}` : "",
 				med.takenBy && med.takenBy.length > 0 ? `For: ${med.takenBy.join(", ")}` : "",
 				`Dosage: ${pillInfo}`,
-				`Frequency: every ${interval} day${interval !== 1 ? "s" : ""}`,
+				`Frequency: ${frequencyText}`,
 				med.notes ? `Notes: ${med.notes}` : "",
 			]
 				.filter(Boolean)
@@ -44,7 +64,7 @@ UID:medassist-ng-${med.id}-${idx}@medassist-ng
 DTSTAMP:${formatICSDate(new Date())}
 DTSTART:${formatICSDate(start)}
 DTEND:${formatICSDate(end)}
-RRULE:FREQ=DAILY;INTERVAL=${interval}
+${rrule}
 SUMMARY:${summary}
 DESCRIPTION:${description}
 BEGIN:VALARM

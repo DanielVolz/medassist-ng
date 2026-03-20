@@ -33,6 +33,15 @@ import {
 } from "../types";
 import { combineDateAndTime, formatDate, formatDateTime, formatNumber } from "../utils/formatters";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
+import {
+	getIntakeFrequencyText,
+	getIntakeScheduleMode,
+	getMedicationIntakes,
+	getWeekdayLabel,
+	hasSelectedWeekdays,
+	toggleWeekdaySelection,
+	WEEKDAY_CODES,
+} from "../utils/intake-schedule";
 import { log } from "../utils/logger";
 
 function userStorageKey(userId: number | undefined, key: string): string {
@@ -311,6 +320,24 @@ export function MedicationsPage() {
 	const totalCapacityLabel = usesAmountLabels ? t("form.totalAmount") : t("form.totalCapacity");
 	const currentStockLabel = usesAmountLabels ? t("form.currentAmount") : t("form.currentPills");
 	const totalLabel = usesAmountLabels ? t("form.totalAmountLabel") : t("form.total");
+	const weekdayOptions = useMemo(
+		() =>
+			WEEKDAY_CODES.map((day) => ({
+				value: day,
+				shortLabel: getWeekdayLabel(day, t, "short"),
+				longLabel: getWeekdayLabel(day, t, "long"),
+			})),
+		[t]
+	);
+	const hasWeekdaySelectionError = useCallback(
+		(intake: (typeof form.intakes)[number]) =>
+			getIntakeScheduleMode(intake) === "weekdays" && !hasSelectedWeekdays(intake.weekdays),
+		[]
+	);
+	const hasWeekdayScheduleError = useMemo(
+		() => form.intakes.some((intake) => hasWeekdaySelectionError(intake)),
+		[form.intakes, hasWeekdaySelectionError]
+	);
 
 	const getMedicationPackageTypeLabel = useCallback(
 		(med: Medication) => {
@@ -512,7 +539,7 @@ export function MedicationsPage() {
 	async function saveMedication(e: React.FormEvent) {
 		e.preventDefault();
 		if (readOnlyView) return;
-		if (hasValidationErrors || dateConsistencyError) {
+		if (hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError) {
 			setShowNameValidation(true);
 			// Scroll to first visible error so the user sees what's wrong
 			const firstError = document.querySelector(".field-error");
@@ -534,8 +561,10 @@ export function MedicationsPage() {
 		// Prepare intakes data with per-intake takenBy
 		const intakes = form.intakes.map((intake) => ({
 			usage: Number(intake.usage) || 1,
-			every: Number(intake.every) || 1,
+			every: getIntakeScheduleMode(intake) === "weekdays" ? 1 : Number(intake.every) || 1,
 			start: combineDateAndTime(intake.startDate, intake.startTime),
+			scheduleMode: getIntakeScheduleMode(intake),
+			weekdays: getIntakeScheduleMode(intake) === "weekdays" ? [...(intake.weekdays ?? [])] : [],
 			intakeUnit: isLiquidContainerPackageType(form.packageType) ? intake.intakeUnit : null,
 			takenBy: intake.takenBy.trim() || null, // Empty string becomes null
 			intakeRemindersEnabled: intake.intakeRemindersEnabled,
@@ -1050,15 +1079,12 @@ export function MedicationsPage() {
 										</div>
 									</div>
 									<div className="blister-list">
-										{(med.intakes ?? med.blisters).map((s, idx) => (
+										{getMedicationIntakes(med).map((s, idx) => (
 											<div key={`${med.id}-${idx}`} className="blister-row-simple">
-												{s.usage} {getMedicationUsageUnitLabel(med, s.usage)} ·{" "}
-												{s.every === 1 ? t("common.daily") : t("common.everyNDays", { count: s.every })} ·{" "}
+												{s.usage} {getMedicationUsageUnitLabel(med, s.usage)} · {getIntakeFrequencyText(s, t)} ·{" "}
 												{t("form.blisters.from")} {formatDateTime(s.start)}
-												{"takenBy" in s && (s as import("../types").Intake).takenBy && (
-													<span className="blister-taken-by"> · {(s as import("../types").Intake).takenBy}</span>
-												)}
-												{"intakeRemindersEnabled" in s && (s as import("../types").Intake).intakeRemindersEnabled && (
+												{s.takenBy && <span className="blister-taken-by"> · {s.takenBy}</span>}
+												{s.intakeRemindersEnabled && (
 													<span className="blister-reminder-icon" title={t("form.blisters.remindTooltip")}>
 														{" "}
 														<Bell size={12} aria-hidden="true" />
@@ -1734,105 +1760,154 @@ export function MedicationsPage() {
 											</button>
 										)}
 									</div>
-									{form.intakes.map((intake, idx) => (
-										<div key={idx} className="blister-row">
-											<div className="blister-inputs">
-												<label>
-													{getUsageLabel(intake.intakeUnit ?? "ml")}
-													<FormNumberStepper
-														value={intake.usage}
-														onChange={(nextValue) => setIntakeValue(idx, "usage", nextValue)}
-														min={allowFractionalIntake ? 0.5 : 1}
-														step={allowFractionalIntake ? 0.5 : 1}
-														allowDecimal={allowFractionalIntake}
-														decrementLabel={decrementValueLabel}
-														incrementLabel={incrementValueLabel}
-													/>
-												</label>
-												<label>
-													{t("form.blisters.everyDays")}
-													<FormNumberStepper
-														value={intake.every}
-														onChange={(nextValue) => setIntakeValue(idx, "every", nextValue)}
-														min={1}
-														decrementLabel={decrementValueLabel}
-														incrementLabel={incrementValueLabel}
-													/>
-												</label>
-												<label>
-													{t("form.blisters.startDate")}
-													<DateInput
-														value={intake.startDate}
-														onChange={(e) => setIntakeValue(idx, "startDate", e.target.value)}
-													/>
-												</label>
-												<label>
-													{t("form.blisters.startTime")}
-													<input
-														type="time"
-														value={intake.startTime}
-														onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
-													/>
-												</label>
-												{isLiquidContainerPackageType(form.packageType) && (
+									{form.intakes.map((intake, idx) => {
+										const scheduleMode = getIntakeScheduleMode(intake);
+										const selectedWeekdays = intake.weekdays ?? [];
+										return (
+											<div key={idx} className="blister-row">
+												<div className="blister-inputs">
 													<label>
-														{t("form.blisters.intakeUnit")}
+														{getUsageLabel(intake.intakeUnit ?? "ml")}
+														<FormNumberStepper
+															value={intake.usage}
+															onChange={(nextValue) => setIntakeValue(idx, "usage", nextValue)}
+															min={allowFractionalIntake ? 0.5 : 1}
+															step={allowFractionalIntake ? 0.5 : 1}
+															allowDecimal={allowFractionalIntake}
+															decrementLabel={decrementValueLabel}
+															incrementLabel={incrementValueLabel}
+														/>
+													</label>
+													<label>
+														{t("form.blisters.scheduleMode")}
 														<select
 															className="select-field"
-															value={intake.intakeUnit}
+															value={scheduleMode}
 															onChange={(e) =>
-																setIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")
+																setIntakeValue(idx, "scheduleMode", e.target.value as "interval" | "weekdays")
 															}
 														>
-															<option value="ml">{t("form.blisters.intakeUnitMl")}</option>
-															<option value="tsp">{t("form.blisters.intakeUnitTsp")}</option>
-															<option value="tbsp">{t("form.blisters.intakeUnitTbsp")}</option>
+															<option value="interval">{t("form.blisters.scheduleModeInterval")}</option>
+															<option value="weekdays">{t("form.blisters.scheduleModeWeekdays")}</option>
 														</select>
 													</label>
-												)}
-												{form.takenBy.length === 0 ? null : (
-													<label className="taken-by-field" title={t("form.blisters.takenByTooltip")}>
-														{t("form.blisters.takenByIntake")}
-														<select
-															className="select-field"
-															value={intake.takenBy}
-															onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}
-														>
-															{form.takenBy.map((person) => (
-																<option key={person} value={person}>
-																	{person}
-																</option>
-															))}
-														</select>
-													</label>
-												)}
-												<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
-													<span className="blister-reminder-icon">
-														<Bell size={14} aria-hidden="true" />
-													</span>
-													<label className="toggle-switch small">
-														<input
-															type="checkbox"
-															checked={intake.intakeRemindersEnabled}
-															onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+													{scheduleMode === "interval" ? (
+														<label>
+															{t("form.blisters.everyDays")}
+															<FormNumberStepper
+																value={intake.every}
+																onChange={(nextValue) => setIntakeValue(idx, "every", nextValue)}
+																min={1}
+																decrementLabel={decrementValueLabel}
+																incrementLabel={incrementValueLabel}
+															/>
+														</label>
+													) : (
+														<label className="taken-by-field">
+															{t("form.blisters.weekdays")}
+															<div className="badges">
+																{weekdayOptions.map((weekday) => {
+																	const isSelected = selectedWeekdays.includes(weekday.value);
+																	return (
+																		<button
+																			key={weekday.value}
+																			type="button"
+																			className={isSelected ? "pill clickable" : "pill clickable neutral"}
+																			aria-pressed={isSelected}
+																			title={weekday.longLabel}
+																			onClick={() =>
+																				setIntakeValue(
+																					idx,
+																					"weekdays",
+																					toggleWeekdaySelection(selectedWeekdays, weekday.value)
+																				)
+																			}
+																		>
+																			{weekday.shortLabel}
+																		</button>
+																	);
+																})}
+															</div>
+															{!readOnlyView && hasWeekdaySelectionError(intake) && (
+																<span className="field-error">{t("form.blisters.weekdaysRequired")}</span>
+															)}
+														</label>
+													)}
+													<label>
+														{t("form.blisters.startDate")}
+														<DateInput
+															value={intake.startDate}
+															onChange={(e) => setIntakeValue(idx, "startDate", e.target.value)}
 														/>
-														<span className="toggle-slider"></span>
 													</label>
+													<label>
+														{t("form.blisters.startTime")}
+														<input
+															type="time"
+															value={intake.startTime}
+															onChange={(e) => setIntakeValue(idx, "startTime", e.target.value)}
+														/>
+													</label>
+													{isLiquidContainerPackageType(form.packageType) && (
+														<label>
+															{t("form.blisters.intakeUnit")}
+															<select
+																className="select-field"
+																value={intake.intakeUnit}
+																onChange={(e) =>
+																	setIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")
+																}
+															>
+																<option value="ml">{t("form.blisters.intakeUnitMl")}</option>
+																<option value="tsp">{t("form.blisters.intakeUnitTsp")}</option>
+																<option value="tbsp">{t("form.blisters.intakeUnitTbsp")}</option>
+															</select>
+														</label>
+													)}
+													{form.takenBy.length === 0 ? null : (
+														<label className="taken-by-field" title={t("form.blisters.takenByTooltip")}>
+															{t("form.blisters.takenByIntake")}
+															<select
+																className="select-field"
+																value={intake.takenBy}
+																onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}
+															>
+																{form.takenBy.map((person) => (
+																	<option key={person} value={person}>
+																		{person}
+																	</option>
+																))}
+															</select>
+														</label>
+													)}
+													<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
+														<span className="blister-reminder-icon">
+															<Bell size={14} aria-hidden="true" />
+														</span>
+														<label className="toggle-switch small">
+															<input
+																type="checkbox"
+																checked={intake.intakeRemindersEnabled}
+																onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+															/>
+															<span className="toggle-slider"></span>
+														</label>
+													</div>
 												</div>
+												{!readOnlyView && form.intakes.length > 1 && (
+													<button
+														type="button"
+														className="danger icon-only tooltip-trigger"
+														onClick={() => removeIntake(idx)}
+														aria-label={t("common.remove")}
+														data-tooltip={t("common.remove")}
+													>
+														<Minus size={18} aria-hidden="true" />
+													</button>
+												)}
 											</div>
-											{!readOnlyView && form.intakes.length > 1 && (
-												<button
-													type="button"
-													className="danger icon-only tooltip-trigger"
-													onClick={() => removeIntake(idx)}
-													aria-label={t("common.remove")}
-													data-tooltip={t("common.remove")}
-												>
-													<Minus size={18} aria-hidden="true" />
-												</button>
-											)}
-										</div>
-									))}
+										);
+									})}
 								</div>
 							</div>
 							{/* end schedule tab */}
@@ -1845,7 +1920,9 @@ export function MedicationsPage() {
 								<button
 									type="submit"
 									disabled={saving || (!formChanged && (formSaved || !!editingId))}
-									className={hasValidationErrors || dateConsistencyError ? "has-validation-error" : ""}
+									className={
+										hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError ? "has-validation-error" : ""
+									}
 								>
 									{formSaved && !formChanged ? t("common.saved") : t("common.save")}
 								</button>

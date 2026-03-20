@@ -19,6 +19,8 @@ import { isAmountBasedPackageType } from "./package-profiles";
 
 // Common medication dose units
 export type DoseUnit = "mg" | "g" | "mcg" | "ml" | "units";
+export type ScheduleMode = "interval" | "weekdays";
+export type WeekdayCode = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 export type MedicationForm = "tablet" | "capsule" | "topical" | "liquid";
 export type PillForm = "tablet" | "capsule";
@@ -49,6 +51,8 @@ export type Intake = {
 	usage: number;
 	every: number;
 	start: string;
+	scheduleMode?: ScheduleMode | null;
+	weekdays?: WeekdayCode[] | null;
 	intakeUnit?: IntakeUnit | null;
 	takenBy: string | null; // Per-intake user assignment (single person or null)
 	intakeRemindersEnabled: boolean;
@@ -131,6 +135,8 @@ export type FormIntake = {
 	every: string;
 	startDate: string;
 	startTime: string;
+	scheduleMode?: ScheduleMode;
+	weekdays?: WeekdayCode[];
 	intakeUnit?: IntakeUnit;
 	takenBy: string; // Single person or empty string (empty = null for everyone)
 	intakeRemindersEnabled: boolean;

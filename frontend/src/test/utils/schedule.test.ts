@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Coverage, Medication, StockThresholds } from "../../types";
 import {
+	buildClearMissedPayload,
 	buildSchedulePreview,
 	calculateCoverage,
 	computeMissedPastDoseIds,
@@ -278,6 +279,33 @@ describe("buildSchedulePreview", () => {
 		expect(zResult.events.map((event) => event.id)).toEqual(localResult.events.map((event) => event.id));
 		expect(zResult.events.map((event) => event.when)).toEqual(localResult.events.map((event) => event.when));
 	});
+
+	it("falls back legacy blisters to schedule events with a null intake unit", () => {
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "Legacy Liquid",
+				packCount: 0,
+				blistersPerPack: 1,
+				pillsPerBlister: 1,
+				totalPills: 120,
+				looseTablets: 120,
+				takenBy: [],
+				packageType: "liquid_container",
+				medicationForm: "liquid",
+				blisters: [{ usage: 2, every: 1, start: "2024-03-15T09:00:00" }],
+				updatedAt: null,
+			},
+		];
+
+		const result = buildSchedulePreview(meds, "en", false);
+
+		expect(result.totalBlisters).toBe(1);
+		expect(result.events[0]).toMatchObject({
+			usage: 2,
+			intakeUnit: null,
+		});
+	});
 });
 
 describe("calculateCoverage", () => {
@@ -374,6 +402,41 @@ describe("calculateCoverage", () => {
 		// 30 pills, 2 per day consumed. March 10 09:00 to March 15 12:00 = 6 occurrences × 2 = 12 consumed
 		expect(result.all[0].medsLeft).toBe(18);
 		expect(result.all[0].daysLeft).toBe(9); // 18 pills / 2 per day = 9 days
+	});
+
+	it("converts liquid intake units to ml for automatic coverage calculations", () => {
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "Liquid Med",
+				packCount: 0,
+				blistersPerPack: 1,
+				pillsPerBlister: 1,
+				totalPills: 120,
+				looseTablets: 120,
+				takenBy: [],
+				packageType: "liquid_container",
+				medicationForm: "liquid",
+				blisters: [],
+				intakes: [
+					{
+						usage: 2,
+						every: 1,
+						start: "2024-03-14T09:00:00",
+						intakeUnit: "tbsp",
+						takenBy: null,
+						intakeRemindersEnabled: false,
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		const result = calculateCoverage(meds, [], "en", 7, "automatic", new Set());
+
+		expect(result.all).toHaveLength(1);
+		expect(result.all[0].medsLeft).toBe(60);
+		expect(result.all[0].daysLeft).toBe(2);
 	});
 
 	it("per-intake takenBy counts person correctly in automatic mode", () => {
@@ -1987,6 +2050,83 @@ describe("dose tracking survives medication edits (regression)", () => {
 	});
 });
 
+describe("buildClearMissedPayload", () => {
+	it("collects unique missed medication ids and the latest missed day", () => {
+		const march10 = new Date("2024-03-10T09:00:00Z");
+		const march11 = new Date("2024-03-11T09:00:00Z");
+		const aspirinDoseMarch10 = "1-0-1710061200000";
+		const aspirinDoseMarch11 = "1-0-1710147600000";
+		const vitaminDDoseMarch11 = "2-0-1710147600000";
+		const calciumDoseMarch11 = "3-0-1710147600000";
+
+		const pastDays = [
+			{
+				date: march10,
+				meds: [{ medName: "Aspirin", doses: [{ id: aspirinDoseMarch10, takenBy: ["John"] }] }],
+			},
+			{
+				date: march11,
+				meds: [
+					{ medName: "Aspirin", doses: [{ id: aspirinDoseMarch11, takenBy: ["John"] }] },
+					{ medName: "Vitamin D", doses: [{ id: vitaminDDoseMarch11, takenBy: [] }] },
+					{ medName: "Calcium", doses: [{ id: calciumDoseMarch11, takenBy: [] }] },
+				],
+			},
+		];
+
+		const medications = [
+			{ id: 1, name: "Aspirin", dismissedUntil: null },
+			{ id: 2, name: "Vitamin D", dismissedUntil: null },
+			{ id: 3, name: "Calcium", dismissedUntil: "2024-03-11" },
+		];
+
+		const payload = buildClearMissedPayload(
+			pastDays,
+			medications,
+			new Set<string>(),
+			new Set<string>([`${aspirinDoseMarch11}-John`])
+		);
+
+		expect(payload).toEqual({
+			medicationIds: [1, 2],
+			until: "2024-03-11",
+		});
+	});
+
+	it("returns an empty payload when every remaining missed dose is already resolved", () => {
+		const march10 = new Date("2024-03-10T09:00:00Z");
+		const aspirinDoseMarch10 = "1-0-1710061200000";
+		const vitaminDDoseMarch10 = "2-0-1710061200000";
+
+		const pastDays = [
+			{
+				date: march10,
+				meds: [
+					{ medName: "Aspirin", doses: [{ id: aspirinDoseMarch10, takenBy: ["Alice"] }] },
+					{ medName: "Vitamin D", doses: [{ id: vitaminDDoseMarch10, takenBy: [] }] },
+				],
+			},
+		];
+
+		const medications = [
+			{ id: 1, name: "Aspirin", dismissedUntil: null },
+			{ id: 2, name: "Vitamin D", dismissedUntil: "2024-03-10" },
+		];
+
+		const payload = buildClearMissedPayload(
+			pastDays,
+			medications,
+			new Set<string>([`${aspirinDoseMarch10}-Alice`]),
+			new Set<string>()
+		);
+
+		expect(payload).toEqual({
+			medicationIds: [],
+			until: null,
+		});
+	});
+});
+
 // =============================================================================
 // Test Helpers
 // =============================================================================
@@ -2320,5 +2460,88 @@ describe("past schedule windowing", () => {
 		const past180 = grouped180.filter((d) => d.isPast);
 		expect(past180.length).toBeLessThanOrEqual(180);
 		expect(past180.length).toBeGreaterThan(past90.length);
+	});
+});
+
+describe("weekday intake schedules", () => {
+	beforeEach(() => {
+		vi.setSystemTime(new Date("2024-03-18T12:00:00Z"));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("builds preview events only on selected weekdays", () => {
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "Weekday Med",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 30,
+				looseTablets: 0,
+				takenBy: [],
+				packageType: "blister",
+				blisters: [],
+				intakes: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-18T09:00:00",
+						scheduleMode: "weekdays",
+						weekdays: ["mon", "wed", "fri"],
+						intakeUnit: null,
+						takenBy: null,
+						intakeRemindersEnabled: false,
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		const result = buildSchedulePreview(meds, "en", false);
+		const weekdayDateStrings = result.events.slice(0, 3).map((event) => event.dateStr);
+
+		expect(weekdayDateStrings).toEqual(["Mon, Mar 18", "Wed, Mar 20", "Fri, Mar 22"]);
+		expect(result.totalBlisters).toBe(1);
+	});
+
+	it("uses weekday schedules when calculating coverage", () => {
+		const meds: Medication[] = [
+			{
+				id: 1,
+				name: "Weekday Med",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 10,
+				looseTablets: 0,
+				takenBy: [],
+				packageType: "blister",
+				blisters: [],
+				intakes: [
+					{
+						usage: 1,
+						every: 1,
+						start: "2024-03-18T09:00:00",
+						scheduleMode: "weekdays",
+						weekdays: ["mon", "wed", "fri"],
+						intakeUnit: null,
+						takenBy: null,
+						intakeRemindersEnabled: false,
+					},
+				],
+				updatedAt: null,
+			},
+		];
+
+		const preview = buildSchedulePreview(meds, "en", false);
+		const coverage = calculateCoverage(meds, preview.events, "en", 7, "automatic", new Set());
+
+		expect(coverage.all[0]).toMatchObject({
+			name: "Weekday Med",
+			medsLeft: 9,
+			daysLeft: 21,
+		});
 	});
 });

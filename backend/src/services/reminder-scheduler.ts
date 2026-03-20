@@ -18,10 +18,13 @@ import {
 import {
 	type Blister,
 	calculateDepletionInfo,
+	countScheduledOccurrencesInRange,
 	createDefaultReminderState,
 	formatInTimezone,
 	getCurrentHourInTimezone,
+	getDateOnlyTimestamp,
 	getMsUntilNextCheck,
+	getNextScheduledOccurrenceTime,
 	getNextScheduledTime,
 	getTimezone,
 	getTodayInTimezone,
@@ -271,7 +274,6 @@ async function getMedicationsNeedingReminder(
 
 	const lowStock: LowStockItem[] = [];
 	const now = Date.now();
-	const msPerDay = 86_400_000;
 
 	for (const row of rows) {
 		const packageType = normalizePackageType(row.packageType);
@@ -288,6 +290,8 @@ async function getMedicationsNeedingReminder(
 			usage: normalizeIntakeUsageForStock(i, row.medicationForm, row.packageType),
 			every: i.every,
 			start: i.start,
+			scheduleMode: i.scheduleMode,
+			weekdays: i.weekdays,
 		}));
 
 		const originalTotalPills = isAmountBasedPackageType(packageType)
@@ -304,16 +308,11 @@ async function getMedicationsNeedingReminder(
 				const blisterStart = parseLocalDateTime(blister.start).getTime();
 				if (Number.isNaN(blisterStart)) return;
 
-				const period = Math.max(1, blister.every) * msPerDay;
-
-				let effectiveStart: number;
-				if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
-					const elapsedSinceStart = stockCorrectionCutoff - blisterStart;
-					const periodsElapsed = Math.floor(elapsedSinceStart / period);
-					effectiveStart = blisterStart + (periodsElapsed + 1) * period;
-				} else {
-					effectiveStart = blisterStart;
-				}
+				const effectiveStart =
+					stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart
+						? getNextScheduledOccurrenceTime(blister, stockCorrectionCutoff, false)
+						: blisterStart;
+				if (effectiveStart === null) return;
 
 				const intake = intakes[blisterIdx];
 				const intakePerson = intake?.takenBy;
@@ -331,25 +330,20 @@ async function getMedicationsNeedingReminder(
 				let lastAutoConsumedDateMs = 0;
 
 				if (effectiveStart <= now) {
-					const occurrences = Math.floor((now - effectiveStart) / period) + 1;
+					const { count: occurrences, lastOccurrenceMs } = countScheduledOccurrencesInRange(
+						blister,
+						effectiveStart,
+						now
+					);
 					timeBasedConsumed = occurrences * blister.usage * peopleForThisIntake.length;
 
-					const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
-					lastAutoConsumedDateMs = new Date(
-						lastDoseTime.getFullYear(),
-						lastDoseTime.getMonth(),
-						lastDoseTime.getDate()
-					).getTime();
+					if (lastOccurrenceMs !== null) {
+						lastAutoConsumedDateMs = getDateOnlyTimestamp(new Date(lastOccurrenceMs));
+					}
 				}
 
 				const stockCorrectionDateOnly =
-					stockCorrectionCutoff > 0
-						? new Date(
-								new Date(stockCorrectionCutoff).getFullYear(),
-								new Date(stockCorrectionCutoff).getMonth(),
-								new Date(stockCorrectionCutoff).getDate()
-							).getTime()
-						: 0;
+					stockCorrectionCutoff > 0 ? getDateOnlyTimestamp(new Date(stockCorrectionCutoff)) : 0;
 				const earlyCutoff = Math.max(lastAutoConsumedDateMs, stockCorrectionDateOnly);
 
 				let earlyTakenConsumed = 0;

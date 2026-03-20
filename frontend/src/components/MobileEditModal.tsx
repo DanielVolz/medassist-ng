@@ -19,6 +19,13 @@ import {
 	PACKAGE_PROFILES,
 } from "../types";
 import { deriveTotal } from "../utils";
+import {
+	getIntakeScheduleMode,
+	getWeekdayLabel,
+	hasSelectedWeekdays,
+	toggleWeekdaySelection,
+	WEEKDAY_CODES,
+} from "../utils/intake-schedule";
 import { DateInput } from "./DateInput";
 import { FormNumberStepper } from "./FormNumberStepper";
 
@@ -57,7 +64,7 @@ export interface MobileEditModalProps {
 	onAddBlister: () => void;
 	onRemoveBlister: (idx: number) => void;
 	// Intake helpers (new - with per-intake takenBy)
-	onSetIntakeValue: (idx: number, field: keyof FormIntake, value: string | boolean) => void;
+	onSetIntakeValue: <K extends keyof FormIntake>(idx: number, field: K, value: FormIntake[K]) => void;
 	onAddIntake: (takenBy?: string) => void;
 	onRemoveIntake: (idx: number) => void;
 	// Value change handler for numeric fields
@@ -158,6 +165,24 @@ export function MobileEditModal({
 	const totalCapacityLabel = usesAmountLabels ? t("form.totalAmount") : t("form.totalCapacity");
 	const currentStockLabel = usesAmountLabels ? t("form.currentAmount") : t("form.currentPills");
 	const totalLabel = usesAmountLabels ? t("form.totalAmountLabel") : t("form.total");
+	const weekdayOptions = useMemo(
+		() =>
+			WEEKDAY_CODES.map((day) => ({
+				value: day,
+				shortLabel: getWeekdayLabel(day, t, "short"),
+				longLabel: getWeekdayLabel(day, t, "long"),
+			})),
+		[t]
+	);
+	const hasWeekdaySelectionError = useCallback(
+		(intake: (typeof form.intakes)[number]) =>
+			getIntakeScheduleMode(intake) === "weekdays" && !hasSelectedWeekdays(intake.weekdays),
+		[]
+	);
+	const hasWeekdayScheduleError = useMemo(
+		() => form.intakes.some((intake) => hasWeekdaySelectionError(intake)),
+		[form.intakes, hasWeekdaySelectionError]
+	);
 
 	// Reset tab when modal opens
 	useEffect(() => {
@@ -815,7 +840,9 @@ export function MobileEditModal({
 											)}
 										</div>
 										{form.intakes.map((intake, idx) => {
-											const intakeKey = `${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}-${intake.intakeUnit ?? "unit"}-${intake.intakeRemindersEnabled ? "reminder" : "silent"}`;
+											const scheduleMode = getIntakeScheduleMode(intake);
+											const selectedWeekdays = intake.weekdays ?? [];
+											const intakeKey = `${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${scheduleMode}-${selectedWeekdays.join("")}-${intake.takenBy ?? ""}-${intake.intakeUnit ?? "unit"}-${intake.intakeRemindersEnabled ? "reminder" : "silent"}`;
 											return (
 												<div key={intakeKey} className="blister-row">
 													<label className="compact">
@@ -831,15 +858,60 @@ export function MobileEditModal({
 														/>
 													</label>
 													<label className="compact">
-														<span>{t("form.blisters.everyDays")}</span>
-														<FormNumberStepper
-															value={intake.every}
-															onChange={(nextValue) => onSetIntakeValue(idx, "every", nextValue)}
-															min={1}
-															decrementLabel={decrementValueLabel}
-															incrementLabel={incrementValueLabel}
-														/>
+														<span>{t("form.blisters.scheduleMode")}</span>
+														<select
+															className="select-field"
+															value={scheduleMode}
+															onChange={(e) =>
+																onSetIntakeValue(idx, "scheduleMode", e.target.value as "interval" | "weekdays")
+															}
+														>
+															<option value="interval">{t("form.blisters.scheduleModeInterval")}</option>
+															<option value="weekdays">{t("form.blisters.scheduleModeWeekdays")}</option>
+														</select>
 													</label>
+													{scheduleMode === "interval" ? (
+														<label className="compact">
+															<span>{t("form.blisters.everyDays")}</span>
+															<FormNumberStepper
+																value={intake.every}
+																onChange={(nextValue) => onSetIntakeValue(idx, "every", nextValue)}
+																min={1}
+																decrementLabel={decrementValueLabel}
+																incrementLabel={incrementValueLabel}
+															/>
+														</label>
+													) : (
+														<label className="compact full-row">
+															<span>{t("form.blisters.weekdays")}</span>
+															<div className="badges">
+																{weekdayOptions.map((weekday) => {
+																	const isSelected = selectedWeekdays.includes(weekday.value);
+																	return (
+																		<button
+																			key={weekday.value}
+																			type="button"
+																			className={isSelected ? "pill clickable" : "pill clickable neutral"}
+																			aria-pressed={isSelected}
+																			title={weekday.longLabel}
+																			onClick={() =>
+																				onSetIntakeValue(
+																					idx,
+																					"weekdays",
+																					toggleWeekdaySelection(selectedWeekdays, weekday.value)
+																				)
+																			}
+																		>
+																			{weekday.shortLabel}
+																		</button>
+																	);
+																})}
+															</div>
+															{!readOnlyMode && hasWeekdaySelectionError(intake) && (
+																<span className="field-error">{t("form.blisters.weekdaysRequired")}</span>
+															)}
+														</label>
+													)}
 													<label className="compact full-row">
 														<span>{t("form.blisters.startDate")}</span>
 														<DateInput
@@ -984,7 +1056,9 @@ export function MobileEditModal({
 							<button
 								type="submit"
 								disabled={saving || (!formChanged && (formSaved || !!editingId))}
-								className={hasValidationErrors || dateConsistencyError ? "has-validation-error" : ""}
+								className={
+									hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError ? "has-validation-error" : ""
+								}
 							>
 								{formSaved && !formChanged ? t("common.saved") : t("common.save")}
 							</button>

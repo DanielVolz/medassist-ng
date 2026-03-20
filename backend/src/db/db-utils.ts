@@ -10,7 +10,13 @@ import { fileURLToPath } from "node:url";
 import type { Client } from "@libsql/client";
 import type { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import { parseIntakesJson, parseLocalDateTime } from "../utils/scheduler-utils.js";
+import {
+	forEachScheduledOccurrenceInRange,
+	getDateOnlyTimestamp,
+	getScheduleMatchWindowMs,
+	parseIntakesJson,
+	parseLocalDateTime,
+} from "../utils/scheduler-utils.js";
 
 // Get migrations folder path (relative to this file's location)
 const __filename = fileURLToPath(import.meta.url);
@@ -363,9 +369,9 @@ export async function repairOrphanedDoseIds(client: Client): Promise<{ repaired:
 				if (every <= 0 || Number.isNaN(start.getTime())) continue;
 
 				const validDates = new Set<number>();
-				for (let d = new Date(start); d <= today; d.setDate(d.getDate() + every)) {
-					validDates.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
-				}
+				forEachScheduledOccurrenceInRange(intake, start.getTime(), today.getTime() + MS_PER_DAY - 1, (occurrenceMs) => {
+					validDates.add(getDateOnlyTimestamp(new Date(occurrenceMs)));
+				});
 				validDatesByIntake.set(idx, validDates);
 			}
 
@@ -388,7 +394,7 @@ export async function repairOrphanedDoseIds(client: Client): Promise<{ repaired:
 				const intake = intakes[intakeIdx];
 				if (!intake) continue;
 
-				const halfInterval = (intake.every * MS_PER_DAY) / 2;
+				const halfInterval = getScheduleMatchWindowMs(intake);
 				let bestMatch: number | null = null;
 				let bestDist = Infinity;
 

@@ -13,11 +13,14 @@ import {
 	allowsPillFormSelection,
 	getMedDisplayName,
 	getMedTotal,
+	type IntakeUnit,
 	isLiquidContainerPackageType,
 	isTubePackageType,
 	type StockThresholds,
 } from "../types";
 import { getSystemLocale } from "../utils/formatters";
+import { getIntakeDailyRate, getMedicationIntakes, iterateIntakeOccurrences } from "../utils/intake-schedule";
+import { convertLiquidUsageToMl, getLiquidCountUnitLabel } from "../utils/intake-units";
 import { getStockStatus, isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
 import { loadCollapsedDaysFromStorage } from "../utils/storage";
 import { MedicationAvatar } from "./MedicationAvatar";
@@ -40,16 +43,10 @@ export function SharedSchedule() {
 	const isLiquidContainerMed = (med: SharedScheduleData["medications"][number] | undefined) =>
 		isLiquidContainerPackageType(med?.packageType);
 
-	const convertLiquidUsageToMl = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): number => {
-		if (unit === "tsp") return usage * 5;
-		if (unit === "tbsp") return usage * 15;
-		return usage;
-	};
-
 	const convertUsageForStock = (
 		usage: number,
 		med: SharedScheduleData["medications"][number] | undefined,
-		unit: "ml" | "tsp" | "tbsp" | null | undefined
+		unit: IntakeUnit | null | undefined
 	): number => {
 		if (isTubePackageType(med?.packageType)) return 0;
 		if (!isLiquidContainerMed(med)) return usage;
@@ -61,13 +58,7 @@ export function SharedSchedule() {
 		return String(rounded);
 	};
 
-	const getLiquidCountUnitLabel = (unit: "ml" | "tsp" | "tbsp" | null | undefined, usage: number): string => {
-		if (unit === "tsp") return t("form.blisters.teaspoons", { count: Math.abs(usage) });
-		if (unit === "tbsp") return t("form.blisters.tablespoons", { count: Math.abs(usage) });
-		return t("form.packageAmountUnitMl");
-	};
-
-	const formatLiquidUsageLabel = (usage: number, unit: "ml" | "tsp" | "tbsp" | null | undefined): string => {
+	const formatLiquidUsageLabel = (usage: number, unit: IntakeUnit | null | undefined): string => {
 		const normalizedUsage = Number(usage);
 		if (!Number.isFinite(normalizedUsage) || normalizedUsage <= 0) {
 			return `0 ${t("form.packageAmountUnitMl")}`;
@@ -78,13 +69,13 @@ export function SharedSchedule() {
 		}
 
 		const mlTotal = convertLiquidUsageToMl(normalizedUsage, unit);
-		return `${formatAmount(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage)} ${formatAmount(mlTotal)} ${t("form.packageAmountUnitMl")}`;
+		return `${formatAmount(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage, t)} ${formatAmount(mlTotal)} ${t("form.packageAmountUnitMl")}`;
 	};
 
 	const formatDoseUsageLabel = (
 		med: SharedScheduleData["medications"][number] | undefined,
 		usage: number,
-		intakeUnit?: "ml" | "tsp" | "tbsp" | null
+		intakeUnit?: IntakeUnit | null
 	) => {
 		if (isLiquidContainerMed(med)) {
 			return formatLiquidUsageLabel(usage, intakeUnit);
@@ -95,7 +86,7 @@ export function SharedSchedule() {
 	const formatTotalUsageLabel = (
 		med: SharedScheduleData["medications"][number] | undefined,
 		total: number,
-		doses?: Array<{ usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }>
+		doses?: Array<{ usage: number; intakeUnit?: IntakeUnit | null }>
 	) => {
 		if (isLiquidContainerMed(med)) {
 			if (doses && doses.length > 0) {
@@ -418,7 +409,7 @@ export function SharedSchedule() {
 			when: number;
 			medName: string;
 			usage: number;
-			intakeUnit?: "ml" | "tsp" | "tbsp" | null;
+			intakeUnit?: IntakeUnit | null;
 			timeStr: string;
 			isPast: boolean;
 			takenBy: string | null; // Per-intake takenBy (single person or null)
@@ -426,15 +417,7 @@ export function SharedSchedule() {
 		}[] = [];
 
 		for (const med of data.medications) {
-			// Use intakes (with per-intake takenBy) if available, fallback to blisters (legacy)
-			const intakes =
-				med.intakes ||
-				med.blisters.map((b) => ({
-					...b,
-					intakeUnit: null,
-					takenBy: null as string | null,
-					intakeRemindersEnabled: false,
-				}));
+			const intakes = getMedicationIntakes(med);
 
 			intakes.forEach((intake, intakeIdx) => {
 				// Filter: for person-specific shares, include matching intakes plus shared-for-everyone intakes.
@@ -443,9 +426,7 @@ export function SharedSchedule() {
 				const startDate = parseLocalDateTime(intake.start);
 				if (Number.isNaN(startDate.getTime())) return;
 
-				// Use the same iteration method as buildSchedulePreview (setDate instead of adding ms)
-				// This ensures identical timestamps even across DST changes
-				for (let d = new Date(startDate); d <= end; d.setDate(d.getDate() + intake.every)) {
+				iterateIntakeOccurrences(intake, startDate, end, (d) => {
 					const t = d.getTime();
 					const isPast = d < todayStart;
 					// Use date-only timestamp for stable ID (immune to time changes)
@@ -470,7 +451,7 @@ export function SharedSchedule() {
 							month: "short",
 						}),
 					});
-				}
+				});
 			});
 		}
 
@@ -544,20 +525,12 @@ export function SharedSchedule() {
 	// Uses time-based automatic consumption (same as DashboardPage) for accurate stock levels
 	const coverageByMed = useMemo(() => {
 		if (!data) return {};
-		const MS_PER_DAY = 86_400_000;
 		const now = Date.now();
 		const calcMode = data.stockCalculationMode ?? "automatic";
 		const coverage: Record<string, { daysLeft: number | null; medsLeft: number; dailyUsage: number }> = {};
 
 		for (const med of data.medications) {
-			const intakes =
-				med.intakes ||
-				med.blisters.map((b) => ({
-					...b,
-					intakeUnit: null,
-					takenBy: null as string | null,
-					intakeRemindersEnabled: false,
-				}));
+			const intakes = getMedicationIntakes(med);
 
 			// Count unique people from all intakes (for per-intake takenBy)
 			const uniquePeople = new Set<string>();
@@ -571,7 +544,7 @@ export function SharedSchedule() {
 			let dailyRate = 0;
 			intakes.forEach((intake) => {
 				const usageForStock = convertUsageForStock(intake.usage, med, intake.intakeUnit ?? "ml");
-				const baseRate = intake.every > 0 ? usageForStock / intake.every : 0;
+				const baseRate = usageForStock * getIntakeDailyRate(intake);
 				if (intake?.takenBy) {
 					dailyRate += baseRate; // Per-intake takenBy: 1 person
 				} else {
@@ -586,18 +559,8 @@ export function SharedSchedule() {
 				// Time-based: every scheduled dose counts as consumed once its time has passed
 				intakes.forEach((intake, blisterIdx) => {
 					const usageForStock = convertUsageForStock(intake.usage, med, intake.intakeUnit ?? "ml");
-					const blisterStart = parseLocalDateTime(intake.start).getTime();
-					const period = Math.max(1, intake.every) * MS_PER_DAY;
-
-					let effectiveStart: number;
-					if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
-						const elapsedSinceStart = stockCorrectionCutoff - blisterStart;
-						const periodsElapsed = Math.floor(elapsedSinceStart / period);
-						effectiveStart = blisterStart + (periodsElapsed + 1) * period;
-					} else {
-						effectiveStart = blisterStart;
-					}
-					if (Number.isNaN(effectiveStart)) return;
+					const intakeStart = parseLocalDateTime(intake.start);
+					if (Number.isNaN(intakeStart.getTime())) return;
 
 					const intakePerson = intake?.takenBy;
 					const fallbackPeople = med.takenBy?.length > 0 ? med.takenBy : [null];
@@ -606,16 +569,15 @@ export function SharedSchedule() {
 					let timeBasedConsumed = 0;
 					let lastAutoConsumedDateMs = 0;
 
-					if (effectiveStart <= now) {
-						const occurrences = Math.floor((now - effectiveStart) / period) + 1;
-						timeBasedConsumed = occurrences * usageForStock * peopleForThisIntake.length;
-						const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
+					iterateIntakeOccurrences(intake, intakeStart, new Date(now), (occurrence) => {
+						if (occurrence.getTime() <= stockCorrectionCutoff) return;
+						timeBasedConsumed += usageForStock * peopleForThisIntake.length;
 						lastAutoConsumedDateMs = new Date(
-							lastDoseTime.getFullYear(),
-							lastDoseTime.getMonth(),
-							lastDoseTime.getDate()
+							occurrence.getFullYear(),
+							occurrence.getMonth(),
+							occurrence.getDate()
 						).getTime();
-					}
+					});
 
 					// Early intakes: future doses already marked as taken
 					const stockCorrectionDateOnly =
@@ -727,7 +689,7 @@ export function SharedSchedule() {
 
 	const renderDoseUsage = (
 		med: SharedScheduleData["medications"][number] | undefined,
-		dose: { usage: number; intakeUnit?: "ml" | "tsp" | "tbsp" | null }
+		dose: { usage: number; intakeUnit?: IntakeUnit | null }
 	) => formatDoseUsageLabel(med, dose.usage, dose.intakeUnit);
 
 	// Helper: check if a dose is "done" (taken, per-dose dismissed, or med-level dismissed)

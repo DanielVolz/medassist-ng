@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ReportModal from "../../components/ReportModal";
 import type { Medication } from "../../types";
+import { formatDate, formatDateTime } from "../../utils/formatters";
 
 function createMedication(overrides: Partial<Medication> = {}): Medication {
 	return {
@@ -65,6 +66,53 @@ describe("ReportModal", () => {
 		expect(URL.createObjectURL).toHaveBeenCalled();
 	});
 
+	it("renders shared formatter output in exported text reports", async () => {
+		const onClose = vi.fn();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				1: {
+					dosesTaken: 1,
+					automaticDosesTaken: 0,
+					dosesDismissed: 0,
+					firstDoseAt: "2026-02-03T12:00:00.000Z",
+					lastDoseAt: null,
+					refills: [],
+				},
+			}),
+		});
+
+		render(
+			<ReportModal
+				isOpen={true}
+				onClose={onClose}
+				medications={[
+					createMedication({
+						medicationStartDate: "2026-02-01",
+						blisters: [{ usage: 1, every: 1, start: "2026-02-02T08:30:00.000Z" }],
+					}),
+				]}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole("radio", { name: /report\.formatTxt/i }));
+		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
+
+		await waitFor(() => {
+			expect(URL.createObjectURL).toHaveBeenCalled();
+		});
+
+		const [blob] = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls.at(-1) ?? [];
+		expect(blob).toBeInstanceOf(Blob);
+
+		const content = await (blob as Blob).text();
+
+		expect(content).toContain(formatDate("2026-02-01"));
+		expect(content).toContain(formatDateTime("2026-02-02T08:30:00.000Z"));
+		expect(content).toContain(formatDate("2026-02-03T12:00:00.000Z"));
+		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
 	it("generates printable report when PDF format is selected", async () => {
 		const onClose = vi.fn();
 		const mockWrite = vi.fn();
@@ -83,16 +131,35 @@ describe("ReportModal", () => {
 			ok: true,
 			json: async () => ({
 				1: {
-					dosesTaken: 0,
+					dosesTaken: 1,
+					automaticDosesTaken: 0,
 					dosesDismissed: 0,
-					firstDoseAt: null,
+					firstDoseAt: "2026-03-03T12:00:00.000Z",
 					lastDoseAt: null,
-					refills: [],
+					refills: [
+						{
+							packsAdded: 1,
+							loosePillsAdded: 0,
+							usedPrescription: false,
+							refillDate: "2026-03-04",
+						},
+					],
 				},
 			}),
 		});
 
-		render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+		render(
+			<ReportModal
+				isOpen={true}
+				onClose={onClose}
+				medications={[
+					createMedication({
+						medicationStartDate: "2026-03-01",
+						blisters: [{ usage: 1, every: 1, start: "2026-03-02T08:30:00.000Z" }],
+					}),
+				]}
+			/>
+		);
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
@@ -101,6 +168,11 @@ describe("ReportModal", () => {
 			expect(mockClose).toHaveBeenCalled();
 		});
 
+		const [html] = mockWrite.mock.calls.at(-1) ?? [];
+		expect(html).toContain(formatDate("2026-03-01"));
+		expect(html).toContain(formatDateTime("2026-03-02T08:30:00.000Z"));
+		expect(html).toContain(formatDate("2026-03-03T12:00:00.000Z"));
+		expect(html).toContain(formatDate("2026-03-04"));
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 

@@ -114,8 +114,10 @@ test.describe("Share Schedule", () => {
 		const personSelect = modal.locator("select").first();
 		await expect(personSelect).toBeVisible();
 
-		// Should contain Alice and Bob options
-		await expect(personSelect.locator("option")).toHaveCount(2);
+		// Should contain Alice and Bob options.
+		// The dialog can also include an "all people" option, so assert presence instead of exact count.
+		await expect(personSelect.locator('option[value="Alice"]')).toBeAttached();
+		await expect(personSelect.locator('option[value="Bob"]')).toBeAttached();
 
 		// Close
 		await page.locator("button.modal-close").click();
@@ -187,7 +189,7 @@ test.describe("Share Schedule", () => {
 		await expect(sharedSchedule).toBeVisible({ timeout: 10000 });
 
 		// The page should show Alice's medication name
-		const content = sharedSchedule.getByText(MED_ALICE);
+		const content = sharedSchedule.locator(".med-name-text", { hasText: MED_ALICE }).first();
 		try {
 			await expect(content).toBeVisible({ timeout: 10000 });
 		} catch {
@@ -236,12 +238,16 @@ test.describe("Share Schedule", () => {
 		await expect(sharedSchedule).toBeVisible({ timeout: 10000 });
 
 		try {
-			await expect(sharedSchedule.getByText(MED_ALICE)).toBeVisible({ timeout: 10000 });
+			await expect(sharedSchedule.locator(".med-name-text", { hasText: MED_ALICE }).first()).toBeVisible({
+				timeout: 10000,
+			});
 		} catch {
 			await page.reload();
 			await page.waitForLoadState("networkidle");
 			await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
-			await expect(sharedSchedule.getByText(MED_ALICE)).toBeVisible({ timeout: 10000 });
+			await expect(sharedSchedule.locator(".med-name-text", { hasText: MED_ALICE }).first()).toBeVisible({
+				timeout: 10000,
+			});
 		}
 
 		// Visit Bob's share — should show Bob's med
@@ -251,12 +257,16 @@ test.describe("Share Schedule", () => {
 		await expect(sharedSchedule).toBeVisible({ timeout: 10000 });
 
 		try {
-			await expect(sharedSchedule.getByText(MED_BOB)).toBeVisible({ timeout: 10000 });
+			await expect(sharedSchedule.locator(".med-name-text", { hasText: MED_BOB }).first()).toBeVisible({
+				timeout: 10000,
+			});
 		} catch {
 			await page.reload();
 			await page.waitForLoadState("networkidle");
 			await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
-			await expect(sharedSchedule.getByText(MED_BOB)).toBeVisible({ timeout: 10000 });
+			await expect(sharedSchedule.locator(".med-name-text", { hasText: MED_BOB }).first()).toBeVisible({
+				timeout: 10000,
+			});
 		}
 	});
 

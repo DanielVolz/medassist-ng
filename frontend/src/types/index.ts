@@ -26,6 +26,64 @@ export type MedicationForm = "tablet" | "capsule" | "topical" | "liquid";
 export type PillForm = "tablet" | "capsule";
 export type LifecycleCategory = "refill_when_empty" | "treatment_period";
 export type PackageAmountUnit = "ml" | "g";
+export type MedicationEnrichmentDoseUnit = DoseUnit | "IU" | "drops" | "puffs";
+export type MedicationEnrichmentMatchType = "brand" | "ingredient";
+export type MedicationEnrichmentGenericStatus = "generic" | "original" | "unknown";
+export type MedicationEnrichmentSearchSource = "ema" | "rxnorm" | "openfda";
+export type MedicationEnrichmentSource =
+	| MedicationEnrichmentSearchSource
+	| "ema+rxnorm"
+	| "ema+openfda"
+	| "rxnorm+openfda"
+	| "ema+rxnorm+openfda";
+
+export type MedicationEnrichmentSearchResult = {
+	code: string;
+	name: string;
+	genericName: string | null;
+	authorisationHolder: string | null;
+	therapeuticArea: string | null;
+	matchType: MedicationEnrichmentMatchType;
+	genericStatus: MedicationEnrichmentGenericStatus;
+	authorisationDate: string | null;
+	source: MedicationEnrichmentSearchSource;
+};
+
+export type MedicationEnrichmentSearchResponse = {
+	query: string;
+	normalizedQuery: string;
+	hasMore: boolean;
+	results: MedicationEnrichmentSearchResult[];
+};
+
+export type MedicationEnrichmentStrengthOption = {
+	label: string;
+	pillWeightMg: number | null;
+	doseUnit: MedicationEnrichmentDoseUnit | null;
+};
+
+export type MedicationEnrichmentEnrichResponse = {
+	selection: {
+		name: string;
+		genericName: string | null;
+		therapeuticArea: string | null;
+		indication: string | null;
+		atcCode: string | null;
+		source: MedicationEnrichmentSource;
+	};
+	suggestions: {
+		name: string;
+		genericName: string | null;
+		medicationForm: MedicationForm | null;
+		strengthOptions: MedicationEnrichmentStrengthOption[];
+	};
+	meta: {
+		rxNormMatched: boolean;
+		openFdaMatched: boolean;
+		partial: boolean;
+		note: string | null;
+	};
+};
 
 export const DOSE_UNITS: { value: DoseUnit; label: string }[] = [
 	{ value: "mg", label: "mg" },

@@ -21,6 +21,7 @@ import { authRoutes } from "./routes/auth.js";
 import { doseRoutes } from "./routes/doses.js";
 import { exportRoutes } from "./routes/export.js";
 import { healthRoutes } from "./routes/health.js";
+import { medicationEnrichmentRoutes } from "./routes/medication-enrichment.js";
 import { medicationRoutes } from "./routes/medications.js";
 import { oidcRoutes } from "./routes/oidc.js";
 import { plannerRoutes } from "./routes/planner.js";
@@ -29,6 +30,7 @@ import { reportRoutes } from "./routes/report.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { shareRoutes } from "./routes/share.js";
 import { startIntakeReminderScheduler } from "./services/intake-reminder-scheduler.js";
+import { startMedicationEnrichmentCatalogRefresh } from "./services/medication-enrichment.js";
 import { startReminderScheduler } from "./services/reminder-scheduler.js";
 import { documentationSchemaAjv } from "./utils/documentation-schema-keywords.js";
 
@@ -93,6 +95,7 @@ async function registerApiDocs(app: FastifyInstance, enabled: boolean) {
 				{ name: "health", description: "Service health endpoints" },
 				{ name: "auth", description: "Authentication and profile endpoints" },
 				{ name: "api-keys", description: "Programmatic API key management" },
+				{ name: "medication-enrichment", description: "Medication search and enrichment endpoints" },
 				{ name: "settings", description: "User settings and notification test endpoints" },
 			],
 			components: {
@@ -206,6 +209,7 @@ export async function createApp(options?: {
 	await app.register(apiKeyRoutes);
 	await app.register(oidcRoutes);
 	await app.register(medicationRoutes);
+	await app.register(medicationEnrichmentRoutes);
 	await app.register(settingsRoutes);
 	await app.register(plannerRoutes);
 	await app.register(shareRoutes);
@@ -287,6 +291,7 @@ await app.register(authRoutes);
 await app.register(apiKeyRoutes);
 await app.register(oidcRoutes);
 await app.register(medicationRoutes);
+await app.register(medicationEnrichmentRoutes);
 await app.register(settingsRoutes);
 await app.register(plannerRoutes);
 await app.register(shareRoutes);
@@ -305,6 +310,13 @@ const start = async () => {
 			info: (msg) => app.log.info(msg),
 			debug: (msg) => app.log.debug(msg),
 			error: (msg) => app.log.error(msg),
+		});
+
+		startMedicationEnrichmentCatalogRefresh({
+			info: (msg: string) => app.log.info(msg),
+			debug: (msg: string) => app.log.debug(msg),
+			warn: (msg: string) => app.log.warn(msg),
+			error: (msg: string) => app.log.error(msg),
 		});
 
 		// Start the intake reminder scheduler (checks every minute)

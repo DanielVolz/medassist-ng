@@ -11,13 +11,23 @@ import {
 	FormNumberStepper,
 	Lightbox,
 	MedicationAvatar,
+	MedicationEnrichmentSection,
 	MobileEditModal,
 	ReportModal,
 } from "../components";
 import { useAuth } from "../components/Auth";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useMedicationForm, useModalHistory, useUnsavedChangesWarning } from "../hooks";
-import type { DoseUnit, FormState, Medication, PackageType } from "../types";
+import type {
+	DoseUnit,
+	FormState,
+	Medication,
+	MedicationEnrichmentEnrichResponse,
+	MedicationEnrichmentSearchResponse,
+	MedicationEnrichmentSearchResult,
+	MedicationEnrichmentStrengthOption,
+	PackageType,
+} from "../types";
 import {
 	allowsPillFormSelection,
 	DOSE_UNITS,
@@ -49,6 +59,113 @@ function userStorageKey(userId: number | undefined, key: string): string {
 }
 
 const OBSOLETE_SECTION_STORAGE_KEY = "medicationsShowObsolete";
+const MEDICATION_ENRICHMENT_INITIAL_LIMIT = 6;
+const MEDICATION_ENRICHMENT_LIMIT_STEP = 6;
+const MEDICATION_ENRICHMENT_MAX_LIMIT = 20;
+
+type MedicationEnrichmentState = {
+	query: string;
+	results: MedicationEnrichmentSearchResult[];
+	hasMoreResults: boolean;
+	resultLimit: number;
+	isSearching: boolean;
+	hasSearched: boolean;
+	searchError: string | null;
+	applyingCode: string | null;
+	activeResultCode: string | null;
+	appliedSelection: MedicationEnrichmentEnrichResponse["selection"] | null;
+	enrichError: string | null;
+	meta: MedicationEnrichmentEnrichResponse["meta"] | null;
+	strengthOptions: MedicationEnrichmentStrengthOption[];
+	appliedStrengthLabel: string | null;
+};
+
+function createMedicationEnrichmentState(
+	query = "",
+	resultLimit = MEDICATION_ENRICHMENT_INITIAL_LIMIT
+): MedicationEnrichmentState {
+	return {
+		query,
+		results: [],
+		hasMoreResults: false,
+		resultLimit,
+		isSearching: false,
+		hasSearched: false,
+		searchError: null,
+		applyingCode: null,
+		activeResultCode: null,
+		appliedSelection: null,
+		enrichError: null,
+		meta: null,
+		strengthOptions: [],
+		appliedStrengthLabel: null,
+	};
+}
+
+function normalizeMedicationEnrichmentDoseUnit(unit: MedicationEnrichmentStrengthOption["doseUnit"]): DoseUnit | null {
+	if (unit === "IU") return "units";
+	if (unit === "mg" || unit === "g" || unit === "mcg" || unit === "ml" || unit === "units") return unit;
+	return null;
+}
+
+function applyMedicationEnrichmentSuggestions(
+	form: FormState,
+	suggestions: MedicationEnrichmentEnrichResponse["suggestions"]
+): FormState {
+	const nextForm: FormState = {
+		...form,
+		name: suggestions.name,
+		genericName: suggestions.genericName ?? "",
+	};
+
+	if (suggestions.medicationForm === "tablet" || suggestions.medicationForm === "capsule") {
+		return {
+			...nextForm,
+			medicationForm: suggestions.medicationForm,
+			pillForm: suggestions.medicationForm,
+		};
+	}
+
+	if (suggestions.medicationForm === "liquid" || suggestions.medicationForm === "topical") {
+		return {
+			...nextForm,
+			medicationForm: suggestions.medicationForm,
+		};
+	}
+
+	return nextForm;
+}
+
+function applyMedicationEnrichmentStrength(
+	form: FormState,
+	option: MedicationEnrichmentStrengthOption
+): FormState | null {
+	if (option.pillWeightMg === null) return null;
+	const doseUnit = normalizeMedicationEnrichmentDoseUnit(option.doseUnit);
+	if (!doseUnit) return null;
+
+	return {
+		...form,
+		pillWeightMg: `${option.pillWeightMg}`,
+		doseUnit,
+	};
+}
+
+async function getMedicationEnrichmentErrorMessage(response: Response, fallback: string): Promise<string> {
+	try {
+		const errorBody = (await response.json()) as { error?: string; message?: string };
+		if (typeof errorBody?.error === "string" && errorBody.error.trim().length > 0) {
+			return errorBody.error;
+		}
+		if (typeof errorBody?.message === "string" && errorBody.message.trim().length > 0) {
+			return errorBody.message;
+		}
+	} catch {
+		// keep translated fallback
+	}
+
+	return fallback;
+}
 
 export function MedicationsPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -162,6 +279,88 @@ export function MedicationsPage() {
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<Medication | null>(null);
 	const [allMeds, setAllMeds] = useState<Medication[]>(meds);
 	const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+	const [medicationEnrichment, setMedicationEnrichment] = useState<MedicationEnrichmentState>(() =>
+		createMedicationEnrichmentState()
+	);
+
+	const resetMedicationEnrichment = useCallback((query = "") => {
+		setMedicationEnrichment(createMedicationEnrichmentState(query));
+	}, []);
+
+	const handleMedicationEnrichmentQueryChange = useCallback((value: string) => {
+		setMedicationEnrichment((previous) => ({
+			...previous,
+			query: value,
+		}));
+	}, []);
+
+	const performMedicationEnrichmentSearch = useCallback(
+		async (requestedLimit: number, preserveExistingResults = false) => {
+			const trimmedQuery = medicationEnrichment.query.trim();
+			if (!trimmedQuery) return;
+			const limit = Math.min(requestedLimit, MEDICATION_ENRICHMENT_MAX_LIMIT);
+
+			setMedicationEnrichment((previous) => ({
+				...previous,
+				query: trimmedQuery,
+				results: preserveExistingResults ? previous.results : [],
+				hasMoreResults: false,
+				resultLimit: limit,
+				isSearching: true,
+				hasSearched: preserveExistingResults ? previous.hasSearched : false,
+				searchError: null,
+				applyingCode: null,
+				...(preserveExistingResults
+					? {}
+					: {
+							activeResultCode: null,
+							appliedSelection: null,
+							enrichError: null,
+							meta: null,
+							strengthOptions: [],
+							appliedStrengthLabel: null,
+						}),
+			}));
+
+			try {
+				const params = new URLSearchParams({ q: trimmedQuery, limit: String(limit) });
+				const response = await fetch(`/api/medication-enrichment/search?${params.toString()}`, {
+					credentials: "include",
+				});
+
+				if (!response.ok) {
+					throw new Error(await getMedicationEnrichmentErrorMessage(response, t("form.enrichment.searchError")));
+				}
+
+				const data = (await response.json()) as MedicationEnrichmentSearchResponse;
+
+				setMedicationEnrichment((previous) => ({
+					...previous,
+					query: data.query,
+					results: Array.isArray(data.results) ? data.results : [],
+					hasMoreResults: Boolean(data.hasMore),
+					resultLimit: limit,
+					isSearching: false,
+					hasSearched: true,
+					searchError: null,
+				}));
+			} catch (error) {
+				const message =
+					error instanceof Error && error.message.trim().length > 0 ? error.message : t("form.enrichment.searchError");
+
+				setMedicationEnrichment((previous) => ({
+					...previous,
+					results: preserveExistingResults ? previous.results : [],
+					hasMoreResults: false,
+					resultLimit: limit,
+					isSearching: false,
+					hasSearched: true,
+					searchError: message,
+				}));
+			}
+		},
+		[medicationEnrichment.query, t]
+	);
 
 	const handlePendingMedicationImageSelection = useCallback(
 		(event: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,6 +455,126 @@ export function MedicationsPage() {
 			void loadAllMeds();
 		},
 		[deleteMedImage, loadAllMeds]
+	);
+
+	const applicableMedicationEnrichmentStrengthOptions = useMemo(() => {
+		if (!allowsPillFormSelection(form.packageType)) return [];
+
+		return medicationEnrichment.strengthOptions.filter(
+			(option) => option.pillWeightMg !== null && normalizeMedicationEnrichmentDoseUnit(option.doseUnit) !== null
+		);
+	}, [form.packageType, medicationEnrichment.strengthOptions]);
+
+	const handleMedicationEnrichmentSearch = useCallback(async () => {
+		await performMedicationEnrichmentSearch(MEDICATION_ENRICHMENT_INITIAL_LIMIT);
+	}, [performMedicationEnrichmentSearch]);
+
+	const handleMedicationEnrichmentLoadMore = useCallback(async () => {
+		if (medicationEnrichment.isSearching || !medicationEnrichment.hasMoreResults) return;
+		await performMedicationEnrichmentSearch(
+			Math.min(medicationEnrichment.resultLimit + MEDICATION_ENRICHMENT_LIMIT_STEP, MEDICATION_ENRICHMENT_MAX_LIMIT),
+			true
+		);
+	}, [
+		medicationEnrichment.hasMoreResults,
+		medicationEnrichment.isSearching,
+		medicationEnrichment.resultLimit,
+		performMedicationEnrichmentSearch,
+	]);
+
+	const handleMedicationEnrichmentApply = useCallback(
+		async (result: MedicationEnrichmentSearchResult) => {
+			setMedicationEnrichment((previous) => ({
+				...previous,
+				applyingCode: result.code,
+				activeResultCode: result.code,
+				enrichError: null,
+				appliedSelection: null,
+				meta: null,
+				strengthOptions: [],
+				appliedStrengthLabel: null,
+			}));
+
+			try {
+				const response = await fetch("/api/medication-enrichment/enrich", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						query: medicationEnrichment.query.trim() || result.name,
+						name: result.name,
+						genericName: result.genericName ?? null,
+						code: result.code,
+						source: result.source,
+					}),
+					credentials: "include",
+				});
+
+				if (!response.ok) {
+					throw new Error(await getMedicationEnrichmentErrorMessage(response, t("form.enrichment.applyError")));
+				}
+
+				const data = (await response.json()) as MedicationEnrichmentEnrichResponse;
+				let nextForm = applyMedicationEnrichmentSuggestions(form, data.suggestions);
+				let appliedStrengthLabel: string | null = null;
+
+				if (allowsPillFormSelection(nextForm.packageType) && data.suggestions.strengthOptions.length === 1) {
+					const autoAppliedForm = applyMedicationEnrichmentStrength(nextForm, data.suggestions.strengthOptions[0]);
+					if (autoAppliedForm) {
+						nextForm = autoAppliedForm;
+						appliedStrengthLabel = data.suggestions.strengthOptions[0].label;
+					}
+				}
+
+				setForm(nextForm);
+				setMedicationEnrichment((previous) => ({
+					...previous,
+					applyingCode: null,
+					activeResultCode: result.code,
+					appliedSelection: data.selection,
+					enrichError: null,
+					meta: data.meta,
+					strengthOptions: data.suggestions.strengthOptions,
+					appliedStrengthLabel,
+				}));
+			} catch (error) {
+				const message =
+					error instanceof Error && error.message.trim().length > 0 ? error.message : t("form.enrichment.applyError");
+
+				setMedicationEnrichment((previous) => ({
+					...previous,
+					applyingCode: null,
+					activeResultCode: null,
+					appliedSelection: null,
+					enrichError: message,
+					meta: null,
+					strengthOptions: [],
+					appliedStrengthLabel: null,
+				}));
+			}
+		},
+		[form, medicationEnrichment.query, setForm, t]
+	);
+
+	const handleMedicationEnrichmentStrengthApply = useCallback(
+		(option: MedicationEnrichmentStrengthOption) => {
+			setForm((currentForm) => {
+				const nextForm = applyMedicationEnrichmentStrength(currentForm, option);
+				return nextForm ?? currentForm;
+			});
+			setMedicationEnrichment((previous) => ({
+				...previous,
+				appliedStrengthLabel: option.label,
+			}));
+		},
+		[setForm]
+	);
+
+	const medicationEnrichmentViewModel = useMemo(
+		() => ({
+			...medicationEnrichment,
+			strengthOptions: applicableMedicationEnrichmentStrengthOptions,
+		}),
+		[applicableMedicationEnrichmentStrengthOptions, medicationEnrichment]
 	);
 
 	// Calculate total tablets
@@ -416,12 +735,14 @@ export function MedicationsPage() {
 		if (pendingAction) {
 			// There's a pending action (e.g. switching to another medication) — reset and run it
 			resetForm();
+			resetMedicationEnrichment();
 			setReadOnlyView(false);
 			pendingAction();
 		} else if (source === "mobile-edit" && showEditModal) {
 			clearEditMedIdParam();
 			setShowEditModal(false);
 			resetForm();
+			resetMedicationEnrichment();
 			setReadOnlyView(false);
 			window.history.back();
 		} else {
@@ -449,6 +770,7 @@ export function MedicationsPage() {
 			window.history.back();
 		}
 		resetForm();
+		resetMedicationEnrichment();
 		setShowNameValidation(false);
 		setActiveTab("general");
 		setReadOnlyView(false);
@@ -710,11 +1032,13 @@ export function MedicationsPage() {
 					setActiveTab("general");
 					setViewMode("grid");
 					resetForm();
+					resetMedicationEnrichment();
 					window.history.back();
 					setSaving(false);
 					return;
 				}
 				resetForm();
+				resetMedicationEnrichment();
 				setViewMode("grid");
 			} else {
 				// Update originalForm so formChanged becomes false
@@ -758,6 +1082,7 @@ export function MedicationsPage() {
 				if (showEditModal) {
 					setShowEditModal(false);
 					resetForm();
+					resetMedicationEnrichment();
 				}
 				return;
 			}
@@ -780,6 +1105,7 @@ export function MedicationsPage() {
 				clearEditMedIdParam();
 				setShowEditModal(false);
 				resetForm();
+				resetMedicationEnrichment();
 				return;
 			}
 
@@ -793,6 +1119,7 @@ export function MedicationsPage() {
 				}
 				hasDesktopFormHistoryState.current = false;
 				resetForm();
+				resetMedicationEnrichment();
 				setShowNameValidation(false);
 				setActiveTab("general");
 				setReadOnlyView(false);
@@ -836,6 +1163,7 @@ export function MedicationsPage() {
 			pendingActionRef.current = () => {
 				setShowNameValidation(false);
 				setReadOnlyView(false);
+				resetMedicationEnrichment(med.name || med.genericName || "");
 				startEdit(med, openEditModal);
 				setViewMode("form");
 				scrollToTopForDesktopEdit();
@@ -847,6 +1175,7 @@ export function MedicationsPage() {
 		setShowNameValidation(false);
 		setReadOnlyView(false);
 		setActiveTab("general");
+		resetMedicationEnrichment(med.name || med.genericName || "");
 		startEdit(med, openEditModal);
 		setViewMode("form");
 		scrollToTopForDesktopEdit();
@@ -857,6 +1186,7 @@ export function MedicationsPage() {
 			pendingActionRef.current = () => {
 				setShowNameValidation(false);
 				setReadOnlyView(true);
+				resetMedicationEnrichment(med.name || med.genericName || "");
 				startEdit(med, openEditModal);
 				setViewMode("form");
 				scrollToTopForDesktopEdit();
@@ -868,6 +1198,7 @@ export function MedicationsPage() {
 		setShowNameValidation(false);
 		setReadOnlyView(true);
 		setActiveTab("general");
+		resetMedicationEnrichment(med.name || med.genericName || "");
 		startEdit(med, openEditModal);
 		setViewMode("form");
 		scrollToTopForDesktopEdit();
@@ -877,6 +1208,7 @@ export function MedicationsPage() {
 		if (formChanged) {
 			pendingActionRef.current = () => {
 				resetForm();
+				resetMedicationEnrichment();
 				setShowNameValidation(false);
 				setReadOnlyView(false);
 				if (window.innerWidth <= 768) {
@@ -890,6 +1222,7 @@ export function MedicationsPage() {
 			return;
 		}
 		resetForm();
+		resetMedicationEnrichment();
 		setShowNameValidation(false);
 		setReadOnlyView(false);
 		if (window.innerWidth <= 768) {
@@ -932,6 +1265,7 @@ export function MedicationsPage() {
 		setShowNameValidation(false);
 		setReadOnlyView(false);
 		setActiveTab("general");
+		resetMedicationEnrichment(medicationToEdit.name || medicationToEdit.genericName || "");
 		startEdit(medicationToEdit, openEditModal);
 		setViewMode("form");
 		scrollToTopForDesktopEdit();
@@ -1280,6 +1614,14 @@ export function MedicationsPage() {
 											<span className="field-error">{fieldErrors.genericName}</span>
 										)}
 									</label>
+									<MedicationEnrichmentSection
+										state={medicationEnrichmentViewModel}
+										onQueryChange={handleMedicationEnrichmentQueryChange}
+										onSearch={handleMedicationEnrichmentSearch}
+										onLoadMoreResults={handleMedicationEnrichmentLoadMore}
+										onApplyResult={handleMedicationEnrichmentApply}
+										onApplyStrength={handleMedicationEnrichmentStrengthApply}
+									/>
 									<div className="full date-pair-group">
 										<label className="date-pair-field">
 											{t("form.medicationStartDate")}
@@ -1938,6 +2280,12 @@ export function MedicationsPage() {
 				editingId={editingId}
 				form={form}
 				onFormChange={setForm}
+				medicationEnrichment={medicationEnrichmentViewModel}
+				onMedicationEnrichmentQueryChange={handleMedicationEnrichmentQueryChange}
+				onMedicationEnrichmentSearch={handleMedicationEnrichmentSearch}
+				onMedicationEnrichmentLoadMore={handleMedicationEnrichmentLoadMore}
+				onMedicationEnrichmentApply={handleMedicationEnrichmentApply}
+				onMedicationEnrichmentStrengthApply={handleMedicationEnrichmentStrengthApply}
 				fieldErrors={fieldErrors}
 				saving={saving}
 				formSaved={formSaved}

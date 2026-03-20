@@ -225,6 +225,50 @@
       "weight": "z.B. 240",
       "notes": "z.B. Mit Essen einnehmen, Alkohol vermeiden... (optional)"
     },
+    "enrichment": {
+      "title": "Optionale Medikamentensuche",
+      "coverageLabel": "Unvollständige freie Abdeckung",
+      "collapsedHint": "Öffne das nur, wenn du Suchvorschläge nutzen möchtest.",
+      "toggleShow": "Suche anzeigen",
+      "toggleHide": "Suche ausblenden",
+      "infoShow": "Infos zu den Quellen",
+      "infoHide": "Quellenhinweise ausblenden",
+      "infoTitle": "Was du erwarten kannst",
+      "description": "Durchsuche zuerst RxNorm und openFDA, nutze EMA nur als letzten Fallback und prüfe jeden Treffer, bevor du etwas ins Formular übernimmst.",
+      "searchLabel": "Medikamentenquellen durchsuchen",
+      "searchPlaceholder": "Nach Marke oder Wirkstoff suchen",
+      "searchAction": "Suchen",
+      "searching": "Suche läuft...",
+      "showMoreAction": "Mehr Treffer anzeigen",
+      "noResults": "Es wurden in der aktuellen Freiquellen-Suche keine Treffer gefunden. Du kannst das Medikament manuell weiter erfassen.",
+      "manualEntryHint": "Diese Hilfe ist optional und kann Medikamente, Stärken oder lokale Marktvarianten übersehen.",
+      "searchError": "Die Medikamentensuche ist momentan nicht verfügbar. Bitte fahre mit der manuellen Eingabe fort.",
+      "applyAction": "Übernehmen",
+      "applying": "Wird übernommen...",
+      "applied": "Ins Formular übernommen",
+      "applyError": "Das Autofill konnte nicht übernommen werden. Bitte bearbeite das Medikament manuell weiter.",
+      "partialNote": "Es waren nur teilweise Autofill-Vorschläge verfügbar. Prüfe die Felder vor dem Speichern.",
+      "strengthTitle": "Stärke-Vorschläge",
+      "strengthHint": "Wähle eine Stärke aus, um Dosis pro Tablette und Einheit zu aktualisieren.",
+      "appliedStrength": "Übernommene Stärke: {{label}}",
+      "details": {
+        "showAction": "Mehr Details",
+        "hideAction": "Weniger Details",
+        "authorisationHolder": "Zulassungsinhaber",
+        "therapeuticArea": "Therapiebereich",
+        "authorisationDate": "Zulassungsdatum"
+      },
+      "genericStatus": {
+        "generic": "Generikum",
+        "original": "Original",
+        "unknown": "Status unbekannt"
+      },
+      "sources": {
+        "ema": "EMA",
+        "rxnorm": "RxNorm",
+        "openfda": "openFDA (USA)"
+      }
+    },
     "validation": {
       "startDateAfterIntake": "Das Medikations-Startdatum ({{medicationStartDate}}) darf nicht nach dem Einnahmedatum ({{intakeDate}}) liegen.",
       "endDateBeforeStart": "Das Medikations-Enddatum ({{medicationEndDate}}) darf nicht vor dem Startdatum ({{medicationStartDate}}) liegen."

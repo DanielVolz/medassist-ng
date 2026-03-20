@@ -225,6 +225,50 @@
       "weight": "e.g. 240",
       "notes": "e.g. Take with food, avoid alcohol... (optional)"
     },
+    "enrichment": {
+      "title": "Optional medication lookup",
+      "coverageLabel": "Incomplete free-source coverage",
+      "collapsedHint": "Open this only if you want lookup suggestions.",
+      "toggleShow": "Show lookup",
+      "toggleHide": "Hide lookup",
+      "infoShow": "About sources",
+      "infoHide": "Hide source notes",
+      "infoTitle": "What to expect",
+      "description": "Search RxNorm and openFDA first, use EMA as a last fallback, and review each result before applying anything to the form.",
+      "searchLabel": "Search medication sources",
+      "searchPlaceholder": "Search by brand or ingredient",
+      "searchAction": "Search",
+      "searching": "Searching...",
+      "showMoreAction": "Show more results",
+      "noResults": "No matches were found in the current free-source search. You can continue entering the medication manually.",
+      "manualEntryHint": "This helper is optional and may miss medications, strengths, or local market variants.",
+      "searchError": "Medication lookup is currently unavailable. Please continue with manual entry.",
+      "applyAction": "Apply",
+      "applying": "Applying...",
+      "applied": "Applied to form",
+      "applyError": "Autofill could not be applied. Please keep editing the medication manually.",
+      "partialNote": "Only partial autofill suggestions were available. Review the fields before saving.",
+      "strengthTitle": "Strength suggestions",
+      "strengthHint": "Choose a strength to update dose per pill and unit.",
+      "appliedStrength": "Applied strength: {{label}}",
+      "details": {
+        "showAction": "More details",
+        "hideAction": "Less details",
+        "authorisationHolder": "Authorisation holder",
+        "therapeuticArea": "Therapeutic area",
+        "authorisationDate": "Authorisation date"
+      },
+      "genericStatus": {
+        "generic": "Generic",
+        "original": "Original",
+        "unknown": "Status unknown"
+      },
+      "sources": {
+        "ema": "EMA",
+        "rxnorm": "RxNorm",
+        "openfda": "openFDA (US)"
+      }
+    },
     "validation": {
       "startDateAfterIntake": "Medication start date ({{medicationStartDate}}) cannot be after intake date ({{intakeDate}}).",
       "endDateBeforeStart": "Medication end date ({{medicationEndDate}}) cannot be before medication start date ({{medicationStartDate}})."

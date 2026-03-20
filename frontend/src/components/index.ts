@@ -14,6 +14,8 @@ export type { MedDetailModalProps } from "./MedDetailModal";
 export { MedDetailModal } from "./MedDetailModal";
 export type { MedicationAvatarProps } from "./MedicationAvatar";
 export { MedicationAvatar } from "./MedicationAvatar";
+export type { MedicationEnrichmentViewModel } from "./MedicationEnrichmentSection";
+export { MedicationEnrichmentSection } from "./MedicationEnrichmentSection";
 export type { MobileEditModalProps } from "./MobileEditModal";
 export { MobileEditModal } from "./MobileEditModal";
 export { PasswordInput } from "./PasswordInput";

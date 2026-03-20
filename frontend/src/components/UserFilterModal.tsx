@@ -5,11 +5,13 @@
 import { useTranslation } from "react-i18next";
 import { MedicationAvatar } from "../components";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import type { Coverage, Medication, StockThresholds } from "../types";
+import type { Coverage, IntakeUnit, Medication, StockThresholds } from "../types";
 import { getMedDisplayName, getMedTotal, getPackageSize } from "../types";
 import { allowsPillFormSelection, isLiquidContainerPackageType, isTubePackageType } from "../types/package-profiles";
 import { formatNumber } from "../utils";
 import { getSystemLocale } from "../utils/formatters";
+import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
+import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { getStockStatus } from "../utils/schedule";
 
 export interface UserFilterModalProps {
@@ -40,19 +42,9 @@ export function UserFilterModal({
 		);
 	};
 
-	const getLiquidCountUnitLabel = (unit: "ml" | "tsp" | "tbsp" | null | undefined, usage: number): string => {
-		if (unit === "tsp") return t("form.blisters.teaspoons", { count: Math.abs(usage) });
-		if (unit === "tbsp") return t("form.blisters.tablespoons", { count: Math.abs(usage) });
-		return t("form.packageAmountUnitMl");
-	};
-
-	const formatIntakeUsageLabel = (
-		med: Medication,
-		usage: number,
-		intakeUnit?: "ml" | "tsp" | "tbsp" | null
-	): string => {
+	const formatIntakeUsageLabel = (med: Medication, usage: number, intakeUnit?: IntakeUnit | null): string => {
 		if (isLiquidMedication(med)) {
-			return `${formatNumber(usage)} ${getLiquidCountUnitLabel(intakeUnit, usage)}`;
+			return `${formatNumber(usage)} ${getLiquidCountUnitLabel(intakeUnit, usage, t)}`;
 		}
 		if (isTubePackageType(med.packageType)) {
 			return `${formatNumber(usage)} ${t("form.blisters.applications", { count: usage })}`;
@@ -111,14 +103,9 @@ export function UserFilterModal({
 						const currentStock = medCoverage ? medCoverage.medsLeft : getMedTotal(med);
 
 						// Get intakes relevant to this person
-						const personIntakes = (
-							med.intakes ||
-							med.blisters.map((b) => ({
-								...b,
-								takenBy: null as string | null,
-								intakeRemindersEnabled: false,
-							}))
-						).filter((intake) => intake.takenBy === null || intake.takenBy === selectedUser);
+						const personIntakes = getMedicationIntakes(med).filter(
+							(intake) => intake.takenBy === null || intake.takenBy === selectedUser
+						);
 
 						return (
 							<div
@@ -146,7 +133,7 @@ export function UserFilterModal({
 													hour: "2-digit",
 													minute: "2-digit",
 												});
-												const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.takenBy ?? ""}`;
+												const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.scheduleMode ?? "interval"}-${(intake.weekdays ?? []).join("")}-${intake.takenBy ?? ""}`;
 												const intakeUnit = "intakeUnit" in intake ? intake.intakeUnit : undefined;
 												return (
 													<span key={intakeKey} className="user-med-intake-item">
@@ -154,8 +141,7 @@ export function UserFilterModal({
 														{allowsPillFormSelection(med.packageType) &&
 															med.pillWeightMg != null &&
 															` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}
-														{intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every })}{" "}
-														{t("modal.at")} {timeStr}
+														{getIntakeFrequencyText(intake, t)} {t("modal.at")} {timeStr}
 													</span>
 												);
 											})}

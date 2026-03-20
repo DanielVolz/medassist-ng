@@ -16,14 +16,14 @@ import {
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
 import { normalizePackageType, PACKAGE_TYPES } from "../utils/package-profiles.js";
-import { parseIntakesJson, parseTakenByJson } from "../utils/scheduler-utils.js";
+import { normalizeIntake, parseIntakesJson, parseTakenByJson } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(getDataDir(), "images");
 
 // =============================================================================
 // Export Format Version (bump this when format changes)
 // =============================================================================
-const EXPORT_VERSION = "1.3";
+const EXPORT_VERSION = "1.4";
 
 // =============================================================================
 // Zod Schemas for Import Validation
@@ -33,6 +33,8 @@ const scheduleSchema = z.object({
 	usage: z.number().nonnegative(),
 	every: z.number().int().min(1),
 	start: z.string(), // ISO datetime string
+	scheduleMode: z.unknown().optional(),
+	weekdays: z.unknown().optional(),
 	intakeUnit: z.enum(["ml", "tsp", "tbsp"]).nullable().optional(),
 	remind: z.boolean().optional().default(false),
 	takenBy: z.string().nullable().optional(), // Per-intake takenBy (new field)
@@ -237,6 +239,8 @@ function parseIntakesForExport(row: typeof medications.$inferSelect): Array<{
 	usage: number;
 	every: number;
 	start: string;
+	scheduleMode: "interval" | "weekdays";
+	weekdays: Array<"mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun">;
 	intakeUnit: "ml" | "tsp" | "tbsp" | null;
 	remind: boolean;
 	takenBy: string | null;
@@ -252,7 +256,9 @@ function parseIntakesForExport(row: typeof medications.$inferSelect): Array<{
 		usage: intake.usage,
 		every: intake.every,
 		start: intake.start,
-		intakeUnit: null,
+		scheduleMode: intake.scheduleMode ?? "interval",
+		weekdays: intake.weekdays ?? [],
+		intakeUnit: intake.intakeUnit ?? null,
 		remind: intake.intakeRemindersEnabled,
 		takenBy: intake.takenBy, // Per-intake takenBy
 	}));
@@ -671,26 +677,28 @@ export async function exportRoutes(app: FastifyInstance) {
 			const exportIdToNewId = new Map<string, number>();
 
 			for (const med of importData.medications) {
-				// Convert schedules to both legacy and new formats
-				const usageJson = JSON.stringify(med.schedules.map((s) => s.usage));
-				const everyJson = JSON.stringify(med.schedules.map((s) => s.every));
-				const startJson = JSON.stringify(med.schedules.map((s) => s.start));
+				const normalizedSchedules = med.schedules.map((schedule) =>
+					normalizeIntake({
+						usage: schedule.usage,
+						every: schedule.every,
+						start: schedule.start,
+						scheduleMode: schedule.scheduleMode,
+						weekdays: schedule.weekdays,
+						intakeUnit: schedule.intakeUnit ?? null,
+						takenBy: schedule.takenBy || null,
+						intakeRemindersEnabled: schedule.remind ?? false,
+					})
+				);
+				const usageJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.usage));
+				const everyJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.every));
+				const startJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.start));
 				const takenByJson = JSON.stringify(med.takenBy);
 
-				// Build intakesJson array (new unified format with per-intake takenBy)
-				const intakesJson = JSON.stringify(
-					med.schedules.map((s) => ({
-						usage: s.usage,
-						every: s.every,
-						start: s.start,
-						intakeUnit: s.intakeUnit ?? null,
-						takenBy: s.takenBy || null,
-						intakeRemindersEnabled: s.remind ?? false,
-					}))
-				);
+				const intakesJson = JSON.stringify(normalizedSchedules);
 
 				// Check if any schedule has remind enabled
-				const intakeRemindersEnabled = med.schedules.some((s) => s.remind) || med.intakeRemindersEnabled;
+				const intakeRemindersEnabled =
+					normalizedSchedules.some((schedule) => schedule.intakeRemindersEnabled) || med.intakeRemindersEnabled;
 
 				const [inserted] = await db
 					.insert(medications)

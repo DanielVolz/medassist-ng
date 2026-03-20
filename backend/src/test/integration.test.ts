@@ -942,17 +942,17 @@ describe("Integration Tests", () => {
 	// ---------------------------------------------------------------------------
 
 	describe("Planner usage calculation", () => {
+		const plannerWindowStart = "2030-01-15T00:00:00.000Z";
+		const futureDailyStart = "2030-01-15T08:00:00.000Z";
+		const futureEveningStart = "2030-01-15T20:00:00.000Z";
+		const tenDayPlanEnd = "2030-01-24T23:59:59.999Z";
+		const thirtyFiveDayPlanEnd = "2030-02-18T23:59:59.999Z";
+
 		it("should calculate correct usage for daily medication", async () => {
 			// Create medication: 2 packs × 3 blisters × 10 pills = 60 pills total
-			// Schedule: 1 pill daily starting tomorrow (future date)
-			const tomorrow = new Date();
-			tomorrow.setDate(tomorrow.getDate() + 1);
-			tomorrow.setHours(8, 0, 0, 0);
-			const intakeStart = tomorrow.toISOString();
-
-			const planEnd = new Date(tomorrow);
-			planEnd.setDate(planEnd.getDate() + 10);
-			const planEndStr = planEnd.toISOString();
+			// Schedule: 1 pill daily starting on a fixed future winter date.
+			// This avoids daylight-saving-time edge cases in local test environments.
+			const intakeStart = futureDailyStart;
 
 			await app.inject({
 				method: "POST",
@@ -972,8 +972,8 @@ describe("Integration Tests", () => {
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: intakeStart,
-					endDate: planEndStr, // 10 days
+					startDate: plannerWindowStart,
+					endDate: tenDayPlanEnd,
 				},
 			});
 
@@ -988,15 +988,8 @@ describe("Integration Tests", () => {
 
 		it("should detect insufficient stock", async () => {
 			// Create medication: 1 pack × 1 blister × 5 pills = 5 pills total
-			// Schedule: 1 pill daily starting tomorrow
-			const tomorrow = new Date();
-			tomorrow.setDate(tomorrow.getDate() + 1);
-			tomorrow.setHours(8, 0, 0, 0);
-			const intakeStart = tomorrow.toISOString();
-
-			const planEnd = new Date(tomorrow);
-			planEnd.setDate(planEnd.getDate() + 10);
-			const planEndStr = planEnd.toISOString();
+			// Schedule: 1 pill daily starting on a fixed future winter date.
+			const intakeStart = futureDailyStart;
 
 			await app.inject({
 				method: "POST",
@@ -1016,8 +1009,8 @@ describe("Integration Tests", () => {
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: intakeStart,
-					endDate: planEndStr,
+					startDate: plannerWindowStart,
+					endDate: tenDayPlanEnd,
 				},
 			});
 
@@ -1029,15 +1022,8 @@ describe("Integration Tests", () => {
 
 		it("should calculate weekly medication usage correctly", async () => {
 			// Create medication: 10 pills total
-			// Schedule: 1 pill every 7 days starting tomorrow
-			const tomorrow = new Date();
-			tomorrow.setDate(tomorrow.getDate() + 1);
-			tomorrow.setHours(8, 0, 0, 0);
-			const intakeStart = tomorrow.toISOString();
-
-			const planEnd = new Date(tomorrow);
-			planEnd.setDate(planEnd.getDate() + 35); // 35 days to get 5 weekly doses
-			const planEndStr = planEnd.toISOString();
+			// Schedule: 1 pill every 7 days starting on a fixed future winter date.
+			const intakeStart = futureDailyStart;
 
 			await app.inject({
 				method: "POST",
@@ -1056,8 +1042,8 @@ describe("Integration Tests", () => {
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: intakeStart,
-					endDate: planEndStr,
+					startDate: plannerWindowStart,
+					endDate: thirtyFiveDayPlanEnd,
 				},
 			});
 
@@ -1070,18 +1056,8 @@ describe("Integration Tests", () => {
 		it("should handle multiple intake schedules per medication", async () => {
 			// Create medication with morning and evening doses
 			// 30 pills total, 1.5 pills per day (1 morning + 0.5 evening)
-			const tomorrow = new Date();
-			tomorrow.setDate(tomorrow.getDate() + 1);
-			tomorrow.setHours(8, 0, 0, 0);
-			const morningStart = tomorrow.toISOString();
-
-			const eveningStart = new Date(tomorrow);
-			eveningStart.setHours(20, 0, 0, 0);
-			const eveningStartStr = eveningStart.toISOString();
-
-			const planEnd = new Date(tomorrow);
-			planEnd.setDate(planEnd.getDate() + 10);
-			const planEndStr = planEnd.toISOString();
+			const morningStart = futureDailyStart;
+			const eveningStartStr = futureEveningStart;
 
 			await app.inject({
 				method: "POST",
@@ -1103,8 +1079,8 @@ describe("Integration Tests", () => {
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: morningStart,
-					endDate: planEndStr,
+					startDate: plannerWindowStart,
+					endDate: tenDayPlanEnd,
 				},
 			});
 
@@ -1116,14 +1092,7 @@ describe("Integration Tests", () => {
 
 		it("should calculate correct blisters needed", async () => {
 			// 10 pills per blister, need 25 pills → need 3 blisters
-			const tomorrow = new Date();
-			tomorrow.setDate(tomorrow.getDate() + 1);
-			tomorrow.setHours(8, 0, 0, 0);
-			const intakeStart = tomorrow.toISOString();
-
-			const planEnd = new Date(tomorrow);
-			planEnd.setDate(planEnd.getDate() + 10);
-			const planEndStr = planEnd.toISOString();
+			const intakeStart = futureDailyStart;
 
 			await app.inject({
 				method: "POST",
@@ -1142,8 +1111,8 @@ describe("Integration Tests", () => {
 				method: "POST",
 				url: "/medications/usage",
 				payload: {
-					startDate: intakeStart,
-					endDate: planEndStr,
+					startDate: plannerWindowStart,
+					endDate: tenDayPlanEnd,
 				},
 			});
 

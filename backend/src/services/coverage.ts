@@ -1,14 +1,14 @@
 import type { doseTracking, medications } from "../db/schema.js";
 import { isAmountBasedPackageType } from "../utils/package-profiles.js";
 import {
+	getAverageOccurrencesPerDay,
+	getNextScheduledOccurrenceTime,
 	getTodayInTimezone,
 	type Intake,
 	normalizeIntakeUsageForStock,
 	parseIntakesJson,
-	parseLocalDateTime,
 } from "../utils/scheduler-utils.js";
 
-const MS_PER_DAY = 86_400_000;
 const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
 
 type MedicationRow = typeof medications.$inferSelect;
@@ -60,35 +60,27 @@ function computeCapacity(medication: MedicationRow): number {
 
 function computeDailyDoseRate(intakes: Intake[], medication: MedicationRow): number {
 	return intakes.reduce((sum, intake) => {
-		if (intake.every <= 0) return sum;
 		const normalizedUsage = normalizeIntakeUsageForStock(intake, medication.medicationForm, medication.packageType);
-		return sum + normalizedUsage / intake.every;
+		return sum + normalizedUsage * getAverageOccurrencesPerDay(intake);
 	}, 0);
 }
 
 function computeNextIntakeDate(intakes: Intake[], todayDateOnly: string): string | null {
 	const today = parseDateOnly(todayDateOnly);
-	let nextDate: Date | null = null;
+	let nextOccurrenceMs: number | null = null;
 
 	for (const intake of intakes) {
-		if (intake.every <= 0) continue;
-
-		const startDate = parseLocalDateTime(intake.start);
-		const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0, 0);
-
-		let candidate = startDateOnly;
-		if (candidate.getTime() < today.getTime()) {
-			const elapsedDays = Math.floor((today.getTime() - candidate.getTime()) / MS_PER_DAY);
-			const intervals = Math.ceil(elapsedDays / intake.every);
-			candidate = new Date(candidate.getTime() + intervals * intake.every * MS_PER_DAY);
+		const occurrenceMs = getNextScheduledOccurrenceTime(intake, today.getTime(), true);
+		if (occurrenceMs === null) {
+			continue;
 		}
 
-		if (!nextDate || candidate.getTime() < nextDate.getTime()) {
-			nextDate = candidate;
+		if (nextOccurrenceMs === null || occurrenceMs < nextOccurrenceMs) {
+			nextOccurrenceMs = occurrenceMs;
 		}
 	}
 
-	return nextDate ? toDateOnlyString(nextDate) : null;
+	return nextOccurrenceMs === null ? null : toDateOnlyString(new Date(nextOccurrenceMs));
 }
 
 function computeTakenAmount(
@@ -188,7 +180,7 @@ export function buildSharedMedicationOverview(options: {
 		const currentStock = Math.max(0, Math.floor(rawCurrentStock));
 		const daysLeft = dailyDoseRate > 0 ? Math.floor(currentStock / dailyDoseRate) : null;
 		const depletionDate =
-			daysLeft === null ? null : toDateOnlyString(new Date(todayDate.getTime() + daysLeft * MS_PER_DAY));
+			daysLeft === null ? null : toDateOnlyString(new Date(todayDate.getTime() + daysLeft * 86_400_000));
 		const priority = computeOverviewPriority(currentStock, daysLeft, thresholdDays);
 		return {
 			name: medication.name,

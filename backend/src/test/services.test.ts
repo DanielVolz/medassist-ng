@@ -6,22 +6,30 @@ import {
 	calculateDailyUsage,
 	calculateDepletionInfo,
 	cleanOldIntakeReminders,
+	countScheduledOccurrencesInRange,
 	createDefaultIntakeReminderState,
 	createDefaultReminderState,
+	forEachScheduledOccurrenceInRange,
 	formatInTimezone,
+	getAverageOccurrencesPerDay,
 	getCurrentHourInTimezone,
+	getMaxScheduledGapDays,
 	getMsUntilNextCheck,
+	getNextScheduledOccurrenceTime,
 	getNextScheduledTime,
 	getTimezone,
 	getTodayInTimezone,
 	getTodaysIntakes,
 	getUpcomingIntakes,
 	type Intake,
+	normalizeIntake,
 	parseBlisters,
 	parseIntakeReminderState,
+	parseIntakesJson,
 	parseReminderState,
 	parseTakenByJson,
 	personTakesMedication,
+	type Weekday,
 } from "../utils/scheduler-utils.js";
 
 // Helper to convert Blister to Intake for tests
@@ -267,6 +275,77 @@ describe("Scheduler Utils - Blister Parsing", () => {
 	});
 });
 
+describe("Scheduler Utils - Intake Schedule Normalization", () => {
+	describe("normalizeIntake", () => {
+		it("keeps interval schedules backward-compatible by default", () => {
+			const intake = normalizeIntake({
+				usage: 2,
+				every: 3,
+				start: "2025-01-01T08:00:00",
+			});
+
+			expect(intake).toMatchObject({
+				usage: 2,
+				every: 3,
+				start: "2025-01-01T08:00:00",
+				scheduleMode: "interval",
+				weekdays: [],
+			});
+		});
+
+		it("normalizes malformed weekday schedules to the start date weekday", () => {
+			const intake = normalizeIntake({
+				usage: 1,
+				every: 99,
+				start: "2025-01-06T08:00:00",
+				scheduleMode: "weekdays",
+				weekdays: ["bogus", null],
+			});
+
+			expect(intake.scheduleMode).toBe("weekdays");
+			expect(intake.every).toBe(1);
+			expect(intake.weekdays).toEqual(["mon"]);
+		});
+	});
+
+	describe("parseIntakesJson", () => {
+		it("falls back to legacy interval data when unified intakes are absent", () => {
+			const intakes = parseIntakesJson(
+				null,
+				{
+					usageJson: "[1,2]",
+					everyJson: "[1,3]",
+					startJson: '["2025-01-01T08:00:00","2025-01-02T20:00:00"]',
+				},
+				true
+			);
+
+			expect(intakes).toEqual([
+				{
+					usage: 1,
+					every: 1,
+					start: "2025-01-01T08:00:00",
+					scheduleMode: "interval",
+					weekdays: [],
+					intakeUnit: null,
+					takenBy: null,
+					intakeRemindersEnabled: true,
+				},
+				{
+					usage: 2,
+					every: 3,
+					start: "2025-01-02T20:00:00",
+					scheduleMode: "interval",
+					weekdays: [],
+					intakeUnit: null,
+					takenBy: null,
+					intakeRemindersEnabled: true,
+				},
+			]);
+		});
+	});
+});
+
 describe("Scheduler Utils - Daily Usage Calculation", () => {
 	describe("calculateDailyUsage", () => {
 		it("should calculate daily usage for single daily dose", () => {
@@ -302,6 +381,71 @@ describe("Scheduler Utils - Daily Usage Calculation", () => {
 		it("should handle fractional usage amounts", () => {
 			const blisters: Blister[] = [{ usage: 0.5, every: 1, start: "2025-01-01T08:00" }];
 			expect(calculateDailyUsage(blisters)).toBe(0.5);
+		});
+	});
+});
+
+describe("Scheduler Utils - Schedule Occurrence Calculation", () => {
+	it("calculates average usage and gap length for weekday schedules", () => {
+		const weekdaysSchedule = {
+			every: 1,
+			start: "2025-01-06T09:00:00",
+			scheduleMode: "weekdays" as const,
+			weekdays: ["mon", "wed", "fri"] satisfies Weekday[],
+		};
+
+		expect(getAverageOccurrencesPerDay(weekdaysSchedule)).toBeCloseTo(3 / 7, 5);
+		expect(getMaxScheduledGapDays(weekdaysSchedule)).toBe(3);
+		expect(getAverageOccurrencesPerDay({ every: 2, start: "2025-01-01T09:00:00" })).toBe(0.5);
+		expect(getMaxScheduledGapDays({ every: 2, start: "2025-01-01T09:00:00" })).toBe(2);
+	});
+
+	it("finds the next weekday occurrence after a given timestamp", () => {
+		const schedule = {
+			every: 1,
+			start: "2025-01-06T09:00:00",
+			scheduleMode: "weekdays" as const,
+			weekdays: ["mon", "wed", "fri"] satisfies Weekday[],
+		};
+
+		const fromMs = new Date(2025, 0, 7, 12, 0, 0).getTime();
+		const nextOccurrence = getNextScheduledOccurrenceTime(schedule, fromMs);
+
+		expect(nextOccurrence).toBe(new Date(2025, 0, 8, 9, 0, 0).getTime());
+	});
+
+	it("iterates weekday occurrences in canonical order within a range", () => {
+		const schedule = {
+			every: 1,
+			start: "2025-01-06T09:00:00",
+			scheduleMode: "weekdays" as const,
+			weekdays: ["wed", "mon", "fri"] satisfies Weekday[],
+		};
+		const occurrences: number[] = [];
+
+		forEachScheduledOccurrenceInRange(
+			schedule,
+			new Date(2025, 0, 6, 0, 0, 0).getTime(),
+			new Date(2025, 0, 12, 23, 59, 59).getTime(),
+			(occurrenceMs) => {
+				occurrences.push(occurrenceMs);
+			}
+		);
+
+		expect(occurrences.sort((a, b) => a - b)).toEqual([
+			new Date(2025, 0, 6, 9, 0, 0).getTime(),
+			new Date(2025, 0, 8, 9, 0, 0).getTime(),
+			new Date(2025, 0, 10, 9, 0, 0).getTime(),
+		]);
+		expect(
+			countScheduledOccurrencesInRange(
+				schedule,
+				new Date(2025, 0, 6, 0, 0, 0).getTime(),
+				new Date(2025, 0, 12, 23, 59, 59).getTime()
+			)
+		).toEqual({
+			count: 3,
+			lastOccurrenceMs: new Date(2025, 0, 10, 9, 0, 0).getTime(),
 		});
 	});
 });
@@ -378,12 +522,17 @@ describe("Scheduler Utils - Upcoming Intakes", () => {
 			expect(result[0].pillWeightMg).toBe(500);
 		});
 
-		it("should skip blisters with zero interval", () => {
+		it("should treat zero interval as a daily fallback", () => {
 			const intakes: Intake[] = [blisterToIntake({ usage: 1, every: 0, start: "2025-01-01T08:00:00" })];
 			const now = new Date(2025, 0, 1, 7, 45, 0).getTime();
 
 			const result = getUpcomingIntakes("TestMed", intakes, 15, [], null, "en-US", "UTC", now);
-			expect(result).toEqual([]);
+			expect(result).toHaveLength(1);
+			expect(result[0]).toMatchObject({
+				medName: "TestMed",
+				usage: 1,
+				takenBy: null,
+			});
 		});
 
 		it("should handle multiple blisters", () => {

@@ -10,6 +10,8 @@ import {
 	isLiquidContainerPackageType,
 	isTubePackageType,
 } from "../types";
+import { formatDate, formatDateTime } from "../utils/formatters";
+import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
 import { MedicationAvatar } from "./MedicationAvatar";
 
 type ReportFormat = "txt" | "md" | "pdf";
@@ -290,20 +292,6 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 
 type TFn = (key: string, opts?: Record<string, unknown>) => string;
 
-function fmtDate(iso: string | null | undefined): string {
-	if (!iso) return "-";
-	const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-	if (!m) return "-";
-	return `${m[3]}.${m[2]}.${m[1]}`;
-}
-
-function fmtDateTime(iso: string | null | undefined): string {
-	if (!iso) return "-";
-	const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-	if (!m) return `${fmtDate(iso)}`;
-	return `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}`;
-}
-
 function getTubeUnitKey(med: Medication): "form.ml" | "blisters.applications" {
 	if (isLiquidContainerPackageType(med.packageType)) return "form.ml";
 	return med.medicationForm === "liquid" ? "form.ml" : "blisters.applications";
@@ -353,7 +341,7 @@ function generateTextReport(
 	const item = (label: string, value: string) => (fmt === "md" ? `- ${bold(label)}: ${value}` : `  ${label}: ${value}`);
 
 	lines.push(h1(t("report.docTitle")));
-	lines.push(`${t("report.docGenerated")}: ${fmtDate(new Date().toISOString())}`);
+	lines.push(`${t("report.docGenerated")}: ${formatDate(new Date().toISOString())}`);
 	lines.push("");
 
 	for (const med of meds) {
@@ -373,8 +361,8 @@ function generateTextReport(
 		lines.push(
 			item(t("report.docStatus"), med.isObsolete ? t("report.docStatusObsolete") : t("report.docStatusActive"))
 		);
-		if (med.medicationStartDate) lines.push(item(t("report.docStartDate"), fmtDate(med.medicationStartDate)));
-		if (med.isObsolete && med.obsoleteAt) lines.push(item(t("report.docObsoleteSince"), fmtDate(med.obsoleteAt)));
+		if (med.medicationStartDate) lines.push(item(t("report.docStartDate"), formatDate(med.medicationStartDate)));
+		if (med.isObsolete && med.obsoleteAt) lines.push(item(t("report.docObsoleteSince"), formatDate(med.obsoleteAt)));
 		lines.push("");
 
 		// Package / Stock
@@ -391,24 +379,23 @@ function generateTextReport(
 		lines.push(item(t("report.docCurrentStock"), getCurrentStockText(med, t)));
 		if (!isTubePackageType(med.packageType) && !isLiquidContainerPackageType(med.packageType) && med.pillWeightMg)
 			lines.push(item(t("report.docDosePerPill"), `${med.pillWeightMg} ${med.doseUnit ?? "mg"}`));
-		if (med.expiryDate) lines.push(item(t("report.docExpiryDate"), fmtDate(med.expiryDate)));
+		if (med.expiryDate) lines.push(item(t("report.docExpiryDate"), formatDate(med.expiryDate)));
 		if (med.notes) lines.push(item(t("report.docNotes"), med.notes));
 		lines.push("");
 
 		// Intake Schedule
-		const allIntakes = med.intakes ?? med.blisters;
+		const allIntakes = getMedicationIntakes(med);
 		const intakes = personFilter
-			? allIntakes?.filter((i) => "takenBy" in i && personFilter.includes(i.takenBy as string))
+			? allIntakes?.filter((intake) => intake.takenBy && personFilter.includes(intake.takenBy))
 			: allIntakes;
 		if (intakes?.length) {
 			lines.push(h3(t("report.docIntakeSchedule")));
 			for (const intake of intakes) {
 				let entry = getUsageText(med, intake.usage, t);
-				entry += ` ${intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every })}`;
-				entry += ` ${t("form.blisters.from")} ${fmtDateTime(intake.start)}`;
-				if ("takenBy" in intake && intake.takenBy)
-					entry += ` (${t("report.docIntakeTakenBy", { person: intake.takenBy })})`;
-				if ("intakeRemindersEnabled" in intake && intake.intakeRemindersEnabled) entry += ` 🔔`;
+				entry += ` ${getIntakeFrequencyText(intake, t)}`;
+				entry += ` ${t("form.blisters.from")} ${formatDateTime(intake.start)}`;
+				if (intake.takenBy) entry += ` (${t("report.docIntakeTakenBy", { person: intake.takenBy })})`;
+				if (intake.intakeRemindersEnabled) entry += ` 🔔`;
 				lines.push(fmt === "md" ? `- ${entry}` : `  • ${entry}`);
 			}
 			lines.push("");
@@ -420,7 +407,7 @@ function generateTextReport(
 			lines.push(item(t("report.docAuthorizedRefills"), String(med.prescriptionAuthorizedRefills ?? 0)));
 			lines.push(item(t("report.docRemainingRefills"), String(med.prescriptionRemainingRefills ?? 0)));
 			if (med.prescriptionExpiryDate)
-				lines.push(item(t("report.docPrescriptionExpiry"), fmtDate(med.prescriptionExpiryDate)));
+				lines.push(item(t("report.docPrescriptionExpiry"), formatDate(med.prescriptionExpiryDate)));
 			lines.push("");
 		}
 
@@ -434,8 +421,8 @@ function generateTextReport(
 					lines.push(item(`🤖 ${t("report.docDosesTakenAutomatic")}`, String(data.automaticDosesTaken)));
 				}
 				if (data.dosesDismissed > 0) lines.push(item(t("report.docDosesDismissed"), String(data.dosesDismissed)));
-				if (data.firstDoseAt) lines.push(item(t("report.docFirstDose"), fmtDate(data.firstDoseAt)));
-				if (data.lastDoseAt) lines.push(item(t("report.docLastDose"), fmtDate(data.lastDoseAt)));
+				if (data.firstDoseAt) lines.push(item(t("report.docFirstDose"), formatDate(data.firstDoseAt)));
+				if (data.lastDoseAt) lines.push(item(t("report.docLastDose"), formatDate(data.lastDoseAt)));
 			} else {
 				lines.push(fmt === "md" ? `- ${t("report.docNoDoses")}` : `  ${t("report.docNoDoses")}`);
 			}
@@ -445,7 +432,7 @@ function generateTextReport(
 			if (data.refills.length > 0) {
 				lines.push(h3(t("report.docRefillHistory")));
 				for (const r of data.refills) {
-					let entry = `${fmtDate(r.refillDate)}: +${r.packsAdded} ${t("report.docPacks")}, +${r.loosePillsAdded} ${isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType) ? t(getTubeUnitKey(med)) : t("common.pills")}`;
+					let entry = `${formatDate(r.refillDate)}: +${r.packsAdded} ${t("report.docPacks")}, +${r.loosePillsAdded} ${isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType) ? t(getTubeUnitKey(med)) : t("common.pills")}`;
 					if (r.usedPrescription) entry += ` ${t("report.docRefillPrescription")}`;
 					lines.push(fmt === "md" ? `- ${entry}` : `  • ${entry}`);
 				}
@@ -528,7 +515,7 @@ function buildPrintHtml(
 
 	for (const med of meds) {
 		const data = reportData[med.id];
-		const intakes = med.intakes ?? med.blisters;
+		const intakes = getMedicationIntakes(med);
 		const displayName = getMedDisplayName(med);
 		const title = med.isObsolete
 			? `${escHtml(displayName)} <span class="obsolete-badge">${escHtml(t("report.docStatusObsolete"))}</span>`
@@ -560,11 +547,11 @@ function buildPrintHtml(
 		);
 		if (med.medicationStartDate)
 			generalRows.push(
-				`<tr><td class="label">${escHtml(t("report.docStartDate"))}</td><td>${fmtDate(med.medicationStartDate)}</td></tr>`
+				`<tr><td class="label">${escHtml(t("report.docStartDate"))}</td><td>${formatDate(med.medicationStartDate)}</td></tr>`
 			);
 		if (med.isObsolete && med.obsoleteAt)
 			generalRows.push(
-				`<tr><td class="label">${escHtml(t("report.docObsoleteSince"))}</td><td>${fmtDate(med.obsoleteAt)}</td></tr>`
+				`<tr><td class="label">${escHtml(t("report.docObsoleteSince"))}</td><td>${formatDate(med.obsoleteAt)}</td></tr>`
 			);
 		const generalTable = `<h3>${escHtml(t("report.docGeneral"))}</h3><table><tbody>${generalRows.join("")}</tbody></table>`;
 
@@ -591,7 +578,7 @@ function buildPrintHtml(
 		if (!isTubePackageType(med.packageType) && !isLiquidContainerPackageType(med.packageType) && med.pillWeightMg)
 			s += `<tr><td class="label">${escHtml(t("report.docDosePerPill"))}</td><td>${med.pillWeightMg} ${escHtml(med.doseUnit ?? "mg")}</td></tr>`;
 		if (med.expiryDate)
-			s += `<tr><td class="label">${escHtml(t("report.docExpiryDate"))}</td><td>${fmtDate(med.expiryDate)}</td></tr>`;
+			s += `<tr><td class="label">${escHtml(t("report.docExpiryDate"))}</td><td>${formatDate(med.expiryDate)}</td></tr>`;
 		if (med.notes)
 			s += `<tr><td class="label">${escHtml(t("report.docNotes"))}</td><td>${escHtml(med.notes)}</td></tr>`;
 		s += `</tbody></table>`;
@@ -599,18 +586,17 @@ function buildPrintHtml(
 		// Intake Schedule
 		const allPrintIntakes = intakes;
 		const filteredPrintIntakes = personFilter
-			? allPrintIntakes?.filter((i) => "takenBy" in i && personFilter.includes(i.takenBy as string))
+			? allPrintIntakes?.filter((intake) => intake.takenBy && personFilter.includes(intake.takenBy))
 			: allPrintIntakes;
 		if (filteredPrintIntakes?.length) {
 			s += `<h3>${escHtml(t("report.docIntakeSchedule"))}</h3>`;
 			s += `<ul>`;
 			for (const intake of filteredPrintIntakes) {
 				let entry = escHtml(getUsageText(med, intake.usage, t));
-				entry += ` ${escHtml(intake.every === 1 ? t("common.daily") : t("common.everyNDays", { count: intake.every }))}`;
-				entry += ` ${escHtml(t("form.blisters.from"))} ${fmtDateTime(intake.start)}`;
-				if ("takenBy" in intake && intake.takenBy)
-					entry += ` <em>(${escHtml(t("report.docIntakeTakenBy", { person: intake.takenBy }))})</em>`;
-				if ("intakeRemindersEnabled" in intake && intake.intakeRemindersEnabled) entry += ` 🔔`;
+				entry += ` ${escHtml(getIntakeFrequencyText(intake, t))}`;
+				entry += ` ${escHtml(t("form.blisters.from"))} ${formatDateTime(intake.start)}`;
+				if (intake.takenBy) entry += ` <em>(${escHtml(t("report.docIntakeTakenBy", { person: intake.takenBy }))})</em>`;
+				if (intake.intakeRemindersEnabled) entry += ` 🔔`;
 				s += `<li>${entry}</li>`;
 			}
 			s += `</ul>`;
@@ -623,7 +609,7 @@ function buildPrintHtml(
 			s += `<tr><td class="label">${escHtml(t("report.docAuthorizedRefills"))}</td><td>${med.prescriptionAuthorizedRefills ?? 0}</td></tr>`;
 			s += `<tr><td class="label">${escHtml(t("report.docRemainingRefills"))}</td><td>${med.prescriptionRemainingRefills ?? 0}</td></tr>`;
 			if (med.prescriptionExpiryDate)
-				s += `<tr><td class="label">${escHtml(t("report.docPrescriptionExpiry"))}</td><td>${fmtDate(med.prescriptionExpiryDate)}</td></tr>`;
+				s += `<tr><td class="label">${escHtml(t("report.docPrescriptionExpiry"))}</td><td>${formatDate(med.prescriptionExpiryDate)}</td></tr>`;
 			s += `</tbody></table>`;
 		}
 
@@ -639,9 +625,9 @@ function buildPrintHtml(
 				if (data.dosesDismissed > 0)
 					s += `<tr><td class="label">${escHtml(t("report.docDosesDismissed"))}</td><td>${data.dosesDismissed}</td></tr>`;
 				if (data.firstDoseAt)
-					s += `<tr><td class="label">${escHtml(t("report.docFirstDose"))}</td><td>${fmtDate(data.firstDoseAt)}</td></tr>`;
+					s += `<tr><td class="label">${escHtml(t("report.docFirstDose"))}</td><td>${formatDate(data.firstDoseAt)}</td></tr>`;
 				if (data.lastDoseAt)
-					s += `<tr><td class="label">${escHtml(t("report.docLastDose"))}</td><td>${fmtDate(data.lastDoseAt)}</td></tr>`;
+					s += `<tr><td class="label">${escHtml(t("report.docLastDose"))}</td><td>${formatDate(data.lastDoseAt)}</td></tr>`;
 				s += `</tbody></table>`;
 			} else {
 				s += `<p class="no-data">${escHtml(t("report.docNoDoses"))}</p>`;
@@ -652,7 +638,7 @@ function buildPrintHtml(
 				s += `<h3>${escHtml(t("report.docRefillHistory"))}</h3>`;
 				s += `<ul>`;
 				for (const r of data.refills) {
-					let entry = `${fmtDate(r.refillDate)}: +${r.packsAdded} ${escHtml(t("report.docPacks"))}, +${r.loosePillsAdded} ${escHtml(isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType) ? t(getTubeUnitKey(med)) : t("common.pills"))}`;
+					let entry = `${formatDate(r.refillDate)}: +${r.packsAdded} ${escHtml(t("report.docPacks"))}, +${r.loosePillsAdded} ${escHtml(isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType) ? t(getTubeUnitKey(med)) : t("common.pills"))}`;
 					if (r.usedPrescription) entry += ` <em>${escHtml(t("report.docRefillPrescription"))}</em>`;
 					s += `<li>${entry}</li>`;
 				}
@@ -708,7 +694,7 @@ function buildPrintHtml(
 <body>
 <div class="no-print print-hint">${escHtml(t("report.docPrintInstruction"))}</div>
 <h1>${escHtml(t("report.docTitle"))}</h1>
-<p class="subtitle">${escHtml(t("report.docGenerated"))}: ${fmtDate(new Date().toISOString())}</p>
+<p class="subtitle">${escHtml(t("report.docGenerated"))}: ${formatDate(new Date().toISOString())}</p>
 ${sections.join("\n")}
 </body>
 </html>`;

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { FormEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MobileEditModal } from "../../components/MobileEditModal";
-import type { FormState } from "../../types";
+import type { FormState, WeekdayCode } from "../../types";
 
 const defaultForm: FormState = {
 	name: "",
@@ -428,6 +428,61 @@ describe("MobileEditModal blister management", () => {
 			fireEvent.change(usageInputs[0], { target: { value: "2" } });
 			expect(onSetIntakeValue).toHaveBeenCalled();
 		}
+	});
+
+	it("shows weekday controls and validation error for weekday schedules", () => {
+		const form = {
+			...defaultForm,
+			name: "Weekday Med",
+			intakes: [
+				{
+					usage: "1",
+					every: "1",
+					startDate: "2024-01-01",
+					startTime: "09:00",
+					scheduleMode: "weekdays" as const,
+					weekdays: [],
+					takenBy: "",
+					intakeRemindersEnabled: false,
+				},
+			],
+		};
+
+		render(<MobileEditModal {...defaultProps} form={form} formChanged={true} />);
+
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
+
+		expect(screen.getByText("form.blisters.weekdaysRequired")).toBeInTheDocument();
+		expect(screen.getByText("form.blisters.weekdays")).toBeInTheDocument();
+		expect(screen.queryByLabelText("form.blisters.everyDays")).not.toBeInTheDocument();
+		expect(document.querySelector('button[type="submit"]')).toHaveClass("has-validation-error");
+	});
+
+	it("toggles weekday selections for weekday schedules", () => {
+		const onSetIntakeValue = vi.fn();
+		const form = {
+			...defaultForm,
+			name: "Weekday Med",
+			intakes: [
+				{
+					usage: "1",
+					every: "1",
+					startDate: "2024-01-01",
+					startTime: "09:00",
+					scheduleMode: "weekdays" as const,
+					weekdays: ["wed"] satisfies WeekdayCode[],
+					takenBy: "",
+					intakeRemindersEnabled: false,
+				},
+			],
+		};
+
+		render(<MobileEditModal {...defaultProps} form={form} onSetIntakeValue={onSetIntakeValue} />);
+
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
+		fireEvent.click(screen.getByTitle("form.blisters.weekdaysLong.mon"));
+
+		expect(onSetIntakeValue).toHaveBeenCalledWith(0, "weekdays", ["mon", "wed"]);
 	});
 });
 

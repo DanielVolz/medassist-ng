@@ -29,7 +29,13 @@ import {
 	PACKAGE_TYPES,
 } from "../utils/package-profiles.js";
 import {
+	countScheduledOccurrencesInRange,
+	forEachScheduledOccurrenceInRange,
+	getDateOnlyTimestamp,
+	getNextScheduledOccurrenceTime,
+	getScheduleMatchWindowMs,
 	type Intake,
+	normalizeIntake,
 	normalizeIntakeUsageForStock,
 	parseIntakesJson,
 	parseLocalDateTime,
@@ -100,6 +106,8 @@ const intakeSchema = z.object({
 	usage: z.number().nonnegative(),
 	every: z.number().int().min(1),
 	start: z.string().datetime({ local: true }),
+	scheduleMode: z.unknown().optional(),
+	weekdays: z.unknown().optional(),
 	intakeUnit: z.enum(["ml", "tsp", "tbsp"]).nullable().optional(),
 	takenBy: z.string().trim().max(100).nullable().optional(), // Person for this specific intake
 	intakeRemindersEnabled: z.boolean().default(false), // Per-intake reminder setting
@@ -274,6 +282,11 @@ const intakeOpenApiSchema = {
 		usage: { type: "number", minimum: 0 },
 		every: { type: "integer", minimum: 1 },
 		start: { type: "string", description: "ISO datetime string; timezone suffix optional." },
+		scheduleMode: { type: "string", enum: ["interval", "weekdays"] },
+		weekdays: {
+			type: "array",
+			items: { type: "string", enum: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] },
+		},
 		intakeUnit: { type: ["string", "null"], enum: ["ml", "tsp", "tbsp", null] },
 		takenBy: { type: ["string", "null"], maxLength: 100 },
 		intakeRemindersEnabled: { type: "boolean" },
@@ -359,6 +372,8 @@ const medicationBodyOpenApiSchema = {
 				usage: 1,
 				every: 8,
 				start: "2026-03-11T08:00:00.000Z",
+				scheduleMode: "interval",
+				weekdays: [],
 				takenBy: "Daniel",
 				intakeRemindersEnabled: true,
 			},
@@ -664,25 +679,20 @@ export async function medicationRoutes(app: FastifyInstance) {
 			// Convert to unified intakes format
 			let intakes: Intake[];
 			if (inputIntakes) {
-				// New format with per-intake takenBy
-				intakes = inputIntakes.map((i) => ({
-					usage: i.usage,
-					every: i.every,
-					start: i.start,
-					intakeUnit: i.intakeUnit ?? null,
-					takenBy: i.takenBy || null,
-					intakeRemindersEnabled: i.intakeRemindersEnabled ?? false,
-				}));
+				intakes = inputIntakes.map((intake) => normalizeIntake(intake));
 			} else if (inputBlisters) {
-				// Legacy format - convert to new format
-				intakes = inputBlisters.map((b) => ({
-					usage: b.usage,
-					every: b.every,
-					start: b.start,
-					intakeUnit: null,
-					takenBy: null, // No per-intake takenBy from legacy
-					intakeRemindersEnabled: intakeRemindersEnabled ?? false,
-				}));
+				intakes = inputBlisters.map((blister) =>
+					normalizeIntake(
+						{
+							usage: blister.usage,
+							every: blister.every,
+							start: blister.start,
+							intakeUnit: null,
+							takenBy: null,
+						},
+						intakeRemindersEnabled ?? false
+					)
+				);
 			} else {
 				return reply.status(400).send({ error: "Either 'intakes' or 'blisters' must be provided" });
 			}
@@ -840,25 +850,20 @@ export async function medicationRoutes(app: FastifyInstance) {
 			// Convert to unified intakes format
 			let intakes: Intake[];
 			if (inputIntakes) {
-				// New format with per-intake takenBy
-				intakes = inputIntakes.map((i) => ({
-					usage: i.usage,
-					every: i.every,
-					start: i.start,
-					intakeUnit: i.intakeUnit ?? null,
-					takenBy: i.takenBy || null,
-					intakeRemindersEnabled: i.intakeRemindersEnabled ?? false,
-				}));
+				intakes = inputIntakes.map((intake) => normalizeIntake(intake));
 			} else if (inputBlisters) {
-				// Legacy format - convert to new format
-				intakes = inputBlisters.map((b) => ({
-					usage: b.usage,
-					every: b.every,
-					start: b.start,
-					intakeUnit: null,
-					takenBy: null, // No per-intake takenBy from legacy
-					intakeRemindersEnabled: intakeRemindersEnabled ?? false,
-				}));
+				intakes = inputBlisters.map((blister) =>
+					normalizeIntake(
+						{
+							usage: blister.usage,
+							every: blister.every,
+							start: blister.start,
+							intakeUnit: null,
+							takenBy: null,
+						},
+						intakeRemindersEnabled ?? false
+					)
+				);
 			} else {
 				return reply.status(400).send({ error: "Either 'intakes' or 'blisters' must be provided" });
 			}
@@ -942,8 +947,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			if (allDoses.length > 0) {
 				// Build migration map: for each intake index, map old dateOnlyMs → new dateOnlyMs
 				const now = new Date();
-				const migrationEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-				const MS_PER_DAY = 86_400_000;
+				const migrationEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
 				for (let idx = 0; idx < Math.max(oldIntakes.length, intakes.length); idx++) {
 					const oldIntake = oldIntakes[idx];
@@ -954,44 +958,45 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 					const oldStart = parseLocalDateTime(oldIntake.start);
 					const newStart = parseLocalDateTime(newIntake.start);
-					const oldEvery = oldIntake.every;
-					const newEvery = newIntake.every;
-
-					// Check if start date or interval changed (time-of-day changes don't matter for dateOnlyMs)
+					// Check if start date or schedule changed (time-of-day changes don't matter for dateOnlyMs)
 					const oldStartDateOnly = new Date(oldStart.getFullYear(), oldStart.getMonth(), oldStart.getDate()).getTime();
 					const newStartDateOnly = new Date(newStart.getFullYear(), newStart.getMonth(), newStart.getDate()).getTime();
 
-					if (oldStartDateOnly === newStartDateOnly && oldEvery === newEvery) {
+					const scheduleUnchanged =
+						oldStartDateOnly === newStartDateOnly &&
+						oldIntake.every === newIntake.every &&
+						oldIntake.scheduleMode === newIntake.scheduleMode &&
+						(oldIntake.weekdays ?? []).join(",") === (newIntake.weekdays ?? []).join(",");
+
+					if (scheduleUnchanged) {
 						continue; // No schedule change that affects dose IDs
 					}
 
 					// Build set of new valid dateOnlyMs values for this intake
 					const newDates = new Set<number>();
-					for (let d = new Date(newStart); d <= migrationEnd; d.setDate(d.getDate() + newEvery)) {
-						newDates.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
-					}
+					forEachScheduledOccurrenceInRange(newIntake, newStart.getTime(), migrationEnd.getTime(), (occurrenceMs) => {
+						newDates.add(getDateOnlyTimestamp(new Date(occurrenceMs)));
+					});
 
 					// Build set of old dateOnlyMs values with mapping to nearest new date
 					const oldToNewMap = new Map<number, number>();
-					for (let d = new Date(oldStart); d <= migrationEnd; d.setDate(d.getDate() + oldEvery)) {
-						const oldDateMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-						// Find the closest new date within ±(newEvery/2) days
-						const halfInterval = (newEvery * MS_PER_DAY) / 2;
+					const scheduleMatchWindowMs = getScheduleMatchWindowMs(newIntake);
+					forEachScheduledOccurrenceInRange(oldIntake, oldStart.getTime(), migrationEnd.getTime(), (occurrenceMs) => {
+						const oldDateMs = getDateOnlyTimestamp(new Date(occurrenceMs));
 						let bestMatch: number | null = null;
-						let bestDist = Infinity;
+						let bestDistance = Infinity;
 						for (const newDateMs of newDates) {
-							const dist = Math.abs(newDateMs - oldDateMs);
-							if (dist < bestDist && dist <= halfInterval) {
-								bestDist = dist;
+							const distance = Math.abs(newDateMs - oldDateMs);
+							if (distance < bestDistance && distance <= scheduleMatchWindowMs) {
+								bestDistance = distance;
 								bestMatch = newDateMs;
 							}
 						}
 						if (bestMatch !== null && bestMatch !== oldDateMs) {
 							oldToNewMap.set(oldDateMs, bestMatch);
-							// Remove matched new date to prevent double-mapping
 							newDates.delete(bestMatch);
 						}
-					}
+					});
 
 					// Apply migrations to dose tracking entries
 					if (oldToNewMap.size > 0) {
@@ -1503,6 +1508,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 					usage: normalizeIntakeUsageForStock(i, medForm, row.packageType),
 					every: i.every,
 					start: i.start,
+					scheduleMode: i.scheduleMode,
+					weekdays: i.weekdays,
 				}));
 				const pillsPerBlister = row.pillsPerBlister ?? 1;
 				const packCount = row.packCount ?? 1;
@@ -1523,8 +1530,6 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 				// Count consumed pills by generating expected doses and checking if they're taken
 				let consumedUntilNow = 0;
-				const msPerDay = 86400000;
-
 				if (isTopical) {
 					consumedUntilNow = 0;
 				} else if (stockCalculationMode === "automatic") {
@@ -1532,16 +1537,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 						const blisterStart = parseLocalDateTime(blister.start).getTime();
 						if (Number.isNaN(blisterStart)) return;
 
-						const period = Math.max(1, blister.every) * msPerDay;
-
-						let effectiveStart: number;
-						if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
-							const elapsedSinceStart = stockCorrectionCutoff - blisterStart;
-							const periodsElapsed = Math.floor(elapsedSinceStart / period);
-							effectiveStart = blisterStart + (periodsElapsed + 1) * period;
-						} else {
-							effectiveStart = blisterStart;
-						}
+						const effectiveStart =
+							stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart
+								? getNextScheduledOccurrenceTime(blister, stockCorrectionCutoff, false)
+								: blisterStart;
+						if (effectiveStart === null) return;
 
 						const intake = intakes[blisterIdx];
 						const intakePerson = intake?.takenBy;
@@ -1559,25 +1559,20 @@ export async function medicationRoutes(app: FastifyInstance) {
 						let lastAutoConsumedDateMs = 0;
 
 						if (effectiveStart <= now.getTime()) {
-							const occurrences = Math.floor((now.getTime() - effectiveStart) / period) + 1;
+							const { count: occurrences, lastOccurrenceMs } = countScheduledOccurrencesInRange(
+								blister,
+								effectiveStart,
+								now.getTime()
+							);
 							timeBasedConsumed = occurrences * blister.usage * peopleForThisIntake.length;
 
-							const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
-							lastAutoConsumedDateMs = new Date(
-								lastDoseTime.getFullYear(),
-								lastDoseTime.getMonth(),
-								lastDoseTime.getDate()
-							).getTime();
+							if (lastOccurrenceMs !== null) {
+								lastAutoConsumedDateMs = getDateOnlyTimestamp(new Date(lastOccurrenceMs));
+							}
 						}
 
 						const stockCorrectionDateOnly =
-							stockCorrectionCutoff > 0
-								? new Date(
-										new Date(stockCorrectionCutoff).getFullYear(),
-										new Date(stockCorrectionCutoff).getMonth(),
-										new Date(stockCorrectionCutoff).getDate()
-									).getTime()
-								: 0;
+							stockCorrectionCutoff > 0 ? getDateOnlyTimestamp(new Date(stockCorrectionCutoff)) : 0;
 						const earlyCutoff = Math.max(lastAutoConsumedDateMs, stockCorrectionDateOnly);
 
 						let earlyTakenConsumed = 0;
@@ -1768,34 +1763,19 @@ export async function medicationRoutes(app: FastifyInstance) {
 }
 
 function calculateUsageInRange(
-	blisters: Array<{ usage: number; every: number; start: string }>,
+	blisters: Array<Pick<Intake, "usage" | "every" | "start" | "scheduleMode" | "weekdays">>,
 	start: Date,
 	end: Date
 ) {
+	if (end.getTime() <= start.getTime()) {
+		return 0;
+	}
+
 	let total = 0;
-	const msPerDay = 86400000;
 	blisters.forEach((blister) => {
-		const blisterStart = parseLocalDateTime(blister.start);
-		if (Number.isNaN(blisterStart.getTime())) return;
-
-		const every = Math.max(1, blister.every);
-
-		// Skip ahead to the first occurrence at or after start to avoid
-		// iterating through months/years of past doses
-		const dt = new Date(blisterStart);
-		if (dt < start) {
-			const daysToSkip = Math.floor((start.getTime() - dt.getTime()) / (every * msPerDay));
-			dt.setDate(dt.getDate() + daysToSkip * every);
-			// Fine-tune: advance until we reach or pass start
-			while (dt < start) {
-				dt.setDate(dt.getDate() + every);
-			}
-		}
-
-		// Count occurrences in [start, end)
-		for (; dt < end; dt.setDate(dt.getDate() + every)) {
+		forEachScheduledOccurrenceInRange(blister, start.getTime(), end.getTime() - 1, () => {
 			total += blister.usage;
-		}
+		});
 	});
 	return Number(total.toFixed(2));
 }

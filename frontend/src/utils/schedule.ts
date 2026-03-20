@@ -2,17 +2,10 @@
 // Schedule Building and Coverage Calculations
 // =============================================================================
 
-import type {
-	Blister,
-	Coverage,
-	Intake,
-	Medication,
-	PackageType,
-	ScheduleEvent,
-	StockStatus,
-	StockThresholds,
-} from "../types";
+import type { Coverage, Intake, Medication, PackageType, ScheduleEvent, StockStatus, StockThresholds } from "../types";
 import { getMedDisplayName, getMedTotal, isLiquidContainerPackageType, isTubePackageType } from "../types";
+import { getIntakeDailyRate, getMedicationIntakes, iterateIntakeOccurrences } from "./intake-schedule";
+import { convertLiquidUsageToMl } from "./intake-units";
 
 export function parseLocalDateTime(isoString: string): Date {
 	const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):?(\d{2})?/);
@@ -39,38 +32,7 @@ function normalizeIntakeUsageForStock(intake: Intake, med: Medication): number {
 	const isLiquidStock = isLiquidContainerPackageType(med.packageType) || med.medicationForm === "liquid";
 	if (!isLiquidStock) return usage;
 
-	if (intake.intakeUnit === "tsp") return usage * 5;
-	if (intake.intakeUnit === "tbsp") return usage * 15;
-	return usage;
-}
-
-/**
- * Get intakes for a medication, preferring new intakes format over legacy blisters
- */
-function getIntakesForMed(med: Medication): Intake[] {
-	// Use new intakes array if available and non-empty
-	if (med.intakes && med.intakes.length > 0) {
-		return med.intakes;
-	}
-	// Fallback to legacy blisters (convert to Intake format)
-	return med.blisters.map((b) => ({
-		usage: b.usage,
-		every: b.every,
-		start: b.start,
-		intakeUnit: null,
-		takenBy: null, // Legacy format has no per-intake takenBy
-		intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,
-	}));
-}
-
-/**
- * Get blisters for a medication (for backward compatibility with coverage calculations)
- */
-function getBlistersForMed(med: Medication): Blister[] {
-	if (med.intakes && med.intakes.length > 0) {
-		return med.intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
-	}
-	return med.blisters;
+	return convertLiquidUsageToMl(usage, intake.intakeUnit);
 }
 
 /**
@@ -90,13 +52,13 @@ export function buildSchedulePreview(
 	end.setDate(end.getDate() + 180); // 6 months horizon
 
 	meds.forEach((med) => {
-		const intakes = getIntakesForMed(med);
+		const intakes = getMedicationIntakes(med);
 		intakes.forEach((intake, idx) => {
 			const start = parseLocalDateTime(intake.start);
 			if (Number.isNaN(start.getTime())) return;
-			for (let d = new Date(start); d <= end; d.setDate(d.getDate() + intake.every)) {
+			iterateIntakeOccurrences(intake, start, end, (d) => {
 				const isPast = d < todayStart;
-				if (isPast && !includePast) continue;
+				if (isPast && !includePast) return;
 				const whenMs = d.getTime();
 				// Use date-only timestamp for stable ID (immune to time changes)
 				// This ensures changing intake times doesn't invalidate past dose tracking
@@ -113,7 +75,7 @@ export function buildSchedulePreview(
 					dateStr: d.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" }),
 					intakeRemindersEnabled: intake.intakeRemindersEnabled,
 				});
-			}
+			});
 		});
 	});
 
@@ -129,7 +91,7 @@ export function buildSchedulePreview(
 		events,
 		today: todayCount,
 		nextThree: events.length,
-		totalBlisters: meds.reduce((acc, m) => acc + getIntakesForMed(m).length, 0),
+		totalBlisters: meds.reduce((acc, med) => acc + getMedicationIntakes(med).length, 0),
 	};
 }
 
@@ -147,10 +109,10 @@ export function calculateCoverage(
 ): { low: Coverage[]; all: Coverage[] } {
 	const MS_PER_DAY = 86_400_000;
 	const now = Date.now();
+	const nowDate = new Date(now);
 
 	const coverage: Coverage[] = meds.map((m) => {
-		const intakes = getIntakesForMed(m);
-		const blisters = getBlistersForMed(m);
+		const intakes = getMedicationIntakes(m);
 		// Count unique people from all intakes (for per-intake takenBy)
 		const uniquePeople = new Set<string>();
 		intakes.forEach((intake) => {
@@ -165,11 +127,9 @@ export function calculateCoverage(
 		// one person's dose — do NOT multiply by personCount again.
 		// For legacy intakes (no takenBy), the intake applies to ALL people.
 		let dailyRate = 0;
-		blisters.forEach((_s, idx) => {
-			const intake = intakes[idx];
-			if (!intake) return;
+		intakes.forEach((intake) => {
 			const usageForStock = normalizeIntakeUsageForStock(intake, m);
-			const baseRate = intake.every > 0 ? usageForStock / intake.every : 0;
+			const baseRate = usageForStock * getIntakeDailyRate(intake);
 			if (intake?.takenBy) {
 				// Per-intake takenBy: this intake is for exactly 1 person
 				dailyRate += baseRate;
@@ -189,28 +149,10 @@ export function calculateCoverage(
 			// time (early intake), that dose is also counted as consumed immediately.
 			// This prevents double-counting: once the scheduled time arrives, the dose
 			// was already counted via the early-taken path, not again via time.
-			blisters.forEach((s, blisterIdx) => {
-				const blisterStart = parseLocalDateTime(s.start).getTime();
-				const period = Math.max(1, s.every) * MS_PER_DAY;
-				const intake = intakes[blisterIdx];
-				if (!intake) return;
+			intakes.forEach((intake, blisterIdx) => {
+				const intakeStart = parseLocalDateTime(intake.start);
+				if (Number.isNaN(intakeStart.getTime())) return;
 				const usageForStock = normalizeIntakeUsageForStock(intake, m);
-
-				// After a stock correction, start counting consumption from the NEXT
-				// scheduled dose on this blister's grid, because the user's pill count
-				// already reflects all consumption up to the correction time.
-				// We align to the schedule grid so that e.g. correction at 15:40 with
-				// a daily 15:42 dose counts today's 15:42 dose (2 min later), not
-				// tomorrow's dose (24h later as the old code did).
-				let effectiveStart: number;
-				if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart) {
-					const elapsedSinceStart = stockCorrectionCutoff - blisterStart;
-					const periodsElapsed = Math.floor(elapsedSinceStart / period);
-					effectiveStart = blisterStart + (periodsElapsed + 1) * period;
-				} else {
-					effectiveStart = blisterStart;
-				}
-				if (Number.isNaN(effectiveStart)) return;
 
 				const intakePerson = intake?.takenBy;
 
@@ -223,18 +165,15 @@ export function calculateCoverage(
 				let timeBasedConsumed = 0;
 				let lastAutoConsumedDateMs = 0;
 
-				if (effectiveStart <= now) {
-					const occurrences = Math.floor((now - effectiveStart) / period) + 1;
-					timeBasedConsumed = occurrences * usageForStock * peopleForThisIntake.length;
-
-					// Date-only timestamp of the last auto-consumed dose
-					const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
+				iterateIntakeOccurrences(intake, intakeStart, nowDate, (occurrence) => {
+					if (occurrence.getTime() <= stockCorrectionCutoff) return;
+					timeBasedConsumed += usageForStock * peopleForThisIntake.length;
 					lastAutoConsumedDateMs = new Date(
-						lastDoseTime.getFullYear(),
-						lastDoseTime.getMonth(),
-						lastDoseTime.getDate()
+						occurrence.getFullYear(),
+						occurrence.getMonth(),
+						occurrence.getDate()
 					).getTime();
-				}
+				});
 
 				// Early intakes: count future doses already marked as taken.
 				// The cutoff is the later of: last auto-consumed date or stock correction date.
@@ -276,16 +215,15 @@ export function calculateCoverage(
 					const medId = parseInt(parts[0], 10);
 					const blisterIdx = parseInt(parts[1], 10);
 					const doseTimestamp = parseInt(parts[2], 10);
-					if (medId === m.id && blisters[blisterIdx]) {
-						const intake = intakes[blisterIdx];
-						if (!intake) return;
+					const intake = intakes[blisterIdx];
+					if (medId === m.id && intake) {
 						const usageForStock = normalizeIntakeUsageForStock(intake, m);
 						// Convert blister start to date-only for comparison (dose timestamps are date-only)
-						const blisterStartDate = new Date(blisters[blisterIdx].start);
-						const blisterStartDateOnly = new Date(
-							blisterStartDate.getFullYear(),
-							blisterStartDate.getMonth(),
-							blisterStartDate.getDate()
+						const intakeStartDate = new Date(intake.start);
+						const intakeStartDateOnly = new Date(
+							intakeStartDate.getFullYear(),
+							intakeStartDate.getMonth(),
+							intakeStartDate.getDate()
 						).getTime();
 
 						// Use actual takenAt timestamp for stock correction comparison.
@@ -295,8 +233,8 @@ export function calculateCoverage(
 						const afterCorrectionOrNoCorrectionMs = stockCorrectionCutoff === 0 || takenAt > stockCorrectionCutoff;
 
 						if (
-							!Number.isNaN(blisterStartDateOnly) &&
-							doseTimestamp >= blisterStartDateOnly &&
+							!Number.isNaN(intakeStartDateOnly) &&
+							doseTimestamp >= intakeStartDateOnly &&
 							afterCorrectionOrNoCorrectionMs
 						) {
 							consumed += usageForStock;
@@ -617,4 +555,49 @@ export function computeMissedPastDoseIds(
 		})
 	);
 	return totalPastDoses.filter((id) => !takenDoses.has(id) && !dismissedDoses.has(id));
+}
+
+export function buildClearMissedPayload(
+	pastDays: ReadonlyArray<{
+		date: Date;
+		meds: ReadonlyArray<{
+			medName: string;
+			doses: ReadonlyArray<{ id: string; takenBy: string[] }>;
+		}>;
+	}>,
+	medications: ReadonlyArray<{ id: number; name: string; genericName?: string | null; dismissedUntil?: string | null }>,
+	takenDoses: Set<string>,
+	dismissedDoses: Set<string>
+): { medicationIds: number[]; until: string | null } {
+	const medicationIds = new Set<number>();
+	let latestMissedDate: string | null = null;
+
+	for (const day of pastDays) {
+		for (const item of day.meds) {
+			const med = medications.find((candidate) => getMedDisplayName(candidate as Medication) === item.medName);
+			if (!med) continue;
+
+			const dismissedUntilDate = med.dismissedUntil ?? undefined;
+			const hasMissedDose = item.doses.some((dose) => {
+				if (isDoseDismissed(dose.id, dismissedUntilDate)) {
+					return false;
+				}
+
+				return expandDoseIds([dose]).some((doseId) => !takenDoses.has(doseId) && !dismissedDoses.has(doseId));
+			});
+
+			if (!hasMissedDose) continue;
+
+			medicationIds.add(med.id);
+			const dayDate = day.date.toISOString().slice(0, 10);
+			if (!latestMissedDate || dayDate > latestMissedDate) {
+				latestMissedDate = dayDate;
+			}
+		}
+	}
+
+	return {
+		medicationIds: [...medicationIds],
+		until: latestMissedDate,
+	};
 }

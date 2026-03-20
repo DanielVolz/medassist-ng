@@ -9,6 +9,7 @@ import {
 	normalizePackageType,
 } from "../types";
 import { toDateValue, toTimeValue } from "../utils/formatters";
+import { normalizeWeekdays } from "../utils/intake-schedule";
 
 export const defaultBlister = (): FormBlister => {
 	const now = new Date();
@@ -30,6 +31,8 @@ export const defaultIntake = (takenBy: string = ""): FormIntake => {
 		every: "1",
 		startDate: toDateValue(now),
 		startTime: toTimeValue(now),
+		scheduleMode: "interval",
+		weekdays: [],
 		intakeUnit: "ml",
 		takenBy, // Per-intake user assignment (empty string = null/everyone)
 		intakeRemindersEnabled: false,
@@ -93,7 +96,7 @@ export interface UseMedicationFormReturn {
 	addBlister: () => void;
 	removeBlister: (idx: number) => void;
 	// Intake management with per-intake takenBy
-	setIntakeValue: (idx: number, field: keyof FormIntake, value: string | boolean) => void;
+	setIntakeValue: <K extends keyof FormIntake>(idx: number, field: K, value: FormIntake[K]) => void;
 	addIntake: (takenBy?: string) => void;
 	removeIntake: (idx: number) => void;
 	startEdit: (med: Medication, openEditModal: () => void) => void;
@@ -189,7 +192,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 	}, []);
 
 	// Intake management with per-intake takenBy
-	const setIntakeValue = useCallback((idx: number, field: keyof FormIntake, value: string | boolean) => {
+	const setIntakeValue = useCallback(<K extends keyof FormIntake>(idx: number, field: K, value: FormIntake[K]) => {
 		setForm((prev) => {
 			const next = [...prev.intakes];
 			next[idx] = { ...next[idx], [field]: value };
@@ -219,6 +222,8 @@ export function useMedicationForm(): UseMedicationFormReturn {
 						every: String(i.every),
 						startDate: toDateValue(i.start),
 						startTime: toTimeValue(i.start),
+						scheduleMode: (i.scheduleMode === "weekdays" ? "weekdays" : "interval") as FormIntake["scheduleMode"],
+						weekdays: normalizeWeekdays(i.weekdays),
 						intakeUnit: (i.intakeUnit ?? "ml") as FormIntake["intakeUnit"],
 						takenBy: i.takenBy ?? "", // Convert null to empty string for form
 						intakeRemindersEnabled: i.intakeRemindersEnabled,
@@ -228,6 +233,8 @@ export function useMedicationForm(): UseMedicationFormReturn {
 						every: String(s.every),
 						startDate: toDateValue(s.start),
 						startTime: toTimeValue(s.start),
+						scheduleMode: "interval" as const,
+						weekdays: [],
 						intakeUnit: "ml" as const,
 						takenBy: "", // Legacy blisters have no per-intake takenBy
 						intakeRemindersEnabled: med.intakeRemindersEnabled ?? false,

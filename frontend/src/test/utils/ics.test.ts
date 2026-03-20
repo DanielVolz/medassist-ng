@@ -151,4 +151,54 @@ describe("generateICS", () => {
 		expect(() => generateICS(dailyMed)).not.toThrow();
 		expect(() => generateICS(weeklyMed)).not.toThrow();
 	});
+
+	it("exports weekday schedules with a weekly BYDAY rule", async () => {
+		const med = createTestMed({
+			intakes: [
+				{
+					usage: 1,
+					every: 1,
+					start: "2024-03-18T09:00:00",
+					scheduleMode: "weekdays",
+					weekdays: ["mon", "wed", "fri"],
+					intakeUnit: null,
+					takenBy: null,
+					intakeRemindersEnabled: false,
+				},
+			],
+		});
+
+		generateICS(med);
+
+		const blobArg = mockCreateObjectURL.mock.calls[0][0] as Blob;
+		const content = await blobArg.text();
+
+		expect(content).toContain("RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR");
+		expect(content).not.toContain("RRULE:FREQ=DAILY;INTERVAL=1");
+	});
+
+	it("keeps interval schedules exported as daily interval rules", async () => {
+		const med = createTestMed({
+			intakes: [
+				{
+					usage: 1,
+					every: 2,
+					start: "2024-03-15T09:00:00",
+					scheduleMode: "interval",
+					weekdays: [],
+					intakeUnit: null,
+					takenBy: null,
+					intakeRemindersEnabled: false,
+				},
+			],
+		});
+
+		generateICS(med);
+
+		const blobArg = mockCreateObjectURL.mock.calls[0][0] as Blob;
+		const content = await blobArg.text();
+
+		expect(content).toContain("RRULE:FREQ=DAILY;INTERVAL=2");
+		expect(content).not.toContain("BYDAY=");
+	});
 });

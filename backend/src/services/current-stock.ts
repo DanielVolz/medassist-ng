@@ -1,6 +1,9 @@
 import type { doseTracking, medications } from "../db/schema.js";
 import { isAmountBasedPackageType } from "../utils/package-profiles.js";
 import {
+	countScheduledOccurrencesInRange,
+	getDateOnlyTimestamp,
+	getNextScheduledOccurrenceTime,
 	normalizeIntakeUsageForStock,
 	parseIntakesJson,
 	parseLocalDateTime,
@@ -10,7 +13,6 @@ import {
 type MedicationRow = typeof medications.$inferSelect;
 type DoseRow = typeof doseTracking.$inferSelect;
 
-const MS_PER_DAY = 86_400_000;
 const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
 
 function getDoseTakenAtMs(dose: DoseRow): number {
@@ -60,15 +62,11 @@ export function computeMedicationCurrentStock(options: {
 			const intakeStart = parseLocalDateTime(intake.start).getTime();
 			if (Number.isNaN(intakeStart)) return;
 
-			const period = Math.max(1, intake.every) * MS_PER_DAY;
-			let effectiveStart: number;
-			if (stockCorrectionCutoff > 0 && stockCorrectionCutoff >= intakeStart) {
-				const elapsedSinceStart = stockCorrectionCutoff - intakeStart;
-				const periodsElapsed = Math.floor(elapsedSinceStart / period);
-				effectiveStart = intakeStart + (periodsElapsed + 1) * period;
-			} else {
-				effectiveStart = intakeStart;
-			}
+			const effectiveStart =
+				stockCorrectionCutoff > 0 && stockCorrectionCutoff >= intakeStart
+					? getNextScheduledOccurrenceTime(intake, stockCorrectionCutoff, false)
+					: intakeStart;
+			if (effectiveStart === null) return;
 
 			let peopleForThisIntake: Array<string | null>;
 			if (intake.takenBy) {
@@ -81,25 +79,20 @@ export function computeMedicationCurrentStock(options: {
 
 			let lastAutoConsumedDateMs = 0;
 			if (effectiveStart <= nowMs) {
-				const occurrences = Math.floor((nowMs - effectiveStart) / period) + 1;
+				const { count: occurrences, lastOccurrenceMs } = countScheduledOccurrencesInRange(
+					intake,
+					effectiveStart,
+					nowMs
+				);
 				consumed += occurrences * usage * peopleForThisIntake.length;
 
-				const lastDoseTime = new Date(effectiveStart + (occurrences - 1) * period);
-				lastAutoConsumedDateMs = new Date(
-					lastDoseTime.getFullYear(),
-					lastDoseTime.getMonth(),
-					lastDoseTime.getDate()
-				).getTime();
+				if (lastOccurrenceMs !== null) {
+					lastAutoConsumedDateMs = getDateOnlyTimestamp(new Date(lastOccurrenceMs));
+				}
 			}
 
 			const stockCorrectionDateOnly =
-				stockCorrectionCutoff > 0
-					? new Date(
-							new Date(stockCorrectionCutoff).getFullYear(),
-							new Date(stockCorrectionCutoff).getMonth(),
-							new Date(stockCorrectionCutoff).getDate()
-						).getTime()
-					: 0;
+				stockCorrectionCutoff > 0 ? getDateOnlyTimestamp(new Date(stockCorrectionCutoff)) : 0;
 			const earlyCutoff = Math.max(lastAutoConsumedDateMs, stockCorrectionDateOnly);
 
 			for (const dose of relevantDoses) {

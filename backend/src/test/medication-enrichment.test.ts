@@ -176,6 +176,7 @@ describe("medication enrichment", () => {
 								generic_name: "Semaglutide",
 								dosage_form: "Tablet",
 								marketing_start_date: "20240101",
+								packaging: [{ description: "2 blisters in 1 carton / 10 tablets in 1 blister" }],
 							},
 						],
 					})
@@ -203,9 +204,23 @@ describe("medication enrichment", () => {
 				}),
 			])
 		);
+		expect(response.results.find((result) => result.code === "00011-1111")?.packageOptions).toEqual([
+			{
+				label: "2 blisters in 1 carton / 10 tablets in 1 blister",
+				description: "2 blisters in 1 carton / 10 tablets in 1 blister",
+				packageType: "blister",
+				packCount: 1,
+				blistersPerPack: 2,
+				pillsPerBlister: 10,
+				totalPills: 20,
+				looseTablets: 0,
+				packageAmountValue: null,
+				packageAmountUnit: null,
+			},
+		]);
 	});
 
-	it("prioritizes RxNorm first, then openFDA, and keeps EMA last", async () => {
+	it("prioritizes results with package sizes before source-only matches", async () => {
 		const { searchMedicationEnrichment } = await import("../services/medication-enrichment.js");
 
 		fetchMock.mockImplementation((url: string) => {
@@ -242,6 +257,7 @@ describe("medication enrichment", () => {
 								generic_name: "Acetylsalicylic acid",
 								dosage_form: "Tablet",
 								marketing_start_date: "20240101",
+								packaging: [{ description: "2 blisters in 1 carton / 10 tablets in 1 blister" }],
 							},
 						],
 					})
@@ -255,17 +271,70 @@ describe("medication enrichment", () => {
 		expect(response.hasMore).toBe(false);
 		expect(response.results).toHaveLength(3);
 		expect(response.results[0]).toMatchObject({
-			code: "1191",
-			source: "rxnorm",
-		});
-		expect(response.results[1]).toMatchObject({
 			code: "00011-1111",
 			source: "openfda",
+		});
+		expect(response.results[1]).toMatchObject({
+			code: "1191",
+			source: "rxnorm",
 		});
 		expect(response.results[2]).toMatchObject({
 			code: "EMA-ASPIRIN",
 			source: "ema",
 		});
+	});
+
+	it("sorts richer package hits ahead of package-bearing results with fewer options", async () => {
+		const { searchMedicationEnrichment } = await import("../services/medication-enrichment.js");
+
+		fetchMock.mockImplementation((url: string) => {
+			if (url.includes("medicines-output-medicines_json-report_en.json")) {
+				return Promise.resolve(jsonResponse([createEmaRow()]));
+			}
+			if (url.includes("/drugs.json?name=")) {
+				return Promise.resolve(jsonResponse({ drugGroup: { conceptGroup: [] } }));
+			}
+			if (url.includes("api.fda.gov/drug/ndc.json")) {
+				return Promise.resolve(
+					jsonResponse({
+						results: [
+							{
+								product_ndc: "00011-1111",
+								brand_name: "Ibuprofen Max",
+								generic_name: "Ibuprofen",
+								dosage_form: "Tablet",
+								marketing_start_date: "20240101",
+								packaging: [{ description: "60 tablets in 1 bottle" }, { description: "120 tablets in 1 bottle" }],
+							},
+							{
+								product_ndc: "00022-2222",
+								brand_name: "Ibuprofen Compact",
+								generic_name: "Ibuprofen",
+								dosage_form: "Tablet",
+								marketing_start_date: "20240101",
+								packaging: [{ description: "20 tablets in 1 blister" }],
+							},
+						],
+					})
+				);
+			}
+			return Promise.reject(new Error(`Unexpected URL: ${url}`));
+		});
+
+		const response = await searchMedicationEnrichment("Ibuprofen", 3);
+
+		expect(response.results.slice(0, 2)).toMatchObject([
+			{
+				code: "00011-1111",
+				source: "openfda",
+			},
+			{
+				code: "00022-2222",
+				source: "openfda",
+			},
+		]);
+		expect(response.results[0].packageOptions).toHaveLength(2);
+		expect(response.results[1].packageOptions).toHaveLength(1);
 	});
 
 	it("validates malformed search requests", async () => {
@@ -338,6 +407,89 @@ describe("medication enrichment", () => {
 			meta: {
 				rxNormMatched: true,
 				openFdaMatched: false,
+				partial: false,
+				note: null,
+			},
+		});
+
+		await app.close();
+	});
+
+	it("includes package suggestions from openFDA fallback in route responses", async () => {
+		const app = await buildApp();
+		fetchMock.mockImplementation((url: string) => {
+			if (url.includes("medicines-output-medicines_json-report_en.json")) {
+				return Promise.resolve(
+					jsonResponse([
+						createEmaRow({
+							name_of_medicine: "Tylenol 500 mg tablets",
+							international_non_proprietary_name_common_name: "Acetaminophen",
+							active_substance: "Acetaminophen",
+							ema_product_number: "EMA-TYLENOL",
+						}),
+					])
+				);
+			}
+			if (url.includes("/rxcui.json?name=acetaminophen&search=2")) {
+				return Promise.resolve(jsonResponse({ idGroup: {} }));
+			}
+			if (url.includes("api.fda.gov/drug/ndc.json")) {
+				return Promise.resolve(
+					jsonResponse({
+						results: [
+							{
+								product_ndc: "00011-1111",
+								brand_name: "Tylenol",
+								generic_name: "Acetaminophen",
+								dosage_form: "Tablet",
+								active_ingredients: [{ name: "Acetaminophen", strength: "500 mg" }],
+								packaging: [{ description: "30 tablets in 1 bottle" }],
+							},
+						],
+					})
+				);
+			}
+			return Promise.reject(new Error(`Unexpected URL: ${url}`));
+		});
+
+		const response = await app.inject({
+			method: "POST",
+			url: "/medication-enrichment/enrich",
+			payload: {
+				query: "Paracetamol",
+				name: "Tylenol 500 mg tablets",
+				genericName: "Acetaminophen",
+			},
+		});
+
+		expect(response.statusCode).toBe(200);
+		expect(response.json()).toMatchObject({
+			selection: {
+				name: "Tylenol 500 mg tablets",
+				genericName: "Acetaminophen",
+				source: "ema+openfda",
+			},
+			suggestions: {
+				medicationForm: "tablet",
+				strengthOptions: [{ label: "500 mg", pillWeightMg: 500, doseUnit: "mg" }],
+				packageOptions: [
+					{
+						label: "30 tablets in 1 bottle",
+						description: "30 tablets in 1 bottle",
+						packageType: "bottle",
+						packCount: 1,
+						blistersPerPack: null,
+						pillsPerBlister: null,
+						totalPills: 30,
+						looseTablets: 30,
+						packageAmountValue: null,
+						packageAmountUnit: null,
+					},
+				],
+			},
+			meta: {
+				rxNormMatched: false,
+				openFdaMatched: true,
 				partial: false,
 				note: null,
 			},
@@ -459,6 +611,7 @@ describe("medication enrichment", () => {
 								generic_name: "Ibuprofen",
 								dosage_form: "Tablet",
 								active_ingredients: [{ name: "Ibuprofen", strength: "200 mg" }],
+								packaging: [{ description: "100 mL in 1 bottle" }],
 							},
 						],
 					})
@@ -505,6 +658,20 @@ describe("medication enrichment", () => {
 				strengthOptions: [
 					{ label: "200 mg", pillWeightMg: 200, doseUnit: "mg" },
 					{ label: "400 mg", pillWeightMg: 400, doseUnit: "mg" },
+				],
+				packageOptions: [
+					{
+						label: "100 mL in 1 bottle",
+						description: "100 mL in 1 bottle",
+						packageType: "liquid_container",
+						packCount: 1,
+						blistersPerPack: null,
+						pillsPerBlister: null,
+						totalPills: 100,
+						looseTablets: 100,
+						packageAmountValue: 100,
+						packageAmountUnit: "ml",
+					},
 				],
 			},
 			meta: {

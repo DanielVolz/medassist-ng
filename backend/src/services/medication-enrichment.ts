@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from "fastify";
+import type { PackageType } from "../utils/package-profiles.js";
 
 const EMA_MEDICINES_URL =
 	"https://www.ema.europa.eu/en/documents/report/medicines-output-medicines_json-report_en.json";
@@ -40,12 +41,26 @@ export type MedicationEnrichmentSearchResult = {
 	genericStatus: "generic" | "original" | "unknown";
 	authorisationDate: string | null;
 	source: MedicationEnrichmentSearchSource;
+	packageOptions: MedicationEnrichmentPackageOption[];
 };
 
 export type MedicationEnrichmentStrengthOption = {
 	label: string;
 	pillWeightMg: number | null;
 	doseUnit: "mg" | "g" | "mcg" | "ml" | "IU" | "units" | "drops" | "puffs" | null;
+};
+
+export type MedicationEnrichmentPackageOption = {
+	label: string;
+	description: string;
+	packageType: PackageType;
+	packCount: number;
+	blistersPerPack: number | null;
+	pillsPerBlister: number | null;
+	totalPills: number | null;
+	looseTablets: number | null;
+	packageAmountValue: number | null;
+	packageAmountUnit: "ml" | "g" | null;
 };
 
 export type MedicationEnrichmentSearchResponse = {
@@ -77,6 +92,7 @@ export type MedicationEnrichmentEnrichResponse = {
 		genericName: string | null;
 		medicationForm: "capsule" | "tablet" | "liquid" | "topical" | null;
 		strengthOptions: MedicationEnrichmentStrengthOption[];
+		packageOptions: MedicationEnrichmentPackageOption[];
 	};
 	meta: {
 		rxNormMatched: boolean;
@@ -161,6 +177,12 @@ type OpenFdaProduct = {
 	dosage_form?: string;
 	marketing_start_date?: string;
 	active_ingredients?: OpenFdaActiveIngredient[];
+	packaging?: OpenFdaPackaging[];
+};
+
+type OpenFdaPackaging = {
+	description?: string;
+	package_ndc?: string;
 };
 
 type OpenFdaResponse = {
@@ -172,6 +194,14 @@ type OpenFdaEnrichment = {
 	genericName: string | null;
 	strengthOptions: MedicationEnrichmentStrengthOption[];
 	medicationForm: "capsule" | "tablet" | "liquid" | "topical" | null;
+	packageOptions: MedicationEnrichmentPackageOption[];
+};
+
+type ParsedOpenFdaPackagingSegment = {
+	quantity: number;
+	itemText: string;
+	containerCount: number;
+	containerText: string;
 };
 
 const defaultLogger: MedicationEnrichmentLogger = {
@@ -436,6 +466,7 @@ function compareSearchResults(
 	right: MedicationEnrichmentSearchResult & { score: number }
 ): number {
 	return (
+		right.packageOptions.length - left.packageOptions.length ||
 		getSearchSourcePriority(left.source) - getSearchSourcePriority(right.source) ||
 		right.score - left.score ||
 		left.name.localeCompare(right.name)
@@ -474,6 +505,7 @@ function collectEmaSearchResults(
 			genericStatus: entry.genericStatus,
 			authorisationDate: entry.authorisationDate,
 			source: "ema",
+			packageOptions: [],
 			score: bestMatch.score,
 		});
 	}
@@ -623,6 +655,7 @@ function buildRxNormSearchResult(property: RxNormDrugConceptProperty): Medicatio
 		genericStatus: "unknown",
 		authorisationDate: null,
 		source: "rxnorm",
+		packageOptions: [],
 	};
 }
 
@@ -749,6 +782,165 @@ function normalizeOpenFdaName(value: unknown): string | null {
 		.trim();
 }
 
+function normalizeOpenFdaPackagingText(value: string): string {
+	return value
+		.toUpperCase()
+		.replace(/[^A-Z0-9]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function parseOpenFdaPackagingSegment(segment: string): ParsedOpenFdaPackagingSegment | null {
+	const sanitized = sanitizeText(segment);
+	if (!sanitized) return null;
+	const match = /^(\d+(?:[.,]\d+)?)\s+(.+?)\s+in\s+(\d+(?:[.,]\d+)?)\s+(.+)$/i.exec(sanitized);
+	if (!match) return null;
+
+	const quantity = Number(match[1].replace(",", "."));
+	const containerCount = Number(match[3].replace(",", "."));
+	if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(containerCount) || containerCount <= 0) {
+		return null;
+	}
+
+	return {
+		quantity,
+		itemText: match[2].trim(),
+		containerCount,
+		containerText: match[4].trim(),
+	};
+}
+
+function isOpenFdaBlisterLikeContainer(containerText: string): boolean {
+	const normalized = normalizeOpenFdaPackagingText(containerText);
+	return (
+		normalized.includes("BLISTER") ||
+		normalized.includes("POUCH") ||
+		normalized.includes("STRIP") ||
+		normalized.includes("SACHET")
+	);
+}
+
+function isOpenFdaBottleLikeContainer(containerText: string): boolean {
+	const normalized = normalizeOpenFdaPackagingText(containerText);
+	return normalized.includes("BOTTLE") || normalized.includes("JAR") || normalized.includes("VIAL");
+}
+
+function isOpenFdaSolidUnit(itemText: string): boolean {
+	const normalized = normalizeOpenFdaPackagingText(itemText);
+	return (
+		normalized.includes("TABLET") ||
+		normalized.includes("CAPSULE") ||
+		normalized.includes("CAPLET") ||
+		normalized.includes("SOFTGEL") ||
+		normalized.includes("LOZENGE")
+	);
+}
+
+function getOpenFdaAmountUnit(itemText: string): "ml" | "g" | null {
+	const normalized = normalizeOpenFdaPackagingText(itemText);
+	if (normalized.includes("ML")) return "ml";
+	if (normalized === "G" || normalized.startsWith("G ") || normalized.includes("GRAM")) return "g";
+	return null;
+}
+
+function toPositiveInteger(value: number): number | null {
+	if (!Number.isFinite(value) || value <= 0) return null;
+	return Math.round(value);
+}
+
+function uniquePackageOptions(options: MedicationEnrichmentPackageOption[]): MedicationEnrichmentPackageOption[] {
+	const byKey = new Map<string, MedicationEnrichmentPackageOption>();
+	for (const option of options) {
+		const key = JSON.stringify([
+			option.description,
+			option.packageType,
+			option.packCount,
+			option.blistersPerPack,
+			option.pillsPerBlister,
+			option.totalPills,
+			option.packageAmountValue,
+			option.packageAmountUnit,
+		]);
+		if (!byKey.has(key)) {
+			byKey.set(key, option);
+		}
+	}
+	return [...byKey.values()];
+}
+
+function buildOpenFdaPackageOptions(product: OpenFdaProduct): MedicationEnrichmentPackageOption[] {
+	return uniquePackageOptions(
+		(product.packaging ?? [])
+			.map((entry): MedicationEnrichmentPackageOption | null => {
+				const description = sanitizeText(entry.description);
+				if (!description) return null;
+
+				const segments = description.split(/\s*\/\s*/).filter((value) => value.trim().length > 0);
+				const outerSegment = segments.length > 1 ? parseOpenFdaPackagingSegment(segments[0] ?? "") : null;
+				const primarySegment = parseOpenFdaPackagingSegment(segments[segments.length - 1] ?? "");
+				if (!primarySegment) return null;
+
+				const packCount = toPositiveInteger(outerSegment?.quantity ?? 1) ?? 1;
+				const packageAmountUnit = getOpenFdaAmountUnit(primarySegment.itemText);
+				if (packageAmountUnit) {
+					const packageAmountValue = toPositiveInteger(primarySegment.quantity);
+					if (packageAmountValue === null) return null;
+					const totalAmount = packCount * packageAmountValue;
+					return {
+						label: description,
+						description,
+						packageType: packageAmountUnit === "g" ? "tube" : "liquid_container",
+						packCount,
+						blistersPerPack: null,
+						pillsPerBlister: null,
+						totalPills: totalAmount,
+						looseTablets: totalAmount,
+						packageAmountValue,
+						packageAmountUnit,
+					} satisfies MedicationEnrichmentPackageOption;
+				}
+
+				if (!isOpenFdaSolidUnit(primarySegment.itemText)) return null;
+				const pillsPerUnit = toPositiveInteger(primarySegment.quantity);
+				if (pillsPerUnit === null) return null;
+
+				if (isOpenFdaBlisterLikeContainer(primarySegment.containerText)) {
+					return {
+						label: description,
+						description,
+						packageType: "blister",
+						packCount: 1,
+						blistersPerPack: packCount,
+						pillsPerBlister: pillsPerUnit,
+						totalPills: packCount * pillsPerUnit,
+						looseTablets: 0,
+						packageAmountValue: null,
+						packageAmountUnit: null,
+					} satisfies MedicationEnrichmentPackageOption;
+				}
+
+				if (isOpenFdaBottleLikeContainer(primarySegment.containerText) || outerSegment === null) {
+					const totalPills = packCount * pillsPerUnit;
+					return {
+						label: description,
+						description,
+						packageType: "bottle",
+						packCount,
+						blistersPerPack: null,
+						pillsPerBlister: null,
+						totalPills,
+						looseTablets: totalPills,
+						packageAmountValue: null,
+						packageAmountUnit: null,
+					} satisfies MedicationEnrichmentPackageOption;
+				}
+
+				return null;
+			})
+			.filter((value): value is MedicationEnrichmentPackageOption => value !== null)
+	);
+}
+
 function buildOpenFdaSearchResult(product: OpenFdaProduct): MedicationEnrichmentSearchResult | null {
 	const code = sanitizeText(product.product_ndc) ?? sanitizeText(product.product_id);
 	const name = normalizeOpenFdaName(product.brand_name) ?? normalizeOpenFdaName(product.generic_name);
@@ -773,6 +965,7 @@ function buildOpenFdaSearchResult(product: OpenFdaProduct): MedicationEnrichment
 		genericStatus: "unknown",
 		authorisationDate: parseCompactDate(product.marketing_start_date),
 		source: "openfda",
+		packageOptions: buildOpenFdaPackageOptions(product),
 	};
 }
 
@@ -852,6 +1045,7 @@ function buildOpenFdaEnrichment(product: OpenFdaProduct): OpenFdaEnrichment | nu
 		genericName,
 		strengthOptions: buildOpenFdaStrengthOptions(product),
 		medicationForm: product.dosage_form ? deriveMedicationFormFromName(product.dosage_form) : null,
+		packageOptions: buildOpenFdaPackageOptions(product),
 	};
 }
 
@@ -1034,7 +1228,9 @@ export async function enrichMedicationSelection(
 				);
 				openFdaMatched =
 					openFdaEnrichment !== null &&
-					(openFdaEnrichment.medicationForm !== null || openFdaEnrichment.strengthOptions.length > 0);
+					(openFdaEnrichment.medicationForm !== null ||
+						openFdaEnrichment.strengthOptions.length > 0 ||
+						openFdaEnrichment.packageOptions.length > 0);
 			} catch (error) {
 				partial = true;
 				note = note ?? "Returned EMA enrichment without secondary-source suggestions.";
@@ -1061,6 +1257,7 @@ export async function enrichMedicationSelection(
 					rxNormEnrichment?.strengthOptions ?? [],
 					openFdaEnrichment?.strengthOptions ?? []
 				),
+				packageOptions: openFdaEnrichment?.packageOptions ?? [],
 			},
 			meta: {
 				rxNormMatched,
@@ -1099,7 +1296,9 @@ export async function enrichMedicationSelection(
 				openFdaEnrichment = await fetchOpenFdaEnrichmentByQuery(selection.genericName ?? selection.name);
 				openFdaMatched =
 					openFdaEnrichment !== null &&
-					(openFdaEnrichment.medicationForm !== null || openFdaEnrichment.strengthOptions.length > 0);
+					(openFdaEnrichment.medicationForm !== null ||
+						openFdaEnrichment.strengthOptions.length > 0 ||
+						openFdaEnrichment.packageOptions.length > 0);
 			} catch (error) {
 				partial = true;
 				note = note ?? "Returned RxNorm enrichment without openFDA suggestions.";
@@ -1126,6 +1325,7 @@ export async function enrichMedicationSelection(
 					rxNormEnrichment?.strengthOptions ?? [],
 					openFdaEnrichment?.strengthOptions ?? []
 				),
+				packageOptions: openFdaEnrichment?.packageOptions ?? [],
 			},
 			meta: {
 				rxNormMatched,
@@ -1164,7 +1364,9 @@ export async function enrichMedicationSelection(
 	openFdaEnrichment = buildOpenFdaEnrichment(product);
 	openFdaMatched =
 		openFdaEnrichment !== null &&
-		(openFdaEnrichment.medicationForm !== null || openFdaEnrichment.strengthOptions.length > 0);
+		(openFdaEnrichment.medicationForm !== null ||
+			openFdaEnrichment.strengthOptions.length > 0 ||
+			openFdaEnrichment.packageOptions.length > 0);
 
 	const openFdaGeneric = openFdaEnrichment?.genericName ?? request.genericName ?? request.name;
 	try {
@@ -1197,6 +1399,7 @@ export async function enrichMedicationSelection(
 				rxNormEnrichment?.strengthOptions ?? [],
 				openFdaEnrichment?.strengthOptions ?? []
 			),
+			packageOptions: openFdaEnrichment?.packageOptions ?? [],
 		},
 		meta: {
 			rxNormMatched,

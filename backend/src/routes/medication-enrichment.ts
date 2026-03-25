@@ -75,6 +75,24 @@ const strengthOptionSchema = {
 	},
 } as const;
 
+const packageOptionSchema = {
+	type: "object",
+	properties: {
+		label: { type: "string" },
+		description: { type: "string" },
+		packageType: { type: "string", enum: ["blister", "bottle", "tube", "liquid_container"] },
+		packCount: { type: "integer", minimum: 1 },
+		blistersPerPack: { type: "integer", minimum: 1, nullable: true },
+		pillsPerBlister: { type: "integer", minimum: 1, nullable: true },
+		totalPills: { type: "integer", minimum: 0, nullable: true },
+		looseTablets: { type: "integer", minimum: 0, nullable: true },
+		packageAmountValue: { type: "integer", minimum: 1, nullable: true },
+		packageAmountUnit: {
+			anyOf: [{ type: "string", enum: ["ml", "g"] }, { type: "null" }],
+		},
+	},
+} as const;
+
 const searchResponseSchema = {
 	type: "object",
 	properties: {
@@ -95,6 +113,7 @@ const searchResponseSchema = {
 					genericStatus: { type: "string", enum: ["generic", "original", "unknown"] },
 					authorisationDate: { type: "string", nullable: true },
 					source: { type: "string", enum: ["ema", "rxnorm", "openfda"] },
+					packageOptions: { type: "array", items: packageOptionSchema },
 				},
 			},
 		},
@@ -127,6 +146,7 @@ const enrichResponseSchema = {
 					anyOf: [{ type: "string", enum: ["capsule", "tablet", "liquid", "topical"] }, { type: "null" }],
 				},
 				strengthOptions: { type: "array", items: strengthOptionSchema },
+				packageOptions: { type: "array", items: packageOptionSchema },
 			},
 		},
 		meta: {

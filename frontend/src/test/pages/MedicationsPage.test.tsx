@@ -94,7 +94,6 @@ const createMockFormHook = (overrides = {}) => ({
 	formChanged: false,
 	fieldErrors: {},
 	hasValidationErrors: false,
-	takenByInput: "",
 	setTakenByInput: vi.fn(),
 	addTakenByPerson: vi.fn(),
 	removeTakenByPerson: vi.fn(),
@@ -195,12 +194,50 @@ function openNewMedicationForm() {
 	fireEvent.click(newButton as HTMLButtonElement);
 }
 
+function getEnrichmentPackageButtons() {
+	return Array.from(document.querySelectorAll<HTMLButtonElement>(".medication-enrichment-package-choice-button"));
+}
+
+function createMedicationEnrichmentSearchResults(count: number) {
+	return Array.from({ length: count }, (_, index) => ({
+		code: `RX-RESULT-${index + 1}`,
+		name: `Result ${index + 1}`,
+		genericName: `Generic ${index + 1}`,
+		authorisationHolder: null,
+		therapeuticArea: null,
+		matchType: "brand" as const,
+		genericStatus: "unknown" as const,
+		authorisationDate: null,
+		source: "rxnorm" as const,
+		packageOptions: [],
+	}));
+}
+
+function createGroupedOpenFdaMedicationEnrichmentResults(count: number, name: string) {
+	return Array.from({ length: count }, (_, index) => ({
+		code: `OPENFDA-${name}-${index + 1}`,
+		name,
+		genericName: "dimethyl fumarate",
+		authorisationHolder: null,
+		therapeuticArea: null,
+		matchType: "brand" as const,
+		genericStatus: "unknown" as const,
+		authorisationDate: null,
+		source: "openfda" as const,
+		packageOptions: [],
+	}));
+}
+
 describe("MedicationsPage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockContextValue = createMockContext();
 		mockFormHookValue = createMockFormHook();
 		Object.defineProperty(window, "innerWidth", { value: 1200, writable: true });
+		Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+			configurable: true,
+			value: vi.fn(),
+		});
 		fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
 		vi.stubGlobal("fetch", fetchMock);
 	});
@@ -463,6 +500,8 @@ describe("MedicationsPage form interactions", () => {
 		vi.clearAllMocks();
 		mockContextValue = createMockContext();
 		mockFormHookValue = createMockFormHook();
+		fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
+		vi.stubGlobal("fetch", fetchMock);
 	});
 
 	it("calls handleValueChange when typing name", () => {
@@ -527,6 +566,7 @@ describe("MedicationsPage form interactions", () => {
 								genericStatus: "unknown",
 								authorisationDate: null,
 								source: "rxnorm",
+								packageOptions: [],
 							},
 							{
 								code: "EMA-ASPIRIN",
@@ -538,6 +578,7 @@ describe("MedicationsPage form interactions", () => {
 								genericStatus: "original",
 								authorisationDate: "2024-02-01",
 								source: "ema",
+								packageOptions: [],
 							},
 							...(url.includes("limit=12")
 								? [
@@ -551,6 +592,7 @@ describe("MedicationsPage form interactions", () => {
 											genericStatus: "unknown",
 											authorisationDate: null,
 											source: "openfda",
+											packageOptions: [],
 										},
 									]
 								: []),
@@ -576,6 +618,20 @@ describe("MedicationsPage form interactions", () => {
 							genericName: "Acetylsalicylic acid",
 							medicationForm: "tablet",
 							strengthOptions: [{ label: "500 mg", pillWeightMg: 500, doseUnit: "mg" }],
+							packageOptions: [
+								{
+									label: "2 blisters in 1 carton / 10 tablets in 1 blister",
+									description: "2 blisters in 1 carton / 10 tablets in 1 blister",
+									packageType: "blister",
+									packCount: 1,
+									blistersPerPack: 2,
+									pillsPerBlister: 10,
+									totalPills: 20,
+									looseTablets: 0,
+									packageAmountValue: null,
+									packageAmountUnit: null,
+								},
+							],
 						},
 						meta: {
 							rxNormMatched: true,
@@ -637,14 +693,1139 @@ describe("MedicationsPage form interactions", () => {
 					genericName: "Acetylsalicylic acid",
 					medicationForm: "tablet",
 					pillForm: "tablet",
+					packageType: "blister",
+					packCount: "1",
+					blistersPerPack: "2",
+					pillsPerBlister: "10",
+					totalPills: "",
+					looseTablets: "0",
 					pillWeightMg: "500",
 					doseUnit: "mg",
 				})
 			);
 		});
 
-		expect(screen.getAllByText("form.enrichment.applied").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getByText("form.enrichment.appliedStrength")).toBeInTheDocument();
+	});
+
+	it("shows the translated auth-required lookup message for search 401 responses", async () => {
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: false,
+					status: 401,
+					json: async () => ({ error: "Authentication required to use medication lookup" }),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Aspirin" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=6", {
+				credentials: "include",
+			});
+		});
+
+		expect(await screen.findByText("form.enrichment.authRequired")).toBeInTheDocument();
+		expect(screen.queryByText("Authentication required to use medication lookup")).not.toBeInTheDocument();
+		expect(screen.queryByText("form.enrichment.noResults")).not.toBeInTheDocument();
+	});
+
+	it("hides the load-more button when a load-more request returns no additional results", async () => {
+		const initialResults = createMedicationEnrichmentSearchResults(6);
+
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Aspirin",
+						normalizedQuery: "aspirin",
+						hasMore: true,
+						results: initialResults,
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Aspirin" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findByText("Result 6");
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12", {
+				credentials: "include",
+			});
+		});
+
+		await waitFor(() => {
+			expect(screen.queryByRole("button", { name: "form.enrichment.showMoreAction" })).not.toBeInTheDocument();
+		});
+	});
+
+	it("hides the load-more button when the UI reaches the maximum enrichment result limit", async () => {
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				const params = new URL(url, "http://localhost").searchParams;
+				const limit = Number(params.get("limit") ?? "0");
+
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Aspirin",
+						normalizedQuery: "aspirin",
+						hasMore: true,
+						results: createMedicationEnrichmentSearchResults(limit),
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Aspirin" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findByText("Result 6");
+
+		for (const expectedLimit of [12, 18, 20]) {
+			fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
+
+			await waitFor(() => {
+				expect(fetchMock).toHaveBeenCalledWith(`/api/medication-enrichment/search?q=Aspirin&limit=${expectedLimit}`, {
+					credentials: "include",
+				});
+			});
+		}
+
+		await screen.findByText("Result 20");
+		expect(screen.queryByRole("button", { name: "form.enrichment.showMoreAction" })).not.toBeInTheDocument();
+	});
+
+	it("keeps a visible loading state while more lookup results are being fetched", async () => {
+		let resolveLoadMore:
+			| ((value: {
+					ok: boolean;
+					json: () => Promise<{
+						query: string;
+						normalizedQuery: string;
+						hasMore: boolean;
+						results: ReturnType<typeof createMedicationEnrichmentSearchResults>;
+					}>;
+			  }) => void)
+			| null = null;
+
+		fetchMock.mockImplementation((url: string) => {
+			if (url === "/api/medication-enrichment/search?q=Aspirin&limit=6") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Aspirin",
+						normalizedQuery: "aspirin",
+						hasMore: true,
+						results: createMedicationEnrichmentSearchResults(6),
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/search?q=Aspirin&limit=12") {
+				return new Promise((resolve) => {
+					resolveLoadMore = resolve;
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Aspirin" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findByText("Result 6");
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12", {
+				credentials: "include",
+			});
+		});
+
+		expect(screen.getByRole("button", { name: "form.enrichment.loadingMoreResults" })).toBeDisabled();
+		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+		resolveLoadMore?.({
+			ok: true,
+			json: async () => ({
+				query: "Aspirin",
+				normalizedQuery: "aspirin",
+				hasMore: false,
+				results: createMedicationEnrichmentSearchResults(12),
+			}),
+		});
+
+		await screen.findByText("Result 12");
+		expect(screen.queryByRole("button", { name: "form.enrichment.loadingMoreResults" })).not.toBeInTheDocument();
+	});
+
+	it("loads past grouped duplicate pages so one show-more click yields a visible new result", async () => {
+		fetchMock.mockImplementation((url: string) => {
+			if (url === "/api/medication-enrichment/search?q=Tecfidera&limit=6") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Tecfidera",
+						normalizedQuery: "tecfidera",
+						hasMore: true,
+						results: [...createGroupedOpenFdaMedicationEnrichmentResults(6, "Tecfidera")],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/search?q=Tecfidera&limit=12") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Tecfidera",
+						normalizedQuery: "tecfidera",
+						hasMore: true,
+						results: [...createGroupedOpenFdaMedicationEnrichmentResults(12, "Tecfidera")],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/search?q=Tecfidera&limit=18") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Tecfidera",
+						normalizedQuery: "tecfidera",
+						hasMore: false,
+						results: [
+							...createGroupedOpenFdaMedicationEnrichmentResults(12, "Tecfidera"),
+							...createMedicationEnrichmentSearchResults(6),
+						],
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Tecfidera" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findAllByText("Tecfidera");
+		expect(screen.queryByText("Result 1")).not.toBeInTheDocument();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Tecfidera&limit=12", {
+				credentials: "include",
+			});
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Tecfidera&limit=18", {
+				credentials: "include",
+			});
+		});
+
+		await screen.findByText("Result 1");
+		expect(screen.queryByRole("button", { name: "form.enrichment.showMoreAction" })).not.toBeInTheDocument();
+	});
+
+	it("sorts strength suggestions numerically ascending before rendering them", async () => {
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Ibuprofen",
+						normalizedQuery: "ibuprofen",
+						hasMore: false,
+						results: [
+							{
+								code: "RX-IBUPROFEN-STRENGTHS",
+								name: "Ibuprofen",
+								genericName: "Ibuprofen",
+								authorisationHolder: null,
+								therapeuticArea: null,
+								matchType: "brand",
+								genericStatus: "unknown",
+								authorisationDate: null,
+								source: "rxnorm",
+								packageOptions: [],
+							},
+						],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/enrich") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						selection: {
+							name: "Ibuprofen",
+							genericName: "Ibuprofen",
+							therapeuticArea: null,
+							indication: null,
+							atcCode: null,
+							source: "rxnorm",
+						},
+						suggestions: {
+							name: "Ibuprofen",
+							genericName: "Ibuprofen",
+							medicationForm: "tablet",
+							strengthOptions: [
+								{ label: "500 mg", pillWeightMg: 500, doseUnit: "mg" },
+								{ label: "25 mg", pillWeightMg: 25, doseUnit: "mg" },
+								{ label: "1000 mg", pillWeightMg: 1000, doseUnit: "mg" },
+								{ label: "75 mg", pillWeightMg: 75, doseUnit: "mg" },
+							],
+							packageOptions: [],
+						},
+						meta: {
+							rxNormMatched: true,
+							openFdaMatched: false,
+							partial: false,
+							note: null,
+						},
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Ibuprofen" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findByRole("button", { name: "form.enrichment.applyAction" });
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.applyAction" }));
+
+		await waitFor(() => {
+			const strengthLabels = Array.from(
+				document.querySelectorAll<HTMLButtonElement>(".medication-enrichment-strength-list > button")
+			).map((button) => button.textContent);
+
+			expect(strengthLabels).toEqual(["25 mg", "75 mg", "500 mg", "1000 mg"]);
+		});
+	});
+
+	it("applies multi-package suggestions for bottle, liquid, and tube flows", async () => {
+		const setForm = vi.fn();
+		mockFormHookValue = createMockFormHook({ setForm });
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Ibuprofen",
+						normalizedQuery: "ibuprofen",
+						hasMore: false,
+						results: [
+							{
+								code: "NDC-IBU",
+								name: "Ibuprofen",
+								genericName: "Ibuprofen",
+								authorisationHolder: null,
+								therapeuticArea: null,
+								matchType: "brand",
+								genericStatus: "unknown",
+								authorisationDate: null,
+								source: "openfda",
+								packageOptions: [
+									{
+										label: "60 tablets in 1 bottle",
+										description: "60 tablets in 1 bottle",
+										packageType: "bottle",
+										packCount: 1,
+										blistersPerPack: null,
+										pillsPerBlister: null,
+										totalPills: 60,
+										looseTablets: 60,
+										packageAmountValue: null,
+										packageAmountUnit: null,
+									},
+								],
+							},
+						],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/enrich") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						selection: {
+							name: "Ibuprofen",
+							genericName: "Ibuprofen",
+							therapeuticArea: null,
+							indication: null,
+							atcCode: null,
+							source: "openfda",
+						},
+						suggestions: {
+							name: "Ibuprofen",
+							genericName: "Ibuprofen",
+							medicationForm: "tablet",
+							strengthOptions: [],
+							packageOptions: [
+								{
+									label: "60 tablets in 1 bottle (00093-7424-56)",
+									description: "60 tablets in 1 bottle (00093-7424-56)",
+									packageType: "bottle",
+									packCount: 1,
+									blistersPerPack: null,
+									pillsPerBlister: null,
+									totalPills: 60,
+									looseTablets: 60,
+									packageAmountValue: null,
+									packageAmountUnit: null,
+								},
+								{
+									label: "250 mL in 1 bottle (00536-1167-01)",
+									description: "250 mL in 1 bottle (00536-1167-01)",
+									packageType: "liquid_container",
+									packCount: 1,
+									blistersPerPack: null,
+									pillsPerBlister: null,
+									totalPills: 250,
+									looseTablets: 250,
+									packageAmountValue: 250,
+									packageAmountUnit: "ml",
+								},
+								{
+									label: "15 g in 1 tube",
+									description: "15 g in 1 tube",
+									packageType: "tube",
+									packCount: 1,
+									blistersPerPack: null,
+									pillsPerBlister: null,
+									totalPills: 15,
+									looseTablets: 15,
+									packageAmountValue: 15,
+									packageAmountUnit: "g",
+								},
+							],
+						},
+						meta: {
+							rxNormMatched: false,
+							openFdaMatched: true,
+							partial: false,
+							note: null,
+						},
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Ibuprofen" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+		await screen.findByRole("button", { name: "form.enrichment.applyAction" });
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.applyAction" }));
+
+		await waitFor(() => {
+			expect(getEnrichmentPackageButtons()).toHaveLength(3);
+		});
+
+		const packageButtons = getEnrichmentPackageButtons();
+		fireEvent.click(packageButtons[0]);
+		fireEvent.click(packageButtons[1]);
+		fireEvent.click(packageButtons[2]);
+
+		const bottleUpdater = setForm.mock.calls[1]?.[0] as (
+			form: ReturnType<typeof createMockFormHook>["form"]
+		) => unknown;
+		const liquidUpdater = setForm.mock.calls[2]?.[0] as (
+			form: ReturnType<typeof createMockFormHook>["form"]
+		) => unknown;
+		const tubeUpdater = setForm.mock.calls[3]?.[0] as (form: ReturnType<typeof createMockFormHook>["form"]) => unknown;
+		const baseForm = createMockFormHook().form;
+
+		expect(bottleUpdater(baseForm)).toMatchObject({
+			packageType: "bottle",
+			packCount: "1",
+			blistersPerPack: "1",
+			pillsPerBlister: "1",
+			totalPills: "60",
+			looseTablets: "60",
+		});
+		expect(liquidUpdater(baseForm)).toMatchObject({
+			packageType: "liquid_container",
+			packCount: "1",
+			totalPills: "250",
+			looseTablets: "250",
+			packageAmountValue: "250",
+			packageAmountUnit: "ml",
+			medicationForm: "liquid",
+		});
+		expect(tubeUpdater(baseForm)).toMatchObject({
+			packageType: "tube",
+			packCount: "1",
+			totalPills: "15",
+			looseTablets: "15",
+			packageAmountValue: "15",
+			packageAmountUnit: "g",
+			medicationForm: "topical",
+		});
+	});
+
+	it("auto-applies the matching inline package option after enrich returns multi-package suggestions", async () => {
+		const setForm = vi.fn();
+		mockFormHookValue = createMockFormHook({ setForm });
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Ibuprofen",
+						normalizedQuery: "ibuprofen",
+						hasMore: false,
+						results: [
+							{
+								code: "NDC-IBU",
+								name: "Ibuprofen",
+								genericName: "Ibuprofen",
+								authorisationHolder: null,
+								therapeuticArea: null,
+								matchType: "brand",
+								genericStatus: "unknown",
+								authorisationDate: null,
+								source: "openfda",
+								packageOptions: [
+									{
+										label: "60 tablets in 1 bottle (00093-7424-56)",
+										description: "60 tablets in 1 bottle (00093-7424-56)",
+										packageType: "bottle",
+										packCount: 1,
+										blistersPerPack: null,
+										pillsPerBlister: null,
+										totalPills: 60,
+										looseTablets: 60,
+										packageAmountValue: null,
+										packageAmountUnit: null,
+									},
+									{
+										label: "250 mL in 1 bottle (00536-1167-01)",
+										description: "250 mL in 1 bottle (00536-1167-01)",
+										packageType: "liquid_container",
+										packCount: 1,
+										blistersPerPack: null,
+										pillsPerBlister: null,
+										totalPills: 250,
+										looseTablets: 250,
+										packageAmountValue: 250,
+										packageAmountUnit: "ml",
+									},
+								],
+							},
+						],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/enrich") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						selection: {
+							name: "Ibuprofen",
+							genericName: "Ibuprofen",
+							therapeuticArea: null,
+							indication: null,
+							atcCode: null,
+							source: "openfda",
+						},
+						suggestions: {
+							name: "Ibuprofen",
+							genericName: "Ibuprofen",
+							medicationForm: "tablet",
+							strengthOptions: [],
+							packageOptions: [
+								{
+									label: "60 tablets in 1 bottle",
+									description: "60 tablets in 1 bottle",
+									packageType: "bottle",
+									packCount: 1,
+									blistersPerPack: null,
+									pillsPerBlister: null,
+									totalPills: 60,
+									looseTablets: 60,
+									packageAmountValue: null,
+									packageAmountUnit: null,
+								},
+								{
+									label: "250 mL in 1 bottle",
+									description: "250 mL in 1 bottle",
+									packageType: "liquid_container",
+									packCount: 1,
+									blistersPerPack: null,
+									pillsPerBlister: null,
+									totalPills: 250,
+									looseTablets: 250,
+									packageAmountValue: 250,
+									packageAmountUnit: "ml",
+								},
+							],
+						},
+						meta: {
+							rxNormMatched: false,
+							openFdaMatched: true,
+							partial: false,
+							note: null,
+						},
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Ibuprofen" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findByRole("button", { name: "form.enrichment.details.showAction" });
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
+		fireEvent.click(getEnrichmentPackageButtons()[1]);
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					query: "Ibuprofen",
+					name: "Ibuprofen",
+					genericName: "Ibuprofen",
+					code: "NDC-IBU",
+					source: "openfda",
+				}),
+				credentials: "include",
+			});
+			expect(setForm).toHaveBeenCalledWith(
+				expect.objectContaining({
+					name: "Ibuprofen",
+					genericName: "Ibuprofen",
+					packageType: "liquid_container",
+					packCount: "1",
+					totalPills: "250",
+					looseTablets: "250",
+					packageAmountValue: "250",
+					packageAmountUnit: "ml",
+					medicationForm: "liquid",
+				})
+			);
+		});
+
+		expect(screen.getByText("form.enrichment.appliedPackage")).toBeInTheDocument();
+		expect(getEnrichmentPackageButtons()).toHaveLength(2);
+	});
+
+	it("clears applied strength feedback when the enrichment package size is changed", async () => {
+		const setForm = vi.fn();
+		mockFormHookValue = createMockFormHook({ setForm });
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Ibuprofen",
+						normalizedQuery: "ibuprofen",
+						hasMore: false,
+						results: [
+							{
+								code: "NDC-IBU-STRENGTH",
+								name: "Ibuprofen",
+								genericName: "Ibuprofen",
+								authorisationHolder: null,
+								therapeuticArea: null,
+								matchType: "brand",
+								genericStatus: "unknown",
+								authorisationDate: null,
+								source: "openfda",
+								packageOptions: [
+									{
+										label: "60 tablets in 1 bottle (00093-7424-56)",
+										description: "60 tablets in 1 bottle (00093-7424-56)",
+										packageType: "bottle",
+										packCount: 1,
+										blistersPerPack: null,
+										pillsPerBlister: null,
+										totalPills: 60,
+										looseTablets: 60,
+										packageAmountValue: null,
+										packageAmountUnit: null,
+									},
+									{
+										label: "120 tablets in 1 bottle (00093-7424-57)",
+										description: "120 tablets in 1 bottle (00093-7424-57)",
+										packageType: "bottle",
+										packCount: 1,
+										blistersPerPack: null,
+										pillsPerBlister: null,
+										totalPills: 120,
+										looseTablets: 120,
+										packageAmountValue: null,
+										packageAmountUnit: null,
+									},
+								],
+							},
+						],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/enrich") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						selection: {
+							name: "Ibuprofen",
+							genericName: "Ibuprofen",
+							therapeuticArea: null,
+							indication: null,
+							atcCode: null,
+							source: "openfda",
+						},
+						suggestions: {
+							name: "Ibuprofen",
+							genericName: "Ibuprofen",
+							medicationForm: "tablet",
+							strengthOptions: [
+								{ label: "200 mg", pillWeightMg: 200, doseUnit: "mg" },
+								{ label: "400 mg", pillWeightMg: 400, doseUnit: "mg" },
+							],
+							packageOptions: [
+								{
+									label: "60 tablets in 1 bottle",
+									description: "60 tablets in 1 bottle",
+									packageType: "bottle",
+									packCount: 1,
+									blistersPerPack: null,
+									pillsPerBlister: null,
+									totalPills: 60,
+									looseTablets: 60,
+									packageAmountValue: null,
+									packageAmountUnit: null,
+								},
+								{
+									label: "120 tablets in 1 bottle",
+									description: "120 tablets in 1 bottle",
+									packageType: "bottle",
+									packCount: 1,
+									blistersPerPack: null,
+									pillsPerBlister: null,
+									totalPills: 120,
+									looseTablets: 120,
+									packageAmountValue: null,
+									packageAmountUnit: null,
+								},
+							],
+						},
+						meta: {
+							rxNormMatched: false,
+							openFdaMatched: true,
+							partial: false,
+							note: null,
+						},
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Ibuprofen" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findByRole("button", { name: "form.enrichment.details.showAction" });
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
+
+		const initialPackageButtons = getEnrichmentPackageButtons();
+		expect(initialPackageButtons).toHaveLength(2);
+		fireEvent.click(initialPackageButtons[0]);
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					query: "Ibuprofen",
+					name: "Ibuprofen",
+					genericName: "Ibuprofen",
+					code: "NDC-IBU-STRENGTH",
+					source: "openfda",
+				}),
+				credentials: "include",
+			});
+		});
+
+		fireEvent.click(screen.getByRole("button", { name: "400 mg" }));
+		expect(screen.getByText("form.enrichment.appliedStrength")).toBeInTheDocument();
+
+		const activePackageButtons = getEnrichmentPackageButtons();
+		expect(activePackageButtons).toHaveLength(2);
+		fireEvent.click(activePackageButtons[1]);
+
+		await waitFor(() => {
+			expect(screen.queryByText("form.enrichment.appliedStrength")).not.toBeInTheDocument();
+		});
+		expect(screen.getByText("form.enrichment.appliedPackage")).toBeInTheDocument();
+	});
+
+	it("shows the selected package as pending while enrichment details are still loading", async () => {
+		const setForm = vi.fn();
+		let resolveEnrichment: ((value: { ok: boolean; json: () => Promise<unknown> }) => void) | null = null;
+		mockFormHookValue = createMockFormHook({ setForm });
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Ibuprofen",
+						normalizedQuery: "ibuprofen",
+						hasMore: false,
+						results: [
+							{
+								code: "NDC-PENDING-PACKAGE",
+								name: "Ibuprofen",
+								genericName: "Ibuprofen",
+								authorisationHolder: null,
+								therapeuticArea: null,
+								matchType: "brand",
+								genericStatus: "unknown",
+								authorisationDate: null,
+								source: "openfda",
+								packageOptions: [
+									{
+										label: "60 capsules in 1 bottle",
+										description: "60 capsules in 1 bottle",
+										packageType: "bottle",
+										packCount: 1,
+										blistersPerPack: null,
+										pillsPerBlister: null,
+										totalPills: 60,
+										looseTablets: 60,
+										packageAmountValue: null,
+										packageAmountUnit: null,
+									},
+									{
+										label: "90 capsules in 1 bottle",
+										description: "90 capsules in 1 bottle",
+										packageType: "bottle",
+										packCount: 1,
+										blistersPerPack: null,
+										pillsPerBlister: null,
+										totalPills: 90,
+										looseTablets: 90,
+										packageAmountValue: null,
+										packageAmountUnit: null,
+									},
+								],
+							},
+						],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/enrich") {
+				return new Promise((resolve) => {
+					resolveEnrichment = resolve;
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Ibuprofen" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findByRole("button", { name: "form.enrichment.details.showAction" });
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
+		await waitFor(() => {
+			expect(getEnrichmentPackageButtons()).toHaveLength(2);
+		});
+		const packageButtons = getEnrichmentPackageButtons();
+		fireEvent.click(packageButtons[0]);
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					query: "Ibuprofen",
+					name: "Ibuprofen",
+					genericName: "Ibuprofen",
+					code: "NDC-PENDING-PACKAGE",
+					source: "openfda",
+				}),
+				credentials: "include",
+			});
+		});
+
+		const pendingPackageButton = getEnrichmentPackageButtons()[0];
+		expect(pendingPackageButton).toBeDisabled();
+		expect(pendingPackageButton.querySelector(".medication-enrichment-spinner")).not.toBeNull();
+		expect(screen.getByText("form.enrichment.applying")).toBeInTheDocument();
+
+		resolveEnrichment?.({
+			ok: true,
+			json: async () => ({
+				selection: {
+					name: "Ibuprofen",
+					genericName: "Ibuprofen",
+					therapeuticArea: null,
+					indication: null,
+					atcCode: null,
+					source: "openfda",
+				},
+				suggestions: {
+					name: "Ibuprofen",
+					genericName: "Ibuprofen",
+					medicationForm: "capsule",
+					strengthOptions: [{ label: "400 mg", pillWeightMg: 400, doseUnit: "mg" }],
+					packageOptions: [
+						{
+							label: "60 capsules in 1 bottle",
+							description: "60 capsules in 1 bottle",
+							packageType: "bottle",
+							packCount: 1,
+							blistersPerPack: null,
+							pillsPerBlister: null,
+							totalPills: 60,
+							looseTablets: 60,
+							packageAmountValue: null,
+							packageAmountUnit: null,
+						},
+					],
+				},
+				meta: {
+					rxNormMatched: false,
+					openFdaMatched: true,
+					partial: false,
+					note: null,
+				},
+			}),
+		});
+
+		await waitFor(() => {
+			expect(screen.queryByText("form.enrichment.applying")).not.toBeInTheDocument();
+			expect(screen.getByText("form.enrichment.appliedPackage")).toBeInTheDocument();
+		});
+	});
+
+	it("auto-applies the correct blister package by structural match when multiple package variants exist", async () => {
+		const setForm = vi.fn();
+		mockFormHookValue = createMockFormHook({ setForm });
+		fetchMock.mockImplementation((url: string) => {
+			if (url.startsWith("/api/medication-enrichment/search?")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						query: "Dimethyl fumarate",
+						normalizedQuery: "dimethyl fumarate",
+						hasMore: false,
+						results: [
+							{
+								code: "NDC-DMF",
+								name: "Dimethyl fumarate",
+								genericName: "Dimethyl fumarate",
+								authorisationHolder: null,
+								therapeuticArea: null,
+								matchType: "brand",
+								genericStatus: "unknown",
+								authorisationDate: null,
+								source: "openfda",
+								packageOptions: [
+									{
+										label: "14 blister packs in 1 carton / 14 capsules in 1 blister pack (31722-999-01)",
+										description: "14 blister packs in 1 carton / 14 capsules in 1 blister pack (31722-999-01)",
+										packageType: "blister",
+										packCount: 1,
+										blistersPerPack: 14,
+										pillsPerBlister: 14,
+										totalPills: 196,
+										looseTablets: 0,
+										packageAmountValue: null,
+										packageAmountUnit: null,
+									},
+									{
+										label: "14 capsules in 1 bottle (31722-999-02)",
+										description: "14 capsules in 1 bottle (31722-999-02)",
+										packageType: "bottle",
+										packCount: 1,
+										blistersPerPack: null,
+										pillsPerBlister: null,
+										totalPills: 14,
+										looseTablets: 14,
+										packageAmountValue: null,
+										packageAmountUnit: null,
+									},
+								],
+							},
+						],
+					}),
+				});
+			}
+
+			if (url === "/api/medication-enrichment/enrich") {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						selection: {
+							name: "Dimethyl fumarate",
+							genericName: "Dimethyl fumarate",
+							therapeuticArea: null,
+							indication: null,
+							atcCode: null,
+							source: "openfda",
+						},
+						suggestions: {
+							name: "Dimethyl fumarate",
+							genericName: "Dimethyl fumarate",
+							medicationForm: "capsule",
+							strengthOptions: [],
+							packageOptions: [
+								{
+									label: "14 capsules in 1 bottle",
+									description: "14 capsules in 1 bottle",
+									packageType: "bottle",
+									packCount: 1,
+									blistersPerPack: null,
+									pillsPerBlister: null,
+									totalPills: 14,
+									looseTablets: 14,
+									packageAmountValue: null,
+									packageAmountUnit: null,
+								},
+								{
+									label: "14 blister packs in 1 carton / 14 capsules in 1 blister pack",
+									description: "14 blister packs in 1 carton / 14 capsules in 1 blister pack",
+									packageType: "blister",
+									packCount: 1,
+									blistersPerPack: 14,
+									pillsPerBlister: 14,
+									totalPills: 196,
+									looseTablets: 0,
+									packageAmountValue: null,
+									packageAmountUnit: null,
+								},
+							],
+						},
+						meta: {
+							rxNormMatched: false,
+							openFdaMatched: true,
+							partial: false,
+							note: null,
+						},
+					}),
+				});
+			}
+
+			return Promise.resolve({ ok: true, json: async () => [] });
+		});
+
+		renderPage();
+		openNewMedicationForm();
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.toggleShow" }));
+		fireEvent.change(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), {
+			target: { value: "Dimethyl fumarate" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
+
+		await screen.findByRole("button", { name: "form.enrichment.details.showAction" });
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
+		fireEvent.click(getEnrichmentPackageButtons()[0]);
+
+		await waitFor(() => {
+			expect(setForm).toHaveBeenCalledWith(
+				expect.objectContaining({
+					name: "Dimethyl fumarate",
+					genericName: "Dimethyl fumarate",
+					medicationForm: "capsule",
+					pillForm: "capsule",
+					packageType: "blister",
+					packCount: "1",
+					blistersPerPack: "14",
+					pillsPerBlister: "14",
+					totalPills: "",
+					looseTablets: "0",
+				})
+			);
+		});
+
+		expect(screen.getByText("form.enrichment.appliedPackage")).toBeInTheDocument();
 	});
 
 	it("shows liquid stock against configured multi-container capacity in the list", () => {

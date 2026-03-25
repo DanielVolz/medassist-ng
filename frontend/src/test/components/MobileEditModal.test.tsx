@@ -99,16 +99,20 @@ function createMedicationEnrichmentState(
 	return {
 		query: "",
 		results: [],
+		hasMoreResults: false,
 		isSearching: false,
 		hasSearched: false,
 		searchError: null,
 		applyingCode: null,
+		applyingPackageLabel: null,
 		activeResultCode: null,
 		appliedSelection: null,
 		enrichError: null,
 		meta: null,
 		strengthOptions: [],
+		packageOptions: [],
 		appliedStrengthLabel: null,
+		appliedPackageLabel: null,
 		...overrides,
 	};
 }
@@ -198,6 +202,7 @@ describe("MobileEditModal", () => {
 		const onMedicationEnrichmentSearch = vi.fn();
 		const onMedicationEnrichmentApply = vi.fn();
 		const onMedicationEnrichmentStrengthApply = vi.fn();
+		const onMedicationEnrichmentPackageApply = vi.fn();
 		const result = {
 			code: "RX-123",
 			name: "Wegovy",
@@ -208,8 +213,21 @@ describe("MobileEditModal", () => {
 			genericStatus: "unknown" as const,
 			authorisationDate: null,
 			source: "rxnorm" as const,
+			packageOptions: [],
 		};
 		const strengthOption = { label: "0.25 mg", pillWeightMg: 0.25, doseUnit: "mg" as const };
+		const packageOption = {
+			label: "60 tablets in 1 bottle",
+			description: "60 tablets in 1 bottle",
+			packageType: "bottle" as const,
+			packCount: 1,
+			blistersPerPack: null,
+			pillsPerBlister: null,
+			totalPills: 60,
+			looseTablets: 60,
+			packageAmountValue: null,
+			packageAmountUnit: null,
+		};
 
 		render(
 			<MobileEditModal
@@ -217,12 +235,22 @@ describe("MobileEditModal", () => {
 				medicationEnrichment={createMedicationEnrichmentState({
 					query: "Wegovy",
 					results: [result],
+					appliedSelection: {
+						name: "Wegovy",
+						genericName: "Semaglutide",
+						therapeuticArea: null,
+						indication: null,
+						atcCode: null,
+						source: "rxnorm",
+					},
 					strengthOptions: [strengthOption],
+					packageOptions: [packageOption],
 				})}
 				onMedicationEnrichmentQueryChange={onMedicationEnrichmentQueryChange}
 				onMedicationEnrichmentSearch={onMedicationEnrichmentSearch}
 				onMedicationEnrichmentApply={onMedicationEnrichmentApply}
 				onMedicationEnrichmentStrengthApply={onMedicationEnrichmentStrengthApply}
+				onMedicationEnrichmentPackageApply={onMedicationEnrichmentPackageApply}
 			/>
 		);
 
@@ -232,12 +260,76 @@ describe("MobileEditModal", () => {
 		});
 		fireEvent.keyDown(screen.getByPlaceholderText("form.enrichment.searchPlaceholder"), { key: "Enter" });
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.applyAction" }));
-		fireEvent.click(screen.getByRole("button", { name: "0.25 mg" }));
 
 		expect(onMedicationEnrichmentQueryChange).toHaveBeenCalledWith("Ozempic");
 		expect(onMedicationEnrichmentSearch).toHaveBeenCalledTimes(1);
 		expect(onMedicationEnrichmentApply).toHaveBeenCalledWith(result);
-		expect(onMedicationEnrichmentStrengthApply).toHaveBeenCalledWith(strengthOption);
+		expect(onMedicationEnrichmentStrengthApply).not.toHaveBeenCalled();
+		expect(onMedicationEnrichmentPackageApply).not.toHaveBeenCalled();
+	});
+
+	it("forwards inline package option clicks with the preferred package payload in the mobile editor", () => {
+		const onMedicationEnrichmentApply = vi.fn();
+		const packageOptions = [
+			{
+				label: "10 tablets in 1 blister (59651-083-14)",
+				description: "10 tablets in 1 blister (59651-083-14)",
+				packageType: "blister" as const,
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 10,
+				totalPills: 10,
+				looseTablets: 0,
+				packageAmountValue: null,
+				packageAmountUnit: null,
+			},
+			{
+				label: "30 tablets in 1 bottle (00093-7424-56)",
+				description: "30 tablets in 1 bottle (00093-7424-56)",
+				packageType: "bottle" as const,
+				packCount: 1,
+				blistersPerPack: null,
+				pillsPerBlister: null,
+				totalPills: 30,
+				looseTablets: 30,
+				packageAmountValue: null,
+				packageAmountUnit: null,
+			},
+		];
+		const result = {
+			code: "NDC-123",
+			name: "Ibuprofen",
+			genericName: "Ibuprofen",
+			authorisationHolder: null,
+			therapeuticArea: null,
+			matchType: "brand" as const,
+			genericStatus: "unknown" as const,
+			authorisationDate: null,
+			source: "openfda" as const,
+			packageOptions,
+		};
+
+		render(
+			<MobileEditModal
+				{...defaultProps}
+				medicationEnrichment={createMedicationEnrichmentState({
+					query: "Ibuprofen",
+					results: [result],
+				})}
+				onMedicationEnrichmentQueryChange={vi.fn()}
+				onMedicationEnrichmentSearch={vi.fn()}
+				onMedicationEnrichmentApply={onMedicationEnrichmentApply}
+				onMedicationEnrichmentStrengthApply={vi.fn()}
+				onMedicationEnrichmentPackageApply={vi.fn()}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
+		const packageButtons = document.querySelectorAll<HTMLButtonElement>(".medication-enrichment-package-choice-button");
+		expect(packageButtons).toHaveLength(2);
+		fireEvent.click(packageButtons[1]);
+
+		expect(onMedicationEnrichmentApply).toHaveBeenCalledWith(result, packageOptions[1]);
 	});
 
 	it("groups medication start and end date fields in one stacked date pair", () => {

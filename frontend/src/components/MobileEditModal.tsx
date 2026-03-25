@@ -16,6 +16,7 @@ import type {
 	FormIntake,
 	FormState,
 	Medication,
+	MedicationEnrichmentPackageOption,
 	MedicationEnrichmentSearchResult,
 	MedicationEnrichmentStrengthOption,
 } from "../types";
@@ -59,12 +60,15 @@ const EMPTY_MEDICATION_ENRICHMENT: MedicationEnrichmentViewModel = {
 	hasSearched: false,
 	searchError: null,
 	applyingCode: null,
+	applyingPackageLabel: null,
 	activeResultCode: null,
 	appliedSelection: null,
 	enrichError: null,
 	meta: null,
 	strengthOptions: [],
+	packageOptions: [],
 	appliedStrengthLabel: null,
+	appliedPackageLabel: null,
 };
 
 export interface MobileEditModalProps {
@@ -76,8 +80,12 @@ export interface MobileEditModalProps {
 	onMedicationEnrichmentQueryChange?: (value: string) => void;
 	onMedicationEnrichmentSearch?: () => void;
 	onMedicationEnrichmentLoadMore?: () => void;
-	onMedicationEnrichmentApply?: (result: MedicationEnrichmentSearchResult) => void;
+	onMedicationEnrichmentApply?: (
+		result: MedicationEnrichmentSearchResult,
+		preferredPackageOption?: MedicationEnrichmentPackageOption
+	) => void;
 	onMedicationEnrichmentStrengthApply?: (option: MedicationEnrichmentStrengthOption) => void;
+	onMedicationEnrichmentPackageApply?: (option: MedicationEnrichmentPackageOption) => void;
 	fieldErrors: FieldErrors;
 	saving: boolean;
 	formSaved: boolean;
@@ -136,6 +144,7 @@ export function MobileEditModal({
 	onMedicationEnrichmentLoadMore = () => {},
 	onMedicationEnrichmentApply = () => {},
 	onMedicationEnrichmentStrengthApply = () => {},
+	onMedicationEnrichmentPackageApply = () => {},
 	fieldErrors,
 	saving,
 	formSaved,
@@ -492,6 +501,7 @@ export function MobileEditModal({
 											onLoadMoreResults={onMedicationEnrichmentLoadMore}
 											onApplyResult={onMedicationEnrichmentApply}
 											onApplyStrength={onMedicationEnrichmentStrengthApply}
+											onApplyPackage={onMedicationEnrichmentPackageApply}
 										/>
 										<div className="full date-pair-group">
 											<label className="date-pair-field">

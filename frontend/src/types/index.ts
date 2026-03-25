@@ -47,6 +47,7 @@ export type MedicationEnrichmentSearchResult = {
 	genericStatus: MedicationEnrichmentGenericStatus;
 	authorisationDate: string | null;
 	source: MedicationEnrichmentSearchSource;
+	packageOptions: MedicationEnrichmentPackageOption[];
 };
 
 export type MedicationEnrichmentSearchResponse = {
@@ -60,6 +61,19 @@ export type MedicationEnrichmentStrengthOption = {
 	label: string;
 	pillWeightMg: number | null;
 	doseUnit: MedicationEnrichmentDoseUnit | null;
+};
+
+export type MedicationEnrichmentPackageOption = {
+	label: string;
+	description: string;
+	packageType: PackageType;
+	packCount: number;
+	blistersPerPack: number | null;
+	pillsPerBlister: number | null;
+	totalPills: number | null;
+	looseTablets: number | null;
+	packageAmountValue: number | null;
+	packageAmountUnit: PackageAmountUnit | null;
 };
 
 export type MedicationEnrichmentEnrichResponse = {
@@ -76,6 +90,7 @@ export type MedicationEnrichmentEnrichResponse = {
 		genericName: string | null;
 		medicationForm: MedicationForm | null;
 		strengthOptions: MedicationEnrichmentStrengthOption[];
+		packageOptions: MedicationEnrichmentPackageOption[];
 	};
 	meta: {
 		rxNormMatched: boolean;

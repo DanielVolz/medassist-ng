@@ -120,7 +120,7 @@ Share your medication schedule with others via a public link.
 </details>
 
 ### Medication Setup
-- Optional multi-source lookup inside the medication editor on desktop and mobile, prioritizing `RxNorm` and `openFDA` before `EMA`
+- Optional multi-source lookup inside the medication editor on desktop and mobile, prioritizing `RxNorm` and `openFDA` before `EMA`, including package-size suggestions when the source exposes them
 - Explicit review-and-apply flow with low-risk suggestions only
 - Additional lookup results can be revealed on demand instead of being hard-cut at the initial small result set
 - Honest incomplete-coverage messaging with source labels; manual entry always remains available

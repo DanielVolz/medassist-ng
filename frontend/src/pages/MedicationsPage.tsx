@@ -23,6 +23,7 @@ import type {
 	FormState,
 	Medication,
 	MedicationEnrichmentEnrichResponse,
+	MedicationEnrichmentPackageOption,
 	MedicationEnrichmentSearchResponse,
 	MedicationEnrichmentSearchResult,
 	MedicationEnrichmentStrengthOption,
@@ -55,6 +56,7 @@ import {
 	WEEKDAY_CODES,
 } from "../utils/intake-schedule";
 import { log } from "../utils/logger";
+import { countMedicationEnrichmentDisplayResults } from "../utils/medication-enrichment";
 
 function userStorageKey(userId: number | undefined, key: string): string {
 	return userId ? `user_${userId}_${key}` : key;
@@ -64,6 +66,7 @@ const OBSOLETE_SECTION_STORAGE_KEY = "medicationsShowObsolete";
 const MEDICATION_ENRICHMENT_INITIAL_LIMIT = 6;
 const MEDICATION_ENRICHMENT_LIMIT_STEP = 6;
 const MEDICATION_ENRICHMENT_MAX_LIMIT = 20;
+const OPEN_FDA_PACKAGE_CODE_PATTERN = /\s*\(([0-9A-Z]{4,}(?:-[0-9A-Z]{1,})+)\)\s*/gi;
 
 type MedicationEnrichmentState = {
 	query: string;
@@ -74,12 +77,15 @@ type MedicationEnrichmentState = {
 	hasSearched: boolean;
 	searchError: string | null;
 	applyingCode: string | null;
+	applyingPackageLabel: string | null;
 	activeResultCode: string | null;
 	appliedSelection: MedicationEnrichmentEnrichResponse["selection"] | null;
 	enrichError: string | null;
 	meta: MedicationEnrichmentEnrichResponse["meta"] | null;
 	strengthOptions: MedicationEnrichmentStrengthOption[];
+	packageOptions: MedicationEnrichmentPackageOption[];
 	appliedStrengthLabel: string | null;
+	appliedPackageLabel: string | null;
 };
 
 function createMedicationEnrichmentState(
@@ -95,12 +101,15 @@ function createMedicationEnrichmentState(
 		hasSearched: false,
 		searchError: null,
 		applyingCode: null,
+		applyingPackageLabel: null,
 		activeResultCode: null,
 		appliedSelection: null,
 		enrichError: null,
 		meta: null,
 		strengthOptions: [],
+		packageOptions: [],
 		appliedStrengthLabel: null,
+		appliedPackageLabel: null,
 	};
 }
 
@@ -108,6 +117,40 @@ function normalizeMedicationEnrichmentDoseUnit(unit: MedicationEnrichmentStrengt
 	if (unit === "IU") return "units";
 	if (unit === "mg" || unit === "g" || unit === "mcg" || unit === "ml" || unit === "units") return unit;
 	return null;
+}
+
+function normalizeMedicationEnrichmentPackageText(value: string): string {
+	return value.replace(OPEN_FDA_PACKAGE_CODE_PATTERN, " ").replace(/\s+/g, " ").trim();
+}
+
+function hasMatchingMedicationEnrichmentPackageStructure(
+	left: MedicationEnrichmentPackageOption,
+	right: MedicationEnrichmentPackageOption
+): boolean {
+	return (
+		left.packageType === right.packageType &&
+		left.packCount === right.packCount &&
+		left.blistersPerPack === right.blistersPerPack &&
+		left.pillsPerBlister === right.pillsPerBlister &&
+		left.totalPills === right.totalPills &&
+		left.looseTablets === right.looseTablets &&
+		left.packageAmountValue === right.packageAmountValue &&
+		left.packageAmountUnit === right.packageAmountUnit
+	);
+}
+
+function matchesMedicationEnrichmentPackageOption(
+	left: MedicationEnrichmentPackageOption,
+	right: MedicationEnrichmentPackageOption
+): boolean {
+	const leftTexts = [left.label, left.description].map(normalizeMedicationEnrichmentPackageText).filter(Boolean);
+	const rightTexts = [right.label, right.description].map(normalizeMedicationEnrichmentPackageText).filter(Boolean);
+	const hasMatchingText = leftTexts.some((text) => rightTexts.includes(text));
+
+	return (
+		hasMatchingMedicationEnrichmentPackageStructure(left, right) ||
+		(hasMatchingText && left.packageType === right.packageType)
+	);
 }
 
 function applyMedicationEnrichmentSuggestions(
@@ -153,7 +196,53 @@ function applyMedicationEnrichmentStrength(
 	};
 }
 
-async function getMedicationEnrichmentErrorMessage(response: Response, fallback: string): Promise<string> {
+function applyMedicationEnrichmentPackage(form: FormState, option: MedicationEnrichmentPackageOption): FormState {
+	const nextForm: FormState = {
+		...form,
+		packageType: option.packageType,
+		packCount: `${option.packCount}`,
+		blistersPerPack: option.blistersPerPack !== null ? `${option.blistersPerPack}` : "1",
+		pillsPerBlister: option.pillsPerBlister !== null ? `${option.pillsPerBlister}` : "1",
+		packageAmountValue: option.packageAmountValue !== null ? `${option.packageAmountValue}` : "",
+		packageAmountUnit: option.packageAmountUnit ?? form.packageAmountUnit,
+		totalPills: option.totalPills !== null ? `${option.totalPills}` : "",
+		looseTablets: option.looseTablets !== null ? `${option.looseTablets}` : "0",
+	};
+
+	if (option.packageType === "blister") {
+		return {
+			...nextForm,
+			totalPills: "",
+			looseTablets: "0",
+		};
+	}
+
+	if (option.packageType === "liquid_container") {
+		return {
+			...nextForm,
+			medicationForm: "liquid",
+		};
+	}
+
+	if (option.packageType === "tube") {
+		return {
+			...nextForm,
+			medicationForm: "topical",
+		};
+	}
+
+	return nextForm;
+}
+
+async function getMedicationEnrichmentErrorMessage(
+	response: Response,
+	fallback: string,
+	unauthorizedFallback: string
+): Promise<string> {
+	if (response.status === 401) {
+		return unauthorizedFallback;
+	}
+
 	try {
 		const errorBody = (await response.json()) as { error?: string; message?: string };
 		if (typeof errorBody?.error === "string" && errorBody.error.trim().length > 0) {
@@ -284,12 +373,15 @@ export function MedicationsPage() {
 	const [medicationEnrichment, setMedicationEnrichment] = useState<MedicationEnrichmentState>(() =>
 		createMedicationEnrichmentState()
 	);
+	const medicationEnrichmentQueryRef = useRef("");
 
 	const resetMedicationEnrichment = useCallback((query = "") => {
+		medicationEnrichmentQueryRef.current = query;
 		setMedicationEnrichment(createMedicationEnrichmentState(query));
 	}, []);
 
 	const handleMedicationEnrichmentQueryChange = useCallback((value: string) => {
+		medicationEnrichmentQueryRef.current = value;
 		setMedicationEnrichment((previous) => ({
 			...previous,
 			query: value,
@@ -297,21 +389,28 @@ export function MedicationsPage() {
 	}, []);
 
 	const performMedicationEnrichmentSearch = useCallback(
-		async (requestedLimit: number, preserveExistingResults = false) => {
-			const trimmedQuery = medicationEnrichment.query.trim();
+		async (
+			requestedLimit: number,
+			preserveExistingResults = false,
+			previousVisibleResultCount = countMedicationEnrichmentDisplayResults(medicationEnrichment.results),
+			queryOverride?: string
+		) => {
+			const trimmedQuery = (queryOverride ?? medicationEnrichmentQueryRef.current).trim();
 			if (!trimmedQuery) return;
 			const limit = Math.min(requestedLimit, MEDICATION_ENRICHMENT_MAX_LIMIT);
+			medicationEnrichmentQueryRef.current = trimmedQuery;
 
 			setMedicationEnrichment((previous) => ({
 				...previous,
 				query: trimmedQuery,
 				results: preserveExistingResults ? previous.results : [],
-				hasMoreResults: false,
+				hasMoreResults: preserveExistingResults ? previous.hasMoreResults : false,
 				resultLimit: limit,
 				isSearching: true,
 				hasSearched: preserveExistingResults ? previous.hasSearched : false,
 				searchError: null,
 				applyingCode: null,
+				applyingPackageLabel: null,
 				...(preserveExistingResults
 					? {}
 					: {
@@ -320,7 +419,9 @@ export function MedicationsPage() {
 							enrichError: null,
 							meta: null,
 							strengthOptions: [],
+							packageOptions: [],
 							appliedStrengthLabel: null,
+							appliedPackageLabel: null,
 						}),
 			}));
 
@@ -331,21 +432,50 @@ export function MedicationsPage() {
 				});
 
 				if (!response.ok) {
-					throw new Error(await getMedicationEnrichmentErrorMessage(response, t("form.enrichment.searchError")));
+					throw new Error(
+						await getMedicationEnrichmentErrorMessage(
+							response,
+							t("form.enrichment.searchError"),
+							t("form.enrichment.authRequired")
+						)
+					);
 				}
 
 				const data = (await response.json()) as MedicationEnrichmentSearchResponse;
+				const nextResults = Array.isArray(data.results) ? data.results : [];
+				const nextVisibleResultCount = countMedicationEnrichmentDisplayResults(nextResults);
+				const reachedResultLimitCap = limit >= MEDICATION_ENRICHMENT_MAX_LIMIT;
+				const shouldLoadUntilVisibleResultChanges =
+					preserveExistingResults &&
+					Boolean(data.hasMore) &&
+					!reachedResultLimitCap &&
+					nextVisibleResultCount <= previousVisibleResultCount;
 
-				setMedicationEnrichment((previous) => ({
-					...previous,
-					query: data.query,
-					results: Array.isArray(data.results) ? data.results : [],
-					hasMoreResults: Boolean(data.hasMore),
-					resultLimit: limit,
-					isSearching: false,
-					hasSearched: true,
-					searchError: null,
-				}));
+				if (shouldLoadUntilVisibleResultChanges) {
+					await performMedicationEnrichmentSearch(
+						Math.min(limit + MEDICATION_ENRICHMENT_LIMIT_STEP, MEDICATION_ENRICHMENT_MAX_LIMIT),
+						true,
+						previousVisibleResultCount,
+						trimmedQuery
+					);
+					return;
+				}
+
+				setMedicationEnrichment((previous) => {
+					const loadedAdditionalResults = !preserveExistingResults || nextResults.length > previous.results.length;
+
+					return {
+						...previous,
+						query: data.query,
+						results: nextResults,
+						hasMoreResults: Boolean(data.hasMore) && !reachedResultLimitCap && loadedAdditionalResults,
+						resultLimit: limit,
+						isSearching: false,
+						hasSearched: true,
+						searchError: null,
+					};
+				});
+				medicationEnrichmentQueryRef.current = data.query;
 			} catch (error) {
 				const message =
 					error instanceof Error && error.message.trim().length > 0 ? error.message : t("form.enrichment.searchError");
@@ -361,7 +491,7 @@ export function MedicationsPage() {
 				}));
 			}
 		},
-		[medicationEnrichment.query, t]
+		[medicationEnrichment.query, medicationEnrichment.results, t]
 	);
 
 	const handlePendingMedicationImageSelection = useCallback(
@@ -408,6 +538,15 @@ export function MedicationsPage() {
 			return next;
 		});
 	}, [user?.id]);
+
+	const handleMedicationEnrichmentSearch = useCallback(async () => {
+		await performMedicationEnrichmentSearch(
+			MEDICATION_ENRICHMENT_INITIAL_LIMIT,
+			false,
+			countMedicationEnrichmentDisplayResults(medicationEnrichment.results),
+			medicationEnrichmentQueryRef.current
+		);
+	}, [medicationEnrichment.results, performMedicationEnrichmentSearch]);
 
 	const loadAllMeds = useCallback(async () => {
 		try {
@@ -462,17 +601,27 @@ export function MedicationsPage() {
 	const applicableMedicationEnrichmentStrengthOptions = useMemo(() => {
 		if (!allowsPillFormSelection(form.packageType)) return [];
 
-		return medicationEnrichment.strengthOptions.filter(
-			(option) => option.pillWeightMg !== null && normalizeMedicationEnrichmentDoseUnit(option.doseUnit) !== null
-		);
+		return [...medicationEnrichment.strengthOptions]
+			.filter(
+				(option) => option.pillWeightMg !== null && normalizeMedicationEnrichmentDoseUnit(option.doseUnit) !== null
+			)
+			.sort((left, right) => {
+				const leftWeight = left.pillWeightMg ?? Number.POSITIVE_INFINITY;
+				const rightWeight = right.pillWeightMg ?? Number.POSITIVE_INFINITY;
+				if (leftWeight !== rightWeight) {
+					return leftWeight - rightWeight;
+				}
+				return left.label.localeCompare(right.label, undefined, { numeric: true });
+			});
 	}, [form.packageType, medicationEnrichment.strengthOptions]);
 
-	const handleMedicationEnrichmentSearch = useCallback(async () => {
-		await performMedicationEnrichmentSearch(MEDICATION_ENRICHMENT_INITIAL_LIMIT);
-	}, [performMedicationEnrichmentSearch]);
-
 	const handleMedicationEnrichmentLoadMore = useCallback(async () => {
-		if (medicationEnrichment.isSearching || !medicationEnrichment.hasMoreResults) return;
+		if (
+			medicationEnrichment.isSearching ||
+			!medicationEnrichment.hasMoreResults ||
+			medicationEnrichment.resultLimit >= MEDICATION_ENRICHMENT_MAX_LIMIT
+		)
+			return;
 		await performMedicationEnrichmentSearch(
 			Math.min(medicationEnrichment.resultLimit + MEDICATION_ENRICHMENT_LIMIT_STEP, MEDICATION_ENRICHMENT_MAX_LIMIT),
 			true
@@ -485,16 +634,19 @@ export function MedicationsPage() {
 	]);
 
 	const handleMedicationEnrichmentApply = useCallback(
-		async (result: MedicationEnrichmentSearchResult) => {
+		async (result: MedicationEnrichmentSearchResult, preferredPackageOption?: MedicationEnrichmentPackageOption) => {
 			setMedicationEnrichment((previous) => ({
 				...previous,
 				applyingCode: result.code,
+				applyingPackageLabel: preferredPackageOption?.label ?? null,
 				activeResultCode: result.code,
 				enrichError: null,
 				appliedSelection: null,
 				meta: null,
 				strengthOptions: [],
+				packageOptions: [],
 				appliedStrengthLabel: null,
+				appliedPackageLabel: null,
 			}));
 
 			try {
@@ -512,12 +664,32 @@ export function MedicationsPage() {
 				});
 
 				if (!response.ok) {
-					throw new Error(await getMedicationEnrichmentErrorMessage(response, t("form.enrichment.applyError")));
+					throw new Error(
+						await getMedicationEnrichmentErrorMessage(
+							response,
+							t("form.enrichment.applyError"),
+							t("form.enrichment.authRequired")
+						)
+					);
 				}
 
 				const data = (await response.json()) as MedicationEnrichmentEnrichResponse;
 				let nextForm = applyMedicationEnrichmentSuggestions(form, data.suggestions);
+				let appliedPackageLabel: string | null = null;
 				let appliedStrengthLabel: string | null = null;
+				const matchedPreferredPackageOption = preferredPackageOption
+					? (data.suggestions.packageOptions.find((option) =>
+							matchesMedicationEnrichmentPackageOption(option, preferredPackageOption)
+						) ?? null)
+					: null;
+
+				if (matchedPreferredPackageOption) {
+					nextForm = applyMedicationEnrichmentPackage(nextForm, matchedPreferredPackageOption);
+					appliedPackageLabel = matchedPreferredPackageOption.label;
+				} else if (data.suggestions.packageOptions.length === 1) {
+					nextForm = applyMedicationEnrichmentPackage(nextForm, data.suggestions.packageOptions[0]);
+					appliedPackageLabel = data.suggestions.packageOptions[0].label;
+				}
 
 				if (allowsPillFormSelection(nextForm.packageType) && data.suggestions.strengthOptions.length === 1) {
 					const autoAppliedForm = applyMedicationEnrichmentStrength(nextForm, data.suggestions.strengthOptions[0]);
@@ -531,12 +703,15 @@ export function MedicationsPage() {
 				setMedicationEnrichment((previous) => ({
 					...previous,
 					applyingCode: null,
+					applyingPackageLabel: null,
 					activeResultCode: result.code,
 					appliedSelection: data.selection,
 					enrichError: null,
 					meta: data.meta,
 					strengthOptions: data.suggestions.strengthOptions,
+					packageOptions: data.suggestions.packageOptions,
 					appliedStrengthLabel,
+					appliedPackageLabel,
 				}));
 			} catch (error) {
 				const message =
@@ -545,12 +720,15 @@ export function MedicationsPage() {
 				setMedicationEnrichment((previous) => ({
 					...previous,
 					applyingCode: null,
+					applyingPackageLabel: null,
 					activeResultCode: null,
 					appliedSelection: null,
 					enrichError: message,
 					meta: null,
 					strengthOptions: [],
+					packageOptions: [],
 					appliedStrengthLabel: null,
+					appliedPackageLabel: null,
 				}));
 			}
 		},
@@ -566,6 +744,19 @@ export function MedicationsPage() {
 			setMedicationEnrichment((previous) => ({
 				...previous,
 				appliedStrengthLabel: option.label,
+			}));
+		},
+		[setForm]
+	);
+
+	const handleMedicationEnrichmentPackageApply = useCallback(
+		(option: MedicationEnrichmentPackageOption) => {
+			setForm((currentForm) => applyMedicationEnrichmentPackage(currentForm, option));
+			setMedicationEnrichment((previous) => ({
+				...previous,
+				appliedPackageLabel: option.label,
+				applyingPackageLabel: null,
+				appliedStrengthLabel: null,
 			}));
 		},
 		[setForm]
@@ -1635,6 +1826,7 @@ export function MedicationsPage() {
 										onLoadMoreResults={handleMedicationEnrichmentLoadMore}
 										onApplyResult={handleMedicationEnrichmentApply}
 										onApplyStrength={handleMedicationEnrichmentStrengthApply}
+										onApplyPackage={handleMedicationEnrichmentPackageApply}
 									/>
 									<div className="full date-pair-group">
 										<label className="date-pair-field">
@@ -2300,6 +2492,7 @@ export function MedicationsPage() {
 				onMedicationEnrichmentLoadMore={handleMedicationEnrichmentLoadMore}
 				onMedicationEnrichmentApply={handleMedicationEnrichmentApply}
 				onMedicationEnrichmentStrengthApply={handleMedicationEnrichmentStrengthApply}
+				onMedicationEnrichmentPackageApply={handleMedicationEnrichmentPackageApply}
 				fieldErrors={fieldErrors}
 				saving={saving}
 				formSaved={formSaved}

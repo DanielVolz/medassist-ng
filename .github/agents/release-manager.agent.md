@@ -494,6 +494,12 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
 
 All three labels trigger the `add-to-project.yml` workflow, which automatically adds the issue to the Project board.
 
+### Weekly Triage Report Hygiene
+
+- There must never be more than one open `Weekly Triage Report - YYYY-MM-DD` issue at the same time.
+- Before a new weekly triage report issue is created, close any older open weekly triage report issue and leave a short closing comment.
+- If automation creates a new weekly report without closing the old one first, treat that as workflow drift and fix the workflow or close the stale report immediately.
+
 ---
 
 ## Complete Workflow Summary

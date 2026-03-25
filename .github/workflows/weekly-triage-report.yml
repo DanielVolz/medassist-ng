@@ -68,6 +68,36 @@ jobs:
             const title = `${{ steps.summary.outputs.title }}`;
             const body = `${{ steps.summary.outputs.body }}`;
 
+            const existingReports = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              labels: 'triage',
+              per_page: 100,
+            });
+
+            for (const issue of existingReports) {
+              if (issue.pull_request) {
+                continue;
+              }
+
+              if (issue.title.startsWith('Weekly Triage Report - ') && issue.title !== title) {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  body: 'Closing this older weekly triage report before publishing the next one so only one weekly report issue stays open at a time.',
+                });
+
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                });
+              }
+            }
+
             await github.rest.issues.create({
               owner,
               repo,

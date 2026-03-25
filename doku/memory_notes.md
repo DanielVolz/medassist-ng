@@ -19,3 +19,12 @@ Purpose: persistent agent work memory to survive context loss.
 - Decisions: Kept the stock/refill doku history entries while resolving add/add conflicts and combined both branches' MedicationsPage tests in the shared file.
 - Files touched: doku/memory_notes.md, doku/report.md, frontend/src/test/pages/MedicationsPage.test.tsx.
 - Follow-up: Re-run the minimum frontend validation and push the conflict-resolution commit for PR #475.
+
+- Task: Review and merge the open Dependabot pull requests after verifying scope and CI state.
+- Decisions: Merged only dependency-only PRs with acceptable checks; accepted skipped jobs on the root-only tooling bump because the diff did not touch frontend or backend runtime code.
+- Merged PRs: #468 (`@biomejs/biome` root bump), #469 (frontend dependency group bump), #470 (backend dependency group bump).
+- Follow-up: Synced local `main` to commit `39c19ab` and confirmed there are no remaining open Dependabot PRs from this reviewed set.
+
+- Task: Investigate why last week's weekly triage report issue stayed open after a newer report was created.
+- Root cause: `.github/workflows/weekly-triage-report.yml` always created a new issue and had no cleanup step for older open weekly report issues; `.github/agents/release-manager.agent.md` also lacked an explicit weekly-report closure rule.
+- Fix: Added workflow logic to close older open weekly triage reports before publishing the new one and added a dedicated "Weekly Triage Report Hygiene" rule to the release-manager agent instructions.

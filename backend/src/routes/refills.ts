@@ -197,18 +197,21 @@ export async function refillRoutes(app: FastifyInstance) {
 				? Math.max(0, remainingPrescriptionRefills - consumedRefills)
 				: (med.prescriptionRemainingRefills ?? null);
 
+			const refillBaselineAt = new Date();
 			const updatePayload: {
 				packCount: number;
 				looseTablets: number;
 				totalPills?: number;
 				packageAmountValue?: number;
 				prescriptionRemainingRefills: number | null;
+				lastStockCorrectionAt: Date;
 				updatedAt: Date;
 			} = {
 				packCount: newPackCount,
 				looseTablets: newLooseTablets,
 				prescriptionRemainingRefills: newRemainingRefills,
-				updatedAt: new Date(),
+				lastStockCorrectionAt: refillBaselineAt,
+				updatedAt: refillBaselineAt,
 			};
 
 			if (isCountBasedAmountPackage) {

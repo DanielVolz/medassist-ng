@@ -646,4 +646,58 @@ describe("MedicationsPage form interactions", () => {
 		expect(screen.getAllByText("form.enrichment.applied").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getByText("form.enrichment.appliedStrength")).toBeInTheDocument();
 	});
+
+	it("shows liquid stock against configured multi-container capacity in the list", () => {
+		const liquidMed = {
+			...mockMeds[0],
+			id: 2,
+			name: "Liquid Multi",
+			genericName: "Liquid Generic",
+			packageType: "liquid_container" as const,
+			packCount: 4,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			packageAmountValue: 150,
+			packageAmountUnit: "ml" as const,
+			totalPills: 450,
+			looseTablets: 450,
+		};
+		mockContextValue = createMockContext({
+			meds: [liquidMed],
+			coverageByMed: {
+				"Liquid Multi": { medsLeft: 450 },
+			},
+		});
+
+		renderPage();
+
+		expect(screen.getByText(/medications\.details\.stock: 450 \/ 600 ml/i)).toBeInTheDocument();
+		expect(screen.queryByText(/medications\.details\.stock: 450 \/ 450 ml/i)).not.toBeInTheDocument();
+	});
+
+	it("shows bottle current stock against configured bottle capacity in the list", () => {
+		const bottleMed = {
+			...mockMeds[0],
+			id: 3,
+			name: "Bottle Capacity",
+			packageType: "bottle" as const,
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 100,
+			looseTablets: 20,
+			stockAdjustment: 50,
+		};
+		mockContextValue = createMockContext({
+			meds: [bottleMed],
+			coverageByMed: {
+				"Bottle Capacity": { medsLeft: 70 },
+			},
+		});
+
+		renderPage();
+
+		expect(screen.getByText(/medications\.details\.stock: 70 \/ 100 common\.pills/i)).toBeInTheDocument();
+		expect(screen.queryByText(/medications\.details\.stock: 100 \/ 100 common\.pills/i)).not.toBeInTheDocument();
+	});
 });

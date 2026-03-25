@@ -113,6 +113,56 @@ describe("ReportModal", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
+	it("exports bottle current stock separately from configured capacity", async () => {
+		const onClose = vi.fn();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				1: {
+					dosesTaken: 0,
+					automaticDosesTaken: 0,
+					dosesDismissed: 0,
+					firstDoseAt: null,
+					lastDoseAt: null,
+					refills: [],
+				},
+			}),
+		});
+
+		render(
+			<ReportModal
+				isOpen={true}
+				onClose={onClose}
+				medications={[
+					createMedication({
+						packageType: "bottle",
+						packCount: 0,
+						blistersPerPack: 1,
+						pillsPerBlister: 1,
+						totalPills: 100,
+						looseTablets: 20,
+						stockAdjustment: 50,
+					}),
+				]}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole("radio", { name: /report\.formatTxt/i }));
+		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
+
+		await waitFor(() => {
+			expect(URL.createObjectURL).toHaveBeenCalled();
+		});
+
+		const [blob] = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls.at(-1) ?? [];
+		const content = await (blob as Blob).text();
+
+		expect(content).toContain("report.docTotalCapacity: 100");
+		expect(content).toContain("report.docCurrentStock: 70 common.pills");
+		expect(content).not.toContain("report.docCurrentStock: 100 common.pills");
+		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
 	it("generates printable report when PDF format is selected", async () => {
 		const onClose = vi.fn();
 		const mockWrite = vi.fn();

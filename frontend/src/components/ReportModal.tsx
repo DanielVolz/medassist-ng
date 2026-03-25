@@ -5,7 +5,7 @@ import { useScrollLock } from "../hooks/useScrollLock";
 import type { Medication } from "../types";
 import {
 	getMedDisplayName,
-	getPackageSize,
+	getMedTotal,
 	isAmountBasedPackageType,
 	isLiquidContainerPackageType,
 	isTubePackageType,
@@ -313,9 +313,9 @@ function getTotalCapacityLabel(med: Medication, t: TFn): string {
 
 function getCurrentStockText(med: Medication, t: TFn): string {
 	if (isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)) {
-		return `${getPackageSize(med)} ${t(getTubeUnitKey(med))}`;
+		return `${getMedTotal(med)} ${t(getTubeUnitKey(med))}`;
 	}
-	return `${getPackageSize(med)} ${t("common.pills")}`;
+	return `${getMedTotal(med)} ${t("common.pills")}`;
 }
 
 function getReportPackageTypeLabel(med: Medication, t: TFn): string {

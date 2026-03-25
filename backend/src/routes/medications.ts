@@ -464,7 +464,7 @@ const stockAdjustmentBodySchema = {
 		looseTablets: { type: "integer", minimum: 0 },
 		totalPills: { type: "integer", minimum: 0 },
 		packageAmountValue: { type: "integer", minimum: 0 },
-		packCount: { type: "integer", minimum: 1 },
+		packCount: { type: "integer", minimum: 0 },
 	},
 	example: {
 		stockAdjustment: -2,
@@ -1238,8 +1238,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 			) {
 				return reply.badRequest("packageAmountValue must be a non-negative integer");
 			}
-			if (packCount !== undefined && (typeof packCount !== "number" || !Number.isInteger(packCount) || packCount < 1)) {
-				return reply.badRequest("packCount must be an integer >= 1");
+			if (packCount !== undefined && (typeof packCount !== "number" || !Number.isInteger(packCount) || packCount < 0)) {
+				return reply.badRequest("packCount must be a non-negative integer");
 			}
 
 			const updateFields: {
@@ -1258,12 +1258,16 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 			const packageType = normalizePackageType(existing.packageType);
 			const allowsAmountBaseUpdate = isTubePackageType(packageType) || isLiquidContainerPackageType(packageType);
+			const allowsBottleCapacityUpdate = packageType === "bottle";
 			if (allowsAmountBaseUpdate) {
 				if (totalPills !== undefined) updateFields.totalPills = totalPills;
 				if (looseTablets !== undefined) updateFields.looseTablets = looseTablets;
 				if (packageAmountValue !== undefined) updateFields.packageAmountValue = packageAmountValue;
-				if (packCount !== undefined) updateFields.packCount = packCount;
 			}
+			if (allowsBottleCapacityUpdate && totalPills !== undefined) {
+				updateFields.totalPills = totalPills;
+			}
+			if (packCount !== undefined) updateFields.packCount = packCount;
 			if (looseTablets !== undefined) {
 				updateFields.looseTablets = looseTablets;
 			}

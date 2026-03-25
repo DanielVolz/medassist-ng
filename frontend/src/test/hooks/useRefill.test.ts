@@ -89,6 +89,25 @@ describe("useRefill", () => {
 		expect(window.history.pushState).toHaveBeenCalledWith({ modal: "refill" }, "");
 	});
 
+	it("resets stale refill form state when opening modal", () => {
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.setRefillPacks(4);
+			result.current.setRefillLoose(9);
+			result.current.setUsePrescriptionRefill(true);
+		});
+
+		act(() => {
+			result.current.openRefillModal();
+		});
+
+		expect(result.current.showRefillModal).toBe(true);
+		expect(result.current.refillPacks).toBe(1);
+		expect(result.current.refillLoose).toBe(0);
+		expect(result.current.usePrescriptionRefill).toBe(false);
+	});
+
 	it("closes refill modal using history back", () => {
 		const { result } = renderHook(() => useRefill());
 
@@ -325,42 +344,197 @@ describe("useRefill", () => {
 		expect(mockLoadMeds).toHaveBeenCalled();
 	});
 
-	it("stock correction uses correct base for bottle type medications", async () => {
-		// BUG FIX: submitStockCorrection used blister formula (packCount * blistersPerPack * pillsPerBlister + looseTablets)
-		// for ALL medications, but getMedTotal() uses only looseTablets + stockAdjustment for bottles.
-		// This mismatch caused the correction to compute the wrong stockAdjustment.
+	it("resets blister stock correction payload to zero base fields", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
-		const bottleMed: Medication = {
-			id: 4,
-			name: "Pills in a Box",
-			packageType: "bottle",
-			packCount: 1,
-			blistersPerPack: 1,
-			pillsPerBlister: 1,
-			looseTablets: 150,
-			stockAdjustment: -2,
+		const blisterMed: Medication = {
+			id: 8,
+			name: "Zero Reset Blister",
+			packageType: "blister",
+			packCount: 2,
+			blistersPerPack: 3,
+			pillsPerBlister: 10,
+			looseTablets: 5,
+			stockAdjustment: -4,
 			takenBy: [],
 			blisters: [{ usage: 1, every: 1, start: "2026-01-31T20:27:00" }],
 			updatedAt: null,
 		};
 
-		// getMedTotal for bottle = looseTablets + stockAdjustment = 150 + (-2) = 148
-		// getPackageSize for bottle = looseTablets = 150
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(blisterMed, {
+				all: [{ name: "Zero Reset Blister", medsLeft: 31, daysLeft: 31 }] as Coverage[],
+			});
+			result.current.setEditStockFullBlisters(0);
+			result.current.setEditStockPartialBlisterPills(0);
+			result.current.setEditStockLoosePills(0);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(8, blisterMed, mockLoadMeds);
+		});
+
+		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+		const body = JSON.parse(requestInit.body as string);
+		expect(body).toEqual({
+			stockAdjustment: 0,
+			packCount: 0,
+			looseTablets: 0,
+		});
+	});
+
+	it("resets bottle stock correction payload to zero base fields", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const bottleMed: Medication = {
+			id: 9,
+			name: "Zero Reset Bottle",
+			packageType: "bottle",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 100,
+			looseTablets: 20,
+			stockAdjustment: 5,
+			takenBy: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-31T20:27:00" }],
+			updatedAt: null,
+		};
 
 		const mockLoadMeds = vi.fn();
 		const { result } = renderHook(() => useRefill());
 
-		// Pre-fill for bottle: full=0, partial=current total
 		act(() => {
 			result.current.openEditStockModal(bottleMed, {
-				all: [{ name: "Pills in a Box", medsLeft: 148, daysLeft: 148 }] as Coverage[],
+				all: [{ name: "Zero Reset Bottle", medsLeft: 25, daysLeft: 25 }] as Coverage[],
+			});
+			result.current.setEditStockFullBlisters(0);
+			result.current.setEditStockPartialBlisterPills(0);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(9, bottleMed, mockLoadMeds);
+		});
+
+		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+		const body = JSON.parse(requestInit.body as string);
+		expect(body).toEqual({
+			stockAdjustment: 0,
+			packCount: 0,
+			looseTablets: 0,
+			totalPills: 0,
+		});
+	});
+
+	it.each([
+		{
+			label: "liquid container",
+			id: 10,
+			med: {
+				id: 10,
+				name: "Zero Reset Liquid",
+				medicationForm: "liquid",
+				packageType: "liquid_container",
+				doseUnit: "ml",
+				packCount: 1,
+				packageAmountValue: 180,
+				packageAmountUnit: "ml",
+				blistersPerPack: 1,
+				pillsPerBlister: 1,
+				totalPills: 180,
+				looseTablets: 180,
+				stockAdjustment: 0,
+				takenBy: [],
+				blisters: [{ usage: 5, every: 1, start: "2026-01-31T20:27:00" }],
+				updatedAt: null,
+			} satisfies Medication,
+			coverage: 180,
+		},
+		{
+			label: "tube",
+			id: 11,
+			med: {
+				id: 11,
+				name: "Zero Reset Tube",
+				medicationForm: "topical",
+				packageType: "tube",
+				doseUnit: "units",
+				packCount: 2,
+				packageAmountValue: 40,
+				packageAmountUnit: "g",
+				blistersPerPack: 1,
+				pillsPerBlister: 1,
+				totalPills: 80,
+				looseTablets: 80,
+				stockAdjustment: 0,
+				takenBy: [],
+				blisters: [{ usage: 2, every: 1, start: "2026-01-31T20:27:00" }],
+				updatedAt: null,
+			} satisfies Medication,
+			coverage: 80,
+		},
+	])("resets $label stock correction payload to zero amount-base fields", async ({ id, med, coverage }) => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(med, {
+				all: [{ name: med.name, medsLeft: coverage, daysLeft: coverage }] as Coverage[],
+			});
+			result.current.setEditStockFullBlisters(0);
+			result.current.setEditStockPartialBlisterPills(0);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(id, med, mockLoadMeds);
+		});
+
+		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+		const body = JSON.parse(requestInit.body as string);
+		expect(body).toEqual({
+			stockAdjustment: 0,
+			packCount: 0,
+			looseTablets: 0,
+			totalPills: 0,
+			packageAmountValue: 0,
+		});
+	});
+
+	it("stock correction uses loose tablets rather than bottle capacity as the base", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const bottleMed: Medication = {
+			id: 4,
+			name: "Capacity Bottle",
+			packageType: "bottle",
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 100,
+			looseTablets: 20,
+			stockAdjustment: 5,
+			takenBy: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-31T20:27:00" }],
+			updatedAt: null,
+		};
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(bottleMed, {
+				all: [{ name: "Capacity Bottle", medsLeft: 25, daysLeft: 25 }] as Coverage[],
 			});
 		});
 
-		// User sets total to 149 pills.
+		// User corrects current stock to 70 pills.
 		act(() => {
-			result.current.setEditStockPartialBlisterPills(149);
+			result.current.setEditStockPartialBlisterPills(70);
 		});
 
 		await act(async () => {
@@ -376,7 +550,8 @@ describe("useRefill", () => {
 		);
 		expect(fetchCall).toBeDefined();
 		const body = JSON.parse(fetchCall![1].body as string);
-		expect(body.stockAdjustment).toBe(-1); // NOT -2 (the old bug)
+		expect(body.stockAdjustment).toBe(50);
+		expect(body.looseTablets).toBeUndefined();
 	});
 
 	it("stock correction clamps blister totals to package size", async () => {

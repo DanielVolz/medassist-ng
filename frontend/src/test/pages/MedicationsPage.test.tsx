@@ -51,7 +51,6 @@ const createMockContext = (overrides = {}) => ({
 	submitRefill: vi.fn(),
 	coverageByMed: {},
 	...overrides,
-	
 });
 
 const createMockFormHook = (overrides = {}) => ({

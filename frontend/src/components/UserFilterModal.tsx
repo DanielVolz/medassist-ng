@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { MedicationAvatar } from "../components";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, IntakeUnit, Medication, StockThresholds } from "../types";
-import { getMedDisplayName, getMedTotal, getPackageSize } from "../types";
+import { getMedDisplayName, getMedTotal, getStockDisplayCapacity } from "../types";
 import { allowsPillFormSelection, isLiquidContainerPackageType, isTubePackageType } from "../types/package-profiles";
 import { formatNumber } from "../utils";
 import { getSystemLocale } from "../utils/formatters";
@@ -99,7 +99,7 @@ export function UserFilterModal({
 						const status = medCoverage
 							? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med.packageType)
 							: getStockStatus(null, getMedTotal(med), settings, med.packageType);
-						const packageSize = getPackageSize(med);
+						const packageSize = getStockDisplayCapacity(med);
 						const currentStock = medCoverage ? medCoverage.medsLeft : getMedTotal(med);
 
 						// Get intakes relevant to this person

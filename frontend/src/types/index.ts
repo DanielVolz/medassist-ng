@@ -15,7 +15,7 @@ export {
 } from "./package-profiles";
 
 import type { PackageType } from "./package-profiles";
-import { isAmountBasedPackageType } from "./package-profiles";
+import { isAmountBasedPackageType, isLiquidContainerPackageType, isTubePackageType } from "./package-profiles";
 
 // Common medication dose units
 export type DoseUnit = "mg" | "g" | "mcg" | "ml" | "units";
@@ -379,7 +379,10 @@ export function getMedDisplayName(med: { name: string; genericName?: string | nu
 // Helper Functions for Medication Calculations
 // =============================================================================
 
-type MedLike = Pick<Medication, "packCount" | "blistersPerPack" | "pillsPerBlister" | "looseTablets"> & {
+type MedLike = Pick<
+	Medication,
+	"packCount" | "blistersPerPack" | "pillsPerBlister" | "looseTablets" | "packageAmountValue"
+> & {
 	stockAdjustment?: number;
 	packageType?: PackageType;
 	totalPills?: number | null;
@@ -387,6 +390,10 @@ type MedLike = Pick<Medication, "packCount" | "blistersPerPack" | "pillsPerBlist
 
 /** Calculate total pills including stockAdjustment */
 export function getMedTotal(med: MedLike): number {
+	if (med.packageType === "bottle") {
+		return med.looseTablets + (med.stockAdjustment ?? 0);
+	}
+
 	// Amount-based package types store their current base stock directly
 	// in totalPills (fallback looseTablets for legacy rows).
 	if (isAmountBasedPackageType(med.packageType)) {
@@ -399,10 +406,27 @@ export function getMedTotal(med: MedLike): number {
 
 /** Get the base package size (without stockAdjustment) */
 export function getPackageSize(med: MedLike): number {
+	if (med.packageType === "bottle") {
+		return med.totalPills ?? med.looseTablets;
+	}
+
 	// Amount-based package types use totalPills as base capacity
 	if (isAmountBasedPackageType(med.packageType)) {
 		return med.totalPills ?? med.looseTablets;
 	}
 	// For blister type, calculate from packs + loose
 	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;
+}
+
+/** Get the configured structural capacity used for stock display/limits. */
+export function getStockDisplayCapacity(med: MedLike): number {
+	if (isLiquidContainerPackageType(med.packageType) || isTubePackageType(med.packageType)) {
+		const packageCount = Math.max(1, med.packCount || 1);
+		const packageAmountValue = Number(med.packageAmountValue ?? 0);
+		if (Number.isFinite(packageAmountValue) && packageAmountValue > 0) {
+			return packageCount * packageAmountValue;
+		}
+	}
+
+	return getPackageSize(med);
 }

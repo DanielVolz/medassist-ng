@@ -344,6 +344,58 @@ describe("UserFilterModal", () => {
 		expect(screen.queryByText(/600\/600 .*common\.pills/)).not.toBeInTheDocument();
 	});
 
+	it("shows liquid stock against configured multi-container capacity", () => {
+		const onClose = vi.fn();
+		const onOpenMedDetail = vi.fn();
+
+		const liquidMedication: Medication = {
+			...mockMedication,
+			id: 13,
+			name: "Liquid Multi",
+			genericName: "Liquid Generic",
+			packageType: "liquid_container",
+			packCount: 4,
+			packageAmountValue: 150,
+			packageAmountUnit: "ml",
+			totalPills: 450,
+			looseTablets: 450,
+			intakes: [
+				{
+					usage: 2,
+					every: 1,
+					start: "2024-01-01T09:32:00",
+					intakeUnit: "ml",
+					takenBy: "John",
+					intakeRemindersEnabled: true,
+				},
+			],
+		};
+
+		const liquidCoverage: Coverage = {
+			name: "Liquid Multi",
+			medsLeft: 450,
+			daysLeft: 30,
+			depletionDate: null,
+			depletionTime: null,
+			nextDose: null,
+		};
+
+		render(
+			<UserFilterModal
+				selectedUser="John"
+				meds={[liquidMedication]}
+				coverage={{ all: [liquidCoverage] }}
+				settings={defaultSettings}
+				onClose={onClose}
+				onClearUser={vi.fn()}
+				onOpenMedDetail={onOpenMedDetail}
+			/>
+		);
+
+		expect(screen.getByText("450/600 form.packageAmountUnitMl")).toBeInTheDocument();
+		expect(screen.queryByText("450/450 form.packageAmountUnitMl")).not.toBeInTheDocument();
+	});
+
 	it("renders liquid container intakes and stock in ml", () => {
 		const onClose = vi.fn();
 		const onOpenMedDetail = vi.fn();

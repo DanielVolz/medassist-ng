@@ -921,6 +921,39 @@ describe("MedDetailModal stock overflow warning", () => {
 	});
 });
 
+describe("MedDetailModal amount-based stock display", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("shows current liquid stock against configured structural capacity", () => {
+		const liquidMed: Medication = {
+			...mockMedication,
+			id: 20,
+			name: "Liquid Multi",
+			packageType: "liquid_container",
+			packCount: 4,
+			packageAmountValue: 150,
+			packageAmountUnit: "ml",
+			totalPills: 450,
+			looseTablets: 450,
+		};
+		const liquidCoverage: Coverage = {
+			name: "Liquid Multi",
+			medsLeft: 450,
+			daysLeft: 45,
+			depletionDate: "2024-04-01",
+			depletionTime: Date.now() + 45 * 86400000,
+			nextDose: null,
+		};
+
+		render(<MedDetailModal {...defaultProps} selectedMed={liquidMed} coverage={{ all: [liquidCoverage] }} />);
+
+		expect(screen.getByText("450 / 600 form.packageAmountUnitMl")).toBeInTheDocument();
+		expect(screen.queryByText("450 / 450 form.packageAmountUnitMl")).not.toBeInTheDocument();
+	});
+});
+
 describe("MedDetailModal bottle package type", () => {
 	const bottleMed: Medication = {
 		id: 2,

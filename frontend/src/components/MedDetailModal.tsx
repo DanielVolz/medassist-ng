@@ -20,6 +20,7 @@ import {
 	getMedDisplayName,
 	getMedTotal,
 	getPackageSize,
+	getStockDisplayCapacity,
 	type IntakeUnit,
 	isAmountBasedPackageType,
 	isLiquidContainerPackageType,
@@ -213,9 +214,10 @@ export function MedDetailModal({
 
 	const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(selectedMed));
 	const packageSize = getPackageSize(selectedMed);
+	const stockDisplayCapacity = getStockDisplayCapacity(selectedMed);
 	// Structural max = sealed package capacity only (excludes pre-existing looseTablets).
 	const structuralMax = isAmountBasedPackageType(selectedMed.packageType)
-		? (selectedMed.totalPills ?? packageSize)
+		? stockDisplayCapacity
 		: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
 	const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
 	const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
@@ -226,7 +228,7 @@ export function MedDetailModal({
 	const currentPartialPills = Math.max(0, stock.openBlisterPills);
 	const currentLoosePills = Math.max(0, stock.loosePills);
 	const stockDisplayTotal = isAmountBasedPackageType(selectedMed.packageType)
-		? (selectedMed.totalPills ?? packageSize)
+		? stockDisplayCapacity
 		: Math.max(0, structuralMax);
 	const packageCount = Math.max(1, Number(selectedMed.packCount) || 1);
 	const amountPerPackage = (() => {

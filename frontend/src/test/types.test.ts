@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIELD_LIMITS, getMedTotal, getPackageSize } from "../types";
+import { FIELD_LIMITS, getMedTotal, getPackageSize, getStockDisplayCapacity } from "../types";
 
 describe("getMedTotal", () => {
 	it("calculates total pills without stock adjustment", () => {
@@ -85,6 +85,20 @@ describe("getMedTotal", () => {
 		expect(getMedTotal(med)).toBe(140); // 150 + (-10) = 140
 	});
 
+	it("uses loose stock for bottle current total even when explicit capacity exists", () => {
+		const med = {
+			packageType: "bottle" as const,
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 100,
+			looseTablets: 20,
+			stockAdjustment: 50,
+		};
+
+		expect(getMedTotal(med)).toBe(70);
+	});
+
 	it("ignores blister fields for bottle type", () => {
 		const med = {
 			packageType: "bottle" as const,
@@ -158,6 +172,20 @@ describe("getPackageSize", () => {
 		expect(getPackageSize(med)).toBe(200);
 	});
 
+	it("returns explicit bottle capacity instead of current stock", () => {
+		const med = {
+			packageType: "bottle" as const,
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 100,
+			looseTablets: 70,
+			stockAdjustment: 25,
+		};
+
+		expect(getPackageSize(med)).toBe(100);
+	});
+
 	it("ignores blister fields for bottle type", () => {
 		const med = {
 			packageType: "bottle" as const,
@@ -192,6 +220,62 @@ describe("getPackageSize", () => {
 
 		expect(getPackageSize(tube)).toBe(600);
 		expect(getPackageSize(liquid)).toBe(450);
+	});
+});
+
+describe("getStockDisplayCapacity", () => {
+	it("returns configured multi-container capacity for liquid containers", () => {
+		const liquid = {
+			packageType: "liquid_container" as const,
+			packCount: 4,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			packageAmountValue: 150,
+			totalPills: 450,
+			looseTablets: 450,
+		};
+
+		expect(getStockDisplayCapacity(liquid)).toBe(600);
+	});
+
+	it("returns configured multi-container capacity for tubes", () => {
+		const tube = {
+			packageType: "tube" as const,
+			packCount: 4,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			packageAmountValue: 150,
+			totalPills: 450,
+			looseTablets: 450,
+		};
+
+		expect(getStockDisplayCapacity(tube)).toBe(600);
+	});
+
+	it("falls back to current package size when amount metadata is missing", () => {
+		const liquid = {
+			packageType: "liquid_container" as const,
+			packCount: 4,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 450,
+			looseTablets: 450,
+		};
+
+		expect(getStockDisplayCapacity(liquid)).toBe(450);
+	});
+
+	it("keeps bottle semantics unchanged", () => {
+		const bottle = {
+			packageType: "bottle" as const,
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 100,
+			looseTablets: 80,
+		};
+
+		expect(getStockDisplayCapacity(bottle)).toBe(100);
 	});
 });
 

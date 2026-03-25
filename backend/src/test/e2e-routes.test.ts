@@ -1867,6 +1867,133 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.newStock.looseTablets).toBe(15); // 5 + 10
 		});
 
+		it("should reset automatic stock baseline on refill so pre-refill dose history no longer reduces current stock", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Automatic Refill Baseline",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 14,
+					looseTablets: 0,
+					blisters: [{ usage: 1, every: 1, start: "2024-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const preRefillDoseDateOnlyMs = new Date("2025-01-05T00:00:00.000Z").getTime();
+			const preRefillTakenAtMs = new Date("2025-01-05T10:00:00.000Z").getTime();
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed)
+				      VALUES (?, ?, ?, 0)`,
+				args: [userId, `${medId}-0-${preRefillDoseDateOnlyMs}`, preRefillTakenAtMs],
+			});
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 0 },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			expect(refillResponse.json().newStock.packCount).toBe(2);
+
+			const tomorrow = new Date();
+			tomorrow.setDate(tomorrow.getDate() + 1);
+			const nextWeek = new Date();
+			nextWeek.setDate(nextWeek.getDate() + 7);
+
+			const usageResponse = await app.inject({
+				method: "POST",
+				url: "/medications/usage",
+				payload: {
+					startDate: tomorrow.toISOString(),
+					endDate: nextWeek.toISOString(),
+				},
+			});
+
+			expect(usageResponse.statusCode).toBe(200);
+			const med = usageResponse.json().find((item: Record<string, unknown>) => item.medicationId === medId);
+			expect(med).toBeDefined();
+			expect(med.totalPills).toBe(28);
+			expect(med.currentPills).toBe(28);
+		});
+
+		it("should reset manual stock baseline on refill for liquid_container packages before later dose tracking", async () => {
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, stock_calculation_mode) VALUES (?, 'manual')`,
+				args: [userId],
+			});
+
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Manual Liquid Refill Baseline",
+					medicationForm: "liquid",
+					packageType: "liquid_container",
+					doseUnit: "ml",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					packageAmountValue: 5,
+					packageAmountUnit: "ml",
+					totalPills: 5,
+					looseTablets: 5,
+					blisters: [{ usage: 5, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const preRefillDoseDateOnlyMs = new Date("2025-01-05T00:00:00.000Z").getTime();
+			const preRefillTakenAtMs = new Date("2025-01-05T10:00:00.000Z").getTime();
+			await testClient.execute({
+				sql: `INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed)
+				      VALUES (?, ?, ?, 0)`,
+				args: [userId, `${medId}-0-${preRefillDoseDateOnlyMs}`, preRefillTakenAtMs],
+			});
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 1, loosePillsAdded: 0 },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			expect(refillData.refill.loosePillsAdded).toBe(5);
+			expect(refillData.newStock.totalPills).toBe(10);
+
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.lastStockCorrectionAt).toBeTruthy();
+			expect(med.totalPills).toBe(10);
+			expect(med.looseTablets).toBe(10);
+
+			const firstPostRefillDoseId = `${medId}-0-${new Date("2026-01-06T00:00:00.000Z").getTime()}`;
+			const firstDoseResponse = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: firstPostRefillDoseId },
+			});
+			expect(firstDoseResponse.statusCode).toBe(200);
+			expect(firstDoseResponse.json()).toEqual({ success: true });
+
+			const secondPostRefillDoseId = `${medId}-0-${new Date("2026-01-07T00:00:00.000Z").getTime()}`;
+			const secondDoseResponse = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: secondPostRefillDoseId },
+			});
+			expect(secondDoseResponse.statusCode).toBe(200);
+			expect(secondDoseResponse.json()).toEqual({ success: true });
+		});
+
 		it("should decrement remaining refills and mark history when using prescription refill", async () => {
 			const createResponse = await app.inject({
 				method: "POST",
@@ -2132,6 +2259,187 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.stockAdjustment).toBe(-83);
 			expect(data.lastStockCorrectionAt).toBeTruthy();
 			expect(data.updatedAt).toBeTruthy();
+		});
+
+		it("should accept packCount set to 0 in stock adjustment patch", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Pack Count Zero Patch Med",
+					packageType: "blister",
+					packCount: 1,
+					blistersPerPack: 2,
+					pillsPerBlister: 10,
+					looseTablets: 4,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: 0, packCount: 0, looseTablets: 0 },
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.stockAdjustment).toBe(0);
+
+			const getResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(getResponse.statusCode).toBe(200);
+			const med = getResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(0);
+			expect(med.looseTablets).toBe(0);
+			expect(med.stockAdjustment).toBe(0);
+		});
+
+		it("should persist blister zero reset with packCount 0", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Blister Zero Reset Med",
+					packageType: "blister",
+					packCount: 2,
+					blistersPerPack: 3,
+					pillsPerBlister: 10,
+					looseTablets: 5,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: 0, packCount: 0, looseTablets: 0 },
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.stockAdjustment).toBe(0);
+
+			const getResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(getResponse.statusCode).toBe(200);
+			const med = getResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(0);
+			expect(med.looseTablets).toBe(0);
+			expect(med.stockAdjustment).toBe(0);
+		});
+
+		it("should persist bottle zero reset with packCount 0 and zero totals", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Bottle Zero Reset Med",
+					packageType: "bottle",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					totalPills: 100,
+					looseTablets: 20,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: { stockAdjustment: 0, packCount: 0, looseTablets: 0, totalPills: 0 },
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.stockAdjustment).toBe(0);
+
+			const getResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(getResponse.statusCode).toBe(200);
+			const med = getResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(0);
+			expect(med.looseTablets).toBe(0);
+			expect(med.totalPills).toBe(0);
+			expect(med.stockAdjustment).toBe(0);
+		});
+
+		it.each([
+			{
+				label: "liquid container",
+				payload: {
+					name: "Liquid Zero Reset Med",
+					medicationForm: "liquid",
+					packageType: "liquid_container",
+					doseUnit: "ml",
+					packCount: 1,
+					packageAmountValue: 180,
+					packageAmountUnit: "ml",
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					totalPills: 180,
+					looseTablets: 180,
+					blisters: [{ usage: 5, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			},
+			{
+				label: "tube",
+				payload: {
+					name: "Tube Zero Reset Med",
+					medicationForm: "topical",
+					packageType: "tube",
+					doseUnit: "units",
+					packCount: 2,
+					packageAmountValue: 40,
+					packageAmountUnit: "g",
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					totalPills: 80,
+					looseTablets: 80,
+					blisters: [{ usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			},
+		])("should persist $label zero reset with zeroed amount-base fields", async ({ payload }) => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload,
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const response = await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: {
+					stockAdjustment: 0,
+					packCount: 0,
+					looseTablets: 0,
+					totalPills: 0,
+					packageAmountValue: 0,
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.stockAdjustment).toBe(0);
+
+			const getResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(getResponse.statusCode).toBe(200);
+			const med = getResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(0);
+			expect(med.looseTablets).toBe(0);
+			expect(med.totalPills).toBe(0);
+			expect(med.packageAmountValue).toBe(0);
+			expect(med.stockAdjustment).toBe(0);
 		});
 
 		it("should persist stockAdjustment in GET /medications", async () => {
@@ -2853,26 +3161,83 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.medications[0].totalPills).toBe(65);
 		});
 
-		it("should calculate correct refill totalPillsAdded for bottle type", async () => {
+		it("should refill bottle stock from loose tablets without mutating explicit capacity", async () => {
+			const bottleWithExplicitCapacity = {
+				...bottleMedication,
+				totalPills: 100,
+				looseTablets: 20,
+			};
 			const createResponse = await app.inject({
 				method: "POST",
 				url: "/medications",
-				payload: bottleMedication,
+				payload: bottleWithExplicitCapacity,
 			});
 			const medId = createResponse.json().id;
 
-			// Refill bottle: only loosePillsAdded matters, packs should add 0 pills
+			// Refill bottle: only loosePillsAdded should affect current stock.
 			const refillResponse = await app.inject({
 				method: "POST",
 				url: `/medications/${medId}/refill`,
-				payload: { packsAdded: 0, loosePillsAdded: 30 },
+				payload: { packsAdded: 0, loosePillsAdded: 50 },
 			});
 
 			expect(refillResponse.statusCode).toBe(200);
 			const data = refillResponse.json();
-			expect(data.refill.totalPillsAdded).toBe(30);
-			// newStock.totalPills should be looseTablets only (no blister math)
-			expect(data.newStock.totalPills).toBe(150); // 120 + 30
+			expect(data.refill.totalPillsAdded).toBe(50);
+			// Bottle current stock must be based on looseTablets, not configured capacity.
+			expect(data.newStock.totalPills).toBe(70);
+			expect(data.newStock.looseTablets).toBe(70);
+
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(0);
+			expect(med.looseTablets).toBe(70);
+			// Persisted bottle capacity must remain unchanged on later GET /medications.
+			expect(med.totalPills).toBe(100);
+		});
+
+		it("should use one prescription refill for bottle package refills and ignore pack count", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					...bottleMedication,
+					prescriptionEnabled: true,
+					prescriptionAuthorizedRefills: 3,
+					prescriptionRemainingRefills: 2,
+					prescriptionLowRefillThreshold: 1,
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: { packsAdded: 3, loosePillsAdded: 30, usePrescription: true },
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			expect(refillData.refill.packsAdded).toBe(0);
+			expect(refillData.refill.loosePillsAdded).toBe(30);
+			expect(refillData.prescription.used).toBe(true);
+			expect(refillData.prescription.remainingRefills).toBe(1);
+			expect(refillData.newStock.packCount).toBe(0);
+			expect(refillData.newStock.looseTablets).toBe(150);
+
+			const historyResponse = await app.inject({
+				method: "GET",
+				url: `/medications/${medId}/refills`,
+			});
+			expect(historyResponse.statusCode).toBe(200);
+			expect(historyResponse.json()[0]).toMatchObject({
+				packsAdded: 0,
+				loosePillsAdded: 30,
+				usedPrescription: true,
+			});
 		});
 
 		it("should calculate correct refill totalPillsAdded for blister type", async () => {
@@ -2893,6 +3258,16 @@ describe("E2E Tests with Real Routes", () => {
 			expect(refillResponse.statusCode).toBe(200);
 			const data = refillResponse.json();
 			expect(data.refill.totalPillsAdded).toBe(35); // 1*30 + 5
+			expect(data.newStock.packCount).toBe(3);
+			expect(data.newStock.looseTablets).toBe(10);
+			expect(data.newStock.totalPills).toBe(100);
+
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(3);
+			expect(med.looseTablets).toBe(10);
 		});
 
 		it("should keep liquid_container refill additive and preserve amount baseline", async () => {
@@ -2929,6 +3304,85 @@ describe("E2E Tests with Real Routes", () => {
 			expect(med).toBeTruthy();
 			expect(med.totalPills).toBe(360);
 			expect(med.looseTablets).toBe(360);
+		});
+
+		it.each([
+			{
+				name: "liquid_container",
+				payload: {
+					...liquidContainerMedication,
+					packCount: 1,
+					packageAmountValue: 180,
+					packageAmountUnit: "ml",
+					totalPills: 180,
+					looseTablets: 180,
+					prescriptionEnabled: true,
+					prescriptionAuthorizedRefills: 3,
+					prescriptionRemainingRefills: 2,
+					prescriptionLowRefillThreshold: 1,
+				},
+				refillPayload: { packsAdded: 0, loosePillsAdded: 180, usePrescription: true },
+				expectedPacksAdded: 1,
+				expectedLooseAdded: 180,
+				expectedRemainingRefills: 1,
+				expectedTotalPills: 360,
+			},
+			{
+				name: "tube",
+				payload: {
+					...tubeMedication,
+					prescriptionEnabled: true,
+					prescriptionAuthorizedRefills: 4,
+					prescriptionRemainingRefills: 3,
+					prescriptionLowRefillThreshold: 1,
+				},
+				refillPayload: { packsAdded: 0, loosePillsAdded: 80, usePrescription: true },
+				expectedPacksAdded: 2,
+				expectedLooseAdded: 80,
+				expectedRemainingRefills: 1,
+				expectedTotalPills: 160,
+			},
+		])("should derive amount-based refill counts and decrement prescription remaining refills for $name", async ({
+			payload,
+			refillPayload,
+			expectedPacksAdded,
+			expectedLooseAdded,
+			expectedRemainingRefills,
+			expectedTotalPills,
+		}) => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload,
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: refillPayload,
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			expect(refillData.refill.packsAdded).toBe(expectedPacksAdded);
+			expect(refillData.refill.loosePillsAdded).toBe(expectedLooseAdded);
+			expect(refillData.refill.totalPillsAdded).toBe(expectedLooseAdded);
+			expect(refillData.prescription.used).toBe(true);
+			expect(refillData.prescription.remainingRefills).toBe(expectedRemainingRefills);
+			expect(refillData.newStock.totalPills).toBe(expectedTotalPills);
+
+			const historyResponse = await app.inject({
+				method: "GET",
+				url: `/medications/${medId}/refills`,
+			});
+			expect(historyResponse.statusCode).toBe(200);
+			expect(historyResponse.json()[0]).toMatchObject({
+				packsAdded: expectedPacksAdded,
+				loosePillsAdded: expectedLooseAdded,
+				usedPrescription: true,
+			});
 		});
 
 		it("should keep tube refill additive and preserve amount baseline", async () => {

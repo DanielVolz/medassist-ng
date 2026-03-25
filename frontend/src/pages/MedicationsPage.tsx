@@ -34,8 +34,10 @@ import {
 	DOSE_UNITS,
 	FIELD_LIMITS,
 	getMedDisplayName,
+	getMedTotal,
 	getPackageProfile,
 	getPackageSize,
+	getStockDisplayCapacity,
 	isAmountBasedPackageType,
 	isLiquidContainerPackageType,
 	isTubePackageType,
@@ -1583,23 +1585,35 @@ export function MedicationsPage() {
 												</div>
 											)}
 											<div className="med-total">
-												{t("medications.details.stock")}:{" "}
-												{coverageByMed[getMedDisplayName(med)]
-													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
-													: getPackageSize(med)}{" "}
-												/ {getPackageSize(med)}
+												{(() => {
+													const stockDisplayCapacity = getStockDisplayCapacity(med);
+													const currentStock = coverageByMed[getMedDisplayName(med)]
+														? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
+														: getMedTotal(med);
+
+													return (
+														<>
+															{t("medications.details.stock")}: {currentStock} / {stockDisplayCapacity}
+														</>
+													);
+												})()}
 												{getMedicationStockSuffix(med)}
-												{(coverageByMed[getMedDisplayName(med)]
-													? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
-													: getPackageSize(med)) > getPackageSize(med) && (
-													<span
-														className="info-tooltip tooltip-align-left warning-text"
-														data-tooltip={t("tooltips.stockExceedsCapacity")}
-													>
-														{" "}
-														⚠️
-													</span>
-												)}
+												{(() => {
+													const stockDisplayCapacity = getStockDisplayCapacity(med);
+													const currentStock = coverageByMed[getMedDisplayName(med)]
+														? Math.round(coverageByMed[getMedDisplayName(med)].medsLeft)
+														: getMedTotal(med);
+
+													return currentStock > stockDisplayCapacity ? (
+														<span
+															className="info-tooltip tooltip-align-left warning-text"
+															data-tooltip={t("tooltips.stockExceedsCapacity")}
+														>
+															{" "}
+															⚠️
+														</span>
+													) : null;
+												})()}
 											</div>
 										</div>
 									</div>

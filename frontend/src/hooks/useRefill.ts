@@ -70,12 +70,16 @@ export function useRefill(): UseRefillReturn {
 	const [editStockSaving, setEditStockSaving] = useState(false);
 	const [editStockMedication, setEditStockMedication] = useState<Medication | null>(null);
 
-	const clearRefillState = useCallback(() => {
-		setShowRefillModal(false);
+	const resetRefillForm = useCallback(() => {
 		setRefillPacks(1);
 		setRefillLoose(0);
 		setUsePrescriptionRefill(false);
 		setRefillSaving(false);
+	}, []);
+
+	const clearRefillState = useCallback(() => {
+		setShowRefillModal(false);
+		resetRefillForm();
 		setRefillHistory([]);
 		setRefillHistoryExpanded(false);
 		setShowEditStockModal(false);
@@ -84,7 +88,7 @@ export function useRefill(): UseRefillReturn {
 		setEditStockLoosePills(0);
 		setEditStockSaving(false);
 		setEditStockMedication(null);
-	}, []);
+	}, [resetRefillForm]);
 
 	// Load refill history for a medication
 	const loadRefillHistory = useCallback(async (medId: number) => {
@@ -190,9 +194,11 @@ export function useRefill(): UseRefillReturn {
 				const structuralMax = isAmountPackage
 					? (selectedMed.totalPills ?? getPackageSize(selectedMed))
 					: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
-				const correctedLiquidBottleCount = isLiquidPackage
-					? Math.max(1, finalFullBlisters)
-					: Math.max(1, selectedMed.packCount);
+				const isZeroReset = finalFullBlisters === 0 && finalPartialPills === 0 && finalLoosePills === 0;
+				let correctedLiquidBottleCount = Math.max(0, selectedMed.packCount);
+				if (isLiquidPackage) {
+					correctedLiquidBottleCount = isZeroReset ? 0 : Math.max(1, finalFullBlisters);
+				}
 				const liquidStructuralMax = isLiquidPackage
 					? correctedLiquidBottleCount * liquidAmountPerBottle
 					: structuralMax;
@@ -217,8 +223,10 @@ export function useRefill(): UseRefillReturn {
 				let baseTotal: number;
 				if (isLiquidPackage) {
 					baseTotal = liquidStructuralMax;
+				} else if (selectedMed.packageType === "bottle") {
+					baseTotal = selectedMed.looseTablets;
 				} else if (isAmountPackage) {
-					baseTotal = getPackageSize(selectedMed); // bottle: stockAdjustment relative to fixed looseTablets base
+					baseTotal = getPackageSize(selectedMed);
 				} else {
 					baseTotal = structuralMax + finalLoosePills; // blister: base = sealed capacity + NEW loose pills
 				}
@@ -236,7 +244,17 @@ export function useRefill(): UseRefillReturn {
 				} = {
 					stockAdjustment: newStockAdjustment,
 				};
-				if (isTubePackage) {
+				if (isZeroReset) {
+					patchBody.stockAdjustment = 0;
+					patchBody.packCount = 0;
+					patchBody.looseTablets = 0;
+					if (selectedMed.packageType === "bottle" || isAmountPackage) {
+						patchBody.totalPills = 0;
+					}
+					if (isTubePackage || isLiquidPackage) {
+						patchBody.packageAmountValue = 0;
+					}
+				} else if (isTubePackage) {
 					// Tube has fixed count=1 and no automatic depletion.
 					// Correction must update the base amount fields directly.
 					patchBody.stockAdjustment = 0;
@@ -277,9 +295,10 @@ export function useRefill(): UseRefillReturn {
 	);
 
 	const openRefillModal = useCallback(() => {
+		resetRefillForm();
 		setShowRefillModal(true);
 		window.history.pushState({ modal: "refill" }, "");
-	}, []);
+	}, [resetRefillForm]);
 
 	const closeRefillModal = useCallback(() => {
 		if (showRefillModal) {

@@ -1,5 +1,7 @@
 /* =============================================================================
    Shared Schedule Page (Public)
+	Owns the shared schedule experience and the mobile-first public edit flow
+	outside the authenticated app-shell surface styles.
    ============================================================================= */
 .shared-schedule-page {
 	min-height: 100vh;

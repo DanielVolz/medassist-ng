@@ -1,5 +1,7 @@
 /* =============================================================================
-   Modal Base Styles
+	Modal Base Styles
+	Owns reusable overlay, container, animation, and shared modal primitives used
+	by the focused modal/domain layers.
    ============================================================================= */
 
 .modal-overlay {

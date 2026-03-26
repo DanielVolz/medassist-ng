@@ -1,5 +1,7 @@
 /* =============================================================================
    Refill Modal & History
+	Owns medication workflow overlays and history views that are intentionally
+	kept separate from broader app-surface styling.
    ============================================================================= */
 .refill-modal {
 	max-width: 500px;

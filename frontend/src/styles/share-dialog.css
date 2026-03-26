@@ -1,5 +1,6 @@
 /* =============================================================================
    Share Dialog
+	Owns the focused sharing dialog flow and related share-specific form states.
    ============================================================================= */
 .share-dialog-modal {
 	max-width: 480px;

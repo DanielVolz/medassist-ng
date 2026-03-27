@@ -24,6 +24,8 @@ You are the release manager for **MedAssist-ng**. Your job is to guide code from
 - **No CI-first failures policy**: do not use GitHub CI as first detection for obvious test/lint regressions; those must be reproducible and fixed locally before PR creation.
 - **Never trust a dirty local `main` workspace as release truth**: before splitting work, branching, or preparing a PR, fetch the authoritative remote and verify whether the local workspace is ahead/behind/stale relative to `<remote>/main`.
 - **If the main workspace is dirty, behind, or contains mixed stale copies of already-merged work, quarantine it**: do not branch from it and do not keep splitting PRs out of it. Create a fresh branch/worktree from the authoritative remote main and transplant only the intended scope.
+- **`git stash` is temporary only**: use it only as a short-lived safety mechanism during an active transition. Never use stash as the final way to make a workspace appear clean, and never leave user changes hidden in stash at task completion unless the user explicitly asked for that exact outcome.
+- **"Local `main` must be clean" means zero leftover local changes**: when the user asks for a clean local `main`, finish with no uncommitted tracked changes, no leftover untracked files from the completed task, and no hidden task residue parked in stash as a substitute for cleanup.
 - **Track all work in the GitHub Project board.** Every PR should reference an issue. Move issues through the board as work progresses.
 - **ALWAYS verify Project board status after merge.** The `project-auto-done.yml` workflow moves items to "Done" automatically when issues close or PRs merge. Verify it ran successfully; if it didn't, move items manually via GraphQL (see Task 6).
 
@@ -72,6 +74,7 @@ This repository intentionally uses only two operational agents for CI/CD handoff
 - If the classification is unclear, stop using the dirty workspace as the source branch and move the intended scope into fresh worktrees from `<remote>/main`.
 - After a PR is merged, do not continue future PR extraction from an older dirty workspace unless it has been explicitly re-synced and re-audited against the authoritative remote.
 - **Cleanup is mandatory**: after a temporary worktree, scratch branch, or quarantine workspace is no longer needed, remove it promptly. Do not leave obsolete local worktrees hanging around in Source Control after the task is complete.
+- If `git stash` was used temporarily during the flow, either restore and resolve it or intentionally discard it before finishing. Do not end the task with a stash that merely hides leftover scope.
 
 ---
 
@@ -187,7 +190,8 @@ When code changes (features or bug fixes) are complete:
 2. If CI fails: analyze the failure, fix it, push again, and re-check.
 3. Once CI is green, **ask the user for merge confirmation**, then merge the PR via GitHub MCP using squash merge and branch deletion.
 4. Re-sync the authoritative local `main` before using it again as a source of truth for any next PR or release step. Do not continue from a previously dirty workspace without another source-of-truth audit.
-5. Switch back to main and pull:
+5. If the requested end state is a clean local `main`, verify that `git status` is empty and that no task-related stash entry remains as hidden residue.
+6. Switch back to main and pull:
    ```bash
    git checkout main
    git pull origin main

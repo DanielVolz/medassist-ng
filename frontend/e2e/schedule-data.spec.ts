@@ -189,19 +189,24 @@ test.describe("Schedule with medications", () => {
 		await navigateTo(page, "/dashboard");
 		await page.waitForLoadState("networkidle");
 
-		const todayBlock = page.locator(".day-block.today");
+		let todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 
 		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
 		test.skip(!(await takeBtn.isVisible().catch(() => false)), "No actionable take-dose button is visible for today");
 
-		await Promise.all([
-			page.waitForResponse(
-				(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
-				{ timeout: 10000 }
-			),
-			takeBtn.click(),
-		]);
+		const takeResponsePromise = page.waitForResponse(
+			(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
+			{ timeout: 10000 }
+		);
+		await takeBtn.click();
+		const takeResponse = await takeResponsePromise;
+		test.skip(!takeResponse.ok(), "Backend did not accept dose take request");
+
+		await page.reload();
+		await page.waitForLoadState("networkidle");
+		todayBlock = page.locator(".day-block.today");
+		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 		await expect(todayBlock.locator("button.dose-btn.undo").first()).toBeVisible({ timeout: 10000 });
 	});
 

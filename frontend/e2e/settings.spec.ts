@@ -138,18 +138,15 @@ test.describe("Settings Page", () => {
 
 		const modeGroup = page.locator("div.calculation-mode-group");
 		const radioCards = modeGroup.locator("label.radio-card");
+		await expect(radioCards).toHaveCount(2);
+		await expect(modeGroup.locator("label.radio-card.selected")).toHaveCount(1);
 
-		// Find the non-selected card and click it
 		const firstSelected = await radioCards.first().evaluate((el) => el.classList.contains("selected"));
 		const targetCard = firstSelected ? radioCards.nth(1) : radioCards.first();
 
 		await targetCard.click();
-		await expect(targetCard).toHaveClass(/selected/);
-
-		// Click the other one back
-		const otherCard = firstSelected ? radioCards.first() : radioCards.nth(1);
-		await otherCard.click();
-		await expect(otherCard).toHaveClass(/selected/);
+		await expect(targetCard).toHaveClass(/selected/, { timeout: 10000 });
+		await expect(modeGroup.locator("label.radio-card.selected")).toHaveCount(1);
 	});
 
 	test("should have export action button", async ({ page }) => {

@@ -11,7 +11,7 @@ import {
 } from "./components";
 import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
-import { AppProvider, UnsavedChangesProvider, useAppContext } from "./context";
+import { AppProvider, UnsavedChangesProvider, useAppContext, useShareContext } from "./context";
 import { useScrollLock } from "./hooks/useScrollLock";
 import { DashboardPage, MedicationsPage, PlannerPage, SchedulePage, SettingsPage, SharedOverviewPage } from "./pages";
 
@@ -134,6 +134,7 @@ function AppContent() {
 	const location = useLocation();
 	// Get shared state from AppContext
 	const ctx = useAppContext();
+	const shareCtx = useShareContext();
 	const {
 		// Medications
 		meds,
@@ -165,22 +166,6 @@ function AppContent() {
 		closeRefillModal,
 		openEditStockModal,
 		closeEditStockModal,
-		// Share
-		showShareDialog,
-		sharePeople,
-		shareSelectedPerson,
-		setShareSelectedPerson,
-		shareSelectedDays,
-		setShareSelectedDays,
-		shareGenerating,
-		shareLink,
-		setShareLink,
-		shareCopied,
-		setShareCopied,
-		generateShareLink,
-		copyShareLink,
-		closeShareDialog,
-		resetShareDialogState,
 		// Computed
 		coverage,
 		// Modal state
@@ -201,8 +186,23 @@ function AppContent() {
 		closeUserFilter,
 	} = ctx;
 
-	// Wrapper to pass meds to openShareDialog
-	const _openShareDialog = () => ctx.openShareDialog();
+	const {
+		showShareDialog,
+		sharePeople,
+		shareSelectedPerson,
+		setShareSelectedPerson,
+		shareSelectedDays,
+		setShareSelectedDays,
+		shareGenerating,
+		shareLink,
+		setShareLink,
+		shareCopied,
+		setShareCopied,
+		generateShareLink,
+		copyShareLink,
+		closeShareDialog,
+		resetShareDialogState,
+	} = shareCtx;
 
 	// Local-only state (not shared across components)
 	const [showProfile, setShowProfile] = useState(false);

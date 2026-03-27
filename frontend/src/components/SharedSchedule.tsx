@@ -7,6 +7,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
+import { ScheduleUsageTag } from "../features/schedule/components";
+import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
+import { toggleDateInSet } from "../features/schedule/interactions";
+import { loadScheduleCollapseState, saveCollapsedDaySet } from "../features/schedule/storage";
 import { useEscapeKey } from "../hooks";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
 import {
@@ -20,9 +24,8 @@ import {
 } from "../types";
 import { getSystemLocale } from "../utils/formatters";
 import { getIntakeDailyRate, getMedicationIntakes, iterateIntakeOccurrences } from "../utils/intake-schedule";
-import { convertLiquidUsageToMl, getLiquidCountUnitLabel } from "../utils/intake-units";
+import { convertLiquidUsageToMl } from "../utils/intake-units";
 import { getStockStatus, isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
-import { loadCollapsedDaysFromStorage } from "../utils/storage";
 import { MedicationAvatar } from "./MedicationAvatar";
 import { SharedMedicationOverviewSection } from "./SharedMedicationOverviewSection";
 
@@ -53,64 +56,17 @@ export function SharedSchedule() {
 		return convertLiquidUsageToMl(usage, unit);
 	};
 
-	const formatAmount = (value: number) => {
-		const rounded = Math.round(value * 100) / 100;
-		return String(rounded);
-	};
-
-	const formatLiquidUsageLabel = (usage: number, unit: IntakeUnit | null | undefined): string => {
-		const normalizedUsage = Number(usage);
-		if (!Number.isFinite(normalizedUsage) || normalizedUsage <= 0) {
-			return `0 ${t("form.packageAmountUnitMl")}`;
-		}
-
-		if (unit === "ml" || unit == null) {
-			return `${formatAmount(normalizedUsage)} ${t("form.packageAmountUnitMl")}`;
-		}
-
-		const mlTotal = convertLiquidUsageToMl(normalizedUsage, unit);
-		return `${formatAmount(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage, t)} ${formatAmount(mlTotal)} ${t("form.packageAmountUnitMl")}`;
-	};
-
 	const formatDoseUsageLabel = (
 		med: SharedScheduleData["medications"][number] | undefined,
 		usage: number,
 		intakeUnit?: IntakeUnit | null
-	) => {
-		if (isLiquidContainerMed(med)) {
-			return formatLiquidUsageLabel(usage, intakeUnit);
-		}
-		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
-	};
+	) => formatScheduleDoseUsageLabel(med, usage, t, intakeUnit);
 
 	const formatTotalUsageLabel = (
 		med: SharedScheduleData["medications"][number] | undefined,
 		total: number,
 		doses?: Array<{ usage: number; intakeUnit?: IntakeUnit | null }>
-	) => {
-		if (isLiquidContainerMed(med)) {
-			if (doses && doses.length > 0) {
-				const normalizedDoses = doses.filter((dose) => Number.isFinite(Number(dose.usage)) && Number(dose.usage) > 0);
-				if (normalizedDoses.length > 0) {
-					const allUnits = new Set(normalizedDoses.map((dose) => dose.intakeUnit ?? "ml"));
-					if (allUnits.size === 1) {
-						const onlyUnit = normalizedDoses[0]?.intakeUnit ?? "ml";
-						const totalUsageInUnit = normalizedDoses.reduce((sum, dose) => sum + Number(dose.usage), 0);
-						return formatLiquidUsageLabel(totalUsageInUnit, onlyUnit);
-					}
-
-					const totalMl = normalizedDoses.reduce(
-						(sum, dose) => sum + convertLiquidUsageToMl(Number(dose.usage), dose.intakeUnit ?? "ml"),
-						0
-					);
-					return `${formatAmount(totalMl)} ${t("form.packageAmountUnitMl")}`;
-				}
-			}
-			return `${formatAmount(total)} ${t("form.packageAmountUnitMl")}`;
-		}
-
-		return t("common.pillsTotal", { count: total });
-	};
+	) => formatScheduleTotalUsageLabel(med, total, t, doses);
 
 	// Theme preference: light, dark, or system
 	type ThemePreference = "light" | "dark" | "system";
@@ -172,7 +128,7 @@ export function SharedSchedule() {
 	// Load collapsed/expanded state from localStorage
 	useEffect(() => {
 		if (token && typeof window !== "undefined") {
-			const { collapsed, expanded } = loadCollapsedDaysFromStorage(
+			const { collapsed, expanded } = loadScheduleCollapseState(
 				`share_${token}_collapsedDays`,
 				`share_${token}_expandedDays`
 			);
@@ -185,24 +141,14 @@ export function SharedSchedule() {
 	function toggleDayCollapse(dateStr: string, isAutoCollapsed: boolean) {
 		if (isAutoCollapsed) {
 			setManuallyExpandedDays((prev) => {
-				const next = new Set(prev);
-				if (next.has(dateStr)) {
-					next.delete(dateStr);
-				} else {
-					next.add(dateStr);
-				}
-				if (token) localStorage.setItem(`share_${token}_expandedDays`, JSON.stringify([...next]));
+				const next = toggleDateInSet(prev, dateStr);
+				if (token) saveCollapsedDaySet(`share_${token}_expandedDays`, next);
 				return next;
 			});
 		} else {
 			setManuallyCollapsedDays((prev) => {
-				const next = new Set(prev);
-				if (next.has(dateStr)) {
-					next.delete(dateStr);
-				} else {
-					next.add(dateStr);
-				}
-				if (token) localStorage.setItem(`share_${token}_collapsedDays`, JSON.stringify([...next]));
+				const next = toggleDateInSet(prev, dateStr);
+				if (token) saveCollapsedDaySet(`share_${token}_collapsedDays`, next);
 				return next;
 			});
 		}
@@ -977,9 +923,9 @@ export function SharedSchedule() {
 																		</div>
 																	</div>
 																	<div className="tag-row">
-																		<span className="tag subtle">
+																		<ScheduleUsageTag>
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
-																		</span>
+																		</ScheduleUsageTag>
 																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
 																	</div>
 																</div>
@@ -1192,9 +1138,9 @@ export function SharedSchedule() {
 																		</div>
 																	</div>
 																	<div className="tag-row">
-																		<span className="tag subtle">
+																		<ScheduleUsageTag>
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
-																		</span>
+																		</ScheduleUsageTag>
 																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
 																	</div>
 																</div>
@@ -1394,9 +1340,9 @@ export function SharedSchedule() {
 																		</div>
 																	</div>
 																	<div className="tag-row">
-																		<span className="tag subtle">
+																		<ScheduleUsageTag>
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
-																		</span>
+																		</ScheduleUsageTag>
 																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
 																	</div>
 																</div>

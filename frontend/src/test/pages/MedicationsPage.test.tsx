@@ -120,11 +120,15 @@ let mockContextValue = createMockContext();
 let mockFormHookValue = createMockFormHook();
 const fetchMock = vi.fn();
 
-vi.mock("../../hooks", () => ({
-	useMedicationForm: () => mockFormHookValue,
-	useUnsavedChangesWarning: () => ({}),
-	useModalHistory: vi.fn(),
-}));
+vi.mock("../../hooks", async () => {
+	const actual = await vi.importActual<typeof import("../../hooks")>("../../hooks");
+	return {
+		...actual,
+		useMedicationForm: () => mockFormHookValue,
+		useUnsavedChangesWarning: () => ({}),
+		useModalHistory: vi.fn(),
+	};
+});
 
 vi.mock("../../context", () => ({
 	useAppContext: () => mockContextValue,
@@ -179,6 +183,57 @@ vi.mock("../../components", async () => {
 			isOpen ? <div data-testid="report-modal-open">Report Modal</div> : null,
 	};
 });
+
+vi.mock("../../components/medications/MedicationDialogs", () => ({
+	MedicationDialogs: ({
+		showUnsavedConfirm,
+		unsavedConfirmLabel,
+		onConfirmClose,
+		showObsoleteConfirm,
+		obsoleteConfirmLabel,
+		onConfirmMarkObsolete,
+		showDeleteConfirm,
+		deleteConfirmLabel,
+		onConfirmDelete,
+		showReportModal,
+	}: {
+		showUnsavedConfirm: boolean;
+		unsavedConfirmLabel: string;
+		onConfirmClose: () => void;
+		showObsoleteConfirm: boolean;
+		obsoleteConfirmLabel: string;
+		onConfirmMarkObsolete: () => void;
+		showDeleteConfirm: boolean;
+		deleteConfirmLabel: string;
+		onConfirmDelete: () => void;
+		showReportModal: boolean;
+	}) => (
+		<>
+			{showUnsavedConfirm ? (
+				<div data-testid="confirm-modal">
+					<button type="button" onClick={onConfirmClose}>
+						{unsavedConfirmLabel}
+					</button>
+				</div>
+			) : null}
+			{showObsoleteConfirm ? (
+				<div data-testid="confirm-modal">
+					<button type="button" onClick={onConfirmMarkObsolete}>
+						{obsoleteConfirmLabel}
+					</button>
+				</div>
+			) : null}
+			{showDeleteConfirm ? (
+				<div data-testid="confirm-modal">
+					<button type="button" onClick={onConfirmDelete}>
+						{deleteConfirmLabel}
+					</button>
+				</div>
+			) : null}
+			{showReportModal ? <div data-testid="report-modal-open">Report Modal</div> : null}
+		</>
+	),
+}));
 
 function renderPage(initialEntry = "/medications") {
 	render(
@@ -829,17 +884,15 @@ describe("MedicationsPage form interactions", () => {
 	});
 
 	it("keeps a visible loading state while more lookup results are being fetched", async () => {
-		let resolveLoadMore:
-			| ((value: {
-					ok: boolean;
-					json: () => Promise<{
-						query: string;
-						normalizedQuery: string;
-						hasMore: boolean;
-						results: ReturnType<typeof createMedicationEnrichmentSearchResults>;
-					}>;
-			  }) => void)
-			| null = null;
+		let resolveLoadMore!: (value: {
+			ok: boolean;
+			json: () => Promise<{
+				query: string;
+				normalizedQuery: string;
+				hasMore: boolean;
+				results: ReturnType<typeof createMedicationEnrichmentSearchResults>;
+			}>;
+		}) => void;
 
 		fetchMock.mockImplementation((url: string) => {
 			if (url === "/api/medication-enrichment/search?q=Aspirin&limit=6") {
@@ -884,7 +937,7 @@ describe("MedicationsPage form interactions", () => {
 		expect(screen.getByRole("button", { name: "form.enrichment.loadingMoreResults" })).toBeDisabled();
 		expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
-		resolveLoadMore?.({
+		resolveLoadMore({
 			ok: true,
 			json: async () => ({
 				query: "Aspirin",
@@ -1539,7 +1592,7 @@ describe("MedicationsPage form interactions", () => {
 
 	it("shows the selected package as pending while enrichment details are still loading", async () => {
 		const setForm = vi.fn();
-		let resolveEnrichment: ((value: { ok: boolean; json: () => Promise<unknown> }) => void) | null = null;
+		let resolveEnrichment!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
 		mockFormHookValue = createMockFormHook({ setForm });
 		fetchMock.mockImplementation((url: string) => {
 			if (url.startsWith("/api/medication-enrichment/search?")) {
@@ -1638,7 +1691,7 @@ describe("MedicationsPage form interactions", () => {
 		expect(pendingPackageButton.querySelector(".medication-enrichment-spinner")).not.toBeNull();
 		expect(screen.getByText("form.enrichment.applying")).toBeInTheDocument();
 
-		resolveEnrichment?.({
+		resolveEnrichment({
 			ok: true,
 			json: async () => ({
 				selection: {

@@ -130,6 +130,13 @@ export interface UseSettingsReturn {
 
 export function useSettings(): UseSettingsReturn {
 	const { i18n } = useTranslation();
+	const getErrorMessage = useCallback((error: unknown): string => {
+		if (error instanceof Error) {
+			return error.message;
+		}
+		return String(error);
+	}, []);
+
 	const [settings, setSettings] = useState<Settings>(defaultSettings);
 	const [savedSettings, setSavedSettings] = useState<Settings>(defaultSettings);
 	const [settingsLoading, setSettingsLoading] = useState(false);
@@ -281,9 +288,13 @@ export function useSettings(): UseSettingsReturn {
 				credentials: "include",
 				keepalive: true,
 				body: JSON.stringify(payload),
-			}).catch(() => {});
+			}).catch((error: unknown) => {
+				log.warn("[useSettings] keepalive settings flush failed", {
+					error: getErrorMessage(error),
+				});
+			});
 		},
-		[buildSettingsPayload]
+		[buildSettingsPayload, getErrorMessage]
 	);
 
 	// Load settings function - exposed for manual refresh (e.g., after auth)
@@ -394,12 +405,16 @@ export function useSettings(): UseSettingsReturn {
 						),
 					}));
 				})
-				.catch(() => {});
+				.catch((error: unknown) => {
+					log.warn("[useSettings] reminder status refresh failed", {
+						error: getErrorMessage(error),
+					});
+				});
 		};
 
 		const interval = setInterval(refreshReminderStatus, 30000);
 		return () => clearInterval(interval);
-	}, [clearReminderMetadata, fetchWithRefresh]);
+	}, [clearReminderMetadata, fetchWithRefresh, getErrorMessage]);
 
 	// Internal save function (no event needed)
 	const performSave = useCallback(
@@ -431,7 +446,11 @@ export function useSettings(): UseSettingsReturn {
 				} else {
 					latestSavedSettingsRef.current = { ...settingsToSave };
 				}
-			} catch {
+			} catch (error: unknown) {
+				log.warn("[useSettings] settings save failed", {
+					error: getErrorMessage(error),
+					syncState,
+				});
 				if (syncState) {
 					setSettingsSaved(false);
 					// Keep UI aligned with backend truth if save failed (auth/session/network/server error).
@@ -443,7 +462,7 @@ export function useSettings(): UseSettingsReturn {
 				}
 			}
 		},
-		[buildSettingsPayload, fetchWithRefresh, loadSettings]
+		[buildSettingsPayload, fetchWithRefresh, getErrorMessage, loadSettings]
 	);
 
 	// Debounced auto-save: fires whenever settings change
@@ -541,12 +560,13 @@ export function useSettings(): UseSettingsReturn {
 				success: res.ok,
 				message: data.message || (res.ok ? "Email sent!" : "Failed to send email"),
 			});
-		} catch {
+		} catch (error: unknown) {
+			log.warn("[useSettings] test email failed", { error: getErrorMessage(error) });
 			setTestEmailResult({ success: false, message: "Failed to send test email" });
 		} finally {
 			setTestingEmail(false);
 		}
-	}, [fetchWithRefresh, settings.notificationEmail]);
+	}, [fetchWithRefresh, getErrorMessage, settings.notificationEmail]);
 
 	const testShoutrrr = useCallback(async () => {
 		setTestingShoutrrr(true);
@@ -562,12 +582,13 @@ export function useSettings(): UseSettingsReturn {
 				success: res.ok,
 				message: data.message || (res.ok ? "Notification sent!" : "Failed to send notification"),
 			});
-		} catch {
+		} catch (error: unknown) {
+			log.warn("[useSettings] test push notification failed", { error: getErrorMessage(error) });
 			setTestShoutrrrResult({ success: false, message: "Failed to send test notification" });
 		} finally {
 			setTestingShoutrrr(false);
 		}
-	}, [fetchWithRefresh, settings.shoutrrrUrl]);
+	}, [fetchWithRefresh, getErrorMessage, settings.shoutrrrUrl]);
 
 	// Check for unsaved changes
 	const hasUnsavedChanges = JSON.stringify(settings) !== JSON.stringify(savedSettings);

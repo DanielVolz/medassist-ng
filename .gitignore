@@ -88,3 +88,13 @@ doku/report.md
 plan/
 .copilot-tracking/
 .playwright-cli/
+
+# ===================
+# Local Spec Kit artifacts
+# ===================
+.specify/
+specs/
+docs/SPEC_KIT.md
+.github/agents/medassist-feature-orchestrator.agent.md
+.github/agents/speckit.*.agent.md
+.github/prompts/speckit.*.prompt.md

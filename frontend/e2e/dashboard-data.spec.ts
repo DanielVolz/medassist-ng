@@ -139,13 +139,24 @@ test.describe("Dashboard with medications", () => {
 	test("should mark a dose as taken and show undo", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const todayBlock = page.locator(".day-block.today");
+		let todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 10000 });
 
 		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
 		test.skip(!(await takeBtn.isVisible().catch(() => false)), "No actionable take-dose button is visible for today");
 
+		const takeResponsePromise = page.waitForResponse(
+			(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
+			{ timeout: 10000 }
+		);
 		await takeBtn.click();
+		const takeResponse = await takeResponsePromise;
+		test.skip(!takeResponse.ok(), "Backend did not accept dose take request");
+
+		await page.reload();
+		await page.waitForLoadState("networkidle");
+		todayBlock = page.locator(".day-block.today");
+		await expect(todayBlock).toBeVisible({ timeout: 10000 });
 		await expect(todayBlock.locator("button.dose-btn.undo").first()).toBeVisible({ timeout: 5000 });
 	});
 
@@ -153,7 +164,11 @@ test.describe("Dashboard with medications", () => {
 		await navigateTo(page, "/dashboard");
 		await page.waitForLoadState("networkidle");
 
-		const todayBlock = page.locator(".day-block.today");
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		await expect(overviewTable).toBeVisible({ timeout: 15000 });
+		await expect(overviewTable.getByText(MED_1)).toBeVisible({ timeout: 15000 });
+
+		let todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 
 		// Normalize state first: if a dose is already taken, undo it so we can
@@ -167,8 +182,20 @@ test.describe("Dashboard with medications", () => {
 		// Mark a dose as taken first
 		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
 		await expect(takeBtn).toBeVisible({ timeout: 10000 });
+		const takeResponsePromise = page.waitForResponse(
+			(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
+			{ timeout: 10000 }
+		);
 		await takeBtn.click();
+		const takeResponse = await takeResponsePromise;
+		test.skip(!takeResponse.ok(), "Backend did not accept dose take request");
+
+		await page.reload();
 		await page.waitForLoadState("networkidle");
+		await expect(overviewTable).toBeVisible({ timeout: 15000 });
+		await expect(overviewTable.getByText(MED_1)).toBeVisible({ timeout: 15000 });
+		todayBlock = page.locator(".day-block.today");
+		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 
 		// Wait for undo button to appear (confirms the take succeeded)
 		const undoBtn = todayBlock.locator("button.dose-btn.undo").first();

@@ -83,6 +83,84 @@
 			"type": "shell",
 			"command": "git --no-pager diff --check -- .github/agents/release-manager.agent.md .github/agents/testing-manager.agent.md .gitignore .vscode/tasks.json && node -e \"JSON.parse(require('fs').readFileSync('.vscode/tasks.json','utf8')); console.log('tasks.json valid')\"",
 			"isBackground": false
+		},
+		{
+			"label": "US4 T038 frontend check+build",
+			"type": "shell",
+			"command": "cd frontend && npm run check && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "US4 T038 frontend check+build rerun",
+			"type": "shell",
+			"command": "cd frontend && npm run check && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "US4 T038 frontend gate final",
+			"type": "shell",
+			"command": "cd frontend && npm run check && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "US4 T038 frontend gate pass check",
+			"type": "shell",
+			"command": "cd frontend && npm run check && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "US4 T038 frontend build only",
+			"type": "shell",
+			"command": "cd frontend && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "US6 T050 backend check+build",
+			"type": "shell",
+			"command": "cd backend && npm run check && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "US6 backend biome autofix touched files",
+			"type": "shell",
+			"command": "cd backend && npx biome check --write src/db/client.ts src/db/db-utils.ts src/routes/medications.ts src/routes/planner.ts src/routes/settings.ts src/services/medication-enrichment/adapters.ts src/services/medication-enrichment/index.ts src/services/medications-service.ts",
+			"isBackground": false
+		},
+		{
+			"label": "US6 T050 backend gate rerun",
+			"type": "shell",
+			"command": "cd backend && npm run check && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "US6 T050 backend gate final",
+			"type": "shell",
+			"command": "cd backend && npm run check && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "Rewrite db-utils barrel",
+			"type": "shell",
+			"command": "cat > backend/src/db/db-utils.ts <<'EOF'\n/**\n * Compatibility barrel for DB utilities.\n *\n * New code should prefer importing from focused modules:\n * - ./path-utils.js\n * - ./migration-utils.js\n * - ./repair-utils.js\n */\n\nexport { ensureDefaultUser, runAlterMigrations, runDrizzleMigrations } from \"./migration-utils.js\";\nexport { buildDbUrl, ensureDataDirectory, getDataDir, getDbPaths } from \"./path-utils.js\";\nexport { repairOrphanedDoseIds, repairTrailingHyphenDoseIds } from \"./repair-utils.js\";\nEOF",
+			"isBackground": false
+		},
+		{
+			"label": "US6 T050 backend gate success attempt",
+			"type": "shell",
+			"command": "cd backend && npm run check && npm run build",
+			"isBackground": false
+		},
+		{
+			"label": "T039 targeted frontend parity tests",
+			"type": "shell",
+			"command": "cd frontend && CI=true npm run test:run -- src/test/components/MedicationEditCoordinator.test.tsx src/test/components/MedicationDialogs.test.tsx src/test/components/MobileEditModal.test.tsx",
+			"isBackground": false
+		},
+		{
+			"label": "T044/T051 targeted backend regression tests",
+			"type": "shell",
+			"command": "cd backend && CI=true npm run test:run -- src/test/decomposition-services.test.ts src/test/medication-enrichment.test.ts src/test/database.test.ts src/test/medications.test.ts src/test/planner.test.ts src/test/settings.test.ts",
+			"isBackground": false
 		}
 	]
 }

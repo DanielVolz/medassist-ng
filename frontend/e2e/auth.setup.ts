@@ -74,54 +74,64 @@ setup("authenticate", async ({ page }) => {
 	const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
 	let formLoginEnabled = true;
 	let oidcEnabled = false;
+	let registrationEnabled = true;
 	try {
 		const stateRes = await page.request.get(`${baseURL}/api/auth/state`);
 		if (stateRes.ok()) {
 			const state = await stateRes.json();
 			formLoginEnabled = state.formLoginEnabled !== false;
 			oidcEnabled = state.oidcEnabled === true;
+			registrationEnabled = state.registrationEnabled !== false;
 		}
 	} catch {
 		// Fallback: assume form login is available
 	}
 
-	// ---- 4. Ensure the test user exists (only if form login is available) ----
-	if (formLoginEnabled) {
-		await page.request
-			.post(`${baseURL}/api/auth/register`, {
-				data: { username: TEST_USER.username, password: TEST_USER.password },
-			})
-			.catch(() => {});
-	}
-
 	// ---- 5. Log in via the appropriate method ----
 	if (formLoginEnabled) {
-		// Form login path: username/password
-		const usernameField = page.locator("#username");
-		const passwordField = page.locator("#password");
+		const loginWithForm = async () => {
+			const usernameField = page.locator("#username");
+			const passwordField = page.locator("#password");
 
-		// Make sure we're on the login form (not register)
-		const isOnRegister = await page
-			.locator(".auth-subtitle")
-			.filter({ hasText: /Create Account/i })
-			.isVisible()
+			// Make sure we're on the login form (not register)
+			const isOnRegister = await page
+				.locator(".auth-subtitle")
+				.filter({ hasText: /Create Account/i })
+				.isVisible()
+				.catch(() => false);
+
+			if (isOnRegister) {
+				const switchBtn = page.locator("button.auth-link-btn");
+				if (await switchBtn.isVisible().catch(() => false)) {
+					await switchBtn.click();
+					await page.waitForTimeout(500);
+				}
+			}
+
+			await usernameField.clear();
+			await usernameField.fill(TEST_USER.username);
+			await passwordField.clear();
+			await passwordField.fill(TEST_USER.password);
+
+			// Click the submit button (not the SSO button)
+			await page.locator('button.auth-submit[type="submit"]').click();
+		};
+
+		await loginWithForm();
+		const hasHeroAfterFirstLogin = await page
+			.locator("header.hero")
+			.isVisible({ timeout: 5000 })
 			.catch(() => false);
 
-		if (isOnRegister) {
-			const switchBtn = page.locator("button.auth-link-btn");
-			if (await switchBtn.isVisible().catch(() => false)) {
-				await switchBtn.click();
-				await page.waitForTimeout(500);
-			}
+		if (!hasHeroAfterFirstLogin && registrationEnabled) {
+			await page.request
+				.post(`${baseURL}/api/auth/register`, {
+					data: { username: TEST_USER.username, password: TEST_USER.password },
+				})
+				.catch(() => {});
+
+			await loginWithForm();
 		}
-
-		await usernameField.clear();
-		await usernameField.fill(TEST_USER.username);
-		await passwordField.clear();
-		await passwordField.fill(TEST_USER.password);
-
-		// Click the submit button (not the SSO button)
-		await page.locator('button.auth-submit[type="submit"]').click();
 	} else if (oidcEnabled) {
 		// SSO-only path: click the SSO button and let the OIDC provider handle login.
 		// This requires the OIDC provider to be configured with test credentials

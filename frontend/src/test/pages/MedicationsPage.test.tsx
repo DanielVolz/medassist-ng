@@ -908,7 +908,15 @@ describe("MedicationsPage form interactions", () => {
 			}
 
 			if (url === "/api/medication-enrichment/search?q=Aspirin&limit=12") {
-				return new Promise((resolve) => {
+				return new Promise<{
+					ok: boolean;
+					json: () => Promise<{
+						query: string;
+						normalizedQuery: string;
+						hasMore: boolean;
+						results: ReturnType<typeof createMedicationEnrichmentSearchResults>;
+					}>;
+				}>((resolve) => {
 					resolveLoadMore = resolve;
 				});
 			}
@@ -1646,7 +1654,7 @@ describe("MedicationsPage form interactions", () => {
 			}
 
 			if (url === "/api/medication-enrichment/enrich") {
-				return new Promise((resolve) => {
+				return new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
 					resolveEnrichment = resolve;
 				});
 			}

@@ -1,12 +1,11 @@
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, statSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { and, eq } from "drizzle-orm";
-import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
-import { getDataDir } from "../db/db-utils.js";
-import { doseTracking, medications, userSettings } from "../db/schema.js";
+import { getDataDir } from "../db/path-utils.js";
+import { doseTracking, medications } from "../db/schema.js";
 import { getFooterHtml, getFooterPlain, getTranslations, type Language, t } from "../i18n/translations.js";
-import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
+import { getAllUserSettings, type UserSettings } from "../routes/settings.js";
 import type { ServiceLogger } from "../utils/logger.js";
 import {
 	isAmountBasedPackageType,
@@ -19,7 +18,6 @@ import {
 	type Blister,
 	calculateDepletionInfo,
 	countScheduledOccurrencesInRange,
-	createDefaultReminderState,
 	formatInTimezone,
 	getCurrentHourInTimezone,
 	getDateOnlyTimestamp,
@@ -31,10 +29,16 @@ import {
 	normalizeIntakeUsageForStock,
 	parseIntakesJson,
 	parseLocalDateTime,
-	parseReminderState,
 	parseTakenByJson,
-	type ReminderState,
 } from "../utils/scheduler-utils.js";
+import {
+	buildPrescriptionReminderPushNotification,
+	buildStockReminderPushNotification,
+} from "./notifications/builders.js";
+import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "./notifications/delivery.js";
+import { loadReminderState, saveReminderState, updateUserReminderSentTime } from "./notifications/state.js";
+
+export { getReminderState, updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
 
 function escapeHtml(text: string): string {
 	const htmlEscapes: Record<string, string> = {
@@ -47,39 +51,8 @@ function escapeHtml(text: string): string {
 	return text.replace(/[&<>"']/g, (char) => htmlEscapes[char] || char);
 }
 
-type MailDeliveryInfo = {
-	accepted?: unknown;
-	rejected?: unknown;
-	response?: unknown;
-};
-
-function normalizeRecipients(value: unknown): string[] {
-	if (!Array.isArray(value)) return [];
-	return value
-		.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "")))
-		.map((entry) => entry.trim())
-		.filter(Boolean);
-}
-
-function getDeliveryError(info: MailDeliveryInfo): string | null {
-	const accepted = normalizeRecipients(info.accepted);
-	const rejected = normalizeRecipients(info.rejected);
-
-	if (accepted.length > 0) return null;
-	if (rejected.length > 0) {
-		return `SMTP rejected all recipients: ${rejected.join(", ")}`;
-	}
-
-	if (typeof info.response === "string" && info.response.trim()) {
-		return `SMTP did not confirm accepted recipients. Response: ${info.response}`;
-	}
-
-	return "SMTP did not confirm accepted recipients.";
-}
-
 const REMINDER_HOUR = parseInt(process.env.REMINDER_HOUR ?? "6", 10); // Default 6:00 AM local time
 
-const reminderStateFile = resolve(getDataDir(), "reminder-state.json");
 const reminderLocksDir = resolve(getDataDir(), "scheduler-locks");
 const LOCK_STALE_MS = 15 * 60 * 1000;
 
@@ -128,86 +101,6 @@ function releaseReminderSendLock(lockFilePath: string | null): void {
 		unlinkSync(lockFilePath);
 	} catch {
 		// ignore release errors
-	}
-}
-
-function loadReminderState(): ReminderState {
-	try {
-		if (existsSync(reminderStateFile)) {
-			return parseReminderState(readFileSync(reminderStateFile, "utf-8"));
-		}
-	} catch {
-		// ignore
-	}
-	return createDefaultReminderState();
-}
-
-function saveReminderState(state: ReminderState): void {
-	writeFileSync(reminderStateFile, JSON.stringify(state, null, 2));
-}
-
-export function getReminderState(): ReminderState {
-	return loadReminderState();
-}
-
-export function updateReminderSentTime(
-	type: "stock" | "intake" | "prescription" = "stock",
-	channel: "email" | "push" | "both" = "email"
-): void {
-	const state = loadReminderState();
-	const today = getTodayInTimezone();
-	saveReminderState({
-		...state,
-		lastAutoEmailSent: new Date().toISOString(),
-		lastAutoEmailDate: today,
-		lastNotificationType: type,
-		lastNotificationChannel: channel,
-	});
-}
-
-// Update user settings in database when reminder is sent
-// Stock and intake reminders are tracked separately so neither overwrites the other
-export async function updateUserReminderSentTime(
-	userId: number,
-	type: "stock" | "intake" | "prescription" = "stock",
-	channel: "email" | "push" | "both" = "email",
-	medName?: string,
-	takenBy?: string
-): Promise<void> {
-	const now = new Date().toISOString();
-	if (type === "stock") {
-		// Write to dedicated stock reminder columns only — do NOT touch the shared
-		// lastNotificationType column, as that would block intake reminder display
-		await db
-			.update(userSettings)
-			.set({
-				lastStockReminderSent: now,
-				lastStockReminderChannel: channel,
-				lastStockReminderMedNames: medName ?? null,
-			})
-			.where(eq(userSettings.userId, userId));
-	} else if (type === "prescription") {
-		// Write to dedicated prescription reminder columns only
-		await db
-			.update(userSettings)
-			.set({
-				lastPrescriptionReminderSent: now,
-				lastPrescriptionReminderChannel: channel,
-				lastPrescriptionReminderMedNames: medName ?? null,
-			})
-			.where(eq(userSettings.userId, userId));
-	} else {
-		// Write to intake reminder columns
-		await db
-			.update(userSettings)
-			.set({
-				lastAutoEmailSent: now,
-				lastNotificationType: type,
-				lastNotificationChannel: channel,
-				lastReminderMedName: medName ?? null,
-				lastReminderTakenBy: takenBy ?? null,
-			})
-			.where(eq(userSettings.userId, userId));
 	}
 }
 
@@ -461,14 +354,8 @@ async function sendReminderEmail(
 	language: Language,
 	isRepeatDaily: boolean = false
 ): Promise<{ success: boolean; error?: string }> {
-	const smtpHost = process.env.SMTP_HOST;
-	const smtpUser = process.env.SMTP_USER;
-	const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
-	const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-	const smtpSecure = process.env.SMTP_SECURE === "true";
-	const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
-
-	if (!smtpHost || !smtpUser) {
+	const smtp = getSmtpConfig();
+	if (!smtp.host || !smtp.user) {
 		return { success: false, error: "SMTP not configured" };
 	}
 
@@ -590,35 +477,19 @@ ${getFooterPlain(language)}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDaily
 	const subjectPlural = lowStock.length === 1 ? "" : pluralSuffix;
 	const subject = t(tr.stockReminder.subject, { count: lowStock.length, s: subjectPlural, e: subjectPlural });
 
-	try {
-		const transporter = nodemailer.createTransport({
-			host: smtpHost,
-			port: smtpPort,
-			secure: smtpSecure,
-			auth: {
-				user: smtpUser,
-				pass: smtpPass ?? "",
-			},
-		});
+	const emailResult = await sendEmailNotification({
+		to: email,
+		subject,
+		text: plainText,
+		html,
+		from: smtp.from,
+	});
 
-		const mailResult = await transporter.sendMail({
-			from: smtpFrom,
-			to: email,
-			subject,
-			text: plainText,
-			html,
-		});
-
-		const deliveryError = getDeliveryError(mailResult);
-		if (deliveryError) {
-			throw new Error(deliveryError);
-		}
-
-		return { success: true };
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : "Unknown error";
-		return { success: false, error: errorMessage };
+	if (!emailResult.success) {
+		return { success: false, error: emailResult.error ?? "Unknown error" };
 	}
+
+	return { success: true };
 }
 
 async function checkAndSendReminder(logger: ServiceLogger): Promise<void> {
@@ -703,41 +574,8 @@ async function checkAndSendReminderForUser(
 					}
 
 					if (stockPushEnabled) {
-						const emptyMeds = allLowStock.filter((m) => m.medsLeft <= 0);
-						const criticalMeds = allLowStock.filter((m) => m.medsLeft > 0 && m.isCritical);
-						const lowStockMeds = allLowStock.filter((m) => m.medsLeft > 0 && !m.isCritical);
-
-						const titleParts: string[] = [];
-						if (emptyMeds.length > 0) titleParts.push(`🚨 ${emptyMeds.length} ${tr.push.empty}`);
-						if (criticalMeds.length > 0) titleParts.push(`🚨 ${criticalMeds.length} ${tr.push.critical}`);
-						if (lowStockMeds.length > 0) titleParts.push(`⚠️ ${lowStockMeds.length} ${tr.push.lowStock}`);
-						const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
-
-						const messageParts: string[] = [];
-						if (emptyMeds.length > 0) {
-							messageParts.push(`🚨 ${tr.push.emptySection}:`);
-							emptyMeds.forEach((m) => messageParts.push(`  • ${m.name}`));
-						}
-						if (criticalMeds.length > 0) {
-							if (messageParts.length > 0) messageParts.push("");
-							messageParts.push(`🚨 ${tr.push.criticalSection}:`);
-							criticalMeds.forEach((m) =>
-								messageParts.push(
-									`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
-								)
-							);
-						}
-						if (lowStockMeds.length > 0) {
-							if (messageParts.length > 0) messageParts.push("");
-							messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
-							lowStockMeds.forEach((m) =>
-								messageParts.push(
-									`  • ${m.name}: ${t(tr.push.pillsLeft, { count: m.medsLeft })}, ${t(tr.push.daysLeft, { count: m.daysLeft ?? 0 })}`
-								)
-							);
-						}
-						const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
-						const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
+						const pushPayload = buildStockReminderPushNotification(allLowStock, language);
+						const result = await sendPushNotification(settings.shoutrrrUrl!, pushPayload.title, pushPayload.message);
 						shoutrrrSuccess = result.success;
 						if (!result.success) {
 							logger.error(`[Reminder] Failed to send stock push: ${result.error}`);
@@ -824,22 +662,9 @@ async function checkAndSendReminderForUser(
 						let shoutrrrSuccess = false;
 
 						if (prescriptionEmailEnabled) {
-							const smtpHost = process.env.SMTP_HOST;
-							const smtpUser = process.env.SMTP_USER;
-							const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
-							const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-							const smtpSecure = process.env.SMTP_SECURE === "true";
-							const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
-
-							if (smtpHost && smtpUser) {
+							const smtp = getSmtpConfig();
+							if (smtp.host && smtp.user) {
 								try {
-									const transporter = nodemailer.createTransport({
-										host: smtpHost,
-										port: smtpPort,
-										secure: smtpSecure,
-										auth: { user: smtpUser, pass: smtpPass ?? "" },
-									});
-
 									const subject =
 										allPrescriptionLow.length === 1
 											? tr.prescriptionReminder.subjectSingle
@@ -919,16 +744,15 @@ async function checkAndSendReminderForUser(
   `;
 									const text = `${emptyRx.length > 0 ? tr.prescriptionReminder.titleEmpty : tr.prescriptionReminder.title}\n\n${bodyText}\n\n${lines.join("\n")}\n\n---\n${getFooterPlain(language)}${settings.repeatDailyReminders ? `\n\n${tr.prescriptionReminder.repeatDailyNote}` : ""}`;
 
-									const mailResult = await transporter.sendMail({
-										from: smtpFrom,
+									const mailResult = await sendEmailNotification({
 										to: settings.notificationEmail!,
 										subject,
 										text,
 										html,
+										from: smtp.from,
 									});
-									const deliveryError = getDeliveryError(mailResult);
-									if (deliveryError) {
-										throw new Error(deliveryError);
+									if (!mailResult.success) {
+										throw new Error(mailResult.error ?? "Unknown error");
 									}
 									emailSuccess = true;
 								} catch (error) {
@@ -939,35 +763,8 @@ async function checkAndSendReminderForUser(
 						}
 
 						if (prescriptionPushEnabled) {
-							const titleParts: string[] = [];
-							if (emptyRx.length > 0)
-								titleParts.push(
-									`🚨 ${emptyRx.length} ${emptyRx.length === 1 ? tr.prescriptionReminder.pushEmptySingle : tr.prescriptionReminder.pushEmpty}`
-								);
-							if (lowRx.length > 0)
-								titleParts.push(
-									`🚨 ${lowRx.length} ${lowRx.length === 1 ? tr.prescriptionReminder.pushLowSingle : tr.prescriptionReminder.pushLow}`
-								);
-							const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.prescriptionReminder.pushRenewNow}`;
-
-							const messageParts: string[] = [];
-							if (emptyRx.length > 0) {
-								messageParts.push(`🚨 ${tr.prescriptionReminder.pushEmptySection}:`);
-								for (const m of emptyRx) {
-									messageParts.push(`  • ${m.name}`);
-								}
-							}
-							if (lowRx.length > 0) {
-								if (emptyRx.length > 0) messageParts.push("");
-								messageParts.push(`🚨 ${tr.prescriptionReminder.pushLowSection}:`);
-								for (const m of lowRx) {
-									messageParts.push(
-										`  • ${m.name}: ${t(tr.prescriptionReminder.pushRefillsLeft, { count: m.remainingRefills })}`
-									);
-								}
-							}
-							const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
-							const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
+							const pushPayload = buildPrescriptionReminderPushNotification(allPrescriptionLow, language);
+							const result = await sendPushNotification(settings.shoutrrrUrl!, pushPayload.title, pushPayload.message);
 							shoutrrrSuccess = result.success;
 							if (!result.success) {
 								logger.error(`[Reminder] Failed to send prescription push: ${result.error}`);

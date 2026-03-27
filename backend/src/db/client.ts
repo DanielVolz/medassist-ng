@@ -3,16 +3,10 @@ import { type Client, createClient } from "@libsql/client";
 import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
 import { log } from "../utils/logger.js";
-// Import utilities from db-utils (side-effect-free)
-import {
-	ensureDataDirectory,
-	ensureDefaultUser,
-	getDbPaths,
-	repairOrphanedDoseIds,
-	repairTrailingHyphenDoseIds,
-	runAlterMigrations,
-	runDrizzleMigrations,
-} from "./db-utils.js";
+import { ensureDefaultUser, runAlterMigrations, runDrizzleMigrations } from "./migration-utils.js";
+// Import utilities from focused DB modules (side-effect-free)
+import { ensureDataDirectory, getDbPaths } from "./path-utils.js";
+import { repairOrphanedDoseIds, repairTrailingHyphenDoseIds } from "./repair-utils.js";
 
 // Re-export all utilities so existing imports from client.ts keep working
 export {

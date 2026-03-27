@@ -1125,10 +1125,20 @@ export function startMedicationEnrichmentService(logger: MedicationEnrichmentLog
 	if (schedulerStarted) return;
 
 	schedulerStarted = true;
-	void refreshEmaCatalog("startup").catch(() => undefined);
+	void refreshEmaCatalog("startup").catch((error: unknown) => {
+		activeLogger.error(
+			`[MedicationEnrichment] startup refresh failed: ${error instanceof Error ? error.message : String(error)}`
+		);
+		return undefined;
+	});
 
 	refreshTimer = setInterval(() => {
-		void refreshEmaCatalog("scheduled").catch(() => undefined);
+		void refreshEmaCatalog("scheduled").catch((error: unknown) => {
+			activeLogger.error(
+				`[MedicationEnrichment] scheduled refresh failed: ${error instanceof Error ? error.message : String(error)}`
+			);
+			return undefined;
+		});
 	}, EMA_REFRESH_INTERVAL_MS);
 
 	if (typeof refreshTimer.unref === "function") {

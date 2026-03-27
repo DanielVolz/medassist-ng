@@ -30,7 +30,7 @@ import { reportRoutes } from "./routes/report.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { shareRoutes } from "./routes/share.js";
 import { startIntakeReminderScheduler } from "./services/intake-reminder-scheduler.js";
-import { startMedicationEnrichmentCatalogRefresh } from "./services/medication-enrichment.js";
+import { startMedicationEnrichmentCatalogRefresh } from "./services/medication-enrichment/index.js";
 import { startReminderScheduler } from "./services/reminder-scheduler.js";
 import { documentationSchemaAjv } from "./utils/documentation-schema-keywords.js";
 

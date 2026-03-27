@@ -41,16 +41,22 @@ async function loadDbClientModule(options: ClientTestOptions = {}) {
 	const repairOrphanedDoseIds = vi.fn().mockResolvedValue({ repaired: 0, errors: [] });
 	const ensureDefaultUser = vi.fn().mockResolvedValue(false);
 
-	vi.doMock("../db/db-utils.js", () => ({
-		buildDbUrl: vi.fn(),
+	vi.doMock("../db/path-utils.js", () => ({
 		getDataDir: vi.fn(),
+		buildDbUrl: vi.fn(),
 		ensureDataDirectory,
 		getDbPaths,
+	}));
+
+	vi.doMock("../db/migration-utils.js", () => ({
 		runDrizzleMigrations,
 		runAlterMigrations,
+		ensureDefaultUser,
+	}));
+
+	vi.doMock("../db/repair-utils.js", () => ({
 		repairTrailingHyphenDoseIds,
 		repairOrphanedDoseIds,
-		ensureDefaultUser,
 	}));
 
 	const log = {

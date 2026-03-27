@@ -13,6 +13,7 @@ import { type Client, createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import Fastify, { type FastifyInstance } from "fastify";
+import { afterEach } from "vitest";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 // Get migrations folder path
@@ -315,5 +316,13 @@ export async function clearTestData(client: Client): Promise<void> {
 // =============================================================================
 
 // Set test environment
+process.env.DOTENV_PATH = "/tmp/medassist-nonexistent.env";
 process.env.AUTH_ENABLED = "false";
+process.env.OIDC_ENABLED = "false";
 process.env.NODE_ENV = "test";
+
+afterEach(() => {
+	process.env.DOTENV_PATH = "/tmp/medassist-nonexistent.env";
+	process.env.AUTH_ENABLED = "false";
+	process.env.OIDC_ENABLED = "false";
+});

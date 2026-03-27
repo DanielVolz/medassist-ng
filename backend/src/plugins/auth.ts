@@ -3,6 +3,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
 import { apiKeys, users } from "../db/schema.js";
+import { log } from "../utils/logger.js";
 import { env } from "./env.js";
 
 // =============================================================================
@@ -180,8 +181,14 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
 			.select()
 			.from(apiKeys)
 			.where(and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isActive, true)));
-		if (!keyRow) return;
-		if (keyRow.expiresAt && keyRow.expiresAt.getTime() <= Date.now()) return;
+		if (!keyRow) {
+			log.debug("[Auth] optionalAuth API key verification failed: key not found");
+			return;
+		}
+		if (keyRow.expiresAt && keyRow.expiresAt.getTime() <= Date.now()) {
+			log.debug("[Auth] optionalAuth API key verification failed: key expired");
+			return;
+		}
 
 		const [userByKey] = await db.select().from(users).where(eq(users.id, keyRow.userId));
 		if (userByKey?.isActive) {
@@ -191,7 +198,10 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
 				scope: keyRow.scope === "read" ? "read" : "write",
 				apiKeyId: keyRow.id,
 			};
+			log.debug("[Auth] optionalAuth authenticated via API key");
+			return;
 		}
+		log.debug("[Auth] optionalAuth API key verification failed: user inactive or missing");
 		return;
 	}
 
@@ -212,9 +222,11 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
 				method: "session",
 				scope: "write",
 			};
+			log.debug("[Auth] optionalAuth authenticated via session token");
 		}
-	} catch {
-		// Invalid token, continue as anonymous
+	} catch (err: unknown) {
+		const errorMessage = err instanceof Error ? err.message : String(err);
+		log.debug(`[Auth] optionalAuth session verification failed: ${errorMessage}`);
 	}
 }
 

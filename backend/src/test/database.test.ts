@@ -248,10 +248,10 @@ describe("Database Client Utilities", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("should create .write-test file", () => {
+		it("should not leave .write-test residue", () => {
 			const result = ensureDataDirectory(testDir);
 			expect(result.success).toBe(true);
-			expect(existsSync(resolve(testDir, ".write-test"))).toBe(true);
+			expect(existsSync(resolve(testDir, ".write-test"))).toBe(false);
 		});
 
 		it("should return error for invalid path", () => {

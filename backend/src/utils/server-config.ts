@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { CookieSerializeOptions } from "@fastify/cookie";
-import { getDataDir } from "../db/db-utils.js";
+import { getDataDir } from "../db/path-utils.js";
 
 /**
  * Parse comma-separated CORS origins string

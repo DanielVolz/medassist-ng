@@ -3,10 +3,11 @@ import { and, eq, like } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { getDataDir } from "../db/db-utils.js";
+import { getDataDir } from "../db/path-utils.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { calculateUsageInRange, normalizeDateTime, parseIntakesWithUnits } from "../services/medications-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	ALLOWED_IMAGE_MIME_TYPES,
@@ -37,69 +38,11 @@ import {
 	type Intake,
 	normalizeIntake,
 	normalizeIntakeUsageForStock,
-	parseIntakesJson,
 	parseLocalDateTime,
 	parseTakenByJson,
 } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(getDataDir(), "images");
-
-function isIntakeUnit(value: unknown): value is "ml" | "tsp" | "tbsp" {
-	return value === "ml" || value === "tsp" || value === "tbsp";
-}
-
-function parseRawIntakeUnits(intakesJson: string | null | undefined): Array<"ml" | "tsp" | "tbsp" | null> {
-	if (!intakesJson) return [];
-	try {
-		const parsed = JSON.parse(intakesJson);
-		if (!Array.isArray(parsed)) return [];
-		return parsed.map((item: unknown) => {
-			if (!item || typeof item !== "object") return null;
-			const unit = (item as Record<string, unknown>).intakeUnit;
-			return isIntakeUnit(unit) ? unit : null;
-		});
-	} catch {
-		return [];
-	}
-}
-
-function parseIntakesWithUnits(
-	intakesJson: string | null | undefined,
-	legacyRow: { usageJson: string; everyJson: string; startJson: string },
-	medicationIntakeRemindersEnabled?: boolean
-): Intake[] {
-	const intakes = parseIntakesJson(intakesJson, legacyRow, medicationIntakeRemindersEnabled);
-	const rawUnits = parseRawIntakeUnits(intakesJson);
-	if (rawUnits.length === 0) return intakes;
-
-	return intakes.map((intake, idx) => ({
-		...intake,
-		intakeUnit: rawUnits[idx] ?? intake.intakeUnit ?? null,
-	}));
-}
-
-function normalizeDateTime(value: unknown): string | null {
-	if (value == null) {
-		return null;
-	}
-
-	if (value instanceof Date) {
-		return Number.isNaN(value.getTime()) ? null : value.toISOString();
-	}
-
-	if (typeof value === "number") {
-		const timestampMs = value < 1_000_000_000_000 ? value * 1000 : value;
-		const date = new Date(timestampMs);
-		return Number.isNaN(date.getTime()) ? null : date.toISOString();
-	}
-
-	if (typeof value === "string") {
-		const date = new Date(value);
-		return Number.isNaN(date.getTime()) ? null : date.toISOString();
-	}
-
-	return null;
-}
 
 // New intake schema with per-intake takenBy
 const intakeSchema = z.object({
@@ -1764,22 +1707,4 @@ export async function medicationRoutes(app: FastifyInstance) {
 			return { success: true };
 		}
 	);
-}
-
-function calculateUsageInRange(
-	blisters: Array<Pick<Intake, "usage" | "every" | "start" | "scheduleMode" | "weekdays">>,
-	start: Date,
-	end: Date
-) {
-	if (end.getTime() <= start.getTime()) {
-		return 0;
-	}
-
-	let total = 0;
-	blisters.forEach((blister) => {
-		forEachScheduledOccurrenceInRange(blister, start.getTime(), end.getTime() - 1, () => {
-			total += blister.usage;
-		});
-	});
-	return Number(total.toFixed(2));
 }

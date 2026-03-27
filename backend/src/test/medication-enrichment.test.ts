@@ -705,4 +705,39 @@ describe("medication enrichment", () => {
 
 		await app.close();
 	});
+
+	it("keeps split module exports aligned with the canonical enrichment service", async () => {
+		const indexExports = await import("../services/medication-enrichment/index.js");
+		const searchExports = await import("../services/medication-enrichment/search.js");
+		const adapterExports = await import("../services/medication-enrichment/adapters.js");
+		const canonical = await import("../services/medication-enrichment.js");
+
+		expect(indexExports.searchMedicationEnrichment).toBe(canonical.searchMedicationEnrichment);
+		expect(indexExports.enrichMedicationSelection).toBe(canonical.enrichMedicationSelection);
+		expect(searchExports.searchMedicationEnrichment).toBe(canonical.searchMedicationEnrichment);
+		expect(adapterExports.MEDICATION_ENRICHMENT_SEARCH_DEFAULT_LIMIT).toBe(
+			canonical.MEDICATION_ENRICHMENT_SEARCH_DEFAULT_LIMIT
+		);
+		expect(adapterExports.MEDICATION_ENRICHMENT_SEARCH_MAX_LIMIT).toBe(
+			canonical.MEDICATION_ENRICHMENT_SEARCH_MAX_LIMIT
+		);
+	});
+
+	it("returns transport-safe 503 payload when search lookup fails unexpectedly", async () => {
+		const app = await buildApp();
+		fetchMock.mockRejectedValue(new Error("network unavailable"));
+
+		const response = await app.inject({
+			method: "GET",
+			url: "/medication-enrichment/search?q=aspirin&limit=1",
+		});
+
+		expect(response.statusCode).toBe(503);
+		expect(response.json()).toEqual({
+			error: "Medication enrichment is temporarily unavailable.",
+			code: "MEDICATION_ENRICHMENT_UNAVAILABLE",
+		});
+
+		await app.close();
+	});
 });

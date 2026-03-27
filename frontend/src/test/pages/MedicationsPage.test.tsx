@@ -829,17 +829,15 @@ describe("MedicationsPage form interactions", () => {
 	});
 
 	it("keeps a visible loading state while more lookup results are being fetched", async () => {
-		let resolveLoadMore:
-			| ((value: {
-					ok: boolean;
-					json: () => Promise<{
-						query: string;
-						normalizedQuery: string;
-						hasMore: boolean;
-						results: ReturnType<typeof createMedicationEnrichmentSearchResults>;
-					}>;
-			  }) => void)
-			| null = null;
+		let resolveLoadMore!: (value: {
+			ok: boolean;
+			json: () => Promise<{
+				query: string;
+				normalizedQuery: string;
+				hasMore: boolean;
+				results: ReturnType<typeof createMedicationEnrichmentSearchResults>;
+			}>;
+		}) => void;
 
 		fetchMock.mockImplementation((url: string) => {
 			if (url === "/api/medication-enrichment/search?q=Aspirin&limit=6") {
@@ -855,7 +853,15 @@ describe("MedicationsPage form interactions", () => {
 			}
 
 			if (url === "/api/medication-enrichment/search?q=Aspirin&limit=12") {
-				return new Promise((resolve) => {
+				return new Promise<{
+					ok: boolean;
+					json: () => Promise<{
+						query: string;
+						normalizedQuery: string;
+						hasMore: boolean;
+						results: ReturnType<typeof createMedicationEnrichmentSearchResults>;
+					}>;
+				}>((resolve) => {
 					resolveLoadMore = resolve;
 				});
 			}
@@ -884,7 +890,7 @@ describe("MedicationsPage form interactions", () => {
 		expect(screen.getByRole("button", { name: "form.enrichment.loadingMoreResults" })).toBeDisabled();
 		expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
-		resolveLoadMore?.({
+		resolveLoadMore({
 			ok: true,
 			json: async () => ({
 				query: "Aspirin",
@@ -1539,7 +1545,7 @@ describe("MedicationsPage form interactions", () => {
 
 	it("shows the selected package as pending while enrichment details are still loading", async () => {
 		const setForm = vi.fn();
-		let resolveEnrichment: ((value: { ok: boolean; json: () => Promise<unknown> }) => void) | null = null;
+		let resolveEnrichment!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
 		mockFormHookValue = createMockFormHook({ setForm });
 		fetchMock.mockImplementation((url: string) => {
 			if (url.startsWith("/api/medication-enrichment/search?")) {
@@ -1593,7 +1599,7 @@ describe("MedicationsPage form interactions", () => {
 			}
 
 			if (url === "/api/medication-enrichment/enrich") {
-				return new Promise((resolve) => {
+				return new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
 					resolveEnrichment = resolve;
 				});
 			}
@@ -1638,7 +1644,7 @@ describe("MedicationsPage form interactions", () => {
 		expect(pendingPackageButton.querySelector(".medication-enrichment-spinner")).not.toBeNull();
 		expect(screen.getByText("form.enrichment.applying")).toBeInTheDocument();
 
-		resolveEnrichment?.({
+		resolveEnrichment({
 			ok: true,
 			json: async () => ({
 				selection: {

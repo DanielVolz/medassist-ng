@@ -164,6 +164,10 @@ test.describe("Dashboard with medications", () => {
 		await navigateTo(page, "/dashboard");
 		await page.waitForLoadState("networkidle");
 
+		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		await expect(overviewTable).toBeVisible({ timeout: 15000 });
+		await expect(overviewTable.getByText(MED_1)).toBeVisible({ timeout: 15000 });
+
 		let todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 
@@ -188,6 +192,8 @@ test.describe("Dashboard with medications", () => {
 
 		await page.reload();
 		await page.waitForLoadState("networkidle");
+		await expect(overviewTable).toBeVisible({ timeout: 15000 });
+		await expect(overviewTable.getByText(MED_1)).toBeVisible({ timeout: 15000 });
 		todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 

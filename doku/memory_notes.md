@@ -118,6 +118,22 @@ Purpose: persistent agent work memory to survive context loss.
 - Detail: Added a small local `getErrorMessage` helper to normalize unknown thrown values into loggable strings and reused it in the new catch handlers.
 - Validation: Editor diagnostics for `frontend/src/hooks/useSettings.ts` report no errors after the changes.
 
+### 2026-03-27
+
+- Task: Diagnose and fix PR #490 CI failures (`Frontend Build`, `Playwright E2E`) in worktree `medassist-pr-e2e`.
+- Root causes:
+	- Frontend gate: `frontend/e2e/app-shell.spec.ts` had a biome formatting violation; after fixing that, `frontend/src/test/pages/MedicationsPage.test.tsx` still failed TypeScript (`resolveLoadMore?.(...)` and `resolveEnrichment?.(...)` inferred as `never`).
+	- Playwright E2E: `frontend/e2e/dashboard-data.spec.ts` undo test asserted `.day-block.today` before dashboard data was fully ready, causing intermittent/not-found failure in CI-like runs.
+- Fixes:
+	- Added formatting newline in `frontend/e2e/app-shell.spec.ts`.
+	- Reworked resolver typing in `frontend/src/test/pages/MedicationsPage.test.tsx` to definite-assignment callbacks with matching `Promise` generics.
+	- Hardened `frontend/e2e/dashboard-data.spec.ts` undo flow by waiting for dashboard overview table and seeded medication row before asserting timeline blocks.
+	- Reduced auth setup rate-limit pressure in `frontend/e2e/auth.setup.ts` by switching to login-first and registering only as fallback before a single retry.
+- Validation:
+	- `cd frontend && CI=true npm run check` passed.
+	- `cd frontend && CI=true npm run build` passed.
+	- `cd frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npx playwright test --config=playwright.stable.config.ts --workers=1 e2e/dashboard-data.spec.ts --grep "should undo a taken dose|should mark a dose as taken and show undo"` passed after resetting reused local servers and installing backend/frontend deps in this worktree.
+
 - Task: Complete US7/T053 by adding intentional optional-auth verification logging.
 - Output: Updated `backend/src/plugins/auth.ts` optional auth flow to emit debug logs for API-key/session verification outcomes (authenticated, key not found, key expired, inactive/missing user, session verify failure).
 - Security note: Logs intentionally avoid token values and only include outcome-level context.

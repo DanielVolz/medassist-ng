@@ -126,6 +126,19 @@
   - Re-checked PR `#485` after the rebase and left it open because its refreshed Playwright E2E run was still in progress, so it was not yet fully green.
 - Result: Three safe Dependabot PRs were merged; one remains open pending completion of its rerun checks.
 
+### 2026-03-27
+- Scope: Stabilize PR #490 (`test/e2e-stability-remediation`) after CI failures in `Frontend Build` and `Playwright E2E`.
+- What changed:
+  - Fixed frontend formatting gate violation in `frontend/e2e/app-shell.spec.ts`.
+  - Fixed TypeScript check failures in `frontend/src/test/pages/MedicationsPage.test.tsx` by replacing nullable optional-callback resolvers with definite-assignment callbacks plus matching typed Promise resolvers.
+  - Stabilized dashboard dose-undo E2E flow in `frontend/e2e/dashboard-data.spec.ts` by waiting for seeded overview-table content before asserting `.day-block.today` and before post-reload undo assertions.
+  - Hardened E2E auth setup in `frontend/e2e/auth.setup.ts` to avoid unnecessary `/auth/register` calls that consume sensitive rate-limit quota; setup now attempts login first and only registers/retries as fallback.
+- Validation:
+  - `cd frontend && CI=true npm run check`: passed.
+  - `cd frontend && CI=true npm run build`: passed.
+  - `cd frontend && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 npx playwright test --config=playwright.stable.config.ts --workers=1 e2e/dashboard-data.spec.ts --grep "should undo a taken dose|should mark a dose as taken and show undo"`: passed (3/3, including setup).
+- Result: Both originally failing CI scopes now reproduce cleanly with local targeted validation in the PR worktree.
+
 ### 2026-03-26
 - Scope: Turn the code-quality audit into an implementation roadmap.
 - What changed:

@@ -14,6 +14,7 @@ import {
 import { getSystemLocale } from "../utils/formatters";
 import { log } from "../utils/logger";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, getStockStatus } from "../utils/schedule";
+import { ShareContextProvider } from "./ShareContext";
 
 // =============================================================================
 // Types
@@ -799,6 +800,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		);
 	}, [settingsHook.settings, settingsHook.savedSettings]);
 
+	const shareValue = useMemo(
+		() => ({
+			showShareDialog: share.showShareDialog,
+			sharePeople: share.sharePeople,
+			shareSelectedPerson: share.shareSelectedPerson,
+			setShareSelectedPerson: share.setShareSelectedPerson,
+			shareSelectedDays: share.shareSelectedDays,
+			setShareSelectedDays: share.setShareSelectedDays,
+			shareGenerating: share.shareGenerating,
+			shareLink: share.shareLink,
+			setShareLink: share.setShareLink,
+			shareCopied: share.shareCopied,
+			setShareCopied: share.setShareCopied,
+			openShareDialog,
+			generateShareLink: share.generateShareLink,
+			copyShareLink: share.copyShareLink,
+			closeShareDialog: share.closeShareDialog,
+			resetShareDialogState: share.resetShareDialogState,
+		}),
+		[share, openShareDialog]
+	);
+
 	// Build context value
 	const value: AppContextValue = useMemo(
 		() => ({
@@ -992,7 +1015,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		]
 	);
 
-	return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+	return (
+		<AppContext.Provider value={value}>
+			<ShareContextProvider value={shareValue}>{children}</ShareContextProvider>
+		</AppContext.Provider>
+	);
 }
 
 // =============================================================================

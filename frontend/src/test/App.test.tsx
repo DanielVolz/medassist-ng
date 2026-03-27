@@ -18,6 +18,7 @@ let authMock: AuthStateMock = {
 };
 
 let appContextMock: Record<string, unknown>;
+let shareContextMock: Record<string, unknown>;
 
 vi.mock("../components", () => ({
 	AboutModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>about-modal-open</div> : null),
@@ -45,11 +46,17 @@ vi.mock("../components/Auth", () => ({
 	useAuth: () => authMock,
 }));
 
-vi.mock("../context", () => ({
-	AppProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-	UnsavedChangesProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-	useAppContext: () => appContextMock,
-}));
+vi.mock("../context", async () => {
+	const actual = await vi.importActual<typeof import("../context")>("../context");
+	return {
+		...actual,
+		AppProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+		ShareContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+		UnsavedChangesProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+		useAppContext: () => appContextMock,
+		useShareContext: () => shareContextMock,
+	};
+});
 
 vi.mock("../pages", () => ({
 	DashboardPage: () => <div>dashboard-page</div>,
@@ -93,21 +100,6 @@ describe("App", () => {
 			closeRefillModal: vi.fn(),
 			openEditStockModal: vi.fn(),
 			closeEditStockModal: vi.fn(),
-			showShareDialog: false,
-			sharePeople: [],
-			shareSelectedPerson: "",
-			setShareSelectedPerson: vi.fn(),
-			shareSelectedDays: 7,
-			setShareSelectedDays: vi.fn(),
-			shareGenerating: false,
-			shareLink: null,
-			setShareLink: vi.fn(),
-			shareCopied: false,
-			setShareCopied: vi.fn(),
-			generateShareLink: vi.fn(),
-			copyShareLink: vi.fn(),
-			closeShareDialog: vi.fn(),
-			resetShareDialogState: vi.fn(),
 			coverage: { all: [], low: [] },
 			selectedMed: null,
 			setSelectedMed: vi.fn(),
@@ -133,6 +125,23 @@ describe("App", () => {
 				criticalStockDays: 7,
 				expiryWarningDays: 30,
 			},
+		};
+		shareContextMock = {
+			showShareDialog: false,
+			sharePeople: [],
+			shareSelectedPerson: "",
+			setShareSelectedPerson: vi.fn(),
+			shareSelectedDays: 7,
+			setShareSelectedDays: vi.fn(),
+			shareGenerating: false,
+			shareLink: null,
+			setShareLink: vi.fn(),
+			shareCopied: false,
+			setShareCopied: vi.fn(),
+			generateShareLink: vi.fn(),
+			copyShareLink: vi.fn(),
+			closeShareDialog: vi.fn(),
+			resetShareDialogState: vi.fn(),
 		};
 		document.documentElement.classList.remove("modal-open");
 		document.body.classList.remove("modal-open");
@@ -300,7 +309,7 @@ describe("App", () => {
 	});
 
 	it("adds modal-open class when modal state is active", () => {
-		appContextMock.showShareDialog = true;
+		shareContextMock.showShareDialog = true;
 
 		render(
 			<MemoryRouter initialEntries={["/dashboard"]}>
@@ -328,7 +337,7 @@ describe("App", () => {
 	});
 
 	it("handles popstate by resetting share dialog state", () => {
-		appContextMock.showShareDialog = true;
+		shareContextMock.showShareDialog = true;
 
 		render(
 			<MemoryRouter initialEntries={["/dashboard"]}>
@@ -337,7 +346,7 @@ describe("App", () => {
 		);
 
 		window.dispatchEvent(new PopStateEvent("popstate"));
-		expect(appContextMock.resetShareDialogState).toHaveBeenCalled();
+		expect(shareContextMock.resetShareDialogState).toHaveBeenCalled();
 	});
 
 	it("redirects unknown routes to dashboard", () => {

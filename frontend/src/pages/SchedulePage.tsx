@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
-import { useAppContext } from "../context";
+import { ScheduleUsageTag } from "../features/schedule/components";
+import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
+import { useScheduleController } from "../hooks";
 import type { Coverage, IntakeUnit } from "../types";
 import { getMedDisplayName, isLiquidContainerPackageType, isTubePackageType } from "../types";
-import { formatNumber } from "../utils/formatters";
-import { convertLiquidUsageToMl, getLiquidCountUnitLabel } from "../utils/intake-units";
 import { buildClearMissedPayload, isDoseDismissed } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
@@ -93,7 +93,7 @@ export function SchedulePage() {
 		openUserFilter,
 		missedPastDoseIds,
 		loadMeds,
-	} = useAppContext();
+	} = useScheduleController();
 	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
 	const [clearingMissed, setClearingMissed] = useState(false);
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
@@ -160,69 +160,17 @@ export function SchedulePage() {
 		setObsoleteCandidate(null);
 	};
 
-	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
-		isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid"
-			? t("form.packageAmountUnitMl")
-			: t("form.blisters.applications", { count: Math.abs(value) });
-
-	const formatLiquidUsageLabel = (usage: number, unit: IntakeUnit | null | undefined): string => {
-		const normalizedUsage = Number(usage);
-		if (!Number.isFinite(normalizedUsage) || normalizedUsage <= 0) {
-			return `0 ${t("form.packageAmountUnitMl")}`;
-		}
-
-		if (unit === "ml" || unit == null) {
-			return `${formatNumber(normalizedUsage)} ${t("form.packageAmountUnitMl")}`;
-		}
-
-		const mlTotal = convertLiquidUsageToMl(normalizedUsage, unit);
-		return `${formatNumber(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage, t)} ${formatNumber(mlTotal)} ${t("form.packageAmountUnitMl")}`;
-	};
-
 	const formatDoseUsageLabel = (
 		med: (typeof meds)[number] | undefined,
 		usage: number,
 		intakeUnit?: IntakeUnit | null
-	) => {
-		if (isLiquidContainerPackageType(med?.packageType)) {
-			return formatLiquidUsageLabel(usage, intakeUnit);
-		}
-		if (isTubePackageType(med?.packageType)) {
-			return `${usage} ${getTubeUnitLabel(med, usage)}`;
-		}
-		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
-	};
+	) => formatScheduleDoseUsageLabel(med, usage, t, intakeUnit);
 
 	const formatTotalUsageLabel = (
 		med: (typeof meds)[number] | undefined,
 		total: number,
 		doses?: Array<{ usage: number; intakeUnit?: IntakeUnit | null }>
-	) => {
-		if (isLiquidContainerPackageType(med?.packageType)) {
-			if (doses && doses.length > 0) {
-				const normalizedDoses = doses.filter((dose) => Number.isFinite(Number(dose.usage)) && Number(dose.usage) > 0);
-				if (normalizedDoses.length > 0) {
-					const allUnits = new Set(normalizedDoses.map((dose) => dose.intakeUnit ?? "ml"));
-					if (allUnits.size === 1) {
-						const onlyUnit = normalizedDoses[0]?.intakeUnit ?? "ml";
-						const totalUsageInUnit = normalizedDoses.reduce((sum, dose) => sum + Number(dose.usage), 0);
-						return formatLiquidUsageLabel(totalUsageInUnit, onlyUnit);
-					}
-
-					const totalMl = normalizedDoses.reduce(
-						(sum, dose) => sum + convertLiquidUsageToMl(Number(dose.usage), dose.intakeUnit ?? "ml"),
-						0
-					);
-					return `${formatNumber(totalMl)} ${t("form.packageAmountUnitMl")}`;
-				}
-			}
-			return `${formatNumber(total)} ${t("form.packageAmountUnitMl")}`;
-		}
-		if (isTubePackageType(med?.packageType)) {
-			return `${total} ${getTubeUnitLabel(med, total)}`;
-		}
-		return t("common.pillsTotal", { count: total });
-	};
+	) => formatScheduleTotalUsageLabel(med, total, t, doses);
 
 	return (
 		<section className="grid">
@@ -335,7 +283,7 @@ export function SchedulePage() {
 															<span className="med-name-text">{item.medName}</span>
 														</div>
 														<div className="tag-row">
-															<span className="tag subtle">{formatTotalUsageLabel(med, item.total, item.doses)}</span>
+															<ScheduleUsageTag>{formatTotalUsageLabel(med, item.total, item.doses)}</ScheduleUsageTag>
 														</div>
 													</div>
 													<div className="doses-col">
@@ -549,7 +497,7 @@ export function SchedulePage() {
 													<span className="med-name-text">{item.medName}</span>
 												</div>
 												<div className="tag-row">
-													<span className="tag subtle">{formatTotalUsageLabel(med, item.total, item.doses)}</span>
+													<ScheduleUsageTag>{formatTotalUsageLabel(med, item.total, item.doses)}</ScheduleUsageTag>
 													{visibleStatus && (
 														<span className={`tag ${visibleStatus.className}`}>{t(visibleStatus.label)}</span>
 													)}

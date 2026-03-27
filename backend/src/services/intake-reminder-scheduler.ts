@@ -1,9 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { and, eq, gte, lte } from "drizzle-orm";
-import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
-import { getDataDir } from "../db/db-utils.js";
+import { getDataDir } from "../db/path-utils.js";
 import { doseTracking, medications, users } from "../db/schema.js";
 import {
 	getDateLocale,
@@ -13,7 +12,7 @@ import {
 	type Language,
 	t,
 } from "../i18n/translations.js";
-import { getAllUserSettings, sendShoutrrrNotification, type UserSettings } from "../routes/settings.js";
+import { getAllUserSettings, type UserSettings } from "../routes/settings.js";
 import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
 import {
@@ -30,56 +29,28 @@ import {
 	type UpcomingIntake,
 } from "../utils/scheduler-utils.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
-import { updateReminderSentTime, updateUserReminderSentTime } from "./reminder-scheduler.js";
+import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "./notifications/delivery.js";
+import { updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
 
 const REMINDER_MINUTES_BEFORE = parseInt(process.env.REMINDER_MINUTES_BEFORE ?? "15", 10);
 const CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute
 
 const intakeReminderStateFile = resolve(getDataDir(), "intake-reminder-state.json");
 
-function loadIntakeReminderState(): IntakeReminderState {
+function loadIntakeReminderState(logger: ServiceLogger): IntakeReminderState {
 	try {
 		if (existsSync(intakeReminderStateFile)) {
 			return parseIntakeReminderState(readFileSync(intakeReminderStateFile, "utf-8"));
 		}
-	} catch {
-		// ignore
+	} catch (error: unknown) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		logger.error(`[IntakeReminder] Failed to load reminder state file=${intakeReminderStateFile}: ${errorMessage}`);
 	}
 	return createDefaultIntakeReminderState();
 }
 
 function saveIntakeReminderState(state: IntakeReminderState): void {
 	writeFileSync(intakeReminderStateFile, JSON.stringify(state, null, 2));
-}
-
-type MailDeliveryInfo = {
-	accepted?: unknown;
-	rejected?: unknown;
-	response?: unknown;
-};
-
-function normalizeRecipients(value: unknown): string[] {
-	if (!Array.isArray(value)) return [];
-	return value
-		.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "")))
-		.map((entry) => entry.trim())
-		.filter(Boolean);
-}
-
-function getDeliveryError(info: MailDeliveryInfo): string | null {
-	const accepted = normalizeRecipients(info.accepted);
-	const rejected = normalizeRecipients(info.rejected);
-
-	if (accepted.length > 0) return null;
-	if (rejected.length > 0) {
-		return `SMTP rejected all recipients: ${rejected.join(", ")}`;
-	}
-
-	if (typeof info.response === "string" && info.response.trim()) {
-		return `SMTP did not confirm accepted recipients. Response: ${info.response}`;
-	}
-
-	return "SMTP did not confirm accepted recipients.";
 }
 
 function buildDoseIdForIntake(intake: UpcomingIntake & { medicationId: number; blisterIndex: number }): string {
@@ -269,14 +240,9 @@ async function sendIntakeReminderEmail(
 	currentCount?: number,
 	maxCount?: number
 ): Promise<{ success: boolean; error?: string; messageId?: string; smtpResponse?: string }> {
-	const smtpHost = process.env.SMTP_HOST;
-	const smtpUser = process.env.SMTP_USER;
-	const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
-	const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-	const smtpSecure = process.env.SMTP_SECURE === "true";
-	const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+	const smtp = getSmtpConfig();
 
-	if (!smtpHost || !smtpUser) {
+	if (!smtp.host || !smtp.user) {
 		return { success: false, error: "SMTP not configured" };
 	}
 
@@ -401,39 +367,23 @@ ${getFooterPlain(language)}`;
 		? `[Reminder] ${t(tr.intakeReminder.subject, { medications: intakes.map((i) => i.medName).join(", ") })}`
 		: t(tr.intakeReminder.subject, { medications: intakes.map((i) => i.medName).join(", ") });
 
-	try {
-		const transporter = nodemailer.createTransport({
-			host: smtpHost,
-			port: smtpPort,
-			secure: smtpSecure,
-			auth: {
-				user: smtpUser,
-				pass: smtpPass ?? "",
-			},
-		});
+	const mailResult = await sendEmailNotification({
+		to: email,
+		subject: `💊 ${subject}`,
+		text: plainText,
+		html,
+		from: smtp.from,
+	});
 
-		const mailResult = await transporter.sendMail({
-			from: smtpFrom,
-			to: email,
-			subject: `💊 ${subject}`,
-			text: plainText,
-			html,
-		});
-
-		const deliveryError = getDeliveryError(mailResult);
-		if (deliveryError) {
-			return { success: false, error: deliveryError };
-		}
-
-		return {
-			success: true,
-			messageId: mailResult.messageId,
-			smtpResponse: typeof mailResult.response === "string" ? mailResult.response : undefined,
-		};
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : "Unknown error";
-		return { success: false, error: errorMessage };
+	if (!mailResult.success) {
+		return { success: false, error: mailResult.error ?? "Unknown error" };
 	}
+
+	return {
+		success: true,
+		messageId: mailResult.messageId,
+		smtpResponse: mailResult.smtpResponse,
+	};
 }
 
 async function checkAndSendIntakeReminders(logger: ServiceLogger): Promise<void> {
@@ -523,7 +473,7 @@ export async function checkAndSendIntakeRemindersForUser(
 		return; // No medications have reminders enabled for this user
 	}
 
-	const state = loadIntakeReminderState();
+	const state = loadIntakeReminderState(logger);
 	const allUpcoming: (UpcomingIntake & { medicationId: number; blisterIndex: number })[] = [];
 	let scheduledIntakesTodayCount = 0;
 	// Get start and end of today in user's timezone (for filtering today's doses only)
@@ -842,7 +792,7 @@ export async function checkAndSendIntakeRemindersForUser(
 			repeatNote +
 			`\n\n---\n${getFooterPlain(language)}`;
 
-		const result = await sendShoutrrrNotification(settings.shoutrrrUrl!, title, message);
+		const result = await sendPushNotification(settings.shoutrrrUrl!, title, message);
 		shoutrrrSuccess = result.success;
 		if (!result.success) {
 			logger.error(

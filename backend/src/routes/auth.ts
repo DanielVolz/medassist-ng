@@ -5,7 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { getDataDir } from "../db/db-utils.js";
+import { getDataDir } from "../db/path-utils.js";
 import { refreshTokens, users } from "../db/schema.js";
 import { getAuthState, requireAuth } from "../plugins/auth.js";
 import type { AuthUser } from "../types/fastify.js";

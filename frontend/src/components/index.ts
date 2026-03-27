@@ -18,6 +18,9 @@ export type { MedicationEnrichmentViewModel } from "./MedicationEnrichmentSectio
 export { MedicationEnrichmentSection } from "./MedicationEnrichmentSection";
 export type { MobileEditModalProps } from "./MobileEditModal";
 export { MobileEditModal } from "./MobileEditModal";
+export { MedicationDialogs } from "./medications/MedicationDialogs";
+export { MedicationEditCoordinator } from "./medications/MedicationEditCoordinator";
+export { MedicationListSection } from "./medications/MedicationListSection";
 export { PasswordInput } from "./PasswordInput";
 export { default as ProfileModal } from "./ProfileModal";
 export { default as ReportModal } from "./ReportModal";

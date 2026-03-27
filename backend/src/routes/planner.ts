@@ -13,6 +13,14 @@ import {
 } from "../i18n/translations.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import {
+	buildPrescriptionReminderPushNotification,
+	buildStockReminderPushNotification,
+	type PrescriptionReminderItem as SharedPrescriptionReminderItem,
+	type StockReminderItem as SharedStockReminderItem,
+} from "../services/notifications/builders.js";
+import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "../services/notifications/delivery.js";
+import { escapeHtml, getDeliveryError, getPlannerUnit, isContainerPackage } from "../services/planner-service.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
@@ -20,55 +28,8 @@ import {
 	genericErrorSchema,
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
-import {
-	getPlannerUnitKind,
-	isAmountBasedPackageType,
-	isTubePackageType,
-	normalizePackageType,
-} from "../utils/package-profiles.js";
+import { isTubePackageType, normalizePackageType } from "../utils/package-profiles.js";
 import { loadUserSettings, sendShoutrrrNotification } from "./settings.js";
-
-// Escape HTML to prevent XSS in email templates
-function escapeHtml(text: string): string {
-	const htmlEscapes: Record<string, string> = {
-		"&": "&amp;",
-		"<": "&lt;",
-		">": "&gt;",
-		'"': "&quot;",
-		"'": "&#39;",
-	};
-	return text.replace(/[&<>"']/g, (char) => htmlEscapes[char] || char);
-}
-
-type MailDeliveryInfo = {
-	accepted?: unknown;
-	rejected?: unknown;
-	response?: unknown;
-};
-
-function normalizeRecipients(value: unknown): string[] {
-	if (!Array.isArray(value)) return [];
-	return value
-		.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "")))
-		.map((entry) => entry.trim())
-		.filter(Boolean);
-}
-
-function getDeliveryError(info: MailDeliveryInfo): string | null {
-	const accepted = normalizeRecipients(info.accepted);
-	const rejected = normalizeRecipients(info.rejected);
-
-	if (accepted.length > 0) return null;
-	if (rejected.length > 0) {
-		return `SMTP rejected all recipients: ${rejected.join(", ")}`;
-	}
-
-	if (typeof info.response === "string" && info.response.trim()) {
-		return `SMTP did not confirm accepted recipients. Response: ${info.response}`;
-	}
-
-	return "SMTP did not confirm accepted recipients.";
-}
 
 type PlannerRow = {
 	medicationId: number;
@@ -82,17 +43,6 @@ type PlannerRow = {
 	enough: boolean;
 	packageType?: string;
 };
-
-function isContainerPackage(packageType?: string): boolean {
-	return isAmountBasedPackageType(packageType);
-}
-
-function getPlannerUnit(packageType: string | undefined, tr: ReturnType<typeof getTranslations>): string {
-	const unitKind = getPlannerUnitKind(packageType);
-	if (unitKind === "units") return tr.common.units;
-	if (unitKind === "ml") return tr.common.ml;
-	return tr.common.pills;
-}
 
 type SendEmailBody = {
 	email: string;
@@ -682,7 +632,6 @@ ${getFooterPlain(language)}`;
 			if (lowStockMeds.length > 0) {
 				titleParts.push(`⚠️ ${lowStockMeds.length} ${tr.push.lowStock}`);
 			}
-			const notificationTitle = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.push.reorderNow}`;
 
 			// Build description text
 			let descriptionText: string;
@@ -723,28 +672,23 @@ ${getFooterPlain(language)}`;
 
 			// Send email if enabled
 			if (notificationSettings.emailEnabled && email) {
-				const smtpHost = process.env.SMTP_HOST;
-				const smtpUser = process.env.SMTP_USER;
-				const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
-				const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-				const smtpSecure = process.env.SMTP_SECURE === "true";
-				const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+				const smtp = getSmtpConfig();
 
 				request.log.info(
 					{
 						userId,
-						hasSmtpHost: Boolean(smtpHost),
-						hasSmtpUser: Boolean(smtpUser),
-						hasSmtpPass: Boolean(smtpPass),
-						smtpPort,
-						smtpSecure,
-						hasSmtpFrom: Boolean(smtpFrom),
+						hasSmtpHost: Boolean(smtp.host),
+						hasSmtpUser: Boolean(smtp.user),
+						hasSmtpPass: Boolean(smtp.pass),
+						smtpPort: smtp.port,
+						smtpSecure: smtp.secure,
+						hasSmtpFrom: Boolean(smtp.from),
 						recipientEmail: email,
 					},
 					"[ReminderManual] Stock email path selected"
 				);
 
-				if (smtpHost && smtpUser) {
+				if (smtp.host && smtp.user) {
 					// Build subject line from shared title parts
 					const subjectText = titleParts.join(", ");
 
@@ -847,29 +791,18 @@ ${getFooterPlain(language)}`;
 					const plainText = `MedAssist-ng - ${tr.push.reorderNow}\n\n${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 
 					try {
-						const transporter = nodemailer.createTransport({
-							host: smtpHost,
-							port: smtpPort,
-							secure: smtpSecure,
-							auth: {
-								user: smtpUser,
-								pass: smtpPass ?? "",
-							},
-						});
-
 						request.log.info({ userId, recipientEmail: email }, "[ReminderManual] Sending stock reminder email");
 
-						const mailResult = await transporter.sendMail({
-							from: smtpFrom,
+						const mailResult = await sendEmailNotification({
 							to: email,
 							subject: `MedAssist-ng: ${subjectText}`,
 							text: plainText,
 							html,
+							from: smtp.from,
 						});
 
-						const deliveryError = getDeliveryError(mailResult);
-						if (deliveryError) {
-							throw new Error(deliveryError);
+						if (!mailResult.success) {
+							throw new Error(mailResult.error ?? "Unknown error");
 						}
 
 						request.log.info(
@@ -886,8 +819,8 @@ ${getFooterPlain(language)}`;
 					request.log.warn(
 						{
 							userId,
-							hasSmtpHost: Boolean(smtpHost),
-							hasSmtpUser: Boolean(smtpUser),
+							hasSmtpHost: Boolean(smtp.host),
+							hasSmtpUser: Boolean(smtp.user),
 							recipientEmail: email,
 						},
 						"[ReminderManual] Stock reminder email skipped: SMTP not configured"
@@ -902,13 +835,13 @@ ${getFooterPlain(language)}`;
 
 			// Send push notification if enabled
 			if (notificationSettings.shoutrrrEnabled && notificationSettings.shoutrrrUrl) {
-				const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+				const pushPayload = buildStockReminderPushNotification(filteredLowStock as SharedStockReminderItem[], language);
 
 				try {
-					const pushResult = await sendShoutrrrNotification(
+					const pushResult = await sendPushNotification(
 						notificationSettings.shoutrrrUrl,
-						notificationTitle,
-						message
+						pushPayload.title,
+						pushPayload.message
 					);
 					if (pushResult.success) {
 						results.push = true;
@@ -1046,39 +979,24 @@ ${getFooterPlain(language)}`;
 			const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
 
 			if (userSettings.emailEnabled && userSettings.emailPrescriptionReminders && email) {
-				const smtpHost = process.env.SMTP_HOST;
-				const smtpUser = process.env.SMTP_USER;
-				const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
-				const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-				const smtpSecure = process.env.SMTP_SECURE === "true";
-				const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+				const smtp = getSmtpConfig();
 
 				request.log.info(
 					{
 						userId,
-						hasSmtpHost: Boolean(smtpHost),
-						hasSmtpUser: Boolean(smtpUser),
-						hasSmtpPass: Boolean(smtpPass),
-						smtpPort,
-						smtpSecure,
-						hasSmtpFrom: Boolean(smtpFrom),
+						hasSmtpHost: Boolean(smtp.host),
+						hasSmtpUser: Boolean(smtp.user),
+						hasSmtpPass: Boolean(smtp.pass),
+						smtpPort: smtp.port,
+						smtpSecure: smtp.secure,
+						hasSmtpFrom: Boolean(smtp.from),
 						recipientEmail: email,
 					},
 					"[ReminderManual] Prescription email path selected"
 				);
 
-				if (smtpHost && smtpUser) {
+				if (smtp.host && smtp.user) {
 					try {
-						const transporter = nodemailer.createTransport({
-							host: smtpHost,
-							port: smtpPort,
-							secure: smtpSecure,
-							auth: {
-								user: smtpUser,
-								pass: smtpPass ?? "",
-							},
-						});
-
 						const subject =
 							filteredPrescriptionLow.length === 1
 								? tr.prescriptionReminder.subjectSingle
@@ -1152,17 +1070,16 @@ ${getFooterPlain(language)}`;
 
 						request.log.info({ userId, recipientEmail: email }, "[ReminderManual] Sending prescription reminder email");
 
-						const mailResult = await transporter.sendMail({
-							from: smtpFrom,
+						const mailResult = await sendEmailNotification({
 							to: email,
 							subject,
 							text,
 							html,
+							from: smtp.from,
 						});
 
-						const deliveryError = getDeliveryError(mailResult);
-						if (deliveryError) {
-							throw new Error(deliveryError);
+						if (!mailResult.success) {
+							throw new Error(mailResult.error ?? "Unknown error");
 						}
 
 						request.log.info(
@@ -1182,8 +1099,8 @@ ${getFooterPlain(language)}`;
 					request.log.warn(
 						{
 							userId,
-							hasSmtpHost: Boolean(smtpHost),
-							hasSmtpUser: Boolean(smtpUser),
+							hasSmtpHost: Boolean(smtp.host),
+							hasSmtpUser: Boolean(smtp.user),
 							recipientEmail: email,
 						},
 						"[ReminderManual] Prescription reminder email skipped: SMTP not configured"
@@ -1201,37 +1118,17 @@ ${getFooterPlain(language)}`;
 			}
 
 			if (userSettings.shoutrrrEnabled && userSettings.shoutrrrPrescriptionReminders && userSettings.shoutrrrUrl) {
-				const titleParts: string[] = [];
-				if (emptyRx.length > 0)
-					titleParts.push(
-						`🚨 ${emptyRx.length} ${emptyRx.length === 1 ? tr.prescriptionReminder.pushEmptySingle : tr.prescriptionReminder.pushEmpty}`
-					);
-				if (lowRx.length > 0)
-					titleParts.push(
-						`🚨 ${lowRx.length} ${lowRx.length === 1 ? tr.prescriptionReminder.pushLowSingle : tr.prescriptionReminder.pushLow}`
-					);
-				const title = `MedAssist-ng: ${titleParts.join(", ")} - ${tr.prescriptionReminder.pushRenewNow}`;
-
-				const messageParts: string[] = [];
-				if (emptyRx.length > 0) {
-					messageParts.push(`🚨 ${tr.prescriptionReminder.pushEmptySection}:`);
-					for (const m of emptyRx) {
-						messageParts.push(`  • ${m.name}`);
-					}
-				}
-				if (lowRx.length > 0) {
-					if (emptyRx.length > 0) messageParts.push("");
-					messageParts.push(`🚨 ${tr.prescriptionReminder.pushLowSection}:`);
-					for (const m of lowRx) {
-						messageParts.push(
-							`  • ${m.name}: ${t(tr.prescriptionReminder.pushRefillsLeft, { count: m.remainingRefills })}`
-						);
-					}
-				}
-				const message = `${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
+				const pushPayload = buildPrescriptionReminderPushNotification(
+					filteredPrescriptionLow as SharedPrescriptionReminderItem[],
+					language
+				);
 
 				try {
-					const pushResult = await sendShoutrrrNotification(userSettings.shoutrrrUrl, title, message);
+					const pushResult = await sendPushNotification(
+						userSettings.shoutrrrUrl,
+						pushPayload.title,
+						pushPayload.message
+					);
 					if (pushResult.success) {
 						results.push = true;
 					} else {

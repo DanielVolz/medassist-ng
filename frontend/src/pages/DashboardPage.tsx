@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
+import { DashboardReminderSection } from "../components/dashboard/DashboardReminderSection";
+import { DashboardStatusSection } from "../components/dashboard/DashboardStatusSection";
 import { useAppContext } from "../context";
 import {
 	allowsPillFormSelection,
-	type Coverage,
 	getMedDisplayName,
 	type IntakeUnit,
 	isAmountBasedPackageType,
@@ -26,26 +27,6 @@ import {
 	getReminderStatusData,
 	userStorageKey,
 } from "./dashboard-helpers";
-
-// Notification bell SVG icon (no emoji)
-function NotificationBellIcon() {
-	return (
-		<svg
-			width="20"
-			height="20"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="2"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			style={{ display: "block" }}
-		>
-			<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-			<path d="M13.73 21a2 2 0 0 1-3.46 0" />
-		</svg>
-	);
-}
 
 export function DashboardPage() {
 	const { t, i18n } = useTranslation();
@@ -428,266 +409,33 @@ export function DashboardPage() {
 
 	return (
 		<>
-			{remindersLoading ? (
-				<section className="reminder-status-bar reminder-status-skeleton" aria-busy="true">
-					<div className="reminder-status-header">
-						<span className="reminder-status-icon">
-							<NotificationBellIcon />
-						</span>
-						<span className="reminder-status-title">{t("dashboard.reminders.active")}</span>
-					</div>
-					<div className="reminder-status-details reminder-status-skeleton-lines">
-						<span className="skeleton-line skeleton-line-long" />
-						<span className="skeleton-line skeleton-line-medium" />
-						<span className="skeleton-line skeleton-line-short" />
-					</div>
-				</section>
-			) : (
-				anyRemindersEnabled && (
-					<section className="reminder-status-bar">
-						<div className="reminder-status-header">
-							<span className="reminder-status-icon">
-								<NotificationBellIcon />
-							</span>
-							<span className="reminder-status-title">{t("dashboard.reminders.active")}</span>
-							{stockRemindersEnabled && (
-								<span className={`status-chip small ${reminderData.status.className}`}>{reminderData.status.text}</span>
-							)}
-							{prescriptionStatus && (
-								<span className={`status-chip small ${prescriptionStatus.className}`}>{prescriptionStatus.text}</span>
-							)}
-						</div>
-						{(reminderData.lowStockMeds.length > 0 ||
-							(prescriptionRemindersEnabled && prescriptionLowMeds.length > 0) ||
-							(stockRemindersEnabled && reminderData.lastStockSent) ||
-							(intakeRemindersEnabled && reminderData.lastIntakeSent)) && (
-							<div className="reminder-status-details">
-								{stockRemindersEnabled && reminderData.lowStockMeds.length > 0 && (
-									<div className="reminder-status-row">
-										<span className="reminder-status-label">{t("dashboard.reminders.needsRefill")}:</span>
-										<span className="reminder-status-value">
-											{reminderData.lowStockMeds.map((med, idx) => {
-												const medication = meds.find((m) => getMedDisplayName(m) === med.name);
-												const cov = coverage.all.find((c) => c.name === med.name);
-												const status = cov
-													? getStockStatus(cov.daysLeft, cov.medsLeft, stockThresholds, medication?.packageType)
-													: null;
-												const textClass =
-													status?.className === "danger"
-														? "danger-text"
-														: status?.className === "warning"
-															? "warning-text"
-															: "";
-												return (
-													<span key={med.name}>
-														{idx > 0 && ", "}
-														<span
-															className={`med-link clickable ${textClass}`}
-															onClick={() => medication && openMedDetail(medication)}
-															onKeyDown={(e) => {
-																if (e.key === "Enter" || e.key === " ") {
-																	if (medication) openMedDetail(medication);
-																}
-															}}
-														>
-															{med.name}
-														</span>
-														<span className={`reminder-days-left ${textClass}`}>
-															{" "}
-															{t("dashboard.reminders.daysLeft", { count: med.daysLeft, days: med.daysLeft })}
-														</span>
-													</span>
-												);
-											})}
-										</span>
-									</div>
-								)}
-								{prescriptionRemindersEnabled && prescriptionLowMeds.length > 0 && (
-									<div className="reminder-status-row">
-										<span className="reminder-status-label">{t("dashboard.reminders.needsPrescriptionRefill")}:</span>
-										<span className="reminder-status-value">
-											{prescriptionLowMeds.map((med, idx) => {
-												const medication = meds.find((m) => m.id === med.id);
-												const textClass = med.remainingRefills <= 0 ? "danger-text" : "warning-text";
-												return (
-													<span key={med.id}>
-														{idx > 0 && ", "}
-														<span className={`reminder-days-left ${textClass}`}>
-															{t("prescription.remainingRefills")}: {med.remainingRefills} ·{" "}
-															{t("dashboard.reminders.usedBy")}:{" "}
-															<span
-																className={`med-link clickable ${textClass}`}
-																onClick={() => medication && openMedDetail(medication)}
-																onKeyDown={(e) => {
-																	if (e.key === "Enter" || e.key === " ") {
-																		if (medication) openMedDetail(medication);
-																	}
-																}}
-															>
-																{med.name}
-															</span>
-														</span>
-													</span>
-												);
-											})}
-										</span>
-									</div>
-								)}
-								{stockRemindersEnabled && reminderData.lastStockSent && (
-									<div className="reminder-status-row">
-										<span className="reminder-status-label">{t("dashboard.reminders.lastStockSent")}:</span>
-										<span className="reminder-status-value">
-											{reminderData.lastStockSent.medNames &&
-												(() => {
-													const names = reminderData.lastStockSent!.medNames!.split(", ");
-													return names.map((name, idx) => {
-														const medication = meds.find((m) => getMedDisplayName(m) === name);
-														return (
-															<span key={name}>
-																{idx > 0 && ", "}
-																{medication ? (
-																	<span
-																		className="med-link clickable"
-																		onClick={() => openMedDetail(medication)}
-																		onKeyDown={(e) => {
-																			if (e.key === "Enter" || e.key === " ") openMedDetail(medication);
-																		}}
-																	>
-																		{name}
-																	</span>
-																) : (
-																	<span className="reminder-med-name">{name}</span>
-																)}
-															</span>
-														);
-													});
-												})()}
-											<span className="reminder-date"> {reminderData.lastStockSent.date}</span>
-										</span>
-									</div>
-								)}
-								{intakeRemindersEnabled && reminderData.lastIntakeSent && (
-									<div className="reminder-status-row">
-										<span className="reminder-status-label">{t("dashboard.reminders.lastSent")}:</span>
-										<span className="reminder-status-value">
-											{reminderData.lastIntakeSent.medName &&
-												(() => {
-													const medication = meds.find(
-														(m) => getMedDisplayName(m) === reminderData.lastIntakeSent!.medName
-													);
-													return medication ? (
-														<span
-															className="med-link clickable"
-															onClick={() => openMedDetail(medication)}
-															onKeyDown={(e) => {
-																if (e.key === "Enter" || e.key === " ") openMedDetail(medication);
-															}}
-														>
-															{reminderData.lastIntakeSent!.medName}
-														</span>
-													) : (
-														<span className="reminder-med-name">{reminderData.lastIntakeSent!.medName}</span>
-													);
-												})()}
-											{reminderData.lastIntakeSent.takenBy && (
-												<span className="reminder-taken-by"> ({reminderData.lastIntakeSent.takenBy})</span>
-											)}
-											<span className="reminder-date"> {reminderData.lastIntakeSent.date}</span>
-										</span>
-									</div>
-								)}
-							</div>
-						)}
-						{((stockRemindersEnabled && reminderData.lowStockMeds.length > 0) ||
-							(prescriptionRemindersEnabled && prescriptionLowMeds.length > 0)) && (
-							<div className="reminder-send-row">
-								<button type="button" className="ghost" onClick={sendManualReminder} disabled={sendingReminder}>
-									{sendingReminder ? t("common.sending") : t("dashboard.reorder.sendReminder")}
-								</button>
-								{reminderResult && (
-									<span className={`reminder-send-result ${reminderResult.success ? "success" : "error"}`}>
-										{reminderResult.message}
-									</span>
-								)}
-							</div>
-						)}
-					</section>
-				)
-			)}
-			{/* Reorder Reminder card: Only show when reminders are NOT enabled (otherwise Reminder Bar shows the same info) */}
-			{!remindersLoading && !anyRemindersEnabled && (
-				<section className="grid">
-					<article className="card">
-						<div className="card-head">
-							<h2>{t("dashboard.reorder.title")}</h2>
-						</div>
-						{(() => {
-							if (meds.length === 0) {
-								return <p className="muted">{t("dashboard.reorder.noMeds")}</p>;
-							}
+			<DashboardReminderSection
+				t={t}
+				remindersLoading={remindersLoading}
+				anyRemindersEnabled={anyRemindersEnabled}
+				stockRemindersEnabled={stockRemindersEnabled}
+				intakeRemindersEnabled={intakeRemindersEnabled}
+				prescriptionRemindersEnabled={prescriptionRemindersEnabled}
+				reminderData={reminderData}
+				prescriptionLowMeds={prescriptionLowMeds}
+				prescriptionStatus={prescriptionStatus}
+				meds={meds}
+				coverage={coverage}
+				stockThresholds={stockThresholds}
+				sendingReminder={sendingReminder}
+				reminderResult={reminderResult}
+				onSendManualReminder={sendManualReminder}
+				onOpenMedicationDetail={openMedDetail}
+			/>
 
-							// Count medications with low stock (based on lowStockDays setting), deduplicated by name
-							const lowStockMap = new Map<string, Coverage>();
-							for (const c of coverage.all) {
-								if (c.daysLeft === null && c.medsLeft > 0) continue; // no schedule, has stock
-								const med = getMedByName(c.name);
-								const status = getStockStatus(c.daysLeft, c.medsLeft, stockThresholds, med?.packageType);
-								if (status.className === "danger" || status.className === "warning") {
-									const existing = lowStockMap.get(c.name);
-									if (!existing || (c.daysLeft ?? 0) < (existing.daysLeft ?? 0)) {
-										lowStockMap.set(c.name, c);
-									}
-								}
-							}
-							const lowStockMeds = Array.from(lowStockMap.values());
-							const lowStockCount = lowStockMeds.length;
-
-							if (lowStockCount === 0) {
-								// All good - everything is Normal or High
-								return <p className="success-text">{t("dashboard.reorder.allGood")}</p>;
-							}
-
-							// Some meds are low - show simple text with clickable names and days left
-							return (
-								<p>
-									{t("dashboard.reorder.lowWarningPrefix")}{" "}
-									{lowStockMeds.map((c, idx) => {
-										const med = meds.find((m) => getMedDisplayName(m) === c.name);
-										const status = getStockStatus(c.daysLeft, c.medsLeft, stockThresholds, med?.packageType);
-										const textClass =
-											status.className === "danger"
-												? "danger-text"
-												: status.className === "warning"
-													? "warning-text"
-													: "";
-										return (
-											<span key={c.name}>
-												{idx > 0 && ", "}
-												<span
-													className={`med-link clickable ${textClass}`}
-													onClick={() => med && openMedDetail(med)}
-													onKeyDown={(e) => {
-														if (e.key === "Enter" || e.key === " ") {
-															if (med) openMedDetail(med);
-														}
-													}}
-												>
-													{c.name}
-												</span>
-												<span className={`reminder-days-left ${textClass}`}>
-													{" "}
-													({t("dashboard.reminders.daysLeft", { count: c.daysLeft ?? 0, days: c.daysLeft ?? 0 })})
-												</span>
-											</span>
-										);
-									})}{" "}
-									{t("dashboard.reorder.lowWarningSuffix", { count: lowStockCount })}
-								</p>
-							);
-						})()}
-					</article>
-				</section>
-			)}
+			<DashboardStatusSection
+				t={t}
+				show={!remindersLoading && !anyRemindersEnabled}
+				meds={meds}
+				coverage={coverage}
+				stockThresholds={stockThresholds}
+				onOpenMedicationDetail={openMedDetail}
+			/>
 
 			<div
 				className={`dashboard-main-sections${settings.swapDashboardMainSections ? " dashboard-main-sections-swapped" : ""}`}

@@ -120,11 +120,15 @@ let mockContextValue = createMockContext();
 let mockFormHookValue = createMockFormHook();
 const fetchMock = vi.fn();
 
-vi.mock("../../hooks", () => ({
-	useMedicationForm: () => mockFormHookValue,
-	useUnsavedChangesWarning: () => ({}),
-	useModalHistory: vi.fn(),
-}));
+vi.mock("../../hooks", async () => {
+	const actual = await vi.importActual<typeof import("../../hooks")>("../../hooks");
+	return {
+		...actual,
+		useMedicationForm: () => mockFormHookValue,
+		useUnsavedChangesWarning: () => ({}),
+		useModalHistory: vi.fn(),
+	};
+});
 
 vi.mock("../../context", () => ({
 	useAppContext: () => mockContextValue,
@@ -179,6 +183,57 @@ vi.mock("../../components", async () => {
 			isOpen ? <div data-testid="report-modal-open">Report Modal</div> : null,
 	};
 });
+
+vi.mock("../../components/medications/MedicationDialogs", () => ({
+	MedicationDialogs: ({
+		showUnsavedConfirm,
+		unsavedConfirmLabel,
+		onConfirmClose,
+		showObsoleteConfirm,
+		obsoleteConfirmLabel,
+		onConfirmMarkObsolete,
+		showDeleteConfirm,
+		deleteConfirmLabel,
+		onConfirmDelete,
+		showReportModal,
+	}: {
+		showUnsavedConfirm: boolean;
+		unsavedConfirmLabel: string;
+		onConfirmClose: () => void;
+		showObsoleteConfirm: boolean;
+		obsoleteConfirmLabel: string;
+		onConfirmMarkObsolete: () => void;
+		showDeleteConfirm: boolean;
+		deleteConfirmLabel: string;
+		onConfirmDelete: () => void;
+		showReportModal: boolean;
+	}) => (
+		<>
+			{showUnsavedConfirm ? (
+				<div data-testid="confirm-modal">
+					<button type="button" onClick={onConfirmClose}>
+						{unsavedConfirmLabel}
+					</button>
+				</div>
+			) : null}
+			{showObsoleteConfirm ? (
+				<div data-testid="confirm-modal">
+					<button type="button" onClick={onConfirmMarkObsolete}>
+						{obsoleteConfirmLabel}
+					</button>
+				</div>
+			) : null}
+			{showDeleteConfirm ? (
+				<div data-testid="confirm-modal">
+					<button type="button" onClick={onConfirmDelete}>
+						{deleteConfirmLabel}
+					</button>
+				</div>
+			) : null}
+			{showReportModal ? <div data-testid="report-modal-open">Report Modal</div> : null}
+		</>
+	),
+}));
 
 function renderPage(initialEntry = "/medications") {
 	render(

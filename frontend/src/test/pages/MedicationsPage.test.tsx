@@ -439,6 +439,30 @@ describe("MedicationsPage with items", () => {
 		expect(startEdit).toHaveBeenCalledTimes(1);
 	});
 
+	it("prefers the latest context medication data when opening edit", () => {
+		const startEdit = vi.fn();
+		const contextMedication = { ...mockMeds[0], takenBy: ["Alice", "Bob"] };
+		const staleFetchedMedication = { ...mockMeds[0], takenBy: [] };
+
+		mockContextValue = createMockContext({
+			meds: [contextMedication],
+			existingPeople: ["Alice", "Bob"],
+		});
+		mockFormHookValue = createMockFormHook({ startEdit });
+		fetchMock.mockResolvedValue({ ok: true, json: async () => [staleFetchedMedication] });
+
+		renderPage();
+
+		const editButton = document.querySelector(".med-actions .info") as HTMLButtonElement | null;
+		expect(editButton).toBeInTheDocument();
+		fireEvent.click(editButton as HTMLButtonElement);
+
+		expect(startEdit).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 1, takenBy: ["Alice", "Bob"] }),
+			expect.any(Function)
+		);
+	});
+
 	it("opens edit flow from editMedId query parameter", async () => {
 		const startEdit = vi.fn();
 		mockFormHookValue = createMockFormHook({ startEdit });

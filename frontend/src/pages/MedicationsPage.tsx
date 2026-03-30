@@ -1291,13 +1291,19 @@ export function MedicationsPage() {
 		});
 	}
 
+	const getLatestMedication = useCallback(
+		(med: Medication) => meds.find((candidate) => candidate.id === med.id) ?? med,
+		[meds]
+	);
+
 	function handleEditClick(med: Medication) {
+		const latestMedication = getLatestMedication(med);
 		if (formChanged) {
 			pendingActionRef.current = () => {
 				setShowNameValidation(false);
 				setReadOnlyView(false);
-				resetMedicationEnrichment(med.name || med.genericName || "");
-				startEdit(med, openEditModal);
+				resetMedicationEnrichment(latestMedication.name || latestMedication.genericName || "");
+				startEdit(latestMedication, openEditModal);
 				setViewMode("form");
 				scrollToTopForDesktopEdit();
 			};
@@ -1308,19 +1314,20 @@ export function MedicationsPage() {
 		setShowNameValidation(false);
 		setReadOnlyView(false);
 		setActiveTab("general");
-		resetMedicationEnrichment(med.name || med.genericName || "");
-		startEdit(med, openEditModal);
+		resetMedicationEnrichment(latestMedication.name || latestMedication.genericName || "");
+		startEdit(latestMedication, openEditModal);
 		setViewMode("form");
 		scrollToTopForDesktopEdit();
 	}
 
 	function handleViewClick(med: Medication) {
+		const latestMedication = getLatestMedication(med);
 		if (formChanged) {
 			pendingActionRef.current = () => {
 				setShowNameValidation(false);
 				setReadOnlyView(true);
-				resetMedicationEnrichment(med.name || med.genericName || "");
-				startEdit(med, openEditModal);
+				resetMedicationEnrichment(latestMedication.name || latestMedication.genericName || "");
+				startEdit(latestMedication, openEditModal);
 				setViewMode("form");
 				scrollToTopForDesktopEdit();
 			};
@@ -1331,8 +1338,8 @@ export function MedicationsPage() {
 		setShowNameValidation(false);
 		setReadOnlyView(true);
 		setActiveTab("general");
-		resetMedicationEnrichment(med.name || med.genericName || "");
-		startEdit(med, openEditModal);
+		resetMedicationEnrichment(latestMedication.name || latestMedication.genericName || "");
+		startEdit(latestMedication, openEditModal);
 		setViewMode("form");
 		scrollToTopForDesktopEdit();
 	}
@@ -1390,7 +1397,8 @@ export function MedicationsPage() {
 		if (processedEditMedIdRef.current === editMedId) return;
 		const parsedMedId = Number.parseInt(editMedId, 10);
 		if (Number.isNaN(parsedMedId)) return;
-		const medicationToEdit = allMeds.find((med) => med.id === parsedMedId);
+		const medicationToEdit =
+			meds.find((med) => med.id === parsedMedId) ?? allMeds.find((med) => med.id === parsedMedId);
 		if (!medicationToEdit) return;
 
 		processedEditMedIdRef.current = editMedId;
@@ -1408,7 +1416,7 @@ export function MedicationsPage() {
 		const nextParams = new URLSearchParams(searchParams);
 		nextParams.delete("editMedId");
 		setSearchParams(nextParams, { replace: true });
-	}, [allMeds, openEditModal, searchParams, setSearchParams, startEdit]);
+	}, [allMeds, meds, openEditModal, searchParams, setSearchParams, startEdit]);
 
 	const selectedMedication = useMemo(() => {
 		if (!editingId) return null;

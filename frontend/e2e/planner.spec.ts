@@ -13,45 +13,42 @@ test.describe("Planner Page", () => {
 	test("should display planner form", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		await expect(page.getByTestId("planner-form-card")).toBeVisible();
+		await expect(page.locator("form.planner")).toBeVisible();
 	});
 
 	test("should navigate to planner via nav tab", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		await page
-			.getByTestId("main-nav")
-			.getByRole("button", { name: /Planner/i })
-			.click();
+		await page.locator('button.pill:has-text("Planner")').click();
 		await expect(page).toHaveURL(/\/planner/);
-		await expect(page.getByTestId("planner-form-card")).toBeVisible();
+		await expect(page.locator("form.planner")).toBeVisible();
 	});
 
 	test("should have date inputs", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		await expect(page.getByText(/From|Von/i)).toBeVisible();
-		await expect(page.getByText(/Until|Bis/i)).toBeVisible();
+		const dateInputs = page.locator('form.planner input[type="datetime-local"]');
+		expect(await dateInputs.count()).toBeGreaterThanOrEqual(2);
 	});
 
 	test("should have a calculate button", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		const calculateBtn = page.getByTestId("planner-form-card").getByRole("button", { name: /Calculate|Calculating/i });
+		const calculateBtn = page.locator('form.planner button[type="submit"]');
 		await expect(calculateBtn).toBeVisible();
 	});
 
 	test("should have a reset button", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		const resetBtn = page.getByTestId("planner-form-card").getByRole("button", { name: /Reset/i });
+		const resetBtn = page.locator("form.planner button.ghost");
 		await expect(resetBtn).toBeVisible();
 	});
 
 	test("should have include-until-start checkbox", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		const checkbox = page.getByTestId("planner-include-until-start").locator('input[type="checkbox"]');
+		const checkbox = page.locator('label.planner-checkbox input[type="checkbox"]');
 		await expect(checkbox).toBeVisible();
 	});
 
@@ -59,24 +56,22 @@ test.describe("Planner Page", () => {
 		await navigateTo(page, "/planner");
 
 		// Submit the planner form (default dates should work)
-		await page
-			.getByTestId("planner-form-card")
-			.getByRole("button", { name: /Calculate/i })
-			.click();
+		await page.locator('form.planner button[type="submit"]').click();
 
 		// After submit, the form should still be visible (no crash)
-		await expect(page.getByTestId("planner-form-card")).toBeVisible();
+		await expect(page.locator("form.planner")).toBeVisible();
 	});
 
 	test("should show planner tab as active", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		await expect(page).toHaveURL(/\/planner/);
+		const plannerTab = page.locator('button.pill:has-text("Planner")');
+		await expect(plannerTab).toHaveClass(/primary/);
 	});
 
 	test("Planner eyebrow shows correct heading", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		await expect(page.getByTestId("planner-page-header")).toBeVisible();
+		await expect(page.locator(".eyebrow")).toBeVisible();
 	});
 });

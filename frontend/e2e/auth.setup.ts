@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { expect, test as setup, type APIResponse, type Cookie } from "@playwright/test";
+import { type APIResponse, type Cookie, expect, test as setup } from "@playwright/test";
 import { applyVideoSafetyMode, TEST_USER } from "./fixtures";
 
 const authFile = path.join(import.meta.dirname, ".auth", "user.json");
@@ -73,7 +73,13 @@ function toBrowserCookie(setCookieHeader: string, baseURL: string): Cookie | nul
 				cookie.path = value || "/";
 				break;
 			case "samesite":
-				cookie.sameSite = /^none$/i.test(value) ? "None" : /^strict$/i.test(value) ? "Strict" : "Lax";
+				if (/^none$/i.test(value)) {
+					cookie.sameSite = "None";
+				} else if (/^strict$/i.test(value)) {
+					cookie.sameSite = "Strict";
+				} else {
+					cookie.sameSite = "Lax";
+				}
 				break;
 			case "secure":
 				cookie.secure = true;

@@ -14,42 +14,36 @@ test.describe("Dashboard", () => {
 		await navigateTo(page, "/dashboard");
 
 		// App header with navigation tabs should be visible
-		await expect(page.getByTestId("app-header")).toBeVisible();
-		await expect(page.getByTestId("app-header").getByRole("heading", { level: 1 })).toBeVisible();
+		await expect(page.locator("header.hero")).toBeVisible();
+		await expect(page.locator("header.hero h1")).toBeVisible();
 
 		// Eyebrow should show "Overview"
-		await expect(page.getByTestId("app-header")).toContainText(/Overview/i);
+		await expect(page.locator(".eyebrow")).toContainText("Overview");
 	});
 
 	test("should show navigation tabs", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
 		// All three nav tabs should be visible
-		await expect(page.getByTestId("main-nav").getByRole("button", { name: /Dashboard/i })).toBeVisible();
-		await expect(page.getByTestId("main-nav").getByRole("button", { name: /Medications/i })).toBeVisible();
-		await expect(page.getByTestId("main-nav").getByRole("button", { name: /Planner/i })).toBeVisible();
+		await expect(page.locator('button.pill:has-text("Dashboard")')).toBeVisible();
+		await expect(page.locator('button.pill:has-text("Medications")')).toBeVisible();
+		await expect(page.locator('button.pill:has-text("Planner")')).toBeVisible();
 
 		// Dashboard tab should be active
-		await expect(page).toHaveURL(/\/dashboard/);
+		await expect(page.locator('button.pill.primary:has-text("Dashboard")')).toBeVisible();
 	});
 
 	test("should navigate to medications via tab", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		await page
-			.getByTestId("main-nav")
-			.getByRole("button", { name: /Medications/i })
-			.click();
+		await page.locator('button.pill:has-text("Medications")').click();
 		await expect(page).toHaveURL(/\/medications/);
 	});
 
 	test("should navigate to planner via tab", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		await page
-			.getByTestId("main-nav")
-			.getByRole("button", { name: /Planner/i })
-			.click();
+		await page.locator('button.pill:has-text("Planner")').click();
 		await expect(page).toHaveURL(/\/planner/);
 	});
 
@@ -96,7 +90,7 @@ test.describe("Dashboard", () => {
 
 	test("should redirect root to dashboard", async ({ page }) => {
 		await page.goto("/");
-		await expect(page.getByTestId("app-header")).toBeVisible({ timeout: 15000 });
+		await expect(page.locator("header.hero")).toBeVisible({ timeout: 15000 });
 		await expect(page).toHaveURL(/\/dashboard/);
 	});
 });

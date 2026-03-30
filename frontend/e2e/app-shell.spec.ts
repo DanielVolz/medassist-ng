@@ -31,8 +31,8 @@ test.describe("App Shell", () => {
 
 		await navigateTo(page, "/dashboard");
 
-		await page.getByTestId("user-menu-trigger").click();
-		await page.getByTestId("user-menu-profile").click();
+		await page.locator(".user-menu-btn").click();
+		await page.locator('.dropdown-item:has-text("Profile")').click();
 
 		await expect(page.locator(".modal-content.profile-modal")).toBeVisible();
 		await page.locator(".modal-content.profile-modal .modal-close").click();
@@ -44,8 +44,8 @@ test.describe("App Shell", () => {
 
 		await navigateTo(page, "/dashboard");
 
-		await page.getByTestId("user-menu-trigger").click();
-		await page.getByTestId("user-menu-about").click();
+		await page.locator(".user-menu-btn").click();
+		await page.locator('.dropdown-item:has-text("About")').click();
 
 		await expect(page.locator(".modal-content.about-modal")).toBeVisible();
 		await expect(page.locator(".about-header h2")).toContainText("MedAssist-ng");
@@ -58,8 +58,8 @@ test.describe("App Shell", () => {
 
 		await navigateTo(page, "/dashboard");
 
-		await page.getByTestId("user-menu-trigger").click();
-		await page.getByTestId("user-menu-signout").click();
+		await page.locator(".user-menu-btn").click();
+		await page.locator('.dropdown-item.danger:has-text("Sign Out")').click();
 
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 	});

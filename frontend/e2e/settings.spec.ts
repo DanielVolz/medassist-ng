@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { authFile, navigateTo, test } from "./fixtures";
 
+const emailHeadingPattern = /Email|E-Mail/i;
 const smtpUnavailablePattern = /stay unavailable until SMTP is configured|bleiben deaktiviert, bis SMTP/i;
 
 /**
@@ -15,13 +16,13 @@ test.describe("Settings Page", () => {
 	test("should display settings form", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		await expect(page.getByTestId("settings-page")).toBeVisible();
+		await expect(page.locator("div.settings-form")).toBeVisible();
 	});
 
 	test("should show language section with select", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const languageSelect = page.getByTestId("settings-language-select").locator("select");
+		const languageSelect = page.locator("select.language-select");
 		await expect(languageSelect).toBeVisible();
 
 		// Should have at least English and German
@@ -31,7 +32,7 @@ test.describe("Settings Page", () => {
 	test("should allow switching language", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const languageSelect = page.getByTestId("settings-language-select").locator("select");
+		const languageSelect = page.locator("select.language-select");
 		const currentValue = await languageSelect.inputValue();
 
 		// Switch to the other language
@@ -47,11 +48,11 @@ test.describe("Settings Page", () => {
 	test("should show notification matrix", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const matrix = page.getByTestId("settings-notification-matrix");
+		const matrix = page.locator("div.notification-matrix");
 		await expect(matrix).toBeVisible();
 
 		// Matrix contains toggle switches
-		const toggles = matrix.locator('input[type="checkbox"]');
+		const toggles = matrix.locator("label.toggle-switch");
 		expect(await toggles.count()).toBeGreaterThanOrEqual(2);
 	});
 
@@ -71,8 +72,11 @@ test.describe("Settings Page", () => {
 
 		await navigateTo(page, "/settings");
 
-		const emailSection = page.getByTestId("settings-notification-card");
-		const emailToggle = page.getByTestId("settings-email-enabled-toggle").locator('input[type="checkbox"]');
+		const emailSection = page
+			.locator(".setting-section")
+			.filter({ has: page.locator(".section-header h3").filter({ hasText: emailHeadingPattern }) })
+			.first();
+		const emailToggle = emailSection.locator('input[type="checkbox"]').first();
 
 		await expect(emailToggle).toBeDisabled();
 		await expect(emailSection.getByText(smtpUnavailablePattern)).toHaveCount(0);
@@ -94,8 +98,11 @@ test.describe("Settings Page", () => {
 		test.skip(!settingsResponse.ok, `Settings request failed with status ${settingsResponse.status}`);
 		test.skip(!settingsResponse.body?.smtpHost, "SMTP is not configured in this environment");
 
-		const emailSection = page.getByTestId("settings-notification-card");
-		const emailToggle = page.getByTestId("settings-email-enabled-toggle").locator('input[type="checkbox"]');
+		const emailSection = page
+			.locator(".setting-section")
+			.filter({ has: page.locator(".section-header h3").filter({ hasText: emailHeadingPattern }) })
+			.first();
+		const emailToggle = emailSection.locator('input[type="checkbox"]').first();
 
 		await expect(emailToggle).toBeEnabled();
 		await expect(emailSection.getByText(smtpUnavailablePattern)).toHaveCount(0);
@@ -104,44 +111,42 @@ test.describe("Settings Page", () => {
 	test("should show stock settings section with threshold inputs", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		await expect(page.getByTestId("settings-security-card")).toBeVisible();
-		await expect(page.getByTestId("settings-threshold-critical")).toBeVisible();
-		await expect(page.getByTestId("settings-threshold-low")).toBeVisible();
-		await expect(page.getByTestId("settings-threshold-high")).toBeVisible();
+		const thresholdGroup = page.locator("div.threshold-chips-group");
+		await expect(thresholdGroup).toBeVisible();
+
+		// Should have three threshold number inputs
+		const thresholdInputs = thresholdGroup.locator('input[type="text"]');
+		await expect(thresholdInputs).toHaveCount(3);
 	});
 
 	test("should show calculation mode radio cards", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const modeGroup = page.getByTestId("settings-calculation-mode");
+		const modeGroup = page.locator("div.calculation-mode-group");
 		await expect(modeGroup).toBeVisible();
-		expect(await modeGroup.locator('[value="automatic"], [data-value="automatic"]').count()).toBeGreaterThan(0);
-		expect(await modeGroup.locator('[value="manual"], [data-value="manual"]').count()).toBeGreaterThan(0);
+
+		// Two radio cards: automatic and manual
+		const radioCards = modeGroup.locator("label.radio-card");
+		await expect(radioCards).toHaveCount(2);
+
+		// One should be selected
+		await expect(modeGroup.locator("label.radio-card.selected")).toHaveCount(1);
 	});
 
 	test("should toggle calculation mode", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const modeGroup = page.getByTestId("settings-calculation-mode");
-		const automatic = modeGroup.locator('input[type="radio"][value="automatic"]');
-		const manual = modeGroup.locator('input[type="radio"][value="manual"]');
-		await expect(automatic).toHaveCount(1);
-		await expect(manual).toHaveCount(1);
-		const automaticId = await automatic.getAttribute("id");
-		const manualId = await manual.getAttribute("id");
-		expect(automaticId).toBeTruthy();
-		expect(manualId).toBeTruthy();
-		const automaticLabel = modeGroup.locator(`label[for="${automaticId}"]`).first();
-		const manualLabel = modeGroup.locator(`label[for="${manualId}"]`).first();
+		const modeGroup = page.locator("div.calculation-mode-group");
+		const radioCards = modeGroup.locator("label.radio-card");
+		await expect(radioCards).toHaveCount(2);
+		await expect(modeGroup.locator("label.radio-card.selected")).toHaveCount(1);
 
-		const automaticChecked = await automatic.isChecked();
-		if (automaticChecked) {
-			await manualLabel.click();
-			await expect(manual).toBeChecked();
-		} else {
-			await automaticLabel.click();
-			await expect(automatic).toBeChecked();
-		}
+		const firstSelected = await radioCards.first().evaluate((el) => el.classList.contains("selected"));
+		const targetCard = firstSelected ? radioCards.nth(1) : radioCards.first();
+
+		await targetCard.click();
+		await expect(targetCard).toHaveClass(/selected/, { timeout: 10000 });
+		await expect(modeGroup.locator("label.radio-card.selected")).toHaveCount(1);
 	});
 
 	test("should have export action button", async ({ page }) => {
@@ -176,73 +181,78 @@ test.describe("Settings Page", () => {
 	test("should show export/import section", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const exportBtn = page
-			.getByTestId("settings-danger-zone-card")
-			.getByRole("button", { name: /Export Data|Daten exportieren/i });
+		// Export button
+		const exportBtn = page.locator("div.action-card button.secondary").first();
 		await expect(exportBtn).toBeVisible();
 	});
 
 	test("should toggle a notification switch", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const matrix = page.getByTestId("settings-notification-matrix");
-		const toggles = matrix.locator('input[type="checkbox"]');
-		const count = await toggles.count();
+		// Find all toggle-switch labels on the entire settings page
+		const allToggleLabels = page.locator("label.toggle-switch");
+		const count = await allToggleLabels.count();
 
-		let enabledToggle = null as null | ReturnType<typeof toggles.nth>;
+		// Find the first toggle that is NOT disabled
+		let enabledToggle = null;
 		for (let i = 0; i < count; i++) {
-			const toggle = toggles.nth(i);
-			const isDisabled = !(await toggle.isEnabled());
+			const label = allToggleLabels.nth(i);
+			const isDisabled = await label.evaluate((el) => el.classList.contains("disabled"));
 			if (!isDisabled) {
-				enabledToggle = toggle;
+				enabledToggle = label;
 				break;
 			}
 		}
 
 		test.skip(!enabledToggle, "All notification toggles are disabled in this environment");
 
-		const initialState = await enabledToggle.isChecked();
+		const checkbox = enabledToggle.locator('input[type="checkbox"]');
+		const initialState = await checkbox.isChecked();
 
+		// Click the label to toggle
 		await enabledToggle.click();
 
 		if (initialState) {
-			await expect(enabledToggle).not.toBeChecked();
+			await expect(checkbox).not.toBeChecked();
 		} else {
-			await expect(enabledToggle).toBeChecked();
+			await expect(checkbox).toBeChecked();
 		}
 
 		// Toggle back to restore original state
 		await enabledToggle.click();
-		await expect(enabledToggle).toHaveJSProperty("checked", initialState);
+		await expect(checkbox).toHaveJSProperty("checked", initialState);
 	});
 
 	test("should validate stock thresholds", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
+		const thresholdGroup = page.locator("div.threshold-chips-group");
+		const inputs = thresholdGroup.locator('input[type="text"]');
+
 		// Set an invalid value (critical > low)
-		const criticalInput = page.getByTestId("settings-threshold-critical").locator("input");
+		const criticalInput = inputs.first();
 		await criticalInput.fill("999");
 
 		// Should show validation error
-		const validationError = page.getByTestId("settings-threshold-validation");
+		const validationError = page.locator("p.threshold-validation-error");
 		await expect(validationError).toBeVisible();
 	});
 
 	test("should reach settings via user menu", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const userMenuButton = page.getByTestId("user-menu-trigger");
+		const userMenuButton = page.locator("button.user-menu-btn");
 		test.skip(!(await userMenuButton.isVisible().catch(() => false)), "User menu is unavailable when auth is disabled");
 
 		// Open user menu
 		await userMenuButton.click();
 
 		// Click settings option in dropdown
-		const settingsOption = page.getByTestId("user-menu-settings");
+		const settingsOption = page.locator(".user-dropdown").getByText(/Settings/i);
 		await expect(settingsOption).toBeVisible();
 		await settingsOption.click();
 
 		await expect(page).toHaveURL(/\/settings/);
-		await expect(page.getByTestId("settings-page")).toBeVisible();
+		await expect(page.locator("div.settings-form")).toBeVisible();
 	});
 });

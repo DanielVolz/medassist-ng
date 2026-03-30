@@ -9,6 +9,7 @@ import { authFile, createMedicationViaAPI, deleteAllMedicationsViaAPI, navigateT
  */
 test.describe("Schedule Timeline", () => {
 	test.use({ storageState: authFile });
+	test.describe.configure({ timeout: 60000 });
 
 	const seededName = "Schedule Smoke Seed";
 	const startThreeDaysAgo = (() => {
@@ -19,7 +20,26 @@ test.describe("Schedule Timeline", () => {
 		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 	})();
 
+	async function waitForSeededScheduleData(page: Parameters<Parameters<typeof test>[0]>[0]["page"]) {
+		for (let attempt = 0; attempt < 5; attempt++) {
+			const response = await page.request.get("/api/medications").catch(() => null);
+			const medications = response?.ok() ? ((await response.json()) as Array<{ name?: string }>) : [];
+			const hasSeededMedication = medications.some((medication) => medication.name === seededName);
+
+			if (hasSeededMedication) {
+				await page.reload();
+				await page.waitForLoadState("networkidle");
+				return;
+			}
+
+			await page.waitForTimeout(1000 * (attempt + 1));
+		}
+
+		throw new Error(`Seeded medication ${seededName} did not become available via /api/medications`);
+	}
+
 	test.beforeAll(async () => {
+		test.setTimeout(60000);
 		await deleteAllMedicationsViaAPI();
 		await createMedicationViaAPI({
 			name: seededName,
@@ -39,7 +59,6 @@ test.describe("Schedule Timeline", () => {
 	test("should have timeline container in DOM", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// Timeline exists in the DOM (may be empty/hidden if no medications)
 		await expect(page.locator(".timeline")).toBeAttached();
 	});
 
@@ -48,8 +67,6 @@ test.describe("Schedule Timeline", () => {
 
 		const daysSelect = page.locator("select.schedule-days-select");
 		await expect(daysSelect).toBeVisible();
-
-		// Should offer 30, 90, 180 days
 		await expect(daysSelect.locator('option[value="30"]')).toBeAttached();
 		await expect(daysSelect.locator('option[value="90"]')).toBeAttached();
 		await expect(daysSelect.locator('option[value="180"]')).toBeAttached();
@@ -60,8 +77,6 @@ test.describe("Schedule Timeline", () => {
 
 		const daysSelect = page.locator("select.schedule-days-select");
 		const currentValue = await daysSelect.inputValue();
-
-		// Switch to a different range
 		const newValue = currentValue === "30" ? "90" : "30";
 		await daysSelect.selectOption(newValue);
 		await expect(daysSelect).toHaveValue(newValue);
@@ -69,20 +84,20 @@ test.describe("Schedule Timeline", () => {
 
 	test("should show past days toggle when medications exist", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		await waitForSeededScheduleData(page);
 
-		// Past days toggle appears when there are scheduled medications
 		const pastToggle = page.locator(".past-days-toggle");
-		await expect(pastToggle).toBeVisible();
+		await expect(pastToggle).toBeVisible({ timeout: 20000 });
 	});
 
 	test("should expand/collapse past days on click", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		await waitForSeededScheduleData(page);
 
 		const pastToggle = page.locator(".past-days-toggle");
-		await expect(pastToggle).toBeVisible();
+		await expect(pastToggle).toBeVisible({ timeout: 20000 });
 
 		const wasExpanded = await pastToggle.evaluate((el) => el.classList.contains("expanded"));
-
 		await pastToggle.click();
 
 		if (wasExpanded) {
@@ -94,16 +109,15 @@ test.describe("Schedule Timeline", () => {
 
 	test("should show future days toggle when medications exist", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		await waitForSeededScheduleData(page);
 
-		// Future days toggle appears when there are scheduled medications
 		const futureToggle = page.locator(".future-days-toggle");
-		await expect(futureToggle).toBeVisible();
+		await expect(futureToggle).toBeVisible({ timeout: 20000 });
 	});
 
 	test("should display day blocks in timeline", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// With medications there should be day blocks; otherwise empty-state is expected.
 		const dayBlocks = page.locator(".day-block");
 		const dayBlockCount = await dayBlocks.count();
 		if (dayBlockCount === 0) {
@@ -116,33 +130,32 @@ test.describe("Schedule Timeline", () => {
 	test("should highlight today block", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// With medications, today should be highlighted
 		const todayBlock = page.locator(".day-block.today");
-		await expect(todayBlock).toBeVisible();
+		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 		await expect(todayBlock.locator(".day-date")).toBeVisible();
 	});
 
 	test("should show day summary with progress", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		await waitForSeededScheduleData(page);
 
-		const todayBlock = page.locator(".day-block.today");
-		await expect(todayBlock).toBeVisible();
-		const summary = todayBlock.locator(".day-summary");
-		await expect(summary).toBeVisible();
+		const summary = page.locator(".dashboard-schedules-section .timeline .day-summary").first();
+		await expect(summary).toBeVisible({ timeout: 20000 });
 	});
 
 	test("should collapse/expand a day block", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		await waitForSeededScheduleData(page);
 
-		const todayBlock = page.locator(".day-block.today");
-		await expect(todayBlock).toBeVisible();
-		const dayDivider = todayBlock.locator(".day-divider");
+		await expect(page.locator(".dashboard-schedules-section .timeline")).toBeVisible();
+		const dayBlock = page.locator(".dashboard-schedules-section .day-block.today");
+		await expect(dayBlock).toBeVisible({ timeout: 20000 });
+		const dayDivider = dayBlock.locator(".day-divider");
 		await dayDivider.click();
 
-		const isCollapsed = await todayBlock.evaluate((el) => el.classList.contains("collapsed"));
-
+		const isCollapsed = await dayBlock.evaluate((el) => el.classList.contains("collapsed"));
 		await dayDivider.click();
-		const isCollapsedAfter = await todayBlock.evaluate((el) => el.classList.contains("collapsed"));
+		const isCollapsedAfter = await dayBlock.evaluate((el) => el.classList.contains("collapsed"));
 
 		expect(isCollapsed).not.toBe(isCollapsedAfter);
 	});

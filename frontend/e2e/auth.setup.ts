@@ -89,6 +89,17 @@ setup("authenticate", async ({ page }) => {
 
 	// ---- 5. Log in via the appropriate method ----
 	if (formLoginEnabled) {
+		const loginWithApi = async () => {
+			const loginRes = await page.request.post(`${baseURL}/api/auth/login`, {
+				data: {
+					username: TEST_USER.username,
+					password: TEST_USER.password,
+					rememberMe: true,
+				},
+			});
+			return loginRes.ok();
+		};
+
 		const loginWithForm = async () => {
 			const usernameField = page.locator("#username");
 			const passwordField = page.locator("#password");
@@ -119,7 +130,12 @@ setup("authenticate", async ({ page }) => {
 			await submitButton.click();
 		};
 
-		await loginWithForm();
+		let loggedIn = await loginWithApi();
+		if (!loggedIn) {
+			await loginWithForm();
+		} else {
+			await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+		}
 		const hasHeroAfterFirstLogin = await page
 			.locator("header.hero")
 			.isVisible({ timeout: 5000 })
@@ -132,7 +148,12 @@ setup("authenticate", async ({ page }) => {
 				})
 				.catch(() => {});
 
-			await loginWithForm();
+			loggedIn = await loginWithApi();
+			if (!loggedIn) {
+				await loginWithForm();
+			} else {
+				await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+			}
 		}
 	} else if (oidcEnabled) {
 		// SSO-only path: click the SSO button and let the OIDC provider handle login.

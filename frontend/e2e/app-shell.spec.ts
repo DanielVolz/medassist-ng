@@ -8,11 +8,27 @@ import {
 	test,
 } from "./fixtures";
 
+async function isAuthEnabled(page: Parameters<Parameters<typeof test>[0]>[0]["page"]): Promise<boolean> {
+	try {
+		const response = await page.request.get("/api/auth/state");
+		if (!response.ok()) {
+			return true;
+		}
+
+		const state = (await response.json()) as { authEnabled?: boolean };
+		return state.authEnabled !== false;
+	} catch {
+		return true;
+	}
+}
+
 test.describe("App Shell", () => {
 	test.use({ storageState: authFile });
 	test.describe.configure({ timeout: 90000 });
 
 	test("opens and closes profile modal from user menu", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
 		await navigateTo(page, "/dashboard");
 
 		await page.locator(".user-menu-btn").click();
@@ -24,6 +40,8 @@ test.describe("App Shell", () => {
 	});
 
 	test("opens and closes about modal from user menu", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
 		await navigateTo(page, "/dashboard");
 
 		await page.locator(".user-menu-btn").click();
@@ -36,6 +54,8 @@ test.describe("App Shell", () => {
 	});
 
 	test("signs out from user menu", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
 		await navigateTo(page, "/dashboard");
 
 		await page.locator(".user-menu-btn").click();
@@ -50,6 +70,7 @@ test.describe("Public Share Routes", () => {
 	test.describe.configure({ timeout: 90000 });
 
 	test.beforeAll(async () => {
+		test.setTimeout(60000);
 		await deleteAllMedicationsViaAPI();
 		await createMedicationViaAPI({
 			name: "Share Overview Redirect Med",

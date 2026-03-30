@@ -172,11 +172,41 @@ export async function signOut(page: Page): Promise<void> {
 // Re-export expect for convenience
 export { expect };
 
+const APP_BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
+// Seed helpers talk to the backend directly so Vite proxy readiness does not consume
+// the 30s beforeAll budget for API-created test data.
+const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL || "http://localhost:3000";
+
+let cachedAuthEnabled: boolean | null = null;
+
+async function isRuntimeAuthEnabled(): Promise<boolean> {
+	if (cachedAuthEnabled !== null) {
+		return cachedAuthEnabled;
+	}
+
+	try {
+		const response = await fetch(`${APP_BASE}/api/auth/state`);
+		if (!response.ok) {
+			cachedAuthEnabled = true;
+			return cachedAuthEnabled;
+		}
+
+		const state = (await response.json()) as { authEnabled?: boolean };
+		cachedAuthEnabled = state.authEnabled === true;
+		return cachedAuthEnabled;
+	} catch {
+		cachedAuthEnabled = true;
+		return cachedAuthEnabled;
+	}
+}
+
+async function getRuntimeApiBase(): Promise<string> {
+	return (await isRuntimeAuthEnabled()) ? API_BASE : `${APP_BASE}/api`;
+}
+
 // ---------------------------------------------------------------------------
 // API helpers — create / delete medications via backend API
 // ---------------------------------------------------------------------------
-const API_BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
-
 let cachedAuthCookie: string | null = null;
 
 function readAuthCookieFromFile(): string | null {
@@ -201,7 +231,8 @@ function extractCookieValue(setCookieHeaders: string[], name: string): string | 
 }
 
 async function refreshAuthCookieViaLogin(): Promise<string | null> {
-	const res = await fetch(`${API_BASE}/api/auth/login`, {
+	const apiBase = await getRuntimeApiBase();
+	const res = await fetch(`${apiBase}/auth/login`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -229,6 +260,19 @@ function getAuthCookie(): string | null {
 	if (cachedAuthCookie) return cachedAuthCookie;
 	cachedAuthCookie = readAuthCookieFromFile();
 	return cachedAuthCookie;
+}
+
+async function ensureAuthCookie(): Promise<string | null> {
+	if (!(await isRuntimeAuthEnabled())) {
+		return null;
+	}
+
+	const existingCookie = getAuthCookie();
+	if (existingCookie) {
+		return existingCookie;
+	}
+
+	return refreshAuthCookieViaLogin();
 }
 
 /** Typed medication response (subset of fields we care about) */
@@ -276,7 +320,8 @@ export async function createMedicationViaAPI(data: {
 		takenBy?: string | null;
 	}[];
 }): Promise<TestMedication> {
-	let token = getAuthCookie();
+	let token = await ensureAuthCookie();
+	const apiBase = await getRuntimeApiBase();
 	const packageType = data.packageType ?? "blister";
 	const isAmountBased = packageType === "bottle" || packageType === "tube" || packageType === "liquid_container";
 	let defaultMedicationForm: "capsule" | "tablet" | "liquid" | "topical" = "tablet";
@@ -314,7 +359,7 @@ export async function createMedicationViaAPI(data: {
 	};
 
 	for (let attempt = 0; attempt < 5; attempt++) {
-		const res = await fetch(`${API_BASE}/api/medications`, {
+		const res = await fetch(`${apiBase}/medications`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -345,9 +390,10 @@ export async function createMedicationViaAPI(data: {
  * Includes retry for rate-limited responses.
  */
 export async function deleteMedicationViaAPI(id: number): Promise<void> {
-	let token = getAuthCookie();
+	let token = await ensureAuthCookie();
+	const apiBase = await getRuntimeApiBase();
 	for (let attempt = 0; attempt < 3; attempt++) {
-		const res = await fetch(`${API_BASE}/api/medications/${id}`, {
+		const res = await fetch(`${apiBase}/medications/${id}`, {
 			method: "DELETE",
 			headers: token ? { Cookie: `access_token=${token}` } : {},
 		});
@@ -368,9 +414,10 @@ export async function deleteMedicationViaAPI(id: number): Promise<void> {
  * Includes retry logic for rate-limited responses.
  */
 export async function deleteAllMedicationsViaAPI(): Promise<void> {
-	let token = getAuthCookie();
+	let token = await ensureAuthCookie();
+	const apiBase = await getRuntimeApiBase();
 	for (let attempt = 0; attempt < 3; attempt++) {
-		const res = await fetch(`${API_BASE}/api/medications`, {
+		const res = await fetch(`${apiBase}/medications`, {
 			headers: token ? { Cookie: `access_token=${token}` } : {},
 		});
 		if (res.status === 401) {
@@ -385,7 +432,7 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
 		const meds = (await res.json()) as TestMedication[];
 		for (const med of meds) {
 			for (let delAttempt = 0; delAttempt < 3; delAttempt++) {
-				const delRes = await fetch(`${API_BASE}/api/medications/${med.id}`, {
+				const delRes = await fetch(`${apiBase}/medications/${med.id}`, {
 					method: "DELETE",
 					headers: token ? { Cookie: `access_token=${token}` } : {},
 				});
@@ -409,9 +456,10 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
  * Requires a medication with takenBy to exist first.
  */
 export async function createShareTokenViaAPI(takenBy: string, scheduleDays = 30): Promise<TestShareToken> {
-	let token = getAuthCookie();
+	let token = await ensureAuthCookie();
+	const apiBase = await getRuntimeApiBase();
 	for (let attempt = 0; attempt < 5; attempt++) {
-		const res = await fetch(`${API_BASE}/api/share`, {
+		const res = await fetch(`${apiBase}/share`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -449,9 +497,10 @@ export async function createShareTokenViaAPI(takenBy: string, scheduleDays = 30)
  * Update user settings via the backend API.
  */
 export async function updateSettingsViaAPI(settings: Record<string, unknown>): Promise<void> {
-	const token = getAuthCookie();
+	const token = await ensureAuthCookie();
+	const apiBase = await getRuntimeApiBase();
 	for (let attempt = 0; attempt < 3; attempt++) {
-		const res = await fetch(`${API_BASE}/api/settings`, {
+		const res = await fetch(`${apiBase}/settings`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",

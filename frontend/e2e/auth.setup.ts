@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { expect, test as setup } from "@playwright/test";
+import { expect, test as setup, type APIResponse, type Cookie } from "@playwright/test";
 import { applyVideoSafetyMode, TEST_USER } from "./fixtures";
 
 const authFile = path.join(import.meta.dirname, ".auth", "user.json");
@@ -21,6 +21,85 @@ function isTokenValid(token: string): boolean {
 	}
 }
 
+function toBrowserCookie(setCookieHeader: string, baseURL: string): Cookie | null {
+	const segments = setCookieHeader
+		.split(";")
+		.map((segment) => segment.trim())
+		.filter(Boolean);
+	const [nameValue, ...attributes] = segments;
+	if (!nameValue) {
+		return null;
+	}
+
+	const separatorIndex = nameValue.indexOf("=");
+	if (separatorIndex <= 0) {
+		return null;
+	}
+
+	const cookie: Cookie = {
+		name: nameValue.slice(0, separatorIndex),
+		value: nameValue.slice(separatorIndex + 1),
+		url: baseURL,
+		path: "/",
+		httpOnly: false,
+		secure: false,
+		sameSite: "Lax",
+	};
+
+	for (const attribute of attributes) {
+		const [rawKey, ...rawValueParts] = attribute.split("=");
+		const key = rawKey?.toLowerCase();
+		const value = rawValueParts.join("=");
+
+		switch (key) {
+			case "expires": {
+				const expiresAt = Date.parse(value);
+				if (!Number.isNaN(expiresAt)) {
+					cookie.expires = Math.floor(expiresAt / 1000);
+				}
+				break;
+			}
+			case "httponly":
+				cookie.httpOnly = true;
+				break;
+			case "max-age": {
+				const seconds = Number.parseInt(value, 10);
+				if (Number.isFinite(seconds)) {
+					cookie.expires = Math.floor(Date.now() / 1000) + seconds;
+				}
+				break;
+			}
+			case "path":
+				cookie.path = value || "/";
+				break;
+			case "samesite":
+				cookie.sameSite = /^none$/i.test(value) ? "None" : /^strict$/i.test(value) ? "Strict" : "Lax";
+				break;
+			case "secure":
+				cookie.secure = true;
+				break;
+		}
+	}
+
+	return cookie;
+}
+
+async function syncResponseCookiesToBrowserContext(
+	page: Parameters<Parameters<typeof setup>[0]>[0]["page"],
+	baseURL: string,
+	response: APIResponse
+): Promise<void> {
+	const cookies = response
+		.headersArray()
+		.filter((header) => header.name.toLowerCase() === "set-cookie")
+		.map((header) => toBrowserCookie(header.value, baseURL))
+		.filter((cookie): cookie is Cookie => cookie !== null);
+
+	if (cookies.length > 0) {
+		await page.context().addCookies(cookies);
+	}
+}
+
 /**
  * Global setup: ensure a test user exists and persist authenticated state.
  * Runs once before all test projects.
@@ -33,6 +112,7 @@ function isTokenValid(token: string): boolean {
  * 4. Log in via the UI.
  */
 setup("authenticate", async ({ page }) => {
+	setup.setTimeout(120000);
 	await applyVideoSafetyMode(page);
 
 	// Create .auth directory if it doesn't exist
@@ -41,37 +121,24 @@ setup("authenticate", async ({ page }) => {
 		fs.mkdirSync(authDir, { recursive: true });
 	}
 
-	// ---- 1. Try to reuse an existing auth file (offline check) ----
+	// ---- 1. Try to reuse an existing auth file (offline check only) ----
 	if (fs.existsSync(authFile)) {
 		try {
 			const saved = JSON.parse(fs.readFileSync(authFile, "utf-8"));
 			const accessCookie = saved.cookies?.find((c: { name: string }) => c.name === "access_token");
 			if (accessCookie?.value && isTokenValid(accessCookie.value)) {
-				// Token still has enough validity — skip login entirely
-				return;
+				// Keep going and verify the session online. A JWT can be time-valid but
+				// still rejected by backend token rotation/restart.
 			}
 		} catch {
 			// Invalid file — fall through to regular login
 		}
 	}
 
-	// ---- 2. Check if auth is disabled ----
+	// ---- 2. Fast path: already authenticated session ----
 	await page.goto("/");
-
-	const authDisabled = await page
-		.locator("header.hero")
-		.isVisible()
-		.catch(() => false);
-	if (authDisabled) {
-		await page.context().storageState({ path: authFile });
-		return;
-	}
-
-	// Wait for auth container
-	await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
-
-	// ---- 3. Query auth state to determine login method ----
 	const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
+	let authEnabled = true;
 	let formLoginEnabled = true;
 	let oidcEnabled = false;
 	let registrationEnabled = true;
@@ -79,16 +146,142 @@ setup("authenticate", async ({ page }) => {
 		const stateRes = await page.request.get(`${baseURL}/api/auth/state`);
 		if (stateRes.ok()) {
 			const state = await stateRes.json();
+			authEnabled = state.authEnabled === true;
 			formLoginEnabled = state.formLoginEnabled !== false;
 			oidcEnabled = state.oidcEnabled === true;
 			registrationEnabled = state.registrationEnabled !== false;
 		}
 	} catch {
-		// Fallback: assume form login is available
+		// Fallback: assume auth is enabled and form login is available.
 	}
+
+	// ---- 3. Check if auth is disabled ----
+	if (!authEnabled) {
+		await page.context().storageState({ path: authFile });
+		return;
+	}
+
+	const hasUserMenu = await page
+		.locator(".user-menu-btn")
+		.isVisible({ timeout: 5000 })
+		.catch(() => false);
+	if (hasUserMenu) {
+		await page.context().storageState({ path: authFile });
+		return;
+	}
+
+	const hasAuthenticatedSession = await page.request
+		.get(`${baseURL}/api/auth/me`)
+		.then((response) => response.ok())
+		.catch(() => false);
+	if (hasAuthenticatedSession) {
+		await page.goto("/");
+		await expect(page.locator(".user-menu-btn")).toBeVisible({ timeout: 15000 });
+		await page.context().storageState({ path: authFile });
+		return;
+	}
+
+	const hasAuthContainer = await page
+		.locator(".auth-container")
+		.isVisible({ timeout: 5000 })
+		.catch(() => false);
+	if (!hasAuthContainer) {
+		const hasLoginFields = await page
+			.locator("#username")
+			.isVisible({ timeout: 5000 })
+			.catch(() => false);
+		if (!hasLoginFields) {
+			const becameAuthenticated = await page
+				.locator("header.hero")
+				.isVisible({ timeout: 5000 })
+				.catch(() => false);
+			if (becameAuthenticated) {
+				await page.context().storageState({ path: authFile });
+				return;
+			}
+		}
+	}
+
+	const loginWithApi = async () => {
+		const res = await page.request.post(`${baseURL}/api/auth/login`, {
+			data: { username: TEST_USER.username, password: TEST_USER.password, rememberMe: false },
+		});
+
+		if (res.ok()) {
+			await syncResponseCookiesToBrowserContext(page, baseURL, res);
+		}
+
+		const bodyText = await res.text().catch(() => "");
+
+		return {
+			bodyText,
+			ok: res.ok(),
+			status: res.status(),
+		};
+	};
+
+	const loginWithApiRetry = async (maxAttempts = 5) => {
+		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			const result = await loginWithApi();
+			if (result.ok) {
+				return true;
+			}
+
+			const isRateLimited = result.status === 429 || /too many attempts/i.test(result.bodyText);
+			if (!isRateLimited || attempt === maxAttempts) {
+				return false;
+			}
+
+			await page.waitForTimeout(1000 * attempt);
+		}
+
+		return false;
+	};
+
+	const registerWithApi = async () => {
+		await page.request
+			.post(`${baseURL}/api/auth/register`, {
+				data: { username: TEST_USER.username, password: TEST_USER.password },
+			})
+			.catch(() => {});
+	};
+
+	const ensureAuthenticated = async () => {
+		const hasHeader = await page
+			.locator("header.hero")
+			.isVisible({ timeout: 8000 })
+			.catch(() => false);
+		if (hasHeader) return true;
+
+		const meRes = await page.request.get(`${baseURL}/api/auth/me`).catch(() => null);
+		return Boolean(meRes?.ok());
+	};
+
+	const hasBrowserAccessCookie = async () => {
+		const cookies = await page.context().cookies(baseURL);
+		return cookies.some((cookie) => cookie.name === "access_token");
+	};
 
 	// ---- 5. Log in via the appropriate method ----
 	if (formLoginEnabled) {
+		let loggedIn = await loginWithApiRetry();
+
+		if (!loggedIn && registrationEnabled) {
+			await registerWithApi();
+			loggedIn = await loginWithApiRetry();
+		}
+
+		if (loggedIn && (await hasBrowserAccessCookie())) {
+			await page.goto("/");
+			const isAuthenticated = await ensureAuthenticated();
+			if (!isAuthenticated) {
+				throw new Error("Authentication succeeded but app shell did not become ready");
+			}
+			await page.context().storageState({ path: authFile });
+			return;
+		}
+
+		// Fallback path for environments where API login flow is unavailable.
 		const loginWithForm = async () => {
 			const usernameField = page.locator("#username");
 			const passwordField = page.locator("#password");
@@ -114,7 +307,9 @@ setup("authenticate", async ({ page }) => {
 			await passwordField.fill(TEST_USER.password);
 
 			// Click the submit button (not the SSO button)
-			await page.locator('button.auth-submit[type="submit"]').click();
+			const submitButton = page.locator('button.auth-submit[type="submit"]');
+			await expect(submitButton).toBeEnabled({ timeout: 15000 });
+			await submitButton.click();
 		};
 
 		await loginWithForm();
@@ -124,11 +319,7 @@ setup("authenticate", async ({ page }) => {
 			.catch(() => false);
 
 		if (!hasHeroAfterFirstLogin && registrationEnabled) {
-			await page.request
-				.post(`${baseURL}/api/auth/register`, {
-					data: { username: TEST_USER.username, password: TEST_USER.password },
-				})
-				.catch(() => {});
+			await registerWithApi();
 
 			await loginWithForm();
 		}
@@ -157,8 +348,12 @@ setup("authenticate", async ({ page }) => {
 		throw new Error("No login method available: form login and OIDC are both disabled");
 	}
 
-	// Wait for successful auth — app header should appear
-	await expect(page.locator("header.hero")).toBeVisible({ timeout: 15000 });
+	// Wait for successful auth. Prefer app header visibility, but allow verified
+	// authenticated API state for environments where shell render is delayed.
+	const isAuthenticated = await ensureAuthenticated();
+	if (!isAuthenticated) {
+		throw new Error("Authentication completed but no authenticated app state was detected");
+	}
 
 	// Persist authenticated state for all test projects
 	await page.context().storageState({ path: authFile });

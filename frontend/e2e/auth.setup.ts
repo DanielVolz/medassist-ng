@@ -114,7 +114,9 @@ setup("authenticate", async ({ page }) => {
 			await passwordField.fill(TEST_USER.password);
 
 			// Click the submit button (not the SSO button)
-			await page.locator('button.auth-submit[type="submit"]').click();
+			const submitButton = page.locator('button.auth-submit[type="submit"]');
+			await expect(submitButton).toBeEnabled({ timeout: 10000 });
+			await submitButton.click();
 		};
 
 		await loginWithForm();

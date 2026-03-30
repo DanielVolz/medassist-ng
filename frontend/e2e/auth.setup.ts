@@ -40,7 +40,6 @@ function toBrowserCookie(setCookieHeader: string, baseURL: string): Cookie | nul
 		name: nameValue.slice(0, separatorIndex),
 		value: nameValue.slice(separatorIndex + 1),
 		url: baseURL,
-		path: "/",
 		httpOnly: false,
 		secure: false,
 		sameSite: "Lax",
@@ -70,7 +69,8 @@ function toBrowserCookie(setCookieHeader: string, baseURL: string): Cookie | nul
 				break;
 			}
 			case "path":
-				cookie.path = value || "/";
+				// Playwright cookies must provide either url or domain/path.
+				// This setup path uses url-based cookies for localhost auth.
 				break;
 			case "samesite":
 				if (/^none$/i.test(value)) {

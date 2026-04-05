@@ -1,5 +1,6 @@
 import { TextEncoder } from "node:util";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import fastifyPlugin from "fastify-plugin";
 import { SignJWT, jwtVerify as verifyJwt } from "jose";
 
 const JWT_ALGORITHM = "HS256";
@@ -43,7 +44,7 @@ function getTokenFromRequest(request: FastifyRequest, cookieName: string): strin
 	throw new Error("JWT token missing");
 }
 
-export const jwtPlugin: FastifyPluginAsync<JwtPluginOptions> = async (app, options) => {
+const jwtPluginImpl: FastifyPluginAsync<JwtPluginOptions> = async (app, options) => {
 	const defaultKey = getKey(options.secret);
 
 	app.decorate("jwt", {
@@ -79,3 +80,7 @@ export const jwtPlugin: FastifyPluginAsync<JwtPluginOptions> = async (app, optio
 		return payload as T;
 	});
 };
+
+export const jwtPlugin = fastifyPlugin(jwtPluginImpl, {
+	name: "medassist-jwt-plugin",
+});

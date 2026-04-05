@@ -174,6 +174,26 @@ describe("SettingsPage", () => {
 		expect(screen.getByText(/exportImport\.title/i)).toBeInTheDocument();
 	});
 
+	it("wires stock calculation radios with ids and matching labels", () => {
+		renderPage();
+
+		const modeGroup = screen.getByTestId("settings-calculation-mode");
+		const automatic = modeGroup.querySelector('input[type="radio"][value="automatic"]') as HTMLInputElement | null;
+		const manual = modeGroup.querySelector('input[type="radio"][value="manual"]') as HTMLInputElement | null;
+
+		expect(automatic?.id).toBeTruthy();
+		expect(manual?.id).toBeTruthy();
+		expect(modeGroup.querySelector(`label[for="${automatic?.id}"]`)).toBeInTheDocument();
+		expect(modeGroup.querySelector(`label[for="${manual?.id}"]`)).toBeInTheDocument();
+	});
+
+	it("keeps the export action inside the danger zone card", () => {
+		renderPage();
+
+		const dangerZoneCard = screen.getByTestId("settings-danger-zone-card");
+		expect(dangerZoneCard).toContainElement(screen.getByText("exportImport.export"));
+	});
+
 	it("renders language select and switches language", () => {
 		renderPage();
 		const select = document.querySelector(".language-select") as HTMLSelectElement | null;

@@ -1,12 +1,12 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import cookie from "@fastify/cookie";
-import jwt from "@fastify/jwt";
 import sensible from "@fastify/sensible";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAlterMigrations } from "../db/db-utils.js";
+import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
@@ -77,8 +77,8 @@ async function createUser(username: string) {
 	return Number(result.rows[0].id);
 }
 
-function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
-	const token = app.jwt.sign({ sub: userId, username });
+async function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
+	const token = await app.jwt.sign({ sub: userId, username });
 	return `access_token=${token}`;
 }
 
@@ -230,7 +230,7 @@ describe("Real business route authz contracts", () => {
 		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(sensible);
 		await app.register(cookie, { secret: "test-cookie-secret" });
-		await app.register(jwt, {
+		await app.register(jwtPlugin, {
 			secret: "test-jwt-secret",
 			cookie: { cookieName: "access_token", signed: false },
 		});
@@ -277,7 +277,7 @@ describe("Real business route authz contracts", () => {
 	it("scopes medication listing and export output to the authenticated user", async () => {
 		const ownerId = await createUser("owner-medications");
 		const otherId = await createUser("other-medications");
-		const ownerCookie = buildSessionCookie(app, ownerId, "owner-medications");
+		const ownerCookie = await buildSessionCookie(app, ownerId, "owner-medications");
 
 		await seedMedication({ userId: ownerId, name: "Owner Only Med" });
 		await seedMedication({ userId: otherId, name: "Other User Med" });
@@ -306,7 +306,7 @@ describe("Real business route authz contracts", () => {
 	it("returns 404 when a user updates or deletes another user's medication", async () => {
 		const ownerId = await createUser("owner-update");
 		const otherId = await createUser("other-update");
-		const otherCookie = buildSessionCookie(app, otherId, "other-update");
+		const otherCookie = await buildSessionCookie(app, otherId, "other-update");
 		const medicationId = await seedMedication({ userId: ownerId, name: "Protected Medication" });
 
 		const updateResponse = await app.inject({
@@ -336,8 +336,8 @@ describe("Real business route authz contracts", () => {
 	it("scopes dose reads and writes to the authenticated user", async () => {
 		const ownerId = await createUser("owner-dose");
 		const otherId = await createUser("other-dose");
-		const ownerCookie = buildSessionCookie(app, ownerId, "owner-dose");
-		const otherCookie = buildSessionCookie(app, otherId, "other-dose");
+		const ownerCookie = await buildSessionCookie(app, ownerId, "owner-dose");
+		const otherCookie = await buildSessionCookie(app, otherId, "other-dose");
 
 		await seedDose({ userId: ownerId, doseId: "101-0-1760000000000" });
 		await seedDose({ userId: otherId, doseId: "202-0-1760000000000" });
@@ -370,7 +370,7 @@ describe("Real business route authz contracts", () => {
 	it("enforces medication ownership on refill history and report generation", async () => {
 		const ownerId = await createUser("owner-refill");
 		const otherId = await createUser("other-refill");
-		const otherCookie = buildSessionCookie(app, otherId, "other-refill");
+		const otherCookie = await buildSessionCookie(app, otherId, "other-refill");
 		const medicationId = await seedMedication({ userId: ownerId, name: "Owner Refill Med", packCount: 2 });
 		await seedRefill({ userId: ownerId, medicationId });
 
@@ -405,7 +405,7 @@ describe("Real business route authz contracts", () => {
 	it("scopes share people to the authenticated user's medications", async () => {
 		const ownerId = await createUser("owner-share");
 		const otherId = await createUser("other-share");
-		const ownerCookie = buildSessionCookie(app, ownerId, "owner-share");
+		const ownerCookie = await buildSessionCookie(app, ownerId, "owner-share");
 
 		await seedMedication({ userId: ownerId, name: "Daniel Med", takenBy: ["Daniel"] });
 		await seedMedication({ userId: otherId, name: "Anna Med", takenBy: ["Anna"] });

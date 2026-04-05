@@ -1,5 +1,5 @@
 import "fastify";
-import "@fastify/jwt";
+import type { JwtSignOptions, JwtVerifyOptions } from "../plugins/jwt.js";
 
 // User type for authenticated requests
 export interface AuthUser {
@@ -23,19 +23,16 @@ declare module "fastify" {
 			cookieOptions: import("@fastify/cookie").CookieSerializeOptions;
 			refreshCookieOptions: import("@fastify/cookie").CookieSerializeOptions;
 		};
+		jwt: {
+			sign(payload: Record<string, unknown>, options?: JwtSignOptions): Promise<string>;
+			verify<T extends Record<string, unknown>>(token: string, options?: JwtVerifyOptions): Promise<T>;
+		};
 	}
 
 	interface FastifyRequest {
 		user?: AuthUser | null;
 		authContext?: AuthContext;
 		correlationId?: string;
-	}
-}
-
-declare module "@fastify/jwt" {
-	interface FastifyJWT {
-		// Allow flexible payload for access and refresh tokens
-		payload: Record<string, unknown>;
-		user: Record<string, unknown>;
+		jwtVerify<T extends Record<string, unknown>>(options?: JwtVerifyOptions): Promise<T>;
 	}
 }

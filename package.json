@@ -11,6 +11,9 @@
     "husky": "^9.1.0",
     "lint-staged": "^16.4.0"
   },
+  "overrides": {
+    "yaml": "^2.8.3"
+  },
   "lint-staged": {
     "backend/src/**/*.ts": [
       "npx @biomejs/biome check --write --no-errors-on-unmatched"

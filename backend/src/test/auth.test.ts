@@ -3,11 +3,11 @@
  */
 
 import cookie from "@fastify/cookie";
-import jwt from "@fastify/jwt";
 import sensible from "@fastify/sensible";
 import type { Client } from "@libsql/client";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 // Use vi.hoisted to create the db BEFORE mocks are set up
@@ -102,7 +102,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 
 		await app.register(sensible);
 		await app.register(cookie, { secret: "test-cookie-secret-12345" });
-		await app.register(jwt, {
+		await app.register(jwtPlugin, {
 			secret: "test-jwt-secret-12345",
 			cookie: { cookieName: "access_token", signed: false },
 		});

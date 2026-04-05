@@ -71,7 +71,7 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 	}[currentPath] || { eyebrow: t("header.eyebrow.overview"), title: t("nav.dashboard") };
 
 	return (
-		<header className="hero">
+		<header className="hero" data-testid="app-header">
 			<div className="hero-title">
 				<img src="/app-logo.png" alt="MedAssist-ng" className="hero-logo" />
 				<div>
@@ -80,7 +80,7 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 				</div>
 			</div>
 			<div className="header-actions">
-				<div className="tabs">
+				<div className="tabs" data-testid="main-nav">
 					<button
 						className={currentPath === "/dashboard" || currentPath === "/" ? "pill primary" : "pill"}
 						onClick={() => safeNavigate("/dashboard")}
@@ -168,7 +168,11 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 				</div>
 				{authState?.authEnabled && user && (
 					<div className={`user-menu ${userDropdownOpen ? "open" : ""}`}>
-						<button className="user-menu-btn" onClick={() => setUserDropdownOpen(!userDropdownOpen)}>
+						<button
+							className="user-menu-btn"
+							data-testid="user-menu-trigger"
+							onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+						>
 							{user.avatarUrl ? (
 								<img src={`/api/images/${user.avatarUrl}`} alt={user.username} className="user-avatar-img" />
 							) : (
@@ -187,6 +191,7 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 							<div className="dropdown-menu">
 								<button
 									className="dropdown-item"
+									data-testid="user-menu-profile"
 									onClick={() => {
 										onOpenProfile();
 										setUserDropdownOpen(false);
@@ -200,6 +205,7 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 								</button>
 								<button
 									className="dropdown-item"
+									data-testid="user-menu-settings"
 									onClick={() => {
 										safeNavigate("/settings");
 										setUserDropdownOpen(false);
@@ -213,6 +219,7 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 								</button>
 								<button
 									className="dropdown-item"
+									data-testid="user-menu-about"
 									onClick={() => {
 										onOpenAbout();
 										setUserDropdownOpen(false);
@@ -227,6 +234,7 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 								</button>
 								<button
 									className="dropdown-item danger"
+									data-testid="user-menu-signout"
 									onClick={() => {
 										logout();
 										setUserDropdownOpen(false);

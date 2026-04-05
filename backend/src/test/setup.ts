@@ -6,7 +6,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import cookie from "@fastify/cookie";
-import jwt from "@fastify/jwt";
 import fastifyMultipart from "@fastify/multipart";
 import sensible from "@fastify/sensible";
 import { type Client, createClient } from "@libsql/client";
@@ -14,6 +13,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach } from "vitest";
+import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 // Get migrations folder path
@@ -50,7 +50,7 @@ export async function buildTestApp(): Promise<TestContext> {
 
 	await app.register(sensible);
 	await app.register(cookie, { secret: "test-cookie-secret" });
-	await app.register(jwt, {
+	await app.register(jwtPlugin, {
 		secret: "test-jwt-secret",
 		cookie: { cookieName: "access_token", signed: false },
 	});

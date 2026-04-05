@@ -1,11 +1,11 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import cookie from "@fastify/cookie";
-import jwt from "@fastify/jwt";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAlterMigrations } from "../db/db-utils.js";
+import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
@@ -110,8 +110,8 @@ async function _insertShareToken(userId: number, token: string, takenBy: string)
 	});
 }
 
-function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
-	const token = app.jwt.sign({ sub: userId, username });
+async function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
+	const token = await app.jwt.sign({ sub: userId, username });
 	return `access_token=${token}`;
 }
 
@@ -148,7 +148,7 @@ describe("Dose Tracking API", () => {
 
 		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(cookie, { secret: "test-cookie-secret" });
-		await app.register(jwt, {
+		await app.register(jwtPlugin, {
 			secret: "test-jwt-secret",
 			cookie: { cookieName: "access_token", signed: false },
 		});
@@ -164,7 +164,7 @@ describe("Dose Tracking API", () => {
 	beforeEach(async () => {
 		await clearTables();
 		userId = await createUser("dose-test-user");
-		cookieHeader = buildSessionCookie(app, userId, "dose-test-user");
+		cookieHeader = await buildSessionCookie(app, userId, "dose-test-user");
 	});
 
 	describe("POST /doses/taken", () => {

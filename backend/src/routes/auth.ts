@@ -357,7 +357,7 @@ export async function authRoutes(app: FastifyInstance) {
 			await db.update(users).set({ lastLoginAt: new Date(), updatedAt: new Date() }).where(eq(users.id, user.id));
 
 			// Generate tokens
-			const accessToken = app.jwt.sign(
+			const accessToken = await app.jwt.sign(
 				{ sub: user.id, username: user.username },
 				{ expiresIn: `${accessTtlMinutes}m` }
 			);
@@ -371,7 +371,7 @@ export async function authRoutes(app: FastifyInstance) {
 				expiresAt: refreshExp,
 			});
 
-			const refreshToken = app.jwt.sign(
+			const refreshToken = await app.jwt.sign(
 				{ sub: user.id, jti: tokenId },
 				{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
 			);
@@ -425,7 +425,7 @@ export async function authRoutes(app: FastifyInstance) {
 
 			try {
 				// Verify refresh token
-				const decoded = app.jwt.verify<{ sub: number; jti: string }>(refreshTokenCookie, {
+				const decoded = await app.jwt.verify<{ sub: number; jti: string }>(refreshTokenCookie, {
 					key: app.config.refreshSecret,
 				});
 
@@ -458,12 +458,12 @@ export async function authRoutes(app: FastifyInstance) {
 				});
 
 				// Generate new tokens
-				const newAccessToken = app.jwt.sign(
+				const newAccessToken = await app.jwt.sign(
 					{ sub: user.id, username: user.username },
 					{ expiresIn: `${accessTtlMinutes}m` }
 				);
 
-				const newRefreshToken = app.jwt.sign(
+				const newRefreshToken = await app.jwt.sign(
 					{ sub: user.id, jti: newTokenId },
 					{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
 				);
@@ -498,7 +498,9 @@ export async function authRoutes(app: FastifyInstance) {
 
 			if (refreshTokenCookie) {
 				try {
-					const decoded = app.jwt.verify<{ jti: string }>(refreshTokenCookie, { key: app.config.refreshSecret });
+					const decoded = await app.jwt.verify<{ jti: string }>(refreshTokenCookie, {
+						key: app.config.refreshSecret,
+					});
 
 					// Revoke the refresh token
 					await db.update(refreshTokens).set({ revoked: true }).where(eq(refreshTokens.tokenId, decoded.jti));

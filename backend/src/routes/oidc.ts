@@ -312,7 +312,7 @@ async function findOrCreateOIDCUser(
 // JWT Token Generation (reused from auth.ts logic)
 // =============================================================================
 async function generateAccessToken(app: FastifyInstance, userId: number, username: string): Promise<string> {
-	return app.jwt.sign({ sub: userId, username }, { expiresIn: `${env.ACCESS_TOKEN_TTL_MINUTES}m` });
+	return await app.jwt.sign({ sub: userId, username }, { expiresIn: `${env.ACCESS_TOKEN_TTL_MINUTES}m` });
 }
 
 async function generateRefreshToken(
@@ -322,7 +322,7 @@ async function generateRefreshToken(
 	const tokenId = randomBytes(32).toString("hex");
 	const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-	const refreshToken = app.jwt.sign(
+	const refreshToken = await app.jwt.sign(
 		{ sub: userId, jti: tokenId, type: "refresh" },
 		{ expiresIn: `${env.REFRESH_TOKEN_TTL_DAYS}d` }
 	);

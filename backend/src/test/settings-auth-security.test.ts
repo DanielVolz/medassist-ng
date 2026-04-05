@@ -1,12 +1,12 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import cookie from "@fastify/cookie";
-import jwt from "@fastify/jwt";
 import sensible from "@fastify/sensible";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAlterMigrations } from "../db/db-utils.js";
+import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 const { testClient, testDb, mockedEnv, nodemailerSendMail } = vi.hoisted(() => {
@@ -78,8 +78,8 @@ async function createUser(username: string) {
 	return Number(result.rows[0].id);
 }
 
-function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
-	const token = app.jwt.sign({ sub: userId, username });
+async function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
+	const token = await app.jwt.sign({ sub: userId, username });
 	return `access_token=${token}`;
 }
 
@@ -119,7 +119,7 @@ describe("Settings and API key security contracts", () => {
 		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(sensible);
 		await app.register(cookie, { secret: "test-cookie-secret" });
-		await app.register(jwt, {
+		await app.register(jwtPlugin, {
 			secret: "test-jwt-secret",
 			cookie: { cookieName: "access_token", signed: false },
 		});
@@ -157,7 +157,7 @@ describe("Settings and API key security contracts", () => {
 		const response = await app.inject({
 			method: "GET",
 			url: "/settings",
-			headers: { cookie: buildSessionCookie(app, userId, "settings-session-user") },
+			headers: { cookie: await buildSessionCookie(app, userId, "settings-session-user") },
 		});
 
 		expect(response.statusCode).toBe(200);
@@ -267,7 +267,7 @@ describe("Settings and API key security contracts", () => {
 
 	it("rotates API keys and does not leak raw tokens from the list endpoint", async () => {
 		const userId = await createUser("api-key-session-user");
-		const cookieHeader = buildSessionCookie(app, userId, "api-key-session-user");
+		const cookieHeader = await buildSessionCookie(app, userId, "api-key-session-user");
 
 		const firstCreate = await app.inject({
 			method: "POST",
@@ -331,7 +331,7 @@ describe("Settings and API key security contracts", () => {
 	it("returns 404 when deleting an API key owned by a different user", async () => {
 		const ownerUserId = await createUser("api-key-owner");
 		const otherUserId = await createUser("api-key-other-user");
-		const otherCookieHeader = buildSessionCookie(app, otherUserId, "api-key-other-user");
+		const otherCookieHeader = await buildSessionCookie(app, otherUserId, "api-key-other-user");
 
 		const keyId = await insertApiKey({
 			userId: ownerUserId,
@@ -363,7 +363,7 @@ describe("Settings and API key security contracts", () => {
 		const response = await app.inject({
 			method: "POST",
 			url: "/settings/test-email",
-			headers: { cookie: buildSessionCookie(app, userId, "settings-email-recipient-user") },
+			headers: { cookie: await buildSessionCookie(app, userId, "settings-email-recipient-user") },
 			payload: { email: "missing@example.com" },
 		});
 
@@ -385,7 +385,7 @@ describe("Settings and API key security contracts", () => {
 		const response = await app.inject({
 			method: "POST",
 			url: "/settings/test-email",
-			headers: { cookie: buildSessionCookie(app, userId, "settings-email-unconfirmed-user") },
+			headers: { cookie: await buildSessionCookie(app, userId, "settings-email-unconfirmed-user") },
 			payload: { email: "person@example.com" },
 		});
 

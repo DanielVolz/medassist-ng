@@ -114,6 +114,9 @@ export function SettingsPage() {
 		}
 	};
 
+	const automaticStockCalculationId = "settings-stock-calculation-automatic";
+	const manualStockCalculationId = "settings-stock-calculation-manual";
+
 	return (
 		<section className="grid">
 			{settingsLoading ? (
@@ -705,8 +708,12 @@ export function SettingsPage() {
 								<h3>{t("settings.stock.calculationMode")}</h3>
 							</div>
 							<div className="setting-group calculation-mode-group" data-testid="settings-calculation-mode">
-								<label className={`radio-card ${settings.stockCalculationMode === "automatic" ? "selected" : ""}`}>
+								<label
+									className={`radio-card ${settings.stockCalculationMode === "automatic" ? "selected" : ""}`}
+									htmlFor={automaticStockCalculationId}
+								>
 									<input
+										id={automaticStockCalculationId}
 										type="radio"
 										name="stockCalculationMode"
 										value="automatic"
@@ -722,8 +729,12 @@ export function SettingsPage() {
 										</div>
 									</div>
 								</label>
-								<label className={`radio-card ${settings.stockCalculationMode === "manual" ? "selected" : ""}`}>
+								<label
+									className={`radio-card ${settings.stockCalculationMode === "manual" ? "selected" : ""}`}
+									htmlFor={manualStockCalculationId}
+								>
 									<input
+										id={manualStockCalculationId}
 										type="radio"
 										name="stockCalculationMode"
 										value="manual"
@@ -829,7 +840,7 @@ export function SettingsPage() {
 					</article>
 
 					{/* General UI */}
-					<article className="card" data-testid="settings-danger-zone-card">
+					<article className="card">
 						<div className="card-head">
 							<h2>{t("settings.timeline.title")}</h2>
 						</div>
@@ -921,7 +932,7 @@ export function SettingsPage() {
 					</article>
 
 					{/* Export/Import Section */}
-					<article className="card">
+					<article className="card" data-testid="settings-danger-zone-card">
 						<div className="card-head">
 							<h2>
 								{t("exportImport.title")}

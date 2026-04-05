@@ -131,13 +131,13 @@ export function SettingsPage() {
 					</article>
 				</div>
 			) : (
-				<div className="settings-form">
+				<div className="settings-form" data-testid="settings-page">
 					{/* Language */}
 					<article className="card">
 						<div className="card-head">
 							<h2>{t("settings.language.title")}</h2>
 						</div>
-						<label className="setting-row language-row">
+						<label className="setting-row language-row" data-testid="settings-language-select">
 							<span className="setting-label">{t("settings.language.select")}</span>
 							<select
 								value={i18n.language}
@@ -159,7 +159,7 @@ export function SettingsPage() {
 						</label>
 					</article>
 
-					<article className="card">
+					<article className="card" data-testid="settings-notification-card">
 						<div className="card-head">
 							<h2>{t("settings.apiKey.title")}</h2>
 						</div>
@@ -209,7 +209,7 @@ export function SettingsPage() {
 							<div className="section-header">
 								<h3>{t("settings.notifications.channels")}</h3>
 							</div>
-							<div className="notification-matrix">
+							<div className="notification-matrix" data-testid="settings-notification-matrix">
 								<div className="matrix-header">
 									<div className="matrix-label"></div>
 									<div className="matrix-channel">{t("settings.notifications.email")}</div>
@@ -467,7 +467,10 @@ export function SettingsPage() {
 						<div className="setting-section">
 							<div className="section-header">
 								<h3>{t("settings.notifications.email")}</h3>
-								<label className={`toggle-switch small${!settings.smtpHost ? " disabled" : ""}`}>
+								<label
+									className={`toggle-switch small${!settings.smtpHost ? " disabled" : ""}`}
+									data-testid="settings-email-enabled-toggle"
+								>
 									<input
 										type="checkbox"
 										checked={settings.smtpHost ? settings.emailEnabled : false}
@@ -692,7 +695,7 @@ export function SettingsPage() {
 					</article>
 
 					{/* Stock Settings */}
-					<article className="card">
+					<article className="card" data-testid="settings-security-card">
 						<div className="card-head">
 							<h2>{t("settings.stock.title")}</h2>
 						</div>
@@ -701,7 +704,7 @@ export function SettingsPage() {
 							<div className="section-header">
 								<h3>{t("settings.stock.calculationMode")}</h3>
 							</div>
-							<div className="setting-group calculation-mode-group">
+							<div className="setting-group calculation-mode-group" data-testid="settings-calculation-mode">
 								<label className={`radio-card ${settings.stockCalculationMode === "automatic" ? "selected" : ""}`}>
 									<input
 										type="radio"
@@ -744,7 +747,10 @@ export function SettingsPage() {
 								<h3>{t("settings.stock.thresholds")}</h3>
 							</div>
 							<div className="setting-group threshold-chips-group">
-								<div className={settings.reminderDaysBefore >= settings.lowStockDays ? "threshold-invalid" : ""}>
+								<div
+									className={settings.reminderDaysBefore >= settings.lowStockDays ? "threshold-invalid" : ""}
+									data-testid="settings-threshold-critical"
+								>
 									<span className="field-label threshold-chip-label">
 										<span className="status-chip small danger">{t("status.criticalStock")}</span>
 										<span
@@ -769,6 +775,7 @@ export function SettingsPage() {
 											? "threshold-invalid"
 											: ""
 									}
+									data-testid="settings-threshold-low"
 								>
 									<span className="field-label threshold-chip-label">
 										<span className="status-chip small warning">{t("status.lowStock")}</span>
@@ -787,7 +794,10 @@ export function SettingsPage() {
 										onChange={(e) => setSettings({ ...settings, lowStockDays: Number(e.target.value) || 30 })}
 									/>
 								</div>
-								<div className={settings.highStockDays <= settings.lowStockDays ? "threshold-invalid" : ""}>
+								<div
+									className={settings.highStockDays <= settings.lowStockDays ? "threshold-invalid" : ""}
+									data-testid="settings-threshold-high"
+								>
 									<span className="field-label threshold-chip-label">
 										<span className="status-chip small high">{t("status.highStock")}</span>
 										<span
@@ -808,7 +818,9 @@ export function SettingsPage() {
 							</div>
 							{(settings.reminderDaysBefore >= settings.lowStockDays ||
 								settings.lowStockDays >= settings.highStockDays) && (
-								<p className="threshold-validation-error">{t("settings.stock.thresholdValidation")}</p>
+								<p className="threshold-validation-error" data-testid="settings-threshold-validation">
+									{t("settings.stock.thresholdValidation")}
+								</p>
 							)}
 							<p className="hint-text" style={{ marginTop: "12px" }}>
 								ℹ️ {t("settings.stock.packageTypesNote")}
@@ -817,7 +829,7 @@ export function SettingsPage() {
 					</article>
 
 					{/* General UI */}
-					<article className="card">
+					<article className="card" data-testid="settings-danger-zone-card">
 						<div className="card-head">
 							<h2>{t("settings.timeline.title")}</h2>
 						</div>

@@ -177,8 +177,8 @@ export function PlannerPage() {
 
 	return (
 		<section className="grid">
-			<article className="card">
-				<div className="card-head">
+			<article className="card" data-testid="planner-form-card">
+				<div className="card-head" data-testid="planner-page-header">
 					<h2>{t("planner.title")}</h2>
 				</div>
 				<form className="planner" onSubmit={runPlanner}>
@@ -195,7 +195,7 @@ export function PlannerPage() {
 						<DateTimeInput step="60" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} />
 					</label>
 					<div className="planner-checkbox-row">
-						<label className="planner-checkbox">
+						<label className="planner-checkbox" data-testid="planner-include-until-start">
 							<input
 								type="checkbox"
 								checked={includeUntilStart}

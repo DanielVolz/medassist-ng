@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
 import { medications } from "../db/schema.js";
 import {
@@ -20,7 +19,7 @@ import {
 	type StockReminderItem as SharedStockReminderItem,
 } from "../services/notifications/builders.js";
 import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "../services/notifications/delivery.js";
-import { escapeHtml, getDeliveryError, getPlannerUnit, isContainerPackage } from "../services/planner-service.js";
+import { escapeHtml, getPlannerUnit, isContainerPackage } from "../services/planner-service.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
@@ -428,19 +427,9 @@ ${getFooterPlain(language)}`;
     `;
 
 					try {
-						const transporter = nodemailer.createTransport({
-							host: smtpHost,
-							port: smtpPort,
-							secure: smtpSecure,
-							auth: {
-								user: smtpUser,
-								pass: smtpPass ?? "",
-							},
-						});
-
 						request.log.info({ userId, recipientEmail: email }, "[Planner] Sending demand email");
 
-						const mailResult = await transporter.sendMail({
+						const mailResult = await sendEmailNotification({
 							from: smtpFrom,
 							to: email,
 							subject: t(dc.subject, { from: fromDate, until: untilDate }),
@@ -448,9 +437,8 @@ ${getFooterPlain(language)}`;
 							html,
 						});
 
-						const deliveryError = getDeliveryError(mailResult);
-						if (deliveryError) {
-							throw new Error(deliveryError);
+						if (!mailResult.success) {
+							throw new Error(mailResult.error ?? "Failed to send demand email");
 						}
 
 						request.log.info(

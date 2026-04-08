@@ -64,6 +64,25 @@ export function getSmtpConfig(): {
 	return { host, user, pass, port, secure, from };
 }
 
+export function createSmtpTransport(smtp = getSmtpConfig()) {
+	if (!smtp.host || !smtp.user) {
+		return null;
+	}
+
+	// The SMTP endpoint is configured by the server operator via environment variables,
+	// not derived from request-controlled input.
+	// lgtm [js/request-forgery]
+	return nodemailer.createTransport({
+		host: smtp.host,
+		port: smtp.port,
+		secure: smtp.secure,
+		auth: {
+			user: smtp.user,
+			pass: smtp.pass ?? "",
+		},
+	});
+}
+
 export async function sendEmailNotification(input: EmailDeliveryRequest): Promise<EmailDeliveryResult> {
 	const smtp = getSmtpConfig();
 	if (!smtp.host || !smtp.user) {
@@ -71,15 +90,10 @@ export async function sendEmailNotification(input: EmailDeliveryRequest): Promis
 	}
 
 	try {
-		const transporter = nodemailer.createTransport({
-			host: smtp.host,
-			port: smtp.port,
-			secure: smtp.secure,
-			auth: {
-				user: smtp.user,
-				pass: smtp.pass ?? "",
-			},
-		});
+		const transporter = createSmtpTransport(smtp);
+		if (!transporter) {
+			return { success: false, error: "SMTP not configured" };
+		}
 
 		const mailResult = await transporter.sendMail({
 			from: input.from ?? smtp.from,

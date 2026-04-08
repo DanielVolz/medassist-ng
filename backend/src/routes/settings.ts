@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import nodemailer from "nodemailer";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { getSmtpConfig, sendEmailNotification } from "../services/notifications/delivery.js";
 import {
 	classifyTestEmailFailure,
 	getAllUserSettingsFromDb,
@@ -445,49 +445,34 @@ export async function settingsRoutes(app: FastifyInstance) {
 		async (request, reply) => {
 			const { email } = request.body;
 
-			const smtpHost = process.env.SMTP_HOST;
-			const smtpUser = process.env.SMTP_USER;
-			const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
-			const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-			const smtpSecure = process.env.SMTP_SECURE === "true";
-			const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+			const smtp = getSmtpConfig();
 
 			request.log.info(
 				{
 					to: email,
-					hasSmtpHost: Boolean(smtpHost),
-					hasSmtpUser: Boolean(smtpUser),
-					hasSmtpPass: Boolean(smtpPass),
-					hasSmtpFrom: Boolean(smtpFrom),
-					smtpPort,
-					smtpSecure,
+					hasSmtpHost: Boolean(smtp.host),
+					hasSmtpUser: Boolean(smtp.user),
+					hasSmtpPass: Boolean(smtp.pass),
+					hasSmtpFrom: Boolean(smtp.from),
+					smtpPort: smtp.port,
+					smtpSecure: smtp.secure,
 				},
 				"[Settings] Test email request received"
 			);
 
-			if (!smtpHost || !smtpUser) {
+			if (!smtp.host || !smtp.user) {
 				request.log.warn(
-					{ to: email, hasSmtpHost: Boolean(smtpHost), hasSmtpUser: Boolean(smtpUser) },
+					{ to: email, hasSmtpHost: Boolean(smtp.host), hasSmtpUser: Boolean(smtp.user) },
 					"[Settings] Test email skipped: SMTP not configured"
 				);
 				return reply.status(400).send({ error: "SMTP not configured" });
 			}
 
 			try {
-				const transporter = nodemailer.createTransport({
-					host: smtpHost,
-					port: smtpPort,
-					secure: smtpSecure,
-					auth: {
-						user: smtpUser,
-						pass: smtpPass ?? "",
-					},
-				});
-
 				request.log.info({ to: email }, "[Settings] Sending test email");
 
-				const mailResult = await transporter.sendMail({
-					from: smtpFrom,
+				const mailResult = await sendEmailNotification({
+					from: smtp.from,
 					to: email,
 					subject: "MedAssist-ng - Test Email",
 					text: "This is a test email from MedAssist-ng. If you received this, your email configuration is working correctly!",
@@ -502,9 +487,8 @@ export async function settingsRoutes(app: FastifyInstance) {
         `,
 				});
 
-				const deliveryError = getDeliveryError(mailResult);
-				if (deliveryError) {
-					throw new Error(deliveryError);
+				if (!mailResult.success) {
+					throw new Error(mailResult.error ?? "Failed to send test email");
 				}
 
 				request.log.info({ to: email, messageId: mailResult.messageId }, "[Settings] Test email sent");

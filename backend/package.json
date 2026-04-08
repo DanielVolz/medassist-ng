@@ -50,5 +50,10 @@
     "tsx": "^4.19.0",
     "typescript": "^6.0.2",
     "vitest": "^4.0.16"
+  },
+  "overrides": {
+    "@esbuild-kit/esm-loader": "2.6.5",
+    "@esbuild-kit/core-utils": "3.3.2",
+    "esbuild": "0.25.4"
   }
 }

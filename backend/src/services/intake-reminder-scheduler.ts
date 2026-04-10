@@ -19,7 +19,6 @@ import {
 	cleanOldIntakeReminders,
 	createDefaultIntakeReminderState,
 	getEffectiveTimezone,
-	getTimezone,
 	getTodaysIntakes,
 	getUpcomingIntakes,
 	type IntakeReminderState,
@@ -84,6 +83,16 @@ function formatIntakeLog(intake: {
 	return `${intake.medName} (medId=${intake.medicationId}, intakeIndex=${intake.blisterIndex}, time=${intake.intakeTime.toISOString()}, localTime=${intake.intakeTimeStr}, usage=${intake.usage} ${doseUnit}, takenBy=${takenBy})`;
 }
 
+function getMedicationDisplayName(med: { id: number; name: string | null; genericName: string | null }): string {
+	const commercialName = med.name?.trim() ?? "";
+	if (commercialName) return commercialName;
+
+	const genericName = med.genericName?.trim() ?? "";
+	if (genericName) return genericName;
+
+	return `Medication #${med.id}`;
+}
+
 async function autoMarkDueIntakesAsTaken(
 	settings: UserSettings & { userId: number },
 	rows: (typeof medications.$inferSelect)[],
@@ -138,7 +147,7 @@ async function autoMarkDueIntakesAsTaken(
 		}
 
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
-		const medDisplayName = med.name || med.genericName || "";
+		const medDisplayName = getMedicationDisplayName({ id: med.id, name: med.name, genericName: med.genericName });
 		let remainingStock = computeMedicationCurrentStock({
 			medication: med,
 			doses: trackedDoses,
@@ -489,7 +498,7 @@ export async function checkAndSendIntakeRemindersForUser(
 	for (const { med, intakes, intakesWithReminders } of reminderEntries) {
 		// Medication-level takenBy (for fallback/display purposes)
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
-		const medDisplayName = med.name || med.genericName || "";
+		const medDisplayName = getMedicationDisplayName({ id: med.id, name: med.name, genericName: med.genericName });
 
 		// Process each intake separately to track blisterIndex
 		intakesWithReminders.forEach((intake, _blisterIndex) => {

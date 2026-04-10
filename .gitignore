@@ -83,14 +83,18 @@ Thumbs.db
 AGENTS.md
 docs/TECH_STACK.md
 doku/
+
+# Local agent work logs stay on disk but must never go upstream.
 doku/memory_notes.md
 doku/report.md
 plan/
 .copilot-tracking/
 .playwright-cli/
+.agents/
+skills-lock.json
 
 # ===================
-# Local Spec Kit artifacts
+# Local Spec Kit workspace state
 # ===================
 .specify/
 specs/
@@ -98,3 +102,9 @@ docs/SPEC_KIT.md
 .github/agents/medassist-feature-orchestrator.agent.md
 .github/agents/speckit.*.agent.md
 .github/prompts/speckit.*.prompt.md
+.github/skills/accessibility/
+.github/skills/frontend-design/
+.github/skills/nodejs-backend-patterns/
+.github/skills/nodejs-best-practices/
+.github/skills/seo/
+.playwright-mcp

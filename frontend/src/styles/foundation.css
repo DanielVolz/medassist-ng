@@ -613,7 +613,7 @@ body.modal-open {
 	grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
 	margin-bottom: 1rem;
 	max-width: 100%;
-	overflow: hidden;
+	overflow: visible;
 }
 
 .card {

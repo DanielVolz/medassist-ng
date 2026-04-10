@@ -10,7 +10,7 @@
 	flex-direction: column;
 	gap: 1.5rem;
 	max-width: 100%;
-	overflow: hidden;
+	overflow: visible;
 }
 
 .setting-row {
@@ -311,7 +311,7 @@
 	transition:
 		opacity 0.15s,
 		visibility 0.15s;
-	z-index: 1100;
+	z-index: 12000;
 	pointer-events: none;
 }
 
@@ -329,7 +329,7 @@
 	transition:
 		opacity 0.15s,
 		visibility 0.15s;
-	z-index: 1101;
+	z-index: 12001;
 }
 
 /* Tooltip aligned to left edge of icon (prevents clipping inside modals) */
@@ -505,6 +505,20 @@
 	padding: 0.5rem 0.75rem;
 	background: var(--warning-bg);
 	border-radius: 6px;
+}
+
+.timezone-status {
+	min-height: 1.25rem;
+	margin-top: 8px;
+	margin-bottom: 0;
+	padding: 0;
+	font-size: 0.85rem;
+	color: transparent;
+	background: transparent;
+}
+
+.timezone-status-saved {
+	color: var(--success);
 }
 
 /* Notification Matrix Mobile */

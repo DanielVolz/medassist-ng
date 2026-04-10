@@ -105,6 +105,7 @@ export const userSettings = sqliteTable("user_settings", {
 	expiryWarningDays: integer("expiry_warning_days").notNull().default(90),
 	// UI preferences
 	language: text("language", { length: 10 }).notNull().default("en"),
+	timezone: text("timezone", { length: 64 }).notNull().default(""),
 	// Stock calculation mode: "automatic" (schedule-based) or "manual" (only marked doses)
 	stockCalculationMode: text("stock_calculation_mode", { length: 20 }).notNull().default("automatic"),
 	// Whether shared schedule links show stock status (Critical/Low/Normal) to intake users

@@ -64,6 +64,7 @@ export function getTableCreationSQL(): string[] {
       high_stock_days integer NOT NULL DEFAULT 180,
       expiry_warning_days integer NOT NULL DEFAULT 90,
       language text NOT NULL DEFAULT 'en',
+	  timezone text NOT NULL DEFAULT '',
       stock_calculation_mode text NOT NULL DEFAULT 'automatic',
       share_stock_status integer NOT NULL DEFAULT 1,
       upcoming_today_only integer NOT NULL DEFAULT 0,

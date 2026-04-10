@@ -116,6 +116,23 @@ export function SettingsPage() {
 
 	const automaticStockCalculationId = "settings-stock-calculation-automatic";
 	const manualStockCalculationId = "settings-stock-calculation-manual";
+	const timezoneSuggestions =
+		settings.availableTimezones.length > 0
+			? settings.availableTimezones
+			: (() => {
+					try {
+						type IntlWithSupportedValuesOf = typeof Intl & {
+							supportedValuesOf?: (key: string) => string[];
+						};
+						const intlWithSupportedValues = Intl as IntlWithSupportedValuesOf;
+						if (typeof intlWithSupportedValues.supportedValuesOf === "function") {
+							return intlWithSupportedValues.supportedValuesOf("timeZone");
+						}
+					} catch {
+						// fall through
+					}
+					return [settings.serverTimezone || "UTC", "UTC"];
+				})();
 
 	return (
 		<section className="grid">
@@ -160,6 +177,35 @@ export function SettingsPage() {
 								<option value="de">🇩🇪 Deutsch</option>
 							</select>
 						</label>
+						<div className="setting-row compact" style={{ marginTop: "12px" }}>
+							<div className="setting-label">
+								<span>{t("settings.timezone.select")}</span>
+								<span className="info-tooltip small" data-tooltip={t("settings.timezone.hint")}>
+									ⓘ
+								</span>
+							</div>
+							<div className="setting-actions" style={{ margin: 0, flexWrap: "nowrap", gap: "8px" }}>
+								<input
+									type="text"
+									className="select-field language-select"
+									value={settings.timezone}
+									onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
+									list="settings-timezone-suggestions"
+									placeholder={settings.serverTimezone || "UTC"}
+								/>
+								<datalist id="settings-timezone-suggestions">
+									{timezoneSuggestions.map((zone) => (
+										<option key={zone} value={zone} />
+									))}
+								</datalist>
+								<button type="button" className="ghost" onClick={() => setSettings({ ...settings, timezone: "" })}>
+									{t("settings.timezone.useServerDefault")}
+								</button>
+							</div>
+						</div>
+						<p className="hint-text" style={{ marginTop: "8px" }}>
+							{t("settings.timezone.currentServerTz", { timezone: settings.serverTimezone || "UTC" })}
+						</p>
 					</article>
 
 					<article className="card" data-testid="settings-notification-card">

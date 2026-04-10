@@ -389,6 +389,12 @@
       "title": "Sprache",
       "select": "Sprache auswählen"
     },
+    "timezone": {
+      "select": "Zeitzone",
+      "hint": "IANA-Zeitzone wählen. Wenn gesetzt, überschreibt sie die Server-TZ für deine Reminder-Zeitpunkte.",
+      "useServerDefault": "Server-Standard nutzen",
+      "currentServerTz": "Server-Standardzeitzone: {{timezone}}"
+    },
     "apiKey": {
       "title": "API-Zugriff",
       "generateTitle": "API-Key erzeugen",

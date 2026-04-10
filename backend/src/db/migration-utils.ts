@@ -33,6 +33,7 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE user_settings ADD COLUMN repeat_reminders_enabled integer NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_settings ADD COLUMN reminder_repeat_interval_minutes integer NOT NULL DEFAULT 30`,
 		`ALTER TABLE user_settings ADD COLUMN max_nagging_reminders integer NOT NULL DEFAULT 5`,
+		`ALTER TABLE user_settings ADD COLUMN timezone text NOT NULL DEFAULT ''`,
 		`ALTER TABLE dose_tracking ADD COLUMN dismissed integer NOT NULL DEFAULT 0`,
 		`ALTER TABLE dose_tracking ADD COLUMN taken_source text NOT NULL DEFAULT 'manual'`,
 		`ALTER TABLE user_settings ADD COLUMN stock_calculation_mode text NOT NULL DEFAULT 'automatic'`,

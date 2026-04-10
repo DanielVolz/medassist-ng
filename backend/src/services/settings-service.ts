@@ -5,6 +5,7 @@ import type { Language } from "../i18n/translations.js";
 
 export type UserSettings = {
 	userId: number;
+	timezone?: string | null;
 	emailEnabled: boolean;
 	notificationEmail: string | null;
 	emailStockReminders: boolean;
@@ -105,6 +106,7 @@ function envInt(key: string, defaultVal: number): number {
 
 export function getDefaultSettings() {
 	return {
+		timezone: "",
 		emailEnabled: envBool("DEFAULT_EMAIL_ENABLED", false),
 		notificationEmail: process.env.DEFAULT_NOTIFICATION_EMAIL || null,
 		emailStockReminders: envBool("DEFAULT_EMAIL_STOCK_REMINDERS", true),
@@ -142,6 +144,33 @@ export function getDefaultSettings() {
 		lastPrescriptionReminderChannel: null,
 		lastPrescriptionReminderMedNames: null,
 	};
+}
+
+type IntlWithSupportedValuesOf = typeof Intl & {
+	supportedValuesOf?: (key: string) => string[];
+};
+
+let cachedTimezones: Set<string> | null = null;
+
+function getTimezoneSet(): Set<string> {
+	if (cachedTimezones) return cachedTimezones;
+	const intlWithSupportedValues = Intl as IntlWithSupportedValuesOf;
+	if (typeof intlWithSupportedValues.supportedValuesOf === "function") {
+		cachedTimezones = new Set(intlWithSupportedValues.supportedValuesOf("timeZone"));
+		return cachedTimezones;
+	}
+	cachedTimezones = new Set([process.env.TZ || "UTC", "UTC"]);
+	return cachedTimezones;
+}
+
+export function getAvailableTimezones(): string[] {
+	return [...getTimezoneSet()].sort((left, right) => left.localeCompare(right));
+}
+
+export function normalizeSettingsTimezone(value: string | null | undefined): string {
+	const trimmed = value?.trim() ?? "";
+	if (!trimmed) return "";
+	return getTimezoneSet().has(trimmed) ? trimmed : "";
 }
 
 export function validateNotificationHostname(hostnameRaw: string): string | null {
@@ -245,6 +274,7 @@ export async function loadUserSettingsFromDb(userId: number): Promise<UserSettin
 	const settings = await getOrCreateUserSettings(userId);
 	return {
 		userId: settings.userId,
+		timezone: settings.timezone?.trim() ? settings.timezone : null,
 		emailEnabled: settings.emailEnabled,
 		notificationEmail: settings.notificationEmail,
 		emailStockReminders: settings.emailStockReminders,
@@ -288,6 +318,7 @@ export async function getAllUserSettingsFromDb(): Promise<UserSettings[]> {
 	const allSettings = await db.select().from(userSettings);
 	return allSettings.map((settings) => ({
 		userId: settings.userId,
+		timezone: settings.timezone?.trim() ? settings.timezone : null,
 		emailEnabled: settings.emailEnabled,
 		notificationEmail: settings.notificationEmail,
 		emailStockReminders: settings.emailStockReminders,

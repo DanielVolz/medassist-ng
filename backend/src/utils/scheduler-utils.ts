@@ -64,6 +64,16 @@ function toDateOnly(date: Date): Date {
 	return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
 }
 
+function getLocalDateOrdinal(date: Date): number {
+	return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
+}
+
+function addLocalCalendarDays(date: Date, days: number): Date {
+	const next = new Date(date);
+	next.setDate(next.getDate() + days);
+	return next;
+}
+
 export function getDateOnlyTimestamp(date: Date): number {
 	return toDateOnly(date).getTime();
 }
@@ -175,13 +185,23 @@ export function getNextScheduledOccurrenceTime(
 
 	const lowerBound = inclusive ? fromMs : fromMs + 1;
 	if (schedule.scheduleMode !== "weekdays") {
-		const period = Math.max(1, schedule.every) * 86_400_000;
+		const intervalDays = Math.max(1, schedule.every);
 		if (startTime >= lowerBound) {
 			return startTime;
 		}
 
-		const intervals = Math.ceil((lowerBound - startTime) / period);
-		return startTime + intervals * period;
+		const lowerBoundDate = new Date(lowerBound);
+		const startOrdinal = getLocalDateOrdinal(startDate);
+		const lowerBoundOrdinal = getLocalDateOrdinal(lowerBoundDate);
+		const daysBetween = Math.max(0, lowerBoundOrdinal - startOrdinal);
+		const wholeIntervals = Math.floor(daysBetween / intervalDays);
+
+		let candidate = addLocalCalendarDays(startDate, wholeIntervals * intervalDays);
+		while (candidate.getTime() < lowerBound) {
+			candidate = addLocalCalendarDays(candidate, intervalDays);
+		}
+
+		return candidate.getTime();
 	}
 
 	const candidateStart = Math.max(lowerBound, startTime);
@@ -224,17 +244,28 @@ export function forEachScheduledOccurrenceInRange(
 	}
 
 	if (schedule.scheduleMode !== "weekdays") {
-		const period = Math.max(1, schedule.every) * 86_400_000;
-		let occurrenceMs = startTime;
-		if (occurrenceMs < rangeStartMs) {
-			const intervals = Math.ceil((rangeStartMs - occurrenceMs) / period);
-			occurrenceMs += intervals * period;
+		const intervalDays = Math.max(1, schedule.every);
+		let occurrence = new Date(startDate);
+		if (occurrence.getTime() < rangeStartMs) {
+			const rangeStartDate = new Date(rangeStartMs);
+			const startOrdinal = getLocalDateOrdinal(startDate);
+			const rangeStartOrdinal = getLocalDateOrdinal(rangeStartDate);
+			const daysBetween = Math.max(0, rangeStartOrdinal - startOrdinal);
+			const wholeIntervals = Math.floor(daysBetween / intervalDays);
+			occurrence = addLocalCalendarDays(startDate, wholeIntervals * intervalDays);
+
+			while (occurrence.getTime() < rangeStartMs) {
+				occurrence = addLocalCalendarDays(occurrence, intervalDays);
+			}
 		}
 
-		for (; occurrenceMs <= rangeEndMs; occurrenceMs += period) {
+		for (let occurrenceMs = occurrence.getTime(); occurrenceMs <= rangeEndMs; ) {
 			if (occurrenceMs >= rangeStartMs) {
 				callback(occurrenceMs);
 			}
+
+			occurrence = addLocalCalendarDays(occurrence, intervalDays);
+			occurrenceMs = occurrence.getTime();
 		}
 		return;
 	}
@@ -346,6 +377,23 @@ export function normalizeIntakeUsageForStock(
 /** Get current timezone from TZ env variable or default to UTC */
 export function getTimezone(): string {
 	return process.env.TZ || "UTC";
+}
+
+export function isValidTimezone(value: string): boolean {
+	try {
+		new Intl.DateTimeFormat("en-US", { timeZone: value });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+export function getEffectiveTimezone(override?: string | null): string {
+	const normalized = override?.trim() ?? "";
+	if (normalized && isValidTimezone(normalized)) {
+		return normalized;
+	}
+	return getTimezone();
 }
 
 /** Format a date in the configured timezone */

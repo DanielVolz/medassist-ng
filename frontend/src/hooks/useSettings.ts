@@ -7,6 +7,9 @@ import { useTranslation } from "react-i18next";
 import { log } from "../utils/logger";
 
 export interface Settings {
+	timezone: string;
+	availableTimezones: string[];
+	serverTimezone: string;
 	emailEnabled: boolean;
 	notificationEmail: string;
 	reminderDaysBefore: number;
@@ -58,6 +61,9 @@ export interface Settings {
 export type SettingsLoadError = "auth" | "forbidden" | "request" | null;
 
 const defaultSettings: Settings = {
+	timezone: "",
+	availableTimezones: [],
+	serverTimezone: "UTC",
 	emailEnabled: false,
 	notificationEmail: "",
 	reminderDaysBefore: 7,
@@ -243,6 +249,7 @@ export function useSettings(): UseSettingsReturn {
 			const repeatDailyReminders = hasAnyStockReminder ? settingsToSave.repeatDailyReminders : false;
 
 			return {
+				timezone: settingsToSave.timezone,
 				emailEnabled: effectiveEmailEnabled,
 				notificationEmail: settingsToSave.notificationEmail,
 				reminderDaysBefore: settingsToSave.reminderDaysBefore,

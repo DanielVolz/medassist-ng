@@ -21,6 +21,7 @@ import {
 	formatInTimezone,
 	getCurrentHourInTimezone,
 	getDateOnlyTimestamp,
+	getEffectiveTimezone,
 	getMsUntilNextCheck,
 	getNextScheduledOccurrenceTime,
 	getNextScheduledTime,
@@ -534,7 +535,8 @@ async function checkAndSendReminderForUser(
 	}
 
 	const state = loadReminderState();
-	const today = getTodayInTimezone(); // YYYY-MM-DD in configured timezone
+	const userTimezone = getEffectiveTimezone(settings.timezone ?? null);
+	const today = getTodayInTimezone(userTimezone); // YYYY-MM-DD in effective user timezone
 	const userStateKey = `user_${settings.userId}`;
 	const userStockNotifiedKey = `${userStateKey}_${today}_stock`;
 	const userPrescriptionNotifiedKey = `${userStateKey}_${today}_prescription`;

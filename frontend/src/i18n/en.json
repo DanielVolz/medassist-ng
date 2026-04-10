@@ -389,6 +389,12 @@
       "title": "Language",
       "select": "Select language"
     },
+    "timezone": {
+      "select": "Timezone",
+      "hint": "Select an IANA timezone. When set, this overrides server TZ for your reminder timing.",
+      "useServerDefault": "Use server default",
+      "currentServerTz": "Server default timezone: {{timezone}}"
+    },
     "apiKey": {
       "title": "API Access",
       "generateTitle": "Generate API key",

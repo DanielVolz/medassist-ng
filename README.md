@@ -203,7 +203,7 @@ All configuration is done via environment variables in `.env`. Copy `.env.exampl
 | `CORS_ORIGINS` | `http://localhost:4174` | Allowed origins for CORS |
 | `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`, `silent`). At `info` (default), high-frequency polling endpoints are suppressed. Set `debug` to see all requests. |
 | `OPENAPI_DOCS_ENABLED` | `auto` | Enables API docs in non-production by default. Set explicitly to `true`/`false` to override. |
-| `TZ` | `Europe/Berlin` | Timezone for scheduled reminders |
+| `TZ` | `Europe/Berlin` | Server default timezone for scheduled reminders (can be overridden per user in Settings) |
 
 Recommended values for API docs by environment:
 
@@ -304,6 +304,8 @@ API reference:
 | `REMINDER_HOUR` | `6` | Hour to send daily reminders (24h format) |
 | `REMINDER_MINUTES_BEFORE` | `15` | Minutes before intake to send reminder |
 | `EXPIRY_WARNING_DAYS` | `30` | Days before expiry to show warning |
+
+Intake reminder timing uses IANA timezones. The server uses `TZ` as default, and each user can set an override in Settings. If no user timezone is set, reminders continue using the server default.
 
 ### Push Notifications (Shoutrrr)
 

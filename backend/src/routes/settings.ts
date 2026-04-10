@@ -8,9 +8,11 @@ import { getSmtpConfig, sendEmailNotification } from "../services/notifications/
 import {
 	classifyTestEmailFailure,
 	getAllUserSettingsFromDb,
+	getAvailableTimezones,
 	getDefaultSettings,
 	getNotificationProvider,
 	loadUserSettingsFromDb,
+	normalizeSettingsTimezone,
 	sanitizeNotificationUrl,
 	type UserSettings,
 	validateNotificationHostname,
@@ -20,6 +22,7 @@ import type { AuthUser } from "../types/fastify.js";
 export type { UserSettings } from "../services/settings-service.js";
 
 type SettingsBody = {
+	timezone: string;
 	emailEnabled: boolean;
 	notificationEmail: string;
 	reminderDaysBefore: number;
@@ -174,6 +177,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 			const reminderMinutesBefore = envInt("REMINDER_MINUTES_BEFORE", 15);
 
 			return reply.send({
+				timezone: settings.timezone ?? "",
+				availableTimezones: getAvailableTimezones(),
+				serverTimezone: process.env.TZ || "UTC",
 				// User notification settings (from DB)
 				emailEnabled: settings.emailEnabled,
 				notificationEmail: settings.notificationEmail ?? "",
@@ -241,6 +247,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 					type: "object",
 					required: ["emailEnabled", "notificationEmail", "reminderDaysBefore", "language"],
 					properties: {
+						timezone: { type: "string" },
 						emailEnabled: { type: "boolean" },
 						notificationEmail: { type: "string" },
 						reminderDaysBefore: { type: "number" },
@@ -293,6 +300,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 						upcomingTodayOnly: false,
 						shareScheduleTodayOnly: false,
 						swapDashboardMainSections: false,
+						timezone: "",
 					},
 				},
 				response: {
@@ -318,6 +326,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 			const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
 
 			const settingsData = {
+				timezone: normalizeSettingsTimezone(body.timezone),
 				emailEnabled: body.emailEnabled,
 				notificationEmail: body.notificationEmail || null,
 				emailStockReminders: body.emailStockReminders ?? true,

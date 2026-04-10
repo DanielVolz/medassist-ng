@@ -18,6 +18,7 @@ import type { ServiceLogger } from "../utils/logger.js";
 import {
 	cleanOldIntakeReminders,
 	createDefaultIntakeReminderState,
+	getEffectiveTimezone,
 	getTimezone,
 	getTodaysIntakes,
 	getUpcomingIntakes,
@@ -425,7 +426,7 @@ export async function checkAndSendIntakeRemindersForUser(
 	const activeRows = rows.filter((med) => med.isObsolete !== true).sort((left, right) => left.id - right.id);
 
 	const locale = getDateLocale(language);
-	const tz = getTimezone();
+	const tz = getEffectiveTimezone(settings.timezone ?? null);
 
 	const autoMarkedCount = await autoMarkDueIntakesAsTaken(settings, activeRows, locale, tz, logger);
 	if (autoMarkedCount > 0) {

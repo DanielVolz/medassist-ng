@@ -134,6 +134,7 @@ async function createSchema(client: Client) {
 		`CREATE TABLE IF NOT EXISTS user_settings (
       id integer PRIMARY KEY AUTOINCREMENT,
       user_id integer NOT NULL UNIQUE,
+		timezone text NOT NULL DEFAULT '',
       email_enabled integer NOT NULL DEFAULT 0,
       notification_email text,
       email_stock_reminders integer NOT NULL DEFAULT 1,

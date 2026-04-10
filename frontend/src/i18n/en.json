@@ -393,7 +393,9 @@
       "select": "Timezone",
       "hint": "Select an IANA timezone. When set, this overrides server TZ for your reminder timing.",
       "useServerDefault": "Use server default",
-      "currentServerTz": "Server default timezone: {{timezone}}"
+      "currentServerTz": "Server default timezone: {{timezone}}",
+      "saving": "Saving timezone...",
+      "saved": "Timezone saved"
     },
     "apiKey": {
       "title": "API Access",

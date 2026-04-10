@@ -1,5 +1,5 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: settings rows use label-styled text with adjacent custom toggle controls */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, ExportModal } from "../components";
 import { useAppContext } from "../context";
@@ -13,8 +13,11 @@ export function SettingsPage() {
 	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
 	const {
 		settings,
+		savedSettings,
 		setSettings,
 		settingsLoading,
+		settingsSaving,
+		settingsSaved,
 		settingsLoadError,
 		// Email testing
 		testEmail,
@@ -39,6 +42,8 @@ export function SettingsPage() {
 		setImportResult,
 		meds,
 	} = useAppContext();
+	const [timezoneTouched, setTimezoneTouched] = useState(false);
+	const [timezoneDraft, setTimezoneDraft] = useState("");
 
 	const hasExistingData = meds.length > 0;
 	let emailUnavailableReason: string | null = null;
@@ -116,9 +121,35 @@ export function SettingsPage() {
 
 	const automaticStockCalculationId = "settings-stock-calculation-automatic";
 	const manualStockCalculationId = "settings-stock-calculation-manual";
+
+	useEffect(() => {
+		setTimezoneDraft(settings.timezone);
+	}, [settings.timezone]);
+
+	const commitTimezoneDraft = () => {
+		if (timezoneDraft === settings.timezone) {
+			return;
+		}
+
+		setTimezoneTouched(true);
+		setSettings((prev) => ({ ...prev, timezone: timezoneDraft }));
+	};
+
+	const savedTimezone = savedSettings?.timezone ?? settings.timezone;
+	const timezoneChanged = settings.timezone !== savedTimezone;
+	const showTimezoneSaving = timezoneTouched && timezoneChanged && settingsSaving;
+	const showTimezoneSaved = timezoneTouched && !timezoneChanged && settingsSaved;
+	let timezoneStatusText = "";
+	if (showTimezoneSaving) {
+		timezoneStatusText = t("settings.timezone.saving");
+	} else if (showTimezoneSaved) {
+		timezoneStatusText = t("settings.timezone.saved");
+	}
+	const timezoneStatusClassName = showTimezoneSaved ? "timezone-status timezone-status-saved" : "timezone-status";
+	const availableTimezones = Array.isArray(settings.availableTimezones) ? settings.availableTimezones : [];
 	const timezoneSuggestions =
-		settings.availableTimezones.length > 0
-			? settings.availableTimezones
+		availableTimezones.length > 0
+			? availableTimezones
 			: (() => {
 					try {
 						type IntlWithSupportedValuesOf = typeof Intl & {
@@ -177,19 +208,28 @@ export function SettingsPage() {
 								<option value="de">🇩🇪 Deutsch</option>
 							</select>
 						</label>
-						<div className="setting-row compact" style={{ marginTop: "12px" }}>
+						<div className="setting-row language-row" style={{ marginTop: "12px" }}>
 							<div className="setting-label">
 								<span>{t("settings.timezone.select")}</span>
-								<span className="info-tooltip small" data-tooltip={t("settings.timezone.hint")}>
+								<span className="info-tooltip small tooltip-align-left" data-tooltip={t("settings.timezone.hint")}>
 									ⓘ
 								</span>
 							</div>
-							<div className="setting-actions" style={{ margin: 0, flexWrap: "nowrap", gap: "8px" }}>
+							<div className="setting-actions" style={{ margin: 0, flexWrap: "nowrap", gap: "8px", width: "auto" }}>
 								<input
 									type="text"
 									className="select-field language-select"
-									value={settings.timezone}
-									onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
+									value={timezoneDraft}
+									onChange={(e) => {
+										setTimezoneDraft(e.target.value);
+									}}
+									onBlur={commitTimezoneDraft}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											e.preventDefault();
+											(e.currentTarget as HTMLInputElement).blur();
+										}
+									}}
 									list="settings-timezone-suggestions"
 									placeholder={settings.serverTimezone || "UTC"}
 								/>
@@ -198,11 +238,20 @@ export function SettingsPage() {
 										<option key={zone} value={zone} />
 									))}
 								</datalist>
-								<button type="button" className="ghost" onClick={() => setSettings({ ...settings, timezone: "" })}>
+								<button
+									type="button"
+									className="ghost"
+									onClick={() => {
+										setTimezoneTouched(true);
+										setTimezoneDraft("");
+										setSettings((prev) => ({ ...prev, timezone: "" }));
+									}}
+								>
 									{t("settings.timezone.useServerDefault")}
 								</button>
 							</div>
 						</div>
+						<p className={timezoneStatusClassName}>{timezoneStatusText || " "}</p>
 						<p className="hint-text" style={{ marginTop: "8px" }}>
 							{t("settings.timezone.currentServerTz", { timezone: settings.serverTimezone || "UTC" })}
 						</p>

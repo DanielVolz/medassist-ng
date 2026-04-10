@@ -4,6 +4,14 @@ Purpose: persistent agent work memory to survive context loss.
 
 ## Entries
 
+### 2026-04-10
+
+- Task: Investigate and fix the production blank-homepage bug (user report: both containers running, blank page, many `400 - -` log lines in frontend container).
+- Root cause: `upgrade-insecure-requests` directive was present in the `Content-Security-Policy` header in `frontend/nginx.conf`. This directive instructs browsers to upgrade all same-host HTTP requests to HTTPS (preserving the port). When users access the app over plain HTTP (e.g., `http://host:4174/`), the browser receives this CSP and upgrades subsequent asset requests (`/assets/index-*.js`, `/assets/index-*.css`, favicons, API calls) to `https://host:4174/...`. The nginx container only speaks plain HTTP on port 4174, so it receives TLS Client Hello bytes which it cannot parse as an HTTP request. nginx returns `400 Bad Request` with no parseable method or URI — producing the `400 - -` log pattern. All JS/CSS bundles fail to load, React never mounts, and the page stays blank.
+- Fix: Removed `; upgrade-insecure-requests` from the CSP string in `frontend/nginx.conf` (line 20). No other changes needed.
+- Validation notes: The directive is safe to remove — `upgrade-insecure-requests` is designed for HTTPS-only sites and is harmful when the server runs on plain HTTP. Removing it does not weaken security for self-hosted HTTP deployments (mixed content is not a concern when the origin itself is HTTP). If a reverse proxy with TLS termination is added in front, the directive can be re-introduced at the proxy level.
+- Files touched: `frontend/nginx.conf`.
+
 ### 2026-03-25
 
 - Task: Diagnose PR #475 GitHub CI failure for the frontend build job and fix testing/build-scope issues only.

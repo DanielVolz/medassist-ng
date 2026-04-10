@@ -393,7 +393,9 @@
       "select": "Zeitzone",
       "hint": "IANA-Zeitzone wählen. Wenn gesetzt, überschreibt sie die Server-TZ für deine Reminder-Zeitpunkte.",
       "useServerDefault": "Server-Standard nutzen",
-      "currentServerTz": "Server-Standardzeitzone: {{timezone}}"
+      "currentServerTz": "Server-Standardzeitzone: {{timezone}}",
+      "saving": "Zeitzone wird gespeichert...",
+      "saved": "Zeitzone gespeichert"
     },
     "apiKey": {
       "title": "API-Zugriff",

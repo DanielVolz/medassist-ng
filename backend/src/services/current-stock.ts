@@ -99,9 +99,16 @@ export function computeMedicationCurrentStock(options: {
 				const match = doseIdPattern.exec(dose.doseId);
 				if (!match) continue;
 
+				const parsedMedicationId = Number.parseInt(match[1], 10);
 				const parsedIntakeIndex = Number.parseInt(match[2], 10);
 				const doseDateOnlyMs = Number.parseInt(match[3], 10);
-				if (Number.isNaN(parsedIntakeIndex) || Number.isNaN(doseDateOnlyMs) || parsedIntakeIndex !== intakeIndex) {
+				if (
+					Number.isNaN(parsedMedicationId) ||
+					Number.isNaN(parsedIntakeIndex) ||
+					Number.isNaN(doseDateOnlyMs) ||
+					parsedMedicationId !== medication.id ||
+					parsedIntakeIndex !== intakeIndex
+				) {
 					continue;
 				}
 
@@ -125,9 +132,16 @@ export function computeMedicationCurrentStock(options: {
 				const match = doseIdPattern.exec(dose.doseId);
 				if (!match) continue;
 
+				const parsedMedicationId = Number.parseInt(match[1], 10);
 				const parsedIntakeIndex = Number.parseInt(match[2], 10);
 				const doseDateOnlyMs = Number.parseInt(match[3], 10);
-				if (Number.isNaN(parsedIntakeIndex) || Number.isNaN(doseDateOnlyMs) || parsedIntakeIndex !== intakeIndex) {
+				if (
+					Number.isNaN(parsedMedicationId) ||
+					Number.isNaN(parsedIntakeIndex) ||
+					Number.isNaN(doseDateOnlyMs) ||
+					parsedMedicationId !== medication.id ||
+					parsedIntakeIndex !== intakeIndex
+				) {
 					continue;
 				}
 

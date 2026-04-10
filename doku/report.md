@@ -2,6 +2,17 @@
 
 ## Entries
 
+### 2026-04-10
+- Scope: Investigate and fix the production blank-homepage bug.
+- Root cause: The `Content-Security-Policy` header in `frontend/nginx.conf` included the `upgrade-insecure-requests` directive. This directive instructs browsers to upgrade all HTTP resource requests to HTTPS (same port). In a plain HTTP deployment (the default Docker setup on port 4174), this causes the browser to attempt TLS connections to the nginx HTTP port. nginx cannot parse the TLS bytes as HTTP and returns `400 Bad Request` with no method/URI — the `400 - -` log pattern the user observed. All JS/CSS bundles fail to load; React never mounts; the page stays blank.
+- What changed:
+  - Removed `; upgrade-insecure-requests` from the CSP string in `frontend/nginx.conf`.
+- Validation:
+  - `upgrade-insecure-requests` is designed for HTTPS-only sites. Removing it from a plain HTTP server is correct and does not reduce security.
+  - After this fix, browsers accessing the app over HTTP will load assets normally without being redirected to a non-existent HTTPS endpoint.
+  - If TLS termination is added via a reverse proxy in future, the directive can be applied at the proxy layer.
+- Result: The blank-homepage bug is fixed. All asset and API requests now succeed over plain HTTP as expected.
+
 ### 2026-03-25
 - Scope: Diagnose and fix the PR #475 frontend CI failure within testing/build ownership.
 - What changed:

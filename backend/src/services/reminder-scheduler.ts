@@ -126,6 +126,16 @@ type PrescriptionReminderItem = {
 	expiryDate: string | null;
 };
 
+function getMedicationDisplayName(row: { id: number; name: string | null; genericName: string | null }): string {
+	const commercialName = row.name?.trim() ?? "";
+	if (commercialName) return commercialName;
+
+	const genericName = row.genericName?.trim() ?? "";
+	if (genericName) return genericName;
+
+	return `Medication #${row.id}`;
+}
+
 async function getMedicationsNeedingReminder(
 	userId: number,
 	reminderDaysBefore: number,
@@ -297,7 +307,7 @@ async function getMedicationsNeedingReminder(
 
 		if (isCritical || isLow) {
 			lowStock.push({
-				name: row.name,
+				name: getMedicationDisplayName({ id: row.id, name: row.name, genericName: row.genericName }),
 				medsLeft: currentPills,
 				daysLeft,
 				depletionDate,
@@ -323,7 +333,7 @@ async function getMedicationsNeedingPrescriptionReminder(userId: number): Promis
 				(row.prescriptionRemainingRefills ?? 0) <= (row.prescriptionLowRefillThreshold ?? 1)
 		)
 		.map((row) => ({
-			name: row.name,
+			name: getMedicationDisplayName({ id: row.id, name: row.name, genericName: row.genericName }),
 			remainingRefills: row.prescriptionRemainingRefills ?? 0,
 			lowThreshold: row.prescriptionLowRefillThreshold ?? 1,
 			expiryDate: row.prescriptionExpiryDate ?? null,

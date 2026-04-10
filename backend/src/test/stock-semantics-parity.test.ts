@@ -68,6 +68,7 @@ async function setStockMode(mode: "automatic" | "manual") {
 
 async function createMedication(options: {
 	name: string;
+	genericName?: string | null;
 	packCount?: number;
 	blistersPerPack?: number;
 	pillsPerBlister?: number;
@@ -80,6 +81,7 @@ async function createMedication(options: {
 }) {
 	const {
 		name,
+		genericName = null,
 		packCount = 1,
 		blistersPerPack = 1,
 		pillsPerBlister = 10,
@@ -106,16 +108,17 @@ async function createMedication(options: {
 
 	const result = await testClient.execute({
 		sql: `INSERT INTO medications (
-        user_id, name, taken_by_json, package_type,
+				user_id, name, generic_name, taken_by_json, package_type,
         pack_count, blisters_per_pack, pills_per_blister, loose_tablets,
         stock_adjustment, last_stock_correction_at,
         usage_json, every_json, start_json, intakes_json,
         is_obsolete, intake_reminders_enabled
-      ) VALUES (?, ?, ?, 'blister', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			) VALUES (?, ?, ?, ?, 'blister', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
       RETURNING id`,
 		args: [
 			1,
 			name,
+			genericName,
 			JSON.stringify(takenBy),
 			packCount,
 			blistersPerPack,
@@ -347,6 +350,21 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 
 		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "automatic");
 		expect(lowStock.some((r) => r.name === "Obsolete Med")).toBe(false);
+	});
+
+	it("uses generic name fallback in scheduler reminders when commercial name is empty", async () => {
+		await setStockMode("automatic");
+		await createMedication({
+			name: "",
+			genericName: "Acetylsalicylic acid",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 10,
+			intakes: [{ usage: 1, every: 1, start: "2026-01-01T08:00:00" }],
+		});
+
+		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "automatic");
+		expect(lowStock.some((r) => r.name === "Acetylsalicylic acid")).toBe(true);
 	});
 });
 

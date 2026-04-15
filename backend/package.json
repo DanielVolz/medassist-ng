@@ -30,7 +30,7 @@
     "argon2": "^0.44.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^5.8.4",
+    "fastify": "^5.8.5",
     "fastify-plugin": "^5.0.1",
     "jose": "^6.2.2",
     "nodemailer": "^8.0.5",

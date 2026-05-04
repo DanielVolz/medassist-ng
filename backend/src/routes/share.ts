@@ -385,7 +385,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			const parsed = createShareSchema.safeParse(request.body);
 			if (!parsed.success) {
 				return reply.status(400).send({
-					error: parsed.error.errors[0]?.message ?? "Invalid input",
+					error: parsed.error.issues[0]?.message ?? "Invalid input",
 					code: "VALIDATION_ERROR",
 				});
 			}

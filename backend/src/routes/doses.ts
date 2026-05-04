@@ -61,6 +61,15 @@ const doseReadResponseSchema = {
 	},
 } as const;
 
+function getValidationErrorMessage(error: z.ZodError): string {
+	const firstIssue = error.issues[0];
+	if (!firstIssue) {
+		return "Invalid input";
+	}
+
+	return firstIssue.code === "invalid_type" && firstIssue.input === undefined ? "Required" : firstIssue.message;
+}
+
 // Helper to get user ID from request
 // Returns anonymous user ID when auth is disabled
 async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
@@ -301,7 +310,7 @@ export async function doseRoutes(app: FastifyInstance) {
 			const parsed = markDoseSchema.safeParse(request.body);
 			if (!parsed.success) {
 				return reply.status(400).send({
-					error: parsed.error.errors[0]?.message ?? "Invalid input",
+					error: getValidationErrorMessage(parsed.error),
 				});
 			}
 
@@ -423,7 +432,7 @@ export async function doseRoutes(app: FastifyInstance) {
 			const parsed = dismissDosesSchema.safeParse(request.body);
 			if (!parsed.success) {
 				return reply.status(400).send({
-					error: parsed.error.errors[0]?.message ?? "Invalid input",
+					error: getValidationErrorMessage(parsed.error),
 				});
 			}
 
@@ -590,7 +599,7 @@ export async function doseRoutes(app: FastifyInstance) {
 			const parsed = shareDoseSchema.safeParse(request.body);
 			if (!parsed.success) {
 				return reply.status(400).send({
-					error: parsed.error.errors[0]?.message ?? "Invalid input",
+					error: getValidationErrorMessage(parsed.error),
 				});
 			}
 

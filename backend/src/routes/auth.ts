@@ -221,7 +221,7 @@ export async function authRoutes(app: FastifyInstance) {
 			const parsed = registerSchema.safeParse(request.body);
 			if (!parsed.success) {
 				return reply.status(400).send({
-					error: parsed.error.errors[0]?.message ?? "Invalid input",
+					error: parsed.error.issues[0]?.message ?? "Invalid input",
 					code: "VALIDATION_ERROR",
 				});
 			}
@@ -616,7 +616,7 @@ export async function authRoutes(app: FastifyInstance) {
 			const parsed = updateProfileSchema.safeParse(request.body);
 			if (!parsed.success) {
 				return reply.status(400).send({
-					error: parsed.error.errors[0]?.message ?? "Invalid input",
+					error: parsed.error.issues[0]?.message ?? "Invalid input",
 					code: "VALIDATION_ERROR",
 				});
 			}

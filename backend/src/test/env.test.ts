@@ -11,32 +11,32 @@ const EnvSchema = z.object({
 	PORT: z
 		.string()
 		.transform((v) => parseInt(v, 10))
-		.default("3000"),
+		.default(3000),
 	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
 	LOG_LEVEL: z.string().default("info"),
 	AUTH_ENABLED: z
 		.string()
 		.transform((v) => v === "true")
-		.default("false"),
+		.default(false),
 	REGISTRATION_ENABLED: z
 		.string()
 		.transform((v) => v === "true")
-		.default("false"),
+		.default(false),
 	JWT_SECRET: z.string().min(10).optional(),
 	REFRESH_SECRET: z.string().min(10).optional(),
 	COOKIE_SECRET: z.string().min(10).optional(),
 	ACCESS_TOKEN_TTL_MINUTES: z
 		.string()
 		.transform((v) => parseInt(v, 10))
-		.default("15"),
+		.default(15),
 	REFRESH_TOKEN_TTL_DAYS: z
 		.string()
 		.transform((v) => parseInt(v, 10))
-		.default("7"),
+		.default(7),
 	OIDC_ENABLED: z
 		.string()
 		.transform((v) => v === "true")
-		.default("false"),
+		.default(false),
 	OIDC_ISSUER_URL: z.string().url().optional(),
 	OIDC_CLIENT_ID: z.string().optional(),
 	OIDC_CLIENT_SECRET: z.string().optional(),
@@ -45,7 +45,7 @@ const EnvSchema = z.object({
 	OIDC_AUTO_CREATE_USERS: z
 		.string()
 		.transform((v) => v === "true")
-		.default("true"),
+		.default(true),
 	OIDC_USERNAME_CLAIM: z.string().default("preferred_username"),
 	OIDC_PROVIDER_NAME: z.string().default("SSO"),
 });

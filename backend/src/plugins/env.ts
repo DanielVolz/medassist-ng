@@ -11,7 +11,7 @@ const EnvSchema = z.object({
 	PORT: z
 		.string()
 		.transform((v) => parseInt(v, 10))
-		.default("3000"),
+		.default(3000),
 	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
 	LOG_LEVEL: z.string().default("info"),
 	OPENAPI_DOCS_ENABLED: z
@@ -26,17 +26,17 @@ const EnvSchema = z.object({
 	AUTH_ENABLED: z
 		.string()
 		.transform((v) => v === "true")
-		.default("false"),
+		.default(false),
 	// Allow new user registrations (auto-enabled if no users exist)
 	REGISTRATION_ENABLED: z
 		.string()
 		.transform((v) => v === "true")
-		.default("false"),
+		.default(false),
 	// Disable username/password form login (useful for OIDC-only setups)
 	FORM_LOGIN_ENABLED: z
 		.string()
 		.transform((v) => v === "true")
-		.default("true"),
+		.default(true),
 
 	// JWT Secrets - only required when AUTH_ENABLED=true
 	JWT_SECRET: z.string().min(10).optional(),
@@ -47,11 +47,11 @@ const EnvSchema = z.object({
 	ACCESS_TOKEN_TTL_MINUTES: z
 		.string()
 		.transform((v) => parseInt(v, 10))
-		.default("15"),
+		.default(15),
 	REFRESH_TOKEN_TTL_DAYS: z
 		.string()
 		.transform((v) => parseInt(v, 10))
-		.default("7"),
+		.default(7),
 
 	// ==========================================================================
 	// OIDC SSO Configuration (Pocket ID, Authelia, etc.)
@@ -59,7 +59,7 @@ const EnvSchema = z.object({
 	OIDC_ENABLED: z
 		.string()
 		.transform((v) => v === "true")
-		.default("false"),
+		.default(false),
 	OIDC_ISSUER_URL: z.string().url().optional(), // e.g., https://auth.example.com
 	OIDC_CLIENT_ID: z.string().optional(),
 	OIDC_CLIENT_SECRET: z.string().optional(),
@@ -68,7 +68,7 @@ const EnvSchema = z.object({
 	OIDC_AUTO_CREATE_USERS: z
 		.string()
 		.transform((v) => v === "true")
-		.default("true"),
+		.default(true),
 	OIDC_USERNAME_CLAIM: z.string().default("preferred_username"), // or 'email', 'sub'
 	OIDC_PROVIDER_NAME: z.string().default("SSO"), // Display name for UI button
 });

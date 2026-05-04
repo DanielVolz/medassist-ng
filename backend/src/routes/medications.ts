@@ -1654,7 +1654,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 		async (req, reply) => {
 			const parsed = dismissUntilSchema.safeParse(req.body);
 			if (!parsed.success) {
-				return reply.status(400).send({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+				return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
 			}
 
 			const userId = await getUserId(req, reply);

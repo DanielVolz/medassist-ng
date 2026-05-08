@@ -130,6 +130,13 @@ const mockTodayDay = {
 	],
 };
 
+function getRouteDateKey(value: Date): string {
+	const year = value.getFullYear();
+	const month = String(value.getMonth() + 1).padStart(2, "0");
+	const day = String(value.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+}
+
 // Default mock factory
 const createMockAppContext = (overrides = {}) => ({
 	meds: [],
@@ -321,6 +328,7 @@ describe("DashboardPage", () => {
 		vi.clearAllMocks();
 		localStorage.clear();
 		mockContextValue = createMockAppContext();
+		HTMLElement.prototype.scrollIntoView = vi.fn();
 	});
 
 	it("renders dashboard page", () => {
@@ -505,6 +513,7 @@ describe("DashboardPage interactions", () => {
 		vi.clearAllMocks();
 		localStorage.clear();
 		mockContextValue = createMockAppContext();
+		HTMLElement.prototype.scrollIntoView = vi.fn();
 	});
 
 	it("has schedule days options", () => {
@@ -537,6 +546,91 @@ describe("DashboardPage interactions", () => {
 
 		fireEvent.change(select, { target: { value: "90" } });
 		expect(setScheduleDays).toHaveBeenCalledWith(90);
+	});
+
+	it("highlights and scrolls to the notification-linked dashboard dose", async () => {
+		const doseId = String(mockTodayDay.meds[0].doses[0].id);
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			todayDay: mockTodayDay,
+		});
+
+		render(
+			<MemoryRouter
+				initialEntries={[`/?date=${getRouteDateKey(mockTodayDay.date)}&medId=1&doseId=${encodeURIComponent(doseId)}`]}
+			>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		await waitFor(() => {
+			const targetDose = document.querySelector(`[data-dose-id="${doseId}"]`);
+			const targetRow = document.querySelector('[data-med-id="1"]');
+			expect(targetDose).toHaveClass("notification-focus-target");
+			expect(targetRow).toHaveClass("notification-focus-target-row");
+			expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+		});
+	});
+
+	it("supports the shorter dashboard notification query params", async () => {
+		const doseId = String(mockTodayDay.meds[0].doses[0].id);
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			todayDay: mockTodayDay,
+		});
+
+		render(
+			<MemoryRouter
+				initialEntries={[`/dashboard?day=${getRouteDateKey(mockTodayDay.date)}&dose=${encodeURIComponent(doseId)}`]}
+			>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		await waitFor(() => {
+			const targetDose = document.querySelector(`[data-dose-id="${doseId}"]`);
+			const targetRow = document.querySelector('[data-med-id="1"]');
+			expect(targetDose).toHaveClass("notification-focus-target");
+			expect(targetRow).toHaveClass("notification-focus-target-row");
+		});
+	});
+
+	it("scrolls to the notification-linked dashboard dose after schedule data loads", async () => {
+		const doseId = String(mockTodayDay.meds[0].doses[0].id);
+		mockContextValue = createMockAppContext();
+
+		const { rerender } = render(
+			<MemoryRouter
+				initialEntries={[`/?date=${getRouteDateKey(mockTodayDay.date)}&medId=1&doseId=${encodeURIComponent(doseId)}`]}
+			>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		expect(document.querySelector(`[data-dose-id="${doseId}"]`)).toBeNull();
+		expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			todayDay: mockTodayDay,
+		});
+
+		rerender(
+			<MemoryRouter
+				initialEntries={[`/?date=${getRouteDateKey(mockTodayDay.date)}&medId=1&doseId=${encodeURIComponent(doseId)}`]}
+			>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		await waitFor(() => {
+			const targetDose = document.querySelector(`[data-dose-id="${doseId}"]`);
+			expect(targetDose).toHaveClass("notification-focus-target");
+			expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+		});
 	});
 
 	it("hides past and future sections when upcomingTodayOnly is enabled", () => {

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SharedSchedule } from "../../components/SharedSchedule";
@@ -168,10 +168,58 @@ function createSharedDataWithTodayDose(referenceNow: Date) {
 	};
 }
 
+function createSharedDoseFetchMock(options: {
+	token?: string;
+	sharedData: ReturnType<typeof createSharedDataWithTodayDose>;
+	initialDoses?: Array<{ doseId: string; skipped?: boolean; dismissed?: boolean; takenSource?: string }>;
+}) {
+	const token = options.token ?? "token-123";
+	const doseState = new Map((options.initialDoses ?? []).map((dose) => [dose.doseId, { ...dose }]));
+	const requests: Array<{ url: string; method: string; body?: unknown }> = [];
+
+	const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+		const method = init?.method ?? "GET";
+		const body =
+			typeof init?.body === "string" && init.body.length > 0
+				? (JSON.parse(init.body) as { doseId: string })
+				: undefined;
+		requests.push({ url, method, body });
+
+		if (url === `/api/share/${token}` && method === "GET") {
+			return { ok: true, json: async () => options.sharedData };
+		}
+
+		if (url === `/api/share/${token}/doses` && method === "GET") {
+			return { ok: true, json: async () => ({ doses: Array.from(doseState.values()) }) };
+		}
+
+		if (url === `/api/share/${token}/doses/skip` && method === "POST" && body?.doseId) {
+			doseState.set(body.doseId, { doseId: body.doseId, skipped: true });
+			return { ok: true, json: async () => ({}) };
+		}
+
+		if (url === `/api/share/${token}/doses` && method === "POST" && body?.doseId) {
+			doseState.set(body.doseId, { doseId: body.doseId, takenSource: "manual" });
+			return { ok: true, json: async () => ({}) };
+		}
+
+		if (url.startsWith(`/api/share/${token}/doses/skip/`) && method === "DELETE") {
+			const doseId = decodeURIComponent(url.split("/").at(-1) ?? "");
+			doseState.delete(doseId);
+			return { ok: true, json: async () => ({}) };
+		}
+
+		return Promise.reject(new Error(`Unexpected request: ${method} ${url}`));
+	});
+
+	return { fetchMock, requests, getDoses: () => Array.from(doseState.values()) };
+}
+
 describe("SharedSchedule", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		window.localStorage.clear();
+		globalThis.fetch = vi.fn() as unknown as typeof fetch;
 		vi.spyOn(globalThis, "setInterval").mockImplementation(() => 1 as unknown as ReturnType<typeof setInterval>);
 		vi.spyOn(globalThis, "clearInterval").mockImplementation(() => {});
 	});
@@ -183,7 +231,7 @@ describe("SharedSchedule", () => {
 
 	it("renders shared schedule shell for valid token", async () => {
 		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-			if (url === "/api/share/token-123/doses" && (!init || !init.method || init.method === "GET")) {
+			if (url === "/api/share/token-123/doses" && (!init?.method || init.method === "GET")) {
 				return Promise.resolve({ ok: true, json: () => Promise.resolve({ doses: [] }) });
 			}
 			if (url === "/api/share/token-123") {
@@ -247,7 +295,7 @@ describe("SharedSchedule", () => {
 
 	it("renders generic error when loading share data fails", async () => {
 		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-			if (url === "/api/share/token-123/doses" && (!init || !init.method || init.method === "GET")) {
+			if (url === "/api/share/token-123/doses" && (!init?.method || init.method === "GET")) {
 				return Promise.resolve({ ok: true, json: () => Promise.resolve({ doses: [] }) });
 			}
 			if (url === "/api/share/token-123") {
@@ -270,7 +318,7 @@ describe("SharedSchedule", () => {
 		const sharedData = createSharedDataWithTodayDose(referenceNow);
 
 		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-			if (url === "/api/share/token-123/doses" && (!init || !init.method || init.method === "GET")) {
+			if (url === "/api/share/token-123/doses" && (!init?.method || init.method === "GET")) {
 				return Promise.resolve({
 					ok: true,
 					json: () =>
@@ -296,7 +344,7 @@ describe("SharedSchedule", () => {
 		const sharedData = createSharedDataWithEmbeddedOverview();
 
 		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-			if (url === "/api/share/token-123/doses" && (!init || !init.method || init.method === "GET")) {
+			if (url === "/api/share/token-123/doses" && (!init?.method || init.method === "GET")) {
 				return Promise.resolve({ ok: true, json: () => Promise.resolve({ doses: [] }) });
 			}
 			if (url === "/api/share/token-123") {
@@ -317,5 +365,91 @@ describe("SharedSchedule", () => {
 		expect(screen.getAllByText("2 x 40 form.packageAmountUnitG").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("3 x 150 form.packageAmountUnitMl").length).toBeGreaterThan(0);
 		expect(screen.getByText("share.noSchedule")).toBeInTheDocument();
+	});
+
+	it("skips a neutral shared dose via the skip endpoint", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		const { fetchMock, requests } = createSharedDoseFetchMock({ sharedData });
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(document.querySelector(".dose-btn.skip")).toBeInTheDocument();
+		});
+
+		fireEvent.click(screen.getByText("dose.skip"));
+
+		await waitFor(() => {
+			expect(requests).toContainEqual({
+				url: "/api/share/token-123/doses/skip",
+				method: "POST",
+				body: { doseId: sharedData.automaticDoseId },
+			});
+			expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
+		});
+	});
+
+	it("undoes a skipped shared dose via the delete skip endpoint", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		const { fetchMock, requests } = createSharedDoseFetchMock({
+			sharedData,
+			initialDoses: [{ doseId: sharedData.automaticDoseId, skipped: true }],
+		});
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
+		});
+
+		fireEvent.click(screen.getByText("dose.undoSkip"));
+
+		await waitFor(() => {
+			expect(requests).toContainEqual({
+				url: `/api/share/token-123/doses/skip/${sharedData.automaticDoseId}`,
+				method: "DELETE",
+			});
+			expect(document.querySelector(".dose-btn.skip")).toBeInTheDocument();
+		});
+	});
+
+	it("takes a skipped shared dose again via the take endpoint", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		const { fetchMock, requests, getDoses } = createSharedDoseFetchMock({
+			sharedData,
+			initialDoses: [{ doseId: sharedData.automaticDoseId, skipped: true }],
+		});
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
+		});
+
+		fireEvent.click(screen.getByText("dose.take"));
+
+		await waitFor(() => {
+			expect(requests).toContainEqual({
+				url: "/api/share/token-123/doses",
+				method: "POST",
+				body: { doseId: sharedData.automaticDoseId },
+			});
+			expect(getDoses()).toEqual([
+				expect.objectContaining({ doseId: sharedData.automaticDoseId, takenSource: "manual" }),
+			]);
+			expect(document.querySelector(".day-block.today")).toHaveClass("all-taken");
+		});
 	});
 });

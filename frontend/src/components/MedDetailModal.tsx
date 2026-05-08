@@ -1105,10 +1105,7 @@ export function MedDetailModal({
 											</span>
 											<span className="refill-amount">
 												{(() => {
-													const total = isAmountBasedPackageType(selectedMed.packageType)
-														? entry.loosePillsAdded
-														: entry.packsAdded * selectedMed.blistersPerPack * selectedMed.pillsPerBlister +
-															entry.loosePillsAdded;
+													const total = entry.quantityAdded;
 													return `+${total}${isAmountPackage ? ` ${stockUnitLabel}` : ` ${total === 1 ? t("common.pill") : t("common.pills")}`}`;
 												})()}
 												{entry.usedPrescription && (

@@ -1264,14 +1264,14 @@ describe("getStockStatus", () => {
 		expect(result.className).toBe("danger");
 	});
 
-	it("returns out-of-stock when daysLeft is 0", () => {
+	it("returns critical when daysLeft is 0 but stock remains", () => {
 		const result = getStockStatus(0, 5, thresholds);
-		expect(result.level).toBe("out-of-stock");
+		expect(result.level).toBe("critical");
 		expect(result.className).toBe("danger");
 	});
 
 	it("returns high when daysLeft > highStockDays", () => {
-		const result = getStockStatus(200, 100, thresholds);
+		const result = getStockStatus(181, 100, thresholds);
 		expect(result.level).toBe("high");
 		expect(result.className).toBe("high");
 	});
@@ -1377,9 +1377,9 @@ describe("getStockStatus", () => {
 		const resultCritical = getStockStatus(1, 100, boundaryThresholds, "liquid_container");
 		expect(resultCritical.level).toBe("critical");
 
-		// daysLeft = 0 (out of stock)
+		// daysLeft = 0 with stock remaining is still critical, not empty
 		const resultEmpty = getStockStatus(0, 100, boundaryThresholds, "liquid_container");
-		expect(resultEmpty.level).toBe("out-of-stock");
+		expect(resultEmpty.level).toBe("critical");
 	});
 });
 

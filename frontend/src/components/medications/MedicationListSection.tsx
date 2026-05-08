@@ -50,7 +50,6 @@ export function MedicationListSection({
 	const renderImageAvatar = (med: Medication) => (
 		<span
 			className={med.imageUrl ? "med-avatar-clickable" : undefined}
-			onClick={() => med.imageUrl && onImagePreview(med)}
 			onKeyDown={(e) => {
 				if ((e.key === "Enter" || e.key === " ") && med.imageUrl) {
 					onImagePreview(med);
@@ -146,8 +145,7 @@ export function MedicationListSection({
 													</>
 												) : (
 													<span>
-														{t("medications.details.totalCapacity")}:{" "}
-														<strong>{med.totalPills ?? med.looseTablets}</strong>
+														{t("medications.details.totalCapacity")}: <strong>{stockDisplayCapacity}</strong>
 													</span>
 												)}
 											</div>

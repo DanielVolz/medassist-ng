@@ -293,8 +293,8 @@ export function getStockStatus(
 	thresholds: StockThresholds,
 	packageType?: PackageType
 ): StockStatus {
-	// Out of stock or completely depleted = danger (red)
-	if (medsLeft <= 0 || daysLeft === 0) {
+	// Only a real zero-or-below stock count is out of stock.
+	if (medsLeft <= 0) {
 		return { level: "out-of-stock", className: "danger", label: "status.outOfStock" };
 	}
 

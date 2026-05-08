@@ -411,6 +411,7 @@ describe("Export/Import API", () => {
 			expect(data.settings.notificationEmail).toBe("test@example.com");
 			expect(data.settings.language).toBe("de");
 			expect(data.settings.lowStockDays).toBe(14);
+			expect(data.settings.shareStockStatus).toBeUndefined();
 		});
 
 		it("should exclude sensitive data by default", async () => {
@@ -555,6 +556,45 @@ describe("Export/Import API", () => {
 			expect(result.rows[0].blisters_per_pack).toBe(3);
 			expect(result.rows[0].pills_per_blister).toBe(10);
 			expect(result.rows[0].loose_tablets).toBe(5);
+		});
+
+		it("accepts legacy shareStockStatus in imported settings but does not export or use it", async () => {
+			const importData = {
+				version: "1.0",
+				exportedAt: new Date().toISOString(),
+				medications: [],
+				doseHistory: [],
+				refillHistory: [],
+				settings: {
+					language: "de",
+					stockCalculationMode: "automatic",
+					shareStockStatus: false,
+				},
+				shareLinks: [],
+			};
+
+			const importResponse = await ctx.app.inject({
+				method: "POST",
+				url: "/import",
+				payload: importData,
+			});
+
+			expect(importResponse.statusCode).toBe(200);
+
+			const exportResponse = await ctx.app.inject({
+				method: "GET",
+				url: "/export",
+			});
+
+			expect(exportResponse.statusCode).toBe(200);
+			expect(exportResponse.json().settings.shareStockStatus).toBeUndefined();
+
+			const settingsRow = await ctx.client.execute({
+				sql: "SELECT share_medication_overview, share_stock_status FROM user_settings WHERE user_id = ?",
+				args: [userId],
+			});
+			expect(settingsRow.rows[0].share_medication_overview).toBe(0);
+			expect(settingsRow.rows[0].share_stock_status).toBe(1);
 		});
 
 		it("should replace existing data on import", async () => {

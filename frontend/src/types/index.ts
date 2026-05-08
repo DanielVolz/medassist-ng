@@ -188,7 +188,8 @@ export type PlannerRow = {
 export type RefillEntry = {
 	id: number;
 	packsAdded: number;
-	loosePillsAdded: number;
+	loosePillsAdded?: number;
+	quantityAdded: number;
 	usedPrescription?: boolean;
 	refillDate: string;
 };
@@ -409,10 +410,11 @@ export function getMedTotal(med: MedLike): number {
 		return med.looseTablets + (med.stockAdjustment ?? 0);
 	}
 
-	// Amount-based package types store their current base stock directly
-	// in totalPills (fallback looseTablets for legacy rows).
+	// Amount-based package types use the same canonical base field as the backend:
+	// looseTablets stores the current amount baseline, while totalPills is kept in sync
+	// for compatibility and UI helpers.
 	if (isAmountBasedPackageType(med.packageType)) {
-		const baseStock = med.totalPills ?? med.looseTablets;
+		const baseStock = med.looseTablets ?? med.totalPills ?? 0;
 		return baseStock + (med.stockAdjustment ?? 0);
 	}
 	// For blister type, calculate from packs + loose
@@ -425,9 +427,9 @@ export function getPackageSize(med: MedLike): number {
 		return med.totalPills ?? med.looseTablets;
 	}
 
-	// Amount-based package types use totalPills as base capacity
+	// Amount-based package types reuse the backend canonical amount baseline.
 	if (isAmountBasedPackageType(med.packageType)) {
-		return med.totalPills ?? med.looseTablets;
+		return med.looseTablets ?? med.totalPills ?? 0;
 	}
 	// For blister type, calculate from packs + loose
 	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets;

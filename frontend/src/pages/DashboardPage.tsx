@@ -62,6 +62,11 @@ function findFocusTargetElement(doseId: string | null, medId: string | null): HT
 	return null;
 }
 
+function getDosePeople(takenBy: unknown): Array<string | null> {
+	const takenByArray = Array.isArray(takenBy) ? takenBy : [];
+	return takenByArray.length > 0 ? takenByArray : [null];
+}
+
 export function DashboardPage() {
 	const { t, i18n } = useTranslation();
 	const { user } = useAuth();
@@ -1035,7 +1040,7 @@ export function DashboardPage() {
 																<div className="doses-col">
 																	{item.doses.map((dose) => {
 																		// If no takenBy, show single checkbox; otherwise show one per person
-																		const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+																		const people = getDosePeople(dose.takenBy);
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
@@ -1358,7 +1363,7 @@ export function DashboardPage() {
 																<div className="doses-col">
 																	{item.doses.map((dose) => {
 																		const isOverdue = dose.when < Date.now() && !isEmpty;
-																		const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+																		const people = getDosePeople(dose.takenBy);
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
@@ -1443,7 +1448,7 @@ export function DashboardPage() {
 										const totalFutureDoses = futureDays.flatMap((d) =>
 											d.meds.flatMap((m) =>
 												m.doses.flatMap((dose) =>
-													dose.takenBy.length > 0 ? dose.takenBy.map((p) => `${dose.id}-${p}`) : [dose.id]
+													getDosePeople(dose.takenBy).map((person) => (person ? `${dose.id}-${person}` : dose.id))
 												)
 											)
 										);
@@ -1623,7 +1628,7 @@ export function DashboardPage() {
 																</div>
 																<div className="doses-col">
 																	{item.doses.map((dose) => {
-																		const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
+																		const people = getDosePeople(dose.takenBy);
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);

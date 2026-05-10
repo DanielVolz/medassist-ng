@@ -165,6 +165,7 @@ const createMockAppContext = (overrides = {}) => ({
 	todayDay: null,
 	futureDays: [],
 	takenDoses: new Set(),
+	skippedDoses: new Set(),
 	dismissedDoses: new Set(),
 	markDoseTaken: vi.fn(),
 	undoDoseTaken: vi.fn(),
@@ -383,6 +384,41 @@ describe("DashboardPage", () => {
 		// With no meds, should show the dashboard cards
 		const cards = document.querySelectorAll(".card");
 		expect(cards.length).toBeGreaterThan(0);
+	});
+
+	it("renders today doses even when schedule data omits takenBy arrays", () => {
+		mockContextValue = createMockAppContext({
+			todayDay: {
+				dateStr: "Today",
+				date: new Date(),
+				isPast: false,
+				meds: [
+					{
+						medName: "Aspirin",
+						total: 1,
+						doses: [
+							{
+								id: "dose-without-taken-by",
+								timeStr: "09:00",
+								when: Date.now() + 60_000,
+								usage: 1,
+								takenBy: undefined as unknown as string[],
+							},
+						],
+						lastWhen: Date.now() + 60_000,
+					},
+				],
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText(/dashboard\.schedules\.title/i)).toBeInTheDocument();
+		expect(screen.getByText("09:00")).toBeInTheDocument();
 	});
 
 	it("renders schedule days selector", () => {

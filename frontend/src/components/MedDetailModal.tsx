@@ -26,7 +26,7 @@ import {
 	isLiquidContainerPackageType,
 	isTubePackageType,
 } from "../types";
-import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
+import { formatNumber, generateICS, getExpiryClass, getSystemLocale, withFormattingTimezone } from "../utils";
 import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
 import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { getStockStatus } from "../utils/schedule";
@@ -1092,16 +1092,22 @@ export function MedDetailModal({
 									{refillHistory.map((entry) => (
 										<div key={entry.id} className="refill-history-item">
 											<span className="refill-date">
-												{new Date(entry.refillDate).toLocaleDateString(getSystemLocale(i18n.language), {
-													day: "2-digit",
-													month: "short",
-													year: "numeric",
-												})}
+												{new Date(entry.refillDate).toLocaleDateString(
+													getSystemLocale(i18n.language),
+													withFormattingTimezone({
+														day: "2-digit",
+														month: "short",
+														year: "numeric",
+													})
+												)}
 												,{" "}
-												{new Date(entry.refillDate).toLocaleTimeString(getSystemLocale(i18n.language), {
-													hour: "2-digit",
-													minute: "2-digit",
-												})}
+												{new Date(entry.refillDate).toLocaleTimeString(
+													getSystemLocale(i18n.language),
+													withFormattingTimezone({
+														hour: "2-digit",
+														minute: "2-digit",
+													})
+												)}
 											</span>
 											<span className="refill-amount">
 												{(() => {

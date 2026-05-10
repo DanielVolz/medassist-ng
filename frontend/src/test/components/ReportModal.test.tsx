@@ -190,7 +190,6 @@ describe("ReportModal", () => {
 						{
 							packsAdded: 1,
 							loosePillsAdded: 0,
-							quantityAdded: 20,
 							usedPrescription: false,
 							refillDate: "2026-03-04",
 						},

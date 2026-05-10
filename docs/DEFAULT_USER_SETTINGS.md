@@ -6,7 +6,6 @@ Scope and behavior:
 
 - These values are applied only when a user's settings are created for the first time.
 - After that, values stored in the database are used and take precedence.
-- Source of truth in code: [backend/src/routes/settings.ts](backend/src/routes/settings.ts).
 
 ## Email Defaults
 
@@ -47,6 +46,6 @@ Scope and behavior:
 |----------|---------|-------------|
 | `DEFAULT_LANGUAGE` | `en` | Default language (`en` or `de`). |
 | `DEFAULT_STOCK_CALCULATION_MODE` | `automatic` | Default stock mode (`automatic` or `manual`). |
-| `DEFAULT_SHARE_STOCK_STATUS` | `true` | Show stock status on shared schedule links. |
+| `DEFAULT_SHARE_MEDICATION_OVERVIEW` | `false` | Show medication overview section on shared schedule links. |
 | `DEFAULT_UPCOMING_TODAY_ONLY` | `false` | Show only today's upcoming doses by default. |
 | `DEFAULT_SHARE_SCHEDULE_TODAY_ONLY` | `false` | Show only today's schedule in shared view by default. |

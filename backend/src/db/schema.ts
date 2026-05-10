@@ -108,8 +108,9 @@ export const userSettings = sqliteTable("user_settings", {
 	timezone: text("timezone", { length: 64 }).notNull().default(""),
 	// Stock calculation mode: "automatic" (schedule-based) or "manual" (only marked doses)
 	stockCalculationMode: text("stock_calculation_mode", { length: 20 }).notNull().default("automatic"),
-	// Whether shared schedule links show stock status (Critical/Low/Normal) to intake users
-	shareStockStatus: integer("share_stock_status", { mode: "boolean" }).notNull().default(true),
+	// Legacy column kept only so existing SQLite files continue to open cleanly after upgrades.
+	// Current MedAssist versions no longer read or expose this setting in product flows.
+	legacyShareStockStatusCompat: integer("share_stock_status", { mode: "boolean" }).notNull().default(true),
 	// Whether shared schedule links also embed the medication overview section
 	shareMedicationOverview: integer("share_medication_overview", { mode: "boolean" }).notNull().default(false),
 	// UI timeline visibility preferences
@@ -184,6 +185,43 @@ export const shareTokens = sqliteTable("share_tokens", {
 });
 
 // =============================================================================
+// Notification Action Groups - Shared action state for reminder notifications
+// =============================================================================
+export const notificationActionGroups = sqliteTable("notification_action_groups", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	userId: integer("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	groupKey: text("group_key", { length: 255 }).notNull().unique(),
+	sequenceId: text("sequence_id", { length: 255 }).notNull(),
+	ntfyOriginalMessageId: text("ntfy_original_message_id", { length: 255 }).notNull().default(""),
+	doseIdsJson: text("dose_ids_json").notNull(),
+	title: text("title", { length: 255 }).notNull(),
+	message: text("message").notNull(),
+	language: text("language", { length: 10 }).notNull().default("en"),
+	scheduledFor: integer("scheduled_for", { mode: "timestamp" }),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	resolvedAction: text("resolved_action", { length: 20 }),
+	resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// =============================================================================
+// Notification Action Tokens - Hashed tokens for public reminder responses
+// =============================================================================
+export const notificationActionTokens = sqliteTable("notification_action_tokens", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	groupId: integer("group_id")
+		.notNull()
+		.references(() => notificationActionGroups.id, { onDelete: "cascade" }),
+	tokenHash: text("token_hash", { length: 128 }).notNull().unique(),
+	kind: text("kind", { length: 20 }).notNull(),
+	usedAt: integer("used_at", { mode: "timestamp" }),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// =============================================================================
 // Dose Tracking - Tracks when doses are marked as taken
 // =============================================================================
 export const doseTracking = sqliteTable("dose_tracking", {
@@ -194,8 +232,8 @@ export const doseTracking = sqliteTable("dose_tracking", {
 	doseId: text("dose_id", { length: 255 }).notNull(), // e.g. "med-5-1-86400000-1735200000000"
 	takenAt: integer("taken_at", { mode: "timestamp" }).notNull().default(sql`(strftime('%s','now'))`),
 	markedBy: text("marked_by", { length: 100 }), // null = user, "Daniel" = via share link
-	takenSource: text("taken_source", { length: 20 }).notNull().default("manual"), // manual or automatic
-	dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false), // true = missed dose acknowledged without taking
+	takenSource: text("taken_source", { length: 20 }).notNull().default("manual"), // manual, automatic, or notification
+	dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false), // legacy column: true = intake skipped without stock deduction
 });
 
 // =============================================================================

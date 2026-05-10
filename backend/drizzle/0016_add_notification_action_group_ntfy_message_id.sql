@@ -1,0 +1,1 @@
+ALTER TABLE `notification_action_groups` ADD `ntfy_original_message_id` text(255) DEFAULT '' NOT NULL;

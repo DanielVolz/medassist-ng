@@ -10,10 +10,11 @@ const EnvSchema = z.object({
 	NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
 	PORT: z
 		.string()
-		.transform((v) => parseInt(v, 10))
-		.default(3000),
+		.default("3000")
+		.transform((v) => parseInt(v, 10)),
 	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
 	LOG_LEVEL: z.string().default("info"),
+	PUBLIC_APP_URL: z.string().url().optional(),
 	OPENAPI_DOCS_ENABLED: z
 		.string()
 		.transform((v) => v === "true")
@@ -25,18 +26,18 @@ const EnvSchema = z.object({
 	// Master switch: Enable/disable authentication (default: disabled for easy setup)
 	AUTH_ENABLED: z
 		.string()
-		.transform((v) => v === "true")
-		.default(false),
+		.default("false")
+		.transform((v) => v === "true"),
 	// Allow new user registrations (auto-enabled if no users exist)
 	REGISTRATION_ENABLED: z
 		.string()
-		.transform((v) => v === "true")
-		.default(false),
+		.default("false")
+		.transform((v) => v === "true"),
 	// Disable username/password form login (useful for OIDC-only setups)
 	FORM_LOGIN_ENABLED: z
 		.string()
-		.transform((v) => v === "true")
-		.default(true),
+		.default("true")
+		.transform((v) => v === "true"),
 
 	// JWT Secrets - only required when AUTH_ENABLED=true
 	JWT_SECRET: z.string().min(10).optional(),
@@ -46,20 +47,20 @@ const EnvSchema = z.object({
 	// Token TTL settings
 	ACCESS_TOKEN_TTL_MINUTES: z
 		.string()
-		.transform((v) => parseInt(v, 10))
-		.default(15),
+		.default("15")
+		.transform((v) => parseInt(v, 10)),
 	REFRESH_TOKEN_TTL_DAYS: z
 		.string()
-		.transform((v) => parseInt(v, 10))
-		.default(7),
+		.default("7")
+		.transform((v) => parseInt(v, 10)),
 
 	// ==========================================================================
 	// OIDC SSO Configuration (Pocket ID, Authelia, etc.)
 	// ==========================================================================
 	OIDC_ENABLED: z
 		.string()
-		.transform((v) => v === "true")
-		.default(false),
+		.default("false")
+		.transform((v) => v === "true"),
 	OIDC_ISSUER_URL: z.string().url().optional(), // e.g., https://auth.example.com
 	OIDC_CLIENT_ID: z.string().optional(),
 	OIDC_CLIENT_SECRET: z.string().optional(),
@@ -67,8 +68,8 @@ const EnvSchema = z.object({
 	OIDC_SCOPES: z.string().default("openid profile email"),
 	OIDC_AUTO_CREATE_USERS: z
 		.string()
-		.transform((v) => v === "true")
-		.default(true),
+		.default("true")
+		.transform((v) => v === "true"),
 	OIDC_USERNAME_CLAIM: z.string().default("preferred_username"), // or 'email', 'sub'
 	OIDC_PROVIDER_NAME: z.string().default("SSO"), // Display name for UI button
 });

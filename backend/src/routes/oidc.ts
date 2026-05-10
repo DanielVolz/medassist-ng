@@ -119,7 +119,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 				return reply.redirect(authUrl.href);
 			} catch (err: unknown) {
 				request.log.error({ err }, "[OIDC] Login initialization failed");
-				return reply.redirect(`${getFrontendUrl()}/?error=oidc_init_failed`);
+				return reply.redirect(getFrontendUrl());
 			}
 		}
 	);
@@ -151,25 +151,25 @@ export async function oidcRoutes(app: FastifyInstance) {
 			// Handle OIDC provider errors
 			if (error) {
 				app.log.warn({ error, errorDescription: error_description }, "[OIDC] Provider returned error");
-				return reply.redirect(`${getFrontendUrl()}/?error=oidc_${error}`);
+				return reply.redirect(getFrontendUrl());
 			}
 
 			if (!code || !state) {
-				return reply.redirect(`${getFrontendUrl()}/?error=oidc_missing_params`);
+				return reply.redirect(getFrontendUrl());
 			}
 
 			// Verify state
 			const storedState = request.unsignCookie(request.cookies.oidc_state || "");
 			if (!storedState.valid || storedState.value !== state) {
 				request.log.warn("[OIDC] State mismatch during callback validation");
-				return reply.redirect(`${getFrontendUrl()}/?error=oidc_state_mismatch`);
+				return reply.redirect(getFrontendUrl());
 			}
 
 			// Get code verifier
 			const storedVerifier = request.unsignCookie(request.cookies.oidc_code_verifier || "");
 			if (!storedVerifier.valid || !storedVerifier.value) {
 				request.log.warn("[OIDC] Missing/invalid code verifier cookie");
-				return reply.redirect(`${getFrontendUrl()}/?error=oidc_missing_verifier`);
+				return reply.redirect(getFrontendUrl());
 			}
 
 			try {
@@ -190,7 +190,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 				const sub = tokens.claims()?.sub;
 				if (!sub) {
 					request.log.error("[OIDC] Missing sub claim in token response");
-					return reply.redirect(`${getFrontendUrl()}/?error=oidc_missing_sub`);
+					return reply.redirect(getFrontendUrl());
 				}
 				const userInfo = await client.fetchUserInfo(config, tokens.access_token, sub);
 
@@ -208,7 +208,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 						{ hasUsername: Boolean(username), hasOidcSubject: Boolean(oidcSubject) },
 						"[OIDC] Missing required user info"
 					);
-					return reply.redirect(`${getFrontendUrl()}/?error=oidc_missing_user_info`);
+					return reply.redirect(getFrontendUrl());
 				}
 
 				// Clean cookies
@@ -219,7 +219,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 				const user = await findOrCreateOIDCUser(username, oidcSubject, reply);
 
 				if (!user) {
-					return reply.redirect(`${getFrontendUrl()}/?error=oidc_user_creation_failed`);
+					return reply.redirect(getFrontendUrl());
 				}
 
 				// Update last login
@@ -248,7 +248,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 				return reply.redirect(`${frontendUrl}/dashboard`);
 			} catch (err: unknown) {
 				request.log.error({ err }, "[OIDC] Callback processing failed");
-				return reply.redirect(`${getFrontendUrl()}/?error=oidc_callback_failed`);
+				return reply.redirect(getFrontendUrl());
 			}
 		}
 	);

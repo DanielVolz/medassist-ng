@@ -23,7 +23,7 @@ const IMAGES_DIR = resolve(getDataDir(), "images");
 // =============================================================================
 // Export Format Version (bump this when format changes)
 // =============================================================================
-const EXPORT_VERSION = "1.4";
+const EXPORT_VERSION = "1.5";
 
 // =============================================================================
 // Zod Schemas for Import Validation
@@ -96,7 +96,8 @@ const doseHistorySchema = z.object({
 const refillHistoryExportSchema = z.object({
 	medicationRef: z.string(), // References _exportId
 	packsAdded: z.number().int().min(0).default(0),
-	loosePillsAdded: z.number().int().min(0).default(0),
+	loosePillsAdded: z.number().int().min(0).optional(),
+	quantityAdded: z.number().int().min(0).optional(),
 	usedPrescription: z.boolean().default(false),
 	refillDate: z.string(), // ISO datetime
 });
@@ -108,37 +109,44 @@ const shareLinkSchema = z.object({
 	regenerateToken: z.boolean().default(true),
 });
 
-const settingsExportSchema = z
-	.object({
-		// Email notifications
-		emailEnabled: z.boolean().default(false),
-		notificationEmail: z.string().nullable().optional(),
-		emailStockReminders: z.boolean().default(true),
-		emailIntakeReminders: z.boolean().default(true),
-		emailPrescriptionReminders: z.boolean().default(true),
-		// Push notifications
-		shoutrrrEnabled: z.boolean().optional(),
-		shoutrrrUrl: z.string().nullable().optional(),
-		shoutrrrStockReminders: z.boolean().default(true),
-		shoutrrrIntakeReminders: z.boolean().default(true),
-		shoutrrrPrescriptionReminders: z.boolean().default(true),
-		// Reminder settings
-		reminderDaysBefore: z.number().int().default(7),
-		repeatDailyReminders: z.boolean().default(false),
-		skipRemindersForTakenDoses: z.boolean().default(false),
-		repeatRemindersEnabled: z.boolean().default(false),
-		reminderRepeatIntervalMinutes: z.number().int().default(30),
-		maxNaggingReminders: z.number().int().default(5),
-		// Stock thresholds
-		lowStockDays: z.number().int().default(30),
-		normalStockDays: z.number().int().default(90),
-		highStockDays: z.number().int().default(180),
-		expiryWarningDays: z.number().int().default(90),
-		// UI preferences
-		language: z.string().default("en"),
-		stockCalculationMode: z.enum(["automatic", "manual"]).default("automatic"),
-		shareStockStatus: z.boolean().default(true),
-		shareMedicationOverview: z.boolean().default(false),
+const settingsSchemaBase = z.object({
+	// Email notifications
+	emailEnabled: z.boolean().default(false),
+	notificationEmail: z.string().nullable().optional(),
+	emailStockReminders: z.boolean().default(true),
+	emailIntakeReminders: z.boolean().default(true),
+	emailPrescriptionReminders: z.boolean().default(true),
+	// Push notifications
+	shoutrrrEnabled: z.boolean().optional(),
+	shoutrrrUrl: z.string().nullable().optional(),
+	shoutrrrStockReminders: z.boolean().default(true),
+	shoutrrrIntakeReminders: z.boolean().default(true),
+	shoutrrrPrescriptionReminders: z.boolean().default(true),
+	// Reminder settings
+	reminderDaysBefore: z.number().int().default(7),
+	repeatDailyReminders: z.boolean().default(false),
+	skipRemindersForTakenDoses: z.boolean().default(false),
+	repeatRemindersEnabled: z.boolean().default(false),
+	reminderRepeatIntervalMinutes: z.number().int().default(30),
+	maxNaggingReminders: z.number().int().default(5),
+	// Stock thresholds
+	lowStockDays: z.number().int().default(30),
+	normalStockDays: z.number().int().default(90),
+	highStockDays: z.number().int().default(180),
+	expiryWarningDays: z.number().int().default(90),
+	// UI preferences
+	language: z.string().default("en"),
+	stockCalculationMode: z.enum(["automatic", "manual"]).default("automatic"),
+	shareMedicationOverview: z.boolean().default(false),
+});
+
+const exportSettingsSchema = settingsSchemaBase.optional();
+
+const importSettingsSchema = settingsSchemaBase
+	.extend({
+		// Accept the removed field from legacy exports so old backups still import,
+		// but do not map it back into current runtime settings.
+		shareStockStatus: z.boolean().optional(),
 	})
 	.optional();
 
@@ -149,7 +157,7 @@ const importDataSchema = z.object({
 	medications: z.array(medicationExportSchema).default([]),
 	doseHistory: z.array(doseHistorySchema).default([]),
 	refillHistory: z.array(refillHistoryExportSchema).default([]),
-	settings: settingsExportSchema,
+	settings: importSettingsSchema,
 	shareLinks: z.array(shareLinkSchema).default([]),
 });
 
@@ -210,7 +218,7 @@ const importBodyOpenApiSchema = {
 			},
 		],
 		doseHistory: [{ doseId: "1:2026-03-11T08:00:00.000Z:Daniel", takenAt: 1773216000000 }],
-		refillHistory: [{ packsAdded: 1, loosePillsAdded: 4, refillDate: "2026-03-10T12:00:00.000Z" }],
+		refillHistory: [{ packsAdded: 1, loosePillsAdded: 4, quantityAdded: 34, refillDate: "2026-03-10T12:00:00.000Z" }],
 		settings: { language: "en", stockCalculationMode: "automatic" },
 		shareLinks: [{ takenBy: "Daniel", scheduleDays: 14 }],
 	},
@@ -370,6 +378,7 @@ export async function exportRoutes(app: FastifyInstance) {
 
 			// 1. Load all medications
 			const meds = await db.select().from(medications).where(eq(medications.userId, userId)).orderBy(medications.id);
+			const medicationById = new Map(meds.map((med) => [med.id, med]));
 
 			// Build medication ID to export ID mapping
 			const medIdToExportId = new Map<number, string>();
@@ -509,7 +518,6 @@ export async function exportRoutes(app: FastifyInstance) {
 						expiryWarningDays: settings.expiryWarningDays,
 						language: settings.language,
 						stockCalculationMode: settings.stockCalculationMode,
-						shareStockStatus: settings.shareStockStatus,
 						shareMedicationOverview: settings.shareMedicationOverview ?? false,
 					}
 				: undefined;
@@ -548,6 +556,13 @@ export async function exportRoutes(app: FastifyInstance) {
 				.map((refill) => {
 					const exportId = medIdToExportId.get(refill.medicationId);
 					if (!exportId) return null; // Orphaned refill, skip
+					const medication = medicationById.get(refill.medicationId);
+					const packageType = normalizePackageType(medication?.packageType);
+					const pillsPerPack = Math.max(1, (medication?.blistersPerPack ?? 1) * (medication?.pillsPerBlister ?? 1));
+					const quantityAdded =
+						packageType === "bottle" || packageType === "tube" || packageType === "liquid_container"
+							? (refill.loosePillsAdded ?? 0)
+							: (refill.packsAdded ?? 0) * pillsPerPack + (refill.loosePillsAdded ?? 0);
 
 					// Safely convert refillDate to ISO string
 					let refillDateIso: string;
@@ -568,6 +583,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						medicationRef: exportId,
 						packsAdded: refill.packsAdded ?? 0,
 						loosePillsAdded: refill.loosePillsAdded ?? 0,
+						quantityAdded,
 						usedPrescription: refill.usedPrescription ?? false,
 						refillDate: refillDateIso,
 					};
@@ -778,6 +794,8 @@ export async function exportRoutes(app: FastifyInstance) {
 
 			// 5. Import settings
 			if (importData.settings) {
+				// Legacy exports may still contain shareStockStatus. The current app no longer
+				// uses that setting, so imports accept it for compatibility and then ignore it.
 				await db.insert(userSettings).values({
 					userId,
 					emailEnabled: importData.settings.emailEnabled ?? false,
@@ -802,7 +820,6 @@ export async function exportRoutes(app: FastifyInstance) {
 					expiryWarningDays: importData.settings.expiryWarningDays ?? 90,
 					language: importData.settings.language ?? "en",
 					stockCalculationMode: importData.settings.stockCalculationMode ?? "automatic",
-					shareStockStatus: importData.settings.shareStockStatus ?? true,
 					shareMedicationOverview: importData.settings.shareMedicationOverview ?? false,
 				});
 			}
@@ -830,7 +847,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					medicationId: newMedId,
 					userId,
 					packsAdded: refill.packsAdded ?? 0,
-					loosePillsAdded: refill.loosePillsAdded ?? 0,
+					loosePillsAdded: refill.loosePillsAdded ?? refill.quantityAdded ?? 0,
 					usedPrescription: refill.usedPrescription ?? false,
 					refillDate: new Date(refill.refillDate),
 				});

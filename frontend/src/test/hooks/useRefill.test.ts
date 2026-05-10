@@ -31,7 +31,9 @@ describe("useRefill", () => {
 	});
 
 	it("loads refill history", async () => {
-		const mockHistory = [{ id: 1, packsAdded: 2, loosePillsAdded: 0, createdAt: "2024-03-15T10:00:00Z" }];
+		const mockHistory = [
+			{ id: 1, packsAdded: 2, loosePillsAdded: 0, quantityAdded: 20, createdAt: "2024-03-15T10:00:00Z" },
+		];
 
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 			ok: true,
@@ -49,7 +51,7 @@ describe("useRefill", () => {
 
 	it("handles refill history with refills wrapper", async () => {
 		const mockHistory = {
-			refills: [{ id: 1, packsAdded: 2, createdAt: "2024-03-15T10:00:00Z" }],
+			refills: [{ id: 1, packsAdded: 2, quantityAdded: 20, createdAt: "2024-03-15T10:00:00Z" }],
 		};
 
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -162,7 +164,7 @@ describe("useRefill", () => {
 			"/api/medications/1/refill",
 			expect.objectContaining({
 				method: "POST",
-				body: JSON.stringify({ packsAdded: 1, loosePillsAdded: 0, usePrescription: false }),
+				body: JSON.stringify({ packsAdded: 1, loosePillsAdded: 0, quantityAdded: 0, usePrescription: false }),
 			})
 		);
 		expect(fetch).toHaveBeenNthCalledWith(
@@ -502,6 +504,53 @@ describe("useRefill", () => {
 			looseTablets: 0,
 			totalPills: 0,
 			packageAmountValue: 0,
+		});
+	});
+
+	it("keeps liquid stock correction base fields aligned", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const liquidMed: Medication = {
+			id: 12,
+			name: "Aligned Liquid",
+			medicationForm: "liquid",
+			packageType: "liquid_container",
+			doseUnit: "ml",
+			packCount: 1,
+			packageAmountValue: 180,
+			packageAmountUnit: "ml",
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 180,
+			looseTablets: 180,
+			stockAdjustment: 0,
+			takenBy: [],
+			blisters: [{ usage: 5, every: 1, start: "2026-01-31T20:27:00" }],
+			updatedAt: null,
+		};
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(liquidMed, {
+				all: [{ name: liquidMed.name, medsLeft: 180, daysLeft: 36 }] as Coverage[],
+			});
+			result.current.setEditStockFullBlisters(2);
+			result.current.setEditStockPartialBlisterPills(300);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(12, liquidMed, mockLoadMeds);
+		});
+
+		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+		const body = JSON.parse(requestInit.body as string);
+		expect(body).toEqual({
+			stockAdjustment: -60,
+			packCount: 2,
+			totalPills: 360,
+			looseTablets: 360,
 		});
 	});
 

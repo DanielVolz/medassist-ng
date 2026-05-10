@@ -1,7 +1,8 @@
 /* biome-ignore-all lint/style/noNestedTernary: timeline rendering uses explicit UI-state branching */
 import { Archive, Bell, ClipboardList, NotebookPen, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import { ConfirmModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { DashboardReminderSection } from "../components/dashboard/DashboardReminderSection";
@@ -28,9 +29,43 @@ import {
 	userStorageKey,
 } from "./dashboard-helpers";
 
+function getRouteDateKey(value: Date): string {
+	const year = value.getFullYear();
+	const month = String(value.getMonth() + 1).padStart(2, "0");
+	const day = String(value.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+}
+
+function getMedicationIdFromNotificationDoseId(doseId: string | null): string | null {
+	if (!doseId) {
+		return null;
+	}
+
+	const [rawMedicationId] = doseId.split("-");
+	return rawMedicationId?.trim() ? rawMedicationId : null;
+}
+
+function findFocusTargetElement(doseId: string | null, medId: string | null): HTMLElement | null {
+	if (doseId) {
+		const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-dose-id]"));
+		const doseElement = elements.find((element) => element.dataset.doseId === doseId);
+		if (doseElement) {
+			return doseElement.closest<HTMLElement>("[data-med-id]") ?? doseElement;
+		}
+	}
+
+	if (medId) {
+		const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-med-id]"));
+		return elements.find((element) => element.dataset.medId === medId) ?? null;
+	}
+
+	return null;
+}
+
 export function DashboardPage() {
 	const { t, i18n } = useTranslation();
 	const { user } = useAuth();
+	const location = useLocation();
 	const {
 		meds,
 		loading,
@@ -49,9 +84,12 @@ export function DashboardPage() {
 		todayDay,
 		futureDays,
 		takenDoses,
+		skippedDoses,
 		dismissedDoses,
 		markDoseTaken,
+		markDoseSkipped,
 		undoDoseTaken,
+		undoDoseSkipped,
 		manuallyCollapsedDays,
 		manuallyExpandedDays,
 		toggleDayCollapse,
@@ -71,8 +109,147 @@ export function DashboardPage() {
 	const [clearingMissed, setClearingMissed] = useState(false);
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<{ id: number; name: string } | null>(null);
+	const notificationFocusAppliedRef = useRef<string | null>(null);
 
-	const isDoseTakenForDisplay = (doseId: string) => takenDoses.has(doseId);
+	const isDoseTakenForDisplay = useCallback((doseId: string) => takenDoses.has(doseId), [takenDoses]);
+
+	const notificationTarget = useMemo(() => {
+		const params = new URLSearchParams(location.search);
+		const date = params.get("day")?.trim() ?? params.get("date")?.trim() ?? "";
+		const doseId = params.get("dose")?.trim() ?? params.get("doseId")?.trim() ?? "";
+		const medId =
+			params.get("med")?.trim() ?? params.get("medId")?.trim() ?? getMedicationIdFromNotificationDoseId(doseId) ?? "";
+		if (!date && !doseId && !medId) {
+			return null;
+		}
+
+		return {
+			date: date || null,
+			doseId: doseId || null,
+			medId: medId || null,
+			key: `${date}|${doseId}|${medId}`,
+		};
+	}, [location.search]);
+
+	const targetDayState = useMemo(() => {
+		if (!notificationTarget?.date) {
+			return null;
+		}
+
+		const todayDateKey = todayDay ? getRouteDateKey(todayDay.date) : null;
+		if (todayDay && todayDateKey === notificationTarget.date) {
+			const allDoseIds = todayDay.meds.flatMap((item) => expandDoseIds(item.doses));
+			const allDayTaken = allDoseIds.length > 0 && allDoseIds.every((id) => isDoseTakenForDisplay(id));
+			const isAutoCollapsed = allDayTaken;
+			const isManuallyExpanded = manuallyExpandedDays.has(todayDay.dateStr);
+			const isManuallyCollapsed = manuallyCollapsedDays.has(todayDay.dateStr);
+			const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
+			return { day: todayDay, isAutoCollapsed, isCollapsed, section: "today" as const };
+		}
+
+		const pastDay = pastDays.find((day) => getRouteDateKey(day.date) === notificationTarget.date);
+		if (pastDay) {
+			const isAutoCollapsed = true;
+			const isCollapsed = !manuallyExpandedDays.has(pastDay.dateStr);
+			return { day: pastDay, isAutoCollapsed, isCollapsed, section: "past" as const };
+		}
+
+		const futureDay = futureDays.find((day) => getRouteDateKey(day.date) === notificationTarget.date);
+		if (futureDay) {
+			const isAutoCollapsed = true;
+			const isCollapsed = !manuallyExpandedDays.has(futureDay.dateStr);
+			return { day: futureDay, isAutoCollapsed, isCollapsed, section: "future" as const };
+		}
+
+		return null;
+	}, [
+		notificationTarget,
+		todayDay,
+		pastDays,
+		futureDays,
+		manuallyExpandedDays,
+		manuallyCollapsedDays,
+		isDoseTakenForDisplay,
+	]);
+
+	useEffect(() => {
+		if (!notificationTarget || !targetDayState) {
+			return;
+		}
+
+		if (targetDayState.section === "past" && !showPastDays) {
+			setShowPastDays(true);
+		}
+
+		if (targetDayState.section === "future" && !showFutureDays) {
+			setShowFutureDays(true);
+		}
+
+		if (targetDayState.isCollapsed) {
+			toggleDayCollapse(targetDayState.day.dateStr, targetDayState.isAutoCollapsed);
+		}
+	}, [
+		notificationTarget,
+		targetDayState,
+		setShowPastDays,
+		setShowFutureDays,
+		showPastDays,
+		showFutureDays,
+		toggleDayCollapse,
+	]);
+
+	useEffect(() => {
+		if (!notificationTarget) {
+			notificationFocusAppliedRef.current = null;
+			return;
+		}
+
+		if (loading || settingsLoading) {
+			return;
+		}
+
+		if (!targetDayState) {
+			return;
+		}
+
+		if (notificationFocusAppliedRef.current === notificationTarget.key) {
+			return;
+		}
+
+		let correctionTimerId: number | null = null;
+
+		const scrollTargetIntoView = () => {
+			const targetElement = findFocusTargetElement(notificationTarget.doseId, notificationTarget.medId);
+
+			if (!targetElement) {
+				return false;
+			}
+
+			targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
+			return true;
+		};
+
+		const frameId = requestAnimationFrame(() => {
+			if (!scrollTargetIntoView()) {
+				return;
+			}
+
+			correctionTimerId = window.setTimeout(() => {
+				if (!scrollTargetIntoView()) {
+					return;
+				}
+
+				notificationFocusAppliedRef.current = notificationTarget.key;
+			}, 220);
+		});
+
+		return () => {
+			cancelAnimationFrame(frameId);
+			if (correctionTimerId !== null) {
+				window.clearTimeout(correctionTimerId);
+			}
+		};
+	}, [notificationTarget, targetDayState, loading, settingsLoading]);
 
 	// Get structured reminder data
 	const reminderData = getReminderStatusData(
@@ -151,6 +328,59 @@ export function DashboardPage() {
 		} finally {
 			setClearingMissed(false);
 		}
+	};
+
+	const renderDoseActionButtons = (options: {
+		doseId: string;
+		isTaken: boolean;
+		isSkipped: boolean;
+		isAutomaticallyTaken: boolean;
+		isEmpty: boolean;
+	}) => {
+		const takeButton = options.isTaken ? (
+			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
+				{options.isAutomaticallyTaken && (
+					<span className="info-tooltip" data-tooltip={t("tooltips.automaticTaken")}>
+						🤖
+					</span>
+				)}
+				<span className="dose-btn-label">{t("common.undo")}</span>
+				<span aria-hidden="true">↩</span>
+			</button>
+		) : (
+			<button
+				className={`dose-btn take${options.isEmpty ? " out-of-stock" : ""}`}
+				onClick={() => markDoseTaken(options.doseId)}
+				title={options.isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
+				disabled={options.isEmpty || options.isSkipped}
+			>
+				<span className="dose-btn-label">{t("dose.take")}</span>
+				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
+			</button>
+		);
+
+		const skipButton = options.isSkipped ? (
+			<button className="dose-btn undo skip" onClick={() => undoDoseSkipped(options.doseId)} title={t("common.undo")}>
+				<span className="dose-btn-label">{t("common.undo")}</span>
+				<span aria-hidden="true">↩</span>
+			</button>
+		) : (
+			<button
+				className="dose-btn skip"
+				onClick={() => markDoseSkipped(options.doseId)}
+				title={t("dose.markAsSkipped")}
+				disabled={options.isTaken}
+			>
+				<span className="dose-btn-label">{t("dose.skip")}</span>
+			</button>
+		);
+
+		return (
+			<>
+				{takeButton}
+				{skipButton}
+			</>
+		);
 	};
 
 	const requestMarkObsolete = (med: { id: number; name: string }) => {
@@ -708,6 +938,7 @@ export function DashboardPage() {
 										return (
 											<div
 												key={day.dateStr}
+												data-date-key={getRouteDateKey(day.date)}
 												className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allReallyTaken ? "all-taken" : allDoseIds.length > 0 ? "past-missed" : ""}`}
 											>
 												<div
@@ -753,8 +984,15 @@ export function DashboardPage() {
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
 														else if (isLowStock) rowClasses.push("med-low");
+														if (med?.id != null && notificationTarget?.medId === String(med.id)) {
+															rowClasses.push("notification-focus-target-row");
+														}
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
+															<div
+																key={`${day.dateStr}-${item.medName}`}
+																className={rowClasses.join(" ")}
+																data-med-id={med?.id != null ? String(med.id) : undefined}
+															>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -828,10 +1066,20 @@ export function DashboardPage() {
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
+																						const isSkipped = skippedDoses.has(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
+																						const personClasses = ["dose-person"];
+																						if (isTaken) personClasses.push("taken");
+																						if (isSkipped) personClasses.push("skipped");
+																						if (notificationTarget?.doseId === doseId)
+																							personClasses.push("notification-focus-target");
 																						return (
-																							<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
+																							<div
+																								key={doseId}
+																								data-dose-id={doseId}
+																								className={personClasses.join(" ")}
+																							>
 																								{person && (
 																									<span
 																										className="person-name clickable"
@@ -843,38 +1091,13 @@ export function DashboardPage() {
 																										{person}
 																									</span>
 																								)}
-																								{isTaken ? (
-																									<button
-																										className="dose-btn undo"
-																										onClick={() => undoDoseTaken(doseId)}
-																										title={t("common.undo")}
-																									>
-																										{isAutomaticallyTaken && (
-																											<span
-																												className="info-tooltip"
-																												data-tooltip={t("tooltips.automaticTaken")}
-																											>
-																												🤖
-																											</span>
-																										)}
-																										<span className="dose-btn-label">{t("common.undo")}</span>
-																										<span aria-hidden="true">↩</span>
-																									</button>
-																								) : (
-																									<button
-																										className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
-																										onClick={() => markDoseTaken(doseId)}
-																										title={
-																											isEmpty
-																												? t("common.outOfStockTakeBlocked")
-																												: t("dose.markAsTaken")
-																										}
-																										disabled={isEmpty}
-																									>
-																										<span className="dose-btn-label">{t("dose.take")}</span>
-																										<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
-																									</button>
-																								)}
+																								{renderDoseActionButtons({
+																									doseId,
+																									isTaken,
+																									isSkipped,
+																									isAutomaticallyTaken,
+																									isEmpty,
+																								})}
 																							</div>
 																						);
 																					})}
@@ -1023,6 +1246,7 @@ export function DashboardPage() {
 										return (
 											<div
 												key={day.dateStr}
+												data-date-key={getRouteDateKey(day.date)}
 												className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} today ${worstStatus ? `stock-${worstStatus}` : ""}`}
 											>
 												<div
@@ -1067,8 +1291,15 @@ export function DashboardPage() {
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
 														else if (isLowStock) rowClasses.push("med-low");
+														if (med?.id != null && notificationTarget?.medId === String(med.id)) {
+															rowClasses.push("notification-focus-target-row");
+														}
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
+															<div
+																key={`${day.dateStr}-${item.medName}`}
+																className={rowClasses.join(" ")}
+																data-med-id={med?.id != null ? String(med.id) : undefined}
+															>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1126,7 +1357,7 @@ export function DashboardPage() {
 																</div>
 																<div className="doses-col">
 																	{item.doses.map((dose) => {
-																		const isOverdue = dose.when < Date.now();
+																		const isOverdue = dose.when < Date.now() && !isEmpty;
 																		const people = dose.takenBy.length > 0 ? dose.takenBy : [null];
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
@@ -1159,10 +1390,20 @@ export function DashboardPage() {
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
+																						const isSkipped = skippedDoses.has(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
+																						const personClasses = ["dose-person"];
+																						if (isTaken) personClasses.push("taken");
+																						if (isSkipped) personClasses.push("skipped");
+																						if (notificationTarget?.doseId === doseId)
+																							personClasses.push("notification-focus-target");
 																						return (
-																							<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
+																							<div
+																								key={doseId}
+																								data-dose-id={doseId}
+																								className={personClasses.join(" ")}
+																							>
 																								{person && (
 																									<span
 																										className="person-name clickable"
@@ -1174,38 +1415,13 @@ export function DashboardPage() {
 																										{person}
 																									</span>
 																								)}
-																								{isTaken ? (
-																									<button
-																										className="dose-btn undo"
-																										onClick={() => undoDoseTaken(doseId)}
-																										title={t("common.undo")}
-																									>
-																										{isAutomaticallyTaken && (
-																											<span
-																												className="info-tooltip"
-																												data-tooltip={t("tooltips.automaticTaken")}
-																											>
-																												🤖
-																											</span>
-																										)}
-																										<span className="dose-btn-label">{t("common.undo")}</span>
-																										<span aria-hidden="true">↩</span>
-																									</button>
-																								) : (
-																									<button
-																										className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
-																										onClick={() => markDoseTaken(doseId)}
-																										title={
-																											isEmpty
-																												? t("common.outOfStockTakeBlocked")
-																												: t("dose.markAsTaken")
-																										}
-																										disabled={isEmpty}
-																									>
-																										<span className="dose-btn-label">{t("dose.take")}</span>
-																										<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
-																									</button>
-																								)}
+																								{renderDoseActionButtons({
+																									doseId,
+																									isTaken,
+																									isSkipped,
+																									isAutomaticallyTaken,
+																									isEmpty,
+																								})}
 																							</div>
 																						);
 																					})}
@@ -1296,6 +1512,7 @@ export function DashboardPage() {
 										return (
 											<div
 												key={day.dateStr}
+												data-date-key={getRouteDateKey(day.date)}
 												className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} ${worstStatus ? `stock-${worstStatus}` : ""}`}
 											>
 												<div
@@ -1340,8 +1557,15 @@ export function DashboardPage() {
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
 														else if (isLowStock) rowClasses.push("med-low");
+														if (med?.id != null && notificationTarget?.medId === String(med.id)) {
+															rowClasses.push("notification-focus-target-row");
+														}
 														return (
-															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
+															<div
+																key={`${day.dateStr}-${item.medName}`}
+																className={rowClasses.join(" ")}
+																data-med-id={med?.id != null ? String(med.id) : undefined}
+															>
 																<div className="time-main">
 																	<div className="med-name">
 																		<div
@@ -1430,10 +1654,20 @@ export function DashboardPage() {
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
+																						const isSkipped = skippedDoses.has(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
+																						const personClasses = ["dose-person"];
+																						if (isTaken) personClasses.push("taken");
+																						if (isSkipped) personClasses.push("skipped");
+																						if (notificationTarget?.doseId === doseId)
+																							personClasses.push("notification-focus-target");
 																						return (
-																							<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
+																							<div
+																								key={doseId}
+																								data-dose-id={doseId}
+																								className={personClasses.join(" ")}
+																							>
 																								{person && (
 																									<span
 																										className="person-name clickable"
@@ -1445,34 +1679,13 @@ export function DashboardPage() {
 																										{person}
 																									</span>
 																								)}
-																								{isTaken ? (
-																									<button
-																										className="dose-btn undo"
-																										onClick={() => undoDoseTaken(doseId)}
-																										title={t("common.undo")}
-																									>
-																										{isAutomaticallyTaken && (
-																											<span
-																												className="info-tooltip"
-																												data-tooltip={t("tooltips.automaticTaken")}
-																											>
-																												🤖
-																											</span>
-																										)}
-																										<span className="dose-btn-label">{t("common.undo")}</span>
-																										<span aria-hidden="true">↩</span>
-																									</button>
-																								) : (
-																									<button
-																										className={`dose-btn take out-of-stock`}
-																										onClick={() => markDoseTaken(doseId)}
-																										title={t("common.outOfStockTakeBlocked")}
-																										disabled={true}
-																									>
-																										<span className="dose-btn-label">{t("dose.take")}</span>
-																										<span aria-hidden="true">⊘</span>
-																									</button>
-																								)}
+																								{renderDoseActionButtons({
+																									doseId,
+																									isTaken,
+																									isSkipped,
+																									isAutomaticallyTaken,
+																									isEmpty: true,
+																								})}
 																							</div>
 																						);
 																					})}

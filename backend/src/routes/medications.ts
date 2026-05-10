@@ -1203,15 +1203,18 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const allowsAmountBaseUpdate = isTubePackageType(packageType) || isLiquidContainerPackageType(packageType);
 			const allowsBottleCapacityUpdate = packageType === "bottle";
 			if (allowsAmountBaseUpdate) {
-				if (totalPills !== undefined) updateFields.totalPills = totalPills;
-				if (looseTablets !== undefined) updateFields.looseTablets = looseTablets;
+				const normalizedAmountBase = looseTablets ?? totalPills;
+				if (normalizedAmountBase !== undefined) {
+					updateFields.totalPills = normalizedAmountBase;
+					updateFields.looseTablets = normalizedAmountBase;
+				}
 				if (packageAmountValue !== undefined) updateFields.packageAmountValue = packageAmountValue;
 			}
 			if (allowsBottleCapacityUpdate && totalPills !== undefined) {
 				updateFields.totalPills = totalPills;
 			}
 			if (packCount !== undefined) updateFields.packCount = packCount;
-			if (looseTablets !== undefined) {
+			if (!allowsAmountBaseUpdate && looseTablets !== undefined) {
 				updateFields.looseTablets = looseTablets;
 			}
 

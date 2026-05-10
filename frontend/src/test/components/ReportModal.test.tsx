@@ -42,7 +42,7 @@ describe("ReportModal", () => {
 			json: async () => ({
 				1: {
 					dosesTaken: 2,
-					dosesDismissed: 0,
+					dosesSkipped: 0,
 					firstDoseAt: "2026-01-01T08:00:00.000Z",
 					lastDoseAt: "2026-01-02T08:00:00.000Z",
 					refills: [],
@@ -74,7 +74,7 @@ describe("ReportModal", () => {
 				1: {
 					dosesTaken: 1,
 					automaticDosesTaken: 0,
-					dosesDismissed: 0,
+					dosesSkipped: 0,
 					firstDoseAt: "2026-02-03T12:00:00.000Z",
 					lastDoseAt: null,
 					refills: [],
@@ -121,7 +121,7 @@ describe("ReportModal", () => {
 				1: {
 					dosesTaken: 0,
 					automaticDosesTaken: 0,
-					dosesDismissed: 0,
+					dosesSkipped: 0,
 					firstDoseAt: null,
 					lastDoseAt: null,
 					refills: [],
@@ -183,13 +183,14 @@ describe("ReportModal", () => {
 				1: {
 					dosesTaken: 1,
 					automaticDosesTaken: 0,
-					dosesDismissed: 0,
+					dosesSkipped: 0,
 					firstDoseAt: "2026-03-03T12:00:00.000Z",
 					lastDoseAt: null,
 					refills: [
 						{
 							packsAdded: 1,
 							loosePillsAdded: 0,
+							quantityAdded: 20,
 							usedPrescription: false,
 							refillDate: "2026-03-04",
 						},
@@ -249,6 +250,81 @@ describe("ReportModal", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /report\.selectAll/i }));
 		expect(screen.getByRole("button", { name: /report\.generate/i })).not.toBeDisabled();
+	});
+
+	it("sends the selected person filter with the report request and clears it for all people", async () => {
+		const onClose = vi.fn();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				1: {
+					dosesTaken: 2,
+					automaticDosesTaken: 0,
+					dosesSkipped: 1,
+					firstDoseAt: "2026-01-01T08:00:00.000Z",
+					lastDoseAt: "2026-01-02T08:00:00.000Z",
+					refills: [],
+				},
+				2: {
+					dosesTaken: 1,
+					automaticDosesTaken: 0,
+					dosesSkipped: 0,
+					firstDoseAt: "2026-01-01T08:00:00.000Z",
+					lastDoseAt: "2026-01-02T08:00:00.000Z",
+					refills: [],
+				},
+			}),
+		});
+
+		const firstRender = render(
+			<ReportModal
+				isOpen={true}
+				onClose={onClose}
+				medications={[
+					createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
+					createMedication({ id: 2, name: "Bob Med", takenBy: ["Bob"] }),
+				]}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole("checkbox", { name: "Alice" }));
+		fireEvent.click(screen.getByRole("radio", { name: /report\.formatTxt/i }));
+		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
+
+		await waitFor(() => {
+			expect(global.fetch).toHaveBeenCalledWith(
+				"/api/medications/report-data",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ medicationIds: [1], takenByFilter: ["Alice"] }),
+				})
+			);
+		});
+
+		(global.fetch as ReturnType<typeof vi.fn>).mockClear();
+		firstRender.unmount();
+		render(
+			<ReportModal
+				isOpen={true}
+				onClose={onClose}
+				medications={[
+					createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
+					createMedication({ id: 2, name: "Bob Med", takenBy: ["Bob"] }),
+				]}
+			/>
+		);
+		fireEvent.click(screen.getByRole("radio", { name: /report\.formatTxt/i }));
+		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
+
+		await waitFor(() => {
+			expect(global.fetch).toHaveBeenCalledWith(
+				"/api/medications/report-data",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ medicationIds: [1, 2], takenByFilter: undefined }),
+				})
+			);
+		});
 	});
 
 	it("generates markdown report and keeps modal open on fetch error", async () => {

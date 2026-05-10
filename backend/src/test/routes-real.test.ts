@@ -16,6 +16,8 @@ const { testClient, testDb, mockedEnv, nodemailerSendMail, fetchMock } = vi.hois
 		OIDC_ENABLED: false,
 		OIDC_PROVIDER_NAME: "SSO",
 		NODE_ENV: "test",
+		PUBLIC_APP_URL: "https://app.example.com",
+		CORS_ORIGINS: "https://app.example.com",
 	};
 	return {
 		testClient: client,
@@ -351,7 +353,7 @@ describe("Real route coverage: settings/export/report", () => {
 	});
 
 	it("POST /settings/test-shoutrrr returns 200 for a valid ntfy target", async () => {
-		fetchMock.mockResolvedValue({ ok: true });
+		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-test-message-id" }) });
 
 		const response = await app.inject({
 			method: "POST",
@@ -361,6 +363,44 @@ describe("Real route coverage: settings/export/report", () => {
 
 		expect(response.statusCode).toBe(200);
 		expect(response.json()).toEqual({ success: true, message: "Test notification sent successfully" });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+
+		const [, requestInit] = fetchMock.mock.calls[0] ?? [];
+		const headers = (requestInit?.headers ?? {}) as Record<string, string>;
+		expect(headers["X-Sequence-ID"]).toEqual(expect.stringMatching(/^medassist-/));
+		expect(JSON.parse(headers.Actions ?? "[]")).toEqual([
+			{
+				action: "http",
+				label: "Take",
+				url: expect.stringMatching(/^https:\/\/app\.example\.com\/api\/notification-actions\//),
+				method: "POST",
+				clear: false,
+			},
+			{
+				action: "http",
+				label: "Skip",
+				url: expect.stringMatching(/^https:\/\/app\.example\.com\/api\/notification-actions\//),
+				method: "POST",
+				clear: false,
+			},
+			{
+				action: "view",
+				label: "View",
+				url: "https://app.example.com/dashboard",
+				clear: false,
+			},
+		]);
+
+		const groups = await testClient.execute("SELECT COUNT(*) AS count FROM notification_action_groups");
+		expect(Number(groups.rows[0].count)).toBe(1);
+
+		const storedGroup = await testClient.execute(
+			"SELECT ntfy_original_message_id FROM notification_action_groups LIMIT 1"
+		);
+		expect(storedGroup.rows).toEqual([expect.objectContaining({ ntfy_original_message_id: "ntfy-test-message-id" })]);
+
+		const tokens = await testClient.execute("SELECT COUNT(*) AS count FROM notification_action_tokens");
+		expect(Number(tokens.rows[0].count)).toBe(3);
 	});
 
 	it("sendShoutrrrNotification blocks localhost/private targets", async () => {
@@ -370,11 +410,12 @@ describe("Real route coverage: settings/export/report", () => {
 	});
 
 	it("sendShoutrrrNotification handles ntfy auth and safe URL reconstruction", async () => {
-		fetchMock.mockResolvedValue({ ok: true });
+		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-message-id" }) });
 
 		const result = await sendShoutrrrNotification("ntfy://user:pass@ntfy.sh/mytopic", "Title ä", "Message");
 
 		expect(result.success).toBe(true);
+		expect(result.providerMessageId).toBe("ntfy-message-id");
 		expect(fetchMock).toHaveBeenCalledWith(
 			"https://ntfy.sh/mytopic",
 			expect.objectContaining({
@@ -589,8 +630,35 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(response.statusCode).toBe(200);
 		const body = response.json();
 		expect(body[medId].dosesTaken).toBe(1);
-		expect(body[medId].dosesDismissed).toBe(1);
+		expect(body[medId].dosesSkipped).toBe(1);
 		expect(body[medId].refills).toHaveLength(1);
+		expect(body[medId].refills[0].quantityAdded).toBe(22);
+	});
+
+	it("POST /medications/report-data filters dose counts by takenBy suffix when requested", async () => {
+		const medId = await seedMedication("Report Filter Med");
+		await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
+			args: [1, `${medId}-0-1700000000000-Alice`, 1700000000, 0],
+		});
+		await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
+			args: [1, `${medId}-0-1700000600000-Alice`, 1700000600, 1],
+		});
+		await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
+			args: [1, `${medId}-0-1700001200000-Bob`, 1700001200, 0],
+		});
+
+		const response = await app.inject({
+			method: "POST",
+			url: "/medications/report-data",
+			payload: { medicationIds: [medId], takenByFilter: ["Alice"] },
+		});
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body[medId].dosesTaken).toBe(1);
+		expect(body[medId].dosesSkipped).toBe(1);
 	});
 
 	it("GET /export includes medications, settings, doseHistory and refillHistory", async () => {
@@ -621,7 +689,9 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(body.medications).toHaveLength(1);
 		expect(body.doseHistory).toHaveLength(1);
 		expect(body.refillHistory).toHaveLength(1);
+		expect(body.refillHistory[0].quantityAdded).toBe(23);
 		expect(body.settings.language).toBe("de");
+		expect(body.settings.shareStockStatus).toBeUndefined();
 		expect(body.shareLinks).toHaveLength(1);
 	});
 
@@ -672,7 +742,15 @@ describe("Real route coverage: settings/export/report", () => {
 				},
 			],
 			doseHistory: [],
-			refillHistory: [],
+			refillHistory: [
+				{
+					medicationRef: "med-1",
+					packsAdded: 0,
+					quantityAdded: 4,
+					usedPrescription: false,
+					refillDate: "2026-01-02T08:00:00.000Z",
+				},
+			],
 			settings: {
 				emailEnabled: false,
 				notificationEmail: null,
@@ -708,10 +786,24 @@ describe("Real route coverage: settings/export/report", () => {
 		});
 		expect(valid.statusCode).toBe(200);
 		expect(valid.json().imported.medications).toBe(1);
+		expect(valid.json().imported.refillHistory).toBe(1);
 
 		const rows = await testClient.execute({
 			sql: "SELECT name FROM medications WHERE user_id = 1",
 		});
 		expect(rows.rows[0].name).toBe("Imported Med");
+
+		const refillRows = await testClient.execute({
+			sql: "SELECT packs_added, loose_pills_added FROM refill_history WHERE user_id = 1",
+		});
+		expect(refillRows.rows).toHaveLength(1);
+		expect(refillRows.rows[0].packs_added).toBe(0);
+		expect(refillRows.rows[0].loose_pills_added).toBe(4);
+
+		const importedSettings = await testClient.execute({
+			sql: "SELECT share_medication_overview, share_stock_status FROM user_settings WHERE user_id = 1",
+		});
+		expect(importedSettings.rows[0].share_medication_overview).toBe(0);
+		expect(importedSettings.rows[0].share_stock_status).toBe(1);
 	});
 });

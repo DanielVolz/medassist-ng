@@ -134,6 +134,20 @@ describe("getMedTotal", () => {
 		expect(getMedTotal(tube)).toBe(604);
 		expect(getMedTotal(liquid)).toBe(450);
 	});
+
+	it("prefers canonical amount-base stock over compatibility mirror fields", () => {
+		const liquid = {
+			packageType: "liquid_container" as const,
+			packCount: 2,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 300,
+			looseTablets: 150,
+			stockAdjustment: 0,
+		};
+
+		expect(getMedTotal(liquid)).toBe(150);
+	});
 });
 
 describe("getPackageSize", () => {
@@ -200,7 +214,7 @@ describe("getPackageSize", () => {
 		expect(getPackageSize(med)).toBe(80);
 	});
 
-	it("returns totalPills for tube/liquid container package size", () => {
+	it("returns canonical amount-base stock for tube/liquid container package size", () => {
 		const tube = {
 			packageType: "tube" as const,
 			packCount: 4,
@@ -220,6 +234,19 @@ describe("getPackageSize", () => {
 
 		expect(getPackageSize(tube)).toBe(600);
 		expect(getPackageSize(liquid)).toBe(450);
+	});
+
+	it("prefers canonical amount-base stock for package size when compatibility mirror drifts", () => {
+		const tube = {
+			packageType: "tube" as const,
+			packCount: 2,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 300,
+			looseTablets: 150,
+		};
+
+		expect(getPackageSize(tube)).toBe(150);
 	});
 });
 

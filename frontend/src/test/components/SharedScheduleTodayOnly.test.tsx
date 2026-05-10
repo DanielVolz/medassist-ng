@@ -77,7 +77,7 @@ describe("SharedSchedule today-only", () => {
 		const sharedData = createSharedData();
 
 		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-			if (url === "/api/share/token-123/doses" && (!init || !init.method || init.method === "GET")) {
+			if (url === "/api/share/token-123/doses" && (!init?.method || init.method === "GET")) {
 				return Promise.resolve({ ok: true, json: () => Promise.resolve({ doses: [] }) });
 			}
 			if (url === "/api/share/token-123") {

@@ -39,6 +39,7 @@ export function SharedSchedule() {
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [automaticTakenDoses, setAutomaticTakenDoses] = useState<Set<string>>(new Set());
 	const [dismissedDoses, setDismissedDoses] = useState<Set<string>>(new Set());
+	const mutationInFlightRef = useRef(0);
 	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [showFutureDays, setShowFutureDays] = useState(false);
@@ -183,15 +184,23 @@ export function SharedSchedule() {
 	// Separates taken and dismissed doses (like main app's useDoses hook)
 	const loadTakenDoses = useCallback(async () => {
 		if (!token) return;
+		if (mutationInFlightRef.current > 0) return;
 		try {
 			const res = await fetch(`/api/share/${token}/doses`);
 			if (res.ok) {
+				if (mutationInFlightRef.current > 0) return;
+
 				const data = await res.json();
 				const taken = new Set<string>();
 				const automatic = new Set<string>();
 				const dismissed = new Set<string>();
-				for (const d of data.doses as Array<{ doseId: string; dismissed?: boolean; takenSource?: string }>) {
-					if (d.dismissed) {
+				for (const d of data.doses as Array<{
+					doseId: string;
+					dismissed?: boolean;
+					skipped?: boolean;
+					takenSource?: string;
+				}>) {
+					if (d.skipped === true || d.dismissed === true) {
 						dismissed.add(d.doseId);
 					} else {
 						taken.add(d.doseId);
@@ -203,15 +212,9 @@ export function SharedSchedule() {
 				setTakenDoses(taken);
 				setAutomaticTakenDoses(automatic);
 				setDismissedDoses(dismissed);
-			} else {
-				setTakenDoses(new Set());
-				setAutomaticTakenDoses(new Set());
-				setDismissedDoses(new Set());
 			}
 		} catch {
-			setTakenDoses(new Set());
-			setAutomaticTakenDoses(new Set());
-			setDismissedDoses(new Set());
+			// Keep the current optimistic/shared state on transient read errors.
 		}
 	}, [token]);
 
@@ -232,10 +235,24 @@ export function SharedSchedule() {
 	}
 
 	async function markDoseTaken(doseId: string) {
+		if (dismissedDoses.has(doseId)) {
+			return;
+		}
+
+		const wasTaken = takenDoses.has(doseId);
+		const wasSkipped = dismissedDoses.has(doseId);
+		const wasAutomatic = automaticTakenDoses.has(doseId);
+
 		// Optimistic update
+		mutationInFlightRef.current++;
 		setTakenDoses((prev) => {
 			const next = new Set(prev);
 			next.add(doseId);
+			return next;
+		});
+		setDismissedDoses((prev) => {
+			const next = new Set(prev);
+			next.delete(doseId);
 			return next;
 		});
 		setAutomaticTakenDoses((prev) => {
@@ -266,16 +283,104 @@ export function SharedSchedule() {
 			// Revert on error
 			setTakenDoses((prev) => {
 				const next = new Set(prev);
-				next.delete(doseId);
+				if (wasTaken) {
+					next.add(doseId);
+				} else {
+					next.delete(doseId);
+				}
+				return next;
+			});
+			setDismissedDoses((prev) => {
+				const next = new Set(prev);
+				if (wasSkipped) {
+					next.add(doseId);
+				} else {
+					next.delete(doseId);
+				}
+				return next;
+			});
+			setAutomaticTakenDoses((prev) => {
+				const next = new Set(prev);
+				if (wasAutomatic) {
+					next.add(doseId);
+				}
 				return next;
 			});
 		} finally {
+			mutationInFlightRef.current--;
+			loadTakenDoses();
+		}
+	}
+
+	async function markDoseSkipped(doseId: string) {
+		if (takenDoses.has(doseId)) {
+			return;
+		}
+
+		const wasTaken = takenDoses.has(doseId);
+		const wasSkipped = dismissedDoses.has(doseId);
+		const wasAutomatic = automaticTakenDoses.has(doseId);
+
+		mutationInFlightRef.current++;
+		setDismissedDoses((prev) => {
+			const next = new Set(prev);
+			next.add(doseId);
+			return next;
+		});
+		setTakenDoses((prev) => {
+			const next = new Set(prev);
+			next.delete(doseId);
+			return next;
+		});
+		setAutomaticTakenDoses((prev) => {
+			const next = new Set(prev);
+			next.delete(doseId);
+			return next;
+		});
+
+		try {
+			const response = await fetch(`/api/share/${token}/doses/skip`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ doseId }),
+			});
+			if (!response.ok) {
+				throw new Error("Failed to mark shared dose as skipped");
+			}
+		} catch {
+			setDismissedDoses((prev) => {
+				const next = new Set(prev);
+				if (wasSkipped) {
+					next.add(doseId);
+				} else {
+					next.delete(doseId);
+				}
+				return next;
+			});
+			setTakenDoses((prev) => {
+				const next = new Set(prev);
+				if (wasTaken) {
+					next.add(doseId);
+				}
+				return next;
+			});
+			setAutomaticTakenDoses((prev) => {
+				const next = new Set(prev);
+				if (wasAutomatic) {
+					next.add(doseId);
+				}
+				return next;
+			});
+		} finally {
+			mutationInFlightRef.current--;
 			loadTakenDoses();
 		}
 	}
 
 	async function undoDoseTaken(doseId: string) {
+		const wasAutomatic = automaticTakenDoses.has(doseId);
 		// Optimistic update
+		mutationInFlightRef.current++;
 		setTakenDoses((prev) => {
 			const next = new Set(prev);
 			next.delete(doseId);
@@ -299,8 +404,99 @@ export function SharedSchedule() {
 				next.add(doseId);
 				return next;
 			});
+			setAutomaticTakenDoses((prev) => {
+				const next = new Set(prev);
+				if (wasAutomatic) {
+					next.add(doseId);
+				}
+				return next;
+			});
+		} finally {
+			mutationInFlightRef.current--;
+			loadTakenDoses();
 		}
 	}
+
+	async function undoDoseSkipped(doseId: string) {
+		const wasSkipped = dismissedDoses.has(doseId);
+
+		mutationInFlightRef.current++;
+		setDismissedDoses((prev) => {
+			const next = new Set(prev);
+			next.delete(doseId);
+			return next;
+		});
+
+		try {
+			await fetch(`/api/share/${token}/doses/skip/${encodeURIComponent(doseId)}`, {
+				method: "DELETE",
+			});
+		} catch {
+			setDismissedDoses((prev) => {
+				const next = new Set(prev);
+				if (wasSkipped) {
+					next.add(doseId);
+				}
+				return next;
+			});
+		} finally {
+			mutationInFlightRef.current--;
+			loadTakenDoses();
+		}
+	}
+
+	const renderDoseActionButtons = (options: {
+		doseId: string;
+		isTaken: boolean;
+		isSkipped: boolean;
+		isAutomaticallyTaken: boolean;
+		isEmpty: boolean;
+	}) => {
+		const takeButton = options.isTaken ? (
+			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
+				{options.isAutomaticallyTaken && (
+					<span className="info-tooltip" data-tooltip={t("tooltips.automaticTaken")}>
+						🤖
+					</span>
+				)}
+				<span className="dose-btn-label">{t("common.undo")}</span>
+				<span aria-hidden="true">↩</span>
+			</button>
+		) : (
+			<button
+				className={`dose-btn take${options.isEmpty ? " out-of-stock" : ""}`}
+				onClick={() => markDoseTaken(options.doseId)}
+				disabled={options.isEmpty || options.isSkipped}
+				title={options.isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
+			>
+				<span className="dose-btn-label">{t("dose.take")}</span>
+				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
+			</button>
+		);
+
+		const skipButton = options.isSkipped ? (
+			<button className="dose-btn undo skip" onClick={() => undoDoseSkipped(options.doseId)} title={t("common.undo")}>
+				<span className="dose-btn-label">{t("common.undo")}</span>
+				<span aria-hidden="true">↩</span>
+			</button>
+		) : (
+			<button
+				className="dose-btn skip"
+				onClick={() => markDoseSkipped(options.doseId)}
+				title={t("dose.markAsSkipped")}
+				disabled={options.isTaken}
+			>
+				<span className="dose-btn-label">{t("dose.skip")}</span>
+			</button>
+		);
+
+		return (
+			<>
+				{takeButton}
+				{skipButton}
+			</>
+		);
+	};
 
 	const isDoseTakenAutomatically = (doseId: string) => automaticTakenDoses.has(doseId);
 
@@ -934,6 +1130,7 @@ export function SharedSchedule() {
 																		const isTaken = isDoseTakenForDisplay(dose.id);
 																		const isAutomaticallyTaken =
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
+																		const isSkipped = dismissedDoses.has(dose.id);
 																		const doseClasses = ["dose-item", "past"];
 																		if (isTaken) doseClasses.push("all-taken");
 																		if (isEmpty) doseClasses.push("med-empty");
@@ -948,37 +1145,17 @@ export function SharedSchedule() {
 																					)}
 																				</span>
 																				<div className="dose-checks">
-																					<div className={`dose-person ${isTaken ? "taken" : ""}`}>
+																					<div
+																						className={`dose-person ${isTaken ? "taken" : ""} ${isSkipped ? "skipped" : ""}`}
+																					>
 																						{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
-																						{isTaken ? (
-																							<button
-																								className="dose-btn undo"
-																								onClick={() => undoDoseTaken(dose.id)}
-																								title={t("common.undo")}
-																							>
-																								{isAutomaticallyTaken && (
-																									<span
-																										className="info-tooltip"
-																										data-tooltip={t("tooltips.automaticTaken")}
-																									>
-																										🤖
-																									</span>
-																								)}
-																								↩
-																							</button>
-																						) : (
-																							<button
-																								className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
-																								onClick={() => markDoseTaken(dose.id)}
-																								disabled={isEmpty}
-																								title={
-																									isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")
-																								}
-																							>
-																								<span className="dose-btn-label">{t("dose.take")}</span>
-																								<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
-																							</button>
-																						)}
+																						{renderDoseActionButtons({
+																							doseId: dose.id,
+																							isTaken,
+																							isSkipped,
+																							isAutomaticallyTaken,
+																							isEmpty,
+																						})}
 																					</div>
 																				</div>
 																			</div>
@@ -1149,7 +1326,8 @@ export function SharedSchedule() {
 																		const isTaken = isDoseTakenForDisplay(dose.id);
 																		const isAutomaticallyTaken =
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
-																		const isOverdue = dose.when < Date.now() && !isTaken;
+																		const isSkipped = dismissedDoses.has(dose.id);
+																		const isOverdue = dose.when < Date.now() && !isTaken && !isSkipped && !isEmpty;
 																		const doseClasses = ["dose-item"];
 																		if (isOverdue) doseClasses.push("overdue");
 																		if (isTaken) doseClasses.push("all-taken");
@@ -1166,38 +1344,16 @@ export function SharedSchedule() {
 																				</span>
 																				<div className="dose-checks">
 																					<div
-																						className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}
+																						className={`dose-person ${isTaken ? "taken" : ""} ${isSkipped ? "skipped" : ""} ${isOverdue ? "overdue" : ""}`}
 																					>
 																						{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
-																						{isTaken ? (
-																							<button
-																								className="dose-btn undo"
-																								onClick={() => undoDoseTaken(dose.id)}
-																								title={t("common.undo")}
-																							>
-																								{isAutomaticallyTaken && (
-																									<span
-																										className="info-tooltip"
-																										data-tooltip={t("tooltips.automaticTaken")}
-																									>
-																										🤖
-																									</span>
-																								)}
-																								↩
-																							</button>
-																						) : (
-																							<button
-																								className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
-																								onClick={() => markDoseTaken(dose.id)}
-																								title={
-																									isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")
-																								}
-																								disabled={isEmpty}
-																							>
-																								<span className="dose-btn-label">{t("dose.take")}</span>
-																								<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
-																							</button>
-																						)}
+																						{renderDoseActionButtons({
+																							doseId: dose.id,
+																							isTaken,
+																							isSkipped,
+																							isAutomaticallyTaken,
+																							isEmpty,
+																						})}
 																					</div>
 																				</div>
 																			</div>
@@ -1351,6 +1507,7 @@ export function SharedSchedule() {
 																		const isTaken = isDoseTakenForDisplay(dose.id);
 																		const isAutomaticallyTaken =
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
+																		const isSkipped = dismissedDoses.has(dose.id);
 																		const doseClasses = ["dose-item", "future"];
 																		if (isTaken) doseClasses.push("all-taken");
 																		if (isEmpty) doseClasses.push("med-empty");
@@ -1365,37 +1522,17 @@ export function SharedSchedule() {
 																					)}
 																				</span>
 																				<div className="dose-checks">
-																					<div className={`dose-person ${isTaken ? "taken" : ""}`}>
+																					<div
+																						className={`dose-person ${isTaken ? "taken" : ""} ${isSkipped ? "skipped" : ""}`}
+																					>
 																						{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
-																						{isTaken ? (
-																							<button
-																								className="dose-btn undo"
-																								onClick={() => undoDoseTaken(dose.id)}
-																								title={t("common.undo")}
-																							>
-																								{isAutomaticallyTaken && (
-																									<span
-																										className="info-tooltip"
-																										data-tooltip={t("tooltips.automaticTaken")}
-																									>
-																										🤖
-																									</span>
-																								)}
-																								↩
-																							</button>
-																						) : (
-																							<button
-																								className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
-																								onClick={() => markDoseTaken(dose.id)}
-																								title={
-																									isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")
-																								}
-																								disabled={true}
-																							>
-																								<span className="dose-btn-label">{t("dose.take")}</span>
-																								<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
-																							</button>
-																						)}
+																						{renderDoseActionButtons({
+																							doseId: dose.id,
+																							isTaken,
+																							isSkipped,
+																							isAutomaticallyTaken,
+																							isEmpty: true,
+																						})}
 																					</div>
 																				</div>
 																			</div>

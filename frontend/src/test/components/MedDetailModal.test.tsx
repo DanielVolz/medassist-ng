@@ -697,7 +697,7 @@ describe("MedDetailModal with refill history", () => {
 
 	it("shows refill history when expanded", () => {
 		const refillHistory: RefillEntry[] = [
-			{ id: 1, refillDate: new Date().toISOString(), packsAdded: 1, loosePillsAdded: 0 },
+			{ id: 1, refillDate: new Date().toISOString(), packsAdded: 1, loosePillsAdded: 0, quantityAdded: 30 },
 		];
 
 		render(<MedDetailModal {...defaultProps} refillHistory={refillHistory} refillHistoryExpanded={true} />);
@@ -710,7 +710,7 @@ describe("MedDetailModal with refill history", () => {
 	it("calls onRefillHistoryExpandedChange when toggle clicked", () => {
 		const onRefillHistoryExpandedChange = vi.fn();
 		const refillHistory: RefillEntry[] = [
-			{ id: 1, refillDate: new Date().toISOString(), packsAdded: 1, loosePillsAdded: 0 },
+			{ id: 1, refillDate: new Date().toISOString(), packsAdded: 1, loosePillsAdded: 0, quantityAdded: 30 },
 		];
 
 		render(

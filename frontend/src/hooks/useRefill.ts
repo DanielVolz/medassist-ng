@@ -121,7 +121,12 @@ export function useRefill(): UseRefillReturn {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					credentials: "include",
-					body: JSON.stringify({ packsAdded: refillPacks, loosePillsAdded: refillLoose, usePrescription }),
+					body: JSON.stringify({
+						packsAdded: refillPacks,
+						loosePillsAdded: refillLoose,
+						quantityAdded: refillLoose,
+						usePrescription,
+					}),
 				});
 				if (res.ok) {
 					const data = await res.json();
@@ -267,6 +272,7 @@ export function useRefill(): UseRefillReturn {
 					// Keep packageAmountValue (ml per bottle) and update capacity base by bottle count.
 					patchBody.packCount = correctedLiquidBottleCount;
 					patchBody.totalPills = liquidStructuralMax;
+					patchBody.looseTablets = liquidStructuralMax;
 				} else if (!isAmountPackage) {
 					patchBody.looseTablets = finalLoosePills;
 				}

@@ -6,6 +6,7 @@ import { doseTracking, medications, shareTokens, userSettings } from "../db/sche
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { computeMedicationCurrentStock } from "../services/current-stock.js";
+import { dismissDosesForUser, markDoseTakenForUser } from "../services/dose-tracking-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	applyOpenApiRouteStandards,
@@ -316,33 +317,21 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			const { doseId } = parsed.data;
 
-			// Check if already marked
-			const [existing] = await db
-				.select()
-				.from(doseTracking)
-				.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
+			const result = await markDoseTakenForUser({
+				userId,
+				doseId,
+				source: "manual",
+				markedBy: null,
+			});
 
-			if (existing) {
+			if (!result.success) {
+				const statusCode = result.code === "INVALID_DOSE" ? 400 : 409;
+				return reply.status(statusCode).send({ error: result.message, code: result.code });
+			}
+
+			if (result.status === "already_taken") {
 				return { success: true, message: "Already marked" };
 			}
-
-			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
-			const outOfStock = await isDoseOutOfStock({
-				userId,
-				doseId,
-				stockCalculationMode: (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic",
-			});
-			if (outOfStock) {
-				return reply.status(409).send({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
-			}
-
-			// Insert new record
-			await db.insert(doseTracking).values({
-				userId,
-				doseId,
-				markedBy: null, // Marked by the user themselves
-				takenSource: "manual",
-			});
 
 			return { success: true };
 		}
@@ -438,38 +427,9 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			const { doseIds } = parsed.data;
 
-			// Insert dismissed records for each dose that doesn't exist yet
-			let dismissedCount = 0;
-			for (const doseId of doseIds) {
-				// Check if already exists (taken or dismissed)
-				const [existing] = await db
-					.select()
-					.from(doseTracking)
-					.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
+			const result = await dismissDosesForUser({ userId, doseIds });
 
-				if (existing) {
-					// Already exists - update to dismissed if not already
-					if (!existing.dismissed) {
-						await db
-							.update(doseTracking)
-							.set({ dismissed: true })
-							.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
-						dismissedCount++;
-					}
-				} else {
-					// Create new dismissed record
-					await db.insert(doseTracking).values({
-						userId,
-						doseId,
-						markedBy: null,
-						takenAt: new Date(0),
-						dismissed: true,
-					});
-					dismissedCount++;
-				}
-			}
-
-			return { success: true, dismissedCount };
+			return { success: true, dismissedCount: result.dismissedCount };
 		}
 	);
 

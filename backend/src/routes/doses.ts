@@ -427,9 +427,36 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			const { doseIds } = parsed.data;
 
-			const result = await dismissDosesForUser({ userId, doseIds });
+			// Preserve the existing route semantics for dismiss: any non-dismissed record
+			// becomes dismissed, regardless of whether it already has a taken timestamp.
+			let dismissedCount = 0;
+			for (const doseId of doseIds) {
+				const [existing] = await db
+					.select()
+					.from(doseTracking)
+					.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
 
-			return { success: true, dismissedCount: result.dismissedCount };
+				if (existing) {
+					if (!existing.dismissed) {
+						await db
+							.update(doseTracking)
+							.set({ dismissed: true })
+							.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
+						dismissedCount++;
+					}
+				} else {
+					await db.insert(doseTracking).values({
+						userId,
+						doseId,
+						markedBy: null,
+						takenAt: new Date(0),
+						dismissed: true,
+					});
+					dismissedCount++;
+				}
+			}
+
+			return { success: true, dismissedCount };
 		}
 	);
 

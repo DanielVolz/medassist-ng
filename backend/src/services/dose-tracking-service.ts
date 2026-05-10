@@ -66,10 +66,10 @@ function hasRealTakenTimestamp(takenAt: Date | null): boolean {
 	return takenAt instanceof Date && takenAt.getTime() > 0;
 }
 
-async function isDoseOutOfStock(options: { userId: number; doseId: string }): Promise<boolean | null> {
+async function isDoseOutOfStock(options: { userId: number; doseId: string }): Promise<boolean> {
 	const parsedDose = parseDoseId(options.doseId);
 	if (!parsedDose) {
-		return null;
+		return false;
 	}
 
 	const [medication] = await db
@@ -78,7 +78,7 @@ async function isDoseOutOfStock(options: { userId: number; doseId: string }): Pr
 		.where(and(eq(medications.id, parsedDose.medicationId), eq(medications.userId, options.userId)));
 
 	if (!medication) {
-		return null;
+		return false;
 	}
 
 	const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, options.userId));
@@ -157,14 +157,6 @@ export async function markDoseTakenForUser(input: {
 	}
 
 	const outOfStock = await isDoseOutOfStock({ userId: input.userId, doseId: input.doseId });
-	if (outOfStock === null) {
-		return {
-			success: false,
-			code: "INVALID_DOSE",
-			message: "Invalid dose ID",
-		};
-	}
-
 	if (outOfStock) {
 		return {
 			success: false,

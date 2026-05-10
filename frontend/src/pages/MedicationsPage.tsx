@@ -257,8 +257,10 @@ export function MedicationsPage() {
 	useUnsavedChangesWarning(formChanged);
 
 	// View mode: grid (default) or form (edit/new)
-	// If navigating in with editMedId, suppress rendering until the edit form is ready
-	const [pendingEditTransition, setPendingEditTransition] = useState(() => searchParams.has("editMedId"));
+	// If navigating in with a medication deep-link, suppress rendering until the target form is ready
+	const [pendingEditTransition, setPendingEditTransition] = useState(
+		() => searchParams.has("editMedId") || searchParams.has("viewMedId")
+	);
 	const [viewMode, setViewMode] = useState<"grid" | "form">(pendingEditTransition ? "form" : "grid");
 	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
 	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
@@ -269,8 +271,22 @@ export function MedicationsPage() {
 	useEffect(() => {
 		showEditModalRef.current = showEditModal;
 	}, [showEditModal]);
-	const processedEditMedIdRef = useRef<string | null>(null);
+	const processedMedicationLinkRef = useRef<string | null>(null);
 	const hasDesktopFormHistoryState = useRef(false);
+
+	const getMedicationLinkState = useCallback((params: URLSearchParams) => {
+		const viewMedId = params.get("viewMedId");
+		if (viewMedId) {
+			return { mode: "view" as const, linkedMedId: viewMedId };
+		}
+
+		const editMedId = params.get("editMedId");
+		if (editMedId) {
+			return { mode: "edit" as const, linkedMedId: editMedId };
+		}
+
+		return { mode: null, linkedMedId: null };
+	}, []);
 
 	// Sync formChanged state to the global context for navigation blocking
 	const { setHasUnsavedChanges } = useUnsavedChanges();
@@ -819,12 +835,13 @@ export function MedicationsPage() {
 		[t]
 	);
 
-	const clearEditMedIdParam = useCallback(() => {
+	const clearMedicationLinkParams = useCallback(() => {
 		setSearchParams(
 			(prevParams) => {
-				if (!prevParams.has("editMedId")) return prevParams;
+				if (!prevParams.has("editMedId") && !prevParams.has("viewMedId")) return prevParams;
 				const nextParams = new URLSearchParams(prevParams);
 				nextParams.delete("editMedId");
+				nextParams.delete("viewMedId");
 				return nextParams;
 			},
 			{ replace: true }
@@ -848,7 +865,7 @@ export function MedicationsPage() {
 				setShowUnsavedConfirm(true);
 				return;
 			}
-			clearEditMedIdParam();
+			clearMedicationLinkParams();
 			// Mark as confirmed to avoid double confirmation in popstate handler
 			closeConfirmedRef.current = true;
 			window.history.back();
@@ -1159,7 +1176,7 @@ export function MedicationsPage() {
 				if (shouldCloseMobileModal) {
 					// Treat post-save close as confirmed so popstate does not trigger unsaved guards.
 					closeConfirmedRef.current = true;
-					clearEditMedIdParam();
+					clearMedicationLinkParams();
 					setShowEditModal(false);
 					setReadOnlyView(false);
 					setActiveTab("general");
@@ -1188,7 +1205,8 @@ export function MedicationsPage() {
 	// Handle browser back button for modals and unsaved changes
 	useEffect(() => {
 		const handlePopState = () => {
-			const currentEditMedId = new URLSearchParams(window.location.search).get("editMedId");
+			const currentParams = new URLSearchParams(window.location.search);
+			const { mode: currentLinkMode, linkedMedId: currentMedicationLinkId } = getMedicationLinkState(currentParams);
 
 			// Obsolete confirmation is open — dismiss it and stay where we are
 			if (showObsoleteConfirm) {
@@ -1207,10 +1225,10 @@ export function MedicationsPage() {
 			// If close was already confirmed programmatically, allow navigation
 			if (closeConfirmedRef.current) {
 				closeConfirmedRef.current = false;
-				if (currentEditMedId) {
+				if (currentMedicationLinkId && currentLinkMode) {
 					// Prevent URL popstate from immediately reopening mobile edit for the same id.
-					processedEditMedIdRef.current = currentEditMedId;
-					clearEditMedIdParam();
+					processedMedicationLinkRef.current = `${currentLinkMode}:${currentMedicationLinkId}`;
+					clearMedicationLinkParams();
 				}
 				if (showEditModal) {
 					setShowEditModal(false);
@@ -1231,11 +1249,11 @@ export function MedicationsPage() {
 					setShowUnsavedConfirm(true);
 					return;
 				}
-				if (currentEditMedId) {
+				if (currentMedicationLinkId && currentLinkMode) {
 					// Mark as handled before URL cleanup to avoid same-tick re-open races.
-					processedEditMedIdRef.current = currentEditMedId;
+					processedMedicationLinkRef.current = `${currentLinkMode}:${currentMedicationLinkId}`;
 				}
-				clearEditMedIdParam();
+				clearMedicationLinkParams();
 				setShowEditModal(false);
 				resetForm();
 				resetMedicationEnrichment();
@@ -1271,7 +1289,16 @@ export function MedicationsPage() {
 		};
 		window.addEventListener("popstate", handlePopState);
 		return () => window.removeEventListener("popstate", handlePopState);
-	}, [showObsoleteConfirm, showDeleteConfirm, showEditModal, viewMode, formChanged, resetForm, clearEditMedIdParam]);
+	}, [
+		showObsoleteConfirm,
+		showDeleteConfirm,
+		showEditModal,
+		viewMode,
+		formChanged,
+		resetForm,
+		clearMedicationLinkParams,
+		getMedicationLinkState,
+	]);
 
 	// Close modal on Escape key
 	useEffect(() => {
@@ -1389,22 +1416,23 @@ export function MedicationsPage() {
 	}, [activeMeds, editingId]);
 
 	useEffect(() => {
-		const editMedId = searchParams.get("editMedId");
-		if (!editMedId) {
-			processedEditMedIdRef.current = null;
+		const { mode: linkMode, linkedMedId } = getMedicationLinkState(searchParams);
+		if (!linkedMedId || !linkMode) {
+			processedMedicationLinkRef.current = null;
 			return;
 		}
-		if (processedEditMedIdRef.current === editMedId) return;
-		const parsedMedId = Number.parseInt(editMedId, 10);
+		const linkKey = `${linkMode}:${linkedMedId}`;
+		if (processedMedicationLinkRef.current === linkKey) return;
+		const parsedMedId = Number.parseInt(linkedMedId, 10);
 		if (Number.isNaN(parsedMedId)) return;
 		const medicationToEdit =
 			meds.find((med) => med.id === parsedMedId) ?? allMeds.find((med) => med.id === parsedMedId);
 		if (!medicationToEdit) return;
 
-		processedEditMedIdRef.current = editMedId;
+		processedMedicationLinkRef.current = linkKey;
 
 		setShowNameValidation(false);
-		setReadOnlyView(false);
+		setReadOnlyView(linkMode === "view");
 		setActiveTab("general");
 		resetMedicationEnrichment(medicationToEdit.name || medicationToEdit.genericName || "");
 		startEdit(medicationToEdit, openEditModal);
@@ -1415,8 +1443,9 @@ export function MedicationsPage() {
 
 		const nextParams = new URLSearchParams(searchParams);
 		nextParams.delete("editMedId");
+		nextParams.delete("viewMedId");
 		setSearchParams(nextParams, { replace: true });
-	}, [allMeds, meds, openEditModal, searchParams, setSearchParams, startEdit]);
+	}, [allMeds, getMedicationLinkState, meds, openEditModal, searchParams, setSearchParams, startEdit]);
 
 	const selectedMedication = useMemo(() => {
 		if (!editingId) return null;

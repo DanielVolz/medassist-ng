@@ -235,10 +235,6 @@ export function SharedSchedule() {
 	}
 
 	async function markDoseTaken(doseId: string) {
-		if (dismissedDoses.has(doseId)) {
-			return;
-		}
-
 		const wasTaken = takenDoses.has(doseId);
 		const wasSkipped = dismissedDoses.has(doseId);
 		const wasAutomatic = automaticTakenDoses.has(doseId);
@@ -466,7 +462,7 @@ export function SharedSchedule() {
 			<button
 				className={`dose-btn take${options.isEmpty ? " out-of-stock" : ""}`}
 				onClick={() => markDoseTaken(options.doseId)}
-				disabled={options.isEmpty || options.isSkipped}
+				disabled={options.isEmpty}
 				title={options.isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
 			>
 				<span className="dose-btn-label">{t("dose.take")}</span>
@@ -476,7 +472,7 @@ export function SharedSchedule() {
 
 		const skipButton = options.isSkipped ? (
 			<button className="dose-btn undo skip" onClick={() => undoDoseSkipped(options.doseId)} title={t("common.undo")}>
-				<span className="dose-btn-label">{t("common.undo")}</span>
+				<span className="dose-btn-label">{t("dose.undoSkip")}</span>
 				<span aria-hidden="true">↩</span>
 			</button>
 		) : (

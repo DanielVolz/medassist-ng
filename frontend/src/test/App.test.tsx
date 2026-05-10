@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 
@@ -59,7 +59,15 @@ vi.mock("../context", async () => {
 });
 
 vi.mock("../pages", () => ({
-	DashboardPage: () => <div>dashboard-page</div>,
+	DashboardPage: () => {
+		const location = useLocation();
+		return (
+			<div>
+				<span>dashboard-page</span>
+				<span data-testid="dashboard-location-search">{location.search}</span>
+			</div>
+		);
+	},
 	MedicationsPage: () => <div>medications-page</div>,
 	PlannerPage: () => <div>planner-page</div>,
 	SchedulePage: () => <div>schedule-page</div>,
@@ -263,6 +271,19 @@ describe("App", () => {
 
 		expect(screen.getByText("app-header")).toBeInTheDocument();
 		expect(screen.getByText("dashboard-page")).toBeInTheDocument();
+	});
+
+	it("preserves notification query params when redirecting root to dashboard", () => {
+		const search = "?date=2026-05-06&medId=4332&doseId=4332-0-1778104500000";
+
+		render(
+			<MemoryRouter initialEntries={[`/${search}`]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText("dashboard-page")).toBeInTheDocument();
+		expect(screen.getByTestId("dashboard-location-search")).toHaveTextContent(search);
 	});
 
 	it("renders initializing state when auth state is missing", () => {

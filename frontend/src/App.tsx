@@ -506,7 +506,7 @@ function AppContent() {
 			<AboutModal isOpen={showAbout} onClose={closeAbout} />
 
 			<Routes>
-				<Route path="/" element={<Navigate to="/dashboard" replace />} />
+				<Route path="/" element={<Navigate to={{ pathname: "/dashboard", search: location.search }} replace />} />
 				<Route path="/dashboard" element={<DashboardPage />} />
 
 				<Route path="/medications" element={<MedicationsPage />} />

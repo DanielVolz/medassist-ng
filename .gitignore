@@ -108,3 +108,14 @@ docs/SPEC_KIT.md
 .github/skills/nodejs-best-practices/
 .github/skills/seo/
 .playwright-mcp
+
+# Local GSD/copilot generated workspace artifacts (not for upstream)
+.github/agents/medassist-feature-orchestrator.agent.md
+.github/agents/speckit.*.agent.md
+.github/get-shit-done/
+.github/gsd-file-manifest.json
+.github/prompts/speckit.*.prompt.md
+.github/skills/gsd-*/
+.planning/
+doku/memory_notes.md
+doku/report.md

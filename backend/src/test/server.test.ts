@@ -244,6 +244,46 @@ describe("Server Bootstrap", () => {
 			await app.close();
 		});
 
+		it("should allow browser preflight requests on public notification action routes", async () => {
+			const origins = ["https://medtest.danielvolz.org"];
+
+			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
+			await app.register(cors, {
+				delegator: (request, callback) => {
+					if (request.raw.url?.startsWith("/notification-actions/")) {
+						callback(null, {
+							origin: true,
+							credentials: false,
+							methods: ["GET", "HEAD", "POST", "OPTIONS"],
+						});
+						return;
+					}
+
+					callback(null, { origin: origins, credentials: true });
+				},
+			});
+
+			app.post("/notification-actions/:token", async () => ({ ok: true }));
+			await app.ready();
+
+			const response = await app.inject({
+				method: "OPTIONS",
+				url: "/notification-actions/demo-token",
+				headers: {
+					origin: "https://ntfy.danielvolz.org",
+					"access-control-request-method": "POST",
+					"access-control-request-headers": "content-type",
+				},
+			});
+
+			expect(response.statusCode).toBe(204);
+			expect(response.headers["access-control-allow-origin"]).toBe("https://ntfy.danielvolz.org");
+			expect(response.headers["access-control-allow-credentials"]).toBeUndefined();
+			expect(response.headers["access-control-allow-methods"]).toContain("OPTIONS");
+
+			await app.close();
+		});
+
 		it("should register cookie plugin", async () => {
 			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 			await app.register(cookie, { secret: "test-cookie-secret" });

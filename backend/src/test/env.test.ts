@@ -10,33 +10,34 @@ const EnvSchema = z.object({
 	NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
 	PORT: z
 		.string()
-		.transform((v) => parseInt(v, 10))
-		.default(3000),
+		.default("3000")
+		.transform((v) => parseInt(v, 10)),
 	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
 	LOG_LEVEL: z.string().default("info"),
+	PUBLIC_APP_URL: z.string().url().optional(),
 	AUTH_ENABLED: z
 		.string()
-		.transform((v) => v === "true")
-		.default(false),
+		.default("false")
+		.transform((v) => v === "true"),
 	REGISTRATION_ENABLED: z
 		.string()
-		.transform((v) => v === "true")
-		.default(false),
+		.default("false")
+		.transform((v) => v === "true"),
 	JWT_SECRET: z.string().min(10).optional(),
 	REFRESH_SECRET: z.string().min(10).optional(),
 	COOKIE_SECRET: z.string().min(10).optional(),
 	ACCESS_TOKEN_TTL_MINUTES: z
 		.string()
-		.transform((v) => parseInt(v, 10))
-		.default(15),
+		.default("15")
+		.transform((v) => parseInt(v, 10)),
 	REFRESH_TOKEN_TTL_DAYS: z
 		.string()
-		.transform((v) => parseInt(v, 10))
-		.default(7),
+		.default("7")
+		.transform((v) => parseInt(v, 10)),
 	OIDC_ENABLED: z
 		.string()
-		.transform((v) => v === "true")
-		.default(false),
+		.default("false")
+		.transform((v) => v === "true"),
 	OIDC_ISSUER_URL: z.string().url().optional(),
 	OIDC_CLIENT_ID: z.string().optional(),
 	OIDC_CLIENT_SECRET: z.string().optional(),
@@ -44,8 +45,8 @@ const EnvSchema = z.object({
 	OIDC_SCOPES: z.string().default("openid profile email"),
 	OIDC_AUTO_CREATE_USERS: z
 		.string()
-		.transform((v) => v === "true")
-		.default(true),
+		.default("true")
+		.transform((v) => v === "true"),
 	OIDC_USERNAME_CLAIM: z.string().default("preferred_username"),
 	OIDC_PROVIDER_NAME: z.string().default("SSO"),
 });
@@ -81,6 +82,7 @@ describe("EnvSchema", () => {
 			expect(result.PORT).toBe(3000);
 			expect(result.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4173");
 			expect(result.LOG_LEVEL).toBe("info");
+			expect(result.PUBLIC_APP_URL).toBeUndefined();
 			expect(result.AUTH_ENABLED).toBe(false);
 			expect(result.REGISTRATION_ENABLED).toBe(false);
 			expect(result.ACCESS_TOKEN_TTL_MINUTES).toBe(15);
@@ -188,6 +190,15 @@ describe("EnvSchema", () => {
 	});
 
 	describe("OIDC URL validation", () => {
+		it("should accept valid PUBLIC_APP_URL", () => {
+			const result = EnvSchema.parse({ PUBLIC_APP_URL: "https://medassist.example.com" });
+			expect(result.PUBLIC_APP_URL).toBe("https://medassist.example.com");
+		});
+
+		it("should reject invalid PUBLIC_APP_URL", () => {
+			expect(() => EnvSchema.parse({ PUBLIC_APP_URL: "not-a-url" })).toThrow();
+		});
+
 		it("should accept valid OIDC_ISSUER_URL", () => {
 			const result = EnvSchema.parse({ OIDC_ISSUER_URL: "https://auth.example.com" });
 			expect(result.OIDC_ISSUER_URL).toBe("https://auth.example.com");

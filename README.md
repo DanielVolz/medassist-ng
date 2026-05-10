@@ -378,6 +378,14 @@ docker compose -p medassist-dev -f docker-compose.dev.yml up
 - API docs UI: `http://localhost:3000/docs` (when docs are enabled)
 - OpenAPI JSON: `http://localhost:3000/docs/json` (when docs are enabled)
 
+If you run the frontend dev server behind a reverse proxy or on a remote host, you can optionally set these frontend-only environment variables before starting Vite:
+
+- `VITE_ALLOWED_HOSTS`: comma-separated hostnames allowed to connect to the dev server; defaults to `localhost,127.0.0.1`
+- `VITE_HMR_HOST`: public hostname used for HMR websocket connections
+- `VITE_HMR_PROTOCOL`: optional websocket protocol override (`ws` or `wss`)
+- `VITE_HMR_CLIENT_PORT`: optional public websocket port exposed to the browser
+- `VITE_HMR_PORT`: optional server-side websocket port for the Vite process
+
 Useful local commands:
 
 ```bash

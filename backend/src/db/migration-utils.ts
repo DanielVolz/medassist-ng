@@ -76,7 +76,6 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE user_settings ADD COLUMN last_prescription_reminder_channel text`,
 		`ALTER TABLE user_settings ADD COLUMN last_prescription_reminder_med_names text`,
 		`ALTER TABLE refill_history ADD COLUMN used_prescription integer NOT NULL DEFAULT 0`,
-		`ALTER TABLE notification_action_groups ADD COLUMN ntfy_original_message_id text NOT NULL DEFAULT ''`,
 	];
 
 	for (const sql of alterMigrations) {

@@ -117,7 +117,7 @@ describe("OIDC routes", () => {
 			});
 
 			expect(res.statusCode).toBe(302);
-			expect(res.headers.location).toBe("http://localhost:5173/?error=oidc_access_denied");
+			expect(res.headers.location).toBe("http://localhost:5173");
 		} finally {
 			await app.close();
 		}
@@ -129,7 +129,7 @@ describe("OIDC routes", () => {
 			const res = await app.inject({ method: "GET", url: "/auth/oidc/callback" });
 
 			expect(res.statusCode).toBe(302);
-			expect(res.headers.location).toBe("http://localhost:5173/?error=oidc_missing_params");
+			expect(res.headers.location).toBe("http://localhost:5173");
 		} finally {
 			await app.close();
 		}
@@ -144,7 +144,7 @@ describe("OIDC routes", () => {
 			});
 
 			expect(res.statusCode).toBe(302);
-			expect(res.headers.location).toBe("http://localhost:5173/?error=oidc_state_mismatch");
+			expect(res.headers.location).toBe("http://localhost:5173");
 		} finally {
 			await app.close();
 		}

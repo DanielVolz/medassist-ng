@@ -475,6 +475,21 @@ describe("MedicationsPage with items", () => {
 		});
 	});
 
+	it("opens read-only view from viewMedId query parameter", async () => {
+		const startEdit = vi.fn();
+		mockFormHookValue = createMockFormHook({ startEdit });
+		fetchMock.mockResolvedValue({ ok: true, json: async () => mockMeds });
+
+		renderPage("/medications?viewMedId=1");
+
+		await waitFor(() => {
+			expect(startEdit).toHaveBeenCalledTimes(1);
+		});
+
+		expect(screen.getByText("common.close")).toBeInTheDocument();
+		expect(screen.queryByText("common.save")).not.toBeInTheDocument();
+	});
+
 	it("opens unsaved confirm and continues edit after confirmation", async () => {
 		const startEdit = vi.fn();
 		const resetForm = vi.fn();

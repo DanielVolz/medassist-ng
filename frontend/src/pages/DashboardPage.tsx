@@ -46,6 +46,10 @@ function getMedicationIdFromNotificationDoseId(doseId: string | null): string | 
 }
 
 function findFocusTargetElement(doseId: string | null, medId: string | null): HTMLElement | null {
+	if (typeof document === "undefined") {
+		return null;
+	}
+
 	if (doseId) {
 		const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-dose-id]"));
 		const doseElement = elements.find((element) => element.dataset.doseId === doseId);
@@ -66,6 +70,8 @@ function getDosePeople(takenBy: unknown): Array<string | null> {
 	const takenByArray = Array.isArray(takenBy) ? takenBy : [];
 	return takenByArray.length > 0 ? takenByArray : [null];
 }
+
+const EMPTY_DOSE_SET = new Set<string>();
 
 export function DashboardPage() {
 	const { t, i18n } = useTranslation();
@@ -115,6 +121,9 @@ export function DashboardPage() {
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<{ id: number; name: string } | null>(null);
 	const notificationFocusAppliedRef = useRef<string | null>(null);
+	const effectiveSkippedDoses =
+		skippedDoses instanceof Set ? skippedDoses : dismissedDoses instanceof Set ? dismissedDoses : EMPTY_DOSE_SET;
+	const canManageSkippedDoses = typeof markDoseSkipped === "function" && typeof undoDoseSkipped === "function";
 
 	const isDoseTakenForDisplay = useCallback((doseId: string) => takenDoses.has(doseId), [takenDoses]);
 
@@ -182,16 +191,20 @@ export function DashboardPage() {
 			return;
 		}
 
-		if (targetDayState.section === "past" && !showPastDays) {
-			setShowPastDays(true);
-		}
+		try {
+			if (targetDayState.section === "past" && !showPastDays) {
+				setShowPastDays(true);
+			}
 
-		if (targetDayState.section === "future" && !showFutureDays) {
-			setShowFutureDays(true);
-		}
+			if (targetDayState.section === "future" && !showFutureDays) {
+				setShowFutureDays(true);
+			}
 
-		if (targetDayState.isCollapsed) {
-			toggleDayCollapse(targetDayState.day.dateStr, targetDayState.isAutoCollapsed);
+			if (targetDayState.isCollapsed) {
+				toggleDayCollapse(targetDayState.day.dateStr, targetDayState.isAutoCollapsed);
+			}
+		} catch {
+			notificationFocusAppliedRef.current = null;
 		}
 	}, [
 		notificationTarget,
@@ -224,14 +237,18 @@ export function DashboardPage() {
 		let correctionTimerId: number | null = null;
 
 		const scrollTargetIntoView = () => {
-			const targetElement = findFocusTargetElement(notificationTarget.doseId, notificationTarget.medId);
+			try {
+				const targetElement = findFocusTargetElement(notificationTarget.doseId, notificationTarget.medId);
 
-			if (!targetElement) {
+				if (!targetElement || typeof targetElement.scrollIntoView !== "function") {
+					return false;
+				}
+
+				targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
+				return true;
+			} catch {
 				return false;
 			}
-
-			targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
-			return true;
 		};
 
 		const frameId = requestAnimationFrame(() => {
@@ -363,6 +380,10 @@ export function DashboardPage() {
 				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
 			</button>
 		);
+
+		if (!canManageSkippedDoses) {
+			return takeButton;
+		}
 
 		const skipButton = options.isSkipped ? (
 			<button className="dose-btn undo skip" onClick={() => undoDoseSkipped(options.doseId)} title={t("common.undo")}>
@@ -1071,7 +1092,7 @@ export function DashboardPage() {
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
-																						const isSkipped = skippedDoses.has(doseId);
+																						const isSkipped = effectiveSkippedDoses.has(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																						const personClasses = ["dose-person"];
@@ -1395,7 +1416,7 @@ export function DashboardPage() {
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
-																						const isSkipped = skippedDoses.has(doseId);
+																						const isSkipped = effectiveSkippedDoses.has(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																						const personClasses = ["dose-person"];
@@ -1659,7 +1680,7 @@ export function DashboardPage() {
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
-																						const isSkipped = skippedDoses.has(doseId);
+																						const isSkipped = effectiveSkippedDoses.has(doseId);
 																						const isAutomaticallyTaken =
 																							isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
 																						const personClasses = ["dose-person"];

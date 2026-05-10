@@ -584,6 +584,53 @@ describe("DashboardPage interactions", () => {
 		expect(setScheduleDays).toHaveBeenCalledWith(90);
 	});
 
+	it("renders today doses when skip state is missing from an older app context shape", () => {
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			todayDay: mockTodayDay,
+			skippedDoses: undefined,
+			markDoseSkipped: undefined,
+			undoDoseSkipped: undefined,
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		expect(screen.getByText("Today")).toBeInTheDocument();
+		expect(document.querySelector(".day-block.today .dose-btn.take")).toBeInTheDocument();
+		expect(document.querySelector(".day-block.today .dose-btn.skip")).not.toBeInTheDocument();
+	});
+
+	it("keeps the dashboard rendered when notification focus scrolling fails", async () => {
+		const doseId = String(mockTodayDay.meds[0].doses[0].id);
+		HTMLElement.prototype.scrollIntoView = vi.fn(() => {
+			throw new Error("scroll failed");
+		});
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			todayDay: mockTodayDay,
+		});
+
+		render(
+			<MemoryRouter
+				initialEntries={[`/?date=${getRouteDateKey(mockTodayDay.date)}&medId=1&doseId=${encodeURIComponent(doseId)}`]}
+			>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("Today")).toBeInTheDocument();
+			const targetDose = document.querySelector(`[data-dose-id="${doseId}"]`);
+			expect(targetDose).toHaveClass("notification-focus-target");
+		});
+	});
+
 	it("highlights and scrolls to the notification-linked dashboard dose", async () => {
 		const doseId = String(mockTodayDay.meds[0].doses[0].id);
 		mockContextValue = createMockAppContext({

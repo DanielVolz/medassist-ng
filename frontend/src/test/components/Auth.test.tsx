@@ -175,6 +175,10 @@ describe("LoginForm", () => {
 		oidcProviderName: "",
 	};
 
+	afterEach(() => {
+		window.history.replaceState({}, "", "/");
+	});
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 		(global.fetch as ReturnType<typeof vi.fn>)

@@ -46,5 +46,6 @@ export const log = {
 export type ServiceLogger = {
 	info: (msg: string) => void;
 	debug: (msg: string) => void;
+	warn: (msg: string) => void;
 	error: (msg: string) => void;
 };

@@ -123,13 +123,13 @@ export async function sendPushNotification(
 	url: string,
 	title: string,
 	message: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; providerMessageId?: string }> {
 	try {
 		const result = await sendShoutrrrNotification(url, title, message);
 		if (!result.success) {
 			return { success: false, error: result.error };
 		}
-		return { success: true };
+		return { success: true, providerMessageId: result.providerMessageId };
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
 		return { success: false, error: errorMessage };

@@ -583,7 +583,7 @@ export async function sendShoutrrrNotification(
 	urlStr: string,
 	title: string,
 	message: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; providerMessageId?: string }> {
 	try {
 		if (urlStr.startsWith("pushover://")) {
 			const pushoverAuthority = urlStr.slice("pushover://".length).split("/")[0] ?? "";
@@ -736,7 +736,7 @@ export async function sendShoutrrrNotification(
 		}
 
 		// Use ONLY the reconstructed URL from validation - never the original urlStr
-		const { url: sanitizedUrl, isNtfy: _isNtfy, auth } = validation;
+		const { url: sanitizedUrl, isNtfy, auth } = validation;
 
 		let targetUrl: string;
 		const method = "POST";
@@ -823,7 +823,17 @@ export async function sendShoutrrrNotification(
 		});
 
 		if (response.ok) {
-			return { success: true };
+			let providerMessageId: string | undefined;
+			if (isNtfy) {
+				try {
+					const payload = (await response.json()) as { id?: unknown };
+					providerMessageId = typeof payload.id === "string" && payload.id.length > 0 ? payload.id : undefined;
+				} catch {
+					providerMessageId = undefined;
+				}
+			}
+
+			return { success: true, providerMessageId };
 		} else {
 			const errorText = await response.text();
 			return { success: false, error: `HTTP ${response.status}: ${errorText}` };

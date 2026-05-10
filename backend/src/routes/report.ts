@@ -65,7 +65,6 @@ const reportDataResponseSchema = {
 					properties: {
 						packsAdded: { type: "integer" },
 						loosePillsAdded: { type: "integer" },
-						quantityAdded: { type: "integer" },
 						usedPrescription: { type: "boolean" },
 						refillDate: { type: "string", format: "date-time" },
 					},
@@ -116,16 +115,7 @@ export async function reportRoutes(app: FastifyInstance) {
 				: null;
 
 			// Verify all medications belong to this user
-			const userMeds = await db
-				.select({
-					id: medications.id,
-					packageType: medications.packageType,
-					blistersPerPack: medications.blistersPerPack,
-					pillsPerBlister: medications.pillsPerBlister,
-				})
-				.from(medications)
-				.where(eq(medications.userId, userId));
-			const medMap = new Map(userMeds.map((med) => [med.id, med]));
+			const userMeds = await db.select({ id: medications.id }).from(medications).where(eq(medications.userId, userId));
 			const userMedIds = new Set(userMeds.map((m) => m.id));
 
 			for (const id of medicationIds) {
@@ -169,13 +159,7 @@ export async function reportRoutes(app: FastifyInstance) {
 					dosesSkipped: number;
 					firstDoseAt: string | null;
 					lastDoseAt: string | null;
-					refills: {
-						packsAdded: number;
-						loosePillsAdded: number;
-						quantityAdded: number;
-						usedPrescription: boolean;
-						refillDate: string;
-					}[];
+					refills: { packsAdded: number; loosePillsAdded: number; usedPrescription: boolean; refillDate: string }[];
 				}
 			> = {};
 
@@ -186,9 +170,6 @@ export async function reportRoutes(app: FastifyInstance) {
 				const skippedDoses = doses.filter((d) => d.dismissed);
 
 				const sortedTaken = takenDoses.map((d) => d.takenAt.getTime()).sort((a, b) => a - b);
-				const medication = medMap.get(medId);
-				const pillsPerPack = Math.max(1, (medication?.blistersPerPack ?? 1) * (medication?.pillsPerBlister ?? 1));
-				const isAmountBased = medication?.packageType === "liquid_container" || medication?.packageType === "tube";
 
 				// Get refills for this medication scoped to the authenticated user.
 				const refills = await db
@@ -205,7 +186,6 @@ export async function reportRoutes(app: FastifyInstance) {
 					refills: refills.map((r) => ({
 						packsAdded: r.packsAdded,
 						loosePillsAdded: r.loosePillsAdded,
-						quantityAdded: isAmountBased ? r.loosePillsAdded : r.packsAdded * pillsPerPack + r.loosePillsAdded,
 						usedPrescription: r.usedPrescription ?? false,
 						refillDate: r.refillDate instanceof Date ? r.refillDate.toISOString() : String(r.refillDate),
 					})),

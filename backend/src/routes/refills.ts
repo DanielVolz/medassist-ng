@@ -2,10 +2,9 @@ import { and, desc, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { doseTracking, medications, refillHistory, userSettings } from "../db/schema.js";
+import { medications, refillHistory } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
-import { computeMedicationCurrentStock } from "../services/current-stock.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	applyOpenApiRouteStandards,
@@ -196,22 +195,13 @@ export async function refillRoutes(app: FastifyInstance) {
 			}
 
 			const refillBaselineAt = new Date();
-			const [settings] = await db
-				.select({ stockCalculationMode: userSettings.stockCalculationMode })
-				.from(userSettings)
-				.where(eq(userSettings.userId, userId));
-			const stockCalculationMode = settings?.stockCalculationMode === "manual" ? "manual" : "automatic";
-			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
-			const currentStockAtRefill = computeMedicationCurrentStock({
-				medication: med,
-				doses,
-				stockCalculationMode,
-				nowMs: refillBaselineAt.getTime(),
-			});
-			const targetCurrentStock = currentStockAtRefill + totalPillsAdded;
+			const baselineStockBeforeRefill = isAmountBased
+				? med.looseTablets + (med.stockAdjustment ?? 0)
+				: med.packCount * pillsPerPack + med.looseTablets + (med.stockAdjustment ?? 0);
+			const targetCurrentStock = baselineStockBeforeRefill + totalPillsAdded;
 
-			// Update medication stock. Refill establishes a new stock baseline at the current visible
-			// stock level so previously consumed doses are not "resurrected" when lastStockCorrectionAt resets.
+			// Update medication stock. Refill establishes a new persisted stock baseline and resets
+			// `lastStockCorrectionAt` so pre-refill dose history is ignored for future stock math.
 			let newPackCount = med.packCount + effectivePacksAdded;
 			let newLooseTablets = med.looseTablets + effectiveLoosePillsAdded;
 			let newStockAdjustment = med.stockAdjustment ?? 0;

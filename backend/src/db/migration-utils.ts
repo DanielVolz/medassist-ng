@@ -148,6 +148,20 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		}
 	}
 
+	const postCreateAlterMigrations = [
+		`ALTER TABLE notification_action_groups ADD COLUMN ntfy_original_message_id text NOT NULL DEFAULT ''`,
+	];
+
+	for (const sql of postCreateAlterMigrations) {
+		try {
+			await client.execute(sql);
+		} catch (e: unknown) {
+			if (!(e as Error).message?.includes("duplicate column")) {
+				errors.push((e as Error).message);
+			}
+		}
+	}
+
 	const createIndexMigrations = [
 		`CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_unique ON users(lower(username))`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS api_keys_key_hash_unique ON api_keys(key_hash)`,

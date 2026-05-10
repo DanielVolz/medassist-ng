@@ -374,14 +374,14 @@ describe("Real route coverage: settings/export/report", () => {
 				label: "Take",
 				url: expect.stringMatching(/^https:\/\/app\.example\.com\/api\/notification-actions\//),
 				method: "POST",
-				clear: false,
+				clear: true,
 			},
 			{
 				action: "http",
 				label: "Skip",
 				url: expect.stringMatching(/^https:\/\/app\.example\.com\/api\/notification-actions\//),
 				method: "POST",
-				clear: false,
+				clear: true,
 			},
 			{
 				action: "view",
@@ -632,7 +632,11 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(body[medId].dosesTaken).toBe(1);
 		expect(body[medId].dosesSkipped).toBe(1);
 		expect(body[medId].refills).toHaveLength(1);
-		expect(body[medId].refills[0].quantityAdded).toBe(22);
+		expect(body[medId].refills[0]).toMatchObject({
+			packsAdded: 1,
+			loosePillsAdded: 2,
+			usedPrescription: true,
+		});
 	});
 
 	it("POST /medications/report-data filters dose counts by takenBy suffix when requested", async () => {

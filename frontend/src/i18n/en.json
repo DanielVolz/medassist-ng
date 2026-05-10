@@ -548,7 +548,11 @@
   "dose": {
     "takenBy": "taken by",
     "markAsTaken": "Mark as taken",
-    "take": "Take"
+  "take": "Take",
+  "skip": "Skip",
+  "markAsSkipped": "Mark as skipped",
+  "undoTake": "Undo take",
+  "undoSkip": "Undo skip"
   },
   "auth": {
     "login": "Login",
@@ -870,7 +874,7 @@
     "docIntakeHistory": "Intake History",
     "docDosesTaken": "Doses taken",
     "docDosesTakenAutomatic": "Automatically taken",
-    "docDosesDismissed": "Doses dismissed",
+    "docDosesSkipped": "Doses skipped",
     "docFirstDose": "First dose",
     "docLastDose": "Last dose",
     "docRefillHistory": "Refill History",

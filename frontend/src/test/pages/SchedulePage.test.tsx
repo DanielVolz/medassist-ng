@@ -103,9 +103,12 @@ const createMockContext = (overrides = {}) => ({
 	pastDays: [],
 	futureDays: [],
 	takenDoses: new Set(),
+	skippedDoses: new Set(),
 	dismissedDoses: new Set(),
 	markDoseTaken: vi.fn(),
+	markDoseSkipped: vi.fn(),
 	undoDoseTaken: vi.fn(),
+	undoDoseSkipped: vi.fn(),
 	coverageByMed: {},
 	depletionByMed: {},
 	manuallyExpandedDays: new Set(),
@@ -671,6 +674,144 @@ describe("SchedulePage with taken doses", () => {
 			fireEvent.click(undoBtn);
 			expect(undoDoseTaken).toHaveBeenCalled();
 		}
+	});
+});
+
+describe("SchedulePage skip behavior", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorage.clear();
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			futureDays: mockFutureDays,
+			coverageByMed: mockCoverageByMed,
+		});
+	});
+
+	it("shows a skip action alongside take for neutral doses", () => {
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		expect(document.querySelector(".dose-btn.take")).toBeInTheDocument();
+		expect(document.querySelector(".dose-btn.skip")).toBeInTheDocument();
+	});
+
+	it("calls markDoseSkipped when clicking skip", () => {
+		const markDoseSkipped = vi.fn();
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			futureDays: mockFutureDays,
+			coverageByMed: mockCoverageByMed,
+			markDoseSkipped,
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		const skipButton = document.querySelector(".dose-btn.skip");
+		expect(skipButton).toBeInTheDocument();
+
+		if (skipButton) {
+			fireEvent.click(skipButton);
+		}
+
+		expect(markDoseSkipped).toHaveBeenCalledWith(`1-0-${FIXED_TIMESTAMP}-John`);
+	});
+
+	it("renders undo skip state for skipped doses", () => {
+		const skippedDoseId = `1-0-${FIXED_TIMESTAMP}-John`;
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			futureDays: mockFutureDays,
+			coverageByMed: mockCoverageByMed,
+			skippedDoses: new Set([skippedDoseId]),
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
+		expect(screen.getByText("John").closest(".dose-person")).toHaveClass("skipped");
+	});
+
+	it("calls undoDoseSkipped when clicking undo skip", () => {
+		const skippedDoseId = `1-0-${FIXED_TIMESTAMP}-John`;
+		const undoDoseSkipped = vi.fn();
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			futureDays: mockFutureDays,
+			coverageByMed: mockCoverageByMed,
+			skippedDoses: new Set([skippedDoseId]),
+			undoDoseSkipped,
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		const undoSkipButton = document.querySelector(".dose-btn.undo.skip");
+		expect(undoSkipButton).toBeInTheDocument();
+
+		if (undoSkipButton) {
+			fireEvent.click(undoSkipButton);
+		}
+
+		expect(undoDoseSkipped).toHaveBeenCalledWith(skippedDoseId);
+	});
+
+	it("does not mark skipped due doses as overdue", () => {
+		vi.useFakeTimers();
+		const now = new Date("2026-01-22T12:00:00.000Z");
+		vi.setSystemTime(now);
+
+		const when = new Date("2026-01-22T09:00:00.000Z").getTime();
+		const baseDoseId = `1-0-${when}`;
+		const skippedDoseId = `${baseDoseId}-John`;
+		const dueDay = [
+			{
+				dateStr: "Wed, Jan 22",
+				date: new Date(now),
+				isPast: false,
+				meds: [
+					{
+						medName: "Aspirin",
+						total: 1,
+						doses: [{ id: baseDoseId, timeStr: "09:00", when, usage: 1, takenBy: ["John"] }],
+						lastWhen: when,
+					},
+				],
+			},
+		];
+
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			futureDays: dueDay,
+			coverageByMed: mockCoverageByMed,
+			skippedDoses: new Set([skippedDoseId]),
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		const personRow = screen.getByText("John").closest(".dose-person");
+		expect(personRow).toHaveClass("skipped");
+		expect(personRow).not.toHaveClass("overdue");
+
+		vi.useRealTimers();
 	});
 });
 

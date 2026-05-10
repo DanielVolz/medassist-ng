@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, ExportModal } from "../components";
 import { useAppContext } from "../context";
-import { getSystemLocale } from "../utils/formatters";
+import { getSystemLocale, withFormattingTimezone } from "../utils/formatters";
 
 export function SettingsPage() {
 	const { t, i18n } = useTranslation();
@@ -737,13 +737,16 @@ export function SettingsPage() {
 								<div className="schedule-row">
 									<span className="schedule-label">{t("settings.schedule.nextCheck")}</span>
 									<span className="schedule-value">
-										{new Date(settings.nextScheduledCheck).toLocaleString(getSystemLocale(i18n.language), {
-											day: "2-digit",
-											month: "2-digit",
-											year: "numeric",
-											hour: "2-digit",
-											minute: "2-digit",
-										})}
+										{new Date(settings.nextScheduledCheck).toLocaleString(
+											getSystemLocale(i18n.language),
+											withFormattingTimezone({
+												day: "2-digit",
+												month: "2-digit",
+												year: "numeric",
+												hour: "2-digit",
+												minute: "2-digit",
+											})
+										)}
 									</span>
 								</div>
 							)}
@@ -751,13 +754,16 @@ export function SettingsPage() {
 								<div className="schedule-row">
 									<span className="schedule-label">{t("settings.schedule.lastStockSent")}</span>
 									<span className="schedule-value">
-										{new Date(settings.lastStockReminderSent).toLocaleString(getSystemLocale(i18n.language), {
-											day: "2-digit",
-											month: "2-digit",
-											year: "numeric",
-											hour: "2-digit",
-											minute: "2-digit",
-										})}
+										{new Date(settings.lastStockReminderSent).toLocaleString(
+											getSystemLocale(i18n.language),
+											withFormattingTimezone({
+												day: "2-digit",
+												month: "2-digit",
+												year: "numeric",
+												hour: "2-digit",
+												minute: "2-digit",
+											})
+										)}
 									</span>
 								</div>
 							)}
@@ -765,13 +771,16 @@ export function SettingsPage() {
 								<div className="schedule-row">
 									<span className="schedule-label">{t("settings.schedule.lastIntakeSent")}</span>
 									<span className="schedule-value">
-										{new Date(settings.lastAutoEmailSent).toLocaleString(getSystemLocale(i18n.language), {
-											day: "2-digit",
-											month: "2-digit",
-											year: "numeric",
-											hour: "2-digit",
-											minute: "2-digit",
-										})}
+										{new Date(settings.lastAutoEmailSent).toLocaleString(
+											getSystemLocale(i18n.language),
+											withFormattingTimezone({
+												day: "2-digit",
+												month: "2-digit",
+												year: "numeric",
+												hour: "2-digit",
+												minute: "2-digit",
+											})
+										)}
 									</span>
 								</div>
 							)}
@@ -779,13 +788,16 @@ export function SettingsPage() {
 								<div className="schedule-row">
 									<span className="schedule-label">{t("settings.schedule.lastPrescriptionSent")}</span>
 									<span className="schedule-value">
-										{new Date(settings.lastPrescriptionReminderSent).toLocaleString(getSystemLocale(i18n.language), {
-											day: "2-digit",
-											month: "2-digit",
-											year: "numeric",
-											hour: "2-digit",
-											minute: "2-digit",
-										})}
+										{new Date(settings.lastPrescriptionReminderSent).toLocaleString(
+											getSystemLocale(i18n.language),
+											withFormattingTimezone({
+												day: "2-digit",
+												month: "2-digit",
+												year: "numeric",
+												hour: "2-digit",
+												minute: "2-digit",
+											})
+										)}
 									</span>
 								</div>
 							)}

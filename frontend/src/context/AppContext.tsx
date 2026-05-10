@@ -11,7 +11,7 @@ import {
 	type ScheduleEvent,
 	type StockThresholds,
 } from "../types";
-import { getSystemLocale } from "../utils/formatters";
+import { getSystemLocale, setDefaultFormattingTimezone } from "../utils/formatters";
 import { log } from "../utils/logger";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, getStockStatus } from "../utils/schedule";
 import { ShareContextProvider } from "./ShareContext";
@@ -77,12 +77,15 @@ export interface AppContextValue {
 	// From useDoses
 	takenDoses: Set<string>;
 	setTakenDoses: React.Dispatch<React.SetStateAction<Set<string>>>;
+	skippedDoses: Set<string>;
 	dismissedDoses: Set<string>;
 	getDoseId: (baseDoseId: string, person: string | null) => string;
 	isDoseTakenAutomatically: (doseId: string) => boolean;
 	countTakenDoses: (doses: Array<{ id: string; takenBy: string[] }>) => { total: number; taken: number };
 	markDoseTaken: (doseId: string) => Promise<void>;
+	markDoseSkipped: (doseId: string) => Promise<void>;
 	undoDoseTaken: (doseId: string) => Promise<void>;
+	undoDoseSkipped: (doseId: string) => Promise<void>;
 
 	// From useCollapsedDays
 	manuallyCollapsedDays: Set<string>;
@@ -298,6 +301,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		refills: number;
 		shares: number;
 	} | null>(null);
+
+	useEffect(() => {
+		setDefaultFormattingTimezone(settingsHook.settings.timezone || settingsHook.settings.serverTimezone || null);
+	}, [settingsHook.settings.timezone, settingsHook.settings.serverTimezone]);
 
 	// Load user-specific scheduleDays when user changes
 	useEffect(() => {
@@ -848,12 +855,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			// From useDoses
 			takenDoses: doses.takenDoses,
 			setTakenDoses: doses.setTakenDoses,
+			skippedDoses: doses.skippedDoses,
 			dismissedDoses: doses.dismissedDoses,
 			getDoseId: doses.getDoseId,
 			isDoseTakenAutomatically: doses.isDoseTakenAutomatically,
 			countTakenDoses: doses.countTakenDoses,
 			markDoseTaken: doses.markDoseTaken,
+			markDoseSkipped: doses.markDoseSkipped,
 			undoDoseTaken: doses.undoDoseTaken,
+			undoDoseSkipped: doses.undoDoseSkipped,
 
 			// From useCollapsedDays
 			manuallyCollapsedDays: collapsed.manuallyCollapsedDays,

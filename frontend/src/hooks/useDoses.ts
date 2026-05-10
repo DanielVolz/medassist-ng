@@ -10,13 +10,16 @@ export interface UseDosesReturn {
 	setTakenDoses: React.Dispatch<React.SetStateAction<Set<string>>>;
 	takenDoseTimestamps: Map<string, number>;
 	takenDoseSources: Map<string, "manual" | "automatic">;
+	skippedDoses: Set<string>;
 	dismissedDoses: Set<string>;
 	clearDosesState: () => void;
 	getDoseId: (baseDoseId: string, person: string | null) => string;
 	isDoseTakenAutomatically: (doseId: string) => boolean;
 	countTakenDoses: (doses: Array<{ id: string; takenBy: string[] }>) => { total: number; taken: number };
 	markDoseTaken: (doseId: string) => Promise<void>;
+	markDoseSkipped: (doseId: string) => Promise<void>;
 	undoDoseTaken: (doseId: string) => Promise<void>;
+	undoDoseSkipped: (doseId: string) => Promise<void>;
 	loadTakenDoses: () => Promise<void>;
 }
 
@@ -56,7 +59,7 @@ export function useDoses(): UseDosesReturn {
 				const sources = new Map<string, "manual" | "automatic">();
 				const dismissed = new Set<string>();
 				for (const d of data.doses) {
-					if (d.dismissed) {
+					if (d.skipped === true || d.dismissed === true) {
 						dismissed.add(d.doseId);
 					} else {
 						taken.add(d.doseId);
@@ -127,11 +130,25 @@ export function useDoses(): UseDosesReturn {
 
 	const markDoseTaken = useCallback(
 		async (doseId: string) => {
+			if (dismissedDoses.has(doseId)) {
+				return;
+			}
+
+			const wasTaken = takenDoses.has(doseId);
+			const wasSkipped = dismissedDoses.has(doseId);
+			const previousTimestamp = takenDoseTimestamps.get(doseId);
+			const previousSource = takenDoseSources.get(doseId);
+
 			// Optimistic update
 			mutationInFlightRef.current++;
 			setTakenDoses((prev) => {
 				const next = new Set(prev);
 				next.add(doseId);
+				return next;
+			});
+			setDismissedDoses((prev) => {
+				const next = new Set(prev);
+				next.delete(doseId);
 				return next;
 			});
 			setTakenDoseTimestamps((prev) => {
@@ -163,17 +180,38 @@ export function useDoses(): UseDosesReturn {
 				// Revert on error
 				setTakenDoses((prev) => {
 					const next = new Set(prev);
-					next.delete(doseId);
+					if (wasTaken) {
+						next.add(doseId);
+					} else {
+						next.delete(doseId);
+					}
+					return next;
+				});
+				setDismissedDoses((prev) => {
+					const next = new Set(prev);
+					if (wasSkipped) {
+						next.add(doseId);
+					} else {
+						next.delete(doseId);
+					}
 					return next;
 				});
 				setTakenDoseTimestamps((prev) => {
 					const next = new Map(prev);
-					next.delete(doseId);
+					if (wasTaken && typeof previousTimestamp === "number") {
+						next.set(doseId, previousTimestamp);
+					} else {
+						next.delete(doseId);
+					}
 					return next;
 				});
 				setTakenDoseSources((prev) => {
 					const next = new Map(prev);
-					next.delete(doseId);
+					if (wasTaken && previousSource) {
+						next.set(doseId, previousSource);
+					} else {
+						next.delete(doseId);
+					}
 					return next;
 				});
 			} finally {
@@ -182,11 +220,96 @@ export function useDoses(): UseDosesReturn {
 				loadTakenDoses();
 			}
 		},
-		[getErrorCode, loadTakenDoses, t]
+		[dismissedDoses, getErrorCode, loadTakenDoses, t, takenDoseSources, takenDoseTimestamps, takenDoses]
+	);
+
+	const markDoseSkipped = useCallback(
+		async (doseId: string) => {
+			if (takenDoses.has(doseId)) {
+				return;
+			}
+
+			const wasTaken = takenDoses.has(doseId);
+			const wasSkipped = dismissedDoses.has(doseId);
+			const previousTimestamp = takenDoseTimestamps.get(doseId);
+			const previousSource = takenDoseSources.get(doseId);
+
+			mutationInFlightRef.current++;
+			setDismissedDoses((prev) => {
+				const next = new Set(prev);
+				next.add(doseId);
+				return next;
+			});
+			setTakenDoses((prev) => {
+				const next = new Set(prev);
+				next.delete(doseId);
+				return next;
+			});
+			setTakenDoseTimestamps((prev) => {
+				const next = new Map(prev);
+				next.delete(doseId);
+				return next;
+			});
+			setTakenDoseSources((prev) => {
+				const next = new Map(prev);
+				next.delete(doseId);
+				return next;
+			});
+
+			try {
+				const response = await fetch("/api/doses/skip", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "include",
+					body: JSON.stringify({ doseId }),
+				});
+				if (!response.ok) {
+					throw new Error("Failed to mark dose as skipped");
+				}
+			} catch {
+				setDismissedDoses((prev) => {
+					const next = new Set(prev);
+					if (wasSkipped) {
+						next.add(doseId);
+					} else {
+						next.delete(doseId);
+					}
+					return next;
+				});
+				setTakenDoses((prev) => {
+					const next = new Set(prev);
+					if (wasTaken) {
+						next.add(doseId);
+					}
+					return next;
+				});
+				setTakenDoseTimestamps((prev) => {
+					const next = new Map(prev);
+					if (wasTaken && typeof previousTimestamp === "number") {
+						next.set(doseId, previousTimestamp);
+					}
+					return next;
+				});
+				setTakenDoseSources((prev) => {
+					const next = new Map(prev);
+					if (wasTaken && previousSource) {
+						next.set(doseId, previousSource);
+					}
+					return next;
+				});
+			} finally {
+				mutationInFlightRef.current--;
+				loadTakenDoses();
+			}
+		},
+		[dismissedDoses, loadTakenDoses, takenDoseSources, takenDoseTimestamps, takenDoses]
 	);
 
 	const undoDoseTaken = useCallback(
 		async (doseId: string) => {
+			const previousTimestamp = takenDoseTimestamps.get(doseId);
+			const previousSource = takenDoseSources.get(doseId);
+
 			// Optimistic update
 			mutationInFlightRef.current++;
 			setTakenDoses((prev) => {
@@ -218,13 +341,59 @@ export function useDoses(): UseDosesReturn {
 					next.add(doseId);
 					return next;
 				});
+				setTakenDoseTimestamps((prev) => {
+					const next = new Map(prev);
+					if (typeof previousTimestamp === "number") {
+						next.set(doseId, previousTimestamp);
+					}
+					return next;
+				});
+				setTakenDoseSources((prev) => {
+					const next = new Map(prev);
+					if (previousSource) {
+						next.set(doseId, previousSource);
+					}
+					return next;
+				});
 			} finally {
 				mutationInFlightRef.current--;
 				// Re-sync with server after mutation completes
 				loadTakenDoses();
 			}
 		},
-		[loadTakenDoses]
+		[loadTakenDoses, takenDoseSources, takenDoseTimestamps]
+	);
+
+	const undoDoseSkipped = useCallback(
+		async (doseId: string) => {
+			const wasSkipped = dismissedDoses.has(doseId);
+
+			mutationInFlightRef.current++;
+			setDismissedDoses((prev) => {
+				const next = new Set(prev);
+				next.delete(doseId);
+				return next;
+			});
+
+			try {
+				await fetch(`/api/doses/skip/${encodeURIComponent(doseId)}`, {
+					method: "DELETE",
+					credentials: "include",
+				});
+			} catch {
+				setDismissedDoses((prev) => {
+					const next = new Set(prev);
+					if (wasSkipped) {
+						next.add(doseId);
+					}
+					return next;
+				});
+			} finally {
+				mutationInFlightRef.current--;
+				loadTakenDoses();
+			}
+		},
+		[dismissedDoses, loadTakenDoses]
 	);
 
 	return {
@@ -232,13 +401,16 @@ export function useDoses(): UseDosesReturn {
 		setTakenDoses,
 		takenDoseTimestamps,
 		takenDoseSources,
+		skippedDoses: dismissedDoses,
 		dismissedDoses,
 		clearDosesState,
 		getDoseId,
 		isDoseTakenAutomatically,
 		countTakenDoses,
 		markDoseTaken,
+		markDoseSkipped,
 		undoDoseTaken,
+		undoDoseSkipped,
 		loadTakenDoses,
 	};
 }

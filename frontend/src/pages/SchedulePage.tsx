@@ -24,8 +24,8 @@ function getStockStatus(
 	packageType?: string
 ) {
 	if (isTubePackageType(packageType)) return { className: "success", label: "status.noSchedule" };
-	// Out of stock or completely depleted = danger (red)
-	if (medsLeft <= 0 || daysLeft === 0) return { className: "danger", label: "status.outOfStock" };
+	// Only a real zero-or-below stock count is out of stock.
+	if (medsLeft <= 0) return { className: "danger", label: "status.outOfStock" };
 	// No schedule, but has stock = normal
 	if (daysLeft === null) return { className: "success", label: "status.noSchedule" };
 	if (isLiquidContainerPackageType(packageType)) {
@@ -85,7 +85,10 @@ export function SchedulePage() {
 		isDoseTakenAutomatically,
 		dismissedDoses,
 		markDoseTaken,
+		skippedDoses,
+		markDoseSkipped,
 		undoDoseTaken,
+		undoDoseSkipped,
 		coverageByMed,
 		depletionByMed,
 		manuallyExpandedDays,
@@ -171,6 +174,59 @@ export function SchedulePage() {
 		total: number,
 		doses?: Array<{ usage: number; intakeUnit?: IntakeUnit | null }>
 	) => formatScheduleTotalUsageLabel(med, total, t, doses);
+
+	const renderDoseActionButtons = (options: {
+		doseId: string;
+		isTaken: boolean;
+		isSkipped: boolean;
+		isAutomaticallyTaken: boolean;
+		isEmpty: boolean;
+	}) => {
+		const takeButton = options.isTaken ? (
+			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
+				{options.isAutomaticallyTaken && (
+					<span className="info-tooltip" data-tooltip={t("tooltips.automaticTaken")}>
+						🤖
+					</span>
+				)}
+				<span className="dose-btn-label">{t("common.undo")}</span>
+				<span aria-hidden="true">↩</span>
+			</button>
+		) : (
+			<button
+				className={`dose-btn take${options.isEmpty ? " out-of-stock" : ""}`}
+				onClick={() => markDoseTaken(options.doseId)}
+				disabled={options.isEmpty || options.isSkipped}
+				title={options.isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
+			>
+				<span className="dose-btn-label">{t("dose.take")}</span>
+				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
+			</button>
+		);
+
+		const skipButton = options.isSkipped ? (
+			<button className="dose-btn undo skip" onClick={() => undoDoseSkipped(options.doseId)} title={t("common.undo")}>
+				<span className="dose-btn-label">{t("common.undo")}</span>
+				<span aria-hidden="true">↩</span>
+			</button>
+		) : (
+			<button
+				className="dose-btn skip"
+				onClick={() => markDoseSkipped(options.doseId)}
+				title={t("dose.markAsSkipped")}
+				disabled={options.isTaken}
+			>
+				<span className="dose-btn-label">{t("dose.skip")}</span>
+			</button>
+		);
+
+		return (
+			<>
+				{takeButton}
+				{skipButton}
+			</>
+		);
+	};
 
 	return (
 		<section className="grid">
@@ -320,10 +376,14 @@ export function SchedulePage() {
 																		{people.map((person) => {
 																			const doseId = getDoseId(dose.id, person);
 																			const isTaken = isDoseTakenForDisplay(doseId);
+																			const isSkipped = skippedDoses.has(doseId);
 																			const isAutomaticallyTaken =
 																				isTaken && isDoseTakenAutomatically(doseId) && dose.when <= Date.now();
+																			const personClasses = ["dose-person"];
+																			if (isTaken) personClasses.push("taken");
+																			if (isSkipped) personClasses.push("skipped");
 																			return (
-																				<div key={doseId} className={`dose-person ${isTaken ? "taken" : ""}`}>
+																				<div key={doseId} className={personClasses.join(" ")}>
 																					{person && (
 																						<span
 																							className="person-name clickable"
@@ -335,35 +395,13 @@ export function SchedulePage() {
 																							{person}
 																						</span>
 																					)}
-																					{isTaken ? (
-																						<button
-																							className="dose-btn undo"
-																							onClick={() => undoDoseTaken(doseId)}
-																							title={t("common.undo")}
-																						>
-																							{isAutomaticallyTaken && (
-																								<span
-																									className="info-tooltip"
-																									data-tooltip={t("tooltips.automaticTaken")}
-																								>
-																									🤖
-																								</span>
-																							)}
-																							↩
-																						</button>
-																					) : (
-																						<button
-																							className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
-																							onClick={() => markDoseTaken(doseId)}
-																							disabled={isEmpty}
-																							title={
-																								isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")
-																							}
-																						>
-																							<span className="dose-btn-label">{t("dose.take")}</span>
-																							<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
-																						</button>
-																					)}
+																					{renderDoseActionButtons({
+																						doseId,
+																						isTaken,
+																						isSkipped,
+																						isAutomaticallyTaken,
+																						isEmpty,
+																					})}
 																				</div>
 																			);
 																		})}
@@ -549,14 +587,16 @@ export function SchedulePage() {
 																{people.map((person) => {
 																	const doseId = getDoseId(dose.id, person);
 																	const isTaken = isDoseTakenForDisplay(doseId);
+																	const isSkipped = skippedDoses.has(doseId);
 																	const isAutomaticallyTaken =
 																		isTaken && isDoseTakenAutomatically(doseId) && dose.when <= now;
-																	const isOverdue = !isTaken && dose.when < now && !isPastDay;
+																	const isOverdue = !isTaken && !isSkipped && !isEmpty && dose.when < now && !isPastDay;
+																	const personClasses = ["dose-person"];
+																	if (isTaken) personClasses.push("taken");
+																	if (isSkipped) personClasses.push("skipped");
+																	if (isOverdue) personClasses.push("overdue");
 																	return (
-																		<div
-																			key={doseId}
-																			className={`dose-person ${isTaken ? "taken" : ""} ${isOverdue ? "overdue" : ""}`}
-																		>
+																		<div key={doseId} className={personClasses.join(" ")}>
 																			{person && (
 																				<span
 																					className="person-name clickable"
@@ -568,30 +608,13 @@ export function SchedulePage() {
 																					{person}
 																				</span>
 																			)}
-																			{isTaken ? (
-																				<button
-																					className="dose-btn undo"
-																					onClick={() => undoDoseTaken(doseId)}
-																					title={t("common.undo")}
-																				>
-																					{isAutomaticallyTaken && (
-																						<span className="info-tooltip" data-tooltip={t("tooltips.automaticTaken")}>
-																							🤖
-																						</span>
-																					)}
-																					↩
-																				</button>
-																			) : (
-																				<button
-																					className={`dose-btn take${isEmpty ? " out-of-stock" : ""}`}
-																					onClick={() => markDoseTaken(doseId)}
-																					disabled={isEmpty}
-																					title={isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
-																				>
-																					<span className="dose-btn-label">{t("dose.take")}</span>
-																					<span aria-hidden="true">{isEmpty ? "⊘" : "✓"}</span>
-																				</button>
-																			)}
+																			{renderDoseActionButtons({
+																				doseId,
+																				isTaken,
+																				isSkipped,
+																				isAutomaticallyTaken,
+																				isEmpty,
+																			})}
 																		</div>
 																	);
 																})}

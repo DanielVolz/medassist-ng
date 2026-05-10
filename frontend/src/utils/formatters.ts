@@ -59,17 +59,43 @@ const TIMEZONE_TO_REGION: Record<string, string> = {
 	"Pacific/Auckland": "NZ",
 };
 
+let defaultFormattingTimezone: string | null = null;
+
+export function setDefaultFormattingTimezone(timezone: string | null | undefined): void {
+	defaultFormattingTimezone = timezone?.trim() || null;
+}
+
+export function getFormattingTimezone(): string | undefined {
+	if (defaultFormattingTimezone) {
+		return defaultFormattingTimezone;
+	}
+
+	try {
+		return Intl.DateTimeFormat().resolvedOptions().timeZone;
+	} catch {
+		return undefined;
+	}
+}
+
+export function withFormattingTimezone(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormatOptions {
+	const timezone = getFormattingTimezone();
+	if (!timezone) {
+		return options;
+	}
+
+	return {
+		...options,
+		timeZone: timezone,
+	};
+}
+
 /**
  * Get region code from timezone.
  * Returns undefined if timezone is not mapped.
  */
 export function getRegionFromTimezone(): string | undefined {
-	try {
-		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-		return TIMEZONE_TO_REGION[timezone];
-	} catch {
-		return undefined;
-	}
+	const timezone = getFormattingTimezone();
+	return timezone ? TIMEZONE_TO_REGION[timezone] : undefined;
 }
 
 /**

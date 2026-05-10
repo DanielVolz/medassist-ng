@@ -12,6 +12,8 @@ import {
 	type Language,
 	t,
 } from "../i18n/translations.js";
+
+import { env } from "../plugins/env.js";
 import { getAllUserSettings, type UserSettings } from "../routes/settings.js";
 import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
@@ -29,6 +31,10 @@ import {
 	type UpcomingIntake,
 } from "../utils/scheduler-utils.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
+import {
+	createNotificationActionContext,
+	storeNotificationActionGroupNtfyMessageId,
+} from "./notification-actions-service.js";
 import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "./notifications/delivery.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
 
@@ -91,6 +97,31 @@ function getMedicationDisplayName(med: { id: number; name: string | null; generi
 	if (genericName) return genericName;
 
 	return `Medication #${med.id}`;
+}
+
+function getPushProviderLabel(url: string): string {
+	const normalizedUrl = url.trim().toLowerCase();
+	if (normalizedUrl.startsWith("ntfy://")) return "ntfy";
+	if (normalizedUrl.startsWith("discord://")) return "discord";
+	if (normalizedUrl.startsWith("pushover://")) return "pushover";
+	if (normalizedUrl.startsWith("gotify://")) return "gotify";
+	if (normalizedUrl.startsWith("telegram://")) return "telegram";
+
+	try {
+		const parsedUrl = new URL(url);
+		return parsedUrl.hostname || parsedUrl.protocol.replace(":", "") || "unknown";
+	} catch {
+		return "unknown";
+	}
+}
+
+function formatActionContextLog(options: {
+	actionMode: "full" | "view-only";
+	doseCount: number;
+	actionContext: Awaited<ReturnType<typeof createNotificationActionContext>> | null;
+}): string {
+	const { actionMode, doseCount, actionContext } = options;
+	return `actionMode=${actionMode}, doses=${doseCount}, actions=${actionContext?.actions.length ?? 0}, hasRespondUrl=${actionContext?.respondUrl ? "yes" : "no"}, hasViewUrl=${actionContext?.viewUrl ? "yes" : "no"}, sequenceId=${actionContext?.sequenceId ?? "none"}, groupId=${actionContext?.groupId ?? "n/a"}`;
 }
 
 async function autoMarkDueIntakesAsTaken(
@@ -483,11 +514,42 @@ export async function checkAndSendIntakeRemindersForUser(
 		return; // No medications have reminders enabled for this user
 	}
 
+	const now = new Date();
 	const state = loadIntakeReminderState(logger);
+	const trackedDoses = await db
+		.select()
+		.from(doseTracking)
+		.where(and(eq(doseTracking.userId, settings.userId), eq(doseTracking.dismissed, false)));
+
+	const reminderEntriesWithStock = reminderEntries.map((entry) => ({
+		...entry,
+		currentStock: computeMedicationCurrentStock({
+			medication: entry.med,
+			doses: trackedDoses,
+			stockCalculationMode: settings.stockCalculationMode,
+			nowMs: now.getTime(),
+		}),
+	}));
+	const suppressedEmptyStockEntries = reminderEntriesWithStock.filter((entry) => entry.currentStock <= 0);
+	if (suppressedEmptyStockEntries.length > 0) {
+		logger.info(
+			`[IntakeReminder] Skipping reminder-enabled medications with empty stock for user=${username} (userId=${settings.userId}): count=${suppressedEmptyStockEntries.length}, meds=${suppressedEmptyStockEntries
+				.map((entry) =>
+					getMedicationDisplayName({ id: entry.med.id, name: entry.med.name, genericName: entry.med.genericName })
+				)
+				.join(", ")}`
+		);
+	}
+	const reminderEntriesEligible = reminderEntriesWithStock.filter((entry) => entry.currentStock > 0);
+	if (reminderEntriesEligible.length === 0) {
+		logger.info(
+			`[IntakeReminder] No reminder-eligible medications with stock remaining for user=${username} (userId=${settings.userId})`
+		);
+		return;
+	}
 	const allUpcoming: (UpcomingIntake & { medicationId: number; blisterIndex: number })[] = [];
 	let scheduledIntakesTodayCount = 0;
 	// Get start and end of today in user's timezone (for filtering today's doses only)
-	const now = new Date();
 	const todayStart = new Date(now.toLocaleString("en-US", { timeZone: tz }));
 	todayStart.setHours(0, 0, 0, 0);
 
@@ -495,7 +557,7 @@ export async function checkAndSendIntakeRemindersForUser(
 	todayEnd.setHours(23, 59, 59, 999);
 
 	// Find intakes: upcoming ones in reminder window + past ones for repeat reminders
-	for (const { med, intakes, intakesWithReminders } of reminderEntries) {
+	for (const { med, intakes, intakesWithReminders } of reminderEntriesEligible) {
 		// Medication-level takenBy (for fallback/display purposes)
 		const medicationTakenBy = parseTakenByJson(med.takenByJson);
 		const medDisplayName = getMedicationDisplayName({ id: med.id, name: med.name, genericName: med.genericName });
@@ -801,16 +863,96 @@ export async function checkAndSendIntakeRemindersForUser(
 				.join("\n") +
 			repeatNote +
 			`\n\n---\n${getFooterPlain(language)}`;
+		const actionMode = remindersToSend.length === 1 ? "full" : "view-only";
+		const actionDoseIds = remindersToSend.map((intake) =>
+			buildDoseIdForIntake({
+				...intake,
+				medicationId: intake.medicationId,
+				blisterIndex: intake.blisterIndex,
+			})
+		);
+		let actionContext: Awaited<ReturnType<typeof createNotificationActionContext>> | null = null;
+		let actionContextFailed = false;
+		try {
+			actionContext = await createNotificationActionContext({
+				userId: settings.userId,
+				title,
+				message,
+				doseIds: actionDoseIds,
+				scheduledFor: remindersToSend[0]?.intakeTime ?? new Date(),
+				publicAppUrl: env.PUBLIC_APP_URL,
+				language,
+				actionMode,
+			});
+		} catch (error) {
+			actionContextFailed = true;
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			logger.error(
+				`[IntakeReminder] Notification action context failed for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
+					settings.shoutrrrUrl!
+				)}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext: null })}): ${errorMessage}`
+			);
+		}
+		if (!actionContext) {
+			if (actionContextFailed) {
+				logger.warn(
+					`[IntakeReminder] Sending intake reminders without actions after action context failure for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
+						settings.shoutrrrUrl!
+					)})`
+				);
+			} else {
+				logger.warn(
+					`[IntakeReminder] No reachable public app URL configured; sending intake reminders without actions for user=${username} (userId=${settings.userId})`
+				);
+			}
+		} else {
+			logger.info(
+				`[IntakeReminder] Notification action context ready for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
+					settings.shoutrrrUrl!
+				)}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
+			);
+		}
 
-		const result = await sendPushNotification(settings.shoutrrrUrl!, title, message);
+		const pushProvider = getPushProviderLabel(settings.shoutrrrUrl!);
+		logger.info(
+			`[IntakeReminder] Sending push reminder for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${remindersToSend.length}, priority=${hasNaggingReminder ? 4 : 3}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
+		);
+
+		const result = await sendPushNotification(settings.shoutrrrUrl!, title, message, {
+			actions: actionContext?.actions,
+			respondUrl: actionContext?.respondUrl,
+			viewUrl: actionContext?.viewUrl,
+			clickUrl: actionContext?.respondUrl ?? actionContext?.viewUrl,
+			sequenceId: actionContext?.sequenceId,
+			tags: ["pill"],
+			priority: hasNaggingReminder ? 4 : 3,
+		});
 		shoutrrrSuccess = result.success;
 		if (!result.success) {
 			logger.error(
-				`[IntakeReminder] Push delivery failed for user=${username} (userId=${settings.userId}): ${result.error}`
+				`[IntakeReminder] Push delivery failed for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${remindersToSend.length}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })}): ${result.error}`
 			);
 		} else {
+			if (actionContext?.groupId && result.providerMessageId) {
+				try {
+					await storeNotificationActionGroupNtfyMessageId(actionContext.groupId, result.providerMessageId);
+					logger.info(
+						`[IntakeReminder] Stored ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId}, providerMessageId=${result.providerMessageId})`
+					);
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error);
+					logger.warn(
+						`[IntakeReminder] Failed to store ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId}, providerMessageId=${result.providerMessageId}): ${errorMessage}`
+					);
+				}
+			} else if (actionContext?.groupId && pushProvider === "ntfy") {
+				logger.warn(
+					`[IntakeReminder] Push delivered without ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId})`
+				);
+			}
+
 			logger.info(
-				`[IntakeReminder] Push delivered for user=${username} (userId=${settings.userId}, reminders=${remindersToSend.length})`
+				`[IntakeReminder] Push delivered for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${remindersToSend.length}, providerMessageId=${result.providerMessageId ?? "n/a"}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
 			);
 		}
 	}

@@ -2,8 +2,17 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
+import { getDateLocale, getFooterPlain, getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import {
+	createTestNotificationActionContext,
+	storeNotificationActionGroupNtfyMessageId,
+} from "../services/notification-actions-service.js";
+import {
+	type PushNotificationOptions,
+	renderNotificationActionPayload,
+} from "../services/notifications/action-renderer.js";
 import { getSmtpConfig, sendEmailNotification } from "../services/notifications/delivery.js";
 import {
 	classifyTestEmailFailure,
@@ -70,41 +79,29 @@ const settingsErrorSchema = {
 	},
 };
 
-type MailDeliveryInfo = {
-	accepted?: unknown;
-	rejected?: unknown;
-	response?: unknown;
-};
-
-function normalizeRecipients(value: unknown): string[] {
-	if (!Array.isArray(value)) return [];
-	return value
-		.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "")))
-		.map((entry) => entry.trim())
-		.filter(Boolean);
-}
-
-function getDeliveryError(info: MailDeliveryInfo): string | null {
-	const accepted = normalizeRecipients(info.accepted);
-	const rejected = normalizeRecipients(info.rejected);
-
-	if (accepted.length > 0) return null;
-	if (rejected.length > 0) {
-		return `SMTP rejected all recipients: ${rejected.join(", ")}`;
-	}
-
-	if (typeof info.response === "string" && info.response.trim()) {
-		return `SMTP did not confirm accepted recipients. Response: ${info.response}`;
-	}
-
-	return "SMTP did not confirm accepted recipients.";
-}
-
 function envInt(key: string, defaultVal: number): number {
 	const val = process.env[key];
 	if (val === undefined) return defaultVal;
 	const parsed = parseInt(val, 10);
 	return Number.isNaN(parsed) ? defaultVal : parsed;
+}
+
+function getLanguage(language: string | null | undefined): Language {
+	return language === "de" ? "de" : "en";
+}
+
+function buildInteractiveTestPushNotification(language: Language): { title: string; message: string } {
+	const tr = getTranslations(language);
+	const reminderAt = new Date(Date.now() + 60 * 1000);
+	const reminderTime = new Intl.DateTimeFormat(getDateLocale(language), {
+		hour: "2-digit",
+		minute: "2-digit",
+	}).format(reminderAt);
+
+	return {
+		title: t(tr.push.intakeTitle, { minutes: 1 }),
+		message: `• MedAssist-ng Test: 1 ${tr.common.pill} (100 mg) @ ${reminderTime}\n\n---\n${getFooterPlain(language)}`,
+	};
 }
 
 async function getOrCreateUserSettings(userId: number) {
@@ -552,14 +549,33 @@ export async function settingsRoutes(app: FastifyInstance) {
 			}
 
 			try {
+				const userId = await getUserId(request, reply);
+				const settings = await getOrCreateUserSettings(userId);
+				const language = getLanguage(settings.language);
+				const { title, message } = buildInteractiveTestPushNotification(language);
+				const actionContext = await createTestNotificationActionContext({
+					userId,
+					title,
+					message,
+					publicAppUrl: env.PUBLIC_APP_URL,
+					language,
+				});
 				const provider = getNotificationProvider(url);
-				const result = await sendShoutrrrNotification(
-					url,
-					"MedAssist-ng Test",
-					"This is a test notification from MedAssist-ng. If you received this, your notification configuration is working correctly!"
-				);
+				const result = await sendShoutrrrNotification(url, title, message, {
+					actions: actionContext?.actions,
+					respondUrl: actionContext?.respondUrl,
+					viewUrl: actionContext?.viewUrl,
+					clickUrl: actionContext?.respondUrl ?? actionContext?.viewUrl,
+					sequenceId: actionContext?.sequenceId,
+					tags: ["pill"],
+					priority: 3,
+				});
 
 				if (result.success) {
+					if (actionContext?.groupId && result.providerMessageId) {
+						await storeNotificationActionGroupNtfyMessageId(actionContext.groupId, result.providerMessageId);
+					}
+
 					request.log.info({ provider }, "[Settings] Test push notification sent");
 					return reply.send({ success: true, message: "Test notification sent successfully" });
 				} else {
@@ -582,8 +598,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 export async function sendShoutrrrNotification(
 	urlStr: string,
 	title: string,
-	message: string
-): Promise<{ success: boolean; error?: string }> {
+	message: string,
+	options: PushNotificationOptions = {}
+): Promise<{ success: boolean; error?: string; providerMessageId?: string }> {
 	try {
 		if (urlStr.startsWith("pushover://")) {
 			const pushoverAuthority = urlStr.slice("pushover://".length).split("/")[0] ?? "";
@@ -736,12 +753,13 @@ export async function sendShoutrrrNotification(
 		}
 
 		// Use ONLY the reconstructed URL from validation - never the original urlStr
-		const { url: sanitizedUrl, isNtfy: _isNtfy, auth } = validation;
+		const { url: sanitizedUrl, isNtfy, auth } = validation;
 
 		let targetUrl: string;
 		const method = "POST";
 		let headers: Record<string, string> = {};
 		let body: string | undefined;
+		const renderedPayload = renderNotificationActionPayload(urlStr, message, options);
 
 		// Remove emojis from title for header compatibility
 		const cleanTitle = title
@@ -786,19 +804,27 @@ export async function sendShoutrrrNotification(
 			// characters (umlauts, accents, etc.) through HTTP headers
 			const encodedTitle = `=?UTF-8?B?${Buffer.from(cleanTitle, "utf-8").toString("base64")}?=`;
 			headers = { Title: encodedTitle, Tags: "pill" };
-			body = message;
+			body = renderedPayload.message;
 
 			// Add auth if present (extracted during sanitization)
 			if (auth) {
 				headers.Authorization = `Basic ${Buffer.from(`${auth.user}:${auth.pass}`).toString("base64")}`;
 			}
+
+			if (isNtfy) {
+				headers = { ...headers, ...renderedPayload.headers };
+			}
 		} else if (sanitizedUrl.startsWith("http://") || sanitizedUrl.startsWith("https://")) {
 			targetUrl = sanitizedUrl;
 			headers = { "Content-Type": "application/json" };
 			if (isDiscordWebhook) {
-				body = JSON.stringify({ content: `${title}\n\n${message}` });
+				body = JSON.stringify({ content: `${title}\n\n${renderedPayload.message}` });
 			} else {
-				body = JSON.stringify({ title, message, text: `${title}\n\n${message}` });
+				body = JSON.stringify({
+					title,
+					message: renderedPayload.message,
+					text: `${title}\n\n${renderedPayload.message}`,
+				});
 			}
 		} else {
 			return {
@@ -823,7 +849,17 @@ export async function sendShoutrrrNotification(
 		});
 
 		if (response.ok) {
-			return { success: true };
+			let providerMessageId: string | undefined;
+			if (isNtfy) {
+				try {
+					const payload = (await response.json()) as { id?: unknown };
+					providerMessageId = typeof payload.id === "string" && payload.id.length > 0 ? payload.id : undefined;
+				} catch {
+					providerMessageId = undefined;
+				}
+			}
+
+			return { success: true, providerMessageId };
 		} else {
 			const errorText = await response.text();
 			return { success: false, error: `HTTP ${response.status}: ${errorText}` };

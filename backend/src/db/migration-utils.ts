@@ -59,6 +59,7 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE user_settings ADD COLUMN last_stock_reminder_sent text`,
 		`ALTER TABLE user_settings ADD COLUMN last_stock_reminder_channel text`,
 		`ALTER TABLE user_settings ADD COLUMN last_stock_reminder_med_names text`,
+		// Keep the removed legacy setting column for backward compatibility with older SQLite files.
 		`ALTER TABLE user_settings ADD COLUMN share_stock_status integer NOT NULL DEFAULT 1`,
 		`ALTER TABLE user_settings ADD COLUMN share_medication_overview integer NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_settings ADD COLUMN upcoming_today_only integer NOT NULL DEFAULT 0`,
@@ -96,6 +97,31 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
       loose_pills_added INTEGER NOT NULL DEFAULT 0,
       refill_date INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 	    )`,
+		`CREATE TABLE IF NOT EXISTS notification_action_groups (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			group_key TEXT NOT NULL UNIQUE,
+			sequence_id TEXT NOT NULL,
+			ntfy_original_message_id TEXT NOT NULL DEFAULT '',
+			dose_ids_json TEXT NOT NULL,
+			title TEXT NOT NULL,
+			message TEXT NOT NULL,
+			language TEXT NOT NULL DEFAULT 'en',
+			scheduled_for INTEGER,
+			expires_at INTEGER NOT NULL,
+			resolved_action TEXT,
+			resolved_at INTEGER,
+			created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+			updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS notification_action_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_id INTEGER NOT NULL REFERENCES notification_action_groups(id) ON DELETE CASCADE,
+			token_hash TEXT NOT NULL UNIQUE,
+			kind TEXT NOT NULL,
+			used_at INTEGER,
+			created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+		)`,
 		`CREATE TABLE IF NOT EXISTS api_keys (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -121,9 +147,25 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		}
 	}
 
+	const postCreateAlterMigrations = [
+		`ALTER TABLE notification_action_groups ADD COLUMN ntfy_original_message_id text NOT NULL DEFAULT ''`,
+	];
+
+	for (const sql of postCreateAlterMigrations) {
+		try {
+			await client.execute(sql);
+		} catch (e: unknown) {
+			if (!(e as Error).message?.includes("duplicate column")) {
+				errors.push((e as Error).message);
+			}
+		}
+	}
+
 	const createIndexMigrations = [
 		`CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_unique ON users(lower(username))`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS api_keys_key_hash_unique ON api_keys(key_hash)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS notification_action_groups_group_key_unique ON notification_action_groups(group_key)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS notification_action_tokens_token_hash_unique ON notification_action_tokens(token_hash)`,
 		`CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys(user_id)`,
 	];
 

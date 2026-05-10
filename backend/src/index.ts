@@ -309,6 +309,7 @@ const start = async () => {
 		startReminderScheduler({
 			info: (msg) => app.log.info(msg),
 			debug: (msg) => app.log.debug(msg),
+			warn: (msg) => app.log.warn(msg),
 			error: (msg) => app.log.error(msg),
 		});
 
@@ -323,6 +324,7 @@ const start = async () => {
 		startIntakeReminderScheduler({
 			info: (msg) => app.log.info(msg),
 			debug: (msg) => app.log.debug(msg),
+			warn: (msg) => app.log.warn(msg),
 			error: (msg) => app.log.error(msg),
 		});
 	} catch (err) {

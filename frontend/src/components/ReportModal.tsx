@@ -6,7 +6,6 @@ import type { Medication } from "../types";
 import {
 	getMedDisplayName,
 	getMedTotal,
-	getStockDisplayCapacity,
 	isAmountBasedPackageType,
 	isLiquidContainerPackageType,
 	isTubePackageType,
@@ -31,13 +30,7 @@ type ReportData = Record<
 		dosesSkipped: number;
 		firstDoseAt: string | null;
 		lastDoseAt: string | null;
-		refills: {
-			packsAdded: number;
-			loosePillsAdded?: number;
-			quantityAdded: number;
-			usedPrescription: boolean;
-			refillDate: string;
-		}[];
+		refills: { packsAdded: number; loosePillsAdded: number; usedPrescription: boolean; refillDate: string }[];
 	}
 >;
 
@@ -384,7 +377,7 @@ function generateTextReport(
 			lines.push(item(t("report.docPillsPerBlister"), String(med.pillsPerBlister)));
 			if (med.looseTablets > 0) lines.push(item(t("report.docLoosePills"), String(med.looseTablets)));
 		} else {
-			lines.push(item(getTotalCapacityLabel(med, t), String(getStockDisplayCapacity(med))));
+			lines.push(item(getTotalCapacityLabel(med, t), String(med.totalPills ?? med.looseTablets)));
 		}
 		lines.push(item(t("report.docCurrentStock"), getCurrentStockText(med, t)));
 		if (!isTubePackageType(med.packageType) && !isLiquidContainerPackageType(med.packageType) && med.pillWeightMg)
@@ -442,7 +435,7 @@ function generateTextReport(
 			if (data.refills.length > 0) {
 				lines.push(h3(t("report.docRefillHistory")));
 				for (const r of data.refills) {
-					let entry = `${formatDate(r.refillDate)}: +${r.packsAdded} ${t("report.docPacks")}, +${r.quantityAdded} ${isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType) ? t(getTubeUnitKey(med)) : t("common.pills")}`;
+					let entry = `${formatDate(r.refillDate)}: +${r.packsAdded} ${t("report.docPacks")}, +${r.loosePillsAdded} ${isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType) ? t(getTubeUnitKey(med)) : t("common.pills")}`;
 					if (r.usedPrescription) entry += ` ${t("report.docRefillPrescription")}`;
 					lines.push(fmt === "md" ? `- ${entry}` : `  • ${entry}`);
 				}
@@ -582,7 +575,7 @@ function buildPrintHtml(
 			if (med.looseTablets > 0)
 				s += `<tr><td class="label">${escHtml(t("report.docLoosePills"))}</td><td>${med.looseTablets}</td></tr>`;
 		} else {
-			s += `<tr><td class="label">${escHtml(getTotalCapacityLabel(med, t))}</td><td>${getStockDisplayCapacity(med)}</td></tr>`;
+			s += `<tr><td class="label">${escHtml(getTotalCapacityLabel(med, t))}</td><td>${med.totalPills ?? med.looseTablets}</td></tr>`;
 		}
 		s += `<tr><td class="label">${escHtml(t("report.docCurrentStock"))}</td><td>${escHtml(getCurrentStockText(med, t))}</td></tr>`;
 		if (!isTubePackageType(med.packageType) && !isLiquidContainerPackageType(med.packageType) && med.pillWeightMg)
@@ -648,7 +641,7 @@ function buildPrintHtml(
 				s += `<h3>${escHtml(t("report.docRefillHistory"))}</h3>`;
 				s += `<ul>`;
 				for (const r of data.refills) {
-					let entry = `${formatDate(r.refillDate)}: +${r.packsAdded} ${escHtml(t("report.docPacks"))}, +${r.quantityAdded} ${escHtml(isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType) ? t(getTubeUnitKey(med)) : t("common.pills"))}`;
+					let entry = `${formatDate(r.refillDate)}: +${r.packsAdded} ${escHtml(t("report.docPacks"))}, +${r.loosePillsAdded} ${escHtml(isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType) ? t(getTubeUnitKey(med)) : t("common.pills"))}`;
 					if (r.usedPrescription) entry += ` <em>${escHtml(t("report.docRefillPrescription"))}</em>`;
 					s += `<li>${entry}</li>`;
 				}

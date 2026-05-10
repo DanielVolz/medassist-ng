@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
 import type { Language } from "../i18n/translations.js";
+import { isNtfyNotificationUrl } from "./notifications/action-renderer.js";
 
 export type UserSettings = {
 	userId: number;
@@ -81,7 +82,7 @@ export function getNotificationProvider(url: string): string {
 	if (url.startsWith("telegram://")) return "telegram";
 	if (url.startsWith("gotify://")) return "gotify";
 	if (url.startsWith("pushover://")) return "pushover";
-	if (url.startsWith("ntfy://")) return "ntfy";
+	if (isNtfyNotificationUrl(url)) return "ntfy";
 
 	try {
 		const parsed = new URL(url);
@@ -231,7 +232,7 @@ export function sanitizeNotificationUrl(
 			return { url: discordWebhookUrl, isNtfy: false };
 		}
 
-		const isNtfy = urlStr.startsWith("ntfy://");
+		const isNtfy = isNtfyNotificationUrl(urlStr);
 		const normalizedUrl = isNtfy ? urlStr.replace("ntfy://", "https://") : urlStr;
 		const parsed = new URL(normalizedUrl);
 

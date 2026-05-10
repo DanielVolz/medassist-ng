@@ -117,8 +117,7 @@ export function buildNtfyActions(options: PushNotificationOptions): NtfyActionPa
 			label: action.label,
 			url: action.url,
 			method: "POST",
-			// Clear the original actionable ntfy notification locally after a successful mutation.
-			clear: true,
+			clear: false,
 		};
 	});
 }

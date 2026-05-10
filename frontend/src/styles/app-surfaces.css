@@ -2112,6 +2112,20 @@ button.has-validation-error {
 	border-color: color-mix(in srgb, var(--danger) 42%, transparent);
 	color: color-mix(in srgb, var(--danger) 82%, white 18%);
 }
+
+.time-row.notification-focus-target-row {
+	scroll-margin-top: 0.75rem;
+}
+
+.time-row.notification-focus-target-row .med-name-text {
+	color: color-mix(in srgb, var(--primary) 88%, white 12%);
+}
+
+.time-row.notification-focus-target-row .tag.subtle {
+	background: color-mix(in srgb, var(--primary) 12%, transparent);
+	border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
 .time-main {
 	display: flex;
 	flex-direction: column;
@@ -2209,12 +2223,12 @@ button.has-validation-error {
 	color: var(--warning);
 }
 
-.dose-item.overdue .dose-btn.take {
+.dose-item.overdue .dose-btn.take:not(.undo):not(:disabled) {
 	box-shadow: 0 0 0 2px var(--warning);
 	animation: overduePulse 1.5s ease-in-out infinite;
 }
 
-.dose-item.overdue .dose-btn.take:hover {
+.dose-item.overdue .dose-btn.take:not(.undo):hover {
 	filter: brightness(0.87);
 }
 
@@ -2332,7 +2346,7 @@ button.has-validation-error {
 }
 
 .dose-btn .dose-btn-label {
-	display: none;
+	display: inline;
 }
 
 .dose-btn.take {
@@ -2379,6 +2393,16 @@ button.has-validation-error {
 	filter: none;
 }
 
+.dose-btn.skip {
+	background: color-mix(in srgb, var(--warning) 18%, var(--bg-tertiary));
+	border: 1px solid color-mix(in srgb, var(--warning) 52%, var(--border-primary));
+	color: var(--text-primary);
+}
+
+.dose-btn.skip:hover {
+	filter: brightness(0.94);
+}
+
 .dose-btn.take.out-of-stock,
 .dose-btn.take.out-of-stock:disabled,
 .dashboard-schedules-section .dose-btn.take.out-of-stock,
@@ -2409,6 +2433,18 @@ button.has-validation-error {
 	filter: brightness(0.9);
 }
 
+.dose-btn.undo.take {
+	background: color-mix(in srgb, var(--success) 82%, var(--accent-bg));
+	border-color: color-mix(in srgb, var(--success) 88%, white 12%);
+	color: #eafff6;
+}
+
+.dose-btn.undo.skip {
+	background: color-mix(in srgb, var(--warning) 50%, var(--bg-tertiary));
+	border-color: color-mix(in srgb, var(--warning) 68%, var(--border-primary));
+	color: var(--text-primary);
+}
+
 /* Per-person dose tracking */
 .dose-checks {
 	display: flex;
@@ -2426,8 +2462,18 @@ button.has-validation-error {
 	background: rgba(255, 255, 255, 0.03);
 }
 
+.dose-person.notification-focus-target {
+	background: color-mix(in srgb, var(--primary) 16%, var(--accent-bg));
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 46%, transparent);
+	animation: notification-focus-pulse 1.5s ease 2;
+}
+
 .dose-person.taken {
 	background: var(--success-bg);
+}
+
+.dose-person.skipped {
+	background: color-mix(in srgb, var(--warning) 20%, var(--accent-bg));
 }
 
 .dose-person.overdue {
@@ -2457,12 +2503,26 @@ button.has-validation-error {
 	color: var(--success);
 }
 
+.dose-person.skipped .person-name {
+	color: color-mix(in srgb, var(--warning) 82%, var(--text-primary));
+}
+
 .dose-person .dose-btn {
 	margin-left: 0;
 	height: 24px;
 	min-height: 24px;
 	padding: 0 6px;
 	font-size: 0.75rem;
+}
+
+@keyframes notification-focus-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 46%, transparent);
+	}
+	50% {
+		box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 14%, transparent);
+	}
 }
 
 @media (min-width: 769px) {

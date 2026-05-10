@@ -1,5 +1,6 @@
 import type { Coverage, Medication, PackageType } from "../types";
 import { getMedTotal as getMedTotalFromTypes, isLiquidContainerPackageType, isTubePackageType } from "../types";
+import { withFormattingTimezone } from "../utils/formatters";
 import { splitCurrentBlisterStock } from "../utils/stock";
 
 export function userStorageKey(userId: number | undefined, key: string): string {
@@ -132,12 +133,15 @@ export function getReminderStatusData(
 	let lastStockSent: { date: string; medNames: string | null } | null = null;
 	if (lastStockReminderSent) {
 		const sentDate = new Date(lastStockReminderSent);
-		const formattedDate = sentDate.toLocaleDateString(locale, {
-			day: "2-digit",
-			month: "short",
-			hour: "2-digit",
-			minute: "2-digit",
-		});
+		const formattedDate = sentDate.toLocaleDateString(
+			locale,
+			withFormattingTimezone({
+				day: "2-digit",
+				month: "short",
+				hour: "2-digit",
+				minute: "2-digit",
+			})
+		);
 		lastStockSent = {
 			date: formattedDate,
 			medNames: lastStockReminderMedNames,
@@ -147,12 +151,15 @@ export function getReminderStatusData(
 	let lastIntakeSent: { date: string; medName: string | null; takenBy: string | null } | null = null;
 	if (lastAutoEmailSent) {
 		const sentDate = new Date(lastAutoEmailSent);
-		const formattedDate = sentDate.toLocaleDateString(locale, {
-			day: "2-digit",
-			month: "short",
-			hour: "2-digit",
-			minute: "2-digit",
-		});
+		const formattedDate = sentDate.toLocaleDateString(
+			locale,
+			withFormattingTimezone({
+				day: "2-digit",
+				month: "short",
+				hour: "2-digit",
+				minute: "2-digit",
+			})
+		);
 		lastIntakeSent = {
 			date: formattedDate,
 			medName: lastReminderMedName,

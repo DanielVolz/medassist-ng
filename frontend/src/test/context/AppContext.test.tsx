@@ -37,6 +37,7 @@ vi.mock("../../hooks", () => ({
 
 vi.mock("../../utils/formatters", () => ({
 	getSystemLocale: () => "en-US",
+	setDefaultFormattingTimezone: vi.fn(),
 }));
 
 vi.mock("../../utils/schedule", async () => {

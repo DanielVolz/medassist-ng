@@ -23,6 +23,7 @@ import { exportRoutes } from "./routes/export.js";
 import { healthRoutes } from "./routes/health.js";
 import { medicationEnrichmentRoutes } from "./routes/medication-enrichment.js";
 import { medicationRoutes } from "./routes/medications.js";
+import { notificationActionRoutes } from "./routes/notification-actions.js";
 import { oidcRoutes } from "./routes/oidc.js";
 import { plannerRoutes } from "./routes/planner.js";
 import { refillRoutes } from "./routes/refills.js";
@@ -77,6 +78,19 @@ function buildLoggerOptions(level: string) {
 		};
 	}
 	return base;
+}
+
+function buildHelmetOptions(_isProduction: boolean) {
+	return {};
+}
+
+function isPublicNotificationActionPath(url: string | undefined): boolean {
+	if (!url) {
+		return false;
+	}
+
+	const normalizedUrl = url.split("?")[0]?.toLowerCase() ?? "";
+	return /(^|\/)(api\/)?notification-actions(\/|$)/.test(normalizedUrl);
 }
 
 async function registerApiDocs(app: FastifyInstance, enabled: boolean) {
@@ -166,6 +180,7 @@ export async function createApp(options?: {
 	app.addHook("onRequest", (request, reply, done) => {
 		request.correlationId = request.id;
 		reply.header("x-correlation-id", request.id);
+
 		done();
 	});
 
@@ -182,8 +197,26 @@ export async function createApp(options?: {
 
 	// Register plugins
 	await app.register(sensible);
-	await app.register(helmet);
-	await app.register(cors, { origin: opts.corsOrigins, credentials: true });
+	await app.register(helmet, buildHelmetOptions(opts.isProduction));
+	await app.register(cors, {
+		hook: "preHandler",
+		delegator: (request, callback) => {
+			if (isPublicNotificationActionPath(request.raw.url)) {
+				callback(null, {
+					origin: true,
+					credentials: false,
+					methods: ["GET", "HEAD", "POST", "OPTIONS"],
+					preflightContinue: true,
+				});
+				return;
+			}
+
+			callback(null, {
+				origin: opts.corsOrigins,
+				credentials: true,
+			});
+		},
+	});
 	await app.register(rateLimit, { max: 300, timeWindow: "1 minute" });
 	await app.register(cookie, { secret: opts.cookieSecret });
 
@@ -212,6 +245,7 @@ export async function createApp(options?: {
 	await app.register(medicationEnrichmentRoutes);
 	await app.register(settingsRoutes);
 	await app.register(plannerRoutes);
+	await app.register(notificationActionRoutes);
 	await app.register(shareRoutes);
 	await app.register(doseRoutes);
 	await app.register(exportRoutes);
@@ -266,8 +300,26 @@ app.decorate("config", {
 });
 
 await app.register(sensible);
-await app.register(helmet);
-await app.register(cors, { origin: origins, credentials: true });
+await app.register(helmet, buildHelmetOptions(env.NODE_ENV === "production"));
+await app.register(cors, {
+	hook: "preHandler",
+	delegator: (request, callback) => {
+		if (isPublicNotificationActionPath(request.raw.url)) {
+			callback(null, {
+				origin: true,
+				credentials: false,
+				methods: ["GET", "HEAD", "POST", "OPTIONS"],
+				preflightContinue: true,
+			});
+			return;
+		}
+
+		callback(null, {
+			origin: origins,
+			credentials: true,
+		});
+	},
+});
 await app.register(rateLimit, {
 	max: Number(process.env.RATE_LIMIT_MAX) || 100,
 	timeWindow: "1 minute",
@@ -294,6 +346,7 @@ await app.register(medicationRoutes);
 await app.register(medicationEnrichmentRoutes);
 await app.register(settingsRoutes);
 await app.register(plannerRoutes);
+await app.register(notificationActionRoutes);
 await app.register(shareRoutes);
 await app.register(doseRoutes);
 await app.register(exportRoutes);

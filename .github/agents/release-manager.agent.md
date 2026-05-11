@@ -245,28 +245,9 @@ Apply these rules strictly:
 
 ## Task 3: Execute Release
 
-Use the release script — it is **fully non-interactive** (no y/N prompts) and handles the entire flow automatically:
-
-```bash
-./scripts/release.sh <patch|minor|major|x.y.z>
-```
-
-The script performs these steps in order:
-1. Checks out and updates `main`
-2. Creates release branch `chore/release-X.Y.Z`
-3. Bumps version in `backend/package.json` and `frontend/package.json`
-4. Commits, pushes, and creates a PR
-5. Waits for CI checks (with retry logic — polls every 15s, waits up to 10 minutes)
-6. Merges the PR (squash + delete branch)
-7. Creates a signed tag `vX.Y.Z` and pushes it
+Use the manual release flow. The repository no longer uses a public release helper script.
 
 **Release precondition:** never start the release flow from a dirty or stale mixed workspace. If the repository root contains unrelated/stale diffs, first switch to a clean base that matches the authoritative remote main.
-
-**The script auto-detects the git remote** (`origin` or `github`) and uses it consistently.
-
-**CI wait behavior:** GitHub Actions can take 10-30 seconds before checks appear on a new PR. The script waits 20 seconds initially, then polls every 15 seconds until checks are registered, then watches them to completion. Maximum wait is 10 minutes.
-
-**On failure:** If CI fails, the script exits with an error. The release branch and PR remain open for inspection. Fix the issue, push to the branch, and the PR will re-run CI. Then merge manually or re-run the script.
 
 ### Version Files (MANDATORY)
 
@@ -279,7 +260,7 @@ The version number is displayed in the **About modal** (Settings → About) as a
 - The About modal will show the old version
 - The version link will point to a non-existent GitHub release page
 
-### Manual Release (if script is not available)
+### Manual Release
 
 1. Create release branch:
    ```bash
@@ -523,8 +504,7 @@ Ready for release?
 7. Check current version (git tag + package.json)
 8. Analyze changes → determine SemVer level
 9. If minor/major: check README.md for needed updates (Task 5)
-10. Run ./scripts/release.sh <patch|minor|major>
-    (or manually: branch → version bump → PR → CI → merge → tag)
+10. Run the manual release flow: branch → version bump → PR → CI → merge → tag
         ↓
 11. Write release notes (mandatory for minor/major)
 12. Publish GitHub release

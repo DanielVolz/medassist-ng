@@ -392,7 +392,13 @@ describe("useRefill", () => {
 		{ id: 9, packageType: "bottle" as const, name: "Zero Reset Bottle", totalPills: 100, looseTablets: 20 },
 		{ id: 10, packageType: "inhaler" as const, name: "Zero Reset Inhaler", totalPills: 200, looseTablets: 40 },
 		{ id: 11, packageType: "injection" as const, name: "Zero Reset Injection", totalPills: 12, looseTablets: 4 },
-	])("resets $packageType stock correction payload to zero base fields", async ({ id, packageType, name, totalPills, looseTablets }) => {
+	])("resets $packageType stock correction payload to zero base fields", async ({
+		id,
+		packageType,
+		name,
+		totalPills,
+		looseTablets,
+	}) => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
 		const med: Medication = {

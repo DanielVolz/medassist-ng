@@ -1311,9 +1311,7 @@ export function MedDetailModal({
 									return totalRefill > 0 ? (
 										<span className="refill-preview">
 											+{totalRefill}
-											{isAmountPackage
-												? ` ${stockUnitLabel}`
-												: ` ${getDiscreteUnitLabel(totalRefill)}`}
+											{isAmountPackage ? ` ${stockUnitLabel}` : ` ${getDiscreteUnitLabel(totalRefill)}`}
 										</span>
 									) : null;
 								})()}

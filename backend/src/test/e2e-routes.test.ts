@@ -3291,22 +3291,22 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.looseTablets).toBe(180);
 		});
 
-		it.each(discreteContainerMedications)(
-			"should create and return $label type medication",
-			async ({ payload, expectedDoseUnit }) => {
-				const response = await app.inject({
-					method: "POST",
-					url: "/medications",
-					payload,
-				});
+		it.each(discreteContainerMedications)("should create and return $label type medication", async ({
+			payload,
+			expectedDoseUnit,
+		}) => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload,
+			});
 
-				expect(response.statusCode).toBe(200);
-				const data = response.json();
-				expect(data.packageType).toBe(payload.packageType);
-				expect(data.doseUnit).toBe(expectedDoseUnit);
-				expect(data.looseTablets).toBe(payload.looseTablets);
-			}
-		);
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.packageType).toBe(payload.packageType);
+			expect(data.doseUnit).toBe(expectedDoseUnit);
+			expect(data.looseTablets).toBe(payload.looseTablets);
+		});
 
 		it("should return packageType and ml-based stock semantics in shared schedule for liquid_container", async () => {
 			await app.inject({

@@ -456,6 +456,9 @@ export function DashboardPage() {
 			return `${formatNumber(medsLeft)} ${getTubeStockUnitLabel()}`;
 		}
 		const roundedCount = Math.round(medsLeft);
+		if (med?.packageType !== "inhaler" && med?.packageType !== "injection") {
+			return t("table.pillsCount", { count: roundedCount });
+		}
 		return `${roundedCount} ${getDiscreteUnitLabel(med?.packageType, roundedCount)}`;
 	};
 

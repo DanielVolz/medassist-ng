@@ -67,12 +67,12 @@ Thumbs.db
 .idea/
 *.sublime-project
 *.sublime-workspace
+/.vscode/settings.json
 
-# Keep shared VS Code settings
-# .vscode/ is NOT ignored - settings.json is useful for the team
+# Keep shared VS Code workspace files, but ignore personal editor settings.
 
 # ===================
-# Misc
+# Local-only workspace artifacts (never upstream)
 # ===================
 *.local
 .cache/
@@ -82,12 +82,9 @@ Thumbs.db
 .claude/
 AGENTS.md
 docs/TECH_STACK.md
-doku/
-
-# Local agent work logs stay on disk but must never go upstream.
-doku/memory_notes.md
-doku/report.md
-plan/
+/doku/
+/plan/
+/.planning/
 .copilot-tracking/
 .playwright-cli/
 .agents/
@@ -118,7 +115,4 @@ docs/SPEC_KIT.md
 .github/gsd-file-manifest.json
 .github/prompts/speckit.*.prompt.md
 .github/skills/gsd-*/
-.planning/
-doku/memory_notes.md
-doku/report.md
 ops/medtest/

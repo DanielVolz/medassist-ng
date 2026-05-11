@@ -6,12 +6,12 @@ import { db } from "../db/client.js";
 import { notificationActionGroups, notificationActionTokens, userSettings } from "../db/schema.js";
 import { getTranslations, type Language } from "../i18n/translations.js";
 import { markDoseTakenForUser, skipDosesForUser } from "../services/dose-tracking-service.js";
-import { sendPushNotification } from "../services/notifications/delivery.js";
 import {
 	getNotificationActionTokenRecord,
 	isNotificationActionExpired,
 } from "../services/notification-actions-service.js";
 import { getNotificationActionLabels } from "../services/notifications/action-renderer.js";
+import { sendPushNotification } from "../services/notifications/delivery.js";
 import { sanitizeNotificationUrl } from "../services/settings-service.js";
 import { applyOpenApiRouteStandards, genericErrorSchema } from "../utils/openapi-route-standards.js";
 
@@ -118,8 +118,7 @@ function buildReplacementReminderMessage(
 	originalMessage: string
 ): string {
 	const tr = getTranslations(language);
-	const confirmationLine =
-		action === "taken" ? tr.push.intakeTakenConfirmation : tr.push.intakeSkippedConfirmation;
+	const confirmationLine = action === "taken" ? tr.push.intakeTakenConfirmation : tr.push.intakeSkippedConfirmation;
 	const separatorIndex = originalMessage.indexOf(reminderFooterSeparator);
 
 	if (separatorIndex >= 0) {
@@ -235,15 +234,9 @@ async function replaceNtfyNotificationSequence(options: {
 	}
 
 	const labels = getNotificationActionLabels(options.language);
-	const replacementMessage = buildReplacementReminderMessage(
-		options.language,
-		options.action,
-		options.originalMessage
-	);
+	const replacementMessage = buildReplacementReminderMessage(options.language, options.action, options.originalMessage);
 	const result = await sendPushNotification(settings.shoutrrrUrl, options.title, replacementMessage, {
-		actions: options.viewUrl
-			? [{ kind: "view", label: labels.view, url: options.viewUrl, method: "GET" }]
-			: undefined,
+		actions: options.viewUrl ? [{ kind: "view", label: labels.view, url: options.viewUrl, method: "GET" }] : undefined,
 		viewUrl: options.viewUrl ?? undefined,
 		clickUrl: options.viewUrl ?? undefined,
 		sequenceId: normalizedSequenceId,

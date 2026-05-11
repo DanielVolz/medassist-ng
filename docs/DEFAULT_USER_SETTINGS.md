@@ -6,6 +6,9 @@ Scope and behavior:
 
 - These values are applied only when a user's settings are created for the first time.
 - After that, values stored in the database are used and take precedence.
+- This document only covers settings that have an environment-backed default.
+- It is not intended to be a full inventory of every setting shown in the UI.
+- UI-only settings without a `DEFAULT_*` variable, for example the dashboard section order toggle, are intentionally excluded.
 
 ## Email Defaults
 

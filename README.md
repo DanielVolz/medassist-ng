@@ -120,10 +120,10 @@ Share your medication schedule with others via a public link.
 </details>
 
 ### Medication Setup
-- Optional multi-source lookup inside the medication editor on desktop and mobile, prioritizing `RxNorm` and `openFDA` before `EMA`, including package-size suggestions when the source exposes them
-- Explicit review-and-apply flow with low-risk suggestions only
-- Additional lookup results can be revealed on demand instead of being hard-cut at the initial small result set
-- Honest incomplete-coverage messaging with source labels; manual entry always remains available
+- Optional medication lookup in the editor on desktop and mobile
+- Supports `RxNorm`, `openFDA`, and `EMA` with source labels
+- Review-and-apply flow with package-size suggestions when available
+- Manual entry remains available
 
 ### Smart Inventory
 - Track exact stock with package profiles (blister, bottle, tube, liquid container)
@@ -148,7 +148,6 @@ Share your medication schedule with others via a public link.
 
 ### Trip Planner
 - Calculate medication demand for a trip or date range with package-aware units
-- Plan ahead for vacations, business trips, or hospital stays
 - Send demand reports via email or push notification
 
 ### Reports
@@ -168,7 +167,7 @@ Share your medication schedule with others via a public link.
 ### Notifications
 - Email via SMTP
 - Push notifications via ntfy, Pushover, Gotify, Telegram, Discord & more ([Shoutrrr](https://containrrr.dev/shoutrrr/))
-- Supports both stock warnings and intake reminders
+- Supports stock warnings and intake reminders
 
 ### Privacy & Security
 - Fully self-hosted
@@ -191,208 +190,33 @@ Open `http://localhost:4174` and start tracking your medications.
 
 # Configuration
 
-All configuration is done via environment variables in `.env`. Copy `.env.example` to get started.
+Configure the application with environment variables in `.env`. Keep the basic container settings in the README and use the dedicated docs for the full reference.
 
-### General
+### Initial Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PUID` | `1000` | User ID for container file permissions |
 | `PGID` | `1000` | Group ID for container file permissions |
 | `PORT` | `3000` | Backend API port |
-| `CORS_ORIGINS` | `http://localhost:4174` | Allowed origins for CORS |
-| `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`, `silent`). At `info` (default), high-frequency polling endpoints are suppressed. Set `debug` to see all requests. |
-| `OPENAPI_DOCS_ENABLED` | `auto` | Enables API docs in non-production by default. Set explicitly to `true`/`false` to override. |
-| `TZ` | `Europe/Berlin` | Server default timezone for scheduled reminders (can be overridden per user in Settings) |
+| `CORS_ORIGINS` | `http://localhost:4174` | Allowed frontend origins |
+| `TZ` | `Europe/Berlin` | Default timezone for reminders |
 
-Recommended values for API docs by environment:
-
-| Environment | Recommendation |
-|-------------|----------------|
-| Development | `OPENAPI_DOCS_ENABLED=true` |
-| Staging/Test | `OPENAPI_DOCS_ENABLED=true` |
-| Production | leave it unset, or set `OPENAPI_DOCS_ENABLED=false` |
-
-Notes:
-
-- If `OPENAPI_DOCS_ENABLED` is not set, docs are enabled outside production and disabled in production.
-- If `OPENAPI_DOCS_ENABLED=true`, docs are available on `/docs` and `/docs/json`.
-- If `OPENAPI_DOCS_ENABLED=false`, only the docs are disabled. The API still works normally.
-
-### Authentication
+Optional but commonly needed:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_ENABLED` | `false` | Enable user authentication |
-| `REGISTRATION_ENABLED` | `false` | Allow new user registrations |
-| `JWT_SECRET` | — | Access token signing key (required if auth enabled) |
-| `REFRESH_SECRET` | — | Refresh token signing key (required if auth enabled) |
-| `COOKIE_SECRET` | — | Cookie signing key (required if auth enabled) |
-| `ACCESS_TOKEN_TTL_MINUTES` | `15` | Access token lifetime |
-| `REFRESH_TOKEN_TTL_DAYS` | `7` | Refresh token lifetime |
+| `PUBLIC_APP_URL` | — | Public base URL for notification action links |
 
-Generate secrets with: `openssl rand -hex 32`
+Detailed configuration references:
 
-### API Keys (Programmatic API Access)
-
-When `AUTH_ENABLED=true`, you can create personal API keys and call protected endpoints with:
-
-```bash
-Authorization: Bearer ma_...
-```
-
-Available scopes:
-
-- `read`: read-only access (`GET`, `HEAD`, `OPTIONS`)
-- `write`: read + write access
-
-Essential notes:
-
-- Create keys in the app when authentication is enabled.
-- The token is shown only once after creation.
-- Creating a new key automatically deactivates previously active keys for the same user.
-- API keys are stored hashed in the database.
-
-Example usage:
-
-```bash
-curl http://localhost:3000/settings \
-  -H "Authorization: Bearer ma_..."
-```
-
-API reference:
-
-- Interactive docs: `/docs`
-- OpenAPI JSON: `/docs/json`
-- With the bundled frontend ingress, these paths work on the normal app URL as well, for example `http://localhost:4174/docs` when docs are enabled.
-- Key management endpoints for authenticated users:
-  - `GET /auth/api-keys`
-  - `POST /auth/api-keys`
-  - `DELETE /auth/api-keys/:id`
-
-### OIDC / SSO
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OIDC_ENABLED` | `false` | Enable OIDC authentication |
-| `OIDC_ISSUER_URL` | — | OIDC provider URL |
-| `OIDC_CLIENT_ID` | — | Client ID from OIDC provider |
-| `OIDC_CLIENT_SECRET` | — | Client secret from OIDC provider |
-| `OIDC_REDIRECT_URI` | — | Full callback URL (e.g., `https://your-domain.com/api/auth/oidc/callback`) |
-| `OIDC_SCOPES` | `openid profile email` | Scopes to request |
-| `OIDC_USERNAME_CLAIM` | `preferred_username` | Claim for username |
-| `OIDC_AUTO_CREATE_USERS` | `true` | Auto-create users on first SSO login |
-| `OIDC_PROVIDER_NAME` | `SSO` | Name shown on login button |
-
-### Email (SMTP)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SMTP_HOST` | — | SMTP server hostname |
-| `SMTP_PORT` | `587` | SMTP server port |
-| `SMTP_USER` | — | SMTP username |
-| `SMTP_PASS` | — | SMTP password |
-| `SMTP_TOKEN` | — | OAuth2/App token (takes precedence over password) |
-| `SMTP_FROM` | — | Sender email address |
-| `SMTP_SECURE` | `false` | Use TLS |
-
-### Reminders
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REMINDER_DAYS_BEFORE` | `7` | Days before stock runs out to send reminder |
-| `REMINDER_HOUR` | `6` | Hour to send daily reminders (24h format) |
-| `REMINDER_MINUTES_BEFORE` | `15` | Minutes before intake to send reminder |
-| `EXPIRY_WARNING_DAYS` | `30` | Days before expiry to show warning |
-
-Intake reminder timing uses IANA timezones. The server uses `TZ` as default, and each user can set an override in Settings. If no user timezone is set, reminders continue using the server default.
-
-### Push Notifications (Shoutrrr)
-
-MedAssist uses [Shoutrrr](https://containrrr.dev/shoutrrr/) for push notifications, supporting many services with a single URL format.
-
-**Implemented URL schemes in MedAssist:** `ntfy://`, `discord://`, `pushover://`, `gotify://`, `telegram://`, plus direct `https://` webhooks.
-
-This covers common providers like ntfy, Discord, Pushover, Gotify, Telegram, Slack webhooks, and many others via webhook URLs.
-
-Configure push notifications in Settings → Push, or set defaults via environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DEFAULT_SHOUTRRR_ENABLED` | `false` | Enable push notifications by default |
-| `DEFAULT_SHOUTRRR_URL` | — | Shoutrrr URL (see examples below) |
-| `DEFAULT_SHOUTRRR_STOCK_REMINDERS` | `true` | Send stock warnings via push |
-| `DEFAULT_SHOUTRRR_INTAKE_REMINDERS` | `true` | Send intake reminders via push |
-
-### Default User Settings
-
-These defaults are applied when a new user is created. Once a user saves settings in the app, their values take precedence.
-
-Complete list and details:
-
-- [docs/DEFAULT_USER_SETTINGS.md](docs/DEFAULT_USER_SETTINGS.md)
-
-#### URL Examples
-
-**ntfy** (free, self-hostable):
-```
-ntfy://ntfy.sh/your-topic
-ntfy://user:password@your-server.com/topic
-```
-
-**Pushover** (free app for iOS/Android):
-```
-pushover://shoutrrr:API_TOKEN@USER_KEY/
-```
-Get your keys at [pushover.net](https://pushover.net/):
-- **User Key**: Shown on your dashboard (top right)
-- **API Token**: Create an application → copy the API Token
-
-**Gotify** (self-hosted):
-```
-gotify://your-server.com/TOKEN
-gotify://your-server.com:443/path/to/gotify/TOKEN?priority=1
-```
-
-**Discord**:
-```
-discord://TOKEN@WEBHOOK_ID
-```
-
-**Telegram**:
-```
-telegram://TOKEN@telegram?chats=CHAT_ID
-telegram://TOKEN@telegram?chats=@your_channel,-1001234567890
-```
-
-For all services and options, see the [Shoutrrr documentation](https://containrrr.dev/shoutrrr/v0.8/services/overview/).
+- Full configuration reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+- Push notifications: [docs/PUSH_NOTIFICATIONS.md](docs/PUSH_NOTIFICATIONS.md)
+- Default user settings: [docs/DEFAULT_USER_SETTINGS.md](docs/DEFAULT_USER_SETTINGS.md)
 
 # Development
 
-```bash
-docker compose -p medassist-dev -f docker-compose.dev.yml up
-```
-
-- Frontend: `http://localhost:5173` (hot reload)
-- Backend: `http://localhost:3000`
-- API docs UI: `http://localhost:3000/docs` (when docs are enabled)
-- OpenAPI JSON: `http://localhost:3000/docs/json` (when docs are enabled)
-
-If you run the frontend dev server behind a reverse proxy or on a remote host, you can optionally set these frontend-only environment variables before starting Vite:
-
-- `VITE_ALLOWED_HOSTS`: comma-separated hostnames allowed to connect to the dev server; defaults to `localhost,127.0.0.1`
-- `VITE_HMR_HOST`: public hostname used for HMR websocket connections
-- `VITE_HMR_PROTOCOL`: optional websocket protocol override (`ws` or `wss`)
-- `VITE_HMR_CLIENT_PORT`: optional public websocket port exposed to the browser
-- `VITE_HMR_PORT`: optional server-side websocket port for the Vite process
-
-Useful local commands:
-
-```bash
-npm run lint
-cd backend && npm run test:run
-cd frontend && npm run test:run
-```
+Development setup and local commands are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 # Acknowledgements
 

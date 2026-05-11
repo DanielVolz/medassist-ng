@@ -10,15 +10,16 @@
 - This memory/report rule replaces the previous `doku/APP_BEHAVIOR.md` persistence requirement.
 
 **Second: Follow Governance Rules**
-- Consult `AGENTS.md` for all governance, workflow, and skill rules.
+- Consult `AGENTS.md` for governance, workflow, and skill rules when that file exists in the workspace.
 
-Use `AGENTS.md` as the single source of truth for all governance, workflow, and skill rules.
+When `AGENTS.md` exists in the workspace, use it as the single source of truth for governance, workflow, and skill rules.
 
 ## Required Startup Steps
 
-1. Read `AGENTS.md` first.
-2. Identify triggered skills from `AGENTS.md` and read each referenced `SKILL.md` before making changes.
+1. Read `AGENTS.md` first when it exists in the workspace.
+2. If `AGENTS.md` exists, identify triggered skills from it and read each referenced `SKILL.md` before making changes.
 3. Follow delegation boundaries exactly (`@testing-manager` for testing, `@release-manager` for release orchestration).
+4. When work moves into a different thematic area, create or switch to a dedicated local branch or worktree before editing code, and reuse the same branch/worktree for follow-up work inside that same theme.
 
 ## Scope
 

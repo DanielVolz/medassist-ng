@@ -4,8 +4,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { notificationActionGroups, notificationActionTokens, userSettings } from "../db/schema.js";
-import type { Language } from "../i18n/translations.js";
+import { getTranslations, type Language } from "../i18n/translations.js";
 import { markDoseTakenForUser, skipDosesForUser } from "../services/dose-tracking-service.js";
+import { sendPushNotification } from "../services/notifications/delivery.js";
 import {
 	getNotificationActionTokenRecord,
 	isNotificationActionExpired,
@@ -33,6 +34,7 @@ function normalizeNotificationAction(action: string | null | undefined): Notific
 }
 
 const publicNotificationActionMethods = "GET,HEAD,POST,OPTIONS";
+const reminderFooterSeparator = "\n\n---\n";
 
 function escapeHtml(value: string): string {
 	return value
@@ -110,6 +112,25 @@ function getActionRecordedText(language: Language, action: NotificationMutationA
 	};
 }
 
+function buildReplacementReminderMessage(
+	language: Language,
+	action: NotificationMutationAction,
+	originalMessage: string
+): string {
+	const tr = getTranslations(language);
+	const confirmationLine =
+		action === "taken" ? tr.push.intakeTakenConfirmation : tr.push.intakeSkippedConfirmation;
+	const separatorIndex = originalMessage.indexOf(reminderFooterSeparator);
+
+	if (separatorIndex >= 0) {
+		const beforeFooter = originalMessage.slice(0, separatorIndex).trimEnd();
+		const footer = originalMessage.slice(separatorIndex);
+		return `${beforeFooter}\n\n${confirmationLine}${footer}`;
+	}
+
+	return `${originalMessage.trimEnd()}\n\n${confirmationLine}`;
+}
+
 async function clearNtfyNotificationSequence(userId: number, sequenceId: string): Promise<void> {
 	const [settings] = await db
 		.select({ shoutrrrEnabled: userSettings.shoutrrrEnabled, shoutrrrUrl: userSettings.shoutrrrUrl })
@@ -183,6 +204,57 @@ async function deleteNtfyNotificationSequence(userId: number, sequenceId: string
 		const errorText = await response.text();
 		throw new Error(`HTTP ${response.status}: ${errorText}`);
 	}
+}
+
+async function replaceNtfyNotificationSequence(options: {
+	userId: number;
+	sequenceId: string;
+	language: Language;
+	title: string;
+	originalMessage: string;
+	action: NotificationMutationAction;
+	viewUrl: string | null;
+}): Promise<boolean> {
+	const normalizedSequenceId = options.sequenceId.trim();
+	if (normalizedSequenceId.length === 0) {
+		return false;
+	}
+
+	const [settings] = await db
+		.select({ shoutrrrEnabled: userSettings.shoutrrrEnabled, shoutrrrUrl: userSettings.shoutrrrUrl })
+		.from(userSettings)
+		.where(eq(userSettings.userId, options.userId));
+
+	if (!settings?.shoutrrrEnabled || !settings.shoutrrrUrl) {
+		return false;
+	}
+
+	const sanitized = sanitizeNotificationUrl(settings.shoutrrrUrl);
+	if ("error" in sanitized || !sanitized.isNtfy) {
+		return false;
+	}
+
+	const labels = getNotificationActionLabels(options.language);
+	const replacementMessage = buildReplacementReminderMessage(
+		options.language,
+		options.action,
+		options.originalMessage
+	);
+	const result = await sendPushNotification(settings.shoutrrrUrl, options.title, replacementMessage, {
+		actions: options.viewUrl
+			? [{ kind: "view", label: labels.view, url: options.viewUrl, method: "GET" }]
+			: undefined,
+		viewUrl: options.viewUrl ?? undefined,
+		clickUrl: options.viewUrl ?? undefined,
+		sequenceId: normalizedSequenceId,
+		tags: ["pill"],
+	});
+
+	if (!result.success) {
+		throw new Error(result.error ?? "Failed to replace ntfy notification");
+	}
+
+	return true;
 }
 
 function renderPage(options: {
@@ -351,7 +423,7 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 			const resolvedAction = normalizeNotificationAction(record.group.resolvedAction);
 			let bodyTitle: string;
 			let bodyText: string;
-			let actionButtons: Array<{ label: string; formAction?: string }> = [];
+			actionButtons: Array<{ label: string; formAction?: string }> = [];
 
 			if (resolvedAction) {
 				({ bodyTitle, bodyText } = getAlreadyProcessedText(language, resolvedAction));
@@ -519,21 +591,41 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 			);
 
 			const recordedText = getActionRecordedText(language, action);
+			let replacedNtfyNotification = false;
 
 			try {
-				await deleteNtfyNotificationSequence(record.group.userId, record.group.sequenceId);
+				replacedNtfyNotification = await replaceNtfyNotificationSequence({
+					userId: record.group.userId,
+					sequenceId: record.group.sequenceId,
+					language,
+					title: record.group.title,
+					originalMessage: record.group.message,
+					action,
+					viewUrl: record.viewUrl,
+				});
 			} catch (error) {
 				request.log.warn(
 					buildNotificationActionLogContext(record, { requestedAction: action, error }),
-					"[NotificationActions] Failed to delete ntfy notification after resolved action"
+					"[NotificationActions] Failed to replace ntfy notification after resolved action"
 				);
+			}
+
+			if (!replacedNtfyNotification) {
 				try {
-					await clearNtfyNotificationSequence(record.group.userId, record.group.sequenceId);
-				} catch (clearError) {
+					await deleteNtfyNotificationSequence(record.group.userId, record.group.sequenceId);
+				} catch (error) {
 					request.log.warn(
-						buildNotificationActionLogContext(record, { requestedAction: action, error: clearError }),
-						"[NotificationActions] Failed to clear ntfy notification after delete fallback"
+						buildNotificationActionLogContext(record, { requestedAction: action, error }),
+						"[NotificationActions] Failed to delete ntfy notification after resolved action"
 					);
+					try {
+						await clearNtfyNotificationSequence(record.group.userId, record.group.sequenceId);
+					} catch (clearError) {
+						request.log.warn(
+							buildNotificationActionLogContext(record, { requestedAction: action, error: clearError }),
+							"[NotificationActions] Failed to clear ntfy notification after delete fallback"
+						);
+					}
 				}
 			}
 

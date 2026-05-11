@@ -163,6 +163,59 @@ describe("ReportModal", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
+	it("exports injection refill history with injection unit wording", async () => {
+		const onClose = vi.fn();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				1: {
+					dosesTaken: 0,
+					automaticDosesTaken: 0,
+					dosesSkipped: 0,
+					firstDoseAt: null,
+					lastDoseAt: null,
+					refills: [
+						{
+							packsAdded: 1,
+							loosePillsAdded: 0,
+							quantityAdded: 3,
+							usedPrescription: false,
+							refillDate: "2026-03-04",
+						},
+					],
+				},
+			}),
+		});
+
+		render(
+			<ReportModal
+				isOpen={true}
+				onClose={onClose}
+				medications={[
+					createMedication({
+						packageType: "injection",
+						totalPills: 6,
+						looseTablets: 6,
+					}),
+				]}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole("radio", { name: /report\.formatTxt/i }));
+		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
+
+		await waitFor(() => {
+			expect(URL.createObjectURL).toHaveBeenCalled();
+		});
+
+		const [blob] = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls.at(-1) ?? [];
+		const content = await (blob as Blob).text();
+
+		expect(content).toContain("report.docCurrentStock: 6 common.injections");
+		expect(content).toContain("+3 common.injections");
+		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
 	it("generates printable report when PDF format is selected", async () => {
 		const onClose = vi.fn();
 		const mockWrite = vi.fn();

@@ -7,7 +7,9 @@ export {
 	allowsPillFormSelection,
 	getPackageProfile,
 	isAmountBasedPackageType,
+	isDiscreteCountPackageType,
 	isLiquidContainerPackageType,
+	isPackageAmountPackageType,
 	isTubePackageType,
 	normalizePackageType,
 	PACKAGE_PROFILES,
@@ -15,10 +17,10 @@ export {
 } from "./package-profiles";
 
 import type { PackageType } from "./package-profiles";
-import { isAmountBasedPackageType, isLiquidContainerPackageType, isTubePackageType } from "./package-profiles";
+import { isDiscreteCountPackageType, isPackageAmountPackageType } from "./package-profiles";
 
 // Common medication dose units
-export type DoseUnit = "mg" | "g" | "mcg" | "ml" | "units";
+export type DoseUnit = "mg" | "g" | "mcg" | "ml" | "units" | "puffs" | "injections";
 export type ScheduleMode = "interval" | "weekdays";
 export type WeekdayCode = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -106,6 +108,8 @@ export const DOSE_UNITS: { value: DoseUnit; label: string }[] = [
 	{ value: "mcg", label: "mcg (µg)" },
 	{ value: "ml", label: "ml" },
 	{ value: "units", label: "units" },
+	{ value: "puffs", label: "puffs" },
+	{ value: "injections", label: "injections" },
 ];
 
 export type Blister = {
@@ -406,14 +410,14 @@ type MedLike = Pick<
 
 /** Calculate total pills including stockAdjustment */
 export function getMedTotal(med: MedLike): number {
-	if (med.packageType === "bottle") {
+	if (isDiscreteCountPackageType(med.packageType)) {
 		return med.looseTablets + (med.stockAdjustment ?? 0);
 	}
 
 	// Amount-based package types use the same canonical base field as the backend:
 	// looseTablets stores the current amount baseline, while totalPills is kept in sync
 	// for compatibility and UI helpers.
-	if (isAmountBasedPackageType(med.packageType)) {
+	if (isPackageAmountPackageType(med.packageType)) {
 		const baseStock = med.looseTablets ?? med.totalPills ?? 0;
 		return baseStock + (med.stockAdjustment ?? 0);
 	}
@@ -423,12 +427,12 @@ export function getMedTotal(med: MedLike): number {
 
 /** Get the base package size (without stockAdjustment) */
 export function getPackageSize(med: MedLike): number {
-	if (med.packageType === "bottle") {
+	if (isDiscreteCountPackageType(med.packageType)) {
 		return med.totalPills ?? med.looseTablets;
 	}
 
 	// Amount-based package types reuse the backend canonical amount baseline.
-	if (isAmountBasedPackageType(med.packageType)) {
+	if (isPackageAmountPackageType(med.packageType)) {
 		return med.looseTablets ?? med.totalPills ?? 0;
 	}
 	// For blister type, calculate from packs + loose
@@ -437,7 +441,7 @@ export function getPackageSize(med: MedLike): number {
 
 /** Get the configured structural capacity used for stock display/limits. */
 export function getStockDisplayCapacity(med: MedLike): number {
-	if (isLiquidContainerPackageType(med.packageType) || isTubePackageType(med.packageType)) {
+	if (isPackageAmountPackageType(med.packageType)) {
 		const packageCount = Math.max(1, med.packCount || 1);
 		const packageAmountValue = Number(med.packageAmountValue ?? 0);
 		if (Number.isFinite(packageAmountValue) && packageAmountValue > 0) {

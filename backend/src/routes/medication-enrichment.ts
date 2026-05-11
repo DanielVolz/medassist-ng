@@ -70,7 +70,10 @@ const strengthOptionSchema = {
 		label: { type: "string" },
 		pillWeightMg: { type: "number", nullable: true },
 		doseUnit: {
-			anyOf: [{ type: "string", enum: ["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"] }, { type: "null" }],
+			anyOf: [
+				{ type: "string", enum: ["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs", "injections"] },
+				{ type: "null" },
+			],
 		},
 	},
 } as const;
@@ -80,7 +83,7 @@ const packageOptionSchema = {
 	properties: {
 		label: { type: "string" },
 		description: { type: "string" },
-		packageType: { type: "string", enum: ["blister", "bottle", "tube", "liquid_container"] },
+		packageType: { type: "string", enum: ["blister", "bottle", "tube", "liquid_container", "inhaler", "injection"] },
 		packCount: { type: "integer", minimum: 1 },
 		blistersPerPack: { type: "integer", minimum: 1, nullable: true },
 		pillsPerBlister: { type: "integer", minimum: 1, nullable: true },

@@ -122,6 +122,12 @@ export function PlannerPage() {
 	const canSendNotification =
 		(settings.emailEnabled && settings.notificationEmail) || (settings.shoutrrrEnabled && settings.shoutrrrUrl);
 
+	const getDiscreteUnitLabel = (packageType: string | undefined, count: number): string => {
+		if (packageType === "inhaler") return count === 1 ? t("common.puff") : t("common.puffs");
+		if (packageType === "injection") return count === 1 ? t("common.injection") : t("common.injections");
+		return count === 1 ? t("common.pill") : t("common.pills");
+	};
+
 	const getUsageUnitLabel = (medicationId: number, count: number): string => {
 		const med = meds.find((m) => m.id === medicationId);
 		if (isLiquidContainerPackageType(med?.packageType)) {
@@ -130,7 +136,7 @@ export function PlannerPage() {
 		if (isTubePackageType(med?.packageType)) {
 			return med?.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
 		}
-		return count === 1 ? t("common.pill") : t("common.pills");
+		return getDiscreteUnitLabel(med?.packageType, count);
 	};
 
 	const getAvailableLabel = (medicationId: number, loosePills: number): string => {
@@ -143,7 +149,7 @@ export function PlannerPage() {
 			const unit = med?.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
 			return `${roundedLoose} ${unit}`;
 		}
-		return `${roundedLoose} ${roundedLoose === 1 ? t("common.pill") : t("common.pills")}`;
+		return `${roundedLoose} ${getDiscreteUnitLabel(med?.packageType, roundedLoose)}`;
 	};
 
 	async function sendPlannerNotification() {

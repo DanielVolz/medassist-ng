@@ -435,6 +435,12 @@ export function DashboardPage() {
 		setObsoleteCandidate(null);
 	};
 
+	const getDiscreteUnitLabel = (packageType: string | undefined, count: number) => {
+		if (packageType === "inhaler") return count === 1 ? t("common.puff") : t("common.puffs");
+		if (packageType === "injection") return count === 1 ? t("common.injection") : t("common.injections");
+		return count === 1 ? t("common.pill") : t("common.pills");
+	};
+
 	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
 		isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid"
 			? t("form.packageAmountUnitMl")
@@ -449,7 +455,11 @@ export function DashboardPage() {
 		if (isTubePackageType(med?.packageType)) {
 			return `${formatNumber(medsLeft)} ${getTubeStockUnitLabel()}`;
 		}
-		return t("table.pillsCount", { count: Math.round(medsLeft) });
+		const roundedCount = Math.round(medsLeft);
+		if (med?.packageType !== "inhaler" && med?.packageType !== "injection") {
+			return t("table.pillsCount", { count: roundedCount });
+		}
+		return `${roundedCount} ${getDiscreteUnitLabel(med?.packageType, roundedCount)}`;
 	};
 
 	const formatLiquidUsageLabel = (usage: number, unit: IntakeUnit | null | undefined): string => {
@@ -477,7 +487,7 @@ export function DashboardPage() {
 		if (isTubePackageType(med?.packageType)) {
 			return `${usage} ${getTubeUnitLabel(med, usage)}`;
 		}
-		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+		return `${usage} ${getDiscreteUnitLabel(med?.packageType, usage)}`;
 	};
 
 	const formatTotalUsageLabel = (
@@ -510,6 +520,9 @@ export function DashboardPage() {
 		}
 		if (isTubePackageType(med?.packageType)) {
 			return `${total} ${getTubeUnitLabel(med, total)}`;
+		}
+		if (med?.packageType === "inhaler" || med?.packageType === "injection") {
+			return `${total} ${getDiscreteUnitLabel(med.packageType, total)}`;
 		}
 		return t("common.pillsTotal", { count: total });
 	};
@@ -551,7 +564,7 @@ export function DashboardPage() {
 			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: tubeUnit });
 		}
 
-		const pillUnit = dailyTotal === 1 ? t("common.pill") : t("common.pills");
+		const pillUnit = getDiscreteUnitLabel(med.packageType, dailyTotal);
 		return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: pillUnit });
 	};
 

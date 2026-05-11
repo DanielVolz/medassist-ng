@@ -388,18 +388,28 @@ describe("useRefill", () => {
 		});
 	});
 
-	it("resets bottle stock correction payload to zero base fields", async () => {
+	it.each([
+		{ id: 9, packageType: "bottle" as const, name: "Zero Reset Bottle", totalPills: 100, looseTablets: 20 },
+		{ id: 10, packageType: "inhaler" as const, name: "Zero Reset Inhaler", totalPills: 200, looseTablets: 40 },
+		{ id: 11, packageType: "injection" as const, name: "Zero Reset Injection", totalPills: 12, looseTablets: 4 },
+	])("resets $packageType stock correction payload to zero base fields", async ({
+		id,
+		packageType,
+		name,
+		totalPills,
+		looseTablets,
+	}) => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
-		const bottleMed: Medication = {
-			id: 9,
-			name: "Zero Reset Bottle",
-			packageType: "bottle",
+		const med: Medication = {
+			id,
+			name,
+			packageType,
 			packCount: 1,
 			blistersPerPack: 1,
 			pillsPerBlister: 1,
-			totalPills: 100,
-			looseTablets: 20,
+			totalPills,
+			looseTablets,
 			stockAdjustment: 5,
 			takenBy: [],
 			blisters: [{ usage: 1, every: 1, start: "2026-01-31T20:27:00" }],
@@ -410,15 +420,15 @@ describe("useRefill", () => {
 		const { result } = renderHook(() => useRefill());
 
 		act(() => {
-			result.current.openEditStockModal(bottleMed, {
-				all: [{ name: "Zero Reset Bottle", medsLeft: 25, daysLeft: 25 }] as Coverage[],
+			result.current.openEditStockModal(med, {
+				all: [{ name, medsLeft: 25, daysLeft: 25 }] as Coverage[],
 			});
 			result.current.setEditStockFullBlisters(0);
 			result.current.setEditStockPartialBlisterPills(0);
 		});
 
 		await act(async () => {
-			await result.current.submitStockCorrection(9, bottleMed, mockLoadMeds);
+			await result.current.submitStockCorrection(id, med, mockLoadMeds);
 		});
 
 		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];

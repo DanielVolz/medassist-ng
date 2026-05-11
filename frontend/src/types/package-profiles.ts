@@ -1,4 +1,4 @@
-export const PACKAGE_TYPES = ["blister", "bottle", "tube", "liquid_container"] as const;
+export const PACKAGE_TYPES = ["blister", "bottle", "tube", "liquid_container", "inhaler", "injection"] as const;
 
 export type PackageType = (typeof PACKAGE_TYPES)[number];
 
@@ -6,7 +6,7 @@ export type PackageProfile = {
 	value: PackageType;
 	labelKey: string;
 	amountBased: boolean;
-	plannerUnitKind: "pills" | "ml" | "units";
+	plannerUnitKind: "pills" | "ml" | "units" | "puffs" | "injections";
 	allowsPillFormSelection: boolean;
 };
 
@@ -39,6 +39,20 @@ export const PACKAGE_PROFILES: PackageProfile[] = [
 		plannerUnitKind: "ml",
 		allowsPillFormSelection: false,
 	},
+	{
+		value: "inhaler",
+		labelKey: "form.packageTypeInhaler",
+		amountBased: true,
+		plannerUnitKind: "puffs",
+		allowsPillFormSelection: false,
+	},
+	{
+		value: "injection",
+		labelKey: "form.packageTypeInjection",
+		amountBased: true,
+		plannerUnitKind: "injections",
+		allowsPillFormSelection: false,
+	},
 ];
 
 const PACKAGE_TYPE_SET = new Set<string>(PACKAGE_TYPES);
@@ -61,6 +75,16 @@ export function isTubePackageType(packageType?: string | null): boolean {
 
 export function isLiquidContainerPackageType(packageType?: string | null): boolean {
 	return normalizePackageType(packageType) === "liquid_container";
+}
+
+export function isPackageAmountPackageType(packageType?: string | null): boolean {
+	const normalized = normalizePackageType(packageType);
+	return normalized === "tube" || normalized === "liquid_container";
+}
+
+export function isDiscreteCountPackageType(packageType?: string | null): boolean {
+	const normalized = normalizePackageType(packageType);
+	return normalized === "bottle" || normalized === "inhaler" || normalized === "injection";
 }
 
 export function isAmountBasedPackageType(packageType?: string | null): boolean {

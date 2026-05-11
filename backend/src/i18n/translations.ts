@@ -181,6 +181,8 @@ type TranslationKeys = {
 	common: {
 		pill: string;
 		pills: string;
+		puffs: string;
+		injections: string;
 		units: string;
 		ml: string;
 		blister: string;
@@ -211,7 +213,7 @@ const translations: Record<Language, TranslationKeys> = {
 			descriptionLow: "The following medications are running low and should be reordered soon:",
 			tableHeaders: {
 				medication: "Medication",
-				pills: "Pills",
+				pills: "Available",
 				days: "Days",
 				runsOut: "Runs Out",
 			},
@@ -305,6 +307,8 @@ const translations: Record<Language, TranslationKeys> = {
 		common: {
 			pill: "pill",
 			pills: "pills",
+			puffs: "puffs",
+			injections: "injections",
 			units: "units",
 			ml: "ml",
 			blister: "blister",
@@ -333,7 +337,7 @@ const translations: Record<Language, TranslationKeys> = {
 			descriptionLow: "Die folgenden Medikamente werden knapp und sollten bald nachbestellt werden:",
 			tableHeaders: {
 				medication: "Medikament",
-				pills: "Tabletten",
+				pills: "Verfuegbar",
 				days: "Tage",
 				runsOut: "Aufgebraucht",
 			},
@@ -430,6 +434,8 @@ const translations: Record<Language, TranslationKeys> = {
 		common: {
 			pill: "Tablette",
 			pills: "Tabletten",
+			puffs: "Hübe",
+			injections: "Injektionen",
 			units: "Einheiten",
 			ml: "ml",
 			blister: "Blister",

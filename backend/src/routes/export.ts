@@ -62,7 +62,7 @@ const medicationExportSchema = z.object({
 	lifecycleCategory: z.enum(["refill_when_empty", "treatment_period"]).default("refill_when_empty"),
 	inventory: inventorySchema,
 	pillWeightMg: z.number().int().nullable().optional(),
-	doseUnit: z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"]).default("mg"),
+	doseUnit: z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs", "injections"]).default("mg"),
 	schedules: z.array(scheduleSchema).default([]),
 	medicationStartDate: z.string().nullable().optional(),
 	medicationEndDate: z.string().nullable().optional(),
@@ -560,7 +560,11 @@ export async function exportRoutes(app: FastifyInstance) {
 					const packageType = normalizePackageType(medication?.packageType);
 					const pillsPerPack = Math.max(1, (medication?.blistersPerPack ?? 1) * (medication?.pillsPerBlister ?? 1));
 					const quantityAdded =
-						packageType === "bottle" || packageType === "tube" || packageType === "liquid_container"
+						packageType === "bottle" ||
+						packageType === "inhaler" ||
+						packageType === "injection" ||
+						packageType === "tube" ||
+						packageType === "liquid_container"
 							? (refill.loosePillsAdded ?? 0)
 							: (refill.packsAdded ?? 0) * pillsPerPack + (refill.loosePillsAdded ?? 0);
 

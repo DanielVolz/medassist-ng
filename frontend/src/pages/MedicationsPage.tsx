@@ -39,7 +39,9 @@ import {
 	getPackageProfile,
 	getPackageSize,
 	isAmountBasedPackageType,
+	isDiscreteCountPackageType,
 	isLiquidContainerPackageType,
+	isPackageAmountPackageType,
 	isTubePackageType,
 	normalizePackageType,
 	PACKAGE_PROFILES,
@@ -65,7 +67,16 @@ const OPEN_FDA_PACKAGE_CODE_PATTERN = /\s*\(([0-9A-Z]{4,}(?:-[0-9A-Z]{1,})+)\)\s
 
 function normalizeMedicationEnrichmentDoseUnit(unit: MedicationEnrichmentStrengthOption["doseUnit"]): DoseUnit | null {
 	if (unit === "IU") return "units";
-	if (unit === "mg" || unit === "g" || unit === "mcg" || unit === "ml" || unit === "units") return unit;
+	if (
+		unit === "mg" ||
+		unit === "g" ||
+		unit === "mcg" ||
+		unit === "ml" ||
+		unit === "units" ||
+		unit === "puffs" ||
+		unit === "injections"
+	)
+		return unit;
 	return null;
 }
 
@@ -768,6 +779,15 @@ export function MedicationsPage() {
 		return form.pillForm === "tablet";
 	}, [form.packageType, form.medicationForm, form.pillForm]);
 
+	const getDiscreteUnitLabel = useCallback(
+		(packageType: PackageType, count: number) => {
+			if (packageType === "inhaler") return count === 1 ? t("common.puff") : t("common.puffs");
+			if (packageType === "injection") return count === 1 ? t("common.injection") : t("common.injections");
+			return count === 1 ? t("common.pill") : t("common.pills");
+		},
+		[t]
+	);
+
 	const getUsageLabel = useCallback(
 		(intakeUnit: "ml" | "tsp" | "tbsp") => {
 			if (isLiquidContainerPackageType(form.packageType)) {
@@ -778,16 +798,29 @@ export function MedicationsPage() {
 			if (isTubePackageType(form.packageType)) {
 				return form.medicationForm === "liquid" ? t("form.blisters.usageMl") : t("form.blisters.usageApplication");
 			}
+			if (form.packageType === "inhaler") return t("common.puffs");
+			if (form.packageType === "injection") return t("common.injections");
 			if (form.pillForm === "capsule") return t("form.blisters.usageCapsules");
 			return t("form.blisters.usageTablets");
 		},
 		[form.packageType, form.medicationForm, form.pillForm, t]
 	);
 
-	const usesAmountLabels = isTubePackageType(form.packageType) || isLiquidContainerPackageType(form.packageType);
+	const usesAmountLabels = isPackageAmountPackageType(form.packageType);
+	const usesCountLabels = isDiscreteCountPackageType(form.packageType) && form.packageType !== "bottle";
 	const totalCapacityLabel = usesAmountLabels ? t("form.totalAmount") : t("form.totalCapacity");
-	const currentStockLabel = usesAmountLabels ? t("form.currentAmount") : t("form.currentPills");
-	const totalLabel = usesAmountLabels ? t("form.totalAmountLabel") : t("form.total");
+	let currentStockLabel = t("form.currentPills");
+	if (usesAmountLabels) {
+		currentStockLabel = t("form.currentAmount");
+	} else if (usesCountLabels) {
+		currentStockLabel = t("form.currentStockCount");
+	}
+	let totalLabel = t("form.total");
+	if (usesAmountLabels) {
+		totalLabel = t("form.totalAmountLabel");
+	} else if (usesCountLabels) {
+		totalLabel = t("form.totalCount");
+	}
 	const weekdayOptions = useMemo(
 		() =>
 			WEEKDAY_CODES.map((day) => ({
@@ -818,9 +851,9 @@ export function MedicationsPage() {
 		(med: Medication) => {
 			if (isTubePackageType(med.packageType)) return "";
 			if (isLiquidContainerPackageType(med.packageType)) return " ml";
-			return ` ${getPackageSize(med) === 1 ? t("common.pill") : t("common.pills")}`;
+			return ` ${getDiscreteUnitLabel(normalizePackageType(med.packageType), getPackageSize(med))}`;
 		},
-		[t]
+		[getDiscreteUnitLabel]
 	);
 
 	const getMedicationUsageUnitLabel = useCallback(
@@ -829,10 +862,9 @@ export function MedicationsPage() {
 				return med.medicationForm === "liquid" ? "ml" : t("form.blisters.usageApplication");
 			}
 			if (isLiquidContainerPackageType(med.packageType)) return "ml";
-			if (usage === 1) return t("common.pill");
-			return t("common.pills");
+			return getDiscreteUnitLabel(normalizePackageType(med.packageType), usage);
 		},
-		[t]
+		[getDiscreteUnitLabel, t]
 	);
 
 	const clearMedicationLinkParams = useCallback(() => {
@@ -889,7 +921,7 @@ export function MedicationsPage() {
 			setReadOnlyView(false);
 			pendingAction();
 		} else if (source === "mobile-edit" && showEditModal) {
-			clearEditMedIdParam();
+			clearMedicationLinkParams();
 			setShowEditModal(false);
 			resetForm();
 			resetMedicationEnrichment();
@@ -1059,6 +1091,8 @@ export function MedicationsPage() {
 				form.medicationForm === "liquid" || form.medicationForm === "topical" ? form.medicationForm : "topical";
 		} else if (isLiquidContainerPackageType(form.packageType)) {
 			derivedMedicationForm = "liquid";
+		} else if (isDiscreteCountPackageType(form.packageType)) {
+			derivedMedicationForm = "tablet";
 		} else {
 			derivedMedicationForm = form.pillForm;
 		}
@@ -1079,8 +1113,7 @@ export function MedicationsPage() {
 			genericName: form.genericName.trim() || null,
 			takenBy: form.takenBy.length > 0 ? form.takenBy : [],
 			medicationForm: derivedMedicationForm,
-			pillForm:
-				isTubePackageType(form.packageType) || isLiquidContainerPackageType(form.packageType) ? null : form.pillForm,
+			pillForm: allowsPillFormSelection(form.packageType) ? form.pillForm : null,
 			lifecycleCategory: form.lifecycleCategory,
 			packageType: normalizePackageType(form.packageType),
 			packCount: isTubePackageType(form.packageType)

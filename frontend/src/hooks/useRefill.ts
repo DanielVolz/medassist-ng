@@ -4,7 +4,9 @@ import {
 	getMedTotal,
 	getPackageSize,
 	isAmountBasedPackageType,
+	isDiscreteCountPackageType,
 	isLiquidContainerPackageType,
+	isPackageAmountPackageType,
 	isTubePackageType,
 } from "../types";
 
@@ -172,6 +174,8 @@ export function useRefill(): UseRefillReturn {
 				const isTubePackage = isTubePackageType(selectedMed.packageType);
 				const isLiquidPackage = isLiquidContainerPackageType(selectedMed.packageType);
 				const isAmountPackage = isAmountBasedPackageType(selectedMed.packageType);
+				const isPackageAmountPackage = isPackageAmountPackageType(selectedMed.packageType);
+				const isDiscreteCountPackage = isDiscreteCountPackageType(selectedMed.packageType);
 				const liquidAmountPerBottle = Math.max(
 					1,
 					Number.isFinite(Number(selectedMed.packageAmountValue)) && Number(selectedMed.packageAmountValue) > 0
@@ -228,9 +232,9 @@ export function useRefill(): UseRefillReturn {
 				let baseTotal: number;
 				if (isLiquidPackage) {
 					baseTotal = liquidStructuralMax;
-				} else if (selectedMed.packageType === "bottle") {
+				} else if (isDiscreteCountPackage) {
 					baseTotal = selectedMed.looseTablets;
-				} else if (isAmountPackage) {
+				} else if (isPackageAmountPackage) {
 					baseTotal = getPackageSize(selectedMed);
 				} else {
 					baseTotal = structuralMax + finalLoosePills; // blister: base = sealed capacity + NEW loose pills
@@ -253,10 +257,10 @@ export function useRefill(): UseRefillReturn {
 					patchBody.stockAdjustment = 0;
 					patchBody.packCount = 0;
 					patchBody.looseTablets = 0;
-					if (selectedMed.packageType === "bottle" || isAmountPackage) {
+					if (isDiscreteCountPackage || isAmountPackage) {
 						patchBody.totalPills = 0;
 					}
-					if (isTubePackage || isLiquidPackage) {
+					if (isPackageAmountPackage) {
 						patchBody.packageAmountValue = 0;
 					}
 				} else if (isTubePackage) {
@@ -316,6 +320,7 @@ export function useRefill(): UseRefillReturn {
 		if (!selectedMed) return;
 		setEditStockMedication(selectedMed);
 		const isAmountPackage = isAmountBasedPackageType(selectedMed.packageType);
+		const isDiscreteCountPackage = isDiscreteCountPackageType(selectedMed.packageType);
 		// Get current stock from coverage (after consumption)
 		const medCoverage = coverage.all.find((c) => c.name === selectedMed.name);
 		const dbTotal = getMedTotal(selectedMed);
@@ -338,7 +343,7 @@ export function useRefill(): UseRefillReturn {
 		// Pre-fill with current values
 		setEditStockFullBlisters(fullBlisters);
 		setEditStockPartialBlisterPills(partialPills);
-		setEditStockLoosePills(isAmountPackage ? 0 : knownLoose);
+		setEditStockLoosePills(isAmountPackage || isDiscreteCountPackage ? 0 : knownLoose);
 		setShowEditStockModal(true);
 		window.history.pushState({ modal: "editStock" }, "");
 	}, []);

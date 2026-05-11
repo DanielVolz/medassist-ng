@@ -79,6 +79,10 @@ function getPackageContainerTranslationKey(packageType: MedicationEnrichmentPack
 			return "form.enrichment.packageContainers.blister";
 		case "bottle":
 			return "form.enrichment.packageContainers.bottle";
+			case "inhaler":
+				return "form.enrichment.packageContainers.inhaler";
+			case "injection":
+				return "form.enrichment.packageContainers.injection";
 		case "liquid_container":
 			return "form.enrichment.packageContainers.liquidContainer";
 		case "tube":

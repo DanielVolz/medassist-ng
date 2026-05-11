@@ -126,13 +126,13 @@ Share your medication schedule with others via a public link.
 - Manual entry remains available
 
 ### Smart Inventory
-- Track exact stock with package profiles (blister, bottle, tube, liquid container)
+- Track exact stock with package profiles (blister, bottle, tube, liquid container, inhaler, injection)
 - Display remaining days of supply
 - Automatic calculation based on intake schedule
-- Manual stock correction supports profile-specific stock semantics (sealed units + loose stock for blister, amount-based stock for bottle/tube/liquid)
+- Manual stock correction supports profile-specific stock semantics (sealed units + loose stock for blister, discrete capacity/current stock for bottle, inhaler, and injection, amount-based stock for tube and liquid container)
 
 ### Medication Refill
-- One-click refill with pack or loose pill options
+- One-click refill with package-aware refill options for discrete containers and amount-based packages
 - Complete refill history per medication
 - Automatic stock updates after each refill
 

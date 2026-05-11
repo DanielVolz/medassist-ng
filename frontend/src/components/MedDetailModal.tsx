@@ -206,6 +206,11 @@ export function MedDetailModal({
 	if (!selectedMed) return null;
 	const isAmountPackage =
 		isTubePackageType(selectedMed.packageType) || isLiquidContainerPackageType(selectedMed.packageType);
+	const getDiscreteUnitLabel = (value: number) => {
+		if (selectedMed.packageType === "inhaler") return value === 1 ? t("common.puff") : t("common.puffs");
+		if (selectedMed.packageType === "injection") return value === 1 ? t("common.injection") : t("common.injections");
+		return value === 1 ? t("common.pill") : t("common.pills");
+	};
 	const amountUnitLabel =
 		isLiquidContainerPackageType(selectedMed.packageType) || selectedMed.medicationForm === "liquid"
 			? t("form.packageAmountUnitMl")
@@ -266,7 +271,7 @@ export function MedDetailModal({
 		if (isTubePackageType(selectedMed.packageType)) {
 			return `${usage} ${t("form.blisters.applications", { count: Math.abs(usage) })}`;
 		}
-		return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+		return `${usage} ${getDiscreteUnitLabel(usage)}`;
 	};
 	const scheduleIntakes = getMedicationIntakes(selectedMed);
 	const hasAnyIntakeReminder = scheduleIntakes.some((intake) => intake.intakeRemindersEnabled === true);
@@ -694,18 +699,14 @@ export function MedDetailModal({
 										<span>{t("editStock.currentTotal")}:</span>
 										<span>
 											{currentTotal}
-											{isAmountPackage
-												? ` ${stockUnitLabel}`
-												: ` ${currentTotal === 1 ? t("common.pill") : t("common.pills")}`}
+											{isAmountPackage ? ` ${stockUnitLabel}` : ` ${getDiscreteUnitLabel(currentTotal)}`}
 										</span>
 									</div>
 									<div className="summary-row">
 										<span>{t("editStock.newTotal")}:</span>
 										<span>
 											{newTotal}
-											{isAmountPackage
-												? ` ${stockUnitLabel}`
-												: ` ${newTotal === 1 ? t("common.pill") : t("common.pills")}`}
+											{isAmountPackage ? ` ${stockUnitLabel}` : ` ${getDiscreteUnitLabel(newTotal)}`}
 										</span>
 									</div>
 									<div className={`summary-row difference ${differenceClass}`}>
@@ -713,9 +714,7 @@ export function MedDetailModal({
 										<span>
 											{difference > 0 ? "+" : ""}
 											{difference}
-											{isAmountPackage
-												? ` ${stockUnitLabel}`
-												: ` ${Math.abs(difference) === 1 ? t("common.pill") : t("common.pills")}`}
+											{isAmountPackage ? ` ${stockUnitLabel}` : ` ${getDiscreteUnitLabel(Math.abs(difference))}`}
 										</span>
 									</div>
 								</div>
@@ -1106,7 +1105,7 @@ export function MedDetailModal({
 											<span className="refill-amount">
 												{(() => {
 													const total = entry.quantityAdded;
-													return `+${total}${isAmountPackage ? ` ${stockUnitLabel}` : ` ${total === 1 ? t("common.pill") : t("common.pills")}`}`;
+													return `+${total}${isAmountPackage ? ` ${stockUnitLabel}` : ` ${getDiscreteUnitLabel(total)}`}`;
 												})()}
 												{entry.usedPrescription && (
 													<span className="refill-prescription-badge" title={t("refill.viaPrescription")}>
@@ -1314,7 +1313,7 @@ export function MedDetailModal({
 											+{totalRefill}
 											{isAmountPackage
 												? ` ${stockUnitLabel}`
-												: ` ${totalRefill === 1 ? t("common.pill") : t("common.pills")}`}
+												: ` ${getDiscreteUnitLabel(totalRefill)}`}
 										</span>
 									) : null;
 								})()}

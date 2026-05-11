@@ -19,7 +19,7 @@ import {
 	type StockReminderItem as SharedStockReminderItem,
 } from "../services/notifications/builders.js";
 import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "../services/notifications/delivery.js";
-import { escapeHtml, getPlannerUnit, isContainerPackage } from "../services/planner-service.js";
+import { escapeHtml, formatPlannerQuantity, getPlannerUnit, isContainerPackage } from "../services/planner-service.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
@@ -54,6 +54,7 @@ type SendEmailBody = {
 type LowStockItem = {
 	name: string;
 	medsLeft: number;
+	packageType?: string;
 	daysLeft: number | null;
 	depletionDate: string | null;
 	isCritical?: boolean;
@@ -567,11 +568,10 @@ ${getFooterPlain(language)}`;
 					.map((med) => [med.name || med.genericName || "", normalizePackageType(med.packageType)] as const)
 					.filter(([name]) => name.length > 0)
 			);
-			const filteredLowStock = lowStock.filter((item) => {
+			const filteredLowStock = lowStock.flatMap((item) => {
 				const packageType = activeMedicationByName.get(item.name);
-				if (!packageType) return false;
-				if (isTubePackageType(packageType)) return false;
-				return true;
+				if (!packageType || isTubePackageType(packageType)) return [];
+				return [{ ...item, packageType }];
 			});
 			if (filteredLowStock.length === 0) {
 				request.log.warn("[ReminderManual] Stock reminder skipped: no active medications after filtering");
@@ -644,7 +644,7 @@ ${getFooterPlain(language)}`;
 				messageParts.push(`🚨 ${tr.push.criticalSection}:`);
 				criticalMeds.forEach((r) =>
 					messageParts.push(
-						`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
+						`  • ${r.name}: ${formatPlannerQuantity(r.packageType, r.medsLeft, tr)}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
 					)
 				);
 			}
@@ -653,7 +653,7 @@ ${getFooterPlain(language)}`;
 				messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
 				lowStockMeds.forEach((r) =>
 					messageParts.push(
-						`  • ${r.name}: ${t(tr.push.pillsLeft, { count: r.medsLeft })}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
+						`  • ${r.name}: ${formatPlannerQuantity(r.packageType, r.medsLeft, tr)}, ${t(tr.push.daysLeft, { count: r.daysLeft ?? 0 })}`
 					)
 				);
 			}
@@ -734,12 +734,13 @@ ${getFooterPlain(language)}`;
 						const rowBg = isEmpty ? "#fef2f2" : nonEmptyBg;
 						const safeName = escapeHtml(row.name);
 						const safeMedsLeft = Number(row.medsLeft) || 0;
+						const safeQuantity = escapeHtml(formatPlannerQuantity(row.packageType, safeMedsLeft, tr));
 						const safeDaysLeft = Number(row.daysLeft) || 0;
 						const safeDepletionDate = row.depletionDate ? escapeHtml(String(row.depletionDate)) : "-";
 						return `
           <tr style="background: ${rowBg};">
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${safeName}</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${safeMedsLeft}</strong></td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${safeQuantity}</strong></td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${safeDaysLeft}</td>
             <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? `<strong>${tr.stockReminder.now}</strong>` : safeDepletionDate}</td>
           </tr>`;

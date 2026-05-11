@@ -15,8 +15,14 @@ const t = (key: string, options?: Record<string, unknown>): string => {
 			return "pill";
 		case "common.pills":
 			return "pills";
-		case "common.pillsTotal":
-			return `${options?.count ?? 0} pills total`;
+		case "common.puff":
+			return "puff";
+		case "common.puffs":
+			return "puffs";
+		case "common.injection":
+			return "injection";
+		case "common.injections":
+			return "injections";
 		default:
 			return key;
 	}
@@ -31,6 +37,13 @@ describe("schedule formatters", () => {
 	it("formats tube doses as applications by default and ml for liquid forms", () => {
 		expect(formatScheduleDoseUsageLabel({ packageType: "tube" }, 1, t)).toBe("1 application");
 		expect(formatScheduleDoseUsageLabel({ packageType: "tube", medicationForm: "liquid" }, 3, t)).toBe("3 ml");
+	});
+
+	it("formats inhaler and injection doses with package-specific unit wording", () => {
+		expect(formatScheduleDoseUsageLabel({ packageType: "inhaler" }, 1, t)).toBe("1 puff");
+		expect(formatScheduleDoseUsageLabel({ packageType: "inhaler" }, 2, t)).toBe("2 puffs");
+		expect(formatScheduleDoseUsageLabel({ packageType: "injection" }, 1, t)).toBe("1 injection");
+		expect(formatScheduleDoseUsageLabel({ packageType: "injection" }, 3, t)).toBe("3 injections");
 	});
 
 	it("formats liquid totals from dose units and mixed-unit conversion", () => {
@@ -71,6 +84,8 @@ describe("schedule formatters", () => {
 				"tbsp"
 			)
 		).toBe("4 tablespoons 60 ml");
-		expect(formatScheduleTotalUsageLabel({ packageType: "blister" }, 3, t)).toBe("3 pills total");
+		expect(formatScheduleTotalUsageLabel({ packageType: "blister" }, 3, t)).toBe("3 pills");
+		expect(formatScheduleTotalUsageLabel({ packageType: "inhaler" }, 4, t)).toBe("4 puffs");
+		expect(formatScheduleTotalUsageLabel({ packageType: "injection" }, 2, t)).toBe("2 injections");
 	});
 });

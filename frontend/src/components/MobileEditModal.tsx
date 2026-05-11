@@ -24,7 +24,9 @@ import {
 	allowsPillFormSelection,
 	DOSE_UNITS,
 	isAmountBasedPackageType,
+	isDiscreteCountPackageType,
 	isLiquidContainerPackageType,
+	isPackageAmountPackageType,
 	isTubePackageType,
 	PACKAGE_PROFILES,
 } from "../types";
@@ -193,6 +195,15 @@ export function MobileEditModal({
 		return form.pillForm === "tablet";
 	}, [form.packageType, form.medicationForm, form.pillForm]);
 
+	const getDiscreteUnitLabel = useCallback(
+		(count: number) => {
+			if (form.packageType === "inhaler") return count === 1 ? t("common.puff") : t("common.puffs");
+			if (form.packageType === "injection") return count === 1 ? t("common.injection") : t("common.injections");
+			return count === 1 ? t("common.pill") : t("common.pills");
+		},
+		[form.packageType, t]
+	);
+
 	const getUsageLabel = useCallback(
 		(intake: (typeof form.intakes)[number]) => {
 			if (isLiquidContainerPackageType(form.packageType)) {
@@ -203,16 +214,29 @@ export function MobileEditModal({
 			if (isTubePackageType(form.packageType)) {
 				return form.medicationForm === "liquid" ? t("form.blisters.usageMl") : t("form.blisters.usageApplication");
 			}
+			if (form.packageType === "inhaler") return t("common.puffs");
+			if (form.packageType === "injection") return t("common.injections");
 			if (form.pillForm === "capsule") return t("form.blisters.usageCapsules");
 			return t("form.blisters.usageTablets");
 		},
 		[form.packageType, form.medicationForm, form.pillForm, t]
 	);
 
-	const usesAmountLabels = isTubePackageType(form.packageType) || isLiquidContainerPackageType(form.packageType);
+	const usesAmountLabels = isPackageAmountPackageType(form.packageType);
+	const usesCountLabels = isDiscreteCountPackageType(form.packageType) && form.packageType !== "bottle";
 	const totalCapacityLabel = usesAmountLabels ? t("form.totalAmount") : t("form.totalCapacity");
-	const currentStockLabel = usesAmountLabels ? t("form.currentAmount") : t("form.currentPills");
-	const totalLabel = usesAmountLabels ? t("form.totalAmountLabel") : t("form.total");
+	let currentStockLabel = t("form.currentPills");
+	if (usesAmountLabels) {
+		currentStockLabel = t("form.currentAmount");
+	} else if (usesCountLabels) {
+		currentStockLabel = t("form.currentStockCount");
+	}
+	let totalLabel = t("form.total");
+	if (usesAmountLabels) {
+		totalLabel = t("form.totalAmountLabel");
+	} else if (usesCountLabels) {
+		totalLabel = t("form.totalCount");
+	}
 	const weekdayOptions = useMemo(
 		() =>
 			WEEKDAY_CODES.map((day) => ({
@@ -816,7 +840,7 @@ export function MobileEditModal({
 												<div className="stock-total-field">
 													<p className="sub">
 														<strong>{totalLabel}:</strong> {deriveTotalFromForm(form)}
-														{` ${deriveTotalFromForm(form) === 1 ? t("common.pill") : t("common.pills")}`}
+														{` ${getDiscreteUnitLabel(deriveTotalFromForm(form))}`}
 													</p>
 												</div>
 											</div>

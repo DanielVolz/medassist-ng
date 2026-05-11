@@ -1,8 +1,10 @@
 import { getFooterPlain, getTranslations, type Language, t } from "../../i18n/translations.js";
+import { formatPlannerQuantity } from "../planner-service.js";
 
 export type StockReminderItem = {
 	name: string;
 	medsLeft: number;
+	packageType?: string;
 	daysLeft: number | null;
 	depletionDate: string | null;
 	isCritical?: boolean;
@@ -47,7 +49,7 @@ export function buildStockReminderPushNotification(
 		messageParts.push(`🚨 ${tr.push.criticalSection}:`);
 		criticalItems.forEach((item) =>
 			messageParts.push(
-				`  • ${item.name}: ${t(tr.push.pillsLeft, { count: item.medsLeft })}, ${t(tr.push.daysLeft, { count: item.daysLeft ?? 0 })}`
+				`  • ${item.name}: ${formatPlannerQuantity(item.packageType, item.medsLeft, tr)}, ${t(tr.push.daysLeft, { count: item.daysLeft ?? 0 })}`
 			)
 		);
 	}
@@ -56,7 +58,7 @@ export function buildStockReminderPushNotification(
 		messageParts.push(`⚠️ ${tr.push.lowStockSection}:`);
 		lowItems.forEach((item) =>
 			messageParts.push(
-				`  • ${item.name}: ${t(tr.push.pillsLeft, { count: item.medsLeft })}, ${t(tr.push.daysLeft, { count: item.daysLeft ?? 0 })}`
+				`  • ${item.name}: ${formatPlannerQuantity(item.packageType, item.medsLeft, tr)}, ${t(tr.push.daysLeft, { count: item.daysLeft ?? 0 })}`
 			)
 		);
 	}

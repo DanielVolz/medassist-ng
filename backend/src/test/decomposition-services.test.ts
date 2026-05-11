@@ -62,13 +62,17 @@ describe("planner-service decomposition regression", () => {
 	});
 
 	it("maps package type to expected planner units after service extraction", () => {
-		const tr = { common: { units: "units", ml: "ml", pills: "pills" } };
+		const tr = { common: { units: "units", ml: "ml", pills: "pills", puffs: "puffs", injections: "injections" } };
 
 		expect(isContainerPackage("bottle")).toBe(true);
+		expect(isContainerPackage("inhaler")).toBe(true);
+		expect(isContainerPackage("injection")).toBe(true);
 		expect(isContainerPackage("blister")).toBe(false);
 		expect(getPlannerUnit("tube", tr)).toBe("units");
 		expect(getPlannerUnit("liquid_container", tr)).toBe("ml");
 		expect(getPlannerUnit("bottle", tr)).toBe("pills");
+		expect(getPlannerUnit("inhaler", tr)).toBe("puffs");
+		expect(getPlannerUnit("injection", tr)).toBe("injections");
 		expect(getPlannerUnit("blister", tr)).toBe("pills");
 	});
 });

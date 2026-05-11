@@ -4,7 +4,9 @@ import type { FieldErrors, FormBlister, FormIntake, FormState, Medication } from
 import {
 	FIELD_LIMITS,
 	isAmountBasedPackageType,
+	isDiscreteCountPackageType,
 	isLiquidContainerPackageType,
+	isPackageAmountPackageType,
 	isTubePackageType,
 	normalizePackageType,
 } from "../types";
@@ -244,7 +246,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		const remainingRefills = Math.min(Math.max(0, med.prescriptionRemainingRefills ?? 0), authorizedRefills);
 		const lowRefillThreshold = Math.min(Math.max(0, med.prescriptionLowRefillThreshold ?? 1), authorizedRefills);
 		const packageType = normalizePackageType(med.packageType);
-		const isTubeOrLiquidPackage = isTubePackageType(packageType) || isLiquidContainerPackageType(packageType);
+		const isTubeOrLiquidPackage = isPackageAmountPackageType(packageType);
 		let normalizedPackCount = String(med.packCount);
 		let normalizedPackageAmountValue = String(med.packageAmountValue ?? 0);
 
@@ -288,6 +290,15 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		} else if (isLiquidContainerPackageType(packageType)) {
 			normalizedPackageAmountUnit = "ml";
 		}
+		let resolvedDoseUnit = med.doseUnit ?? "mg";
+		if (!med.doseUnit) {
+			if (packageType === "inhaler") {
+				resolvedDoseUnit = "puffs";
+			} else if (packageType === "injection") {
+				resolvedDoseUnit = "injections";
+			}
+		}
+
 		let resolvedTotalPills = bottleTotalPills;
 		if (normalizedDerivedTotal != null) {
 			resolvedTotalPills = String(normalizedDerivedTotal);
@@ -310,7 +321,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			totalPills: resolvedTotalPills,
 			looseTablets: normalizedDerivedTotal != null ? String(normalizedDerivedTotal) : String(med.looseTablets),
 			pillWeightMg: med.pillWeightMg ? String(med.pillWeightMg) : "",
-			doseUnit: med.doseUnit ?? "mg",
+			doseUnit: resolvedDoseUnit,
 			medicationStartDate: med.medicationStartDate ?? "",
 			medicationEndDate: med.medicationEndDate ?? "",
 			autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
@@ -373,9 +384,22 @@ export function useMedicationForm(): UseMedicationFormReturn {
 						next.doseUnit = "ml";
 						next.packageAmountUnit = "ml";
 						next.intakes = next.intakes.map((intake) => ({ ...intake, intakeUnit: intake.intakeUnit || "ml" }));
+					} else if (nextPackageType === "inhaler") {
+						next.medicationForm = "tablet";
+						next.pillForm = "tablet";
+						next.lifecycleCategory = "refill_when_empty";
+						next.doseUnit = "puffs";
+					} else if (nextPackageType === "injection") {
+						next.medicationForm = "tablet";
+						next.pillForm = "tablet";
+						next.lifecycleCategory = "refill_when_empty";
+						next.doseUnit = "injections";
 					} else {
 						next.medicationForm = next.pillForm;
 						next.lifecycleCategory = "refill_when_empty";
+						if (next.doseUnit === "puffs" || next.doseUnit === "injections") {
+							next.doseUnit = "mg";
+						}
 					}
 				}
 
@@ -398,6 +422,8 @@ export function useMedicationForm(): UseMedicationFormReturn {
 					next.packCount = "1";
 					next.packageAmountUnit = "g";
 				} else if (isLiquidContainerPackageType(next.packageType)) {
+					next.packageAmountUnit = "ml";
+				} else if (isDiscreteCountPackageType(next.packageType)) {
 					next.packageAmountUnit = "ml";
 				}
 

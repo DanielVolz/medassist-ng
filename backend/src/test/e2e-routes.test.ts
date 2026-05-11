@@ -1962,7 +1962,7 @@ describe("E2E Tests with Real Routes", () => {
 			const refillResponse = await app.inject({
 				method: "POST",
 				url: `/medications/${medId}/refill`,
-				payload: { packsAdded: 1, loosePillsAdded: 0 },
+				payload: { packsAdded: 1, loosePillsAdded: 5, quantityAdded: 5 },
 			});
 
 			expect(refillResponse.statusCode).toBe(200);
@@ -2336,10 +2336,9 @@ describe("E2E Tests with Real Routes", () => {
 			expect(med.stockAdjustment).toBe(0);
 		});
 
-		it("should persist bottle zero reset with packCount 0 and zero totals", async () => {
-			const createResponse = await app.inject({
-				method: "POST",
-				url: "/medications",
+		it.each([
+			{
+				label: "bottle",
 				payload: {
 					name: "Bottle Zero Reset Med",
 					packageType: "bottle",
@@ -2350,6 +2349,40 @@ describe("E2E Tests with Real Routes", () => {
 					looseTablets: 20,
 					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 				},
+			},
+			{
+				label: "inhaler",
+				payload: {
+					name: "Inhaler Zero Reset Med",
+					packageType: "inhaler",
+					doseUnit: "puffs",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					totalPills: 200,
+					looseTablets: 40,
+					blisters: [{ usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			},
+			{
+				label: "injection",
+				payload: {
+					name: "Injection Zero Reset Med",
+					packageType: "injection",
+					doseUnit: "injections",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					totalPills: 12,
+					looseTablets: 4,
+					blisters: [{ usage: 1, every: 7, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			},
+		])("should persist $label zero reset with packCount 0 and zero totals", async ({ payload }) => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload,
 			});
 			expect(createResponse.statusCode).toBe(200);
 			const medId = createResponse.json().id;
@@ -2495,7 +2528,7 @@ describe("E2E Tests with Real Routes", () => {
 			const refillResponse = await app.inject({
 				method: "POST",
 				url: `/medications/${medId}/refill`,
-				payload: { packsAdded: 1, loosePillsAdded: 0 },
+				payload: { packsAdded: 1, loosePillsAdded: 150, quantityAdded: 150 },
 			});
 			expect(refillResponse.statusCode).toBe(200);
 			const refillData = refillResponse.json();
@@ -3125,6 +3158,39 @@ describe("E2E Tests with Real Routes", () => {
 			blisters: [{ usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 		};
 
+		const discreteContainerMedications = [
+			{
+				label: "inhaler",
+				payload: {
+					name: "Asthma Inhaler",
+					packageType: "inhaler",
+					doseUnit: "puffs",
+					packCount: 0,
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					totalPills: 200,
+					looseTablets: 200,
+					blisters: [{ usage: 2, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+				expectedDoseUnit: "puffs",
+			},
+			{
+				label: "injection",
+				payload: {
+					name: "B12 Injection",
+					packageType: "injection",
+					doseUnit: "injections",
+					packCount: 0,
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					totalPills: 12,
+					looseTablets: 12,
+					blisters: [{ usage: 1, every: 7, start: "2025-01-01T08:00:00.000Z" }],
+				},
+				expectedDoseUnit: "injections",
+			},
+		] as const;
+
 		async function expectRefillInvariants({
 			medId,
 			refillData,
@@ -3224,6 +3290,23 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.doseUnit).toBe("ml");
 			expect(data.looseTablets).toBe(180);
 		});
+
+		it.each(discreteContainerMedications)(
+			"should create and return $label type medication",
+			async ({ payload, expectedDoseUnit }) => {
+				const response = await app.inject({
+					method: "POST",
+					url: "/medications",
+					payload,
+				});
+
+				expect(response.statusCode).toBe(200);
+				const data = response.json();
+				expect(data.packageType).toBe(payload.packageType);
+				expect(data.doseUnit).toBe(expectedDoseUnit);
+				expect(data.looseTablets).toBe(payload.looseTablets);
+			}
+		);
 
 		it("should return packageType and ml-based stock semantics in shared schedule for liquid_container", async () => {
 			await app.inject({
@@ -3407,7 +3490,7 @@ describe("E2E Tests with Real Routes", () => {
 					looseTablets: 10,
 					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
 				},
-				refillPayload: { packsAdded: 1, loosePillsAdded: 0 },
+				refillPayload: { packsAdded: 1, loosePillsAdded: 100, quantityAdded: 100 },
 				expectedVisibleStockBeforeRefill: 10,
 				expectedQuantityAdded: 100,
 				expectedResponsePacksAdded: 1,
@@ -3522,7 +3605,7 @@ describe("E2E Tests with Real Routes", () => {
 			const refillResponse = await app.inject({
 				method: "POST",
 				url: `/medications/${medId}/refill`,
-				payload: { packsAdded: 1, loosePillsAdded: 0 },
+				payload: { packsAdded: 1, loosePillsAdded: 80, quantityAdded: 80 },
 			});
 
 			expect(refillResponse.statusCode).toBe(200);
@@ -3602,7 +3685,7 @@ describe("E2E Tests with Real Routes", () => {
 			const refillResponse = await app.inject({
 				method: "POST",
 				url: `/medications/${medId}/refill`,
-				payload: { packsAdded: 1, loosePillsAdded: 0 },
+				payload: { packsAdded: 1, loosePillsAdded: 180, quantityAdded: 180 },
 			});
 
 			expect(refillResponse.statusCode).toBe(200);
@@ -3649,7 +3732,7 @@ describe("E2E Tests with Real Routes", () => {
 			const refillResponse = await app.inject({
 				method: "POST",
 				url: `/medications/${medId}/refill`,
-				payload: { packsAdded: 5, loosePillsAdded: 0 },
+				payload: { packsAdded: 5, loosePillsAdded: 750, quantityAdded: 750 },
 			});
 
 			expect(refillResponse.statusCode).toBe(200);
@@ -3689,7 +3772,7 @@ describe("E2E Tests with Real Routes", () => {
 					prescriptionRemainingRefills: 2,
 					prescriptionLowRefillThreshold: 1,
 				},
-				refillPayload: { packsAdded: 0, loosePillsAdded: 180, usePrescription: true },
+				refillPayload: { packsAdded: 1, loosePillsAdded: 180, quantityAdded: 180, usePrescription: true },
 				expectedVisibleStockBeforeRefill: 180,
 				expectedPacksAdded: 1,
 				expectedLooseAdded: 180,
@@ -3706,7 +3789,7 @@ describe("E2E Tests with Real Routes", () => {
 					prescriptionRemainingRefills: 3,
 					prescriptionLowRefillThreshold: 1,
 				},
-				refillPayload: { packsAdded: 0, loosePillsAdded: 80, usePrescription: true },
+				refillPayload: { packsAdded: 2, loosePillsAdded: 80, quantityAdded: 80, usePrescription: true },
 				expectedVisibleStockBeforeRefill: 80,
 				expectedPacksAdded: 2,
 				expectedLooseAdded: 80,
@@ -3786,7 +3869,7 @@ describe("E2E Tests with Real Routes", () => {
 			const refillResponse = await app.inject({
 				method: "POST",
 				url: `/medications/${medId}/refill`,
-				payload: { packsAdded: 1, loosePillsAdded: 0 },
+				payload: { packsAdded: 1, loosePillsAdded: 40, quantityAdded: 40 },
 			});
 
 			expect(refillResponse.statusCode).toBe(200);

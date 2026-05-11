@@ -1,5 +1,5 @@
 import type { IntakeUnit } from "../../types";
-import { allowsPillFormSelection, isLiquidContainerPackageType, isTubePackageType } from "../../types";
+import { isLiquidContainerPackageType, isTubePackageType } from "../../types";
 import { formatNumber } from "../../utils/formatters";
 import { convertLiquidUsageToMl, getLiquidCountUnitLabel } from "../../utils/intake-units";
 
@@ -27,6 +27,12 @@ function getTubeUnitLabel(med: MedicationLike, value: number, t: Translate): str
 	return t("form.blisters.applications", { count: Math.abs(value) });
 }
 
+function getDiscreteUnitLabel(med: MedicationLike, value: number, t: Translate): string {
+	if (med?.packageType === "inhaler") return value === 1 ? t("common.puff") : t("common.puffs");
+	if (med?.packageType === "injection") return value === 1 ? t("common.injection") : t("common.injections");
+	return value === 1 ? t("common.pill") : t("common.pills");
+}
+
 export function formatScheduleDoseUsageLabel(
 	med: MedicationLike,
 	usage: number,
@@ -41,7 +47,7 @@ export function formatScheduleDoseUsageLabel(
 		return `${usage} ${getTubeUnitLabel(med, usage, t)}`;
 	}
 
-	return `${usage} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+	return `${usage} ${getDiscreteUnitLabel(med, usage, t)}`;
 }
 
 export function formatScheduleTotalUsageLabel(
@@ -77,9 +83,5 @@ export function formatScheduleTotalUsageLabel(
 		return `${total} ${getTubeUnitLabel(med, total, t)}`;
 	}
 
-	if (allowsPillFormSelection(med?.packageType)) {
-		return t("common.pillsTotal", { count: total });
-	}
-
-	return t("common.pillsTotal", { count: total });
+	return `${total} ${getDiscreteUnitLabel(med, total, t)}`;
 }

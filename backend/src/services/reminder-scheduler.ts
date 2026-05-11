@@ -38,6 +38,7 @@ import {
 } from "./notifications/builders.js";
 import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "./notifications/delivery.js";
 import { loadReminderState, saveReminderState, updateUserReminderSentTime } from "./notifications/state.js";
+import { formatPlannerQuantity } from "./planner-service.js";
 
 export { getReminderState, updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
 
@@ -108,6 +109,7 @@ function releaseReminderSendLock(lockFilePath: string | null): void {
 type LowStockItem = {
 	name: string;
 	medsLeft: number;
+	packageType?: string;
 	daysLeft: number | null;
 	depletionDate: string | null;
 	isCritical: boolean;
@@ -309,6 +311,7 @@ async function getMedicationsNeedingReminder(
 			lowStock.push({
 				name: getMedicationDisplayName({ id: row.id, name: row.name, genericName: row.genericName }),
 				medsLeft: currentPills,
+				packageType,
 				daysLeft,
 				depletionDate,
 				isCritical,
@@ -432,10 +435,11 @@ async function sendReminderEmail(
 			const statusIcon = isEmpty ? "🚨" : nonEmptyIcon;
 			const nonEmptyBg = isCritical ? "#fff7ed" : "white";
 			const rowBg = isEmpty ? "#fef2f2" : nonEmptyBg;
+			const quantityText = formatPlannerQuantity(row.packageType, row.medsLeft, tr);
 			return `
       <tr style="background: ${rowBg};">
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${statusIcon} ${row.name}</td>
-        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${row.medsLeft}</strong></td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap; ${isEmpty ? "color: #dc2626; font-weight: 600;" : ""}"><strong>${quantityText}</strong></td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${row.daysLeft ?? 0}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; white-space: nowrap;">${isEmpty ? `<strong>${tr.stockReminder.now ?? "-"}</strong>` : (row.depletionDate ?? "-")}</td>
       </tr>`;
@@ -479,7 +483,7 @@ async function sendReminderEmail(
 
 ${tr.stockReminder.description}
 
-${lowStock.map((r) => `${r.name}: ${r.medsLeft} ${tr.common.pills}, ${r.daysLeft ?? 0} ${tr.common.days}, ${tr.stockReminder.tableHeaders.runsOut}: ${r.depletionDate ?? tr.common.soon}`).join("\n")}
+${lowStock.map((r) => `${r.name}: ${formatPlannerQuantity(r.packageType, r.medsLeft, tr)}, ${r.daysLeft ?? 0} ${tr.common.days}, ${tr.stockReminder.tableHeaders.runsOut}: ${r.depletionDate ?? tr.common.soon}`).join("\n")}
 
 ---
 ${getFooterPlain(language)}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyNote}` : ""}`;

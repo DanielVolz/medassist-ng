@@ -199,6 +199,24 @@ describe("useMedicationForm", () => {
 		expect(result.current.form.packageAmountUnit).toBe("g");
 	});
 
+	it.each([
+		{ packageType: "inhaler" as const, expectedDoseUnit: "puffs" },
+		{ packageType: "injection" as const, expectedDoseUnit: "injections" },
+	])("enforces discrete container defaults when packageType is $packageType", ({ packageType, expectedDoseUnit }) => {
+		const { result } = renderHook(() => useMedicationForm());
+
+		act(() => {
+			result.current.handleValueChange("packageType", packageType);
+		});
+
+		expect(result.current.form.packageType).toBe(packageType);
+		expect(result.current.form.medicationForm).toBe("tablet");
+		expect(result.current.form.pillForm).toBe("tablet");
+		expect(result.current.form.lifecycleCategory).toBe("refill_when_empty");
+		expect(result.current.form.doseUnit).toBe(expectedDoseUnit);
+		expect(result.current.form.packageAmountUnit).toBe("ml");
+	});
+
 	it("normalizes legacy tube records to grams in startEdit", () => {
 		const { result } = renderHook(() => useMedicationForm());
 		const openEditModal = vi.fn();
@@ -226,6 +244,39 @@ describe("useMedicationForm", () => {
 		expect(result.current.form.packageType).toBe("tube");
 		expect(result.current.form.packageAmountUnit).toBe("g");
 	});
+
+	it.each([
+		{ packageType: "inhaler" as const, totalPills: 200, looseTablets: 120, expectedDoseUnit: "puffs" },
+		{ packageType: "injection" as const, totalPills: 12, looseTablets: 6, expectedDoseUnit: "injections" },
+	])(
+		"assigns $expectedDoseUnit when editing $packageType records without a stored dose unit",
+		({ packageType, totalPills, looseTablets, expectedDoseUnit }) => {
+			const { result } = renderHook(() => useMedicationForm());
+			const openEditModal = vi.fn();
+			Object.defineProperty(window, "innerWidth", { value: 1024, writable: true });
+
+			const med: Medication = {
+				id: 13,
+				name: `${packageType} med`,
+				takenBy: [],
+				packageType,
+				packCount: 0,
+				blistersPerPack: 1,
+				pillsPerBlister: 1,
+				totalPills,
+				looseTablets,
+				blisters: [{ usage: 1, every: 1, start: "2026-01-01T08:00:00.000Z" }],
+				updatedAt: null,
+			};
+
+			act(() => {
+				result.current.startEdit(med, openEditModal);
+			});
+
+			expect(result.current.form.packageType).toBe(packageType);
+			expect(result.current.form.doseUnit).toBe(expectedDoseUnit);
+		}
+	);
 
 	it("adds, edits and removes blister rows", () => {
 		const { result } = renderHook(() => useMedicationForm());

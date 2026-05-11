@@ -42,6 +42,12 @@ export function UserFilterModal({
 		);
 	};
 
+	const getDiscreteUnitLabel = (med: Medication, count: number): string => {
+		if (med.packageType === "inhaler") return count === 1 ? t("common.puff") : t("common.puffs");
+		if (med.packageType === "injection") return count === 1 ? t("common.injection") : t("common.injections");
+		return count === 1 ? t("common.pill") : t("common.pills");
+	};
+
 	const formatIntakeUsageLabel = (med: Medication, usage: number, intakeUnit?: IntakeUnit | null): string => {
 		if (isLiquidMedication(med)) {
 			return `${formatNumber(usage)} ${getLiquidCountUnitLabel(intakeUnit, usage, t)}`;
@@ -49,7 +55,7 @@ export function UserFilterModal({
 		if (isTubePackageType(med.packageType)) {
 			return `${formatNumber(usage)} ${t("form.blisters.applications", { count: usage })}`;
 		}
-		return `${formatNumber(usage)} ${usage !== 1 ? t("common.pills") : t("common.pill")}`;
+		return `${formatNumber(usage)} ${getDiscreteUnitLabel(med, usage)}`;
 	};
 
 	const formatStockSummaryLabel = (med: Medication, currentStock: number, packageSize: number): string => {
@@ -59,7 +65,7 @@ export function UserFilterModal({
 		if (isTubePackageType(med.packageType)) {
 			return `${formatNumber(currentStock)}/${formatNumber(packageSize)} ${t("form.packageAmountUnitG")}`;
 		}
-		return `${formatNumber(currentStock)}/${formatNumber(packageSize)} ${packageSize === 1 ? t("common.pill") : t("common.pills")}`;
+		return `${formatNumber(currentStock)}/${formatNumber(packageSize)} ${getDiscreteUnitLabel(med, packageSize)}`;
 	};
 
 	useEscapeKey(!!selectedUser, onClose);

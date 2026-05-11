@@ -24,6 +24,7 @@ import {
 } from "../utils/openapi-route-standards.js";
 import {
 	isAmountBasedPackageType,
+	isDiscreteCountPackageType,
 	isLiquidContainerPackageType,
 	isTubePackageType,
 	normalizePackageType,
@@ -67,7 +68,7 @@ const packageTypeSchema = z.enum(PACKAGE_TYPES).default("blister");
 const medicationFormSchema = z.enum(["capsule", "tablet", "liquid", "topical"]).default("tablet");
 const pillFormSchema = z.enum(["capsule", "tablet"]);
 const lifecycleCategorySchema = z.enum(["refill_when_empty", "treatment_period"]).default("refill_when_empty");
-const doseUnitSchema = z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"]).default("mg");
+const doseUnitSchema = z.enum(["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs", "injections"]).default("mg");
 const medicationStartDateSchema = z
 	.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()])
 	.optional();
@@ -264,7 +265,7 @@ const medicationBodyOpenApiSchema = {
 		totalPills: { type: ["integer", "null"], minimum: 1 },
 		looseTablets: { type: "integer", minimum: 0 },
 		pillWeightMg: { type: ["number", "null"], minimum: 0 },
-		doseUnit: { type: "string", enum: ["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs"] },
+		doseUnit: { type: "string", enum: ["mg", "g", "mcg", "ml", "IU", "units", "drops", "puffs", "injections"] },
 		medicationStartDate: {
 			anyOf: [{ type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" }, { type: "null" }, { const: "" }],
 		},
@@ -1201,7 +1202,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 			const packageType = normalizePackageType(existing.packageType);
 			const allowsAmountBaseUpdate = isTubePackageType(packageType) || isLiquidContainerPackageType(packageType);
-			const allowsBottleCapacityUpdate = packageType === "bottle";
+			const allowsDiscreteCapacityUpdate = isDiscreteCountPackageType(packageType);
 			if (allowsAmountBaseUpdate) {
 				const normalizedAmountBase = looseTablets ?? totalPills;
 				if (normalizedAmountBase !== undefined) {
@@ -1210,7 +1211,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				}
 				if (packageAmountValue !== undefined) updateFields.packageAmountValue = packageAmountValue;
 			}
-			if (allowsBottleCapacityUpdate && totalPills !== undefined) {
+			if (allowsDiscreteCapacityUpdate && totalPills !== undefined) {
 				updateFields.totalPills = totalPills;
 			}
 			if (packCount !== undefined) updateFields.packCount = packCount;

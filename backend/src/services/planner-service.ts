@@ -48,10 +48,20 @@ export function isContainerPackage(packageType?: string): boolean {
 
 export function getPlannerUnit(
 	packageType: string | undefined,
-	tr: { common: { units: string; ml: string; pills: string } }
+	tr: { common: { units: string; ml: string; pills: string; puffs?: string; injections?: string } }
 ): string {
 	const unitKind = getPlannerUnitKind(packageType);
 	if (unitKind === "units") return tr.common.units;
 	if (unitKind === "ml") return tr.common.ml;
+	if (unitKind === "puffs") return tr.common.puffs ?? tr.common.pills;
+	if (unitKind === "injections") return tr.common.injections ?? tr.common.pills;
 	return tr.common.pills;
+}
+
+export function formatPlannerQuantity(
+	packageType: string | undefined,
+	count: number,
+	tr: { common: { units: string; ml: string; pills: string; puffs?: string; injections?: string } }
+): string {
+	return `${count} ${getPlannerUnit(packageType, tr)}`;
 }

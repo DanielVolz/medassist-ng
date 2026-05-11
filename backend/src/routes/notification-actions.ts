@@ -423,7 +423,7 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 			const resolvedAction = normalizeNotificationAction(record.group.resolvedAction);
 			let bodyTitle: string;
 			let bodyText: string;
-			actionButtons: Array<{ label: string; formAction?: string }> = [];
+			let actionButtons: Array<{ label: string; formAction?: string }> = [];
 
 			if (resolvedAction) {
 				({ bodyTitle, bodyText } = getAlreadyProcessedText(language, resolvedAction));

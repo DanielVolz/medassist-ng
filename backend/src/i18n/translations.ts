@@ -109,6 +109,8 @@ type TranslationKeys = {
 		stockTitle: string;
 		stockTitleMultiple: string;
 		intakeTitle: string;
+		intakeTakenConfirmation: string;
+		intakeSkippedConfirmation: string;
 		pillsLeft: string;
 		daysLeft: string;
 		pillsAt: string;
@@ -234,6 +236,8 @@ const translations: Record<Language, TranslationKeys> = {
 			stockTitle: "MedAssist-ng: 1 Medication Running Critically Low",
 			stockTitleMultiple: "MedAssist-ng: {count} Medications Running Critically Low",
 			intakeTitle: "💊 Reminder: Medication intake in {minutes} min",
+			intakeTakenConfirmation: "✅ This dose was marked as taken.",
+			intakeSkippedConfirmation: "⏭️ This intake was marked as skipped.",
 			pillsLeft: "{count} pills",
 			daysLeft: "{count} days left",
 			pillsAt: "{count} pills at {time}",
@@ -355,6 +359,8 @@ const translations: Record<Language, TranslationKeys> = {
 			stockTitle: "MedAssist-ng: 1 Medikament kritisch niedrig",
 			stockTitleMultiple: "MedAssist-ng: {count} Medikamente kritisch niedrig",
 			intakeTitle: "💊 Erinnerung: Medikamenteneinnahme in {minutes} Min.",
+			intakeTakenConfirmation: "✅ Diese Einnahme wurde als genommen markiert.",
+			intakeSkippedConfirmation: "⏭️ Diese Einnahme wurde als übersprungen markiert.",
 			pillsLeft: "{count} Tabletten",
 			daysLeft: "{count} Tage übrig",
 			pillsAt: "{count} Tabletten um {time}",

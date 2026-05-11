@@ -342,7 +342,7 @@ describe("notification action routes", () => {
 		});
 	});
 
-	it("deletes the original ntfy notification after a successful action", async () => {
+	it("replaces the original ntfy notification after a successful action with a view-only confirmation", async () => {
 		const userId = await createUser("notification-route-ntfy-delete");
 		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic", {
@@ -350,7 +350,7 @@ describe("notification action routes", () => {
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
 		});
 		const { takenToken, context } = await seedContext({ userId, doseId: "5-0-1736064000000" });
-		fetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve("") });
+		fetchMock.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: "ntfy-msg-2" }) });
 
 		const response = await app.inject({
 			method: "POST",
@@ -361,19 +361,31 @@ describe("notification action routes", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 
 		const [targetUrl, requestInit] = fetchMock.mock.calls[0] ?? [];
-		expect(targetUrl).toBe(`https://ntfy.example.com/medassist/${context.sequenceId}`);
+		expect(targetUrl).toBe("https://ntfy.example.com/medassist");
 		expect(requestInit).toEqual(
 			expect.objectContaining({
-				method: "DELETE",
+				method: "POST",
+				body: "Take your medication now\n\n✅ This dose was marked as taken.",
 				redirect: "error",
 				headers: expect.objectContaining({
 					Authorization: expect.stringMatching(/^Basic /),
+					"X-Sequence-ID": context.sequenceId,
 				}),
 			})
 		);
+
+		const actionHeader = String((requestInit as { headers?: Record<string, string> }).headers?.Actions ?? "[]");
+		expect(JSON.parse(actionHeader)).toEqual([
+			{
+				action: "view",
+				label: "View",
+				url: context.viewUrl,
+				clear: false,
+			},
+		]);
 	});
 
-	it("deletes the original ntfy notification after a skip action", async () => {
+	it("replaces the original ntfy notification after a skip action with a view-only confirmation", async () => {
 		const userId = await createUser("notification-route-ntfy-skip-delete");
 		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic", {
@@ -381,7 +393,7 @@ describe("notification action routes", () => {
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
 		});
 		const { skipToken, context } = await seedContext({ userId, doseId: "5-0-1736064000000" });
-		fetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve("") });
+		fetchMock.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: "ntfy-msg-3" }) });
 
 		const response = await app.inject({
 			method: "POST",
@@ -392,19 +404,21 @@ describe("notification action routes", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 
 		const [targetUrl, requestInit] = fetchMock.mock.calls[0] ?? [];
-		expect(targetUrl).toBe(`https://ntfy.example.com/medassist/${context.sequenceId}`);
+		expect(targetUrl).toBe("https://ntfy.example.com/medassist");
 		expect(requestInit).toEqual(
 			expect.objectContaining({
-				method: "DELETE",
+				method: "POST",
+				body: "Take your medication now\n\n⏭️ This intake was marked as skipped.",
 				redirect: "error",
 				headers: expect.objectContaining({
 					Authorization: expect.stringMatching(/^Basic /),
+					"X-Sequence-ID": context.sequenceId,
 				}),
 			})
 		);
 	});
 
-	it("warns when ntfy delete and fallback clear both fail", async () => {
+	it("warns when ntfy replacement, delete, and fallback clear all fail", async () => {
 		const userId = await createUser("notification-route-ntfy-delete-warn");
 		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic", {
@@ -412,6 +426,7 @@ describe("notification action routes", () => {
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
 		});
 		const { takenToken } = await seedContext({ userId, doseId: "5-0-1736064000000" });
+		fetchMock.mockResolvedValueOnce({ ok: false, status: 500, text: () => Promise.resolve("publish failed") });
 		fetchMock.mockResolvedValueOnce({ ok: false, status: 500, text: () => Promise.resolve("upstream down") });
 		fetchMock.mockResolvedValueOnce({ ok: false, status: 404, text: () => Promise.resolve("not found") });
 
@@ -421,7 +436,11 @@ describe("notification action routes", () => {
 		});
 
 		expect(response.statusCode).toBe(200);
-		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(app.log.warn).toHaveBeenCalledWith(
+			expect.objectContaining({ requestedAction: "taken" }),
+			expect.stringContaining("Failed to replace ntfy notification after resolved action")
+		);
 		expect(app.log.warn).toHaveBeenCalledWith(
 			expect.objectContaining({ requestedAction: "taken" }),
 			expect.stringContaining("Failed to delete ntfy notification after resolved action")
@@ -432,7 +451,7 @@ describe("notification action routes", () => {
 		);
 	});
 
-	it("falls back to clear when deleting the ntfy notification fails", async () => {
+	it("falls back to clear when ntfy replacement and delete both fail", async () => {
 		const userId = await createUser("notification-route-ntfy-delete-clear-fallback");
 		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic", {
@@ -440,6 +459,7 @@ describe("notification action routes", () => {
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
 		});
 		const { takenToken, context } = await seedContext({ userId, doseId: "5-0-1736064000000" });
+		fetchMock.mockResolvedValueOnce({ ok: false, status: 500, text: () => Promise.resolve("publish failed") });
 		fetchMock.mockResolvedValueOnce({ ok: false, status: 404, text: () => Promise.resolve("missing") });
 		fetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve("") });
 
@@ -449,9 +469,9 @@ describe("notification action routes", () => {
 		});
 
 		expect(response.statusCode).toBe(200);
-		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 
-		const [clearUrl, clearInit] = fetchMock.mock.calls[1] ?? [];
+		const [clearUrl, clearInit] = fetchMock.mock.calls[2] ?? [];
 		expect(clearUrl).toBe(`https://ntfy.example.com/medassist/${context.sequenceId}/clear`);
 		expect(clearInit).toEqual(
 			expect.objectContaining({

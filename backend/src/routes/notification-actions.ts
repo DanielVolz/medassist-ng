@@ -213,10 +213,10 @@ async function replaceNtfyNotificationSequence(options: {
 	originalMessage: string;
 	action: NotificationMutationAction;
 	viewUrl: string | null;
-}): Promise<boolean> {
+}): Promise<{ replaced: boolean; providerMessageId?: string }> {
 	const normalizedSequenceId = options.sequenceId.trim();
 	if (normalizedSequenceId.length === 0) {
-		return false;
+		return { replaced: false };
 	}
 
 	const [settings] = await db
@@ -225,12 +225,12 @@ async function replaceNtfyNotificationSequence(options: {
 		.where(eq(userSettings.userId, options.userId));
 
 	if (!settings?.shoutrrrEnabled || !settings.shoutrrrUrl) {
-		return false;
+		return { replaced: false };
 	}
 
 	const sanitized = sanitizeNotificationUrl(settings.shoutrrrUrl);
 	if ("error" in sanitized || !sanitized.isNtfy) {
-		return false;
+		return { replaced: false };
 	}
 
 	const labels = getNotificationActionLabels(options.language);
@@ -247,7 +247,7 @@ async function replaceNtfyNotificationSequence(options: {
 		throw new Error(result.error ?? "Failed to replace ntfy notification");
 	}
 
-	return true;
+	return { replaced: true, providerMessageId: result.providerMessageId };
 }
 
 function renderPage(options: {
@@ -585,9 +585,10 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 
 			const recordedText = getActionRecordedText(language, action);
 			let replacedNtfyNotification = false;
+			const previousNtfyMessageId = record.group.ntfyOriginalMessageId.trim();
 
 			try {
-				replacedNtfyNotification = await replaceNtfyNotificationSequence({
+				const replacementResult = await replaceNtfyNotificationSequence({
 					userId: record.group.userId,
 					sequenceId: record.group.sequenceId,
 					language,
@@ -596,6 +597,33 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 					action,
 					viewUrl: record.viewUrl,
 				});
+				replacedNtfyNotification = replacementResult.replaced;
+
+				if (replacementResult.providerMessageId) {
+					await db
+						.update(notificationActionGroups)
+						.set({ ntfyOriginalMessageId: replacementResult.providerMessageId, updatedAt: new Date() })
+						.where(eq(notificationActionGroups.id, record.group.id));
+				}
+
+				if (
+					replacementResult.replaced &&
+					previousNtfyMessageId.length > 0 &&
+					previousNtfyMessageId !== replacementResult.providerMessageId
+				) {
+					try {
+						await deleteNtfyNotificationSequence(record.group.userId, previousNtfyMessageId);
+					} catch (error) {
+						request.log.warn(
+							buildNotificationActionLogContext(record, {
+								requestedAction: action,
+								originalMessageId: previousNtfyMessageId,
+								error,
+							}),
+							"[NotificationActions] Failed to delete original ntfy notification after replacement"
+						);
+					}
+				}
 			} catch (error) {
 				request.log.warn(
 					buildNotificationActionLogContext(record, { requestedAction: action, error }),

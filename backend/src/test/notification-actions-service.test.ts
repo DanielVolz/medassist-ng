@@ -39,6 +39,11 @@ function extractToken(url: string): string {
 	return url.split("/").at(-1) ?? "";
 }
 
+type ActionTokenRow = {
+	kind: string | null;
+	token_hash: string | null;
+};
+
 async function clearTables() {
 	await testClient.execute("DELETE FROM notification_action_tokens");
 	await testClient.execute("DELETE FROM notification_action_groups");
@@ -254,10 +259,10 @@ describe("notification-actions-service", () => {
 			args: [firstGroupId],
 		});
 		expect(secondTokenRows.rows).toHaveLength(3);
-		expect(secondTokenRows.rows.map((row) => row.kind)).toEqual(["respond", "skip", "taken"]);
+		expect(secondTokenRows.rows.map((row: ActionTokenRow) => row.kind)).toEqual(["respond", "skip", "taken"]);
 
-		const firstTokenHashes = new Set(firstTokenRows.rows.map((row) => String(row.token_hash)));
-		const secondTokenHashes = new Set(secondTokenRows.rows.map((row) => String(row.token_hash)));
+		const firstTokenHashes = new Set(firstTokenRows.rows.map((row: ActionTokenRow) => String(row.token_hash)));
+		const secondTokenHashes = new Set(secondTokenRows.rows.map((row: ActionTokenRow) => String(row.token_hash)));
 		expect(secondTokenHashes.size).toBe(3);
 		expect([...secondTokenHashes].every((tokenHash) => !firstTokenHashes.has(tokenHash))).toBe(true);
 

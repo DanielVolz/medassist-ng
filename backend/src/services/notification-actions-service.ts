@@ -149,6 +149,10 @@ async function createActionTokens(groupId: number): Promise<Record<ActiveTokenKi
 	);
 }
 
+async function resetActionTokens(groupId: number): Promise<void> {
+	await db.delete(notificationActionTokens).where(eq(notificationActionTokens.groupId, groupId));
+}
+
 export async function createNotificationActionContext(input: {
 	userId: number;
 	title: string;
@@ -198,21 +202,47 @@ export async function createNotificationActionContext(input: {
 		);
 
 	if (!group) {
-		[group] = await db
-			.insert(notificationActionGroups)
-			.values({
-				userId: input.userId,
-				groupKey,
-				sequenceId,
-				doseIdsJson: JSON.stringify(uniqueDoseIds),
-				title: input.title,
-				message: input.message,
-				language: input.language,
-				scheduledFor: input.scheduledFor,
-				expiresAt,
-				updatedAt: now,
-			})
-			.returning();
+		const [existingGroup] = await db
+			.select()
+			.from(notificationActionGroups)
+			.where(eq(notificationActionGroups.groupKey, groupKey));
+
+		if (existingGroup) {
+			await resetActionTokens(existingGroup.id);
+			[group] = await db
+				.update(notificationActionGroups)
+				.set({
+					sequenceId,
+					ntfyOriginalMessageId: "",
+					doseIdsJson: JSON.stringify(uniqueDoseIds),
+					title: input.title,
+					message: input.message,
+					language: input.language,
+					scheduledFor: input.scheduledFor,
+					expiresAt,
+					resolvedAction: null,
+					resolvedAt: null,
+					updatedAt: now,
+				})
+				.where(eq(notificationActionGroups.id, existingGroup.id))
+				.returning();
+		} else {
+			[group] = await db
+				.insert(notificationActionGroups)
+				.values({
+					userId: input.userId,
+					groupKey,
+					sequenceId,
+					doseIdsJson: JSON.stringify(uniqueDoseIds),
+					title: input.title,
+					message: input.message,
+					language: input.language,
+					scheduledFor: input.scheduledFor,
+					expiresAt,
+					updatedAt: now,
+				})
+				.returning();
+		}
 	}
 
 	const tokens = await createActionTokens(group.id);

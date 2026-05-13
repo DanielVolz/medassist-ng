@@ -39,6 +39,11 @@ function extractToken(url: string): string {
 	return url.split("/").at(-1) ?? "";
 }
 
+type ActionTokenRow = {
+	kind: string | null;
+	token_hash: string | null;
+};
+
 async function clearTables() {
 	await testClient.execute("DELETE FROM notification_action_tokens");
 	await testClient.execute("DELETE FROM notification_action_groups");
@@ -179,6 +184,97 @@ describe("notification-actions-service", () => {
 
 		const tokens = await testClient.execute("SELECT COUNT(*) AS count FROM notification_action_tokens");
 		expect(Number(tokens.rows[0].count)).toBe(6);
+	});
+
+	it("reactivates a resolved group with the same key instead of inserting a duplicate", async () => {
+		const userId = await createUser("notify-actions-reactivate");
+		const scheduledFor = new Date("2026-01-05T08:00:00.000Z");
+		const doseIds = ["9-1-1736064000000", "9-0-1736064000000"];
+
+		const first = await createNotificationActionContext({
+			userId,
+			title: "Reminder",
+			message: "Take your medication now",
+			doseIds,
+			scheduledFor,
+			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
+			language: "en",
+		});
+
+		expect(first).toMatchObject({
+			groupId: expect.any(Number),
+			respondUrl: expect.stringContaining("/api/notification-actions/"),
+			sequenceId: expect.stringMatching(/^medassist-/),
+			viewUrl: "https://app.example.com/dashboard?day=2026-01-05&dose=9-0-1736064000000",
+		});
+
+		const firstGroupId = first!.groupId!;
+		const firstSequenceId = first!.sequenceId!;
+		const firstRespondToken = extractToken(first!.respondUrl!);
+		const firstTokenRows = await testClient.execute({
+			sql: "SELECT kind, token_hash FROM notification_action_tokens WHERE group_id = ? ORDER BY kind ASC",
+			args: [firstGroupId],
+		});
+		expect(firstTokenRows.rows).toHaveLength(3);
+
+		await testClient.execute({
+			sql: "UPDATE notification_action_groups SET resolved_action = 'taken', resolved_at = ?, ntfy_original_message_id = 'old-message-id' WHERE id = ?",
+			args: [new Date(), firstGroupId],
+		});
+
+		const second = await createNotificationActionContext({
+			userId,
+			title: "Reminder",
+			message: "Take your medication now",
+			doseIds,
+			scheduledFor,
+			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
+			language: "en",
+		});
+
+		expect(second).toMatchObject({
+			groupId: firstGroupId,
+			respondUrl: expect.stringContaining("/api/notification-actions/"),
+			sequenceId: expect.stringMatching(/^medassist-/),
+			viewUrl: "https://app.example.com/dashboard?day=2026-01-05&dose=9-0-1736064000000",
+		});
+		expect(second?.sequenceId).toBe(firstSequenceId);
+
+		const groups = await testClient.execute(
+			"SELECT id, sequence_id, resolved_action, resolved_at, ntfy_original_message_id FROM notification_action_groups"
+		);
+		expect(groups.rows).toHaveLength(1);
+		expect(groups.rows[0]).toEqual(
+			expect.objectContaining({
+				id: firstGroupId,
+				sequence_id: second?.sequenceId,
+				resolved_action: null,
+				resolved_at: null,
+				ntfy_original_message_id: "",
+			})
+		);
+
+		const secondTokenRows = await testClient.execute({
+			sql: "SELECT kind, token_hash FROM notification_action_tokens WHERE group_id = ? ORDER BY kind ASC",
+			args: [firstGroupId],
+		});
+		expect(secondTokenRows.rows).toHaveLength(3);
+		expect(secondTokenRows.rows.map((row: ActionTokenRow) => row.kind)).toEqual(["respond", "skip", "taken"]);
+
+		const firstTokenHashes = new Set(firstTokenRows.rows.map((row: ActionTokenRow) => String(row.token_hash)));
+		const secondTokenHashes = new Set(secondTokenRows.rows.map((row: ActionTokenRow) => String(row.token_hash)));
+		expect(secondTokenHashes.size).toBe(3);
+		expect([...secondTokenHashes].every((tokenHash) => !firstTokenHashes.has(tokenHash))).toBe(true);
+
+		expect(await getNotificationActionTokenRecord(firstRespondToken)).toBeNull();
+
+		const secondRespondToken = extractToken(second!.respondUrl!);
+		const secondRespondRecord = await getNotificationActionTokenRecord(secondRespondToken);
+		expect(secondRespondRecord).toMatchObject({
+			doseIds: ["9-0-1736064000000", "9-1-1736064000000"],
+			viewUrl: "https://app.example.com/dashboard?day=2026-01-05&dose=9-0-1736064000000",
+		});
+		expect(secondRespondRecord?.group.id).toBe(firstGroupId);
 	});
 
 	it("prefers a non-local CORS origin when PUBLIC_APP_URL points to localhost", async () => {

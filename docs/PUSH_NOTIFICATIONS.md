@@ -6,7 +6,11 @@ MedAssist uses [Shoutrrr](https://containrrr.dev/shoutrrr/) for push notificatio
 
 Recommended provider: `ntfy`.
 
-Use `ntfy` when you want the best-supported MedAssist notification flow, especially for intake reminders with direct actions such as `Take`, `Skip`, and `View`.
+Use `ntfy` when you want the best-supported MedAssist notification flow, especially for intake reminders with actions such as `Take`, `Skip`, and `View`.
+
+For `ntfy`, MedAssist publishes native action buttons so `Take` and `Skip` are executed directly from the notification. The browser-based confirmation flow remains the fallback path for other Shoutrrr targets that do not support native action buttons.
+
+When an ntfy intake action succeeds, MedAssist publishes the confirmation as the updated notification state and removes the outdated actionable ntfy entry using the original ntfy message ID when available, so duplicate reminder entries do not accumulate unnecessarily.
 
 ## Supported URL Schemes
 

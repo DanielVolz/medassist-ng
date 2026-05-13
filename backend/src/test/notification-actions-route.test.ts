@@ -350,7 +350,12 @@ describe("notification action routes", () => {
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
 		});
 		const { takenToken, context } = await seedContext({ userId, doseId: "5-0-1736064000000" });
+		await testClient.execute({
+			sql: "UPDATE notification_action_groups SET ntfy_original_message_id = ? WHERE user_id = ?",
+			args: ["ntfy-msg-1", userId],
+		});
 		fetchMock.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: "ntfy-msg-2" }) });
+		fetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve("") });
 
 		const response = await app.inject({
 			method: "POST",
@@ -358,7 +363,7 @@ describe("notification action routes", () => {
 		});
 
 		expect(response.statusCode).toBe(200);
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 
 		const [targetUrl, requestInit] = fetchMock.mock.calls[0] ?? [];
 		expect(targetUrl).toBe("https://ntfy.example.com/medassist");
@@ -383,6 +388,21 @@ describe("notification action routes", () => {
 				clear: false,
 			},
 		]);
+
+		const [deleteUrl, deleteInit] = fetchMock.mock.calls[1] ?? [];
+		expect(deleteUrl).toBe("https://ntfy.example.com/medassist/ntfy-msg-1");
+		expect(deleteInit).toEqual(
+			expect.objectContaining({
+				method: "DELETE",
+				headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Basic /) }),
+			})
+		);
+
+		const groupRow = await testClient.execute({
+			sql: "SELECT ntfy_original_message_id FROM notification_action_groups WHERE user_id = ?",
+			args: [userId],
+		});
+		expect(groupRow.rows).toEqual([expect.objectContaining({ ntfy_original_message_id: "ntfy-msg-2" })]);
 	});
 
 	it("replaces the original ntfy notification after a skip action with a view-only confirmation", async () => {
@@ -393,7 +413,12 @@ describe("notification action routes", () => {
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
 		});
 		const { skipToken, context } = await seedContext({ userId, doseId: "5-0-1736064000000" });
+		await testClient.execute({
+			sql: "UPDATE notification_action_groups SET ntfy_original_message_id = ? WHERE user_id = ?",
+			args: ["ntfy-msg-7", userId],
+		});
 		fetchMock.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: "ntfy-msg-3" }) });
+		fetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve("") });
 
 		const response = await app.inject({
 			method: "POST",
@@ -401,7 +426,7 @@ describe("notification action routes", () => {
 		});
 
 		expect(response.statusCode).toBe(200);
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 
 		const [targetUrl, requestInit] = fetchMock.mock.calls[0] ?? [];
 		expect(targetUrl).toBe("https://ntfy.example.com/medassist");
@@ -416,6 +441,21 @@ describe("notification action routes", () => {
 				}),
 			})
 		);
+
+		const [deleteUrl, deleteInit] = fetchMock.mock.calls[1] ?? [];
+		expect(deleteUrl).toBe("https://ntfy.example.com/medassist/ntfy-msg-7");
+		expect(deleteInit).toEqual(
+			expect.objectContaining({
+				method: "DELETE",
+				headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Basic /) }),
+			})
+		);
+
+		const groupRow = await testClient.execute({
+			sql: "SELECT ntfy_original_message_id FROM notification_action_groups WHERE user_id = ?",
+			args: [userId],
+		});
+		expect(groupRow.rows).toEqual([expect.objectContaining({ ntfy_original_message_id: "ntfy-msg-3" })]);
 	});
 
 	it("warns when ntfy replacement, delete, and fallback clear all fail", async () => {

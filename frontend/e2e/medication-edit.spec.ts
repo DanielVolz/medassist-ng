@@ -33,6 +33,28 @@ async function clickEditMed(page: Page, medName: string): Promise<void> {
 	});
 }
 
+async function openMedicationDetailFromDashboard(page: Page, medName: string) {
+	const overviewTable = page.locator(".dashboard-overview-section .table").first();
+	for (let attempt = 0; attempt < 3; attempt++) {
+		try {
+			await expect(overviewTable).toBeVisible({ timeout: 10000 });
+			const medRow = overviewTable.locator(".table-row").filter({ hasText: medName });
+			await expect(medRow).toBeVisible({ timeout: 10000 });
+			await medRow.click();
+			const modal = page.locator(".modal-content.med-detail-modal");
+			await expect(modal).toBeVisible({ timeout: 5000 });
+			await expect(modal.getByText(medName)).toBeVisible({ timeout: 5000 });
+			return modal;
+		} catch {
+			if (attempt === 2) throw new Error(`Failed to open dashboard medication detail for ${medName}`);
+			await page.reload();
+			await page.waitForLoadState("networkidle");
+		}
+	}
+
+	throw new Error(`Failed to open dashboard medication detail for ${medName}`);
+}
+
 /** Helper: save edit and verify success */
 async function saveEditAndVerify(page: Page, medName: string): Promise<void> {
 	const form = page.locator("form.form-grid:visible").first();
@@ -310,24 +332,107 @@ test.describe("Medication Editing", () => {
 
 		// Find the remind checkbox in the intake row
 		const intakeRow = page.locator(".blister-row").first();
-		const remindCheckbox = intakeRow.locator('input[type="checkbox"]');
+		const remindToggle = intakeRow.locator(".toggle-switch");
+		const remindCheckbox = intakeRow.locator('.toggle-switch input[type="checkbox"]');
 
-		if (await remindCheckbox.isVisible().catch(() => false)) {
-			// Should be unchecked initially
+		await expect(remindCheckbox).not.toBeChecked();
+		await remindToggle.click();
+		await expect(remindCheckbox).toBeChecked();
+
+		await saveEditAndVerify(page, "Reminder Toggle Med");
+
+		// Verify reminder was saved
+		await clickEditMed(page, "Reminder Toggle Med");
+		const savedCheckbox = page.locator(".blister-row").first().locator('.toggle-switch input[type="checkbox"]');
+		await expect(savedCheckbox).toBeChecked();
+	});
+
+	for (const scenario of [
+		{
+			name: "Inhaler Reminder Refill Med",
+			packageType: "inhaler" as const,
+			totalCapacity: 200,
+			currentStock: 120,
+			refillAmount: 30,
+			expectedStock: 150,
+			unitLabel: /puffs?|common\.puffs?/i,
+		},
+		{
+			name: "Injection Reminder Refill Med",
+			packageType: "injection" as const,
+			totalCapacity: 12,
+			currentStock: 4,
+			refillAmount: 3,
+			expectedStock: 7,
+			unitLabel: /injections?|common\.injections?/i,
+		},
+	]) {
+		test(`should persist reminders and refill ${scenario.packageType} stock without drift`, async ({ page }) => {
+			createdMeds.push(
+				await createMedicationViaAPI({
+					name: scenario.name,
+					packageType: scenario.packageType,
+					totalPills: scenario.totalCapacity,
+					looseTablets: scenario.currentStock,
+					intakes: [
+						{
+							usage: 1,
+							every: 1,
+							start: new Date().toISOString().slice(0, 16),
+							intakeRemindersEnabled: false,
+						},
+					],
+				})
+			);
+
+			await navigateTo(page, "/medications");
+			await clickEditMed(page, scenario.name);
+			await page.getByRole("tab", { name: /Schedule/i }).click();
+
+			const intakeRow = page.locator(".blister-row").first();
+			const remindToggle = intakeRow.locator(".toggle-switch");
+			const remindCheckbox = intakeRow.locator('.toggle-switch input[type="checkbox"]');
 			await expect(remindCheckbox).not.toBeChecked();
-
-			// Enable it
-			await remindCheckbox.check();
+			await remindToggle.click();
 			await expect(remindCheckbox).toBeChecked();
 
-			await saveEditAndVerify(page, "Reminder Toggle Med");
+			await saveEditAndVerify(page, scenario.name);
 
-			// Verify reminder was saved
-			await clickEditMed(page, "Reminder Toggle Med");
-			const savedCheckbox = page.locator(".blister-row").first().locator('input[type="checkbox"]');
-			await expect(savedCheckbox).toBeChecked();
-		}
-	});
+			await clickEditMed(page, scenario.name);
+			await page.getByRole("tab", { name: /Schedule/i }).click();
+			await expect(page.locator(".blister-row").first().locator('.toggle-switch input[type="checkbox"]')).toBeChecked();
+
+			await navigateTo(page, "/dashboard");
+			const modal = await openMedicationDetailFromDashboard(page, scenario.name);
+
+			await modal.getByRole("button", { name: /Refill|refill\.button/i }).click();
+			const refillModal = page.locator(".modal-content.refill-modal");
+			await expect(refillModal).toBeVisible({ timeout: 5000 });
+			const refillInput = refillModal.locator('input[type="number"]').first();
+			await refillInput.fill(String(scenario.refillAmount));
+			await expect(refillModal.locator(".refill-preview")).toContainText(`+${scenario.refillAmount}`);
+			await expect(refillModal.locator(".refill-preview")).toContainText(scenario.unitLabel);
+
+			await refillModal.locator(".modal-footer .success").click();
+			await expect(refillModal).not.toBeVisible({ timeout: 10000 });
+
+			const refillHistoryHeader = modal.locator(".med-detail-section h3").filter({
+				hasText: /Refill History|refill\.history/i,
+			});
+			await expect(refillHistoryHeader).toBeVisible({ timeout: 10000 });
+			await refillHistoryHeader.click();
+			const refillAmount = modal.locator(".refill-history-item .refill-amount").first();
+			await expect(refillAmount).toContainText(`+${scenario.refillAmount}`);
+			await expect(refillAmount).toContainText(scenario.unitLabel);
+
+			await page.locator("button.modal-close").click();
+			await expect(modal).not.toBeVisible({ timeout: 5000 });
+
+			await navigateTo(page, "/medications");
+			const medRow = page.locator(".med-row").filter({ hasText: scenario.name });
+			await expect(medRow.locator(".med-total")).toContainText(`${scenario.expectedStock} / ${scenario.totalCapacity}`);
+		});
+	}
 
 	test("should change package type across all supported profiles", async ({ page }) => {
 		createdMeds.push(
@@ -369,12 +474,26 @@ test.describe("Medication Editing", () => {
 		await packageSelect.selectOption("liquid_container");
 		await page.getByRole("tab", { name: /Package/i }).click();
 		await expect(form.getByLabel(/(Package amount|form\.packageAmount)/i)).toBeVisible();
+		await page.getByRole("tab", { name: /General/i }).click();
+
+		// Switch to inhaler
+		await packageSelect.selectOption("inhaler");
+		await page.getByRole("tab", { name: /Package/i }).click();
+		await expect(form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(count\)|form\.totalCount)/i)).toBeVisible();
+		await expect(form.getByLabel(/(Current Stock|form\.currentStockCount)/i)).toBeVisible();
+		await page.getByRole("tab", { name: /General/i }).click();
+
+		// Switch to injection and persist this final state
+		await packageSelect.selectOption("injection");
+		await page.getByRole("tab", { name: /Package/i }).click();
+		await expect(form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(count\)|form\.totalCount)/i)).toBeVisible();
+		await expect(form.getByLabel(/(Current Stock|form\.currentStockCount)/i)).toBeVisible();
 
 		await saveEditAndVerify(page, "PackType Change Med");
 
 		// Verify final package type persisted
 		await clickEditMed(page, "PackType Change Med");
-		await expect(page.locator("select.package-type-select")).toHaveValue("liquid_container");
+		await expect(page.locator("select.package-type-select")).toHaveValue("injection");
 	});
 
 	test("should edit multiple fields at once (name, notes, generic, taken-by)", async ({ page }) => {

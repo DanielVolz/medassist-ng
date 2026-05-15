@@ -26,7 +26,7 @@ async function fillAndSaveMedication(
 	opts: {
 		name: string;
 		genericName?: string;
-		packageType?: "blister" | "bottle" | "tube" | "liquid_container";
+		packageType?: "blister" | "bottle" | "tube" | "liquid_container" | "inhaler" | "injection";
 		packs?: string;
 		blistersPerPack?: string;
 		pillsPerBlister?: string;
@@ -50,12 +50,15 @@ async function fillAndSaveMedication(
 	}
 
 	const packageTypeSelect = form.locator("select.package-type-select");
-	if (opts.packageType === "bottle") {
-		await packageTypeSelect.selectOption("bottle");
+	if (opts.packageType === "bottle" || opts.packageType === "inhaler" || opts.packageType === "injection") {
+		await packageTypeSelect.selectOption(opts.packageType ?? "bottle");
 		await page.getByRole("tab", { name: /Package/i }).click();
 		if (opts.totalCapacity)
-			await form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\))/i).fill(opts.totalCapacity);
-		if (opts.currentPills) await form.getByLabel(/(Current Pills|form\.currentPills)/i).fill(opts.currentPills);
+			await form
+				.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\)|Total \(count\)|form\.totalCount)/i)
+				.fill(opts.totalCapacity);
+		if (opts.currentPills)
+			await form.getByLabel(/(Current Pills|form\.currentPills|Current Stock|form\.currentStockCount)/i).fill(opts.currentPills);
 	} else if (opts.packageType === "tube") {
 		await packageTypeSelect.selectOption("tube");
 		await page.getByRole("tab", { name: /Package/i }).click();
@@ -95,12 +98,12 @@ async function fillAndSaveMedication(
 			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
 		}
 		const row = form.locator(".blister-row").nth(i);
-		await row
-			.getByLabel(
-				/(Usage \((pills|tablets|capsules|ml|applications)\)|form\.blisters\.(usage|usageTablets|usageCapsules|usageMl|usageApplication))/i
-			)
-			.fill(intakes[i].usage);
-		await row.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i).fill(intakes[i].every);
+		const usageField = row.getByRole("textbox", {
+			name: /(Usage|Tablets|Capsules|Applications|Puffs|Injections|Ml|form\.blisters\.usage|common\.(puffs|injections))/i,
+		});
+		const everyField = row.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i);
+		await usageField.fill(intakes[i].usage);
+		await everyField.fill(intakes[i].every);
 	}
 
 	await page.waitForLoadState("networkidle");
@@ -193,6 +196,38 @@ test.describe("Medication CRUD", () => {
 				totalCapacity: "60",
 				currentPills: "45",
 			});
+		});
+
+		test("should create an inhaler medication via the form", async ({ page }) => {
+			await navigateTo(page, "/medications");
+
+			await fillAndSaveMedication(page, {
+				name: "Test Rescue Inhaler",
+				packageType: "inhaler",
+				totalCapacity: "200",
+				currentPills: "120",
+				intakes: [{ usage: "2", every: "1" }],
+			});
+
+			const medRow = page.locator(".med-row").filter({ hasText: "Test Rescue Inhaler" });
+			await expect(medRow.locator(".med-details")).toContainText(/Inhaler|form\.packageTypeInhaler/i);
+			await expect(medRow.locator(".med-total")).toContainText("120 / 200");
+		});
+
+		test("should create an injection medication via the form", async ({ page }) => {
+			await navigateTo(page, "/medications");
+
+			await fillAndSaveMedication(page, {
+				name: "Test Weekly Injection",
+				packageType: "injection",
+				totalCapacity: "12",
+				currentPills: "4",
+				intakes: [{ usage: "1", every: "7" }],
+			});
+
+			const medRow = page.locator(".med-row").filter({ hasText: "Test Weekly Injection" });
+			await expect(medRow.locator(".med-details")).toContainText(/Injection|form\.packageTypeInjection/i);
+			await expect(medRow.locator(".med-total")).toContainText("4 / 12");
 		});
 
 		test("should create medication with multiple intake schedules", async ({ page }) => {

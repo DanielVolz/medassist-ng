@@ -1,9 +1,34 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type APIResponse, type Cookie, expect, test as setup } from "@playwright/test";
+import { type APIResponse, expect, type Page, test as setup } from "@playwright/test";
 import { applyVideoSafetyMode, TEST_USER } from "./fixtures";
 
 const authFile = path.join(import.meta.dirname, ".auth", "user.json");
+
+type StoredAuthCookie = {
+	name: string;
+	value: string;
+	domain: string;
+	path: string;
+	expires: number;
+	httpOnly: boolean;
+	secure: boolean;
+	sameSite: "Strict" | "Lax" | "None";
+};
+
+type BrowserCookie = {
+	name: string;
+	value: string;
+	url: string;
+	expires?: number;
+	httpOnly: boolean;
+	secure: boolean;
+	sameSite: "Strict" | "Lax" | "None";
+};
+
+type StoredAuthState = {
+	cookies?: StoredAuthCookie[];
+};
 
 /**
  * Check if a JWT token is still valid (not expired) without making a
@@ -21,7 +46,7 @@ function isTokenValid(token: string): boolean {
 	}
 }
 
-function toBrowserCookie(setCookieHeader: string, baseURL: string): Cookie | null {
+function toBrowserCookie(setCookieHeader: string, baseURL: string): BrowserCookie | null {
 	const segments = setCookieHeader
 		.split(";")
 		.map((segment) => segment.trim())
@@ -36,7 +61,7 @@ function toBrowserCookie(setCookieHeader: string, baseURL: string): Cookie | nul
 		return null;
 	}
 
-	const cookie: Cookie = {
+	const cookie: BrowserCookie = {
 		name: nameValue.slice(0, separatorIndex),
 		value: nameValue.slice(separatorIndex + 1),
 		url: baseURL,
@@ -90,16 +115,12 @@ function toBrowserCookie(setCookieHeader: string, baseURL: string): Cookie | nul
 	return cookie;
 }
 
-async function syncResponseCookiesToBrowserContext(
-	page: Parameters<Parameters<typeof setup>[0]>[0]["page"],
-	baseURL: string,
-	response: APIResponse
-): Promise<void> {
+async function syncResponseCookiesToBrowserContext(page: Page, baseURL: string, response: APIResponse): Promise<void> {
 	const cookies = response
 		.headersArray()
 		.filter((header) => header.name.toLowerCase() === "set-cookie")
 		.map((header) => toBrowserCookie(header.value, baseURL))
-		.filter((cookie): cookie is Cookie => cookie !== null);
+		.filter((cookie): cookie is BrowserCookie => cookie !== null);
 
 	if (cookies.length > 0) {
 		await page.context().addCookies(cookies);
@@ -120,6 +141,7 @@ async function syncResponseCookiesToBrowserContext(
 setup("authenticate", async ({ page }) => {
 	setup.setTimeout(120000);
 	await applyVideoSafetyMode(page);
+	const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
 
 	// Create .auth directory if it doesn't exist
 	const authDir = path.dirname(authFile);
@@ -130,11 +152,41 @@ setup("authenticate", async ({ page }) => {
 	// ---- 1. Try to reuse an existing auth file (offline check only) ----
 	if (fs.existsSync(authFile)) {
 		try {
-			const saved = JSON.parse(fs.readFileSync(authFile, "utf-8"));
+			const saved = JSON.parse(fs.readFileSync(authFile, "utf-8")) as StoredAuthState;
 			const accessCookie = saved.cookies?.find((c: { name: string }) => c.name === "access_token");
+			const refreshCookie = saved.cookies?.find((c: { name: string }) => c.name === "refresh_token");
+
+			if (saved.cookies?.length) {
+				await page.context().addCookies(saved.cookies);
+			}
+
 			if (accessCookie?.value && isTokenValid(accessCookie.value)) {
-				// Keep going and verify the session online. A JWT can be time-valid but
-				// still rejected by backend token rotation/restart.
+				const hasSavedSession = await page.request
+					.get(`${baseURL}/api/auth/me`)
+					.then((response) => response.ok())
+					.catch(() => false);
+
+				if (hasSavedSession) {
+					await page.context().storageState({ path: authFile });
+					return;
+				}
+			}
+
+			if (refreshCookie?.value) {
+				const refreshResponse = await page.request.post(`${baseURL}/api/auth/refresh`).catch(() => null);
+				if (refreshResponse?.ok()) {
+					await syncResponseCookiesToBrowserContext(page, baseURL, refreshResponse);
+
+					const refreshedSession = await page.request
+						.get(`${baseURL}/api/auth/me`)
+						.then((response) => response.ok())
+						.catch(() => false);
+
+					if (refreshedSession) {
+						await page.context().storageState({ path: authFile });
+						return;
+					}
+				}
 			}
 		} catch {
 			// Invalid file — fall through to regular login
@@ -143,7 +195,6 @@ setup("authenticate", async ({ page }) => {
 
 	// ---- 2. Fast path: already authenticated session ----
 	await page.goto("/");
-	const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
 	let authEnabled = true;
 	let formLoginEnabled = true;
 	let oidcEnabled = false;

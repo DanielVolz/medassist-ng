@@ -303,7 +303,7 @@ export async function createMedicationViaAPI(data: {
 	takenBy?: string[];
 	notes?: string;
 	expiryDate?: string;
-	packageType?: "blister" | "bottle" | "tube" | "liquid_container";
+	packageType?: "blister" | "bottle" | "tube" | "liquid_container" | "inhaler" | "injection";
 	medicationForm?: "capsule" | "tablet" | "liquid" | "topical";
 	packCount?: number;
 	blistersPerPack?: number;
@@ -323,7 +323,12 @@ export async function createMedicationViaAPI(data: {
 	let token = await ensureAuthCookie();
 	const apiBase = await getRuntimeApiBase();
 	const packageType = data.packageType ?? "blister";
-	const isAmountBased = packageType === "bottle" || packageType === "tube" || packageType === "liquid_container";
+	const isAmountBased =
+		packageType === "bottle" ||
+		packageType === "tube" ||
+		packageType === "liquid_container" ||
+		packageType === "inhaler" ||
+		packageType === "injection";
 	let defaultMedicationForm: "capsule" | "tablet" | "liquid" | "topical" = "tablet";
 	if (packageType === "tube") {
 		defaultMedicationForm = "topical";

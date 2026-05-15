@@ -479,14 +479,18 @@ test.describe("Medication Editing", () => {
 		// Switch to inhaler
 		await packageSelect.selectOption("inhaler");
 		await page.getByRole("tab", { name: /Package/i }).click();
-		await expect(form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(count\)|form\.totalCount)/i)).toBeVisible();
+		await expect(
+			form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(count\)|form\.totalCount)/i)
+		).toBeVisible();
 		await expect(form.getByLabel(/(Current Stock|form\.currentStockCount)/i)).toBeVisible();
 		await page.getByRole("tab", { name: /General/i }).click();
 
 		// Switch to injection and persist this final state
 		await packageSelect.selectOption("injection");
 		await page.getByRole("tab", { name: /Package/i }).click();
-		await expect(form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(count\)|form\.totalCount)/i)).toBeVisible();
+		await expect(
+			form.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(count\)|form\.totalCount)/i)
+		).toBeVisible();
 		await expect(form.getByLabel(/(Current Stock|form\.currentStockCount)/i)).toBeVisible();
 
 		await saveEditAndVerify(page, "PackType Change Med");

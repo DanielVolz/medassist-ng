@@ -58,7 +58,9 @@ async function fillAndSaveMedication(
 				.getByLabel(/(Total Capacity|form\.totalCapacity|Total \(pills\)|Total \(count\)|form\.totalCount)/i)
 				.fill(opts.totalCapacity);
 		if (opts.currentPills)
-			await form.getByLabel(/(Current Pills|form\.currentPills|Current Stock|form\.currentStockCount)/i).fill(opts.currentPills);
+			await form
+				.getByLabel(/(Current Pills|form\.currentPills|Current Stock|form\.currentStockCount)/i)
+				.fill(opts.currentPills);
 	} else if (opts.packageType === "tube") {
 		await packageTypeSelect.selectOption("tube");
 		await page.getByRole("tab", { name: /Package/i }).click();

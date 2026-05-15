@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type APIResponse, type Page, expect, test as setup } from "@playwright/test";
+import { type APIResponse, expect, type Page, test as setup } from "@playwright/test";
 import { applyVideoSafetyMode, TEST_USER } from "./fixtures";
 
 const authFile = path.join(import.meta.dirname, ".auth", "user.json");
@@ -115,11 +115,7 @@ function toBrowserCookie(setCookieHeader: string, baseURL: string): BrowserCooki
 	return cookie;
 }
 
-async function syncResponseCookiesToBrowserContext(
-	page: Page,
-	baseURL: string,
-	response: APIResponse
-): Promise<void> {
+async function syncResponseCookiesToBrowserContext(page: Page, baseURL: string, response: APIResponse): Promise<void> {
 	const cookies = response
 		.headersArray()
 		.filter((header) => header.name.toLowerCase() === "set-cookie")

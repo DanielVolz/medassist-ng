@@ -58,7 +58,7 @@ vi.mock("../context", async () => {
 	};
 });
 
-vi.mock("../pages", () => ({
+vi.mock("../pages/DashboardPage", () => ({
 	DashboardPage: () => {
 		const location = useLocation();
 		return (
@@ -68,10 +68,25 @@ vi.mock("../pages", () => ({
 			</div>
 		);
 	},
+}));
+
+vi.mock("../pages/MedicationsPage", () => ({
 	MedicationsPage: () => <div>medications-page</div>,
+}));
+
+vi.mock("../pages/PlannerPage", () => ({
 	PlannerPage: () => <div>planner-page</div>,
+}));
+
+vi.mock("../pages/SchedulePage", () => ({
 	SchedulePage: () => <div>schedule-page</div>,
+}));
+
+vi.mock("../pages/SettingsPage", () => ({
 	SettingsPage: () => <div>settings-page</div>,
+}));
+
+vi.mock("../pages/SharedOverviewPage", () => ({
 	SharedOverviewPage: () => <div>shared-overview-page</div>,
 }));
 
@@ -262,7 +277,7 @@ describe("App", () => {
 		expect(screen.getByText("auth-page")).toBeInTheDocument();
 	});
 
-	it("renders app shell when auth is disabled", () => {
+	it("renders app shell when auth is disabled", async () => {
 		render(
 			<MemoryRouter initialEntries={["/dashboard"]}>
 				<App />
@@ -270,10 +285,10 @@ describe("App", () => {
 		);
 
 		expect(screen.getByText("app-header")).toBeInTheDocument();
-		expect(screen.getByText("dashboard-page")).toBeInTheDocument();
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
 	});
 
-	it("preserves notification query params when redirecting root to dashboard", () => {
+	it("preserves notification query params when redirecting root to dashboard", async () => {
 		const search = "?date=2026-05-06&medId=4332&doseId=4332-0-1778104500000";
 
 		render(
@@ -282,8 +297,8 @@ describe("App", () => {
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText("dashboard-page")).toBeInTheDocument();
-		expect(screen.getByTestId("dashboard-location-search")).toHaveTextContent(search);
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+		expect(await screen.findByTestId("dashboard-location-search")).toHaveTextContent(search);
 	});
 
 	it("renders initializing state when auth state is missing", () => {
@@ -370,14 +385,14 @@ describe("App", () => {
 		expect(shareContextMock.resetShareDialogState).toHaveBeenCalled();
 	});
 
-	it("redirects unknown routes to dashboard", () => {
+	it("redirects unknown routes to dashboard", async () => {
 		render(
 			<MemoryRouter initialEntries={["/unknown-route"]}>
 				<App />
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText("dashboard-page")).toBeInTheDocument();
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
 	});
 
 	it("popstate closes image lightbox before other modals", () => {

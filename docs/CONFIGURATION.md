@@ -11,7 +11,7 @@ Configure MedAssist with environment variables in `.env`. Start from `.env.examp
 | `PORT` | `3000` | Backend API port |
 | `CORS_ORIGINS` | `http://localhost:4174` | Allowed origins for CORS |
 | `TZ` | `Europe/Berlin` | Server default timezone for scheduled reminders |
-| `PUBLIC_APP_URL` | — | Public base URL for notification action links |
+| `PUBLIC_APP_URL` | — | Public base URL for notification action links. Must be reachable by phones, browsers, and notification providers; do not point this to `localhost` or an internal Docker hostname. |
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error`, or `silent` |
 | `RATE_LIMIT_MAX` | `100` | Maximum requests per minute per IP |
 | `OPENAPI_DOCS_ENABLED` | `auto` | Explicitly enable or disable `/docs` and `/docs/json` |
@@ -107,6 +107,8 @@ Reminder timing uses IANA timezones. `TZ` is the server default. Users can overr
 Push notification setup, provider support, and URL examples are documented in [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
 
 Recommended provider: `ntfy`, especially for intake reminders with direct actions.
+
+Notification action links use `PUBLIC_APP_URL` as their base URL. For self-hosted setups, this should normally be your externally reachable HTTPS address, for example `https://med.example.com`.
 
 ## Default User Settings
 

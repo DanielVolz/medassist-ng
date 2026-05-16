@@ -140,8 +140,6 @@ const settingsSchemaBase = z.object({
 	shareMedicationOverview: z.boolean().default(false),
 });
 
-const exportSettingsSchema = settingsSchemaBase.optional();
-
 const importSettingsSchema = settingsSchemaBase
 	.extend({
 		// Accept the removed field from legacy exports so old backups still import,
@@ -297,7 +295,7 @@ function imageToBase64(imageUrl: string | null): string | null {
 
 // Save base64 image to file and return filename
 function base64ToImage(base64: string, medicationId: number): string | null {
-	if (!base64 || !base64.startsWith("data:")) return null;
+	if (!base64.startsWith("data:")) return null;
 
 	try {
 		// Parse data URL: "data:image/jpeg;base64,/9j/4AAQ..."

@@ -25,6 +25,23 @@ When an ntfy intake action succeeds, MedAssist publishes the confirmation as the
 
 Configure push notifications in the app under `Settings -> Push`, or set defaults for new users with environment variables.
 
+Notification action links such as `Take`, `Skip`, and `View` use `PUBLIC_APP_URL` as their base URL. Set this to the public MedAssist URL that the receiving device can actually reach.
+
+Good examples:
+
+```text
+https://med.example.com
+https://medtest.example.com
+```
+
+Bad examples for notification actions:
+
+```text
+http://localhost:3000
+http://backend-dev:3000
+http://192.168.x.x:3000
+```
+
 Push-related default variables:
 
 | Variable | Default | Description |
@@ -73,3 +90,21 @@ telegram://TOKEN@telegram?chats=@your_channel,-1001234567890
 ```
 
 For all supported services and options, see the [Shoutrrr documentation](https://containrrr.dev/shoutrrr/v0.8/services/overview/).
+
+## Troubleshooting
+
+### ntfy `Take` / `Skip` fails with a connection timeout
+
+If the ntfy client shows an error such as `failed to connect to ... port 443`, the failure usually happens before MedAssist can process the action token.
+
+Check these points first:
+
+1. `PUBLIC_APP_URL` points to your real public MedAssist URL, not to `localhost`, a Docker service name, or another internal-only address.
+2. The same URL opens from the same phone and network outside the notification flow.
+3. If the failure only happens on your home Wi-Fi, retry once on mobile data. That strongly helps distinguish an app issue from missing NAT loopback / hairpin routing on the local network.
+
+### ntfy shows an old actionable entry after a successful action
+
+MedAssist updates the notification state after a successful ntfy action and removes the stale actionable entry using the original ntfy message ID when available.
+
+If an outdated actionable entry still remains visible, verify that the action actually reached MedAssist and that your ntfy server accepted both the confirmation publish and the follow-up delete of the original message.

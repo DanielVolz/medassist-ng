@@ -30,6 +30,17 @@ These development overrides are documented here intentionally and are not part o
 
 ```bash
 npm run lint
+npm run check
+npm run build
 cd backend && npm run test:run
 cd frontend && npm run test:run
 ```
+
+Recommended local maintenance preflight before opening or updating a PR:
+
+```bash
+npm run check
+npm run build
+```
+
+Use the root-level commands for full-stack validation when a change spans backend and frontend. Keep using the package-local commands when you are validating only one slice.

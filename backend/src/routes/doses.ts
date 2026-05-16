@@ -6,7 +6,7 @@ import { doseTracking, medications, shareTokens, userSettings } from "../db/sche
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { computeMedicationCurrentStock } from "../services/current-stock.js";
-import { dismissDosesForUser, markDoseTakenForUser } from "../services/dose-tracking-service.js";
+import { markDoseTakenForUser } from "../services/dose-tracking-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	applyOpenApiRouteStandards,

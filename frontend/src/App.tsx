@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
 	AboutModal,
@@ -13,7 +14,17 @@ import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
 import { AppProvider, UnsavedChangesProvider, useAppContext, useShareContext } from "./context";
 import { useScrollLock } from "./hooks/useScrollLock";
-import { DashboardPage, MedicationsPage, PlannerPage, SchedulePage, SettingsPage, SharedOverviewPage } from "./pages";
+
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const MedicationsPage = lazy(() =>
+	import("./pages/MedicationsPage").then((module) => ({ default: module.MedicationsPage }))
+);
+const PlannerPage = lazy(() => import("./pages/PlannerPage").then((module) => ({ default: module.PlannerPage })));
+const SchedulePage = lazy(() => import("./pages/SchedulePage").then((module) => ({ default: module.SchedulePage })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const SharedOverviewPage = lazy(() =>
+	import("./pages/SharedOverviewPage").then((module) => ({ default: module.SharedOverviewPage }))
+);
 
 // Vite injects this at build time from package.json
 declare const __APP_VERSION__: string;
@@ -21,19 +32,27 @@ export const FRONTEND_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_V
 const GITHUB_REPO = "DanielVolz/medassist-ng";
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 
+function RouteLoadingFallback() {
+	const { t } = useTranslation();
+
+	return <div style={{ padding: "1rem", textAlign: "center" }}>{t("common.loading")}</div>;
+}
+
 // =============================================================================
 // Main App Wrapper with Auth
 // =============================================================================
 export default function App() {
 	return (
 		<AuthProvider>
-			<Routes>
-				{/* Public share route - accessible without auth */}
-				<Route path="/share/:token/overview" element={<SharedOverviewPage />} />
-				<Route path="/share/:token" element={<SharedSchedule />} />
-				{/* All other routes go through AppRouter */}
-				<Route path="*" element={<AppRouter />} />
-			</Routes>
+			<Suspense fallback={<RouteLoadingFallback />}>
+				<Routes>
+					{/* Public share route - accessible without auth */}
+					<Route path="/share/:token/overview" element={<SharedOverviewPage />} />
+					<Route path="/share/:token" element={<SharedSchedule />} />
+					{/* All other routes go through AppRouter */}
+					<Route path="*" element={<AppRouter />} />
+				</Routes>
+			</Suspense>
 		</AuthProvider>
 	);
 }
@@ -505,20 +524,22 @@ function AppContent() {
 			{/* About Modal */}
 			<AboutModal isOpen={showAbout} onClose={closeAbout} />
 
-			<Routes>
-				<Route path="/" element={<Navigate to={{ pathname: "/dashboard", search: location.search }} replace />} />
-				<Route path="/dashboard" element={<DashboardPage />} />
+			<Suspense fallback={<RouteLoadingFallback />}>
+				<Routes>
+					<Route path="/" element={<Navigate to={{ pathname: "/dashboard", search: location.search }} replace />} />
+					<Route path="/dashboard" element={<DashboardPage />} />
 
-				<Route path="/medications" element={<MedicationsPage />} />
+					<Route path="/medications" element={<MedicationsPage />} />
 
-				<Route path="/planner" element={<PlannerPage />} />
+					<Route path="/planner" element={<PlannerPage />} />
 
-				<Route path="/settings" element={<SettingsPage />} />
+					<Route path="/settings" element={<SettingsPage />} />
 
-				<Route path="/schedule" element={<SchedulePage />} />
-				{/* Catch-all: redirect unknown routes to dashboard */}
-				<Route path="*" element={<Navigate to="/dashboard" replace />} />
-			</Routes>
+					<Route path="/schedule" element={<SchedulePage />} />
+					{/* Catch-all: redirect unknown routes to dashboard */}
+					<Route path="*" element={<Navigate to="/dashboard" replace />} />
+				</Routes>
+			</Suspense>
 
 			{/* Medication Detail Modal */}
 			<MedDetailModal

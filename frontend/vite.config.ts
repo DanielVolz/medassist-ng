@@ -47,6 +47,35 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(packageJson.version || "unknown"),
     __LOG_LEVEL__: JSON.stringify(process.env.LOG_LEVEL || "warn"),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return undefined;
+          }
+
+          if (id.includes("react-router-dom")) {
+            return "router-vendor";
+          }
+
+          if (id.includes("react-i18next") || id.includes("i18next-browser-languagedetector") || id.includes("i18next")) {
+            return "i18n-vendor";
+          }
+
+          if (id.includes("lucide-react")) {
+            return "icons-vendor";
+          }
+
+          if (id.includes("react") || id.includes("scheduler")) {
+            return "react-vendor";
+          }
+
+          return "vendor";
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,

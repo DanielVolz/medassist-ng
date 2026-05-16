@@ -136,7 +136,7 @@ async function tryApiKeyAuth(request: FastifyRequest, reply: FastifyReply): Prom
 	}
 
 	const [user] = await db.select().from(users).where(eq(users.id, keyRow.userId));
-	if (!user || !user.isActive) {
+	if (!user?.isActive) {
 		reply.status(401).send({ error: "User not found", code: "USER_NOT_FOUND" });
 		throw new Error("USER_NOT_FOUND");
 	}

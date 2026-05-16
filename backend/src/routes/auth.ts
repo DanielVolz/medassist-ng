@@ -438,7 +438,7 @@ export async function authRoutes(app: FastifyInstance) {
 
 				// Get user
 				const [user] = await db.select().from(users).where(eq(users.id, decoded.sub));
-				if (!user || !user.isActive) {
+				if (!user?.isActive) {
 					return reply.status(401).send({ error: "User not found or disabled", code: "USER_INVALID" });
 				}
 

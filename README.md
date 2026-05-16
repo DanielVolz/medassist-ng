@@ -218,6 +218,13 @@ Detailed configuration references:
 
 Development setup and local commands are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
+For cross-stack maintenance work and pre-PR validation, the repository root now exposes:
+
+```bash
+npm run check
+npm run build
+```
+
 # Acknowledgements
 
 This project was inspired by [MedAssist](https://github.com/njic/medassist) by njic.

@@ -20,6 +20,22 @@ function parseOptionalPort(value: string | undefined) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function parseUrlHostname(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+function uniqueHosts(hosts: Array<string | undefined>) {
+  return [...new Set(hosts.filter((host): host is string => Boolean(host)))];
+}
+
 // Read version from package.json at build time
 const packageJson = JSON.parse(readFileSync("./package.json", "utf-8"));
 
@@ -27,7 +43,9 @@ const packageJson = JSON.parse(readFileSync("./package.json", "utf-8"));
 // In Docker, prefer backend-dev to avoid localhost proxy failures.
 const defaultBackendTarget = existsSync("/.dockerenv") ? "http://backend-dev:3000" : "http://localhost:3000";
 const backendTarget = process.env.BACKEND_URL || defaultBackendTarget;
-const allowedHosts = parseCsvEnv(process.env.VITE_ALLOWED_HOSTS, ["localhost", "127.0.0.1"]);
+const configuredAllowedHosts = parseCsvEnv(process.env.VITE_ALLOWED_HOSTS, []);
+const baseAllowedHosts = configuredAllowedHosts.length > 0 ? configuredAllowedHosts : ["localhost", "127.0.0.1"];
+const allowedHosts = uniqueHosts([...baseAllowedHosts, parseUrlHostname(process.env.PUBLIC_APP_URL)]);
 const hmrHost = process.env.VITE_HMR_HOST?.trim();
 const hmrProtocol = process.env.VITE_HMR_PROTOCOL === "ws" ? "ws" : process.env.VITE_HMR_PROTOCOL === "wss" ? "wss" : undefined;
 const hmrClientPort = parseOptionalPort(process.env.VITE_HMR_CLIENT_PORT);

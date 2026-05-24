@@ -9,9 +9,9 @@ Configure MedAssist with environment variables in `.env`. Start from `.env.examp
 | `PUID` | `1000` | User ID for container file permissions |
 | `PGID` | `1000` | Group ID for container file permissions |
 | `PORT` | `3000` | Backend API port |
-| `CORS_ORIGINS` | `http://localhost:4174` | Allowed origins for CORS |
+| `CORS_ORIGINS` | `http://localhost:4174` | Allowed origins for CORS in the Docker Compose quickstart; local Vite development commonly uses `http://localhost:5173` or `http://localhost:4173` |
 | `TZ` | `Europe/Berlin` | Server default timezone for scheduled reminders |
-| `PUBLIC_APP_URL` | — | Public base URL for notification action links. Must be reachable by phones, browsers, and notification providers; do not point this to `localhost` or an internal Docker hostname. |
+| `PUBLIC_APP_URL` | — | Public base URL for notification action and share links. Strongly recommended for any deployment used from another device; do not point this to `localhost` or an internal Docker hostname. Local Vite development also allows this hostname automatically. |
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error`, or `silent` |
 | `RATE_LIMIT_MAX` | `100` | Maximum requests per minute per IP |
 | `OPENAPI_DOCS_ENABLED` | `auto` | Explicitly enable or disable `/docs` and `/docs/json` |
@@ -21,6 +21,12 @@ API docs behavior:
 - If `OPENAPI_DOCS_ENABLED` is unset, docs are enabled outside production and disabled in production.
 - `OPENAPI_DOCS_ENABLED=true` enables `/docs` and `/docs/json`.
 - `OPENAPI_DOCS_ENABLED=false` disables the docs only.
+
+`CORS_ORIGINS` note:
+
+- The `.env.example` file is optimized for the Docker Compose quickstart, where the frontend runs on `http://localhost:4174`.
+- Local frontend development uses the Vite dev server instead, so the backend schema defaults cover `http://localhost:5173` and `http://localhost:4173`.
+- If you use a custom hostname or reverse proxy, include that origin in `CORS_ORIGINS`.
 
 ## Authentication
 
@@ -102,13 +108,17 @@ API reference:
 
 Reminder timing uses IANA timezones. `TZ` is the server default. Users can override it in Settings.
 
+These values are runtime defaults. User-specific settings can override reminder behavior after first save.
+
 ## Push Notifications
 
 Push notification setup, provider support, and URL examples are documented in [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
 
 Recommended provider: `ntfy`, especially for intake reminders with direct actions.
 
-Notification action links use `PUBLIC_APP_URL` as their base URL. For self-hosted setups, this should normally be your externally reachable HTTPS address, for example `https://med.example.com`.
+Notification action and share links should use `PUBLIC_APP_URL` as their reachable base URL. For self-hosted setups, this should normally be your externally reachable HTTPS address, for example `https://med.example.com`.
+
+If `PUBLIC_APP_URL` is missing in a remote deployment, reminder links can still be generated from local origins that are unreachable from phones or external browsers.
 
 ## Default User Settings
 

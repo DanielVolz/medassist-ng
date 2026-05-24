@@ -157,10 +157,13 @@ Share your medication schedule with others via a public link.
 ### Multi-Person Support
 - Manage medications for multiple people
 - Share schedules via link. Recipients can mark doses as taken, you see it live
+- Optionally allow shared links to view and edit intake journal notes for their visible schedule window
 - Optionally embed the medication overview directly on shared links via a settings toggle
 
 ### Data Export & Import
-- Export all your data (medications, dose history, settings) as JSON
+- Export all your data (medications, dose history, intake journal notes, settings) as JSON
+- Review validated import contents before replacing current data
+- Optionally download a fresh backup before confirming import
 - Import previously exported data with automatic ID remapping
 - Choose whether to include sensitive data in exports
 
@@ -188,6 +191,16 @@ docker compose -p medassist-ng up -d
 
 Open `http://localhost:4174` and start tracking your medications.
 
+### Verify Deployment
+
+After the containers start, confirm the stack is actually healthy:
+
+1. Run `docker compose ps` and confirm the `backend` service is `healthy` and the `frontend` service is running.
+2. Open `http://localhost:3000/health` and confirm the backend responds with JSON that includes `"status":"ok"`.
+3. Open `http://localhost:4174` and confirm the app shell loads and can reach the API.
+
+If the frontend loads but API requests fail, check the backend health endpoint first and confirm `CORS_ORIGINS` includes the frontend origin you are using. If you plan to open reminder or share links from another device, set `PUBLIC_APP_URL` to the externally reachable app URL instead of relying on `localhost`.
+
 # Configuration
 
 Configure the application with environment variables in `.env`. Keep the basic container settings in the README and use the dedicated docs for the full reference.
@@ -206,7 +219,7 @@ Optional but commonly needed:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PUBLIC_APP_URL` | — | Public base URL for notification action links |
+| `PUBLIC_APP_URL` | — | Public base URL for notification action and share links |
 
 Detailed configuration references:
 

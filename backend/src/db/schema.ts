@@ -180,6 +180,7 @@ export const shareTokens = sqliteTable("share_tokens", {
 	token: text("token", { length: 64 }).notNull().unique(),
 	takenBy: text("taken_by", { length: 100 }).notNull(),
 	scheduleDays: integer("schedule_days").notNull().default(30),
+	allowJournalNotes: integer("allow_journal_notes", { mode: "boolean" }).notNull().default(false),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 	expiresAt: integer("expires_at", { mode: "timestamp" }), // NULL = never expires
 });
@@ -234,6 +235,27 @@ export const doseTracking = sqliteTable("dose_tracking", {
 	markedBy: text("marked_by", { length: 100 }), // null = user, "Daniel" = via share link
 	takenSource: text("taken_source", { length: 20 }).notNull().default("manual"), // manual, automatic, or notification
 	dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false), // legacy column: true = intake skipped without stock deduction
+});
+
+// =============================================================================
+// Intake Journal - Optional owner-scoped note for a tracked dose event
+// =============================================================================
+export const intakeJournal = sqliteTable("intake_journal", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	userId: integer("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	doseTrackingId: integer("dose_tracking_id")
+		.notNull()
+		.unique()
+		.references(() => doseTracking.id, { onDelete: "cascade" }),
+	medicationId: integer("medication_id")
+		.notNull()
+		.references(() => medications.id, { onDelete: "cascade" }),
+	scheduledFor: integer("scheduled_for", { mode: "timestamp" }).notNull(),
+	note: text("note").notNull(),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 // =============================================================================

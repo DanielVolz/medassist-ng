@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, lt } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -12,10 +12,42 @@ import {
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
 
-const reportDataSchema = z.object({
-	medicationIds: z.array(z.number().int().positive()).min(1).max(100),
-	takenByFilter: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
-});
+const reportDataSchema = z
+	.object({
+		medicationIds: z.array(z.number().int().positive()).min(1).max(100),
+		startDate: z.string().datetime().optional(),
+		endDate: z.string().datetime().optional(),
+		takenByFilter: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
+	})
+	.superRefine((value, ctx) => {
+		const hasStartDate = typeof value.startDate === "string";
+		const hasEndDate = typeof value.endDate === "string";
+
+		if (hasStartDate !== hasEndDate) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "startDate and endDate must be provided together",
+				path: hasStartDate ? ["endDate"] : ["startDate"],
+			});
+			return;
+		}
+
+		if (!hasStartDate || !hasEndDate) {
+			return;
+		}
+
+		const startDateValue = value.startDate!;
+		const endDateValue = value.endDate!;
+		const startDate = new Date(startDateValue);
+		const endDate = new Date(endDateValue);
+		if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Invalid date range",
+				path: ["endDate"],
+			});
+		}
+	});
 
 const reportDataBodyOpenApiSchema = {
 	type: "object",
@@ -27,6 +59,14 @@ const reportDataBodyOpenApiSchema = {
 			maxItems: 100,
 			items: { type: "integer", minimum: 1 },
 		},
+		startDate: {
+			type: "string",
+			format: "date-time",
+		},
+		endDate: {
+			type: "string",
+			format: "date-time",
+		},
 		takenByFilter: {
 			type: "array",
 			maxItems: 50,
@@ -35,9 +75,17 @@ const reportDataBodyOpenApiSchema = {
 	},
 	example: {
 		medicationIds: [1, 3, 5],
+		startDate: "2026-05-01T00:00:00.000Z",
+		endDate: "2026-06-01T00:00:00.000Z",
 		takenByFilter: ["Daniel"],
 	},
 } as const;
+
+const trackedDoseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
+
+function getPersonTagKey(value: string): string {
+	return value.trim().toLocaleLowerCase();
+}
 
 function matchesTakenByFilter(doseId: string, takenByFilter: Set<string> | null): boolean {
 	if (!takenByFilter) return true;
@@ -45,7 +93,29 @@ function matchesTakenByFilter(doseId: string, takenByFilter: Set<string> | null)
 	if (parts.length < 4) return false;
 	const takenBy = parts.at(-1)?.trim();
 	if (!takenBy) return false;
-	return takenByFilter.has(takenBy);
+	return takenByFilter.has(getPersonTagKey(takenBy));
+}
+
+function getDoseScheduledAtMs(doseId: string): number | null {
+	const match = trackedDoseIdPattern.exec(doseId);
+	if (!match) {
+		return null;
+	}
+
+	const scheduledAtMs = Number.parseInt(match[3], 10);
+	return Number.isNaN(scheduledAtMs) ? null : scheduledAtMs;
+}
+
+function isWithinDateRange(timestampMs: number | null, range: { startMs: number; endMs: number } | null): boolean {
+	if (!range) {
+		return true;
+	}
+
+	if (timestampMs === null) {
+		return false;
+	}
+
+	return timestampMs >= range.startMs && timestampMs < range.endMs;
 }
 
 const reportDataResponseSchema = {
@@ -110,10 +180,17 @@ export async function reportRoutes(app: FastifyInstance) {
 			if (!parsed.success) return reply.status(400).send(parsed.error.format());
 
 			const userId = await getUserId(req, reply);
-			const { medicationIds, takenByFilter } = parsed.data;
+			const { medicationIds, startDate, endDate, takenByFilter } = parsed.data;
 			const normalizedTakenByFilter = takenByFilter?.length
-				? new Set(takenByFilter.map((value) => value.trim()))
+				? new Set(takenByFilter.map((value) => getPersonTagKey(value)))
 				: null;
+			const dateRange =
+				startDate && endDate
+					? {
+							startMs: new Date(startDate).getTime(),
+							endMs: new Date(endDate).getTime(),
+						}
+					: null;
 
 			// Verify all medications belong to this user
 			const userMeds = await db
@@ -152,6 +229,7 @@ export async function reportRoutes(app: FastifyInstance) {
 				const medId = Number.parseInt(dose.doseId.split("-")[0], 10);
 				if (Number.isNaN(medId) || !medicationIds.includes(medId)) continue;
 				if (!matchesTakenByFilter(dose.doseId, normalizedTakenByFilter)) continue;
+				if (!isWithinDateRange(getDoseScheduledAtMs(dose.doseId), dateRange)) continue;
 				if (!dosesByMed.has(medId)) dosesByMed.set(medId, []);
 				dosesByMed.get(medId)!.push({
 					takenAt: dose.takenAt,
@@ -191,10 +269,15 @@ export async function reportRoutes(app: FastifyInstance) {
 				const isAmountBased = medication?.packageType === "liquid_container" || medication?.packageType === "tube";
 
 				// Get refills for this medication scoped to the authenticated user.
+				const refillFilters = [eq(refillHistory.medicationId, medId), eq(refillHistory.userId, userId)];
+				if (dateRange) {
+					refillFilters.push(gte(refillHistory.refillDate, new Date(dateRange.startMs)));
+					refillFilters.push(lt(refillHistory.refillDate, new Date(dateRange.endMs)));
+				}
 				const refills = await db
 					.select()
 					.from(refillHistory)
-					.where(and(eq(refillHistory.medicationId, medId), eq(refillHistory.userId, userId)));
+					.where(and(...refillFilters));
 
 				result[medId] = {
 					dosesTaken: takenDoses.length,

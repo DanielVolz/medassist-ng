@@ -6,9 +6,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/path-utils.js";
-import { doseTracking, medications, refillHistory, shareTokens, userSettings } from "../db/schema.js";
+import { doseTracking, intakeJournal, medications, refillHistory, shareTokens, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import {
+	listIntakeJournalExportPayloadsForUser,
+	restoreIntakeJournalForImportedDose,
+} from "../services/intake-journal-export.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	applyOpenApiRouteStandards,
@@ -23,7 +27,7 @@ const IMAGES_DIR = resolve(getDataDir(), "images");
 // =============================================================================
 // Export Format Version (bump this when format changes)
 // =============================================================================
-const EXPORT_VERSION = "1.5";
+const EXPORT_VERSION = "1.6";
 
 // =============================================================================
 // Zod Schemas for Import Validation
@@ -91,6 +95,9 @@ const doseHistorySchema = z.object({
 	takenSource: z.enum(["manual", "automatic"]).default("manual"),
 	dismissed: z.boolean().default(false),
 	takenByPerson: z.string().nullable().optional(), // Person suffix from dose ID (e.g., "Daniel")
+	journalNote: z.string().nullable().optional(),
+	journalCreatedAt: z.string().nullable().optional(),
+	journalUpdatedAt: z.string().nullable().optional(),
 });
 
 const refillHistoryExportSchema = z.object({
@@ -105,6 +112,7 @@ const refillHistoryExportSchema = z.object({
 const shareLinkSchema = z.object({
 	takenBy: z.string().min(1),
 	scheduleDays: z.number().int().min(1).default(30),
+	allowJournalNotes: z.boolean().default(false),
 	expiresAt: z.string().nullable().optional(), // ISO datetime
 	regenerateToken: z.boolean().default(true),
 });
@@ -195,7 +203,7 @@ const importBodyOpenApiSchema = {
 		shareLinks: { type: "array", items: { type: "object", additionalProperties: true } },
 	},
 	example: {
-		version: "1.8.0",
+		version: "1.6",
 		exportedAt: "2026-03-11T10:15:00.000Z",
 		includeSensitiveData: true,
 		medications: [
@@ -215,10 +223,69 @@ const importBodyOpenApiSchema = {
 				],
 			},
 		],
-		doseHistory: [{ doseId: "1:2026-03-11T08:00:00.000Z:Daniel", takenAt: 1773216000000 }],
+		doseHistory: [
+			{
+				medicationRef: "med-1",
+				scheduleIndex: 0,
+				scheduledTime: "2026-03-11T08:00:00.000Z",
+				takenAt: "2026-03-11T08:03:00.000Z",
+				markedBy: "Daniel",
+				takenSource: "manual",
+				dismissed: false,
+				takenByPerson: "Daniel",
+				journalNote: "Took after breakfast.",
+				journalUpdatedAt: "2026-03-11T08:05:00.000Z",
+			},
+		],
 		refillHistory: [{ packsAdded: 1, loosePillsAdded: 4, quantityAdded: 34, refillDate: "2026-03-10T12:00:00.000Z" }],
 		settings: { language: "en", stockCalculationMode: "automatic" },
 		shareLinks: [{ takenBy: "Daniel", scheduleDays: 14 }],
+	},
+} as const;
+
+const importPreviewResponseSchema = {
+	type: "object",
+	properties: {
+		success: { type: "boolean" },
+		preview: {
+			type: "object",
+			properties: {
+				version: { type: "string" },
+				exportedAt: { type: "string", format: "date-time" },
+				includeSensitiveData: { type: "boolean" },
+				incoming: {
+					type: "object",
+					properties: {
+						medications: { type: "integer" },
+						doseHistory: { type: "integer" },
+						refillHistory: { type: "integer" },
+						shareLinks: { type: "integer" },
+						journalEntries: { type: "integer" },
+						imageCount: { type: "integer" },
+						hasSettings: { type: "boolean" },
+					},
+				},
+				current: {
+					type: "object",
+					properties: {
+						medications: { type: "integer" },
+						doseHistory: { type: "integer" },
+						refillHistory: { type: "integer" },
+						shareLinks: { type: "integer" },
+						hasSettings: { type: "boolean" },
+					},
+				},
+				warnings: {
+					type: "object",
+					properties: {
+						replacesExistingData: { type: "boolean" },
+						regeneratesShareLinks: { type: "boolean" },
+						containsImages: { type: "boolean" },
+						containsSensitiveData: { type: "boolean" },
+					},
+				},
+			},
+		},
 	},
 } as const;
 
@@ -319,6 +386,64 @@ function base64ToImage(base64: string, medicationId: number): string | null {
 	} catch {
 		return null;
 	}
+}
+
+function removeFileIfPresent(filePath: string): string | null {
+	if (!existsSync(filePath)) {
+		return null;
+	}
+
+	try {
+		unlinkSync(filePath);
+		return null;
+	} catch (error) {
+		return error instanceof Error ? error.message : "Unknown file removal error";
+	}
+}
+
+function buildImportPreview(
+	importData: z.infer<typeof importDataSchema>,
+	currentData: {
+		medications: number;
+		doseHistory: number;
+		refillHistory: number;
+		shareLinks: number;
+		hasSettings: boolean;
+	}
+) {
+	const journalEntries = importData.doseHistory.filter(
+		(dose) => typeof dose.journalNote === "string" && dose.journalNote.trim()
+	).length;
+	const imageCount = importData.medications.filter(
+		(med) => typeof med.image === "string" && med.image.startsWith("data:")
+	).length;
+
+	return {
+		version: importData.version,
+		exportedAt: importData.exportedAt,
+		includeSensitiveData: importData.includeSensitiveData,
+		incoming: {
+			medications: importData.medications.length,
+			doseHistory: importData.doseHistory.length,
+			refillHistory: importData.refillHistory.length,
+			shareLinks: importData.shareLinks.length,
+			journalEntries,
+			imageCount,
+			hasSettings: Boolean(importData.settings),
+		},
+		current: currentData,
+		warnings: {
+			replacesExistingData:
+				currentData.medications > 0 ||
+				currentData.doseHistory > 0 ||
+				currentData.refillHistory > 0 ||
+				currentData.shareLinks > 0 ||
+				currentData.hasSettings,
+			regeneratesShareLinks: importData.shareLinks.length > 0,
+			containsImages: imageCount > 0,
+			containsSensitiveData: importData.includeSensitiveData,
+		},
+	};
 }
 
 // Parse dose ID to extract medication ID and timestamp
@@ -442,6 +567,7 @@ export async function exportRoutes(app: FastifyInstance) {
 
 			// 2. Load all dose tracking entries
 			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
+			const journalPayloadsByDoseTrackingId = await listIntakeJournalExportPayloadsForUser(userId);
 
 			const exportDoseHistory = doses
 				.map((dose) => {
@@ -484,6 +610,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						takenSource: dose.takenSource === "automatic" ? "automatic" : "manual",
 						dismissed: dose.dismissed ?? false,
 						takenByPerson: parsed.person,
+						...journalPayloadsByDoseTrackingId.get(dose.id),
 					};
 				})
 				.filter((d): d is NonNullable<typeof d> => d !== null);
@@ -542,6 +669,7 @@ export async function exportRoutes(app: FastifyInstance) {
 				return {
 					takenBy: share.takenBy,
 					scheduleDays: share.scheduleDays,
+					allowJournalNotes: share.allowJournalNotes ?? false,
 					expiresAt: expiresAtIso,
 					regenerateToken: true, // Always regenerate tokens on import for security
 				};
@@ -618,6 +746,58 @@ export async function exportRoutes(app: FastifyInstance) {
 	);
 
 	// ---------------------------------------------------------------------------
+	// POST /import/preview - Validate and summarize import data without writing
+	// ---------------------------------------------------------------------------
+	app.post(
+		"/import/preview",
+		{
+			config: {
+				rawBody: true,
+			},
+			bodyLimit: 50 * 1024 * 1024,
+			schema: {
+				body: importBodyOpenApiSchema,
+				response: {
+					200: importPreviewResponseSchema,
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
+
+			const parsed = importDataSchema.safeParse(request.body);
+			if (!parsed.success) {
+				return reply.status(400).send({
+					error: "Invalid import data format",
+					details: parsed.error.format(),
+				});
+			}
+
+			const [existingMeds, existingDoseHistory, existingRefillHistory, existingShareLinks, existingSettings] =
+				await Promise.all([
+					db.select({ id: medications.id }).from(medications).where(eq(medications.userId, userId)),
+					db.select({ id: doseTracking.id }).from(doseTracking).where(eq(doseTracking.userId, userId)),
+					db.select({ id: refillHistory.id }).from(refillHistory).where(eq(refillHistory.userId, userId)),
+					db.select({ id: shareTokens.id }).from(shareTokens).where(eq(shareTokens.userId, userId)),
+					db.select({ id: userSettings.id }).from(userSettings).where(eq(userSettings.userId, userId)),
+				]);
+
+			return {
+				success: true,
+				preview: buildImportPreview(parsed.data, {
+					medications: existingMeds.length,
+					doseHistory: existingDoseHistory.length,
+					refillHistory: existingRefillHistory.length,
+					shareLinks: existingShareLinks.length,
+					hasSettings: existingSettings.length > 0,
+				}),
+			};
+		}
+	);
+
+	// ---------------------------------------------------------------------------
 	// POST /import - Import user data (replaces all existing data!)
 	// ---------------------------------------------------------------------------
 	app.post(
@@ -649,6 +829,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					},
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
 					401: genericErrorSchema,
+					500: genericErrorSchema,
 				},
 			},
 		},
@@ -666,193 +847,208 @@ export async function exportRoutes(app: FastifyInstance) {
 
 			const importData = parsed.data;
 
-			// 2. Delete all existing user data (in correct order to respect foreign keys)
-			// Note: CASCADE delete should handle this, but let's be explicit
-
-			// First, delete images for existing medications
+			// Existing image files are removed only after the DB import commits.
 			const existingMeds = await db.select().from(medications).where(eq(medications.userId, userId));
-			for (const med of existingMeds) {
-				if (med.imageUrl) {
-					const imagePath = resolve(IMAGES_DIR, med.imageUrl);
-					if (existsSync(imagePath)) {
-						try {
-							unlinkSync(imagePath);
-						} catch {
-							/* ignore */
+			const oldImagePaths = existingMeds
+				.map((med) => (med.imageUrl ? resolve(IMAGES_DIR, med.imageUrl) : null))
+				.filter((path): path is string => path !== null);
+			const newImagePaths: string[] = [];
+
+			try {
+				await db.transaction(async (tx) => {
+					// Delete in order: journal entries, refill history, doses, share tokens, medications, settings.
+					await tx.delete(intakeJournal).where(eq(intakeJournal.userId, userId));
+					await tx.delete(refillHistory).where(eq(refillHistory.userId, userId));
+					await tx.delete(doseTracking).where(eq(doseTracking.userId, userId));
+					await tx.delete(shareTokens).where(eq(shareTokens.userId, userId));
+					await tx.delete(medications).where(eq(medications.userId, userId));
+					await tx.delete(userSettings).where(eq(userSettings.userId, userId));
+
+					const exportIdToNewId = new Map<string, number>();
+
+					for (const med of importData.medications) {
+						const normalizedSchedules = med.schedules.map((schedule) =>
+							normalizeIntake({
+								usage: schedule.usage,
+								every: schedule.every,
+								start: schedule.start,
+								scheduleMode: schedule.scheduleMode,
+								weekdays: schedule.weekdays,
+								intakeUnit: schedule.intakeUnit ?? null,
+								takenBy: schedule.takenBy || null,
+								intakeRemindersEnabled: schedule.remind ?? false,
+							})
+						);
+						const usageJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.usage));
+						const everyJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.every));
+						const startJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.start));
+						const takenByJson = JSON.stringify(med.takenBy);
+						const intakesJson = JSON.stringify(normalizedSchedules);
+						const intakeRemindersEnabled =
+							normalizedSchedules.some((schedule) => schedule.intakeRemindersEnabled) || med.intakeRemindersEnabled;
+
+						const [inserted] = await tx
+							.insert(medications)
+							.values({
+								userId,
+								name: med.name,
+								genericName: med.genericName || null,
+								takenByJson,
+								medicationForm: med.medicationForm ?? "tablet",
+								pillForm: med.pillForm || null,
+								lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
+								packageType: normalizePackageType(med.inventory.packageType),
+								packageAmountValue: med.inventory.packageAmountValue ?? 0,
+								packageAmountUnit: med.inventory.packageAmountUnit ?? "ml",
+								packCount: med.inventory.packCount,
+								blistersPerPack: med.inventory.blistersPerPack,
+								pillsPerBlister: med.inventory.pillsPerBlister,
+								looseTablets: med.inventory.looseTablets,
+								totalPills: med.inventory.totalPills ?? null,
+								stockAdjustment: med.inventory.stockAdjustment ?? 0,
+								lastStockCorrectionAt: med.lastStockCorrectionAt ? new Date(med.lastStockCorrectionAt) : null,
+								pillWeightMg: med.pillWeightMg || null,
+								doseUnit: med.doseUnit ?? "mg",
+								medicationStartDate: med.medicationStartDate || "",
+								medicationEndDate: med.medicationEndDate || null,
+								autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
+								intakesJson,
+								usageJson,
+								everyJson,
+								startJson,
+								expiryDate: med.expiryDate || null,
+								notes: med.notes || null,
+								intakeRemindersEnabled,
+								isObsolete: med.isObsolete ?? false,
+								obsoleteAt: med.obsoleteAt ? new Date(med.obsoleteAt) : null,
+								prescriptionEnabled: med.prescriptionEnabled ?? false,
+								prescriptionAuthorizedRefills: med.prescriptionEnabled
+									? (med.prescriptionAuthorizedRefills ?? null)
+									: null,
+								prescriptionRemainingRefills: med.prescriptionEnabled
+									? (med.prescriptionRemainingRefills ?? null)
+									: null,
+								prescriptionLowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
+								prescriptionExpiryDate: med.prescriptionExpiryDate || null,
+								dismissedUntil: med.dismissedUntil || null,
+								imageUrl: null,
+							})
+							.returning();
+
+						exportIdToNewId.set(med._exportId, inserted.id);
+
+						if (med.image) {
+							const imageUrl = base64ToImage(med.image, inserted.id);
+							if (imageUrl) {
+								newImagePaths.push(resolve(IMAGES_DIR, imageUrl));
+								await tx.update(medications).set({ imageUrl }).where(eq(medications.id, inserted.id));
+							}
 						}
 					}
-				}
-			}
 
-			// Delete in order: refill history, doses, share tokens, medications, settings
-			await db.delete(refillHistory).where(eq(refillHistory.userId, userId));
-			await db.delete(doseTracking).where(eq(doseTracking.userId, userId));
-			await db.delete(shareTokens).where(eq(shareTokens.userId, userId));
-			await db.delete(medications).where(eq(medications.userId, userId));
-			await db.delete(userSettings).where(eq(userSettings.userId, userId));
+					for (const dose of importData.doseHistory) {
+						const newMedId = exportIdToNewId.get(dose.medicationRef);
+						if (!newMedId) continue;
 
-			// 3. Import medications and build ID mapping
-			const exportIdToNewId = new Map<string, number>();
+						const scheduledFor = new Date(dose.scheduledTime);
+						const timestampMs = scheduledFor.getTime();
+						const doseId = buildDoseId(newMedId, dose.scheduleIndex, timestampMs, dose.takenByPerson);
 
-			for (const med of importData.medications) {
-				const normalizedSchedules = med.schedules.map((schedule) =>
-					normalizeIntake({
-						usage: schedule.usage,
-						every: schedule.every,
-						start: schedule.start,
-						scheduleMode: schedule.scheduleMode,
-						weekdays: schedule.weekdays,
-						intakeUnit: schedule.intakeUnit ?? null,
-						takenBy: schedule.takenBy || null,
-						intakeRemindersEnabled: schedule.remind ?? false,
-					})
-				);
-				const usageJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.usage));
-				const everyJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.every));
-				const startJson = JSON.stringify(normalizedSchedules.map((schedule) => schedule.start));
-				const takenByJson = JSON.stringify(med.takenBy);
+						const [insertedDose] = await tx
+							.insert(doseTracking)
+							.values({
+								userId,
+								doseId,
+								takenAt: new Date(dose.takenAt),
+								markedBy: dose.markedBy || null,
+								takenSource: dose.takenSource ?? "manual",
+								dismissed: dose.dismissed ?? false,
+							})
+							.returning({ id: doseTracking.id });
 
-				const intakesJson = JSON.stringify(normalizedSchedules);
+						await restoreIntakeJournalForImportedDose({
+							userId,
+							doseTrackingId: insertedDose.id,
+							medicationId: newMedId,
+							scheduledFor,
+							journalNote: dose.journalNote,
+							journalCreatedAt: dose.journalCreatedAt,
+							journalUpdatedAt: dose.journalUpdatedAt,
+							database: tx,
+						});
+					}
 
-				// Check if any schedule has remind enabled
-				const intakeRemindersEnabled =
-					normalizedSchedules.some((schedule) => schedule.intakeRemindersEnabled) || med.intakeRemindersEnabled;
+					if (importData.settings) {
+						await tx.insert(userSettings).values({
+							userId,
+							emailEnabled: importData.settings.emailEnabled ?? false,
+							notificationEmail: importData.settings.notificationEmail || null,
+							emailStockReminders: importData.settings.emailStockReminders ?? true,
+							emailIntakeReminders: importData.settings.emailIntakeReminders ?? true,
+							emailPrescriptionReminders: importData.settings.emailPrescriptionReminders ?? true,
+							shoutrrrEnabled: importData.settings.shoutrrrEnabled ?? false,
+							shoutrrrUrl: importData.settings.shoutrrrUrl || null,
+							shoutrrrStockReminders: importData.settings.shoutrrrStockReminders ?? true,
+							shoutrrrIntakeReminders: importData.settings.shoutrrrIntakeReminders ?? true,
+							shoutrrrPrescriptionReminders: importData.settings.shoutrrrPrescriptionReminders ?? true,
+							reminderDaysBefore: importData.settings.reminderDaysBefore ?? 7,
+							repeatDailyReminders: importData.settings.repeatDailyReminders ?? false,
+							skipRemindersForTakenDoses: importData.settings.skipRemindersForTakenDoses ?? false,
+							repeatRemindersEnabled: importData.settings.repeatRemindersEnabled ?? false,
+							reminderRepeatIntervalMinutes: importData.settings.reminderRepeatIntervalMinutes ?? 30,
+							maxNaggingReminders: importData.settings.maxNaggingReminders ?? 5,
+							lowStockDays: importData.settings.lowStockDays ?? 30,
+							normalStockDays: importData.settings.normalStockDays ?? 90,
+							highStockDays: importData.settings.highStockDays ?? 180,
+							expiryWarningDays: importData.settings.expiryWarningDays ?? 90,
+							language: importData.settings.language ?? "en",
+							stockCalculationMode: importData.settings.stockCalculationMode ?? "automatic",
+							shareMedicationOverview: importData.settings.shareMedicationOverview ?? false,
+						});
+					}
 
-				const [inserted] = await db
-					.insert(medications)
-					.values({
-						userId,
-						name: med.name,
-						genericName: med.genericName || null,
-						takenByJson,
-						medicationForm: med.medicationForm ?? "tablet",
-						pillForm: med.pillForm || null,
-						lifecycleCategory: med.lifecycleCategory ?? "refill_when_empty",
-						packageType: normalizePackageType(med.inventory.packageType),
-						packageAmountValue: med.inventory.packageAmountValue ?? 0,
-						packageAmountUnit: med.inventory.packageAmountUnit ?? "ml",
-						packCount: med.inventory.packCount,
-						blistersPerPack: med.inventory.blistersPerPack,
-						pillsPerBlister: med.inventory.pillsPerBlister,
-						looseTablets: med.inventory.looseTablets,
-						totalPills: med.inventory.totalPills ?? null,
-						stockAdjustment: med.inventory.stockAdjustment ?? 0,
-						lastStockCorrectionAt: med.lastStockCorrectionAt ? new Date(med.lastStockCorrectionAt) : null,
-						pillWeightMg: med.pillWeightMg || null,
-						doseUnit: med.doseUnit ?? "mg",
-						medicationStartDate: med.medicationStartDate || "",
-						medicationEndDate: med.medicationEndDate || null,
-						autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
-						intakesJson,
-						usageJson,
-						everyJson,
-						startJson,
-						expiryDate: med.expiryDate || null,
-						notes: med.notes || null,
-						intakeRemindersEnabled,
-						isObsolete: med.isObsolete ?? false,
-						obsoleteAt: med.obsoleteAt ? new Date(med.obsoleteAt) : null,
-						prescriptionEnabled: med.prescriptionEnabled ?? false,
-						prescriptionAuthorizedRefills: med.prescriptionEnabled ? (med.prescriptionAuthorizedRefills ?? null) : null,
-						prescriptionRemainingRefills: med.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? null) : null,
-						prescriptionLowRefillThreshold: med.prescriptionLowRefillThreshold ?? 1,
-						prescriptionExpiryDate: med.prescriptionExpiryDate || null,
-						dismissedUntil: med.dismissedUntil || null,
-						imageUrl: null, // Will be set after image is saved
-					})
-					.returning();
+					for (const share of importData.shareLinks) {
+						await tx.insert(shareTokens).values({
+							userId,
+							token: randomBytes(8).toString("hex"),
+							takenBy: share.takenBy,
+							scheduleDays: share.scheduleDays,
+							allowJournalNotes: share.allowJournalNotes ?? false,
+							expiresAt: share.expiresAt ? new Date(share.expiresAt) : null,
+						});
+					}
 
-				// Save mapping
-				exportIdToNewId.set(med._exportId, inserted.id);
+					for (const refill of importData.refillHistory) {
+						const newMedId = exportIdToNewId.get(refill.medicationRef);
+						if (!newMedId) continue;
 
-				// Save image if present
-				if (med.image) {
-					const imageUrl = base64ToImage(med.image, inserted.id);
-					if (imageUrl) {
-						await db.update(medications).set({ imageUrl }).where(eq(medications.id, inserted.id));
+						await tx.insert(refillHistory).values({
+							medicationId: newMedId,
+							userId,
+							packsAdded: refill.packsAdded ?? 0,
+							loosePillsAdded: refill.loosePillsAdded ?? refill.quantityAdded ?? 0,
+							usedPrescription: refill.usedPrescription ?? false,
+							refillDate: new Date(refill.refillDate),
+						});
+					}
+				});
+			} catch (error) {
+				for (const imagePath of newImagePaths) {
+					const removalError = removeFileIfPresent(imagePath);
+					if (removalError) {
+						request.log.warn(`[Import] Failed to remove rolled-back image path=${imagePath}: ${removalError}`);
 					}
 				}
+
+				request.log.error({ err: error }, "[Import] Failed to import data");
+				return reply.status(500).send({ error: "Import failed" });
 			}
 
-			// 4. Import dose history with remapped medication IDs
-			for (const dose of importData.doseHistory) {
-				const newMedId = exportIdToNewId.get(dose.medicationRef);
-				if (!newMedId) continue; // Skip orphaned doses
-
-				// Convert ISO timestamp back to milliseconds for dose ID
-				const timestampMs = new Date(dose.scheduledTime).getTime();
-				// Rebuild dose ID with optional person suffix
-				const doseId = buildDoseId(newMedId, dose.scheduleIndex, timestampMs, dose.takenByPerson);
-
-				await db.insert(doseTracking).values({
-					userId,
-					doseId,
-					takenAt: new Date(dose.takenAt),
-					markedBy: dose.markedBy || null,
-					takenSource: dose.takenSource ?? "manual",
-					dismissed: dose.dismissed ?? false,
-				});
-			}
-
-			// 5. Import settings
-			if (importData.settings) {
-				// Legacy exports may still contain shareStockStatus. The current app no longer
-				// uses that setting, so imports accept it for compatibility and then ignore it.
-				await db.insert(userSettings).values({
-					userId,
-					emailEnabled: importData.settings.emailEnabled ?? false,
-					notificationEmail: importData.settings.notificationEmail || null,
-					emailStockReminders: importData.settings.emailStockReminders ?? true,
-					emailIntakeReminders: importData.settings.emailIntakeReminders ?? true,
-					emailPrescriptionReminders: importData.settings.emailPrescriptionReminders ?? true,
-					shoutrrrEnabled: importData.settings.shoutrrrEnabled ?? false,
-					shoutrrrUrl: importData.settings.shoutrrrUrl || null,
-					shoutrrrStockReminders: importData.settings.shoutrrrStockReminders ?? true,
-					shoutrrrIntakeReminders: importData.settings.shoutrrrIntakeReminders ?? true,
-					shoutrrrPrescriptionReminders: importData.settings.shoutrrrPrescriptionReminders ?? true,
-					reminderDaysBefore: importData.settings.reminderDaysBefore ?? 7,
-					repeatDailyReminders: importData.settings.repeatDailyReminders ?? false,
-					skipRemindersForTakenDoses: importData.settings.skipRemindersForTakenDoses ?? false,
-					repeatRemindersEnabled: importData.settings.repeatRemindersEnabled ?? false,
-					reminderRepeatIntervalMinutes: importData.settings.reminderRepeatIntervalMinutes ?? 30,
-					maxNaggingReminders: importData.settings.maxNaggingReminders ?? 5,
-					lowStockDays: importData.settings.lowStockDays ?? 30,
-					normalStockDays: importData.settings.normalStockDays ?? 90,
-					highStockDays: importData.settings.highStockDays ?? 180,
-					expiryWarningDays: importData.settings.expiryWarningDays ?? 90,
-					language: importData.settings.language ?? "en",
-					stockCalculationMode: importData.settings.stockCalculationMode ?? "automatic",
-					shareMedicationOverview: importData.settings.shareMedicationOverview ?? false,
-				});
-			}
-
-			// 6. Import share links (with new tokens)
-			for (const share of importData.shareLinks) {
-				// Always generate new token for security
-				const token = randomBytes(8).toString("hex");
-
-				await db.insert(shareTokens).values({
-					userId,
-					token,
-					takenBy: share.takenBy,
-					scheduleDays: share.scheduleDays,
-					expiresAt: share.expiresAt ? new Date(share.expiresAt) : null,
-				});
-			}
-
-			// 7. Import refill history with remapped medication IDs
-			for (const refill of importData.refillHistory) {
-				const newMedId = exportIdToNewId.get(refill.medicationRef);
-				if (!newMedId) continue; // Skip orphaned refill records
-
-				await db.insert(refillHistory).values({
-					medicationId: newMedId,
-					userId,
-					packsAdded: refill.packsAdded ?? 0,
-					loosePillsAdded: refill.loosePillsAdded ?? refill.quantityAdded ?? 0,
-					usedPrescription: refill.usedPrescription ?? false,
-					refillDate: new Date(refill.refillDate),
-				});
+			for (const imagePath of oldImagePaths) {
+				const removalError = removeFileIfPresent(imagePath);
+				if (removalError) {
+					request.log.warn(`[Import] Failed to remove replaced image path=${imagePath}: ${removalError}`);
+				}
 			}
 
 			return {

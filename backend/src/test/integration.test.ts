@@ -165,6 +165,7 @@ async function createSchema(client: Client) {
       token text NOT NULL UNIQUE,
       taken_by text NOT NULL,
       schedule_days integer NOT NULL DEFAULT 30,
+      allow_journal_notes integer NOT NULL DEFAULT 0,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       expires_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -193,6 +194,16 @@ async function clearData(client: Client) {
 	await client.execute("DELETE FROM medications");
 	await client.execute("DELETE FROM users");
 	await client.execute("DELETE FROM sqlite_sequence");
+}
+
+function visibleDoseTimestampMs(): number {
+	const doseDate = new Date();
+	doseDate.setHours(8, 0, 0, 0);
+	return doseDate.getTime();
+}
+
+function visibleDoseStartIso(): string {
+	return new Date(visibleDoseTimestampMs()).toISOString();
 }
 
 // =============================================================================
@@ -259,9 +270,11 @@ describe("Integration Tests", () => {
 					packCount: 1,
 					blistersPerPack: 1,
 					pillsPerBlister: 10,
-					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					looseTablets: 10,
+					blisters: [{ usage: 1, every: 1, start: visibleDoseStartIso() }],
 				},
 			});
+			expect(createRes.statusCode, createRes.body).toBe(200);
 			const medId = createRes.json().id;
 
 			// Mark some doses (Jan 1, Jan 2, Jan 5, Jan 10)
@@ -617,9 +630,10 @@ describe("Integration Tests", () => {
 					packCount: 1,
 					blistersPerPack: 1,
 					pillsPerBlister: 10,
-					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					blisters: [{ usage: 1, every: 1, start: visibleDoseStartIso() }],
 				},
 			});
+			expect(createRes.statusCode, createRes.body).toBe(200);
 			const medId = createRes.json().id;
 
 			// Create share token for Daniel
@@ -628,15 +642,17 @@ describe("Integration Tests", () => {
 				url: "/share",
 				payload: { takenBy: "Daniel", scheduleDays: 30 },
 			});
+			expect(shareRes.statusCode, shareRes.body).toBe(200);
 			const token = shareRes.json().token;
 
 			// Mark dose via share link
-			const doseId = `${medId}-0-${new Date("2025-01-01T08:00:00.000Z").getTime()}`;
-			await app.inject({
+			const doseId = `${medId}-0-${visibleDoseTimestampMs()}`;
+			const markRes = await app.inject({
 				method: "POST",
 				url: `/share/${token}/doses`,
 				payload: { doseId },
 			});
+			expect(markRes.statusCode, markRes.body).toBe(200);
 
 			// Verify markedBy is "Daniel"
 			const result = await testClient.execute({
@@ -667,9 +683,10 @@ describe("Integration Tests", () => {
 				payload: {
 					name: "Vitamin D",
 					takenBy: ["Anna"],
-					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					blisters: [{ usage: 1, every: 1, start: visibleDoseStartIso() }],
 				},
 			});
+			expect(createRes.statusCode, createRes.body).toBe(200);
 			const medId = createRes.json().id;
 
 			// Create share token
@@ -678,21 +695,24 @@ describe("Integration Tests", () => {
 				url: "/share",
 				payload: { takenBy: "Anna", scheduleDays: 30 },
 			});
+			expect(shareRes.statusCode, shareRes.body).toBe(200);
 			const token = shareRes.json().token;
 
 			// Mark a dose
-			const doseId = `${medId}-0-${new Date("2025-01-05T08:00:00.000Z").getTime()}`;
-			await app.inject({
+			const doseId = `${medId}-0-${visibleDoseTimestampMs()}`;
+			const markRes = await app.inject({
 				method: "POST",
 				url: `/share/${token}/doses`,
 				payload: { doseId },
 			});
+			expect(markRes.statusCode, markRes.body).toBe(200);
 
 			// Get shared schedule
 			const scheduleRes = await app.inject({
 				method: "GET",
 				url: `/share/${token}`,
 			});
+			expect(scheduleRes.statusCode, scheduleRes.body).toBe(200);
 
 			const data = scheduleRes.json();
 			expect(data.takenBy).toBe("Anna");
@@ -781,7 +801,7 @@ describe("Integration Tests", () => {
 				payload: {
 					name: "Family Vitamins",
 					takenBy: ["Daniel", "Anna", "Max"],
-					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					blisters: [{ usage: 1, every: 1, start: visibleDoseStartIso() }],
 				},
 			});
 
@@ -799,8 +819,8 @@ describe("Integration Tests", () => {
 			});
 
 			// Both should succeed with different tokens
-			expect(danielShare.statusCode).toBe(200);
-			expect(annaShare.statusCode).toBe(200);
+			expect(danielShare.statusCode, danielShare.body).toBe(200);
+			expect(annaShare.statusCode, annaShare.body).toBe(200);
 			expect(danielShare.json().token).not.toBe(annaShare.json().token);
 
 			// Each share link should show correct person

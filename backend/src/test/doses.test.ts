@@ -51,6 +51,7 @@ const __dirname = dirname(__filename);
 const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 async function clearTables() {
+	await testClient.execute("DELETE FROM intake_journal");
 	await testClient.execute("DELETE FROM dose_tracking");
 	await testClient.execute("DELETE FROM share_tokens");
 	await testClient.execute("DELETE FROM api_keys");
@@ -78,20 +79,30 @@ async function insertMedication(options: {
 	start?: string;
 }) {
 	const intakeStart = options.start ?? "2025-01-01T08:00:00.000Z";
+	const takenBy = options.takenBy ?? [];
+	const intakeTakenBy = takenBy[0] ?? null;
 	await testClient.execute({
 		sql: `INSERT INTO medications (
 			id, user_id, name, taken_by_json, medication_form, package_type,
 			pack_count, blisters_per_pack, pills_per_blister, loose_tablets, stock_adjustment,
 			usage_json, every_json, start_json, intakes_json, intake_reminders_enabled
-		) VALUES (?, ?, 'Test Medication', ?, 'tablet', 'blister', ?, 1, 10, ?, 0, '[1]', '[1]', ?, '[]', 0)`,
+		) VALUES (?, ?, 'Test Medication', ?, 'tablet', 'blister', ?, 1, 10, ?, 0, '[1]', '[1]', ?, ?, 0)`,
 		args: [
 			options.id,
 			options.userId,
-			JSON.stringify(options.takenBy ?? []),
+			JSON.stringify(takenBy),
 			options.packCount ?? 1,
 			options.looseTablets ?? 0,
 			intakeStart,
-			"[]",
+			JSON.stringify([
+				{
+					usage: 1,
+					every: 1,
+					start: intakeStart,
+					takenBy: intakeTakenBy,
+					intakeRemindersEnabled: false,
+				},
+			]),
 		],
 	});
 }
@@ -103,11 +114,22 @@ async function insertUserSettings(userId: number, stockCalculationMode: "automat
 	});
 }
 
-async function _insertShareToken(userId: number, token: string, takenBy: string) {
+async function _insertShareToken(userId: number, token: string, takenBy: string, allowJournalNotes = false) {
 	await testClient.execute({
-		sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, 30)",
-		args: [userId, token, takenBy],
+		sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, allow_journal_notes) VALUES (?, ?, ?, 30, ?)",
+		args: [userId, token, takenBy, allowJournalNotes ? 1 : 0],
 	});
+}
+
+function buildLocalDoseStart(hours = 8): string {
+	const start = new Date();
+	start.setHours(hours, 0, 0, 0);
+	const year = start.getFullYear();
+	const month = String(start.getMonth() + 1).padStart(2, "0");
+	const day = String(start.getDate()).padStart(2, "0");
+	const hour = String(start.getHours()).padStart(2, "0");
+
+	return `${year}-${month}-${day}T${hour}:00:00.000`;
 }
 
 async function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
@@ -458,6 +480,48 @@ describe("Dose Tracking API", () => {
 		});
 	});
 
+	describe("single-dose skip routes", () => {
+		it("marks a single owner dose as skipped through the frontend route", async () => {
+			const doseId = "1-0-1735344000000";
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/skip",
+				headers: { cookie: cookieHeader },
+				payload: { doseId },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			const result = await testClient.execute({
+				sql: "SELECT dose_id, marked_by, dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(result.rows).toEqual([expect.objectContaining({ dose_id: doseId, marked_by: null, dismissed: 1 })]);
+		});
+
+		it("undoes a skipped-only owner dose through the frontend route", async () => {
+			const doseId = "1-0-1735344000000";
+			await insertDose({ userId, doseId, dismissed: true, takenAt: null });
+
+			const response = await app.inject({
+				method: "DELETE",
+				url: `/doses/skip/${encodeURIComponent(doseId)}`,
+				headers: { cookie: cookieHeader },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+
+			const result = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(Number(result.rows[0].count)).toBe(0);
+		});
+	});
+
 	describe("DELETE /doses/dismiss", () => {
 		it("clears dismissed-only records and removes the dismissed flag from taken doses", async () => {
 			await insertDose({ userId, doseId: "1-0-1735344000000", dismissed: true, takenAt: null });
@@ -479,6 +543,176 @@ describe("Dose Tracking API", () => {
 			expect(rows.rows).toEqual([
 				expect.objectContaining({ dose_id: "1-0-1735430400000", dismissed: 0, marked_by: "Daniel" }),
 			]);
+		});
+	});
+
+	describe("shared single-dose skip routes", () => {
+		it("marks and undoes a visible shared dose as skipped", async () => {
+			const start = buildLocalDoseStart();
+			await insertMedication({
+				id: 6,
+				userId,
+				takenBy: ["Max"],
+				start,
+			});
+			await _insertShareToken(userId, "share-skip-token", "Max", false);
+
+			const doseId = `6-0-${new Date(start).getTime()}-Max`;
+
+			const skipResponse = await app.inject({
+				method: "POST",
+				url: "/share/share-skip-token/doses/skip",
+				payload: { doseId },
+			});
+
+			expect(skipResponse.statusCode).toBe(200);
+			expect(skipResponse.json()).toEqual({ success: true });
+
+			const skippedRows = await testClient.execute({
+				sql: "SELECT dose_id, marked_by, dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(skippedRows.rows).toEqual([expect.objectContaining({ dose_id: doseId, marked_by: null, dismissed: 1 })]);
+
+			const undoResponse = await app.inject({
+				method: "DELETE",
+				url: `/share/share-skip-token/doses/skip/${encodeURIComponent(doseId)}`,
+			});
+
+			expect(undoResponse.statusCode).toBe(200);
+			expect(undoResponse.json()).toEqual({ success: true });
+
+			const remainingRows = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(Number(remainingRows.rows[0].count)).toBe(0);
+		});
+	});
+
+	describe("Shared journal notes", () => {
+		it("rejects shared journal access when the share link does not allow notes", async () => {
+			const start = buildLocalDoseStart();
+			await insertMedication({
+				id: 7,
+				userId,
+				takenBy: ["Max"],
+				start,
+			});
+			await _insertShareToken(userId, "token-no-notes", "Max", false);
+
+			const doseId = `7-0-${new Date(start).getTime()}-Max`;
+			await insertDose({ userId, doseId, markedBy: "Max" });
+
+			const response = await app.inject({
+				method: "GET",
+				url: `/share/token-no-notes/journal/event/${encodeURIComponent(doseId)}`,
+			});
+
+			expect(response.statusCode).toBe(403);
+			expect(response.json()).toEqual({
+				error: "Journal notes are not enabled for this share link",
+				code: "NOT_ENABLED",
+			});
+		});
+
+		it("supports shared journal note read and save, but not implicit or explicit delete", async () => {
+			const start = buildLocalDoseStart();
+			await insertMedication({
+				id: 8,
+				userId,
+				takenBy: ["Max"],
+				start,
+			});
+			await _insertShareToken(userId, "token-with-notes", "Max", true);
+
+			const doseId = `8-0-${new Date(start).getTime()}-Max`;
+			await insertDose({ userId, doseId, markedBy: "Max" });
+
+			const initialResponse = await app.inject({
+				method: "GET",
+				url: `/share/token-with-notes/journal/event/${encodeURIComponent(doseId)}`,
+			});
+
+			expect(initialResponse.statusCode).toBe(200);
+			expect(initialResponse.json().entry).toEqual(
+				expect.objectContaining({
+					doseId,
+					markedBy: "Max",
+					note: null,
+				})
+			);
+
+			const initialDosesResponse = await app.inject({
+				method: "GET",
+				url: "/share/token-with-notes/doses",
+			});
+
+			expect(initialDosesResponse.statusCode).toBe(200);
+			expect(initialDosesResponse.json().doses).toEqual([
+				expect.objectContaining({
+					doseId,
+					hasJournalNote: false,
+				}),
+			]);
+
+			const saveResponse = await app.inject({
+				method: "PUT",
+				url: `/share/token-with-notes/journal/event/${encodeURIComponent(doseId)}`,
+				payload: { note: "Shared note from Max" },
+			});
+
+			expect(saveResponse.statusCode).toBe(200);
+			expect(saveResponse.json().entry).toEqual(
+				expect.objectContaining({
+					doseId,
+					note: "Shared note from Max",
+				})
+			);
+
+			const savedDosesResponse = await app.inject({
+				method: "GET",
+				url: "/share/token-with-notes/doses",
+			});
+
+			expect(savedDosesResponse.statusCode).toBe(200);
+			expect(savedDosesResponse.json().doses).toEqual([
+				expect.objectContaining({
+					doseId,
+					hasJournalNote: true,
+				}),
+			]);
+
+			const blankSaveResponse = await app.inject({
+				method: "PUT",
+				url: `/share/token-with-notes/journal/event/${encodeURIComponent(doseId)}`,
+				payload: { note: "   " },
+			});
+
+			expect(blankSaveResponse.statusCode).toBe(400);
+			expect(blankSaveResponse.json()).toEqual({
+				error: "Journal note cannot be empty",
+				code: "EMPTY_NOTE",
+			});
+
+			const deleteResponse = await app.inject({
+				method: "DELETE",
+				url: `/share/token-with-notes/journal/event/${encodeURIComponent(doseId)}`,
+			});
+
+			expect(deleteResponse.statusCode).toBe(403);
+			expect(deleteResponse.json()).toEqual({
+				error: "Shared links cannot delete journal notes",
+				code: "DELETE_NOT_ALLOWED",
+			});
+
+			const journalRows = await testClient.execute({
+				sql: "SELECT note FROM intake_journal WHERE user_id = ? AND medication_id = ?",
+				args: [userId, 8],
+			});
+
+			expect(journalRows.rows).toHaveLength(1);
+			expect(journalRows.rows[0].note).toBe("Shared note from Max");
 		});
 	});
 });

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -15,6 +15,7 @@ import {
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
 import { isAmountBasedPackageType, normalizePackageType } from "../utils/package-profiles.js";
+import { redactTokenForLog } from "../utils/redaction.js";
 import {
 	getAllTakenByForMedication,
 	parseIntakesJson,
@@ -28,6 +29,11 @@ import {
 const createShareSchema = z.object({
 	takenBy: z.string().min(1, "takenBy is required"),
 	scheduleDays: z.number().int().min(1).max(365).default(30),
+	expiryDays: z
+		.union([z.number().int().min(1).max(365), z.null()])
+		.optional()
+		.default(null),
+	allowJournalNotes: z.boolean().optional().default(false),
 });
 
 const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>> = [
@@ -37,15 +43,59 @@ const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>
 
 const shareTokenPattern = /^[a-f0-9]{16}$/;
 
+function toIsoTimestamp(value: Date | string | number | null | undefined): string | null {
+	if (value == null) {
+		return null;
+	}
+
+	try {
+		if (value instanceof Date) {
+			return Number.isNaN(value.getTime()) ? null : value.toISOString();
+		}
+
+		if (typeof value === "number" || (typeof value === "string" && /^\d+$/.test(value))) {
+			const numericValue = typeof value === "number" ? value : Number(value);
+			const timestampMs = numericValue < 1_000_000_000_000 ? numericValue * 1000 : numericValue;
+			const date = new Date(timestampMs);
+			return Number.isNaN(date.getTime()) ? null : date.toISOString();
+		}
+
+		const date = new Date(value);
+		return Number.isNaN(date.getTime()) ? null : date.toISOString();
+	} catch {
+		return null;
+	}
+}
+
+function resolveExpiryDate(expiryDays: number | null | undefined): Date | null {
+	if (expiryDays == null) {
+		return null;
+	}
+
+	return new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+}
+
+function isExpiredTimestamp(value: Date | string | number | null | undefined): boolean {
+	const isoValue = toIsoTimestamp(value);
+	return isoValue != null && new Date(isoValue).getTime() < Date.now();
+}
+
 const createShareBodyOpenApiSchema = {
 	type: "object",
 	properties: {
 		takenBy: { type: "string" },
 		scheduleDays: { type: "integer", minimum: 1, maximum: 365, default: 30 },
+		allowJournalNotes: { type: "boolean", default: false },
+		expiryDays: {
+			anyOf: [{ type: "integer", minimum: 1, maximum: 365 }, { type: "null" }],
+			default: null,
+		},
 	},
 	example: {
 		takenBy: "Daniel",
 		scheduleDays: 14,
+		allowJournalNotes: true,
+		expiryDays: 30,
 	},
 } as const;
 
@@ -64,6 +114,7 @@ const shareReadResponseSchema = {
 		stockCalculationMode: { type: "string", enum: ["automatic", "manual"] },
 		upcomingTodayOnly: { type: "boolean" },
 		shareScheduleTodayOnly: { type: "boolean" },
+		allowJournalNotes: { type: "boolean" },
 	},
 } as const;
 
@@ -94,6 +145,37 @@ const shareOverviewResponseSchema = {
 		generatedAt: { type: "string", format: "date-time" },
 		medications: { type: "array", items: { type: "object", additionalProperties: true } },
 	},
+} as const;
+
+const shareListResponseSchema = {
+	type: "object",
+	properties: {
+		shareLinks: {
+			type: "array",
+			items: {
+				type: "object",
+				properties: {
+					token: { type: "string" },
+					takenBy: { type: "string" },
+					scheduleDays: { type: "integer" },
+					createdAt: { type: "string", format: "date-time" },
+					expiresAt: { type: ["string", "null"], format: "date-time" },
+					allowJournalNotes: { type: "boolean" },
+					shareUrl: { type: "string" },
+				},
+				required: ["token", "takenBy", "scheduleDays", "createdAt", "expiresAt", "allowJournalNotes", "shareUrl"],
+			},
+		},
+	},
+	required: ["shareLinks"],
+} as const;
+
+const ownerTokenParamsSchema = {
+	type: "object",
+	properties: {
+		token: { type: "string" },
+	},
+	required: ["token"],
 } as const;
 
 // Helper to get user ID from request
@@ -146,11 +228,12 @@ export async function shareRoutes(app: FastifyInstance) {
 		},
 		async (request, reply) => {
 			const { token } = request.params;
+			const tokenRef = redactTokenForLog(token);
 
 			// Find share token
 			const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
 			if (!share) {
-				request.log.warn(`[Share] Invalid share token requested: token=${token}`);
+				request.log.warn(`[Share] Invalid share token requested: tokenRef=${tokenRef}`);
 				return reply.status(404).send({
 					error: "Share link not found",
 					code: "NOT_FOUND",
@@ -160,7 +243,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			// Check if token has expired
 			if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
 				request.log.warn(
-					`[Share] Expired token requested: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}`
+					`[Share] Expired token requested: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}`
 				);
 				// Get the username of the owner to show in the expired message
 				const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
@@ -255,6 +338,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				takenBy: share.takenBy,
 				sharedBy: owner?.username ?? null,
 				scheduleDays: share.scheduleDays,
+				allowJournalNotes: share.allowJournalNotes ?? false,
 				medications: medicationsWithBlisters,
 				shareMedicationOverview,
 				medicationOverview,
@@ -298,20 +382,21 @@ export async function shareRoutes(app: FastifyInstance) {
 			reply.header("Cache-Control", "no-store");
 
 			const { token } = request.params;
+			const tokenRef = redactTokenForLog(token);
 			if (!shareTokenPattern.test(token)) {
-				request.log.warn(`[ShareOverview] Rejected invalid token format: token=${token}`);
+				request.log.warn(`[ShareOverview] Rejected invalid token format: tokenRef=${tokenRef}`);
 				return reply.status(404).send({ error: "not_found" });
 			}
 
 			const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
 			if (!share) {
-				request.log.warn(`[ShareOverview] Unknown token requested: token=${token}`);
+				request.log.warn(`[ShareOverview] Unknown token requested: tokenRef=${tokenRef}`);
 				return reply.status(404).send({ error: "not_found" });
 			}
 
 			if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
 				request.log.warn(
-					`[ShareOverview] Expired token requested: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}`
+					`[ShareOverview] Expired token requested: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}`
 				);
 				return reply.status(410).send({
 					error: "expired",
@@ -371,6 +456,7 @@ export async function shareRoutes(app: FastifyInstance) {
 							reused: { type: "boolean" },
 							token: { type: "string" },
 							shareUrl: { type: "string" },
+							allowJournalNotes: { type: "boolean" },
 							expiresAt: { type: ["string", "null"] },
 						},
 					},
@@ -390,7 +476,8 @@ export async function shareRoutes(app: FastifyInstance) {
 				});
 			}
 
-			const { takenBy, scheduleDays } = parsed.data;
+			const { takenBy, scheduleDays, expiryDays, allowJournalNotes } = parsed.data;
+			const expiresAt = resolveExpiryDate(expiryDays);
 
 			// Check if user has medications for this takenBy (search in both medication-level and intake-level)
 			const allMeds = await db
@@ -422,40 +509,133 @@ export async function shareRoutes(app: FastifyInstance) {
 				.where(and(eq(shareTokens.userId, userId), eq(shareTokens.takenBy, takenBy)));
 
 			if (existingShare) {
-				await db.update(shareTokens).set({ scheduleDays, expiresAt: null }).where(eq(shareTokens.id, existingShare.id));
+				const existingTokenRef = redactTokenForLog(existingShare.token);
+				await db
+					.update(shareTokens)
+					.set({ scheduleDays, expiresAt, allowJournalNotes })
+					.where(eq(shareTokens.id, existingShare.id));
 
 				request.log.info(
-					`[Share] Reused existing share token: token=${existingShare.token}, ownerUserId=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays}`
+					`[Share] Reused existing share token: tokenRef=${existingTokenRef}, ownerUserId=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays}, allowJournalNotes=${allowJournalNotes}, expiresAt=${expiresAt?.toISOString() ?? "never"}`
 				);
 
 				return {
 					reused: true,
 					token: existingShare.token,
 					shareUrl: `/share/${existingShare.token}`,
-					expiresAt: null,
+					allowJournalNotes,
+					expiresAt: toIsoTimestamp(expiresAt),
 				};
 			}
 
 			const token = randomBytes(8).toString("hex");
+			const tokenRef = redactTokenForLog(token);
 
 			await db.insert(shareTokens).values({
 				userId,
 				token,
 				takenBy,
 				scheduleDays,
-				expiresAt: null,
+				allowJournalNotes,
+				expiresAt,
 			});
 
 			request.log.info(
-				`[Share] Created new share token: token=${token}, ownerUserId=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays}`
+				`[Share] Created new share token: tokenRef=${tokenRef}, ownerUserId=${userId}, takenBy=${takenBy}, scheduleDays=${scheduleDays}, allowJournalNotes=${allowJournalNotes}, expiresAt=${expiresAt?.toISOString() ?? "never"}`
 			);
 
 			return {
 				reused: false,
 				token,
 				shareUrl: `/share/${token}`,
-				expiresAt: null,
+				allowJournalNotes,
+				expiresAt: toIsoTimestamp(expiresAt),
 			};
+		}
+	);
+
+	// ---------------------------------------------------------------------------
+	// GET /share - PROTECTED: List active share links for current owner
+	// ---------------------------------------------------------------------------
+	app.get(
+		"/share",
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["share"],
+				security: protectedEndpointSecurity,
+				response: {
+					200: shareListResponseSchema,
+					401: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
+			const shares = await db
+				.select()
+				.from(shareTokens)
+				.where(eq(shareTokens.userId, userId))
+				.orderBy(desc(shareTokens.createdAt));
+
+			return {
+				shareLinks: shares
+					.filter((share) => !isExpiredTimestamp(share.expiresAt))
+					.map((share) => ({
+						token: share.token,
+						takenBy: share.takenBy,
+						scheduleDays: share.scheduleDays,
+						createdAt: toIsoTimestamp(share.createdAt) ?? new Date().toISOString(),
+						expiresAt: toIsoTimestamp(share.expiresAt),
+						allowJournalNotes: share.allowJournalNotes ?? false,
+						shareUrl: `/share/${share.token}`,
+					})),
+			};
+		}
+	);
+
+	// ---------------------------------------------------------------------------
+	// DELETE /share/:token - PROTECTED: Revoke an existing share link
+	// ---------------------------------------------------------------------------
+	app.delete<{ Params: { token: string } }>(
+		"/share/:token",
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["share"],
+				security: protectedEndpointSecurity,
+				params: ownerTokenParamsSchema,
+				response: {
+					204: { type: "null" },
+					401: genericErrorSchema,
+					404: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
+			const { token } = request.params;
+			const tokenRef = redactTokenForLog(token);
+
+			const [share] = await db
+				.select()
+				.from(shareTokens)
+				.where(and(eq(shareTokens.userId, userId), eq(shareTokens.token, token)));
+
+			if (!share) {
+				return reply.status(404).send({
+					error: "Share link not found",
+					code: "NOT_FOUND",
+				});
+			}
+
+			await db.delete(shareTokens).where(eq(shareTokens.id, share.id));
+
+			request.log.info(
+				`[Share] Revoked share token: tokenRef=${tokenRef}, ownerUserId=${userId}, takenBy=${share.takenBy}`
+			);
+
+			return reply.status(204).send();
 		}
 	);
 

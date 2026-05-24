@@ -24,6 +24,8 @@ on:
 
 concurrency:
   group: docker-build-${{ github.ref }}
+  # Cancel older runs on the same ref so the shared branch tag stays aligned
+  # with the newest commit instead of racing older builds against newer ones.
   cancel-in-progress: true
 
 # Default minimal permissions

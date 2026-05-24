@@ -45,11 +45,23 @@ type PlannerRow = {
 
 type SendEmailBody = {
 	email: string;
-	from: string;
-	until: string;
+	from?: string;
+	until?: string;
+	startDate?: string;
+	endDate?: string;
 	rows: PlannerRow[];
 	language?: Language; // Optional: passed from frontend for unauthenticated requests
 };
+
+function resolvePlannerDateRange(body: SendEmailBody): { startDate: string; endDate: string } | null {
+	const startDate = body.startDate ?? body.from;
+	const endDate = body.endDate ?? body.until;
+	if (!startDate || !endDate) {
+		return null;
+	}
+
+	return { startDate, endDate };
+}
 
 type LowStockItem = {
 	name: string;
@@ -165,11 +177,15 @@ export async function plannerRoutes(app: FastifyInstance) {
 						email: { type: "string" },
 						from: { type: "string" },
 						until: { type: "string" },
+						startDate: { type: "string", format: "date-time" },
+						endDate: { type: "string", format: "date-time" },
 						language: { type: "string" },
 						rows: { type: "array", items: plannerRowSchema },
 					},
 					example: {
 						email: "daniel@example.com",
+						startDate: "2026-03-11T00:00:00.000Z",
+						endDate: "2026-04-11T00:00:00.000Z",
 						from: "2026-03-11",
 						until: "2026-04-11",
 						language: "en",
@@ -198,12 +214,19 @@ export async function plannerRoutes(app: FastifyInstance) {
 			},
 		},
 		async (request, reply) => {
-			const { email, from, until, rows, language: bodyLanguage } = request.body;
+			const { email, rows, language: bodyLanguage } = request.body;
+			const resolvedDateRange = resolvePlannerDateRange(request.body);
 			request.log.info({ email, rowCount: rows?.length ?? 0 }, "[Planner] Demand notification request received");
 
 			if (!rows || rows.length === 0) {
 				return reply.status(400).send({ error: "Missing planner data" });
 			}
+
+			if (!resolvedDateRange) {
+				return reply.status(400).send({ error: "Missing planner date range" });
+			}
+
+			const { startDate, endDate } = resolvedDateRange;
 
 			// Load user settings for notification channels
 			const userId = await getUserId(request);
@@ -246,14 +269,14 @@ export async function plannerRoutes(app: FastifyInstance) {
 
 			// Format dates for display - escape to prevent XSS even though toLocaleDateString should be safe
 			const fromDate = escapeHtml(
-				new Date(from).toLocaleDateString(locale, {
+				new Date(startDate).toLocaleDateString(locale, {
 					year: "numeric",
 					month: "long",
 					day: "numeric",
 				})
 			);
 			const untilDate = escapeHtml(
-				new Date(until).toLocaleDateString(locale, {
+				new Date(endDate).toLocaleDateString(locale, {
 					year: "numeric",
 					month: "long",
 					day: "numeric",

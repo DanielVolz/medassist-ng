@@ -3,6 +3,7 @@
  * These tests import the actual route handlers for real coverage.
  */
 
+import { existsSync, unlinkSync } from "node:fs";
 import cookie from "@fastify/cookie";
 import fastifyMultipart from "@fastify/multipart";
 import sensible from "@fastify/sensible";
@@ -13,13 +14,16 @@ import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
 // Use vi.hoisted to create the db BEFORE mocks are set up
-const { testClient, testDb } = vi.hoisted(() => {
+const { testClient, testDb, testDbPath } = vi.hoisted(() => {
 	// Dynamic import inside hoisted block
 	const { createClient } = require("@libsql/client");
 	const { drizzle } = require("drizzle-orm/libsql");
-	const client = createClient({ url: ":memory:" });
+	const { tmpdir } = require("node:os");
+	const { join } = require("node:path");
+	const dbPath = join(tmpdir(), `medassist-e2e-routes-${process.pid}-${Date.now()}.db`);
+	const client = createClient({ url: `file:${dbPath}` });
 	const db = drizzle(client);
-	return { testClient: client, testDb: db };
+	return { testClient: client, testDb: db, testDbPath: dbPath };
 });
 
 // Mock modules using the hoisted db
@@ -171,6 +175,7 @@ async function createSchema(client: Client) {
       token text NOT NULL UNIQUE,
       taken_by text NOT NULL,
       schedule_days integer NOT NULL DEFAULT 30,
+      allow_journal_notes integer NOT NULL DEFAULT 0,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       expires_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -184,6 +189,19 @@ async function createSchema(client: Client) {
 		taken_source text NOT NULL DEFAULT 'manual',
       dismissed integer NOT NULL DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
+		`CREATE TABLE IF NOT EXISTS intake_journal (
+      id integer PRIMARY KEY AUTOINCREMENT,
+      user_id integer NOT NULL,
+      dose_tracking_id integer NOT NULL UNIQUE,
+      medication_id integer NOT NULL,
+      scheduled_for integer NOT NULL,
+      note text NOT NULL,
+      created_at integer NOT NULL DEFAULT (strftime('%s','now')),
+      updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (dose_tracking_id) REFERENCES dose_tracking(id) ON DELETE CASCADE,
+      FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE
     )`,
 		`CREATE TABLE IF NOT EXISTS refill_history (
       id integer PRIMARY KEY AUTOINCREMENT,
@@ -204,6 +222,7 @@ async function createSchema(client: Client) {
 }
 
 async function clearData(client: Client) {
+	await client.execute("DELETE FROM intake_journal");
 	await client.execute("DELETE FROM refill_history");
 	await client.execute("DELETE FROM dose_tracking");
 	await client.execute("DELETE FROM share_tokens");
@@ -222,10 +241,11 @@ async function _createUser(client: Client, username: string): Promise<number> {
 }
 
 async function createMedication(client: Client, userId: number, name: string, takenBy: string[]): Promise<number> {
+	const start = new Date(visibleDoseTimestampMs()).toISOString();
 	const result = await client.execute({
 		sql: `INSERT INTO medications (user_id, name, taken_by_json, usage_json, every_json, start_json)
-          VALUES (?, ?, ?, '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]') RETURNING id`,
-		args: [userId, name, JSON.stringify(takenBy)],
+          VALUES (?, ?, ?, '[1]', '[1]', ?) RETURNING id`,
+		args: [userId, name, JSON.stringify(takenBy), JSON.stringify([start])],
 	});
 	return result.rows[0].id as number;
 }
@@ -235,6 +255,12 @@ async function createShareToken(client: Client, userId: number, takenBy: string,
 		sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, 30)`,
 		args: [userId, token, takenBy],
 	});
+}
+
+function visibleDoseTimestampMs(): number {
+	const doseDate = new Date();
+	doseDate.setHours(8, 0, 0, 0);
+	return doseDate.getTime();
 }
 
 // =============================================================================
@@ -386,6 +412,11 @@ describe("E2E Tests with Real Routes", () => {
 	afterAll(async () => {
 		await app.close();
 		testClient.close();
+		for (const path of [testDbPath, `${testDbPath}-shm`, `${testDbPath}-wal`]) {
+			if (existsSync(path)) {
+				unlinkSync(path);
+			}
+		}
 	});
 
 	beforeEach(async () => {
@@ -508,12 +539,12 @@ describe("E2E Tests with Real Routes", () => {
 		});
 
 		it("should mark dose via share link using real route", async () => {
-			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			const medId = await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 
 			const token = "test_share_token_456";
 			await createShareToken(testClient, userId, "Daniel", token);
 
-			const doseId = "1-0-1735344000000";
+			const doseId = `${medId}-0-${visibleDoseTimestampMs()}`;
 			const response = await app.inject({
 				method: "POST",
 				url: `/share/${token}/doses`,
@@ -1039,13 +1070,13 @@ describe("E2E Tests with Real Routes", () => {
 		});
 
 		it("should unmark dose via share link", async () => {
-			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			const medId = await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 
 			const token = "test_delete_dose_token";
 			await createShareToken(testClient, userId, "Daniel", token);
 
 			// First mark the dose
-			const doseId = "1-0-1735344000000";
+			const doseId = `${medId}-0-${visibleDoseTimestampMs()}`;
 			await testClient.execute({
 				sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by) VALUES (?, ?, ?)`,
 				args: [userId, doseId, "Daniel"],
@@ -1089,12 +1120,12 @@ describe("E2E Tests with Real Routes", () => {
 		});
 
 		it("should return already marked message for duplicate dose", async () => {
-			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			const medId = await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 
 			const token = "test_duplicate_token";
 			await createShareToken(testClient, userId, "Daniel", token);
 
-			const doseId = "1-0-1735344000000";
+			const doseId = `${medId}-0-${visibleDoseTimestampMs()}`;
 
 			// Mark the dose first time
 			await app.inject({
@@ -1530,6 +1561,59 @@ describe("E2E Tests with Real Routes", () => {
 	// ---------------------------------------------------------------------------
 
 	describe("Share token management", () => {
+		it("should list active share links for the owner", async () => {
+			await createMedication(testClient, userId, "Med1", ["Daniel"]);
+
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: {
+					takenBy: "Daniel",
+					scheduleDays: 90,
+				},
+			});
+
+			expect(createResponse.statusCode).toBe(200);
+
+			const listResponse = await app.inject({
+				method: "GET",
+				url: "/share",
+			});
+
+			expect(listResponse.statusCode).toBe(200);
+			const data = listResponse.json();
+			expect(data.shareLinks).toHaveLength(1);
+			expect(data.shareLinks[0].takenBy).toBe("Daniel");
+		});
+
+		it("should revoke an active share link", async () => {
+			await createMedication(testClient, userId, "Med1", ["Daniel"]);
+
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: {
+					takenBy: "Daniel",
+					scheduleDays: 30,
+				},
+			});
+
+			const { token } = createResponse.json();
+			const revokeResponse = await app.inject({
+				method: "DELETE",
+				url: `/share/${token}`,
+			});
+
+			expect(revokeResponse.statusCode).toBe(204);
+
+			const publicResponse = await app.inject({
+				method: "GET",
+				url: `/share/${token}`,
+			});
+
+			expect(publicResponse.statusCode).toBe(404);
+		});
+
 		it("should create share token with custom scheduleDays", async () => {
 			await createMedication(testClient, userId, "Med1", ["Daniel"]);
 
@@ -1546,6 +1630,34 @@ describe("E2E Tests with Real Routes", () => {
 			const data = response.json();
 			expect(data.token).toBeDefined();
 			expect(data.expiresAt).toBeDefined();
+		});
+
+		it("should create a share token with an expiry and keep it in the active owner list", async () => {
+			await createMedication(testClient, userId, "Med1", ["Daniel"]);
+
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/share",
+				payload: {
+					takenBy: "Daniel",
+					scheduleDays: 30,
+					expiryDays: 7,
+				},
+			});
+
+			expect(createResponse.statusCode).toBe(200);
+			const created = createResponse.json();
+			expect(created.expiresAt).toBeTruthy();
+
+			const listResponse = await app.inject({
+				method: "GET",
+				url: "/share",
+			});
+
+			expect(listResponse.statusCode).toBe(200);
+			const listData = listResponse.json();
+			expect(listData.shareLinks).toHaveLength(1);
+			expect(listData.shareLinks[0].expiresAt).toBeTruthy();
 		});
 
 		it("should return validation error for invalid scheduleDays", async () => {
@@ -1685,14 +1797,15 @@ describe("E2E Tests with Real Routes", () => {
 
 	describe("Share token dose routes", () => {
 		it("should get taken doses via share link", async () => {
-			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
+			const medId = await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 			const token = "get-doses-token";
 			await createShareToken(testClient, userId, "Daniel", token);
 
 			// Insert a dose directly
+			const doseId = `${medId}-0-${visibleDoseTimestampMs()}`;
 			await testClient.execute({
 				sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by) VALUES (?, ?, ?)`,
-				args: [userId, "1-0-1735344000000", "Daniel"],
+				args: [userId, doseId, "Daniel"],
 			});
 
 			const response = await app.inject({
@@ -1703,7 +1816,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
 			expect(data.doses).toHaveLength(1);
-			expect(data.doses[0].doseId).toBe("1-0-1735344000000");
+			expect(data.doses[0].doseId).toBe(doseId);
 			expect(data.doses[0].markedBy).toBe("Daniel");
 		});
 
@@ -3000,6 +3113,78 @@ describe("E2E Tests with Real Routes", () => {
 	});
 
 	describe("Real /import routes", () => {
+		it("should preview import data without mutating existing user data", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Existing Med",
+					packCount: 2,
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+
+			const previewPayload = {
+				version: "1.6",
+				exportedAt: new Date().toISOString(),
+				includeSensitiveData: true,
+				medications: [
+					{
+						_exportId: "med-1",
+						name: "Imported Med",
+						inventory: { packCount: 1, blistersPerPack: 2, pillsPerBlister: 14, looseTablets: 0 },
+						schedules: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+					},
+				],
+				settings: { language: "en", stockCalculationMode: "automatic" },
+				shareLinks: [{ takenBy: "Person A", scheduleDays: 14 }],
+				doseHistory: [
+					{
+						medicationRef: "med-1",
+						scheduleIndex: 0,
+						scheduledTime: "2025-01-01T08:00:00.000Z",
+						takenAt: "2025-01-01T08:03:00.000Z",
+						journalNote: "after breakfast",
+					},
+				],
+			};
+
+			const previewResponse = await app.inject({
+				method: "POST",
+				url: "/import/preview",
+				payload: previewPayload,
+			});
+
+			expect(previewResponse.statusCode).toBe(200);
+			expect(previewResponse.json()).toMatchObject({
+				success: true,
+				preview: {
+					version: "1.6",
+					includeSensitiveData: true,
+					incoming: {
+						medications: 1,
+						doseHistory: 1,
+						shareLinks: 1,
+						journalEntries: 1,
+						hasSettings: true,
+					},
+					current: {
+						medications: 1,
+						hasSettings: false,
+					},
+					warnings: {
+						replacesExistingData: true,
+						regeneratesShareLinks: true,
+						containsSensitiveData: true,
+					},
+				},
+			});
+
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.json()).toHaveLength(1);
+			expect(medsResponse.json()[0].name).toBe("Existing Med");
+		});
+
 		it("should import medications from export format", async () => {
 			const importData = {
 				version: "1.0",

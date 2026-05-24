@@ -1,3 +1,4 @@
+import { existsSync, unlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { migrate } from "drizzle-orm/libsql/migrator";
@@ -6,10 +7,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { runAlterMigrations } from "../db/db-utils.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
-const { testClient, testDb, mockedEnv, nodemailerSendMail, fetchMock } = vi.hoisted(() => {
+const { testClient, testDb, testDbPath, mockedEnv, nodemailerSendMail, fetchMock } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
 	const { drizzle } = require("drizzle-orm/libsql");
-	const client = createClient({ url: ":memory:" });
+	const { tmpdir } = require("node:os");
+	const { join } = require("node:path");
+	const dbPath = join(tmpdir(), `medassist-routes-real-${process.pid}-${Date.now()}.db`);
+	const client = createClient({ url: `file:${dbPath}` });
 	const db = drizzle(client);
 	const env = {
 		AUTH_ENABLED: false,
@@ -22,6 +26,7 @@ const { testClient, testDb, mockedEnv, nodemailerSendMail, fetchMock } = vi.hois
 	return {
 		testClient: client,
 		testDb: db,
+		testDbPath: dbPath,
 		mockedEnv: env,
 		nodemailerSendMail: vi.fn(),
 		fetchMock: vi.fn(),
@@ -121,6 +126,9 @@ describe("Real route coverage: settings/export/report", () => {
 	afterAll(async () => {
 		await app.close();
 		testClient.close();
+		if (existsSync(testDbPath)) {
+			unlinkSync(testDbPath);
+		}
 	});
 
 	beforeEach(async () => {
@@ -647,7 +655,7 @@ describe("Real route coverage: settings/export/report", () => {
 		});
 		await testClient.execute({
 			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
-			args: [1, `${medId}-0-1700000600000-Alice`, 1700000600, 1],
+			args: [1, `${medId}-0-1700000600000-alice`, 1700000600, 1],
 		});
 		await testClient.execute({
 			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
@@ -663,6 +671,66 @@ describe("Real route coverage: settings/export/report", () => {
 		const body = response.json();
 		expect(body[medId].dosesTaken).toBe(1);
 		expect(body[medId].dosesSkipped).toBe(1);
+	});
+
+	it("POST /medications/report-data filters doses by scheduled doseId timestamp and refills by the same date window", async () => {
+		const medId = await seedMedication("Report Date Range Med");
+		const windowStart = "2026-01-10T00:00:00.000Z";
+		const windowEnd = "2026-01-20T00:00:00.000Z";
+
+		await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
+			args: [
+				1,
+				`${medId}-0-${Date.parse("2026-01-05T09:00:00.000Z")}-Daniel`,
+				Math.floor(Date.parse("2026-01-12T09:00:00.000Z") / 1000),
+				0,
+			],
+		});
+		await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
+			args: [
+				1,
+				`${medId}-0-${Date.parse("2026-01-15T09:00:00.000Z")}-Daniel`,
+				Math.floor(Date.parse("2026-01-25T09:00:00.000Z") / 1000),
+				0,
+			],
+		});
+		await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
+			args: [
+				1,
+				`${medId}-0-${Date.parse("2026-01-18T09:00:00.000Z")}-Daniel`,
+				Math.floor(Date.parse("2026-01-18T09:30:00.000Z") / 1000),
+				1,
+			],
+		});
+
+		await testClient.execute({
+			sql: "INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date) VALUES (?, ?, ?, ?, ?, ?)",
+			args: [medId, 1, 1, 0, 0, Math.floor(Date.parse("2026-01-12T08:00:00.000Z") / 1000)],
+		});
+		await testClient.execute({
+			sql: "INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date) VALUES (?, ?, ?, ?, ?, ?)",
+			args: [medId, 1, 9, 0, 1, Math.floor(Date.parse("2026-01-22T08:00:00.000Z") / 1000)],
+		});
+
+		const response = await app.inject({
+			method: "POST",
+			url: "/medications/report-data",
+			payload: { medicationIds: [medId], startDate: windowStart, endDate: windowEnd },
+		});
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body[medId]).toMatchObject({
+			dosesTaken: 1,
+			dosesSkipped: 1,
+		});
+		expect(body[medId].refills).toHaveLength(1);
+		expect(body[medId].refills[0]).toMatchObject({
+			packsAdded: 1,
+			usedPrescription: false,
+		});
 	});
 
 	it("GET /export includes medications, settings, doseHistory and refillHistory", async () => {

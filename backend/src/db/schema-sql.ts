@@ -100,6 +100,7 @@ export function getTableCreationSQL(): string[] {
       token text NOT NULL UNIQUE,
       taken_by text NOT NULL,
       schedule_days integer NOT NULL DEFAULT 30,
+		  allow_journal_notes integer NOT NULL DEFAULT 0,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       expires_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

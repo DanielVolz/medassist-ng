@@ -248,6 +248,32 @@ describe("Planner Routes", () => {
 			expect(response.json()).toEqual({ error: "Missing planner data" });
 		});
 
+		it("should reject request when no planner date range can be resolved", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/planner/send-email",
+				payload: {
+					email: "test@example.com",
+					rows: [
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 30,
+							plannerUsage: 10,
+							blisterSize: 10,
+							blistersNeeded: 1,
+							fullBlisters: 3,
+							loosePills: 0,
+							enough: true,
+						},
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json()).toEqual({ error: "Missing planner date range" });
+		});
+
 		it("should return error when no notification channels configured", async () => {
 			// User settings exist but email/shoutrrr disabled
 			await testClient.execute({
@@ -280,6 +306,51 @@ describe("Planner Routes", () => {
 
 			expect(response.statusCode).toBe(400);
 			expect(response.json()).toEqual({ error: "No notification channels configured" });
+		});
+
+		it("should accept startDate and endDate aliases for planner range", async () => {
+			process.env.SMTP_HOST = "smtp.test.com";
+			process.env.SMTP_USER = "user@test.com";
+			process.env.SMTP_PASS = "password";
+
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
+				args: [999999999],
+			});
+
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/planner/send-email",
+				payload: {
+					email: "test@example.com",
+					startDate: "2025-01-01T00:00:00.000Z",
+					endDate: "2025-01-31T00:00:00.000Z",
+					language: "en",
+					rows: [
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 30,
+							plannerUsage: 10,
+							blisterSize: 10,
+							blistersNeeded: 1,
+							fullBlisters: 3,
+							loosePills: 0,
+							enough: true,
+						},
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true, message: "Notification sent via email" });
+			expect(mockSendMail).toHaveBeenCalledTimes(1);
+
+			delete process.env.SMTP_HOST;
+			delete process.env.SMTP_USER;
+			delete process.env.SMTP_PASS;
 		});
 
 		it("should send email successfully when SMTP is configured", async () => {

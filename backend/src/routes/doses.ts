@@ -1,19 +1,26 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { doseTracking, medications, shareTokens, userSettings } from "../db/schema.js";
+import { doseTracking, intakeJournal, medications, shareTokens, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { computeMedicationCurrentStock } from "../services/current-stock.js";
 import { markDoseTakenForUser } from "../services/dose-tracking-service.js";
+import {
+	getIntakeJournalForDoseEvent,
+	resolveTrackedDoseEventForUser,
+	upsertIntakeJournalForDoseEvent,
+} from "../services/intake-journal-service.js";
 import type { AuthUser } from "../types/fastify.js";
+import { toLocalDateTimeOffsetString } from "../utils/local-date-time.js";
 import {
 	applyOpenApiRouteStandards,
 	genericErrorSchema,
 	tokenParamsSchema,
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
+import { redactTokenForLog } from "../utils/redaction.js";
 import {
 	parseIntakesJson,
 	parseLocalDateTime,
@@ -30,6 +37,10 @@ const markDoseSchema = z.object({
 
 const shareDoseSchema = z.object({
 	doseId: z.string().min(1, "doseId is required"),
+});
+
+const shareJournalUpsertSchema = z.object({
+	note: z.string().max(4000),
 });
 
 const dismissDosesSchema = z.object({
@@ -56,10 +67,50 @@ const doseReadResponseSchema = {
 					markedBy: { type: ["string", "null"] },
 					takenSource: { type: "string" },
 					dismissed: { type: "boolean" },
+					hasJournalNote: { type: "boolean" },
 				},
 			},
 		},
 	},
+} as const;
+
+const shareJournalEntrySchema = {
+	type: "object",
+	required: [
+		"doseTrackingId",
+		"doseId",
+		"medicationId",
+		"medicationName",
+		"scheduledFor",
+		"dismissed",
+		"takenSource",
+		"note",
+		"updatedAt",
+	],
+	properties: {
+		doseTrackingId: { type: "integer" },
+		doseId: { type: "string" },
+		medicationId: { type: "integer" },
+		medicationName: { type: "string" },
+		scheduledFor: { type: "string", format: "date-time" },
+		takenAt: { type: ["string", "null"], format: "date-time" },
+		dismissed: { type: "boolean" },
+		takenSource: { type: "string", enum: ["manual", "automatic"] },
+		markedBy: { type: ["string", "null"] },
+		note: { type: ["string", "null"] },
+		updatedAt: { type: ["string", "null"], format: "date-time" },
+		createdAt: { type: ["string", "null"], format: "date-time" },
+	},
+	additionalProperties: false,
+} as const;
+
+const shareJournalResponseSchema = {
+	type: "object",
+	required: ["entry"],
+	properties: {
+		entry: shareJournalEntrySchema,
+	},
+	additionalProperties: false,
 } as const;
 
 function getValidationErrorMessage(error: z.ZodError): string {
@@ -69,6 +120,18 @@ function getValidationErrorMessage(error: z.ZodError): string {
 	}
 
 	return firstIssue.code === "invalid_type" && firstIssue.input === undefined ? "Required" : firstIssue.message;
+}
+
+function serializeJournalTakenAt(value: Date | null, dismissed: boolean): string | null {
+	if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+		return null;
+	}
+
+	if (dismissed && value.getTime() <= 0) {
+		return null;
+	}
+
+	return value.toISOString();
 }
 
 // Helper to get user ID from request
@@ -135,6 +198,10 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 		return false;
 	}
 
+	if (!isDoseInsideShareScheduleWindow(share, parsedDose)) {
+		return false;
+	}
+
 	const [medication] = await db
 		.select()
 		.from(medications)
@@ -170,6 +237,24 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 	}
 
 	return expectedPersons.includes(parsedDose.personSuffix);
+}
+
+function getLocalDayStartMs(value: Date | number): number {
+	const date = typeof value === "number" ? new Date(value) : new Date(value.getTime());
+	date.setHours(0, 0, 0, 0);
+	return date.getTime();
+}
+
+function isDoseInsideShareScheduleWindow(share: typeof shareTokens.$inferSelect, parsedDose: ParsedDoseId): boolean {
+	const scheduleDays = Math.max(1, share.scheduleDays ?? 30);
+	const todayStart = getLocalDayStartMs(new Date());
+	const earliestVisible = new Date(todayStart);
+	earliestVisible.setDate(earliestVisible.getDate() - (scheduleDays - 1));
+	const latestVisibleExclusive = new Date(todayStart);
+	latestVisibleExclusive.setDate(latestVisibleExclusive.getDate() + scheduleDays);
+	const doseDayStart = getLocalDayStartMs(parsedDose.timestampMs);
+
+	return doseDayStart >= earliestVisible.getTime() && doseDayStart < latestVisibleExclusive.getTime();
 }
 
 async function isDoseOutOfStock(options: {
@@ -226,6 +311,81 @@ async function isDoseOutOfStock(options: {
 	);
 }
 
+async function markDoseSkippedForUser(input: {
+	userId: number;
+	doseId: string;
+}): Promise<"created" | "updated" | "already_skipped"> {
+	const [existing] = await db
+		.select()
+		.from(doseTracking)
+		.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, input.doseId)));
+
+	if (existing) {
+		if (existing.dismissed) {
+			return "already_skipped";
+		}
+
+		await db
+			.update(doseTracking)
+			.set({ dismissed: true })
+			.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, input.doseId)));
+		return "updated";
+	}
+
+	await db.insert(doseTracking).values({
+		userId: input.userId,
+		doseId: input.doseId,
+		markedBy: null,
+		takenAt: new Date(0),
+		dismissed: true,
+	});
+
+	return "created";
+}
+
+async function undoDoseSkippedForUser(input: { userId: number; doseId: string }): Promise<boolean> {
+	const [existing] = await db
+		.select()
+		.from(doseTracking)
+		.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, input.doseId)));
+
+	if (!existing?.dismissed) {
+		return false;
+	}
+
+	const hasRealTakenTimestamp =
+		existing.takenAt instanceof Date ? existing.takenAt.getTime() > 0 : Boolean(existing.takenAt);
+	if (existing.markedBy !== null || hasRealTakenTimestamp) {
+		await db.update(doseTracking).set({ dismissed: false }).where(eq(doseTracking.id, existing.id));
+		return true;
+	}
+
+	await db.delete(doseTracking).where(eq(doseTracking.id, existing.id));
+	return true;
+}
+
+function buildSharedJournalEntryDto(input: {
+	event: NonNullable<Awaited<ReturnType<typeof resolveTrackedDoseEventForUser>>>;
+	journalEntry: Awaited<ReturnType<typeof getIntakeJournalForDoseEvent>>;
+}) {
+	const { event, journalEntry } = input;
+
+	return {
+		doseTrackingId: event.doseTrackingId,
+		doseId: event.doseId,
+		medicationId: event.medicationId,
+		medicationName: event.medicationName,
+		scheduledFor: toLocalDateTimeOffsetString(journalEntry?.scheduledFor ?? event.scheduledFor),
+		takenAt: serializeJournalTakenAt(event.takenAt, event.dismissed),
+		dismissed: event.dismissed,
+		takenSource: event.takenSource,
+		markedBy: event.markedBy,
+		note: journalEntry?.note ?? null,
+		updatedAt: journalEntry?.updatedAt?.toISOString() ?? null,
+		createdAt: journalEntry?.createdAt?.toISOString() ?? null,
+	};
+}
+
 // =============================================================================
 // Dose Tracking Routes
 // =============================================================================
@@ -233,7 +393,13 @@ export async function doseRoutes(app: FastifyInstance) {
 	applyOpenApiRouteStandards(app, {
 		tag: "doses",
 		protectedByDefault: false,
-		protectedPaths: [/^\/doses\/taken$/, /^\/doses\/taken\/:doseId$/, /^\/doses\/dismiss$/],
+		protectedPaths: [
+			/^\/doses\/taken$/,
+			/^\/doses\/taken\/:doseId$/,
+			/^\/doses\/dismiss$/,
+			/^\/doses\/skip$/,
+			/^\/doses\/skip\/:doseId$/,
+		],
 	});
 
 	// ---------------------------------------------------------------------------
@@ -384,6 +550,83 @@ export async function doseRoutes(app: FastifyInstance) {
 	);
 
 	// ---------------------------------------------------------------------------
+	// POST /doses/skip - PROTECTED: Mark a single dose as skipped
+	// ---------------------------------------------------------------------------
+	app.post<{ Body: z.infer<typeof markDoseSchema> }>(
+		"/doses/skip",
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["doses"],
+				security: protectedEndpointSecurity,
+				body: {
+					type: "object",
+					required: ["doseId"],
+					properties: {
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							success: { type: "boolean" },
+							message: { type: "string" },
+						},
+					},
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					401: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
+			const parsed = markDoseSchema.safeParse(request.body);
+			if (!parsed.success) {
+				return reply.status(400).send({ error: getValidationErrorMessage(parsed.error) });
+			}
+
+			const status = await markDoseSkippedForUser({ userId, doseId: parsed.data.doseId });
+			if (status === "already_skipped") {
+				return { success: true, message: "Already skipped" };
+			}
+
+			return { success: true };
+		}
+	);
+
+	// ---------------------------------------------------------------------------
+	// DELETE /doses/skip/:doseId - PROTECTED: Undo a single skipped dose
+	// ---------------------------------------------------------------------------
+	app.delete<{ Params: { doseId: string } }>(
+		"/doses/skip/:doseId",
+		{
+			preHandler: requireAuth,
+			schema: {
+				tags: ["doses"],
+				security: protectedEndpointSecurity,
+				params: {
+					type: "object",
+					required: ["doseId"],
+					properties: {
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				response: {
+					200: { type: "object", properties: { success: { type: "boolean" } } },
+					401: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const userId = await getUserId(request, reply);
+			await undoDoseSkippedForUser({ userId, doseId: request.params.doseId });
+
+			return { success: true };
+		}
+	);
+
+	// ---------------------------------------------------------------------------
 	// POST /doses/dismiss - PROTECTED: Dismiss missed doses without deducting stock
 	// ---------------------------------------------------------------------------
 	app.post<{ Body: z.infer<typeof dismissDosesSchema> }>(
@@ -431,27 +674,8 @@ export async function doseRoutes(app: FastifyInstance) {
 			// becomes dismissed, regardless of whether it already has a taken timestamp.
 			let dismissedCount = 0;
 			for (const doseId of doseIds) {
-				const [existing] = await db
-					.select()
-					.from(doseTracking)
-					.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
-
-				if (existing) {
-					if (!existing.dismissed) {
-						await db
-							.update(doseTracking)
-							.set({ dismissed: true })
-							.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
-						dismissedCount++;
-					}
-				} else {
-					await db.insert(doseTracking).values({
-						userId,
-						doseId,
-						markedBy: null,
-						takenAt: new Date(0),
-						dismissed: true,
-					});
+				const status = await markDoseSkippedForUser({ userId, doseId });
+				if (status !== "already_skipped") {
 					dismissedCount++;
 				}
 			}
@@ -533,25 +757,329 @@ export async function doseRoutes(app: FastifyInstance) {
 		},
 		async (request, reply) => {
 			const { token } = request.params;
+			const tokenRef = redactTokenForLog(token);
 
 			const { share, reason } = await getActiveShareToken(token);
 			if (!share) {
-				request.log.warn(`[ShareDose] Rejected read: token=${token}, reason=${reason}`);
+				request.log.warn(`[ShareDose] Rejected read: tokenRef=${tokenRef}, reason=${reason}`);
 				return reply.notFound("Share link not found");
 			}
 
-			// Get all taken doses for this user (no time limit)
+			// Keep public dose reads scoped to the selected share person and visible schedule window.
 			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
+			const visibleDoses: (typeof doseTracking.$inferSelect)[] = [];
+			for (const dose of doses) {
+				if (await validateShareDoseId(share, dose.doseId)) {
+					visibleDoses.push(dose);
+				}
+			}
+
+			const journalDoseTrackingIds = new Set<number>();
+			if ((share.allowJournalNotes ?? false) && visibleDoses.length > 0) {
+				const journalRows = await db
+					.select({ doseTrackingId: intakeJournal.doseTrackingId })
+					.from(intakeJournal)
+					.where(
+						and(
+							eq(intakeJournal.userId, share.userId),
+							inArray(
+								intakeJournal.doseTrackingId,
+								visibleDoses.map((dose) => dose.id)
+							)
+						)
+					);
+
+				for (const row of journalRows) {
+					journalDoseTrackingIds.add(row.doseTrackingId);
+				}
+			}
 
 			return {
-				doses: doses.map((d) => ({
+				doses: visibleDoses.map((d) => ({
 					doseId: d.doseId,
 					takenAt: d.takenAt?.getTime() ?? Date.now(),
 					markedBy: d.markedBy,
 					takenSource: d.takenSource ?? "manual",
 					dismissed: d.dismissed ?? false,
+					hasJournalNote: journalDoseTrackingIds.has(d.id),
 				})),
 			};
+		}
+	);
+
+	app.get<{ Params: { token: string; doseId: string } }>(
+		"/share/:token/journal/event/:doseId",
+		{
+			schema: {
+				params: {
+					type: "object",
+					required: ["token", "doseId"],
+					properties: {
+						token: tokenParamsSchema.properties.token,
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				response: {
+					200: shareJournalResponseSchema,
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					403: genericErrorSchema,
+					404: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { token, doseId } = request.params;
+			const tokenRef = redactTokenForLog(token);
+
+			const { share, reason } = await getActiveShareToken(token);
+			if (!share) {
+				request.log.warn(`[ShareJournal] Rejected read: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+				return reply.notFound("Share link not found");
+			}
+
+			if (!(share.allowJournalNotes ?? false)) {
+				return reply
+					.status(403)
+					.send({ error: "Journal notes are not enabled for this share link", code: "NOT_ENABLED" });
+			}
+
+			const isValidShareDoseId = await validateShareDoseId(share, doseId);
+			if (!isValidShareDoseId) {
+				return reply.status(400).send({ error: "Invalid or unauthorized doseId", code: "INVALID_DOSE" });
+			}
+
+			const event = await resolveTrackedDoseEventForUser({ userId: share.userId, doseId });
+			if (!event) {
+				return reply
+					.status(404)
+					.send({ error: "Tracked dose event not found for this share link", code: "DOSE_NOT_FOUND" });
+			}
+
+			const journalEntry = await getIntakeJournalForDoseEvent({ userId: share.userId, doseId });
+			return { entry: buildSharedJournalEntryDto({ event, journalEntry }) };
+		}
+	);
+
+	app.put<{ Params: { token: string; doseId: string }; Body: z.infer<typeof shareJournalUpsertSchema> }>(
+		"/share/:token/journal/event/:doseId",
+		{
+			schema: {
+				params: {
+					type: "object",
+					required: ["token", "doseId"],
+					properties: {
+						token: tokenParamsSchema.properties.token,
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				body: {
+					type: "object",
+					required: ["note"],
+					properties: {
+						note: { type: "string", maxLength: 4000 },
+					},
+					additionalProperties: false,
+				},
+				response: {
+					200: shareJournalResponseSchema,
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					403: genericErrorSchema,
+					404: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { token, doseId } = request.params;
+			const tokenRef = redactTokenForLog(token);
+
+			const parsed = shareJournalUpsertSchema.safeParse(request.body);
+			if (!parsed.success) {
+				return reply.status(400).send({ error: getValidationErrorMessage(parsed.error), code: "VALIDATION_ERROR" });
+			}
+
+			const normalizedNote = parsed.data.note.trim();
+			if (normalizedNote.length === 0) {
+				return reply.status(400).send({ error: "Journal note cannot be empty", code: "EMPTY_NOTE" });
+			}
+
+			const { share, reason } = await getActiveShareToken(token);
+			if (!share) {
+				request.log.warn(`[ShareJournal] Rejected save: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+				return reply.notFound("Share link not found");
+			}
+
+			if (!(share.allowJournalNotes ?? false)) {
+				return reply
+					.status(403)
+					.send({ error: "Journal notes are not enabled for this share link", code: "NOT_ENABLED" });
+			}
+
+			const isValidShareDoseId = await validateShareDoseId(share, doseId);
+			if (!isValidShareDoseId) {
+				return reply.status(400).send({ error: "Invalid or unauthorized doseId", code: "INVALID_DOSE" });
+			}
+
+			const event = await resolveTrackedDoseEventForUser({ userId: share.userId, doseId });
+			if (!event) {
+				return reply
+					.status(404)
+					.send({ error: "Tracked dose event not found for this share link", code: "DOSE_NOT_FOUND" });
+			}
+
+			const journalEntry = await upsertIntakeJournalForDoseEvent({
+				userId: share.userId,
+				doseId,
+				note: normalizedNote,
+			});
+
+			return { entry: buildSharedJournalEntryDto({ event, journalEntry }) };
+		}
+	);
+
+	app.delete<{ Params: { token: string; doseId: string } }>(
+		"/share/:token/journal/event/:doseId",
+		{
+			schema: {
+				params: {
+					type: "object",
+					required: ["token", "doseId"],
+					properties: {
+						token: tokenParamsSchema.properties.token,
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				response: {
+					403: genericErrorSchema,
+					404: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { token, doseId } = request.params;
+			const tokenRef = redactTokenForLog(token);
+
+			const { share, reason } = await getActiveShareToken(token);
+			if (!share) {
+				request.log.warn(`[ShareJournal] Rejected delete: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+				return reply.notFound("Share link not found");
+			}
+
+			if (!(share.allowJournalNotes ?? false)) {
+				return reply
+					.status(403)
+					.send({ error: "Journal notes are not enabled for this share link", code: "NOT_ENABLED" });
+			}
+
+			return reply.status(403).send({ error: "Shared links cannot delete journal notes", code: "DELETE_NOT_ALLOWED" });
+		}
+	);
+
+	// ---------------------------------------------------------------------------
+	// POST /share/:token/doses/skip - PUBLIC: Mark a dose as skipped via share link
+	// ---------------------------------------------------------------------------
+	app.post<{ Params: { token: string }; Body: z.infer<typeof shareDoseSchema> }>(
+		"/share/:token/doses/skip",
+		{
+			schema: {
+				params: tokenParamsSchema,
+				body: {
+					type: "object",
+					required: ["doseId"],
+					properties: {
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							success: { type: "boolean" },
+							message: { type: "string" },
+						},
+					},
+					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					404: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { token } = request.params;
+			const tokenRef = redactTokenForLog(token);
+
+			const parsed = shareDoseSchema.safeParse(request.body);
+			if (!parsed.success) {
+				return reply.status(400).send({ error: getValidationErrorMessage(parsed.error) });
+			}
+
+			const { doseId } = parsed.data;
+			const { share, reason } = await getActiveShareToken(token);
+			if (!share) {
+				request.log.warn(`[ShareDose] Rejected skip: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+				return reply.notFound("Share link not found");
+			}
+
+			const isValidShareDoseId = await validateShareDoseId(share, doseId);
+			if (!isValidShareDoseId) {
+				request.log.warn(
+					`[ShareDose] Rejected invalid doseId in skip request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+				);
+				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
+			}
+
+			const status = await markDoseSkippedForUser({ userId: share.userId, doseId });
+			if (status === "already_skipped") {
+				return { success: true, message: "Already skipped" };
+			}
+
+			request.log.info(
+				`[ShareDose] Dose skipped via share link: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+			);
+			return { success: true };
+		}
+	);
+
+	// ---------------------------------------------------------------------------
+	// DELETE /share/:token/doses/skip/:doseId - PUBLIC: Undo a skipped dose via share link
+	// ---------------------------------------------------------------------------
+	app.delete<{ Params: { token: string; doseId: string } }>(
+		"/share/:token/doses/skip/:doseId",
+		{
+			schema: {
+				params: {
+					type: "object",
+					required: ["token", "doseId"],
+					properties: {
+						token: tokenParamsSchema.properties.token,
+						doseId: { type: "string", minLength: 1 },
+					},
+				},
+				response: {
+					200: { type: "object", properties: { success: { type: "boolean" } } },
+					400: genericErrorSchema,
+					404: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const { token, doseId } = request.params;
+			const tokenRef = redactTokenForLog(token);
+
+			const { share, reason } = await getActiveShareToken(token);
+			if (!share) {
+				request.log.warn(`[ShareDose] Rejected undo skip: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+				return reply.notFound("Share link not found");
+			}
+
+			const isValidShareDoseId = await validateShareDoseId(share, doseId);
+			if (!isValidShareDoseId) {
+				request.log.warn(
+					`[ShareDose] Rejected invalid doseId in undo skip request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+				);
+				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
+			}
+
+			await undoDoseSkippedForUser({ userId: share.userId, doseId });
+			return { success: true };
 		}
 	);
 
@@ -582,6 +1110,7 @@ export async function doseRoutes(app: FastifyInstance) {
 		},
 		async (request, reply) => {
 			const { token } = request.params;
+			const tokenRef = redactTokenForLog(token);
 
 			const parsed = shareDoseSchema.safeParse(request.body);
 			if (!parsed.success) {
@@ -594,14 +1123,14 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			const { share, reason } = await getActiveShareToken(token);
 			if (!share) {
-				request.log.warn(`[ShareDose] Rejected mark: token=${token}, doseId=${doseId}, reason=${reason}`);
+				request.log.warn(`[ShareDose] Rejected mark: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
 				return reply.notFound("Share link not found");
 			}
 
 			const isValidShareDoseId = await validateShareDoseId(share, doseId);
 			if (!isValidShareDoseId) {
 				request.log.warn(
-					`[ShareDose] Rejected invalid doseId in mark request: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Rejected invalid doseId in mark request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
@@ -614,7 +1143,7 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			if (existing) {
 				request.log.debug(
-					`[ShareDose] Duplicate mark ignored: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Duplicate mark ignored: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 				return { success: true, message: "Already marked" };
 			}
@@ -627,7 +1156,7 @@ export async function doseRoutes(app: FastifyInstance) {
 			});
 			if (outOfStock) {
 				request.log.info(
-					`[ShareDose] Rejected out-of-stock mark request: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Rejected out-of-stock mark request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 				return reply.status(409).send({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
 			}
@@ -644,7 +1173,7 @@ export async function doseRoutes(app: FastifyInstance) {
 			});
 
 			request.log.info(
-				`[ShareDose] Dose marked via share link: token=${token}, ownerUserId=${share.userId}, shareTakenBy=${share.takenBy}, markedBy=${markedBy}, doseId=${doseId}`
+				`[ShareDose] Dose marked via share link: tokenRef=${tokenRef}, ownerUserId=${share.userId}, shareTakenBy=${share.takenBy}, markedBy=${markedBy}, doseId=${doseId}`
 			);
 
 			return { success: true };
@@ -675,17 +1204,18 @@ export async function doseRoutes(app: FastifyInstance) {
 		},
 		async (request, reply) => {
 			const { token, doseId } = request.params;
+			const tokenRef = redactTokenForLog(token);
 
 			const { share, reason } = await getActiveShareToken(token);
 			if (!share) {
-				request.log.warn(`[ShareDose] Rejected unmark: token=${token}, doseId=${doseId}, reason=${reason}`);
+				request.log.warn(`[ShareDose] Rejected unmark: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
 				return reply.notFound("Share link not found");
 			}
 
 			const isValidShareDoseId = await validateShareDoseId(share, doseId);
 			if (!isValidShareDoseId) {
 				request.log.warn(
-					`[ShareDose] Rejected invalid doseId in unmark request: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Rejected invalid doseId in unmark request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
@@ -699,7 +1229,7 @@ export async function doseRoutes(app: FastifyInstance) {
 			if (existing?.dismissed) {
 				// Already dismissed - keep the record as-is
 				request.log.debug(
-					`[ShareDose] Unmark ignored for dismissed dose: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Unmark ignored for dismissed dose: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 			} else {
 				// Not dismissed - delete the record entirely
@@ -707,7 +1237,7 @@ export async function doseRoutes(app: FastifyInstance) {
 					.delete(doseTracking)
 					.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
 				request.log.info(
-					`[ShareDose] Dose unmarked via share link: token=${token}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Dose unmarked via share link: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
 				);
 			}
 

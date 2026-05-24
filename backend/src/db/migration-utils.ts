@@ -76,6 +76,7 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE user_settings ADD COLUMN last_prescription_reminder_channel text`,
 		`ALTER TABLE user_settings ADD COLUMN last_prescription_reminder_med_names text`,
 		`ALTER TABLE refill_history ADD COLUMN used_prescription integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE share_tokens ADD COLUMN allow_journal_notes integer NOT NULL DEFAULT 0`,
 	];
 
 	for (const sql of alterMigrations) {
@@ -97,6 +98,16 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
       loose_pills_added INTEGER NOT NULL DEFAULT 0,
       refill_date INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 	    )`,
+		`CREATE TABLE IF NOT EXISTS intake_journal (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			dose_tracking_id INTEGER NOT NULL REFERENCES dose_tracking(id) ON DELETE CASCADE,
+			medication_id INTEGER NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
+			scheduled_for INTEGER NOT NULL,
+			note TEXT NOT NULL,
+			created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE IF NOT EXISTS notification_action_groups (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -164,6 +175,7 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 	const createIndexMigrations = [
 		`CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_unique ON users(lower(username))`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS api_keys_key_hash_unique ON api_keys(key_hash)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS intake_journal_dose_tracking_id_unique ON intake_journal(dose_tracking_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS notification_action_groups_group_key_unique ON notification_action_groups(group_key)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS notification_action_tokens_token_hash_unique ON notification_action_tokens(token_hash)`,
 		`CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys(user_id)`,

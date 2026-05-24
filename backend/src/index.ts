@@ -21,6 +21,7 @@ import { authRoutes } from "./routes/auth.js";
 import { doseRoutes } from "./routes/doses.js";
 import { exportRoutes } from "./routes/export.js";
 import { healthRoutes } from "./routes/health.js";
+import { intakeJournalRoutes } from "./routes/intake-journal.js";
 import { medicationEnrichmentRoutes } from "./routes/medication-enrichment.js";
 import { medicationRoutes } from "./routes/medications.js";
 import { notificationActionRoutes } from "./routes/notification-actions.js";
@@ -109,6 +110,7 @@ async function registerApiDocs(app: FastifyInstance, enabled: boolean) {
 				{ name: "health", description: "Service health endpoints" },
 				{ name: "auth", description: "Authentication and profile endpoints" },
 				{ name: "api-keys", description: "Programmatic API key management" },
+				{ name: "intake-journal", description: "Owner-only intake journal CRUD and history endpoints" },
 				{ name: "medication-enrichment", description: "Medication search and enrichment endpoints" },
 				{ name: "settings", description: "User settings and notification test endpoints" },
 			],
@@ -248,6 +250,7 @@ export async function createApp(options?: {
 	await app.register(notificationActionRoutes);
 	await app.register(shareRoutes);
 	await app.register(doseRoutes);
+	await app.register(intakeJournalRoutes);
 	await app.register(exportRoutes);
 	await app.register(refillRoutes);
 	await app.register(reportRoutes);
@@ -349,6 +352,7 @@ await app.register(plannerRoutes);
 await app.register(notificationActionRoutes);
 await app.register(shareRoutes);
 await app.register(doseRoutes);
+await app.register(intakeJournalRoutes);
 await app.register(exportRoutes);
 await app.register(refillRoutes);
 await app.register(reportRoutes);

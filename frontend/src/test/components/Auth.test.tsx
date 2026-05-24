@@ -132,6 +132,7 @@ describe("AuthProvider", () => {
 
 		await waitFor(() => {
 			expect(result.current.user).toBeNull();
+			expect(result.current.sessionExpired).toBe(true);
 		});
 	});
 
@@ -865,6 +866,28 @@ describe("AuthProvider methods", () => {
 		});
 
 		expect(result.current.user).toBeNull();
+		expect(result.current.sessionExpired).toBe(false);
+	});
+
+	it("marks the session as expired when refreshUser cannot recover from 401", async () => {
+		vi.clearAllMocks();
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ authEnabled: false, formLoginEnabled: true }) })
+			.mockResolvedValueOnce({ ok: false, status: 401 })
+			.mockResolvedValueOnce({ ok: false, status: 401 });
+
+		const { result } = renderHook(() => useAuth(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.loading).toBe(false);
+		});
+
+		await act(async () => {
+			await result.current.refreshUser();
+		});
+
+		expect(result.current.user).toBeNull();
+		expect(result.current.sessionExpired).toBe(true);
 	});
 
 	it("updateProfile throws default message when backend has no error field", async () => {

@@ -12,6 +12,7 @@ import { formatNumber } from "../utils";
 import { getSystemLocale } from "../utils/formatters";
 import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
 import { getLiquidCountUnitLabel } from "../utils/intake-units";
+import { personTagsMatch } from "../utils/person-tags";
 import { getStockStatus } from "../utils/schedule";
 
 export interface UserFilterModalProps {
@@ -72,7 +73,10 @@ export function UserFilterModal({
 
 	if (!selectedUser) return null;
 
-	const userMeds = meds.filter((m) => !m.isObsolete && (m.takenBy || []).includes(selectedUser));
+	const userMeds = meds.filter(
+		(medication) =>
+			!medication.isObsolete && (medication.takenBy || []).some((person) => personTagsMatch(person, selectedUser))
+	);
 
 	return (
 		<div
@@ -110,7 +114,7 @@ export function UserFilterModal({
 
 						// Get intakes relevant to this person
 						const personIntakes = getMedicationIntakes(med).filter(
-							(intake) => intake.takenBy === null || intake.takenBy === selectedUser
+							(intake) => intake.takenBy === null || personTagsMatch(intake.takenBy, selectedUser)
 						);
 
 						return (

@@ -11,8 +11,11 @@ import {
 	isLiquidContainerPackageType,
 	isTubePackageType,
 } from "../types";
-import { formatDate, formatDateTime } from "../utils/formatters";
+import { formatDate, formatDateTime, toInputValue } from "../utils/formatters";
 import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
+import { mergePersonTags, personTagsMatch } from "../utils/person-tags";
+import { useAuth } from "./Auth";
+import { DateTimeInput } from "./DateTimeInput";
 import { MedicationAvatar } from "./MedicationAvatar";
 
 type ReportFormat = "txt" | "md" | "pdf";
@@ -41,31 +44,53 @@ type ReportData = Record<
 	}
 >;
 
+type ReportDateRange = {
+	startDate: string;
+	endDate: string;
+};
+
+type ReportPreview = {
+	format: "txt" | "md";
+	content: string;
+};
+
+function getDefaultDateRange(): ReportDateRange {
+	const endDate = new Date();
+	const startDate = new Date(endDate);
+	startDate.setDate(startDate.getDate() - 30);
+	return {
+		startDate: toInputValue(startDate),
+		endDate: toInputValue(endDate),
+	};
+}
+
 export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) {
 	const { t } = useTranslation();
+	const { authFetch } = useAuth();
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 	const [format, setFormat] = useState<ReportFormat>("pdf");
 	const [generating, setGenerating] = useState(false);
 	const [takenByFilter, setTakenByFilter] = useState<Set<string>>(new Set());
+	const [dateRange, setDateRange] = useState<ReportDateRange>(() => getDefaultDateRange());
+	const [preview, setPreview] = useState<ReportPreview | null>(null);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
 	useScrollLock(isOpen);
 	useEscapeKey(isOpen, onClose);
 
 	// Collect all unique "taken by" people across all medications
 	const allPeople = useMemo(() => {
-		const people = new Set<string>();
-		for (const med of medications) {
-			if (med.takenBy) {
-				for (const p of med.takenBy) people.add(p);
-			}
-		}
-		return Array.from(people).sort();
+		return mergePersonTags(medications.flatMap((medication) => medication.takenBy || []));
 	}, [medications]);
 
 	// Filtered medications based on takenBy filter
 	const filteredMeds = useMemo(() => {
 		if (takenByFilter.size === 0) return medications;
-		return medications.filter((m) => m.takenBy?.some((p) => takenByFilter.has(p)));
+		return medications.filter((medication) =>
+			medication.takenBy?.some((person) =>
+				Array.from(takenByFilter).some((filterValue) => personTagsMatch(person, filterValue))
+			)
+		);
 	}, [medications, takenByFilter]);
 
 	const activeMeds = useMemo(() => filteredMeds.filter((m) => !m.isObsolete), [filteredMeds]);
@@ -97,8 +122,21 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 			setTakenByFilter(new Set());
 			setFormat("pdf");
 			setGenerating(false);
+			setDateRange(getDefaultDateRange());
+			setPreview(null);
+			setErrorMessage(null);
 		}
 	}, [isOpen]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: preview should reset when any report input changes while the modal is open
+	useEffect(() => {
+		if (!isOpen) {
+			return;
+		}
+
+		setPreview(null);
+		setErrorMessage(null);
+	}, [isOpen, selectedIds, takenByFilter, format, dateRange.startDate, dateRange.endDate]);
 
 	const toggleMed = useCallback((id: number) => {
 		setSelectedIds((prev) => {
@@ -118,37 +156,59 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 	}, []);
 
 	const selectedMeds = useMemo(() => filteredMeds.filter((m) => selectedIds.has(m.id)), [filteredMeds, selectedIds]);
+	let generateButtonLabel = t("report.generate");
+	if (generating) {
+		generateButtonLabel = t("report.generating");
+	} else if (preview) {
+		generateButtonLabel = t("report.regenerate");
+	}
 
 	async function handleGenerate() {
 		if (selectedIds.size === 0) return;
+		const startDate = new Date(dateRange.startDate);
+		const endDate = new Date(dateRange.endDate);
+		if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
+			setErrorMessage(t("report.invalidDateRange"));
+			return;
+		}
+
 		setGenerating(true);
+		setErrorMessage(null);
 
 		try {
+			const resolvedDateRange = {
+				startDate: startDate.toISOString(),
+				endDate: endDate.toISOString(),
+			};
+			const filterArr = takenByFilter.size > 0 ? Array.from(takenByFilter) : null;
+
 			// Fetch report data from backend
-			const res = await fetch("/api/medications/report-data", {
+			const res = await authFetch("/api/medications/report-data", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					medicationIds: Array.from(selectedIds),
+					startDate: resolvedDateRange.startDate,
+					endDate: resolvedDateRange.endDate,
 					takenByFilter: takenByFilter.size > 0 ? Array.from(takenByFilter) : undefined,
 				}),
-				credentials: "include",
 			});
 			if (!res.ok) throw new Error("Failed to fetch report data");
 			const reportData = (await res.json()) as ReportData;
 
 			if (format === "pdf") {
-				const imageMap = await fetchMedImages(selectedMeds);
-				const filterArr = takenByFilter.size > 0 ? Array.from(takenByFilter) : null;
-				openPrintView(selectedMeds, reportData, t, imageMap, filterArr);
+				const imageMap = await fetchMedImages(selectedMeds, authFetch);
+				openPrintView(selectedMeds, reportData, t, imageMap, filterArr, resolvedDateRange);
+				setPreview(null);
+				setErrorMessage(null);
+				onClose();
 			} else {
-				const filterArr = takenByFilter.size > 0 ? Array.from(takenByFilter) : null;
-				const content = generateTextReport(selectedMeds, reportData, format, t, filterArr);
-				downloadFile(content, format);
+				const content = generateTextReport(selectedMeds, reportData, format, t, filterArr, resolvedDateRange);
+				setPreview({ format, content });
 			}
-			onClose();
 		} catch {
 			// Stay open on error so user can retry
+			setErrorMessage(t("report.error"));
 		} finally {
 			setGenerating(false);
 		}
@@ -176,6 +236,28 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 				</button>
 				<h2 className="report-modal-title">{t("report.title")}</h2>
 				<p className="report-modal-desc">{t("report.description")}</p>
+
+				<div className="report-range">
+					<h4>{t("report.dateRange")}</h4>
+					<div className="report-range-grid">
+						<div className="report-range-field">
+							<span>{t("report.from")}</span>
+							<DateTimeInput
+								step="60"
+								value={dateRange.startDate}
+								onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))}
+							/>
+						</div>
+						<div className="report-range-field">
+							<span>{t("report.until")}</span>
+							<DateTimeInput
+								step="60"
+								value={dateRange.endDate}
+								onChange={(e) => setDateRange((prev) => ({ ...prev, endDate: e.target.value }))}
+							/>
+						</div>
+					</div>
+				</div>
 
 				{/* Person filter */}
 				{allPeople.length > 1 && (
@@ -279,6 +361,25 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 					</div>
 				</div>
 
+				{errorMessage && <p className="report-error">{errorMessage}</p>}
+
+				{preview && (
+					<div className="report-preview">
+						<div className="report-preview-header">
+							<h4>{t("report.preview")}</h4>
+							<button
+								type="button"
+								className="ghost small"
+								onClick={() => downloadFile(preview.content, preview.format)}
+							>
+								{t("report.download")}
+							</button>
+						</div>
+						<p className="report-preview-desc">{t("report.previewDescription")}</p>
+						<pre className="report-preview-content">{preview.content}</pre>
+					</div>
+				)}
+
 				{/* Actions */}
 				<div className="report-actions">
 					<button type="button" className="ghost" onClick={onClose}>
@@ -290,7 +391,7 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 						onClick={handleGenerate}
 						disabled={selectedIds.size === 0 || generating}
 					>
-						{generating ? t("report.generating") : t("report.generate")}
+						{generateButtonLabel}
 					</button>
 				</div>
 			</div>
@@ -348,7 +449,8 @@ function generateTextReport(
 	reportData: ReportData,
 	fmt: "txt" | "md",
 	t: TFn,
-	personFilter: string[] | null
+	personFilter: string[] | null,
+	dateRange: { startDate: string; endDate: string }
 ): string {
 	const lines: string[] = [];
 	const sep = fmt === "md" ? "---" : "═".repeat(60);
@@ -360,6 +462,7 @@ function generateTextReport(
 
 	lines.push(h1(t("report.docTitle")));
 	lines.push(`${t("report.docGenerated")}: ${formatDate(new Date().toISOString())}`);
+	lines.push(`${t("report.docRange")}: ${formatDateTime(dateRange.startDate)} - ${formatDateTime(dateRange.endDate)}`);
 	lines.push("");
 
 	for (const med of meds) {
@@ -483,13 +586,13 @@ function downloadFile(content: string, format: "txt" | "md") {
 
 type ImageMap = Record<number, string>;
 
-async function fetchMedImages(meds: Medication[]): Promise<ImageMap> {
+async function fetchMedImages(meds: Medication[], authFetch: typeof fetch): Promise<ImageMap> {
 	const map: ImageMap = {};
 	const fetches = meds
 		.filter((m) => m.imageUrl)
 		.map(async (m) => {
 			try {
-				const res = await fetch(`/api/images/${m.imageUrl}`, { credentials: "include" });
+				const res = await authFetch(`/api/images/${m.imageUrl}`);
 				if (!res.ok) return;
 				const blob = await res.blob();
 				const dataUrl = await new Promise<string>((resolve) => {
@@ -511,12 +614,13 @@ function openPrintView(
 	reportData: ReportData,
 	t: TFn,
 	imageMap: ImageMap,
-	personFilter: string[] | null
+	personFilter: string[] | null,
+	dateRange: { startDate: string; endDate: string }
 ) {
 	const w = window.open("", "_blank");
 	if (!w) return;
 
-	const html = buildPrintHtml(meds, reportData, t, imageMap, personFilter);
+	const html = buildPrintHtml(meds, reportData, t, imageMap, personFilter, dateRange);
 	w.document.write(html);
 	w.document.close();
 	w.onload = () => setTimeout(() => w.print(), 300);
@@ -531,7 +635,8 @@ function buildPrintHtml(
 	reportData: ReportData,
 	t: TFn,
 	imageMap: ImageMap,
-	personFilter: string[] | null
+	personFilter: string[] | null,
+	dateRange: { startDate: string; endDate: string }
 ): string {
 	const sections: string[] = [];
 
@@ -721,6 +826,7 @@ function buildPrintHtml(
 <div class="no-print print-hint">${escHtml(t("report.docPrintInstruction"))}</div>
 <h1>${escHtml(t("report.docTitle"))}</h1>
 <p class="subtitle">${escHtml(t("report.docGenerated"))}: ${formatDate(new Date().toISOString())}</p>
+<p class="subtitle">${escHtml(t("report.docRange"))}: ${formatDateTime(dateRange.startDate)} - ${formatDateTime(dateRange.endDate)}</p>
 ${sections.join("\n")}
 </body>
 </html>`;

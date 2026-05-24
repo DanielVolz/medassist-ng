@@ -2919,48 +2919,74 @@ button.has-validation-error {
 	.time-row {
 		grid-template-columns: 1fr;
 		gap: 0.5rem;
+		min-width: 0;
 	}
 
 	.doses-col {
-		flex-direction: row;
-		flex-wrap: wrap;
+		flex-direction: column;
+		flex-wrap: nowrap;
+		width: 100%;
+		min-width: 0;
 	}
 
 	.dose-item {
-		flex: 1 1 auto;
-		min-width: 140px;
-		gap: 0.35rem;
-		padding: 0.35rem 0.3rem;
+		display: grid;
+		grid-template-columns: minmax(3.75rem, auto) minmax(0, 1fr) auto;
+		align-items: center;
+		width: 100%;
+		min-width: 0;
+		gap: 0.45rem;
+		padding: 0.55rem 0.6rem;
 	}
 
 	.dose-time {
-		min-width: 42px;
-		padding-left: 0.2rem;
+		min-width: 0;
+		padding-left: 0;
+		white-space: nowrap;
 	}
 
 	.dose-usage {
 		line-height: 1.15;
+		min-width: 0;
 	}
 
 	.dose-checks {
-		gap: 2px;
+		grid-column: 1 / -1;
+		width: 100%;
+		min-width: 0;
+		margin-left: 0;
+		gap: 0.3rem;
+		align-items: stretch;
+	}
+
+	.dose-item .reminder-icon {
+		justify-self: end;
 	}
 
 	.dose-person {
-		gap: 4px;
-		padding: 1px 4px;
+		width: 100%;
+		min-width: 0;
+		justify-content: flex-end;
+		gap: 0.35rem;
+		padding: 0.28rem 0.35rem;
 	}
 
 	.dose-person .person-name {
+		flex: 1 1 auto;
 		min-width: 0;
-		max-width: 5.6rem;
-		margin-right: 0.35rem;
+		max-width: none;
+		margin-right: 0;
+	}
+
+	.dose-person > .tooltip-trigger {
+		display: inline-flex;
+		flex-shrink: 0;
 	}
 
 	.dose-person .dose-btn {
-		height: 22px;
-		min-height: 22px;
-		padding: 0 5px;
+		height: 26px;
+		min-height: 26px;
+		padding: 0 0.5rem;
 		font-size: 0.72rem;
 	}
 
@@ -2975,31 +3001,172 @@ button.has-validation-error {
 
 	.day-block {
 		padding: 0.75rem;
+		min-width: 0;
 	}
 
-	/* Use more horizontal space for schedule cards on phones */
-	.dashboard-schedules-section > .card {
-		padding-inline: 0.35rem;
-		overflow: visible;
+	.timeline,
+	.time-main,
+	.time-main .med-name,
+	.tag-row {
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
 	}
 
-	/* Keep header controls aligned like other dashboard cards */
-	.dashboard-schedules-section .card-head {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.6rem;
-		padding-inline: 0.65rem;
+	.time-main .med-name {
+		overflow-wrap: anywhere;
+	}
+
+	/* Keep schedule controls readable without exceeding phone width. */
+	.dashboard-schedules-section > .card,
+	.schedule-full {
+		width: 100%;
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.dashboard-schedules-section .card-head,
+	.schedule-full .card-head {
+		align-items: stretch;
+	}
+
+	.dashboard-schedules-section .card-head h2,
+	.schedule-full .card-head h2 {
+		width: 100%;
 	}
 
 	.dashboard-schedules-section .card-head-actions {
-		margin-left: auto;
+		display: flex;
+		flex-wrap: wrap;
+		width: 100%;
+		min-width: 0;
+		margin-left: 0;
 		gap: 0.5rem;
+		align-items: stretch;
+	}
+
+	.schedule-full .card-head-actions {
+		display: flex;
+		flex-wrap: wrap;
+		width: 100%;
+		min-width: 0;
+		gap: 0.5rem;
+		align-items: stretch;
+	}
+
+	.dashboard-schedules-section .schedule-days-select,
+	.schedule-full .schedule-days-select {
+		flex: 1 1 7.5rem;
+		width: auto;
+		min-width: 0;
+		max-width: none;
+	}
+
+	.dashboard-schedules-section .journal-history-button,
+	.schedule-full .journal-history-button {
+		flex: 1 1 7.5rem;
+		height: 2.75rem;
+		min-height: 2.75rem;
+		min-width: 0;
+		justify-content: center;
+		padding-block: 0;
+	}
+
+	.dashboard-schedules-section .journal-history-button span,
+	.schedule-full .journal-history-button span {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.dashboard-schedules-section .journal-history-label-full,
+	.schedule-full .journal-history-label-full {
+		display: none;
+	}
+
+	.dashboard-schedules-section .journal-history-label-short,
+	.schedule-full .journal-history-label-short {
+		display: inline;
+	}
+
+	.dashboard-schedules-section .share-btn.icon-only {
+		flex: 0 0 2.75rem;
+		width: 2.75rem;
+		height: 2.75rem;
+		min-width: 2.75rem;
+		min-height: 2.75rem;
+		padding: 0;
+		align-self: stretch;
+	}
+
+	@media (max-width: 380px) {
+		.dashboard-schedules-section .schedule-days-select,
+		.schedule-full .schedule-days-select {
+			flex-basis: 100%;
+		}
+
+		.dashboard-schedules-section .journal-history-button {
+			flex-basis: calc(100% - 3.25rem);
+		}
+	}
+
+	.dashboard-schedules-section .day-block,
+	.schedule-full .day-block {
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
+		margin-inline: 0;
+	}
+
+	.day-divider {
+		min-width: 0;
+	}
+
+	.day-date {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.day-summary {
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
+
+	.past-days-header,
+	.future-days-header {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.past-days-toggle,
+	.future-days-toggle,
+	.clear-missed-btn {
+		width: 100%;
+		min-width: 0;
+	}
+
+	.past-days-label,
+	.future-days-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.past-days-warning,
+	.past-days-complete,
+	.future-days-progress {
+		margin-left: auto;
 		flex-shrink: 0;
 	}
 
-	.dashboard-schedules-section .day-block {
-		margin-inline: -0.1rem;
+	.clear-missed-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.status-chip {

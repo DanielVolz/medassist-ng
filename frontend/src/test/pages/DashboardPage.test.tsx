@@ -11,6 +11,9 @@ import {
 	userStorageKey,
 } from "../../pages/dashboard-helpers";
 
+const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+
 // Mock data for tests with medications
 const mockMeds = [
 	{
@@ -128,6 +131,21 @@ const mockTodayDay = {
 			lastWhen: Date.now() + 60_000,
 		},
 	],
+};
+
+const mockJournalEntry = {
+	doseTrackingId: 1,
+	doseId: "1-0-1760000000000",
+	medicationId: 1,
+	medicationName: "Aspirin",
+	scheduledFor: "2026-05-21T09:00:00.000Z",
+	takenAt: "2026-05-21T09:05:00.000Z",
+	dismissed: false,
+	takenSource: "manual" as const,
+	markedBy: null,
+	note: "",
+	updatedAt: null,
+	createdAt: null,
 };
 
 function getRouteDateKey(value: Date): string {
@@ -321,12 +339,22 @@ vi.mock("../../context", () => ({
 vi.mock("../../components/Auth", () => ({
 	useAuth: () => ({
 		user: { id: 1, username: "testuser" },
+		authFetch: authFetchMock,
+	}),
+}));
+
+vi.mock("../../context/FeedbackContext", () => ({
+	useFeedback: () => ({
+		showFeedback: feedbackMock.showFeedback,
+		dismissFeedback: vi.fn(),
+		clearFeedback: vi.fn(),
 	}),
 }));
 
 describe("DashboardPage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		localStorage.clear();
 		mockContextValue = createMockAppContext();
 		HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -419,6 +447,121 @@ describe("DashboardPage", () => {
 
 		expect(screen.getByText(/dashboard\.schedules\.title/i)).toBeInTheDocument();
 		expect(screen.getByText("09:00")).toBeInTheDocument();
+	});
+
+	it("disables the journal note action for untaken doses", () => {
+		const openJournalEditor = vi.fn();
+		mockContextValue = createMockAppContext({
+			openJournalEditor,
+			todayDay: {
+				dateStr: "Today",
+				date: new Date(),
+				isPast: false,
+				meds: [
+					{
+						medName: "Aspirin",
+						total: 1,
+						doses: [
+							{
+								id: "untaken-dose",
+								timeStr: "09:00",
+								when: Date.now() + 60_000,
+								usage: 1,
+								takenBy: ["John"],
+							},
+						],
+						lastWhen: Date.now() + 60_000,
+					},
+				],
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const noteButton = screen.getByRole("button", { name: "journal.actions.note" });
+		expect(noteButton).toBeDisabled();
+		expect(noteButton.closest("span")).toHaveAttribute("data-tooltip", "journal.actions.noteTakenOnly");
+
+		fireEvent.click(noteButton);
+		expect(openJournalEditor).not.toHaveBeenCalled();
+	});
+
+	it("enables the journal note action for skipped doses", () => {
+		const openJournalEditor = vi.fn();
+		const skippedDoseId = "skipped-dose-John";
+		mockContextValue = createMockAppContext({
+			openJournalEditor,
+			skippedDoses: new Set([skippedDoseId]),
+			todayDay: {
+				dateStr: "Today",
+				date: new Date(),
+				isPast: false,
+				meds: [
+					{
+						medName: "Aspirin",
+						total: 1,
+						doses: [
+							{
+								id: "skipped-dose",
+								timeStr: "09:00",
+								when: Date.now() - 60_000,
+								usage: 1,
+								takenBy: ["John"],
+							},
+						],
+						lastWhen: Date.now() - 60_000,
+					},
+				],
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const noteButton = screen.getByRole("button", { name: "journal.actions.note" });
+		expect(noteButton).not.toBeDisabled();
+
+		fireEvent.click(noteButton);
+		expect(openJournalEditor).toHaveBeenCalledWith(skippedDoseId);
+	});
+
+	it("closes the journal editor after saving a main app note", async () => {
+		const saveJournalNote = vi.fn(async () => true);
+		const closeJournalEditor = vi.fn();
+		mockContextValue = createMockAppContext({
+			journalEditorOpen: true,
+			journalEvent: mockJournalEntry,
+			journalEventLoading: false,
+			journalEventSaving: false,
+			journalEventDeleting: false,
+			journalEventError: null,
+			saveJournalNote,
+			closeJournalEditor,
+			deleteJournalNote: vi.fn(),
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		fireEvent.change(screen.getByLabelText("journal.editor.noteLabel"), {
+			target: { value: "Main app note" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+		await waitFor(() => {
+			expect(saveJournalNote).toHaveBeenCalledWith("Main app note");
+			expect(closeJournalEditor).toHaveBeenCalled();
+		});
 	});
 
 	it("renders schedule days selector", () => {
@@ -1033,12 +1176,11 @@ describe("DashboardPage with shoutrrr notifications", () => {
 		fireEvent.click(sendButton);
 
 		await waitFor(() => {
-			expect(global.fetch).toHaveBeenCalledWith(
+			expect(authFetchMock).toHaveBeenCalledWith(
 				"/api/reminder/send-email",
 				expect.objectContaining({
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					credentials: "include",
 				})
 			);
 		});
@@ -1153,8 +1295,6 @@ describe("DashboardPage with past days", () => {
 
 	it("posts the computed dismiss-until payload when clearing missed doses", async () => {
 		const loadMeds = vi.fn();
-		const alertMock = vi.fn();
-		global.alert = alertMock;
 		global.fetch = vi.fn().mockResolvedValue({ ok: true });
 
 		mockContextValue = createMockAppContext({
@@ -1175,22 +1315,24 @@ describe("DashboardPage with past days", () => {
 		fireEvent.click(screen.getByRole("button", { name: /dashboard\.schedules\.clearMissedConfirm/i }));
 
 		await waitFor(() => {
-			expect(global.fetch).toHaveBeenCalledWith(
+			expect(authFetchMock).toHaveBeenCalledWith(
 				"/api/medications/dismiss-until",
 				expect.objectContaining({
 					method: "POST",
-					credentials: "include",
 				})
 			);
 		});
 
-		const body = JSON.parse(((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body as string) ?? "{}");
+		const body = JSON.parse(((authFetchMock as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body as string) ?? "{}");
 		expect(body).toEqual({
 			medicationIds: [1],
 			until: mockPastDays[0].date.toISOString().slice(0, 10),
 		});
 		expect(loadMeds).toHaveBeenCalled();
-		expect(alertMock).toHaveBeenCalledWith(expect.stringContaining("dashboard.schedules.clearMissedSuccess"));
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({
+			message: expect.stringContaining("dashboard.schedules.clearMissedSuccess"),
+			tone: "success",
+		});
 	});
 });
 

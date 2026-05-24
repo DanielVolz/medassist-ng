@@ -18,7 +18,7 @@ import {
  */
 test.describe("Share Schedule", () => {
 	test.use({ storageState: authFile });
-	test.describe.configure({ timeout: 90000 });
+	test.describe.configure({ mode: "serial", timeout: 90000 });
 
 	const MED_ALICE = "ShareTest AliceMed";
 	const MED_BOB = "ShareTest BobMed";
@@ -299,5 +299,60 @@ test.describe("Share Schedule", () => {
 		await expect(modal.getByText("Take every 6 hours as needed")).toBeVisible();
 
 		await page.locator("button.modal-close").click();
+	});
+
+	test("should let a shared recipient add and reopen a journal note", async ({ page }) => {
+		const uniqueSuffix = Date.now().toString(36);
+		const person = `Journal E2E ${uniqueSuffix}`;
+		const medicationName = `Share Journal E2E ${uniqueSuffix}`;
+		const journalNote = `Shared E2E note ${uniqueSuffix}`;
+
+		await createMedicationViaAPI({
+			name: medicationName,
+			takenBy: [person],
+			packageType: "blister",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 10,
+			intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false, takenBy: person }],
+		});
+
+		const shareToken = await createShareTokenViaAPI(person, 30, { allowJournalNotes: true });
+
+		await page.goto(`/share/${shareToken.token}`);
+		await page.waitForLoadState("networkidle");
+		await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
+
+		await expect(page.locator(".med-name-text").filter({ hasText: medicationName }).first()).toBeVisible({
+			timeout: 15000,
+		});
+
+		const doseItem = page.locator(".dose-item").first();
+		await expect(doseItem).toBeVisible({ timeout: 15000 });
+		await expect(doseItem.locator(".dose-btn.journal")).toBeDisabled();
+
+		await doseItem.locator(".dose-btn.take").click();
+
+		const collapsedTodayDivider = page.locator(".day-block.today.collapsed .day-divider.clickable").first();
+		if (await collapsedTodayDivider.isVisible().catch(() => false)) {
+			await collapsedTodayDivider.click();
+		}
+
+		const updatedDoseItem = page.locator(".dose-item").first();
+		const noteButton = updatedDoseItem.locator(".dose-btn.journal");
+		await expect(noteButton).toBeEnabled({ timeout: 10000 });
+		await noteButton.click();
+
+		const noteInput = page.locator("#journal-note-input");
+		await expect(noteInput).toBeVisible({ timeout: 10000 });
+		await expect(noteInput).toHaveValue("");
+
+		await noteInput.fill(journalNote);
+		await page.locator(".journal-modal-footer button.primary").click();
+		await expect(page.locator(".journal-modal")).toBeHidden({ timeout: 10000 });
+
+		await noteButton.click();
+		await expect(noteInput).toBeVisible({ timeout: 10000 });
+		await expect(noteInput).toHaveValue(journalNote, { timeout: 10000 });
 	});
 });

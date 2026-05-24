@@ -3,9 +3,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRefill } from "../../hooks/useRefill";
 import type { Coverage, Medication } from "../../types";
 
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+
+vi.mock("../../components/Auth", () => ({
+	useAuth: () => ({
+		authFetch: authFetchMock,
+	}),
+}));
+
+function parseRequestBody(requestInit: RequestInit | undefined) {
+	expect(requestInit).toBeDefined();
+	expect(typeof requestInit?.body).toBe("string");
+	return JSON.parse(requestInit?.body as string) as Record<string, unknown>;
+}
+
 describe("useRefill", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve({}),
@@ -16,6 +31,21 @@ describe("useRefill", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+	});
+
+	it("loads refill history through authFetch", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve([]),
+		});
+
+		const { result } = renderHook(() => useRefill());
+
+		await act(async () => {
+			await result.current.loadRefillHistory(1);
+		});
+
+		expect(authFetchMock).toHaveBeenCalledWith("/api/medications/1/refills");
 	});
 
 	it("initializes with default state", () => {
@@ -159,7 +189,7 @@ describe("useRefill", () => {
 			await result.current.submitRefill(1, 1, mockSetForm, mockLoadMeds);
 		});
 
-		expect(fetch).toHaveBeenNthCalledWith(
+		expect(authFetchMock).toHaveBeenNthCalledWith(
 			1,
 			"/api/medications/1/refill",
 			expect.objectContaining({
@@ -167,11 +197,7 @@ describe("useRefill", () => {
 				body: JSON.stringify({ packsAdded: 1, loosePillsAdded: 0, quantityAdded: 0, usePrescription: false }),
 			})
 		);
-		expect(fetch).toHaveBeenNthCalledWith(
-			2,
-			"/api/medications/1/refills",
-			expect.objectContaining({ credentials: "include" })
-		);
+		expect(authFetchMock).toHaveBeenNthCalledWith(2, "/api/medications/1/refills");
 		expect(mockSetForm).toHaveBeenCalled();
 		expect(mockLoadMeds).toHaveBeenCalled();
 	});
@@ -191,7 +217,7 @@ describe("useRefill", () => {
 			await result.current.submitRefill(1, 1, mockSetForm, mockLoadMeds);
 		});
 
-		expect(fetch).not.toHaveBeenCalled();
+		expect(authFetchMock).not.toHaveBeenCalled();
 	});
 
 	it("opens edit stock modal", () => {
@@ -306,7 +332,7 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(1, mockMed, mockLoadMeds);
 		});
 
-		expect(fetch).toHaveBeenCalledWith(
+		expect(authFetchMock).toHaveBeenCalledWith(
 			"/api/medications/1/stock-adjustment",
 			expect.objectContaining({ method: "PATCH" })
 		);
@@ -342,7 +368,7 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(1, mockMed, mockLoadMeds);
 		});
 
-		expect(fetch).toHaveBeenCalled();
+		expect(authFetchMock).toHaveBeenCalled();
 		expect(mockLoadMeds).toHaveBeenCalled();
 	});
 
@@ -379,8 +405,8 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(8, blisterMed, mockLoadMeds);
 		});
 
-		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-		const body = JSON.parse(requestInit.body as string);
+		const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+		const body = parseRequestBody(requestInit);
 		expect(body).toEqual({
 			stockAdjustment: 0,
 			packCount: 0,
@@ -431,8 +457,8 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(id, med, mockLoadMeds);
 		});
 
-		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-		const body = JSON.parse(requestInit.body as string);
+		const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+		const body = parseRequestBody(requestInit);
 		expect(body).toEqual({
 			stockAdjustment: 0,
 			packCount: 0,
@@ -506,8 +532,8 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(id, med, mockLoadMeds);
 		});
 
-		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-		const body = JSON.parse(requestInit.body as string);
+		const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+		const body = parseRequestBody(requestInit);
 		expect(body).toEqual({
 			stockAdjustment: 0,
 			packCount: 0,
@@ -554,8 +580,8 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(12, liquidMed, mockLoadMeds);
 		});
 
-		const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-		const body = JSON.parse(requestInit.body as string);
+		const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+		const body = parseRequestBody(requestInit);
 		expect(body).toEqual({
 			stockAdjustment: -60,
 			packCount: 2,
@@ -604,11 +630,9 @@ describe("useRefill", () => {
 		// baseTotal (fixed) = getPackageSize(bottle) = looseTablets = 150
 		// newStockAdjustment = 149 - 150 = -1
 		// → getMedTotal = 150 + (-1) = 149 ✓
-		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-			(call) => call[0] === "/api/medications/4/stock-adjustment"
-		);
+		const fetchCall = authFetchMock.mock.calls.find((call) => call[0] === "/api/medications/4/stock-adjustment");
 		expect(fetchCall).toBeDefined();
-		const body = JSON.parse(fetchCall![1].body as string);
+		const body = parseRequestBody(fetchCall?.[1]);
 		expect(body.stockAdjustment).toBe(50);
 		expect(body.looseTablets).toBeUndefined();
 	});
@@ -657,11 +681,9 @@ describe("useRefill", () => {
 		// desiredTotal is capped to package max (25)
 		// baseTotal = getPackageSize(blister) = 25
 		// newStockAdjustment = 25 - 25 = 0
-		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-			(call) => call[0] === "/api/medications/2/stock-adjustment"
-		);
+		const fetchCall = authFetchMock.mock.calls.find((call) => call[0] === "/api/medications/2/stock-adjustment");
 		expect(fetchCall).toBeDefined();
-		const body = JSON.parse(fetchCall![1].body as string);
+		const body = parseRequestBody(fetchCall?.[1]);
 		expect(body.stockAdjustment).toBe(0);
 	});
 
@@ -699,11 +721,9 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(5, blisterMed, mockLoadMeds);
 		});
 
-		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-			(call) => call[0] === "/api/medications/5/stock-adjustment"
-		);
+		const fetchCall = authFetchMock.mock.calls.find((call) => call[0] === "/api/medications/5/stock-adjustment");
 		expect(fetchCall).toBeDefined();
-		const body = JSON.parse(fetchCall![1].body as string);
+		const body = parseRequestBody(fetchCall?.[1]);
 		// NEW: baseTotal = structuralMax + finalLoosePills = 20 + 7 = 27; desiredTotal = 27 => stockAdjustment=0
 		// looseTablets is sent separately so DB reflects the actual loose count after correction
 		expect(body.stockAdjustment).toBe(0);
@@ -744,11 +764,9 @@ describe("useRefill", () => {
 			await result.current.submitStockCorrection(6, blisterMed, mockLoadMeds);
 		});
 
-		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-			(call) => call[0] === "/api/medications/6/stock-adjustment"
-		);
+		const fetchCall = authFetchMock.mock.calls.find((call) => call[0] === "/api/medications/6/stock-adjustment");
 		expect(fetchCall).toBeDefined();
-		const body = JSON.parse(fetchCall![1].body as string);
+		const body = parseRequestBody(fetchCall?.[1]);
 		// baseTotal = structuralMax + finalLoosePills = 275 + 2 = 277; desiredTotal = 57 => stockAdjustment = -220
 		expect(body.stockAdjustment).toBe(-220);
 		expect(body.looseTablets).toBe(2);

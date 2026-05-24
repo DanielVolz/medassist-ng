@@ -3,11 +3,34 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 
+const appTranslations: Record<string, string> = {
+	"auth.connectionErrorTitle": "Connection Error",
+	"auth.connectionErrorHelp": "Please check if the server is running and try again.",
+	"common.initializing": "Initializing...",
+	"common.loading": "Loading...",
+	"common.retry": "Retry",
+};
+
+vi.mock("react-i18next", async () => {
+	const actual = await vi.importActual<typeof import("react-i18next")>("react-i18next");
+	return {
+		...actual,
+		useTranslation: () => ({
+			t: (key: string) => appTranslations[key] ?? key,
+			i18n: {
+				language: "en",
+				changeLanguage: vi.fn(),
+			},
+		}),
+	};
+});
+
 type AuthStateMock = {
 	user: { id: number; username: string } | null;
 	authState: { authEnabled: boolean; needsSetup: boolean } | null;
 	loading: boolean;
 	authError: string | null;
+	sessionExpired?: boolean;
 };
 
 let authMock: AuthStateMock = {
@@ -15,6 +38,7 @@ let authMock: AuthStateMock = {
 	authState: { authEnabled: false, needsSetup: false },
 	loading: false,
 	authError: null,
+	sessionExpired: false,
 };
 
 let appContextMock: Record<string, unknown>;
@@ -156,12 +180,20 @@ describe("App", () => {
 			setShareSelectedPerson: vi.fn(),
 			shareSelectedDays: 7,
 			setShareSelectedDays: vi.fn(),
+			shareSelectedExpiryDays: null,
+			setShareSelectedExpiryDays: vi.fn(),
+			shareAllowJournalNotes: false,
+			setShareAllowJournalNotes: vi.fn(),
 			shareGenerating: false,
 			shareLink: null,
 			setShareLink: vi.fn(),
 			shareCopied: false,
 			setShareCopied: vi.fn(),
+			activeShareLinks: [],
+			activeSharesLoading: false,
+			revokingShareToken: null,
 			generateShareLink: vi.fn(),
+			revokeShareLink: vi.fn(),
 			copyShareLink: vi.fn(),
 			closeShareDialog: vi.fn(),
 			resetShareDialogState: vi.fn(),
@@ -215,6 +247,7 @@ describe("App", () => {
 		);
 
 		expect(screen.getByText("Connection Error")).toBeInTheDocument();
+		expect(screen.getByText("Please check if the server is running and try again.")).toBeInTheDocument();
 		expect(screen.getByText("Backend is unreachable")).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
 	});

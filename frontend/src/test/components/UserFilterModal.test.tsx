@@ -275,7 +275,7 @@ describe("UserFilterModal", () => {
 		const meds: Medication[] = [
 			{ ...mockMedication, id: 1, name: "Med1", takenBy: ["John"] },
 			{ ...mockMedication, id: 2, name: "Med2", takenBy: ["Jane"] },
-			{ ...mockMedication, id: 3, name: "Med3", takenBy: ["John", "Jane"] },
+			{ ...mockMedication, id: 3, name: "Med3", takenBy: ["john", "Jane"] },
 		];
 
 		render(

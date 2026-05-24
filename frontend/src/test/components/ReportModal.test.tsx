@@ -4,6 +4,28 @@ import ReportModal from "../../components/ReportModal";
 import type { Medication } from "../../types";
 import { formatDate, formatDateTime } from "../../utils/formatters";
 
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+
+vi.mock("../../components/Auth", () => ({
+	useAuth: () => ({ authFetch: authFetchMock }),
+}));
+
+function getPreviewContent() {
+	const preview = document.querySelector(".report-preview-content");
+	if (!(preview instanceof HTMLElement)) {
+		throw new Error("Expected report preview content to be rendered");
+	}
+	return preview.textContent ?? "";
+}
+
+function expectPreviewToBeVisible() {
+	const preview = document.querySelector(".report-preview");
+	if (!(preview instanceof HTMLElement)) {
+		throw new Error("Expected report preview to be rendered");
+	}
+	expect(preview).toBeInTheDocument();
+}
+
 function createMedication(overrides: Partial<Medication> = {}): Medication {
 	return {
 		id: 1,
@@ -24,6 +46,7 @@ function createMedication(overrides: Partial<Medication> = {}): Medication {
 describe("ReportModal", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 	});
 
 	it("renders and closes when cancel is clicked", () => {
@@ -35,35 +58,41 @@ describe("ReportModal", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
-	it("generates text report and closes modal", async () => {
+	it("generates txt and md previews in-app without closing the modal", async () => {
 		const onClose = vi.fn();
-		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-			ok: true,
-			json: async () => ({
-				1: {
-					dosesTaken: 2,
-					dosesSkipped: 0,
-					firstDoseAt: "2026-01-01T08:00:00.000Z",
-					lastDoseAt: "2026-01-02T08:00:00.000Z",
-					refills: [],
-				},
-			}),
-		});
+		for (const format of ["txt", "md"] as const) {
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					1: {
+						dosesTaken: 2,
+						automaticDosesTaken: 0,
+						dosesSkipped: 0,
+						firstDoseAt: "2026-01-01T08:00:00.000Z",
+						lastDoseAt: "2026-01-02T08:00:00.000Z",
+						refills: [],
+					},
+				}),
+			});
 
-		render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+			const view = render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
 
-		fireEvent.click(screen.getByRole("radio", { name: /report\.formatTxt/i }));
-		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
-
-		await waitFor(() => {
-			expect(global.fetch).toHaveBeenCalledWith(
-				"/api/medications/report-data",
-				expect.objectContaining({ method: "POST" })
+			fireEvent.click(
+				screen.getByRole("radio", { name: new RegExp(`report\\.format${format === "txt" ? "Txt" : "Md"}`, "i") })
 			);
-		});
+			fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
-		expect(onClose).toHaveBeenCalledTimes(1);
-		expect(URL.createObjectURL).toHaveBeenCalled();
+			await waitFor(() => {
+				expectPreviewToBeVisible();
+			});
+
+			expect(screen.getByRole("button", { name: /report\.download/i })).toBeInTheDocument();
+			expect(onClose).not.toHaveBeenCalled();
+			expect(URL.createObjectURL).not.toHaveBeenCalled();
+			expect(getPreviewContent()).toContain("report.docTitle");
+
+			view.unmount();
+		}
 	});
 
 	it("renders shared formatter output in exported text reports", async () => {
@@ -99,18 +128,15 @@ describe("ReportModal", () => {
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
-			expect(URL.createObjectURL).toHaveBeenCalled();
+			expectPreviewToBeVisible();
 		});
 
-		const [blob] = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls.at(-1) ?? [];
-		expect(blob).toBeInstanceOf(Blob);
-
-		const content = await (blob as Blob).text();
+		const content = getPreviewContent();
 
 		expect(content).toContain(formatDate("2026-02-01"));
 		expect(content).toContain(formatDateTime("2026-02-02T08:30:00.000Z"));
 		expect(content).toContain(formatDate("2026-02-03T12:00:00.000Z"));
-		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(onClose).not.toHaveBeenCalled();
 	});
 
 	it("exports bottle current stock separately from configured capacity", async () => {
@@ -151,16 +177,15 @@ describe("ReportModal", () => {
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
-			expect(URL.createObjectURL).toHaveBeenCalled();
+			expectPreviewToBeVisible();
 		});
 
-		const [blob] = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls.at(-1) ?? [];
-		const content = await (blob as Blob).text();
+		const content = getPreviewContent();
 
 		expect(content).toContain("report.docTotalCapacity: 100");
 		expect(content).toContain("report.docCurrentStock: 70 common.pills");
 		expect(content).not.toContain("report.docCurrentStock: 100 common.pills");
-		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(onClose).not.toHaveBeenCalled();
 	});
 
 	it("exports injection refill history with injection unit wording", async () => {
@@ -205,15 +230,14 @@ describe("ReportModal", () => {
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
-			expect(URL.createObjectURL).toHaveBeenCalled();
+			expectPreviewToBeVisible();
 		});
 
-		const [blob] = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls.at(-1) ?? [];
-		const content = await (blob as Blob).text();
+		const content = getPreviewContent();
 
 		expect(content).toContain("report.docCurrentStock: 6 common.injections");
 		expect(content).toContain("+3 common.injections");
-		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(onClose).not.toHaveBeenCalled();
 	});
 
 	it("generates printable report when PDF format is selected", async () => {
@@ -288,14 +312,17 @@ describe("ReportModal", () => {
 				onClose={onClose}
 				medications={[
 					createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
-					createMedication({ id: 2, name: "Bob Med", takenBy: ["Bob"] }),
+					createMedication({ id: 2, name: "Alice Lower", takenBy: ["alice"] }),
+					createMedication({ id: 3, name: "Bob Med", takenBy: ["Bob"] }),
 				]}
 			/>
 		);
 
 		expect(screen.getByText(/report\.filterByPerson/i)).toBeInTheDocument();
+		expect(screen.getAllByRole("checkbox", { name: "Alice" })).toHaveLength(1);
 		fireEvent.click(screen.getByRole("checkbox", { name: "Alice" }));
 		expect(screen.getByText("Alice Med")).toBeInTheDocument();
+		expect(screen.getByText("Alice Lower")).toBeInTheDocument();
 		expect(screen.queryByText("Bob Med")).not.toBeInTheDocument();
 
 		fireEvent.click(screen.getByRole("button", { name: /report\.deselectAll/i }));
@@ -335,7 +362,8 @@ describe("ReportModal", () => {
 				onClose={onClose}
 				medications={[
 					createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
-					createMedication({ id: 2, name: "Bob Med", takenBy: ["Bob"] }),
+					createMedication({ id: 2, name: "Alice Lower", takenBy: ["alice"] }),
+					createMedication({ id: 3, name: "Bob Med", takenBy: ["Bob"] }),
 				]}
 			/>
 		);
@@ -345,15 +373,14 @@ describe("ReportModal", () => {
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
-			expect(global.fetch).toHaveBeenCalledWith(
-				"/api/medications/report-data",
-				expect.objectContaining({
-					method: "POST",
-					body: JSON.stringify({ medicationIds: [1], takenByFilter: ["Alice"] }),
-				})
-			);
+			const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+			const body = JSON.parse((requestInit?.body as string) ?? "{}");
+			expect(body).toMatchObject({ medicationIds: [1, 2], takenByFilter: ["Alice"] });
+			expect(typeof body.startDate).toBe("string");
+			expect(typeof body.endDate).toBe("string");
 		});
 
+		authFetchMock.mockClear();
 		(global.fetch as ReturnType<typeof vi.fn>).mockClear();
 		firstRender.unmount();
 		render(
@@ -362,7 +389,8 @@ describe("ReportModal", () => {
 				onClose={onClose}
 				medications={[
 					createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
-					createMedication({ id: 2, name: "Bob Med", takenBy: ["Bob"] }),
+					createMedication({ id: 2, name: "Alice Lower", takenBy: ["alice"] }),
+					createMedication({ id: 3, name: "Bob Med", takenBy: ["Bob"] }),
 				]}
 			/>
 		);
@@ -370,17 +398,16 @@ describe("ReportModal", () => {
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
-			expect(global.fetch).toHaveBeenCalledWith(
-				"/api/medications/report-data",
-				expect.objectContaining({
-					method: "POST",
-					body: JSON.stringify({ medicationIds: [1, 2], takenByFilter: undefined }),
-				})
-			);
+			const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+			const body = JSON.parse((requestInit?.body as string) ?? "{}");
+			expect(body).toMatchObject({ medicationIds: [1, 2, 3] });
+			expect(body).not.toHaveProperty("takenByFilter");
+			expect(typeof body.startDate).toBe("string");
+			expect(typeof body.endDate).toBe("string");
 		});
 	});
 
-	it("generates markdown report and keeps modal open on fetch error", async () => {
+	it("shows a localized fetch error and keeps the modal open when preview generation fails", async () => {
 		const onClose = vi.fn();
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false });
 
@@ -390,9 +417,35 @@ describe("ReportModal", () => {
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
-			expect(global.fetch).toHaveBeenCalled();
+			expect(authFetchMock).toHaveBeenCalledWith(
+				"/api/medications/report-data",
+				expect.objectContaining({ method: "POST" })
+			);
 		});
 
 		expect(onClose).not.toHaveBeenCalled();
+		expect(screen.getByText(/report\.error/i)).toBeInTheDocument();
+		expect(screen.queryByText(/report\.preview/i)).not.toBeInTheDocument();
+	});
+
+	it("shows a localized error and skips the request when the date range is invalid", async () => {
+		const onClose = vi.fn();
+		render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+
+		const inputs = screen.getAllByDisplayValue(/\d{2}\.\d{2}\.\d{4}|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2}/i);
+		const startInput = inputs[0] as HTMLInputElement;
+		const endInput = inputs[1] as HTMLInputElement;
+
+		fireEvent.change(startInput.parentElement?.querySelector("input") ?? startInput, {
+			target: { value: "2026-02-10T10:00" },
+		});
+		fireEvent.change(endInput.parentElement?.querySelector("input") ?? endInput, {
+			target: { value: "2026-02-10T09:00" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
+
+		expect(authFetchMock).not.toHaveBeenCalled();
+		expect(onClose).not.toHaveBeenCalled();
+		expect(screen.getByText(/report\.invalidDateRange/i)).toBeInTheDocument();
 	});
 });

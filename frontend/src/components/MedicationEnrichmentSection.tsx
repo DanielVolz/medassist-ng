@@ -298,7 +298,12 @@ export function MedicationEnrichmentSection({
 		}
 
 		const animationFrameId = window.requestAnimationFrame(() => {
-			resultRefs.current.get(expandedResultCode)?.scrollIntoView({
+			const expandedResultElement = resultRefs.current.get(expandedResultCode);
+			if (typeof expandedResultElement?.scrollIntoView !== "function") {
+				return;
+			}
+
+			expandedResultElement.scrollIntoView({
 				block: "nearest",
 				inline: "nearest",
 				behavior: "smooth",

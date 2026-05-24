@@ -10,13 +10,21 @@ describe("ShareDialog", () => {
 		onShareSelectedPersonChange: vi.fn(),
 		shareSelectedDays: 30,
 		onShareSelectedDaysChange: vi.fn(),
+		shareSelectedExpiryDays: null,
+		onShareSelectedExpiryDaysChange: vi.fn(),
+		shareAllowJournalNotes: false,
+		onShareAllowJournalNotesChange: vi.fn(),
 		shareGenerating: false,
 		shareLink: null,
 		onShareLinkChange: vi.fn(),
 		shareCopied: false,
 		onShareCopiedChange: vi.fn(),
+		activeShareLinks: [],
+		activeSharesLoading: false,
+		revokingShareToken: null,
 		onClose: vi.fn(),
 		onGenerateShareLink: vi.fn(),
+		onRevokeShareLink: vi.fn().mockResolvedValue(true),
 		onCopyShareLink: vi.fn(),
 	};
 
@@ -105,9 +113,13 @@ describe("ShareDialog", () => {
 		const selects = screen.getAllByRole("combobox");
 		fireEvent.change(selects[0], { target: { value: "Bob" } });
 		fireEvent.change(selects[1], { target: { value: "90" } });
+		fireEvent.change(selects[2], { target: { value: "30" } });
+		fireEvent.click(screen.getByLabelText(/share\.allowJournalNotes/i));
 
 		expect(defaultProps.onShareSelectedPersonChange).toHaveBeenCalledWith("Bob");
 		expect(defaultProps.onShareSelectedDaysChange).toHaveBeenCalledWith(90);
+		expect(defaultProps.onShareSelectedExpiryDaysChange).toHaveBeenCalledWith(30);
+		expect(defaultProps.onShareAllowJournalNotesChange).toHaveBeenCalledWith(true);
 	});
 
 	it("disables generate button when no person is selected", () => {
@@ -115,5 +127,59 @@ describe("ShareDialog", () => {
 
 		const generateButton = screen.getByRole("button", { name: /share\.generateLink/i });
 		expect(generateButton).toBeDisabled();
+	});
+
+	it("keeps active share management collapsed until opened", () => {
+		render(
+			<ShareDialog
+				{...defaultProps}
+				activeShareLinks={[
+					{
+						token: "abcdef0123456789",
+						takenBy: "Alice",
+						scheduleDays: 30,
+						createdAt: "2026-05-17T12:00:00.000Z",
+						expiresAt: null,
+						allowJournalNotes: true,
+						shareUrl: "/share/abcdef0123456789",
+					},
+				]}
+			/>
+		);
+
+		expect(screen.getByText(/share\.manageLinksSummary/i)).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /share\.revoke/i })).not.toBeInTheDocument();
+
+		fireEvent.click(screen.getByText(/share\.manageLinksSummary/i));
+
+		expect(screen.getByRole("button", { name: /share\.revoke/i })).toBeInTheDocument();
+	});
+
+	it("uses an in-app confirm modal before revoking an active share link", async () => {
+		render(
+			<ShareDialog
+				{...defaultProps}
+				activeShareLinks={[
+					{
+						token: "abcdef0123456789",
+						takenBy: "Alice",
+						scheduleDays: 30,
+						createdAt: "2026-05-17T12:00:00.000Z",
+						expiresAt: null,
+						allowJournalNotes: true,
+						shareUrl: "/share/abcdef0123456789",
+					},
+				]}
+			/>
+		);
+
+		fireEvent.click(screen.getByText(/share\.manageLinksSummary/i));
+		fireEvent.click(screen.getByRole("button", { name: /share\.revoke/i }));
+
+		expect(screen.getByText(/share\.revokeConfirm/i)).toBeInTheDocument();
+
+		fireEvent.click(screen.getAllByRole("button", { name: /share\.revoke/i })[1]);
+
+		expect(defaultProps.onRevokeShareLink).toHaveBeenCalledWith("abcdef0123456789");
 	});
 });

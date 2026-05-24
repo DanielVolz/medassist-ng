@@ -5,6 +5,7 @@
 	Add new shared styles to the focused partial that owns the relevant domain.
 	============================================================================= */
 @import url("./styles/foundation.css");
+@import url("./styles/feedback.css");
 @import url("./styles/app-surfaces.css");
 @import url("./styles/settings-surfaces.css");
 @import url("./styles/modal-detail.css");

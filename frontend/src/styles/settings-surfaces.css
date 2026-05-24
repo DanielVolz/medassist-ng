@@ -1290,4 +1290,66 @@
 	border: 1px solid var(--border-primary);
 }
 
+.import-review-modal {
+	max-width: 560px;
+}
+
+.import-review-modal h2 {
+	margin-bottom: 16px;
+	padding-right: 2rem;
+}
+
+.import-review-body {
+	display: grid;
+	gap: 16px;
+}
+
+.import-review-summary {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.import-review-summary .action-card {
+	align-items: stretch;
+}
+
+.import-review-meta {
+	display: grid;
+	gap: 6px;
+	font-size: 0.9rem;
+}
+
+.import-review-warnings {
+	display: grid;
+	gap: 8px;
+}
+
+.import-review-warnings ul {
+	display: grid;
+	gap: 6px;
+	margin: 0;
+	padding-left: 1.25rem;
+}
+
+.import-review-footer {
+	justify-content: space-between;
+	gap: 12px;
+	padding: 1rem 0 0;
+	border-top: none;
+}
+
+.import-review-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+@media (max-width: 640px) {
+	.import-review-summary {
+		grid-template-columns: 1fr;
+	}
+}
+
 /* Modal base styles moved to styles/modals-base.css */

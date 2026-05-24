@@ -3,6 +3,8 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlannerPage } from "../../pages/PlannerPage";
 
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+
 // Mock data
 const mockMeds = [
 	{
@@ -48,12 +50,14 @@ vi.mock("../../context", () => ({
 vi.mock("../../components/Auth", () => ({
 	useAuth: () => ({
 		user: { id: 1, username: "testuser" },
+		authFetch: authFetchMock,
 	}),
 }));
 
 describe("PlannerPage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		localStorage.clear();
 		mockContextValue = createMockContext();
 	});
@@ -440,12 +444,11 @@ describe("PlannerPage with email enabled", () => {
 			fireEvent.click(notifyBtn);
 		});
 
-		expect(global.fetch).toHaveBeenCalledWith(
+		expect(authFetchMock).toHaveBeenCalledWith(
 			"/api/planner/send-email",
 			expect.objectContaining({
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				credentials: "include",
 			})
 		);
 
@@ -580,16 +583,15 @@ describe("PlannerPage form interactions", () => {
 			fireEvent.submit(form);
 		});
 
-		expect(global.fetch).toHaveBeenCalledWith(
+		expect(authFetchMock).toHaveBeenCalledWith(
 			"/api/medications/usage",
 			expect.objectContaining({
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				credentials: "include",
 			})
 		);
 
-		const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+		const fetchCall = (authFetchMock as ReturnType<typeof vi.fn>).mock.calls[0];
 		const body = JSON.parse(fetchCall[1].body);
 		expect(body.includeUntilStart).toBe(true);
 		expect(typeof body.startDate).toBe("string");

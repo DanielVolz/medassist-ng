@@ -12,7 +12,7 @@ import {
 } from "./components";
 import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
-import { AppProvider, UnsavedChangesProvider, useAppContext, useShareContext } from "./context";
+import { AppProvider, FeedbackProvider, UnsavedChangesProvider, useAppContext, useShareContext } from "./context";
 import { useScrollLock } from "./hooks/useScrollLock";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
@@ -38,21 +38,72 @@ function RouteLoadingFallback() {
 	return <div style={{ padding: "1rem", textAlign: "center" }}>{t("common.loading")}</div>;
 }
 
+function AuthStatusCard({ theme, children }: { theme: "light" | "dark"; children: React.ReactNode }) {
+	return (
+		<div className="auth-container" data-theme={theme}>
+			<div className="auth-card" style={{ textAlign: "center" }}>
+				<h1 className="auth-title">💊 MedAssist-ng</h1>
+				{children}
+			</div>
+		</div>
+	);
+}
+
 // =============================================================================
 // Main App Wrapper with Auth
 // =============================================================================
 export default function App() {
+	// Close tooltips on scroll/touch (for mobile). Keep this in the public
+	// wrapper too so shared links get the same tooltip behavior as the app.
+	useEffect(() => {
+		const closeAllTooltips = () => {
+			document.querySelectorAll(".info-tooltip.tooltip-active, .tooltip-trigger.tooltip-active").forEach((el) => {
+				el.classList.remove("tooltip-active");
+			});
+		};
+
+		const handleTooltipClick = (e: Event) => {
+			const target = e.target as HTMLElement;
+			const tooltipTrigger = target.closest(".info-tooltip, .tooltip-trigger") as HTMLElement | null;
+			if (tooltipTrigger) {
+				closeAllTooltips();
+				tooltipTrigger.classList.add("tooltip-active");
+				if (window.innerWidth <= 640) {
+					const rect = tooltipTrigger.getBoundingClientRect();
+					tooltipTrigger.style.setProperty("--tooltip-bottom", `${window.innerHeight - rect.top + 8}px`);
+				}
+			} else {
+				closeAllTooltips();
+			}
+		};
+
+		const handleTouchMove = () => {
+			closeAllTooltips();
+		};
+
+		document.addEventListener("click", handleTooltipClick, { capture: true });
+		document.addEventListener("touchmove", handleTouchMove, { passive: true });
+		document.addEventListener("scroll", handleTouchMove, { passive: true });
+		return () => {
+			document.removeEventListener("click", handleTooltipClick, { capture: true });
+			document.removeEventListener("touchmove", handleTouchMove);
+			document.removeEventListener("scroll", handleTouchMove);
+		};
+	}, []);
+
 	return (
 		<AuthProvider>
-			<Suspense fallback={<RouteLoadingFallback />}>
-				<Routes>
-					{/* Public share route - accessible without auth */}
-					<Route path="/share/:token/overview" element={<SharedOverviewPage />} />
-					<Route path="/share/:token" element={<SharedSchedule />} />
-					{/* All other routes go through AppRouter */}
-					<Route path="*" element={<AppRouter />} />
-				</Routes>
-			</Suspense>
+			<FeedbackProvider>
+				<Suspense fallback={<RouteLoadingFallback />}>
+					<Routes>
+						{/* Public share route - accessible without auth */}
+						<Route path="/share/:token/overview" element={<SharedOverviewPage />} />
+						<Route path="/share/:token" element={<SharedSchedule />} />
+						{/* All other routes go through AppRouter */}
+						<Route path="*" element={<AppRouter />} />
+					</Routes>
+				</Suspense>
+			</FeedbackProvider>
 		</AuthProvider>
 	);
 }
@@ -73,52 +124,42 @@ function getInitialAuthTheme(): "light" | "dark" {
 }
 
 function AppRouter() {
+	const { t } = useTranslation();
 	const { user, authState, loading, authError } = useAuth();
 	const authTheme = getInitialAuthTheme();
 
 	// Show loading while checking auth state
 	if (loading) {
 		return (
-			<div className="auth-container" data-theme={authTheme}>
-				<div className="auth-card" style={{ textAlign: "center" }}>
-					<h1 className="auth-title">💊 MedAssist-ng</h1>
-					<p>Loading...</p>
-				</div>
-			</div>
+			<AuthStatusCard theme={authTheme}>
+				<p>{t("common.loading")}</p>
+			</AuthStatusCard>
 		);
 	}
 
 	// Show error if we couldn't connect to the server
 	if (authError) {
 		return (
-			<div className="auth-container" data-theme={authTheme}>
-				<div className="auth-card" style={{ textAlign: "center" }}>
-					<h1 className="auth-title">💊 MedAssist-ng</h1>
-					<div className="auth-error" style={{ marginBottom: "1rem" }}>
-						<strong>Connection Error</strong>
-						<br />
-						{authError}
-					</div>
-					<p style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-						Please check if the server is running and try again.
-					</p>
-					<button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: "1rem" }}>
-						Retry
-					</button>
+			<AuthStatusCard theme={authTheme}>
+				<div className="auth-error" style={{ marginBottom: "1rem" }}>
+					<strong>{t("auth.connectionErrorTitle")}</strong>
+					<br />
+					{authError}
 				</div>
-			</div>
+				<p style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>{t("auth.connectionErrorHelp")}</p>
+				<button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: "1rem" }}>
+					{t("common.retry")}
+				</button>
+			</AuthStatusCard>
 		);
 	}
 
 	// If auth state is null (shouldn't happen after loading, but be safe)
 	if (!authState) {
 		return (
-			<div className="auth-container" data-theme={authTheme}>
-				<div className="auth-card" style={{ textAlign: "center" }}>
-					<h1 className="auth-title">💊 MedAssist-ng</h1>
-					<p>Initializing...</p>
-				</div>
-			</div>
+			<AuthStatusCard theme={authTheme}>
+				<p>{t("common.initializing")}</p>
+			</AuthStatusCard>
 		);
 	}
 
@@ -212,12 +253,20 @@ function AppContent() {
 		setShareSelectedPerson,
 		shareSelectedDays,
 		setShareSelectedDays,
+		shareSelectedExpiryDays,
+		setShareSelectedExpiryDays,
+		shareAllowJournalNotes,
+		setShareAllowJournalNotes,
 		shareGenerating,
 		shareLink,
 		setShareLink,
 		shareCopied,
 		setShareCopied,
+		activeShareLinks,
+		activeSharesLoading,
+		revokingShareToken,
 		generateShareLink,
+		revokeShareLink,
 		copyShareLink,
 		closeShareDialog,
 		resetShareDialogState,
@@ -290,47 +339,6 @@ function AppContent() {
 		setShowImageLightbox,
 		setShowRefillModal,
 	]);
-
-	// Close tooltips on scroll/touch (for mobile)
-	useEffect(() => {
-		const closeAllTooltips = () => {
-			document.querySelectorAll(".info-tooltip.tooltip-active, .tooltip-trigger.tooltip-active").forEach((el) => {
-				el.classList.remove("tooltip-active");
-			});
-		};
-
-		const handleTooltipClick = (e: Event) => {
-			const target = e.target as HTMLElement;
-			const tooltipTrigger = target.closest(".info-tooltip, .tooltip-trigger") as HTMLElement | null;
-			if (tooltipTrigger) {
-				// Close other tooltips first
-				closeAllTooltips();
-				// Toggle this one
-				tooltipTrigger.classList.add("tooltip-active");
-				// Position tooltip above the icon on mobile
-				if (window.innerWidth <= 640) {
-					const rect = tooltipTrigger.getBoundingClientRect();
-					// Place tooltip bottom edge just above the icon
-					tooltipTrigger.style.setProperty("--tooltip-bottom", `${window.innerHeight - rect.top + 8}px`);
-				}
-			} else {
-				closeAllTooltips();
-			}
-		};
-
-		const handleTouchMove = () => {
-			closeAllTooltips();
-		};
-
-		document.addEventListener("click", handleTooltipClick, { capture: true });
-		document.addEventListener("touchmove", handleTouchMove, { passive: true });
-		document.addEventListener("scroll", handleTouchMove, { passive: true });
-		return () => {
-			document.removeEventListener("click", handleTooltipClick, { capture: true });
-			document.removeEventListener("touchmove", handleTouchMove);
-			document.removeEventListener("scroll", handleTouchMove);
-		};
-	}, []);
 
 	// Global Escape handling in priority order.
 	// This keeps behavior consistent even when child modals are mocked in tests.
@@ -602,13 +610,21 @@ function AppContent() {
 				onShareSelectedPersonChange={setShareSelectedPerson}
 				shareSelectedDays={shareSelectedDays}
 				onShareSelectedDaysChange={setShareSelectedDays}
+				shareSelectedExpiryDays={shareSelectedExpiryDays}
+				onShareSelectedExpiryDaysChange={setShareSelectedExpiryDays}
+				shareAllowJournalNotes={shareAllowJournalNotes}
+				onShareAllowJournalNotesChange={setShareAllowJournalNotes}
 				shareGenerating={shareGenerating}
 				shareLink={shareLink}
 				onShareLinkChange={setShareLink}
 				shareCopied={shareCopied}
 				onShareCopiedChange={setShareCopied}
+				activeShareLinks={activeShareLinks}
+				activeSharesLoading={activeSharesLoading}
+				revokingShareToken={revokingShareToken}
 				onClose={closeShareDialog}
 				onGenerateShareLink={generateShareLink}
+				onRevokeShareLink={revokeShareLink}
 				onCopyShareLink={copyShareLink}
 			/>
 

@@ -332,6 +332,7 @@ describe("useMedicationForm", () => {
 
 		act(() => {
 			result.current.addTakenByPerson("Alice");
+			result.current.addTakenByPerson("alice");
 			result.current.addTakenByPerson("");
 		});
 

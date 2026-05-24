@@ -2,9 +2,27 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDoses } from "../../hooks/useDoses";
 
+const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+
+vi.mock("../../components/Auth", () => ({
+	useAuth: () => ({
+		authFetch: authFetchMock,
+	}),
+}));
+
+vi.mock("../../context/FeedbackContext", () => ({
+	useFeedback: () => ({
+		showFeedback: feedbackMock.showFeedback,
+		dismissFeedback: vi.fn(),
+		clearFeedback: vi.fn(),
+	}),
+}));
+
 describe("useDoses", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve({ doses: [] }),
@@ -13,6 +31,19 @@ describe("useDoses", () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
+	});
+
+	it("loads taken doses through authFetch", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ doses: [] }),
+		});
+
+		renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(authFetchMock).toHaveBeenCalledWith("/api/doses/taken");
+		});
 	});
 
 	it("initializes with empty state", () => {
@@ -273,9 +304,6 @@ describe("useDoses", () => {
 	});
 
 	it("shows an out-of-stock alert and reverts the optimistic mark", async () => {
-		const alertMock = vi.fn();
-		global.alert = alertMock;
-
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
 			.mockResolvedValueOnce({
@@ -297,7 +325,10 @@ describe("useDoses", () => {
 		await waitFor(() => {
 			expect(result.current.takenDoses.has("blocked-dose")).toBe(false);
 		});
-		expect(alertMock).toHaveBeenCalledWith("common.outOfStockTakeBlocked");
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({
+			message: "common.outOfStockTakeBlocked",
+			tone: "error",
+		});
 	});
 
 	it("undoDoseTaken encodes special characters in dose ID", async () => {

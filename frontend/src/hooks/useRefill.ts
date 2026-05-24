@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "../components/Auth";
 import type { Coverage, FormState, Medication, RefillEntry } from "../types";
 import {
 	getMedTotal,
@@ -55,6 +56,7 @@ export interface UseRefillReturn {
 }
 
 export function useRefill(): UseRefillReturn {
+	const { authFetch } = useAuth();
 	// Refill state
 	const [showRefillModal, setShowRefillModal] = useState(false);
 	const [refillPacks, setRefillPacks] = useState(1);
@@ -93,19 +95,22 @@ export function useRefill(): UseRefillReturn {
 	}, [resetRefillForm]);
 
 	// Load refill history for a medication
-	const loadRefillHistory = useCallback(async (medId: number) => {
-		try {
-			const res = await fetch(`/api/medications/${medId}/refills`, { credentials: "include" });
-			if (res.ok) {
-				const data = await res.json();
-				setRefillHistory(Array.isArray(data) ? data : data.refills || []);
-			} else {
+	const loadRefillHistory = useCallback(
+		async (medId: number) => {
+			try {
+				const res = await authFetch(`/api/medications/${medId}/refills`);
+				if (res.ok) {
+					const data = await res.json();
+					setRefillHistory(Array.isArray(data) ? data : data.refills || []);
+				} else {
+					setRefillHistory([]);
+				}
+			} catch {
 				setRefillHistory([]);
 			}
-		} catch {
-			setRefillHistory([]);
-		}
-	}, []);
+		},
+		[authFetch]
+	);
 
 	// Submit a refill
 	const submitRefill = useCallback(
@@ -119,10 +124,9 @@ export function useRefill(): UseRefillReturn {
 			if (refillPacks < 1 && refillLoose < 1) return;
 			setRefillSaving(true);
 			try {
-				const res = await fetch(`/api/medications/${medId}/refill`, {
+				const res = await authFetch(`/api/medications/${medId}/refill`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					credentials: "include",
 					body: JSON.stringify({
 						packsAdded: refillPacks,
 						loosePillsAdded: refillLoose,
@@ -162,7 +166,7 @@ export function useRefill(): UseRefillReturn {
 			}
 			setRefillSaving(false);
 		},
-		[refillPacks, refillLoose, showRefillModal, loadRefillHistory]
+		[authFetch, refillPacks, refillLoose, showRefillModal, loadRefillHistory]
 	);
 
 	// Submit a stock correction - user says how many pills they have RIGHT NOW
@@ -282,10 +286,9 @@ export function useRefill(): UseRefillReturn {
 				}
 
 				// Use the PATCH endpoint - it sets stockAdjustment, looseTablets, AND lastStockCorrectionAt
-				const res = await fetch(`/api/medications/${medId}/stock-adjustment`, {
+				const res = await authFetch(`/api/medications/${medId}/stock-adjustment`, {
 					method: "PATCH",
 					headers: { "Content-Type": "application/json" },
-					credentials: "include",
 					body: JSON.stringify(patchBody),
 				});
 				if (res.ok) {
@@ -301,7 +304,7 @@ export function useRefill(): UseRefillReturn {
 			}
 			setEditStockSaving(false);
 		},
-		[editStockFullBlisters, editStockPartialBlisterPills, editStockLoosePills, showEditStockModal]
+		[authFetch, editStockFullBlisters, editStockPartialBlisterPills, editStockLoosePills, showEditStockModal]
 	);
 
 	const openRefillModal = useCallback(() => {

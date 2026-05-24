@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
+
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
 const changeLanguageMock = vi.fn();
 
@@ -42,6 +43,9 @@ const createMockContext = (overrides = {}) => ({
 		reminderRepeatIntervalMinutes: 30,
 		maxNaggingReminders: 5,
 		language: "en",
+		timezone: "Europe/Berlin",
+		serverTimezone: "Europe/Berlin",
+		availableTimezones: ["Europe/Berlin", "UTC"],
 		stockCalculationMode: "automatic",
 		smtpHost: "",
 		smtpPort: 587,
@@ -84,6 +88,8 @@ const createMockContext = (overrides = {}) => ({
 	setShowImportConfirm: vi.fn(),
 	pendingImportData: null,
 	setPendingImportData: vi.fn(),
+	importPreview: null,
+	setImportPreview: vi.fn(),
 	handleImportConfirm: vi.fn(),
 	importResult: null,
 	setImportResult: vi.fn(),
@@ -98,14 +104,9 @@ vi.mock("../../context", () => ({
 	useAppContext: () => mockContextValue,
 }));
 
-interface MockConfirmModalProps {
-	title: string;
-	message: ReactNode;
-	confirmLabel: string;
-	cancelLabel: string;
-	onConfirm: () => void;
-	onCancel: () => void;
-}
+vi.mock("../../components/Auth", () => ({
+	useAuth: () => ({ authFetch: authFetchMock }),
+}));
 
 interface MockExportModalProps {
 	isOpen: boolean;
@@ -113,31 +114,53 @@ interface MockExportModalProps {
 	onExport: () => void;
 }
 
-vi.mock("../../components", () => ({
-	ConfirmModal: ({ title, message, confirmLabel, cancelLabel, onConfirm, onCancel }: MockConfirmModalProps) => (
-		<div>
-			<div>{title}</div>
-			<div>{message}</div>
-			<button type="button" onClick={onConfirm}>
-				{confirmLabel}
-			</button>
-			<button type="button" onClick={onCancel}>
-				{cancelLabel}
-			</button>
-		</div>
-	),
-	ExportModal: ({ isOpen, onClose, onExport }: MockExportModalProps) =>
-		isOpen ? (
-			<div>
-				<button type="button" onClick={onExport}>
-					export-modal-export
-				</button>
-				<button type="button" onClick={onClose}>
-					export-modal-close
-				</button>
-			</div>
-		) : null,
-}));
+const createImportPreview = (overrides = {}) => ({
+	version: "1.6",
+	exportedAt: "2026-05-17T10:00:00.000Z",
+	includeSensitiveData: false,
+	incoming: {
+		medications: 1,
+		doseHistory: 2,
+		refillHistory: 3,
+		shareLinks: 4,
+		journalEntries: 1,
+		imageCount: 0,
+		hasSettings: true,
+	},
+	current: {
+		medications: 1,
+		doseHistory: 0,
+		refillHistory: 0,
+		shareLinks: 0,
+		hasSettings: false,
+	},
+	warnings: {
+		replacesExistingData: true,
+		regeneratesShareLinks: true,
+		containsImages: false,
+		containsSensitiveData: false,
+	},
+	...overrides,
+});
+
+vi.mock("../../components", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../components")>();
+
+	return {
+		...actual,
+		ExportModal: ({ isOpen, onClose, onExport }: MockExportModalProps) =>
+			isOpen ? (
+				<div>
+					<button type="button" onClick={onExport}>
+						export-modal-export
+					</button>
+					<button type="button" onClick={onClose}>
+						export-modal-close
+					</button>
+				</div>
+			) : null,
+	};
+});
 
 function renderPage() {
 	render(
@@ -151,6 +174,7 @@ describe("SettingsPage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockContextValue = createMockContext();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
 		vi.stubGlobal("fetch", fetchMock);
 	});
@@ -200,7 +224,24 @@ describe("SettingsPage", () => {
 		expect(select).toBeInTheDocument();
 		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
 		expect(changeLanguageMock).toHaveBeenCalledWith("de");
-		expect(fetchMock).toHaveBeenCalledWith("/api/settings/language", expect.objectContaining({ method: "PUT" }));
+		expect(authFetchMock).toHaveBeenCalledWith("/api/settings/language", expect.objectContaining({ method: "PUT" }));
+	});
+
+	it("generates an API key through authFetch and shows the returned token", async () => {
+		fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ token: "new-token-123" }) });
+
+		renderPage();
+		fireEvent.click(screen.getByText("settings.apiKey.generateButton"));
+
+		expect(authFetchMock).toHaveBeenCalledWith(
+			"/api/auth/api-keys",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ name: "Default API Key", scope: "write" }),
+			})
+		);
+
+		expect(await screen.findByDisplayValue("new-token-123")).toBeInTheDocument();
 	});
 
 	it("updates timeline toggles through setSettings", () => {
@@ -379,10 +420,13 @@ describe("SettingsPage", () => {
 	it("cancels import confirm and clears pending import", () => {
 		const setShowImportConfirm = vi.fn();
 		const setPendingImportData = vi.fn();
+		const setImportPreview = vi.fn();
 		mockContextValue = createMockContext({
 			setShowImportConfirm,
 			setPendingImportData,
+			setImportPreview,
 			showImportConfirm: true,
+			importPreview: createImportPreview(),
 			meds: [{ id: 1 }],
 		});
 
@@ -390,6 +434,7 @@ describe("SettingsPage", () => {
 		fireEvent.click(screen.getByText("exportImport.cancelButton"));
 		expect(setShowImportConfirm).toHaveBeenCalledWith(false);
 		expect(setPendingImportData).toHaveBeenCalledWith(null);
+		expect(setImportPreview).toHaveBeenCalledWith(null);
 	});
 
 	it("renders notification matrix with toggle switches", () => {
@@ -452,11 +497,13 @@ describe("SettingsPage", () => {
 		mockContextValue = createMockContext({
 			handleImportConfirm,
 			showImportConfirm: true,
+			importPreview: createImportPreview(),
 			meds: [{ id: 1 }],
 		});
 
 		renderPage();
 		expect(screen.getByText("exportImport.confirmImport")).toBeInTheDocument();
+		expect(screen.getByText("exportImport.reviewDescription")).toBeInTheDocument();
 		expect(screen.getByText(/exportImport\.confirmImportWarning/i)).toBeInTheDocument();
 
 		fireEvent.click(screen.getByText("exportImport.confirmButton"));
@@ -466,19 +513,52 @@ describe("SettingsPage", () => {
 	it("renders import confirm for empty state and handles cancel", () => {
 		const setShowImportConfirm = vi.fn();
 		const setPendingImportData = vi.fn();
+		const setImportPreview = vi.fn();
 		mockContextValue = createMockContext({
 			setShowImportConfirm,
 			setPendingImportData,
+			setImportPreview,
 			showImportConfirm: true,
+			importPreview: createImportPreview({
+				current: {
+					medications: 0,
+					doseHistory: 0,
+					refillHistory: 0,
+					shareLinks: 0,
+					hasSettings: false,
+				},
+				warnings: {
+					replacesExistingData: false,
+					regeneratesShareLinks: false,
+					containsImages: false,
+					containsSensitiveData: false,
+				},
+			}),
 			meds: [],
 		});
 
 		renderPage();
 		expect(screen.getByText("exportImport.confirmImportEmpty")).toBeInTheDocument();
+		expect(screen.getByText("exportImport.reviewDescriptionEmpty")).toBeInTheDocument();
 		expect(screen.getByText("exportImport.confirmImportEmptyMessage")).toBeInTheDocument();
 
 		fireEvent.click(screen.getByText("exportImport.cancelButton"));
 		expect(setShowImportConfirm).toHaveBeenCalledWith(false);
 		expect(setPendingImportData).toHaveBeenCalledWith(null);
+		expect(setImportPreview).toHaveBeenCalledWith(null);
+	});
+
+	it("offers backup-first from the import review modal", () => {
+		const handleExport = vi.fn();
+		mockContextValue = createMockContext({
+			handleExport,
+			showImportConfirm: true,
+			importPreview: createImportPreview(),
+			meds: [{ id: 1 }],
+		});
+
+		renderPage();
+		fireEvent.click(screen.getByText("exportImport.backupFirst"));
+		expect(handleExport).toHaveBeenCalledWith(true);
 	});
 });

@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useAuth } from "../components/Auth";
 import type { Medication } from "../types";
 
 export interface UseMedicationsReturn {
@@ -16,6 +17,7 @@ export interface UseMedicationsReturn {
 }
 
 export function useMedications(): UseMedicationsReturn {
+	const { authFetch } = useAuth();
 	const [meds, setMeds] = useState<Medication[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -30,20 +32,20 @@ export function useMedications(): UseMedicationsReturn {
 
 	const loadMeds = useCallback(() => {
 		setLoading(true);
-		fetch("/api/medications?includeObsolete=true", { credentials: "include" })
+		authFetch("/api/medications?includeObsolete=true")
 			.then((res) => res.json())
 			.then((data) => setMeds(Array.isArray(data) ? data : []))
 			.catch(() => setMeds([]))
 			.finally(() => setLoading(false));
-	}, []);
+	}, [authFetch]);
 
 	const deleteMed = useCallback(
 		async (id: number, editingId: number | null, resetForm: () => void) => {
-			await fetch(`/api/medications/${id}`, { method: "DELETE", credentials: "include" }).catch(() => null);
+			await authFetch(`/api/medications/${id}`, { method: "DELETE" }).catch(() => null);
 			if (editingId === id) resetForm();
 			loadMeds();
 		},
-		[loadMeds]
+		[authFetch, loadMeds]
 	);
 
 	const uploadMedImage = useCallback(
@@ -53,10 +55,9 @@ export function useMedications(): UseMedicationsReturn {
 			formData.append("file", file);
 
 			try {
-				const res = await fetch(`/api/medications/${medId}/image`, {
+				const res = await authFetch(`/api/medications/${medId}/image`, {
 					method: "POST",
 					body: formData,
-					credentials: "include",
 				});
 				if (!res.ok) {
 					let code = "UNKNOWN";
@@ -86,15 +87,15 @@ export function useMedications(): UseMedicationsReturn {
 				setUploadingImage(false);
 			}
 		},
-		[loadMeds]
+		[authFetch, loadMeds]
 	);
 
 	const deleteMedImage = useCallback(
 		async (medId: number) => {
-			await fetch(`/api/medications/${medId}/image`, { method: "DELETE", credentials: "include" }).catch(() => null);
+			await authFetch(`/api/medications/${medId}/image`, { method: "DELETE" }).catch(() => null);
 			loadMeds();
 		},
-		[loadMeds]
+		[authFetch, loadMeds]
 	);
 
 	return {

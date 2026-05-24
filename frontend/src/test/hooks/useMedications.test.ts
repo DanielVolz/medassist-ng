@@ -3,9 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMedications } from "../../hooks/useMedications";
 import type { Medication } from "../../types";
 
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+
+vi.mock("../../components/Auth", () => ({
+	useAuth: () => ({
+		authFetch: authFetchMock,
+	}),
+}));
+
 describe("useMedications", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve([]),
@@ -14,6 +23,23 @@ describe("useMedications", () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
+	});
+
+	it("loads medications through authFetch", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve([]),
+		});
+
+		const { result } = renderHook(() => useMedications());
+
+		act(() => {
+			result.current.loadMeds();
+		});
+
+		await waitFor(() => {
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medications?includeObsolete=true");
+		});
 	});
 
 	it("initializes with empty state", () => {
@@ -45,7 +71,7 @@ describe("useMedications", () => {
 			expect(result.current.meds).toEqual(mockMeds);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/medications?includeObsolete=true", { credentials: "include" });
+		expect(authFetchMock).toHaveBeenCalledWith("/api/medications?includeObsolete=true");
 	});
 
 	it("handles API error gracefully", async () => {
@@ -107,7 +133,7 @@ describe("useMedications", () => {
 			await result.current.deleteMed(1, 1, mockResetForm);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/medications/1", { method: "DELETE", credentials: "include" });
+		expect(authFetchMock).toHaveBeenCalledWith("/api/medications/1", { method: "DELETE" });
 		expect(mockResetForm).toHaveBeenCalled();
 	});
 
@@ -123,8 +149,8 @@ describe("useMedications", () => {
 			await result.current.deleteMed(5, 5, mockResetForm);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/medications/5", { method: "DELETE", credentials: "include" });
-		expect(fetch).toHaveBeenCalledWith("/api/medications?includeObsolete=true", { credentials: "include" });
+		expect(authFetchMock).toHaveBeenCalledWith("/api/medications/5", { method: "DELETE" });
+		expect(authFetchMock).toHaveBeenCalledWith("/api/medications?includeObsolete=true");
 		expect(mockResetForm).toHaveBeenCalled();
 	});
 
@@ -190,7 +216,7 @@ describe("useMedications", () => {
 			await result.current.deleteMedImage(1);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/medications/1/image", { method: "DELETE", credentials: "include" });
+		expect(authFetchMock).toHaveBeenCalledWith("/api/medications/1/image", { method: "DELETE" });
 	});
 
 	it("allows setting meds directly", () => {

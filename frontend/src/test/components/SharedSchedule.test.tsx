@@ -141,6 +141,7 @@ function createSharedDataWithTodayDose(referenceNow: Date) {
 		sharedBy: "Owner",
 		takenBy: "Max",
 		scheduleDays: 30,
+		allowJournalNotes: false,
 		automaticDoseId: `1-0-${dateOnlyMs}`,
 		medications: [
 			{
@@ -171,17 +172,24 @@ function createSharedDataWithTodayDose(referenceNow: Date) {
 function createSharedDoseFetchMock(options: {
 	token?: string;
 	sharedData: ReturnType<typeof createSharedDataWithTodayDose>;
-	initialDoses?: Array<{ doseId: string; skipped?: boolean; dismissed?: boolean; takenSource?: string }>;
+	initialDoses?: Array<{
+		doseId: string;
+		skipped?: boolean;
+		dismissed?: boolean;
+		takenSource?: string;
+		hasJournalNote?: boolean;
+	}>;
 }) {
 	const token = options.token ?? "token-123";
 	const doseState = new Map((options.initialDoses ?? []).map((dose) => [dose.doseId, { ...dose }]));
+	const journalState = new Map<string, { note: string | null; createdAt: string | null; updatedAt: string | null }>();
 	const requests: Array<{ url: string; method: string; body?: unknown }> = [];
 
 	const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
 		const method = init?.method ?? "GET";
 		const body =
 			typeof init?.body === "string" && init.body.length > 0
-				? (JSON.parse(init.body) as { doseId: string })
+				? (JSON.parse(init.body) as { doseId?: string; note?: string | null })
 				: undefined;
 		requests.push({ url, method, body });
 
@@ -190,7 +198,11 @@ function createSharedDoseFetchMock(options: {
 		}
 
 		if (url === `/api/share/${token}/doses` && method === "GET") {
-			return { ok: true, json: async () => ({ doses: Array.from(doseState.values()) }) };
+			const doses = Array.from(doseState.values()).map((dose) => ({
+				...dose,
+				hasJournalNote: dose.hasJournalNote === true || Boolean(journalState.get(dose.doseId)?.note?.trim()),
+			}));
+			return { ok: true, json: async () => ({ doses }) };
 		}
 
 		if (url === `/api/share/${token}/doses/skip` && method === "POST" && body?.doseId) {
@@ -201,6 +213,61 @@ function createSharedDoseFetchMock(options: {
 		if (url === `/api/share/${token}/doses` && method === "POST" && body?.doseId) {
 			doseState.set(body.doseId, { doseId: body.doseId, takenSource: "manual" });
 			return { ok: true, json: async () => ({}) };
+		}
+
+		if (url.startsWith(`/api/share/${token}/journal/event/`) && method === "GET") {
+			const doseId = decodeURIComponent(url.split("/").at(-1) ?? "");
+			const journal = journalState.get(doseId) ?? { note: null, createdAt: null, updatedAt: null };
+			return {
+				ok: true,
+				json: async () => ({
+					entry: {
+						doseTrackingId: 1,
+						doseId,
+						medicationId: 1,
+						medicationName: "Ibuprofen",
+						scheduledFor: new Date().toISOString(),
+						takenAt: new Date().toISOString(),
+						dismissed: false,
+						takenSource: "manual",
+						markedBy: "Max",
+						note: journal.note,
+						createdAt: journal.createdAt,
+						updatedAt: journal.updatedAt,
+					},
+				}),
+			};
+		}
+
+		if (url.startsWith(`/api/share/${token}/journal/event/`) && method === "PUT") {
+			const doseId = decodeURIComponent(url.split("/").at(-1) ?? "");
+			const timestamp = new Date().toISOString();
+			journalState.set(doseId, { note: body?.note ?? null, createdAt: timestamp, updatedAt: timestamp });
+			return {
+				ok: true,
+				json: async () => ({
+					entry: {
+						doseTrackingId: 1,
+						doseId,
+						medicationId: 1,
+						medicationName: "Ibuprofen",
+						scheduledFor: new Date().toISOString(),
+						takenAt: new Date().toISOString(),
+						dismissed: false,
+						takenSource: "manual",
+						markedBy: "Max",
+						note: body?.note ?? null,
+						createdAt: timestamp,
+						updatedAt: timestamp,
+					},
+				}),
+			};
+		}
+
+		if (url.startsWith(`/api/share/${token}/journal/event/`) && method === "DELETE") {
+			const doseId = decodeURIComponent(url.split("/").at(-1) ?? "");
+			journalState.delete(doseId);
+			return { ok: true, json: async () => ({ success: true }) };
 		}
 
 		if (url.startsWith(`/api/share/${token}/doses/skip/`) && method === "DELETE") {
@@ -244,7 +311,106 @@ describe("SharedSchedule", () => {
 
 		await waitFor(() => {
 			expect(screen.getByText(/share\.scheduleFor/i)).toBeInTheDocument();
+			expect(screen.getByText("share.publicAccessHelp")).toBeInTheDocument();
 			expect(screen.getByText("share.noSchedule")).toBeInTheDocument();
+		});
+	});
+
+	it("opens and saves a shared journal note when the share link allows notes", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = {
+			...createSharedDataWithTodayDose(referenceNow),
+			allowJournalNotes: true,
+		};
+		const { fetchMock, requests } = createSharedDoseFetchMock({
+			sharedData,
+		});
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(document.querySelector(".dose-btn.take")).toBeInTheDocument();
+		});
+
+		const unavailableJournalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
+		expect(unavailableJournalButton).toBeDisabled();
+		expect(unavailableJournalButton).not.toHaveClass("has-note");
+		expect(unavailableJournalButton.closest("span")).toHaveAttribute("data-tooltip", "journal.actions.noteTakenOnly");
+
+		fireEvent.click(screen.getByText("dose.take"));
+
+		await waitFor(() => {
+			expect(requests).toContainEqual({
+				url: "/api/share/token-123/doses",
+				method: "POST",
+				body: { doseId: sharedData.automaticDoseId },
+			});
+			expect(document.querySelector(".day-block.today")).not.toHaveClass("collapsed");
+		});
+
+		await waitFor(() => {
+			const availableJournalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
+			expect(availableJournalButton).not.toBeDisabled();
+			expect(availableJournalButton).not.toHaveClass("has-note");
+			expect(availableJournalButton.closest("span")).not.toHaveAttribute("data-tooltip");
+		});
+
+		fireEvent.click(document.querySelector(".dose-btn.journal") as Element);
+
+		await waitFor(() => {
+			expect(requests).toContainEqual({
+				url: `/api/share/token-123/journal/event/${sharedData.automaticDoseId}`,
+				method: "GET",
+				body: undefined,
+			});
+		});
+
+		await waitFor(() => {
+			expect(screen.getByLabelText("journal.editor.noteLabel")).toHaveValue("");
+		});
+		expect(screen.queryByRole("button", { name: "common.delete" })).not.toBeInTheDocument();
+
+		fireEvent.change(screen.getByLabelText("journal.editor.noteLabel"), { target: { value: "Shared note" } });
+		fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+		await waitFor(() => {
+			expect(requests).toContainEqual({
+				url: `/api/share/token-123/journal/event/${sharedData.automaticDoseId}`,
+				method: "PUT",
+				body: { note: "Shared note" },
+			});
+		});
+
+		await waitFor(() => {
+			expect(screen.queryByLabelText("journal.editor.noteLabel")).not.toBeInTheDocument();
+			const savedJournalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
+			expect(savedJournalButton).toHaveClass("has-note");
+		});
+	});
+
+	it("marks shared journal notes from the shared dose read state", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = {
+			...createSharedDataWithTodayDose(referenceNow),
+			allowJournalNotes: true,
+		};
+		const { fetchMock } = createSharedDoseFetchMock({
+			sharedData,
+			initialDoses: [{ doseId: sharedData.automaticDoseId, takenSource: "manual", hasJournalNote: true }],
+		});
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			const journalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
+			expect(journalButton).not.toBeDisabled();
+			expect(journalButton).toHaveClass("has-note");
 		});
 	});
 

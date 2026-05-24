@@ -4,10 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppProvider, useAppContext } from "../../context/AppContext";
 import type { Medication } from "../../types";
 
+const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 const mockUseAuth = vi.fn();
 const mockUseMedications = vi.fn();
 const mockUseSettings = vi.fn();
 const mockUseDoses = vi.fn();
+const mockUseIntakeJournal = vi.fn();
 const mockUseCollapsedDays = vi.fn();
 const mockUseShare = vi.fn();
 const mockUseRefill = vi.fn();
@@ -26,10 +29,19 @@ vi.mock("../../components/Auth", () => ({
 	useAuth: () => mockUseAuth(),
 }));
 
+vi.mock("../../context/FeedbackContext", () => ({
+	useFeedback: () => ({
+		showFeedback: feedbackMock.showFeedback,
+		dismissFeedback: vi.fn(),
+		clearFeedback: vi.fn(),
+	}),
+}));
+
 vi.mock("../../hooks", () => ({
 	useMedications: () => mockUseMedications(),
 	useSettings: () => mockUseSettings(),
 	useDoses: () => mockUseDoses(),
+	useIntakeJournal: () => mockUseIntakeJournal(),
 	useCollapsedDays: () => mockUseCollapsedDays(),
 	useShare: () => mockUseShare(),
 	useRefill: () => mockUseRefill(),
@@ -55,7 +67,7 @@ const meds: Medication[] = [
 	{
 		id: 11,
 		name: "Aspirin",
-		takenBy: ["Max", "Anna"],
+		takenBy: ["Max", "Anna", "max"],
 		packageType: "blister",
 		packCount: 1,
 		blistersPerPack: 1,
@@ -80,7 +92,8 @@ describe("useAppContext", () => {
 		const loadSettings = vi.fn();
 		const loadTakenDoses = vi.fn();
 
-		mockUseAuth.mockReturnValue({ user: { id: 7, username: "owner" } });
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+		mockUseAuth.mockReturnValue({ user: { id: 7, username: "owner" }, authFetch: authFetchMock });
 
 		mockUseMedications.mockReturnValue({
 			meds,
@@ -206,6 +219,35 @@ describe("useAppContext", () => {
 			loadTakenDoses,
 		});
 
+		mockUseIntakeJournal.mockReturnValue({
+			journalEditorOpen: false,
+			journalHistoryOpen: false,
+			journalTargetDoseId: null,
+			journalEvent: null,
+			journalEventLoading: false,
+			journalEventSaving: false,
+			journalEventDeleting: false,
+			journalEventError: null,
+			journalHistoryEntries: [],
+			journalHistoryFilters: {
+				medicationId: null,
+				from: "",
+				until: "",
+			},
+			journalHistoryLoading: false,
+			journalHistoryError: null,
+			openJournalEditor: vi.fn(),
+			closeJournalEditor: vi.fn(),
+			saveJournalNote: vi.fn(async () => true),
+			deleteJournalNote: vi.fn(async () => true),
+			openJournalHistory: vi.fn(),
+			closeJournalHistory: vi.fn(),
+			setJournalHistoryFilters: vi.fn(),
+			reloadJournalHistory: vi.fn(async () => {}),
+			reopenJournalHistoryEntry: vi.fn(async () => {}),
+			resetJournalState: vi.fn(),
+		});
+
 		mockUseCollapsedDays.mockReturnValue({
 			manuallyCollapsedDays: new Set<string>(),
 			manuallyExpandedDays: new Set<string>(),
@@ -219,11 +261,19 @@ describe("useAppContext", () => {
 			setShareSelectedPerson: vi.fn(),
 			shareSelectedDays: 30,
 			setShareSelectedDays: vi.fn(),
+			shareSelectedExpiryDays: null,
+			setShareSelectedExpiryDays: vi.fn(),
+			shareAllowJournalNotes: false,
+			setShareAllowJournalNotes: vi.fn(),
 			shareGenerating: false,
 			shareLink: null,
 			setShareLink: vi.fn(),
 			shareCopied: false,
 			setShareCopied: vi.fn(),
+			activeShareLinks: [],
+			activeSharesLoading: false,
+			revokingShareToken: null,
+			revokeShareLink: vi.fn(),
 			openShareDialog: vi.fn(),
 			generateShareLink: vi.fn(),
 			copyShareLink: vi.fn(),
@@ -345,7 +395,7 @@ describe("useAppContext", () => {
 		const clearRefillStateBefore = mockUseRefill().clearRefillState.mock.calls.length;
 		const resetShareDialogStateBefore = mockUseShare().resetShareDialogState.mock.calls.length;
 
-		mockUseAuth.mockReturnValue({ user: { id: 8, username: "other-user" } });
+		mockUseAuth.mockReturnValue({ user: { id: 8, username: "other-user" }, authFetch: authFetchMock });
 		rerender();
 
 		await waitFor(() => {
@@ -407,11 +457,10 @@ describe("useAppContext", () => {
 			await result.current.handleImportConfirm();
 		});
 
-		expect(fetch).toHaveBeenCalledWith(
+		expect(authFetchMock).toHaveBeenCalledWith(
 			"/api/import",
 			expect.objectContaining({
 				method: "POST",
-				credentials: "include",
 			})
 		);
 		expect(mockUseMedications().loadMeds).toHaveBeenCalled();
@@ -447,9 +496,7 @@ describe("useAppContext", () => {
 			await result.current.handleExport(true);
 		});
 
-		expect(fetch).toHaveBeenCalledWith("/api/export?includeSensitive=true&includeImages=true", {
-			credentials: "include",
-		});
+		expect(authFetchMock).toHaveBeenCalledWith("/api/export?includeSensitive=true&includeImages=true");
 		expect(createObjectURL).toHaveBeenCalled();
 		expect(click).toHaveBeenCalled();
 		expect(appendChild).toHaveBeenCalled();
@@ -458,9 +505,6 @@ describe("useAppContext", () => {
 	});
 
 	it("handles invalid import JSON file", () => {
-		const mockAlert = vi.fn();
-		global.alert = mockAlert;
-
 		class MockFileReader {
 			onload: ((event: ProgressEvent<FileReader>) => void) | null = null;
 			readAsText = vi.fn(() => {
@@ -478,10 +522,46 @@ describe("useAppContext", () => {
 			} as unknown as React.ChangeEvent<HTMLInputElement>);
 		});
 
-		expect(mockAlert).toHaveBeenCalledWith("exportImport.invalidFile");
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({ message: "exportImport.invalidFile", tone: "error" });
 	});
 
-	it("parses valid import file and opens confirm modal", () => {
+	it("parses valid import file and opens confirm modal", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			text: () =>
+				Promise.resolve(
+					JSON.stringify({
+						preview: {
+							version: "1",
+							exportedAt: "2026-01-01T00:00:00.000Z",
+							includeSensitiveData: true,
+							incoming: {
+								medications: 0,
+								doseHistory: 0,
+								refillHistory: 0,
+								shareLinks: 0,
+								journalEntries: 0,
+								imageCount: 0,
+								hasSettings: false,
+							},
+							current: {
+								medications: 1,
+								doseHistory: 0,
+								refillHistory: 0,
+								shareLinks: 0,
+								hasSettings: true,
+							},
+							warnings: {
+								replacesExistingData: true,
+								regeneratesShareLinks: false,
+								containsImages: false,
+								containsSensitiveData: true,
+							},
+						},
+					})
+				),
+		});
+
 		class MockFileReader {
 			onload: ((event: ProgressEvent<FileReader>) => void) | null = null;
 			readAsText = vi.fn(() => {
@@ -503,11 +583,20 @@ describe("useAppContext", () => {
 			} as unknown as React.ChangeEvent<HTMLInputElement>);
 		});
 
-		expect(result.current.showImportConfirm).toBe(true);
-		expect(result.current.pendingImportData).toEqual({
-			version: "1",
-			exportedAt: "2026-01-01T00:00:00.000Z",
-			medications: [],
+		await waitFor(() => {
+			expect(authFetchMock).toHaveBeenCalledWith(
+				"/api/import/preview",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ version: "1", exportedAt: "2026-01-01T00:00:00.000Z", medications: [] }),
+				})
+			);
+			expect(result.current.showImportConfirm).toBe(true);
+			expect(result.current.pendingImportData).toEqual({
+				version: "1",
+				exportedAt: "2026-01-01T00:00:00.000Z",
+				medications: [],
+			});
 		});
 	});
 
@@ -550,9 +639,6 @@ describe("useAppContext", () => {
 	});
 
 	it("shows import error alert when import API returns non-ok response", async () => {
-		const mockAlert = vi.fn();
-		global.alert = mockAlert;
-
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 			ok: false,
 			status: 500,
@@ -569,6 +655,9 @@ describe("useAppContext", () => {
 			await result.current.handleImportConfirm();
 		});
 
-		expect(mockAlert).toHaveBeenCalledWith("exportImport.importError: Import failed");
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({
+			message: "exportImport.importError: Import failed",
+			tone: "error",
+		});
 	});
 });

@@ -2,6 +2,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useModalHistory } from "../hooks/useModalHistory";
 import { withCorrelation } from "../utils/correlation";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
@@ -32,6 +33,7 @@ interface AuthContextType {
 	authState: AuthState | null;
 	loading: boolean;
 	authError: string | null;
+	sessionExpired: boolean;
 	login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
 	register: (username: string, password: string) => Promise<void>;
 	logout: () => Promise<void>;
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const [authState, setAuthState] = useState<AuthState | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [authError, setAuthError] = useState<string | null>(null);
+	const [sessionExpired, setSessionExpired] = useState(false);
 	// Track if initial fetch has been done to prevent duplicate calls
 	const initialFetchDone = useRef(false);
 
@@ -113,6 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			// If auth is enabled and we might be logged in, check session
 			if (state.authEnabled) {
 				await refreshUser();
+			} else {
+				setSessionExpired(false);
 			}
 			setLoading(false);
 		} catch (err) {
@@ -138,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			if (res.ok) {
 				const userData = await res.json();
 				setUser(userData);
+				setSessionExpired(false);
 				log.debug("[Auth] Session user loaded", { userId: userData.id, correlationId });
 			} else if (res.status === 401) {
 				// Access token expired - try to refresh it
@@ -150,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					if (retryRes.ok) {
 						const userData = await retryRes.json();
 						setUser(userData);
+						setSessionExpired(false);
 						log.info("[Auth] Session restored after token refresh", {
 							userId: userData.id,
 							correlationId: retry.correlationId,
@@ -159,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				}
 				log.debug("[Auth] Session refresh unavailable, clearing local user state", { correlationId });
 				setUser(null);
+				setSessionExpired(true);
 			} else {
 				log.warn("[Auth] Unexpected /auth/me response", { status: res.status, correlationId });
 				setUser(null);
@@ -215,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 		const data = await res.json();
 		setUser(data.user);
+		setSessionExpired(false);
 		log.info("[Auth] Login successful", { userId: data.user?.id, username: data.user?.username, correlationId });
 	}
 
@@ -233,6 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 		// Auto-login after registration
 		await login(username, password);
+		setSessionExpired(false);
 
 		// Refresh auth state (registration might disable further registrations)
 		await fetchAuthState();
@@ -249,6 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		log.info("[Auth] Logout requested", { userId: user?.id ?? null, correlationId });
 		await fetch("/api/auth/logout", init);
 		setUser(null);
+		setSessionExpired(false);
 		log.info("[Auth] Logout completed", { correlationId });
 	}
 
@@ -341,9 +352,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				if (refreshed) {
 					// Retry the original request with new token
 					res = await fetch(input, options);
+					if (res.ok) {
+						setSessionExpired(false);
+					}
 				} else {
 					// Refresh failed - user needs to login again
 					setUser(null);
+					setSessionExpired(true);
 				}
 			}
 
@@ -359,6 +374,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				authState,
 				loading,
 				authError,
+				sessionExpired,
 				login,
 				register,
 				logout,
@@ -386,7 +402,7 @@ export function LoginForm({
 	onSwitchToRegister?: () => void;
 }) {
 	const { t } = useTranslation();
-	const { login, authState } = useAuth();
+	const { login, authState, sessionExpired } = useAuth();
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [rememberMe, setRememberMe] = useState(false);
@@ -440,6 +456,13 @@ export function LoginForm({
 				{/* Local login form - only show if form login is enabled */}
 				{authState?.formLoginEnabled && (
 					<form onSubmit={handleSubmit} className="auth-form">
+						{sessionExpired && (
+							<div className="auth-error">
+								<strong>{t("auth.sessionExpiredTitle")}</strong>
+								<br />
+								{t("auth.sessionExpiredHelp")}
+							</div>
+						)}
 						{error && <div className="auth-error">{error}</div>}
 
 						<div className="form-group">
@@ -633,7 +656,14 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 	const [deleteLoading, setDeleteLoading] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
+	const closeDeleteConfirm = useCallback(() => {
+		if (!deleteLoading) {
+			setShowDeleteConfirm(false);
+		}
+	}, [deleteLoading]);
+
 	useEscapeKey(!!onClose, onClose ?? (() => {}));
+	useModalHistory(showDeleteConfirm, "profile-delete-account", closeDeleteConfirm);
 
 	async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
 		const file = e.target.files?.[0];
@@ -842,7 +872,7 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 					confirmLabel={t("auth.deleteAccountButton", "Yes, delete my account")}
 					cancelLabel={t("common.cancel", "Cancel")}
 					onConfirm={handleDeleteAccount}
-					onCancel={() => setShowDeleteConfirm(false)}
+					onCancel={closeDeleteConfirm}
 					isLoading={deleteLoading}
 					confirmVariant="danger"
 				/>

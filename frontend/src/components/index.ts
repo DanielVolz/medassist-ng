@@ -7,8 +7,10 @@ export { DateInput } from "./DateInput";
 export { DateTimeInput } from "./DateTimeInput";
 export { default as ExportModal } from "./ExportModal";
 export { FormNumberStepper } from "./FormNumberStepper";
+export { ImportReviewModal } from "./ImportReviewModal";
+export { IntakeJournalHistoryModal } from "./intake-journal/IntakeJournalHistoryModal";
+export { IntakeJournalModal } from "./intake-journal/IntakeJournalModal";
 export type { LightboxProps } from "./Lightbox";
-
 export { Lightbox } from "./Lightbox";
 export type { MedDetailModalProps } from "./MedDetailModal";
 export { MedDetailModal } from "./MedDetailModal";

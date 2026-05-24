@@ -33,7 +33,7 @@ function userStorageKey(userId: number | undefined, key: string): string {
 
 export function PlannerPage() {
 	const { t } = useTranslation();
-	const { user } = useAuth();
+	const { user, authFetch } = useAuth();
 	const { meds, settings, openMedDetail } = useAppContext();
 
 	// Local state for planner
@@ -90,10 +90,9 @@ export function PlannerPage() {
 		e.preventDefault();
 		setPlannerLoading(true);
 		const body = { startDate: toIsoString(range.start), endDate: toIsoString(range.end), includeUntilStart };
-		const rows = (await fetch("/api/medications/usage", {
+		const rows = (await authFetch("/api/medications/usage", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			credentials: "include",
 			body: JSON.stringify(body),
 		})
 			.then((res) => res.json())
@@ -158,10 +157,9 @@ export function PlannerPage() {
 		setPlannerEmailResult(null);
 
 		try {
-			const res = await fetch("/api/planner/send-email", {
+			const res = await authFetch("/api/planner/send-email", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				credentials: "include",
 				body: JSON.stringify({
 					email: settings.notificationEmail,
 					from: range.start,

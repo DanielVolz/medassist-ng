@@ -3,11 +3,24 @@
 // =============================================================================
 
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useAuth } from "../components/Auth";
+import { useFeedback } from "../context/FeedbackContext";
 import type { Medication } from "../types";
 import { withCorrelation } from "../utils/correlation";
 import { log } from "../utils/logger";
 
 const SHARE_ALL_VALUE = "all";
+
+export interface ActiveShareLink {
+	token: string;
+	takenBy: string;
+	scheduleDays: number;
+	createdAt: string;
+	expiresAt: string | null;
+	allowJournalNotes: boolean;
+	shareUrl: string;
+}
 
 export interface UseShareReturn {
 	showShareDialog: boolean;
@@ -16,54 +29,96 @@ export interface UseShareReturn {
 	setShareSelectedPerson: React.Dispatch<React.SetStateAction<string>>;
 	shareSelectedDays: number;
 	setShareSelectedDays: React.Dispatch<React.SetStateAction<number>>;
+	shareSelectedExpiryDays: number | null;
+	setShareSelectedExpiryDays: React.Dispatch<React.SetStateAction<number | null>>;
+	shareAllowJournalNotes: boolean;
+	setShareAllowJournalNotes: React.Dispatch<React.SetStateAction<boolean>>;
 	shareGenerating: boolean;
 	shareLink: string | null;
 	setShareLink: React.Dispatch<React.SetStateAction<string | null>>;
 	shareCopied: boolean;
 	setShareCopied: React.Dispatch<React.SetStateAction<boolean>>;
+	activeShareLinks: ActiveShareLink[];
+	activeSharesLoading: boolean;
+	revokingShareToken: string | null;
 	openShareDialog: (meds: Medication[]) => void;
 	generateShareLink: () => Promise<void>;
+	revokeShareLink: (token: string) => Promise<boolean>;
 	copyShareLink: () => void;
 	closeShareDialog: () => void;
 	resetShareDialogState: () => void;
 }
 
 export function useShare(): UseShareReturn {
+	const { authFetch } = useAuth();
+	const { t } = useTranslation();
+	const { showFeedback } = useFeedback();
 	const [showShareDialog, setShowShareDialog] = useState(false);
 	const [sharePeople, setSharePeople] = useState<string[]>([]);
 	const [shareSelectedPerson, setShareSelectedPerson] = useState<string>("");
 	const [shareSelectedDays, setShareSelectedDays] = useState<number>(30);
+	const [shareSelectedExpiryDays, setShareSelectedExpiryDays] = useState<number | null>(null);
+	const [shareAllowJournalNotes, setShareAllowJournalNotes] = useState(false);
 	const [shareGenerating, setShareGenerating] = useState(false);
 	const [shareLink, setShareLink] = useState<string | null>(null);
 	const [shareCopied, setShareCopied] = useState(false);
+	const [activeShareLinks, setActiveShareLinks] = useState<ActiveShareLink[]>([]);
+	const [activeSharesLoading, setActiveSharesLoading] = useState(false);
+	const [revokingShareToken, setRevokingShareToken] = useState<string | null>(null);
 
-	const openShareDialog = useCallback((meds: Medication[]) => {
-		setShowShareDialog(true);
-		window.history.pushState({ modal: "share" }, "");
-		setShareLink(null);
-		setShareCopied(false);
-		setShareSelectedPerson("");
-		setShareSelectedDays(30);
+	const loadActiveShareLinks = useCallback(async () => {
+		setActiveSharesLoading(true);
+		try {
+			const response = await authFetch("/api/share");
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok || !Array.isArray(data?.shareLinks)) {
+				setActiveShareLinks([]);
+				log.warn("[ShareDialog] Failed to load active share links", { status: response.status });
+				return;
+			}
 
-		// Include both per-intake assignments and legacy medication-level assignments.
-		const uniquePeople = [
-			...new Set(
-				meds.flatMap((medication) => [
-					...(medication.intakes
-						?.map((intake) => intake.takenBy)
-						.filter((person): person is string => Boolean(person)) ?? []),
-					...(medication.takenBy || []),
-				])
-			),
-		]
-			.filter(Boolean)
-			.sort();
-		setSharePeople(uniquePeople.length > 0 ? [SHARE_ALL_VALUE, ...uniquePeople] : []);
-		log.info("[ShareDialog] Opened", { medicationCount: meds.length, personCount: uniquePeople.length });
-		if (uniquePeople.length > 0) {
-			setShareSelectedPerson(uniquePeople[0]);
+			setActiveShareLinks(data.shareLinks);
+		} catch (error) {
+			setActiveShareLinks([]);
+			log.error("[ShareDialog] Active share list request threw error", { error });
+		} finally {
+			setActiveSharesLoading(false);
 		}
-	}, []);
+	}, [authFetch]);
+
+	const openShareDialog = useCallback(
+		(meds: Medication[]) => {
+			setShowShareDialog(true);
+			window.history.pushState({ modal: "share" }, "");
+			setShareLink(null);
+			setShareCopied(false);
+			setShareSelectedPerson("");
+			setShareSelectedDays(30);
+			setShareSelectedExpiryDays(null);
+			setShareAllowJournalNotes(false);
+			void loadActiveShareLinks();
+
+			// Include both per-intake assignments and legacy medication-level assignments.
+			const uniquePeople = [
+				...new Set(
+					meds.flatMap((medication) => [
+						...(medication.intakes
+							?.map((intake) => intake.takenBy)
+							.filter((person): person is string => Boolean(person)) ?? []),
+						...(medication.takenBy || []),
+					])
+				),
+			]
+				.filter(Boolean)
+				.sort();
+			setSharePeople(uniquePeople.length > 0 ? [SHARE_ALL_VALUE, ...uniquePeople] : []);
+			log.info("[ShareDialog] Opened", { medicationCount: meds.length, personCount: uniquePeople.length });
+			if (uniquePeople.length > 0) {
+				setShareSelectedPerson(uniquePeople[0]);
+			}
+		},
+		[loadActiveShareLinks]
+	);
 
 	const generateShareLink = useCallback(async () => {
 		if (!shareSelectedPerson) {
@@ -82,19 +137,24 @@ export function useShare(): UseShareReturn {
 					body: JSON.stringify({
 						takenBy: shareSelectedPerson,
 						scheduleDays: shareSelectedDays,
+						expiryDays: shareSelectedExpiryDays,
+						allowJournalNotes: shareAllowJournalNotes,
 					}),
 				},
 				"fe-share"
 			);
-			const res = await fetch("/api/share", init);
+			const res = await authFetch("/api/share", init);
 
 			if (res.ok) {
 				const data = await res.json();
 				const fullUrl = `${window.location.origin}/share/${data.token}`;
 				setShareLink(fullUrl);
+				void loadActiveShareLinks();
 				log.info("[ShareDialog] Share link ready", {
 					person: shareSelectedPerson,
 					days: shareSelectedDays,
+					expiryDays: shareSelectedExpiryDays,
+					allowJournalNotes: shareAllowJournalNotes,
 					reused: Boolean(data.reused),
 					correlationId,
 				});
@@ -106,15 +166,57 @@ export function useShare(): UseShareReturn {
 					error: err.error,
 					correlationId,
 				});
-				alert(err.error || "Failed to generate share link");
+				showFeedback({
+					message: err.error || t("share.generateFailed"),
+					tone: "error",
+				});
 			}
 		} catch (error) {
 			log.error("[ShareDialog] Share link request threw error", { person: shareSelectedPerson, error });
-			alert("Failed to generate share link");
+			showFeedback({ message: t("share.generateFailed"), tone: "error" });
 		} finally {
 			setShareGenerating(false);
 		}
-	}, [shareSelectedPerson, shareSelectedDays]);
+	}, [
+		authFetch,
+		loadActiveShareLinks,
+		shareAllowJournalNotes,
+		shareSelectedExpiryDays,
+		shareSelectedPerson,
+		shareSelectedDays,
+		showFeedback,
+		t,
+	]);
+
+	const revokeShareLink = useCallback(
+		async (token: string) => {
+			setRevokingShareToken(token);
+			try {
+				const response = await authFetch(`/api/share/${token}`, { method: "DELETE" });
+				if (!response.ok) {
+					const data = await response.json().catch(() => ({}));
+					showFeedback({
+						message: data.error || t("share.revokeFailed"),
+						tone: "error",
+					});
+					return false;
+				}
+
+				setActiveShareLinks((current) => current.filter((share) => share.token !== token));
+				if (shareLink?.endsWith(`/share/${token}`)) {
+					setShareLink(null);
+					setShareCopied(false);
+				}
+				return true;
+			} catch {
+				showFeedback({ message: t("share.revokeFailed"), tone: "error" });
+				return false;
+			} finally {
+				setRevokingShareToken(null);
+			}
+		},
+		[authFetch, shareLink, showFeedback, t]
+	);
 
 	const copyShareLink = useCallback(() => {
 		if (shareLink) {
@@ -168,6 +270,11 @@ export function useShare(): UseShareReturn {
 		setShowShareDialog(false);
 		setShareLink(null);
 		setShareCopied(false);
+		setShareSelectedExpiryDays(null);
+		setShareAllowJournalNotes(false);
+		setActiveShareLinks([]);
+		setActiveSharesLoading(false);
+		setRevokingShareToken(null);
 	}, []);
 
 	return {
@@ -177,13 +284,21 @@ export function useShare(): UseShareReturn {
 		setShareSelectedPerson,
 		shareSelectedDays,
 		setShareSelectedDays,
+		shareSelectedExpiryDays,
+		setShareSelectedExpiryDays,
+		shareAllowJournalNotes,
+		setShareAllowJournalNotes,
 		shareGenerating,
 		shareLink,
 		setShareLink,
 		shareCopied,
 		setShareCopied,
+		activeShareLinks,
+		activeSharesLoading,
+		revokingShareToken,
 		openShareDialog,
 		generateShareLink,
+		revokeShareLink,
 		copyShareLink,
 		closeShareDialog,
 		resetShareDialogState,

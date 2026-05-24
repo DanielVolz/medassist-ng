@@ -284,6 +284,37 @@ a.about-version-link:hover {
 	margin: 0 0 1.25rem;
 }
 
+.report-range {
+	margin-bottom: 1.25rem;
+}
+
+.report-range h4 {
+	font-size: 0.85rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin: 0 0 0.5rem;
+}
+
+.report-range-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem;
+}
+
+.report-range-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	font-size: 0.85rem;
+	color: var(--text-secondary);
+}
+
+.report-range-field .date-input-wrapper {
+	width: 100%;
+}
+
 /* Person filter */
 .report-person-filter {
 	margin-bottom: 1.25rem;
@@ -448,6 +479,60 @@ a.about-version-link:hover {
 	display: none;
 }
 
+.report-error {
+	margin: 0 0 1rem;
+	padding: 0.75rem 0.9rem;
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--danger-bg, #fee2e2) 75%, transparent);
+	color: var(--danger-text, #b91c1c);
+	font-size: 0.9rem;
+}
+
+.report-preview {
+	margin-bottom: 1.25rem;
+	padding: 0.9rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--bg-secondary) 75%, var(--bg-tertiary));
+}
+
+.report-preview-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 0.75rem;
+	margin-bottom: 0.35rem;
+}
+
+.report-preview-header h4 {
+	font-size: 0.85rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin: 0;
+}
+
+.report-preview-desc {
+	margin: 0 0 0.75rem;
+	font-size: 0.85rem;
+	color: var(--text-secondary);
+}
+
+.report-preview-content {
+	margin: 0;
+	padding: 0.85rem;
+	border-radius: 8px;
+	background: var(--bg-primary);
+	border: 1px solid var(--border-secondary);
+	max-height: 280px;
+	overflow: auto;
+	font-size: 0.82rem;
+	line-height: 1.45;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
 /* Actions */
 .report-actions {
 	display: flex;
@@ -455,4 +540,10 @@ a.about-version-link:hover {
 	gap: 0.75rem;
 	padding-top: 0.75rem;
 	border-top: 1px solid var(--border-primary);
+}
+
+@media (max-width: 720px) {
+	.report-range-grid {
+		grid-template-columns: 1fr;
+	}
 }

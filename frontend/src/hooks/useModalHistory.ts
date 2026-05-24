@@ -19,14 +19,15 @@ export function useModalHistory(isOpen: boolean, modalKey: string, onClose: () =
 	useEffect(() => {
 		if (!isOpen) return;
 
-		const handlePopState = () => {
+		const handlePopState = (event: PopStateEvent) => {
 			if (pushedRef.current) {
 				pushedRef.current = false;
 				onClose();
+				event.stopImmediatePropagation();
 			}
 		};
 
-		window.addEventListener("popstate", handlePopState);
-		return () => window.removeEventListener("popstate", handlePopState);
+		window.addEventListener("popstate", handlePopState, { capture: true });
+		return () => window.removeEventListener("popstate", handlePopState, true);
 	}, [isOpen, onClose]);
 }

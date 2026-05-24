@@ -289,6 +289,7 @@ export interface TestShareToken {
 	token: string;
 	takenBy: string;
 	scheduleDays: number;
+	allowJournalNotes?: boolean;
 	expiresAt: string;
 }
 
@@ -460,7 +461,11 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
  * Create a share token via the backend API.
  * Requires a medication with takenBy to exist first.
  */
-export async function createShareTokenViaAPI(takenBy: string, scheduleDays = 30): Promise<TestShareToken> {
+export async function createShareTokenViaAPI(
+	takenBy: string,
+	scheduleDays = 30,
+	options: { allowJournalNotes?: boolean; expiryDays?: number | null } = {}
+): Promise<TestShareToken> {
 	let token = await ensureAuthCookie();
 	const apiBase = await getRuntimeApiBase();
 	for (let attempt = 0; attempt < 5; attempt++) {
@@ -470,7 +475,12 @@ export async function createShareTokenViaAPI(takenBy: string, scheduleDays = 30)
 				"Content-Type": "application/json",
 				...(token ? { Cookie: `access_token=${token}` } : {}),
 			},
-			body: JSON.stringify({ takenBy, scheduleDays }),
+			body: JSON.stringify({
+				takenBy,
+				scheduleDays,
+				expiryDays: options.expiryDays ?? null,
+				allowJournalNotes: options.allowJournalNotes ?? false,
+			}),
 		});
 		if (res.status === 401) {
 			token = await refreshAuthCookieViaLogin();

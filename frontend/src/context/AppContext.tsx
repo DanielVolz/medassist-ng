@@ -2,7 +2,15 @@ import type React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
-import { useCollapsedDays, useDoses, useMedications, useRefill, useSettings, useShare } from "../hooks";
+import {
+	useCollapsedDays,
+	useDoses,
+	useIntakeJournal,
+	useMedications,
+	useRefill,
+	useSettings,
+	useShare,
+} from "../hooks";
 import {
 	type Coverage,
 	type FormState,
@@ -13,7 +21,9 @@ import {
 } from "../types";
 import { getSystemLocale, setDefaultFormattingTimezone } from "../utils/formatters";
 import { log } from "../utils/logger";
+import { mergePersonTags } from "../utils/person-tags";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, getStockStatus } from "../utils/schedule";
+import { useFeedback } from "./FeedbackContext";
 import { ShareContextProvider } from "./ShareContext";
 
 // =============================================================================
@@ -42,6 +52,34 @@ export type GroupedDay = {
 	date: Date;
 	isPast: boolean;
 	meds: DayMedEntry[];
+};
+
+export type ImportPreview = {
+	version: string;
+	exportedAt: string;
+	includeSensitiveData: boolean;
+	incoming: {
+		medications: number;
+		doseHistory: number;
+		refillHistory: number;
+		shareLinks: number;
+		journalEntries: number;
+		imageCount: number;
+		hasSettings: boolean;
+	};
+	current: {
+		medications: number;
+		doseHistory: number;
+		refillHistory: number;
+		shareLinks: number;
+		hasSettings: boolean;
+	};
+	warnings: {
+		replacesExistingData: boolean;
+		regeneratesShareLinks: boolean;
+		containsImages: boolean;
+		containsSensitiveData: boolean;
+	};
 };
 
 export interface AppContextValue {
@@ -87,6 +125,29 @@ export interface AppContextValue {
 	undoDoseTaken: (doseId: string) => Promise<void>;
 	undoDoseSkipped: (doseId: string) => Promise<void>;
 
+	// From useIntakeJournal
+	journalEditorOpen: boolean;
+	journalHistoryOpen: boolean;
+	journalTargetDoseId: string | null;
+	journalEvent: ReturnType<typeof useIntakeJournal>["journalEvent"];
+	journalEventLoading: boolean;
+	journalEventSaving: boolean;
+	journalEventDeleting: boolean;
+	journalEventError: string | null;
+	journalHistoryEntries: ReturnType<typeof useIntakeJournal>["journalHistoryEntries"];
+	journalHistoryFilters: ReturnType<typeof useIntakeJournal>["journalHistoryFilters"];
+	journalHistoryLoading: boolean;
+	journalHistoryError: string | null;
+	openJournalEditor: (doseId: string) => Promise<void>;
+	closeJournalEditor: () => void;
+	saveJournalNote: (note: string) => Promise<boolean>;
+	deleteJournalNote: () => Promise<boolean>;
+	openJournalHistory: () => void;
+	closeJournalHistory: () => void;
+	setJournalHistoryFilters: (patch: Partial<ReturnType<typeof useIntakeJournal>["journalHistoryFilters"]>) => void;
+	reloadJournalHistory: () => Promise<void>;
+	reopenJournalHistoryEntry: (doseId: string) => Promise<void>;
+
 	// From useCollapsedDays
 	manuallyCollapsedDays: Set<string>;
 	manuallyExpandedDays: Set<string>;
@@ -99,13 +160,21 @@ export interface AppContextValue {
 	setShareSelectedPerson: React.Dispatch<React.SetStateAction<string>>;
 	shareSelectedDays: number;
 	setShareSelectedDays: React.Dispatch<React.SetStateAction<number>>;
+	shareSelectedExpiryDays: number | null;
+	setShareSelectedExpiryDays: React.Dispatch<React.SetStateAction<number | null>>;
+	shareAllowJournalNotes: boolean;
+	setShareAllowJournalNotes: React.Dispatch<React.SetStateAction<boolean>>;
 	shareGenerating: boolean;
 	shareLink: string | null;
 	setShareLink: React.Dispatch<React.SetStateAction<string | null>>;
 	shareCopied: boolean;
 	setShareCopied: React.Dispatch<React.SetStateAction<boolean>>;
+	activeShareLinks: ReturnType<typeof useShare>["activeShareLinks"];
+	activeSharesLoading: boolean;
+	revokingShareToken: string | null;
 	openShareDialog: () => void;
 	generateShareLink: () => Promise<void>;
+	revokeShareLink: (token: string) => Promise<boolean>;
 	copyShareLink: () => void;
 	closeShareDialog: () => void;
 	resetShareDialogState: () => void;
@@ -188,6 +257,8 @@ export interface AppContextValue {
 	setShowImportConfirm: React.Dispatch<React.SetStateAction<boolean>>;
 	pendingImportData: unknown;
 	setPendingImportData: React.Dispatch<React.SetStateAction<unknown>>;
+	importPreview: ImportPreview | null;
+	setImportPreview: React.Dispatch<React.SetStateAction<ImportPreview | null>>;
 	importResult: {
 		medications: number;
 		doses: number;
@@ -245,12 +316,14 @@ function userStorageKey(userId: number | undefined, key: string): string {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
 	const { i18n } = useTranslation();
-	const { user } = useAuth();
+	const { user, authFetch } = useAuth();
+	const { showFeedback } = useFeedback();
 
 	// Compose hooks
 	const medications = useMedications();
 	const settingsHook = useSettings();
 	const doses = useDoses();
+	const intakeJournal = useIntakeJournal();
 	const collapsed = useCollapsedDays(user?.id);
 	const share = useShare();
 	const refill = useRefill();
@@ -295,6 +368,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const [showExportModal, setShowExportModal] = useState(false);
 	const [showImportConfirm, setShowImportConfirm] = useState(false);
 	const [pendingImportData, setPendingImportData] = useState<unknown>(null);
+	const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
 	const [importResult, setImportResult] = useState<{
 		medications: number;
 		doses: number;
@@ -326,6 +400,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		medications.clearMedicationsState();
 		settingsHook.resetSettingsState();
 		doses.clearDosesState();
+		intakeJournal.resetJournalState();
 		refill.clearRefillState();
 		share.resetShareDialogState();
 
@@ -351,6 +426,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		settingsHook.loadSettings,
 		doses.clearDosesState,
 		doses.loadTakenDoses,
+		intakeJournal.resetJournalState,
 		refill.clearRefillState,
 		share.resetShareDialogState,
 	]);
@@ -442,8 +518,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	);
 
 	const existingPeople = useMemo(() => {
-		const allPeople = medications.meds.flatMap((m) => m.takenBy || []);
-		return [...new Set(allPeople)].filter(Boolean).sort();
+		return mergePersonTags(medications.meds.flatMap((medication) => medication.takenBy || []));
 	}, [medications.meds]);
 
 	// Get worst stock status for a day's medications
@@ -658,9 +733,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		async (includeImages: boolean = true) => {
 			setExporting(true);
 			try {
-				const res = await fetch(`/api/export?includeSensitive=true&includeImages=${includeImages}`, {
-					credentials: "include",
-				});
+				const res = await authFetch(`/api/export?includeSensitive=true&includeImages=${includeImages}`);
 				if (!res.ok) throw new Error("Export failed");
 				const data = await res.json();
 
@@ -682,7 +755,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			}
 			setExporting(false);
 		},
-		[t, user?.username]
+		[authFetch, t, user?.username]
 	);
 
 	// Handle file selection for import
@@ -692,24 +765,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			if (!file) return;
 
 			const reader = new FileReader();
-			reader.onload = (event) => {
+			reader.onload = async (event) => {
 				try {
 					const data = JSON.parse(event.target?.result as string);
 					if (!data.version || !data.exportedAt) {
-						alert(t("exportImport.invalidFile"));
+						setPendingImportData(null);
+						setImportPreview(null);
+						showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
 						return;
 					}
+
+					const res = await authFetch("/api/import/preview", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(data),
+					});
+
+					const text = await res.text();
+					let previewResponse: { error?: string; preview?: ImportPreview } = {};
+					try {
+						previewResponse = text ? JSON.parse(text) : {};
+					} catch {
+						log.error("Import preview response parse error:", text);
+						showFeedback({
+							message: `${t("exportImport.importError")}: Server returned invalid response`,
+							tone: "error",
+						});
+						return;
+					}
+
+					if (!res.ok || !previewResponse.preview) {
+						setPendingImportData(null);
+						setImportPreview(null);
+						if (previewResponse.error === "Invalid import data format") {
+							showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
+							return;
+						}
+						showFeedback({
+							message: `${t("exportImport.importError")}: ${previewResponse.error || `HTTP ${res.status}`}`,
+							tone: "error",
+						});
+						return;
+					}
+
+					setImportResult(null);
 					setPendingImportData(data);
+					setImportPreview(previewResponse.preview);
 					setShowImportConfirm(true);
 				} catch {
-					alert(t("exportImport.invalidFile"));
+					setPendingImportData(null);
+					setImportPreview(null);
+					showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
 				}
 			};
 			reader.readAsText(file);
 			// Reset file input
 			e.target.value = "";
 		},
-		[t]
+		[authFetch, showFeedback, t]
 	);
 
 	// Confirm and execute import
@@ -719,10 +832,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		setShowImportConfirm(false);
 
 		try {
-			const res = await fetch("/api/import", {
+			const res = await authFetch("/api/import", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				credentials: "include",
 				body: JSON.stringify(pendingImportData),
 			});
 
@@ -744,12 +856,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 				data = text ? JSON.parse(text) : {};
 			} catch {
 				log.error("Import response parse error:", text);
-				alert(`${t("exportImport.importError")}: Server returned invalid response`);
+				showFeedback({
+					message: `${t("exportImport.importError")}: Server returned invalid response`,
+					tone: "error",
+				});
 				return;
 			}
 
 			if (!res.ok) {
-				alert(`${t("exportImport.importError")}: ${data.error || `HTTP ${res.status}`}`);
+				showFeedback({
+					message: `${t("exportImport.importError")}: ${data.error || `HTTP ${res.status}`}`,
+					tone: "error",
+				});
 				return;
 			}
 
@@ -768,12 +886,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			doses.loadTakenDoses();
 		} catch (err) {
 			log.error("Import error:", err);
-			alert(t("exportImport.importError"));
+			showFeedback({ message: t("exportImport.importError"), tone: "error" });
+		} finally {
+			setPendingImportData(null);
+			setImportPreview(null);
+			setImporting(false);
 		}
-
-		setPendingImportData(null);
-		setImporting(false);
-	}, [pendingImportData, t, medications, settingsHook, doses]);
+	}, [authFetch, pendingImportData, t, medications, settingsHook, doses, showFeedback]);
 
 	// Compute settingsChanged
 	const settingsChanged = useMemo(() => {
@@ -815,13 +934,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setShareSelectedPerson: share.setShareSelectedPerson,
 			shareSelectedDays: share.shareSelectedDays,
 			setShareSelectedDays: share.setShareSelectedDays,
+			shareSelectedExpiryDays: share.shareSelectedExpiryDays,
+			setShareSelectedExpiryDays: share.setShareSelectedExpiryDays,
+			shareAllowJournalNotes: share.shareAllowJournalNotes,
+			setShareAllowJournalNotes: share.setShareAllowJournalNotes,
 			shareGenerating: share.shareGenerating,
 			shareLink: share.shareLink,
 			setShareLink: share.setShareLink,
 			shareCopied: share.shareCopied,
 			setShareCopied: share.setShareCopied,
+			activeShareLinks: share.activeShareLinks,
+			activeSharesLoading: share.activeSharesLoading,
+			revokingShareToken: share.revokingShareToken,
 			openShareDialog,
 			generateShareLink: share.generateShareLink,
+			revokeShareLink: share.revokeShareLink,
 			copyShareLink: share.copyShareLink,
 			closeShareDialog: share.closeShareDialog,
 			resetShareDialogState: share.resetShareDialogState,
@@ -865,6 +992,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			undoDoseTaken: doses.undoDoseTaken,
 			undoDoseSkipped: doses.undoDoseSkipped,
 
+			// From useIntakeJournal
+			journalEditorOpen: intakeJournal.journalEditorOpen,
+			journalHistoryOpen: intakeJournal.journalHistoryOpen,
+			journalTargetDoseId: intakeJournal.journalTargetDoseId,
+			journalEvent: intakeJournal.journalEvent,
+			journalEventLoading: intakeJournal.journalEventLoading,
+			journalEventSaving: intakeJournal.journalEventSaving,
+			journalEventDeleting: intakeJournal.journalEventDeleting,
+			journalEventError: intakeJournal.journalEventError,
+			journalHistoryEntries: intakeJournal.journalHistoryEntries,
+			journalHistoryFilters: intakeJournal.journalHistoryFilters,
+			journalHistoryLoading: intakeJournal.journalHistoryLoading,
+			journalHistoryError: intakeJournal.journalHistoryError,
+			openJournalEditor: intakeJournal.openJournalEditor,
+			closeJournalEditor: intakeJournal.closeJournalEditor,
+			saveJournalNote: intakeJournal.saveJournalNote,
+			deleteJournalNote: intakeJournal.deleteJournalNote,
+			openJournalHistory: intakeJournal.openJournalHistory,
+			closeJournalHistory: intakeJournal.closeJournalHistory,
+			setJournalHistoryFilters: intakeJournal.setJournalHistoryFilters,
+			reloadJournalHistory: intakeJournal.reloadJournalHistory,
+			reopenJournalHistoryEntry: intakeJournal.reopenJournalHistoryEntry,
+
 			// From useCollapsedDays
 			manuallyCollapsedDays: collapsed.manuallyCollapsedDays,
 			manuallyExpandedDays: collapsed.manuallyExpandedDays,
@@ -877,13 +1027,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setShareSelectedPerson: share.setShareSelectedPerson,
 			shareSelectedDays: share.shareSelectedDays,
 			setShareSelectedDays: share.setShareSelectedDays,
+			shareSelectedExpiryDays: share.shareSelectedExpiryDays,
+			setShareSelectedExpiryDays: share.setShareSelectedExpiryDays,
+			shareAllowJournalNotes: share.shareAllowJournalNotes,
+			setShareAllowJournalNotes: share.setShareAllowJournalNotes,
 			shareGenerating: share.shareGenerating,
 			shareLink: share.shareLink,
 			setShareLink: share.setShareLink,
 			shareCopied: share.shareCopied,
 			setShareCopied: share.setShareCopied,
+			activeShareLinks: share.activeShareLinks,
+			activeSharesLoading: share.activeSharesLoading,
+			revokingShareToken: share.revokingShareToken,
 			openShareDialog,
 			generateShareLink: share.generateShareLink,
+			revokeShareLink: share.revokeShareLink,
 			copyShareLink: share.copyShareLink,
 			closeShareDialog: share.closeShareDialog,
 			resetShareDialogState: share.resetShareDialogState,
@@ -970,6 +1128,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setShowImportConfirm,
 			pendingImportData,
 			setPendingImportData,
+			importPreview,
+			setImportPreview,
 			importResult,
 			setImportResult,
 			handleExport,
@@ -981,6 +1141,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			medications,
 			settingsHook,
 			doses,
+			intakeJournal,
 			collapsed,
 			share,
 			refill,
@@ -1017,6 +1178,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			showExportModal,
 			showImportConfirm,
 			pendingImportData,
+			importPreview,
 			importResult,
 			handleExport,
 			handleImportFileSelect,

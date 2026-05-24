@@ -328,6 +328,7 @@ export type SharedScheduleData = {
 	takenBy: string;
 	sharedBy: string | null;
 	scheduleDays: number;
+	allowJournalNotes?: boolean;
 	medications: SharedMedication[];
 	stockThresholds?: {
 		lowStockDays: number;

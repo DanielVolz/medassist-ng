@@ -5,6 +5,8 @@ export { useCollapsedDays } from "./useCollapsedDays";
 export type { UseDosesReturn } from "./useDoses";
 export { useDoses } from "./useDoses";
 export { useEscapeKey } from "./useEscapeKey";
+export type { IntakeJournalEntry, IntakeJournalHistoryFilters, UseIntakeJournalReturn } from "./useIntakeJournal";
+export { useIntakeJournal } from "./useIntakeJournal";
 export {
 	createMedicationEnrichmentState,
 	MEDICATION_ENRICHMENT_INITIAL_LIMIT,

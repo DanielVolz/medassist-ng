@@ -10,7 +10,7 @@
 }
 
 .shared-schedule-container {
-	max-width: 800px;
+	max-width: 1180px;
 	margin: 0 auto;
 }
 
@@ -97,6 +97,14 @@
 	margin-bottom: 0.5rem;
 }
 
+.shared-schedule-boundary {
+	max-width: 34rem;
+	margin: 0 auto;
+	color: var(--text-secondary);
+	font-size: 0.95rem;
+	line-height: 1.5;
+}
+
 .shared-schedule-period {
 	color: var(--text-secondary);
 	font-size: 1rem;
@@ -125,6 +133,10 @@
 	background: transparent;
 	border: none;
 	padding: 0.5rem 0;
+}
+
+.shared-schedule-page .tooltip-trigger > .dose-btn:disabled {
+	pointer-events: none;
 }
 
 .med-name-stack {
@@ -326,15 +338,125 @@
 
 @media (max-width: 600px) {
 	.shared-schedule-page {
-		padding: 1rem;
+		padding: 0.75rem;
+		overflow-x: hidden;
+	}
+
+	.shared-schedule-container,
+	.shared-schedule-section,
+	.shared-schedule-section .timeline,
+	.shared-schedule-section .day-block,
+	.shared-schedule-section .time-row,
+	.shared-schedule-section .time-main,
+	.shared-schedule-section .doses-col,
+	.shared-schedule-section .dose-item,
+	.shared-schedule-section .dose-checks,
+	.shared-schedule-section .dose-person {
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	.shared-schedule-header {
+		margin-bottom: 1.5rem;
+		padding-top: 0.25rem;
+		text-align: left;
+	}
+
+	.shared-schedule-header-actions {
+		top: 0;
+		right: 0;
 	}
 
 	.shared-schedule-header h1 {
 		font-size: 1.25rem;
+		line-height: 1.18;
+		padding-right: 3rem;
+		overflow-wrap: anywhere;
+	}
+
+	.shared-schedule-boundary {
+		margin-inline: 0;
+		font-size: 0.9rem;
+	}
+
+	.shared-schedule-period {
+		margin: 0.75rem 0 0;
+		font-size: 0.9rem;
 	}
 
 	.shared-timeline {
 		padding: 1rem;
+	}
+
+	.shared-schedule-section .timeline {
+		gap: 0.85rem;
+	}
+
+	.shared-schedule-section .day-block {
+		overflow: hidden;
+		border-radius: 12px;
+		padding: 0.75rem;
+	}
+
+	.shared-schedule-section .time-row {
+		gap: 0.65rem;
+	}
+
+	.shared-schedule-section .time-main .med-name {
+		overflow-wrap: anywhere;
+	}
+
+	.shared-schedule-section .doses-col {
+		gap: 0.55rem;
+		overflow: hidden;
+	}
+
+	.shared-schedule-section .dose-item {
+		grid-template-columns: minmax(3.5rem, auto) minmax(0, 1fr);
+		gap: 0.45rem 0.6rem;
+		padding: 0.55rem 0.6rem;
+		overflow: hidden;
+	}
+
+	.shared-schedule-section .dose-checks {
+		grid-column: 1 / -1;
+		overflow: visible;
+	}
+
+	.shared-schedule-section .dose-person {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto auto;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem;
+		overflow: visible;
+	}
+
+	.shared-schedule-section .dose-person .person-name {
+		grid-column: 1 / -1;
+		justify-self: stretch;
+		max-width: 100%;
+		margin-right: 0;
+	}
+
+	.shared-schedule-section .dose-person > .dose-btn,
+	.shared-schedule-section .dose-person > .tooltip-trigger {
+		min-width: 0;
+		margin-left: 0;
+		justify-self: end;
+	}
+
+	.shared-schedule-section .dose-person > .tooltip-trigger {
+		display: inline-flex;
+		justify-self: end;
+		max-width: 100%;
+	}
+
+	.shared-schedule-section .dose-person .dose-btn {
+		height: 28px;
+		min-height: 28px;
+		padding-inline: 0.55rem;
 	}
 
 	.shared-overview-table-wrap {
@@ -343,6 +465,28 @@
 
 	.shared-overview-cards {
 		display: grid;
+	}
+}
+
+@media (max-width: 640px) {
+	.shared-schedule-page .tooltip-trigger[data-tooltip]::after,
+	.shared-schedule-page .tooltip-trigger[data-tooltip]::before {
+		display: none;
+	}
+
+	.shared-schedule-page .tooltip-trigger.tooltip-active[data-tooltip]::after {
+		display: block;
+		position: fixed;
+		top: auto;
+		bottom: var(--tooltip-bottom, 50%);
+		left: 16px;
+		right: 16px;
+		transform: none;
+		width: auto;
+		max-width: none;
+		white-space: normal;
+		text-align: center;
+		z-index: 10000;
 	}
 }
 

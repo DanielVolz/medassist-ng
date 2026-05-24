@@ -12,6 +12,7 @@ import {
 } from "../types";
 import { toDateValue, toTimeValue } from "../utils/formatters";
 import { normalizeWeekdays } from "../utils/intake-schedule";
+import { personTagsMatch } from "../utils/person-tags";
 
 export const defaultBlister = (): FormBlister => {
 	const now = new Date();
@@ -488,7 +489,8 @@ export function useMedicationForm(): UseMedicationFormReturn {
 	const addTakenByPerson = useCallback(
 		(name: string) => {
 			const trimmed = name.trim();
-			if (trimmed && trimmed.length <= FIELD_LIMITS.takenBy.max && !form.takenBy.includes(trimmed)) {
+			const alreadyExists = form.takenBy.some((person) => personTagsMatch(person, trimmed));
+			if (trimmed && trimmed.length <= FIELD_LIMITS.takenBy.max && !alreadyExists) {
 				setForm((prev) => ({ ...prev, takenBy: [...prev.takenBy, trimmed] }));
 			}
 			setTakenByInput("");

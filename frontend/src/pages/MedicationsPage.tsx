@@ -11,6 +11,7 @@ import { MedicationDialogs } from "../components/medications/MedicationDialogs";
 import { MedicationEditCoordinator } from "../components/medications/MedicationEditCoordinator";
 import { MedicationListSection } from "../components/medications/MedicationListSection";
 import { useAppContext, useUnsavedChanges } from "../context";
+import { useFeedback } from "../context/FeedbackContext";
 import {
 	MEDICATION_ENRICHMENT_INITIAL_LIMIT,
 	MEDICATION_ENRICHMENT_LIMIT_STEP,
@@ -222,7 +223,8 @@ async function getMedicationEnrichmentErrorMessage(
 export function MedicationsPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const { t } = useTranslation();
-	const { user } = useAuth();
+	const { user, authFetch } = useAuth();
+	const { showFeedback } = useFeedback();
 	const {
 		meds,
 		saving,
@@ -274,6 +276,7 @@ export function MedicationsPage() {
 	);
 	const [viewMode, setViewMode] = useState<"grid" | "form">(pendingEditTransition ? "form" : "grid");
 	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
+	const closeLightbox = useCallback(() => setLightboxImage(null), []);
 	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
 
 	// Mobile modal state (declared early because it's used in useEffect below)
@@ -394,9 +397,7 @@ export function MedicationsPage() {
 
 			try {
 				const params = new URLSearchParams({ q: trimmedQuery, limit: String(limit) });
-				const response = await fetch(`/api/medication-enrichment/search?${params.toString()}`, {
-					credentials: "include",
-				});
+				const response = await authFetch(`/api/medication-enrichment/search?${params.toString()}`);
 
 				if (!response.ok) {
 					throw new Error(
@@ -458,7 +459,7 @@ export function MedicationsPage() {
 				}));
 			}
 		},
-		[medicationEnrichment.query, medicationEnrichment.results, t]
+		[authFetch, medicationEnrichment.query, medicationEnrichment.results, t]
 	);
 
 	const handlePendingMedicationImageSelection = useCallback(
@@ -489,6 +490,8 @@ export function MedicationsPage() {
 	const [readOnlyView, setReadOnlyView] = useState(false);
 	const [showReportModal, setShowReportModal] = useState(false);
 	useModalHistory(showReportModal, "report", () => setShowReportModal(false));
+	useModalHistory(!!lightboxImage, "medication-image-lightbox", closeLightbox);
+	useModalHistory(showUnsavedConfirm, "medication-unsaved-confirm", handleCancelClose);
 	const [showNameValidation, setShowNameValidation] = useState(false);
 
 	useEffect(() => {
@@ -517,13 +520,13 @@ export function MedicationsPage() {
 
 	const loadAllMeds = useCallback(async () => {
 		try {
-			const res = await fetch("/api/medications?includeObsolete=true", { credentials: "include" });
+			const res = await authFetch("/api/medications?includeObsolete=true");
 			const data = (await res.json()) as unknown;
 			setAllMeds(Array.isArray(data) ? (data as Medication[]) : []);
 		} catch {
 			setAllMeds([]);
 		}
-	}, []);
+	}, [authFetch]);
 
 	useEffect(() => {
 		void loadAllMeds();
@@ -617,7 +620,7 @@ export function MedicationsPage() {
 			}));
 
 			try {
-				const response = await fetch("/api/medication-enrichment/enrich", {
+				const response = await authFetch("/api/medication-enrichment/enrich", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
@@ -627,7 +630,6 @@ export function MedicationsPage() {
 						code: result.code,
 						source: result.source,
 					}),
-					credentials: "include",
 				});
 
 				if (!response.ok) {
@@ -699,7 +701,7 @@ export function MedicationsPage() {
 				}));
 			}
 		},
-		[form, medicationEnrichment.query, setForm, t]
+		[authFetch, form, medicationEnrichment.query, setForm, t]
 	);
 
 	const handleMedicationEnrichmentStrengthApply = useCallback(
@@ -1018,7 +1020,7 @@ export function MedicationsPage() {
 
 	async function markMedicationObsolete(id: number) {
 		try {
-			await fetch(`/api/medications/${id}/obsolete`, { method: "POST", credentials: "include" });
+			await authFetch(`/api/medications/${id}/obsolete`, { method: "POST" });
 			if (editingId === id) {
 				handleResetForm();
 			}
@@ -1031,7 +1033,7 @@ export function MedicationsPage() {
 
 	async function reactivateMedication(id: number) {
 		try {
-			await fetch(`/api/medications/${id}/reactivate`, { method: "POST", credentials: "include" });
+			await authFetch(`/api/medications/${id}/reactivate`, { method: "POST" });
 			loadMeds();
 			await loadAllMeds();
 		} catch {
@@ -1229,7 +1231,10 @@ export function MedicationsPage() {
 			}
 		} catch (err) {
 			log.error("Save error:", err);
-			alert(err instanceof Error && err.message ? err.message : t("common.saveFailed"));
+			showFeedback({
+				message: err instanceof Error && err.message ? err.message : t("common.saveFailed"),
+				tone: "error",
+			});
 		}
 
 		setSaving(false);
@@ -2314,7 +2319,7 @@ export function MedicationsPage() {
 				onCancelDelete={handleCancelDelete}
 				showEditModal={showEditModal}
 				lightboxImage={lightboxImage}
-				onCloseLightbox={() => setLightboxImage(null)}
+				onCloseLightbox={closeLightbox}
 				showReportModal={showReportModal}
 				onCloseReportModal={() => setShowReportModal(false)}
 				medications={allMeds}

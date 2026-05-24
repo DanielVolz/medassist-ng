@@ -1,7 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SchedulePage } from "../../pages/SchedulePage";
+
+const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
 // Mock data
 const mockMeds = [
@@ -85,6 +88,21 @@ const mockPastDays = [
 	},
 ];
 
+const mockJournalEntry = {
+	doseTrackingId: 1,
+	doseId: `1-0-${FIXED_TIMESTAMP}-John`,
+	medicationId: 1,
+	medicationName: "Aspirin",
+	scheduledFor: "2026-05-21T09:00:00.000Z",
+	takenAt: "2026-05-21T09:05:00.000Z",
+	dismissed: false,
+	takenSource: "manual" as const,
+	markedBy: "John",
+	note: "",
+	updatedAt: null,
+	createdAt: null,
+};
+
 // Factory function for mock context
 const createMockContext = (overrides = {}) => ({
 	meds: [],
@@ -116,6 +134,7 @@ const createMockContext = (overrides = {}) => ({
 	openUserFilter: vi.fn(),
 	isDoseTakenAutomatically: vi.fn(() => false),
 	missedPastDoseIds: [],
+	loadMeds: vi.fn(),
 	...overrides,
 });
 
@@ -129,12 +148,22 @@ vi.mock("../../context", () => ({
 vi.mock("../../components/Auth", () => ({
 	useAuth: () => ({
 		user: { id: 1, username: "testuser" },
+		authFetch: authFetchMock,
+	}),
+}));
+
+vi.mock("../../context/FeedbackContext", () => ({
+	useFeedback: () => ({
+		showFeedback: feedbackMock.showFeedback,
+		dismissFeedback: vi.fn(),
+		clearFeedback: vi.fn(),
 	}),
 }));
 
 describe("SchedulePage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		localStorage.clear();
 		mockContextValue = createMockContext();
 	});
@@ -183,6 +212,29 @@ describe("SchedulePage", () => {
 		// Should have timeline div
 		const timeline = document.querySelector(".timeline");
 		expect(timeline).toBeInTheDocument();
+	});
+
+	it("disables the journal note action for untaken doses", () => {
+		const openJournalEditor = vi.fn();
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			coverageByMed: mockCoverageByMed,
+			futureDays: mockFutureDays,
+			openJournalEditor,
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		const noteButton = screen.getByRole("button", { name: "journal.actions.note" });
+		expect(noteButton).toBeDisabled();
+		expect(noteButton.closest("span")).toHaveAttribute("data-tooltip", "journal.actions.noteTakenOnly");
+
+		fireEvent.click(noteButton);
+		expect(openJournalEditor).not.toHaveBeenCalled();
 	});
 
 	it("shows empty state when no medications", () => {
@@ -247,6 +299,48 @@ describe("SchedulePage", () => {
 
 		fireEvent.change(select, { target: { value: "90" } });
 		expect(setScheduleDays).toHaveBeenCalledWith(90);
+	});
+
+	it("posts the computed dismiss-until payload when clearing missed doses", async () => {
+		const loadMeds = vi.fn();
+		global.fetch = vi.fn().mockResolvedValue({ ok: true });
+
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			coverageByMed: mockCoverageByMed,
+			pastDays: mockPastDays,
+			missedPastDoseIds: [`${mockPastDays[0].meds[0].doses[0].id}-John`],
+			loadMeds,
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /dashboard\.schedules\.clearMissed/i }));
+		fireEvent.click(screen.getByRole("button", { name: /dashboard\.schedules\.clearMissedConfirm/i }));
+
+		await waitFor(() => {
+			expect(authFetchMock).toHaveBeenCalledWith(
+				"/api/medications/dismiss-until",
+				expect.objectContaining({
+					method: "POST",
+				})
+			);
+		});
+
+		const body = JSON.parse(((authFetchMock as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body as string) ?? "{}");
+		expect(body).toEqual({
+			medicationIds: [1],
+			until: mockPastDays[0].date.toISOString().slice(0, 10),
+		});
+		expect(loadMeds).toHaveBeenCalled();
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({
+			message: expect.stringContaining("dashboard.schedules.clearMissedSuccess"),
+			tone: "success",
+		});
 	});
 });
 
@@ -726,11 +820,13 @@ describe("SchedulePage skip behavior", () => {
 
 	it("renders undo skip state for skipped doses", () => {
 		const skippedDoseId = `1-0-${FIXED_TIMESTAMP}-John`;
+		const openJournalEditor = vi.fn();
 		mockContextValue = createMockContext({
 			meds: mockMeds,
 			futureDays: mockFutureDays,
 			coverageByMed: mockCoverageByMed,
 			skippedDoses: new Set([skippedDoseId]),
+			openJournalEditor,
 		});
 
 		render(
@@ -741,6 +837,43 @@ describe("SchedulePage skip behavior", () => {
 
 		expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
 		expect(screen.getByText("John").closest(".dose-person")).toHaveClass("skipped");
+		const noteButton = screen.getByRole("button", { name: "journal.actions.note" });
+		expect(noteButton).not.toBeDisabled();
+
+		fireEvent.click(noteButton);
+		expect(openJournalEditor).toHaveBeenCalledWith(skippedDoseId);
+	});
+
+	it("closes the journal editor after saving a main app note", async () => {
+		const saveJournalNote = vi.fn(async () => true);
+		const closeJournalEditor = vi.fn();
+		mockContextValue = createMockContext({
+			journalEditorOpen: true,
+			journalEvent: mockJournalEntry,
+			journalEventLoading: false,
+			journalEventSaving: false,
+			journalEventDeleting: false,
+			journalEventError: null,
+			saveJournalNote,
+			closeJournalEditor,
+			deleteJournalNote: vi.fn(),
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		fireEvent.change(screen.getByLabelText("journal.editor.noteLabel"), {
+			target: { value: "Main app note" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+		await waitFor(() => {
+			expect(saveJournalNote).toHaveBeenCalledWith("Main app note");
+			expect(closeJournalEditor).toHaveBeenCalled();
+		});
 	});
 
 	it("calls undoDoseSkipped when clicking undo skip", () => {

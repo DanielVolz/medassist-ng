@@ -4,6 +4,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "../components/Auth";
+import { useFeedback } from "../context/FeedbackContext";
 
 export interface UseDosesReturn {
 	takenDoses: Set<string>;
@@ -25,6 +27,8 @@ export interface UseDosesReturn {
 
 export function useDoses(): UseDosesReturn {
 	const { t } = useTranslation();
+	const { authFetch } = useAuth();
+	const { showFeedback } = useFeedback();
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [takenDoseTimestamps, setTakenDoseTimestamps] = useState<Map<string, number>>(new Map());
 	const [takenDoseSources, setTakenDoseSources] = useState<Map<string, "manual" | "automatic">>(new Map());
@@ -48,7 +52,7 @@ export function useDoses(): UseDosesReturn {
 		if (mutationInFlightRef.current > 0) return;
 
 		try {
-			const res = await fetch("/api/doses/taken", { credentials: "include" });
+			const res = await authFetch("/api/doses/taken");
 			if (res.ok) {
 				// Double-check no mutation started while we were fetching
 				if (mutationInFlightRef.current > 0) return;
@@ -79,7 +83,7 @@ export function useDoses(): UseDosesReturn {
 		} catch {
 			// Don't reset on error - keep current state
 		}
-	}, [clearDosesState]);
+	}, [authFetch, clearDosesState]);
 
 	// Poll for taken doses from server (works with or without auth)
 	useEffect(() => {
@@ -164,15 +168,14 @@ export function useDoses(): UseDosesReturn {
 
 			// Send to server
 			try {
-				const response = await fetch("/api/doses/taken", {
+				const response = await authFetch("/api/doses/taken", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					credentials: "include",
 					body: JSON.stringify({ doseId }),
 				});
 				if (!response.ok) {
 					if ((await getErrorCode(response)) === "OUT_OF_STOCK") {
-						alert(t("common.outOfStockTakeBlocked"));
+						showFeedback({ message: t("common.outOfStockTakeBlocked"), tone: "error" });
 					}
 					throw new Error("Failed to mark dose as taken");
 				}
@@ -220,7 +223,17 @@ export function useDoses(): UseDosesReturn {
 				loadTakenDoses();
 			}
 		},
-		[dismissedDoses, getErrorCode, loadTakenDoses, t, takenDoseSources, takenDoseTimestamps, takenDoses]
+		[
+			authFetch,
+			dismissedDoses,
+			getErrorCode,
+			loadTakenDoses,
+			showFeedback,
+			t,
+			takenDoseSources,
+			takenDoseTimestamps,
+			takenDoses,
+		]
 	);
 
 	const markDoseSkipped = useCallback(
@@ -257,10 +270,9 @@ export function useDoses(): UseDosesReturn {
 			});
 
 			try {
-				const response = await fetch("/api/doses/skip", {
+				const response = await authFetch("/api/doses/skip", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					credentials: "include",
 					body: JSON.stringify({ doseId }),
 				});
 				if (!response.ok) {
@@ -302,7 +314,7 @@ export function useDoses(): UseDosesReturn {
 				loadTakenDoses();
 			}
 		},
-		[dismissedDoses, loadTakenDoses, takenDoseSources, takenDoseTimestamps, takenDoses]
+		[authFetch, dismissedDoses, loadTakenDoses, takenDoseSources, takenDoseTimestamps, takenDoses]
 	);
 
 	const undoDoseTaken = useCallback(
@@ -330,9 +342,8 @@ export function useDoses(): UseDosesReturn {
 
 			// Send to server
 			try {
-				await fetch(`/api/doses/taken/${encodeURIComponent(doseId)}`, {
+				await authFetch(`/api/doses/taken/${encodeURIComponent(doseId)}`, {
 					method: "DELETE",
-					credentials: "include",
 				});
 			} catch {
 				// Revert on error
@@ -361,7 +372,7 @@ export function useDoses(): UseDosesReturn {
 				loadTakenDoses();
 			}
 		},
-		[loadTakenDoses, takenDoseSources, takenDoseTimestamps]
+		[authFetch, loadTakenDoses, takenDoseSources, takenDoseTimestamps]
 	);
 
 	const undoDoseSkipped = useCallback(
@@ -376,9 +387,8 @@ export function useDoses(): UseDosesReturn {
 			});
 
 			try {
-				await fetch(`/api/doses/skip/${encodeURIComponent(doseId)}`, {
+				await authFetch(`/api/doses/skip/${encodeURIComponent(doseId)}`, {
 					method: "DELETE",
-					credentials: "include",
 				});
 			} catch {
 				setDismissedDoses((prev) => {
@@ -393,7 +403,7 @@ export function useDoses(): UseDosesReturn {
 				loadTakenDoses();
 			}
 		},
-		[dismissedDoses, loadTakenDoses]
+		[authFetch, dismissedDoses, loadTakenDoses]
 	);
 
 	return {

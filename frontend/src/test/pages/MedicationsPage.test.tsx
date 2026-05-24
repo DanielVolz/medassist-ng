@@ -3,6 +3,8 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MedicationsPage } from "../../pages/MedicationsPage";
 
+const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+
 const mockMeds = [
 	{
 		id: 1,
@@ -140,7 +142,7 @@ vi.mock("../../context", () => ({
 }));
 
 vi.mock("../../components/Auth", () => ({
-	useAuth: () => ({ user: { id: 1, username: "testuser" }, isAuthenticated: true }),
+	useAuth: () => ({ user: { id: 1, username: "testuser" }, isAuthenticated: true, authFetch: authFetchMock }),
 }));
 
 vi.mock("../../components", async () => {
@@ -286,10 +288,22 @@ function createGroupedOpenFdaMedicationEnrichmentResults(count: number, name: st
 describe("MedicationsPage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		mockContextValue = createMockContext();
 		mockFormHookValue = createMockFormHook();
 		Object.defineProperty(window, "innerWidth", { value: 1200, writable: true });
-		Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+		Object.defineProperty(Element.prototype, "scrollIntoView", {
+			configurable: true,
+			value: vi.fn(),
+		});
+		Object.defineProperty(window, "requestAnimationFrame", {
+			configurable: true,
+			value: (callback: FrameRequestCallback) => {
+				callback(0);
+				return 1;
+			},
+		});
+		Object.defineProperty(window, "cancelAnimationFrame", {
 			configurable: true,
 			value: vi.fn(),
 		});
@@ -538,9 +552,8 @@ describe("MedicationsPage with items", () => {
 		fireEvent.click(confirmButtons[confirmButtons.length - 1]);
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medications/1/obsolete", {
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medications/1/obsolete", {
 				method: "POST",
-				credentials: "include",
 			});
 		});
 	});
@@ -562,9 +575,8 @@ describe("MedicationsPage with items", () => {
 		fireEvent.click(screen.getByText("medications.list.reactivate"));
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medications/2/reactivate", {
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medications/2/reactivate", {
 				method: "POST",
-				credentials: "include",
 			});
 		});
 	});
@@ -750,18 +762,14 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=6", {
-				credentials: "include",
-			});
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=6");
 		});
 
 		await screen.findByText("Aspirin 500 mg tablets");
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12", {
-				credentials: "include",
-			});
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12");
 		});
 
 		await screen.findByText("Bayer Aspirin");
@@ -769,7 +777,7 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(screen.getAllByRole("button", { name: "form.enrichment.applyAction" })[0]);
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -779,7 +787,6 @@ describe("MedicationsPage form interactions", () => {
 					code: "RX-ASPIRIN",
 					source: "rxnorm",
 				}),
-				credentials: "include",
 			});
 			expect(setForm).toHaveBeenCalledWith(
 				expect.objectContaining({
@@ -825,9 +832,7 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.searchAction" }));
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=6", {
-				credentials: "include",
-			});
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=6");
 		});
 
 		expect(await screen.findByText("form.enrichment.authRequired")).toBeInTheDocument();
@@ -867,9 +872,7 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12", {
-				credentials: "include",
-			});
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12");
 		});
 
 		await waitFor(() => {
@@ -912,9 +915,9 @@ describe("MedicationsPage form interactions", () => {
 			fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
 
 			await waitFor(() => {
-				expect(fetchMock).toHaveBeenCalledWith(`/api/medication-enrichment/search?q=Aspirin&limit=${expectedLimit}`, {
-					credentials: "include",
-				});
+				expect(authFetchMock).toHaveBeenCalledWith(
+					`/api/medication-enrichment/search?q=Aspirin&limit=${expectedLimit}`
+				);
 			});
 		}
 
@@ -976,9 +979,7 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12", {
-				credentials: "include",
-			});
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Aspirin&limit=12");
 		});
 
 		expect(screen.getByRole("button", { name: "form.enrichment.loadingMoreResults" })).toBeDisabled();
@@ -1057,12 +1058,8 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.showMoreAction" }));
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Tecfidera&limit=12", {
-				credentials: "include",
-			});
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Tecfidera&limit=18", {
-				credentials: "include",
-			});
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Tecfidera&limit=12");
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/search?q=Tecfidera&limit=18");
 		});
 
 		await screen.findByText("Result 1");
@@ -1448,7 +1445,7 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(getEnrichmentPackageButtons()[1]);
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -1458,7 +1455,6 @@ describe("MedicationsPage form interactions", () => {
 					code: "NDC-IBU",
 					source: "openfda",
 				}),
-				credentials: "include",
 			});
 			expect(setForm).toHaveBeenCalledWith(
 				expect.objectContaining({
@@ -1610,7 +1606,7 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(initialPackageButtons[0]);
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -1620,7 +1616,6 @@ describe("MedicationsPage form interactions", () => {
 					code: "NDC-IBU-STRENGTH",
 					source: "openfda",
 				}),
-				credentials: "include",
 			});
 		});
 
@@ -1719,7 +1714,7 @@ describe("MedicationsPage form interactions", () => {
 		fireEvent.click(packageButtons[0]);
 
 		await waitFor(() => {
-			expect(fetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
+			expect(authFetchMock).toHaveBeenCalledWith("/api/medication-enrichment/enrich", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -1729,7 +1724,6 @@ describe("MedicationsPage form interactions", () => {
 					code: "NDC-PENDING-PACKAGE",
 					source: "openfda",
 				}),
-				credentials: "include",
 			});
 		});
 

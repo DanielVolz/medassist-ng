@@ -4,7 +4,11 @@
  */
 
 import { Check, Copy, Link2, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useModalHistory } from "../hooks";
+import type { ActiveShareLink } from "../hooks/useShare";
+import { ConfirmModal } from "./ConfirmModal";
 
 export interface ShareDialogProps {
 	show: boolean;
@@ -13,13 +17,21 @@ export interface ShareDialogProps {
 	onShareSelectedPersonChange: (person: string) => void;
 	shareSelectedDays: number;
 	onShareSelectedDaysChange: (days: number) => void;
+	shareSelectedExpiryDays: number | null;
+	onShareSelectedExpiryDaysChange: (days: number | null) => void;
+	shareAllowJournalNotes: boolean;
+	onShareAllowJournalNotesChange: (enabled: boolean) => void;
 	shareGenerating: boolean;
 	shareLink: string | null;
 	onShareLinkChange: (link: string | null) => void;
 	shareCopied: boolean;
 	onShareCopiedChange: (copied: boolean) => void;
+	activeShareLinks: ActiveShareLink[];
+	activeSharesLoading: boolean;
+	revokingShareToken: string | null;
 	onClose: () => void;
 	onGenerateShareLink: () => Promise<void>;
+	onRevokeShareLink: (token: string) => Promise<boolean>;
 	onCopyShareLink: () => void;
 }
 
@@ -30,23 +42,115 @@ export function ShareDialog({
 	onShareSelectedPersonChange,
 	shareSelectedDays,
 	onShareSelectedDaysChange,
+	shareSelectedExpiryDays,
+	onShareSelectedExpiryDaysChange,
+	shareAllowJournalNotes,
+	onShareAllowJournalNotesChange,
 	shareGenerating,
 	shareLink,
 	onShareLinkChange,
 	shareCopied,
 	onShareCopiedChange,
+	activeShareLinks,
+	activeSharesLoading,
+	revokingShareToken,
 	onClose,
 	onGenerateShareLink,
+	onRevokeShareLink,
 	onCopyShareLink,
 }: ShareDialogProps) {
 	const { t } = useTranslation();
+	const [manageLinksOpen, setManageLinksOpen] = useState(false);
+	const [shareToRevoke, setShareToRevoke] = useState<ActiveShareLink | null>(null);
 	const closeLabel = t("common.close");
 	const copyLabel = shareCopied ? t("share.copied") : t("share.copyLink");
 	const getPersonLabel = (person: string) => (person === "all" ? t("share.allPeople") : person);
+	const closeRevokeConfirm = useCallback(() => {
+		if (shareToRevoke && revokingShareToken !== shareToRevoke.token) {
+			setShareToRevoke(null);
+		}
+	}, [revokingShareToken, shareToRevoke]);
+
+	useModalHistory(show && Boolean(shareToRevoke), "share-revoke", closeRevokeConfirm);
+
+	useEffect(() => {
+		if (!show) {
+			setShareToRevoke(null);
+		}
+	}, [show]);
 
 	// ESC is handled by the global handler in App.tsx to avoid double history.back()
 
 	if (!show) return null;
+
+	const renderActiveShares = () => {
+		if (activeSharesLoading) {
+			return <p>{t("share.loadingActiveLinks")}</p>;
+		}
+
+		if (activeShareLinks.length === 0) {
+			return <p>{t("share.noActiveLinks")}</p>;
+		}
+
+		return (
+			<ul className="share-active-list">
+				{activeShareLinks.map((share) => {
+					const personLabel = getPersonLabel(share.takenBy);
+					const createdAtLabel = new Date(share.createdAt).toLocaleDateString();
+					const expiresAtLabel = share.expiresAt ? new Date(share.expiresAt).toLocaleDateString() : null;
+					return (
+						<li key={share.token} className="share-active-item">
+							<div className="share-active-copy">
+								<a href={`${window.location.origin}${share.shareUrl}`} className="share-link-inline">
+									{personLabel}
+								</a>
+								<span className="hint-text">
+									{expiresAtLabel
+										? t("share.activeLinkMetaWithExpiry", {
+												person: personLabel,
+												days: share.scheduleDays,
+												createdAt: createdAtLabel,
+												expiresAt: expiresAtLabel,
+											})
+										: t("share.activeLinkMeta", {
+												person: personLabel,
+												days: share.scheduleDays,
+												createdAt: createdAtLabel,
+											})}
+									{share.allowJournalNotes ? ` · ${t("share.journalNotesEnabled")}` : ""}
+								</span>
+							</div>
+							<button
+								type="button"
+								className="ghost"
+								disabled={revokingShareToken === share.token}
+								onClick={() => setShareToRevoke(share)}
+							>
+								{revokingShareToken === share.token ? t("share.revoking") : t("share.revoke")}
+							</button>
+						</li>
+					);
+				})}
+			</ul>
+		);
+	};
+
+	const renderManageLinks = () => (
+		<div className="share-dialog-manage">
+			<button
+				type="button"
+				className="share-dialog-manage-summary"
+				onClick={() => setManageLinksOpen((current) => !current)}
+				aria-expanded={manageLinksOpen}
+			>
+				<span>{t("share.manageLinksSummary", { count: activeShareLinks.length })}</span>
+				<span className="share-dialog-manage-count">
+					{manageLinksOpen ? t("common.hide") : activeShareLinks.length}
+				</span>
+			</button>
+			{manageLinksOpen ? <div className="share-dialog-manage-content">{renderActiveShares()}</div> : null}
+		</div>
+	);
 
 	return (
 		<div
@@ -85,6 +189,7 @@ export function ShareDialog({
 						return (
 							<div className="share-dialog-empty">
 								<p>{t("share.noPeople")}</p>
+								<div className="share-dialog-active-links">{renderManageLinks()}</div>
 							</div>
 						);
 					}
@@ -124,6 +229,7 @@ export function ShareDialog({
 									</button>
 									<button onClick={onClose}>{t("common.close")}</button>
 								</div>
+								<div className="share-dialog-active-links">{renderManageLinks()}</div>
 							</div>
 						);
 					}
@@ -159,6 +265,33 @@ export function ShareDialog({
 								</select>
 							</div>
 
+							<div className="form-group">
+								<label htmlFor="share-expiry-select">{t("share.selectExpiry")}</label>
+								<select
+									id="share-expiry-select"
+									className="select-field"
+									value={shareSelectedExpiryDays == null ? "never" : String(shareSelectedExpiryDays)}
+									onChange={(e) =>
+										onShareSelectedExpiryDaysChange(e.target.value === "never" ? null : Number(e.target.value))
+									}
+								>
+									<option value="never">{t("share.expiryNever")}</option>
+									<option value="7">{t("share.expiry7Days")}</option>
+									<option value="30">{t("share.expiry30Days")}</option>
+									<option value="90">{t("share.expiry90Days")}</option>
+								</select>
+							</div>
+
+							<label className="inline-checkbox" htmlFor="share-journal-notes-toggle">
+								<input
+									id="share-journal-notes-toggle"
+									type="checkbox"
+									checked={shareAllowJournalNotes}
+									onChange={(event) => onShareAllowJournalNotesChange(event.target.checked)}
+								/>
+								<span>{t("share.allowJournalNotes")}</span>
+							</label>
+
 							<div className="share-dialog-footer">
 								<button className="ghost" onClick={onClose}>
 									{t("common.close")}
@@ -167,9 +300,28 @@ export function ShareDialog({
 									{shareGenerating ? t("share.generating") : t("share.generateLink")}
 								</button>
 							</div>
+							<div className="share-dialog-active-links">{renderManageLinks()}</div>
 						</div>
 					);
 				})()}
+				{shareToRevoke && (
+					<ConfirmModal
+						title={t("share.revoke")}
+						message={t("share.revokeConfirm", { person: getPersonLabel(shareToRevoke.takenBy) })}
+						confirmLabel={revokingShareToken === shareToRevoke.token ? t("share.revoking") : t("share.revoke")}
+						cancelLabel={t("common.cancel")}
+						onConfirm={async () => {
+							const revoked = await onRevokeShareLink(shareToRevoke.token);
+							if (revoked) {
+								setShareToRevoke(null);
+							}
+						}}
+						onCancel={closeRevokeConfirm}
+						isLoading={revokingShareToken === shareToRevoke.token}
+						confirmVariant="danger"
+						overlayClassName="nested-confirm"
+					/>
+				)}
 			</div>
 		</div>
 	);

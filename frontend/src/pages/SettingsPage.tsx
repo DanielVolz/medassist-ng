@@ -1,12 +1,15 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: settings rows use label-styled text with adjacent custom toggle controls */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ConfirmModal, ExportModal } from "../components";
+import { ExportModal, ImportReviewModal } from "../components";
+import { useAuth } from "../components/Auth";
 import { useAppContext } from "../context";
+import { useModalHistory } from "../hooks";
 import { getSystemLocale, withFormattingTimezone } from "../utils/formatters";
 
 export function SettingsPage() {
 	const { t, i18n } = useTranslation();
+	const { authFetch } = useAuth();
 	const [apiKeyToken, setApiKeyToken] = useState("");
 	const [apiKeyGenerating, setApiKeyGenerating] = useState(false);
 	const [apiKeyCopied, setApiKeyCopied] = useState(false);
@@ -37,15 +40,32 @@ export function SettingsPage() {
 		showImportConfirm,
 		setShowImportConfirm,
 		setPendingImportData,
+		importPreview,
+		setImportPreview,
 		handleImportConfirm,
 		importResult,
 		setImportResult,
-		meds,
 	} = useAppContext();
 	const [timezoneTouched, setTimezoneTouched] = useState(false);
 	const [timezoneDraft, setTimezoneDraft] = useState("");
 
-	const hasExistingData = meds.length > 0;
+	const formattedImportPreviewDate = importPreview
+		? new Date(importPreview.exportedAt).toLocaleString(getSystemLocale(i18n.language))
+		: "";
+
+	const closeExportModal = useCallback(() => {
+		setShowExportModal(false);
+	}, [setShowExportModal]);
+
+	const closeImportReview = useCallback(() => {
+		setShowImportConfirm(false);
+		setPendingImportData(null);
+		setImportPreview(null);
+	}, [setImportPreview, setPendingImportData, setShowImportConfirm]);
+
+	useModalHistory(showExportModal, "export-options", closeExportModal);
+	useModalHistory(showImportConfirm, "import-review", closeImportReview);
+
 	let emailUnavailableReason: string | null = null;
 	if (settingsLoadError === "auth") {
 		emailUnavailableReason = t("settings.email.loadErrorAuth");
@@ -63,10 +83,9 @@ export function SettingsPage() {
 		setApiKeyCopied(false);
 
 		try {
-			const response = await fetch("/api/auth/api-keys", {
+			const response = await authFetch("/api/auth/api-keys", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				credentials: "include",
 				body: JSON.stringify({
 					name: "Default API Key",
 					scope: "write",
@@ -195,10 +214,9 @@ export function SettingsPage() {
 								onChange={(e) => {
 									const lang = e.target.value;
 									i18n.changeLanguage(lang);
-									fetch("/api/settings/language", {
+									authFetch("/api/settings/language", {
 										method: "PUT",
 										headers: { "Content-Type": "application/json" },
-										credentials: "include",
 										body: JSON.stringify({ language: lang }),
 									});
 								}}
@@ -1142,38 +1160,19 @@ export function SettingsPage() {
 				</div>
 			)}
 
-			{/* Import Confirmation Modal */}
-			{showImportConfirm && (
-				<ConfirmModal
-					title={t(hasExistingData ? "exportImport.confirmImport" : "exportImport.confirmImportEmpty")}
-					message={
-						hasExistingData ? (
-							<>
-								<p style={{ marginBottom: "12px" }}>{t("exportImport.confirmImportMessage")}</p>
-								<p className="warning-text">⚠️ {t("exportImport.confirmImportWarning")}</p>
-							</>
-						) : (
-							<p>{t("exportImport.confirmImportEmptyMessage")}</p>
-						)
-					}
-					confirmLabel={t(hasExistingData ? "exportImport.confirmButton" : "exportImport.confirmButtonEmpty")}
-					cancelLabel={t("exportImport.cancelButton")}
-					onConfirm={handleImportConfirm}
-					onCancel={() => {
-						setShowImportConfirm(false);
-						setPendingImportData(null);
-					}}
-					confirmVariant={hasExistingData ? "danger" : "primary"}
-				/>
-			)}
+			<ImportReviewModal
+				isOpen={showImportConfirm}
+				importPreview={importPreview}
+				formattedExportedAt={formattedImportPreviewDate}
+				importing={importing}
+				exporting={exporting}
+				onClose={closeImportReview}
+				onBackup={() => handleExport(true)}
+				onConfirm={handleImportConfirm}
+			/>
 
 			{/* Export Options Modal */}
-			<ExportModal
-				isOpen={showExportModal}
-				onClose={() => setShowExportModal(false)}
-				onExport={handleExport}
-				exporting={exporting}
-			/>
+			<ExportModal isOpen={showExportModal} onClose={closeExportModal} onExport={handleExport} exporting={exporting} />
 		</section>
 	);
 }

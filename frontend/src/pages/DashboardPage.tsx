@@ -3,11 +3,13 @@ import { Archive, Bell, ClipboardList, NotebookPen, Share2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
-import { ConfirmModal, MedicationAvatar } from "../components";
+import { ConfirmModal, IntakeJournalHistoryModal, IntakeJournalModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
 import { DashboardReminderSection } from "../components/dashboard/DashboardReminderSection";
 import { DashboardStatusSection } from "../components/dashboard/DashboardStatusSection";
 import { useAppContext } from "../context";
+import { useFeedback } from "../context/FeedbackContext";
+import { useModalHistory } from "../hooks";
 import {
 	allowsPillFormSelection,
 	getMedDisplayName,
@@ -75,7 +77,8 @@ const EMPTY_DOSE_SET = new Set<string>();
 
 export function DashboardPage() {
 	const { t, i18n } = useTranslation();
-	const { user } = useAuth();
+	const { user, authFetch } = useAuth();
+	const { showFeedback } = useFeedback();
 	const location = useLocation();
 	const {
 		meds,
@@ -112,6 +115,26 @@ export function DashboardPage() {
 		openUserFilter,
 		openShareDialog,
 		openScheduleLightbox,
+		journalEditorOpen,
+		journalHistoryOpen,
+		journalEvent,
+		journalEventLoading,
+		journalEventSaving,
+		journalEventDeleting,
+		journalEventError,
+		journalHistoryEntries,
+		journalHistoryFilters,
+		journalHistoryLoading,
+		journalHistoryError,
+		openJournalEditor,
+		closeJournalEditor,
+		saveJournalNote,
+		deleteJournalNote,
+		openJournalHistory,
+		closeJournalHistory,
+		setJournalHistoryFilters,
+		reloadJournalHistory,
+		reopenJournalHistoryEntry,
 		stockThresholds,
 		loadMeds,
 		loadSettings,
@@ -121,6 +144,21 @@ export function DashboardPage() {
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<{ id: number; name: string } | null>(null);
 	const notificationFocusAppliedRef = useRef<string | null>(null);
+
+	const closeClearMissedConfirm = useCallback(() => {
+		if (!clearingMissed) {
+			setShowClearMissedConfirm(false);
+		}
+	}, [clearingMissed]);
+
+	const closeObsoleteConfirm = useCallback(() => {
+		setShowObsoleteConfirm(false);
+		setObsoleteCandidate(null);
+	}, []);
+
+	useModalHistory(showClearMissedConfirm, "dashboard-clear-missed", closeClearMissedConfirm);
+	useModalHistory(showObsoleteConfirm, "dashboard-obsolete", closeObsoleteConfirm);
+
 	const effectiveSkippedDoses =
 		skippedDoses instanceof Set ? skippedDoses : dismissedDoses instanceof Set ? dismissedDoses : EMPTY_DOSE_SET;
 	const canManageSkippedDoses = typeof markDoseSkipped === "function" && typeof undoDoseSkipped === "function";
@@ -333,9 +371,8 @@ export function DashboardPage() {
 
 		setClearingMissed(true);
 		try {
-			const res = await fetch("/api/medications/dismiss-until", {
+			const res = await authFetch("/api/medications/dismiss-until", {
 				method: "POST",
-				credentials: "include",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(payload),
 			});
@@ -344,12 +381,35 @@ export function DashboardPage() {
 			}
 			await loadMeds();
 			setShowClearMissedConfirm(false);
-			alert(t("dashboard.schedules.clearMissedSuccess", { count: missedCount }));
+			showFeedback({
+				message: t("dashboard.schedules.clearMissedSuccess", { count: missedCount }),
+				tone: "success",
+			});
 		} catch {
-			alert(t("common.saveFailed"));
+			showFeedback({ message: t("common.saveFailed"), tone: "error" });
 		} finally {
 			setClearingMissed(false);
 		}
+	};
+
+	const handleSaveJournalNote = async (note: string) => {
+		return saveJournalNote(note);
+	};
+
+	const handleDeleteJournalNote = async () => {
+		const deleted = await deleteJournalNote();
+		if (deleted) {
+			closeJournalEditor();
+		}
+	};
+
+	const handleResetJournalFilters = () => {
+		setJournalHistoryFilters({
+			medicationId: null,
+			from: "",
+			to: "",
+			limit: 100,
+		});
 	};
 
 	const renderDoseActionButtons = (options: {
@@ -359,6 +419,7 @@ export function DashboardPage() {
 		isAutomaticallyTaken: boolean;
 		isEmpty: boolean;
 	}) => {
+		const journalUnavailable = !(options.isTaken || options.isSkipped);
 		const takeButton = options.isTaken ? (
 			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
 				{options.isAutomaticallyTaken && (
@@ -381,8 +442,35 @@ export function DashboardPage() {
 			</button>
 		);
 
+		const journalButton = (
+			<span
+				className={journalUnavailable ? "tooltip-trigger" : undefined}
+				data-tooltip={journalUnavailable ? t("journal.actions.noteTakenOnly") : undefined}
+			>
+				<button
+					type="button"
+					className="dose-btn journal"
+					onClick={() => {
+						if (!journalUnavailable) {
+							void openJournalEditor(options.doseId);
+						}
+					}}
+					title={!journalUnavailable ? t("journal.actions.note") : undefined}
+					disabled={journalUnavailable}
+				>
+					<NotebookPen size={14} aria-hidden="true" />
+					<span className="dose-btn-label">{t("journal.actions.note")}</span>
+				</button>
+			</span>
+		);
+
 		if (!canManageSkippedDoses) {
-			return takeButton;
+			return (
+				<>
+					{takeButton}
+					{journalButton}
+				</>
+			);
 		}
 
 		const skipButton = options.isSkipped ? (
@@ -405,6 +493,7 @@ export function DashboardPage() {
 			<>
 				{takeButton}
 				{skipButton}
+				{journalButton}
 			</>
 		);
 	};
@@ -417,22 +506,20 @@ export function DashboardPage() {
 	const handleConfirmMarkObsolete = async () => {
 		if (!obsoleteCandidate) return;
 		try {
-			const res = await fetch(`/api/medications/${obsoleteCandidate.id}/obsolete`, {
+			const res = await authFetch(`/api/medications/${obsoleteCandidate.id}/obsolete`, {
 				method: "POST",
-				credentials: "include",
 			});
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			await loadMeds();
 			setShowObsoleteConfirm(false);
 			setObsoleteCandidate(null);
 		} catch {
-			alert(t("common.saveFailed"));
+			showFeedback({ message: t("common.saveFailed"), tone: "error" });
 		}
 	};
 
 	const handleCancelMarkObsolete = () => {
-		setShowObsoleteConfirm(false);
-		setObsoleteCandidate(null);
+		closeObsoleteConfirm();
 	};
 
 	const getDiscreteUnitLabel = (packageType: string | undefined, count: number) => {
@@ -619,10 +706,9 @@ export function DashboardPage() {
 					};
 				});
 
-				const stockRes = await fetch("/api/reminder/send-email", {
+				const stockRes = await authFetch("/api/reminder/send-email", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					credentials: "include",
 					body: JSON.stringify({
 						email: settings.notificationEmail,
 						lowStock,
@@ -647,10 +733,9 @@ export function DashboardPage() {
 					};
 				});
 
-				const prescriptionRes = await fetch("/api/reminder/send-prescription", {
+				const prescriptionRes = await authFetch("/api/reminder/send-prescription", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					credentials: "include",
 					body: JSON.stringify({
 						email: settings.notificationEmail,
 						prescriptionLow,
@@ -913,6 +998,17 @@ export function DashboardPage() {
 										<option value={90}>{t("dashboard.schedules.3months")}</option>
 										<option value={180}>{t("dashboard.schedules.6months")}</option>
 									</select>
+									<button
+										type="button"
+										className="ghost journal-history-button"
+										onClick={openJournalHistory}
+										aria-label={t("journal.actions.history")}
+										title={t("journal.actions.history")}
+									>
+										<ClipboardList size={16} aria-hidden="true" />
+										<span className="journal-history-label-full">{t("journal.actions.history")}</span>
+										<span className="journal-history-label-short">{t("journal.actions.historyShort")}</span>
+									</button>
 									{meds.some((m) => m.takenBy && m.takenBy.length > 0) && (
 										<button
 											className="ghost share-btn icon-only tooltip-trigger"
@@ -1229,9 +1325,7 @@ export function DashboardPage() {
 										confirmLabel={t("dashboard.schedules.clearMissedConfirm")}
 										cancelLabel={t("dashboard.schedules.clearMissedCancel")}
 										onConfirm={() => void clearMissedDoses(missedPastDoseIds.length)}
-										onCancel={() => {
-											if (!clearingMissed) setShowClearMissedConfirm(false);
-										}}
+										onCancel={closeClearMissedConfirm}
 										isLoading={clearingMissed}
 										confirmVariant="warning"
 									/>
@@ -1741,6 +1835,30 @@ export function DashboardPage() {
 									})}
 							</div>
 						)}
+						<IntakeJournalModal
+							isOpen={journalEditorOpen}
+							entry={journalEvent}
+							isLoading={journalEventLoading}
+							isSaving={journalEventSaving}
+							isDeleting={journalEventDeleting}
+							error={journalEventError}
+							onClose={closeJournalEditor}
+							onSave={handleSaveJournalNote}
+							onDelete={handleDeleteJournalNote}
+						/>
+						<IntakeJournalHistoryModal
+							isOpen={journalHistoryOpen}
+							entries={journalHistoryEntries}
+							filters={journalHistoryFilters}
+							medications={meds}
+							isLoading={journalHistoryLoading}
+							error={journalHistoryError}
+							onClose={closeJournalHistory}
+							onFilterChange={setJournalHistoryFilters}
+							onReload={reloadJournalHistory}
+							onResetFilters={handleResetJournalFilters}
+							onReopen={reopenJournalHistoryEntry}
+						/>
 					</article>
 				</section>
 			</div>

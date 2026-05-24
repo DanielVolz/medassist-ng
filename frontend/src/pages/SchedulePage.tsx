@@ -1,12 +1,13 @@
 /* biome-ignore-all lint/style/noNestedTernary: schedule timeline branches are intentionally explicit */
-import { Archive, Bell } from "lucide-react";
-import { useState } from "react";
+import { Archive, Bell, ClipboardList, NotebookPen } from "lucide-react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ConfirmModal, MedicationAvatar } from "../components";
+import { ConfirmModal, IntakeJournalHistoryModal, IntakeJournalModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
+import { useFeedback } from "../context/FeedbackContext";
 import { ScheduleUsageTag } from "../features/schedule/components";
 import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
-import { useScheduleController } from "../hooks";
+import { useModalHistory, useScheduleController } from "../hooks";
 import type { Coverage, IntakeUnit } from "../types";
 import { getMedDisplayName, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { buildClearMissedPayload, isDoseDismissed } from "../utils/schedule";
@@ -71,7 +72,8 @@ function getDoseId(baseId: string, person: string | null): string {
 
 export function SchedulePage() {
 	const { t } = useTranslation();
-	const { user } = useAuth();
+	const { user, authFetch } = useAuth();
+	const { showFeedback } = useFeedback();
 	const {
 		meds,
 		settings,
@@ -96,11 +98,45 @@ export function SchedulePage() {
 		openUserFilter,
 		missedPastDoseIds,
 		loadMeds,
+		journalEditorOpen,
+		journalHistoryOpen,
+		journalEvent,
+		journalEventLoading,
+		journalEventSaving,
+		journalEventDeleting,
+		journalEventError,
+		journalHistoryEntries,
+		journalHistoryFilters,
+		journalHistoryLoading,
+		journalHistoryError,
+		openJournalEditor,
+		closeJournalEditor,
+		saveJournalNote,
+		deleteJournalNote,
+		openJournalHistory,
+		closeJournalHistory,
+		setJournalHistoryFilters,
+		reloadJournalHistory,
+		reopenJournalHistoryEntry,
 	} = useScheduleController();
 	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
 	const [clearingMissed, setClearingMissed] = useState(false);
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<{ id: number; name: string } | null>(null);
+
+	const closeClearMissedConfirm = useCallback(() => {
+		if (!clearingMissed) {
+			setShowClearMissedConfirm(false);
+		}
+	}, [clearingMissed]);
+
+	const closeObsoleteConfirm = useCallback(() => {
+		setShowObsoleteConfirm(false);
+		setObsoleteCandidate(null);
+	}, []);
+
+	useModalHistory(showClearMissedConfirm, "schedule-clear-missed", closeClearMissedConfirm);
+	useModalHistory(showObsoleteConfirm, "schedule-obsolete", closeObsoleteConfirm);
 
 	const isDoseTakenForDisplay = (doseId: string) => takenDoses.has(doseId);
 
@@ -118,9 +154,8 @@ export function SchedulePage() {
 
 		setClearingMissed(true);
 		try {
-			const res = await fetch("/api/medications/dismiss-until", {
+			const res = await authFetch("/api/medications/dismiss-until", {
 				method: "POST",
-				credentials: "include",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(payload),
 			});
@@ -129,12 +164,35 @@ export function SchedulePage() {
 			}
 			await loadMeds();
 			setShowClearMissedConfirm(false);
-			alert(t("dashboard.schedules.clearMissedSuccess", { count: missedCount }));
+			showFeedback({
+				message: t("dashboard.schedules.clearMissedSuccess", { count: missedCount }),
+				tone: "success",
+			});
 		} catch {
-			alert(t("common.saveFailed"));
+			showFeedback({ message: t("common.saveFailed"), tone: "error" });
 		} finally {
 			setClearingMissed(false);
 		}
+	};
+
+	const handleSaveJournalNote = async (note: string) => {
+		return saveJournalNote(note);
+	};
+
+	const handleDeleteJournalNote = async () => {
+		const deleted = await deleteJournalNote();
+		if (deleted) {
+			closeJournalEditor();
+		}
+	};
+
+	const handleResetJournalFilters = () => {
+		setJournalHistoryFilters({
+			medicationId: null,
+			from: "",
+			to: "",
+			limit: 100,
+		});
 	};
 
 	const requestMarkObsolete = (med: { id: number; name: string }) => {
@@ -145,22 +203,20 @@ export function SchedulePage() {
 	const handleConfirmMarkObsolete = async () => {
 		if (!obsoleteCandidate) return;
 		try {
-			const res = await fetch(`/api/medications/${obsoleteCandidate.id}/obsolete`, {
+			const res = await authFetch(`/api/medications/${obsoleteCandidate.id}/obsolete`, {
 				method: "POST",
-				credentials: "include",
 			});
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			await loadMeds();
 			setShowObsoleteConfirm(false);
 			setObsoleteCandidate(null);
 		} catch {
-			alert(t("common.saveFailed"));
+			showFeedback({ message: t("common.saveFailed"), tone: "error" });
 		}
 	};
 
 	const handleCancelMarkObsolete = () => {
-		setShowObsoleteConfirm(false);
-		setObsoleteCandidate(null);
+		closeObsoleteConfirm();
 	};
 
 	const formatDoseUsageLabel = (
@@ -182,6 +238,7 @@ export function SchedulePage() {
 		isAutomaticallyTaken: boolean;
 		isEmpty: boolean;
 	}) => {
+		const journalUnavailable = !(options.isTaken || options.isSkipped);
 		const takeButton = options.isTaken ? (
 			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
 				{options.isAutomaticallyTaken && (
@@ -220,10 +277,33 @@ export function SchedulePage() {
 			</button>
 		);
 
+		const journalButton = (
+			<span
+				className={journalUnavailable ? "tooltip-trigger" : undefined}
+				data-tooltip={journalUnavailable ? t("journal.actions.noteTakenOnly") : undefined}
+			>
+				<button
+					type="button"
+					className="dose-btn journal"
+					onClick={() => {
+						if (!journalUnavailable) {
+							void openJournalEditor(options.doseId);
+						}
+					}}
+					title={!journalUnavailable ? t("journal.actions.note") : undefined}
+					disabled={journalUnavailable}
+				>
+					<NotebookPen size={14} aria-hidden="true" />
+					<span className="dose-btn-label">{t("journal.actions.note")}</span>
+				</button>
+			</span>
+		);
+
 		return (
 			<>
 				{takeButton}
 				{skipButton}
+				{journalButton}
 			</>
 		);
 	};
@@ -233,19 +313,32 @@ export function SchedulePage() {
 			<article className="card schedule-full">
 				<div className="card-head">
 					<h2>{t("dashboard.schedules.title")}</h2>
-					<select
-						className="select-field schedule-days-select"
-						value={scheduleDays}
-						onChange={(e) => {
-							const val = Number(e.target.value);
-							setScheduleDays(val);
-							if (user?.id) localStorage.setItem(userStorageKey(user.id, "scheduleDays"), String(val));
-						}}
-					>
-						<option value={30}>{t("dashboard.schedules.1month")}</option>
-						<option value={90}>{t("dashboard.schedules.3months")}</option>
-						<option value={180}>{t("dashboard.schedules.6months")}</option>
-					</select>
+					<div className="card-head-actions">
+						<select
+							className="select-field schedule-days-select"
+							value={scheduleDays}
+							onChange={(e) => {
+								const val = Number(e.target.value);
+								setScheduleDays(val);
+								if (user?.id) localStorage.setItem(userStorageKey(user.id, "scheduleDays"), String(val));
+							}}
+						>
+							<option value={30}>{t("dashboard.schedules.1month")}</option>
+							<option value={90}>{t("dashboard.schedules.3months")}</option>
+							<option value={180}>{t("dashboard.schedules.6months")}</option>
+						</select>
+						<button
+							type="button"
+							className="ghost journal-history-button"
+							onClick={openJournalHistory}
+							aria-label={t("journal.actions.history")}
+							title={t("journal.actions.history")}
+						>
+							<ClipboardList size={16} aria-hidden="true" />
+							<span className="journal-history-label-full">{t("journal.actions.history")}</span>
+							<span className="journal-history-label-short">{t("journal.actions.historyShort")}</span>
+						</button>
+					</div>
 				</div>
 				<div className="timeline">
 					{/* Past days (when expanded) — rendered above toggle */}
@@ -482,9 +575,7 @@ export function SchedulePage() {
 							confirmLabel={t("dashboard.schedules.clearMissedConfirm")}
 							cancelLabel={t("dashboard.schedules.clearMissedCancel")}
 							onConfirm={() => void clearMissedDoses(missedPastDoseIds.length)}
-							onCancel={() => {
-								if (!clearingMissed) setShowClearMissedConfirm(false);
-							}}
+							onCancel={closeClearMissedConfirm}
 							isLoading={clearingMissed}
 							confirmVariant="warning"
 						/>
@@ -630,6 +721,30 @@ export function SchedulePage() {
 						);
 					})}
 				</div>
+				<IntakeJournalModal
+					isOpen={journalEditorOpen}
+					entry={journalEvent}
+					isLoading={journalEventLoading}
+					isSaving={journalEventSaving}
+					isDeleting={journalEventDeleting}
+					error={journalEventError}
+					onClose={closeJournalEditor}
+					onSave={handleSaveJournalNote}
+					onDelete={handleDeleteJournalNote}
+				/>
+				<IntakeJournalHistoryModal
+					isOpen={journalHistoryOpen}
+					entries={journalHistoryEntries}
+					filters={journalHistoryFilters}
+					medications={meds}
+					isLoading={journalHistoryLoading}
+					error={journalHistoryError}
+					onClose={closeJournalHistory}
+					onFilterChange={setJournalHistoryFilters}
+					onReload={reloadJournalHistory}
+					onResetFilters={handleResetJournalFilters}
+					onReopen={reopenJournalHistoryEntry}
+				/>
 			</article>
 		</section>
 	);

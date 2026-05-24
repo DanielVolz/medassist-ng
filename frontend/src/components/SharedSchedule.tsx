@@ -4,14 +4,17 @@
 /* biome-ignore-all lint/style/noNestedTernary: rendering branches are intentionally explicit in schedule UI */
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: modal and helper callbacks are stable at runtime */
 
+import { NotebookPen } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
+import { useFeedback } from "../context/FeedbackContext";
 import { ScheduleUsageTag } from "../features/schedule/components";
 import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
 import { toggleDateInSet } from "../features/schedule/interactions";
 import { loadScheduleCollapseState, saveCollapsedDaySet } from "../features/schedule/storage";
-import { useEscapeKey } from "../hooks";
+import { useEscapeKey, useModalHistory } from "../hooks";
+import type { IntakeJournalEntry } from "../hooks/useIntakeJournal";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
 import {
 	allowsPillFormSelection,
@@ -26,12 +29,30 @@ import { getSystemLocale } from "../utils/formatters";
 import { getIntakeDailyRate, getMedicationIntakes, iterateIntakeOccurrences } from "../utils/intake-schedule";
 import { convertLiquidUsageToMl } from "../utils/intake-units";
 import { getStockStatus, isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
+import { IntakeJournalModal } from "./intake-journal/IntakeJournalModal";
 import { MedicationAvatar } from "./MedicationAvatar";
 import { SharedMedicationOverviewSection } from "./SharedMedicationOverviewSection";
+
+async function readSharedJournalError(response: Response, fallbackMessage: string): Promise<string> {
+	try {
+		const data = (await response.json()) as { error?: string; code?: string };
+		if (typeof data.error === "string" && data.error.trim().length > 0) {
+			return data.error;
+		}
+		if (typeof data.code === "string" && data.code.trim().length > 0) {
+			return data.code;
+		}
+	} catch {
+		// Fall back to the supplied message when the response body is not JSON.
+	}
+
+	return fallbackMessage;
+}
 
 export function SharedSchedule() {
 	const { token } = useParams<{ token: string }>();
 	const { t, i18n } = useTranslation();
+	const { showFeedback } = useFeedback();
 	const [data, setData] = useState<SharedScheduleData | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -39,8 +60,15 @@ export function SharedSchedule() {
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [automaticTakenDoses, setAutomaticTakenDoses] = useState<Set<string>>(new Set());
 	const [dismissedDoses, setDismissedDoses] = useState<Set<string>>(new Set());
+	const [sharedJournalDoseIdsWithNotes, setSharedJournalDoseIdsWithNotes] = useState<Set<string>>(new Set());
 	const mutationInFlightRef = useRef(0);
 	const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
+	const [sharedJournalOpen, setSharedJournalOpen] = useState(false);
+	const [sharedJournalDoseId, setSharedJournalDoseId] = useState<string | null>(null);
+	const [sharedJournalEntry, setSharedJournalEntry] = useState<IntakeJournalEntry | null>(null);
+	const [sharedJournalLoading, setSharedJournalLoading] = useState(false);
+	const [sharedJournalSaving, setSharedJournalSaving] = useState(false);
+	const [sharedJournalError, setSharedJournalError] = useState<string | null>(null);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [showFutureDays, setShowFutureDays] = useState(false);
 
@@ -169,6 +197,107 @@ export function SharedSchedule() {
 	// Close lightbox on Escape key
 	useEscapeKey(!!lightboxImage, closeLightbox);
 
+	const closeSharedJournalEditor = useCallback(() => {
+		setSharedJournalOpen(false);
+		setSharedJournalDoseId(null);
+		setSharedJournalEntry(null);
+		setSharedJournalLoading(false);
+		setSharedJournalSaving(false);
+		setSharedJournalError(null);
+	}, []);
+
+	useModalHistory(sharedJournalOpen, "shared-intake-journal", closeSharedJournalEditor);
+
+	const openSharedJournalEditor = useCallback(
+		async (doseId: string) => {
+			if (!token || !data?.allowJournalNotes) {
+				return;
+			}
+
+			setSharedJournalOpen(true);
+			setSharedJournalDoseId(doseId);
+			setSharedJournalEntry(null);
+			setSharedJournalLoading(true);
+			setSharedJournalError(null);
+
+			try {
+				const response = await fetch(`/api/share/${token}/journal/event/${encodeURIComponent(doseId)}`);
+				if (!response.ok) {
+					setSharedJournalEntry(null);
+					setSharedJournalError(await readSharedJournalError(response, t("journal.errors.loadFailed")));
+					return;
+				}
+
+				const payload = (await response.json()) as { entry: IntakeJournalEntry };
+				setSharedJournalEntry(payload.entry);
+				setSharedJournalDoseIdsWithNotes((current) => {
+					const next = new Set(current);
+					if (payload.entry.note?.trim()) {
+						next.add(payload.entry.doseId);
+					} else {
+						next.delete(payload.entry.doseId);
+					}
+					return next;
+				});
+			} catch {
+				setSharedJournalEntry(null);
+				setSharedJournalError(t("journal.errors.loadFailed"));
+			} finally {
+				setSharedJournalLoading(false);
+			}
+		},
+		[data?.allowJournalNotes, t, token]
+	);
+
+	const saveSharedJournalNote = useCallback(
+		async (note: string) => {
+			if (!token || !sharedJournalDoseId) {
+				setSharedJournalError(t("journal.errors.noEventSelected"));
+				return false;
+			}
+
+			if (note.trim().length === 0) {
+				setSharedJournalError(t("journal.errors.emptySharedNote"));
+				return false;
+			}
+
+			setSharedJournalSaving(true);
+			setSharedJournalError(null);
+
+			try {
+				const response = await fetch(`/api/share/${token}/journal/event/${encodeURIComponent(sharedJournalDoseId)}`, {
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ note }),
+				});
+
+				if (!response.ok) {
+					setSharedJournalError(await readSharedJournalError(response, t("journal.errors.saveFailed")));
+					return false;
+				}
+
+				const payload = (await response.json()) as { entry: IntakeJournalEntry };
+				setSharedJournalEntry(payload.entry);
+				setSharedJournalDoseIdsWithNotes((current) => {
+					const next = new Set(current);
+					if (payload.entry.note?.trim()) {
+						next.add(payload.entry.doseId);
+					} else {
+						next.delete(payload.entry.doseId);
+					}
+					return next;
+				});
+				return true;
+			} catch {
+				setSharedJournalError(t("journal.errors.saveFailed"));
+				return false;
+			} finally {
+				setSharedJournalSaving(false);
+			}
+		},
+		[sharedJournalDoseId, t, token]
+	);
+
 	// Handle browser back button to close lightbox
 	useEffect(() => {
 		function handlePopState() {
@@ -194,11 +323,13 @@ export function SharedSchedule() {
 				const taken = new Set<string>();
 				const automatic = new Set<string>();
 				const dismissed = new Set<string>();
+				const journalDoseIds = new Set<string>();
 				for (const d of data.doses as Array<{
 					doseId: string;
 					dismissed?: boolean;
 					skipped?: boolean;
 					takenSource?: string;
+					hasJournalNote?: boolean;
 				}>) {
 					if (d.skipped === true || d.dismissed === true) {
 						dismissed.add(d.doseId);
@@ -208,10 +339,14 @@ export function SharedSchedule() {
 							automatic.add(d.doseId);
 						}
 					}
+					if (d.hasJournalNote === true) {
+						journalDoseIds.add(d.doseId);
+					}
 				}
 				setTakenDoses(taken);
 				setAutomaticTakenDoses(automatic);
 				setDismissedDoses(dismissed);
+				setSharedJournalDoseIdsWithNotes(journalDoseIds);
 			}
 		} catch {
 			// Keep the current optimistic/shared state on transient read errors.
@@ -268,7 +403,7 @@ export function SharedSchedule() {
 				try {
 					const data = (await response.json()) as { code?: string };
 					if (data.code === "OUT_OF_STOCK") {
-						alert(t("common.outOfStockTakeBlocked"));
+						showFeedback({ message: t("common.outOfStockTakeBlocked"), tone: "error" });
 					}
 				} catch {
 					// Ignore JSON parsing errors and fall back to the optimistic rollback only.
@@ -448,6 +583,9 @@ export function SharedSchedule() {
 		isAutomaticallyTaken: boolean;
 		isEmpty: boolean;
 	}) => {
+		const showSharedJournalAction = Boolean(data?.allowJournalNotes);
+		const canOpenSharedJournal = showSharedJournalAction && (options.isTaken || options.isSkipped);
+		const hasSharedJournalNote = sharedJournalDoseIdsWithNotes.has(options.doseId);
 		const takeButton = options.isTaken ? (
 			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
 				{options.isAutomaticallyTaken && (
@@ -486,10 +624,33 @@ export function SharedSchedule() {
 			</button>
 		);
 
+		const journalButton = showSharedJournalAction ? (
+			<span
+				className={!canOpenSharedJournal ? "tooltip-trigger" : undefined}
+				data-tooltip={!canOpenSharedJournal ? t("journal.actions.noteTakenOnly") : undefined}
+			>
+				<button
+					type="button"
+					className={`dose-btn journal${hasSharedJournalNote ? " has-note" : ""}`}
+					onClick={() => {
+						if (canOpenSharedJournal) {
+							void openSharedJournalEditor(options.doseId);
+						}
+					}}
+					disabled={!canOpenSharedJournal}
+					title={canOpenSharedJournal ? t("journal.actions.note") : undefined}
+				>
+					<NotebookPen size={14} aria-hidden="true" />
+					<span className="dose-btn-label">{t("journal.actions.note")}</span>
+				</button>
+			</span>
+		) : null;
+
 		return (
 			<>
 				{takeButton}
 				{skipButton}
+				{journalButton}
 			</>
 		);
 	};
@@ -641,7 +802,10 @@ export function SharedSchedule() {
 	}, [data, i18n.language]);
 
 	// Split into past, today, and future - matches main app logic
-	const pastDays = useMemo(() => schedule.filter((d) => d.isPast), [schedule]);
+	const pastDays = useMemo(() => {
+		const visiblePastDays = Math.max(1, data?.scheduleDays ?? 30);
+		return schedule.filter((d) => d.isPast).slice(-visiblePastDays);
+	}, [schedule, data?.scheduleDays]);
 
 	// Separate today from future days
 	const { todayDay, futureDays } = useMemo(() => {
@@ -901,6 +1065,7 @@ export function SharedSchedule() {
 			<div className="shared-schedule-container">
 				<header className="shared-schedule-header">
 					<h1>{pageTitle}</h1>
+					<p className="shared-schedule-boundary">{t("share.publicAccessHelp")}</p>
 					<div className="shared-schedule-header-actions">
 						<div className={`theme-menu ${themeMenuOpen ? "open" : ""}`} ref={themeMenuRef}>
 							<button className="icon-btn" onClick={() => setThemeMenuOpen(!themeMenuOpen)} title={t("theme.title")}>
@@ -1226,7 +1391,7 @@ export function SharedSchedule() {
 										const hasAutomaticTakenDose = allDoseIds.some((id) => isDoseTakenAutomatically(id));
 
 										// Today: only collapse if manually collapsed or all taken
-										const isAutoCollapsed = allDayTaken && !hasAutomaticTakenDose;
+										const isAutoCollapsed = allDayTaken && !hasAutomaticTakenDose && !data.allowJournalNotes;
 										const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 										const isManuallyCollapsed = manuallyCollapsedDays.has(day.dateStr);
 										const isCollapsed = isAutoCollapsed ? !isManuallyExpanded : isManuallyCollapsed;
@@ -1582,6 +1747,19 @@ export function SharedSchedule() {
 					/>
 				</div>
 			)}
+
+			<IntakeJournalModal
+				isOpen={sharedJournalOpen}
+				entry={sharedJournalEntry}
+				isLoading={sharedJournalLoading}
+				isSaving={sharedJournalSaving}
+				isDeleting={false}
+				error={sharedJournalError}
+				onClose={closeSharedJournalEditor}
+				onSave={saveSharedJournalNote}
+				onDelete={() => undefined}
+				allowDelete={false}
+			/>
 		</div>
 	);
 }

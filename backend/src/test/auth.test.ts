@@ -5,6 +5,7 @@
 import cookie from "@fastify/cookie";
 import sensible from "@fastify/sensible";
 import type { Client } from "@libsql/client";
+import argon2 from "argon2";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { jwtPlugin } from "../plugins/jwt.js";
@@ -87,6 +88,8 @@ async function clearData(client: Client) {
 	await client.execute("DELETE FROM users");
 	await client.execute("DELETE FROM sqlite_sequence");
 }
+
+const invalidCredentialsResponse = { error: "Invalid username or password", code: "INVALID_CREDENTIALS" } as const;
 
 // =============================================================================
 // Tests
@@ -376,7 +379,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			});
 
 			expect(response.statusCode).toBe(401);
-			expect(response.json().code).toBe("INVALID_CREDENTIALS");
+			expect(response.json()).toEqual(invalidCredentialsResponse);
 		});
 
 		it("should reject non-existent user", async () => {
@@ -390,7 +393,75 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			});
 
 			expect(response.statusCode).toBe(401);
-			expect(response.json().code).toBe("INVALID_CREDENTIALS");
+			expect(response.json()).toEqual(invalidCredentialsResponse);
+		});
+
+		it("should perform dummy hash work for non-existent users", async () => {
+			const hashSpy = vi.spyOn(argon2, "hash");
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "nonexistent",
+					password: "TestPassword123",
+				},
+			});
+
+			expect(response.statusCode).toBe(401);
+			expect(response.json()).toEqual(invalidCredentialsResponse);
+			expect(hashSpy).toHaveBeenCalledWith(
+				"dummy",
+				expect.objectContaining({
+					memoryCost: 65536,
+					timeCost: 3,
+					parallelism: 4,
+				})
+			);
+
+			hashSpy.mockRestore();
+		});
+
+		it("should return identical login failure responses for missing, wrong-password, inactive, and SSO-only users", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "inactiveuser",
+					password: "TestPassword123",
+				},
+			});
+
+			await testClient.execute({
+				sql: "UPDATE users SET is_active = 0 WHERE username = ?",
+				args: ["inactiveuser"],
+			});
+
+			await testClient.execute({
+				sql: `
+					INSERT INTO users (username, password_hash, auth_provider, oidc_subject, is_active)
+					VALUES (?, ?, ?, ?, ?)
+				`,
+				args: ["ssouser", null, "oidc", "oidc-subject-1", 1],
+			});
+
+			const loginAttempts = [
+				{ username: "nonexistent", password: "TestPassword123" },
+				{ username: "loginuser", password: "WrongPassword" },
+				{ username: "inactiveuser", password: "TestPassword123" },
+				{ username: "ssouser", password: "TestPassword123" },
+			];
+
+			for (const payload of loginAttempts) {
+				const response = await app.inject({
+					method: "POST",
+					url: "/auth/login",
+					payload,
+				});
+
+				expect(response.statusCode).toBe(401);
+				expect(response.json()).toEqual(invalidCredentialsResponse);
+			}
 		});
 
 		it("should login successfully when username has leading/trailing whitespace", async () => {
@@ -656,7 +727,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			});
 
 			expect(response.statusCode).toBe(401);
-			expect(response.json().code).toBe("ACCOUNT_DISABLED");
+			expect(response.json()).toEqual(invalidCredentialsResponse);
 		});
 	});
 

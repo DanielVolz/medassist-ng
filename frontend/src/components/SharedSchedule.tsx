@@ -71,6 +71,13 @@ export function SharedSchedule() {
 	const [sharedJournalError, setSharedJournalError] = useState<string | null>(null);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [showFutureDays, setShowFutureDays] = useState(false);
+	const sharedImageSrc = useCallback(
+		(filename: string) => {
+			const imagePath = `/api/images/${encodeURIComponent(filename)}`;
+			return token ? `${imagePath}?shareToken=${encodeURIComponent(token)}` : imagePath;
+		},
+		[token]
+	);
 
 	const isLiquidContainerMed = (med: SharedScheduleData["medications"][number] | undefined) =>
 		isLiquidContainerPackageType(med?.packageType);
@@ -1164,6 +1171,7 @@ export function SharedSchedule() {
 						medications={data.medicationOverview ?? []}
 						showTitle={false}
 						onMedicationImageClick={openLightbox}
+						imageSrcResolver={sharedImageSrc}
 					/>
 				) : null}
 
@@ -1287,7 +1295,12 @@ export function SharedSchedule() {
 																				}
 																			}}
 																		>
-																			<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+																			<MedicationAvatar
+																				name={item.medName}
+																				imageUrl={med?.imageUrl}
+																				size="sm"
+																				imageSrcResolver={sharedImageSrc}
+																			/>
 																		</div>
 																		<div className="med-name-stack">
 																			<span className="med-name-text">{item.medName}</span>
@@ -1483,7 +1496,12 @@ export function SharedSchedule() {
 																				}
 																			}}
 																		>
-																			<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+																			<MedicationAvatar
+																				name={item.medName}
+																				imageUrl={med?.imageUrl}
+																				size="sm"
+																				imageSrcResolver={sharedImageSrc}
+																			/>
 																		</div>
 																		<div className="med-name-stack">
 																			<span className="med-name-text">{item.medName}</span>
@@ -1664,7 +1682,12 @@ export function SharedSchedule() {
 																				}
 																			}}
 																		>
-																			<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+																			<MedicationAvatar
+																				name={item.medName}
+																				imageUrl={med?.imageUrl}
+																				size="sm"
+																				imageSrcResolver={sharedImageSrc}
+																			/>
 																		</div>
 																		<div className="med-name-stack">
 																			<span className="med-name-text">{item.medName}</span>
@@ -1754,7 +1777,7 @@ export function SharedSchedule() {
 						×
 					</button>
 					<img
-						src={`/api/images/${lightboxImage.url}`}
+						src={sharedImageSrc(lightboxImage.url)}
 						alt={lightboxImage.name}
 						className="lightbox-image"
 						onClick={(e) => e.stopPropagation()}

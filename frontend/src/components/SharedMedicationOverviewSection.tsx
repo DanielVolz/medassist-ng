@@ -66,6 +66,7 @@ export interface SharedMedicationOverviewSectionProps {
 	medications: SharedMedicationOverviewItem[];
 	showTitle?: boolean;
 	onMedicationImageClick?: (imageUrl: string, name: string) => void;
+	imageSrcResolver?: (filename: string) => string;
 }
 
 export function SharedMedicationOverviewSection({
@@ -73,6 +74,7 @@ export function SharedMedicationOverviewSection({
 	medications,
 	showTitle = true,
 	onMedicationImageClick,
+	imageSrcResolver,
 }: SharedMedicationOverviewSectionProps) {
 	const { t } = useTranslation();
 	const renderMedicationAvatar = (name: string, imageUrl: string | null) => {
@@ -90,7 +92,7 @@ export function SharedMedicationOverviewSection({
 					}
 				}}
 			>
-				<MedicationAvatar name={name} imageUrl={imageUrl} size="sm" />
+				<MedicationAvatar name={name} imageUrl={imageUrl} size="sm" imageSrcResolver={imageSrcResolver} />
 			</div>
 		);
 	};

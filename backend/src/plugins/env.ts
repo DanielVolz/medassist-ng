@@ -19,12 +19,21 @@ const EnvSchema = z.object({
 		.string()
 		.transform((v) => v === "true")
 		.optional(),
+	DOCS_AUTH_REQUIRED: z
+		.string()
+		.transform((v) => v === "true")
+		.optional(),
 
 	// ==========================================================================
 	// Auth Configuration
 	// ==========================================================================
 	// Master switch: Enable/disable authentication (default: disabled for easy setup)
 	AUTH_ENABLED: z
+		.string()
+		.default("false")
+		.transform((v) => v === "true"),
+	// Explicit production-only escape hatch for private/local no-auth deployments.
+	ALLOW_UNAUTHENTICATED: z
 		.string()
 		.default("false")
 		.transform((v) => v === "true"),
@@ -77,6 +86,7 @@ const EnvSchema = z.object({
 type ParsedEnv = z.infer<typeof EnvSchema>;
 export type Env = ParsedEnv & {
 	OPENAPI_DOCS_ENABLED: boolean;
+	DOCS_AUTH_REQUIRED: boolean;
 };
 
 // Parse and validate
@@ -89,6 +99,24 @@ try {
 	console.error("=".repeat(60));
 	console.error(err);
 	console.error("\nPlease check your .env file or environment variables.");
+	console.error("=".repeat(60));
+	process.exit(1);
+}
+
+// Prevent accidental public production deployments without authentication.
+if (parsed.NODE_ENV === "production" && !parsed.AUTH_ENABLED && !parsed.ALLOW_UNAUTHENTICATED) {
+	console.error("=".repeat(60));
+	console.error("AUTHENTICATION CONFIGURATION ERROR");
+	console.error("=".repeat(60));
+	console.error("Refusing to start MedAssist-ng in production with AUTH_ENABLED=false.");
+	console.error(
+		"MedAssist-ng handles health-related personal data, so production deployments must enable authentication."
+	);
+	console.error("");
+	console.error("To fix this, either:");
+	console.error("  1. Set AUTH_ENABLED=true and configure JWT_SECRET, REFRESH_SECRET, and COOKIE_SECRET.");
+	console.error("  2. Enable OIDC with AUTH_ENABLED=true and OIDC_ENABLED=true.");
+	console.error("  3. For local/private-only deployments, explicitly set ALLOW_UNAUTHENTICATED=true.");
 	console.error("=".repeat(60));
 	process.exit(1);
 }
@@ -166,4 +194,6 @@ export const env: Env = {
 	...parsed,
 	// Docs UI/spec are enabled in non-production by default.
 	OPENAPI_DOCS_ENABLED: parsed.OPENAPI_DOCS_ENABLED ?? parsed.NODE_ENV !== "production",
+	// Authenticated deployments protect docs by default when docs are enabled.
+	DOCS_AUTH_REQUIRED: parsed.DOCS_AUTH_REQUIRED ?? parsed.AUTH_ENABLED,
 };

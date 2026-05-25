@@ -15,12 +15,15 @@ Configure MedAssist with environment variables in `.env`. Start from `.env.examp
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error`, or `silent` |
 | `RATE_LIMIT_MAX` | `100` | Maximum requests per minute per IP |
 | `OPENAPI_DOCS_ENABLED` | `auto` | Explicitly enable or disable `/docs` and `/docs/json` |
+| `DOCS_AUTH_REQUIRED` | `auto` | Require authentication for enabled docs; defaults to `true` when `AUTH_ENABLED=true` |
 
 API docs behavior:
 
 - If `OPENAPI_DOCS_ENABLED` is unset, docs are enabled outside production and disabled in production.
 - `OPENAPI_DOCS_ENABLED=true` enables `/docs` and `/docs/json`.
 - `OPENAPI_DOCS_ENABLED=false` disables the docs only.
+- If `DOCS_AUTH_REQUIRED` is unset, authenticated deployments require login/API authentication for `/docs` and `/docs/json`.
+- Keep production docs disabled unless you specifically need them. If docs are enabled in public staging or production, protect them with authentication or a network boundary.
 
 `CORS_ORIGINS` note:
 
@@ -32,7 +35,8 @@ API docs behavior:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_ENABLED` | `false` | Enable user authentication |
+| `AUTH_ENABLED` | `false` | Enable user authentication. Required for public production deployments. |
+| `ALLOW_UNAUTHENTICATED` | `false` | Explicit local/private-only escape hatch that allows production startup with `AUTH_ENABLED=false` |
 | `REGISTRATION_ENABLED` | `false` | Allow new user registrations |
 | `FORM_LOGIN_ENABLED` | `true` | Enable username/password login |
 | `JWT_SECRET` | — | Access token signing key; required when auth is enabled |
@@ -42,6 +46,23 @@ API docs behavior:
 | `REFRESH_TOKEN_TTL_DAYS` | `7` | Refresh token lifetime |
 
 Generate secrets with `openssl rand -hex 32`.
+
+Production startup fails fast when `NODE_ENV=production`, `AUTH_ENABLED=false`, and `ALLOW_UNAUTHENTICATED` is not `true`. This protects health-related personal data from accidental unauthenticated public deployments.
+
+For public deployments, enable `AUTH_ENABLED=true` and configure local form login or OIDC SSO. If you run a private local-only instance without authentication, set `ALLOW_UNAUTHENTICATED=true` deliberately and keep the app off untrusted networks.
+
+## Backend Exposure
+
+The default Docker Compose stack exposes only the frontend. The backend listens on the internal Docker network and is reached through the frontend `/api` proxy.
+
+Do not publish the backend directly to the Internet. For local debugging only, create a local `docker-compose.override.yml` with a loopback-only binding:
+
+```yaml
+services:
+  backend:
+    ports:
+      - "127.0.0.1:4000:3000"
+```
 
 ## API Keys
 

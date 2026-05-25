@@ -94,6 +94,14 @@ const authErrorSchema = {
 	},
 };
 
+const invalidCredentialsResponse = { error: "Invalid username or password", code: "INVALID_CREDENTIALS" } as const;
+
+type LoginFailureReason = "missing_user" | "wrong_password" | "inactive_account" | "sso_only_account";
+
+async function performDummyCredentialWork() {
+	await argon2.hash("dummy", ARGON2_OPTIONS);
+}
+
 function normalizeDateTime(value: unknown): string | null {
 	if (value == null) {
 		return null;
@@ -329,28 +337,35 @@ export async function authRoutes(app: FastifyInstance) {
 			const [user] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
 
 			// Generic error to prevent user enumeration
-			const invalidCredentialsError = () =>
-				reply.status(401).send({ error: "Invalid username or password", code: "INVALID_CREDENTIALS" });
+			const invalidCredentialsError = (reason: LoginFailureReason, rejectedUser?: typeof users.$inferSelect) => {
+				app.log.warn(
+					{ reason, username, userId: rejectedUser?.id },
+					"[Auth] Login rejected with invalid credentials response"
+				);
+				return reply.status(401).send(invalidCredentialsResponse);
+			};
 
 			if (!user) {
 				// Perform dummy hash to prevent timing attacks
-				await argon2.hash("dummy", ARGON2_OPTIONS);
-				return invalidCredentialsError();
+				await performDummyCredentialWork();
+				return invalidCredentialsError("missing_user");
 			}
 
 			if (!user.isActive) {
-				return reply.status(401).send({ error: "Account disabled", code: "ACCOUNT_DISABLED" });
+				await performDummyCredentialWork();
+				return invalidCredentialsError("inactive_account", user);
 			}
 
 			if (!user.passwordHash) {
 				// SSO-only user trying local login
-				return reply.status(401).send({ error: "Please use SSO to login", code: "SSO_ONLY" });
+				await performDummyCredentialWork();
+				return invalidCredentialsError("sso_only_account", user);
 			}
 
 			// Verify password
 			const valid = await argon2.verify(user.passwordHash, password, ARGON2_OPTIONS);
 			if (!valid) {
-				return invalidCredentialsError();
+				return invalidCredentialsError("wrong_password", user);
 			}
 
 			// Update last login

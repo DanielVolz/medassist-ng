@@ -43,6 +43,39 @@ test.describe("Mobile modal browser back", () => {
 		await expect(exportModal).toBeHidden({ timeout: 10000 });
 	});
 
+	test("closes the medication report modal with browser back on mobile", async ({ page }) => {
+		const medicationName = `Mobile Report Back ${Date.now().toString(36)}`;
+
+		await deleteAllMedicationsViaAPI();
+		await createMedicationViaAPI({
+			name: medicationName,
+			takenBy: ["Mobile Report"],
+			packageType: "blister",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 10,
+		});
+
+		await page.goto("/medications", { waitUntil: "domcontentloaded" });
+		await expect(page.getByText(medicationName)).toBeVisible({ timeout: 15000 });
+
+		await page
+			.getByRole("button", { name: /Report|Bericht/i })
+			.first()
+			.click();
+		const reportModal = page.locator(".modal-content.report-modal");
+		await expect(reportModal).toBeVisible({ timeout: 10000 });
+
+		const medicationsUrl = page.url();
+		await page.goBack({ waitUntil: "commit", timeout: 10000 }).catch(() => undefined);
+
+		await expect(reportModal).toBeHidden({ timeout: 10000 });
+		await expect(page).toHaveURL(medicationsUrl);
+		await expect(page.getByText(medicationName)).toBeVisible();
+
+		await deleteAllMedicationsViaAPI();
+	});
+
 	test("closes the shared intake journal modal with browser back on mobile", async ({ page }) => {
 		const uniqueSuffix = Date.now().toString(36);
 		const person = `Mobile Journal ${uniqueSuffix}`;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ReportModal from "../../components/ReportModal";
 import type { Medication } from "../../types";
@@ -56,6 +56,25 @@ describe("ReportModal", () => {
 		expect(screen.getByText(/report\.title/i)).toBeInTheDocument();
 		fireEvent.click(screen.getByRole("button", { name: /common\.close/i }));
 		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
+	it("closes only the report modal when browser back is used", () => {
+		const onClose = vi.fn();
+		const parentPopState = vi.fn();
+		window.addEventListener("popstate", parentPopState);
+
+		try {
+			render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+
+			act(() => {
+				window.dispatchEvent(new PopStateEvent("popstate"));
+			});
+
+			expect(onClose).toHaveBeenCalledTimes(1);
+			expect(parentPopState).not.toHaveBeenCalled();
+		} finally {
+			window.removeEventListener("popstate", parentPopState);
+		}
 	});
 
 	it("generates txt and md previews in-app without closing the modal", async () => {

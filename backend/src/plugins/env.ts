@@ -1,56 +1,60 @@
 import { existsSync } from "node:fs";
 import dotenv from "dotenv";
 import { z } from "zod";
+import { parseBoolEnv, parseIntEnv, parseStringListEnv } from "../utils/env-parsing.js";
 
 // Load .env: try cwd first, then parent dir (for local dev running from backend/)
 const envPath = process.env.DOTENV_PATH || (existsSync(".env") ? ".env" : "../.env");
 dotenv.config({ path: envPath });
 
+const DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://localhost:4174";
+
+function boolEnv(defaultValue: boolean) {
+	return z
+		.string()
+		.optional()
+		.transform((value) => parseBoolEnv(value, defaultValue));
+}
+
+function optionalBoolEnv() {
+	return z
+		.string()
+		.optional()
+		.transform((value) => (value === undefined ? undefined : parseBoolEnv(value, false)));
+}
+
+function intEnv(options: { defaultValue: number; min?: number; max?: number }) {
+	return z
+		.string()
+		.optional()
+		.transform((value) => parseIntEnv(value, options));
+}
+
 const EnvSchema = z.object({
 	NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
-	PORT: z
+	PORT: intEnv({ defaultValue: 3000, min: 1, max: 65535 }),
+	CORS_ORIGINS: z
 		.string()
-		.default("3000")
-		.transform((v) => parseInt(v, 10)),
-	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
+		.optional()
+		.transform((value) => parseStringListEnv(value ?? DEFAULT_CORS_ORIGINS).join(",")),
 	LOG_LEVEL: z.string().default("info"),
-	SENSITIVE_LOGGING_ENABLED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
+	SENSITIVE_LOGGING_ENABLED: boolEnv(false),
 	PUBLIC_APP_URL: z.string().url().optional(),
-	OPENAPI_DOCS_ENABLED: z
-		.string()
-		.transform((v) => v === "true")
-		.optional(),
-	DOCS_AUTH_REQUIRED: z
-		.string()
-		.transform((v) => v === "true")
-		.optional(),
+	OPENAPI_DOCS_ENABLED: optionalBoolEnv(),
+	DOCS_AUTH_REQUIRED: optionalBoolEnv(),
+	RATE_LIMIT_MAX: intEnv({ defaultValue: 100, min: 1, max: 100_000 }),
 
 	// ==========================================================================
 	// Auth Configuration
 	// ==========================================================================
 	// Master switch: Enable/disable authentication (default: disabled for easy setup)
-	AUTH_ENABLED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
+	AUTH_ENABLED: boolEnv(false),
 	// Explicit production-only escape hatch for private/local no-auth deployments.
-	ALLOW_UNAUTHENTICATED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
+	ALLOW_UNAUTHENTICATED: boolEnv(false),
 	// Allow new user registrations (auto-enabled if no users exist)
-	REGISTRATION_ENABLED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
+	REGISTRATION_ENABLED: boolEnv(false),
 	// Disable username/password form login (useful for OIDC-only setups)
-	FORM_LOGIN_ENABLED: z
-		.string()
-		.default("true")
-		.transform((v) => v === "true"),
+	FORM_LOGIN_ENABLED: boolEnv(true),
 
 	// JWT Secrets - only required when AUTH_ENABLED=true
 	JWT_SECRET: z.string().min(10).optional(),
@@ -58,36 +62,20 @@ const EnvSchema = z.object({
 	COOKIE_SECRET: z.string().min(10).optional(),
 
 	// Token TTL settings
-	ACCESS_TOKEN_TTL_MINUTES: z
-		.string()
-		.default("15")
-		.transform((v) => parseInt(v, 10)),
-	REFRESH_TOKEN_TTL_DAYS: z
-		.string()
-		.default("7")
-		.transform((v) => parseInt(v, 10)),
-	SHARE_TOKEN_TTL_DAYS: z
-		.string()
-		.default("90")
-		.transform((v) => parseInt(v, 10))
-		.pipe(z.number().int().min(1).max(3650)),
+	ACCESS_TOKEN_TTL_MINUTES: intEnv({ defaultValue: 15, min: 1, max: 525_600 }),
+	REFRESH_TOKEN_TTL_DAYS: intEnv({ defaultValue: 7, min: 1, max: 3650 }),
+	SHARE_TOKEN_TTL_DAYS: intEnv({ defaultValue: 90, min: 1, max: 3650 }),
 
 	// ==========================================================================
 	// OIDC SSO Configuration (Pocket ID, Authelia, etc.)
 	// ==========================================================================
-	OIDC_ENABLED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
+	OIDC_ENABLED: boolEnv(false),
 	OIDC_ISSUER_URL: z.string().url().optional(), // e.g., https://auth.example.com
 	OIDC_CLIENT_ID: z.string().optional(),
 	OIDC_CLIENT_SECRET: z.string().optional(),
 	OIDC_REDIRECT_URI: z.string().url().optional(), // e.g., https://medassist.example.com/api/auth/oidc/callback
 	OIDC_SCOPES: z.string().default("openid profile email"),
-	OIDC_AUTO_CREATE_USERS: z
-		.string()
-		.default("true")
-		.transform((v) => v === "true"),
+	OIDC_AUTO_CREATE_USERS: boolEnv(true),
 	OIDC_USERNAME_CLAIM: z.string().default("preferred_username"), // or 'email', 'sub'
 	OIDC_PROVIDER_NAME: z.string().default("SSO"), // Display name for UI button
 });

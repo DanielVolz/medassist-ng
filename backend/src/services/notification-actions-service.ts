@@ -4,6 +4,7 @@ import { db } from "../db/client.js";
 import { notificationActionGroups, notificationActionTokens } from "../db/schema.js";
 import type { Language } from "../i18n/translations.js";
 import { env } from "../plugins/env.js";
+import { parseStringListEnv } from "../utils/env-parsing.js";
 import { getNotificationActionLabels, type PushNotificationAction } from "./notifications/action-renderer.js";
 
 export type NotificationActionKind = "taken" | "skip" | "respond" | "view";
@@ -58,7 +59,7 @@ function resolveNotificationPublicAppUrl(publicAppUrl: string | null | undefined
 		return normalizePublicAppUrl(configuredUrl.toString());
 	}
 
-	const corsOrigins = env.CORS_ORIGINS.split(",")
+	const corsOrigins = parseStringListEnv(env.CORS_ORIGINS)
 		.map((origin) => parseConfiguredUrl(origin))
 		.filter((origin): origin is URL => origin !== null);
 	const reachableCorsOrigin =

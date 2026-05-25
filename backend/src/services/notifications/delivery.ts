@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { sendShoutrrrNotification } from "../../routes/settings.js";
+import { parseBoolEnv, parseIntEnv } from "../../utils/env-parsing.js";
 import type { PushNotificationOptions } from "./action-renderer.js";
 
 type MailDeliveryInfo = {
@@ -58,8 +59,8 @@ export function getSmtpConfig(): {
 	const host = process.env.SMTP_HOST;
 	const user = process.env.SMTP_USER;
 	const pass = process.env.SMTP_TOKEN || process.env.SMTP_PASS;
-	const port = parseInt(process.env.SMTP_PORT ?? "587", 10);
-	const secure = process.env.SMTP_SECURE === "true";
+	const port = parseIntEnv(process.env.SMTP_PORT, { defaultValue: 587, min: 1, max: 65_535 });
+	const secure = parseBoolEnv(process.env.SMTP_SECURE, false);
 	const from = process.env.SMTP_FROM ?? user;
 
 	return { host, user, pass, port, secure, from };

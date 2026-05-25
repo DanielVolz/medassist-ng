@@ -15,6 +15,7 @@ import {
 
 import { env } from "../plugins/env.js";
 import { getAllUserSettings, type UserSettings } from "../routes/settings.js";
+import { parseIntEnv } from "../utils/env-parsing.js";
 import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
 import {
@@ -38,7 +39,11 @@ import {
 import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "./notifications/delivery.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
 
-const REMINDER_MINUTES_BEFORE = parseInt(process.env.REMINDER_MINUTES_BEFORE ?? "15", 10);
+const REMINDER_MINUTES_BEFORE = parseIntEnv(process.env.REMINDER_MINUTES_BEFORE, {
+	defaultValue: 15,
+	min: 0,
+	max: 1440,
+});
 const CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute
 
 const intakeReminderStateFile = resolve(getDataDir(), "intake-reminder-state.json");

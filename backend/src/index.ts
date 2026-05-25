@@ -289,7 +289,7 @@ await app.register(cors, {
 	},
 });
 await app.register(rateLimit, {
-	max: Number(process.env.RATE_LIMIT_MAX) || 100,
+	max: env.RATE_LIMIT_MAX,
 	timeWindow: "1 minute",
 });
 await app.register(cookie, { secret: env.COOKIE_SECRET ?? "dev-cookie-secret" });

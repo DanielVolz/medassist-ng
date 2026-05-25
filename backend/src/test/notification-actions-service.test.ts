@@ -15,7 +15,7 @@ const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
 		testDb: db,
 		mockedEnv: {
 			PUBLIC_APP_URL: "https://app.example.com",
-			CORS_ORIGINS: "http://localhost:5173,http://localhost:4173",
+			CORS_ORIGINS: "http://localhost:5173,http://localhost:4174",
 		},
 	};
 });
@@ -72,7 +72,7 @@ describe("notification-actions-service", () => {
 	beforeEach(async () => {
 		await clearTables();
 		mockedEnv.PUBLIC_APP_URL = "https://app.example.com";
-		mockedEnv.CORS_ORIGINS = "http://localhost:5173,http://localhost:4173";
+		mockedEnv.CORS_ORIGINS = "http://localhost:5173,http://localhost:4174";
 	});
 
 	it("creates a notification action group with hashed tokens and app/view links", async () => {

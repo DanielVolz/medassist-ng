@@ -22,6 +22,7 @@ import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "../s
 import { escapeHtml, formatPlannerQuantity, getPlannerUnit, isContainerPackage } from "../services/planner-service.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
 import type { AuthUser } from "../types/fastify.js";
+import { parseBoolEnv, parseIntEnv } from "../utils/env-parsing.js";
 import {
 	applyOpenApiRouteStandards,
 	genericErrorSchema,
@@ -337,8 +338,8 @@ ${getFooterPlain(language)}`;
 				const smtpHost = process.env.SMTP_HOST;
 				const smtpUser = process.env.SMTP_USER;
 				const smtpPass = process.env.SMTP_TOKEN || process.env.SMTP_PASS; // Token takes precedence
-				const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
-				const smtpSecure = process.env.SMTP_SECURE === "true";
+				const smtpPort = parseIntEnv(process.env.SMTP_PORT, { defaultValue: 587, min: 1, max: 65_535 });
+				const smtpSecure = parseBoolEnv(process.env.SMTP_SECURE, false);
 				const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
 
 				request.log.info(

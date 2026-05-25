@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { type Client, createClient } from "@libsql/client";
 import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
+import { parseBoolEnv } from "../utils/env-parsing.js";
 import { log } from "../utils/logger.js";
 import { ensureDefaultUser, runAlterMigrations, runDrizzleMigrations } from "./migration-utils.js";
 // Import utilities from focused DB modules (side-effect-free)
@@ -100,7 +101,7 @@ async function runMigrations() {
 	}
 
 	// If auth is disabled, ensure a default user exists (ID=1)
-	const authEnabled = process.env.AUTH_ENABLED === "true";
+	const authEnabled = parseBoolEnv(process.env.AUTH_ENABLED, false);
 	const created = await ensureDefaultUser(client, authEnabled);
 	if (created) {
 		log.info(`[DB] Created default user for auth-disabled mode`);

@@ -27,6 +27,7 @@ import {
 	validateNotificationHostname,
 } from "../services/settings-service.js";
 import type { AuthUser } from "../types/fastify.js";
+import { parseBoolEnv, parseIntEnv } from "../utils/env-parsing.js";
 
 export type { UserSettings } from "../services/settings-service.js";
 
@@ -80,10 +81,7 @@ const settingsErrorSchema = {
 };
 
 function envInt(key: string, defaultVal: number): number {
-	const val = process.env[key];
-	if (val === undefined) return defaultVal;
-	const parsed = parseInt(val, 10);
-	return Number.isNaN(parsed) ? defaultVal : parsed;
+	return parseIntEnv(process.env[key], { defaultValue: defaultVal, min: 0, max: 100_000 });
 }
 
 function getLanguage(language: string | null | undefined): Language {
@@ -205,10 +203,10 @@ export async function settingsRoutes(app: FastifyInstance) {
 				swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
 				// SMTP settings (from .env - shared/server-configured)
 				smtpHost: process.env.SMTP_HOST ?? "",
-				smtpPort: parseInt(process.env.SMTP_PORT ?? "587", 10),
+				smtpPort: parseIntEnv(process.env.SMTP_PORT, { defaultValue: 587, min: 1, max: 65_535 }),
 				smtpUser: process.env.SMTP_USER ?? "",
 				smtpFrom: process.env.SMTP_FROM ?? "",
-				smtpSecure: process.env.SMTP_SECURE === "true",
+				smtpSecure: parseBoolEnv(process.env.SMTP_SECURE, false),
 				hasSmtpPassword: !!(process.env.SMTP_TOKEN || process.env.SMTP_PASS),
 				// Reminder state for this user
 				lastAutoEmailSent: settings.lastAutoEmailSent,
@@ -227,7 +225,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 				// Server settings (from .env, read-only)
 				reminderHour,
 				reminderMinutesBefore,
-				expiryWarningDays: parseInt(process.env.EXPIRY_WARNING_DAYS ?? "30", 10),
+				expiryWarningDays: parseIntEnv(process.env.EXPIRY_WARNING_DAYS, { defaultValue: 30, min: 0, max: 3650 }),
 			});
 		}
 	);

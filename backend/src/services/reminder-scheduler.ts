@@ -6,6 +6,7 @@ import { getDataDir } from "../db/path-utils.js";
 import { doseTracking, medications } from "../db/schema.js";
 import { getFooterHtml, getFooterPlain, getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, type UserSettings } from "../routes/settings.js";
+import { parseIntEnv } from "../utils/env-parsing.js";
 import type { ServiceLogger } from "../utils/logger.js";
 import {
 	isAmountBasedPackageType,
@@ -53,7 +54,7 @@ function escapeHtml(text: string): string {
 	return text.replace(/[&<>"']/g, (char) => htmlEscapes[char] || char);
 }
 
-const REMINDER_HOUR = parseInt(process.env.REMINDER_HOUR ?? "6", 10); // Default 6:00 AM local time
+const REMINDER_HOUR = parseIntEnv(process.env.REMINDER_HOUR, { defaultValue: 6, min: 0, max: 23 });
 
 const reminderLocksDir = resolve(getDataDir(), "scheduler-locks");
 const LOCK_STALE_MS = 15 * 60 * 1000;

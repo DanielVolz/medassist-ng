@@ -24,12 +24,16 @@ describe("plugins/env runtime validation", () => {
 		delete process.env.JWT_SECRET;
 		delete process.env.REFRESH_SECRET;
 		delete process.env.COOKIE_SECRET;
+		delete process.env.CORS_ORIGINS;
+		delete process.env.RATE_LIMIT_MAX;
 
 		const mod = await import("../plugins/env.js");
 		expect(mod.env.AUTH_ENABLED).toBe(false);
 		expect(mod.env.ALLOW_UNAUTHENTICATED).toBe(false);
 		expect(mod.env.OIDC_ENABLED).toBe(false);
 		expect(mod.env.PORT).toBe(3000);
+		expect(mod.env.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4174");
+		expect(mod.env.RATE_LIMIT_MAX).toBe(100);
 		expect(mod.env.SHARE_TOKEN_TTL_DAYS).toBe(90);
 		expect(mod.env.SENSITIVE_LOGGING_ENABLED).toBe(false);
 		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
@@ -89,6 +93,77 @@ describe("plugins/env runtime validation", () => {
 		const mod = await import("../plugins/env.js");
 		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
 		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
+	});
+
+	it("accepts common boolean variants", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "yes";
+		process.env.ALLOW_UNAUTHENTICATED = "0";
+		process.env.REGISTRATION_ENABLED = "1";
+		process.env.FORM_LOGIN_ENABLED = "TRUE";
+		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.OPENAPI_DOCS_ENABLED = "no";
+		process.env.DOCS_AUTH_REQUIRED = "yes";
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.AUTH_ENABLED).toBe(true);
+		expect(mod.env.ALLOW_UNAUTHENTICATED).toBe(false);
+		expect(mod.env.REGISTRATION_ENABLED).toBe(true);
+		expect(mod.env.FORM_LOGIN_ENABLED).toBe(true);
+		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(false);
+		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(true);
+	});
+
+	it("exits when a boolean env value is invalid", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "maybe";
+
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new Error(`process.exit:${code ?? 0}`);
+		}) as never);
+
+		await expect(import("../plugins/env.js")).rejects.toThrow("process.exit:1");
+	});
+
+	it("exits when ACCESS_TOKEN_TTL_MINUTES is invalid", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "true";
+		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.ACCESS_TOKEN_TTL_MINUTES = "abc";
+
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new Error(`process.exit:${code ?? 0}`);
+		}) as never);
+
+		await expect(import("../plugins/env.js")).rejects.toThrow("process.exit:1");
+	});
+
+	it("exits when RATE_LIMIT_MAX is not positive and bounded", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "true";
+		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.RATE_LIMIT_MAX = "100001";
+
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new Error(`process.exit:${code ?? 0}`);
+		}) as never);
+
+		await expect(import("../plugins/env.js")).rejects.toThrow("process.exit:1");
+	});
+
+	it("trims CORS_ORIGINS and filters empty entries", async () => {
+		process.env.NODE_ENV = "test";
+		process.env.AUTH_ENABLED = "false";
+		process.env.CORS_ORIGINS = " http://localhost:5173, , http://localhost:4174, ";
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4174");
 	});
 
 	it("loads when development auth is disabled", async () => {

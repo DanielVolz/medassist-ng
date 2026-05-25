@@ -4,9 +4,10 @@ import { extname, resolve } from "node:path";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
-import { medications, shareTokens, users } from "../db/schema.js";
+import { medications, users } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { getActiveShareToken } from "../services/share-token-service.js";
 import { getThumbFilename } from "../utils/image-upload.js";
 import { parseIntakesJson, parseTakenByJson, personTakesMedication } from "../utils/scheduler-utils.js";
 
@@ -19,7 +20,6 @@ type ImageQuery = {
 };
 
 const imageFilenamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/;
-const shareTokenPattern = /^[a-f0-9]{16}$/;
 
 function isValidImageFilename(filename: string): boolean {
 	return (
@@ -51,12 +51,6 @@ function matchesStoredImage(storedFilename: string | null | undefined, requested
 	if (!storedFilename) return false;
 	if (requestedCandidates.has(storedFilename)) return true;
 	return requestedCandidates.has(getThumbFilename(storedFilename));
-}
-
-function isExpired(value: Date | string | number | null | undefined): boolean {
-	if (value == null) return false;
-	const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
-	return Number.isFinite(timestamp) && timestamp <= Date.now();
 }
 
 async function getAuthenticatedUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
@@ -91,12 +85,8 @@ async function isAuthorizedSharedMedicationImage(
 	shareToken: string,
 	requestedCandidates: Set<string>
 ): Promise<boolean> {
-	if (!shareTokenPattern.test(shareToken)) {
-		return false;
-	}
-
-	const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, shareToken));
-	if (!share || isExpired(share.expiresAt)) {
+	const { share, reason } = await getActiveShareToken(shareToken, { touchLastUsed: false });
+	if (!share || reason !== "ok") {
 		return false;
 	}
 

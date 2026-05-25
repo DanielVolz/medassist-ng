@@ -29,6 +29,19 @@ describe("MedicationAvatar", () => {
 		expect(img).toHaveAttribute("src", "/api/images/test-image.jpg");
 	});
 
+	it("uses a custom image source resolver when provided", () => {
+		render(
+			<MedicationAvatar
+				name="Shared Med"
+				imageUrl="shared-image.webp"
+				imageSrcResolver={(filename) => `/api/images/${filename}?shareToken=token-123`}
+			/>
+		);
+
+		const img = screen.getByAltText("Shared Med");
+		expect(img).toHaveAttribute("src", "/api/images/shared-image-thumb.webp?shareToken=token-123");
+	});
+
 	it("applies small size class by default", () => {
 		const { container } = render(<MedicationAvatar name="Test" />);
 

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import type { IncomingHttpHeaders } from "node:http";
 import { resolve } from "node:path";
 import cookie from "@fastify/cookie";
@@ -8,7 +7,6 @@ import helmet from "@fastify/helmet";
 import fastifyMultipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
-import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import { migrationsReady } from "./db/client.js";
 import { getDataDir } from "./db/db-utils.js";
@@ -20,6 +18,7 @@ import { authRoutes } from "./routes/auth.js";
 import { doseRoutes } from "./routes/doses.js";
 import { exportRoutes } from "./routes/export.js";
 import { healthRoutes } from "./routes/health.js";
+import { imageRoutes } from "./routes/images.js";
 import { intakeJournalRoutes } from "./routes/intake-journal.js";
 import { medicationEnrichmentRoutes } from "./routes/medication-enrichment.js";
 import { medicationRoutes } from "./routes/medications.js";
@@ -203,16 +202,8 @@ export async function createApp(options?: {
 		authRequired: opts.docsAuthRequired,
 	});
 
-	// Only register static if directory exists
-	if (existsSync(opts.imagesDir)) {
-		await app.register(fastifyStatic, {
-			root: opts.imagesDir,
-			prefix: "/images/",
-			decorateReply: false,
-		});
-	}
-
 	// Register routes
+	await app.register(imageRoutes, { imagesDir: opts.imagesDir });
 	await app.register(healthRoutes);
 	await app.register(authRoutes);
 	await app.register(apiKeyRoutes);
@@ -312,11 +303,7 @@ await registerApiDocs(app, {
 	enabled: env.OPENAPI_DOCS_ENABLED,
 	authRequired: env.DOCS_AUTH_REQUIRED,
 });
-await app.register(fastifyStatic, {
-	root: imagesDir,
-	prefix: "/images/",
-	decorateReply: false,
-});
+await app.register(imageRoutes, { imagesDir });
 await app.register(healthRoutes);
 await app.register(authRoutes);
 await app.register(apiKeyRoutes);

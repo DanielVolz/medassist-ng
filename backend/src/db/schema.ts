@@ -181,8 +181,11 @@ export const shareTokens = sqliteTable("share_tokens", {
 	takenBy: text("taken_by", { length: 100 }).notNull(),
 	scheduleDays: integer("schedule_days").notNull().default(30),
 	allowJournalNotes: integer("allow_journal_notes", { mode: "boolean" }).notNull().default(false),
+	allowMarkTaken: integer("allow_mark_taken", { mode: "boolean" }).notNull().default(true),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 	expiresAt: integer("expires_at", { mode: "timestamp" }), // NULL = never expires
+	lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+	revokedAt: integer("revoked_at", { mode: "timestamp" }),
 });
 
 // =============================================================================

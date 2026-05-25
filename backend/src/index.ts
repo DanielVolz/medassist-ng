@@ -70,6 +70,23 @@ function buildLoggerOptions(level: string) {
 	const base = {
 		level,
 		timestamp: () => `,"time":"${new Date().toISOString()}"`,
+		serializers: {
+			req(request: {
+				method?: string;
+				url?: string;
+				hostname?: string;
+				ip?: string;
+				socket?: { remoteAddress?: string; remotePort?: number };
+			}) {
+				return {
+					method: request.method,
+					url: redactShareTokensInUrl(request.url),
+					hostname: request.hostname,
+					remoteAddress: request.ip ?? request.socket?.remoteAddress,
+					remotePort: request.socket?.remotePort,
+				};
+			},
+		},
 	};
 	// Human-readable logs in development, structured JSON in production/test
 	if (runtimeEnv === "development") {
@@ -79,6 +96,10 @@ function buildLoggerOptions(level: string) {
 		};
 	}
 	return base;
+}
+
+function redactShareTokensInUrl(url: string | undefined): string | undefined {
+	return url?.replace(/(\/(?:api\/)?share\/)(?:[a-f0-9]{16}|[a-f0-9]{64})(?=\/|$|\?)/gi, "$1[share-token]");
 }
 
 function buildHelmetOptions(_isProduction: boolean) {

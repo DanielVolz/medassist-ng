@@ -27,6 +27,8 @@ describe("plugins/env runtime validation", () => {
 		expect(mod.env.AUTH_ENABLED).toBe(false);
 		expect(mod.env.OIDC_ENABLED).toBe(false);
 		expect(mod.env.PORT).toBe(3000);
+		expect(mod.env.SHARE_TOKEN_TTL_DAYS).toBe(90);
+		expect(mod.env.SENSITIVE_LOGGING_ENABLED).toBe(false);
 	});
 
 	it("exits when auth is enabled but secrets are missing", async () => {

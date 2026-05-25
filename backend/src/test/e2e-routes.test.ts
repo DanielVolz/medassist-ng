@@ -176,8 +176,11 @@ async function createSchema(client: Client) {
       taken_by text NOT NULL,
       schedule_days integer NOT NULL DEFAULT 30,
       allow_journal_notes integer NOT NULL DEFAULT 0,
+      allow_mark_taken integer NOT NULL DEFAULT 1,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       expires_at integer,
+      last_used_at integer,
+      revoked_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
 		`CREATE TABLE IF NOT EXISTS dose_tracking (
@@ -523,7 +526,7 @@ describe("E2E Tests with Real Routes", () => {
 			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 
 			// Create share token
-			const token = "test_share_token_123";
+			const token = "1111111111111111";
 			await createShareToken(testClient, userId, "Daniel", token);
 
 			const response = await app.inject({
@@ -541,7 +544,7 @@ describe("E2E Tests with Real Routes", () => {
 		it("should mark dose via share link using real route", async () => {
 			const medId = await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 
-			const token = "test_share_token_456";
+			const token = "2222222222222222";
 			await createShareToken(testClient, userId, "Daniel", token);
 
 			const doseId = `${medId}-0-${visibleDoseTimestampMs()}`;
@@ -1072,7 +1075,7 @@ describe("E2E Tests with Real Routes", () => {
 		it("should unmark dose via share link", async () => {
 			const medId = await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 
-			const token = "test_delete_dose_token";
+			const token = "3333333333333333";
 			await createShareToken(testClient, userId, "Daniel", token);
 
 			// First mark the dose
@@ -1103,7 +1106,7 @@ describe("E2E Tests with Real Routes", () => {
 			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 
 			// Create expired token
-			const token = "expired_token_123";
+			const token = "4444444444444444";
 			const expiredAt = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
 			await testClient.execute({
 				sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at) VALUES (?, ?, ?, 30, ?)`,
@@ -1122,7 +1125,7 @@ describe("E2E Tests with Real Routes", () => {
 		it("should return already marked message for duplicate dose", async () => {
 			const medId = await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
 
-			const token = "test_duplicate_token";
+			const token = "5555555555555555";
 			await createShareToken(testClient, userId, "Daniel", token);
 
 			const doseId = `${medId}-0-${visibleDoseTimestampMs()}`;
@@ -1798,7 +1801,7 @@ describe("E2E Tests with Real Routes", () => {
 	describe("Share token dose routes", () => {
 		it("should get taken doses via share link", async () => {
 			const medId = await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-			const token = "get-doses-token";
+			const token = "6666666666666666";
 			await createShareToken(testClient, userId, "Daniel", token);
 
 			// Insert a dose directly
@@ -1850,7 +1853,7 @@ describe("E2E Tests with Real Routes", () => {
 
 		it("should return validation error for empty doseId in share route", async () => {
 			await createMedication(testClient, userId, "Aspirin", ["Daniel"]);
-			const token = "validation-test-token";
+			const token = "7777777777777777";
 			await createShareToken(testClient, userId, "Daniel", token);
 
 			const response = await app.inject({
@@ -3096,7 +3099,7 @@ describe("E2E Tests with Real Routes", () => {
 			});
 			await testClient.execute({
 				sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at) VALUES (?, ?, ?, ?, ?)`,
-				args: [userId, "date-edge-token", "Daniel", 30, "broken-date"],
+				args: [userId, "8888888888888888", "Daniel", 30, "broken-date"],
 			});
 
 			const response = await app.inject({ method: "GET", url: "/export" });

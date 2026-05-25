@@ -14,6 +14,10 @@ const EnvSchema = z.object({
 		.transform((v) => parseInt(v, 10)),
 	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
 	LOG_LEVEL: z.string().default("info"),
+	SENSITIVE_LOGGING_ENABLED: z
+		.string()
+		.default("false")
+		.transform((v) => v === "true"),
 	PUBLIC_APP_URL: z.string().url().optional(),
 	AUTH_ENABLED: z
 		.string()
@@ -34,6 +38,11 @@ const EnvSchema = z.object({
 		.string()
 		.default("7")
 		.transform((v) => parseInt(v, 10)),
+	SHARE_TOKEN_TTL_DAYS: z
+		.string()
+		.default("90")
+		.transform((v) => parseInt(v, 10))
+		.pipe(z.number().int().min(1).max(3650)),
 	OIDC_ENABLED: z
 		.string()
 		.default("false")
@@ -82,11 +91,13 @@ describe("EnvSchema", () => {
 			expect(result.PORT).toBe(3000);
 			expect(result.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4173");
 			expect(result.LOG_LEVEL).toBe("info");
+			expect(result.SENSITIVE_LOGGING_ENABLED).toBe(false);
 			expect(result.PUBLIC_APP_URL).toBeUndefined();
 			expect(result.AUTH_ENABLED).toBe(false);
 			expect(result.REGISTRATION_ENABLED).toBe(false);
 			expect(result.ACCESS_TOKEN_TTL_MINUTES).toBe(15);
 			expect(result.REFRESH_TOKEN_TTL_DAYS).toBe(7);
+			expect(result.SHARE_TOKEN_TTL_DAYS).toBe(90);
 			expect(result.OIDC_ENABLED).toBe(false);
 			expect(result.OIDC_SCOPES).toBe("openid profile email");
 			expect(result.OIDC_AUTO_CREATE_USERS).toBe(true);
@@ -186,6 +197,11 @@ describe("EnvSchema", () => {
 		it("should transform REFRESH_TOKEN_TTL_DAYS to number", () => {
 			const result = EnvSchema.parse({ REFRESH_TOKEN_TTL_DAYS: "14" });
 			expect(result.REFRESH_TOKEN_TTL_DAYS).toBe(14);
+		});
+
+		it("should transform SHARE_TOKEN_TTL_DAYS to number", () => {
+			const result = EnvSchema.parse({ SHARE_TOKEN_TTL_DAYS: "120" });
+			expect(result.SHARE_TOKEN_TTL_DAYS).toBe(120);
 		});
 	});
 

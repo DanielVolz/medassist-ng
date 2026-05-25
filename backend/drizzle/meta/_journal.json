@@ -120,6 +120,13 @@
       "when": 1779044316043,
       "tag": "0016_add_share_allow_journal_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1779732000000,
+      "tag": "0017_harden_share_tokens",
+      "breakpoints": true
     }
   ]
 }

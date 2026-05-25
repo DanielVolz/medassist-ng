@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import { eq } from "drizzle-orm";
@@ -13,6 +12,7 @@ import {
 	listIntakeJournalExportPayloadsForUser,
 	restoreIntakeJournalForImportedDose,
 } from "../services/intake-journal-export.js";
+import { generateShareToken } from "../services/share-token-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	applyOpenApiRouteStandards,
@@ -113,6 +113,7 @@ const shareLinkSchema = z.object({
 	takenBy: z.string().min(1),
 	scheduleDays: z.number().int().min(1).default(30),
 	allowJournalNotes: z.boolean().default(false),
+	allowMarkTaken: z.boolean().default(true),
 	expiresAt: z.string().nullable().optional(), // ISO datetime
 	regenerateToken: z.boolean().default(true),
 });
@@ -670,6 +671,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					takenBy: share.takenBy,
 					scheduleDays: share.scheduleDays,
 					allowJournalNotes: share.allowJournalNotes ?? false,
+					allowMarkTaken: share.allowMarkTaken ?? true,
 					expiresAt: expiresAtIso,
 					regenerateToken: true, // Always regenerate tokens on import for security
 				};
@@ -1010,10 +1012,11 @@ export async function exportRoutes(app: FastifyInstance) {
 					for (const share of importData.shareLinks) {
 						await tx.insert(shareTokens).values({
 							userId,
-							token: randomBytes(8).toString("hex"),
+							token: generateShareToken(),
 							takenBy: share.takenBy,
 							scheduleDays: share.scheduleDays,
 							allowJournalNotes: share.allowJournalNotes ?? false,
+							allowMarkTaken: share.allowMarkTaken ?? true,
 							expiresAt: share.expiresAt ? new Date(share.expiresAt) : null,
 						});
 					}

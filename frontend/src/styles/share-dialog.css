@@ -131,6 +131,20 @@
 	min-width: 0;
 }
 
+.share-active-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0.4rem;
+}
+
+.share-active-actions .ghost {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	white-space: nowrap;
+}
+
 .share-link-inline {
 	font-weight: 600;
 	color: var(--accent);
@@ -219,6 +233,11 @@
 .share-copied-hint {
 	color: var(--success);
 	font-size: 0.875rem;
+}
+
+.share-dialog-form .warning-text {
+	margin-top: 0.4rem;
+	color: var(--warning);
 }
 
 .share-btn {

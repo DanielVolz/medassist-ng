@@ -11,6 +11,8 @@ type ShareContextValue = {
 	setShareSelectedExpiryDays: React.Dispatch<React.SetStateAction<number | null>>;
 	shareAllowJournalNotes: boolean;
 	setShareAllowJournalNotes: React.Dispatch<React.SetStateAction<boolean>>;
+	shareAllowMarkTaken: boolean;
+	setShareAllowMarkTaken: React.Dispatch<React.SetStateAction<boolean>>;
 	shareGenerating: boolean;
 	shareLink: string | null;
 	setShareLink: React.Dispatch<React.SetStateAction<string | null>>;
@@ -19,9 +21,11 @@ type ShareContextValue = {
 	activeShareLinks: import("../hooks/useShare").ActiveShareLink[];
 	activeSharesLoading: boolean;
 	revokingShareToken: string | null;
+	regeneratingShareToken: string | null;
 	openShareDialog: () => void;
 	generateShareLink: () => Promise<void>;
 	revokeShareLink: (token: string) => Promise<boolean>;
+	regenerateShareLink: (token: string) => Promise<boolean>;
 	copyShareLink: () => void;
 	closeShareDialog: () => void;
 	resetShareDialogState: () => void;

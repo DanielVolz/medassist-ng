@@ -14,6 +14,8 @@ describe("ShareDialog", () => {
 		onShareSelectedExpiryDaysChange: vi.fn(),
 		shareAllowJournalNotes: false,
 		onShareAllowJournalNotesChange: vi.fn(),
+		shareAllowMarkTaken: false,
+		onShareAllowMarkTakenChange: vi.fn(),
 		shareGenerating: false,
 		shareLink: null,
 		onShareLinkChange: vi.fn(),
@@ -22,9 +24,11 @@ describe("ShareDialog", () => {
 		activeShareLinks: [],
 		activeSharesLoading: false,
 		revokingShareToken: null,
+		regeneratingShareToken: null,
 		onClose: vi.fn(),
 		onGenerateShareLink: vi.fn(),
 		onRevokeShareLink: vi.fn().mockResolvedValue(true),
+		onRegenerateShareLink: vi.fn().mockResolvedValue(true),
 		onCopyShareLink: vi.fn(),
 	};
 
@@ -114,11 +118,13 @@ describe("ShareDialog", () => {
 		fireEvent.change(selects[0], { target: { value: "Bob" } });
 		fireEvent.change(selects[1], { target: { value: "90" } });
 		fireEvent.change(selects[2], { target: { value: "30" } });
+		fireEvent.click(screen.getByLabelText(/share\.allowMarkTaken/i));
 		fireEvent.click(screen.getByLabelText(/share\.allowJournalNotes/i));
 
 		expect(defaultProps.onShareSelectedPersonChange).toHaveBeenCalledWith("Bob");
 		expect(defaultProps.onShareSelectedDaysChange).toHaveBeenCalledWith(90);
 		expect(defaultProps.onShareSelectedExpiryDaysChange).toHaveBeenCalledWith(30);
+		expect(defaultProps.onShareAllowMarkTakenChange).toHaveBeenCalledWith(true);
 		expect(defaultProps.onShareAllowJournalNotesChange).toHaveBeenCalledWith(true);
 	});
 
@@ -140,7 +146,10 @@ describe("ShareDialog", () => {
 						scheduleDays: 30,
 						createdAt: "2026-05-17T12:00:00.000Z",
 						expiresAt: null,
+						lastUsedAt: null,
 						allowJournalNotes: true,
+						allowMarkTaken: true,
+						legacyNeverExpires: true,
 						shareUrl: "/share/abcdef0123456789",
 					},
 				]}
@@ -166,7 +175,10 @@ describe("ShareDialog", () => {
 						scheduleDays: 30,
 						createdAt: "2026-05-17T12:00:00.000Z",
 						expiresAt: null,
+						lastUsedAt: null,
 						allowJournalNotes: true,
+						allowMarkTaken: true,
+						legacyNeverExpires: true,
 						shareUrl: "/share/abcdef0123456789",
 					},
 				]}

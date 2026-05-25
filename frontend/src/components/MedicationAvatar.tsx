@@ -8,9 +8,10 @@ export type MedicationAvatarProps = {
 	name: string;
 	imageUrl?: string | null;
 	size?: "sm" | "md" | "lg";
+	imageSrcResolver?: (filename: string) => string;
 };
 
-export function MedicationAvatar({ name, imageUrl, size = "sm" }: MedicationAvatarProps) {
+export function MedicationAvatar({ name, imageUrl, size = "sm", imageSrcResolver }: MedicationAvatarProps) {
 	const [thumbFailed, setThumbFailed] = useState(false);
 	const previousImageUrlRef = useRef(imageUrl);
 
@@ -34,8 +35,9 @@ export function MedicationAvatar({ name, imageUrl, size = "sm" }: MedicationAvat
 		const shouldUseThumbFirst = normalizedImageUrl.endsWith(".webp");
 		const extIndex = imageUrl.lastIndexOf(".");
 		const baseName = extIndex > 0 ? imageUrl.slice(0, extIndex) : imageUrl;
-		const thumbSrc = `/api/images/${baseName}-thumb.webp`;
-		const fullSrc = `/api/images/${imageUrl}`;
+		const resolveImageSrc = imageSrcResolver ?? ((filename: string) => `/api/images/${encodeURIComponent(filename)}`);
+		const thumbSrc = resolveImageSrc(`${baseName}-thumb.webp`);
+		const fullSrc = resolveImageSrc(imageUrl);
 		const resolvedSrc = shouldUseThumbFirst && !thumbFailed ? thumbSrc : fullSrc;
 
 		return (

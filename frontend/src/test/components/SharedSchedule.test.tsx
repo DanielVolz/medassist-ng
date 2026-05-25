@@ -31,7 +31,7 @@ function createSharedDataWithEmbeddedOverview() {
 			{
 				name: "Aspirin",
 				genericName: "Acetylsalicylic Acid",
-				imageUrl: null,
+				imageUrl: null as string | null,
 				packageType: "blister",
 				packCount: 1,
 				packageAmountValue: null,
@@ -54,7 +54,7 @@ function createSharedDataWithEmbeddedOverview() {
 			{
 				name: "Vitamin D",
 				genericName: null,
-				imageUrl: null,
+				imageUrl: null as string | null,
 				packageType: "bottle",
 				packCount: 0,
 				packageAmountValue: null,
@@ -148,6 +148,7 @@ function createSharedDataWithTodayDose(referenceNow: Date) {
 				id: 1,
 				name: "Ibuprofen",
 				genericName: null,
+				imageUrl: null as string | null,
 				takenBy: [],
 				packageType: "blister",
 				packCount: 2,
@@ -411,6 +412,23 @@ describe("SharedSchedule", () => {
 			const journalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
 			expect(journalButton).not.toBeDisabled();
 			expect(journalButton).toHaveClass("has-note");
+		});
+	});
+
+	it("adds the share token to public shared medication image URLs", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		sharedData.medications[0].imageUrl = "med-1-123.webp";
+		const { fetchMock } = createSharedDoseFetchMock({ sharedData });
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			const image = screen.getByAltText("Ibuprofen");
+			expect(image).toHaveAttribute("src", "/api/images/med-1-123-thumb.webp?shareToken=token-123");
 		});
 	});
 

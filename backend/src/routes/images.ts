@@ -47,10 +47,20 @@ function getStoredFilenameCandidates(requestedFilename: string): Set<string> {
 	return candidates;
 }
 
-function matchesStoredImage(storedFilename: string | null | undefined, requestedCandidates: Set<string>): boolean {
-	if (!storedFilename) return false;
-	if (requestedCandidates.has(storedFilename)) return true;
-	return requestedCandidates.has(getThumbFilename(storedFilename));
+function getMatchedStoredFilename(
+	storedFilename: string | null | undefined,
+	requestedCandidates: Set<string>
+): string | null {
+	if (!storedFilename) return null;
+
+	const thumbFilename = getThumbFilename(storedFilename);
+	if (requestedCandidates.has(thumbFilename)) {
+		return thumbFilename;
+	}
+
+	if (requestedCandidates.has(storedFilename)) return storedFilename;
+
+	return null;
 }
 
 async function getAuthenticatedUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
@@ -67,10 +77,11 @@ async function getAuthenticatedUserId(request: FastifyRequest, reply: FastifyRep
 	return userId;
 }
 
-async function isAuthorizedOwnerImage(userId: number, requestedCandidates: Set<string>): Promise<boolean> {
+async function getAuthorizedOwnerImageFilename(userId: number, requestedCandidates: Set<string>): Promise<string | null> {
 	const [user] = await db.select({ avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, userId));
-	if (matchesStoredImage(user?.avatarUrl, requestedCandidates)) {
-		return true;
+	const matchedAvatarFilename = getMatchedStoredFilename(user?.avatarUrl, requestedCandidates);
+	if (matchedAvatarFilename) {
+		return matchedAvatarFilename;
 	}
 
 	const ownerMedications = await db
@@ -78,16 +89,23 @@ async function isAuthorizedOwnerImage(userId: number, requestedCandidates: Set<s
 		.from(medications)
 		.where(eq(medications.userId, userId));
 
-	return ownerMedications.some((medication) => matchesStoredImage(medication.imageUrl, requestedCandidates));
+	for (const medication of ownerMedications) {
+		const matchedMedicationFilename = getMatchedStoredFilename(medication.imageUrl, requestedCandidates);
+		if (matchedMedicationFilename) {
+			return matchedMedicationFilename;
+		}
+	}
+
+	return null;
 }
 
-async function isAuthorizedSharedMedicationImage(
+async function getAuthorizedSharedMedicationImageFilename(
 	shareToken: string,
 	requestedCandidates: Set<string>
-): Promise<boolean> {
+): Promise<string | null> {
 	const { share, reason } = await getActiveShareToken(shareToken, { touchLastUsed: false });
 	if (!share || reason !== "ok") {
-		return false;
+		return null;
 	}
 
 	const sharedMedications = await db
@@ -103,9 +121,10 @@ async function isAuthorizedSharedMedicationImage(
 		.from(medications)
 		.where(and(eq(medications.userId, share.userId), eq(medications.isObsolete, false)));
 
-	return sharedMedications.some((medication) => {
-		if (!matchesStoredImage(medication.imageUrl, requestedCandidates)) {
-			return false;
+	for (const medication of sharedMedications) {
+		const matchedMedicationFilename = getMatchedStoredFilename(medication.imageUrl, requestedCandidates);
+		if (!matchedMedicationFilename) {
+			continue;
 		}
 
 		const takenByArray = parseTakenByJson(medication.takenByJson);
@@ -118,8 +137,12 @@ async function isAuthorizedSharedMedicationImage(
 			},
 			medication.intakeRemindersEnabled ?? false
 		);
-		return personTakesMedication(share.takenBy, takenByArray, intakes);
-	});
+		if (personTakesMedication(share.takenBy, takenByArray, intakes)) {
+			return matchedMedicationFilename;
+		}
+	}
+
+	return null;
 }
 
 export async function imageRoutes(app: FastifyInstance, options: ImageRoutesOptions) {
@@ -131,17 +154,18 @@ export async function imageRoutes(app: FastifyInstance, options: ImageRoutesOpti
 			return reply.status(400).send({ error: "Invalid image filename", code: "INVALID_IMAGE_FILENAME" });
 		}
 
-		const filePath = resolve(options.imagesDir, filename);
 		const requestedCandidates = getStoredFilenameCandidates(filename);
 		const shareToken = typeof request.query.shareToken === "string" ? request.query.shareToken.trim() : "";
 
-		const authorized = shareToken
-			? await isAuthorizedSharedMedicationImage(shareToken, requestedCandidates)
-			: await isAuthorizedOwnerImage(await getAuthenticatedUserId(request, reply), requestedCandidates);
+		const authorizedFilename = shareToken
+			? await getAuthorizedSharedMedicationImageFilename(shareToken, requestedCandidates)
+			: await getAuthorizedOwnerImageFilename(await getAuthenticatedUserId(request, reply), requestedCandidates);
 
-		if (!authorized) {
+		if (!authorizedFilename) {
 			return reply.status(404).send({ error: "Image not found", code: "IMAGE_NOT_FOUND" });
 		}
+
+		const filePath = resolve(options.imagesDir, authorizedFilename);
 
 		if (!existsSync(filePath)) {
 			return reply.status(404).send({ error: "Image not found", code: "IMAGE_NOT_FOUND" });

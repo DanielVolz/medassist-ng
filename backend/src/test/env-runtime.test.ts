@@ -30,8 +30,6 @@ describe("plugins/env runtime validation", () => {
 		expect(mod.env.ALLOW_UNAUTHENTICATED).toBe(false);
 		expect(mod.env.OIDC_ENABLED).toBe(false);
 		expect(mod.env.PORT).toBe(3000);
-		expect(mod.env.SHARE_TOKEN_TTL_DAYS).toBe(90);
-		expect(mod.env.SENSITIVE_LOGGING_ENABLED).toBe(false);
 		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
 		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
 	});

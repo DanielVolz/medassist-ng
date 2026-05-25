@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useModalHistory } from "../hooks/useModalHistory";
 import { useScrollLock } from "../hooks/useScrollLock";
 import type { Medication } from "../types";
 import {
@@ -77,6 +78,7 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 
 	useScrollLock(isOpen);
 	useEscapeKey(isOpen, onClose);
+	useModalHistory(isOpen, "report", onClose);
 
 	// Collect all unique "taken by" people across all medications
 	const allPeople = useMemo(() => {

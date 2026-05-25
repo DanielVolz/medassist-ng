@@ -77,7 +77,10 @@ async function getAuthenticatedUserId(request: FastifyRequest, reply: FastifyRep
 	return userId;
 }
 
-async function getAuthorizedOwnerImageFilename(userId: number, requestedCandidates: Set<string>): Promise<string | null> {
+async function getAuthorizedOwnerImageFilename(
+	userId: number,
+	requestedCandidates: Set<string>
+): Promise<string | null> {
 	const [user] = await db.select({ avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, userId));
 	const matchedAvatarFilename = getMatchedStoredFilename(user?.avatarUrl, requestedCandidates);
 	if (matchedAvatarFilename) {

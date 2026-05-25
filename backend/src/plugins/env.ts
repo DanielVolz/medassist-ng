@@ -28,6 +28,11 @@ const EnvSchema = z.object({
 		.string()
 		.default("false")
 		.transform((v) => v === "true"),
+	// Explicit production-only escape hatch for private/local no-auth deployments.
+	ALLOW_UNAUTHENTICATED: z
+		.string()
+		.default("false")
+		.transform((v) => v === "true"),
 	// Allow new user registrations (auto-enabled if no users exist)
 	REGISTRATION_ENABLED: z
 		.string()
@@ -89,6 +94,24 @@ try {
 	console.error("=".repeat(60));
 	console.error(err);
 	console.error("\nPlease check your .env file or environment variables.");
+	console.error("=".repeat(60));
+	process.exit(1);
+}
+
+// Prevent accidental public production deployments without authentication.
+if (parsed.NODE_ENV === "production" && !parsed.AUTH_ENABLED && !parsed.ALLOW_UNAUTHENTICATED) {
+	console.error("=".repeat(60));
+	console.error("AUTHENTICATION CONFIGURATION ERROR");
+	console.error("=".repeat(60));
+	console.error("Refusing to start MedAssist-ng in production with AUTH_ENABLED=false.");
+	console.error(
+		"MedAssist-ng handles health-related personal data, so production deployments must enable authentication."
+	);
+	console.error("");
+	console.error("To fix this, either:");
+	console.error("  1. Set AUTH_ENABLED=true and configure JWT_SECRET, REFRESH_SECRET, and COOKIE_SECRET.");
+	console.error("  2. Enable OIDC with AUTH_ENABLED=true and OIDC_ENABLED=true.");
+	console.error("  3. For local/private-only deployments, explicitly set ALLOW_UNAUTHENTICATED=true.");
 	console.error("=".repeat(60));
 	process.exit(1);
 }

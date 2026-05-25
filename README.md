@@ -189,6 +189,25 @@ cp .env.example .env
 docker compose -p medassist-ng up -d
 ```
 
+Before running `docker compose`, choose an authentication mode in `.env`.
+
+For non-local deployments, enable authentication:
+
+```bash
+AUTH_ENABLED=true
+JWT_SECRET=<output-of-openssl-rand-hex-32>
+REFRESH_SECRET=<output-of-openssl-rand-hex-32>
+COOKIE_SECRET=<output-of-openssl-rand-hex-32>
+```
+
+For a local/private-only trial that is not reachable from other networks, explicitly set:
+
+```bash
+ALLOW_UNAUTHENTICATED=true
+```
+
+Production startup refuses `AUTH_ENABLED=false` unless that local-only override is present.
+
 Open `http://localhost:4174` and start tracking your medications.
 
 ### Verify Deployment
@@ -196,10 +215,23 @@ Open `http://localhost:4174` and start tracking your medications.
 After the containers start, confirm the stack is actually healthy:
 
 1. Run `docker compose ps` and confirm the `backend` service is `healthy` and the `frontend` service is running.
-2. Open `http://localhost:3000/health` and confirm the backend responds with JSON that includes `"status":"ok"`.
+2. Open `http://localhost:4174/api/health` and confirm the backend responds through the frontend proxy with JSON that includes `"status":"ok"`.
 3. Open `http://localhost:4174` and confirm the app shell loads and can reach the API.
 
 If the frontend loads but API requests fail, check the backend health endpoint first and confirm `CORS_ORIGINS` includes the frontend origin you are using. If you plan to open reminder or share links from another device, set `PUBLIC_APP_URL` to the externally reachable app URL instead of relying on `localhost`.
+
+### Deployment Security
+
+Public deployments must enable `AUTH_ENABLED=true` with local username/password login or OIDC SSO. The default Docker Compose stack exposes only the frontend on `4174`; the backend stays internal on the Docker network and is reached through the frontend `/api` proxy.
+
+Do not expose the backend directly to the Internet. If you need a temporary direct backend port for local debugging, create a local `docker-compose.override.yml` like this and keep the binding on `127.0.0.1`:
+
+```yaml
+services:
+  backend:
+    ports:
+      - "127.0.0.1:4000:3000"
+```
 
 # Configuration
 
@@ -214,6 +246,8 @@ Configure the application with environment variables in `.env`. Keep the basic c
 | `PORT` | `3000` | Backend API port |
 | `CORS_ORIGINS` | `http://localhost:4174` | Allowed frontend origins |
 | `TZ` | `Europe/Berlin` | Default timezone for reminders |
+| `AUTH_ENABLED` | `false` | Enable authentication; required for public production deployments |
+| `ALLOW_UNAUTHENTICATED` | `false` | Explicit local/private-only override for production no-auth startup |
 
 Optional but commonly needed:
 

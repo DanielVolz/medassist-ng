@@ -19,6 +19,10 @@ const EnvSchema = z.object({
 		.string()
 		.default("false")
 		.transform((v) => v === "true"),
+	ALLOW_UNAUTHENTICATED: z
+		.string()
+		.default("false")
+		.transform((v) => v === "true"),
 	REGISTRATION_ENABLED: z
 		.string()
 		.default("false")
@@ -84,6 +88,7 @@ describe("EnvSchema", () => {
 			expect(result.LOG_LEVEL).toBe("info");
 			expect(result.PUBLIC_APP_URL).toBeUndefined();
 			expect(result.AUTH_ENABLED).toBe(false);
+			expect(result.ALLOW_UNAUTHENTICATED).toBe(false);
 			expect(result.REGISTRATION_ENABLED).toBe(false);
 			expect(result.ACCESS_TOKEN_TTL_MINUTES).toBe(15);
 			expect(result.REFRESH_TOKEN_TTL_DAYS).toBe(7);
@@ -138,6 +143,16 @@ describe("EnvSchema", () => {
 		it("should transform AUTH_ENABLED=false to boolean false", () => {
 			const result = EnvSchema.parse({ AUTH_ENABLED: "false" });
 			expect(result.AUTH_ENABLED).toBe(false);
+		});
+
+		it("should transform ALLOW_UNAUTHENTICATED=true to boolean true", () => {
+			const result = EnvSchema.parse({ ALLOW_UNAUTHENTICATED: "true" });
+			expect(result.ALLOW_UNAUTHENTICATED).toBe(true);
+		});
+
+		it("should transform ALLOW_UNAUTHENTICATED=false to boolean false", () => {
+			const result = EnvSchema.parse({ ALLOW_UNAUTHENTICATED: "false" });
+			expect(result.ALLOW_UNAUTHENTICATED).toBe(false);
 		});
 
 		it("should treat non-true string as false", () => {

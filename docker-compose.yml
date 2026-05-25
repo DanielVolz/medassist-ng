@@ -12,8 +12,8 @@ services:
       - DATA_DIR=/app/data
     volumes:
       - ./data:/app/data
-    ports:
-      - "4000:3000"
+    expose:
+      - "3000"
     networks:
       - medassist-ng-net
     # Security options

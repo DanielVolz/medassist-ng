@@ -370,6 +370,10 @@ export function SharedSchedule() {
 	}
 
 	async function markDoseTaken(doseId: string) {
+		if (data?.allowMarkTaken === false) {
+			return;
+		}
+
 		const wasTaken = takenDoses.has(doseId);
 		const wasSkipped = dismissedDoses.has(doseId);
 		const wasAutomatic = automaticTakenDoses.has(doseId);
@@ -444,6 +448,10 @@ export function SharedSchedule() {
 	}
 
 	async function markDoseSkipped(doseId: string) {
+		if (data?.allowMarkTaken === false) {
+			return;
+		}
+
 		if (takenDoses.has(doseId)) {
 			return;
 		}
@@ -509,6 +517,10 @@ export function SharedSchedule() {
 	}
 
 	async function undoDoseTaken(doseId: string) {
+		if (data?.allowMarkTaken === false) {
+			return;
+		}
+
 		const wasAutomatic = automaticTakenDoses.has(doseId);
 		// Optimistic update
 		mutationInFlightRef.current++;
@@ -549,6 +561,10 @@ export function SharedSchedule() {
 	}
 
 	async function undoDoseSkipped(doseId: string) {
+		if (data?.allowMarkTaken === false) {
+			return;
+		}
+
 		const wasSkipped = dismissedDoses.has(doseId);
 
 		mutationInFlightRef.current++;
@@ -584,6 +600,7 @@ export function SharedSchedule() {
 		isEmpty: boolean;
 	}) => {
 		const showSharedJournalAction = Boolean(data?.allowJournalNotes);
+		const canMarkTaken = data?.allowMarkTaken !== false;
 		const canOpenSharedJournal = showSharedJournalAction && (options.isTaken || options.isSkipped);
 		const hasSharedJournalNote = sharedJournalDoseIdsWithNotes.has(options.doseId);
 		const takeButton = options.isTaken ? (
@@ -648,8 +665,8 @@ export function SharedSchedule() {
 
 		return (
 			<>
-				{takeButton}
-				{skipButton}
+				{canMarkTaken ? takeButton : null}
+				{canMarkTaken ? skipButton : null}
 				{journalButton}
 			</>
 		);

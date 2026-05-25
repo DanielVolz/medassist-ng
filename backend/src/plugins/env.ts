@@ -14,6 +14,10 @@ const EnvSchema = z.object({
 		.transform((v) => parseInt(v, 10)),
 	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
 	LOG_LEVEL: z.string().default("info"),
+	SENSITIVE_LOGGING_ENABLED: z
+		.string()
+		.default("false")
+		.transform((v) => v === "true"),
 	PUBLIC_APP_URL: z.string().url().optional(),
 	OPENAPI_DOCS_ENABLED: z
 		.string()
@@ -62,6 +66,11 @@ const EnvSchema = z.object({
 		.string()
 		.default("7")
 		.transform((v) => parseInt(v, 10)),
+	SHARE_TOKEN_TTL_DAYS: z
+		.string()
+		.default("90")
+		.transform((v) => parseInt(v, 10))
+		.pipe(z.number().int().min(1).max(3650)),
 
 	// ==========================================================================
 	// OIDC SSO Configuration (Pocket ID, Authelia, etc.)

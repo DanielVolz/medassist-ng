@@ -178,6 +178,7 @@ export interface CreateShareTokenOptions {
 	scheduleDays?: number;
 	expiresAt?: number | null;
 	allowJournalNotes?: boolean;
+	allowMarkTaken?: boolean;
 }
 
 /**
@@ -187,16 +188,17 @@ export async function createTestShareToken(client: Client, options: CreateShareT
 	const {
 		userId,
 		takenBy,
-		token = `test_token_${Date.now()}`,
+		token = Date.now().toString(16).padStart(16, "0").slice(-16),
 		scheduleDays = 30,
 		expiresAt = null,
 		allowJournalNotes = false,
+		allowMarkTaken = true,
 	} = options;
 
 	await client.execute({
-		sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at, allow_journal_notes)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-		args: [userId, token, takenBy, scheduleDays, expiresAt, allowJournalNotes ? 1 : 0],
+		sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at, allow_journal_notes, allow_mark_taken)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		args: [userId, token, takenBy, scheduleDays, expiresAt, allowJournalNotes ? 1 : 0, allowMarkTaken ? 1 : 0],
 	});
 
 	return token;

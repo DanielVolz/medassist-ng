@@ -457,6 +457,9 @@ describe("Database Client", () => {
 			expect(columnNames).toContain("id");
 			expect(columnNames).toContain("token");
 			expect(columnNames).toContain("taken_by");
+			expect(columnNames).toContain("allow_mark_taken");
+			expect(columnNames).toContain("last_used_at");
+			expect(columnNames).toContain("revoked_at");
 		});
 
 		it("should have dose_tracking table", async () => {

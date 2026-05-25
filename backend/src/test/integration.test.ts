@@ -166,8 +166,11 @@ async function createSchema(client: Client) {
       taken_by text NOT NULL,
       schedule_days integer NOT NULL DEFAULT 30,
       allow_journal_notes integer NOT NULL DEFAULT 0,
+      allow_mark_taken integer NOT NULL DEFAULT 1,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       expires_at integer,
+      last_used_at integer,
+      revoked_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
 		`CREATE TABLE IF NOT EXISTS dose_tracking (
@@ -640,7 +643,7 @@ describe("Integration Tests", () => {
 			const shareRes = await app.inject({
 				method: "POST",
 				url: "/share",
-				payload: { takenBy: "Daniel", scheduleDays: 30 },
+				payload: { takenBy: "Daniel", scheduleDays: 30, allowMarkTaken: true },
 			});
 			expect(shareRes.statusCode, shareRes.body).toBe(200);
 			const token = shareRes.json().token;
@@ -693,7 +696,7 @@ describe("Integration Tests", () => {
 			const shareRes = await app.inject({
 				method: "POST",
 				url: "/share",
-				payload: { takenBy: "Anna", scheduleDays: 30 },
+				payload: { takenBy: "Anna", scheduleDays: 30, allowMarkTaken: true },
 			});
 			expect(shareRes.statusCode, shareRes.body).toBe(200);
 			const token = shareRes.json().token;

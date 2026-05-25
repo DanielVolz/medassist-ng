@@ -62,8 +62,9 @@ describe("useShare", () => {
 		expect(result.current.sharePeople).toEqual([]);
 		expect(result.current.shareSelectedPerson).toBe("");
 		expect(result.current.shareSelectedDays).toBe(30);
-		expect(result.current.shareSelectedExpiryDays).toBeNull();
+		expect(result.current.shareSelectedExpiryDays).toBe(90);
 		expect(result.current.shareAllowJournalNotes).toBe(false);
+		expect(result.current.shareAllowMarkTaken).toBe(false);
 		expect(result.current.shareLink).toBeNull();
 		expect(result.current.activeShareLinks).toEqual([]);
 	});
@@ -176,7 +177,13 @@ describe("useShare", () => {
 			"/api/share",
 			expect.objectContaining({
 				method: "POST",
-				body: JSON.stringify({ takenBy: "Alice", scheduleDays: 30, expiryDays: null, allowJournalNotes: false }),
+				body: JSON.stringify({
+					takenBy: "Alice",
+					scheduleDays: 30,
+					expiryDays: 90,
+					allowMarkTaken: false,
+					allowJournalNotes: false,
+				}),
 			})
 		);
 		expect(authFetchMock).toHaveBeenNthCalledWith(1, "/api/share");
@@ -365,8 +372,9 @@ describe("useShare", () => {
 		expect(result.current.showShareDialog).toBe(false);
 		expect(result.current.shareLink).toBeNull();
 		expect(result.current.shareCopied).toBe(false);
-		expect(result.current.shareSelectedExpiryDays).toBeNull();
+		expect(result.current.shareSelectedExpiryDays).toBe(90);
 		expect(result.current.shareAllowJournalNotes).toBe(false);
+		expect(result.current.shareAllowMarkTaken).toBe(false);
 		expect(result.current.activeShareLinks).toEqual([]);
 	});
 
@@ -401,7 +409,13 @@ describe("useShare", () => {
 			"/api/share",
 			expect.objectContaining({
 				method: "POST",
-				body: JSON.stringify({ takenBy: "Alice", scheduleDays: 30, expiryDays: 7, allowJournalNotes: false }),
+				body: JSON.stringify({
+					takenBy: "Alice",
+					scheduleDays: 30,
+					expiryDays: 7,
+					allowMarkTaken: false,
+					allowJournalNotes: false,
+				}),
 			})
 		);
 	});
@@ -437,7 +451,13 @@ describe("useShare", () => {
 			"/api/share",
 			expect.objectContaining({
 				method: "POST",
-				body: JSON.stringify({ takenBy: "Alice", scheduleDays: 30, expiryDays: null, allowJournalNotes: true }),
+				body: JSON.stringify({
+					takenBy: "Alice",
+					scheduleDays: 30,
+					expiryDays: 90,
+					allowMarkTaken: false,
+					allowJournalNotes: true,
+				}),
 			})
 		);
 	});
@@ -455,7 +475,10 @@ describe("useShare", () => {
 								scheduleDays: 30,
 								createdAt: "2026-05-17T12:00:00.000Z",
 								expiresAt: null,
+								lastUsedAt: null,
 								allowJournalNotes: true,
+								allowMarkTaken: true,
+								legacyNeverExpires: true,
 								shareUrl: "/share/abcdef0123456789",
 							},
 						],
@@ -504,7 +527,10 @@ describe("useShare", () => {
 								scheduleDays: 30,
 								createdAt: "2026-05-17T12:00:00.000Z",
 								expiresAt: null,
+								lastUsedAt: null,
 								allowJournalNotes: false,
+								allowMarkTaken: false,
+								legacyNeverExpires: true,
 								shareUrl: "/share/abcdef0123456789",
 							},
 						],
@@ -552,11 +578,13 @@ describe("useShare", () => {
 			result.current.setShareSelectedDays(90);
 			result.current.setShareSelectedExpiryDays(30);
 			result.current.setShareAllowJournalNotes(true);
+			result.current.setShareAllowMarkTaken(true);
 		});
 
 		expect(result.current.shareSelectedPerson).toBe("Bob");
 		expect(result.current.shareSelectedDays).toBe(90);
 		expect(result.current.shareSelectedExpiryDays).toBe(30);
 		expect(result.current.shareAllowJournalNotes).toBe(true);
+		expect(result.current.shareAllowMarkTaken).toBe(true);
 	});
 });

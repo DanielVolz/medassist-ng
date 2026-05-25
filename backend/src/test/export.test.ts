@@ -266,7 +266,7 @@ async function registerExportRoutes(ctx: TestContext) {
 
 		// Import share links
 		for (const share of importData.shareLinks || []) {
-			const token = randomBytes(8).toString("hex");
+			const token = randomBytes(32).toString("hex");
 			await client.execute({
 				sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, expires_at) VALUES (?, ?, ?, ?, ?)`,
 				args: [
@@ -738,7 +738,7 @@ describe("Export/Import API", () => {
 			expect(shares.rows[0].taken_by).toBe("Daniel");
 			expect(shares.rows[0].schedule_days).toBe(60);
 			expect(shares.rows[0].token).toBeDefined();
-			expect((shares.rows[0].token as string).length).toBe(16); // 8 bytes = 16 hex chars
+			expect(shares.rows[0].token).toMatch(/^[a-f0-9]{64}$/);
 		});
 
 		it("should reject invalid import data", async () => {

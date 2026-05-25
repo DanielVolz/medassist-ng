@@ -101,8 +101,11 @@ export function getTableCreationSQL(): string[] {
       taken_by text NOT NULL,
       schedule_days integer NOT NULL DEFAULT 30,
 		  allow_journal_notes integer NOT NULL DEFAULT 0,
+      allow_mark_taken integer NOT NULL DEFAULT 1,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       expires_at integer,
+      last_used_at integer,
+      revoked_at integer,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
 		`CREATE TABLE IF NOT EXISTS dose_tracking (

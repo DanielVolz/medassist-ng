@@ -164,6 +164,8 @@ export interface AppContextValue {
 	setShareSelectedExpiryDays: React.Dispatch<React.SetStateAction<number | null>>;
 	shareAllowJournalNotes: boolean;
 	setShareAllowJournalNotes: React.Dispatch<React.SetStateAction<boolean>>;
+	shareAllowMarkTaken: boolean;
+	setShareAllowMarkTaken: React.Dispatch<React.SetStateAction<boolean>>;
 	shareGenerating: boolean;
 	shareLink: string | null;
 	setShareLink: React.Dispatch<React.SetStateAction<string | null>>;
@@ -172,9 +174,11 @@ export interface AppContextValue {
 	activeShareLinks: ReturnType<typeof useShare>["activeShareLinks"];
 	activeSharesLoading: boolean;
 	revokingShareToken: string | null;
+	regeneratingShareToken: string | null;
 	openShareDialog: () => void;
 	generateShareLink: () => Promise<void>;
 	revokeShareLink: (token: string) => Promise<boolean>;
+	regenerateShareLink: (token: string) => Promise<boolean>;
 	copyShareLink: () => void;
 	closeShareDialog: () => void;
 	resetShareDialogState: () => void;
@@ -938,6 +942,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setShareSelectedExpiryDays: share.setShareSelectedExpiryDays,
 			shareAllowJournalNotes: share.shareAllowJournalNotes,
 			setShareAllowJournalNotes: share.setShareAllowJournalNotes,
+			shareAllowMarkTaken: share.shareAllowMarkTaken,
+			setShareAllowMarkTaken: share.setShareAllowMarkTaken,
 			shareGenerating: share.shareGenerating,
 			shareLink: share.shareLink,
 			setShareLink: share.setShareLink,
@@ -946,9 +952,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			activeShareLinks: share.activeShareLinks,
 			activeSharesLoading: share.activeSharesLoading,
 			revokingShareToken: share.revokingShareToken,
+			regeneratingShareToken: share.regeneratingShareToken,
 			openShareDialog,
 			generateShareLink: share.generateShareLink,
 			revokeShareLink: share.revokeShareLink,
+			regenerateShareLink: share.regenerateShareLink,
 			copyShareLink: share.copyShareLink,
 			closeShareDialog: share.closeShareDialog,
 			resetShareDialogState: share.resetShareDialogState,
@@ -1031,6 +1039,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			setShareSelectedExpiryDays: share.setShareSelectedExpiryDays,
 			shareAllowJournalNotes: share.shareAllowJournalNotes,
 			setShareAllowJournalNotes: share.setShareAllowJournalNotes,
+			shareAllowMarkTaken: share.shareAllowMarkTaken,
+			setShareAllowMarkTaken: share.setShareAllowMarkTaken,
 			shareGenerating: share.shareGenerating,
 			shareLink: share.shareLink,
 			setShareLink: share.setShareLink,
@@ -1039,9 +1049,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			activeShareLinks: share.activeShareLinks,
 			activeSharesLoading: share.activeSharesLoading,
 			revokingShareToken: share.revokingShareToken,
+			regeneratingShareToken: share.regeneratingShareToken,
 			openShareDialog,
 			generateShareLink: share.generateShareLink,
 			revokeShareLink: share.revokeShareLink,
+			regenerateShareLink: share.regenerateShareLink,
 			copyShareLink: share.copyShareLink,
 			closeShareDialog: share.closeShareDialog,
 			resetShareDialogState: share.resetShareDialogState,

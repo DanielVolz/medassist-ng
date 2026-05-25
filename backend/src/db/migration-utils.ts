@@ -77,6 +77,9 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE user_settings ADD COLUMN last_prescription_reminder_med_names text`,
 		`ALTER TABLE refill_history ADD COLUMN used_prescription integer NOT NULL DEFAULT 0`,
 		`ALTER TABLE share_tokens ADD COLUMN allow_journal_notes integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE share_tokens ADD COLUMN allow_mark_taken integer NOT NULL DEFAULT 1`,
+		`ALTER TABLE share_tokens ADD COLUMN last_used_at integer`,
+		`ALTER TABLE share_tokens ADD COLUMN revoked_at integer`,
 	];
 
 	for (const sql of alterMigrations) {

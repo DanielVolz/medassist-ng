@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { doseTracking, intakeJournal, medications, shareTokens, userSettings } from "../db/schema.js";
+import { doseTracking, intakeJournal, medications, type shareTokens, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { computeMedicationCurrentStock } from "../services/current-stock.js";
@@ -12,6 +12,7 @@ import {
 	resolveTrackedDoseEventForUser,
 	upsertIntakeJournalForDoseEvent,
 } from "../services/intake-journal-service.js";
+import { getActiveShareToken, shareTokenRateLimitKey } from "../services/share-token-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import { toLocalDateTimeOffsetString } from "../utils/local-date-time.js";
 import {
@@ -20,7 +21,7 @@ import {
 	tokenParamsSchema,
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
-import { redactTokenForLog } from "../utils/redaction.js";
+import { tokenFingerprint, valueFingerprint } from "../utils/redaction.js";
 import {
 	parseIntakesJson,
 	parseLocalDateTime,
@@ -53,6 +54,20 @@ const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>
 ];
 
 const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
+
+const publicShareReadRateLimit = {
+	max: 60,
+	timeWindow: "1 minute",
+	keyGenerator: shareTokenRateLimitKey,
+	errorResponseBuilder: () => ({ statusCode: 429, error: "rate_limited" }),
+} as const;
+
+const publicShareMutationRateLimit = {
+	max: 20,
+	timeWindow: "1 minute",
+	keyGenerator: shareTokenRateLimitKey,
+	errorResponseBuilder: () => ({ statusCode: 429, error: "rate_limited" }),
+} as const;
 
 const doseReadResponseSchema = {
 	type: "object",
@@ -178,20 +193,6 @@ function parseDoseId(doseId: string): ParsedDoseId | null {
 	};
 }
 
-async function getActiveShareToken(token: string): Promise<{
-	share: typeof shareTokens.$inferSelect | null;
-	reason: "not_found" | "expired" | "ok";
-}> {
-	const [share] = await db.select().from(shareTokens).where(eq(shareTokens.token, token));
-	if (!share) return { share: null, reason: "not_found" };
-
-	if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
-		return { share: null, reason: "expired" };
-	}
-
-	return { share, reason: "ok" };
-}
-
 async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseId: string): Promise<boolean> {
 	const parsedDose = parseDoseId(doseId);
 	if (!parsedDose) {
@@ -237,6 +238,24 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 	}
 
 	return expectedPersons.includes(parsedDose.personSuffix);
+}
+
+function hasShareWriteAccess(share: typeof shareTokens.$inferSelect): boolean {
+	return share.allowMarkTaken ?? true;
+}
+
+function logShareDoseDebug(
+	request: FastifyRequest,
+	message: string,
+	details: { token: string; doseId?: string; ownerUserId?: number; personName?: string | null; reason?: string }
+) {
+	if (!env.SENSITIVE_LOGGING_ENABLED || env.LOG_LEVEL !== "debug") {
+		return;
+	}
+
+	request.log.debug(
+		`${message}: tokenFingerprint=${tokenFingerprint(details.token)}${details.ownerUserId == null ? "" : `, ownerUserId=${details.ownerUserId}`}${details.reason ? `, reason=${details.reason}` : ""}${details.doseId ? `, doseId=${details.doseId}` : ""}${details.personName ? `, personName=${details.personName}` : ""}`
+	);
 }
 
 function getLocalDayStartMs(value: Date | number): number {
@@ -748,20 +767,16 @@ export async function doseRoutes(app: FastifyInstance) {
 			},
 			logLevel: "warn",
 			config: {
-				rateLimit: {
-					max: 60,
-					timeWindow: "1 minute",
-					errorResponseBuilder: () => ({ error: "rate_limited" }),
-				},
+				rateLimit: publicShareReadRateLimit,
 			},
 		},
 		async (request, reply) => {
 			const { token } = request.params;
-			const tokenRef = redactTokenForLog(token);
+			const fingerprint = tokenFingerprint(token);
 
 			const { share, reason } = await getActiveShareToken(token);
-			if (!share) {
-				request.log.warn(`[ShareDose] Rejected read: tokenRef=${tokenRef}, reason=${reason}`);
+			if (!share || reason !== "ok") {
+				request.log.warn(`[ShareDose] Rejected read: tokenFingerprint=${fingerprint}, reason=${reason}`);
 				return reply.notFound("Share link not found");
 			}
 
@@ -810,6 +825,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	app.get<{ Params: { token: string; doseId: string } }>(
 		"/share/:token/journal/event/:doseId",
 		{
+			logLevel: "warn",
 			schema: {
 				params: {
 					type: "object",
@@ -829,11 +845,14 @@ export async function doseRoutes(app: FastifyInstance) {
 		},
 		async (request, reply) => {
 			const { token, doseId } = request.params;
-			const tokenRef = redactTokenForLog(token);
+			const fingerprint = tokenFingerprint(token);
 
 			const { share, reason } = await getActiveShareToken(token);
-			if (!share) {
-				request.log.warn(`[ShareJournal] Rejected read: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+			if (!share || reason !== "ok") {
+				request.log.warn(
+					`[ShareJournal] Rejected read: tokenFingerprint=${fingerprint}, doseIdFingerprint=${valueFingerprint(doseId)}, reason=${reason}`
+				);
+				logShareDoseDebug(request, "[ShareJournal] Sensitive rejected read details", { token, doseId, reason });
 				return reply.notFound("Share link not found");
 			}
 
@@ -863,6 +882,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	app.put<{ Params: { token: string; doseId: string }; Body: z.infer<typeof shareJournalUpsertSchema> }>(
 		"/share/:token/journal/event/:doseId",
 		{
+			logLevel: "warn",
 			schema: {
 				params: {
 					type: "object",
@@ -890,7 +910,7 @@ export async function doseRoutes(app: FastifyInstance) {
 		},
 		async (request, reply) => {
 			const { token, doseId } = request.params;
-			const tokenRef = redactTokenForLog(token);
+			const fingerprint = tokenFingerprint(token);
 
 			const parsed = shareJournalUpsertSchema.safeParse(request.body);
 			if (!parsed.success) {
@@ -903,8 +923,11 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			const { share, reason } = await getActiveShareToken(token);
-			if (!share) {
-				request.log.warn(`[ShareJournal] Rejected save: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+			if (!share || reason !== "ok") {
+				request.log.warn(
+					`[ShareJournal] Rejected save: tokenFingerprint=${fingerprint}, doseIdFingerprint=${valueFingerprint(doseId)}, reason=${reason}`
+				);
+				logShareDoseDebug(request, "[ShareJournal] Sensitive rejected save details", { token, doseId, reason });
 				return reply.notFound("Share link not found");
 			}
 
@@ -939,6 +962,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	app.delete<{ Params: { token: string; doseId: string } }>(
 		"/share/:token/journal/event/:doseId",
 		{
+			logLevel: "warn",
 			schema: {
 				params: {
 					type: "object",
@@ -956,11 +980,14 @@ export async function doseRoutes(app: FastifyInstance) {
 		},
 		async (request, reply) => {
 			const { token, doseId } = request.params;
-			const tokenRef = redactTokenForLog(token);
+			const fingerprint = tokenFingerprint(token);
 
 			const { share, reason } = await getActiveShareToken(token);
-			if (!share) {
-				request.log.warn(`[ShareJournal] Rejected delete: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+			if (!share || reason !== "ok") {
+				request.log.warn(
+					`[ShareJournal] Rejected delete: tokenFingerprint=${fingerprint}, doseIdFingerprint=${valueFingerprint(doseId)}, reason=${reason}`
+				);
+				logShareDoseDebug(request, "[ShareJournal] Sensitive rejected delete details", { token, doseId, reason });
 				return reply.notFound("Share link not found");
 			}
 
@@ -980,6 +1007,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	app.post<{ Params: { token: string }; Body: z.infer<typeof shareDoseSchema> }>(
 		"/share/:token/doses/skip",
 		{
+			logLevel: "warn",
 			schema: {
 				params: tokenParamsSchema,
 				body: {
@@ -998,13 +1026,17 @@ export async function doseRoutes(app: FastifyInstance) {
 						},
 					},
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					403: genericErrorSchema,
 					404: genericErrorSchema,
 				},
+			},
+			config: {
+				rateLimit: publicShareMutationRateLimit,
 			},
 		},
 		async (request, reply) => {
 			const { token } = request.params;
-			const tokenRef = redactTokenForLog(token);
+			const fingerprint = tokenFingerprint(token);
 
 			const parsed = shareDoseSchema.safeParse(request.body);
 			if (!parsed.success) {
@@ -1013,16 +1045,38 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			const { doseId } = parsed.data;
 			const { share, reason } = await getActiveShareToken(token);
-			if (!share) {
-				request.log.warn(`[ShareDose] Rejected skip: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+			if (!share || reason !== "ok") {
+				request.log.warn(
+					`[ShareDose] Rejected skip: tokenFingerprint=${fingerprint}, doseIdFingerprint=${valueFingerprint(doseId)}, reason=${reason}`
+				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive rejected skip details", { token, doseId, reason });
 				return reply.notFound("Share link not found");
+			}
+
+			if (!hasShareWriteAccess(share)) {
+				request.log.warn(
+					`[ShareDose] Rejected read-only skip: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}`
+				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive read-only skip details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
+				return reply.status(403).send({ error: "Share link is read-only", code: "READ_ONLY" });
 			}
 
 			const isValidShareDoseId = await validateShareDoseId(share, doseId);
 			if (!isValidShareDoseId) {
 				request.log.warn(
-					`[ShareDose] Rejected invalid doseId in skip request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Rejected invalid dose in skip request: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}, doseIdFingerprint=${valueFingerprint(doseId)}`
 				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive invalid skip details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
 
@@ -1032,8 +1086,14 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			request.log.info(
-				`[ShareDose] Dose skipped via share link: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+				`[ShareDose] Dose skipped via share link: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}, doseIdFingerprint=${valueFingerprint(doseId)}`
 			);
+			logShareDoseDebug(request, "[ShareDose] Sensitive skipped dose details", {
+				token,
+				doseId,
+				ownerUserId: share.userId,
+				personName: share.takenBy,
+			});
 			return { success: true };
 		}
 	);
@@ -1044,6 +1104,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	app.delete<{ Params: { token: string; doseId: string } }>(
 		"/share/:token/doses/skip/:doseId",
 		{
+			logLevel: "warn",
 			schema: {
 				params: {
 					type: "object",
@@ -1056,25 +1117,51 @@ export async function doseRoutes(app: FastifyInstance) {
 				response: {
 					200: { type: "object", properties: { success: { type: "boolean" } } },
 					400: genericErrorSchema,
+					403: genericErrorSchema,
 					404: genericErrorSchema,
 				},
+			},
+			config: {
+				rateLimit: publicShareMutationRateLimit,
 			},
 		},
 		async (request, reply) => {
 			const { token, doseId } = request.params;
-			const tokenRef = redactTokenForLog(token);
+			const fingerprint = tokenFingerprint(token);
 
 			const { share, reason } = await getActiveShareToken(token);
-			if (!share) {
-				request.log.warn(`[ShareDose] Rejected undo skip: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+			if (!share || reason !== "ok") {
+				request.log.warn(
+					`[ShareDose] Rejected undo skip: tokenFingerprint=${fingerprint}, doseIdFingerprint=${valueFingerprint(doseId)}, reason=${reason}`
+				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive rejected undo skip details", { token, doseId, reason });
 				return reply.notFound("Share link not found");
+			}
+
+			if (!hasShareWriteAccess(share)) {
+				request.log.warn(
+					`[ShareDose] Rejected read-only undo skip: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}`
+				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive read-only undo skip details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
+				return reply.status(403).send({ error: "Share link is read-only", code: "READ_ONLY" });
 			}
 
 			const isValidShareDoseId = await validateShareDoseId(share, doseId);
 			if (!isValidShareDoseId) {
 				request.log.warn(
-					`[ShareDose] Rejected invalid doseId in undo skip request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Rejected invalid dose in undo skip request: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}, doseIdFingerprint=${valueFingerprint(doseId)}`
 				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive invalid undo skip details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
 
@@ -1089,6 +1176,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	app.post<{ Params: { token: string }; Body: z.infer<typeof shareDoseSchema> }>(
 		"/share/:token/doses",
 		{
+			logLevel: "warn",
 			schema: {
 				params: tokenParamsSchema,
 				body: {
@@ -1104,13 +1192,17 @@ export async function doseRoutes(app: FastifyInstance) {
 					200: { type: "object", properties: { success: { type: "boolean" }, message: { type: "string" } } },
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
 					409: genericErrorSchema,
+					403: genericErrorSchema,
 					404: genericErrorSchema,
 				},
+			},
+			config: {
+				rateLimit: publicShareMutationRateLimit,
 			},
 		},
 		async (request, reply) => {
 			const { token } = request.params;
-			const tokenRef = redactTokenForLog(token);
+			const fingerprint = tokenFingerprint(token);
 
 			const parsed = shareDoseSchema.safeParse(request.body);
 			if (!parsed.success) {
@@ -1122,16 +1214,38 @@ export async function doseRoutes(app: FastifyInstance) {
 			const { doseId } = parsed.data;
 
 			const { share, reason } = await getActiveShareToken(token);
-			if (!share) {
-				request.log.warn(`[ShareDose] Rejected mark: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+			if (!share || reason !== "ok") {
+				request.log.warn(
+					`[ShareDose] Rejected mark: tokenFingerprint=${fingerprint}, doseIdFingerprint=${valueFingerprint(doseId)}, reason=${reason}`
+				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive rejected mark details", { token, doseId, reason });
 				return reply.notFound("Share link not found");
+			}
+
+			if (!hasShareWriteAccess(share)) {
+				request.log.warn(
+					`[ShareDose] Rejected read-only mark: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}`
+				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive read-only mark details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
+				return reply.status(403).send({ error: "Share link is read-only", code: "READ_ONLY" });
 			}
 
 			const isValidShareDoseId = await validateShareDoseId(share, doseId);
 			if (!isValidShareDoseId) {
 				request.log.warn(
-					`[ShareDose] Rejected invalid doseId in mark request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Rejected invalid dose in mark request: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}, doseIdFingerprint=${valueFingerprint(doseId)}`
 				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive invalid mark details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
 
@@ -1142,9 +1256,12 @@ export async function doseRoutes(app: FastifyInstance) {
 				.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
 
 			if (existing) {
-				request.log.debug(
-					`[ShareDose] Duplicate mark ignored: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
-				);
+				logShareDoseDebug(request, "[ShareDose] Duplicate mark ignored", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
 				return { success: true, message: "Already marked" };
 			}
 
@@ -1156,8 +1273,14 @@ export async function doseRoutes(app: FastifyInstance) {
 			});
 			if (outOfStock) {
 				request.log.info(
-					`[ShareDose] Rejected out-of-stock mark request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Rejected out-of-stock mark request: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}, doseIdFingerprint=${valueFingerprint(doseId)}`
 				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive out-of-stock mark details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
 				return reply.status(409).send({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
 			}
 
@@ -1173,8 +1296,14 @@ export async function doseRoutes(app: FastifyInstance) {
 			});
 
 			request.log.info(
-				`[ShareDose] Dose marked via share link: tokenRef=${tokenRef}, ownerUserId=${share.userId}, shareTakenBy=${share.takenBy}, markedBy=${markedBy}, doseId=${doseId}`
+				`[ShareDose] Dose marked via share link: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}, doseIdFingerprint=${valueFingerprint(doseId)}`
 			);
+			logShareDoseDebug(request, "[ShareDose] Sensitive marked dose details", {
+				token,
+				doseId,
+				ownerUserId: share.userId,
+				personName: markedBy,
+			});
 
 			return { success: true };
 		}
@@ -1186,6 +1315,7 @@ export async function doseRoutes(app: FastifyInstance) {
 	app.delete<{ Params: { token: string; doseId: string } }>(
 		"/share/:token/doses/:doseId",
 		{
+			logLevel: "warn",
 			schema: {
 				params: {
 					type: "object",
@@ -1198,25 +1328,51 @@ export async function doseRoutes(app: FastifyInstance) {
 				response: {
 					200: { type: "object", properties: { success: { type: "boolean" } } },
 					400: genericErrorSchema,
+					403: genericErrorSchema,
 					404: genericErrorSchema,
 				},
+			},
+			config: {
+				rateLimit: publicShareMutationRateLimit,
 			},
 		},
 		async (request, reply) => {
 			const { token, doseId } = request.params;
-			const tokenRef = redactTokenForLog(token);
+			const fingerprint = tokenFingerprint(token);
 
 			const { share, reason } = await getActiveShareToken(token);
-			if (!share) {
-				request.log.warn(`[ShareDose] Rejected unmark: tokenRef=${tokenRef}, doseId=${doseId}, reason=${reason}`);
+			if (!share || reason !== "ok") {
+				request.log.warn(
+					`[ShareDose] Rejected unmark: tokenFingerprint=${fingerprint}, doseIdFingerprint=${valueFingerprint(doseId)}, reason=${reason}`
+				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive rejected unmark details", { token, doseId, reason });
 				return reply.notFound("Share link not found");
+			}
+
+			if (!hasShareWriteAccess(share)) {
+				request.log.warn(
+					`[ShareDose] Rejected read-only unmark: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}`
+				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive read-only unmark details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
+				return reply.status(403).send({ error: "Share link is read-only", code: "READ_ONLY" });
 			}
 
 			const isValidShareDoseId = await validateShareDoseId(share, doseId);
 			if (!isValidShareDoseId) {
 				request.log.warn(
-					`[ShareDose] Rejected invalid doseId in unmark request: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Rejected invalid dose in unmark request: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}, doseIdFingerprint=${valueFingerprint(doseId)}`
 				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive invalid unmark details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
 
@@ -1228,17 +1384,26 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			if (existing?.dismissed) {
 				// Already dismissed - keep the record as-is
-				request.log.debug(
-					`[ShareDose] Unmark ignored for dismissed dose: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
-				);
+				logShareDoseDebug(request, "[ShareDose] Unmark ignored for dismissed dose", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
 			} else {
 				// Not dismissed - delete the record entirely
 				await db
 					.delete(doseTracking)
 					.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
 				request.log.info(
-					`[ShareDose] Dose unmarked via share link: tokenRef=${tokenRef}, ownerUserId=${share.userId}, takenBy=${share.takenBy}, doseId=${doseId}`
+					`[ShareDose] Dose unmarked via share link: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}, doseIdFingerprint=${valueFingerprint(doseId)}`
 				);
+				logShareDoseDebug(request, "[ShareDose] Sensitive unmarked dose details", {
+					token,
+					doseId,
+					ownerUserId: share.userId,
+					personName: share.takenBy,
+				});
 			}
 
 			return { success: true };

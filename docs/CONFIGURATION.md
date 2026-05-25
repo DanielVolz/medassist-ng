@@ -13,6 +13,7 @@ Configure MedAssist with environment variables in `.env`. Start from `.env.examp
 | `TZ` | `Europe/Berlin` | Server default timezone for scheduled reminders |
 | `PUBLIC_APP_URL` | — | Public base URL for notification action and share links. Strongly recommended for any deployment used from another device; do not point this to `localhost` or an internal Docker hostname. Local Vite development also allows this hostname automatically. |
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error`, or `silent` |
+| `SENSITIVE_LOGGING_ENABLED` | `false` | Allows sensitive dose/person details only in debug logging paths. Leave disabled outside local troubleshooting. |
 | `RATE_LIMIT_MAX` | `100` | Maximum requests per minute per IP |
 | `OPENAPI_DOCS_ENABLED` | `auto` | Explicitly enable or disable `/docs` and `/docs/json` |
 | `DOCS_AUTH_REQUIRED` | `auto` | Require authentication for enabled docs; defaults to `true` when `AUTH_ENABLED=true` |
@@ -44,6 +45,7 @@ API docs behavior:
 | `COOKIE_SECRET` | — | Cookie signing key; required when auth is enabled |
 | `ACCESS_TOKEN_TTL_MINUTES` | `15` | Access token lifetime |
 | `REFRESH_TOKEN_TTL_DAYS` | `7` | Refresh token lifetime |
+| `SHARE_TOKEN_TTL_DAYS` | `90` | Default lifetime for newly generated public share links |
 
 Generate secrets with `openssl rand -hex 32`.
 

@@ -257,6 +257,8 @@ function AppContent() {
 		setShareSelectedExpiryDays,
 		shareAllowJournalNotes,
 		setShareAllowJournalNotes,
+		shareAllowMarkTaken,
+		setShareAllowMarkTaken,
 		shareGenerating,
 		shareLink,
 		setShareLink,
@@ -265,8 +267,10 @@ function AppContent() {
 		activeShareLinks,
 		activeSharesLoading,
 		revokingShareToken,
+		regeneratingShareToken,
 		generateShareLink,
 		revokeShareLink,
+		regenerateShareLink,
 		copyShareLink,
 		closeShareDialog,
 		resetShareDialogState,
@@ -614,6 +618,8 @@ function AppContent() {
 				onShareSelectedExpiryDaysChange={setShareSelectedExpiryDays}
 				shareAllowJournalNotes={shareAllowJournalNotes}
 				onShareAllowJournalNotesChange={setShareAllowJournalNotes}
+				shareAllowMarkTaken={shareAllowMarkTaken}
+				onShareAllowMarkTakenChange={setShareAllowMarkTaken}
 				shareGenerating={shareGenerating}
 				shareLink={shareLink}
 				onShareLinkChange={setShareLink}
@@ -622,9 +628,11 @@ function AppContent() {
 				activeShareLinks={activeShareLinks}
 				activeSharesLoading={activeSharesLoading}
 				revokingShareToken={revokingShareToken}
+				regeneratingShareToken={regeneratingShareToken}
 				onClose={closeShareDialog}
 				onGenerateShareLink={generateShareLink}
 				onRevokeShareLink={revokeShareLink}
+				onRegenerateShareLink={regenerateShareLink}
 				onCopyShareLink={copyShareLink}
 			/>
 

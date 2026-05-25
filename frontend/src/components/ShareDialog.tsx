@@ -3,7 +3,7 @@
  * Allows sharing schedule view for a specific person
  */
 
-import { Check, Copy, Link2, X } from "lucide-react";
+import { Check, Copy, Link2, RefreshCw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useModalHistory } from "../hooks";
@@ -21,6 +21,8 @@ export interface ShareDialogProps {
 	onShareSelectedExpiryDaysChange: (days: number | null) => void;
 	shareAllowJournalNotes: boolean;
 	onShareAllowJournalNotesChange: (enabled: boolean) => void;
+	shareAllowMarkTaken: boolean;
+	onShareAllowMarkTakenChange: (enabled: boolean) => void;
 	shareGenerating: boolean;
 	shareLink: string | null;
 	onShareLinkChange: (link: string | null) => void;
@@ -29,9 +31,11 @@ export interface ShareDialogProps {
 	activeShareLinks: ActiveShareLink[];
 	activeSharesLoading: boolean;
 	revokingShareToken: string | null;
+	regeneratingShareToken: string | null;
 	onClose: () => void;
 	onGenerateShareLink: () => Promise<void>;
 	onRevokeShareLink: (token: string) => Promise<boolean>;
+	onRegenerateShareLink: (token: string) => Promise<boolean>;
 	onCopyShareLink: () => void;
 }
 
@@ -46,6 +50,8 @@ export function ShareDialog({
 	onShareSelectedExpiryDaysChange,
 	shareAllowJournalNotes,
 	onShareAllowJournalNotesChange,
+	shareAllowMarkTaken,
+	onShareAllowMarkTakenChange,
 	shareGenerating,
 	shareLink,
 	onShareLinkChange,
@@ -54,14 +60,17 @@ export function ShareDialog({
 	activeShareLinks,
 	activeSharesLoading,
 	revokingShareToken,
+	regeneratingShareToken,
 	onClose,
 	onGenerateShareLink,
 	onRevokeShareLink,
+	onRegenerateShareLink,
 	onCopyShareLink,
 }: ShareDialogProps) {
 	const { t } = useTranslation();
 	const [manageLinksOpen, setManageLinksOpen] = useState(false);
 	const [shareToRevoke, setShareToRevoke] = useState<ActiveShareLink | null>(null);
+	const [shareToRegenerate, setShareToRegenerate] = useState<ActiveShareLink | null>(null);
 	const closeLabel = t("common.close");
 	const copyLabel = shareCopied ? t("share.copied") : t("share.copyLink");
 	const getPersonLabel = (person: string) => (person === "all" ? t("share.allPeople") : person);
@@ -70,12 +79,19 @@ export function ShareDialog({
 			setShareToRevoke(null);
 		}
 	}, [revokingShareToken, shareToRevoke]);
+	const closeRegenerateConfirm = useCallback(() => {
+		if (shareToRegenerate && regeneratingShareToken !== shareToRegenerate.token) {
+			setShareToRegenerate(null);
+		}
+	}, [regeneratingShareToken, shareToRegenerate]);
 
 	useModalHistory(show && Boolean(shareToRevoke), "share-revoke", closeRevokeConfirm);
+	useModalHistory(show && Boolean(shareToRegenerate), "share-regenerate", closeRegenerateConfirm);
 
 	useEffect(() => {
 		if (!show) {
 			setShareToRevoke(null);
+			setShareToRegenerate(null);
 		}
 	}, [show]);
 
@@ -98,6 +114,7 @@ export function ShareDialog({
 					const personLabel = getPersonLabel(share.takenBy);
 					const createdAtLabel = new Date(share.createdAt).toLocaleDateString();
 					const expiresAtLabel = share.expiresAt ? new Date(share.expiresAt).toLocaleDateString() : null;
+					const lastUsedAtLabel = share.lastUsedAt ? new Date(share.lastUsedAt).toLocaleDateString() : null;
 					return (
 						<li key={share.token} className="share-active-item">
 							<div className="share-active-copy">
@@ -117,17 +134,34 @@ export function ShareDialog({
 												days: share.scheduleDays,
 												createdAt: createdAtLabel,
 											})}
+									{lastUsedAtLabel ? ` · ${t("share.lastUsedAt", { date: lastUsedAtLabel })}` : ""}
+									{share.legacyNeverExpires ? ` · ${t("share.legacyNeverExpires")}` : ""}
+									{share.allowMarkTaken ? ` · ${t("share.markTakenEnabled")}` : ` · ${t("share.readOnly")}`}
 									{share.allowJournalNotes ? ` · ${t("share.journalNotesEnabled")}` : ""}
 								</span>
 							</div>
-							<button
-								type="button"
-								className="ghost"
-								disabled={revokingShareToken === share.token}
-								onClick={() => setShareToRevoke(share)}
-							>
-								{revokingShareToken === share.token ? t("share.revoking") : t("share.revoke")}
-							</button>
+							<div className="share-active-actions">
+								<button
+									type="button"
+									className="ghost"
+									disabled={regeneratingShareToken === share.token || revokingShareToken === share.token}
+									onClick={() => setShareToRegenerate(share)}
+								>
+									<RefreshCw size={14} aria-hidden="true" />
+									<span>
+										{regeneratingShareToken === share.token ? t("share.regenerating") : t("share.regenerate")}
+									</span>
+								</button>
+								<button
+									type="button"
+									className="ghost"
+									disabled={revokingShareToken === share.token || regeneratingShareToken === share.token}
+									onClick={() => setShareToRevoke(share)}
+								>
+									<Trash2 size={14} aria-hidden="true" />
+									<span>{revokingShareToken === share.token ? t("share.revoking") : t("share.revoke")}</span>
+								</button>
+							</div>
 						</li>
 					);
 				})}
@@ -280,7 +314,20 @@ export function ShareDialog({
 									<option value="30">{t("share.expiry30Days")}</option>
 									<option value="90">{t("share.expiry90Days")}</option>
 								</select>
+								{shareSelectedExpiryDays == null ? (
+									<p className="hint-text warning-text">{t("share.neverExpiresWarning")}</p>
+								) : null}
 							</div>
+
+							<label className="inline-checkbox" htmlFor="share-mark-taken-toggle">
+								<input
+									id="share-mark-taken-toggle"
+									type="checkbox"
+									checked={shareAllowMarkTaken}
+									onChange={(event) => onShareAllowMarkTakenChange(event.target.checked)}
+								/>
+								<span>{t("share.allowMarkTaken")}</span>
+							</label>
 
 							<label className="inline-checkbox" htmlFor="share-journal-notes-toggle">
 								<input
@@ -319,6 +366,25 @@ export function ShareDialog({
 						onCancel={closeRevokeConfirm}
 						isLoading={revokingShareToken === shareToRevoke.token}
 						confirmVariant="danger"
+						overlayClassName="nested-confirm"
+					/>
+				)}
+				{shareToRegenerate && (
+					<ConfirmModal
+						title={t("share.regenerate")}
+						message={t("share.regenerateConfirm", { person: getPersonLabel(shareToRegenerate.takenBy) })}
+						confirmLabel={
+							regeneratingShareToken === shareToRegenerate.token ? t("share.regenerating") : t("share.regenerate")
+						}
+						cancelLabel={t("common.cancel")}
+						onConfirm={async () => {
+							const regenerated = await onRegenerateShareLink(shareToRegenerate.token);
+							if (regenerated) {
+								setShareToRegenerate(null);
+							}
+						}}
+						onCancel={closeRegenerateConfirm}
+						isLoading={regeneratingShareToken === shareToRegenerate.token}
 						overlayClassName="nested-confirm"
 					/>
 				)}

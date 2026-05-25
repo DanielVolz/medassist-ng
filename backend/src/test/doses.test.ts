@@ -114,10 +114,16 @@ async function insertUserSettings(userId: number, stockCalculationMode: "automat
 	});
 }
 
-async function _insertShareToken(userId: number, token: string, takenBy: string, allowJournalNotes = false) {
+async function _insertShareToken(
+	userId: number,
+	token: string,
+	takenBy: string,
+	allowJournalNotes = false,
+	allowMarkTaken = true
+) {
 	await testClient.execute({
-		sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, allow_journal_notes) VALUES (?, ?, ?, 30, ?)",
-		args: [userId, token, takenBy, allowJournalNotes ? 1 : 0],
+		sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, allow_journal_notes, allow_mark_taken) VALUES (?, ?, ?, 30, ?, ?)",
+		args: [userId, token, takenBy, allowJournalNotes ? 1 : 0, allowMarkTaken ? 1 : 0],
 	});
 }
 
@@ -555,13 +561,13 @@ describe("Dose Tracking API", () => {
 				takenBy: ["Max"],
 				start,
 			});
-			await _insertShareToken(userId, "share-skip-token", "Max", false);
+			await _insertShareToken(userId, "aaaaaaaaaaaaaaaa", "Max", false);
 
 			const doseId = `6-0-${new Date(start).getTime()}-Max`;
 
 			const skipResponse = await app.inject({
 				method: "POST",
-				url: "/share/share-skip-token/doses/skip",
+				url: "/share/aaaaaaaaaaaaaaaa/doses/skip",
 				payload: { doseId },
 			});
 
@@ -576,7 +582,7 @@ describe("Dose Tracking API", () => {
 
 			const undoResponse = await app.inject({
 				method: "DELETE",
-				url: `/share/share-skip-token/doses/skip/${encodeURIComponent(doseId)}`,
+				url: `/share/aaaaaaaaaaaaaaaa/doses/skip/${encodeURIComponent(doseId)}`,
 			});
 
 			expect(undoResponse.statusCode).toBe(200);
@@ -599,14 +605,14 @@ describe("Dose Tracking API", () => {
 				takenBy: ["Max"],
 				start,
 			});
-			await _insertShareToken(userId, "token-no-notes", "Max", false);
+			await _insertShareToken(userId, "bbbbbbbbbbbbbbbb", "Max", false);
 
 			const doseId = `7-0-${new Date(start).getTime()}-Max`;
 			await insertDose({ userId, doseId, markedBy: "Max" });
 
 			const response = await app.inject({
 				method: "GET",
-				url: `/share/token-no-notes/journal/event/${encodeURIComponent(doseId)}`,
+				url: `/share/bbbbbbbbbbbbbbbb/journal/event/${encodeURIComponent(doseId)}`,
 			});
 
 			expect(response.statusCode).toBe(403);
@@ -624,14 +630,14 @@ describe("Dose Tracking API", () => {
 				takenBy: ["Max"],
 				start,
 			});
-			await _insertShareToken(userId, "token-with-notes", "Max", true);
+			await _insertShareToken(userId, "cccccccccccccccc", "Max", true);
 
 			const doseId = `8-0-${new Date(start).getTime()}-Max`;
 			await insertDose({ userId, doseId, markedBy: "Max" });
 
 			const initialResponse = await app.inject({
 				method: "GET",
-				url: `/share/token-with-notes/journal/event/${encodeURIComponent(doseId)}`,
+				url: `/share/cccccccccccccccc/journal/event/${encodeURIComponent(doseId)}`,
 			});
 
 			expect(initialResponse.statusCode).toBe(200);
@@ -645,7 +651,7 @@ describe("Dose Tracking API", () => {
 
 			const initialDosesResponse = await app.inject({
 				method: "GET",
-				url: "/share/token-with-notes/doses",
+				url: "/share/cccccccccccccccc/doses",
 			});
 
 			expect(initialDosesResponse.statusCode).toBe(200);
@@ -658,7 +664,7 @@ describe("Dose Tracking API", () => {
 
 			const saveResponse = await app.inject({
 				method: "PUT",
-				url: `/share/token-with-notes/journal/event/${encodeURIComponent(doseId)}`,
+				url: `/share/cccccccccccccccc/journal/event/${encodeURIComponent(doseId)}`,
 				payload: { note: "Shared note from Max" },
 			});
 
@@ -672,7 +678,7 @@ describe("Dose Tracking API", () => {
 
 			const savedDosesResponse = await app.inject({
 				method: "GET",
-				url: "/share/token-with-notes/doses",
+				url: "/share/cccccccccccccccc/doses",
 			});
 
 			expect(savedDosesResponse.statusCode).toBe(200);
@@ -685,7 +691,7 @@ describe("Dose Tracking API", () => {
 
 			const blankSaveResponse = await app.inject({
 				method: "PUT",
-				url: `/share/token-with-notes/journal/event/${encodeURIComponent(doseId)}`,
+				url: `/share/cccccccccccccccc/journal/event/${encodeURIComponent(doseId)}`,
 				payload: { note: "   " },
 			});
 
@@ -697,7 +703,7 @@ describe("Dose Tracking API", () => {
 
 			const deleteResponse = await app.inject({
 				method: "DELETE",
-				url: `/share/token-with-notes/journal/event/${encodeURIComponent(doseId)}`,
+				url: `/share/cccccccccccccccc/journal/event/${encodeURIComponent(doseId)}`,
 			});
 
 			expect(deleteResponse.statusCode).toBe(403);

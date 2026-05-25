@@ -260,6 +260,18 @@ The version number is displayed in the **About modal** (Settings → About) as a
 - The About modal will show the old version
 - The version link will point to a non-existent GitHub release page
 
+### Production Docker Compose Image Pinning (MANDATORY)
+
+The documented production `docker-compose.yml` must be pinned to the exact release image tags for the release being prepared.
+
+- On every release branch, update both production image references in `docker-compose.yml` from any previous version to the new release image tag.
+- Use the Docker image tag produced by `docker-build.yml` for release tags: `X.Y.Z` without the leading Git tag `v`.
+- Example for release tag `v1.23.0`:
+  - `ghcr.io/danielvolz/medassist-ng-backend:1.23.0`
+  - `ghcr.io/danielvolz/medassist-ng-frontend:1.23.0`
+- Do not leave production `docker-compose.yml` on `:latest` after a release PR. `:latest` may appear only in explicitly labeled floating/latest examples, not in the default production compose file.
+- If the release changes the image-tagging workflow, update these instructions and the user-facing deployment docs in the same release PR.
+
 ### Manual Release
 
 1. Create release branch:
@@ -268,8 +280,9 @@ The version number is displayed in the **About modal** (Settings → About) as a
    git checkout -b chore/release-X.Y.Z
    ```
 2. Update versions in **both** `backend/package.json` and `frontend/package.json` to `X.Y.Z`
-3. Commit, push, create PR, wait for CI, merge (same as Task 1)
-4. Create signed tag:
+3. Update production `docker-compose.yml` image references to `ghcr.io/danielvolz/medassist-ng-backend:X.Y.Z` and `ghcr.io/danielvolz/medassist-ng-frontend:X.Y.Z`
+4. Commit, push, create PR, wait for CI, merge (same as Task 1)
+5. Create signed tag:
    ```bash
    git checkout main && git pull origin main
    git tag -s "vX.Y.Z" -m "Release vX.Y.Z"
@@ -279,6 +292,7 @@ The version number is displayed in the **About modal** (Settings → About) as a
 ### After Tagging
 
 - The `docker-build.yml` workflow automatically builds and pushes Docker images to GHCR with both versioned tags (`1.8.7`, `1.8`) and `latest`.
+- Confirm that the production `docker-compose.yml` image tags in the merged release commit match the pushed release image tag (`X.Y.Z`, without the leading `v`).
 - The `update-test-badges.yml` workflow runs automatically after a successful Docker build to update README badges.
 - Track progress: `https://github.com/DanielVolz/medassist-ng/actions`
 

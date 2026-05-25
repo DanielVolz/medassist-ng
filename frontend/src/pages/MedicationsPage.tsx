@@ -489,7 +489,6 @@ export function MedicationsPage() {
 	const [showObsolete, setShowObsolete] = useState(true);
 	const [readOnlyView, setReadOnlyView] = useState(false);
 	const [showReportModal, setShowReportModal] = useState(false);
-	useModalHistory(showReportModal, "report", () => setShowReportModal(false));
 	useModalHistory(!!lightboxImage, "medication-image-lightbox", closeLightbox);
 	useModalHistory(showUnsavedConfirm, "medication-unsaved-confirm", handleCancelClose);
 	const [showNameValidation, setShowNameValidation] = useState(false);

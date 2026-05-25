@@ -9,11 +9,10 @@ import fastifyMultipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import fastifyStatic from "@fastify/static";
-import fastifySwagger from "@fastify/swagger";
-import fastifySwaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyInstance } from "fastify";
 import { migrationsReady } from "./db/client.js";
 import { getDataDir } from "./db/db-utils.js";
+import { registerApiDocs } from "./plugins/api-docs.js";
 import { env } from "./plugins/env.js";
 import { jwtPlugin } from "./plugins/jwt.js";
 import { apiKeyRoutes } from "./routes/api-keys.js";
@@ -115,57 +114,6 @@ function isPublicNotificationActionPath(url: string | undefined): boolean {
 	return /(^|\/)(api\/)?notification-actions(\/|$)/.test(normalizedUrl);
 }
 
-async function registerApiDocs(app: FastifyInstance, enabled: boolean) {
-	if (!enabled) return;
-
-	await app.register(fastifySwagger, {
-		openapi: {
-			openapi: "3.0.3",
-			info: {
-				title: "MedAssist-ng API",
-				description: "MedAssist-ng backend API",
-				version: process.env.npm_package_version ?? "dev",
-			},
-			servers: [{ url: "/", description: "Current server" }],
-			tags: [
-				{ name: "health", description: "Service health endpoints" },
-				{ name: "auth", description: "Authentication and profile endpoints" },
-				{ name: "api-keys", description: "Programmatic API key management" },
-				{ name: "intake-journal", description: "Owner-only intake journal CRUD and history endpoints" },
-				{ name: "medication-enrichment", description: "Medication search and enrichment endpoints" },
-				{ name: "settings", description: "User settings and notification test endpoints" },
-			],
-			components: {
-				securitySchemes: {
-					bearerAuth: {
-						type: "http",
-						scheme: "bearer",
-						bearerFormat: "API key or JWT",
-						description: "Use Authorization: Bearer ma_... (API key) or a JWT token.",
-					},
-					cookieAuth: {
-						type: "apiKey",
-						in: "cookie",
-						name: "access_token",
-						description: "Session cookie set by login.",
-					},
-				},
-			},
-		},
-		hideUntagged: false,
-	});
-
-	await app.register(fastifySwaggerUi, {
-		routePrefix: "/docs",
-		staticCSP: true,
-		transformSpecificationClone: true,
-		uiConfig: {
-			docExpansion: "list",
-			deepLinking: false,
-		},
-	});
-}
-
 /** Create and configure Fastify app (without starting) */
 export async function createApp(options?: {
 	logLevel?: string;
@@ -179,6 +127,7 @@ export async function createApp(options?: {
 	isProduction?: boolean;
 	imagesDir?: string;
 	openApiDocsEnabled?: boolean;
+	docsAuthRequired?: boolean;
 }): Promise<FastifyInstance> {
 	const opts = {
 		logLevel: options?.logLevel ?? "info",
@@ -192,6 +141,7 @@ export async function createApp(options?: {
 		isProduction: options?.isProduction ?? false,
 		imagesDir: options?.imagesDir ?? resolve(getDataDir(), "images"),
 		openApiDocsEnabled: options?.openApiDocsEnabled ?? false,
+		docsAuthRequired: options?.docsAuthRequired ?? options?.authEnabled ?? false,
 	};
 
 	const app = Fastify({
@@ -248,7 +198,10 @@ export async function createApp(options?: {
 	await app.register(jwtPlugin, jwtConfig);
 
 	await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } });
-	await registerApiDocs(app, opts.openApiDocsEnabled);
+	await registerApiDocs(app, {
+		enabled: opts.openApiDocsEnabled,
+		authRequired: opts.docsAuthRequired,
+	});
 
 	// Only register static if directory exists
 	if (existsSync(opts.imagesDir)) {
@@ -355,13 +308,15 @@ const jwtConfig = getJwtConfig(env.AUTH_ENABLED, env.JWT_SECRET);
 await app.register(jwtPlugin, jwtConfig);
 
 await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
-await registerApiDocs(app, env.OPENAPI_DOCS_ENABLED);
+await registerApiDocs(app, {
+	enabled: env.OPENAPI_DOCS_ENABLED,
+	authRequired: env.DOCS_AUTH_REQUIRED,
+});
 await app.register(fastifyStatic, {
 	root: imagesDir,
 	prefix: "/images/",
 	decorateReply: false,
 });
-
 await app.register(healthRoutes);
 await app.register(authRoutes);
 await app.register(apiKeyRoutes);

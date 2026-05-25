@@ -12,6 +12,7 @@ docker compose -p medassist-dev -f docker-compose.dev.yml up
 - Backend: `http://localhost:3000`
 - API docs UI: `http://localhost:3000/docs` when docs are enabled
 - OpenAPI JSON: `http://localhost:3000/docs/json` when docs are enabled
+- Docs are open in no-auth local development; authenticated setups protect docs by default unless `DOCS_AUTH_REQUIRED=false` is set.
 
 ## Frontend Dev Server Behind a Proxy
 

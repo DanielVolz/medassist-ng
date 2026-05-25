@@ -224,6 +224,8 @@ If the frontend loads but API requests fail, check the backend health endpoint f
 
 Public deployments must enable `AUTH_ENABLED=true` with local username/password login or OIDC SSO. The default Docker Compose stack exposes only the frontend on `4174`; the backend stays internal on the Docker network and is reached through the frontend `/api` proxy.
 
+OpenAPI docs are disabled by default in production. If you explicitly enable `/docs` or `/docs/json` on an authenticated staging or production deployment, keep `DOCS_AUTH_REQUIRED=true` or place the docs behind a private network boundary.
+
 Do not expose the backend directly to the Internet. If you need a temporary direct backend port for local debugging, create a local `docker-compose.override.yml` like this and keep the binding on `127.0.0.1`:
 
 ```yaml

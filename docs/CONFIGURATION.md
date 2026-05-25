@@ -15,12 +15,15 @@ Configure MedAssist with environment variables in `.env`. Start from `.env.examp
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error`, or `silent` |
 | `RATE_LIMIT_MAX` | `100` | Maximum requests per minute per IP |
 | `OPENAPI_DOCS_ENABLED` | `auto` | Explicitly enable or disable `/docs` and `/docs/json` |
+| `DOCS_AUTH_REQUIRED` | `auto` | Require authentication for enabled docs; defaults to `true` when `AUTH_ENABLED=true` |
 
 API docs behavior:
 
 - If `OPENAPI_DOCS_ENABLED` is unset, docs are enabled outside production and disabled in production.
 - `OPENAPI_DOCS_ENABLED=true` enables `/docs` and `/docs/json`.
 - `OPENAPI_DOCS_ENABLED=false` disables the docs only.
+- If `DOCS_AUTH_REQUIRED` is unset, authenticated deployments require login/API authentication for `/docs` and `/docs/json`.
+- Keep production docs disabled unless you specifically need them. If docs are enabled in public staging or production, protect them with authentication or a network boundary.
 
 `CORS_ORIGINS` note:
 

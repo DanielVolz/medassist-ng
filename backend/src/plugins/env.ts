@@ -19,6 +19,10 @@ const EnvSchema = z.object({
 		.string()
 		.transform((v) => v === "true")
 		.optional(),
+	DOCS_AUTH_REQUIRED: z
+		.string()
+		.transform((v) => v === "true")
+		.optional(),
 
 	// ==========================================================================
 	// Auth Configuration
@@ -82,6 +86,7 @@ const EnvSchema = z.object({
 type ParsedEnv = z.infer<typeof EnvSchema>;
 export type Env = ParsedEnv & {
 	OPENAPI_DOCS_ENABLED: boolean;
+	DOCS_AUTH_REQUIRED: boolean;
 };
 
 // Parse and validate
@@ -189,4 +194,6 @@ export const env: Env = {
 	...parsed,
 	// Docs UI/spec are enabled in non-production by default.
 	OPENAPI_DOCS_ENABLED: parsed.OPENAPI_DOCS_ENABLED ?? parsed.NODE_ENV !== "production",
+	// Authenticated deployments protect docs by default when docs are enabled.
+	DOCS_AUTH_REQUIRED: parsed.DOCS_AUTH_REQUIRED ?? parsed.AUTH_ENABLED,
 };

@@ -15,6 +15,14 @@ const EnvSchema = z.object({
 	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
 	LOG_LEVEL: z.string().default("info"),
 	PUBLIC_APP_URL: z.string().url().optional(),
+	OPENAPI_DOCS_ENABLED: z
+		.string()
+		.transform((v) => v === "true")
+		.optional(),
+	DOCS_AUTH_REQUIRED: z
+		.string()
+		.transform((v) => v === "true")
+		.optional(),
 	AUTH_ENABLED: z
 		.string()
 		.default("false")
@@ -87,6 +95,8 @@ describe("EnvSchema", () => {
 			expect(result.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4173");
 			expect(result.LOG_LEVEL).toBe("info");
 			expect(result.PUBLIC_APP_URL).toBeUndefined();
+			expect(result.OPENAPI_DOCS_ENABLED).toBeUndefined();
+			expect(result.DOCS_AUTH_REQUIRED).toBeUndefined();
 			expect(result.AUTH_ENABLED).toBe(false);
 			expect(result.ALLOW_UNAUTHENTICATED).toBe(false);
 			expect(result.REGISTRATION_ENABLED).toBe(false);
@@ -173,6 +183,13 @@ describe("EnvSchema", () => {
 		it("should transform OIDC_AUTO_CREATE_USERS correctly", () => {
 			expect(EnvSchema.parse({ OIDC_AUTO_CREATE_USERS: "true" }).OIDC_AUTO_CREATE_USERS).toBe(true);
 			expect(EnvSchema.parse({ OIDC_AUTO_CREATE_USERS: "false" }).OIDC_AUTO_CREATE_USERS).toBe(false);
+		});
+
+		it("should transform API docs booleans correctly", () => {
+			expect(EnvSchema.parse({ OPENAPI_DOCS_ENABLED: "true" }).OPENAPI_DOCS_ENABLED).toBe(true);
+			expect(EnvSchema.parse({ OPENAPI_DOCS_ENABLED: "false" }).OPENAPI_DOCS_ENABLED).toBe(false);
+			expect(EnvSchema.parse({ DOCS_AUTH_REQUIRED: "true" }).DOCS_AUTH_REQUIRED).toBe(true);
+			expect(EnvSchema.parse({ DOCS_AUTH_REQUIRED: "false" }).DOCS_AUTH_REQUIRED).toBe(false);
 		});
 	});
 

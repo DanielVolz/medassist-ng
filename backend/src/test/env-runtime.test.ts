@@ -30,6 +30,10 @@ describe("plugins/env runtime validation", () => {
 		expect(mod.env.ALLOW_UNAUTHENTICATED).toBe(false);
 		expect(mod.env.OIDC_ENABLED).toBe(false);
 		expect(mod.env.PORT).toBe(3000);
+		expect(mod.env.SHARE_TOKEN_TTL_DAYS).toBe(90);
+		expect(mod.env.SENSITIVE_LOGGING_ENABLED).toBe(false);
+		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
+		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
 	});
 
 	it("exits when production auth is disabled without explicit unauthenticated override", async () => {
@@ -55,6 +59,36 @@ describe("plugins/env runtime validation", () => {
 		expect(mod.env.NODE_ENV).toBe("production");
 		expect(mod.env.AUTH_ENABLED).toBe(false);
 		expect(mod.env.ALLOW_UNAUTHENTICATED).toBe(true);
+		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(false);
+		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
+	});
+
+	it("requires docs auth by default when auth is enabled", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "true";
+		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.OPENAPI_DOCS_ENABLED = "true";
+		delete process.env.DOCS_AUTH_REQUIRED;
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
+		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(true);
+	});
+
+	it("allows docs auth to be explicitly disabled", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "true";
+		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.OPENAPI_DOCS_ENABLED = "true";
+		process.env.DOCS_AUTH_REQUIRED = "false";
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
+		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
 	});
 
 	it("loads when development auth is disabled", async () => {

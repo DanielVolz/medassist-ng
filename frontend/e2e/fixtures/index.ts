@@ -464,7 +464,7 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
 export async function createShareTokenViaAPI(
 	takenBy: string,
 	scheduleDays = 30,
-	options: { allowJournalNotes?: boolean; expiryDays?: number | null } = {}
+	options: { allowJournalNotes?: boolean; allowMarkTaken?: boolean; expiryDays?: number | null } = {}
 ): Promise<TestShareToken> {
 	let token = await ensureAuthCookie();
 	const apiBase = await getRuntimeApiBase();
@@ -480,6 +480,7 @@ export async function createShareTokenViaAPI(
 				scheduleDays,
 				expiryDays: options.expiryDays ?? null,
 				allowJournalNotes: options.allowJournalNotes ?? false,
+				allowMarkTaken: options.allowMarkTaken ?? false,
 			}),
 		});
 		if (res.status === 401) {

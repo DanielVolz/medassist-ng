@@ -96,7 +96,10 @@ test.describe("Mobile modal browser back", () => {
 			intakes: [{ usage: 1, every: 1, start: startTime, intakeRemindersEnabled: false, takenBy: person }],
 		});
 
-		const shareToken = await createShareTokenViaAPI(person, 30, { allowJournalNotes: true });
+		const shareToken = await createShareTokenViaAPI(person, 30, {
+			allowJournalNotes: true,
+			allowMarkTaken: true,
+		});
 
 		await page.goto(`/share/${shareToken.token}`);
 		await page.waitForLoadState("networkidle");

@@ -129,6 +129,7 @@ test.describe("Schedule Timeline", () => {
 
 	test("should highlight today block", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		await waitForSeededScheduleData(page);
 
 		const todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });

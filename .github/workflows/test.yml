@@ -69,6 +69,9 @@ jobs:
       - name: TypeScript type check
         run: npx tsc --noEmit
 
+      - name: Run domain safety release gate
+        run: npm run test:domain
+
       - name: Run tests with coverage
         run: npm run test:coverage
 

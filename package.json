@@ -6,7 +6,8 @@
     "lint": "cd backend && npm run lint && cd ../frontend && npm run lint",
     "lint:fix": "cd backend && npm run lint:fix && cd ../frontend && npm run lint:fix",
     "check": "cd backend && npm run check && cd ../frontend && npm run check",
-    "build": "cd backend && npm run build && cd ../frontend && npm run build"
+    "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "test:domain": "cd backend && npm run test:domain && cd ../frontend && npm run test:e2e:domain"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",

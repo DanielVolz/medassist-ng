@@ -25,6 +25,7 @@ jobs:
             e2e_relevant:
               - 'frontend/**'
               - 'backend/**'
+              - '.github/workflows/e2e.yml'
 
   e2e:
     name: Playwright E2E
@@ -59,6 +60,16 @@ jobs:
       - name: Install Playwright browsers
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+
+      - name: Run domain E2E release gate
+        working-directory: frontend
+        run: npm run test:e2e:domain
+        env:
+          CI: true
+          PLAYWRIGHT_WORKERS: 1
+          PLAYWRIGHT_HTML_OPEN: never
+          JWT_SECRET: e2e-test-secret-that-is-long-enough
+          SESSION_SECRET: e2e-test-session-secret-long-enough
 
       - name: Run E2E tests (Chromium only)
         working-directory: frontend

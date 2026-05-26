@@ -111,6 +111,27 @@ describe("AuthProvider", () => {
 		);
 	});
 
+	it("authFetch adds a correlation id to authenticated API requests", async () => {
+		vi.clearAllMocks();
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ authEnabled: false, formLoginEnabled: true }),
+			})
+			.mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ data: true }) });
+
+		const { result } = renderHook(() => useAuth(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.loading).toBe(false);
+		});
+
+		await result.current.authFetch("/api/medications", { method: "GET" });
+
+		const requestInit = (fetch as ReturnType<typeof vi.fn>).mock.calls[1]?.[1] as RequestInit;
+		expect(new Headers(requestInit.headers).get("x-correlation-id")).toMatch(/^fe-api-/);
+	});
+
 	it("authFetch logs user out when refresh fails", async () => {
 		vi.clearAllMocks();
 		(global.fetch as ReturnType<typeof vi.fn>)

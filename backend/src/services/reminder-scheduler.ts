@@ -847,7 +847,7 @@ function scheduleNextCheck(logger: ServiceLogger): void {
 	);
 
 	schedulerTimeout = setTimeout(() => {
-		checkAndSendReminder(logger).catch((err) => logger.error(`[Reminder] Error: ${err}`));
+		checkAndSendReminder(logger).catch((err) => logger.error("[Reminder] Scheduled check failed", err));
 		// Schedule the next check after this one completes
 		scheduleNextCheck(logger);
 	}, msUntilNext);
@@ -870,7 +870,7 @@ export function startReminderScheduler(logger: ServiceLogger): void {
 	// This is intentionally a single current-state snapshot (no replay of missed days).
 	if (currentHour >= REMINDER_HOUR && state.lastStockSchedulerCheckDate !== today) {
 		logger.info("[Reminder] Missed today's check, running one catch-up snapshot (no historical replay)...");
-		checkAndSendReminder(logger).catch((err) => logger.error(`[Reminder] Error: ${err}`));
+		checkAndSendReminder(logger).catch((err) => logger.error("[Reminder] Catch-up check failed", err));
 	}
 
 	// Schedule next check at REMINDER_HOUR

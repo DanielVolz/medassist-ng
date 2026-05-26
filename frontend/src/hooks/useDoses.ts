@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import { useFeedback } from "../context/FeedbackContext";
+import { log } from "../utils/logger";
 
 export interface UseDosesReturn {
 	takenDoses: Set<string>;
@@ -23,6 +24,10 @@ export interface UseDosesReturn {
 	undoDoseTaken: (doseId: string) => Promise<void>;
 	undoDoseSkipped: (doseId: string) => Promise<void>;
 	loadTakenDoses: () => Promise<void>;
+}
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }
 
 export function useDoses(): UseDosesReturn {
@@ -78,9 +83,12 @@ export function useDoses(): UseDosesReturn {
 			} else if (res.status === 401 || res.status === 403) {
 				// Prevent showing previous user's dose state after auth/session changes.
 				clearDosesState();
+			} else {
+				log.debug("[useDoses] dose polling failed", { status: res.status });
 			}
 			// Don't reset on error - keep current state
-		} catch {
+		} catch (error) {
+			log.debug("[useDoses] dose polling request failed", { error: getErrorMessage(error) });
 			// Don't reset on error - keep current state
 		}
 	}, [authFetch, clearDosesState]);
@@ -167,6 +175,8 @@ export function useDoses(): UseDosesReturn {
 			});
 
 			// Send to server
+			let failureStatus: number | null = null;
+			let failureCode: string | null = null;
 			try {
 				const response = await authFetch("/api/doses/taken", {
 					method: "POST",
@@ -174,12 +184,19 @@ export function useDoses(): UseDosesReturn {
 					body: JSON.stringify({ doseId }),
 				});
 				if (!response.ok) {
-					if ((await getErrorCode(response)) === "OUT_OF_STOCK") {
+					failureStatus = response.status;
+					failureCode = await getErrorCode(response);
+					if (failureCode === "OUT_OF_STOCK") {
 						showFeedback({ message: t("common.outOfStockTakeBlocked"), tone: "error" });
 					}
-					throw new Error("Failed to mark dose as taken");
+					throw new Error(`HTTP ${response.status}`);
 				}
-			} catch {
+			} catch (error) {
+				log.warn("[useDoses] mark dose taken failed", {
+					status: failureStatus,
+					code: failureCode,
+					error: getErrorMessage(error),
+				});
 				// Revert on error
 				setTakenDoses((prev) => {
 					const next = new Set(prev);
@@ -269,6 +286,7 @@ export function useDoses(): UseDosesReturn {
 				return next;
 			});
 
+			let failureStatus: number | null = null;
 			try {
 				const response = await authFetch("/api/doses/skip", {
 					method: "POST",
@@ -276,9 +294,14 @@ export function useDoses(): UseDosesReturn {
 					body: JSON.stringify({ doseId }),
 				});
 				if (!response.ok) {
-					throw new Error("Failed to mark dose as skipped");
+					failureStatus = response.status;
+					throw new Error(`HTTP ${response.status}`);
 				}
-			} catch {
+			} catch (error) {
+				log.warn("[useDoses] mark dose skipped failed", {
+					status: failureStatus,
+					error: getErrorMessage(error),
+				});
 				setDismissedDoses((prev) => {
 					const next = new Set(prev);
 					if (wasSkipped) {
@@ -341,11 +364,20 @@ export function useDoses(): UseDosesReturn {
 			});
 
 			// Send to server
+			let failureStatus: number | null = null;
 			try {
-				await authFetch(`/api/doses/taken/${encodeURIComponent(doseId)}`, {
+				const response = await authFetch(`/api/doses/taken/${encodeURIComponent(doseId)}`, {
 					method: "DELETE",
 				});
-			} catch {
+				if (!response.ok) {
+					failureStatus = response.status;
+					throw new Error(`HTTP ${response.status}`);
+				}
+			} catch (error) {
+				log.warn("[useDoses] undo dose taken failed", {
+					status: failureStatus,
+					error: getErrorMessage(error),
+				});
 				// Revert on error
 				setTakenDoses((prev) => {
 					const next = new Set(prev);
@@ -386,11 +418,20 @@ export function useDoses(): UseDosesReturn {
 				return next;
 			});
 
+			let failureStatus: number | null = null;
 			try {
-				await authFetch(`/api/doses/skip/${encodeURIComponent(doseId)}`, {
+				const response = await authFetch(`/api/doses/skip/${encodeURIComponent(doseId)}`, {
 					method: "DELETE",
 				});
-			} catch {
+				if (!response.ok) {
+					failureStatus = response.status;
+					throw new Error(`HTTP ${response.status}`);
+				}
+			} catch (error) {
+				log.warn("[useDoses] undo dose skipped failed", {
+					status: failureStatus,
+					error: getErrorMessage(error),
+				});
 				setDismissedDoses((prev) => {
 					const next = new Set(prev);
 					if (wasSkipped) {

@@ -3,7 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useR
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useModalHistory } from "../hooks/useModalHistory";
-import { withCorrelation } from "../utils/correlation";
+import { createCorrelationId, withCorrelation } from "../utils/correlation";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
 import { ConfirmModal } from "./ConfirmModal";
@@ -49,6 +49,65 @@ interface AuthContextType {
 // Context
 // =============================================================================
 const AuthContext = createContext<AuthContextType | null>(null);
+
+function getRequestUrl(input: RequestInfo | URL): string {
+	if (typeof input === "string") return input;
+	if (input instanceof URL) return input.toString();
+	if (typeof Request !== "undefined" && input instanceof Request) return input.url;
+	return String(input);
+}
+
+function getRequestMethod(input: RequestInfo | URL, init?: RequestInit): string {
+	if (init?.method) return init.method.toUpperCase();
+	if (typeof Request !== "undefined" && input instanceof Request) return input.method.toUpperCase();
+	return "GET";
+}
+
+function redactApiPath(path: string): string {
+	return path.replace(/(\/api\/share\/)(?:[a-f0-9]{16}|[a-f0-9]{64})(?=\/|$|\?)/gi, "$1[share-token]");
+}
+
+function getRequestLogPath(input: RequestInfo | URL): string {
+	const rawUrl = getRequestUrl(input);
+	try {
+		return redactApiPath(new URL(rawUrl, "http://localhost").pathname);
+	} catch {
+		return redactApiPath(rawUrl.split("?")[0] ?? rawUrl);
+	}
+}
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function isPollingRequest(path: string, method: string): boolean {
+	if (method !== "GET") return false;
+	return path === "/api/doses/taken" || /^\/api\/share\/[^/]+\/doses$/.test(path);
+}
+
+function shouldWarnForResponse(path: string, method: string, response: Response): boolean {
+	if (response.ok || isPollingRequest(path, method)) return false;
+	if (method === "GET" || method === "HEAD") return response.status >= 500;
+	return true;
+}
+
+function withAuthFetchCorrelation(init?: RequestInit): { correlationId: string; init: RequestInit } {
+	const headers = new Headers(init?.headers ?? {});
+	const existingCorrelationId = headers.get("x-correlation-id")?.trim();
+	const correlationId = existingCorrelationId || createCorrelationId("fe-api");
+	if (!existingCorrelationId) {
+		headers.set("x-correlation-id", correlationId);
+	}
+
+	return {
+		correlationId,
+		init: {
+			...init,
+			headers,
+			credentials: "include",
+		},
+	};
+}
 
 export function useAuth() {
 	const context = useContext(AuthContext);
@@ -228,15 +287,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	}
 
 	async function register(username: string, password: string) {
-		const res = await fetch("/api/auth/register", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			credentials: "include",
-			body: JSON.stringify({ username, password }),
-		});
+		const { correlationId, init } = withCorrelation(
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ username, password }),
+			},
+			"fe-auth-register"
+		);
+		const res = await fetch("/api/auth/register", init);
 
 		if (!res.ok) {
 			const data = await res.json();
+			log.warn("[Auth] Registration failed", { status: res.status, code: data.code, correlationId });
 			throw new Error(data.error || "Registration failed");
 		}
 
@@ -264,15 +328,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	}
 
 	async function updateProfile(data: { currentPassword?: string; newPassword?: string }) {
-		const res = await fetch("/api/auth/me", {
-			method: "PUT",
-			headers: { "Content-Type": "application/json" },
-			credentials: "include",
-			body: JSON.stringify(data),
-		});
+		const { correlationId, init } = withCorrelation(
+			{
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify(data),
+			},
+			"fe-auth-profile"
+		);
+		const res = await fetch("/api/auth/me", init);
 
 		if (!res.ok) {
 			const err = await res.json();
+			log.warn("[Auth] Profile update failed", { status: res.status, code: err.code, correlationId });
 			throw new Error(err.error || "Update failed");
 		}
 
@@ -284,11 +353,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		const formData = new FormData();
 		formData.append("file", file);
 
-		const res = await fetch("/api/auth/avatar", {
-			method: "POST",
-			credentials: "include",
-			body: formData,
-		});
+		const { correlationId, init } = withCorrelation(
+			{
+				method: "POST",
+				credentials: "include",
+				body: formData,
+			},
+			"fe-auth-avatar"
+		);
+		const res = await fetch("/api/auth/avatar", init);
 
 		if (!res.ok) {
 			let code = "UNKNOWN";
@@ -300,6 +373,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			} catch {
 				// No JSON body
 			}
+			log.warn("[Auth] Avatar upload failed", { status: res.status, code, correlationId });
 			throw new Error(code);
 		}
 
@@ -308,13 +382,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 	// Delete avatar
 	async function deleteAvatar() {
-		const res = await fetch("/api/auth/avatar", {
-			method: "DELETE",
-			credentials: "include",
-		});
+		const { correlationId, init } = withCorrelation(
+			{
+				method: "DELETE",
+				credentials: "include",
+			},
+			"fe-auth-avatar-delete"
+		);
+		const res = await fetch("/api/auth/avatar", init);
 
 		if (!res.ok) {
 			const err = await res.json().catch(() => ({ error: "Delete failed" }));
+			log.warn("[Auth] Avatar delete failed", { status: res.status, code: err.code, correlationId });
 			throw new Error(err.error || "Delete failed");
 		}
 
@@ -323,13 +402,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 	// Delete account
 	async function deleteAccount() {
-		const res = await fetch("/api/auth/me", {
-			method: "DELETE",
-			credentials: "include",
-		});
+		const { correlationId, init } = withCorrelation(
+			{
+				method: "DELETE",
+				credentials: "include",
+			},
+			"fe-auth-account-delete"
+		);
+		const res = await fetch("/api/auth/me", init);
 
 		if (!res.ok) {
 			const err = await res.json().catch(() => ({ error: "Delete failed" }));
+			log.warn("[Auth] Account delete failed", { status: res.status, code: err.code, correlationId });
 			throw new Error(err.error || "Delete failed");
 		}
 
@@ -339,19 +423,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	// Fetch wrapper that automatically refreshes token on 401
 	const authFetch = useCallback(
 		async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-			const options: RequestInit = {
-				...init,
-				credentials: "include",
-			};
+			const method = getRequestMethod(input, init);
+			const path = getRequestLogPath(input);
+			const correlated = withAuthFetchCorrelation(init);
+			const options = correlated.init;
+			const { correlationId } = correlated;
 
-			let res = await fetch(input, options);
+			let res: Response;
+			try {
+				res = await fetch(input, options);
+			} catch (error) {
+				const details = { method, path, correlationId, error: getErrorMessage(error) };
+				if (isPollingRequest(path, method)) {
+					log.debug("[Auth] API polling request failed", details);
+				} else {
+					log.error("[Auth] API request failed", details);
+				}
+				throw error;
+			}
 
 			// If 401 and not already a refresh/login request, try to refresh token
-			if (res.status === 401 && !String(input).includes("/auth/")) {
+			let retried = false;
+			if (res.status === 401 && !path.startsWith("/api/auth/")) {
 				const refreshed = await tryRefreshToken();
 				if (refreshed) {
 					// Retry the original request with new token
-					res = await fetch(input, options);
+					retried = true;
+					try {
+						res = await fetch(input, options);
+					} catch (error) {
+						log.error("[Auth] API retry request failed", {
+							method,
+							path,
+							correlationId,
+							error: getErrorMessage(error),
+						});
+						throw error;
+					}
 					if (res.ok) {
 						setSessionExpired(false);
 					}
@@ -360,6 +468,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					setUser(null);
 					setSessionExpired(true);
 				}
+			}
+
+			if (shouldWarnForResponse(path, method, res)) {
+				log.warn("[Auth] API request completed with failure status", {
+					method,
+					path,
+					status: res.status,
+					correlationId,
+					retried,
+				});
 			}
 
 			return res;

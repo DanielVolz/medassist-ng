@@ -330,14 +330,26 @@ const start = async () => {
 			info: (msg) => app.log.info(msg),
 			debug: (msg) => app.log.debug(msg),
 			warn: (msg) => app.log.warn(msg),
-			error: (msg) => app.log.error(msg),
+			error: (msg, error) => {
+				if (error === undefined) {
+					app.log.error(msg);
+					return;
+				}
+				app.log.error({ err: error }, msg);
+			},
 		});
 
 		startMedicationEnrichmentCatalogRefresh({
 			info: (msg: string) => app.log.info(msg),
 			debug: (msg: string) => app.log.debug(msg),
 			warn: (msg: string) => app.log.warn(msg),
-			error: (msg: string) => app.log.error(msg),
+			error: (msg: string, error?: unknown) => {
+				if (error === undefined) {
+					app.log.error(msg);
+					return;
+				}
+				app.log.error({ err: error }, msg);
+			},
 		});
 
 		// Start the intake reminder scheduler (checks every minute)
@@ -345,7 +357,13 @@ const start = async () => {
 			info: (msg) => app.log.info(msg),
 			debug: (msg) => app.log.debug(msg),
 			warn: (msg) => app.log.warn(msg),
-			error: (msg) => app.log.error(msg),
+			error: (msg, error) => {
+				if (error === undefined) {
+					app.log.error(msg);
+					return;
+				}
+				app.log.error({ err: error }, msg);
+			},
 		});
 	} catch (err) {
 		app.log.error(err);

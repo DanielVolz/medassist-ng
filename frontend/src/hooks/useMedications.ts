@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useAuth } from "../components/Auth";
 import type { Medication } from "../types";
+import { log } from "../utils/logger";
 
 export interface UseMedicationsReturn {
 	meds: Medication[];
@@ -14,6 +15,10 @@ export interface UseMedicationsReturn {
 	deleteMed: (id: number, editingId: number | null, resetForm: () => void) => Promise<void>;
 	uploadMedImage: (medId: number, file: File) => Promise<void>;
 	deleteMedImage: (medId: number) => Promise<void>;
+}
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }
 
 export function useMedications(): UseMedicationsReturn {
@@ -33,15 +38,30 @@ export function useMedications(): UseMedicationsReturn {
 	const loadMeds = useCallback(() => {
 		setLoading(true);
 		authFetch("/api/medications?includeObsolete=true")
-			.then((res) => res.json())
+			.then((res) => {
+				if (!res.ok) {
+					throw new Error(`HTTP ${res.status}`);
+				}
+				return res.json();
+			})
 			.then((data) => setMeds(Array.isArray(data) ? data : []))
-			.catch(() => setMeds([]))
+			.catch((error: unknown) => {
+				log.warn("[useMedications] load medications failed", { error: getErrorMessage(error) });
+				setMeds([]);
+			})
 			.finally(() => setLoading(false));
 	}, [authFetch]);
 
 	const deleteMed = useCallback(
 		async (id: number, editingId: number | null, resetForm: () => void) => {
-			await authFetch(`/api/medications/${id}`, { method: "DELETE" }).catch(() => null);
+			try {
+				const response = await authFetch(`/api/medications/${id}`, { method: "DELETE" });
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}`);
+				}
+			} catch (error) {
+				log.warn("[useMedications] delete medication failed", { medicationId: id, error: getErrorMessage(error) });
+			}
 			if (editingId === id) resetForm();
 			loadMeds();
 		},
@@ -92,7 +112,17 @@ export function useMedications(): UseMedicationsReturn {
 
 	const deleteMedImage = useCallback(
 		async (medId: number) => {
-			await authFetch(`/api/medications/${medId}/image`, { method: "DELETE" }).catch(() => null);
+			try {
+				const response = await authFetch(`/api/medications/${medId}/image`, { method: "DELETE" });
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}`);
+				}
+			} catch (error) {
+				log.warn("[useMedications] delete medication image failed", {
+					medicationId: medId,
+					error: getErrorMessage(error),
+				});
+			}
 			loadMeds();
 		},
 		[authFetch, loadMeds]

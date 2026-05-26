@@ -3,12 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMedications } from "../../hooks/useMedications";
 import type { Medication } from "../../types";
 
+const loggerMock = vi.hoisted(() => ({
+	debug: vi.fn(),
+	error: vi.fn(),
+	info: vi.fn(),
+	warn: vi.fn(),
+}));
 const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
 vi.mock("../../components/Auth", () => ({
 	useAuth: () => ({
 		authFetch: authFetchMock,
 	}),
+}));
+
+vi.mock("../../utils/logger", () => ({
+	log: loggerMock,
 }));
 
 describe("useMedications", () => {
@@ -88,6 +98,10 @@ describe("useMedications", () => {
 		});
 
 		expect(result.current.meds).toEqual([]);
+		expect(loggerMock.warn).toHaveBeenCalledWith(
+			"[useMedications] load medications failed",
+			expect.objectContaining({ error: "Network error" })
+		);
 	});
 
 	it("handles non-array response", async () => {

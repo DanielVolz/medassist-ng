@@ -9,7 +9,7 @@ Configure MedAssist with environment variables in `.env`. Start from `.env.examp
 | `PUID` | `1000` | User ID for container file permissions |
 | `PGID` | `1000` | Group ID for container file permissions |
 | `PORT` | `3000` | Backend API port |
-| `CORS_ORIGINS` | `http://localhost:4174` | Allowed origins for CORS in the Docker Compose quickstart; local Vite development commonly uses `http://localhost:5173` or `http://localhost:4173` |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:4174` | Allowed origins for CORS. The backend schema default covers local Vite development and the Docker Compose quickstart; `.env.example` sets only the Docker quickstart origin. |
 | `TZ` | `Europe/Berlin` | Server default timezone for scheduled reminders |
 | `PUBLIC_APP_URL` | — | Public base URL for notification action and share links. Strongly recommended for any deployment used from another device; do not point this to `localhost` or an internal Docker hostname. Local Vite development also allows this hostname automatically. |
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error`, or `silent` |
@@ -29,7 +29,7 @@ API docs behavior:
 `CORS_ORIGINS` note:
 
 - The `.env.example` file is optimized for the Docker Compose quickstart, where the frontend runs on `http://localhost:4174`.
-- Local frontend development uses the Vite dev server instead, so the backend schema defaults cover `http://localhost:5173` and `http://localhost:4173`.
+- Local frontend development uses the Vite dev server instead, so the backend schema defaults cover `http://localhost:5173` and `http://localhost:4174`.
 - If you use a custom hostname or reverse proxy, include that origin in `CORS_ORIGINS`.
 
 ## Authentication

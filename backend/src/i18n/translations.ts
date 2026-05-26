@@ -1,4 +1,6 @@
 // Backend translations for notifications
+import { parseStringListEnv } from "../utils/env-parsing.js";
+
 export type Language = "en" | "de";
 
 /**
@@ -487,8 +489,7 @@ export function getDateLocale(language: Language): string {
  * Falls back to empty string if not set.
  */
 export function getAppUrl(): string {
-	const origins = process.env.CORS_ORIGINS || "";
-	return origins.split(",")[0]?.trim() || "";
+	return parseStringListEnv(process.env.CORS_ORIGINS)[0] ?? "";
 }
 
 /**

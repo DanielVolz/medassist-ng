@@ -246,7 +246,7 @@ Configure the application with environment variables in `.env`. Keep the basic c
 | `PUID` | `1000` | User ID for container file permissions |
 | `PGID` | `1000` | Group ID for container file permissions |
 | `PORT` | `3000` | Backend API port |
-| `CORS_ORIGINS` | `http://localhost:4174` | Allowed frontend origins |
+| `CORS_ORIGINS` | `http://localhost:4174` in `.env.example` | Allowed frontend origins; backend defaults also include `http://localhost:5173` for local Vite development |
 | `TZ` | `Europe/Berlin` | Default timezone for reminders |
 | `AUTH_ENABLED` | `false` | Enable authentication; required for public production deployments |
 | `ALLOW_UNAUTHENTICATED` | `false` | Explicit local/private-only override for production no-auth startup |

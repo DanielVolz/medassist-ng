@@ -1,73 +1,64 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { parseBoolEnv, parseIntEnv, parseStringListEnv } from "../utils/env-parsing.js";
 
 // Mock process.exit to prevent tests from exiting
 const mockExit = vi.fn();
 vi.spyOn(process, "exit").mockImplementation(mockExit as unknown as (...args: unknown[]) => never);
 
 // Re-create the schema from env.ts for testing
+const DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://localhost:4174";
+
+function boolEnv(defaultValue: boolean) {
+	return z
+		.string()
+		.optional()
+		.transform((value) => parseBoolEnv(value, defaultValue));
+}
+
+function optionalBoolEnv() {
+	return z
+		.string()
+		.optional()
+		.transform((value) => (value === undefined ? undefined : parseBoolEnv(value, false)));
+}
+
+function intEnv(options: { defaultValue: number; min?: number; max?: number }) {
+	return z
+		.string()
+		.optional()
+		.transform((value) => parseIntEnv(value, options));
+}
+
 const EnvSchema = z.object({
 	NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
-	PORT: z
+	PORT: intEnv({ defaultValue: 3000, min: 1, max: 65535 }),
+	CORS_ORIGINS: z
 		.string()
-		.default("3000")
-		.transform((v) => parseInt(v, 10)),
-	CORS_ORIGINS: z.string().default("http://localhost:5173,http://localhost:4173"),
+		.optional()
+		.transform((value) => parseStringListEnv(value ?? DEFAULT_CORS_ORIGINS).join(",")),
 	LOG_LEVEL: z.string().default("info"),
-	SENSITIVE_LOGGING_ENABLED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
+	SENSITIVE_LOGGING_ENABLED: boolEnv(false),
 	PUBLIC_APP_URL: z.string().url().optional(),
-	OPENAPI_DOCS_ENABLED: z
-		.string()
-		.transform((v) => v === "true")
-		.optional(),
-	DOCS_AUTH_REQUIRED: z
-		.string()
-		.transform((v) => v === "true")
-		.optional(),
-	AUTH_ENABLED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
-	ALLOW_UNAUTHENTICATED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
-	REGISTRATION_ENABLED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
+	OPENAPI_DOCS_ENABLED: optionalBoolEnv(),
+	DOCS_AUTH_REQUIRED: optionalBoolEnv(),
+	RATE_LIMIT_MAX: intEnv({ defaultValue: 100, min: 1, max: 100_000 }),
+	AUTH_ENABLED: boolEnv(false),
+	ALLOW_UNAUTHENTICATED: boolEnv(false),
+	REGISTRATION_ENABLED: boolEnv(false),
 	JWT_SECRET: z.string().min(10).optional(),
 	REFRESH_SECRET: z.string().min(10).optional(),
 	COOKIE_SECRET: z.string().min(10).optional(),
-	ACCESS_TOKEN_TTL_MINUTES: z
-		.string()
-		.default("15")
-		.transform((v) => parseInt(v, 10)),
-	REFRESH_TOKEN_TTL_DAYS: z
-		.string()
-		.default("7")
-		.transform((v) => parseInt(v, 10)),
-	SHARE_TOKEN_TTL_DAYS: z
-		.string()
-		.default("90")
-		.transform((v) => parseInt(v, 10))
-		.pipe(z.number().int().min(1).max(3650)),
-	OIDC_ENABLED: z
-		.string()
-		.default("false")
-		.transform((v) => v === "true"),
+	ACCESS_TOKEN_TTL_MINUTES: intEnv({ defaultValue: 15, min: 1, max: 525_600 }),
+	REFRESH_TOKEN_TTL_DAYS: intEnv({ defaultValue: 7, min: 1, max: 3650 }),
+	SHARE_TOKEN_TTL_DAYS: intEnv({ defaultValue: 90, min: 1, max: 3650 }),
+	OIDC_ENABLED: boolEnv(false),
 	OIDC_ISSUER_URL: z.string().url().optional(),
 	OIDC_CLIENT_ID: z.string().optional(),
 	OIDC_CLIENT_SECRET: z.string().optional(),
 	OIDC_REDIRECT_URI: z.string().url().optional(),
 	OIDC_SCOPES: z.string().default("openid profile email"),
-	OIDC_AUTO_CREATE_USERS: z
-		.string()
-		.default("true")
-		.transform((v) => v === "true"),
+	OIDC_AUTO_CREATE_USERS: boolEnv(true),
 	OIDC_USERNAME_CLAIM: z.string().default("preferred_username"),
 	OIDC_PROVIDER_NAME: z.string().default("SSO"),
 });
@@ -101,7 +92,7 @@ describe("EnvSchema", () => {
 
 			expect(result.NODE_ENV).toBe("production");
 			expect(result.PORT).toBe(3000);
-			expect(result.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4173");
+			expect(result.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4174");
 			expect(result.LOG_LEVEL).toBe("info");
 			expect(result.SENSITIVE_LOGGING_ENABLED).toBe(false);
 			expect(result.PUBLIC_APP_URL).toBeUndefined();
@@ -110,6 +101,7 @@ describe("EnvSchema", () => {
 			expect(result.AUTH_ENABLED).toBe(false);
 			expect(result.ALLOW_UNAUTHENTICATED).toBe(false);
 			expect(result.REGISTRATION_ENABLED).toBe(false);
+			expect(result.RATE_LIMIT_MAX).toBe(100);
 			expect(result.ACCESS_TOKEN_TTL_MINUTES).toBe(15);
 			expect(result.REFRESH_TOKEN_TTL_DAYS).toBe(7);
 			expect(result.SHARE_TOKEN_TTL_DAYS).toBe(90);
@@ -156,14 +148,16 @@ describe("EnvSchema", () => {
 	});
 
 	describe("boolean transformations", () => {
-		it("should transform AUTH_ENABLED=true to boolean true", () => {
-			const result = EnvSchema.parse({ AUTH_ENABLED: "true" });
-			expect(result.AUTH_ENABLED).toBe(true);
+		it("should transform truthy boolean variants to true", () => {
+			for (const value of ["true", "TRUE", "1", "yes", "YeS"]) {
+				expect(EnvSchema.parse({ AUTH_ENABLED: value }).AUTH_ENABLED).toBe(true);
+			}
 		});
 
-		it("should transform AUTH_ENABLED=false to boolean false", () => {
-			const result = EnvSchema.parse({ AUTH_ENABLED: "false" });
-			expect(result.AUTH_ENABLED).toBe(false);
+		it("should transform falsy boolean variants to false", () => {
+			for (const value of ["false", "FALSE", "0", "no", "No"]) {
+				expect(EnvSchema.parse({ AUTH_ENABLED: value }).AUTH_ENABLED).toBe(false);
+			}
 		});
 
 		it("should transform ALLOW_UNAUTHENTICATED=true to boolean true", () => {
@@ -176,9 +170,8 @@ describe("EnvSchema", () => {
 			expect(result.ALLOW_UNAUTHENTICATED).toBe(false);
 		});
 
-		it("should treat non-true string as false", () => {
-			const result = EnvSchema.parse({ AUTH_ENABLED: "yes" });
-			expect(result.AUTH_ENABLED).toBe(false);
+		it("should reject invalid boolean strings", () => {
+			expect(() => EnvSchema.parse({ AUTH_ENABLED: "maybe" })).toThrow();
 		});
 
 		it("should transform REGISTRATION_ENABLED correctly", () => {
@@ -197,10 +190,10 @@ describe("EnvSchema", () => {
 		});
 
 		it("should transform API docs booleans correctly", () => {
-			expect(EnvSchema.parse({ OPENAPI_DOCS_ENABLED: "true" }).OPENAPI_DOCS_ENABLED).toBe(true);
-			expect(EnvSchema.parse({ OPENAPI_DOCS_ENABLED: "false" }).OPENAPI_DOCS_ENABLED).toBe(false);
-			expect(EnvSchema.parse({ DOCS_AUTH_REQUIRED: "true" }).DOCS_AUTH_REQUIRED).toBe(true);
-			expect(EnvSchema.parse({ DOCS_AUTH_REQUIRED: "false" }).DOCS_AUTH_REQUIRED).toBe(false);
+			expect(EnvSchema.parse({ OPENAPI_DOCS_ENABLED: "yes" }).OPENAPI_DOCS_ENABLED).toBe(true);
+			expect(EnvSchema.parse({ OPENAPI_DOCS_ENABLED: "0" }).OPENAPI_DOCS_ENABLED).toBe(false);
+			expect(EnvSchema.parse({ DOCS_AUTH_REQUIRED: "1" }).DOCS_AUTH_REQUIRED).toBe(true);
+			expect(EnvSchema.parse({ DOCS_AUTH_REQUIRED: "no" }).DOCS_AUTH_REQUIRED).toBe(false);
 		});
 	});
 
@@ -226,6 +219,11 @@ describe("EnvSchema", () => {
 			expect(result.ACCESS_TOKEN_TTL_MINUTES).toBe(30);
 		});
 
+		it("should reject invalid ACCESS_TOKEN_TTL_MINUTES", () => {
+			expect(() => EnvSchema.parse({ ACCESS_TOKEN_TTL_MINUTES: "abc" })).toThrow();
+			expect(() => EnvSchema.parse({ ACCESS_TOKEN_TTL_MINUTES: "0" })).toThrow();
+		});
+
 		it("should transform REFRESH_TOKEN_TTL_DAYS to number", () => {
 			const result = EnvSchema.parse({ REFRESH_TOKEN_TTL_DAYS: "14" });
 			expect(result.REFRESH_TOKEN_TTL_DAYS).toBe(14);
@@ -234,6 +232,21 @@ describe("EnvSchema", () => {
 		it("should transform SHARE_TOKEN_TTL_DAYS to number", () => {
 			const result = EnvSchema.parse({ SHARE_TOKEN_TTL_DAYS: "120" });
 			expect(result.SHARE_TOKEN_TTL_DAYS).toBe(120);
+		});
+	});
+
+	describe("RATE_LIMIT_MAX validation", () => {
+		it("should transform valid values to positive bounded numbers", () => {
+			expect(EnvSchema.parse({ RATE_LIMIT_MAX: "1" }).RATE_LIMIT_MAX).toBe(1);
+			expect(EnvSchema.parse({ RATE_LIMIT_MAX: "1000" }).RATE_LIMIT_MAX).toBe(1000);
+			expect(EnvSchema.parse({ RATE_LIMIT_MAX: "100000" }).RATE_LIMIT_MAX).toBe(100_000);
+		});
+
+		it("should reject invalid, zero, negative, and unbounded values", () => {
+			expect(() => EnvSchema.parse({ RATE_LIMIT_MAX: "abc" })).toThrow();
+			expect(() => EnvSchema.parse({ RATE_LIMIT_MAX: "0" })).toThrow();
+			expect(() => EnvSchema.parse({ RATE_LIMIT_MAX: "-1" })).toThrow();
+			expect(() => EnvSchema.parse({ RATE_LIMIT_MAX: "100001" })).toThrow();
 		});
 	});
 
@@ -275,6 +288,11 @@ describe("EnvSchema", () => {
 		it("should accept single origin", () => {
 			const result = EnvSchema.parse({ CORS_ORIGINS: "http://localhost:3000" });
 			expect(result.CORS_ORIGINS).toBe("http://localhost:3000");
+		});
+
+		it("should trim origins and filter empty entries", () => {
+			const result = EnvSchema.parse({ CORS_ORIGINS: " http://a.com, , http://b.com, " });
+			expect(result.CORS_ORIGINS).toBe("http://a.com,http://b.com");
 		});
 	});
 });

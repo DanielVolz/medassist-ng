@@ -7,15 +7,13 @@ import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { CookieSerializeOptions } from "@fastify/cookie";
 import { getDataDir } from "../db/path-utils.js";
+import { parseStringListEnv } from "./env-parsing.js";
 
 /**
  * Parse comma-separated CORS origins string
  */
 export function parseCorsOrigins(originsStr: string): string[] {
-	return originsStr
-		.split(",")
-		.map((o) => o.trim())
-		.filter((o) => o.length > 0);
+	return parseStringListEnv(originsStr);
 }
 
 /**

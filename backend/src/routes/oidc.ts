@@ -5,6 +5,7 @@ import * as client from "openid-client";
 import { db } from "../db/client.js";
 import { refreshTokens, users } from "../db/schema.js";
 import { env } from "../plugins/env.js";
+import { parseStringListEnv } from "../utils/env-parsing.js";
 import { applyOpenApiRouteStandards, genericErrorSchema } from "../utils/openapi-route-standards.js";
 
 // =============================================================================
@@ -43,7 +44,7 @@ function generateState(): string {
 // Helpers
 // =============================================================================
 function getFrontendUrl(): string {
-	return env.CORS_ORIGINS.split(",")[0] || "http://localhost:5173";
+	return parseStringListEnv(env.CORS_ORIGINS)[0] ?? "http://localhost:5173";
 }
 
 // =============================================================================
@@ -244,7 +245,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 
 				// Redirect to frontend dashboard
 				// In dev: CORS_ORIGINS contains the frontend URL
-				const frontendUrl = env.CORS_ORIGINS.split(",")[0] || "http://localhost:5173";
+				const frontendUrl = getFrontendUrl();
 				return reply.redirect(`${frontendUrl}/dashboard`);
 			} catch (err: unknown) {
 				request.log.error({ err }, "[OIDC] Callback processing failed");

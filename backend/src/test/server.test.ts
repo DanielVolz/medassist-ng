@@ -21,10 +21,10 @@ import {
 describe("Index.ts Utility Functions", () => {
 	describe("parseCorsOrigins", () => {
 		it("should parse comma-separated origins", () => {
-			const origins = parseCorsOrigins("http://localhost:5173,http://localhost:4173");
+			const origins = parseCorsOrigins("http://localhost:5173,http://localhost:4174");
 			expect(origins).toHaveLength(2);
 			expect(origins[0]).toBe("http://localhost:5173");
-			expect(origins[1]).toBe("http://localhost:4173");
+			expect(origins[1]).toBe("http://localhost:4174");
 		});
 
 		it("should handle single origin", () => {
@@ -34,13 +34,13 @@ describe("Index.ts Utility Functions", () => {
 		});
 
 		it("should filter out empty strings", () => {
-			const origins = parseCorsOrigins("http://localhost:5173,,http://localhost:4173,");
+			const origins = parseCorsOrigins("http://localhost:5173,,http://localhost:4174,");
 			expect(origins).toHaveLength(2);
 		});
 
 		it("should trim whitespace", () => {
-			const origins = parseCorsOrigins(" http://localhost:5173 , http://localhost:4173 ");
-			expect(origins).toEqual(["http://localhost:5173", "http://localhost:4173"]);
+			const origins = parseCorsOrigins(" http://localhost:5173 , http://localhost:4174 ");
+			expect(origins).toEqual(["http://localhost:5173", "http://localhost:4174"]);
 		});
 
 		it("should return empty array for empty string", () => {
@@ -219,7 +219,7 @@ describe("Server Bootstrap", () => {
 		});
 
 		it("should register cors plugin with multiple origins", async () => {
-			const origins = ["http://localhost:5173", "http://localhost:4173"];
+			const origins = ["http://localhost:5173", "http://localhost:4174"];
 
 			const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 			await app.register(cors, { origin: origins, credentials: true });
@@ -366,46 +366,34 @@ describe("Server Bootstrap", () => {
 
 	describe("CORS Origins Parsing", () => {
 		it("should parse comma-separated origins", () => {
-			const originsEnv = "http://localhost:5173,http://localhost:4173";
-			const origins = originsEnv
-				.split(",")
-				.map((o) => o.trim())
-				.filter(Boolean);
+			const originsEnv = "http://localhost:5173,http://localhost:4174";
+			const origins = parseCorsOrigins(originsEnv);
 
 			expect(origins).toHaveLength(2);
 			expect(origins[0]).toBe("http://localhost:5173");
-			expect(origins[1]).toBe("http://localhost:4173");
+			expect(origins[1]).toBe("http://localhost:4174");
 		});
 
 		it("should handle single origin", () => {
 			const originsEnv = "https://myapp.example.com";
-			const origins = originsEnv
-				.split(",")
-				.map((o) => o.trim())
-				.filter(Boolean);
+			const origins = parseCorsOrigins(originsEnv);
 
 			expect(origins).toHaveLength(1);
 			expect(origins[0]).toBe("https://myapp.example.com");
 		});
 
 		it("should filter out empty strings", () => {
-			const originsEnv = "http://localhost:5173,,http://localhost:4173,";
-			const origins = originsEnv
-				.split(",")
-				.map((o) => o.trim())
-				.filter(Boolean);
+			const originsEnv = "http://localhost:5173,,http://localhost:4174,";
+			const origins = parseCorsOrigins(originsEnv);
 
 			expect(origins).toHaveLength(2);
 		});
 
 		it("should trim whitespace", () => {
-			const originsEnv = " http://localhost:5173 , http://localhost:4173 ";
-			const origins = originsEnv
-				.split(",")
-				.map((o) => o.trim())
-				.filter(Boolean);
+			const originsEnv = " http://localhost:5173 , http://localhost:4174 ";
+			const origins = parseCorsOrigins(originsEnv);
 
-			expect(origins).toEqual(["http://localhost:5173", "http://localhost:4173"]);
+			expect(origins).toEqual(["http://localhost:5173", "http://localhost:4174"]);
 		});
 	});
 

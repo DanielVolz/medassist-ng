@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
 import type { Language } from "../i18n/translations.js";
+import { parseBoolEnv, parseIntEnv } from "../utils/env-parsing.js";
 import { isNtfyNotificationUrl } from "./notifications/action-renderer.js";
 
 export type UserSettings = {
@@ -93,16 +94,11 @@ export function getNotificationProvider(url: string): string {
 }
 
 function envBool(key: string, defaultVal: boolean): boolean {
-	const val = process.env[key];
-	if (val === undefined) return defaultVal;
-	return val === "true" || val === "1";
+	return parseBoolEnv(process.env[key], defaultVal);
 }
 
 function envInt(key: string, defaultVal: number): number {
-	const val = process.env[key];
-	if (val === undefined) return defaultVal;
-	const parsed = parseInt(val, 10);
-	return Number.isNaN(parsed) ? defaultVal : parsed;
+	return parseIntEnv(process.env[key], { defaultValue: defaultVal, min: 0, max: 100_000 });
 }
 
 export function getDefaultSettings() {

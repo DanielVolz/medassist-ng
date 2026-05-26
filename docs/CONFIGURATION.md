@@ -66,6 +66,10 @@ services:
       - "127.0.0.1:4000:3000"
 ```
 
+## Docker Image Pinning
+
+The default `docker-compose.yml` uses readable versioned image tags. Each GitHub release also attaches `docker-compose.pinned.yml` with the same release tags plus immutable image digests for deployments that need stricter reproducibility.
+
 ## API Keys
 
 When `AUTH_ENABLED=true`, authenticated users can create API keys and call protected endpoints with:

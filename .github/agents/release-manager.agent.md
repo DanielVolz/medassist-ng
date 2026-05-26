@@ -293,6 +293,7 @@ The documented production `docker-compose.yml` must be pinned to the exact relea
 
 - The `docker-build.yml` workflow automatically builds and pushes Docker images to GHCR with both versioned tags (`1.8.7`, `1.8`) and `latest`.
 - Confirm that the production `docker-compose.yml` image tags in the merged release commit match the pushed release image tag (`X.Y.Z`, without the leading `v`).
+- Confirm the GitHub release includes the generated `docker-compose.pinned.yml` asset with digest-pinned backend and frontend image references.
 - The `update-test-badges.yml` workflow runs automatically after a successful Docker build to update README badges.
 - Track progress: `https://github.com/DanielVolz/medassist-ng/actions`
 

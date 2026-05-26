@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
 import { getDateLocale, getFooterPlain, getTranslations, type Language, t } from "../i18n/translations.js";
-import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
+import { getAnonymousUserId, isReadOnlyApiKeyRequest, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import {
 	createTestNotificationActionContext,
@@ -25,6 +25,7 @@ import {
 	sanitizeNotificationUrl,
 	type UserSettings,
 	validateNotificationHostname,
+	validateNotificationTargetUrl,
 } from "../services/settings-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import { parseBoolEnv, parseIntEnv } from "../utils/env-parsing.js";
@@ -118,6 +119,15 @@ async function getOrCreateUserSettings(userId: number) {
 	return settings;
 }
 
+async function getUserSettingsForRead(userId: number, persistMissing: boolean) {
+	const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+	if (settings || !persistMissing) {
+		return settings ?? ({ userId, ...getDefaultSettings() } as typeof userSettings.$inferSelect);
+	}
+
+	return getOrCreateUserSettings(userId);
+}
+
 // Export for use in reminder scheduler
 export async function loadUserSettings(userId: number): Promise<UserSettings> {
 	return loadUserSettingsFromDb(userId);
@@ -167,7 +177,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
 
-			const settings = await getOrCreateUserSettings(userId);
+			const settings = await getUserSettingsForRead(userId, !isReadOnlyApiKeyRequest(request));
 			const reminderHour = envInt("REMINDER_HOUR", 6);
 			const reminderMinutesBefore = envInt("REMINDER_MINUTES_BEFORE", 15);
 
@@ -833,12 +843,17 @@ export async function sendShoutrrrNotification(
 
 		// SSRF protection: targetUrl is reconstructed from sanitizeNotificationUrl() which validates:
 		// - Only http/https protocols allowed
-		// - Blocks localhost (localhost, 127.0.0.1, ::1)
-		// - Blocks private IPs (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x)
+		// - Blocks localhost, private IPv4 ranges, and private/link-local IPv6 literals
 		// - Blocks internal hostnames (.local, .internal, .lan, metadata.google.internal)
+		// - Rejects hostnames that resolve to private/internal IP addresses
 		// - redirect: "error" prevents redirect-based bypass attacks
 		// This is an intentional feature: users configure their own external notification services
 		// lgtm [js/request-forgery]
+		const targetValidationError = await validateNotificationTargetUrl(targetUrl);
+		if (targetValidationError) {
+			return { success: false, error: targetValidationError };
+		}
+
 		const response = await fetch(targetUrl, {
 			method,
 			headers,

@@ -90,6 +90,23 @@ async function clearData(client: Client) {
 }
 
 const invalidCredentialsResponse = { error: "Invalid username or password", code: "INVALID_CREDENTIALS" } as const;
+const tokenExpiryToleranceSeconds = 5;
+
+type JwtPayloadWithExp = Record<string, unknown> & { exp?: number };
+
+function getResponseCookieValue(response: { cookies: Array<{ name: string; value: string }> }, name: string): string {
+	const cookieValue = response.cookies.find((c) => c.name === name)?.value;
+	expect(cookieValue).toBeDefined();
+	return cookieValue ?? "";
+}
+
+function expectTokenExpiryNear(exp: number | undefined, issuedAtMs: number, ttlSeconds: number) {
+	expect(exp).toBeDefined();
+	const expectedMin = Math.floor(issuedAtMs / 1000) + ttlSeconds - tokenExpiryToleranceSeconds;
+	const expectedMax = Math.ceil(Date.now() / 1000) + ttlSeconds + tokenExpiryToleranceSeconds;
+	expect(exp).toBeGreaterThanOrEqual(expectedMin);
+	expect(exp).toBeLessThanOrEqual(expectedMax);
+}
 
 // =============================================================================
 // Tests
@@ -114,10 +131,10 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 		app.decorate("config", {
 			accessSecret: "test-jwt-secret-12345",
 			refreshSecret: "test-refresh-secret-12345",
-			accessTtl: 15,
-			refreshTtl: 7,
-			cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: 15 * 60 },
-			refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth", maxAge: 7 * 24 * 60 * 60 },
+			accessTtl: 2,
+			refreshTtl: 3,
+			cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: 2 * 60 },
+			refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth", maxAge: 3 * 24 * 60 * 60 },
 		});
 
 		await app.register(authRoutes);
@@ -333,6 +350,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 		});
 
 		it("should login with valid credentials", async () => {
+			const issuedAtMs = Date.now();
 			const response = await app.inject({
 				method: "POST",
 				url: "/auth/login",
@@ -351,6 +369,13 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			const cookies = response.cookies;
 			expect(cookies.find((c: { name: string }) => c.name === "access_token")).toBeDefined();
 			expect(cookies.find((c: { name: string }) => c.name === "refresh_token")).toBeDefined();
+
+			const accessToken = getResponseCookieValue(response, "access_token");
+			const refreshToken = getResponseCookieValue(response, "refresh_token");
+			const accessPayload = await app.jwt.verify<JwtPayloadWithExp>(accessToken);
+			const refreshPayload = await app.jwt.verify<JwtPayloadWithExp>(refreshToken, { key: app.config.refreshSecret });
+			expectTokenExpiryNear(accessPayload.exp, issuedAtMs, app.config.accessTtl * 60);
+			expectTokenExpiryNear(refreshPayload.exp, issuedAtMs, app.config.refreshTtl * 24 * 60 * 60);
 		});
 
 		it("should login case-insensitively with different username casing", async () => {
@@ -547,6 +572,7 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 
 			const refreshToken = login.cookies.find((c: { name: string }) => c.name === "refresh_token");
 
+			const issuedAtMs = Date.now();
 			const response = await app.inject({
 				method: "POST",
 				url: "/auth/refresh",
@@ -557,6 +583,15 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json().ok).toBe(true);
+
+			const accessToken = getResponseCookieValue(response, "access_token");
+			const rotatedRefreshToken = getResponseCookieValue(response, "refresh_token");
+			const accessPayload = await app.jwt.verify<JwtPayloadWithExp>(accessToken);
+			const refreshPayload = await app.jwt.verify<JwtPayloadWithExp>(rotatedRefreshToken, {
+				key: app.config.refreshSecret,
+			});
+			expectTokenExpiryNear(accessPayload.exp, issuedAtMs, app.config.accessTtl * 60);
+			expectTokenExpiryNear(refreshPayload.exp, issuedAtMs, app.config.refreshTtl * 24 * 60 * 60);
 		});
 
 		it("should reject without refresh token", async () => {
@@ -671,6 +706,67 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
 			expect(data.username).toBe("meuser");
+		});
+
+		it("should return user info with a bearer JWT access token", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "bearerjwtuser",
+					password: "TestPassword123",
+				},
+			});
+
+			const login = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "bearerjwtuser",
+					password: "TestPassword123",
+				},
+			});
+
+			const accessToken = getResponseCookieValue(login, "access_token");
+			const response = await app.inject({
+				method: "GET",
+				url: "/auth/me",
+				headers: { authorization: `Bearer ${accessToken}` },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().username).toBe("bearerjwtuser");
+		});
+
+		it("should prefer a valid session cookie over a non-api-key bearer header", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "cookiepreferred",
+					password: "TestPassword123",
+				},
+			});
+
+			const login = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "cookiepreferred",
+					password: "TestPassword123",
+				},
+			});
+
+			const accessToken = getResponseCookieValue(login, "access_token");
+			const response = await app.inject({
+				method: "GET",
+				url: "/auth/me",
+				cookies: { access_token: accessToken },
+				headers: { authorization: "Bearer not-a-jwt" },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().username).toBe("cookiepreferred");
 		});
 
 		it("should reject without access token", async () => {

@@ -66,6 +66,28 @@ function hasRealTakenTimestamp(takenAt: Date | null): boolean {
 	return takenAt instanceof Date && takenAt.getTime() > 0;
 }
 
+function isDoseTrackingUniqueConflict(error: unknown): boolean {
+	let current: unknown = error;
+	const messages: string[] = [];
+	while (current instanceof Error) {
+		messages.push(current.message);
+		current = current.cause;
+	}
+	const message = messages.join("\n").toLowerCase();
+	return message.includes("unique") && message.includes("dose_tracking");
+}
+
+async function findDoseTrackingRow(
+	userId: number,
+	doseId: string
+): Promise<typeof doseTracking.$inferSelect | undefined> {
+	const [existing] = await db
+		.select()
+		.from(doseTracking)
+		.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
+	return existing;
+}
+
 async function isDoseOutOfStock(options: { userId: number; doseId: string }): Promise<boolean> {
 	const parsedDose = parseDoseId(options.doseId);
 	if (!parsedDose) {
@@ -135,10 +157,7 @@ export async function markDoseTakenForUser(input: {
 		};
 	}
 
-	const [existing] = await db
-		.select()
-		.from(doseTracking)
-		.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, input.doseId)));
+	const existing = await findDoseTrackingRow(input.userId, input.doseId);
 
 	if (existing && !existing.dismissed) {
 		return { success: true, status: "already_taken" };
@@ -165,14 +184,33 @@ export async function markDoseTakenForUser(input: {
 		};
 	}
 
-	await db.insert(doseTracking).values({
-		userId: input.userId,
-		doseId: input.doseId,
-		takenAt: new Date(),
-		markedBy: input.markedBy ?? null,
-		takenSource: input.source,
-		dismissed: false,
-	});
+	try {
+		await db.insert(doseTracking).values({
+			userId: input.userId,
+			doseId: input.doseId,
+			takenAt: new Date(),
+			markedBy: input.markedBy ?? null,
+			takenSource: input.source,
+			dismissed: false,
+		});
+	} catch (error) {
+		if (!isDoseTrackingUniqueConflict(error)) {
+			throw error;
+		}
+
+		const concurrentRow = await findDoseTrackingRow(input.userId, input.doseId);
+		if (!concurrentRow) {
+			throw error;
+		}
+		if (!concurrentRow.dismissed || (concurrentRow.dismissed && hasRealTakenTimestamp(concurrentRow.takenAt))) {
+			return { success: true, status: "already_taken" };
+		}
+		return {
+			success: false,
+			code: "ALREADY_SKIPPED",
+			message: "Dose is already skipped",
+		};
+	}
 
 	return { success: true, status: "marked" };
 }
@@ -183,21 +221,28 @@ export async function skipDosesForUser(input: { userId: number; doseIds: string[
 	let switchedFromTakenCount = 0;
 
 	for (const doseId of input.doseIds) {
-		const [existing] = await db
-			.select()
-			.from(doseTracking)
-			.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, doseId)));
+		let existing = await findDoseTrackingRow(input.userId, doseId);
 
 		if (!existing) {
-			await db.insert(doseTracking).values({
-				userId: input.userId,
-				doseId,
-				markedBy: null,
-				takenAt: new Date(0),
-				dismissed: true,
-			});
-			skippedCount++;
-			continue;
+			try {
+				await db.insert(doseTracking).values({
+					userId: input.userId,
+					doseId,
+					markedBy: null,
+					takenAt: new Date(0),
+					dismissed: true,
+				});
+				skippedCount++;
+				continue;
+			} catch (error) {
+				if (!isDoseTrackingUniqueConflict(error)) {
+					throw error;
+				}
+				existing = await findDoseTrackingRow(input.userId, doseId);
+				if (!existing) {
+					throw error;
+				}
+			}
 		}
 
 		if (existing.dismissed) {
@@ -234,21 +279,28 @@ export async function dismissDosesForUser(input: { userId: number; doseIds: stri
 	let alreadyTakenCount = 0;
 
 	for (const doseId of input.doseIds) {
-		const [existing] = await db
-			.select()
-			.from(doseTracking)
-			.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, doseId)));
+		let existing = await findDoseTrackingRow(input.userId, doseId);
 
 		if (!existing) {
-			await db.insert(doseTracking).values({
-				userId: input.userId,
-				doseId,
-				markedBy: null,
-				takenAt: new Date(0),
-				dismissed: true,
-			});
-			dismissedCount++;
-			continue;
+			try {
+				await db.insert(doseTracking).values({
+					userId: input.userId,
+					doseId,
+					markedBy: null,
+					takenAt: new Date(0),
+					dismissed: true,
+				});
+				dismissedCount++;
+				continue;
+			} catch (error) {
+				if (!isDoseTrackingUniqueConflict(error)) {
+					throw error;
+				}
+				existing = await findDoseTrackingRow(input.userId, doseId);
+				if (!existing) {
+					throw error;
+				}
+			}
 		}
 
 		if (existing.dismissed) {

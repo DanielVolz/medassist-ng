@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { type Client, createClient } from "@libsql/client";
 import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { runAlterMigrations, runDrizzleMigrations } from "./migration-utils.js";
 
 // Load .env: try cwd first, then parent dir (for local dev running from backend/)
 const envPath = process.env.DOTENV_PATH || (existsSync(".env") ? ".env" : "../.env");
@@ -32,7 +32,14 @@ export async function executeMigration(
 	const db = drizzle(client);
 
 	try {
-		await migrate(db, { migrationsFolder });
+		const migrationResult = await runDrizzleMigrations(db);
+		if (!migrationResult.success) {
+			throw new Error(migrationResult.error ?? "Unknown migration error");
+		}
+		const alterResult = await runAlterMigrations(client);
+		if (!alterResult.success) {
+			throw new Error(alterResult.errors.join("; "));
+		}
 
 		// Count tables as a proxy for "executed" statements
 		const tables = await client.execute(
@@ -71,7 +78,14 @@ async function main() {
 	const db = drizzle(client);
 
 	console.log("[DB] Running drizzle migrations...");
-	await migrate(db, { migrationsFolder });
+	const migrationResult = await runDrizzleMigrations(db);
+	if (!migrationResult.success) {
+		throw new Error(migrationResult.error ?? "Unknown migration error");
+	}
+	const alterResult = await runAlterMigrations(client);
+	if (!alterResult.success) {
+		throw new Error(alterResult.errors.join("; "));
+	}
 
 	console.log("[DB] Database setup complete!");
 	process.exit(0);

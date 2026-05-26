@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // =============================================================================
 // Users - Simple auth, no roles (every user is equal)
@@ -228,17 +228,21 @@ export const notificationActionTokens = sqliteTable("notification_action_tokens"
 // =============================================================================
 // Dose Tracking - Tracks when doses are marked as taken
 // =============================================================================
-export const doseTracking = sqliteTable("dose_tracking", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
-	userId: integer("user_id")
-		.notNull()
-		.references(() => users.id, { onDelete: "cascade" }),
-	doseId: text("dose_id", { length: 255 }).notNull(), // e.g. "med-5-1-86400000-1735200000000"
-	takenAt: integer("taken_at", { mode: "timestamp" }).notNull().default(sql`(strftime('%s','now'))`),
-	markedBy: text("marked_by", { length: 100 }), // null = user, "Daniel" = via share link
-	takenSource: text("taken_source", { length: 20 }).notNull().default("manual"), // manual, automatic, or notification
-	dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false), // legacy column: true = intake skipped without stock deduction
-});
+export const doseTracking = sqliteTable(
+	"dose_tracking",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		userId: integer("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		doseId: text("dose_id", { length: 255 }).notNull(), // e.g. "med-5-1-86400000-1735200000000"
+		takenAt: integer("taken_at", { mode: "timestamp" }).notNull().default(sql`(strftime('%s','now'))`),
+		markedBy: text("marked_by", { length: 100 }), // null = user, "Daniel" = via share link
+		takenSource: text("taken_source", { length: 20 }).notNull().default("manual"), // manual, automatic, or notification
+		dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false), // legacy column: true = intake skipped without stock deduction
+	},
+	(table) => [uniqueIndex("dose_tracking_user_id_dose_id_unique").on(table.userId, table.doseId)]
+);
 
 // =============================================================================
 // Intake Journal - Optional owner-scoped note for a tracked dose event

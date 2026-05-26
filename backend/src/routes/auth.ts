@@ -131,9 +131,9 @@ function normalizeDateTime(value: unknown): string | null {
 export async function authRoutes(app: FastifyInstance) {
 	const IMAGES_DIR = resolve(getDataDir(), "images");
 
-	// Token TTLs
-	const accessTtlMinutes = 15;
-	const refreshTtlDays = 14;
+	// Token TTLs from centralized runtime configuration.
+	const accessTtlMinutes = app.config.accessTtl;
+	const refreshTtlDays = app.config.refreshTtl;
 
 	// ---------------------------------------------------------------------------
 	// GET /auth/state - Public auth state (needed before login)

@@ -274,17 +274,9 @@ async function findOrCreateOIDCUser(
 	const [existingByUsername] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
 
 	if (existingByUsername) {
-		// Username collision! Check if it's a local user without OIDC linked
-		if (existingByUsername.authProvider === "local" && !existingByUsername.oidcSubject) {
-			// Local user exists without SSO - link this OIDC account to existing user
-			await db.update(users).set({ oidcSubject: oidcSubject }).where(eq(users.id, existingByUsername.id));
-			// Linked OIDC to existing local user
-			return { id: existingByUsername.id, username: existingByUsername.username };
-		} else if (existingByUsername.oidcSubject && existingByUsername.oidcSubject !== oidcSubject) {
-			// User already has a DIFFERENT OIDC subject - create new user with suffix
-			username = `${username}_sso`;
-			// Username collision (different OIDC subject), use suffixed name
-		}
+		// Do not auto-link or auto-rename on username collisions. Linking an external
+		// identity to a local account must be an explicit trusted action.
+		return null;
 	}
 
 	// Check if auto-create is enabled
@@ -313,7 +305,7 @@ async function findOrCreateOIDCUser(
 // JWT Token Generation (reused from auth.ts logic)
 // =============================================================================
 async function generateAccessToken(app: FastifyInstance, userId: number, username: string): Promise<string> {
-	return await app.jwt.sign({ sub: userId, username }, { expiresIn: `${env.ACCESS_TOKEN_TTL_MINUTES}m` });
+	return await app.jwt.sign({ sub: userId, username }, { expiresIn: `${app.config.accessTtl}m` });
 }
 
 async function generateRefreshToken(
@@ -321,11 +313,11 @@ async function generateRefreshToken(
 	userId: number
 ): Promise<{ refreshToken: string; tokenId: string; expiresAt: Date }> {
 	const tokenId = randomBytes(32).toString("hex");
-	const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+	const expiresAt = new Date(Date.now() + app.config.refreshTtl * 24 * 60 * 60 * 1000);
 
 	const refreshToken = await app.jwt.sign(
 		{ sub: userId, jti: tokenId, type: "refresh" },
-		{ expiresIn: `${env.REFRESH_TOKEN_TTL_DAYS}d` }
+		{ expiresIn: `${app.config.refreshTtl}d`, key: app.config.refreshSecret }
 	);
 
 	return { refreshToken, tokenId, expiresAt };

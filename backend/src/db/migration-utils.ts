@@ -1,6 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Client } from "@libsql/client";
+import { sql } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 
@@ -8,11 +9,55 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const migrationsFolder = resolve(__dirname, "../../drizzle");
 
+const deduplicateDoseTrackingRowsSql = `
+DELETE FROM dose_tracking
+WHERE id IN (
+	SELECT id
+	FROM (
+		SELECT
+			id,
+			ROW_NUMBER() OVER (
+				PARTITION BY user_id, dose_id
+				ORDER BY
+					CASE WHEN dismissed = 0 AND taken_at > 0 THEN 0 ELSE 1 END,
+					id
+			) AS duplicate_rank
+		FROM dose_tracking
+	)
+	WHERE duplicate_rank > 1
+)`;
+
+function getMigrationErrorText(error: unknown): string {
+	let current: unknown = error;
+	const messages: string[] = [];
+	while (current instanceof Error) {
+		messages.push(current.message);
+		current = current.cause;
+	}
+	return messages.join("\n").toLowerCase();
+}
+
+function isMissingDoseTrackingTableError(error: unknown): boolean {
+	const errorText = getMigrationErrorText(error);
+	return errorText.includes("no such table") && errorText.includes("dose_tracking");
+}
+
+async function deduplicateDoseTrackingRows(database: ReturnType<typeof drizzle>): Promise<void> {
+	try {
+		await database.run(sql.raw(deduplicateDoseTrackingRowsSql));
+	} catch (error) {
+		if (!isMissingDoseTrackingTableError(error)) {
+			throw error;
+		}
+	}
+}
+
 /** Run drizzle-kit migrations on the database */
 export async function runDrizzleMigrations(
 	database: ReturnType<typeof drizzle>
 ): Promise<{ success: boolean; error?: string; warning?: string }> {
 	try {
+		await deduplicateDoseTrackingRows(database);
 		await migrate(database, { migrationsFolder });
 		return { success: true };
 	} catch (err: unknown) {
@@ -175,12 +220,21 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		}
 	}
 
+	try {
+		await client.execute(deduplicateDoseTrackingRowsSql);
+	} catch (e: unknown) {
+		if (!isMissingDoseTrackingTableError(e)) {
+			errors.push((e as Error).message);
+		}
+	}
+
 	const createIndexMigrations = [
 		`CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_unique ON users(lower(username))`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS api_keys_key_hash_unique ON api_keys(key_hash)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS intake_journal_dose_tracking_id_unique ON intake_journal(dose_tracking_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS notification_action_groups_group_key_unique ON notification_action_groups(group_key)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS notification_action_tokens_token_hash_unique ON notification_action_tokens(token_hash)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS dose_tracking_user_id_dose_id_unique ON dose_tracking(user_id, dose_id)`,
 		`CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys(user_id)`,
 	];
 

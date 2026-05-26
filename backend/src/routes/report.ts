@@ -89,9 +89,8 @@ function getPersonTagKey(value: string): string {
 
 function matchesTakenByFilter(doseId: string, takenByFilter: Set<string> | null): boolean {
 	if (!takenByFilter) return true;
-	const parts = doseId.split("-");
-	if (parts.length < 4) return false;
-	const takenBy = parts.at(-1)?.trim();
+	const match = trackedDoseIdPattern.exec(doseId);
+	const takenBy = match?.[4]?.trim();
 	if (!takenBy) return false;
 	return takenByFilter.has(getPersonTagKey(takenBy));
 }

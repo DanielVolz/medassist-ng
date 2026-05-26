@@ -86,6 +86,10 @@ export interface RequestUser {
 
 const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+export function isReadOnlyApiKeyRequest(request: FastifyRequest): boolean {
+	return request.authContext?.method === "api_key" && request.authContext.scope === "read";
+}
+
 function isMutationMethod(method: string): boolean {
 	return !READ_ONLY_METHODS.has(method.toUpperCase());
 }
@@ -115,8 +119,7 @@ async function tryApiKeyAuth(request: FastifyRequest, reply: FastifyReply): Prom
 	if (!bearerToken) return false;
 
 	if (!bearerToken.startsWith("ma_")) {
-		reply.status(401).send({ error: "Invalid API key", code: "INVALID_API_KEY" });
-		throw new Error("INVALID_API_KEY");
+		return false;
 	}
 
 	const keyHash = hashApiKeyToken(bearerToken);
@@ -242,14 +245,24 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 		return;
 	}
 
-	const token = request.cookies.access_token;
+	const sessionToken = request.cookies.access_token;
+	const bearerToken = getBearerToken(request);
+
+	const looksLikeJwt = bearerToken ? bearerToken.split(".").length === 3 : false;
+
+	if (!sessionToken && bearerToken && !looksLikeJwt) {
+		reply.status(401).send({ error: "Invalid API key", code: "INVALID_API_KEY" });
+		throw new Error("INVALID_API_KEY");
+	}
+
+	const token = sessionToken || bearerToken;
 	if (!token) {
 		reply.status(401).send({ error: "Authentication required", code: "AUTH_REQUIRED" });
 		throw new Error("AUTH_REQUIRED");
 	}
 
 	try {
-		const decoded = await request.jwtVerify<{ sub: number; username: string }>();
+		const decoded = await appJwtVerify(request, token);
 		const [user] = await db.select().from(users).where(sql`${users.id} = ${decoded.sub}`);
 
 		if (!user) {
@@ -287,6 +300,10 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 		reply.status(401).send({ error: "Invalid or expired token", code: "INVALID_TOKEN" });
 		throw new Error("INVALID_TOKEN");
 	}
+}
+
+async function appJwtVerify(request: FastifyRequest, token: string): Promise<{ sub: number; username: string }> {
+	return request.server.jwt.verify<{ sub: number; username: string }>(token);
 }
 
 /**

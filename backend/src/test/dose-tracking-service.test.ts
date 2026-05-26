@@ -150,6 +150,40 @@ describe("dose-tracking-service", () => {
 		expect(Number(count.rows[0].count)).toBe(1);
 	});
 
+	it("keeps one row when the same dose is marked concurrently", async () => {
+		const userId = await createUser("dose-service-concurrent");
+		await insertMedication({ id: 5, userId, packCount: 1 });
+		await insertUserSettings(userId, "automatic");
+
+		const results = await Promise.all([
+			markDoseTakenForUser({
+				userId,
+				doseId: "5-0-1736064000000",
+				source: "notification",
+				markedBy: null,
+			}),
+			markDoseTakenForUser({
+				userId,
+				doseId: "5-0-1736064000000",
+				source: "notification",
+				markedBy: null,
+			}),
+		]);
+
+		expect(results).toEqual(
+			expect.arrayContaining([
+				{ success: true, status: "marked" },
+				{ success: true, status: "already_taken" },
+			])
+		);
+
+		const count = await testClient.execute({
+			sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+			args: [userId, "5-0-1736064000000"],
+		});
+		expect(Number(count.rows[0].count)).toBe(1);
+	});
+
 	it("rejects taking a dose that is already skipped", async () => {
 		const userId = await createUser("dose-service-dismissed");
 		await insertMedication({ id: 5, userId, packCount: 1 });

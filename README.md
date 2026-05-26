@@ -129,10 +129,10 @@ Share your medication schedule with others via a public link.
 - Track exact stock with package profiles (blister, bottle, tube, liquid container, inhaler, injection)
 - Display remaining days of supply
 - Automatic calculation based on intake schedule
-- Manual stock correction supports profile-specific stock semantics (sealed units + loose stock for blister, discrete capacity/current stock for bottle, inhaler, and injection, amount-based stock for tube and liquid container)
+- Manual stock corrections
 
 ### Medication Refill
-- One-click refill with package-aware refill options for discrete containers and amount-based packages
+- One-click refill
 - Complete refill history per medication
 - Automatic stock updates after each refill
 
@@ -216,24 +216,15 @@ After the containers start, confirm the stack is actually healthy:
 
 1. Run `docker compose ps` and confirm the `backend` service is `healthy` and the `frontend` service is running.
 2. Open `http://localhost:4174/api/health` and confirm the backend responds through the frontend proxy with JSON that includes `"status":"ok"`.
-3. Open `http://localhost:4174` and confirm the app shell loads and can reach the API.
+3. Open `http://localhost:4174` and confirm the app loads.
 
-If the frontend loads but API requests fail, check the backend health endpoint first and confirm `CORS_ORIGINS` includes the frontend origin you are using. If you plan to open reminder or share links from another device, set `PUBLIC_APP_URL` to the externally reachable app URL instead of relying on `localhost`.
+If you use MedAssist from another device or domain, set `PUBLIC_APP_URL` to the address people actually use to open the app.
 
 ### Deployment Security
 
-Public deployments must enable `AUTH_ENABLED=true` with local username/password login or OIDC SSO. The default Docker Compose stack exposes only the frontend on `4174`; the backend stays internal on the Docker network and is reached through the frontend `/api` proxy.
+Public deployments must enable authentication. The default Docker Compose setup exposes only the frontend; keep the backend private and put public installations behind HTTPS.
 
-OpenAPI docs are disabled by default in production. If you explicitly enable `/docs` or `/docs/json` on an authenticated staging or production deployment, keep `DOCS_AUTH_REQUIRED=true` or place the docs behind a private network boundary.
-
-Do not expose the backend directly to the Internet. If you need a temporary direct backend port for local debugging, create a local `docker-compose.override.yml` like this and keep the binding on `127.0.0.1`:
-
-```yaml
-services:
-  backend:
-    ports:
-      - "127.0.0.1:4000:3000"
-```
+More deployment and security options are documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 # Configuration
 

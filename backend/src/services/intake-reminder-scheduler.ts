@@ -1041,11 +1041,11 @@ export function startIntakeReminderScheduler(logger: ServiceLogger): void {
 	logger.info(`[IntakeReminder] Starting intake reminder scheduler (checks every minute)...`);
 
 	// Run immediately on start
-	checkAndSendIntakeReminders(logger).catch((err) => logger.error(`[IntakeReminder] Error: ${err}`));
+	checkAndSendIntakeReminders(logger).catch((err) => logger.error("[IntakeReminder] Startup check failed", err));
 
 	// Then run every minute
 	intakeCheckInterval = setInterval(() => {
-		checkAndSendIntakeReminders(logger).catch((err) => logger.error(`[IntakeReminder] Error: ${err}`));
+		checkAndSendIntakeReminders(logger).catch((err) => logger.error("[IntakeReminder] Scheduled check failed", err));
 	}, CHECK_INTERVAL_MS);
 
 	logger.info(`[IntakeReminder] Scheduler started - checking every minute for upcoming intakes`);

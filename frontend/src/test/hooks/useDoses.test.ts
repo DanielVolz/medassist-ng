@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDoses } from "../../hooks/useDoses";
 
 const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
+const loggerMock = vi.hoisted(() => ({
+	debug: vi.fn(),
+	error: vi.fn(),
+	info: vi.fn(),
+	warn: vi.fn(),
+}));
 const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
 vi.mock("../../components/Auth", () => ({
@@ -17,6 +23,10 @@ vi.mock("../../context/FeedbackContext", () => ({
 		dismissFeedback: vi.fn(),
 		clearFeedback: vi.fn(),
 	}),
+}));
+
+vi.mock("../../utils/logger", () => ({
+	log: loggerMock,
 }));
 
 describe("useDoses", () => {
@@ -186,6 +196,28 @@ describe("useDoses", () => {
 		await waitFor(() => {
 			expect(result.current.takenDoses.has("new-dose")).toBe(false);
 		});
+	});
+
+	it("logs a warning when marking a dose as taken fails", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
+			.mockRejectedValueOnce(new Error("Network error"))
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
+
+		const { result } = renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(0);
+		});
+
+		await act(async () => {
+			await result.current.markDoseTaken("new-dose");
+		});
+
+		expect(loggerMock.warn).toHaveBeenCalledWith(
+			"[useDoses] mark dose taken failed",
+			expect.objectContaining({ error: "Network error" })
+		);
 	});
 
 	it("undoes dose taken optimistically", async () => {

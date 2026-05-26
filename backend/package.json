@@ -10,6 +10,7 @@
     "migrate": "tsx src/db/migrate.ts",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:domain": "vitest run src/test/domain-safety.test.ts",
     "test:coverage": "vitest run --coverage",
     "lint": "npx biome check .",
     "lint:fix": "npx biome check --write .",

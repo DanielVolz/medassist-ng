@@ -74,6 +74,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve manual image tag
+        id: manual_image_tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          tag="${{ github.event.inputs.tag }}"
+          if [ -z "$tag" ]; then
+            tag="latest"
+          fi
+          echo "value=${tag#v}" >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -83,10 +93,11 @@ jobs:
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=${{ steps.manual_image_tag.outputs.value || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
@@ -98,6 +109,23 @@ jobs:
           platforms: linux/amd64,linux/arm64
           provenance: false
           sbom: false
+
+      - name: Record image digest
+        run: |
+          mkdir -p image-digests
+          digest="${{ steps.build.outputs.digest }}"
+          if [ -z "$digest" ]; then
+            echo "No digest was returned for ${{ matrix.image }}."
+            exit 1
+          fi
+          printf '%s\n' "$digest" > "image-digests/${{ matrix.image }}.digest"
+
+      - name: Upload image digest metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-digest-${{ matrix.image }}
+          path: image-digests/${{ matrix.image }}.digest
+          retention-days: 1
 
   # =============================================================================
   # Create GitHub Release (on tag push or manual dispatch with create_release)
@@ -194,7 +222,51 @@ jobs:
           echo "docker pull ghcr.io/${{ github.repository_owner }}/medassist-ng-frontend:${CURRENT_TAG#v}" >> changelog.md
           echo '```' >> changelog.md
           echo "" >> changelog.md
+          echo "A digest-pinned Docker Compose file is attached to this release as \`docker-compose.pinned.yml\`." >> changelog.md
+          echo "" >> changelog.md
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}" >> changelog.md
+
+      - name: Download image digest metadata
+        if: steps.check_release.outputs.exists == 'false'
+        uses: actions/download-artifact@v7
+        with:
+          pattern: image-digest-*
+          path: image-digests
+          merge-multiple: true
+
+      - name: Generate digest-pinned Docker Compose
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          CURRENT_TAG="${{ steps.current_tag.outputs.value }}"
+          IMAGE_TAG="${CURRENT_TAG#v}"
+          OWNER_LC="$(printf '%s' "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          BACKEND_DIGEST="$(cat image-digests/backend.digest)"
+          FRONTEND_DIGEST="$(cat image-digests/frontend.digest)"
+
+          case "$BACKEND_DIGEST" in
+            sha256:*) ;;
+            *) echo "Invalid backend digest: $BACKEND_DIGEST"; exit 1 ;;
+          esac
+
+          case "$FRONTEND_DIGEST" in
+            sha256:*) ;;
+            *) echo "Invalid frontend digest: $FRONTEND_DIGEST"; exit 1 ;;
+          esac
+
+          BACKEND_IMAGE="${{ env.REGISTRY }}/${OWNER_LC}/medassist-ng-backend:${IMAGE_TAG}@${BACKEND_DIGEST}"
+          FRONTEND_IMAGE="${{ env.REGISTRY }}/${OWNER_LC}/medassist-ng-frontend:${IMAGE_TAG}@${FRONTEND_DIGEST}"
+
+          {
+            echo "# Generated for ${CURRENT_TAG}; image references include immutable OCI manifest digests."
+            echo "# Use docker-compose.yml for the standard documented upgrade path."
+            sed -E \
+              -e "s#^([[:space:]]*image:[[:space:]]*)[^[:space:]]*/medassist-ng-backend:[^[:space:]]+#\1${BACKEND_IMAGE}#" \
+              -e "s#^([[:space:]]*image:[[:space:]]*)[^[:space:]]*/medassist-ng-frontend:[^[:space:]]+#\1${FRONTEND_IMAGE}#" \
+              docker-compose.yml
+          } > docker-compose.pinned.yml
+
+          grep -F "$BACKEND_IMAGE" docker-compose.pinned.yml >/dev/null
+          grep -F "$FRONTEND_IMAGE" docker-compose.pinned.yml >/dev/null
 
       - name: Create GitHub Release
         if: steps.check_release.outputs.exists == 'false'
@@ -203,6 +275,7 @@ jobs:
           tag_name: ${{ steps.current_tag.outputs.value }}
           target_commitish: ${{ github.sha }}
           body_path: changelog.md
+          files: docker-compose.pinned.yml
           generate_release_notes: false
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}

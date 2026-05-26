@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, like, or } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -193,7 +193,34 @@ function parseDoseId(doseId: string): ParsedDoseId | null {
 	};
 }
 
-async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseId: string): Promise<boolean> {
+type MedicationRow = typeof medications.$inferSelect;
+
+async function loadShareVisibleMedicationMap(
+	share: typeof shareTokens.$inferSelect
+): Promise<Map<number, MedicationRow>> {
+	const shareMedications = await db
+		.select()
+		.from(medications)
+		.where(and(eq(medications.userId, share.userId), eq(medications.isObsolete, false)));
+
+	const visibleMedications = shareMedications.filter((medication) => {
+		const medTakenBy = parseTakenByJson(medication.takenByJson);
+		const intakes = parseIntakesJson(
+			medication.intakesJson,
+			{ usageJson: medication.usageJson, everyJson: medication.everyJson, startJson: medication.startJson },
+			medication.intakeRemindersEnabled ?? false
+		);
+		return personTakesMedication(share.takenBy, medTakenBy, intakes);
+	});
+
+	return new Map(visibleMedications.map((medication) => [medication.id, medication]));
+}
+
+function validateShareDoseIdWithMedicationMap(
+	share: typeof shareTokens.$inferSelect,
+	doseId: string,
+	medicationById: Map<number, MedicationRow>
+): boolean {
 	const parsedDose = parseDoseId(doseId);
 	if (!parsedDose) {
 		return false;
@@ -203,11 +230,7 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 		return false;
 	}
 
-	const [medication] = await db
-		.select()
-		.from(medications)
-		.where(and(eq(medications.id, parsedDose.medicationId), eq(medications.userId, share.userId)));
-
+	const medication = medicationById.get(parsedDose.medicationId);
 	if (!medication) {
 		return false;
 	}
@@ -238,6 +261,11 @@ async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseI
 	}
 
 	return expectedPersons.includes(parsedDose.personSuffix);
+}
+
+async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseId: string): Promise<boolean> {
+	const medicationById = await loadShareVisibleMedicationMap(share);
+	return validateShareDoseIdWithMedicationMap(share, doseId, medicationById);
 }
 
 function hasShareWriteAccess(share: typeof shareTokens.$inferSelect): boolean {
@@ -781,13 +809,22 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			// Keep public dose reads scoped to the selected share person and visible schedule window.
-			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
-			const visibleDoses: (typeof doseTracking.$inferSelect)[] = [];
-			for (const dose of doses) {
-				if (await validateShareDoseId(share, dose.doseId)) {
-					visibleDoses.push(dose);
-				}
+			const medicationById = await loadShareVisibleMedicationMap(share);
+			const visibleMedicationIds = [...medicationById.keys()];
+			let doses: (typeof doseTracking.$inferSelect)[] = [];
+			if (visibleMedicationIds.length > 0) {
+				const medicationDoseFilter =
+					visibleMedicationIds.length === 1
+						? like(doseTracking.doseId, `${visibleMedicationIds[0]}-%`)
+						: or(...visibleMedicationIds.map((medicationId) => like(doseTracking.doseId, `${medicationId}-%`)));
+				doses = await db
+					.select()
+					.from(doseTracking)
+					.where(and(eq(doseTracking.userId, share.userId), medicationDoseFilter));
 			}
+			const visibleDoses = doses.filter((dose) =>
+				validateShareDoseIdWithMedicationMap(share, dose.doseId, medicationById)
+			);
 
 			const journalDoseTrackingIds = new Set<number>();
 			if ((share.allowJournalNotes ?? false) && visibleDoses.length > 0) {

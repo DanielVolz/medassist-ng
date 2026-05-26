@@ -43,6 +43,7 @@ vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
 vi.mock("../plugins/auth.js", () => ({
 	requireAuth: async () => {},
 	getAnonymousUserId: async () => 1,
+	isReadOnlyApiKeyRequest: () => false,
 }));
 
 vi.mock("nodemailer", () => ({
@@ -417,6 +418,15 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(result.error).toContain("not allowed");
 	});
 
+	it("sendShoutrrrNotification blocks IPv6 localhost/private targets before fetch", async () => {
+		for (const url of ["http://[::1]/hook", "http://[fd00::1]/hook", "http://[fe80::1]/hook"]) {
+			const result = await sendShoutrrrNotification(url, "test", "message");
+			expect(result.success).toBe(false);
+			expect(result.error).toContain("not allowed");
+		}
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	it("sendShoutrrrNotification handles ntfy auth and safe URL reconstruction", async () => {
 		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-message-id" }) });
 
@@ -671,6 +681,27 @@ describe("Real route coverage: settings/export/report", () => {
 		const body = response.json();
 		expect(body[medId].dosesTaken).toBe(1);
 		expect(body[medId].dosesSkipped).toBe(1);
+	});
+
+	it("POST /medications/report-data preserves hyphenated takenBy suffixes when filtering", async () => {
+		const medId = await seedMedication("Report Hyphenated Filter Med");
+		await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
+			args: [1, `${medId}-0-1700000000000-Mary-Jane`, 1700000000, 0],
+		});
+		await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?)",
+			args: [1, `${medId}-0-1700000600000-Jane`, 1700000600, 0],
+		});
+
+		const response = await app.inject({
+			method: "POST",
+			url: "/medications/report-data",
+			payload: { medicationIds: [medId], takenByFilter: ["Mary-Jane"] },
+		});
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body[medId].dosesTaken).toBe(1);
 	});
 
 	it("POST /medications/report-data filters doses by scheduled doseId timestamp and refills by the same date window", async () => {

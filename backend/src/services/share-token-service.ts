@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { shareTokens } from "../db/schema.js";
-import { tokenFingerprint } from "../utils/redaction.js";
 
 export const SHARE_TOKEN_PATTERN = /^(?:[a-f0-9]{16}|[a-f0-9]{64})$/;
 
@@ -17,8 +16,7 @@ export function isShareTokenFormat(token: string): boolean {
 }
 
 export function shareTokenRateLimitKey(request: { ip: string; params?: unknown }): string {
-	const token = (request.params as { token?: string } | undefined)?.token ?? "";
-	return `${request.ip}:${tokenFingerprint(token)}`;
+	return request.ip;
 }
 
 export async function getActiveShareToken(

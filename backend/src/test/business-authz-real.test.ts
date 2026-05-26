@@ -483,4 +483,30 @@ describe("Real business route authz contracts", () => {
 		expect(response.body).toContain("Readable Owner Med");
 		expect(response.body).not.toContain("Unreadable Other Med");
 	});
+
+	it("does not auto-mark obsolete medications when listing with a read-only API key", async () => {
+		const userId = await createUser("readonly-medications-no-side-effects");
+		const medicationId = await seedMedication({ userId, name: "Expired Readonly Med" });
+		await testClient.execute({
+			sql: `UPDATE medications
+			      SET medication_end_date = '2026-01-01', auto_mark_obsolete_after_end_date = 1, is_obsolete = 0
+			      WHERE id = ?`,
+			args: [medicationId],
+		});
+		const apiToken = "ma_readonly_no_obsolete_write_123456789";
+		await insertApiKey({ userId, token: apiToken, scope: "read" });
+
+		const response = await app.inject({
+			method: "GET",
+			url: "/medications",
+			headers: { authorization: `Bearer ${apiToken}` },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const medicationRows = await testClient.execute({
+			sql: "SELECT is_obsolete, obsolete_at FROM medications WHERE id = ?",
+			args: [medicationId],
+		});
+		expect(medicationRows.rows[0]).toMatchObject({ is_obsolete: 0, obsolete_at: null });
+	});
 });

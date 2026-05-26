@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `dose_tracking_user_id_dose_id_unique` ON `dose_tracking` (`user_id`,`dose_id`);

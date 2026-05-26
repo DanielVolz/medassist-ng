@@ -54,6 +54,7 @@ vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
 vi.mock("../plugins/auth.js", () => ({
 	requireAuth: async () => {},
 	getAnonymousUserId: () => 1,
+	isReadOnlyApiKeyRequest: () => false,
 }));
 
 const { medicationRoutes } = await import("../routes/medications.js");

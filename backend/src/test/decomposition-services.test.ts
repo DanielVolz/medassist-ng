@@ -98,9 +98,16 @@ describe("settings-service decomposition regression", () => {
 		expect(getNotificationProvider("https://hooks.slack.com/services/a/b/c")).toBe("hooks.slack.com");
 
 		expect(validateNotificationHostname("127.0.0.1")).toContain("not allowed");
+		expect(validateNotificationHostname("[::1]")).toContain("not allowed");
+		expect(validateNotificationHostname("[fd00::1]")).toContain("not allowed");
+		expect(validateNotificationHostname("[fe80::1]")).toContain("not allowed");
+		expect(validateNotificationHostname("0.0.0.0")).toContain("not allowed");
+		expect(validateNotificationHostname("100.64.0.1")).toContain("not allowed");
+		expect(validateNotificationHostname("::ffff:7f00:1")).toContain("not allowed");
 		expect(validateNotificationHostname("example.com")).toBeNull();
 
 		expect(sanitizeNotificationUrl("discord://abc@not-a-number")).toEqual({ error: "Invalid Discord webhook ID" });
+		expect(sanitizeNotificationUrl("https://[::1]/hook")).toEqual({ error: "Localhost URLs are not allowed" });
 		expect(sanitizeNotificationUrl("ntfy://user:pass@ntfy.sh/topic")).toMatchObject({
 			url: "https://ntfy.sh/topic",
 			isNtfy: true,

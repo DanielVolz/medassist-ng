@@ -127,6 +127,13 @@
       "when": 1779732000000,
       "tag": "0017_harden_share_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1779816583288,
+      "tag": "0018_add_dose_tracking_unique_index",
+      "breakpoints": true
     }
   ]
 }

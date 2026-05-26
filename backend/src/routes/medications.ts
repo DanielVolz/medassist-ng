@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/path-utils.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
-import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
+import { getAnonymousUserId, isReadOnlyApiKeyRequest, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { calculateUsageInRange, normalizeDateTime, parseIntakesWithUnits } from "../services/medications-service.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -499,17 +499,19 @@ export async function medicationRoutes(app: FastifyInstance) {
 				.orderBy(medications.id);
 			const todayDate = new Date().toISOString().slice(0, 10);
 
-			for (const row of initialRows) {
-				if (row.isObsolete) continue;
-				if (!(row.autoMarkObsoleteAfterEndDate ?? true)) continue;
-				const endDate = row.medicationEndDate?.slice(0, 10);
-				if (!endDate) continue;
-				if (endDate > todayDate) continue;
+			if (!isReadOnlyApiKeyRequest(request)) {
+				for (const row of initialRows) {
+					if (row.isObsolete) continue;
+					if (!(row.autoMarkObsoleteAfterEndDate ?? true)) continue;
+					const endDate = row.medicationEndDate?.slice(0, 10);
+					if (!endDate) continue;
+					if (endDate > todayDate) continue;
 
-				await db
-					.update(medications)
-					.set({ isObsolete: true, obsoleteAt: new Date(), updatedAt: new Date() })
-					.where(and(eq(medications.id, row.id), eq(medications.userId, userId)));
+					await db
+						.update(medications)
+						.set({ isObsolete: true, obsoleteAt: new Date(), updatedAt: new Date() })
+						.where(and(eq(medications.id, row.id), eq(medications.userId, userId)));
+				}
 			}
 
 			const whereClause = includeObsolete

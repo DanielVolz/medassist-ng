@@ -168,6 +168,11 @@ describe("Settings and API key security contracts", () => {
 				stockCalculationMode: "automatic",
 			})
 		);
+		const settingsRows = await testClient.execute({
+			sql: "SELECT COUNT(*) AS count FROM user_settings WHERE user_id = ?",
+			args: [userId],
+		});
+		expect(Number(settingsRows.rows[0].count)).toBe(1);
 	});
 
 	it("allows GET /settings with a read-only API key", async () => {
@@ -191,6 +196,11 @@ describe("Settings and API key security contracts", () => {
 				smtpPort: 2525,
 			})
 		);
+		const settingsRows = await testClient.execute({
+			sql: "SELECT COUNT(*) AS count FROM user_settings WHERE user_id = ?",
+			args: [userId],
+		});
+		expect(Number(settingsRows.rows[0].count)).toBe(0);
 	});
 
 	it("rejects PUT /settings with a read-only API key", async () => {

@@ -12,7 +12,7 @@ import {
 } from "../services/notification-actions-service.js";
 import { getNotificationActionLabels } from "../services/notifications/action-renderer.js";
 import { sendPushNotification } from "../services/notifications/delivery.js";
-import { sanitizeNotificationUrl } from "../services/settings-service.js";
+import { sanitizeNotificationUrl, validateNotificationTargetUrl } from "../services/settings-service.js";
 import { applyOpenApiRouteStandards, genericErrorSchema } from "../utils/openapi-route-standards.js";
 
 const querySchema = z.object({
@@ -147,6 +147,10 @@ async function clearNtfyNotificationSequence(userId: number, sequenceId: string)
 
 	const clearUrl = new URL(sanitized.url);
 	clearUrl.pathname = `${clearUrl.pathname.replace(/\/+$/, "")}/${encodeURIComponent(sequenceId)}/clear`;
+	const targetValidationError = await validateNotificationTargetUrl(clearUrl.toString());
+	if (targetValidationError) {
+		throw new Error(targetValidationError);
+	}
 
 	const headers: Record<string, string> = {};
 	if (sanitized.auth) {
@@ -187,6 +191,10 @@ async function deleteNtfyNotificationSequence(userId: number, sequenceId: string
 
 	const deleteUrl = new URL(sanitized.url);
 	deleteUrl.pathname = `${deleteUrl.pathname.replace(/\/+$/, "")}/${encodeURIComponent(normalizedSequenceId)}`;
+	const targetValidationError = await validateNotificationTargetUrl(deleteUrl.toString());
+	if (targetValidationError) {
+		throw new Error(targetValidationError);
+	}
 
 	const headers: Record<string, string> = {};
 	if (sanitized.auth) {

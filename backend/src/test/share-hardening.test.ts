@@ -52,6 +52,7 @@ vi.mock("../plugins/auth.js", () => ({
 	getAnonymousUserId: () => 1,
 }));
 
+const { shareTokenRateLimitKey } = await import("../services/share-token-service.js");
 const { doseRoutes } = await import("../routes/doses.js");
 const { shareRoutes } = await import("../routes/share.js");
 
@@ -197,6 +198,11 @@ describe("share link hardening", () => {
 		const logs = logLines.join("\n");
 		expect(logs).not.toContain(token);
 		expect(logs).toContain(`tokenFingerprint=${tokenFingerprint(token)}`);
+	});
+
+	it("uses an IP-only public share rate limit key", () => {
+		expect(shareTokenRateLimitKey({ ip: "203.0.113.10", params: { token: "aaaaaaaaaaaaaaaa" } })).toBe("203.0.113.10");
+		expect(shareTokenRateLimitKey({ ip: "203.0.113.10", params: { token: "bbbbbbbbbbbbbbbb" } })).toBe("203.0.113.10");
 	});
 
 	it("rejects expired tokens for read and write", async () => {

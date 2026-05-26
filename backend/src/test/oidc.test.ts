@@ -6,9 +6,34 @@ import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.j
 type OidcMocks = {
 	discovery: ReturnType<typeof vi.fn>;
 	buildAuthorizationUrl: ReturnType<typeof vi.fn>;
+	authorizationCodeGrant: ReturnType<typeof vi.fn>;
+	fetchUserInfo: ReturnType<typeof vi.fn>;
+	db: {
+		select: ReturnType<typeof vi.fn>;
+		insert: ReturnType<typeof vi.fn>;
+		update: ReturnType<typeof vi.fn>;
+	};
 };
 
-async function buildOidcApp(envOverrides: Record<string, unknown>) {
+type JwtPayloadWithExp = Record<string, unknown> & { exp?: number; sub?: number; type?: string };
+
+type OidcAppOptions = {
+	selectResults?: unknown[][];
+	insertReturning?: unknown[];
+	userInfo?: Record<string, string>;
+};
+
+function buildCookieHeader(cookies: Array<{ name: string; value: string }>): string {
+	return cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+}
+
+function getLocationState(location: string | string[] | undefined): string {
+	expect(location).toBeDefined();
+	const locationValue = Array.isArray(location) ? location[0] : location;
+	return new URL(locationValue ?? "").searchParams.get("state") ?? "";
+}
+
+async function buildOidcApp(envOverrides: Record<string, unknown>, options: OidcAppOptions = {}) {
 	vi.resetModules();
 
 	const env = {
@@ -30,14 +55,20 @@ async function buildOidcApp(envOverrides: Record<string, unknown>) {
 
 	vi.doMock("../plugins/env.js", () => ({ env }));
 
+	const selectResults = [...(options.selectResults ?? [[]])];
+	const where = vi.fn().mockImplementation(() => Promise.resolve(selectResults.shift() ?? []));
+	const returning = vi.fn().mockResolvedValue(options.insertReturning ?? [{ id: 1, username: "sso-user" }]);
+	const values = vi.fn(() => ({ returning }));
+	const updateWhere = vi.fn().mockResolvedValue(undefined);
+	const set = vi.fn(() => ({ where: updateWhere }));
+	const dbMock = {
+		select: vi.fn(() => ({ from: vi.fn(() => ({ where })) })),
+		insert: vi.fn(() => ({ values })),
+		update: vi.fn(() => ({ set })),
+	};
+
 	vi.doMock("../db/client.js", () => ({
-		db: {
-			select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })) })),
-			insert: vi.fn(() => ({
-				values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 1, username: "sso-user" }]) })),
-			})),
-			update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) })) })),
-		},
+		db: dbMock,
 	}));
 
 	const discovery = vi.fn().mockResolvedValue({ issuer: "https://issuer.example.com" });
@@ -45,23 +76,39 @@ async function buildOidcApp(envOverrides: Record<string, unknown>) {
 		const state = typeof params?.state === "string" ? params.state : "state";
 		return new URL(`https://issuer.example.com/authorize?state=${state}`);
 	});
+	const authorizationCodeGrant = vi.fn().mockResolvedValue({
+		access_token: "oidc-provider-access-token",
+		claims: () => ({ sub: "oidc-subject-1" }),
+	});
+	const fetchUserInfo = vi.fn().mockResolvedValue(
+		options.userInfo ?? {
+			sub: "oidc-subject-1",
+			preferred_username: "sso-user",
+			email: "sso-user@example.com",
+		}
+	);
 
 	vi.doMock("openid-client", () => ({
 		discovery,
 		buildAuthorizationUrl,
-		authorizationCodeGrant: vi.fn(),
-		fetchUserInfo: vi.fn(),
+		authorizationCodeGrant,
+		fetchUserInfo,
 	}));
 
+	const { jwtPlugin } = await import("../plugins/jwt.js");
 	const { oidcRoutes } = await import("../routes/oidc.js");
 
 	const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 	await app.register(cookie, { secret: "test-cookie-secret" });
+	await app.register(jwtPlugin, {
+		secret: "test-jwt-secret-12345",
+		cookie: { cookieName: "access_token", signed: false },
+	});
 	app.decorate("config", {
 		accessSecret: "test-jwt-secret-12345",
 		refreshSecret: "test-refresh-secret-12345",
-		accessTtl: 15 * 60,
-		refreshTtl: 7 * 24 * 60 * 60,
+		accessTtl: 15,
+		refreshTtl: 7,
 		cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
 		refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth" },
 	});
@@ -70,7 +117,7 @@ async function buildOidcApp(envOverrides: Record<string, unknown>) {
 
 	return {
 		app,
-		mocks: { discovery, buildAuthorizationUrl } as OidcMocks,
+		mocks: { discovery, buildAuthorizationUrl, authorizationCodeGrant, fetchUserInfo, db: dbMock } as OidcMocks,
 	};
 }
 
@@ -145,6 +192,72 @@ describe("OIDC routes", () => {
 
 			expect(res.statusCode).toBe(302);
 			expect(res.headers.location).toBe("http://localhost:5173");
+		} finally {
+			await app.close();
+		}
+	});
+
+	it("does not auto-link an OIDC subject to an existing local username", async () => {
+		const { app, mocks } = await buildOidcApp(
+			{ OIDC_ENABLED: true },
+			{
+				selectResults: [[], [{ id: 42, username: "victim", authProvider: "local", oidcSubject: null }]],
+				userInfo: {
+					sub: "attacker-oidc-subject",
+					preferred_username: "victim",
+					email: "victim@example.com",
+				},
+			}
+		);
+		try {
+			const login = await app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const state = getLocationState(login.headers.location);
+
+			const callback = await app.inject({
+				method: "GET",
+				url: `/auth/oidc/callback?code=abc123&state=${state}`,
+				headers: { cookie: buildCookieHeader(login.cookies) },
+			});
+
+			expect(callback.statusCode).toBe(302);
+			expect(callback.headers.location).toBe("http://localhost:5173");
+			expect(mocks.db.update).not.toHaveBeenCalled();
+			expect(mocks.db.insert).not.toHaveBeenCalled();
+		} finally {
+			await app.close();
+		}
+	});
+
+	it("signs OIDC refresh tokens with the configured refresh secret", async () => {
+		const { app } = await buildOidcApp(
+			{ OIDC_ENABLED: true },
+			{
+				selectResults: [[], []],
+				insertReturning: [{ id: 7, username: "sso-user" }],
+			}
+		);
+		try {
+			const login = await app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const state = getLocationState(login.headers.location);
+
+			const callback = await app.inject({
+				method: "GET",
+				url: `/auth/oidc/callback?code=abc123&state=${state}`,
+				headers: { cookie: buildCookieHeader(login.cookies) },
+			});
+
+			expect(callback.statusCode).toBe(302);
+			expect(callback.headers.location).toBe("http://localhost:5173/dashboard");
+
+			const refreshCookie = callback.cookies.find((c) => c.name === "refresh_token");
+			expect(refreshCookie).toBeDefined();
+
+			const refreshPayload = await app.jwt.verify<JwtPayloadWithExp>(refreshCookie?.value ?? "", {
+				key: app.config.refreshSecret,
+			});
+			expect(refreshPayload.sub).toBe(7);
+			expect(refreshPayload.type).toBe("refresh");
+			await expect(app.jwt.verify(refreshCookie?.value ?? "")).rejects.toThrow();
 		} finally {
 			await app.close();
 		}

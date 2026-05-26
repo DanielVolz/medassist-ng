@@ -54,6 +54,7 @@ vi.mock("../plugins/env.js", () => ({
 vi.mock("../plugins/auth.js", () => ({
 	requireAuth: async () => {},
 	getAnonymousUserId: () => 999999999,
+	isReadOnlyApiKeyRequest: () => false,
 }));
 
 // Mock reminder-scheduler

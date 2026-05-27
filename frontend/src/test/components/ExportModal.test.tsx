@@ -49,7 +49,7 @@ describe("ExportModal", () => {
 		const actionCards = container.querySelectorAll(".action-card");
 		fireEvent.click(actionCards[0]);
 		expect(defaultProps.onClose).toHaveBeenCalled();
-		expect(defaultProps.onExport).toHaveBeenCalledWith(true);
+		expect(defaultProps.onExport).toHaveBeenCalledWith(true, false);
 	});
 
 	it("calls onExport with false when export data only button clicked", () => {
@@ -57,7 +57,15 @@ describe("ExportModal", () => {
 		const actionCards = container.querySelectorAll(".action-card");
 		fireEvent.click(actionCards[1]);
 		expect(defaultProps.onClose).toHaveBeenCalled();
-		expect(defaultProps.onExport).toHaveBeenCalledWith(false);
+		expect(defaultProps.onExport).toHaveBeenCalledWith(false, false);
+	});
+
+	it("passes sensitive export opt-in when selected", () => {
+		const { container } = render(<ExportModal {...defaultProps} />);
+		fireEvent.click(screen.getByLabelText(/exportImport\.includeSensitive/i));
+		const actionCards = container.querySelectorAll(".action-card");
+		fireEvent.click(actionCards[0]);
+		expect(defaultProps.onExport).toHaveBeenCalledWith(true, true);
 	});
 
 	it("disables buttons when exporting", () => {

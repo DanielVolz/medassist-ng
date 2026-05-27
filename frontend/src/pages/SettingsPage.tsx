@@ -1167,7 +1167,7 @@ export function SettingsPage() {
 				importing={importing}
 				exporting={exporting}
 				onClose={closeImportReview}
-				onBackup={() => handleExport(true)}
+				onBackup={() => handleExport(true, false)}
 				onConfirm={handleImportConfirm}
 			/>
 

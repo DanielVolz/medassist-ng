@@ -111,7 +111,7 @@ vi.mock("../../components/Auth", () => ({
 interface MockExportModalProps {
 	isOpen: boolean;
 	onClose: () => void;
-	onExport: () => void;
+	onExport: (includeImages: boolean, includeSensitive: boolean) => void;
 }
 
 const createImportPreview = (overrides = {}) => ({
@@ -151,7 +151,7 @@ vi.mock("../../components", async (importOriginal) => {
 		ExportModal: ({ isOpen, onClose, onExport }: MockExportModalProps) =>
 			isOpen ? (
 				<div>
-					<button type="button" onClick={onExport}>
+					<button type="button" onClick={() => onExport(true, false)}>
 						export-modal-export
 					</button>
 					<button type="button" onClick={onClose}>
@@ -559,6 +559,6 @@ describe("SettingsPage", () => {
 
 		renderPage();
 		fireEvent.click(screen.getByText("exportImport.backupFirst"));
-		expect(handleExport).toHaveBeenCalledWith(true);
+		expect(handleExport).toHaveBeenCalledWith(true, false);
 	});
 });

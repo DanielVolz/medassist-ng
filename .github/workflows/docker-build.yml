@@ -227,7 +227,6 @@ jobs:
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}" >> changelog.md
 
       - name: Download image digest metadata
-        if: steps.check_release.outputs.exists == 'false'
         uses: actions/download-artifact@v7
         with:
           pattern: image-digest-*
@@ -235,7 +234,6 @@ jobs:
           merge-multiple: true
 
       - name: Generate digest-pinned Docker Compose
-        if: steps.check_release.outputs.exists == 'false'
         run: |
           CURRENT_TAG="${{ steps.current_tag.outputs.value }}"
           IMAGE_TAG="${CURRENT_TAG#v}"
@@ -275,9 +273,15 @@ jobs:
           tag_name: ${{ steps.current_tag.outputs.value }}
           target_commitish: ${{ github.sha }}
           body_path: changelog.md
-          files: docker-compose.pinned.yml
           generate_release_notes: false
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload digest-pinned Docker Compose asset
+        run: |
+          CURRENT_TAG="${{ steps.current_tag.outputs.value }}"
+          gh release upload "$CURRENT_TAG" docker-compose.pinned.yml --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

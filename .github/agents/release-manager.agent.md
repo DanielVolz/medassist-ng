@@ -294,6 +294,8 @@ The documented production `docker-compose.yml` must be pinned to the exact relea
 - The `docker-build.yml` workflow automatically builds and pushes Docker images to GHCR with both versioned tags (`1.8.7`, `1.8`) and `latest`.
 - Confirm that the production `docker-compose.yml` image tags in the merged release commit match the pushed release image tag (`X.Y.Z`, without the leading `v`).
 - Confirm the GitHub release includes the generated `docker-compose.pinned.yml` asset with digest-pinned backend and frontend image references.
+- The pinned compose asset must reference the digests produced by the same `docker-build.yml` run for the tagged release images (`X.Y.Z@sha256:...`), not whichever image `latest` points to later.
+- If the GitHub release already exists, the workflow now uploads or replaces `docker-compose.pinned.yml` on that existing release after the build finishes.
 - The `update-test-badges.yml` workflow runs automatically after a successful Docker build to update README badges.
 - Track progress: `https://github.com/DanielVolz/medassist-ng/actions`
 
@@ -411,6 +413,9 @@ gh release create vX.Y.Z --title "vX.Y.Z" --notes-file /tmp/release-notes-vX.Y.Z
 # If the release was already auto-created (e.g. by pushing a tag), update it:
 gh release edit vX.Y.Z --title "vX.Y.Z" --notes-file /tmp/release-notes-vX.Y.Z.md
 ```
+
+- The release notes may be created or updated manually with `gh`, but `docker-compose.pinned.yml` is attached by the `docker-build.yml` workflow after the tagged image build completes.
+- After publishing or editing a release, wait for the Docker workflow to finish and verify that the release contains `docker-compose.pinned.yml` with `X.Y.Z@sha256:...` image references.
 
 **Present the published release URL to the user for verification.**
 

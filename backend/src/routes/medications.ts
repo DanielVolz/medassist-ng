@@ -4,10 +4,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/path-utils.js";
-import { doseTracking, medications, userSettings } from "../db/schema.js";
+import { doseTracking, medications } from "../db/schema.js";
 import { getAnonymousUserId, isReadOnlyApiKeyRequest, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
-import { calculateUsageInRange, normalizeDateTime, parseIntakesWithUnits } from "../services/medications-service.js";
+import { normalizeDateTime, parseIntakesWithUnits } from "../services/medications-service.js";
+import { calculatePlannerDemandRows } from "../services/planner-demand.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	ALLOWED_IMAGE_MIME_TYPES,
@@ -23,7 +24,6 @@ import {
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
 import {
-	isAmountBasedPackageType,
 	isDiscreteCountPackageType,
 	isLiquidContainerPackageType,
 	isTubePackageType,
@@ -31,14 +31,11 @@ import {
 	PACKAGE_TYPES,
 } from "../utils/package-profiles.js";
 import {
-	countScheduledOccurrencesInRange,
 	forEachScheduledOccurrenceInRange,
 	getDateOnlyTimestamp,
-	getNextScheduledOccurrenceTime,
 	getScheduleMatchWindowMs,
 	type Intake,
 	normalizeIntake,
-	normalizeIntakeUsageForStock,
 	parseLocalDateTime,
 	parseTakenByJson,
 } from "../utils/scheduler-utils.js";
@@ -1406,227 +1403,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			}
 
 			const userId = await getUserId(req, reply);
-			const rows = await db
-				.select()
-				.from(medications)
-				.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)))
-				.orderBy(medications.id);
-
-			const [settingsRow] = await db
-				.select({ stockCalculationMode: userSettings.stockCalculationMode })
-				.from(userSettings)
-				.where(eq(userSettings.userId, userId));
-			const stockCalculationMode = settingsRow?.stockCalculationMode === "manual" ? "manual" : "automatic";
-
-			// Get all taken doses for this user to calculate actual consumption
-			const takenDoses = await db
-				.select()
-				.from(doseTracking)
-				.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, false)));
-
-			const takenDoseIdsByMed = new Map<number, Set<string>>();
-			const takenDoseTimestamps = new Map<string, number>();
-			takenDoses.forEach((dose) => {
-				const parts = dose.doseId.split("-");
-				if (parts.length < 3) return;
-				const medId = parseInt(parts[0], 10);
-				if (Number.isNaN(medId)) return;
-
-				if (!takenDoseIdsByMed.has(medId)) {
-					takenDoseIdsByMed.set(medId, new Set());
-				}
-				takenDoseIdsByMed.get(medId)!.add(dose.doseId);
-				const rawTakenAt = Number(dose.takenAt);
-				let takenAtMs: number;
-				if (Number.isFinite(rawTakenAt)) {
-					takenAtMs = rawTakenAt < 1_000_000_000_000 ? rawTakenAt * 1000 : rawTakenAt;
-				} else {
-					takenAtMs = new Date(dose.takenAt).getTime();
-				}
-				takenDoseTimestamps.set(dose.doseId, takenAtMs);
-			});
-
-			// Use current time as the reference point for "available" stock
-			const now = new Date();
-
-			const payload = rows.map((row) => {
-				// Parse intakes from new format, falling back to legacy
-				const intakes = parseIntakesWithUnits(
-					row.intakesJson,
-					{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
-					row.intakeRemindersEnabled ?? false
-				);
-				const medForm = row.medicationForm ?? "tablet";
-				const blisters = intakes.map((i) => ({
-					usage: normalizeIntakeUsageForStock(i, medForm, row.packageType),
-					every: i.every,
-					start: i.start,
-					scheduleMode: i.scheduleMode,
-					weekdays: i.weekdays,
-				}));
-				const pillsPerBlister = row.pillsPerBlister ?? 1;
-				const packCount = row.packCount ?? 1;
-				const blistersPerPack = row.blistersPerPack ?? 1;
-				const looseTablets = row.looseTablets ?? 0;
-				const stockAdjustment = row.stockAdjustment ?? 0;
-				const packageType = normalizePackageType(row.packageType);
-
-				// For bottle type, looseTablets IS the current stock (no blister math)
-				const isTopical = medForm === "topical" || isTubePackageType(packageType);
-				const originalTotalPills = isAmountBasedPackageType(packageType)
-					? looseTablets + stockAdjustment
-					: packCount * blistersPerPack * pillsPerBlister + looseTablets + stockAdjustment;
-
-				// Calculate consumption with the same automatic/manual behavior as frontend coverage.
-				const stockCorrectionCutoff = row.lastStockCorrectionAt ? new Date(row.lastStockCorrectionAt).getTime() : 0;
-				const takenDoseIds = takenDoseIdsByMed.get(row.id) ?? new Set<string>();
-
-				// Count consumed pills by generating expected doses and checking if they're taken
-				let consumedUntilNow = 0;
-				if (isTopical) {
-					consumedUntilNow = 0;
-				} else if (stockCalculationMode === "automatic") {
-					blisters.forEach((blister, blisterIdx) => {
-						const blisterStart = parseLocalDateTime(blister.start).getTime();
-						if (Number.isNaN(blisterStart)) return;
-
-						const effectiveStart =
-							stockCorrectionCutoff > 0 && stockCorrectionCutoff >= blisterStart
-								? getNextScheduledOccurrenceTime(blister, stockCorrectionCutoff, false)
-								: blisterStart;
-						if (effectiveStart === null) return;
-
-						const intake = intakes[blisterIdx];
-						const intakePerson = intake?.takenBy;
-						const fallbackPeople = parseTakenByJson(row.takenByJson);
-						let peopleForThisIntake: Array<string | null>;
-						if (intakePerson) {
-							peopleForThisIntake = [intakePerson];
-						} else if (fallbackPeople.length > 0) {
-							peopleForThisIntake = fallbackPeople;
-						} else {
-							peopleForThisIntake = [null];
-						}
-
-						let timeBasedConsumed = 0;
-						let lastAutoConsumedDateMs = 0;
-
-						if (effectiveStart <= now.getTime()) {
-							const { count: occurrences, lastOccurrenceMs } = countScheduledOccurrencesInRange(
-								blister,
-								effectiveStart,
-								now.getTime()
-							);
-							timeBasedConsumed = occurrences * blister.usage * peopleForThisIntake.length;
-
-							if (lastOccurrenceMs !== null) {
-								lastAutoConsumedDateMs = getDateOnlyTimestamp(new Date(lastOccurrenceMs));
-							}
-						}
-
-						const stockCorrectionDateOnly =
-							stockCorrectionCutoff > 0 ? getDateOnlyTimestamp(new Date(stockCorrectionCutoff)) : 0;
-						const earlyCutoff = Math.max(lastAutoConsumedDateMs, stockCorrectionDateOnly);
-
-						let earlyTakenConsumed = 0;
-						for (const doseId of takenDoseIds) {
-							const parts = doseId.split("-");
-							if (parts.length < 3) continue;
-							const bIdx = parseInt(parts[1], 10);
-							const timestamp = parseInt(parts[2], 10);
-							if (!Number.isNaN(bIdx) && !Number.isNaN(timestamp) && bIdx === blisterIdx && timestamp > earlyCutoff) {
-								earlyTakenConsumed += blister.usage;
-							}
-						}
-
-						consumedUntilNow += timeBasedConsumed + earlyTakenConsumed;
-					});
-				} else {
-					blisters.forEach((blister, blisterIdx) => {
-						const blisterStart = parseLocalDateTime(blister.start);
-						const blisterStartDateOnly = new Date(
-							blisterStart.getFullYear(),
-							blisterStart.getMonth(),
-							blisterStart.getDate()
-						).getTime();
-						if (Number.isNaN(blisterStartDateOnly)) return;
-
-						for (const doseId of takenDoseIds) {
-							const parts = doseId.split("-");
-							if (parts.length < 3) continue;
-
-							const parsedBlisterIdx = parseInt(parts[1], 10);
-							const doseTimestamp = parseInt(parts[2], 10);
-							if (Number.isNaN(parsedBlisterIdx) || Number.isNaN(doseTimestamp) || parsedBlisterIdx !== blisterIdx) {
-								continue;
-							}
-
-							const takenAt = takenDoseTimestamps.get(doseId) ?? 0;
-							const afterCorrectionOrNoCorrection = stockCorrectionCutoff === 0 || takenAt > stockCorrectionCutoff;
-
-							if (doseTimestamp >= blisterStartDateOnly && afterCorrectionOrNoCorrection) {
-								consumedUntilNow += blister.usage;
-							}
-						}
-					});
-				}
-
-				const currentStock = isTopical ? originalTotalPills : Math.max(0, originalTotalPills - consumedUntilNow);
-
-				// Calculate usage for the planning period
-				// Always use the user-selected start date for the usage calculation.
-				// Using max(now, start) would cause asymmetric counting when now falls
-				// between morning and evening doses on the start day (e.g., morning dose
-				// skipped but evening counted), leading to confusing off-by-one results.
-				// The stock already reflects consumed doses, so no double-counting occurs.
-				// When includeUntilStart is true, calculate from now to end (useful for trip planning)
-				const effectivePlannerStart = includeUntilStart ? now : start;
-				const usageTotal = isTopical ? 0 : calculateUsageInRange(blisters, effectivePlannerStart, end);
-
-				const blistersNeeded = pillsPerBlister > 0 ? Math.ceil(usageTotal / pillsPerBlister) : 0;
-
-				// Calculate AVAILABLE = stock AFTER the planned period (currentStock - usageTotal)
-				const availableAfterPeriod = Math.max(0, currentStock - usageTotal);
-
-				let fullBlisters: number;
-				let loosePills: number;
-
-				if (isAmountBasedPackageType(packageType)) {
-					// Bottle type: no blisters, everything is loose pills
-					fullBlisters = 0;
-					loosePills = availableAfterPeriod;
-				} else {
-					// Blister type: calculate stock breakdown
-					// Consumption order: loose pills first, then from blisters
-					const totalConsumedByEnd = originalTotalPills - availableAfterPeriod;
-					const looseConsumedByEnd = Math.min(totalConsumedByEnd, looseTablets);
-					const loosePillsRemaining = Math.max(0, looseTablets - looseConsumedByEnd);
-					const blisterPillsConsumed = totalConsumedByEnd - looseConsumedByEnd;
-					const originalBlisterPills = originalTotalPills - looseTablets;
-					const blisterPillsRemaining = Math.max(0, originalBlisterPills - blisterPillsConsumed);
-
-					fullBlisters = pillsPerBlister > 0 ? Math.floor(blisterPillsRemaining / pillsPerBlister) : 0;
-					const openBlisterPills = pillsPerBlister > 0 ? blisterPillsRemaining % pillsPerBlister : 0;
-					loosePills = loosePillsRemaining + openBlisterPills; // Combine open blister + remaining loose
-				}
-
-				const enough = currentStock >= usageTotal;
-				return {
-					medicationId: row.id,
-					medicationName: row.name,
-					totalPills: currentStock,
-					currentPills: currentStock,
-					plannerUsage: usageTotal,
-					blisterSize: pillsPerBlister,
-					blistersNeeded,
-					fullBlisters,
-					loosePills,
-					enough,
-					packageType,
-				};
-			});
-
-			return payload;
+			return calculatePlannerDemandRows({ userId, startDate: start, endDate: end, includeUntilStart });
 		}
 	);
 

@@ -440,6 +440,12 @@
     "calculating": "Calculating...",
     "sendEmail": "📧 Send via Email",
     "sendNotification": "🔔 Send Demand",
+    "noResults": "No active medications were found for this range.",
+    "openMedication": "Open {{name}}",
+    "errors": {
+      "invalidDateRange": "Choose a valid date range.",
+      "calculateFailed": "Planner calculation failed. Please try again."
+    },
     "table": {
       "medication": "Medication",
       "usage": "Usage",

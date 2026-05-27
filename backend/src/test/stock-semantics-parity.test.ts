@@ -330,6 +330,24 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 		expect(usageRow.currentPills).toBeLessThan(20);
 	});
 
+	it("counts medication-level people in planner future usage", async () => {
+		await setStockMode("automatic");
+		const medName = "Planner People Demand";
+		await createMedication({
+			name: medName,
+			packCount: 3,
+			blistersPerPack: 1,
+			pillsPerBlister: 10,
+			takenBy: ["Alice", "Bob"],
+			intakes: [{ usage: 1, every: 1, start: "2030-01-01T08:00:00", takenBy: null }],
+		});
+
+		const usageRow = await getUsageRow(app, "2030-01-01T00:00:00.000Z", "2030-01-11T00:00:00.000Z", medName);
+
+		expect(usageRow.plannerUsage).toBe(20);
+		expect(usageRow.blistersNeeded).toBe(2);
+	});
+
 	it("excludes obsolete medications from planner usage and scheduler", async () => {
 		await setStockMode("automatic");
 		await createMedication({

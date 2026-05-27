@@ -58,7 +58,9 @@ export function normalizeDateTime(value: unknown): string | null {
 }
 
 export function calculateUsageInRange(
-	blisters: Array<Pick<Intake, "usage" | "every" | "start" | "scheduleMode" | "weekdays">>,
+	blisters: Array<
+		Pick<Intake, "usage" | "every" | "start" | "scheduleMode" | "weekdays"> & { peopleMultiplier?: number }
+	>,
 	start: Date,
 	end: Date
 ): number {
@@ -69,7 +71,7 @@ export function calculateUsageInRange(
 	let total = 0;
 	blisters.forEach((blister) => {
 		forEachScheduledOccurrenceInRange(blister, start.getTime(), end.getTime() - 1, () => {
-			total += blister.usage;
+			total += blister.usage * (blister.peopleMultiplier ?? 1);
 		});
 	});
 	return Number(total.toFixed(2));

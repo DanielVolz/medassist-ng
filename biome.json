@@ -4,6 +4,7 @@
 	"files": {
 		"includes": [
 			"backend/src/**/*.ts",
+			"shared/src/**/*.ts",
 			"frontend/src/**/*.ts",
 			"frontend/src/**/*.tsx",
 			"frontend/src/**/*.css",

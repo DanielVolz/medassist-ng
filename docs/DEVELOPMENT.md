@@ -38,6 +38,14 @@ These development overrides are documented here intentionally and are not part o
 
 ## Useful Commands
 
+When running commands directly on the host instead of through Docker, install dependencies in all local packages first:
+
+```bash
+cd shared && npm install
+cd ../backend && npm install
+cd ../frontend && npm install
+```
+
 ```bash
 npm run lint
 npm run check

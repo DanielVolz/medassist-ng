@@ -1,68 +1,13 @@
 // Backend translations for notifications
+import { getRegionForTimezone } from "@medassist/shared";
 import { parseStringListEnv } from "../utils/env-parsing.js";
 
 export type Language = "en" | "de";
 
-/**
- * Map timezone to region code (ISO 3166-1 alpha-2).
- * This allows combining app language with regional formatting.
- */
-const TIMEZONE_TO_REGION: Record<string, string> = {
-	// Europe
-	"Europe/Berlin": "DE",
-	"Europe/Vienna": "AT",
-	"Europe/Zurich": "CH",
-	"Europe/London": "GB",
-	"Europe/Dublin": "IE",
-	"Europe/Paris": "FR",
-	"Europe/Madrid": "ES",
-	"Europe/Rome": "IT",
-	"Europe/Amsterdam": "NL",
-	"Europe/Brussels": "BE",
-	"Europe/Warsaw": "PL",
-	"Europe/Prague": "CZ",
-	"Europe/Stockholm": "SE",
-	"Europe/Oslo": "NO",
-	"Europe/Copenhagen": "DK",
-	"Europe/Helsinki": "FI",
-	"Europe/Athens": "GR",
-	"Europe/Lisbon": "PT",
-	"Europe/Moscow": "RU",
-	"Europe/Kiev": "UA",
-	"Europe/Kyiv": "UA",
-	"Europe/Budapest": "HU",
-	"Europe/Bucharest": "RO",
-	// Americas
-	"America/New_York": "US",
-	"America/Chicago": "US",
-	"America/Denver": "US",
-	"America/Los_Angeles": "US",
-	"America/Phoenix": "US",
-	"America/Toronto": "CA",
-	"America/Vancouver": "CA",
-	"America/Mexico_City": "MX",
-	"America/Sao_Paulo": "BR",
-	"America/Buenos_Aires": "AR",
-	// Asia/Pacific
-	"Asia/Tokyo": "JP",
-	"Asia/Shanghai": "CN",
-	"Asia/Hong_Kong": "HK",
-	"Asia/Singapore": "SG",
-	"Asia/Seoul": "KR",
-	"Asia/Dubai": "AE",
-	"Asia/Kolkata": "IN",
-	"Australia/Sydney": "AU",
-	"Australia/Melbourne": "AU",
-	"Pacific/Auckland": "NZ",
-};
-
-/**
- * Get region code from TZ environment variable.
- */
 function getRegionFromTimezone(): string | undefined {
 	const tz = process.env.TZ;
 	if (!tz) return undefined;
-	return TIMEZONE_TO_REGION[tz];
+	return getRegionForTimezone(tz);
 }
 
 type TranslationKeys = {

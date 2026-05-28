@@ -16,13 +16,21 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
+COPY shared/package.json shared/package-lock.json* ./shared/
+RUN cd shared && npm ci --ignore-scripts
+
+COPY shared/tsconfig.json ./shared/
+COPY shared/src ./shared/src
+RUN cd shared && npm run build
+
 # Install dependencies first (better layer caching)
-COPY package.json package-lock.json* ./
+COPY backend/package.json backend/package-lock.json* ./backend/
+WORKDIR /app/backend
 RUN npm ci --ignore-scripts
 
 # Copy source and build
-COPY tsconfig.json ./
-COPY src ./src
+COPY backend/tsconfig.json ./
+COPY backend/src ./src
 RUN npm run build
 
 # Remove dev dependencies for smaller image
@@ -42,18 +50,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends gosu \
     && gosu nobody true
 
 # Copy built application
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./
+COPY --from=builder /app/backend/node_modules ./node_modules
+COPY --from=builder /app/backend/dist ./dist
+COPY --from=builder /app/backend/package.json ./
 
 # Copy drizzle migrations folder (required for database setup)
-COPY drizzle ./drizzle
+COPY backend/drizzle ./drizzle
 
 # Create data directory and set ownership to node user (UID 1000)
 RUN mkdir -p /app/data && chown -R node:node /app
 
 # Copy entrypoint script
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY backend/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # Environment configuration

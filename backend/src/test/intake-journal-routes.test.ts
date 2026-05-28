@@ -410,7 +410,7 @@ describe("Intake journal routes", () => {
 		expect(shareRows.rows[0].token).not.toBe("share-journal-token");
 	});
 
-	it("keeps existing data when import fails inside the replacement transaction", async () => {
+	it("keeps existing data when image import fails inside the replacement transaction", async () => {
 		const userId = await createUser("import-rollback");
 		const sessionCookie = await buildSessionCookie(app, userId, "import-rollback");
 		await seedMedication({ userId, name: "Existing Rollback Med" });
@@ -428,6 +428,7 @@ describe("Intake journal routes", () => {
 						name: "Imported Rollback Med",
 						inventory: { packCount: 1, blistersPerPack: 1, pillsPerBlister: 10, looseTablets: 0 },
 						schedules: [{ usage: 1, every: 1, start: "2026-02-04T08:00:00.000Z" }],
+						image: "data:image/png;base64,not-valid",
 					},
 				],
 				doseHistory: [
@@ -435,13 +436,13 @@ describe("Intake journal routes", () => {
 						medicationRef: "med-1",
 						scheduleIndex: 0,
 						scheduledTime: "2026-02-04T08:00:00.000Z",
-						takenAt: "not-a-date",
+						takenAt: "2026-02-04T08:03:00.000Z",
 					},
 				],
 			},
 		});
 
-		expect(importResponse.statusCode).toBe(500);
+		expect(importResponse.statusCode).toBe(400);
 
 		const medicationRows = await testClient.execute({
 			sql: "SELECT name FROM medications WHERE user_id = ? ORDER BY name",

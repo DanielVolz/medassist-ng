@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAlterMigrations } from "../db/db-utils.js";
+import { insertScheduledTestMedication } from "./setup.js";
 
 const { testClient, testDb } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -41,27 +42,6 @@ async function createUser(username: string) {
 	});
 
 	return Number(result.rows[0].id);
-}
-
-async function insertMedication(options: { id: number; userId: number; packCount?: number; looseTablets?: number }) {
-	const start = "2025-01-01T08:00:00.000Z";
-	await testClient.execute({
-		sql: `INSERT INTO medications (
-			id, user_id, name, taken_by_json, medication_form, package_type,
-			pack_count, blisters_per_pack, pills_per_blister, loose_tablets, stock_adjustment,
-			usage_json, every_json, start_json, intakes_json, intake_reminders_enabled
-		) VALUES (?, ?, 'Test Medication', '[]', 'tablet', 'blister', ?, 1, 10, ?, 0, ?, ?, ?, ?, 0)`,
-		args: [
-			options.id,
-			options.userId,
-			options.packCount ?? 1,
-			options.looseTablets ?? 0,
-			JSON.stringify([1]),
-			JSON.stringify([1]),
-			JSON.stringify([start]),
-			JSON.stringify([{ usage: 1, every: 1, start, takenBy: null, intakeRemindersEnabled: false }]),
-		],
-	});
 }
 
 async function insertUserSettings(userId: number, stockCalculationMode: "automatic" | "manual" = "automatic") {
@@ -109,7 +89,7 @@ describe("dose-tracking-service", () => {
 
 	it("inserts a taken row for a valid in-stock dose", async () => {
 		const userId = await createUser("dose-service-user");
-		await insertMedication({ id: 5, userId, packCount: 1 });
+		await insertScheduledTestMedication(testClient, { id: 5, userId, packCount: 1 });
 		await insertUserSettings(userId, "automatic");
 
 		const result = await markDoseTakenForUser({
@@ -152,7 +132,7 @@ describe("dose-tracking-service", () => {
 
 	it("keeps one row when the same dose is marked concurrently", async () => {
 		const userId = await createUser("dose-service-concurrent");
-		await insertMedication({ id: 5, userId, packCount: 1 });
+		await insertScheduledTestMedication(testClient, { id: 5, userId, packCount: 1 });
 		await insertUserSettings(userId, "automatic");
 
 		const results = await Promise.all([
@@ -186,7 +166,7 @@ describe("dose-tracking-service", () => {
 
 	it("rejects taking a dose that is already skipped", async () => {
 		const userId = await createUser("dose-service-dismissed");
-		await insertMedication({ id: 5, userId, packCount: 1 });
+		await insertScheduledTestMedication(testClient, { id: 5, userId, packCount: 1 });
 		await insertUserSettings(userId, "automatic");
 		await insertDose({
 			userId,
@@ -216,7 +196,7 @@ describe("dose-tracking-service", () => {
 
 	it("returns OUT_OF_STOCK without mutating dose tracking", async () => {
 		const userId = await createUser("dose-service-stock");
-		await insertMedication({ id: 5, userId, packCount: 0, looseTablets: 0 });
+		await insertScheduledTestMedication(testClient, { id: 5, userId, packCount: 0, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic");
 
 		const result = await markDoseTakenForUser({

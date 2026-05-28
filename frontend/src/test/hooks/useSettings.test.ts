@@ -3,6 +3,70 @@ import type React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettings } from "../../hooks/useSettings";
 
+const activeReminderMetadata = {
+	lastAutoEmailSent: "2026-01-01T10:00:00.000Z",
+	lastNotificationType: "stock",
+	lastNotificationChannel: "email",
+	lastReminderMedName: "Aspirin",
+	lastReminderTakenBy: "Max",
+	lastStockReminderSent: "2026-01-01T09:00:00.000Z",
+	lastStockReminderChannel: "both",
+	lastStockReminderMedNames: "Aspirin",
+};
+
+const clearedReminderMetadata = {
+	lastAutoEmailSent: null,
+	lastNotificationType: null,
+	lastNotificationChannel: null,
+	lastReminderMedName: null,
+	lastReminderTakenBy: null,
+	lastStockReminderSent: null,
+	lastStockReminderChannel: null,
+	lastStockReminderMedNames: null,
+	lastPrescriptionReminderSent: null,
+	lastPrescriptionReminderChannel: null,
+	lastPrescriptionReminderMedNames: null,
+};
+
+function okJson(payload: unknown = {}) {
+	return {
+		ok: true,
+		json: () => Promise.resolve(payload),
+	};
+}
+
+function captureReminderRefreshInterval() {
+	let refreshCallback: (() => void) | null = null;
+	const nativeSetInterval = global.setInterval;
+	vi.spyOn(global, "setInterval").mockImplementation(((handler: TimerHandler, timeout?: number) => {
+		if (timeout === 30000) {
+			refreshCallback = handler as () => void;
+			return 1 as unknown as ReturnType<typeof setInterval>;
+		}
+		return nativeSetInterval(handler, timeout);
+	}) as typeof setInterval);
+
+	return () => refreshCallback;
+}
+
+async function renderSettingsAndRunCapturedRefresh(getRefreshCallback: () => (() => void) | null) {
+	const { result } = renderHook(() => useSettings());
+
+	await waitFor(() => {
+		expect(result.current.settingsLoading).toBe(false);
+	});
+
+	expect(result.current.settings.lastNotificationType).toBe("stock");
+	const refreshCallback = getRefreshCallback();
+	expect(refreshCallback).not.toBeNull();
+
+	act(() => {
+		refreshCallback?.();
+	});
+
+	return result;
+}
+
 describe("useSettings", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -486,32 +550,11 @@ describe("useSettings", () => {
 	});
 
 	it("refreshes reminder status on interval", async () => {
-		let refreshCallback: (() => void) | null = null;
-		const nativeSetInterval = global.setInterval;
-		vi.spyOn(global, "setInterval").mockImplementation(((handler: TimerHandler, timeout?: number) => {
-			if (timeout === 30000) {
-				refreshCallback = handler as () => void;
-				return 1 as unknown as ReturnType<typeof setInterval>;
-			}
-			return nativeSetInterval(handler, timeout);
-		}) as typeof setInterval);
+		const getRefreshCallback = captureReminderRefreshInterval();
 
 		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						lastAutoEmailSent: "2026-01-01T10:00:00.000Z",
-						lastNotificationType: "stock",
-						lastNotificationChannel: "email",
-						lastReminderMedName: "Aspirin",
-						lastReminderTakenBy: "Max",
-						lastStockReminderSent: "2026-01-01T09:00:00.000Z",
-						lastStockReminderChannel: "both",
-						lastStockReminderMedNames: "Aspirin",
-					}),
-			});
+			.mockResolvedValueOnce(okJson())
+			.mockResolvedValueOnce(okJson(activeReminderMetadata));
 
 		const { result } = renderHook(() => useSettings());
 
@@ -519,6 +562,7 @@ describe("useSettings", () => {
 			expect(result.current.settingsLoading).toBe(false);
 		});
 
+		const refreshCallback = getRefreshCallback();
 		expect(refreshCallback).not.toBeNull();
 
 		act(() => {
@@ -533,61 +577,13 @@ describe("useSettings", () => {
 	});
 
 	it("clears reminder metadata when refresh returns explicit null values", async () => {
-		let refreshCallback: (() => void) | null = null;
-		const nativeSetInterval = global.setInterval;
-		vi.spyOn(global, "setInterval").mockImplementation(((handler: TimerHandler, timeout?: number) => {
-			if (timeout === 30000) {
-				refreshCallback = handler as () => void;
-				return 1 as unknown as ReturnType<typeof setInterval>;
-			}
-			return nativeSetInterval(handler, timeout);
-		}) as typeof setInterval);
+		const getRefreshCallback = captureReminderRefreshInterval();
 
 		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						lastAutoEmailSent: "2026-01-01T10:00:00.000Z",
-						lastNotificationType: "stock",
-						lastNotificationChannel: "email",
-						lastReminderMedName: "Aspirin",
-						lastReminderTakenBy: "Max",
-						lastStockReminderSent: "2026-01-01T09:00:00.000Z",
-						lastStockReminderChannel: "both",
-						lastStockReminderMedNames: "Aspirin",
-					}),
-			})
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						lastAutoEmailSent: null,
-						lastNotificationType: null,
-						lastNotificationChannel: null,
-						lastReminderMedName: null,
-						lastReminderTakenBy: null,
-						lastStockReminderSent: null,
-						lastStockReminderChannel: null,
-						lastStockReminderMedNames: null,
-						lastPrescriptionReminderSent: null,
-						lastPrescriptionReminderChannel: null,
-						lastPrescriptionReminderMedNames: null,
-					}),
-			});
+			.mockResolvedValueOnce(okJson(activeReminderMetadata))
+			.mockResolvedValueOnce(okJson(clearedReminderMetadata));
 
-		const { result } = renderHook(() => useSettings());
-
-		await waitFor(() => {
-			expect(result.current.settingsLoading).toBe(false);
-		});
-
-		expect(result.current.settings.lastNotificationType).toBe("stock");
-		expect(refreshCallback).not.toBeNull();
-
-		act(() => {
-			refreshCallback?.();
-		});
+		const result = await renderSettingsAndRunCapturedRefresh(getRefreshCallback);
 
 		await waitFor(() => {
 			expect(result.current.settings.lastAutoEmailSent).toBeNull();
@@ -599,46 +595,14 @@ describe("useSettings", () => {
 	});
 
 	it("clears reminder metadata when refresh returns 401", async () => {
-		let refreshCallback: (() => void) | null = null;
-		const nativeSetInterval = global.setInterval;
-		vi.spyOn(global, "setInterval").mockImplementation(((handler: TimerHandler, timeout?: number) => {
-			if (timeout === 30000) {
-				refreshCallback = handler as () => void;
-				return 1 as unknown as ReturnType<typeof setInterval>;
-			}
-			return nativeSetInterval(handler, timeout);
-		}) as typeof setInterval);
+		const getRefreshCallback = captureReminderRefreshInterval();
 
 		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						lastAutoEmailSent: "2026-01-01T10:00:00.000Z",
-						lastNotificationType: "stock",
-						lastNotificationChannel: "email",
-						lastReminderMedName: "Aspirin",
-						lastReminderTakenBy: "Max",
-						lastStockReminderSent: "2026-01-01T09:00:00.000Z",
-						lastStockReminderChannel: "both",
-						lastStockReminderMedNames: "Aspirin",
-					}),
-			})
+			.mockResolvedValueOnce(okJson(activeReminderMetadata))
 			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) })
 			.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) });
 
-		const { result } = renderHook(() => useSettings());
-
-		await waitFor(() => {
-			expect(result.current.settingsLoading).toBe(false);
-		});
-
-		expect(result.current.settings.lastNotificationType).toBe("stock");
-		expect(refreshCallback).not.toBeNull();
-
-		act(() => {
-			refreshCallback?.();
-		});
+		const result = await renderSettingsAndRunCapturedRefresh(getRefreshCallback);
 
 		await waitFor(() => {
 			expect(result.current.settings.lastAutoEmailSent).toBeNull();

@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useModalHistory } from "../hooks";
 import type { ActiveShareLink } from "../hooks/useShare";
 import { ConfirmModal } from "./ConfirmModal";
+import { ModalFrame } from "./ModalFrame";
 
 export interface ShareDialogProps {
 	show: boolean;
@@ -187,20 +188,10 @@ export function ShareDialog({
 	);
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key !== "Escape") e.stopPropagation();
-			}}
-		>
-			<div
-				className="modal-content share-dialog-modal"
-				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => {
-					if (e.key !== "Escape") e.stopPropagation();
-				}}
-			>
+		<ModalFrame
+			contentClassName="share-dialog-modal"
+			onClose={onClose}
+			closeButton={
 				<button
 					type="button"
 					className="modal-close tooltip-trigger"
@@ -210,185 +201,185 @@ export function ShareDialog({
 				>
 					<X size={18} aria-hidden="true" />
 				</button>
+			}
+		>
+			<div className="share-dialog-header">
+				<h2>
+					<Link2 size={18} aria-hidden="true" /> {t("share.title")}
+				</h2>
+				<p className="share-dialog-description">{t("share.description")}</p>
+			</div>
 
-				<div className="share-dialog-header">
-					<h2>
-						<Link2 size={18} aria-hidden="true" /> {t("share.title")}
-					</h2>
-					<p className="share-dialog-description">{t("share.description")}</p>
-				</div>
-
-				{(() => {
-					if (sharePeople.length === 0) {
-						return (
-							<div className="share-dialog-empty">
-								<p>{t("share.noPeople")}</p>
-								<div className="share-dialog-active-links">{renderManageLinks()}</div>
-							</div>
-						);
-					}
-					if (shareLink) {
-						return (
-							<div className="share-dialog-result">
-								<p className="share-success">{t("share.linkGenerated")}</p>
-								<p className="share-link-label">{t("share.scheduleLink")}</p>
-								<div className="share-link-box">
-									<input
-										type="text"
-										value={shareLink}
-										readOnly
-										className="share-link-input"
-										onClick={(e) => (e.target as HTMLInputElement).select()}
-									/>
-									<button
-										type="button"
-										className="btn-copy icon-only tooltip-trigger"
-										onClick={onCopyShareLink}
-										aria-label={copyLabel}
-										data-tooltip={copyLabel}
-									>
-										{shareCopied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
-									</button>
-								</div>
-								{shareCopied && <span className="share-copied-hint">{t("share.copied")}</span>}
-								<div className="share-dialog-footer">
-									<button
-										className="ghost"
-										onClick={() => {
-											onShareLinkChange(null);
-											onShareCopiedChange(false);
-										}}
-									>
-										{t("share.generateAnother")}
-									</button>
-									<button onClick={onClose}>{t("common.close")}</button>
-								</div>
-								<div className="share-dialog-active-links">{renderManageLinks()}</div>
-							</div>
-						);
-					}
+			{(() => {
+				if (sharePeople.length === 0) {
 					return (
-						<div className="share-dialog-form">
-							<div className="form-group">
-								<label htmlFor="share-person-select">{t("share.selectPerson")}</label>
-								<select
-									id="share-person-select"
-									className="select-field"
-									value={shareSelectedPerson}
-									onChange={(e) => onShareSelectedPersonChange(e.target.value)}
-								>
-									{sharePeople.map((person) => (
-										<option key={person} value={person}>
-											{getPersonLabel(person)}
-										</option>
-									))}
-								</select>
-							</div>
-
-							<div className="form-group">
-								<label htmlFor="share-period-select">{t("share.selectPeriod")}</label>
-								<select
-									id="share-period-select"
-									className="select-field"
-									value={shareSelectedDays}
-									onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}
-								>
-									<option value={30}>{t("dashboard.schedules.1month")}</option>
-									<option value={90}>{t("dashboard.schedules.3months")}</option>
-									<option value={180}>{t("dashboard.schedules.6months")}</option>
-								</select>
-							</div>
-
-							<div className="form-group">
-								<label htmlFor="share-expiry-select">{t("share.selectExpiry")}</label>
-								<select
-									id="share-expiry-select"
-									className="select-field"
-									value={shareSelectedExpiryDays == null ? "never" : String(shareSelectedExpiryDays)}
-									onChange={(e) =>
-										onShareSelectedExpiryDaysChange(e.target.value === "never" ? null : Number(e.target.value))
-									}
-								>
-									<option value="never">{t("share.expiryNever")}</option>
-									<option value="7">{t("share.expiry7Days")}</option>
-									<option value="30">{t("share.expiry30Days")}</option>
-									<option value="90">{t("share.expiry90Days")}</option>
-								</select>
-								{shareSelectedExpiryDays == null ? (
-									<p className="hint-text warning-text">{t("share.neverExpiresWarning")}</p>
-								) : null}
-							</div>
-
-							<label className="inline-checkbox" htmlFor="share-mark-taken-toggle">
+						<div className="share-dialog-empty">
+							<p>{t("share.noPeople")}</p>
+							<div className="share-dialog-active-links">{renderManageLinks()}</div>
+						</div>
+					);
+				}
+				if (shareLink) {
+					return (
+						<div className="share-dialog-result">
+							<p className="share-success">{t("share.linkGenerated")}</p>
+							<p className="share-link-label">{t("share.scheduleLink")}</p>
+							<div className="share-link-box">
 								<input
-									id="share-mark-taken-toggle"
-									type="checkbox"
-									checked={shareAllowMarkTaken}
-									onChange={(event) => onShareAllowMarkTakenChange(event.target.checked)}
+									type="text"
+									value={shareLink}
+									readOnly
+									className="share-link-input"
+									onClick={(e) => (e.target as HTMLInputElement).select()}
 								/>
-								<span>{t("share.allowMarkTaken")}</span>
-							</label>
-
-							<label className="inline-checkbox" htmlFor="share-journal-notes-toggle">
-								<input
-									id="share-journal-notes-toggle"
-									type="checkbox"
-									checked={shareAllowJournalNotes}
-									onChange={(event) => onShareAllowJournalNotesChange(event.target.checked)}
-								/>
-								<span>{t("share.allowJournalNotes")}</span>
-							</label>
-
+								<button
+									type="button"
+									className="btn-copy icon-only tooltip-trigger"
+									onClick={onCopyShareLink}
+									aria-label={copyLabel}
+									data-tooltip={copyLabel}
+								>
+									{shareCopied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
+								</button>
+							</div>
+							{shareCopied && <span className="share-copied-hint">{t("share.copied")}</span>}
 							<div className="share-dialog-footer">
-								<button className="ghost" onClick={onClose}>
-									{t("common.close")}
+								<button
+									className="ghost"
+									onClick={() => {
+										onShareLinkChange(null);
+										onShareCopiedChange(false);
+									}}
+								>
+									{t("share.generateAnother")}
 								</button>
-								<button onClick={onGenerateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
-									{shareGenerating ? t("share.generating") : t("share.generateLink")}
-								</button>
+								<button onClick={onClose}>{t("common.close")}</button>
 							</div>
 							<div className="share-dialog-active-links">{renderManageLinks()}</div>
 						</div>
 					);
-				})()}
-				{shareToRevoke && (
-					<ConfirmModal
-						title={t("share.revoke")}
-						message={t("share.revokeConfirm", { person: getPersonLabel(shareToRevoke.takenBy) })}
-						confirmLabel={revokingShareToken === shareToRevoke.token ? t("share.revoking") : t("share.revoke")}
-						cancelLabel={t("common.cancel")}
-						onConfirm={async () => {
-							const revoked = await onRevokeShareLink(shareToRevoke.token);
-							if (revoked) {
-								setShareToRevoke(null);
-							}
-						}}
-						onCancel={closeRevokeConfirm}
-						isLoading={revokingShareToken === shareToRevoke.token}
-						confirmVariant="danger"
-						overlayClassName="nested-confirm"
-					/>
-				)}
-				{shareToRegenerate && (
-					<ConfirmModal
-						title={t("share.regenerate")}
-						message={t("share.regenerateConfirm", { person: getPersonLabel(shareToRegenerate.takenBy) })}
-						confirmLabel={
-							regeneratingShareToken === shareToRegenerate.token ? t("share.regenerating") : t("share.regenerate")
+				}
+				return (
+					<div className="share-dialog-form">
+						<div className="form-group">
+							<label htmlFor="share-person-select">{t("share.selectPerson")}</label>
+							<select
+								id="share-person-select"
+								className="select-field"
+								value={shareSelectedPerson}
+								onChange={(e) => onShareSelectedPersonChange(e.target.value)}
+							>
+								{sharePeople.map((person) => (
+									<option key={person} value={person}>
+										{getPersonLabel(person)}
+									</option>
+								))}
+							</select>
+						</div>
+
+						<div className="form-group">
+							<label htmlFor="share-period-select">{t("share.selectPeriod")}</label>
+							<select
+								id="share-period-select"
+								className="select-field"
+								value={shareSelectedDays}
+								onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}
+							>
+								<option value={30}>{t("dashboard.schedules.1month")}</option>
+								<option value={90}>{t("dashboard.schedules.3months")}</option>
+								<option value={180}>{t("dashboard.schedules.6months")}</option>
+							</select>
+						</div>
+
+						<div className="form-group">
+							<label htmlFor="share-expiry-select">{t("share.selectExpiry")}</label>
+							<select
+								id="share-expiry-select"
+								className="select-field"
+								value={shareSelectedExpiryDays == null ? "never" : String(shareSelectedExpiryDays)}
+								onChange={(e) =>
+									onShareSelectedExpiryDaysChange(e.target.value === "never" ? null : Number(e.target.value))
+								}
+							>
+								<option value="never">{t("share.expiryNever")}</option>
+								<option value="7">{t("share.expiry7Days")}</option>
+								<option value="30">{t("share.expiry30Days")}</option>
+								<option value="90">{t("share.expiry90Days")}</option>
+							</select>
+							{shareSelectedExpiryDays == null ? (
+								<p className="hint-text warning-text">{t("share.neverExpiresWarning")}</p>
+							) : null}
+						</div>
+
+						<label className="inline-checkbox" htmlFor="share-mark-taken-toggle">
+							<input
+								id="share-mark-taken-toggle"
+								type="checkbox"
+								checked={shareAllowMarkTaken}
+								onChange={(event) => onShareAllowMarkTakenChange(event.target.checked)}
+							/>
+							<span>{t("share.allowMarkTaken")}</span>
+						</label>
+
+						<label className="inline-checkbox" htmlFor="share-journal-notes-toggle">
+							<input
+								id="share-journal-notes-toggle"
+								type="checkbox"
+								checked={shareAllowJournalNotes}
+								onChange={(event) => onShareAllowJournalNotesChange(event.target.checked)}
+							/>
+							<span>{t("share.allowJournalNotes")}</span>
+						</label>
+
+						<div className="share-dialog-footer">
+							<button className="ghost" onClick={onClose}>
+								{t("common.close")}
+							</button>
+							<button onClick={onGenerateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
+								{shareGenerating ? t("share.generating") : t("share.generateLink")}
+							</button>
+						</div>
+						<div className="share-dialog-active-links">{renderManageLinks()}</div>
+					</div>
+				);
+			})()}
+			{shareToRevoke && (
+				<ConfirmModal
+					title={t("share.revoke")}
+					message={t("share.revokeConfirm", { person: getPersonLabel(shareToRevoke.takenBy) })}
+					confirmLabel={revokingShareToken === shareToRevoke.token ? t("share.revoking") : t("share.revoke")}
+					cancelLabel={t("common.cancel")}
+					onConfirm={async () => {
+						const revoked = await onRevokeShareLink(shareToRevoke.token);
+						if (revoked) {
+							setShareToRevoke(null);
 						}
-						cancelLabel={t("common.cancel")}
-						onConfirm={async () => {
-							const regenerated = await onRegenerateShareLink(shareToRegenerate.token);
-							if (regenerated) {
-								setShareToRegenerate(null);
-							}
-						}}
-						onCancel={closeRegenerateConfirm}
-						isLoading={regeneratingShareToken === shareToRegenerate.token}
-						overlayClassName="nested-confirm"
-					/>
-				)}
-			</div>
-		</div>
+					}}
+					onCancel={closeRevokeConfirm}
+					isLoading={revokingShareToken === shareToRevoke.token}
+					confirmVariant="danger"
+					overlayClassName="nested-confirm"
+				/>
+			)}
+			{shareToRegenerate && (
+				<ConfirmModal
+					title={t("share.regenerate")}
+					message={t("share.regenerateConfirm", { person: getPersonLabel(shareToRegenerate.takenBy) })}
+					confirmLabel={
+						regeneratingShareToken === shareToRegenerate.token ? t("share.regenerating") : t("share.regenerate")
+					}
+					cancelLabel={t("common.cancel")}
+					onConfirm={async () => {
+						const regenerated = await onRegenerateShareLink(shareToRegenerate.token);
+						if (regenerated) {
+							setShareToRegenerate(null);
+						}
+					}}
+					onCancel={closeRegenerateConfirm}
+					isLoading={regeneratingShareToken === shareToRegenerate.token}
+					overlayClassName="nested-confirm"
+				/>
+			)}
+		</ModalFrame>
 	);
 }

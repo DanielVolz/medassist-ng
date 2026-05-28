@@ -1,4 +1,5 @@
 import { UserProfile } from "./Auth";
+import { ModalFrame } from "./ModalFrame";
 
 interface ProfileModalProps {
 	isOpen: boolean;
@@ -11,25 +12,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 	if (!isOpen) return null;
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key !== "Escape") e.stopPropagation();
-			}}
-		>
-			<div
-				className="modal-content profile-modal"
-				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => {
-					if (e.key !== "Escape") e.stopPropagation();
-				}}
-			>
-				<button className="modal-close" onClick={onClose}>
-					×
-				</button>
-				<UserProfile onClose={onClose} />
-			</div>
-		</div>
+		<ModalFrame contentClassName="profile-modal" onClose={onClose}>
+			<UserProfile onClose={onClose} />
+		</ModalFrame>
 	);
 }

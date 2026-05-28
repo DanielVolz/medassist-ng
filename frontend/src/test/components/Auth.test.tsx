@@ -6,6 +6,30 @@ import { AuthPage, AuthProvider, LoginForm, RegisterForm, UserProfile, useAuth }
 // Wrapper component for testing hooks that require AuthProvider
 const wrapper = ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>;
 
+function renderUserProfile(onClose?: () => void) {
+	return render(
+		<AuthProvider>
+			<UserProfile onClose={onClose} />
+		</AuthProvider>
+	);
+}
+
+async function waitForUserProfile() {
+	await waitFor(() => {
+		expect(screen.getByText("testuser")).toBeInTheDocument();
+	});
+}
+
+async function openDeleteAccountConfirmation() {
+	await waitForUserProfile();
+	const dangerButtons = screen.getAllByRole("button", { name: /auth\.deleteAccount/i });
+	fireEvent.click(dangerButtons[0]);
+
+	await waitFor(() => {
+		expect(screen.getByRole("button", { name: /auth\.deleteAccountButton/i })).toBeInTheDocument();
+	});
+}
+
 describe("AuthProvider", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
@@ -617,22 +641,8 @@ describe("UserProfile", () => {
 	it("opens delete confirmation and executes account deletion", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
-		render(
-			<AuthProvider>
-				<UserProfile />
-			</AuthProvider>
-		);
-
-		await waitFor(() => {
-			expect(screen.getByText("testuser")).toBeInTheDocument();
-		});
-
-		const dangerButtons = screen.getAllByRole("button", { name: /auth\.deleteAccount/i });
-		fireEvent.click(dangerButtons[0]);
-
-		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /auth\.deleteAccountButton/i })).toBeInTheDocument();
-		});
+		renderUserProfile();
+		await openDeleteAccountConfirmation();
 
 		fireEvent.click(screen.getByRole("button", { name: /auth\.deleteAccountButton/i }));
 
@@ -647,15 +657,8 @@ describe("UserProfile", () => {
 	it("closes profile on Escape key when onClose is provided", async () => {
 		const onClose = vi.fn();
 
-		render(
-			<AuthProvider>
-				<UserProfile onClose={onClose} />
-			</AuthProvider>
-		);
-
-		await waitFor(() => {
-			expect(screen.getByText("testuser")).toBeInTheDocument();
-		});
+		renderUserProfile(onClose);
+		await waitForUserProfile();
 
 		fireEvent.keyDown(document, { key: "Escape" });
 		expect(onClose).toHaveBeenCalled();
@@ -667,22 +670,8 @@ describe("UserProfile", () => {
 			json: () => Promise.resolve({ error: "Delete failed badly" }),
 		});
 
-		render(
-			<AuthProvider>
-				<UserProfile />
-			</AuthProvider>
-		);
-
-		await waitFor(() => {
-			expect(screen.getByText("testuser")).toBeInTheDocument();
-		});
-
-		const dangerButtons = screen.getAllByRole("button", { name: /auth\.deleteAccount/i });
-		fireEvent.click(dangerButtons[0]);
-
-		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /auth\.deleteAccountButton/i })).toBeInTheDocument();
-		});
+		renderUserProfile();
+		await openDeleteAccountConfirmation();
 
 		fireEvent.click(screen.getByRole("button", { name: /auth\.deleteAccountButton/i }));
 

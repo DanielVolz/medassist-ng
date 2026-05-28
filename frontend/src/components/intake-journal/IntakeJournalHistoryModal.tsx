@@ -3,9 +3,9 @@ import { useEscapeKey } from "../../hooks/useEscapeKey";
 import type { IntakeJournalEntry, IntakeJournalHistoryFilters } from "../../hooks/useIntakeJournal";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import type { Medication } from "../../types";
-import { formatDateTime, getNumericLocale } from "../../utils/formatters";
 import { DateTimeInput } from "../DateTimeInput";
 import { MedicationAvatar } from "../MedicationAvatar";
+import { formatJournalDisplayDateTime, getJournalSourceLabel } from "./journal-display";
 
 interface IntakeJournalHistoryModalProps {
 	isOpen: boolean;
@@ -19,22 +19,6 @@ interface IntakeJournalHistoryModalProps {
 	onReload: () => Promise<void> | void;
 	onResetFilters: () => void;
 	onReopen: (doseId: string) => Promise<void> | void;
-}
-
-function formatDisplayDateTime(value: string | null): string | null {
-	if (!value) {
-		return null;
-	}
-
-	return formatDateTime(value, getNumericLocale());
-}
-
-function getJournalSourceLabel(entry: IntakeJournalEntry, t: ReturnType<typeof useTranslation>["t"]): string {
-	if (entry.takenSource === "automatic") {
-		return t("journal.context.sourceAutomaticReminder");
-	}
-
-	return entry.markedBy ? t("journal.context.sourceSharedLink") : t("journal.context.sourceOwnerApp");
 }
 
 export function IntakeJournalHistoryModal({
@@ -73,7 +57,7 @@ export function IntakeJournalHistoryModal({
 						<MedicationAvatar name={entry.medicationName} size="sm" />
 						<div>
 							<strong>{entry.medicationName}</strong>
-							<p>{formatDisplayDateTime(entry.scheduledFor) ?? t("common.notAvailable")}</p>
+							<p>{formatJournalDisplayDateTime(entry.scheduledFor) ?? t("common.notAvailable")}</p>
 						</div>
 					</div>
 					<p className="journal-history-note">{entry.note ?? t("journal.history.noNote")}</p>
@@ -83,7 +67,7 @@ export function IntakeJournalHistoryModal({
 						{entry.updatedAt && (
 							<span>
 								{t("journal.history.updatedAt", {
-									date: formatDisplayDateTime(entry.updatedAt) ?? entry.updatedAt,
+									date: formatJournalDisplayDateTime(entry.updatedAt) ?? entry.updatedAt,
 								})}
 							</span>
 						)}

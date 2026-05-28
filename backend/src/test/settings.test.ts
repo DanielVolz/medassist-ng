@@ -139,6 +139,30 @@ async function registerSettingsRoutes(ctx: TestContext) {
 			args: [userId],
 		});
 
+		const settingsArgs = [
+			body.emailEnabled ? 1 : 0,
+			body.notificationEmail || null,
+			body.emailStockReminders !== false ? 1 : 0,
+			body.emailIntakeReminders !== false ? 1 : 0,
+			body.shoutrrrEnabled ? 1 : 0,
+			body.shoutrrrUrl || null,
+			body.shoutrrrStockReminders !== false ? 1 : 0,
+			body.shoutrrrIntakeReminders !== false ? 1 : 0,
+			body.reminderDaysBefore ?? 7,
+			body.repeatDailyReminders ? 1 : 0,
+			body.skipRemindersForTakenDoses ? 1 : 0,
+			body.repeatRemindersEnabled ? 1 : 0,
+			body.reminderRepeatIntervalMinutes ?? 30,
+			body.maxNaggingReminders ?? 5,
+			body.lowStockDays ?? 30,
+			body.normalStockDays ?? 90,
+			body.highStockDays ?? 180,
+			body.expiryWarningDays ?? 90,
+			body.language || "en",
+			body.stockCalculationMode || "automatic",
+			1,
+		];
+
 		if (existing.rows.length === 0) {
 			// Insert new settings
 			await client.execute({
@@ -149,33 +173,10 @@ async function registerSettingsRoutes(ctx: TestContext) {
           shoutrrr_stock_reminders, shoutrrr_intake_reminders,
           reminder_days_before, repeat_daily_reminders, skip_reminders_for_taken_doses,
           repeat_reminders_enabled, reminder_repeat_interval_minutes, max_nagging_reminders,
-          low_stock_days, normal_stock_days, high_stock_days,
-          expiry_warning_days, language, stock_calculation_mode, share_stock_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				args: [
-					userId,
-					body.emailEnabled ? 1 : 0,
-					body.notificationEmail || null,
-					body.emailStockReminders !== false ? 1 : 0,
-					body.emailIntakeReminders !== false ? 1 : 0,
-					body.shoutrrrEnabled ? 1 : 0,
-					body.shoutrrrUrl || null,
-					body.shoutrrrStockReminders !== false ? 1 : 0,
-					body.shoutrrrIntakeReminders !== false ? 1 : 0,
-					body.reminderDaysBefore ?? 7,
-					body.repeatDailyReminders ? 1 : 0,
-					body.skipRemindersForTakenDoses ? 1 : 0,
-					body.repeatRemindersEnabled ? 1 : 0,
-					body.reminderRepeatIntervalMinutes ?? 30,
-					body.maxNaggingReminders ?? 5,
-					body.lowStockDays ?? 30,
-					body.normalStockDays ?? 90,
-					body.highStockDays ?? 180,
-					body.expiryWarningDays ?? 90,
-					body.language || "en",
-					body.stockCalculationMode || "automatic",
-					1,
-				],
+	          low_stock_days, normal_stock_days, high_stock_days,
+	          expiry_warning_days, language, stock_calculation_mode, share_stock_status
+	        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				args: [userId, ...settingsArgs],
 			});
 		} else {
 			// Update existing settings
@@ -200,34 +201,11 @@ async function registerSettingsRoutes(ctx: TestContext) {
           high_stock_days = ?,
           expiry_warning_days = ?,
           language = ?,
-          stock_calculation_mode = ?,
-          share_stock_status = ?,
-          updated_at = strftime('%s','now')
-        WHERE user_id = ?`,
-				args: [
-					body.emailEnabled ? 1 : 0,
-					body.notificationEmail || null,
-					body.emailStockReminders !== false ? 1 : 0,
-					body.emailIntakeReminders !== false ? 1 : 0,
-					body.shoutrrrEnabled ? 1 : 0,
-					body.shoutrrrUrl || null,
-					body.shoutrrrStockReminders !== false ? 1 : 0,
-					body.shoutrrrIntakeReminders !== false ? 1 : 0,
-					body.reminderDaysBefore ?? 7,
-					body.repeatDailyReminders ? 1 : 0,
-					body.skipRemindersForTakenDoses ? 1 : 0,
-					body.repeatRemindersEnabled ? 1 : 0,
-					body.reminderRepeatIntervalMinutes ?? 30,
-					body.maxNaggingReminders ?? 5,
-					body.lowStockDays ?? 30,
-					body.normalStockDays ?? 90,
-					body.highStockDays ?? 180,
-					body.expiryWarningDays ?? 90,
-					body.language || "en",
-					body.stockCalculationMode || "automatic",
-					1,
-					userId,
-				],
+	          stock_calculation_mode = ?,
+	          share_stock_status = ?,
+	          updated_at = strftime('%s','now')
+	        WHERE user_id = ?`,
+				args: [...settingsArgs, userId],
 			});
 		}
 

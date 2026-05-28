@@ -231,6 +231,26 @@ export function SchedulePage() {
 		doses?: Array<{ usage: number; intakeUnit?: IntakeUnit | null }>
 	) => formatScheduleTotalUsageLabel(med, total, t, doses);
 
+	const renderDoseSummary = (
+		med: (typeof meds)[number] | undefined,
+		dose: { timeStr: string; usage: number; intakeUnit?: IntakeUnit | null; intakeRemindersEnabled: boolean }
+	) => (
+		<>
+			<span className="dose-time">{dose.timeStr}</span>
+			<span className="dose-usage">
+				<span className="dose-usage-main">{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}</span>
+				{med?.pillWeightMg && (
+					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+				)}
+			</span>
+			{dose.intakeRemindersEnabled && (
+				<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
+					<Bell size={14} aria-hidden="true" />
+				</span>
+			)}
+		</>
+	);
+
 	const renderDoseActionButtons = (options: {
 		doseId: string;
 		isTaken: boolean;
@@ -448,23 +468,7 @@ export function SchedulePage() {
 															else if (isLowStock) doseClasses.push("med-low");
 															return (
 																<div key={dose.id} className={doseClasses.join(" ")}>
-																	<span className="dose-time">{dose.timeStr}</span>
-																	<span className="dose-usage">
-																		<span className="dose-usage-main">
-																			{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
-																		</span>
-																		{med?.pillWeightMg && (
-																			<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																		)}
-																	</span>{" "}
-																	{dose.intakeRemindersEnabled && (
-																		<span
-																			className="reminder-icon info-tooltip"
-																			data-tooltip={t("tooltips.intakeReminders")}
-																		>
-																			<Bell size={14} aria-hidden="true" />
-																		</span>
-																	)}{" "}
+																	{renderDoseSummary(med, dose)}{" "}
 																	<div className="dose-checks">
 																		{people.map((person) => {
 																			const doseId = getDoseId(dose.id, person);
@@ -657,23 +661,7 @@ export function SchedulePage() {
 													else if (isLowStock) doseClasses.push("med-low");
 													return (
 														<div key={dose.id} className={doseClasses.join(" ")}>
-															<span className="dose-time">{dose.timeStr}</span>
-															<span className="dose-usage">
-																<span className="dose-usage-main">
-																	{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
-																</span>
-																{med?.pillWeightMg && (
-																	<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																)}
-															</span>
-															{dose.intakeRemindersEnabled && (
-																<span
-																	className="reminder-icon info-tooltip"
-																	data-tooltip={t("tooltips.intakeReminders")}
-																>
-																	<Bell size={14} aria-hidden="true" />
-																</span>
-															)}
+															{renderDoseSummary(med, dose)}
 															<div className="dose-checks">
 																{people.map((person) => {
 																	const doseId = getDoseId(dose.id, person);

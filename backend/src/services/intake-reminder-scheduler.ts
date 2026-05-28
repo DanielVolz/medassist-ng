@@ -15,6 +15,7 @@ import {
 
 import { env } from "../plugins/env.js";
 import { getAllUserSettings, type UserSettings } from "../routes/settings.js";
+import { buildDoseId } from "../utils/dose-id.js";
 import { parseIntEnv } from "../utils/env-parsing.js";
 import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
@@ -67,10 +68,7 @@ function saveIntakeReminderState(state: IntakeReminderState): void {
 function buildDoseIdForIntake(intake: UpcomingIntake & { medicationId: number; blisterIndex: number }): string {
 	const intakeDate = intake.intakeTime;
 	const dateOnlyMs = new Date(intakeDate.getFullYear(), intakeDate.getMonth(), intakeDate.getDate()).getTime();
-	if (intake.takenBy) {
-		return `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}-${intake.takenBy}`;
-	}
-	return `${intake.medicationId}-${intake.blisterIndex}-${dateOnlyMs}`;
+	return buildDoseId(intake.medicationId, intake.blisterIndex, dateOnlyMs, intake.takenBy);
 }
 
 async function getUsernameForLog(userId: number): Promise<string> {

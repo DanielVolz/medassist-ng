@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import type { IntakeJournalEntry } from "../../hooks/useIntakeJournal";
 import { useScrollLock } from "../../hooks/useScrollLock";
-import { formatDateTime, getNumericLocale } from "../../utils/formatters";
 import { MedicationAvatar } from "../MedicationAvatar";
+import { formatJournalDisplayDateTime, getJournalSourceLabel } from "./journal-display";
 
 interface IntakeJournalModalProps {
 	isOpen: boolean;
@@ -17,22 +17,6 @@ interface IntakeJournalModalProps {
 	onSave: (note: string) => Promise<boolean> | boolean;
 	onDelete: () => Promise<void> | void;
 	allowDelete?: boolean;
-}
-
-function formatDisplayDateTime(value: string | null): string | null {
-	if (!value) {
-		return null;
-	}
-
-	return formatDateTime(value, getNumericLocale());
-}
-
-function getJournalSourceLabel(entry: IntakeJournalEntry, t: ReturnType<typeof useTranslation>["t"]): string {
-	if (entry.takenSource === "automatic") {
-		return t("journal.context.sourceAutomaticReminder");
-	}
-
-	return entry.markedBy ? t("journal.context.sourceSharedLink") : t("journal.context.sourceOwnerApp");
 }
 
 export function IntakeJournalModal({
@@ -107,8 +91,8 @@ export function IntakeJournalModal({
 		}
 	};
 
-	const scheduledForLabel = formatDisplayDateTime(entry?.scheduledFor ?? null);
-	const takenAtLabel = formatDisplayDateTime(entry?.takenAt ?? null);
+	const scheduledForLabel = formatJournalDisplayDateTime(entry?.scheduledFor ?? null);
+	const takenAtLabel = formatJournalDisplayDateTime(entry?.takenAt ?? null);
 	const title = entry?.note ? t("journal.editor.editTitle") : t("journal.editor.addTitle");
 	const saveLabel = showSavedState ? t("common.saved") : t("common.save");
 	let bodyContent: React.ReactNode;

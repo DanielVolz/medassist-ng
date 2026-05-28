@@ -25,6 +25,7 @@ jobs:
             e2e_relevant:
               - 'frontend/**'
               - 'backend/**'
+              - 'shared/**'
               - '.github/workflows/e2e.yml'
 
   e2e:
@@ -46,8 +47,17 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: |
+            shared/package-lock.json
             backend/package-lock.json
             frontend/package-lock.json
+
+      - name: Install shared dependencies
+        working-directory: shared
+        run: npm ci
+
+      - name: Build shared core
+        working-directory: shared
+        run: npm run build
 
       - name: Install backend dependencies
         working-directory: backend

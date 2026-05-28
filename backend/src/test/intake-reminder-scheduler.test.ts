@@ -26,8 +26,86 @@ function mockSelectWhere<T>(result: T) {
 	} as never;
 }
 
+function createMedicationRow(overrides: Record<string, unknown> = {}, intakeOverrides: Record<string, unknown> = {}) {
+	const intakeRemindersEnabled = Boolean(overrides.intakeRemindersEnabled ?? false);
+
+	return {
+		id: 7,
+		userId: 11,
+		name: "Vitamin D",
+		genericName: null,
+		takenByJson: null,
+		packageType: "blister",
+		medicationForm: "tablet",
+		packCount: 1,
+		blistersPerPack: 1,
+		pillsPerBlister: 10,
+		looseTablets: 0,
+		stockAdjustment: 0,
+		pillWeightMg: null,
+		doseUnit: "mg",
+		isObsolete: false,
+		intakeRemindersEnabled,
+		intakesJson: JSON.stringify([
+			{
+				usage: 1,
+				every: 1,
+				start: "2026-01-05T08:00:00.000Z",
+				takenBy: null,
+				intakeRemindersEnabled,
+				...intakeOverrides,
+			},
+		]),
+		usageJson: "[]",
+		everyJson: "[]",
+		startJson: "[]",
+		...overrides,
+	};
+}
+
+function mockReminderQueries(medicationRows: Array<Record<string, unknown>>) {
+	vi.mocked(db.select)
+		.mockImplementationOnce(() => mockSelectWhere([{ username: "test-user" }]))
+		.mockImplementationOnce(() => mockSelectWhere(medicationRows))
+		.mockImplementationOnce(() => mockSelectWhere([]))
+		.mockImplementationOnce(() => mockSelectWhere([]));
+}
+
+function captureInsertedRows() {
+	const insertedRows: Array<Record<string, unknown>> = [];
+
+	vi.mocked(db.insert).mockImplementation(
+		() =>
+			({
+				values: async (row: Record<string, unknown>) => {
+					insertedRows.push(row);
+				},
+			}) as never
+	);
+
+	return insertedRows;
+}
+
+async function runReminderCheck(settings: Record<string, unknown>, logger: ReturnType<typeof createLogger>) {
+	await checkAndSendIntakeRemindersForUser(
+		{
+			userId: 11,
+			language: "en",
+			stockCalculationMode: "automatic",
+			emailEnabled: false,
+			notificationEmail: null,
+			emailIntakeReminders: false,
+			shoutrrrEnabled: false,
+			shoutrrrUrl: null,
+			shoutrrrIntakeReminders: false,
+			repeatRemindersEnabled: false,
+			...settings,
+		} as never,
+		logger as never
+	);
+}
+
 describe("checkAndSendIntakeRemindersForUser", () => {
-	const mockedDb = vi.mocked(db);
 	let originalTz: string | undefined;
 
 	beforeEach(() => {
@@ -48,75 +126,11 @@ describe("checkAndSendIntakeRemindersForUser", () => {
 	});
 
 	it("auto-marks due intakes in automatic mode even when all intake reminder channels are disabled", async () => {
-		const insertedRows: Array<Record<string, unknown>> = [];
-		const selectMock = vi.mocked(mockedDb.select);
-		const insertMock = vi.mocked(mockedDb.insert);
-
-		selectMock
-			.mockImplementationOnce(() => mockSelectWhere([{ username: "test-user" }]))
-			.mockImplementationOnce(() =>
-				mockSelectWhere([
-					{
-						id: 7,
-						userId: 11,
-						name: "Vitamin D",
-						genericName: null,
-						takenByJson: null,
-						packageType: "blister",
-						medicationForm: "tablet",
-						packCount: 1,
-						blistersPerPack: 1,
-						pillsPerBlister: 10,
-						looseTablets: 0,
-						stockAdjustment: 0,
-						pillWeightMg: null,
-						doseUnit: "mg",
-						isObsolete: false,
-						intakeRemindersEnabled: false,
-						intakesJson: JSON.stringify([
-							{
-								usage: 1,
-								every: 1,
-								start: "2026-01-05T08:00:00.000Z",
-								takenBy: null,
-								intakeRemindersEnabled: false,
-							},
-						]),
-						usageJson: "[]",
-						everyJson: "[]",
-						startJson: "[]",
-					},
-				])
-			)
-			.mockImplementationOnce(() => mockSelectWhere([]))
-			.mockImplementationOnce(() => mockSelectWhere([]));
-
-		insertMock.mockImplementation(
-			() =>
-				({
-					values: async (row: Record<string, unknown>) => {
-						insertedRows.push(row);
-					},
-				}) as never
-		);
-
+		const insertedRows = captureInsertedRows();
+		mockReminderQueries([createMedicationRow()]);
 		const logger = createLogger();
 
-		await checkAndSendIntakeRemindersForUser(
-			{
-				userId: 11,
-				language: "en",
-				stockCalculationMode: "automatic",
-				emailEnabled: false,
-				notificationEmail: null,
-				emailIntakeReminders: false,
-				shoutrrrEnabled: false,
-				shoutrrrUrl: null,
-				shoutrrrIntakeReminders: false,
-				repeatRemindersEnabled: false,
-			} as never,
-			logger as never
-		);
+		await runReminderCheck({}, logger);
 
 		expect(insertedRows).toHaveLength(1);
 		expect(insertedRows[0]).toMatchObject({
@@ -130,150 +144,29 @@ describe("checkAndSendIntakeRemindersForUser", () => {
 	});
 
 	it("does not auto-mark due intakes when current stock is empty", async () => {
-		const insertedRows: Array<Record<string, unknown>> = [];
-		const selectMock = vi.mocked(mockedDb.select);
-		const insertMock = vi.mocked(mockedDb.insert);
-
-		selectMock
-			.mockImplementationOnce(() => mockSelectWhere([{ username: "test-user" }]))
-			.mockImplementationOnce(() =>
-				mockSelectWhere([
-					{
-						id: 7,
-						userId: 11,
-						name: "Vitamin D",
-						genericName: null,
-						takenByJson: null,
-						packageType: "blister",
-						medicationForm: "tablet",
-						packCount: 0,
-						blistersPerPack: 1,
-						pillsPerBlister: 10,
-						looseTablets: 0,
-						stockAdjustment: 0,
-						pillWeightMg: null,
-						doseUnit: "mg",
-						isObsolete: false,
-						intakeRemindersEnabled: false,
-						intakesJson: JSON.stringify([
-							{
-								usage: 1,
-								every: 1,
-								start: "2026-01-05T08:00:00.000Z",
-								takenBy: null,
-								intakeRemindersEnabled: false,
-							},
-						]),
-						usageJson: "[]",
-						everyJson: "[]",
-						startJson: "[]",
-					},
-				])
-			)
-			.mockImplementationOnce(() => mockSelectWhere([]))
-			.mockImplementationOnce(() => mockSelectWhere([]));
-
-		insertMock.mockImplementation(
-			() =>
-				({
-					values: async (row: Record<string, unknown>) => {
-						insertedRows.push(row);
-					},
-				}) as never
-		);
-
+		const insertedRows = captureInsertedRows();
+		mockReminderQueries([createMedicationRow({ packCount: 0 })]);
 		const logger = createLogger();
 
-		await checkAndSendIntakeRemindersForUser(
-			{
-				userId: 11,
-				language: "en",
-				stockCalculationMode: "automatic",
-				emailEnabled: false,
-				notificationEmail: null,
-				emailIntakeReminders: false,
-				shoutrrrEnabled: false,
-				shoutrrrUrl: null,
-				shoutrrrIntakeReminders: false,
-				repeatRemindersEnabled: false,
-			} as never,
-			logger as never
-		);
+		await runReminderCheck({}, logger);
 
 		expect(insertedRows).toHaveLength(0);
 		expect(logger.info).not.toHaveBeenCalledWith("[IntakeReminder] Auto-marked 1 due intake dose(s) as taken");
 	});
 
 	it("suppresses intake notifications entirely when automatic mode and skip-taken reminders are both enabled", async () => {
-		const insertedRows: Array<Record<string, unknown>> = [];
-		const selectMock = vi.mocked(mockedDb.select);
-		const insertMock = vi.mocked(mockedDb.insert);
-
-		selectMock
-			.mockImplementationOnce(() => mockSelectWhere([{ username: "test-user" }]))
-			.mockImplementationOnce(() =>
-				mockSelectWhere([
-					{
-						id: 7,
-						userId: 11,
-						name: "Vitamin D",
-						genericName: null,
-						takenByJson: null,
-						packageType: "blister",
-						medicationForm: "tablet",
-						packCount: 1,
-						blistersPerPack: 1,
-						pillsPerBlister: 10,
-						looseTablets: 0,
-						stockAdjustment: 0,
-						pillWeightMg: null,
-						doseUnit: "mg",
-						isObsolete: false,
-						intakeRemindersEnabled: true,
-						intakesJson: JSON.stringify([
-							{
-								usage: 1,
-								every: 1,
-								start: "2026-01-05T08:00:00.000Z",
-								takenBy: null,
-								intakeRemindersEnabled: true,
-							},
-						]),
-						usageJson: "[]",
-						everyJson: "[]",
-						startJson: "[]",
-					},
-				])
-			)
-			.mockImplementationOnce(() => mockSelectWhere([]))
-			.mockImplementationOnce(() => mockSelectWhere([]));
-
-		insertMock.mockImplementation(
-			() =>
-				({
-					values: async (row: Record<string, unknown>) => {
-						insertedRows.push(row);
-					},
-				}) as never
-		);
-
+		const insertedRows = captureInsertedRows();
+		mockReminderQueries([createMedicationRow({ intakeRemindersEnabled: true })]);
 		const logger = createLogger();
 
-		await checkAndSendIntakeRemindersForUser(
+		await runReminderCheck(
 			{
-				userId: 11,
-				language: "en",
-				stockCalculationMode: "automatic",
 				skipRemindersForTakenDoses: true,
 				emailEnabled: true,
 				notificationEmail: "user@example.com",
 				emailIntakeReminders: true,
-				shoutrrrEnabled: false,
-				shoutrrrUrl: null,
-				shoutrrrIntakeReminders: false,
-				repeatRemindersEnabled: false,
-			} as never,
-			logger as never
+			},
+			logger
 		);
 
 		expect(insertedRows).toHaveLength(1);

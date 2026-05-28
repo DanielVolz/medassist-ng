@@ -12,28 +12,27 @@ const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
 	const { drizzle } = require("drizzle-orm/libsql");
 	const client = createClient({ url: ":memory:" });
-	const db = drizzle(client);
 
 	return {
 		testClient: client,
-		testDb: db,
-		mockedEnv: {
-			AUTH_ENABLED: true,
-			REGISTRATION_ENABLED: true,
-			FORM_LOGIN_ENABLED: true,
-			OIDC_ENABLED: false,
-			OIDC_PROVIDER_NAME: "SSO",
-			NODE_ENV: "test",
-			LOG_LEVEL: "silent",
-			PORT: 3000,
-			CORS_ORIGINS: "*",
-			JWT_SECRET: "test-jwt-secret",
-			REFRESH_SECRET: "test-refresh-secret",
-			COOKIE_SECRET: "test-cookie-secret",
-			ACCESS_TOKEN_TTL_MINUTES: 15,
-			REFRESH_TOKEN_TTL_DAYS: 7,
-			OPENAPI_DOCS_ENABLED: false,
-		},
+		testDb: drizzle(client),
+		mockedEnv: Object.fromEntries([
+			["AUTH_ENABLED", true],
+			["REGISTRATION_ENABLED", true],
+			["FORM_LOGIN_ENABLED", true],
+			["OIDC_ENABLED", false],
+			["OIDC_PROVIDER_NAME", "SSO"],
+			["NODE_ENV", "test"],
+			["LOG_LEVEL", "silent"],
+			["PORT", 3000],
+			["CORS_ORIGINS", "*"],
+			["JWT_SECRET", "test-jwt-secret"],
+			["REFRESH_SECRET", "test-refresh-secret"],
+			["COOKIE_SECRET", "test-cookie-secret"],
+			["ACCESS_TOKEN_TTL_MINUTES", 15],
+			["REFRESH_TOKEN_TTL_DAYS", 7],
+			["OPENAPI_DOCS_ENABLED", false],
+		]),
 	};
 });
 

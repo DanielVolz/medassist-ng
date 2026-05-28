@@ -1,17 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SharedSchedule } from "../../components/SharedSchedule";
-
-function renderSharedSchedule(path: string) {
-	return render(
-		<MemoryRouter initialEntries={[path]}>
-			<Routes>
-				<Route path="/share/:token" element={<SharedSchedule />} />
-			</Routes>
-		</MemoryRouter>
-	);
-}
+import { mockSharedScheduleRead, renderSharedSchedule } from "../helpers/shared-schedule";
 
 function createSharedData(overrides: Record<string, unknown> = {}) {
 	const yesterday = new Date();
@@ -76,15 +65,7 @@ describe("SharedSchedule today-only", () => {
 	it("hides past and future sections when shareScheduleTodayOnly is enabled even if dashboard today-only is off", async () => {
 		const sharedData = createSharedData();
 
-		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-			if (url === "/api/share/token-123/doses" && (!init?.method || init.method === "GET")) {
-				return Promise.resolve({ ok: true, json: () => Promise.resolve({ doses: [] }) });
-			}
-			if (url === "/api/share/token-123") {
-				return Promise.resolve({ ok: true, json: () => Promise.resolve(sharedData) });
-			}
-			return Promise.reject(new Error(`Unexpected URL: ${url}`));
-		});
+		mockSharedScheduleRead(sharedData);
 
 		renderSharedSchedule("/share/token-123");
 

@@ -6,11 +6,7 @@ import type { Medication } from "../../types";
 const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
 const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
-vi.mock("../../components/Auth", () => ({
-	useAuth: () => ({
-		authFetch: authFetchMock,
-	}),
-}));
+vi.mock("../../components/Auth", () => ({ useAuth: () => ({ authFetch: authFetchMock }) }));
 
 vi.mock("../../context/FeedbackContext", () => ({
 	useFeedback: () => ({
@@ -19,6 +15,38 @@ vi.mock("../../context/FeedbackContext", () => ({
 		clearFeedback: vi.fn(),
 	}),
 }));
+
+function createShareMedication(overrides: Partial<Medication> = {}): Medication {
+	return {
+		id: 1,
+		name: "Med1",
+		takenBy: ["Alice"],
+		packageType: "blister",
+		packCount: 1,
+		blistersPerPack: 1,
+		pillsPerBlister: 10,
+		looseTablets: 0,
+		blisters: [],
+		updatedAt: null,
+		...overrides,
+	};
+}
+
+function createActiveShareLink(overrides: Record<string, unknown> = {}) {
+	return {
+		token: "abcdef0123456789",
+		takenBy: "Alice",
+		scheduleDays: 30,
+		createdAt: "2026-05-17T12:00:00.000Z",
+		expiresAt: null,
+		lastUsedAt: null,
+		allowJournalNotes: false,
+		allowMarkTaken: false,
+		legacyNeverExpires: true,
+		shareUrl: "/share/abcdef0123456789",
+		...overrides,
+	};
+}
 
 describe("useShare", () => {
 	let mockClipboard: { writeText: ReturnType<typeof vi.fn> };
@@ -73,30 +101,12 @@ describe("useShare", () => {
 		const { result } = renderHook(() => useShare());
 
 		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice", "Bob"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-			{
+			createShareMedication({ takenBy: ["Alice", "Bob"] }),
+			createShareMedication({
 				id: 2,
 				name: "Med2",
 				takenBy: ["Bob", "Charlie"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
+			}),
 		];
 
 		act(() => {
@@ -122,20 +132,7 @@ describe("useShare", () => {
 			result.current.setShareCopied(true);
 		});
 
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -148,20 +145,7 @@ describe("useShare", () => {
 	it("generates share link", async () => {
 		const { result } = renderHook(() => useShare());
 
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -197,20 +181,7 @@ describe("useShare", () => {
 
 		const { result } = renderHook(() => useShare());
 
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -232,20 +203,7 @@ describe("useShare", () => {
 
 		const { result } = renderHook(() => useShare());
 
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -305,20 +263,7 @@ describe("useShare", () => {
 	it("closes share dialog with history back", () => {
 		const { result } = renderHook(() => useShare());
 
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -344,20 +289,7 @@ describe("useShare", () => {
 	it("resetShareDialogState clears state", () => {
 		const { result } = renderHook(() => useShare());
 
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -380,20 +312,7 @@ describe("useShare", () => {
 
 	it("includes selected expiry when generating a share link", async () => {
 		const { result } = renderHook(() => useShare());
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -422,20 +341,7 @@ describe("useShare", () => {
 
 	it("includes the shared journal-note permission when generating a share link", async () => {
 		const { result } = renderHook(() => useShare());
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -469,38 +375,17 @@ describe("useShare", () => {
 				json: () =>
 					Promise.resolve({
 						shareLinks: [
-							{
-								token: "abcdef0123456789",
-								takenBy: "Alice",
-								scheduleDays: 30,
-								createdAt: "2026-05-17T12:00:00.000Z",
-								expiresAt: null,
-								lastUsedAt: null,
+							createActiveShareLink({
 								allowJournalNotes: true,
 								allowMarkTaken: true,
-								legacyNeverExpires: true,
-								shareUrl: "/share/abcdef0123456789",
-							},
+							}),
 						],
 					}),
 			})
 			.mockResolvedValue({ ok: true, json: () => Promise.resolve({ token: "test-token" }) });
 
 		const { result } = renderHook(() => useShare());
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);
@@ -520,39 +405,13 @@ describe("useShare", () => {
 				ok: true,
 				json: () =>
 					Promise.resolve({
-						shareLinks: [
-							{
-								token: "abcdef0123456789",
-								takenBy: "Alice",
-								scheduleDays: 30,
-								createdAt: "2026-05-17T12:00:00.000Z",
-								expiresAt: null,
-								lastUsedAt: null,
-								allowJournalNotes: false,
-								allowMarkTaken: false,
-								legacyNeverExpires: true,
-								shareUrl: "/share/abcdef0123456789",
-							},
-						],
+						shareLinks: [createActiveShareLink()],
 					}),
 			})
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
 		const { result } = renderHook(() => useShare());
-		const meds: Medication[] = [
-			{
-				id: 1,
-				name: "Med1",
-				takenBy: ["Alice"],
-				packageType: "blister",
-				packCount: 1,
-				blistersPerPack: 1,
-				pillsPerBlister: 10,
-				looseTablets: 0,
-				blisters: [],
-				updatedAt: null,
-			},
-		];
+		const meds: Medication[] = [createShareMedication()];
 
 		act(() => {
 			result.current.openShareDialog(meds);

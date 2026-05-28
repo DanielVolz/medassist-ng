@@ -50,6 +50,56 @@ export function useDoses(): UseDosesReturn {
 		mutationInFlightRef.current = 0;
 	}, []);
 
+	const clearTakenDoseState = useCallback((doseId: string) => {
+		setTakenDoses((prev) => {
+			const next = new Set(prev);
+			next.delete(doseId);
+			return next;
+		});
+		setTakenDoseTimestamps((prev) => {
+			const next = new Map(prev);
+			next.delete(doseId);
+			return next;
+		});
+		setTakenDoseSources((prev) => {
+			const next = new Map(prev);
+			next.delete(doseId);
+			return next;
+		});
+	}, []);
+
+	const restoreTakenDoseState = useCallback(
+		(options: {
+			doseId: string;
+			wasTaken: boolean;
+			previousTimestamp?: number;
+			previousSource?: "manual" | "automatic";
+		}) => {
+			setTakenDoses((prev) => {
+				const next = new Set(prev);
+				if (options.wasTaken) {
+					next.add(options.doseId);
+				}
+				return next;
+			});
+			setTakenDoseTimestamps((prev) => {
+				const next = new Map(prev);
+				if (options.wasTaken && typeof options.previousTimestamp === "number") {
+					next.set(options.doseId, options.previousTimestamp);
+				}
+				return next;
+			});
+			setTakenDoseSources((prev) => {
+				const next = new Map(prev);
+				if (options.wasTaken && options.previousSource) {
+					next.set(options.doseId, options.previousSource);
+				}
+				return next;
+			});
+		},
+		[]
+	);
+
 	// Load taken doses from server
 	const loadTakenDoses = useCallback(async () => {
 		// Skip polling while mutations are in-flight to prevent race conditions
@@ -270,21 +320,7 @@ export function useDoses(): UseDosesReturn {
 				next.add(doseId);
 				return next;
 			});
-			setTakenDoses((prev) => {
-				const next = new Set(prev);
-				next.delete(doseId);
-				return next;
-			});
-			setTakenDoseTimestamps((prev) => {
-				const next = new Map(prev);
-				next.delete(doseId);
-				return next;
-			});
-			setTakenDoseSources((prev) => {
-				const next = new Map(prev);
-				next.delete(doseId);
-				return next;
-			});
+			clearTakenDoseState(doseId);
 
 			let failureStatus: number | null = null;
 			try {
@@ -311,33 +347,22 @@ export function useDoses(): UseDosesReturn {
 					}
 					return next;
 				});
-				setTakenDoses((prev) => {
-					const next = new Set(prev);
-					if (wasTaken) {
-						next.add(doseId);
-					}
-					return next;
-				});
-				setTakenDoseTimestamps((prev) => {
-					const next = new Map(prev);
-					if (wasTaken && typeof previousTimestamp === "number") {
-						next.set(doseId, previousTimestamp);
-					}
-					return next;
-				});
-				setTakenDoseSources((prev) => {
-					const next = new Map(prev);
-					if (wasTaken && previousSource) {
-						next.set(doseId, previousSource);
-					}
-					return next;
-				});
+				restoreTakenDoseState({ doseId, wasTaken, previousTimestamp, previousSource });
 			} finally {
 				mutationInFlightRef.current--;
 				loadTakenDoses();
 			}
 		},
-		[authFetch, dismissedDoses, loadTakenDoses, takenDoseSources, takenDoseTimestamps, takenDoses]
+		[
+			authFetch,
+			clearTakenDoseState,
+			dismissedDoses,
+			loadTakenDoses,
+			restoreTakenDoseState,
+			takenDoseSources,
+			takenDoseTimestamps,
+			takenDoses,
+		]
 	);
 
 	const undoDoseTaken = useCallback(
@@ -347,21 +372,7 @@ export function useDoses(): UseDosesReturn {
 
 			// Optimistic update
 			mutationInFlightRef.current++;
-			setTakenDoses((prev) => {
-				const next = new Set(prev);
-				next.delete(doseId);
-				return next;
-			});
-			setTakenDoseTimestamps((prev) => {
-				const next = new Map(prev);
-				next.delete(doseId);
-				return next;
-			});
-			setTakenDoseSources((prev) => {
-				const next = new Map(prev);
-				next.delete(doseId);
-				return next;
-			});
+			clearTakenDoseState(doseId);
 
 			// Send to server
 			let failureStatus: number | null = null;
@@ -379,32 +390,14 @@ export function useDoses(): UseDosesReturn {
 					error: getErrorMessage(error),
 				});
 				// Revert on error
-				setTakenDoses((prev) => {
-					const next = new Set(prev);
-					next.add(doseId);
-					return next;
-				});
-				setTakenDoseTimestamps((prev) => {
-					const next = new Map(prev);
-					if (typeof previousTimestamp === "number") {
-						next.set(doseId, previousTimestamp);
-					}
-					return next;
-				});
-				setTakenDoseSources((prev) => {
-					const next = new Map(prev);
-					if (previousSource) {
-						next.set(doseId, previousSource);
-					}
-					return next;
-				});
+				restoreTakenDoseState({ doseId, wasTaken: true, previousTimestamp, previousSource });
 			} finally {
 				mutationInFlightRef.current--;
 				// Re-sync with server after mutation completes
 				loadTakenDoses();
 			}
 		},
-		[authFetch, loadTakenDoses, takenDoseSources, takenDoseTimestamps]
+		[authFetch, clearTakenDoseState, loadTakenDoses, restoreTakenDoseState, takenDoseSources, takenDoseTimestamps]
 	);
 
 	const undoDoseSkipped = useCallback(

@@ -200,6 +200,64 @@ function isShareActive(share: typeof shareTokens.$inferSelect): boolean {
 	return !isShareRevoked(share) && !isExpiredTimestamp(share.expiresAt);
 }
 
+type MedicationRow = typeof medications.$inferSelect;
+
+function parseMedicationIntakes(medication: MedicationRow) {
+	return parseIntakesJson(
+		medication.intakesJson,
+		{ usageJson: medication.usageJson, everyJson: medication.everyJson, startJson: medication.startJson },
+		medication.intakeRemindersEnabled ?? false
+	);
+}
+
+async function getActiveMedicationsForPerson(userId: number, takenBy: string): Promise<MedicationRow[]> {
+	const allMeds = await db
+		.select()
+		.from(medications)
+		.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
+
+	return allMeds.filter((medication) =>
+		personTakesMedication(takenBy, parseTakenByJson(medication.takenByJson), parseMedicationIntakes(medication))
+	);
+}
+
+function toSharedScheduleMedication(medication: MedicationRow) {
+	const intakes = parseMedicationIntakes(medication);
+	const blisters = intakes.map((intake) => ({
+		usage: intake.usage,
+		every: intake.every,
+		start: intake.start,
+	}));
+	const takenBy = parseTakenByJson(medication.takenByJson);
+	const totalPills = isAmountBasedPackageType(medication.packageType)
+		? medication.looseTablets + (medication.stockAdjustment ?? 0)
+		: medication.packCount * medication.blistersPerPack * medication.pillsPerBlister +
+			medication.looseTablets +
+			(medication.stockAdjustment ?? 0);
+
+	return {
+		id: medication.id,
+		name: medication.name,
+		genericName: medication.genericName,
+		pillWeightMg: medication.pillWeightMg,
+		doseUnit: medication.doseUnit ?? "mg",
+		imageUrl: medication.imageUrl,
+		totalPills,
+		packageType: normalizePackageType(medication.packageType),
+		packCount: medication.packCount,
+		blistersPerPack: medication.blistersPerPack,
+		looseTablets: medication.looseTablets,
+		pillsPerBlister: medication.pillsPerBlister,
+		takenBy,
+		intakes,
+		blisters,
+		dismissedUntil: medication.dismissedUntil,
+		updatedAt: medication.updatedAt,
+		lastStockCorrectionAt: medication.lastStockCorrectionAt?.getTime() ?? null,
+		stockAdjustment: medication.stockAdjustment ?? 0,
+	};
+}
+
 // Helper to get user ID from request
 // Returns anonymous user ID when auth is disabled
 async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
@@ -284,68 +342,8 @@ export async function shareRoutes(app: FastifyInstance) {
 			// Get the username of the owner who created this share link
 			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
 
-			// Get medications for this user filtered by takenBy (search in JSON array)
-			// Use SQLite JSON function to check if takenBy is in the array
-			const allMeds = await db
-				.select()
-				.from(medications)
-				.where(and(eq(medications.userId, share.userId), eq(medications.isObsolete, false)));
-
-			// Filter medications where takenBy matches either medication-level OR any intake-level takenBy
-			const meds = allMeds.filter((med) => {
-				const takenByArray = parseTakenByJson(med.takenByJson);
-				const intakes = parseIntakesJson(
-					med.intakesJson,
-					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-					med.intakeRemindersEnabled ?? false
-				);
-				return personTakesMedication(share.takenBy, takenByArray, intakes);
-			});
-
-			// Parse blisters and build schedule data
-			const medicationsWithBlisters = meds.map((med) => {
-				// Parse intakes from new format, falling back to legacy
-				const intakes = parseIntakesJson(
-					med.intakesJson,
-					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-					med.intakeRemindersEnabled ?? false
-				);
-
-				// Convert to legacy blisters format for backward compat
-				const blisters = intakes.map((i) => ({
-					usage: i.usage,
-					every: i.every,
-					start: i.start,
-				}));
-
-				// Parse takenBy JSON array
-				const takenByArray = parseTakenByJson(med.takenByJson);
-
-				const totalPills = isAmountBasedPackageType(med.packageType)
-					? med.looseTablets + (med.stockAdjustment ?? 0)
-					: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
-				return {
-					id: med.id,
-					name: med.name,
-					genericName: med.genericName,
-					pillWeightMg: med.pillWeightMg,
-					doseUnit: med.doseUnit ?? "mg",
-					imageUrl: med.imageUrl,
-					totalPills,
-					packageType: normalizePackageType(med.packageType),
-					packCount: med.packCount,
-					blistersPerPack: med.blistersPerPack,
-					looseTablets: med.looseTablets,
-					pillsPerBlister: med.pillsPerBlister,
-					takenBy: takenByArray,
-					intakes, // New unified format with per-intake takenBy
-					blisters, // Legacy format for backward compat
-					dismissedUntil: med.dismissedUntil,
-					updatedAt: med.updatedAt, // For filtering out doses from previous schedule configurations
-					lastStockCorrectionAt: med.lastStockCorrectionAt?.getTime() ?? null,
-					stockAdjustment: med.stockAdjustment ?? 0,
-				};
-			});
+			const meds = await getActiveMedicationsForPerson(share.userId, share.takenBy);
+			const medicationsWithBlisters = meds.map(toSharedScheduleMedication);
 
 			const shareMedicationOverview = settings?.shareMedicationOverview ?? false;
 			const medicationOverview = shareMedicationOverview
@@ -431,19 +429,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, share.userId));
 			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
 
-			const allMeds = await db
-				.select()
-				.from(medications)
-				.where(and(eq(medications.userId, share.userId), eq(medications.isObsolete, false)));
-			const meds = allMeds.filter((med) => {
-				const takenByArray = parseTakenByJson(med.takenByJson);
-				const intakes = parseIntakesJson(
-					med.intakesJson,
-					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-					med.intakeRemindersEnabled ?? false
-				);
-				return personTakesMedication(share.takenBy, takenByArray, intakes);
-			});
+			const meds = await getActiveMedicationsForPerson(share.userId, share.takenBy);
 
 			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
 
@@ -504,20 +490,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			const { takenBy, scheduleDays, expiryDays, allowJournalNotes, allowMarkTaken } = parsed.data;
 			const expiresAt = resolveExpiryDate(expiryDays);
 
-			// Check if user has medications for this takenBy (search in both medication-level and intake-level)
-			const allMeds = await db
-				.select()
-				.from(medications)
-				.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
-			const medsForPerson = allMeds.filter((med) => {
-				const takenByArray = parseTakenByJson(med.takenByJson);
-				const intakes = parseIntakesJson(
-					med.intakesJson,
-					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-					med.intakeRemindersEnabled ?? false
-				);
-				return personTakesMedication(takenBy, takenByArray, intakes);
-			});
+			const medsForPerson = await getActiveMedicationsForPerson(userId, takenBy);
 
 			if (medsForPerson.length === 0) {
 				return reply.status(400).send({

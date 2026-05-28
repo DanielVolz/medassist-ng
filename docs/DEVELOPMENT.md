@@ -6,6 +6,26 @@
 docker compose -p medassist-dev -f docker-compose.dev.yml up
 ```
 
+If you changed `docker-compose.dev.yml`, added new bind mounts, or introduced a new local package like `shared/`, do not rely on `docker compose restart` alone. Restarting reuses the old containers and does not apply mount changes. Recreate the development services instead:
+
+```bash
+docker compose -p medassist-dev -f docker-compose.dev.yml up -d --force-recreate backend-dev frontend-dev
+```
+
+## Start the Medtest Domain Overlay
+
+If you want the local dev stack to be reachable through `https://medtest.danielvolz.org`, start the stack with the medtest overlay as well. That overlay adds the required Caddy labels, joins the `caddy-proxy` network, and sets the frontend host/HMR values for the public domain.
+
+```bash
+docker compose -p medassist-dev -f docker-compose.dev.yml -f docker-compose.medtest-dev.yml up -d backend-dev frontend-dev
+```
+
+If you need to recreate the stack for medtest after config changes, use both files during recreation too:
+
+```bash
+docker compose -p medassist-dev -f docker-compose.dev.yml -f docker-compose.medtest-dev.yml up -d --force-recreate backend-dev frontend-dev
+```
+
 ## Service Endpoints
 
 - Frontend: `http://localhost:5173`
@@ -37,6 +57,14 @@ These development overrides are documented here intentionally and are not part o
 - `VITE_HMR_PORT`: server-side websocket port for the Vite process
 
 ## Useful Commands
+
+When running commands directly on the host instead of through Docker, install dependencies in all local packages first:
+
+```bash
+cd shared && npm install
+cd ../backend && npm install
+cd ../frontend && npm install
+```
 
 ```bash
 npm run lint

@@ -64,6 +64,24 @@ const mockFutureDays = [
 	},
 ];
 
+function createFutureDoseDay(timestamp: number) {
+	return [
+		{
+			dateStr: "Mon, Jan 22",
+			date: new Date(timestamp),
+			isPast: false,
+			meds: [
+				{
+					medName: "Aspirin",
+					total: 1,
+					doses: [{ id: `1-0-${timestamp}`, timeStr: "09:00", when: timestamp, usage: 1, takenBy: ["John"] }],
+					lastWhen: timestamp,
+				},
+			],
+		},
+	];
+}
+
 const mockPastDays = [
 	{
 		dateStr: "Sun, Jan 21",
@@ -694,25 +712,9 @@ describe("SchedulePage with taken doses", () => {
 		const timestamp = Date.now();
 		const doseId = `1-0-${timestamp}-John`;
 
-		const testFutureDays = [
-			{
-				dateStr: "Mon, Jan 22",
-				date: new Date(timestamp),
-				isPast: false,
-				meds: [
-					{
-						medName: "Aspirin",
-						total: 1,
-						doses: [{ id: `1-0-${timestamp}`, timeStr: "09:00", when: timestamp, usage: 1, takenBy: ["John"] }],
-						lastWhen: timestamp,
-					},
-				],
-			},
-		];
-
 		mockContextValue = createMockContext({
 			meds: mockMeds,
-			futureDays: testFutureDays,
+			futureDays: createFutureDoseDay(timestamp),
 			coverageByMed: mockCoverageByMed,
 			takenDoses: new Set([doseId]),
 		});
@@ -733,25 +735,9 @@ describe("SchedulePage with taken doses", () => {
 		const timestamp = Date.now();
 		const doseId = `1-0-${timestamp}-John`;
 
-		const testFutureDays = [
-			{
-				dateStr: "Mon, Jan 22",
-				date: new Date(timestamp),
-				isPast: false,
-				meds: [
-					{
-						medName: "Aspirin",
-						total: 1,
-						doses: [{ id: `1-0-${timestamp}`, timeStr: "09:00", when: timestamp, usage: 1, takenBy: ["John"] }],
-						lastWhen: timestamp,
-					},
-				],
-			},
-		];
-
 		mockContextValue = createMockContext({
 			meds: mockMeds,
-			futureDays: testFutureDays,
+			futureDays: createFutureDoseDay(timestamp),
 			coverageByMed: mockCoverageByMed,
 			takenDoses: new Set([doseId]),
 			undoDoseTaken,

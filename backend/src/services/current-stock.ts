@@ -1,4 +1,5 @@
 import type { doseTracking, medications } from "../db/schema.js";
+import { parseDoseId } from "../utils/dose-id.js";
 import { isAmountBasedPackageType } from "../utils/package-profiles.js";
 import {
 	countScheduledOccurrencesInRange,
@@ -12,8 +13,6 @@ import {
 
 type MedicationRow = typeof medications.$inferSelect;
 type DoseRow = typeof doseTracking.$inferSelect;
-
-const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
 
 function getDoseTakenAtMs(dose: DoseRow): number {
 	const rawTakenAt = Number(dose.takenAt);
@@ -96,23 +95,12 @@ export function computeMedicationCurrentStock(options: {
 			const earlyCutoff = Math.max(lastAutoConsumedDateMs, stockCorrectionDateOnly);
 
 			for (const dose of relevantDoses) {
-				const match = doseIdPattern.exec(dose.doseId);
-				if (!match) continue;
-
-				const parsedMedicationId = Number.parseInt(match[1], 10);
-				const parsedIntakeIndex = Number.parseInt(match[2], 10);
-				const doseDateOnlyMs = Number.parseInt(match[3], 10);
-				if (
-					Number.isNaN(parsedMedicationId) ||
-					Number.isNaN(parsedIntakeIndex) ||
-					Number.isNaN(doseDateOnlyMs) ||
-					parsedMedicationId !== medication.id ||
-					parsedIntakeIndex !== intakeIndex
-				) {
+				const parsedDose = parseDoseId(dose.doseId);
+				if (!parsedDose || parsedDose.medicationId !== medication.id || parsedDose.intakeIndex !== intakeIndex) {
 					continue;
 				}
 
-				if (doseDateOnlyMs > earlyCutoff) {
+				if (parsedDose.timestampMs > earlyCutoff) {
 					consumed += usage;
 				}
 			}
@@ -129,25 +117,14 @@ export function computeMedicationCurrentStock(options: {
 			if (Number.isNaN(intakeStartDateOnly)) return;
 
 			for (const dose of relevantDoses) {
-				const match = doseIdPattern.exec(dose.doseId);
-				if (!match) continue;
-
-				const parsedMedicationId = Number.parseInt(match[1], 10);
-				const parsedIntakeIndex = Number.parseInt(match[2], 10);
-				const doseDateOnlyMs = Number.parseInt(match[3], 10);
-				if (
-					Number.isNaN(parsedMedicationId) ||
-					Number.isNaN(parsedIntakeIndex) ||
-					Number.isNaN(doseDateOnlyMs) ||
-					parsedMedicationId !== medication.id ||
-					parsedIntakeIndex !== intakeIndex
-				) {
+				const parsedDose = parseDoseId(dose.doseId);
+				if (!parsedDose || parsedDose.medicationId !== medication.id || parsedDose.intakeIndex !== intakeIndex) {
 					continue;
 				}
 
 				const takenAtMs = getDoseTakenAtMs(dose);
 				const afterCorrectionOrNoCorrection = stockCorrectionCutoff === 0 || takenAtMs > stockCorrectionCutoff;
-				if (doseDateOnlyMs >= intakeStartDateOnly && afterCorrectionOrNoCorrection) {
+				if (parsedDose.timestampMs >= intakeStartDateOnly && afterCorrectionOrNoCorrection) {
 					consumed += usage;
 				}
 			}

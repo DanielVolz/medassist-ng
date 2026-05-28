@@ -54,6 +54,29 @@ const createMockContext = (overrides = {}) => ({
 	...overrides,
 });
 
+function renderPlannerPage() {
+	return render(
+		<MemoryRouter>
+			<PlannerPage />
+		</MemoryRouter>
+	);
+}
+
+function mockPlannerResponse(rows: unknown) {
+	global.fetch = vi.fn().mockResolvedValue({
+		ok: true,
+		json: () => Promise.resolve(rows),
+	});
+}
+
+async function submitPlannerForm() {
+	const form = document.querySelector("form.planner");
+	expect(form).toBeInTheDocument();
+	await act(async () => {
+		fireEvent.submit(form!);
+	});
+}
+
 let mockContextValue = createMockContext();
 
 // Mock the hooks and context
@@ -654,50 +677,32 @@ describe("PlannerPage medication detail", () => {
 	});
 
 	it("calls openMedDetail when clicking medication row", async () => {
-		global.fetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve(mockPlannerRows),
-		});
+		mockPlannerResponse(mockPlannerRows);
 		const openMedDetail = vi.fn();
 		mockContextValue = createMockContext({
 			meds: mockMeds,
 			openMedDetail,
 		});
 
-		render(
-			<MemoryRouter>
-				<PlannerPage />
-			</MemoryRouter>
-		);
+		renderPlannerPage();
 
-		await act(async () => {
-			fireEvent.submit(document.querySelector("form.planner")!);
-		});
+		await submitPlannerForm();
 		const medRow = await screen.findByRole("button", { name: /planner\.openMedication/i });
 		fireEvent.click(medRow);
 		expect(openMedDetail).toHaveBeenCalled();
 	});
 
 	it("renders planner rows as native buttons for keyboard access", async () => {
-		global.fetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve(mockPlannerRows),
-		});
+		mockPlannerResponse(mockPlannerRows);
 		const openMedDetail = vi.fn();
 		mockContextValue = createMockContext({
 			meds: mockMeds,
 			openMedDetail,
 		});
 
-		render(
-			<MemoryRouter>
-				<PlannerPage />
-			</MemoryRouter>
-		);
+		renderPlannerPage();
 
-		await act(async () => {
-			fireEvent.submit(document.querySelector("form.planner")!);
-		});
+		await submitPlannerForm();
 		const medRow = await screen.findByRole("button", { name: /planner\.openMedication/i });
 		expect(medRow.tagName.toLowerCase()).toBe("button");
 		expect(medRow).not.toBeDisabled();
@@ -742,23 +747,11 @@ describe("PlannerPage bottle package type", () => {
 	});
 
 	it("shows dash for blisters column when bottle type", async () => {
-		global.fetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve(bottlePlannerRows),
-		});
+		mockPlannerResponse(bottlePlannerRows);
 
-		render(
-			<MemoryRouter>
-				<PlannerPage />
-			</MemoryRouter>
-		);
+		renderPlannerPage();
 
-		// Submit the form to trigger the planner calculation
-		const form = document.querySelector("form.planner");
-		expect(form).toBeInTheDocument();
-		await act(async () => {
-			fireEvent.submit(form!);
-		});
+		await submitPlannerForm();
 
 		// For bottle type, blisters column should show "–"
 		await waitFor(() => {
@@ -772,23 +765,11 @@ describe("PlannerPage bottle package type", () => {
 	});
 
 	it("shows blisters calculation for blister type", async () => {
-		global.fetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve(blisterPlannerRows),
-		});
+		mockPlannerResponse(blisterPlannerRows);
 
-		render(
-			<MemoryRouter>
-				<PlannerPage />
-			</MemoryRouter>
-		);
+		renderPlannerPage();
 
-		// Submit the form to trigger the planner calculation
-		const form = document.querySelector("form.planner");
-		expect(form).toBeInTheDocument();
-		await act(async () => {
-			fireEvent.submit(form!);
-		});
+		await submitPlannerForm();
 
 		// For blister type, should show "2 × 10"
 		await waitFor(() => {

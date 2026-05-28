@@ -100,6 +100,15 @@ export async function createTestUser(client: Client, options: CreateUserOptions 
 	return result.rows[0].id as number;
 }
 
+export async function buildTestSessionCookie(
+	app: FastifyInstance,
+	userId: number,
+	username = "testuser"
+): Promise<string> {
+	const token = await app.jwt.sign({ sub: userId, username });
+	return `access_token=${token}`;
+}
+
 export interface CreateMedicationOptions {
 	userId: number;
 	name?: string;
@@ -169,6 +178,42 @@ export async function createTestMedication(client: Client, options: CreateMedica
 	});
 
 	return result.rows[0].id as number;
+}
+
+export async function insertScheduledTestMedication(
+	client: Client,
+	options: {
+		id: number;
+		userId: number;
+		name?: string;
+		start?: string;
+		packCount?: number;
+		looseTablets?: number;
+		intakeRemindersEnabled?: boolean;
+	}
+): Promise<void> {
+	const start = options.start ?? "2025-01-01T08:00:00.000Z";
+	const remindersEnabled = options.intakeRemindersEnabled ?? false;
+
+	await client.execute({
+		sql: `INSERT INTO medications (
+			id, user_id, name, taken_by_json, medication_form, package_type,
+			pack_count, blisters_per_pack, pills_per_blister, loose_tablets, stock_adjustment,
+			usage_json, every_json, start_json, intakes_json, intake_reminders_enabled
+		) VALUES (?, ?, ?, '[]', 'tablet', 'blister', ?, 1, 10, ?, 0, ?, ?, ?, ?, ?)`,
+		args: [
+			options.id,
+			options.userId,
+			options.name ?? "Test Medication",
+			options.packCount ?? 1,
+			options.looseTablets ?? 0,
+			JSON.stringify([1]),
+			JSON.stringify([1]),
+			JSON.stringify([start]),
+			JSON.stringify([{ usage: 1, every: 1, start, takenBy: null, intakeRemindersEnabled: remindersEnabled }]),
+			remindersEnabled ? 1 : 0,
+		],
+	});
 }
 
 export interface CreateShareTokenOptions {

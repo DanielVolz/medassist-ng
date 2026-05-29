@@ -277,7 +277,7 @@ export interface AppContextValue {
 			shares: number;
 		} | null>
 	>;
-	handleExport: (includeImages?: boolean) => Promise<void>;
+	handleExport: (includeImages?: boolean, includeSensitive?: boolean) => Promise<void>;
 	handleImportFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	handleImportConfirm: () => Promise<void>;
 	settingsChanged: boolean;
@@ -734,10 +734,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	// Export data to JSON file
 	const handleExport = useCallback(
-		async (includeImages: boolean = true) => {
+		async (includeImages: boolean = true, includeSensitive: boolean = false) => {
 			setExporting(true);
 			try {
-				const res = await authFetch(`/api/export?includeSensitive=true&includeImages=${includeImages}`);
+				const res = await authFetch(`/api/export?includeSensitive=${includeSensitive}&includeImages=${includeImages}`);
 				if (!res.ok) throw new Error("Export failed");
 				const data = await res.json();
 

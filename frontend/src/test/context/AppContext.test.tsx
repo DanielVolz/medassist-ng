@@ -500,12 +500,29 @@ describe("useAppContext", () => {
 			await result.current.handleExport(true);
 		});
 
-		expect(authFetchMock).toHaveBeenCalledWith("/api/export?includeSensitive=true&includeImages=true");
+		expect(authFetchMock).toHaveBeenCalledWith("/api/export?includeSensitive=false&includeImages=true");
 		expect(createObjectURL).toHaveBeenCalled();
 		expect(click).toHaveBeenCalled();
 		expect(appendChild).toHaveBeenCalled();
 		expect(removeChild).toHaveBeenCalled();
 		expect(revokeObjectURL).toHaveBeenCalledWith("blob:export-url");
+	});
+
+	it("exports sensitive data only when explicitly requested", async () => {
+		vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:sensitive-export-url");
+		vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ version: "1", medications: [] }),
+		});
+
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		await act(async () => {
+			await result.current.handleExport(false, true);
+		});
+
+		expect(authFetchMock).toHaveBeenCalledWith("/api/export?includeSensitive=true&includeImages=false");
 	});
 
 	it("handles invalid import JSON file", () => {

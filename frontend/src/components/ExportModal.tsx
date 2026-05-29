@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useScrollLock } from "../hooks/useScrollLock";
@@ -5,15 +6,21 @@ import { useScrollLock } from "../hooks/useScrollLock";
 interface ExportModalProps {
 	isOpen: boolean;
 	onClose: () => void;
-	onExport: (includeImages: boolean) => void;
+	onExport: (includeImages: boolean, includeSensitive: boolean) => void;
 	exporting: boolean;
 }
 
 export default function ExportModal({ isOpen, onClose, onExport, exporting }: ExportModalProps) {
 	const { t } = useTranslation();
+	const [includeSensitive, setIncludeSensitive] = useState(false);
 
 	useScrollLock(isOpen);
 	useEscapeKey(isOpen, onClose);
+	useEffect(() => {
+		if (!isOpen) {
+			setIncludeSensitive(false);
+		}
+	}, [isOpen]);
 
 	if (!isOpen) return null;
 
@@ -43,7 +50,7 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 						className="action-card"
 						onClick={() => {
 							onClose();
-							onExport(true);
+							onExport(true, includeSensitive);
 						}}
 						disabled={exporting}
 						style={{ textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", borderRadius: "8px" }}
@@ -58,7 +65,7 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 						className="action-card"
 						onClick={() => {
 							onClose();
-							onExport(false);
+							onExport(false, includeSensitive);
 						}}
 						disabled={exporting}
 						style={{ textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", borderRadius: "8px" }}
@@ -69,6 +76,21 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 						</div>
 					</button>
 				</div>
+				<div className="setting-row compact" style={{ marginTop: "14px" }}>
+					<div className="setting-label">
+						<span>{t("exportImport.includeSensitive")}</span>
+					</div>
+					<label className="toggle-switch small" aria-label={t("exportImport.includeSensitive")}>
+						<input
+							type="checkbox"
+							checked={includeSensitive}
+							onChange={(event) => setIncludeSensitive(event.target.checked)}
+							disabled={exporting}
+						/>
+						<span className="toggle-slider"></span>
+					</label>
+				</div>
+				{includeSensitive && <p className="warning-text">{t("exportImport.sensitiveWarning")}</p>}
 				<div className="modal-footer" style={{ padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end" }}>
 					<button type="button" className="ghost" onClick={onClose}>
 						{t("common.close")}

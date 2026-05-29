@@ -1,11 +1,22 @@
 import { defineConfig, devices, type PlaywrightTestConfig } from "@playwright/test";
 
+function parseOptionalPort(value: string | undefined) {
+	if (!value) {
+		return undefined;
+	}
+
+	const parsed = Number.parseInt(value, 10);
+	return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 	const env =
 		typeof globalThis === "object" && "process" in globalThis
 			? ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {})
 			: {};
 	const baseURL = env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
+	const apiBaseURL = env.PLAYWRIGHT_API_BASE_URL || "http://localhost:3000";
+	const frontendPort = parseOptionalPort(env.PLAYWRIGHT_FRONTEND_PORT) ?? parseOptionalPort(new URL(baseURL).port) ?? 5173;
 	const parsedWorkers = Number.parseInt(env.PLAYWRIGHT_WORKERS ?? "", 10);
 	// Default to single-worker execution to keep API-seeded E2E suites deterministic.
 	// Still allow explicit local overrides via PLAYWRIGHT_WORKERS.
@@ -86,13 +97,13 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		webServer: [
 			{
 				command: "cd ../backend && npm run dev",
-				url: "http://localhost:3000/health",
+				url: `${apiBaseURL}/health`,
 				reuseExistingServer: true,
 				timeout: 120 * 1000,
 			},
 			{
-				command: "npm run dev",
-				url: "http://localhost:5173",
+				command: `npm run dev -- --host 127.0.0.1 --port ${frontendPort} --strictPort`,
+				url: baseURL,
 				reuseExistingServer: true,
 				timeout: 120 * 1000,
 			},

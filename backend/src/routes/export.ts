@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { extname, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { extname, isAbsolute, relative, resolve } from "node:path";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -15,6 +15,12 @@ import {
 import { generateShareToken } from "../services/share-token-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
+	ALLOWED_IMAGE_MIME_TYPES,
+	MAX_IMAGE_UPLOAD_BYTES,
+	removeImageFiles,
+	writeOptimizedImageSet,
+} from "../utils/image-upload.js";
+import {
 	applyOpenApiRouteStandards,
 	genericErrorSchema,
 	validationErrorSchema,
@@ -27,7 +33,32 @@ const IMAGES_DIR = resolve(getDataDir(), "images");
 // =============================================================================
 // Export Format Version (bump this when format changes)
 // =============================================================================
-const EXPORT_VERSION = "1.6";
+const EXPORT_VERSION = "1.7";
+
+const currentExportVersion = parseExportVersion(EXPORT_VERSION);
+
+function parseExportVersion(version: string): { major: number; minor: number } | null {
+	const match = version.trim().match(/^(\d+)(?:\.(\d+))?$/);
+	if (!match) return null;
+	return {
+		major: Number.parseInt(match[1], 10),
+		minor: match[2] ? Number.parseInt(match[2], 10) : 0,
+	};
+}
+
+function isSupportedExportVersion(version: string): boolean {
+	const parsed = parseExportVersion(version);
+	if (!parsed || !currentExportVersion) return false;
+	if (parsed.major !== currentExportVersion.major) return false;
+	return parsed.minor <= currentExportVersion.minor;
+}
+
+function isValidDateLikeString(value: string): boolean {
+	return !Number.isNaN(new Date(value).getTime());
+}
+
+const dateLikeStringSchema = z.string().refine(isValidDateLikeString, { message: "Invalid date" });
+const nullableDateLikeStringSchema = dateLikeStringSchema.nullable().optional();
 
 // =============================================================================
 // Zod Schemas for Import Validation
@@ -36,7 +67,7 @@ const EXPORT_VERSION = "1.6";
 const scheduleSchema = z.object({
 	usage: z.number().nonnegative(),
 	every: z.number().int().min(1),
-	start: z.string(), // ISO datetime string
+	start: dateLikeStringSchema, // ISO/local datetime string
 	scheduleMode: z.unknown().optional(),
 	weekdays: z.unknown().optional(),
 	intakeUnit: z.enum(["ml", "tsp", "tbsp"]).nullable().optional(),
@@ -75,7 +106,7 @@ const medicationExportSchema = z.object({
 	notes: z.string().nullable().optional(),
 	intakeRemindersEnabled: z.boolean().default(false),
 	isObsolete: z.boolean().default(false),
-	obsoleteAt: z.string().nullable().optional(),
+	obsoleteAt: nullableDateLikeStringSchema,
 	prescriptionEnabled: z.boolean().default(false),
 	prescriptionAuthorizedRefills: z.number().int().min(0).nullable().optional(),
 	prescriptionRemainingRefills: z.number().int().min(0).nullable().optional(),
@@ -83,21 +114,21 @@ const medicationExportSchema = z.object({
 	prescriptionExpiryDate: z.string().nullable().optional(),
 	dismissedUntil: z.string().nullable().optional(), // ISO date string for dismissed past doses
 	image: z.string().nullable().optional(), // base64 data URL or null
-	lastStockCorrectionAt: z.string().nullable().optional(), // ISO datetime of last stock correction
+	lastStockCorrectionAt: nullableDateLikeStringSchema, // ISO datetime of last stock correction
 });
 
 const doseHistorySchema = z.object({
 	medicationRef: z.string(), // References _exportId
 	scheduleIndex: z.number().int().min(0),
-	scheduledTime: z.string(), // ISO datetime
-	takenAt: z.string(), // ISO datetime
+	scheduledTime: dateLikeStringSchema, // ISO datetime
+	takenAt: dateLikeStringSchema, // ISO datetime
 	markedBy: z.string().nullable().optional(),
-	takenSource: z.enum(["manual", "automatic"]).default("manual"),
+	takenSource: z.enum(["manual", "automatic", "notification"]).default("manual"),
 	dismissed: z.boolean().default(false),
 	takenByPerson: z.string().nullable().optional(), // Person suffix from dose ID (e.g., "Daniel")
 	journalNote: z.string().nullable().optional(),
-	journalCreatedAt: z.string().nullable().optional(),
-	journalUpdatedAt: z.string().nullable().optional(),
+	journalCreatedAt: nullableDateLikeStringSchema,
+	journalUpdatedAt: nullableDateLikeStringSchema,
 });
 
 const refillHistoryExportSchema = z.object({
@@ -106,7 +137,7 @@ const refillHistoryExportSchema = z.object({
 	loosePillsAdded: z.number().int().min(0).optional(),
 	quantityAdded: z.number().int().min(0).optional(),
 	usedPrescription: z.boolean().default(false),
-	refillDate: z.string(), // ISO datetime
+	refillDate: dateLikeStringSchema, // ISO datetime
 });
 
 const shareLinkSchema = z.object({
@@ -114,11 +145,12 @@ const shareLinkSchema = z.object({
 	scheduleDays: z.number().int().min(1).default(30),
 	allowJournalNotes: z.boolean().default(false),
 	allowMarkTaken: z.boolean().default(true),
-	expiresAt: z.string().nullable().optional(), // ISO datetime
+	expiresAt: nullableDateLikeStringSchema, // ISO datetime
 	regenerateToken: z.boolean().default(true),
 });
 
 const settingsSchemaBase = z.object({
+	timezone: z.string().default(""),
 	// Email notifications
 	emailEnabled: z.boolean().default(false),
 	notificationEmail: z.string().nullable().optional(),
@@ -144,9 +176,12 @@ const settingsSchemaBase = z.object({
 	highStockDays: z.number().int().default(180),
 	expiryWarningDays: z.number().int().default(90),
 	// UI preferences
-	language: z.string().default("en"),
+	language: z.enum(["en", "de"]).default("en"),
 	stockCalculationMode: z.enum(["automatic", "manual"]).default("automatic"),
 	shareMedicationOverview: z.boolean().default(false),
+	upcomingTodayOnly: z.boolean().default(false),
+	shareScheduleTodayOnly: z.boolean().default(false),
+	swapDashboardMainSections: z.boolean().default(false),
 });
 
 const importSettingsSchema = settingsSchemaBase
@@ -158,8 +193,10 @@ const importSettingsSchema = settingsSchemaBase
 	.optional();
 
 const importDataSchema = z.object({
-	version: z.string(),
-	exportedAt: z.string(),
+	version: z.string().refine(isSupportedExportVersion, {
+		message: `Unsupported export format version. Supported up to ${EXPORT_VERSION}.`,
+	}),
+	exportedAt: dateLikeStringSchema,
 	includeSensitiveData: z.boolean().default(false),
 	medications: z.array(medicationExportSchema).default([]),
 	doseHistory: z.array(doseHistorySchema).default([]),
@@ -204,7 +241,7 @@ const importBodyOpenApiSchema = {
 		shareLinks: { type: "array", items: { type: "object", additionalProperties: true } },
 	},
 	example: {
-		version: "1.6",
+		version: "1.7",
 		exportedAt: "2026-03-11T10:15:00.000Z",
 		includeSensitiveData: true,
 		medications: [
@@ -339,9 +376,31 @@ function parseIntakesForExport(row: typeof medications.$inferSelect): Array<{
 }
 
 // Read image file and convert to base64 data URL
+const imageFilenamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/;
+
+function resolveStoredImagePath(imageUrl: string): string | null {
+	if (
+		!imageFilenamePattern.test(imageUrl) ||
+		imageUrl.includes("/") ||
+		imageUrl.includes("\\") ||
+		imageUrl.includes("..")
+	) {
+		return null;
+	}
+
+	const imagePath = resolve(IMAGES_DIR, imageUrl);
+	const relativePath = relative(IMAGES_DIR, imagePath);
+	if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+		return null;
+	}
+
+	return imagePath;
+}
+
 function imageToBase64(imageUrl: string | null): string | null {
 	if (!imageUrl) return null;
-	const imagePath = resolve(IMAGES_DIR, imageUrl);
+	const imagePath = resolveStoredImagePath(imageUrl);
+	if (!imagePath) return null;
 	if (!existsSync(imagePath)) return null;
 
 	try {
@@ -361,41 +420,55 @@ function imageToBase64(imageUrl: string | null): string | null {
 	}
 }
 
+class ImportValidationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "ImportValidationError";
+	}
+}
+
 // Save base64 image to file and return filename
-function base64ToImage(base64: string, medicationId: number): string | null {
-	if (!base64.startsWith("data:")) return null;
+async function base64ToImage(base64: string, medicationId: number): Promise<string | null> {
+	if (!base64.startsWith("data:")) {
+		throw new ImportValidationError("Invalid image data");
+	}
 
 	try {
 		// Parse data URL: "data:image/jpeg;base64,/9j/4AAQ..."
-		const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
-		if (!matches) return null;
+		const matches = base64.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/);
+		if (!matches) throw new ImportValidationError("Invalid image data");
 
-		const ext = matches[1] === "jpeg" ? "jpg" : matches[1];
+		const mimeType = matches[1].toLowerCase();
+		if (!ALLOWED_IMAGE_MIME_TYPES.includes(mimeType)) {
+			throw new ImportValidationError("Invalid image type");
+		}
+
 		const data = matches[2];
 		const buffer = Buffer.from(data, "base64");
+		if (buffer.length === 0 || buffer.length > MAX_IMAGE_UPLOAD_BYTES) {
+			throw new ImportValidationError("Invalid image size");
+		}
 
-		const filename = `med-${medicationId}-${Date.now()}.${ext}`;
-		const filepath = resolve(IMAGES_DIR, filename);
-
-		// Ensure images directory exists
 		if (!existsSync(IMAGES_DIR)) {
 			mkdirSync(IMAGES_DIR, { recursive: true });
 		}
 
-		writeFileSync(filepath, buffer);
+		const { filename } = await writeOptimizedImageSet(IMAGES_DIR, `med-${medicationId}`, buffer);
 		return filename;
-	} catch {
-		return null;
+	} catch (error) {
+		if (error instanceof ImportValidationError) {
+			throw error;
+		}
+		throw new ImportValidationError("Invalid image data");
 	}
 }
 
-function removeFileIfPresent(filePath: string): string | null {
-	if (!existsSync(filePath)) {
-		return null;
-	}
-
+function removeImageSetIfPresent(imageFilename: string): string | null {
 	try {
-		unlinkSync(filePath);
+		if (!resolveStoredImagePath(imageFilename)) {
+			return "Unsafe image filename";
+		}
+		removeImageFiles(IMAGES_DIR, imageFilename);
 		return null;
 	} catch (error) {
 		return error instanceof Error ? error.message : "Unknown file removal error";
@@ -445,6 +518,55 @@ function buildImportPreview(
 			containsSensitiveData: importData.includeSensitiveData,
 		},
 	};
+}
+
+function collectImportValidationIssues(importData: z.infer<typeof importDataSchema>): string[] {
+	const issues: string[] = [];
+	const medicationsByRef = new Map<string, z.infer<typeof medicationExportSchema>>();
+	const duplicateMedicationRefs = new Set<string>();
+
+	for (const med of importData.medications) {
+		if (medicationsByRef.has(med._exportId)) {
+			duplicateMedicationRefs.add(med._exportId);
+			continue;
+		}
+		medicationsByRef.set(med._exportId, med);
+	}
+
+	for (const exportId of duplicateMedicationRefs) {
+		issues.push(`Duplicate medication reference: ${exportId}`);
+	}
+
+	const doseKeys = new Set<string>();
+	for (const dose of importData.doseHistory) {
+		const medication = medicationsByRef.get(dose.medicationRef);
+		if (!medication) {
+			issues.push(`Dose history references unknown medication: ${dose.medicationRef}`);
+			continue;
+		}
+		if (dose.scheduleIndex >= medication.schedules.length) {
+			issues.push(`Dose history references unknown schedule index ${dose.scheduleIndex} for ${dose.medicationRef}`);
+		}
+
+		const doseKey = [
+			dose.medicationRef,
+			dose.scheduleIndex,
+			new Date(dose.scheduledTime).getTime(),
+			dose.takenByPerson ?? "",
+		].join(":");
+		if (doseKeys.has(doseKey)) {
+			issues.push(`Duplicate dose history entry for ${dose.medicationRef}`);
+		}
+		doseKeys.add(doseKey);
+	}
+
+	for (const refill of importData.refillHistory) {
+		if (!medicationsByRef.has(refill.medicationRef)) {
+			issues.push(`Refill history references unknown medication: ${refill.medicationRef}`);
+		}
+	}
+
+	return issues;
 }
 
 // Parse dose ID to extract medication ID and timestamp
@@ -608,7 +730,8 @@ export async function exportRoutes(app: FastifyInstance) {
 						scheduledTime: scheduledTimeIso,
 						takenAt: takenAtIso,
 						markedBy: dose.markedBy,
-						takenSource: dose.takenSource === "automatic" ? "automatic" : "manual",
+						takenSource:
+							dose.takenSource === "automatic" || dose.takenSource === "notification" ? dose.takenSource : "manual",
 						dismissed: dose.dismissed ?? false,
 						takenByPerson: parsed.person,
 						...journalPayloadsByDoseTrackingId.get(dose.id),
@@ -621,8 +744,9 @@ export async function exportRoutes(app: FastifyInstance) {
 
 			const exportSettings = settings
 				? {
+						timezone: settings.timezone ?? "",
 						emailEnabled: settings.emailEnabled,
-						notificationEmail: settings.notificationEmail,
+						notificationEmail: includeSensitive ? settings.notificationEmail : undefined,
 						emailStockReminders: settings.emailStockReminders,
 						emailIntakeReminders: settings.emailIntakeReminders,
 						emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
@@ -645,6 +769,9 @@ export async function exportRoutes(app: FastifyInstance) {
 						language: settings.language,
 						stockCalculationMode: settings.stockCalculationMode,
 						shareMedicationOverview: settings.shareMedicationOverview ?? false,
+						upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
+						shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
+						swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
 					}
 				: undefined;
 
@@ -761,7 +888,7 @@ export async function exportRoutes(app: FastifyInstance) {
 				body: importBodyOpenApiSchema,
 				response: {
 					200: importPreviewResponseSchema,
-					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					400: validationErrorSchema,
 					401: genericErrorSchema,
 				},
 			},
@@ -774,6 +901,14 @@ export async function exportRoutes(app: FastifyInstance) {
 				return reply.status(400).send({
 					error: "Invalid import data format",
 					details: parsed.error.format(),
+				});
+			}
+
+			const validationIssues = collectImportValidationIssues(parsed.data);
+			if (validationIssues.length > 0) {
+				return reply.status(400).send({
+					error: "Invalid import data format",
+					details: { _errors: validationIssues.slice(0, 10) },
 				});
 			}
 
@@ -829,7 +964,7 @@ export async function exportRoutes(app: FastifyInstance) {
 							},
 						},
 					},
-					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					400: validationErrorSchema,
 					401: genericErrorSchema,
 					500: genericErrorSchema,
 				},
@@ -848,13 +983,27 @@ export async function exportRoutes(app: FastifyInstance) {
 			}
 
 			const importData = parsed.data;
+			const validationIssues = collectImportValidationIssues(importData);
+			if (validationIssues.length > 0) {
+				return reply.status(400).send({
+					error: "Invalid import data format",
+					details: { _errors: validationIssues.slice(0, 10) },
+				});
+			}
 
 			// Existing image files are removed only after the DB import commits.
 			const existingMeds = await db.select().from(medications).where(eq(medications.userId, userId));
-			const oldImagePaths = existingMeds
-				.map((med) => (med.imageUrl ? resolve(IMAGES_DIR, med.imageUrl) : null))
-				.filter((path): path is string => path !== null);
-			const newImagePaths: string[] = [];
+			const oldImageFilenames = existingMeds
+				.map((med) => med.imageUrl)
+				.filter((filename): filename is string => typeof filename === "string" && filename.length > 0);
+			const newImageFilenames: string[] = [];
+			const imported = {
+				medications: 0,
+				doseHistory: 0,
+				refillHistory: 0,
+				settings: 0,
+				shareLinks: 0,
+			};
 
 			try {
 				await db.transaction(async (tx) => {
@@ -938,11 +1087,12 @@ export async function exportRoutes(app: FastifyInstance) {
 							.returning();
 
 						exportIdToNewId.set(med._exportId, inserted.id);
+						imported.medications += 1;
 
 						if (med.image) {
-							const imageUrl = base64ToImage(med.image, inserted.id);
+							const imageUrl = await base64ToImage(med.image, inserted.id);
 							if (imageUrl) {
-								newImagePaths.push(resolve(IMAGES_DIR, imageUrl));
+								newImageFilenames.push(imageUrl);
 								await tx.update(medications).set({ imageUrl }).where(eq(medications.id, inserted.id));
 							}
 						}
@@ -967,6 +1117,7 @@ export async function exportRoutes(app: FastifyInstance) {
 								dismissed: dose.dismissed ?? false,
 							})
 							.returning({ id: doseTracking.id });
+						imported.doseHistory += 1;
 
 						await restoreIntakeJournalForImportedDose({
 							userId,
@@ -983,6 +1134,7 @@ export async function exportRoutes(app: FastifyInstance) {
 					if (importData.settings) {
 						await tx.insert(userSettings).values({
 							userId,
+							timezone: importData.settings.timezone ?? "",
 							emailEnabled: importData.settings.emailEnabled ?? false,
 							notificationEmail: importData.settings.notificationEmail || null,
 							emailStockReminders: importData.settings.emailStockReminders ?? true,
@@ -1006,7 +1158,11 @@ export async function exportRoutes(app: FastifyInstance) {
 							language: importData.settings.language ?? "en",
 							stockCalculationMode: importData.settings.stockCalculationMode ?? "automatic",
 							shareMedicationOverview: importData.settings.shareMedicationOverview ?? false,
+							upcomingTodayOnly: importData.settings.upcomingTodayOnly ?? false,
+							shareScheduleTodayOnly: importData.settings.shareScheduleTodayOnly ?? false,
+							swapDashboardMainSections: importData.settings.swapDashboardMainSections ?? false,
 						});
+						imported.settings = 1;
 					}
 
 					for (const share of importData.shareLinks) {
@@ -1019,6 +1175,7 @@ export async function exportRoutes(app: FastifyInstance) {
 							allowMarkTaken: share.allowMarkTaken ?? true,
 							expiresAt: share.expiresAt ? new Date(share.expiresAt) : null,
 						});
+						imported.shareLinks += 1;
 					}
 
 					for (const refill of importData.refillHistory) {
@@ -1033,36 +1190,38 @@ export async function exportRoutes(app: FastifyInstance) {
 							usedPrescription: refill.usedPrescription ?? false,
 							refillDate: new Date(refill.refillDate),
 						});
+						imported.refillHistory += 1;
 					}
 				});
 			} catch (error) {
-				for (const imagePath of newImagePaths) {
-					const removalError = removeFileIfPresent(imagePath);
+				for (const imageFilename of newImageFilenames) {
+					const removalError = removeImageSetIfPresent(imageFilename);
 					if (removalError) {
-						request.log.warn(`[Import] Failed to remove rolled-back image path=${imagePath}: ${removalError}`);
+						request.log.warn(`[Import] Failed to remove rolled-back image filename=${imageFilename}: ${removalError}`);
 					}
+				}
+
+				if (error instanceof ImportValidationError) {
+					return reply.status(400).send({
+						error: "Invalid import data format",
+						details: { _errors: [error.message] },
+					});
 				}
 
 				request.log.error({ err: error }, "[Import] Failed to import data");
 				return reply.status(500).send({ error: "Import failed" });
 			}
 
-			for (const imagePath of oldImagePaths) {
-				const removalError = removeFileIfPresent(imagePath);
+			for (const imageFilename of oldImageFilenames) {
+				const removalError = removeImageSetIfPresent(imageFilename);
 				if (removalError) {
-					request.log.warn(`[Import] Failed to remove replaced image path=${imagePath}: ${removalError}`);
+					request.log.warn(`[Import] Failed to remove replaced image filename=${imageFilename}: ${removalError}`);
 				}
 			}
 
 			return {
 				success: true,
-				imported: {
-					medications: importData.medications.length,
-					doseHistory: importData.doseHistory.length,
-					refillHistory: importData.refillHistory.length,
-					settings: importData.settings ? 1 : 0,
-					shareLinks: importData.shareLinks.length,
-				},
+				imported,
 			};
 		}
 	);

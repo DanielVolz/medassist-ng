@@ -513,21 +513,70 @@ export async function createShareTokenViaAPI(
  * Update user settings via the backend API.
  */
 export async function updateSettingsViaAPI(settings: Record<string, unknown>): Promise<void> {
-	const token = await ensureAuthCookie();
+	let token = await ensureAuthCookie();
 	const apiBase = await getRuntimeApiBase();
 	for (let attempt = 0; attempt < 3; attempt++) {
+		const currentRes = await fetch(`${apiBase}/settings`, {
+			headers: token ? { Cookie: `access_token=${token}` } : {},
+		});
+		if (currentRes.status === 401) {
+			token = await refreshAuthCookieViaLogin();
+			if (token) continue;
+		}
+		if (currentRes.status === 429) {
+			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			continue;
+		}
+		const current = currentRes.ok ? ((await currentRes.json()) as Record<string, unknown>) : {};
+		const payload = {
+			timezone: "",
+			emailEnabled: false,
+			notificationEmail: "",
+			reminderDaysBefore: 7,
+			repeatDailyReminders: false,
+			lowStockDays: 30,
+			normalStockDays: 90,
+			highStockDays: 180,
+			shoutrrrEnabled: false,
+			shoutrrrUrl: "",
+			emailStockReminders: true,
+			emailIntakeReminders: true,
+			emailPrescriptionReminders: true,
+			shoutrrrStockReminders: true,
+			shoutrrrIntakeReminders: true,
+			shoutrrrPrescriptionReminders: true,
+			skipRemindersForTakenDoses: false,
+			repeatRemindersEnabled: false,
+			reminderRepeatIntervalMinutes: 30,
+			maxNaggingReminders: 5,
+			language: "en",
+			stockCalculationMode: "automatic",
+			shareMedicationOverview: false,
+			upcomingTodayOnly: false,
+			shareScheduleTodayOnly: false,
+			swapDashboardMainSections: false,
+			...current,
+			...settings,
+		};
 		const res = await fetch(`${apiBase}/settings`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
 				...(token ? { Cookie: `access_token=${token}` } : {}),
 			},
-			body: JSON.stringify(settings),
+			body: JSON.stringify(payload),
 		});
+		if (res.status === 401) {
+			token = await refreshAuthCookieViaLogin();
+			if (token) continue;
+		}
 		if (res.status === 429) {
 			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
 			continue;
 		}
 		if (res.ok) return;
+		const text = await res.text();
+		throw new Error(`Failed to update settings: ${res.status} ${text}`);
 	}
+	throw new Error("Failed to update settings after 3 retries (rate limited)");
 }

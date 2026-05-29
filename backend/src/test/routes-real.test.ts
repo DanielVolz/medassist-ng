@@ -767,16 +767,19 @@ describe("Real route coverage: settings/export/report", () => {
 	it("GET /export includes medications, settings, doseHistory and refillHistory", async () => {
 		const medId = await seedMedication("Export Med");
 		await testClient.execute({
-			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, marked_by) VALUES (?, ?, ?, ?)",
-			args: [1, `${medId}-0-1700000000000-Daniel`, 1700000000, "Daniel"],
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, marked_by, taken_source) VALUES (?, ?, ?, ?, ?)",
+			args: [1, `${medId}-0-1700000000000-Daniel`, 1700000000, "Daniel", "notification"],
 		});
 		await testClient.execute({
 			sql: "INSERT INTO refill_history (medication_id, user_id, packs_added, loose_pills_added, used_prescription, refill_date) VALUES (?, ?, ?, ?, ?, ?)",
 			args: [medId, 1, 1, 3, 0, 1700000000],
 		});
 		await testClient.execute({
-			sql: "INSERT INTO user_settings (user_id, email_enabled, notification_email, share_stock_status, language) VALUES (?, ?, ?, ?, ?)",
-			args: [1, 1, "x@example.com", 1, "de"],
+			sql: `INSERT INTO user_settings (
+					user_id, timezone, email_enabled, notification_email, share_stock_status, language,
+					upcoming_today_only, share_schedule_today_only, swap_dashboard_main_sections
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			args: [1, "Europe/Berlin", 1, "x@example.com", 1, "de", 1, 1, 1],
 		});
 		await testClient.execute({
 			sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, ?)",
@@ -791,11 +794,45 @@ describe("Real route coverage: settings/export/report", () => {
 		const body = response.json();
 		expect(body.medications).toHaveLength(1);
 		expect(body.doseHistory).toHaveLength(1);
+		expect(body.doseHistory[0].takenSource).toBe("notification");
 		expect(body.refillHistory).toHaveLength(1);
 		expect(body.refillHistory[0].quantityAdded).toBe(23);
 		expect(body.settings.language).toBe("de");
+		expect(body.settings.timezone).toBe("Europe/Berlin");
+		expect(body.settings.upcomingTodayOnly).toBe(true);
+		expect(body.settings.shareScheduleTodayOnly).toBe(true);
+		expect(body.settings.swapDashboardMainSections).toBe(true);
 		expect(body.settings.shareStockStatus).toBeUndefined();
 		expect(body.shareLinks).toHaveLength(1);
+	});
+
+	it("GET /export hides notification destinations unless sensitive export is requested", async () => {
+		await testClient.execute({
+			sql: `INSERT INTO user_settings (
+					user_id, email_enabled, notification_email, shoutrrr_enabled, shoutrrr_url
+				) VALUES (?, ?, ?, ?, ?)`,
+			args: [1, 1, "private@example.com", 1, "ntfy://user:secret@ntfy.sh/private"],
+		});
+
+		const nonSensitive = await app.inject({
+			method: "GET",
+			url: "/export?includeSensitive=false&includeImages=false",
+		});
+		expect(nonSensitive.statusCode).toBe(200);
+		expect(nonSensitive.json().includeSensitiveData).toBe(false);
+		expect(nonSensitive.json().settings.notificationEmail).toBeUndefined();
+		expect(nonSensitive.json().settings.shoutrrrEnabled).toBeUndefined();
+		expect(nonSensitive.json().settings.shoutrrrUrl).toBeUndefined();
+
+		const sensitive = await app.inject({
+			method: "GET",
+			url: "/export?includeSensitive=true&includeImages=false",
+		});
+		expect(sensitive.statusCode).toBe(200);
+		expect(sensitive.json().includeSensitiveData).toBe(true);
+		expect(sensitive.json().settings.notificationEmail).toBe("private@example.com");
+		expect(sensitive.json().settings.shoutrrrEnabled).toBe(true);
+		expect(sensitive.json().settings.shoutrrrUrl).toBe("ntfy://user:secret@ntfy.sh/private");
 	});
 
 	it("POST /import validates payload and imports minimal valid structure", async () => {
@@ -855,6 +892,7 @@ describe("Real route coverage: settings/export/report", () => {
 				},
 			],
 			settings: {
+				timezone: "Europe/Berlin",
 				emailEnabled: false,
 				notificationEmail: null,
 				emailStockReminders: true,
@@ -877,6 +915,9 @@ describe("Real route coverage: settings/export/report", () => {
 				expiryWarningDays: 30,
 				language: "en",
 				stockCalculationMode: "automatic",
+				upcomingTodayOnly: true,
+				shareScheduleTodayOnly: true,
+				swapDashboardMainSections: true,
 				shareStockStatus: true,
 			},
 			shareLinks: [],
@@ -904,9 +945,79 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(refillRows.rows[0].loose_pills_added).toBe(4);
 
 		const importedSettings = await testClient.execute({
-			sql: "SELECT share_medication_overview, share_stock_status FROM user_settings WHERE user_id = 1",
+			sql: `SELECT timezone, share_medication_overview, share_stock_status, upcoming_today_only,
+					share_schedule_today_only, swap_dashboard_main_sections
+					FROM user_settings WHERE user_id = 1`,
 		});
+		expect(importedSettings.rows[0].timezone).toBe("Europe/Berlin");
 		expect(importedSettings.rows[0].share_medication_overview).toBe(0);
 		expect(importedSettings.rows[0].share_stock_status).toBe(1);
+		expect(importedSettings.rows[0].upcoming_today_only).toBe(1);
+		expect(importedSettings.rows[0].share_schedule_today_only).toBe(1);
+		expect(importedSettings.rows[0].swap_dashboard_main_sections).toBe(1);
+	});
+
+	it("POST /import rejects unsupported versions and broken references", async () => {
+		const futureVersion = await app.inject({
+			method: "POST",
+			url: "/import",
+			payload: {
+				version: "2.0",
+				exportedAt: new Date().toISOString(),
+				medications: [],
+				doseHistory: [],
+				refillHistory: [],
+				shareLinks: [],
+			},
+		});
+		expect(futureVersion.statusCode).toBe(400);
+		expect(futureVersion.json().error).toBe("Invalid import data format");
+
+		const missingRef = await app.inject({
+			method: "POST",
+			url: "/import",
+			payload: {
+				version: "1.7",
+				exportedAt: new Date().toISOString(),
+				medications: [],
+				doseHistory: [
+					{
+						medicationRef: "missing-med",
+						scheduleIndex: 0,
+						scheduledTime: "2026-01-02T08:00:00.000Z",
+						takenAt: "2026-01-02T08:05:00.000Z",
+					},
+				],
+				refillHistory: [],
+				shareLinks: [],
+			},
+		});
+		expect(missingRef.statusCode).toBe(400);
+		expect(missingRef.json().details._errors[0]).toContain("unknown medication");
+	});
+
+	it("POST /import rejects invalid embedded images", async () => {
+		const response = await app.inject({
+			method: "POST",
+			url: "/import",
+			payload: {
+				version: "1.7",
+				exportedAt: new Date().toISOString(),
+				medications: [
+					{
+						_exportId: "med-1",
+						name: "Bad Image Med",
+						inventory: {},
+						schedules: [],
+						image: "data:image/png;base64,bm90LWltYWdl",
+					},
+				],
+				doseHistory: [],
+				refillHistory: [],
+				shareLinks: [],
+			},
+		});
+		expect(response.statusCode).toBe(400);
+		expect(response.json()).toMatchObject({ error: "Invalid import data format" });
 	});
 });

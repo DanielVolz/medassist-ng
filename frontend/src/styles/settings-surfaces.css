@@ -1290,8 +1290,9 @@
 	border: 1px solid var(--border-primary);
 }
 
-.import-review-modal {
-	max-width: 560px;
+.modal-content.confirm-modal.import-review-modal {
+	width: min(100%, 720px);
+	max-width: 720px;
 }
 
 .import-review-modal h2 {
@@ -1312,6 +1313,8 @@
 
 .import-review-summary .action-card {
 	align-items: stretch;
+	flex-direction: column;
+	gap: 12px;
 }
 
 .import-review-meta {

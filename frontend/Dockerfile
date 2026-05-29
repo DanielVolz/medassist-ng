@@ -17,14 +17,22 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
+COPY shared/package.json shared/package-lock.json* ./shared/
+RUN cd shared && npm ci --ignore-scripts
+
+COPY shared/tsconfig.json ./shared/
+COPY shared/src ./shared/src
+RUN cd shared && npm run build
+
 # Install dependencies first (better layer caching)
-COPY package.json package-lock.json* ./
+COPY frontend/package.json frontend/package-lock.json* ./frontend/
+WORKDIR /app/frontend
 RUN npm ci --ignore-scripts
 
 # Copy source and build
-COPY tsconfig.json tsconfig.node.json vite.config.ts index.html ./
-COPY src ./src
-COPY public ./public
+COPY frontend/tsconfig.json frontend/tsconfig.node.json frontend/vite.config.ts frontend/index.html ./
+COPY frontend/src ./src
+COPY frontend/public ./public
 RUN npm run build
 
 # -----------------------------------------------------------------------------
@@ -39,13 +47,13 @@ RUN sed -i 's|include /etc/nginx/conf.d/\*.conf;|include /tmp/default.conf;|' /e
 
 # Copy custom nginx config as template for envsubst processing
 # nginx-unprivileged automatically substitutes env vars in .template files
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 
 # Copy entrypoint wrapper (translates LOG_LEVEL → nginx access log control)
-COPY --chmod=755 nginx-entrypoint.sh /nginx-entrypoint.sh
+COPY --chmod=755 frontend/nginx-entrypoint.sh /nginx-entrypoint.sh
 
 # Copy built static files with correct ownership (nginx user = uid 101)
-COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html
+COPY --from=builder --chown=101:101 /app/frontend/dist /usr/share/nginx/html
 
 # nginx-unprivileged listens on 8080 by default
 EXPOSE 8080

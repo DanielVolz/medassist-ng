@@ -9,14 +9,10 @@ const { testClient, testDb } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
 	const { drizzle } = require("drizzle-orm/libsql");
 	const client = createClient({ url: ":memory:" });
-	const db = drizzle(client);
-	return { testClient: client, testDb: db };
+	return { testClient: client, testDb: drizzle(client) };
 });
 
-vi.mock("../db/client.js", () => ({
-	db: testDb,
-	migrationsReady: Promise.resolve(),
-}));
+vi.mock("../db/client.js", () => ({ db: testDb, migrationsReady: Promise.resolve() }));
 
 vi.mock("../plugins/env.js", () => ({
 	env: {

@@ -18,6 +18,7 @@ import { mergePersonTags, personTagsMatch } from "../utils/person-tags";
 import { useAuth } from "./Auth";
 import { DateTimeInput } from "./DateTimeInput";
 import { MedicationAvatar } from "./MedicationAvatar";
+import { ModalFrame } from "./ModalFrame";
 
 type ReportFormat = "txt" | "md" | "pdf";
 
@@ -219,185 +220,164 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 	if (!isOpen) return null;
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key !== "Escape") e.stopPropagation();
-			}}
-		>
-			<div
-				className="modal-content report-modal"
-				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => {
-					if (e.key !== "Escape") e.stopPropagation();
-				}}
-			>
-				<button className="modal-close" onClick={onClose}>
-					×
-				</button>
-				<h2 className="report-modal-title">{t("report.title")}</h2>
-				<p className="report-modal-desc">{t("report.description")}</p>
+		<ModalFrame contentClassName="report-modal" onClose={onClose}>
+			<h2 className="report-modal-title">{t("report.title")}</h2>
+			<p className="report-modal-desc">{t("report.description")}</p>
 
-				<div className="report-range">
-					<h4>{t("report.dateRange")}</h4>
-					<div className="report-range-grid">
-						<div className="report-range-field">
-							<span>{t("report.from")}</span>
-							<DateTimeInput
-								step="60"
-								value={dateRange.startDate}
-								onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))}
-							/>
-						</div>
-						<div className="report-range-field">
-							<span>{t("report.until")}</span>
-							<DateTimeInput
-								step="60"
-								value={dateRange.endDate}
-								onChange={(e) => setDateRange((prev) => ({ ...prev, endDate: e.target.value }))}
-							/>
-						</div>
+			<div className="report-range">
+				<h4>{t("report.dateRange")}</h4>
+				<div className="report-range-grid">
+					<div className="report-range-field">
+						<span>{t("report.from")}</span>
+						<DateTimeInput
+							step="60"
+							value={dateRange.startDate}
+							onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))}
+						/>
+					</div>
+					<div className="report-range-field">
+						<span>{t("report.until")}</span>
+						<DateTimeInput
+							step="60"
+							value={dateRange.endDate}
+							onChange={(e) => setDateRange((prev) => ({ ...prev, endDate: e.target.value }))}
+						/>
 					</div>
 				</div>
+			</div>
 
-				{/* Person filter */}
-				{allPeople.length > 1 && (
-					<div className="report-person-filter">
-						<h4>{t("report.filterByPerson")}</h4>
-						<div className="report-format-options">
-							<label className={`report-format-option${takenByFilter.size === 0 ? " selected" : ""}`}>
-								<input type="checkbox" checked={takenByFilter.size === 0} onChange={selectAllPeople} />
-								<span>{t("report.allPeople")}</span>
+			{/* Person filter */}
+			{allPeople.length > 1 && (
+				<div className="report-person-filter">
+					<h4>{t("report.filterByPerson")}</h4>
+					<div className="report-format-options">
+						<label className={`report-format-option${takenByFilter.size === 0 ? " selected" : ""}`}>
+							<input type="checkbox" checked={takenByFilter.size === 0} onChange={selectAllPeople} />
+							<span>{t("report.allPeople")}</span>
+						</label>
+						{allPeople.map((person) => (
+							<label key={person} className={`report-format-option${takenByFilter.has(person) ? " selected" : ""}`}>
+								<input type="checkbox" checked={takenByFilter.has(person)} onChange={() => togglePerson(person)} />
+								<span>{person}</span>
 							</label>
-							{allPeople.map((person) => (
-								<label key={person} className={`report-format-option${takenByFilter.has(person) ? " selected" : ""}`}>
-									<input type="checkbox" checked={takenByFilter.has(person)} onChange={() => togglePerson(person)} />
-									<span>{person}</span>
+						))}
+					</div>
+				</div>
+			)}
+
+			{/* Medication selection */}
+			<div className="report-selection">
+				<div className="report-selection-header">
+					<button
+						type="button"
+						className="ghost small"
+						onClick={selectedIds.size === filteredMeds.length ? deselectAll : selectAll}
+					>
+						{selectedIds.size === filteredMeds.length ? t("report.deselectAll") : t("report.selectAll")}
+					</button>
+					<span className="report-selection-count">
+						{selectedIds.size} / {filteredMeds.length}
+					</span>
+				</div>
+
+				{activeMeds.length > 0 && (
+					<div className="report-group">
+						<h4 className="report-group-title">{t("report.activeMeds")}</h4>
+						<div className="report-med-list">
+							{activeMeds.map((med) => (
+								<label key={med.id} className="report-med-item">
+									<input type="checkbox" checked={selectedIds.has(med.id)} onChange={() => toggleMed(med.id)} />
+									<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
+									<span className="report-med-name">
+										{getMedDisplayName(med)}
+										{med.name && med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
+									</span>
 								</label>
 							))}
 						</div>
 					</div>
 				)}
 
-				{/* Medication selection */}
-				<div className="report-selection">
-					<div className="report-selection-header">
-						<button
-							type="button"
-							className="ghost small"
-							onClick={selectedIds.size === filteredMeds.length ? deselectAll : selectAll}
-						>
-							{selectedIds.size === filteredMeds.length ? t("report.deselectAll") : t("report.selectAll")}
-						</button>
-						<span className="report-selection-count">
-							{selectedIds.size} / {filteredMeds.length}
-						</span>
-					</div>
-
-					{activeMeds.length > 0 && (
-						<div className="report-group">
-							<h4 className="report-group-title">{t("report.activeMeds")}</h4>
-							<div className="report-med-list">
-								{activeMeds.map((med) => (
-									<label key={med.id} className="report-med-item">
-										<input type="checkbox" checked={selectedIds.has(med.id)} onChange={() => toggleMed(med.id)} />
-										<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
-										<span className="report-med-name">
-											{getMedDisplayName(med)}
-											{med.name && med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
-										</span>
-									</label>
-								))}
-							</div>
+				{obsoleteMeds.length > 0 && (
+					<div className="report-group">
+						<h4 className="report-group-title">{t("report.obsoleteMeds")}</h4>
+						<div className="report-med-list">
+							{obsoleteMeds.map((med) => (
+								<label key={med.id} className="report-med-item">
+									<input type="checkbox" checked={selectedIds.has(med.id)} onChange={() => toggleMed(med.id)} />
+									<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
+									<span className="report-med-name obsolete-name">
+										{getMedDisplayName(med)}
+										{med.name && med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
+									</span>
+								</label>
+							))}
 						</div>
-					)}
-
-					{obsoleteMeds.length > 0 && (
-						<div className="report-group">
-							<h4 className="report-group-title">{t("report.obsoleteMeds")}</h4>
-							<div className="report-med-list">
-								{obsoleteMeds.map((med) => (
-									<label key={med.id} className="report-med-item">
-										<input type="checkbox" checked={selectedIds.has(med.id)} onChange={() => toggleMed(med.id)} />
-										<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
-										<span className="report-med-name obsolete-name">
-											{getMedDisplayName(med)}
-											{med.name && med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
-										</span>
-									</label>
-								))}
-							</div>
-						</div>
-					)}
-				</div>
-
-				{/* Format selection */}
-				<div className="report-format">
-					<h4>{t("report.format")}</h4>
-					<div className="report-format-options">
-						<label className={`report-format-option${format === "pdf" ? " selected" : ""}`}>
-							<input
-								type="radio"
-								name="format"
-								value="pdf"
-								checked={format === "pdf"}
-								onChange={() => setFormat("pdf")}
-							/>
-							<span>{t("report.formatPdf")}</span>
-						</label>
-						<label className={`report-format-option${format === "txt" ? " selected" : ""}`}>
-							<input
-								type="radio"
-								name="format"
-								value="txt"
-								checked={format === "txt"}
-								onChange={() => setFormat("txt")}
-							/>
-							<span>{t("report.formatTxt")}</span>
-						</label>
-						<label className={`report-format-option${format === "md" ? " selected" : ""}`}>
-							<input type="radio" name="format" value="md" checked={format === "md"} onChange={() => setFormat("md")} />
-							<span>{t("report.formatMd")}</span>
-						</label>
-					</div>
-				</div>
-
-				{errorMessage && <p className="report-error">{errorMessage}</p>}
-
-				{preview && (
-					<div className="report-preview">
-						<div className="report-preview-header">
-							<h4>{t("report.preview")}</h4>
-							<button
-								type="button"
-								className="ghost small"
-								onClick={() => downloadFile(preview.content, preview.format)}
-							>
-								{t("report.download")}
-							</button>
-						</div>
-						<p className="report-preview-desc">{t("report.previewDescription")}</p>
-						<pre className="report-preview-content">{preview.content}</pre>
 					</div>
 				)}
+			</div>
 
-				{/* Actions */}
-				<div className="report-actions">
-					<button type="button" className="ghost" onClick={onClose}>
-						{t("common.close")}
-					</button>
-					<button
-						type="button"
-						className="primary"
-						onClick={handleGenerate}
-						disabled={selectedIds.size === 0 || generating}
-					>
-						{generateButtonLabel}
-					</button>
+			{/* Format selection */}
+			<div className="report-format">
+				<h4>{t("report.format")}</h4>
+				<div className="report-format-options">
+					<label className={`report-format-option${format === "pdf" ? " selected" : ""}`}>
+						<input
+							type="radio"
+							name="format"
+							value="pdf"
+							checked={format === "pdf"}
+							onChange={() => setFormat("pdf")}
+						/>
+						<span>{t("report.formatPdf")}</span>
+					</label>
+					<label className={`report-format-option${format === "txt" ? " selected" : ""}`}>
+						<input
+							type="radio"
+							name="format"
+							value="txt"
+							checked={format === "txt"}
+							onChange={() => setFormat("txt")}
+						/>
+						<span>{t("report.formatTxt")}</span>
+					</label>
+					<label className={`report-format-option${format === "md" ? " selected" : ""}`}>
+						<input type="radio" name="format" value="md" checked={format === "md"} onChange={() => setFormat("md")} />
+						<span>{t("report.formatMd")}</span>
+					</label>
 				</div>
 			</div>
-		</div>
+
+			{errorMessage && <p className="report-error">{errorMessage}</p>}
+
+			{preview && (
+				<div className="report-preview">
+					<div className="report-preview-header">
+						<h4>{t("report.preview")}</h4>
+						<button type="button" className="ghost small" onClick={() => downloadFile(preview.content, preview.format)}>
+							{t("report.download")}
+						</button>
+					</div>
+					<p className="report-preview-desc">{t("report.previewDescription")}</p>
+					<pre className="report-preview-content">{preview.content}</pre>
+				</div>
+			)}
+
+			{/* Actions */}
+			<div className="report-actions">
+				<button type="button" className="ghost" onClick={onClose}>
+					{t("common.close")}
+				</button>
+				<button
+					type="button"
+					className="primary"
+					onClick={handleGenerate}
+					disabled={selectedIds.size === 0 || generating}
+				>
+					{generateButtonLabel}
+				</button>
+			</div>
+		</ModalFrame>
 	);
 }
 

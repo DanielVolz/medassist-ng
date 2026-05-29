@@ -113,6 +113,40 @@ function isPublicNotificationActionPath(url: string | undefined): boolean {
 	return /(^|\/)(api\/)?notification-actions(\/|$)/.test(normalizedUrl);
 }
 
+async function registerAppRoutes(app: FastifyInstance, imagesDir: string): Promise<void> {
+	await app.register(imageRoutes, { imagesDir });
+	await app.register(healthRoutes);
+	await app.register(authRoutes);
+	await app.register(apiKeyRoutes);
+	await app.register(oidcRoutes);
+	await app.register(medicationRoutes);
+	await app.register(medicationEnrichmentRoutes);
+	await app.register(settingsRoutes);
+	await app.register(plannerRoutes);
+	await app.register(notificationActionRoutes);
+	await app.register(shareRoutes);
+	await app.register(doseRoutes);
+	await app.register(intakeJournalRoutes);
+	await app.register(exportRoutes);
+	await app.register(refillRoutes);
+	await app.register(reportRoutes);
+}
+
+function buildFastifyServiceLogger(app: FastifyInstance) {
+	return {
+		info: (msg: string) => app.log.info(msg),
+		debug: (msg: string) => app.log.debug(msg),
+		warn: (msg: string) => app.log.warn(msg),
+		error: (msg: string, error?: unknown) => {
+			if (error === undefined) {
+				app.log.error(msg);
+				return;
+			}
+			app.log.error({ err: error }, msg);
+		},
+	};
+}
+
 /** Create and configure Fastify app (without starting) */
 export async function createApp(options?: {
 	logLevel?: string;
@@ -202,23 +236,7 @@ export async function createApp(options?: {
 		authRequired: opts.docsAuthRequired,
 	});
 
-	// Register routes
-	await app.register(imageRoutes, { imagesDir: opts.imagesDir });
-	await app.register(healthRoutes);
-	await app.register(authRoutes);
-	await app.register(apiKeyRoutes);
-	await app.register(oidcRoutes);
-	await app.register(medicationRoutes);
-	await app.register(medicationEnrichmentRoutes);
-	await app.register(settingsRoutes);
-	await app.register(plannerRoutes);
-	await app.register(notificationActionRoutes);
-	await app.register(shareRoutes);
-	await app.register(doseRoutes);
-	await app.register(intakeJournalRoutes);
-	await app.register(exportRoutes);
-	await app.register(refillRoutes);
-	await app.register(reportRoutes);
+	await registerAppRoutes(app, opts.imagesDir);
 
 	return app;
 }
@@ -303,68 +321,17 @@ await registerApiDocs(app, {
 	enabled: env.OPENAPI_DOCS_ENABLED,
 	authRequired: env.DOCS_AUTH_REQUIRED,
 });
-await app.register(imageRoutes, { imagesDir });
-await app.register(healthRoutes);
-await app.register(authRoutes);
-await app.register(apiKeyRoutes);
-await app.register(oidcRoutes);
-await app.register(medicationRoutes);
-await app.register(medicationEnrichmentRoutes);
-await app.register(settingsRoutes);
-await app.register(plannerRoutes);
-await app.register(notificationActionRoutes);
-await app.register(shareRoutes);
-await app.register(doseRoutes);
-await app.register(intakeJournalRoutes);
-await app.register(exportRoutes);
-await app.register(refillRoutes);
-await app.register(reportRoutes);
+await registerAppRoutes(app, imagesDir);
 
 const start = async () => {
 	try {
 		await app.listen({ port: env.PORT, host: "0.0.0.0" });
 		app.log.info(`Server running on ${env.PORT}`);
 
-		// Start the automatic reminder scheduler
-		startReminderScheduler({
-			info: (msg) => app.log.info(msg),
-			debug: (msg) => app.log.debug(msg),
-			warn: (msg) => app.log.warn(msg),
-			error: (msg, error) => {
-				if (error === undefined) {
-					app.log.error(msg);
-					return;
-				}
-				app.log.error({ err: error }, msg);
-			},
-		});
-
-		startMedicationEnrichmentCatalogRefresh({
-			info: (msg: string) => app.log.info(msg),
-			debug: (msg: string) => app.log.debug(msg),
-			warn: (msg: string) => app.log.warn(msg),
-			error: (msg: string, error?: unknown) => {
-				if (error === undefined) {
-					app.log.error(msg);
-					return;
-				}
-				app.log.error({ err: error }, msg);
-			},
-		});
-
-		// Start the intake reminder scheduler (checks every minute)
-		startIntakeReminderScheduler({
-			info: (msg) => app.log.info(msg),
-			debug: (msg) => app.log.debug(msg),
-			warn: (msg) => app.log.warn(msg),
-			error: (msg, error) => {
-				if (error === undefined) {
-					app.log.error(msg);
-					return;
-				}
-				app.log.error({ err: error }, msg);
-			},
-		});
+		const serviceLogger = buildFastifyServiceLogger(app);
+		startReminderScheduler(serviceLogger);
+		startMedicationEnrichmentCatalogRefresh(serviceLogger);
+		startIntakeReminderScheduler(serviceLogger);
 	} catch (err) {
 		app.log.error(err);
 		process.exit(1);

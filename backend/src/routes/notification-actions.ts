@@ -13,6 +13,7 @@ import {
 import { getNotificationActionLabels } from "../services/notifications/action-renderer.js";
 import { sendPushNotification } from "../services/notifications/delivery.js";
 import { sanitizeNotificationUrl, validateNotificationTargetUrl } from "../services/settings-service.js";
+import { escapeHtml, toHtmlText } from "../utils/html.js";
 import { applyOpenApiRouteStandards, genericErrorSchema } from "../utils/openapi-route-standards.js";
 
 const querySchema = z.object({
@@ -35,19 +36,6 @@ function normalizeNotificationAction(action: string | null | undefined): Notific
 
 const publicNotificationActionMethods = "GET,HEAD,POST,OPTIONS";
 const reminderFooterSeparator = "\n\n---\n";
-
-function escapeHtml(value: string): string {
-	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;")
-		.replaceAll('"', "&quot;")
-		.replaceAll("'", "&#39;");
-}
-
-function toHtmlText(value: string): string {
-	return escapeHtml(value).replaceAll("\n", "<br />");
-}
 
 function getLanguage(language: string | null): Language {
 	return language === "de" ? "de" : "en";

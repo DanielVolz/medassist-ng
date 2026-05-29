@@ -14,6 +14,7 @@ import {
 } from "../services/intake-journal-service.js";
 import { getActiveShareToken, shareTokenRateLimitKey } from "../services/share-token-service.js";
 import type { AuthUser } from "../types/fastify.js";
+import { type ParsedDoseId, parseDoseId } from "../utils/dose-id.js";
 import { toLocalDateTimeOffsetString } from "../utils/local-date-time.js";
 import {
 	applyOpenApiRouteStandards,
@@ -52,8 +53,6 @@ const protectedEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>
 	{ bearerAuth: [] },
 	{ cookieAuth: [] },
 ];
-
-const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
 
 const publicShareReadRateLimit = {
 	max: 60,
@@ -163,34 +162,6 @@ async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<
 		throw new Error("AUTH_REQUIRED");
 	}
 	return authUser.id;
-}
-
-type ParsedDoseId = {
-	medicationId: number;
-	intakeIndex: number;
-	timestampMs: number;
-	personSuffix: string | null;
-};
-
-function parseDoseId(doseId: string): ParsedDoseId | null {
-	const match = doseIdPattern.exec(doseId);
-	if (!match) return null;
-
-	const medicationId = Number.parseInt(match[1], 10);
-	const intakeIndex = Number.parseInt(match[2], 10);
-	const timestampMs = Number.parseInt(match[3], 10);
-	const personSuffix = match[4] ? match[4].trim() : null;
-
-	if (Number.isNaN(medicationId) || Number.isNaN(intakeIndex) || Number.isNaN(timestampMs) || intakeIndex < 0) {
-		return null;
-	}
-
-	return {
-		medicationId,
-		intakeIndex,
-		timestampMs,
-		personSuffix,
-	};
 }
 
 type MedicationRow = typeof medications.$inferSelect;

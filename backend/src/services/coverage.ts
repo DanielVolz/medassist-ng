@@ -1,4 +1,5 @@
 import type { doseTracking, medications } from "../db/schema.js";
+import { parseDoseId } from "../utils/dose-id.js";
 import { isAmountBasedPackageType } from "../utils/package-profiles.js";
 import {
 	getAverageOccurrencesPerDay,
@@ -8,8 +9,6 @@ import {
 	normalizeIntakeUsageForStock,
 	parseIntakesJson,
 } from "../utils/scheduler-utils.js";
-
-const doseIdPattern = /^(\d+)-(\d+)-(\d+)(?:-(.+))?$/;
 
 type MedicationRow = typeof medications.$inferSelect;
 type DoseRow = typeof doseTracking.$inferSelect;
@@ -107,15 +106,11 @@ function computeTakenAmount(
 	for (const dose of doseRows) {
 		if (dose.dismissed) continue;
 
-		const match = doseIdPattern.exec(dose.doseId);
-		if (!match) continue;
+		const parsedDose = parseDoseId(dose.doseId);
+		if (!parsedDose) continue;
+		if (parsedDose.timestampMs < correctionDateOnlyMs) continue;
 
-		const intakeIndex = Number.parseInt(match[2], 10);
-		const doseDateOnlyMs = Number.parseInt(match[3], 10);
-		if (Number.isNaN(intakeIndex) || Number.isNaN(doseDateOnlyMs)) continue;
-		if (doseDateOnlyMs < correctionDateOnlyMs) continue;
-
-		const intake = intakes[intakeIndex];
+		const intake = intakes[parsedDose.intakeIndex];
 		if (!intake) continue;
 
 		takenAmount += normalizeIntakeUsageForStock(intake, medication.medicationForm, medication.packageType);
@@ -148,15 +143,12 @@ export function buildSharedMedicationOverview(options: {
 
 	const dosesByMedication = new Map<number, DoseRow[]>();
 	for (const dose of doses) {
-		const match = doseIdPattern.exec(dose.doseId);
-		if (!match) continue;
+		const parsedDose = parseDoseId(dose.doseId);
+		if (!parsedDose) continue;
 
-		const medicationId = Number.parseInt(match[1], 10);
-		if (Number.isNaN(medicationId)) continue;
-
-		const existing = dosesByMedication.get(medicationId) ?? [];
+		const existing = dosesByMedication.get(parsedDose.medicationId) ?? [];
 		existing.push(dose);
-		dosesByMedication.set(medicationId, existing);
+		dosesByMedication.set(parsedDose.medicationId, existing);
 	}
 
 	const todayDateOnly = getTodayInTimezone();

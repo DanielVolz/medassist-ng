@@ -9,6 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { runAlterMigrations } from "../db/db-utils.js";
 import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestSessionCookie, createTestUser } from "./setup.js";
 
 const { testClient, testDb, testDbPath, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -68,20 +69,6 @@ async function clearTables() {
 	await testClient.execute("DELETE FROM api_keys");
 	await testClient.execute("DELETE FROM refresh_tokens");
 	await testClient.execute("DELETE FROM users");
-}
-
-async function createUser(username: string) {
-	const result = await testClient.execute({
-		sql: "INSERT INTO users (username, auth_provider, is_active) VALUES (?, 'local', 1) RETURNING id",
-		args: [username],
-	});
-
-	return Number(result.rows[0].id);
-}
-
-async function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
-	const token = await app.jwt.sign({ sub: userId, username });
-	return `access_token=${token}`;
 }
 
 async function seedMedication(options: { userId: number; name: string; start?: string; takenBy?: string[] }) {
@@ -183,10 +170,10 @@ describe("Intake journal routes", () => {
 	});
 
 	it("keeps journal CRUD/history owner-scoped across route access", async () => {
-		const ownerId = await createUser("journal-owner");
-		const otherId = await createUser("journal-other");
-		const ownerCookie = await buildSessionCookie(app, ownerId, "journal-owner");
-		const otherCookie = await buildSessionCookie(app, otherId, "journal-other");
+		const ownerId = await createTestUser(testClient, { username: "journal-owner" });
+		const otherId = await createTestUser(testClient, { username: "journal-other" });
+		const ownerCookie = await buildTestSessionCookie(app, ownerId, "journal-owner");
+		const otherCookie = await buildTestSessionCookie(app, otherId, "journal-other");
 
 		const ownerStart = "2026-02-01T08:00:00.000Z";
 		const otherStart = "2026-02-02T09:00:00.000Z";
@@ -279,16 +266,21 @@ describe("Intake journal routes", () => {
 	});
 
 	it("preserves journal metadata through authenticated export and import", async () => {
-		const userId = await createUser("journal-roundtrip");
-		const sessionCookie = await buildSessionCookie(app, userId, "journal-roundtrip");
+		const userId = await createTestUser(testClient, { username: "journal-roundtrip" });
+		const sessionCookie = await buildTestSessionCookie(app, userId, "journal-roundtrip");
 		const start = "2026-02-03T07:30:00.000Z";
-		const medicationId = await seedMedication({ userId, name: "Roundtrip Journal Med", start });
-		const doseId = `${medicationId}-0-${new Date(start).getTime()}-Daniel`;
+		const medicationId = await seedMedication({
+			userId,
+			name: "Roundtrip Journal Med",
+			start,
+			takenBy: ["Daniel-Volz"],
+		});
+		const doseId = `${medicationId}-0-${new Date(start).getTime()}-Daniel-Volz`;
 		const doseTrackingId = await seedTrackedDose({
 			userId,
 			doseId,
 			takenAt: new Date("2026-02-03T07:33:00.000Z"),
-			markedBy: "Daniel",
+			markedBy: "Daniel-Volz",
 		});
 
 		const createdAt = new Date("2026-02-03T07:40:00.000Z");
@@ -319,6 +311,8 @@ describe("Intake journal routes", () => {
 		expect(exportBody.doseHistory).toHaveLength(1);
 		expect(exportBody.doseHistory[0]).toEqual(
 			expect.objectContaining({
+				scheduleIndex: 0,
+				takenByPerson: "Daniel-Volz",
 				journalNote: "Roundtrip journal note",
 				journalCreatedAt: createdAt.toISOString(),
 				journalUpdatedAt: updatedAt.toISOString(),
@@ -343,6 +337,8 @@ describe("Intake journal routes", () => {
 		expect(reExportResponse.statusCode).toBe(200);
 		expect(reExportResponse.json().doseHistory).toEqual([
 			expect.objectContaining({
+				scheduleIndex: 0,
+				takenByPerson: "Daniel-Volz",
 				journalNote: "Roundtrip journal note",
 				journalCreatedAt: createdAt.toISOString(),
 				journalUpdatedAt: updatedAt.toISOString(),
@@ -359,8 +355,8 @@ describe("Intake journal routes", () => {
 	});
 
 	it("preserves the shared journal-note permission through authenticated export and import", async () => {
-		const userId = await createUser("share-journal-roundtrip");
-		const sessionCookie = await buildSessionCookie(app, userId, "share-journal-roundtrip");
+		const userId = await createTestUser(testClient, { username: "share-journal-roundtrip" });
+		const sessionCookie = await buildTestSessionCookie(app, userId, "share-journal-roundtrip");
 
 		await testClient.execute({
 			sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, allow_journal_notes, expires_at)
@@ -411,8 +407,8 @@ describe("Intake journal routes", () => {
 	});
 
 	it("keeps existing data when image import fails inside the replacement transaction", async () => {
-		const userId = await createUser("import-rollback");
-		const sessionCookie = await buildSessionCookie(app, userId, "import-rollback");
+		const userId = await createTestUser(testClient, { username: "import-rollback" });
+		const sessionCookie = await buildTestSessionCookie(app, userId, "import-rollback");
 		await seedMedication({ userId, name: "Existing Rollback Med" });
 
 		const importResponse = await app.inject({

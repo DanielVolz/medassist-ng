@@ -24,27 +24,41 @@ vi.mock("../../context", () => ({
 	}),
 }));
 
+function mockAuthDisabled() {
+	(global.fetch as ReturnType<typeof vi.fn>)
+		.mockResolvedValueOnce({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					authEnabled: false,
+					formLoginEnabled: true,
+					hasUsers: false,
+					needsSetup: false,
+				}),
+		})
+		.mockResolvedValueOnce({
+			status: 401,
+			ok: false,
+		});
+}
+
+function renderHeader(route = "/dashboard") {
+	return render(
+		<MemoryRouter initialEntries={[route]}>
+			<AuthProvider>
+				<AppHeader onOpenProfile={vi.fn()} onOpenAbout={vi.fn()} />
+			</AuthProvider>
+		</MemoryRouter>
+	);
+}
+
 describe("AppHeader", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockNavigate.mockClear();
 		mockConfirmNavigation.mockResolvedValue(true);
 		// Set up default auth mock - auth disabled
-		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						authEnabled: false,
-						formLoginEnabled: true,
-						hasUsers: false,
-						needsSetup: false,
-					}),
-			})
-			.mockResolvedValueOnce({
-				status: 401,
-				ok: false,
-			});
+		mockAuthDisabled();
 	});
 
 	it("renders header with logo", async () => {
@@ -160,34 +174,11 @@ describe("AppHeader", () => {
 	});
 
 	it("shows medications page title on medications route", async () => {
-		const mockOnOpenProfile = vi.fn();
-		const mockOnOpenAbout = vi.fn();
-
 		// Reset mock for this test
 		vi.clearAllMocks();
-		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						authEnabled: false,
-						formLoginEnabled: true,
-						hasUsers: false,
-						needsSetup: false,
-					}),
-			})
-			.mockResolvedValueOnce({
-				status: 401,
-				ok: false,
-			});
+		mockAuthDisabled();
 
-		render(
-			<MemoryRouter initialEntries={["/medications"]}>
-				<AuthProvider>
-					<AppHeader onOpenProfile={mockOnOpenProfile} onOpenAbout={mockOnOpenAbout} />
-				</AuthProvider>
-			</MemoryRouter>
-		);
+		renderHeader("/medications");
 
 		await waitFor(() => {
 			expect(screen.getByText(/header\.eyebrow\.inventory/i)).toBeInTheDocument();
@@ -195,33 +186,10 @@ describe("AppHeader", () => {
 	});
 
 	it("shows planner page title on planner route", async () => {
-		const mockOnOpenProfile = vi.fn();
-		const mockOnOpenAbout = vi.fn();
-
 		vi.clearAllMocks();
-		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						authEnabled: false,
-						formLoginEnabled: true,
-						hasUsers: false,
-						needsSetup: false,
-					}),
-			})
-			.mockResolvedValueOnce({
-				status: 401,
-				ok: false,
-			});
+		mockAuthDisabled();
 
-		render(
-			<MemoryRouter initialEntries={["/planner"]}>
-				<AuthProvider>
-					<AppHeader onOpenProfile={mockOnOpenProfile} onOpenAbout={mockOnOpenAbout} />
-				</AuthProvider>
-			</MemoryRouter>
-		);
+		renderHeader("/planner");
 
 		await waitFor(() => {
 			expect(screen.getByText(/header\.eyebrow\.planner/i)).toBeInTheDocument();
@@ -229,33 +197,10 @@ describe("AppHeader", () => {
 	});
 
 	it("shows settings page title on settings route", async () => {
-		const mockOnOpenProfile = vi.fn();
-		const mockOnOpenAbout = vi.fn();
-
 		vi.clearAllMocks();
-		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						authEnabled: false,
-						formLoginEnabled: true,
-						hasUsers: false,
-						needsSetup: false,
-					}),
-			})
-			.mockResolvedValueOnce({
-				status: 401,
-				ok: false,
-			});
+		mockAuthDisabled();
 
-		render(
-			<MemoryRouter initialEntries={["/settings"]}>
-				<AuthProvider>
-					<AppHeader onOpenProfile={mockOnOpenProfile} onOpenAbout={mockOnOpenAbout} />
-				</AuthProvider>
-			</MemoryRouter>
-		);
+		renderHeader("/settings");
 
 		await waitFor(() => {
 			expect(screen.getByText(/header\.eyebrow\.settings/i)).toBeInTheDocument();

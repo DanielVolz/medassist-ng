@@ -4,22 +4,16 @@ import { useMedications } from "../../hooks/useMedications";
 import type { Medication } from "../../types";
 
 const loggerMock = vi.hoisted(() => ({
-	debug: vi.fn(),
+	warn: vi.fn(),
 	error: vi.fn(),
 	info: vi.fn(),
-	warn: vi.fn(),
+	debug: vi.fn(),
 }));
 const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
-vi.mock("../../components/Auth", () => ({
-	useAuth: () => ({
-		authFetch: authFetchMock,
-	}),
-}));
+vi.mock("../../components/Auth", () => ({ useAuth: () => ({ authFetch: authFetchMock }) }));
 
-vi.mock("../../utils/logger", () => ({
-	log: loggerMock,
-}));
+vi.mock("../../utils/logger", () => ({ log: loggerMock }));
 
 describe("useMedications", () => {
 	beforeEach(() => {

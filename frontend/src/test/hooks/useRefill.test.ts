@@ -17,6 +17,42 @@ function parseRequestBody(requestInit: RequestInit | undefined) {
 	return JSON.parse(requestInit?.body as string) as Record<string, unknown>;
 }
 
+function createRefillMedication(overrides: Partial<Medication> = {}): Medication {
+	return {
+		id: 1,
+		name: "Test Med",
+		packCount: 1,
+		blistersPerPack: 2,
+		pillsPerBlister: 10,
+		looseTablets: 5,
+		takenBy: [],
+		packageType: "blister",
+		blisters: [],
+		updatedAt: null,
+		...overrides,
+	};
+}
+
+async function submitZeroedStockCorrection(options: { id: number; med: Medication; coverage: Coverage }) {
+	(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+	const mockLoadMeds = vi.fn();
+	const { result } = renderHook(() => useRefill());
+
+	act(() => {
+		result.current.openEditStockModal(options.med, { all: [options.coverage] });
+		result.current.setEditStockFullBlisters(0);
+		result.current.setEditStockPartialBlisterPills(0);
+	});
+
+	await act(async () => {
+		await result.current.submitStockCorrection(options.id, options.med, mockLoadMeds);
+	});
+
+	const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+	return parseRequestBody(requestInit);
+}
+
 describe("useRefill", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -281,18 +317,7 @@ describe("useRefill", () => {
 	it("closes edit stock modal using history back", () => {
 		const { result } = renderHook(() => useRefill());
 
-		const mockMed: Medication = {
-			id: 1,
-			name: "Test Med",
-			packCount: 1,
-			blistersPerPack: 2,
-			pillsPerBlister: 10,
-			looseTablets: 5,
-			takenBy: [],
-			packageType: "blister",
-			blisters: [],
-			updatedAt: null,
-		};
+		const mockMed = createRefillMedication();
 
 		act(() => {
 			result.current.openEditStockModal(mockMed, { all: [] });
@@ -308,18 +333,7 @@ describe("useRefill", () => {
 	it("submits stock correction", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
-		const mockMed: Medication = {
-			id: 1,
-			name: "Test Med",
-			packCount: 1,
-			blistersPerPack: 2,
-			pillsPerBlister: 10,
-			looseTablets: 5,
-			takenBy: [],
-			packageType: "blister",
-			blisters: [],
-			updatedAt: null,
-		};
+		const mockMed = createRefillMedication();
 
 		const mockLoadMeds = vi.fn();
 		const { result } = renderHook(() => useRefill());
@@ -342,18 +356,7 @@ describe("useRefill", () => {
 	it("handles full blister conversion in stock correction", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
-		const mockMed: Medication = {
-			id: 1,
-			name: "Test Med",
-			packCount: 1,
-			blistersPerPack: 2,
-			pillsPerBlister: 10,
-			looseTablets: 5,
-			takenBy: [],
-			packageType: "blister",
-			blisters: [],
-			updatedAt: null,
-		};
+		const mockMed = createRefillMedication();
 
 		const mockLoadMeds = vi.fn();
 		const { result } = renderHook(() => useRefill());
@@ -442,23 +445,12 @@ describe("useRefill", () => {
 			updatedAt: null,
 		};
 
-		const mockLoadMeds = vi.fn();
-		const { result } = renderHook(() => useRefill());
-
-		act(() => {
-			result.current.openEditStockModal(med, {
-				all: [{ name, medsLeft: 25, daysLeft: 25 }] as Coverage[],
-			});
-			result.current.setEditStockFullBlisters(0);
-			result.current.setEditStockPartialBlisterPills(0);
+		const body = await submitZeroedStockCorrection({
+			id,
+			med,
+			coverage: { name, medsLeft: 25, daysLeft: 25 } as Coverage,
 		});
 
-		await act(async () => {
-			await result.current.submitStockCorrection(id, med, mockLoadMeds);
-		});
-
-		const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
-		const body = parseRequestBody(requestInit);
 		expect(body).toEqual({
 			stockAdjustment: 0,
 			packCount: 0,
@@ -515,25 +507,12 @@ describe("useRefill", () => {
 			coverage: 80,
 		},
 	])("resets $label stock correction payload to zero amount-base fields", async ({ id, med, coverage }) => {
-		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
-
-		const mockLoadMeds = vi.fn();
-		const { result } = renderHook(() => useRefill());
-
-		act(() => {
-			result.current.openEditStockModal(med, {
-				all: [{ name: med.name, medsLeft: coverage, daysLeft: coverage }] as Coverage[],
-			});
-			result.current.setEditStockFullBlisters(0);
-			result.current.setEditStockPartialBlisterPills(0);
+		const body = await submitZeroedStockCorrection({
+			id,
+			med,
+			coverage: { name: med.name, medsLeft: coverage, daysLeft: coverage } as Coverage,
 		});
 
-		await act(async () => {
-			await result.current.submitStockCorrection(id, med, mockLoadMeds);
-		});
-
-		const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
-		const body = parseRequestBody(requestInit);
 		expect(body).toEqual({
 			stockAdjustment: 0,
 			packCount: 0,

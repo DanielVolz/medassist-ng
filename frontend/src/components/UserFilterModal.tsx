@@ -14,6 +14,7 @@ import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-sc
 import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { personTagsMatch } from "../utils/person-tags";
 import { getStockStatus } from "../utils/schedule";
+import { ModalFrame } from "./ModalFrame";
 
 export interface UserFilterModalProps {
 	selectedUser: string | null;
@@ -79,101 +80,83 @@ export function UserFilterModal({
 	);
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key !== "Escape") e.stopPropagation();
-			}}
-		>
-			<div
-				className="modal-content user-meds-modal"
-				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => {
-					if (e.key !== "Escape") e.stopPropagation();
-				}}
-			>
-				<button className="modal-close" onClick={onClose}>
-					×
-				</button>
+		<ModalFrame contentClassName="user-meds-modal" onClose={onClose}>
+			<div className="user-meds-header">
+				<div className="user-avatar">{selectedUser.charAt(0).toUpperCase()}</div>
+				<h2>{t("modal.userMedications", { name: selectedUser })}</h2>
+			</div>
 
-				<div className="user-meds-header">
-					<div className="user-avatar">{selectedUser.charAt(0).toUpperCase()}</div>
-					<h2>{t("modal.userMedications", { name: selectedUser })}</h2>
-				</div>
+			<div className="user-meds-list">
+				{userMeds.map((med) => {
+					const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(med));
+					// Fallback: if no coverage data (e.g. obsolete med), compute basic status from total pills
+					const status = medCoverage
+						? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med.packageType)
+						: getStockStatus(null, getMedTotal(med), settings, med.packageType);
+					const packageSize = getStockDisplayCapacity(med);
+					const currentStock = medCoverage ? medCoverage.medsLeft : getMedTotal(med);
 
-				<div className="user-meds-list">
-					{userMeds.map((med) => {
-						const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(med));
-						// Fallback: if no coverage data (e.g. obsolete med), compute basic status from total pills
-						const status = medCoverage
-							? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med.packageType)
-							: getStockStatus(null, getMedTotal(med), settings, med.packageType);
-						const packageSize = getStockDisplayCapacity(med);
-						const currentStock = medCoverage ? medCoverage.medsLeft : getMedTotal(med);
+					// Get intakes relevant to this person
+					const personIntakes = getMedicationIntakes(med).filter(
+						(intake) => intake.takenBy === null || personTagsMatch(intake.takenBy, selectedUser)
+					);
 
-						// Get intakes relevant to this person
-						const personIntakes = getMedicationIntakes(med).filter(
-							(intake) => intake.takenBy === null || personTagsMatch(intake.takenBy, selectedUser)
-						);
-
-						return (
-							<div
-								key={med.id}
-								className="user-med-item clickable"
-								onClick={() => {
+					return (
+						<div
+							key={med.id}
+							className="user-med-item clickable"
+							onClick={() => {
+								onClearUser();
+								onOpenMedDetail(med);
+							}}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
 									onClearUser();
 									onOpenMedDetail(med);
-								}}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										onClearUser();
-										onOpenMedDetail(med);
-									}
-								}}
-							>
-								<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
-								<div className="user-med-info">
-									<span className="user-med-name">{getMedDisplayName(med)}</span>
-									{med.name && med.genericName && <span className="user-med-generic">{med.genericName}</span>}
-									{personIntakes.length > 0 && (
-										<div className="user-med-intakes">
-											{personIntakes.map((intake) => {
-												const timeStr = new Date(intake.start).toLocaleTimeString(getSystemLocale(i18n.language), {
-													hour: "2-digit",
-													minute: "2-digit",
-												});
-												const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.scheduleMode ?? "interval"}-${(intake.weekdays ?? []).join("")}-${intake.takenBy ?? ""}`;
-												const intakeUnit = "intakeUnit" in intake ? intake.intakeUnit : undefined;
-												return (
-													<span key={intakeKey} className="user-med-intake-item">
-														{formatIntakeUsageLabel(med, intake.usage, intakeUnit)}
-														{allowsPillFormSelection(med.packageType) &&
-															med.pillWeightMg != null &&
-															` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}
-														{getIntakeFrequencyText(intake, t)} {t("modal.at")} {timeStr}
-													</span>
-												);
-											})}
-										</div>
-									)}
-								</div>
-								<div className="user-med-stats">
-									<span className="user-med-pills">{formatStockSummaryLabel(med, currentStock, packageSize)}</span>
-									{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
-								</div>
+								}
+							}}
+						>
+							<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
+							<div className="user-med-info">
+								<span className="user-med-name">{getMedDisplayName(med)}</span>
+								{med.name && med.genericName && <span className="user-med-generic">{med.genericName}</span>}
+								{personIntakes.length > 0 && (
+									<div className="user-med-intakes">
+										{personIntakes.map((intake) => {
+											const timeStr = new Date(intake.start).toLocaleTimeString(getSystemLocale(i18n.language), {
+												hour: "2-digit",
+												minute: "2-digit",
+											});
+											const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.scheduleMode ?? "interval"}-${(intake.weekdays ?? []).join("")}-${intake.takenBy ?? ""}`;
+											const intakeUnit = "intakeUnit" in intake ? intake.intakeUnit : undefined;
+											return (
+												<span key={intakeKey} className="user-med-intake-item">
+													{formatIntakeUsageLabel(med, intake.usage, intakeUnit)}
+													{allowsPillFormSelection(med.packageType) &&
+														med.pillWeightMg != null &&
+														` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}
+													{getIntakeFrequencyText(intake, t)} {t("modal.at")} {timeStr}
+												</span>
+											);
+										})}
+									</div>
+								)}
 							</div>
-						);
-					})}
-					{userMeds.length === 0 && (
-						<div className="user-meds-empty">{t("modal.noMedsForUser", { name: selectedUser })}</div>
-					)}
-				</div>
-
-				<div className="user-meds-footer">
-					<button onClick={onClose}>{t("common.close")}</button>
-				</div>
+							<div className="user-med-stats">
+								<span className="user-med-pills">{formatStockSummaryLabel(med, currentStock, packageSize)}</span>
+								{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
+							</div>
+						</div>
+					);
+				})}
+				{userMeds.length === 0 && (
+					<div className="user-meds-empty">{t("modal.noMedsForUser", { name: selectedUser })}</div>
+				)}
 			</div>
-		</div>
+
+			<div className="user-meds-footer">
+				<button onClick={onClose}>{t("common.close")}</button>
+			</div>
+		</ModalFrame>
 	);
 }

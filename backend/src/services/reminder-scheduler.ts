@@ -7,6 +7,7 @@ import { doseTracking, medications } from "../db/schema.js";
 import { getFooterHtml, getFooterPlain, getTranslations, type Language, t } from "../i18n/translations.js";
 import { getAllUserSettings, type UserSettings } from "../routes/settings.js";
 import { parseIntEnv } from "../utils/env-parsing.js";
+import { escapeHtml } from "../utils/html.js";
 import type { ServiceLogger } from "../utils/logger.js";
 import {
 	isAmountBasedPackageType,
@@ -42,17 +43,6 @@ import { loadReminderState, saveReminderState, updateUserReminderSentTime } from
 import { formatPlannerQuantity } from "./planner-service.js";
 
 export { getReminderState, updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
-
-function escapeHtml(text: string): string {
-	const htmlEscapes: Record<string, string> = {
-		"&": "&amp;",
-		"<": "&lt;",
-		">": "&gt;",
-		'"': "&quot;",
-		"'": "&#39;",
-	};
-	return text.replace(/[&<>"']/g, (char) => htmlEscapes[char] || char);
-}
 
 const REMINDER_HOUR = parseIntEnv(process.env.REMINDER_HOUR, { defaultValue: 6, min: 0, max: 23 });
 

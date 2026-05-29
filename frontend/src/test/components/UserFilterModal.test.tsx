@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { UserFilterModal } from "../../components/UserFilterModal";
 import type { Coverage, Medication, StockThresholds } from "../../types";
@@ -34,137 +35,65 @@ const mockCoverage: Coverage = {
 	nextDose: null,
 };
 
+function renderUserFilterModal(overrides: Partial<ComponentProps<typeof UserFilterModal>> = {}) {
+	const props: ComponentProps<typeof UserFilterModal> = {
+		selectedUser: "John",
+		meds: [mockMedication],
+		coverage: { all: [mockCoverage] },
+		settings: defaultSettings,
+		onClose: vi.fn(),
+		onClearUser: vi.fn(),
+		onOpenMedDetail: vi.fn(),
+		...overrides,
+	};
+
+	return {
+		...render(<UserFilterModal {...props} />),
+		props,
+	};
+}
+
 describe("UserFilterModal", () => {
 	it("renders nothing when selectedUser is null", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser={null}
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ selectedUser: null });
 
 		expect(screen.queryByText(/modal\.userMedications/i)).not.toBeInTheDocument();
 	});
 
 	it("renders modal when selectedUser is provided", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal();
 
 		expect(screen.getByText(/modal\.userMedications/i)).toBeInTheDocument();
 	});
 
 	it("displays user avatar", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal();
 
 		// Avatar should show first letter
 		expect(screen.getByText("J")).toBeInTheDocument();
 	});
 
 	it("displays medications for selected user", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal();
 
 		expect(screen.getByText("Test Med")).toBeInTheDocument();
 	});
 
 	it("displays generic name when available", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal();
 
 		expect(screen.getByText("Generic Name")).toBeInTheDocument();
 	});
 
 	it("shows empty message when user has no medications", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="Jane"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ selectedUser: "Jane" });
 
 		expect(screen.getByText(/modal\.noMedsForUser/i)).toBeInTheDocument();
 	});
 
 	it("calls onClose when close button clicked", () => {
 		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ onClose });
 
 		const closeBtn = screen.getByText("×");
 		fireEvent.click(closeBtn);
@@ -174,19 +103,7 @@ describe("UserFilterModal", () => {
 
 	it("calls onClose when overlay clicked", () => {
 		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ onClose });
 
 		const overlay = document.querySelector(".modal-overlay");
 		if (overlay) {
@@ -201,17 +118,7 @@ describe("UserFilterModal", () => {
 		const onClearUser = vi.fn();
 		const onOpenMedDetail = vi.fn();
 
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={onClearUser}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ onClose, onClearUser, onOpenMedDetail });
 
 		const medItem = document.querySelector(".user-med-item");
 		if (medItem) {
@@ -224,19 +131,7 @@ describe("UserFilterModal", () => {
 
 	it("calls onClose when footer close button clicked", () => {
 		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ onClose });
 
 		const footerCloseBtn = screen.getByText(/common\.close/i);
 		fireEvent.click(footerCloseBtn);
@@ -246,19 +141,7 @@ describe("UserFilterModal", () => {
 
 	it("does not call onClose when modal content clicked", () => {
 		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[mockMedication]}
-				coverage={{ all: [mockCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ onClose });
 
 		const content = document.querySelector(".modal-content");
 		if (content) {
@@ -269,26 +152,13 @@ describe("UserFilterModal", () => {
 	});
 
 	it("filters medications by takenBy correctly", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
 		const meds: Medication[] = [
 			{ ...mockMedication, id: 1, name: "Med1", takenBy: ["John"] },
 			{ ...mockMedication, id: 2, name: "Med2", takenBy: ["Jane"] },
 			{ ...mockMedication, id: 3, name: "Med3", takenBy: ["john", "Jane"] },
 		];
 
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={meds}
-				coverage={{ all: [] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ meds, coverage: { all: [] } });
 
 		expect(screen.getByText("Med1")).toBeInTheDocument();
 		expect(screen.queryByText("Med2")).not.toBeInTheDocument();
@@ -296,9 +166,6 @@ describe("UserFilterModal", () => {
 	});
 
 	it("renders tube intakes as applications and stock in g", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
 		const tubeMedication: Medication = {
 			...mockMedication,
 			id: 10,
@@ -327,17 +194,7 @@ describe("UserFilterModal", () => {
 			nextDose: null,
 		};
 
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[tubeMedication]}
-				coverage={{ all: [tubeCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ meds: [tubeMedication], coverage: { all: [tubeCoverage] } });
 
 		expect(screen.getByText(/form\.blisters\.applications_1/)).toBeInTheDocument();
 		expect(screen.getByText("600/600 form.packageAmountUnitG")).toBeInTheDocument();
@@ -345,9 +202,6 @@ describe("UserFilterModal", () => {
 	});
 
 	it("shows liquid stock against configured multi-container capacity", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
 		const liquidMedication: Medication = {
 			...mockMedication,
 			id: 13,
@@ -380,26 +234,13 @@ describe("UserFilterModal", () => {
 			nextDose: null,
 		};
 
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[liquidMedication]}
-				coverage={{ all: [liquidCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ meds: [liquidMedication], coverage: { all: [liquidCoverage] } });
 
 		expect(screen.getByText("450/600 form.packageAmountUnitMl")).toBeInTheDocument();
 		expect(screen.queryByText("450/450 form.packageAmountUnitMl")).not.toBeInTheDocument();
 	});
 
 	it("renders liquid container intakes and stock in ml", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
 		const liquidMedication: Medication = {
 			...mockMedication,
 			id: 11,
@@ -429,17 +270,7 @@ describe("UserFilterModal", () => {
 			nextDose: null,
 		};
 
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[liquidMedication]}
-				coverage={{ all: [liquidCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ meds: [liquidMedication], coverage: { all: [liquidCoverage] } });
 
 		expect(screen.getByText(/2 form\.packageAmountUnitMl common\.daily/)).toBeInTheDocument();
 		expect(screen.getByText("0/150 form.packageAmountUnitMl")).toBeInTheDocument();
@@ -447,9 +278,6 @@ describe("UserFilterModal", () => {
 	});
 
 	it("renders medicationForm liquid as ml in modal fallback", () => {
-		const onClose = vi.fn();
-		const onOpenMedDetail = vi.fn();
-
 		const legacyLiquidMedication: Medication = {
 			...mockMedication,
 			id: 12,
@@ -470,17 +298,7 @@ describe("UserFilterModal", () => {
 			nextDose: null,
 		};
 
-		render(
-			<UserFilterModal
-				selectedUser="John"
-				meds={[legacyLiquidMedication]}
-				coverage={{ all: [legacyLiquidCoverage] }}
-				settings={defaultSettings}
-				onClose={onClose}
-				onClearUser={vi.fn()}
-				onOpenMedDetail={onOpenMedDetail}
-			/>
-		);
+		renderUserFilterModal({ meds: [legacyLiquidMedication], coverage: { all: [legacyLiquidCoverage] } });
 
 		expect(screen.getByText(/1 form\.packageAmountUnitMl common\.daily/)).toBeInTheDocument();
 		expect(screen.getByText("40/100 form.packageAmountUnitMl")).toBeInTheDocument();

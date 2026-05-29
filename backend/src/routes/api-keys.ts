@@ -7,6 +7,7 @@ import { apiKeys } from "../db/schema.js";
 import { hashApiKeyToken, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
+import { normalizeDateTime } from "../utils/date-time.js";
 
 const createApiKeySchema = z.object({
 	name: z.string().trim().min(3).max(100),
@@ -44,29 +45,6 @@ const apiKeyMetadataSchema = {
 		updatedAt: { type: ["string", "null"], format: "date-time" },
 	},
 };
-
-function normalizeDateTime(value: unknown): string | null {
-	if (value == null) {
-		return null;
-	}
-
-	if (value instanceof Date) {
-		return Number.isNaN(value.getTime()) ? null : value.toISOString();
-	}
-
-	if (typeof value === "number") {
-		const timestampMs = value < 1_000_000_000_000 ? value * 1000 : value;
-		const date = new Date(timestampMs);
-		return Number.isNaN(date.getTime()) ? null : date.toISOString();
-	}
-
-	if (typeof value === "string") {
-		const date = new Date(value);
-		return Number.isNaN(date.getTime()) ? null : date.toISOString();
-	}
-
-	return null;
-}
 
 function serializeApiKeyMetadata<
 	T extends {

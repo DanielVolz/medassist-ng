@@ -385,8 +385,7 @@ async function getOrCreateUserSettings(userId: number) {
 	return settings;
 }
 
-export async function loadUserSettingsFromDb(userId: number): Promise<UserSettings> {
-	const settings = await getOrCreateUserSettings(userId);
+function serializeUserSettings(settings: typeof userSettings.$inferSelect): UserSettings {
 	return {
 		userId: settings.userId,
 		timezone: settings.timezone?.trim() ? settings.timezone : null,
@@ -429,46 +428,11 @@ export async function loadUserSettingsFromDb(userId: number): Promise<UserSettin
 	};
 }
 
+export async function loadUserSettingsFromDb(userId: number): Promise<UserSettings> {
+	return serializeUserSettings(await getOrCreateUserSettings(userId));
+}
+
 export async function getAllUserSettingsFromDb(): Promise<UserSettings[]> {
 	const allSettings = await db.select().from(userSettings);
-	return allSettings.map((settings) => ({
-		userId: settings.userId,
-		timezone: settings.timezone?.trim() ? settings.timezone : null,
-		emailEnabled: settings.emailEnabled,
-		notificationEmail: settings.notificationEmail,
-		emailStockReminders: settings.emailStockReminders,
-		emailIntakeReminders: settings.emailIntakeReminders,
-		emailPrescriptionReminders: settings.emailPrescriptionReminders ?? true,
-		shoutrrrEnabled: settings.shoutrrrEnabled,
-		shoutrrrUrl: settings.shoutrrrUrl,
-		shoutrrrStockReminders: settings.shoutrrrStockReminders,
-		shoutrrrIntakeReminders: settings.shoutrrrIntakeReminders,
-		shoutrrrPrescriptionReminders: settings.shoutrrrPrescriptionReminders ?? true,
-		reminderDaysBefore: settings.reminderDaysBefore,
-		repeatDailyReminders: settings.repeatDailyReminders,
-		skipRemindersForTakenDoses: settings.skipRemindersForTakenDoses ?? false,
-		repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
-		reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
-		maxNaggingReminders: settings.maxNaggingReminders ?? 5,
-		lowStockDays: settings.lowStockDays,
-		normalStockDays: settings.normalStockDays,
-		highStockDays: settings.highStockDays,
-		language: settings.language as Language,
-		stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
-		shareMedicationOverview: settings.shareMedicationOverview ?? false,
-		upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
-		shareScheduleTodayOnly: settings.shareScheduleTodayOnly ?? false,
-		swapDashboardMainSections: settings.swapDashboardMainSections ?? false,
-		lastAutoEmailSent: settings.lastAutoEmailSent,
-		lastNotificationType: settings.lastNotificationType,
-		lastNotificationChannel: settings.lastNotificationChannel,
-		lastReminderMedName: settings.lastReminderMedName ?? null,
-		lastReminderTakenBy: settings.lastReminderTakenBy ?? null,
-		lastStockReminderSent: settings.lastStockReminderSent ?? null,
-		lastStockReminderChannel: settings.lastStockReminderChannel ?? null,
-		lastStockReminderMedNames: settings.lastStockReminderMedNames ?? null,
-		lastPrescriptionReminderSent: settings.lastPrescriptionReminderSent ?? null,
-		lastPrescriptionReminderChannel: settings.lastPrescriptionReminderChannel ?? null,
-		lastPrescriptionReminderMedNames: settings.lastPrescriptionReminderMedNames ?? null,
-	}));
+	return allSettings.map(serializeUserSettings);
 }

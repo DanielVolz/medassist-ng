@@ -14,6 +14,7 @@ import {
 } from "../services/intake-journal-export.js";
 import { generateShareToken } from "../services/share-token-service.js";
 import type { AuthUser } from "../types/fastify.js";
+import { buildDoseId, parseDoseId } from "../utils/dose-id.js";
 import {
 	ALLOWED_IMAGE_MIME_TYPES,
 	MAX_IMAGE_UPLOAD_BYTES,
@@ -569,32 +570,6 @@ function collectImportValidationIssues(importData: z.infer<typeof importDataSche
 	return issues;
 }
 
-// Parse dose ID to extract medication ID and timestamp
-// Format: "{medicationId}-{blisterIndex}-{timestampMs}" or "{medicationId}-{blisterIndex}-{timestampMs}-{person}"
-function parseDoseId(
-	doseId: string
-): { medicationId: number; blisterIndex: number; timestampMs: number; person: string | null } | null {
-	const parts = doseId.split("-");
-	if (parts.length < 3) return null;
-
-	const medicationId = parseInt(parts[0], 10);
-	const blisterIndex = parseInt(parts[1], 10);
-	const timestampMs = parseInt(parts[2], 10);
-
-	if (Number.isNaN(medicationId) || Number.isNaN(blisterIndex) || Number.isNaN(timestampMs)) return null;
-
-	// Check if there's a person suffix (4th part onwards, could be multi-part name)
-	const person = parts.length > 3 ? parts.slice(3).join("-") : null;
-
-	return { medicationId, blisterIndex, timestampMs, person };
-}
-
-// Build dose ID from parts (with optional person suffix)
-function buildDoseId(medicationId: number, blisterIndex: number, timestampMs: number, person?: string | null): string {
-	const base = `${medicationId}-${blisterIndex}-${timestampMs}`;
-	return person ? `${base}-${person}` : base;
-}
-
 // =============================================================================
 // Export Routes
 // =============================================================================
@@ -726,14 +701,14 @@ export async function exportRoutes(app: FastifyInstance) {
 
 					return {
 						medicationRef: exportId,
-						scheduleIndex: parsed.blisterIndex,
+						scheduleIndex: parsed.intakeIndex,
 						scheduledTime: scheduledTimeIso,
 						takenAt: takenAtIso,
 						markedBy: dose.markedBy,
 						takenSource:
 							dose.takenSource === "automatic" || dose.takenSource === "notification" ? dose.takenSource : "manual",
 						dismissed: dose.dismissed ?? false,
-						takenByPerson: parsed.person,
+						takenByPerson: parsed.personSuffix,
 						...journalPayloadsByDoseTrackingId.get(dose.id),
 					};
 				})

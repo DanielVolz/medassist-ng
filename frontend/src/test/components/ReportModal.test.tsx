@@ -43,6 +43,28 @@ function createMedication(overrides: Partial<Medication> = {}): Medication {
 	};
 }
 
+function createPersonFilterMedications(): Medication[] {
+	return [
+		createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
+		createMedication({ id: 2, name: "Alice Lower", takenBy: ["alice"] }),
+		createMedication({ id: 3, name: "Bob Med", takenBy: ["Bob"] }),
+	];
+}
+
+function renderReportModal(options: { onClose?: () => void; medications?: Medication[] } = {}) {
+	const onClose = options.onClose ?? vi.fn();
+	const view = render(
+		<ReportModal isOpen={true} onClose={onClose} medications={options.medications ?? [createMedication()]} />
+	);
+
+	return { ...view, onClose };
+}
+
+function getFirstReportRequestBody() {
+	const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+	return JSON.parse((requestInit?.body as string) ?? "{}");
+}
+
 describe("ReportModal", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -324,18 +346,7 @@ describe("ReportModal", () => {
 	});
 
 	it("shows person filter and supports deselect/select all", () => {
-		const onClose = vi.fn();
-		render(
-			<ReportModal
-				isOpen={true}
-				onClose={onClose}
-				medications={[
-					createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
-					createMedication({ id: 2, name: "Alice Lower", takenBy: ["alice"] }),
-					createMedication({ id: 3, name: "Bob Med", takenBy: ["Bob"] }),
-				]}
-			/>
-		);
+		renderReportModal({ medications: createPersonFilterMedications() });
 
 		expect(screen.getByText(/report\.filterByPerson/i)).toBeInTheDocument();
 		expect(screen.getAllByRole("checkbox", { name: "Alice" })).toHaveLength(1);
@@ -375,25 +386,14 @@ describe("ReportModal", () => {
 			}),
 		});
 
-		const firstRender = render(
-			<ReportModal
-				isOpen={true}
-				onClose={onClose}
-				medications={[
-					createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
-					createMedication({ id: 2, name: "Alice Lower", takenBy: ["alice"] }),
-					createMedication({ id: 3, name: "Bob Med", takenBy: ["Bob"] }),
-				]}
-			/>
-		);
+		const firstRender = renderReportModal({ onClose, medications: createPersonFilterMedications() });
 
 		fireEvent.click(screen.getByRole("checkbox", { name: "Alice" }));
 		fireEvent.click(screen.getByRole("radio", { name: /report\.formatTxt/i }));
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
-			const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
-			const body = JSON.parse((requestInit?.body as string) ?? "{}");
+			const body = getFirstReportRequestBody();
 			expect(body).toMatchObject({ medicationIds: [1, 2], takenByFilter: ["Alice"] });
 			expect(typeof body.startDate).toBe("string");
 			expect(typeof body.endDate).toBe("string");
@@ -402,23 +402,12 @@ describe("ReportModal", () => {
 		authFetchMock.mockClear();
 		(global.fetch as ReturnType<typeof vi.fn>).mockClear();
 		firstRender.unmount();
-		render(
-			<ReportModal
-				isOpen={true}
-				onClose={onClose}
-				medications={[
-					createMedication({ id: 1, name: "Alice Med", takenBy: ["Alice"] }),
-					createMedication({ id: 2, name: "Alice Lower", takenBy: ["alice"] }),
-					createMedication({ id: 3, name: "Bob Med", takenBy: ["Bob"] }),
-				]}
-			/>
-		);
+		renderReportModal({ onClose, medications: createPersonFilterMedications() });
 		fireEvent.click(screen.getByRole("radio", { name: /report\.formatTxt/i }));
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
 
 		await waitFor(() => {
-			const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
-			const body = JSON.parse((requestInit?.body as string) ?? "{}");
+			const body = getFirstReportRequestBody();
 			expect(body).toMatchObject({ medicationIds: [1, 2, 3] });
 			expect(body).not.toHaveProperty("takenByFilter");
 			expect(typeof body.startDate).toBe("string");

@@ -29,6 +29,27 @@ vi.mock("../../utils/logger", () => ({
 	log: loggerMock,
 }));
 
+function mockMarkDoseTakenFailure() {
+	(global.fetch as ReturnType<typeof vi.fn>)
+		.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
+		.mockRejectedValueOnce(new Error("Network error"))
+		.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
+}
+
+async function renderAndMarkDoseTaken(doseId: string) {
+	const { result } = renderHook(() => useDoses());
+
+	await waitFor(() => {
+		expect(result.current.takenDoses.size).toBe(0);
+	});
+
+	await act(async () => {
+		await result.current.markDoseTaken(doseId);
+	});
+
+	return result;
+}
+
 describe("useDoses", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -176,21 +197,8 @@ describe("useDoses", () => {
 	});
 
 	it("reverts optimistic update on error", async () => {
-		// First call for initial load, second for marking dose fails, third for re-sync
-		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-			.mockRejectedValueOnce(new Error("Network error"))
-			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
-
-		const { result } = renderHook(() => useDoses());
-
-		await waitFor(() => {
-			expect(result.current.takenDoses.size).toBe(0);
-		});
-
-		await act(async () => {
-			await result.current.markDoseTaken("new-dose");
-		});
+		mockMarkDoseTakenFailure();
+		const result = await renderAndMarkDoseTaken("new-dose");
 
 		// After error, the dose should be removed
 		await waitFor(() => {
@@ -199,20 +207,8 @@ describe("useDoses", () => {
 	});
 
 	it("logs a warning when marking a dose as taken fails", async () => {
-		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
-			.mockRejectedValueOnce(new Error("Network error"))
-			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
-
-		const { result } = renderHook(() => useDoses());
-
-		await waitFor(() => {
-			expect(result.current.takenDoses.size).toBe(0);
-		});
-
-		await act(async () => {
-			await result.current.markDoseTaken("new-dose");
-		});
+		mockMarkDoseTakenFailure();
+		await renderAndMarkDoseTaken("new-dose");
 
 		expect(loggerMock.warn).toHaveBeenCalledWith(
 			"[useDoses] mark dose taken failed",

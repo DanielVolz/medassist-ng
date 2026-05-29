@@ -5,6 +5,7 @@ import Fastify from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAlterMigrations } from "../db/db-utils.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { insertScheduledTestMedication } from "./setup.js";
 
 const { testClient, testDb, mockedEnv, fetchMock, mockLogger } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -63,6 +64,20 @@ function extractToken(url: string): string {
 	return url.split("/").at(-1) ?? "";
 }
 
+async function insertNotificationMedication(options: {
+	id: number;
+	userId: number;
+	packCount?: number;
+	looseTablets?: number;
+}) {
+	await insertScheduledTestMedication(testClient, {
+		name: "Route Medication",
+		start: "2026-01-05T08:00:00.000Z",
+		intakeRemindersEnabled: true,
+		...options,
+	});
+}
+
 async function clearTables() {
 	await testClient.execute("DELETE FROM dose_tracking");
 	await testClient.execute("DELETE FROM notification_action_tokens");
@@ -79,27 +94,6 @@ async function createUser(username: string) {
 	});
 
 	return Number(result.rows[0].id);
-}
-
-async function insertMedication(options: { id: number; userId: number; packCount?: number; looseTablets?: number }) {
-	const start = "2026-01-05T08:00:00.000Z";
-	await testClient.execute({
-		sql: `INSERT INTO medications (
-			id, user_id, name, taken_by_json, medication_form, package_type,
-			pack_count, blisters_per_pack, pills_per_blister, loose_tablets, stock_adjustment,
-			usage_json, every_json, start_json, intakes_json, intake_reminders_enabled
-		) VALUES (?, ?, 'Route Medication', '[]', 'tablet', 'blister', ?, 1, 10, ?, 0, ?, ?, ?, ?, 1)`,
-		args: [
-			options.id,
-			options.userId,
-			options.packCount ?? 1,
-			options.looseTablets ?? 0,
-			JSON.stringify([1]),
-			JSON.stringify([1]),
-			JSON.stringify([start]),
-			JSON.stringify([{ usage: 1, every: 1, start, takenBy: null, intakeRemindersEnabled: true }]),
-		],
-	});
 }
 
 async function insertUserSettings(
@@ -304,7 +298,7 @@ describe("notification action routes", () => {
 
 	it("returns an undo hint when a reminder was already taken before a follow-up skip action", async () => {
 		const userId = await createUser("notification-route-taken-followup");
-		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
+		await insertNotificationMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic");
 		const { takenToken, respondToken } = await seedContext({ userId, doseId: "5-0-1736064000000" });
 
@@ -344,7 +338,7 @@ describe("notification action routes", () => {
 
 	it("replaces the original ntfy notification after a successful action with a view-only confirmation", async () => {
 		const userId = await createUser("notification-route-ntfy-delete");
-		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
+		await insertNotificationMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic", {
 			shoutrrrEnabled: true,
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
@@ -407,7 +401,7 @@ describe("notification action routes", () => {
 
 	it("replaces the original ntfy notification after a skip action with a view-only confirmation", async () => {
 		const userId = await createUser("notification-route-ntfy-skip-delete");
-		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
+		await insertNotificationMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic", {
 			shoutrrrEnabled: true,
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
@@ -460,7 +454,7 @@ describe("notification action routes", () => {
 
 	it("warns when ntfy replacement, delete, and fallback clear all fail", async () => {
 		const userId = await createUser("notification-route-ntfy-delete-warn");
-		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
+		await insertNotificationMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic", {
 			shoutrrrEnabled: true,
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
@@ -493,7 +487,7 @@ describe("notification action routes", () => {
 
 	it("falls back to clear when ntfy replacement and delete both fail", async () => {
 		const userId = await createUser("notification-route-ntfy-delete-clear-fallback");
-		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
+		await insertNotificationMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic", {
 			shoutrrrEnabled: true,
 			shoutrrrUrl: "ntfy://user:pass@ntfy.example.com/medassist",
@@ -555,7 +549,7 @@ describe("notification action routes", () => {
 
 	it("accepts standard HTML form posts on respond pages", async () => {
 		const userId = await createUser("notification-route-form-post");
-		await insertMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
+		await insertNotificationMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic");
 		const { respondToken } = await seedContext({ userId, doseId: "5-0-1736064000000" });
 
@@ -594,7 +588,7 @@ describe("notification action routes", () => {
 		expect(expired.statusCode).toBe(410);
 
 		const userId = await createUser("notification-route-stock");
-		await insertMedication({ id: 5, userId, packCount: 0, looseTablets: 0 });
+		await insertNotificationMedication({ id: 5, userId, packCount: 0, looseTablets: 0 });
 		await insertUserSettings(userId, "automatic");
 		const { takenToken } = await seedContext({ userId, doseId: "5-0-1736064000000" });
 

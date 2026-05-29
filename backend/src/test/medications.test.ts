@@ -19,16 +19,8 @@ import {
 async function registerMedicationRoutes(ctx: TestContext) {
 	const { app, client } = ctx;
 
-	// GET /medications - List all medications
-	app.get("/medications", async (_request, _reply) => {
-		const userId = 1;
-
-		const result = await client.execute({
-			sql: `SELECT * FROM medications WHERE user_id = ? ORDER BY name`,
-			args: [userId],
-		});
-
-		return result.rows.map((m) => ({
+	function serializeMedicationRow(m: Record<string, unknown>) {
+		return {
 			id: m.id,
 			name: m.name,
 			genericName: m.generic_name,
@@ -52,7 +44,19 @@ async function registerMedicationRoutes(ctx: TestContext) {
 					start: start[i] || new Date().toISOString(),
 				}));
 			})(),
-		}));
+		};
+	}
+
+	// GET /medications - List all medications
+	app.get("/medications", async (_request, _reply) => {
+		const userId = 1;
+
+		const result = await client.execute({
+			sql: `SELECT * FROM medications WHERE user_id = ? ORDER BY name`,
+			args: [userId],
+		});
+
+		return result.rows.map((m) => serializeMedicationRow(m as Record<string, unknown>));
 	});
 
 	// POST /medications - Create medication
@@ -237,31 +241,7 @@ async function registerMedicationRoutes(ctx: TestContext) {
 		}
 
 		const m = result.rows[0];
-		return {
-			id: m.id,
-			name: m.name,
-			genericName: m.generic_name,
-			takenBy: JSON.parse((m.taken_by_json as string) || "[]"),
-			packCount: m.pack_count,
-			blistersPerPack: m.blisters_per_pack,
-			pillsPerBlister: m.pills_per_blister,
-			looseTablets: m.loose_tablets,
-			pillWeightMg: m.pill_weight_mg,
-			imageUrl: m.image_url,
-			expiryDate: m.expiry_date,
-			notes: m.notes,
-			intakeRemindersEnabled: Boolean(m.intake_reminders_enabled),
-			blisters: (() => {
-				const usage: number[] = JSON.parse((m.usage_json as string) || "[]");
-				const every: number[] = JSON.parse((m.every_json as string) || "[]");
-				const start: string[] = JSON.parse((m.start_json as string) || "[]");
-				return usage.map((u, i) => ({
-					usage: u,
-					every: every[i] || 1,
-					start: start[i] || new Date().toISOString(),
-				}));
-			})(),
-		};
+		return serializeMedicationRow(m as Record<string, unknown>);
 	});
 }
 

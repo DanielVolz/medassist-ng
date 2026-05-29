@@ -8,33 +8,33 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { runAlterMigrations } from "../db/db-utils.js";
 import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestSessionCookie, createTestUser } from "./setup.js";
 
 const { testClient, testDb, mockedEnv, nodemailerSendMail } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
 	const { drizzle } = require("drizzle-orm/libsql");
 	const client = createClient({ url: ":memory:" });
-	const db = drizzle(client);
 
 	return {
 		testClient: client,
-		testDb: db,
-		mockedEnv: {
-			AUTH_ENABLED: true,
-			REGISTRATION_ENABLED: true,
-			FORM_LOGIN_ENABLED: true,
-			OIDC_ENABLED: false,
-			OIDC_PROVIDER_NAME: "SSO",
-			NODE_ENV: "test",
-			LOG_LEVEL: "silent",
-			PORT: 3000,
-			CORS_ORIGINS: "*",
-			JWT_SECRET: "test-jwt-secret",
-			REFRESH_SECRET: "test-refresh-secret",
-			COOKIE_SECRET: "test-cookie-secret",
-			ACCESS_TOKEN_TTL_MINUTES: 15,
-			REFRESH_TOKEN_TTL_DAYS: 7,
-			OPENAPI_DOCS_ENABLED: false,
-		},
+		testDb: drizzle(client),
+		mockedEnv: Object.fromEntries([
+			["NODE_ENV", "test"],
+			["LOG_LEVEL", "silent"],
+			["PORT", 3000],
+			["CORS_ORIGINS", "*"],
+			["AUTH_ENABLED", true],
+			["REGISTRATION_ENABLED", true],
+			["FORM_LOGIN_ENABLED", true],
+			["OIDC_ENABLED", false],
+			["OIDC_PROVIDER_NAME", "SSO"],
+			["JWT_SECRET", "test-jwt-secret"],
+			["REFRESH_SECRET", "test-refresh-secret"],
+			["COOKIE_SECRET", "test-cookie-secret"],
+			["ACCESS_TOKEN_TTL_MINUTES", 15],
+			["REFRESH_TOKEN_TTL_DAYS", 7],
+			["OPENAPI_DOCS_ENABLED", false],
+		]),
 		nodemailerSendMail: vi.fn(),
 	};
 });
@@ -67,20 +67,6 @@ async function clearTables() {
 	await testClient.execute("DELETE FROM refresh_tokens");
 	await testClient.execute("DELETE FROM user_settings");
 	await testClient.execute("DELETE FROM users");
-}
-
-async function createUser(username: string) {
-	const result = await testClient.execute({
-		sql: "INSERT INTO users (username, auth_provider, is_active) VALUES (?, 'local', 1) RETURNING id",
-		args: [username],
-	});
-
-	return Number(result.rows[0].id);
-}
-
-async function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
-	const token = await app.jwt.sign({ sub: userId, username });
-	return `access_token=${token}`;
 }
 
 async function insertApiKey(options: {
@@ -153,11 +139,11 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("returns settings defaults for an authenticated session cookie", async () => {
-		const userId = await createUser("settings-session-user");
+		const userId = await createTestUser(testClient, { username: "settings-session-user" });
 		const response = await app.inject({
 			method: "GET",
 			url: "/settings",
-			headers: { cookie: await buildSessionCookie(app, userId, "settings-session-user") },
+			headers: { cookie: await buildTestSessionCookie(app, userId, "settings-session-user") },
 		});
 
 		expect(response.statusCode).toBe(200);
@@ -176,7 +162,7 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("allows GET /settings with a read-only API key", async () => {
-		const userId = await createUser("settings-read-user");
+		const userId = await createTestUser(testClient, { username: "settings-read-user" });
 		process.env.SMTP_HOST = "smtp.example.com";
 		process.env.SMTP_PORT = "2525";
 
@@ -204,7 +190,7 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("rejects PUT /settings with a read-only API key", async () => {
-		const userId = await createUser("settings-read-mutation-user");
+		const userId = await createTestUser(testClient, { username: "settings-read-mutation-user" });
 		const apiToken = "ma_read_only_mutation_token_123456789";
 		await insertApiKey({ userId, token: apiToken, scope: "read" });
 
@@ -256,7 +242,7 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("rejects expired API keys for GET /settings", async () => {
-		const userId = await createUser("settings-expired-key-user");
+		const userId = await createTestUser(testClient, { username: "settings-expired-key-user" });
 		const apiToken = "ma_expired_token_for_settings_123456789";
 		await insertApiKey({
 			userId,
@@ -276,8 +262,8 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("rotates API keys and does not leak raw tokens from the list endpoint", async () => {
-		const userId = await createUser("api-key-session-user");
-		const cookieHeader = await buildSessionCookie(app, userId, "api-key-session-user");
+		const userId = await createTestUser(testClient, { username: "api-key-session-user" });
+		const cookieHeader = await buildTestSessionCookie(app, userId, "api-key-session-user");
 
 		const firstCreate = await app.inject({
 			method: "POST",
@@ -323,7 +309,7 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("rejects API key rotation when authenticated with a read-only API key", async () => {
-		const userId = await createUser("api-key-readonly-rotate-user");
+		const userId = await createTestUser(testClient, { username: "api-key-readonly-rotate-user" });
 		const readOnlyToken = "ma_readonly_rotation_denied_123456789";
 		await insertApiKey({ userId, token: readOnlyToken, scope: "read" });
 
@@ -339,9 +325,9 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("returns 404 when deleting an API key owned by a different user", async () => {
-		const ownerUserId = await createUser("api-key-owner");
-		const otherUserId = await createUser("api-key-other-user");
-		const otherCookieHeader = await buildSessionCookie(app, otherUserId, "api-key-other-user");
+		const ownerUserId = await createTestUser(testClient, { username: "api-key-owner" });
+		const otherUserId = await createTestUser(testClient, { username: "api-key-other-user" });
+		const otherCookieHeader = await buildTestSessionCookie(app, otherUserId, "api-key-other-user");
 
 		const keyId = await insertApiKey({
 			userId: ownerUserId,
@@ -360,7 +346,7 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("maps SMTP recipient rejection to HTTP 400 instead of a generic 500", async () => {
-		const userId = await createUser("settings-email-recipient-user");
+		const userId = await createTestUser(testClient, { username: "settings-email-recipient-user" });
 		process.env.SMTP_HOST = "smtp.example.com";
 		process.env.SMTP_USER = "mailer@example.com";
 		process.env.SMTP_PASS = "secret";
@@ -373,7 +359,7 @@ describe("Settings and API key security contracts", () => {
 		const response = await app.inject({
 			method: "POST",
 			url: "/settings/test-email",
-			headers: { cookie: await buildSessionCookie(app, userId, "settings-email-recipient-user") },
+			headers: { cookie: await buildTestSessionCookie(app, userId, "settings-email-recipient-user") },
 			payload: { email: "missing@example.com" },
 		});
 
@@ -382,7 +368,7 @@ describe("Settings and API key security contracts", () => {
 	});
 
 	it("maps missing SMTP acceptance to HTTP 502 for test email", async () => {
-		const userId = await createUser("settings-email-unconfirmed-user");
+		const userId = await createTestUser(testClient, { username: "settings-email-unconfirmed-user" });
 		process.env.SMTP_HOST = "smtp.example.com";
 		process.env.SMTP_USER = "mailer@example.com";
 		process.env.SMTP_PASS = "secret";
@@ -395,7 +381,7 @@ describe("Settings and API key security contracts", () => {
 		const response = await app.inject({
 			method: "POST",
 			url: "/settings/test-email",
-			headers: { cookie: await buildSessionCookie(app, userId, "settings-email-unconfirmed-user") },
+			headers: { cookie: await buildTestSessionCookie(app, userId, "settings-email-unconfirmed-user") },
 			payload: { email: "person@example.com" },
 		});
 

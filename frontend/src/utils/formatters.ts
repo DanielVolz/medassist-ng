@@ -2,62 +2,10 @@
 // Formatting Utilities
 // =============================================================================
 
+import { getRegionForTimezone } from "@medassist/shared";
 import type { BlisterStock, Medication } from "../types";
 import { getMedTotal } from "../types";
 import { splitCurrentBlisterStock } from "./stock";
-
-/**
- * Map timezone to region code (ISO 3166-1 alpha-2).
- * This allows combining app language with regional formatting.
- */
-const TIMEZONE_TO_REGION: Record<string, string> = {
-	// Europe
-	"Europe/Berlin": "DE",
-	"Europe/Vienna": "AT",
-	"Europe/Zurich": "CH",
-	"Europe/London": "GB",
-	"Europe/Dublin": "IE",
-	"Europe/Paris": "FR",
-	"Europe/Madrid": "ES",
-	"Europe/Rome": "IT",
-	"Europe/Amsterdam": "NL",
-	"Europe/Brussels": "BE",
-	"Europe/Warsaw": "PL",
-	"Europe/Prague": "CZ",
-	"Europe/Stockholm": "SE",
-	"Europe/Oslo": "NO",
-	"Europe/Copenhagen": "DK",
-	"Europe/Helsinki": "FI",
-	"Europe/Athens": "GR",
-	"Europe/Lisbon": "PT",
-	"Europe/Moscow": "RU",
-	"Europe/Kiev": "UA",
-	"Europe/Kyiv": "UA",
-	"Europe/Budapest": "HU",
-	"Europe/Bucharest": "RO",
-	// Americas
-	"America/New_York": "US",
-	"America/Chicago": "US",
-	"America/Denver": "US",
-	"America/Los_Angeles": "US",
-	"America/Phoenix": "US",
-	"America/Toronto": "CA",
-	"America/Vancouver": "CA",
-	"America/Mexico_City": "MX",
-	"America/Sao_Paulo": "BR",
-	"America/Buenos_Aires": "AR",
-	// Asia/Pacific
-	"Asia/Tokyo": "JP",
-	"Asia/Shanghai": "CN",
-	"Asia/Hong_Kong": "HK",
-	"Asia/Singapore": "SG",
-	"Asia/Seoul": "KR",
-	"Asia/Dubai": "AE",
-	"Asia/Kolkata": "IN",
-	"Australia/Sydney": "AU",
-	"Australia/Melbourne": "AU",
-	"Pacific/Auckland": "NZ",
-};
 
 let defaultFormattingTimezone: string | null = null;
 
@@ -95,7 +43,7 @@ export function withFormattingTimezone(options: Intl.DateTimeFormatOptions): Int
  */
 export function getRegionFromTimezone(): string | undefined {
 	const timezone = getFormattingTimezone();
-	return timezone ? TIMEZONE_TO_REGION[timezone] : undefined;
+	return getRegionForTimezone(timezone);
 }
 
 /**

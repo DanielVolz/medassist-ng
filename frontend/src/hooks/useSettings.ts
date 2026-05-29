@@ -112,6 +112,35 @@ const defaultSettings: Settings = {
 	expiryWarningDays: 30,
 };
 
+const reminderMetadataKeys = [
+	"lastAutoEmailSent",
+	"lastNotificationType",
+	"lastNotificationChannel",
+	"lastReminderMedName",
+	"lastReminderTakenBy",
+	"lastStockReminderSent",
+	"lastStockReminderChannel",
+	"lastStockReminderMedNames",
+	"lastPrescriptionReminderSent",
+	"lastPrescriptionReminderChannel",
+	"lastPrescriptionReminderMedNames",
+] as const;
+
+function mergeReminderMetadata(prev: Settings, data: unknown): Settings {
+	if (typeof data !== "object" || data === null) {
+		return prev;
+	}
+
+	const source = data as Partial<Settings>;
+	const next = { ...prev };
+	for (const key of reminderMetadataKeys) {
+		if (Object.hasOwn(source, key)) {
+			next[key] = source[key] as never;
+		}
+	}
+	return next;
+}
+
 export interface UseSettingsReturn {
 	settings: Settings;
 	setSettings: React.Dispatch<React.SetStateAction<Settings>>;
@@ -368,49 +397,9 @@ export function useSettings(): UseSettingsReturn {
 					return res.json();
 				})
 				.then((data) => {
-					const pick = <T>(key: string, fallback: T): T => (Object.hasOwn(data, key) ? (data[key] as T) : fallback);
-
 					// Only update the reminder-related fields without triggering unsaved changes
-					setSettings((prev) => ({
-						...prev,
-						lastAutoEmailSent: pick("lastAutoEmailSent", prev.lastAutoEmailSent),
-						lastNotificationType: pick("lastNotificationType", prev.lastNotificationType),
-						lastNotificationChannel: pick("lastNotificationChannel", prev.lastNotificationChannel),
-						lastReminderMedName: pick("lastReminderMedName", prev.lastReminderMedName),
-						lastReminderTakenBy: pick("lastReminderTakenBy", prev.lastReminderTakenBy),
-						lastStockReminderSent: pick("lastStockReminderSent", prev.lastStockReminderSent),
-						lastStockReminderChannel: pick("lastStockReminderChannel", prev.lastStockReminderChannel),
-						lastStockReminderMedNames: pick("lastStockReminderMedNames", prev.lastStockReminderMedNames),
-						lastPrescriptionReminderSent: pick("lastPrescriptionReminderSent", prev.lastPrescriptionReminderSent),
-						lastPrescriptionReminderChannel: pick(
-							"lastPrescriptionReminderChannel",
-							prev.lastPrescriptionReminderChannel
-						),
-						lastPrescriptionReminderMedNames: pick(
-							"lastPrescriptionReminderMedNames",
-							prev.lastPrescriptionReminderMedNames
-						),
-					}));
-					setSavedSettings((prev) => ({
-						...prev,
-						lastAutoEmailSent: pick("lastAutoEmailSent", prev.lastAutoEmailSent),
-						lastNotificationType: pick("lastNotificationType", prev.lastNotificationType),
-						lastNotificationChannel: pick("lastNotificationChannel", prev.lastNotificationChannel),
-						lastReminderMedName: pick("lastReminderMedName", prev.lastReminderMedName),
-						lastReminderTakenBy: pick("lastReminderTakenBy", prev.lastReminderTakenBy),
-						lastStockReminderSent: pick("lastStockReminderSent", prev.lastStockReminderSent),
-						lastStockReminderChannel: pick("lastStockReminderChannel", prev.lastStockReminderChannel),
-						lastStockReminderMedNames: pick("lastStockReminderMedNames", prev.lastStockReminderMedNames),
-						lastPrescriptionReminderSent: pick("lastPrescriptionReminderSent", prev.lastPrescriptionReminderSent),
-						lastPrescriptionReminderChannel: pick(
-							"lastPrescriptionReminderChannel",
-							prev.lastPrescriptionReminderChannel
-						),
-						lastPrescriptionReminderMedNames: pick(
-							"lastPrescriptionReminderMedNames",
-							prev.lastPrescriptionReminderMedNames
-						),
-					}));
+					setSettings((prev) => mergeReminderMetadata(prev, data));
+					setSavedSettings((prev) => mergeReminderMetadata(prev, data));
 				})
 				.catch((error: unknown) => {
 					log.warn("[useSettings] reminder status refresh failed", {

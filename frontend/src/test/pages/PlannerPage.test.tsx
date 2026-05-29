@@ -23,7 +23,21 @@ const mockMeds = [
 	},
 ];
 
-const mockPlannerRows = [{ medName: "Aspirin", total: 30, currentStock: 25 }];
+const mockPlannerRows = [
+	{
+		medicationId: 1,
+		medicationName: "Aspirin",
+		totalPills: 25,
+		currentPills: 25,
+		plannerUsage: 5,
+		blisterSize: 10,
+		blistersNeeded: 1,
+		fullBlisters: 2,
+		loosePills: 0,
+		enough: true,
+		packageType: "blister" as const,
+	},
+];
 
 // Factory for mock context
 const createMockContext = (overrides = {}) => ({
@@ -451,6 +465,13 @@ describe("PlannerPage with email enabled", () => {
 				headers: { "Content-Type": "application/json" },
 			})
 		);
+		const notificationCall = (authFetchMock as ReturnType<typeof vi.fn>).mock.calls.find(
+			([url]) => url === "/api/planner/send-email"
+		);
+		const notificationBody = JSON.parse(notificationCall?.[1]?.body as string);
+		expect(notificationBody.startDate).toEqual(expect.any(String));
+		expect(notificationBody.endDate).toEqual(expect.any(String));
+		expect(notificationBody.includeUntilStart).toBe(false);
 
 		await waitFor(() => {
 			expect(screen.getByText("Planner notification sent")).toBeInTheDocument();
@@ -530,6 +551,25 @@ describe("PlannerPage form interactions", () => {
 
 		// Form should still be present after submit
 		expect(document.querySelector("form.planner")).toBeInTheDocument();
+	});
+
+	it("shows calculation error when planner API fails", async () => {
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: false,
+			json: () => Promise.resolve({ error: "Invalid date range" }),
+		});
+
+		render(
+			<MemoryRouter>
+				<PlannerPage />
+			</MemoryRouter>
+		);
+
+		await act(async () => {
+			fireEvent.submit(document.querySelector("form.planner")!);
+		});
+
+		expect(await screen.findByRole("alert")).toHaveTextContent("Invalid date range");
 	});
 
 	it("can reset the form", () => {
@@ -613,7 +653,11 @@ describe("PlannerPage medication detail", () => {
 		);
 	});
 
-	it("calls openMedDetail when clicking medication row", () => {
+	it("calls openMedDetail when clicking medication row", async () => {
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(mockPlannerRows),
+		});
 		const openMedDetail = vi.fn();
 		mockContextValue = createMockContext({
 			meds: mockMeds,
@@ -626,11 +670,37 @@ describe("PlannerPage medication detail", () => {
 			</MemoryRouter>
 		);
 
-		const medRow = document.querySelector(".table-row.clickable");
-		if (medRow) {
-			fireEvent.click(medRow);
-			expect(openMedDetail).toHaveBeenCalled();
-		}
+		await act(async () => {
+			fireEvent.submit(document.querySelector("form.planner")!);
+		});
+		const medRow = await screen.findByRole("button", { name: /planner\.openMedication/i });
+		fireEvent.click(medRow);
+		expect(openMedDetail).toHaveBeenCalled();
+	});
+
+	it("renders planner rows as native buttons for keyboard access", async () => {
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(mockPlannerRows),
+		});
+		const openMedDetail = vi.fn();
+		mockContextValue = createMockContext({
+			meds: mockMeds,
+			openMedDetail,
+		});
+
+		render(
+			<MemoryRouter>
+				<PlannerPage />
+			</MemoryRouter>
+		);
+
+		await act(async () => {
+			fireEvent.submit(document.querySelector("form.planner")!);
+		});
+		const medRow = await screen.findByRole("button", { name: /planner\.openMedication/i });
+		expect(medRow.tagName.toLowerCase()).toBe("button");
+		expect(medRow).not.toBeDisabled();
 	});
 });
 

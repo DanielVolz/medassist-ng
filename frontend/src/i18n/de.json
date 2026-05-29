@@ -440,6 +440,12 @@
     "calculating": "Wird berechnet...",
     "sendEmail": "📧 Per E-Mail senden",
     "sendNotification": "🔔 Bedarf senden",
+    "noResults": "Für diesen Zeitraum wurden keine aktiven Medikamente gefunden.",
+    "openMedication": "{{name}} öffnen",
+    "errors": {
+      "invalidDateRange": "Wähle einen gültigen Zeitraum.",
+      "calculateFailed": "Die Planer-Berechnung ist fehlgeschlagen. Bitte versuche es erneut."
+    },
     "table": {
       "medication": "Medikament",
       "usage": "Verbrauch",

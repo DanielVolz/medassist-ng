@@ -8,22 +8,31 @@ import type { PlannerRow } from "../types";
 import { getMedDisplayName, isAmountBasedPackageType, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { toInputValue } from "../utils/formatters";
 
-// Date helpers
-function todayIso(): string {
-	return new Date().toISOString().slice(0, 10);
-}
-
-function plusDaysIso(days: number): string {
+function localDateAtStartOfDay(days = 0): Date {
 	const d = new Date();
 	d.setDate(d.getDate() + days);
-	return d.toISOString().slice(0, 10);
+	d.setHours(0, 0, 0, 0);
+	return d;
+}
+
+function defaultPlannerRange(): { start: string; end: string } {
+	return {
+		start: toInputValue(localDateAtStartOfDay()),
+		end: toInputValue(localDateAtStartOfDay(3)),
+	};
 }
 
 // Convert datetime-local value to ISO string
-function toIsoString(value: string): string {
-	if (!value) return new Date().toISOString();
+function toIsoString(value: string): string | null {
+	if (!value) return null;
 	const date = new Date(value);
-	return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+	return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function toDate(value: string): Date | null {
+	if (!value) return null;
+	const date = new Date(value);
+	return Number.isNaN(date.getTime()) ? null : date;
 }
 
 // Helper for user-specific localStorage keys
@@ -39,13 +48,12 @@ export function PlannerPage() {
 	// Local state for planner
 	const [plannerRows, setPlannerRows] = useState<PlannerRow[]>([]);
 	const [plannerLoading, setPlannerLoading] = useState(false);
-	const [range, setRange] = useState<{ start: string; end: string }>({
-		start: toInputValue(todayIso()),
-		end: toInputValue(plusDaysIso(3)),
-	});
+	const [range, setRange] = useState<{ start: string; end: string }>(() => defaultPlannerRange());
 	const [includeUntilStart, setIncludeUntilStart] = useState(false);
 	const [sendingPlannerEmail, setSendingPlannerEmail] = useState(false);
 	const [plannerEmailResult, setPlannerEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+	const [plannerError, setPlannerError] = useState<string | null>(null);
+	const [hasCalculated, setHasCalculated] = useState(false);
 
 	// Load user-specific planner data when user changes
 	useEffect(() => {
@@ -71,7 +79,7 @@ export function PlannerPage() {
 					/* keep default */
 				}
 			} else {
-				setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
+				setRange(defaultPlannerRange());
 			}
 
 			if (savedIncludeUntilStart) {
@@ -81,36 +89,70 @@ export function PlannerPage() {
 			}
 		} else {
 			setPlannerRows([]);
-			setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
+			setRange(defaultPlannerRange());
 			setIncludeUntilStart(false);
 		}
 	}, [user?.id]);
 
 	async function runPlanner(e: React.FormEvent) {
 		e.preventDefault();
+		const start = toDate(range.start);
+		const end = toDate(range.end);
+		const startDate = toIsoString(range.start);
+		const endDate = toIsoString(range.end);
+		setPlannerError(null);
+		setPlannerEmailResult(null);
+		setHasCalculated(false);
+		if (!start || !end || !startDate || !endDate || end <= start) {
+			setPlannerRows([]);
+			setPlannerError(t("planner.errors.invalidDateRange"));
+			setHasCalculated(true);
+			return;
+		}
+
 		setPlannerLoading(true);
-		const body = { startDate: toIsoString(range.start), endDate: toIsoString(range.end), includeUntilStart };
-		const rows = (await authFetch("/api/medications/usage", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(body),
-		})
-			.then((res) => res.json())
-			.catch(() => [])) as PlannerRow[];
-		setPlannerRows(rows);
-		setPlannerLoading(false);
-		// Save to user-specific localStorage
-		if (user?.id) {
-			localStorage.setItem(userStorageKey(user.id, "plannerRange"), JSON.stringify(range));
-			localStorage.setItem(userStorageKey(user.id, "plannerRows"), JSON.stringify(rows));
-			localStorage.setItem(userStorageKey(user.id, "plannerIncludeUntilStart"), String(includeUntilStart));
+		try {
+			const body = { startDate, endDate, includeUntilStart };
+			const res = await authFetch("/api/medications/usage", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			});
+			const data = await res.json().catch(() => null);
+			if (!res.ok) {
+				const message =
+					data && typeof data === "object" && "error" in data && typeof data.error === "string"
+						? data.error
+						: t("planner.errors.calculateFailed");
+				throw new Error(message);
+			}
+			if (!Array.isArray(data)) {
+				throw new Error(t("planner.errors.calculateFailed"));
+			}
+			const rows = data as PlannerRow[];
+			setPlannerRows(rows);
+			setHasCalculated(true);
+			if (user?.id) {
+				localStorage.setItem(userStorageKey(user.id, "plannerRange"), JSON.stringify(range));
+				localStorage.setItem(userStorageKey(user.id, "plannerRows"), JSON.stringify(rows));
+				localStorage.setItem(userStorageKey(user.id, "plannerIncludeUntilStart"), String(includeUntilStart));
+			}
+		} catch (error) {
+			setPlannerRows([]);
+			setPlannerError(error instanceof Error && error.message ? error.message : t("planner.errors.calculateFailed"));
+			setHasCalculated(true);
+		} finally {
+			setPlannerLoading(false);
 		}
 	}
 
 	function resetRange() {
-		setRange({ start: toInputValue(todayIso()), end: toInputValue(plusDaysIso(3)) });
+		setRange(defaultPlannerRange());
 		setIncludeUntilStart(false);
 		setPlannerRows([]);
+		setPlannerError(null);
+		setPlannerEmailResult(null);
+		setHasCalculated(false);
 		if (user?.id) {
 			localStorage.removeItem(userStorageKey(user.id, "plannerRange"));
 			localStorage.removeItem(userStorageKey(user.id, "plannerRows"));
@@ -153,6 +195,15 @@ export function PlannerPage() {
 
 	async function sendPlannerNotification() {
 		if (!canSendNotification || plannerRows.length === 0) return;
+		const start = toDate(range.start);
+		const end = toDate(range.end);
+		const startDate = toIsoString(range.start);
+		const endDate = toIsoString(range.end);
+		if (!start || !end || !startDate || !endDate || end <= start) {
+			setPlannerEmailResult({ success: false, message: t("planner.errors.invalidDateRange") });
+			return;
+		}
+
 		setSendingPlannerEmail(true);
 		setPlannerEmailResult(null);
 
@@ -162,16 +213,23 @@ export function PlannerPage() {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					email: settings.notificationEmail,
-					from: range.start,
-					until: range.end,
+					startDate,
+					endDate,
+					includeUntilStart,
 					rows: plannerRows,
 				}),
 			});
-			const data = await res.json();
+			const data = await res.json().catch(() => null);
 			if (res.ok) {
-				setPlannerEmailResult({ success: true, message: data.message || t("common.sent") });
+				setPlannerEmailResult({
+					success: true,
+					message: data && typeof data.message === "string" ? data.message : t("common.sent"),
+				});
 			} else {
-				setPlannerEmailResult({ success: false, message: data.error || t("common.sendFailed") });
+				setPlannerEmailResult({
+					success: false,
+					message: data && typeof data.error === "string" ? data.error : t("common.sendFailed"),
+				});
 			}
 		} catch {
 			setPlannerEmailResult({ success: false, message: t("common.networkError") });
@@ -220,6 +278,14 @@ export function PlannerPage() {
 						</button>
 					</div>
 				</form>
+				{plannerError && (
+					<p className="danger-text" role="alert">
+						{plannerError}
+					</p>
+				)}
+				{hasCalculated && !plannerError && plannerRows.length === 0 && (
+					<p className="info-text">{t("planner.noResults")}</p>
+				)}
 				{plannerRows.length > 0 && (
 					<>
 						<div className="table table-6">
@@ -236,16 +302,17 @@ export function PlannerPage() {
 									meds.find((m) => m.id === row.medicationId) ||
 									meds.find((m) => getMedDisplayName(m) === row.medicationName);
 								const remainingRefills = med?.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? 0) : null;
+								const openMedication = () => {
+									if (med) openMedDetail(med);
+								};
 								return (
-									<div
+									<button
+										type="button"
 										key={row.medicationId}
-										className="table-row clickable"
-										onClick={() => med && openMedDetail(med)}
-										onKeyDown={(e) => {
-											if (e.key === "Enter" || e.key === " ") {
-												if (med) openMedDetail(med);
-											}
-										}}
+										className={med ? "table-row clickable" : "table-row"}
+										disabled={!med}
+										aria-label={t("planner.openMedication", { name: row.medicationName })}
+										onClick={openMedication}
 									>
 										<span data-label={t("planner.table.medication")} className="cell-with-avatar">
 											<MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />
@@ -257,7 +324,7 @@ export function PlannerPage() {
 												{getUsageUnitLabel(row.medicationId, row.plannerUsage)}
 											</span>
 										</span>
-										<span data-label={t("planner.table.blisters")}>
+										<span data-label={t("planner.table.blistersNeeded")}>
 											{isAmountBasedPackageType(row.packageType) ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`}
 										</span>
 										<span data-label={t("planner.table.prescriptionRefills")}>{remainingRefills ?? "–"}</span>
@@ -278,7 +345,7 @@ export function PlannerPage() {
 										>
 											{row.enough ? t("status.enough") : t("status.outOfStock")}
 										</span>
-									</div>
+									</button>
 								);
 							})}
 						</div>

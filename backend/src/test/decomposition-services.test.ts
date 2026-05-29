@@ -49,6 +49,25 @@ describe("medications-service decomposition regression", () => {
 
 		expect(usage).toBe(1.5);
 	});
+
+	it("applies planner people multipliers when calculating range usage", () => {
+		const usage = calculateUsageInRange(
+			[
+				{
+					usage: 1,
+					every: 1,
+					start: "2026-01-01T08:00:00.000Z",
+					scheduleMode: "interval",
+					weekdays: [],
+					peopleMultiplier: 2,
+				},
+			],
+			new Date("2026-01-01T00:00:00.000Z"),
+			new Date("2026-01-11T00:00:00.000Z")
+		);
+
+		expect(usage).toBe(20);
+	});
 });
 
 describe("planner-service decomposition regression", () => {

@@ -19,6 +19,7 @@ import {
 	type StockReminderItem as SharedStockReminderItem,
 } from "../services/notifications/builders.js";
 import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "../services/notifications/delivery.js";
+import { calculatePlannerDemandRows } from "../services/planner-demand.js";
 import { escapeHtml, formatPlannerQuantity, getPlannerUnit, isContainerPackage } from "../services/planner-service.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/reminder-scheduler.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -50,18 +51,43 @@ type SendEmailBody = {
 	until?: string;
 	startDate?: string;
 	endDate?: string;
-	rows: PlannerRow[];
+	rows?: PlannerRow[];
+	includeUntilStart?: boolean;
 	language?: Language; // Optional: passed from frontend for unauthenticated requests
 };
 
-function resolvePlannerDateRange(body: SendEmailBody): { startDate: string; endDate: string } | null {
-	const startDate = body.startDate ?? body.from;
-	const endDate = body.endDate ?? body.until;
-	if (!startDate || !endDate) {
+type ResolvedPlannerDateRange =
+	| { ok: true; startDate: Date; endDate: Date }
+	| { ok: false; error: "Missing planner date range" | "Invalid planner date range" };
+
+function parsePlannerDate(value: string | undefined): Date | null {
+	const trimmed = value?.trim();
+	if (!trimmed) {
 		return null;
 	}
 
-	return { startDate, endDate };
+	const parsed = new Date(trimmed);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolvePlannerDateRange(body: SendEmailBody): ResolvedPlannerDateRange {
+	const rawStartDate = body.startDate ?? body.from;
+	const rawEndDate = body.endDate ?? body.until;
+	if (!rawStartDate || !rawEndDate) {
+		return { ok: false, error: "Missing planner date range" };
+	}
+
+	const startDate = parsePlannerDate(rawStartDate);
+	const endDate = parsePlannerDate(rawEndDate);
+	if (!startDate || !endDate) {
+		return { ok: false, error: "Invalid planner date range" };
+	}
+
+	if (endDate <= startDate) {
+		return { ok: false, error: "Invalid planner date range" };
+	}
+
+	return { ok: true, startDate, endDate };
 }
 
 type LowStockItem = {
@@ -180,6 +206,7 @@ export async function plannerRoutes(app: FastifyInstance) {
 						until: { type: "string" },
 						startDate: { type: "string", format: "date-time" },
 						endDate: { type: "string", format: "date-time" },
+						includeUntilStart: { type: "boolean" },
 						language: { type: "string" },
 						rows: { type: "array", items: plannerRowSchema },
 					},
@@ -189,6 +216,7 @@ export async function plannerRoutes(app: FastifyInstance) {
 						endDate: "2026-04-11T00:00:00.000Z",
 						from: "2026-03-11",
 						until: "2026-04-11",
+						includeUntilStart: false,
 						language: "en",
 						rows: [
 							{
@@ -217,31 +245,37 @@ export async function plannerRoutes(app: FastifyInstance) {
 		async (request, reply) => {
 			const { email, rows, language: bodyLanguage } = request.body;
 			const resolvedDateRange = resolvePlannerDateRange(request.body);
-			request.log.info({ email, rowCount: rows?.length ?? 0 }, "[Planner] Demand notification request received");
+			request.log.info(
+				{ hasRecipientEmail: Boolean(email), requestedRowCount: rows?.length ?? 0 },
+				"[Planner] Demand notification request received"
+			);
 
-			if (!rows || rows.length === 0) {
+			if (rows && rows.length === 0) {
 				return reply.status(400).send({ error: "Missing planner data" });
 			}
 
-			if (!resolvedDateRange) {
-				return reply.status(400).send({ error: "Missing planner date range" });
+			if (!resolvedDateRange.ok) {
+				return reply.status(400).send({ error: resolvedDateRange.error });
 			}
 
 			const { startDate, endDate } = resolvedDateRange;
 
 			// Load user settings for notification channels
 			const userId = await getUserId(request);
-			const activeMeds = await db
-				.select({ id: medications.id })
-				.from(medications)
-				.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
-			const activeMedIds = new Set(activeMeds.map((med) => med.id));
-			const activeRows = rows.filter((row) => activeMedIds.has(row.medicationId));
+			const requestedMedicationIds = rows
+				?.map((row) => row.medicationId)
+				.filter((id) => Number.isInteger(id) && id > 0);
+			const activeRows = await calculatePlannerDemandRows({
+				userId,
+				startDate,
+				endDate,
+				includeUntilStart: request.body.includeUntilStart ?? false,
+				medicationIds: requestedMedicationIds,
+			});
 			if (activeRows.length === 0) {
 				request.log.warn("[Planner] Demand notification skipped: no active medications in request");
 				return reply.status(400).send({ error: "No active medications to notify" });
 			}
-			const activeMedicationNames = activeRows.map((row) => row.medicationName);
 
 			const userSettings = await loadUserSettings(userId);
 			const notificationSettings = {
@@ -256,8 +290,7 @@ export async function plannerRoutes(app: FastifyInstance) {
 					pushEnabled: notificationSettings.shoutrrrEnabled,
 					hasPushUrl: Boolean(notificationSettings.shoutrrrUrl),
 					activeRowCount: activeRows.length,
-					recipientEmail: email,
-					medications: activeMedicationNames,
+					hasRecipientEmail: Boolean(email),
 				},
 				"[Planner] Demand notification channel state"
 			);
@@ -270,14 +303,14 @@ export async function plannerRoutes(app: FastifyInstance) {
 
 			// Format dates for display - escape to prevent XSS even though toLocaleDateString should be safe
 			const fromDate = escapeHtml(
-				new Date(startDate).toLocaleDateString(locale, {
+				startDate.toLocaleDateString(locale, {
 					year: "numeric",
 					month: "long",
 					day: "numeric",
 				})
 			);
 			const untilDate = escapeHtml(
-				new Date(endDate).toLocaleDateString(locale, {
+				endDate.toLocaleDateString(locale, {
 					year: "numeric",
 					month: "long",
 					day: "numeric",
@@ -351,7 +384,7 @@ ${getFooterPlain(language)}`;
 						smtpPort,
 						smtpSecure,
 						hasSmtpFrom: Boolean(smtpFrom),
-						recipientEmail: email,
+						hasRecipientEmail: Boolean(email),
 					},
 					"[Planner] Demand email path selected"
 				);
@@ -452,7 +485,7 @@ ${getFooterPlain(language)}`;
     `;
 
 					try {
-						request.log.info({ userId, recipientEmail: email }, "[Planner] Sending demand email");
+						request.log.info({ userId, hasRecipientEmail: Boolean(email) }, "[Planner] Sending demand email");
 
 						const mailResult = await sendEmailNotification({
 							from: smtpFrom,
@@ -467,12 +500,12 @@ ${getFooterPlain(language)}`;
 						}
 
 						request.log.info(
-							{ userId, recipientEmail: email, messageId: mailResult.messageId },
+							{ userId, hasRecipientEmail: Boolean(email), messageId: mailResult.messageId },
 							"[Planner] Demand email sent"
 						);
 						results.email = true;
 					} catch (error) {
-						request.log.error({ userId, recipientEmail: email, error }, "[Planner] Demand email failed");
+						request.log.error({ userId, hasRecipientEmail: Boolean(email), error }, "[Planner] Demand email failed");
 						const errorMessage = error instanceof Error ? error.message : "Unknown error";
 						results.errors.push(`Email: ${errorMessage}`);
 					}
@@ -482,7 +515,7 @@ ${getFooterPlain(language)}`;
 							userId,
 							hasSmtpHost: Boolean(smtpHost),
 							hasSmtpUser: Boolean(smtpUser),
-							recipientEmail: email,
+							hasRecipientEmail: Boolean(email),
 						},
 						"[Planner] Demand email skipped: SMTP not configured"
 					);
@@ -573,7 +606,7 @@ ${getFooterPlain(language)}`;
 		async (request, reply) => {
 			const { email, lowStock } = request.body;
 			request.log.info(
-				{ email, lowStockCount: lowStock?.length ?? 0 },
+				{ hasRecipientEmail: Boolean(email), lowStockCount: lowStock?.length ?? 0 },
 				"[ReminderManual] Stock reminder request received"
 			);
 
@@ -616,8 +649,8 @@ ${getFooterPlain(language)}`;
 					pushEnabled: notificationSettings.shoutrrrEnabled,
 					hasPushUrl: Boolean(notificationSettings.shoutrrrUrl),
 					filteredLowStockCount: filteredLowStock.length,
-					recipientEmail: email,
-					medications: filteredMedicationNames,
+					hasRecipientEmail: Boolean(email),
+					medicationCount: filteredMedicationNames.length,
 				},
 				"[ReminderManual] Stock reminder channel state"
 			);
@@ -695,7 +728,7 @@ ${getFooterPlain(language)}`;
 						smtpPort: smtp.port,
 						smtpSecure: smtp.secure,
 						hasSmtpFrom: Boolean(smtp.from),
-						recipientEmail: email,
+						hasRecipientEmail: Boolean(email),
 					},
 					"[ReminderManual] Stock email path selected"
 				);
@@ -804,7 +837,10 @@ ${getFooterPlain(language)}`;
 					const plainText = `MedAssist-ng - ${tr.push.reorderNow}\n\n${messageParts.join("\n")}\n\n---\n${getFooterPlain(language)}`;
 
 					try {
-						request.log.info({ userId, recipientEmail: email }, "[ReminderManual] Sending stock reminder email");
+						request.log.info(
+							{ userId, hasRecipientEmail: Boolean(email) },
+							"[ReminderManual] Sending stock reminder email"
+						);
 
 						const mailResult = await sendEmailNotification({
 							to: email,
@@ -819,12 +855,15 @@ ${getFooterPlain(language)}`;
 						}
 
 						request.log.info(
-							{ userId, recipientEmail: email, messageId: mailResult.messageId },
+							{ userId, hasRecipientEmail: Boolean(email), messageId: mailResult.messageId },
 							"[ReminderManual] Stock reminder email sent"
 						);
 						results.email = true;
 					} catch (error) {
-						request.log.error({ userId, recipientEmail: email, error }, "[ReminderManual] Stock reminder email failed");
+						request.log.error(
+							{ userId, hasRecipientEmail: Boolean(email), error },
+							"[ReminderManual] Stock reminder email failed"
+						);
 						const errorMessage = error instanceof Error ? error.message : "Unknown error";
 						results.errors.push(`Email: ${errorMessage}`);
 					}
@@ -834,7 +873,7 @@ ${getFooterPlain(language)}`;
 							userId,
 							hasSmtpHost: Boolean(smtp.host),
 							hasSmtpUser: Boolean(smtp.user),
-							recipientEmail: email,
+							hasRecipientEmail: Boolean(email),
 						},
 						"[ReminderManual] Stock reminder email skipped: SMTP not configured"
 					);
@@ -932,7 +971,7 @@ ${getFooterPlain(language)}`;
 		async (request, reply) => {
 			const { email, prescriptionLow } = request.body;
 			request.log.info(
-				{ email, prescriptionCount: prescriptionLow?.length ?? 0 },
+				{ hasRecipientEmail: Boolean(email), prescriptionCount: prescriptionLow?.length ?? 0 },
 				"[ReminderManual] Prescription reminder request received"
 			);
 
@@ -963,8 +1002,8 @@ ${getFooterPlain(language)}`;
 					pushEnabled: userSettings.shoutrrrEnabled,
 					hasPushUrl: Boolean(userSettings.shoutrrrUrl),
 					prescriptionCount: filteredPrescriptionLow.length,
-					recipientEmail: email,
-					medications: filteredMedicationNames,
+					hasRecipientEmail: Boolean(email),
+					medicationCount: filteredMedicationNames.length,
 				},
 				"[ReminderManual] Prescription reminder channel state"
 			);
@@ -1003,7 +1042,7 @@ ${getFooterPlain(language)}`;
 						smtpPort: smtp.port,
 						smtpSecure: smtp.secure,
 						hasSmtpFrom: Boolean(smtp.from),
-						recipientEmail: email,
+						hasRecipientEmail: Boolean(email),
 					},
 					"[ReminderManual] Prescription email path selected"
 				);
@@ -1081,7 +1120,10 @@ ${getFooterPlain(language)}`;
 					</div>
 				`;
 
-						request.log.info({ userId, recipientEmail: email }, "[ReminderManual] Sending prescription reminder email");
+						request.log.info(
+							{ userId, hasRecipientEmail: Boolean(email) },
+							"[ReminderManual] Sending prescription reminder email"
+						);
 
 						const mailResult = await sendEmailNotification({
 							to: email,
@@ -1096,13 +1138,13 @@ ${getFooterPlain(language)}`;
 						}
 
 						request.log.info(
-							{ userId, recipientEmail: email, messageId: mailResult.messageId },
+							{ userId, hasRecipientEmail: Boolean(email), messageId: mailResult.messageId },
 							"[ReminderManual] Prescription reminder email sent"
 						);
 						results.email = true;
 					} catch (error) {
 						request.log.error(
-							{ userId, recipientEmail: email, error },
+							{ userId, hasRecipientEmail: Boolean(email), error },
 							"[ReminderManual] Prescription reminder email failed"
 						);
 						const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -1114,7 +1156,7 @@ ${getFooterPlain(language)}`;
 							userId,
 							hasSmtpHost: Boolean(smtp.host),
 							hasSmtpUser: Boolean(smtp.user),
-							recipientEmail: email,
+							hasRecipientEmail: Boolean(email),
 						},
 						"[ReminderManual] Prescription reminder email skipped: SMTP not configured"
 					);

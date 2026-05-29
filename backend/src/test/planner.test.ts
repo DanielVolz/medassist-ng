@@ -172,11 +172,21 @@ async function createSchema(client: Client) {
       last_stock_reminder_channel text,
       last_stock_reminder_med_names text,
 			last_prescription_reminder_sent text,
-			last_prescription_reminder_channel text,
-			last_prescription_reminder_med_names text,
-      updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )`,
+	      last_prescription_reminder_channel text,
+	      last_prescription_reminder_med_names text,
+	      updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
+	      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	    )`,
+		`CREATE TABLE IF NOT EXISTS dose_tracking (
+	      id integer PRIMARY KEY AUTOINCREMENT,
+	      user_id integer NOT NULL,
+	      dose_id text NOT NULL,
+	      taken_at integer NOT NULL DEFAULT (strftime('%s','now')),
+	      marked_by text,
+	      taken_source text NOT NULL DEFAULT 'manual',
+	      dismissed integer NOT NULL DEFAULT 0,
+	      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	    )`,
 	];
 
 	for (const sql of tableCreations) {
@@ -185,6 +195,7 @@ async function createSchema(client: Client) {
 }
 
 async function clearData(client: Client) {
+	await client.execute("DELETE FROM dose_tracking");
 	await client.execute("DELETE FROM medications");
 	await client.execute("DELETE FROM user_settings");
 	await client.execute("DELETE FROM users");
@@ -208,13 +219,13 @@ describe("Planner Routes", () => {
 
 		// Insert test medications so active-medication filters pass
 		await testClient.execute({
-			sql: `INSERT INTO medications (id, user_id, name, taken_by_json, usage_json, every_json, start_json)
-			       VALUES (1, 999999999, 'Aspirin', '["Daniel"]', '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]')`,
+			sql: `INSERT INTO medications (id, user_id, name, taken_by_json, usage_json, every_json, start_json, pack_count, blisters_per_pack, pills_per_blister)
+				       VALUES (1, 999999999, 'Aspirin', '["Daniel"]', '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]', 100, 1, 10)`,
 			args: [],
 		});
 		await testClient.execute({
-			sql: `INSERT INTO medications (id, user_id, name, taken_by_json, usage_json, every_json, start_json)
-			       VALUES (2, 999999999, 'Ibuprofen', '["Daniel"]', '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]')`,
+			sql: `INSERT INTO medications (id, user_id, name, taken_by_json, usage_json, every_json, start_json, pack_count, blisters_per_pack, pills_per_blister)
+				       VALUES (2, 999999999, 'Ibuprofen', '["Daniel"]', '[1]', '[1]', '["2025-01-01T08:00:00.000Z"]', 100, 1, 10)`,
 			args: [],
 		});
 
@@ -273,6 +284,34 @@ describe("Planner Routes", () => {
 
 			expect(response.statusCode).toBe(400);
 			expect(response.json()).toEqual({ error: "Missing planner date range" });
+		});
+
+		it("should reject request when planner date range is invalid", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/planner/send-email",
+				payload: {
+					email: "test@example.com",
+					from: "not-a-date",
+					until: "2025-01-31",
+					rows: [
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 30,
+							plannerUsage: 10,
+							blisterSize: 10,
+							blistersNeeded: 1,
+							fullBlisters: 3,
+							loosePills: 0,
+							enough: true,
+						},
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(400);
+			expect(response.json()).toEqual({ error: "Invalid planner date range" });
 		});
 
 		it("should return error when no notification channels configured", async () => {
@@ -402,10 +441,58 @@ describe("Planner Routes", () => {
 			delete process.env.SMTP_PASS;
 		});
 
+		it("should recompute planner rows before sending notifications", async () => {
+			process.env.SMTP_HOST = "smtp.test.com";
+			process.env.SMTP_USER = "user@test.com";
+			process.env.SMTP_PASS = "password";
+
+			await testClient.execute({
+				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
+				args: [999999999],
+			});
+
+			mockSendMail.mockResolvedValueOnce({ messageId: "123", accepted: ["test.com"], rejected: [] });
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/planner/send-email",
+				payload: {
+					email: "test@example.com",
+					from: "2025-01-01",
+					until: "2025-01-11",
+					rows: [
+						{
+							medicationId: 1,
+							medicationName: "Aspirin",
+							totalPills: 1,
+							plannerUsage: 999,
+							blisterSize: 1,
+							blistersNeeded: 999,
+							fullBlisters: 0,
+							loosePills: 0,
+							enough: false,
+						},
+					],
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			const mailCall = mockSendMail.mock.calls[0][0];
+			expect(mailCall.text).toContain("Aspirin: 10 pills");
+			expect(mailCall.text).not.toContain("999");
+
+			delete process.env.SMTP_HOST;
+			delete process.env.SMTP_USER;
+			delete process.env.SMTP_PASS;
+		});
+
 		it("should handle email with out of stock medications", async () => {
 			process.env.SMTP_HOST = "smtp.test.com";
 			process.env.SMTP_USER = "user@test.com";
 			process.env.SMTP_PASS = "password";
+			await testClient.execute(
+				"UPDATE medications SET pack_count = 1, blisters_per_pack = 1, pills_per_blister = 5 WHERE id = 1"
+			);
 
 			await testClient.execute({
 				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, language) VALUES (?, 1, 0, 'en')`,
@@ -598,6 +685,9 @@ describe("Planner Routes", () => {
 			process.env.SMTP_HOST = "smtp.test.com";
 			process.env.SMTP_USER = "user@test.com";
 			process.env.SMTP_PASS = "password";
+			await testClient.execute(
+				"UPDATE medications SET pack_count = 1, blisters_per_pack = 1, pills_per_blister = 5 WHERE id = 1"
+			);
 
 			await testClient.execute({
 				sql: `INSERT INTO user_settings (user_id, email_enabled, shoutrrr_enabled, shoutrrr_url, language) VALUES (?, 1, 1, 'ntfy://localhost/test', 'en')`,

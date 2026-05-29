@@ -301,9 +301,18 @@ describe("SharedSchedule", () => {
 
 		await waitFor(() => {
 			expect(screen.getByText(/share\.scheduleFor/i)).toBeInTheDocument();
-			expect(screen.getByText("share.publicAccessHelp")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "share.publicAccessSummary" })).toBeInTheDocument();
 			expect(screen.getByText("share.noSchedule")).toBeInTheDocument();
 		});
+
+		const helpToggle = screen.getByRole("button", { name: "share.publicAccessSummary" });
+		expect(helpToggle).toHaveAttribute("aria-expanded", "false");
+		expect(screen.queryByText("share.publicAccessHelp")).not.toBeInTheDocument();
+
+		fireEvent.click(helpToggle);
+
+		expect(helpToggle).toHaveAttribute("aria-expanded", "true");
+		expect(screen.getByText("share.publicAccessHelp")).toBeInTheDocument();
 	});
 
 	it("opens and saves a shared journal note when the share link allows notes", async () => {

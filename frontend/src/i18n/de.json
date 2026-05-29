@@ -787,6 +787,7 @@
     "noPeople": "Keine Medikamente mit 'Eingenommen von' zugewiesen. Füge zuerst eine Person zu einem Medikament hinzu.",
     "scheduleFor": "Zeitplan für",
     "period": "Zeitraum",
+    "publicAccessSummary": "So funktioniert dieser Teilen-Link",
     "publicAccessHelp": "Dieser Teilen-Link zeigt nur den ausgewaehlten Zeitplan und geteilte Dosisaktionen. Einstellungen und voller Kontozugriff bleiben in der Haupt-App.",
     "noSchedule": "Keine geplanten Einnahmen gefunden.",
     "generatedBy": "Erstellt von",

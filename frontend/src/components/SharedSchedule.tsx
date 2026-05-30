@@ -71,6 +71,7 @@ export function SharedSchedule() {
 	const [sharedJournalError, setSharedJournalError] = useState<string | null>(null);
 	const [showPastDays, setShowPastDays] = useState(false);
 	const [showFutureDays, setShowFutureDays] = useState(false);
+	const [shareHelpOpen, setShareHelpOpen] = useState(false);
 	const sharedImageSrc = useCallback(
 		(filename: string) => {
 			const imagePath = `/api/images/${encodeURIComponent(filename)}`;
@@ -1089,7 +1090,21 @@ export function SharedSchedule() {
 			<div className="shared-schedule-container">
 				<header className="shared-schedule-header">
 					<h1>{pageTitle}</h1>
-					<p className="shared-schedule-boundary">{t("share.publicAccessHelp")}</p>
+					<div className="shared-schedule-help">
+						<button
+							type="button"
+							className="shared-schedule-help-toggle"
+							onClick={() => setShareHelpOpen((current) => !current)}
+							aria-expanded={shareHelpOpen}
+							title={shareHelpOpen ? t("common.collapse") : t("common.expand")}
+						>
+							<span>{t("share.publicAccessSummary")}</span>
+							<span className={`shared-schedule-help-icon${shareHelpOpen ? " open" : ""}`} aria-hidden="true">
+								▼
+							</span>
+						</button>
+						{shareHelpOpen ? <p className="shared-schedule-boundary">{t("share.publicAccessHelp")}</p> : null}
+					</div>
 					<div className="shared-schedule-header-actions">
 						<div className={`theme-menu ${themeMenuOpen ? "open" : ""}`} ref={themeMenuRef}>
 							<button className="icon-btn" onClick={() => setThemeMenuOpen(!themeMenuOpen)} title={t("theme.title")}>

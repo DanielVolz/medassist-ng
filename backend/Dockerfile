@@ -53,6 +53,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends gosu \
 COPY --from=builder /app/backend/node_modules ./node_modules
 COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/backend/package.json ./
+COPY --from=builder /app/shared/package.json /shared/package.json
+COPY --from=builder /app/shared/dist /shared/dist
 
 # Copy drizzle migrations folder (required for database setup)
 COPY backend/drizzle ./drizzle

@@ -231,7 +231,7 @@ jobs:
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}" >> changelog.md
 
       - name: Download image digest metadata
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: image-digest-*
           path: image-digests

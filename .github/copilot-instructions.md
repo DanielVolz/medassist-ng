@@ -11,3 +11,8 @@ If rules differ between files, follow `AGENTS.md`.
 3. Identify triggered skills from `AGENTS.md` and read only the matching `SKILL.md` files before making changes.
 4. Follow delegation boundaries from `AGENTS.md`: `@testing-manager` for testing work and `@release-manager` for release orchestration, including the documented fallback protocol when a required specialist is unavailable.
 5. Keep all non-canonical instruction files brief and aligned with `AGENTS.md`; do not duplicate full governance here.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

@@ -52,6 +52,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     strategy:
       matrix:
@@ -66,6 +67,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Normalize image owner
+        id: image_owner
+        run: echo "value=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -91,11 +96,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/medassist-ng-${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ steps.image_owner.outputs.value }}/medassist-ng-${{ matrix.image }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long,prefix=sha-
             type=raw,value=${{ steps.manual_image_tag.outputs.value || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
@@ -111,8 +117,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
-          provenance: false
-          sbom: false
+          provenance: mode=max
+          sbom: true
 
       - name: Record image digest
         run: |
@@ -132,11 +138,142 @@ jobs:
           retention-days: 1
 
   # =============================================================================
+  # Smoke-test published images before completing a release
+  # =============================================================================
+  smoke-backend:
+    name: Smoke backend image
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve backend image reference
+        id: backend_image
+        run: |
+          owner="$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "ref=${{ env.REGISTRY }}/${owner}/medassist-ng-backend:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Pull backend image
+        run: docker pull "${{ steps.backend_image.outputs.ref }}"
+
+      - name: Smoke shared runtime import
+        run: |
+          docker run --rm --entrypoint node "${{ steps.backend_image.outputs.ref }}" \
+            -e 'import("@medassist/shared").then(() => console.log("shared-import-ok")).catch((error) => { console.error(error); process.exit(1); })'
+
+      - name: Smoke backend startup and health endpoint
+        run: |
+          DATA_DIR="$(mktemp -d)"
+          CONTAINER_NAME="medassist-backend-smoke-${GITHUB_RUN_ID}"
+          HEALTH_FILE="$(mktemp)"
+          success=0
+
+          cleanup() {
+            if [ "$success" -ne 1 ]; then
+              docker logs "$CONTAINER_NAME" 2>/dev/null || true
+            fi
+            docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+            rm -rf "$DATA_DIR"
+            rm -f "$HEALTH_FILE"
+          }
+
+          trap cleanup EXIT
+
+          docker run -d \
+            --name "$CONTAINER_NAME" \
+            -p 127.0.0.1:38080:3000 \
+            -v "$DATA_DIR:/app/data" \
+            -e ALLOW_UNAUTHENTICATED=true \
+            -e LOG_LEVEL=warn \
+            "${{ steps.backend_image.outputs.ref }}"
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:38080/health >"$HEALTH_FILE"; then
+              grep -F '"status":"ok"' "$HEALTH_FILE" >/dev/null
+              success=1
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Backend smoke health check did not become ready in time."
+          exit 1
+
+  smoke-frontend:
+    name: Smoke frontend image
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve frontend image reference
+        id: frontend_image
+        run: |
+          owner="$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "ref=${{ env.REGISTRY }}/${owner}/medassist-ng-frontend:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Pull frontend image
+        run: docker pull "${{ steps.frontend_image.outputs.ref }}"
+
+      - name: Smoke frontend startup
+        run: |
+          CONTAINER_NAME="medassist-frontend-smoke-${GITHUB_RUN_ID}"
+          INDEX_FILE="$(mktemp)"
+          success=0
+
+          cleanup() {
+            if [ "$success" -ne 1 ]; then
+              docker logs "$CONTAINER_NAME" 2>/dev/null || true
+            fi
+            docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+            rm -f "$INDEX_FILE"
+          }
+
+          trap cleanup EXIT
+
+          docker run -d \
+            --name "$CONTAINER_NAME" \
+            -p 127.0.0.1:38081:8080 \
+            -e BACKEND_URL=127.0.0.1:9 \
+            -e LOG_LEVEL=warn \
+            "${{ steps.frontend_image.outputs.ref }}"
+
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error http://127.0.0.1:38081/ >"$INDEX_FILE"; then
+              grep -F '<div id="root"></div>' "$INDEX_FILE" >/dev/null
+              success=1
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Frontend smoke check did not become ready in time."
+          exit 1
+
+  # =============================================================================
   # Create GitHub Release (on tag push or manual dispatch with create_release)
   # =============================================================================
   create-release:
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: [build-and-push, smoke-backend, smoke-frontend]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
     permissions:
       contents: write
@@ -222,11 +359,13 @@ jobs:
           echo "## Docker Images" >> changelog.md
           echo "" >> changelog.md
           echo '```bash' >> changelog.md
-          echo "docker pull ghcr.io/${{ github.repository_owner }}/medassist-ng-backend:${CURRENT_TAG#v}" >> changelog.md
-          echo "docker pull ghcr.io/${{ github.repository_owner }}/medassist-ng-frontend:${CURRENT_TAG#v}" >> changelog.md
+          OWNER_LC="$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "docker pull ghcr.io/${OWNER_LC}/medassist-ng-backend:${CURRENT_TAG#v}" >> changelog.md
+          echo "docker pull ghcr.io/${OWNER_LC}/medassist-ng-frontend:${CURRENT_TAG#v}" >> changelog.md
           echo '```' >> changelog.md
           echo "" >> changelog.md
           echo "A digest-pinned Docker Compose file is attached to this release as \`docker-compose.pinned.yml\`." >> changelog.md
+          echo "Release images now publish OCI provenance and SBOM attestations, and release completion is gated by container smoke tests." >> changelog.md
           echo "" >> changelog.md
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}" >> changelog.md
 

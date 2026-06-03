@@ -21,9 +21,73 @@ jobs:
         with:
           github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
           script: |
-            const projectId = 'PVT_kwHOADH82s4BO2OT';
-            const statusFieldId = 'PVTSSF_lAHOADH82s4BO2OTzg9bdkE';
-            const doneOptionId = 'ca45af98';
+            const projectUrl = process.env.PROJECT_URL;
+            if (!projectUrl) {
+              core.setFailed("Missing repository variable PROJECT_URL.");
+              return;
+            }
+
+            const match = projectUrl.match(/^https:\/\/github\.com\/(?:users|orgs)\/([^/]+)\/projects\/(\d+)\/?$/);
+            if (!match) {
+              core.setFailed(`PROJECT_URL has an unsupported format: ${projectUrl}`);
+              return;
+            }
+
+            const [, owner, projectNumberRaw] = match;
+            const projectNumber = Number(projectNumberRaw);
+
+            const projectResult = await github.graphql(`
+              query($owner: String!, $number: Int!) {
+                user(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { owner, number: projectNumber });
+
+            const project = projectResult.user?.projectV2 || projectResult.organization?.projectV2;
+            if (!project) {
+              core.setFailed(`Project ${projectUrl} was not found or is not accessible to the project automation token.`);
+              return;
+            }
+
+            const statusField = (project.fields?.nodes || []).find((field) => field.name === "Status");
+            const doneOptionId = (statusField?.options || []).find((option) => option.name === "Done")?.id;
+
+            if (!statusField || !doneOptionId) {
+              core.setFailed('Configured project is missing the single-select "Status" field or its "Done" option.');
+              return;
+            }
 
             // Determine content ID (issue or PR node ID)
             const nodeId = context.payload.issue?.node_id || context.payload.pull_request?.node_id;
@@ -69,7 +133,7 @@ jobs:
             `, { nodeId });
 
             const items = result.node?.projectItems?.nodes || [];
-            const projectItem = items.find(item => item.project.id === projectId);
+            const projectItem = items.find(item => item.project.id === project.id);
 
             if (!projectItem) {
               console.log(`${type} #${number} is not in the project board — skipping.`);
@@ -96,10 +160,12 @@ jobs:
                 }
               }
             `, {
-              projectId,
+              projectId: project.id,
               itemId: projectItem.id,
-              fieldId: statusFieldId,
+              fieldId: statusField.id,
               optionId: doneOptionId
             });
 
             console.log(`Successfully moved ${type} #${number} to "Done".`);
+        env:
+          PROJECT_URL: ${{ vars.PROJECT_URL }}

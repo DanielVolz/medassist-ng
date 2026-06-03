@@ -218,6 +218,8 @@ After the containers start, confirm the stack is actually healthy:
 2. Open `http://localhost:4174/api/health` and confirm the backend responds through the frontend proxy with JSON that includes `"status":"ok"`.
 3. Open `http://localhost:4174` and confirm the app loads.
 
+GitHub releases also attach a digest-pinned `docker-compose.pinned.yml`. The published container images now include OCI SBOM/provenance attestations and must pass container smoke tests before release completion.
+
 If you use MedAssist from another device or domain, set `PUBLIC_APP_URL` to the address people actually use to open the app.
 
 ### Deployment Security

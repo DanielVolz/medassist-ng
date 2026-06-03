@@ -82,3 +82,21 @@ npm run build
 ```
 
 Use the root-level commands for full-stack validation when a change spans backend and frontend. Keep using the package-local commands when you are validating only one slice.
+
+## Release Workflow Safeguards
+
+- PR validation is enforced through `.github/workflows/test.yml` and `.github/workflows/e2e.yml`.
+- Docker publishing is handled by `.github/workflows/docker-build.yml`.
+- Release completion now depends on container smoke tests:
+  - backend shared-runtime import plus backend `/health` startup check
+  - frontend container boot and app-shell response check
+- Published release images also carry OCI SBOM/provenance attestations.
+
+## Project Automation Configuration
+
+GitHub Project automation expects these repository settings:
+
+- `vars.PROJECT_URL`: GitHub Project v2 URL in the form `https://github.com/users/<owner>/projects/<number>` or `https://github.com/orgs/<owner>/projects/<number>`
+- `secrets.ADD_TO_PROJECT_PAT`: token that can add/update project items for that project
+
+The project workflows resolve project and field IDs dynamically from `PROJECT_URL`. If the configured project is inaccessible or missing the expected `Status`, `Type`, or `Priority` fields/options, the workflow now fails clear instead of silently drifting.

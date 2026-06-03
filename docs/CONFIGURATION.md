@@ -70,6 +70,8 @@ services:
 
 The default `docker-compose.yml` uses readable versioned image tags. Each GitHub release also attaches `docker-compose.pinned.yml` with the same release tags plus immutable image digests for deployments that need stricter reproducibility.
 
+Release images also publish OCI SBOM/provenance attestations through the Docker build workflow. Use the pinned compose file when you want immutable deployment references, and use the published attestations when you need supply-chain metadata for the exact shipped image.
+
 ## API Keys
 
 When `AUTH_ENABLED=true`, authenticated users can create API keys and call protected endpoints with:

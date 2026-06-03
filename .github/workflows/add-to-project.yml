@@ -1,14 +1,15 @@
-name: Add to Project
+name: Project Intake
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened, labeled, unlabeled, reopened]
 
 permissions: {}
 
 jobs:
   add-to-project:
     name: Add issue to project
+    if: contains(fromJson('["opened","reopened","labeled"]'), github.event.action)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/add-to-project@v2.0.0
@@ -17,3 +18,188 @@ jobs:
           github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
           labeled: enhancement, bug, triage
           label-operator: OR
+
+  sync-fields:
+    name: Sync project fields
+    runs-on: ubuntu-latest
+    needs: add-to-project
+    if: always() && !cancelled()
+    steps:
+      - name: Sync Type/Priority fields from labels
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          script: |
+            const projectUrl = process.env.PROJECT_URL;
+            if (!projectUrl) {
+              core.setFailed("Missing repository variable PROJECT_URL.");
+              return;
+            }
+
+            const match = projectUrl.match(/^https:\/\/github\.com\/(?:users|orgs)\/([^/]+)\/projects\/(\d+)\/?$/);
+            if (!match) {
+              core.setFailed(`PROJECT_URL has an unsupported format: ${projectUrl}`);
+              return;
+            }
+
+            const [, owner, projectNumberRaw] = match;
+            const projectNumber = Number(projectNumberRaw);
+            const issueNodeId = context.payload.issue.node_id;
+            const issueNumber = context.payload.issue.number;
+            const labels = (context.payload.issue.labels || []).map((label) => label.name.toLowerCase());
+            const qualifyingLabels = ["enhancement", "bug", "triage"];
+
+            const projectQuery = `
+              query($owner: String!, $number: Int!) {
+                user(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            const projectResult = await github.graphql(projectQuery, { owner, number: projectNumber });
+            const project = projectResult.user?.projectV2 || projectResult.organization?.projectV2;
+
+            if (!project) {
+              core.setFailed(`Project ${projectUrl} was not found or is not accessible to the project automation token.`);
+              return;
+            }
+
+            const itemResult = await github.graphql(`
+              query($nodeId: ID!) {
+                node(id: $nodeId) {
+                  ... on Issue {
+                    projectItems(first: 20) {
+                      nodes {
+                        id
+                        project { id }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { nodeId: issueNodeId });
+
+            const projectItem = (itemResult.node?.projectItems?.nodes || []).find((item) => item.project.id === project.id) || null;
+            const shouldAlreadyBeTracked = labels.some((label) => qualifyingLabels.includes(label));
+
+            if (!projectItem) {
+              if (shouldAlreadyBeTracked) {
+                core.setFailed(`Issue #${issueNumber} should already be in the project after intake sync, but no matching project item was found.`);
+                return;
+              }
+
+              console.log(`Issue #${issueNumber} is not currently tracked in the configured project. Skipping field sync.`);
+              return;
+            }
+
+            const fieldsByName = new Map((project.fields?.nodes || []).map((field) => [field.name, field]));
+            const typeField = fieldsByName.get("Type");
+            const priorityField = fieldsByName.get("Priority");
+
+            const pickOptionId = (field, optionName) => {
+              if (!field || !optionName) return null;
+              return (field.options || []).find((option) => option.name.toLowerCase() === optionName.toLowerCase())?.id || null;
+            };
+
+            let typeName = null;
+            if (labels.includes("bug")) typeName = "Bug";
+            else if (labels.includes("enhancement")) typeName = "Feature";
+            else if (labels.includes("documentation")) typeName = "Documentation";
+
+            let priorityName = null;
+            if (labels.includes("priority/high")) priorityName = "High";
+            else if (labels.includes("priority/low")) priorityName = "Low";
+            else if (labels.includes("priority/medium")) priorityName = "Medium";
+            else if (labels.includes("triage")) priorityName = "Medium";
+
+            const syncSingleSelectField = async ({ field, fieldName, optionName }) => {
+              if (!field) {
+                if (optionName) {
+                  throw new Error(`Configured project is missing the single-select "${fieldName}" field required for label sync.`);
+                }
+                return;
+              }
+
+              if (!optionName) {
+                await github.graphql(`
+                  mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!) {
+                    clearProjectV2ItemFieldValue(input: {
+                      projectId: $projectId
+                      itemId: $itemId
+                      fieldId: $fieldId
+                    }) {
+                      projectV2Item { id }
+                    }
+                  }
+                `, {
+                  projectId: project.id,
+                  itemId: projectItem.id,
+                  fieldId: field.id
+                });
+
+                console.log(`Issue #${issueNumber}: cleared ${fieldName}`);
+                return;
+              }
+
+              const optionId = pickOptionId(field, optionName);
+              if (!optionId) {
+                throw new Error(`Configured project field "${fieldName}" is missing option "${optionName}".`);
+              }
+
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $optionId }
+                  }) {
+                    projectV2Item { id }
+                  }
+                }
+              `, {
+                projectId: project.id,
+                itemId: projectItem.id,
+                fieldId: field.id,
+                optionId
+              });
+
+              console.log(`Issue #${issueNumber}: set ${fieldName} = ${optionName}`);
+            };
+
+            await syncSingleSelectField({ field: typeField, fieldName: "Type", optionName: typeName });
+            await syncSingleSelectField({ field: priorityField, fieldName: "Priority", optionName: priorityName });
+        env:
+          PROJECT_URL: ${{ vars.PROJECT_URL }}

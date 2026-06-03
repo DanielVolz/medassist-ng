@@ -29,21 +29,26 @@ jobs:
             backend:
               - 'backend/**'
               - 'shared/**'
+              - 'package.json'
+              - 'release-policy.json'
+              - 'scripts/**'
               - 'biome.json'
-              - '.github/workflows/test.yml'
+              - '.github/workflows/**'
             frontend:
               - 'frontend/**'
               - 'shared/**'
+              - 'package.json'
+              - 'release-policy.json'
+              - 'scripts/**'
               - 'biome.json'
-              - '.github/workflows/test.yml'
+              - '.github/workflows/**'
 
   # =============================================================================
-  # Backend Tests (skipped if no backend-related files changed)
+  # Backend Tests (always emits the required check context)
   # =============================================================================
   backend-test:
     name: Backend Tests
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,10 +57,17 @@ jobs:
         working-directory: backend
 
     steps:
+      - name: Skip backend checks when change is not backend-relevant
+        if: needs.changes.outputs.backend != 'true'
+        working-directory: .
+        run: echo "No backend-relevant changes detected; required check passes without running backend validations."
+
       - name: Checkout repository
+        if: needs.changes.outputs.backend == 'true'
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: needs.changes.outputs.backend == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: '22'
@@ -65,43 +77,49 @@ jobs:
             backend/package-lock.json
 
       - name: Install shared dependencies
+        if: needs.changes.outputs.backend == 'true'
         working-directory: shared
         run: npm ci
 
       - name: Build shared core
+        if: needs.changes.outputs.backend == 'true'
         working-directory: shared
         run: npm run build
 
       - name: Install dependencies
+        if: needs.changes.outputs.backend == 'true'
         run: npm ci
 
       - name: Lint
+        if: needs.changes.outputs.backend == 'true'
         run: npm run lint
 
       - name: TypeScript type check
+        if: needs.changes.outputs.backend == 'true'
         run: npx tsc --noEmit
 
       - name: Run domain safety release gate
+        if: needs.changes.outputs.backend == 'true'
         run: npm run test:domain
 
       - name: Run tests with coverage
+        if: needs.changes.outputs.backend == 'true'
         run: npm run test:coverage
 
       - name: Upload coverage report
+        if: always() && needs.changes.outputs.backend == 'true'
         uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: backend-coverage
           path: backend/coverage/
           retention-days: 7
 
   # =============================================================================
-  # Frontend Tests & Build (skipped if no frontend-related files changed)
+  # Frontend Tests & Build (always emits the required check context)
   # =============================================================================
   frontend-build:
     name: Frontend Build
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -110,10 +128,17 @@ jobs:
         working-directory: frontend
 
     steps:
+      - name: Skip frontend checks when change is not frontend-relevant
+        if: needs.changes.outputs.frontend != 'true'
+        working-directory: .
+        run: echo "No frontend-relevant changes detected; required check passes without running frontend validations."
+
       - name: Checkout repository
+        if: needs.changes.outputs.frontend == 'true'
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: needs.changes.outputs.frontend == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: '22'
@@ -123,28 +148,34 @@ jobs:
             frontend/package-lock.json
 
       - name: Install shared dependencies
+        if: needs.changes.outputs.frontend == 'true'
         working-directory: shared
         run: npm ci
 
       - name: Build shared core
+        if: needs.changes.outputs.frontend == 'true'
         working-directory: shared
         run: npm run build
 
       - name: Install dependencies
+        if: needs.changes.outputs.frontend == 'true'
         run: npm ci
 
       - name: Lint
+        if: needs.changes.outputs.frontend == 'true'
         run: npm run lint
 
       - name: Run tests with coverage
+        if: needs.changes.outputs.frontend == 'true'
         run: npm run test:coverage
 
       - name: TypeScript type check & build
+        if: needs.changes.outputs.frontend == 'true'
         run: npm run build
 
       - name: Upload coverage report
+        if: always() && needs.changes.outputs.frontend == 'true'
         uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: frontend-coverage
           path: frontend/coverage/

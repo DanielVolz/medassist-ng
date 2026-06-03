@@ -130,19 +130,29 @@ jobs:
 
       - name: Start backend container and verify health
         run: |
-          DATA_DIR="$(mktemp -d)"
-          echo "SMOKE_DATA_DIR=$DATA_DIR" >> "$GITHUB_ENV"
+          DATA_VOLUME="medassist-backend-smoke-data-${GITHUB_RUN_ID}"
+          echo "SMOKE_DATA_VOLUME=$DATA_VOLUME" >> "$GITHUB_ENV"
+          docker volume create "$DATA_VOLUME" >/dev/null
 
           docker run -d \
             --name medassist-backend-smoke \
             --network medassist-smoke \
             -p 127.0.0.1:38080:3000 \
-            -v "$DATA_DIR:/app/data" \
+            -v "$DATA_VOLUME:/app/data" \
             -e ALLOW_UNAUTHENTICATED=true \
+            -e DATA_DIR=/app/data \
             -e LOG_LEVEL=warn \
             "${{ steps.image_refs.outputs.backend }}"
 
           for attempt in $(seq 1 30); do
+            container_status="$(docker inspect --format '{{.State.Status}}' medassist-backend-smoke 2>/dev/null || echo missing)"
+            if [ "$container_status" != "running" ]; then
+              echo "Backend smoke container stopped before health became ready (status: $container_status)."
+              docker inspect --format 'exit={{.State.ExitCode}} error={{.State.Error}}' medassist-backend-smoke 2>/dev/null || true
+              docker logs medassist-backend-smoke 2>/dev/null || true
+              exit 1
+            fi
+
             if curl --fail --silent --show-error http://127.0.0.1:38080/health > smoke-logs/backend-health.json; then
               grep -F '"status":"ok"' smoke-logs/backend-health.json >/dev/null
               exit 0
@@ -151,6 +161,8 @@ jobs:
           done
 
           echo "Backend health check did not become ready in time."
+          docker inspect --format 'exit={{.State.ExitCode}} error={{.State.Error}}' medassist-backend-smoke 2>/dev/null || true
+          docker logs medassist-backend-smoke 2>/dev/null || true
           exit 1
 
       - name: Start frontend container and verify static assets and backend proxy
@@ -208,5 +220,4 @@ jobs:
           docker rm -f medassist-backend-smoke >/dev/null 2>&1 || true
           docker rm -f medassist-frontend-smoke >/dev/null 2>&1 || true
           docker network rm medassist-smoke >/dev/null 2>&1 || true
-          chmod -R u+w "${SMOKE_DATA_DIR:-}" >/dev/null 2>&1 || true
-          rm -rf "${SMOKE_DATA_DIR:-}" >/dev/null 2>&1 || true
+          docker volume rm -f "${SMOKE_DATA_VOLUME:-}" >/dev/null 2>&1 || true

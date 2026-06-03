@@ -32,6 +32,10 @@ function fail(message) {
   throw new Error(message);
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function resolveInputPath(inputPath) {
   return path.isAbsolute(inputPath) ? inputPath : path.join(repoRoot, inputPath);
 }
@@ -109,10 +113,11 @@ function validateTaggedCompose(composePath, releaseVersion) {
 
 function validatePinnedCompose(pinnedComposePath, releaseVersion) {
   const pinnedContent = readText(pinnedComposePath);
+  const escapedReleaseVersion = escapeRegExp(releaseVersion);
 
   for (const imageName of ["medassist-ng-backend", "medassist-ng-frontend"]) {
     const imageRef = extractImageLine(pinnedContent, imageName);
-    const match = new RegExp(`:${releaseVersion}@(sha256:[a-f0-9]{64})$`).exec(imageRef);
+    const match = new RegExp(`:${escapedReleaseVersion}@(sha256:[a-f0-9]{64})$`).exec(imageRef);
     if (!match) {
       fail(`${pinnedComposePath} must pin ${imageName}:${releaseVersion}@sha256:<digest>, found ${imageRef}`);
     }
@@ -121,6 +126,7 @@ function validatePinnedCompose(pinnedComposePath, releaseVersion) {
 
 function validateChangelog(changelogPath, releaseTag, releaseVersion) {
   const changelog = readText(changelogPath);
+  const escapedReleaseVersion = escapeRegExp(releaseVersion);
 
   if (!changelog.includes(releaseTag)) {
     fail(`${changelogPath} must mention the current release tag ${releaseTag}.`);
@@ -130,8 +136,8 @@ function validateChangelog(changelogPath, releaseTag, releaseVersion) {
     fail(`${changelogPath} contains a malformed compare URL with an empty previous tag.`);
   }
 
-  const backendPullPattern = new RegExp(`docker pull ghcr\\.io\\/[^\\s]+\\/medassist-ng-backend:${releaseVersion}`);
-  const frontendPullPattern = new RegExp(`docker pull ghcr\\.io\\/[^\\s]+\\/medassist-ng-frontend:${releaseVersion}`);
+  const backendPullPattern = new RegExp(`docker pull ghcr\\.io\\/[^\\s]+\\/medassist-ng-backend:${escapedReleaseVersion}`);
+  const frontendPullPattern = new RegExp(`docker pull ghcr\\.io\\/[^\\s]+\\/medassist-ng-frontend:${escapedReleaseVersion}`);
 
   if (!backendPullPattern.test(changelog)) {
     fail(`${changelogPath} is missing the backend docker pull command for ${releaseVersion}.`);

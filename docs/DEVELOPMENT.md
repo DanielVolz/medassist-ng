@@ -86,10 +86,20 @@ Use the root-level commands for full-stack validation when a change spans backen
 ## Release Workflow Safeguards
 
 - PR validation is enforced through `.github/workflows/test.yml` and `.github/workflows/e2e.yml`.
+- Release-relevant PRs also run `.github/workflows/container-smoke.yml` as a dedicated container runtime check.
 - Docker publishing is handled by `.github/workflows/docker-build.yml`.
-- Release completion now depends on container smoke tests:
+- The reusable container smoke workflow is used in two places:
+  - directly on release-relevant PRs as the visible `Container Smoke` check
+  - from `docker-build.yml` before release completion
+- Releases also run `npm run release:preflight` in two stages:
+  - early static validation of tag, package versions, release policy, compose tags, and release workflow dependencies
+  - late validation of generated changelog and `docker-compose.pinned.yml` before GitHub Release creation
+- The release version policy is documented in `release-policy.json`:
+  - `backend` and `frontend` must match the release tag
+  - `shared` may version independently, but the exception must be reviewed explicitly per release tag
+- Container smoke covers:
   - backend shared-runtime import plus backend `/health` startup check
-  - frontend container boot and app-shell response check
+  - frontend container boot, static asset serving, and `/api/health` proxy wiring
 - Published release images also carry OCI SBOM/provenance attestations.
 
 ## Project Automation Configuration

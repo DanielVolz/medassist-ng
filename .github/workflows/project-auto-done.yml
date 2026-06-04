@@ -16,46 +16,85 @@ jobs:
       (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
       (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     steps:
+      - name: Parse project URL
+        id: project
+        env:
+          PROJECT_URL: ${{ vars.PROJECT_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PROJECT_URL:-}" ]]; then
+            echo "Missing repository variable PROJECT_URL." >&2
+            exit 1
+          fi
+
+          if [[ "${PROJECT_URL}" =~ ^https://github\.com/(users|orgs)/([^/]+)/projects/([0-9]+)/?$ ]]; then
+            echo "owner_type=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            echo "owner=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+            echo "project_number=${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "PROJECT_URL has an unsupported format: ${PROJECT_URL}" >&2
+          exit 1
+
+      - name: Create project automation GitHub App token
+        id: app-token
+        if: vars.PROJECT_AUTOMATION_APP_ID != '' && secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.PROJECT_AUTOMATION_APP_ID }}
+          owner: ${{ steps.project.outputs.owner }}
+          private-key: ${{ secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY }}
+
+      - name: Select project automation token
+        id: project-token
+        env:
+          APP_TOKEN_OUTCOME: ${{ steps.app-token.outcome }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          FALLBACK_PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APP_TOKEN:-}" ]]; then
+            echo "token=${APP_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "mode=github-app" >> "$GITHUB_OUTPUT"
+            echo "Using GitHub App token for project automation."
+            exit 0
+          fi
+
+          if [[ -n "${FALLBACK_PAT:-}" ]]; then
+            if [[ "${APP_TOKEN_OUTCOME:-}" == "failure" ]]; then
+              echo "::warning title=GitHub App token failed::GitHub App credentials are configured but token creation failed. Falling back to deprecated ADD_TO_PROJECT_PAT for this run."
+            fi
+            echo "::warning title=Project automation fallback::Using deprecated ADD_TO_PROJECT_PAT because PROJECT_AUTOMATION_APP_ID / PROJECT_AUTOMATION_APP_PRIVATE_KEY are not fully configured yet."
+            echo "::add-mask::${FALLBACK_PAT}"
+            echo "token=${FALLBACK_PAT}" >> "$GITHUB_OUTPUT"
+            echo "mode=pat-fallback" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Neither GitHub App credentials nor ADD_TO_PROJECT_PAT are configured for project automation." >&2
+          exit 1
+
       - name: Move project item to Done
         uses: actions/github-script@v9
         with:
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ steps.project-token.outputs.token }}
           script: |
-            const projectUrl = process.env.PROJECT_URL;
-            if (!projectUrl) {
-              core.setFailed("Missing repository variable PROJECT_URL.");
+            const ownerType = process.env.PROJECT_OWNER_TYPE;
+            const owner = process.env.PROJECT_OWNER;
+            const projectNumber = Number(process.env.PROJECT_NUMBER);
+
+            if (!ownerType || !owner || Number.isNaN(projectNumber)) {
+              core.setFailed("Project URL parsing outputs are missing or invalid.");
               return;
             }
 
-            const match = projectUrl.match(/^https:\/\/github\.com\/(?:users|orgs)\/([^/]+)\/projects\/(\d+)\/?$/);
-            if (!match) {
-              core.setFailed(`PROJECT_URL has an unsupported format: ${projectUrl}`);
-              return;
-            }
-
-            const [, owner, projectNumberRaw] = match;
-            const projectNumber = Number(projectNumberRaw);
+            const ownerRoot = ownerType === "users" ? "user" : "organization";
 
             const projectResult = await github.graphql(`
               query($owner: String!, $number: Int!) {
-                user(login: $owner) {
-                  projectV2(number: $number) {
-                    id
-                    fields(first: 50) {
-                      nodes {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options {
-                            id
-                            name
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                organization(login: $owner) {
+                ${ownerRoot}(login: $owner) {
                   projectV2(number: $number) {
                     id
                     fields(first: 50) {
@@ -75,9 +114,9 @@ jobs:
               }
             `, { owner, number: projectNumber });
 
-            const project = projectResult.user?.projectV2 || projectResult.organization?.projectV2;
+            const project = projectResult[ownerRoot]?.projectV2;
             if (!project) {
-              core.setFailed(`Project ${projectUrl} was not found or is not accessible to the project automation token.`);
+              core.setFailed(`Project ${ownerType}/${owner}/${projectNumber} was not found or is not accessible to the project automation token.`);
               return;
             }
 
@@ -169,3 +208,6 @@ jobs:
             console.log(`Successfully moved ${type} #${number} to "Done".`);
         env:
           PROJECT_URL: ${{ vars.PROJECT_URL }}
+          PROJECT_OWNER: ${{ steps.project.outputs.owner }}
+          PROJECT_OWNER_TYPE: ${{ steps.project.outputs.owner_type }}
+          PROJECT_NUMBER: ${{ steps.project.outputs.project_number }}

@@ -495,6 +495,10 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
 | --- | --- | --- |
 | **Type** | Bug (red), Feature (green), Chore (gray), Documentation (blue) | Categorize the work |
 | **Priority** | High (red), Medium (orange), Low (yellow) | Set urgency |
+| **Area** | backend, frontend, shared, ci, docker, release, security, docs, project-automation | Identify the primary domain |
+| **Risk** | low, medium, high, release-blocking | Track delivery risk |
+| **Agent** | project-bot, implementation-agent, ci-surgeon, security-reviewer, testing-manager, release-manager, frontend-refactor-agent | Track primary specialist ownership |
+| **Validation** | unit, domain, coverage, e2e-smoke, e2e-full, container-smoke, security, release-preflight | Track the expected validation lane |
 | **Size** | XS, S, M, L, XL | Estimate effort |
 
 ### Workflow During PRs
@@ -508,18 +512,7 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
    Also add a direct issue comment with the PR link and a one-line summary for clear issue-thread traceability.
 3. **After merge — verify automation**: The `project-auto-done.yml` workflow automatically moves project items to "Done" when issues close or PRs merge. After merge, verify issue/project status via GitHub MCP.
 
-    **Manual fallback** — if the workflow fails or the item wasn't moved, use GitHub MCP GraphQL/project mutation support with the project/item/field IDs below.
-
-   **Known Project field IDs (Status):**
-   | Status | Option ID |
-   |--------|-----------|
-   | Triage | `826183f5` |
-   | Backlog | `c7cb819e` |
-   | Ready | `13307944` |
-   | In progress | `732e285e` |
-   | Done | `ca45af98` |
-
-   Status field ID: `PVTSSF_lAHOADH82s4BO2OTzg9bdkE`
+    **Manual fallback** — if the workflow fails or the item wasn't moved, use GitHub MCP GraphQL/project mutation support to resolve the current project item, the live `Status` field ID, and the live `Done` option ID dynamically from the configured project. Do not rely on stale hard-coded field IDs.
 
 ### Issue Labels
 

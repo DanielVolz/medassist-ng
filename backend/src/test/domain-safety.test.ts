@@ -497,6 +497,15 @@ describe("Domain safety corpus: real route and service flows", () => {
 			lowStockDays: 12,
 			shareMedicationOverview: true,
 		});
+		await testClient.execute({
+			sql: `UPDATE user_settings
+			      SET email_enabled = 1,
+			          notification_email = ?,
+			          shoutrrr_enabled = 1,
+			          shoutrrr_url = ?
+			      WHERE user_id = ?`,
+			args: ["alice.private@example.com", "ntfy://user:secret@ntfy.sh/private", 1],
+		});
 		const medication = await createMedication(app, {
 			name: "Roundtrip Domain Med",
 			takenBy: ["Alice", "Bob"],
@@ -550,9 +559,25 @@ describe("Domain safety corpus: real route and service flows", () => {
 		});
 		expect(shareResponse.statusCode).toBe(200);
 
-		const beforeExport = await app.inject({ method: "GET", url: "/export?includeSensitive=false&includeImages=false" });
+		const defaultExport = await app.inject({ method: "GET", url: "/export?includeImages=false" });
+		expect(defaultExport.statusCode).toBe(200);
+		const defaultPayload = defaultExport.json();
+		expect(defaultPayload.includeSensitiveData).toBe(false);
+		expect(defaultPayload.medications).toHaveLength(1);
+		expect(defaultPayload.doseHistory).toHaveLength(1);
+		expect(defaultPayload.refillHistory).toHaveLength(1);
+		expect(defaultPayload.settings.notificationEmail).toBeUndefined();
+		expect(defaultPayload.settings.shoutrrrEnabled).toBeUndefined();
+		expect(defaultPayload.settings.shoutrrrUrl).toBeUndefined();
+		expect(defaultPayload.shareLinks).toEqual([]);
+
+		const beforeExport = await app.inject({ method: "GET", url: "/export?includeSensitive=true&includeImages=false" });
 		expect(beforeExport.statusCode).toBe(200);
 		const before = beforeExport.json();
+		expect(before.includeSensitiveData).toBe(true);
+		expect(before.settings.notificationEmail).toBe("alice.private@example.com");
+		expect(before.settings.shoutrrrUrl).toBe("ntfy://user:secret@ntfy.sh/private");
+		expect(before.shareLinks).toHaveLength(1);
 
 		const importResponse = await app.inject({ method: "POST", url: "/import", payload: before });
 		expect(importResponse.statusCode).toBe(200);
@@ -561,7 +586,7 @@ describe("Domain safety corpus: real route and service flows", () => {
 			imported: { medications: 1, doseHistory: 1, refillHistory: 1, settings: 1, shareLinks: 1 },
 		});
 
-		const afterExport = await app.inject({ method: "GET", url: "/export?includeSensitive=false&includeImages=false" });
+		const afterExport = await app.inject({ method: "GET", url: "/export?includeSensitive=true&includeImages=false" });
 		expect(afterExport.statusCode).toBe(200);
 		const after = afterExport.json();
 

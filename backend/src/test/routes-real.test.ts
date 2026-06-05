@@ -806,33 +806,42 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(body.shareLinks).toHaveLength(1);
 	});
 
-	it("GET /export hides notification destinations unless sensitive export is requested", async () => {
+	it("GET /export hides sensitive fields unless sensitive export is requested", async () => {
 		await testClient.execute({
 			sql: `INSERT INTO user_settings (
 					user_id, email_enabled, notification_email, shoutrrr_enabled, shoutrrr_url
 				) VALUES (?, ?, ?, ?, ?)`,
 			args: [1, 1, "private@example.com", 1, "ntfy://user:secret@ntfy.sh/private"],
 		});
+		await testClient.execute({
+			sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, ?)",
+			args: [1, "sensitive-share-token", "Daniel", 30],
+		});
 
 		const nonSensitive = await app.inject({
 			method: "GET",
-			url: "/export?includeSensitive=false&includeImages=false",
+			url: "/export?includeImages=false",
 		});
 		expect(nonSensitive.statusCode).toBe(200);
-		expect(nonSensitive.json().includeSensitiveData).toBe(false);
-		expect(nonSensitive.json().settings.notificationEmail).toBeUndefined();
-		expect(nonSensitive.json().settings.shoutrrrEnabled).toBeUndefined();
-		expect(nonSensitive.json().settings.shoutrrrUrl).toBeUndefined();
+		const nonSensitiveBody = nonSensitive.json();
+		expect(nonSensitiveBody.includeSensitiveData).toBe(false);
+		expect(nonSensitiveBody.settings.notificationEmail).toBeUndefined();
+		expect(nonSensitiveBody.settings.shoutrrrEnabled).toBeUndefined();
+		expect(nonSensitiveBody.settings.shoutrrrUrl).toBeUndefined();
+		expect(nonSensitiveBody.shareLinks).toEqual([]);
 
 		const sensitive = await app.inject({
 			method: "GET",
 			url: "/export?includeSensitive=true&includeImages=false",
 		});
 		expect(sensitive.statusCode).toBe(200);
-		expect(sensitive.json().includeSensitiveData).toBe(true);
-		expect(sensitive.json().settings.notificationEmail).toBe("private@example.com");
-		expect(sensitive.json().settings.shoutrrrEnabled).toBe(true);
-		expect(sensitive.json().settings.shoutrrrUrl).toBe("ntfy://user:secret@ntfy.sh/private");
+		const sensitiveBody = sensitive.json();
+		expect(sensitiveBody.includeSensitiveData).toBe(true);
+		expect(sensitiveBody.settings.notificationEmail).toBe("private@example.com");
+		expect(sensitiveBody.settings.shoutrrrEnabled).toBe(true);
+		expect(sensitiveBody.settings.shoutrrrUrl).toBe("ntfy://user:secret@ntfy.sh/private");
+		expect(sensitiveBody.shareLinks).toHaveLength(1);
+		expect(sensitiveBody.shareLinks[0].takenBy).toBe("Daniel");
 	});
 
 	it("POST /import validates payload and imports minimal valid structure", async () => {

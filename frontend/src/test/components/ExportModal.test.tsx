@@ -60,6 +60,18 @@ describe("ExportModal", () => {
 		expect(defaultProps.onExport).toHaveBeenCalledWith(false, false);
 	});
 
+	it("keeps sensitive export disabled and warning hidden by default", () => {
+		render(<ExportModal {...defaultProps} />);
+		expect(screen.getByLabelText(/exportImport\.includeSensitive/i)).not.toBeChecked();
+		expect(screen.queryByText(/exportImport\.sensitiveWarning/i)).not.toBeInTheDocument();
+	});
+
+	it("shows the sensitive export warning only after explicit confirmation", () => {
+		render(<ExportModal {...defaultProps} />);
+		fireEvent.click(screen.getByLabelText(/exportImport\.includeSensitive/i));
+		expect(screen.getByText(/exportImport\.sensitiveWarning/i)).toBeInTheDocument();
+	});
+
 	it("passes sensitive export opt-in when selected", () => {
 		const { container } = render(<ExportModal {...defaultProps} />);
 		fireEvent.click(screen.getByLabelText(/exportImport\.includeSensitive/i));

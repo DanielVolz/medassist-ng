@@ -3103,7 +3103,7 @@ describe("E2E Tests with Real Routes", () => {
 				args: [userId, "8888888888888888", "Daniel", 30, "broken-date"],
 			});
 
-			const response = await app.inject({ method: "GET", url: "/export" });
+			const response = await app.inject({ method: "GET", url: "/export?includeSensitive=true" });
 			expect(response.statusCode).toBe(200);
 
 			const data = response.json();

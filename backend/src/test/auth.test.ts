@@ -882,6 +882,77 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			expect(newLogin.statusCode).toBe(200);
 		});
 
+		it("should revoke existing refresh tokens and keep the current session usable after password change", async () => {
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "rotateprofileuser",
+					password: "TestPassword123",
+				},
+			});
+
+			const currentSession = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "rotateprofileuser",
+					password: "TestPassword123",
+				},
+			});
+			const otherSession = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: {
+					username: "rotateprofileuser",
+					password: "TestPassword123",
+				},
+			});
+			const oldCurrentRefreshToken = getResponseCookieValue(currentSession, "refresh_token");
+			const oldOtherRefreshToken = getResponseCookieValue(otherSession, "refresh_token");
+			const accessToken = getResponseCookieValue(currentSession, "access_token");
+
+			const response = await app.inject({
+				method: "PUT",
+				url: "/auth/me",
+				cookies: {
+					access_token: accessToken,
+				},
+				payload: {
+					currentPassword: "TestPassword123",
+					newPassword: "NewPassword456",
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().ok).toBe(true);
+			const newRefreshToken = getResponseCookieValue(response, "refresh_token");
+			expect(newRefreshToken).not.toBe(oldCurrentRefreshToken);
+			expect(newRefreshToken).not.toBe(oldOtherRefreshToken);
+
+			for (const revokedRefreshToken of [oldCurrentRefreshToken, oldOtherRefreshToken]) {
+				const revokedResponse = await app.inject({
+					method: "POST",
+					url: "/auth/refresh",
+					cookies: {
+						refresh_token: revokedRefreshToken,
+					},
+				});
+				expect(revokedResponse.statusCode).toBe(401);
+				expect(revokedResponse.json().code).toBe("INVALID_REFRESH_TOKEN");
+			}
+
+			const usableCurrentSession = await app.inject({
+				method: "POST",
+				url: "/auth/refresh",
+				cookies: {
+					refresh_token: newRefreshToken,
+				},
+			});
+			expect(usableCurrentSession.statusCode).toBe(200);
+			expect(usableCurrentSession.json().ok).toBe(true);
+		});
+
 		it("should reject password change without current password", async () => {
 			await app.inject({
 				method: "POST",

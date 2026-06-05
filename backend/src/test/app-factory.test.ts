@@ -67,6 +67,17 @@ async function expectCorsDefaultAllowsSecondaryDevOrigin(app: FastifyInstance): 
 	expect(response.headers["access-control-allow-credentials"]).toBe("true");
 }
 
+async function expectCorsWithholdsAllowOriginForUnconfiguredBrowserOrigin(app: FastifyInstance): Promise<void> {
+	const response = await app.inject({
+		method: "GET",
+		url: "/bootstrap-test/probe",
+		headers: { origin: "https://evil.example" },
+	});
+
+	expect(response.statusCode).toBe(200);
+	expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+}
+
 async function expectDefaultRateLimit(app: FastifyInstance): Promise<void> {
 	for (let index = 0; index < DEFAULT_RATE_LIMIT_MAX; index += 1) {
 		const response = await app.inject({ method: "GET", url: "/bootstrap-test/probe" });
@@ -116,6 +127,40 @@ describe("createApp bootstrap defaults", () => {
 		} finally {
 			await defaultApp.close();
 			await runtimeApp.close();
+		}
+	});
+
+	it("withholds CORS allow-origin from unconfigured browser origins", async () => {
+		const app = await buildProbeApp();
+
+		try {
+			await expectCorsWithholdsAllowOriginForUnconfiguredBrowserOrigin(app);
+		} finally {
+			await app.close();
+		}
+	});
+
+	it("keeps public notification action CORS credential-free for arbitrary browser origins", async () => {
+		const app = await buildProbeApp({
+			corsOrigins: ["https://medassist.example"],
+		});
+
+		try {
+			const preflight = await app.inject({
+				method: "OPTIONS",
+				url: "/notification-actions/demo-token",
+				headers: {
+					origin: "https://ntfy.example",
+					"access-control-request-method": "POST",
+					"access-control-request-headers": "content-type",
+				},
+			});
+
+			expect(preflight.statusCode).toBe(204);
+			expect(preflight.headers["access-control-allow-origin"]).toBe("https://ntfy.example");
+			expect(preflight.headers["access-control-allow-credentials"]).toBeUndefined();
+		} finally {
+			await app.close();
 		}
 	});
 

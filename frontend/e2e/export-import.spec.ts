@@ -35,12 +35,12 @@ async function downloadExportFromSettings(page: Page, options: { includeSensitiv
 	const dialog = page.getByRole("dialog").or(page.locator(".modal-content"));
 	await expect(dialog).toBeVisible();
 
-	const sensitiveToggle = page.getByRole("checkbox", { name: /sensitive data|Sensible Daten/i });
+	const sensitiveToggle = page.locator(".sensitive-export-confirmation input[type='checkbox']");
 	await expect(sensitiveToggle).not.toBeChecked();
 	if (options.includeSensitive) {
-		await page.locator(".modal-content .toggle-switch").click();
+		await sensitiveToggle.check();
 		await expect(sensitiveToggle).toBeChecked();
-		await expect(page.getByText(/stored in plain text|Klartext gespeichert/i)).toBeVisible();
+		await expect(page.getByText(/store the file securely|datei sicher auf/i)).toBeVisible();
 	}
 
 	const downloadPromise = page.waitForEvent("download");

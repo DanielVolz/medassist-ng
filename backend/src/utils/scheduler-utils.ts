@@ -608,6 +608,13 @@ export function personTakesMedication(person: string, medicationTakenBy: string[
 	return intakes.some((intake) => intake.takenBy === person);
 }
 
+export function scopeIntakesToTakenBy(intakes: Intake[], medicationTakenBy: string[], takenBy: string): Intake[] {
+	if (takenBy === "all") return intakes;
+
+	const appliesAtMedicationLevel = medicationTakenBy.includes(takenBy);
+	return intakes.filter((intake) => intake.takenBy === takenBy || (intake.takenBy == null && appliesAtMedicationLevel));
+}
+
 // =============================================================================
 // Stock calculation utilities
 // =============================================================================

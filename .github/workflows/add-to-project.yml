@@ -24,9 +24,11 @@ jobs:
           fi
 
           if [[ "${PROJECT_URL}" =~ ^https://github\.com/(users|orgs)/([^/]+)/projects/([0-9]+)/?$ ]]; then
-            echo "owner_type=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
-            echo "owner=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
-            echo "project_number=${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
+            {
+              echo "owner_type=${BASH_REMATCH[1]}"
+              echo "owner=${BASH_REMATCH[2]}"
+              echo "project_number=${BASH_REMATCH[3]}"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -110,9 +112,11 @@ jobs:
           fi
 
           if [[ "${PROJECT_URL}" =~ ^https://github\.com/(users|orgs)/([^/]+)/projects/([0-9]+)/?$ ]]; then
-            echo "owner_type=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
-            echo "owner=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
-            echo "project_number=${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
+            {
+              echo "owner_type=${BASH_REMATCH[1]}"
+              echo "owner=${BASH_REMATCH[2]}"
+              echo "project_number=${BASH_REMATCH[3]}"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 

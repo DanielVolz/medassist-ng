@@ -218,10 +218,10 @@ jobs:
         run: |
           CURRENT_TAG="${{ steps.current_tag.outputs.value }}"
           if gh release view "$CURRENT_TAG" &>/dev/null; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release $CURRENT_TAG already exists, skipping creation"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -238,7 +238,7 @@ jobs:
             PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           fi
 
-          echo "tag=${PREV_TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Generate changelog
         if: steps.check_release.outputs.exists == 'false'
@@ -246,39 +246,39 @@ jobs:
         run: |
           CURRENT_TAG="${{ steps.current_tag.outputs.value }}"
           PREV_TAG="${{ steps.prev_tag.outputs.tag }}"
-          
-          echo "## What's New" > changelog.md
-          echo "" >> changelog.md
-          echo "This release includes updates and fixes shipped with ${CURRENT_TAG}." >> changelog.md
-          echo "" >> changelog.md
-          echo "### Highlights" >> changelog.md
-          echo "" >> changelog.md
-          
-          if [ -n "$PREV_TAG" ]; then
-            echo "Changes from ${PREV_TAG} to ${CURRENT_TAG}:" >> changelog.md
-            git log ${PREV_TAG}..${CURRENT_TAG} --pretty=format:"- %s (%h)" --no-merges >> changelog.md
-          else
-            echo "Recent shipped commits:" >> changelog.md
-            git log -20 --pretty=format:"- %s (%h)" --no-merges >> changelog.md
-          fi
-          
-          echo "" >> changelog.md
-          echo "" >> changelog.md
-          echo "## Docker Images" >> changelog.md
-          echo "" >> changelog.md
-          echo '```bash' >> changelog.md
+
           OWNER_LC="$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-          echo "docker pull ghcr.io/${OWNER_LC}/medassist-ng-backend:${CURRENT_TAG#v}" >> changelog.md
-          echo "docker pull ghcr.io/${OWNER_LC}/medassist-ng-frontend:${CURRENT_TAG#v}" >> changelog.md
-          echo '```' >> changelog.md
-          echo "" >> changelog.md
-          echo "" >> changelog.md
-          echo "A digest-pinned Docker Compose file is attached to this release as \`docker-compose.pinned.yml\`." >> changelog.md
-          echo "Release images now publish OCI provenance and SBOM attestations, and release completion is gated by container smoke tests." >> changelog.md
-          if [ -n "$PREV_TAG" ]; then
-            echo "" >> changelog.md
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}" >> changelog.md
-          fi
+          {
+            echo "## What's New"
+            echo ""
+            echo "This release includes updates and fixes shipped with ${CURRENT_TAG}."
+            echo ""
+            echo "### Highlights"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "Changes from ${PREV_TAG} to ${CURRENT_TAG}:"
+              git log "${PREV_TAG}..${CURRENT_TAG}" --pretty=format:"- %s (%h)" --no-merges
+            else
+              echo "Recent shipped commits:"
+              git log -20 --pretty=format:"- %s (%h)" --no-merges
+            fi
+            echo ""
+            echo ""
+            echo "## Docker Images"
+            echo ""
+            echo '```bash'
+            echo "docker pull ghcr.io/${OWNER_LC}/medassist-ng-backend:${CURRENT_TAG#v}"
+            echo "docker pull ghcr.io/${OWNER_LC}/medassist-ng-frontend:${CURRENT_TAG#v}"
+            echo '```'
+            echo ""
+            echo ""
+            echo "A digest-pinned Docker Compose file is attached to this release as \`docker-compose.pinned.yml\`."
+            echo "Release images now publish OCI provenance and SBOM attestations, and release completion is gated by container smoke tests."
+            if [ -n "$PREV_TAG" ]; then
+              echo ""
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}"
+            fi
+          } > changelog.md
 
       - name: Download image digest metadata
         uses: actions/download-artifact@v8

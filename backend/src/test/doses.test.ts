@@ -238,6 +238,34 @@ describe("Dose Tracking API", () => {
 			expect(Number(countResult.rows[0].count)).toBe(1);
 		});
 
+		it("keeps one row when the same dose is marked twice through the API", async () => {
+			const doseId = "1-0-1735344000000";
+
+			const firstResponse = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+				payload: { doseId },
+			});
+			const secondResponse = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+				payload: { doseId },
+			});
+
+			expect(firstResponse.statusCode).toBe(200);
+			expect(firstResponse.json()).toEqual({ success: true });
+			expect(secondResponse.statusCode).toBe(200);
+			expect(secondResponse.json()).toEqual({ success: true, message: "Already marked" });
+
+			const countResult = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(Number(countResult.rows[0].count)).toBe(1);
+		});
+
 		it("rejects requests without a doseId", async () => {
 			const response = await app.inject({
 				method: "POST",

@@ -87,8 +87,9 @@ Use the root-level commands for full-stack validation when a change spans backen
 
 - PR validation is enforced through `.github/workflows/test.yml` and `.github/workflows/e2e.yml`.
 - Workflow syntax validation is enforced through `.github/workflows/workflow-validation.yml` with `actionlint` on PRs that change workflow files under `.github/workflows/**`.
+- CodeQL scans both `javascript-typescript` source code and GitHub Actions workflow changes under `.github/workflows/**` / `.github/actions/**`.
 - Within product-relevant PRs, required product checks still emit their stable names and report a no-op success when a backend/frontend lane is not relevant inside that product scope.
-- Workflow-only edits are validated by `Workflow Validation / Actionlint` and do not trigger backend/frontend/Playwright/container smoke lanes by themselves.
+- Workflow-only edits are validated by `Workflow Validation / Actionlint`; they do not trigger backend/frontend/Playwright/container smoke lanes by themselves, but they still run CodeQL for the `actions` language.
 - Release-relevant PRs also run `.github/workflows/container-smoke.yml` as a dedicated container runtime check.
 - Docker publishing is handled by `.github/workflows/docker-build.yml`.
 - The reusable container smoke workflow is used in two places:

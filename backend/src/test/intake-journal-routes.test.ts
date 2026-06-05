@@ -366,7 +366,7 @@ describe("Intake journal routes", () => {
 
 		const exportResponse = await app.inject({
 			method: "GET",
-			url: "/export",
+			url: "/export?includeSensitive=true",
 			headers: { cookie: sessionCookie },
 		});
 

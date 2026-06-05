@@ -753,31 +753,33 @@ export async function exportRoutes(app: FastifyInstance) {
 			// 4. Load share links
 			const shares = await db.select().from(shareTokens).where(eq(shareTokens.userId, userId));
 
-			const exportShareLinks = shares.map((share) => {
-				// Safely convert expiresAt to ISO string
-				let expiresAtIso: string | null = null;
-				if (share.expiresAt) {
-					try {
-						if (share.expiresAt instanceof Date && !Number.isNaN(share.expiresAt.getTime())) {
-							expiresAtIso = share.expiresAt.toISOString();
-						} else if (typeof share.expiresAt === "number" || typeof share.expiresAt === "string") {
-							const d = new Date(share.expiresAt);
-							expiresAtIso = !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+			const exportShareLinks = includeSensitive
+				? shares.map((share) => {
+						// Safely convert expiresAt to ISO string
+						let expiresAtIso: string | null = null;
+						if (share.expiresAt) {
+							try {
+								if (share.expiresAt instanceof Date && !Number.isNaN(share.expiresAt.getTime())) {
+									expiresAtIso = share.expiresAt.toISOString();
+								} else if (typeof share.expiresAt === "number" || typeof share.expiresAt === "string") {
+									const d = new Date(share.expiresAt);
+									expiresAtIso = !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+								}
+							} catch {
+								expiresAtIso = null;
+							}
 						}
-					} catch {
-						expiresAtIso = null;
-					}
-				}
 
-				return {
-					takenBy: share.takenBy,
-					scheduleDays: share.scheduleDays,
-					allowJournalNotes: share.allowJournalNotes ?? false,
-					allowMarkTaken: share.allowMarkTaken ?? true,
-					expiresAt: expiresAtIso,
-					regenerateToken: true, // Always regenerate tokens on import for security
-				};
-			});
+						return {
+							takenBy: share.takenBy,
+							scheduleDays: share.scheduleDays,
+							allowJournalNotes: share.allowJournalNotes ?? false,
+							allowMarkTaken: share.allowMarkTaken ?? true,
+							expiresAt: expiresAtIso,
+							regenerateToken: true, // Always regenerate tokens on import for security
+						};
+					})
+				: [];
 
 			// 5. Load refill history
 			const refills = await db.select().from(refillHistory).where(eq(refillHistory.userId, userId));

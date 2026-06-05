@@ -106,7 +106,7 @@ async function registerExportRoutes(ctx: TestContext) {
 			const s = settingsResult.rows[0];
 			settings = {
 				emailEnabled: Boolean(s.email_enabled),
-				notificationEmail: s.notification_email,
+				notificationEmail: includeSensitive ? s.notification_email : undefined,
 				emailStockReminders: Boolean(s.email_stock_reminders ?? 1),
 				emailIntakeReminders: Boolean(s.email_intake_reminders ?? 1),
 				shoutrrrEnabled: includeSensitive ? Boolean(s.shoutrrr_enabled) : undefined,
@@ -133,12 +133,14 @@ async function registerExportRoutes(ctx: TestContext) {
 			args: [userId],
 		});
 
-		const shareLinks = sharesResult.rows.map((s) => ({
-			takenBy: s.taken_by,
-			scheduleDays: s.schedule_days ?? 30,
-			expiresAt: s.expires_at ? new Date((s.expires_at as number) * 1000).toISOString() : null,
-			regenerateToken: true,
-		}));
+		const shareLinks = includeSensitive
+			? sharesResult.rows.map((s) => ({
+					takenBy: s.taken_by,
+					scheduleDays: s.schedule_days ?? 30,
+					expiresAt: s.expires_at ? new Date((s.expires_at as number) * 1000).toISOString() : null,
+					regenerateToken: true,
+				}))
+			: [];
 
 		return {
 			version: "1.0",
@@ -401,7 +403,7 @@ describe("Export/Import API", () => {
 
 			const response = await ctx.app.inject({
 				method: "GET",
-				url: "/export",
+				url: "/export?includeSensitive=true",
 			});
 
 			expect(response.statusCode).toBe(200);
@@ -417,8 +419,8 @@ describe("Export/Import API", () => {
 		it("should exclude sensitive data by default", async () => {
 			await ctx.client.execute({
 				sql: `INSERT INTO user_settings (
-          user_id, shoutrrr_enabled, shoutrrr_url
-        ) VALUES (?, 1, 'ntfy://user:pass@ntfy.sh/topic')`,
+          user_id, notification_email, shoutrrr_enabled, shoutrrr_url
+        ) VALUES (?, 'private@example.com', 1, 'ntfy://user:pass@ntfy.sh/topic')`,
 				args: [userId],
 			});
 
@@ -430,6 +432,7 @@ describe("Export/Import API", () => {
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
 			expect(data.includeSensitiveData).toBe(false);
+			expect(data.settings.notificationEmail).toBeUndefined();
 			expect(data.settings.shoutrrrEnabled).toBeUndefined();
 			expect(data.settings.shoutrrrUrl).toBeUndefined();
 		});
@@ -482,7 +485,7 @@ describe("Export/Import API", () => {
 			expect(data.doseHistory[0].takenAt).toBeDefined();
 		});
 
-		it("should export share links", async () => {
+		it("should exclude share links by default", async () => {
 			await ctx.client.execute({
 				sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, ?)`,
 				args: [userId, "abc123", "Daniel", 30],
@@ -495,6 +498,24 @@ describe("Export/Import API", () => {
 
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
+			expect(data.includeSensitiveData).toBe(false);
+			expect(data.shareLinks).toEqual([]);
+		});
+
+		it("should export share links when sensitive data is requested", async () => {
+			await ctx.client.execute({
+				sql: `INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, ?)`,
+				args: [userId, "abc123", "Daniel", 30],
+			});
+
+			const response = await ctx.app.inject({
+				method: "GET",
+				url: "/export?includeSensitive=true",
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.includeSensitiveData).toBe(true);
 			expect(data.shareLinks).toHaveLength(1);
 			expect(data.shareLinks[0].takenBy).toBe("Daniel");
 			expect(data.shareLinks[0].scheduleDays).toBe(30);
@@ -803,7 +824,7 @@ describe("Export/Import API", () => {
 			// Export
 			const exportResponse = await ctx.app.inject({
 				method: "GET",
-				url: "/export",
+				url: "/export?includeSensitive=true",
 			});
 			expect(exportResponse.statusCode).toBe(200);
 			const exportData = exportResponse.json();
@@ -819,7 +840,7 @@ describe("Export/Import API", () => {
 			// Export again and compare
 			const reExportResponse = await ctx.app.inject({
 				method: "GET",
-				url: "/export",
+				url: "/export?includeSensitive=true",
 			});
 			const reExportData = reExportResponse.json();
 

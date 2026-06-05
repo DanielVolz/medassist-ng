@@ -76,21 +76,33 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 						</div>
 					</button>
 				</div>
-				<div className="setting-row compact" style={{ marginTop: "14px" }}>
-					<div className="setting-label">
-						<span>{t("exportImport.includeSensitive")}</span>
-					</div>
-					<label className="toggle-switch small" aria-label={t("exportImport.includeSensitive")}>
+				<div
+					className="sensitive-export-confirmation"
+					style={{ marginTop: "14px", padding: "12px", border: "1px solid var(--border)", borderRadius: "8px" }}
+				>
+					<label
+						style={{
+							display: "flex",
+							alignItems: "flex-start",
+							gap: "10px",
+							cursor: exporting ? "default" : "pointer",
+						}}
+					>
 						<input
 							type="checkbox"
 							checked={includeSensitive}
 							onChange={(event) => setIncludeSensitive(event.target.checked)}
 							disabled={exporting}
+							aria-describedby={includeSensitive ? "sensitive-export-warning" : undefined}
 						/>
-						<span className="toggle-slider"></span>
+						<span>{t("exportImport.includeSensitive")}</span>
 					</label>
+					{includeSensitive && (
+						<p id="sensitive-export-warning" className="warning-text" style={{ margin: "10px 0 0 0" }}>
+							{t("exportImport.sensitiveWarning")}
+						</p>
+					)}
 				</div>
-				{includeSensitive && <p className="warning-text">{t("exportImport.sensitiveWarning")}</p>}
 				<div className="modal-footer" style={{ padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end" }}>
 					<button type="button" className="ghost" onClick={onClose}>
 						{t("common.close")}

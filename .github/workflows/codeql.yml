@@ -16,6 +16,16 @@ on:
       - '.github/workflows/codeql.yml'
   pull_request:
     branches: [main]
+    paths:
+      - '**.js'
+      - '**.ts'
+      - '**.tsx'
+      - '**.jsx'
+      - 'backend/package.json'
+      - 'backend/package-lock.json'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - '.github/codeql/**'
   schedule:
     - cron: "0 6 * * 1" # Weekly on Monday at 6am UTC
   workflow_dispatch: # Allow manual trigger

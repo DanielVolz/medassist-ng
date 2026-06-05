@@ -53,6 +53,8 @@ Production startup fails fast when `NODE_ENV=production`, `AUTH_ENABLED=false`, 
 
 For public deployments, enable `AUTH_ENABLED=true` and configure local form login or OIDC SSO. If you run a private local-only instance without authentication, set `ALLOW_UNAUTHENTICATED=true` deliberately and keep the app off untrusted networks.
 
+When a local user's password is changed, all existing refresh tokens for that user are revoked. The current browser session receives a newly issued access/refresh token pair, while other sessions must sign in again.
+
 ## Backend Exposure
 
 The default Docker Compose stack exposes only the frontend. The backend listens on the internal Docker network and is reached through the frontend `/api` proxy.

@@ -643,6 +643,35 @@ export async function authRoutes(app: FastifyInstance) {
 				updates.passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
 			}
 
+			if (newPassword) {
+				const newTokenId = randomBytes(32).toString("hex");
+				const refreshExp = new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000);
+				const newAccessToken = await app.jwt.sign(
+					{ sub: user.id, username: user.username },
+					{ expiresIn: `${accessTtlMinutes}m` }
+				);
+				const newRefreshToken = await app.jwt.sign(
+					{ sub: user.id, jti: newTokenId },
+					{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
+				);
+
+				await db.update(users).set(updates).where(eq(users.id, user.id));
+				await db
+					.update(refreshTokens)
+					.set({ revoked: true, rotatedAt: new Date() })
+					.where(eq(refreshTokens.userId, user.id));
+				await db.insert(refreshTokens).values({
+					userId: user.id,
+					tokenId: newTokenId,
+					expiresAt: refreshExp,
+				});
+
+				return reply
+					.setCookie("access_token", newAccessToken, app.config.cookieOptions)
+					.setCookie("refresh_token", newRefreshToken, app.config.refreshCookieOptions)
+					.send({ ok: true, message: "Profile updated" });
+			}
+
 			await db.update(users).set(updates).where(eq(users.id, user.id));
 
 			return { ok: true, message: "Profile updated" };

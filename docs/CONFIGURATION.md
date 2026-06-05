@@ -34,6 +34,8 @@ API docs behavior:
 
 ## Authentication
 
+Browser cookie, CORS, CSRF, Bearer token, and API-key security behavior is documented in [SECURITY.md](SECURITY.md).
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTH_ENABLED` | `false` | Enable user authentication. Required for public production deployments. |

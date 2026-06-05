@@ -50,6 +50,17 @@ describe("Index.ts Utility Functions", () => {
 	});
 
 	describe("buildBaseCookieOptions", () => {
+		it("should make development access cookies httpOnly SameSite=Lax without Secure", () => {
+			const options = buildBaseCookieOptions(15, false);
+			expect(options).toMatchObject({
+				httpOnly: true,
+				secure: false,
+				sameSite: "lax",
+				path: "/",
+				maxAge: 15 * 60,
+			});
+		});
+
 		it("should set secure=true in production", () => {
 			const options = buildBaseCookieOptions(15, true);
 			expect(options.secure).toBe(true);
@@ -75,6 +86,18 @@ describe("Index.ts Utility Functions", () => {
 	});
 
 	describe("buildRefreshCookieOptions", () => {
+		it("should make production refresh cookies secure, httpOnly and SameSite=Lax", () => {
+			const base = buildBaseCookieOptions(15, true);
+			const refresh = buildRefreshCookieOptions(base, 7);
+			expect(refresh).toMatchObject({
+				httpOnly: true,
+				secure: true,
+				sameSite: "lax",
+				path: "/",
+				maxAge: 7 * 24 * 60 * 60,
+			});
+		});
+
 		it("should extend base options with longer maxAge", () => {
 			const base = buildBaseCookieOptions(15, false);
 			const refresh = buildRefreshCookieOptions(base, 7);

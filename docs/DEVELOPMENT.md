@@ -86,7 +86,9 @@ Use the root-level commands for full-stack validation when a change spans backen
 ## Release Workflow Safeguards
 
 - PR validation is enforced through `.github/workflows/test.yml` and `.github/workflows/e2e.yml`.
+- Workflow syntax validation is enforced through `.github/workflows/workflow-validation.yml` with `actionlint` on all PR workflow changes.
 - Required PR checks now always emit their stable check names; when a PR is not relevant for a given lane, the workflow reports a no-op success instead of disappearing as a skipped/missing required context.
+- Product test lanes are only triggered by product code or product-facing CI/CD workflow changes (`test.yml`, `e2e.yml`, `docker-build.yml`, `container-smoke.yml`). Project, issue, and PR automation workflow edits still get workflow validation, but no longer trigger backend/frontend/Playwright lanes by themselves.
 - Release-relevant PRs also run `.github/workflows/container-smoke.yml` as a dedicated container runtime check.
 - Docker publishing is handled by `.github/workflows/docker-build.yml`.
 - The reusable container smoke workflow is used in two places:

@@ -3,6 +3,13 @@ name: E2E Tests
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'shared/**'
+      - 'package.json'
+      - 'release-policy.json'
+      - 'scripts/**'
 
 # Minimal permissions for security
 permissions:
@@ -29,10 +36,6 @@ jobs:
               - 'package.json'
               - 'release-policy.json'
               - 'scripts/**'
-              - '.github/workflows/test.yml'
-              - '.github/workflows/e2e.yml'
-              - '.github/workflows/docker-build.yml'
-              - '.github/workflows/container-smoke.yml'
 
   e2e:
     name: Playwright E2E

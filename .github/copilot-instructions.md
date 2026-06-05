@@ -60,6 +60,12 @@ Always preserve these parity rules:
 - Project automation lives in `.github/workflows/add-to-project.yml` and related project workflows.
 - CI changes must keep docs and operational guidance in sync.
 
+## Preferred specialist routing
+
+- Use `testing-manager` for test planning, local validation, and CI test triage.
+- Use `release-manager` for PR shipping, merge, release, and workflow monitoring.
+- Use `project-bot` for issue, PR metadata, and GitHub Project board coordination work when no product code change is required.
+
 ## Local-only artifacts
 
 The following are local workspace state and must not be committed unless a user explicitly asks for that exact action:

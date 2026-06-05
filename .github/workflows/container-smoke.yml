@@ -144,7 +144,7 @@ jobs:
             -e LOG_LEVEL=warn \
             "${{ steps.image_refs.outputs.backend }}"
 
-          for attempt in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             container_status="$(docker inspect --format '{{.State.Status}}' medassist-backend-smoke 2>/dev/null || echo missing)"
             if [ "$container_status" != "running" ]; then
               echo "Backend smoke container stopped before health became ready (status: $container_status)."

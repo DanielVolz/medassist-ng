@@ -12,10 +12,85 @@ jobs:
     if: contains(fromJson('["opened","reopened","labeled"]'), github.event.action)
     runs-on: ubuntu-latest
     steps:
+      - name: Parse project URL
+        id: project
+        env:
+          PROJECT_URL: ${{ vars.PROJECT_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PROJECT_URL:-}" ]]; then
+            echo "Missing repository variable PROJECT_URL." >&2
+            exit 1
+          fi
+
+          if [[ "${PROJECT_URL}" =~ ^https://github\.com/(users|orgs)/([^/]+)/projects/([0-9]+)/?$ ]]; then
+            {
+              echo "owner_type=${BASH_REMATCH[1]}"
+              echo "owner=${BASH_REMATCH[2]}"
+              echo "project_number=${BASH_REMATCH[3]}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "PROJECT_URL has an unsupported format: ${PROJECT_URL}" >&2
+          exit 1
+
+      - name: Check project automation GitHub App configuration
+        id: app-config
+        env:
+          APP_ID: ${{ vars.PROJECT_AUTOMATION_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APP_ID:-}" && -n "${APP_PRIVATE_KEY:-}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+
+      - name: Create project automation GitHub App token
+        id: app-token
+        if: steps.app-config.outputs.enabled == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.PROJECT_AUTOMATION_APP_ID }}
+          owner: ${{ steps.project.outputs.owner }}
+          private-key: ${{ secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY }}
+
+      - name: Select project automation token
+        id: project-token
+        env:
+          APP_TOKEN_OUTCOME: ${{ steps.app-token.outcome }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          FALLBACK_PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APP_TOKEN:-}" ]]; then
+            echo "token=${APP_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "mode=github-app" >> "$GITHUB_OUTPUT"
+            echo "Using GitHub App token for project automation."
+            exit 0
+          fi
+
+          if [[ -n "${FALLBACK_PAT:-}" ]]; then
+            if [[ "${APP_TOKEN_OUTCOME:-}" == "failure" ]]; then
+              echo "::warning title=GitHub App token failed::GitHub App credentials are configured but token creation failed. Falling back to deprecated ADD_TO_PROJECT_PAT for this run."
+            fi
+            echo "::warning title=Project automation fallback::Using deprecated ADD_TO_PROJECT_PAT because PROJECT_AUTOMATION_APP_ID / PROJECT_AUTOMATION_APP_PRIVATE_KEY are not fully configured yet."
+            echo "::add-mask::${FALLBACK_PAT}"
+            echo "token=${FALLBACK_PAT}" >> "$GITHUB_OUTPUT"
+            echo "mode=pat-fallback" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Neither GitHub App credentials nor ADD_TO_PROJECT_PAT are configured for project automation." >&2
+          exit 1
+
       - uses: actions/add-to-project@v2.0.0
         with:
           project-url: ${{ vars.PROJECT_URL }}
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ steps.project-token.outputs.token }}
           labeled: enhancement, bug, triage
           label-operator: OR
 
@@ -25,50 +100,104 @@ jobs:
     needs: add-to-project
     if: always() && !cancelled()
     steps:
+      - name: Parse project URL
+        id: project
+        env:
+          PROJECT_URL: ${{ vars.PROJECT_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PROJECT_URL:-}" ]]; then
+            echo "Missing repository variable PROJECT_URL." >&2
+            exit 1
+          fi
+
+          if [[ "${PROJECT_URL}" =~ ^https://github\.com/(users|orgs)/([^/]+)/projects/([0-9]+)/?$ ]]; then
+            {
+              echo "owner_type=${BASH_REMATCH[1]}"
+              echo "owner=${BASH_REMATCH[2]}"
+              echo "project_number=${BASH_REMATCH[3]}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "PROJECT_URL has an unsupported format: ${PROJECT_URL}" >&2
+          exit 1
+
+      - name: Check project automation GitHub App configuration
+        id: app-config
+        env:
+          APP_ID: ${{ vars.PROJECT_AUTOMATION_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APP_ID:-}" && -n "${APP_PRIVATE_KEY:-}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+
+      - name: Create project automation GitHub App token
+        id: app-token
+        if: steps.app-config.outputs.enabled == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.PROJECT_AUTOMATION_APP_ID }}
+          owner: ${{ steps.project.outputs.owner }}
+          private-key: ${{ secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY }}
+
+      - name: Select project automation token
+        id: project-token
+        env:
+          APP_TOKEN_OUTCOME: ${{ steps.app-token.outcome }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          FALLBACK_PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APP_TOKEN:-}" ]]; then
+            echo "token=${APP_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "mode=github-app" >> "$GITHUB_OUTPUT"
+            echo "Using GitHub App token for project automation."
+            exit 0
+          fi
+
+          if [[ -n "${FALLBACK_PAT:-}" ]]; then
+            if [[ "${APP_TOKEN_OUTCOME:-}" == "failure" ]]; then
+              echo "::warning title=GitHub App token failed::GitHub App credentials are configured but token creation failed. Falling back to deprecated ADD_TO_PROJECT_PAT for this run."
+            fi
+            echo "::warning title=Project automation fallback::Using deprecated ADD_TO_PROJECT_PAT because PROJECT_AUTOMATION_APP_ID / PROJECT_AUTOMATION_APP_PRIVATE_KEY are not fully configured yet."
+            echo "::add-mask::${FALLBACK_PAT}"
+            echo "token=${FALLBACK_PAT}" >> "$GITHUB_OUTPUT"
+            echo "mode=pat-fallback" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Neither GitHub App credentials nor ADD_TO_PROJECT_PAT are configured for project automation." >&2
+          exit 1
+
       - name: Sync Type/Priority fields from labels
         uses: actions/github-script@v9
         with:
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ steps.project-token.outputs.token }}
           script: |
-            const projectUrl = process.env.PROJECT_URL;
-            if (!projectUrl) {
-              core.setFailed("Missing repository variable PROJECT_URL.");
+            const ownerType = process.env.PROJECT_OWNER_TYPE;
+            const owner = process.env.PROJECT_OWNER;
+            const projectNumber = Number(process.env.PROJECT_NUMBER);
+
+            if (!ownerType || !owner || Number.isNaN(projectNumber)) {
+              core.setFailed("Project URL parsing outputs are missing or invalid.");
               return;
             }
 
-            const match = projectUrl.match(/^https:\/\/github\.com\/(?:users|orgs)\/([^/]+)\/projects\/(\d+)\/?$/);
-            if (!match) {
-              core.setFailed(`PROJECT_URL has an unsupported format: ${projectUrl}`);
-              return;
-            }
-
-            const [, owner, projectNumberRaw] = match;
-            const projectNumber = Number(projectNumberRaw);
             const issueNodeId = context.payload.issue.node_id;
             const issueNumber = context.payload.issue.number;
             const labels = (context.payload.issue.labels || []).map((label) => label.name.toLowerCase());
             const qualifyingLabels = ["enhancement", "bug", "triage"];
+            const ownerRoot = ownerType === "users" ? "user" : "organization";
 
-            const projectQuery = `
+            const projectResult = await github.graphql(`
               query($owner: String!, $number: Int!) {
-                user(login: $owner) {
-                  projectV2(number: $number) {
-                    id
-                    fields(first: 50) {
-                      nodes {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options {
-                            id
-                            name
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                organization(login: $owner) {
+                ${ownerRoot}(login: $owner) {
                   projectV2(number: $number) {
                     id
                     fields(first: 50) {
@@ -86,13 +215,11 @@ jobs:
                   }
                 }
               }
-            `;
-
-            const projectResult = await github.graphql(projectQuery, { owner, number: projectNumber });
-            const project = projectResult.user?.projectV2 || projectResult.organization?.projectV2;
+            `, { owner, number: projectNumber });
+            const project = projectResult[ownerRoot]?.projectV2;
 
             if (!project) {
-              core.setFailed(`Project ${projectUrl} was not found or is not accessible to the project automation token.`);
+              core.setFailed(`Project ${ownerType}/${owner}/${projectNumber} was not found or is not accessible to the project automation token.`);
               return;
             }
 
@@ -127,6 +254,10 @@ jobs:
             const fieldsByName = new Map((project.fields?.nodes || []).map((field) => [field.name, field]));
             const typeField = fieldsByName.get("Type");
             const priorityField = fieldsByName.get("Priority");
+            const areaField = fieldsByName.get("Area");
+            const riskField = fieldsByName.get("Risk");
+            const agentField = fieldsByName.get("Agent");
+            const validationField = fieldsByName.get("Validation");
 
             const pickOptionId = (field, optionName) => {
               if (!field || !optionName) return null;
@@ -144,10 +275,65 @@ jobs:
             else if (labels.includes("priority/medium")) priorityName = "Medium";
             else if (labels.includes("triage")) priorityName = "Medium";
 
-            const syncSingleSelectField = async ({ field, fieldName, optionName }) => {
+            const areaLabelMap = new Map([
+              ["area/backend", "backend"],
+              ["area/frontend", "frontend"],
+              ["area/shared", "shared"],
+              ["area/ci", "ci"],
+              ["area/docker", "docker"],
+              ["area/release", "release"],
+              ["area/security", "security"],
+              ["area/docs", "docs"],
+              ["area/project-automation", "project-automation"]
+            ]);
+
+            const riskLabelMap = new Map([
+              ["risk/low", "low"],
+              ["risk/medium", "medium"],
+              ["risk/high", "high"],
+              ["risk/release-blocking", "release-blocking"]
+            ]);
+
+            const agentLabelMap = new Map([
+              ["agent/project-bot", "project-bot"],
+              ["agent/implementation-agent", "implementation-agent"],
+              ["agent/ci-surgeon", "ci-surgeon"],
+              ["agent/security-reviewer", "security-reviewer"],
+              ["agent/testing-manager", "testing-manager"],
+              ["agent/release-manager", "release-manager"],
+              ["agent/frontend-refactor-agent", "frontend-refactor-agent"]
+            ]);
+
+            const validationLabelMap = new Map([
+              ["validation/unit", "unit"],
+              ["validation/domain", "domain"],
+              ["validation/coverage", "coverage"],
+              ["validation/e2e-smoke", "e2e-smoke"],
+              ["validation/e2e-full", "e2e-full"],
+              ["validation/container-smoke", "container-smoke"],
+              ["validation/security", "security"],
+              ["validation/release-preflight", "release-preflight"]
+            ]);
+
+            const pickMappedLabel = (mapping) => {
+              for (const [label, optionName] of mapping.entries()) {
+                if (labels.includes(label)) return optionName;
+              }
+              return null;
+            };
+
+            const areaName = pickMappedLabel(areaLabelMap);
+            const riskName = pickMappedLabel(riskLabelMap);
+            const agentName = pickMappedLabel(agentLabelMap);
+            const validationName = pickMappedLabel(validationLabelMap);
+
+            const syncSingleSelectField = async ({ field, fieldName, optionName, required }) => {
               if (!field) {
                 if (optionName) {
-                  throw new Error(`Configured project is missing the single-select "${fieldName}" field required for label sync.`);
+                  if (required) {
+                    throw new Error(`Configured project is missing the single-select "${fieldName}" field required for label sync.`);
+                  }
+                  core.warning(`Configured project is missing the optional single-select "${fieldName}" field. Skipping label sync for this field.`);
                 }
                 return;
               }
@@ -175,6 +361,10 @@ jobs:
 
               const optionId = pickOptionId(field, optionName);
               if (!optionId) {
+                if (!required) {
+                  core.warning(`Configured project field "${fieldName}" is missing option "${optionName}". Skipping label sync for this field.`);
+                  return;
+                }
                 throw new Error(`Configured project field "${fieldName}" is missing option "${optionName}".`);
               }
 
@@ -199,7 +389,14 @@ jobs:
               console.log(`Issue #${issueNumber}: set ${fieldName} = ${optionName}`);
             };
 
-            await syncSingleSelectField({ field: typeField, fieldName: "Type", optionName: typeName });
-            await syncSingleSelectField({ field: priorityField, fieldName: "Priority", optionName: priorityName });
+            await syncSingleSelectField({ field: typeField, fieldName: "Type", optionName: typeName, required: true });
+            await syncSingleSelectField({ field: priorityField, fieldName: "Priority", optionName: priorityName, required: true });
+            await syncSingleSelectField({ field: areaField, fieldName: "Area", optionName: areaName, required: false });
+            await syncSingleSelectField({ field: riskField, fieldName: "Risk", optionName: riskName, required: false });
+            await syncSingleSelectField({ field: agentField, fieldName: "Agent", optionName: agentName, required: false });
+            await syncSingleSelectField({ field: validationField, fieldName: "Validation", optionName: validationName, required: false });
         env:
           PROJECT_URL: ${{ vars.PROJECT_URL }}
+          PROJECT_OWNER: ${{ steps.project.outputs.owner }}
+          PROJECT_OWNER_TYPE: ${{ steps.project.outputs.owner_type }}
+          PROJECT_NUMBER: ${{ steps.project.outputs.project_number }}

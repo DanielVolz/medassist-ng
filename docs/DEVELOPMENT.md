@@ -86,7 +86,9 @@ Use the root-level commands for full-stack validation when a change spans backen
 ## Release Workflow Safeguards
 
 - PR validation is enforced through `.github/workflows/test.yml` and `.github/workflows/e2e.yml`.
+- Workflow syntax validation is enforced through `.github/workflows/workflow-validation.yml` with `actionlint` on all PR workflow changes.
 - Required PR checks now always emit their stable check names; when a PR is not relevant for a given lane, the workflow reports a no-op success instead of disappearing as a skipped/missing required context.
+- Product test lanes are only triggered by product code or product-facing CI/CD workflow changes (`test.yml`, `e2e.yml`, `docker-build.yml`, `container-smoke.yml`). Project, issue, and PR automation workflow edits still get workflow validation, but no longer trigger backend/frontend/Playwright lanes by themselves.
 - Release-relevant PRs also run `.github/workflows/container-smoke.yml` as a dedicated container runtime check.
 - Docker publishing is handled by `.github/workflows/docker-build.yml`.
 - The reusable container smoke workflow is used in two places:
@@ -108,6 +110,33 @@ Use the root-level commands for full-stack validation when a change spans backen
 GitHub Project automation expects these repository settings:
 
 - `vars.PROJECT_URL`: GitHub Project v2 URL in the form `https://github.com/users/<owner>/projects/<number>` or `https://github.com/orgs/<owner>/projects/<number>`
-- `secrets.ADD_TO_PROJECT_PAT`: token that can add/update project items for that project
+- `vars.PROJECT_AUTOMATION_APP_ID`: GitHub App ID for Project automation
+- `secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY`: private key for that GitHub App installation
+- optional transitional fallback: `secrets.ADD_TO_PROJECT_PAT`
 
-The project workflows resolve project and field IDs dynamically from `PROJECT_URL`. If the configured project is inaccessible or missing the expected `Status`, `Type`, or `Priority` fields/options, the workflow now fails clear instead of silently drifting.
+The project workflows now prefer a GitHub App token and only fall back to `ADD_TO_PROJECT_PAT` with an explicit warning while the App rollout is incomplete. They also parse `PROJECT_URL` as either a user-owned or organization-owned project and query the correct GraphQL root explicitly instead of probing both and risking false failures.
+
+The project workflows resolve project and field IDs dynamically from `PROJECT_URL`.
+
+Required fields:
+
+- `Status` with a `Done` option
+- `Type`
+- `Priority`
+
+Recommended deterministic routing fields:
+
+- `Area`: `backend`, `frontend`, `shared`, `ci`, `docker`, `release`, `security`, `docs`, `project-automation`
+- `Risk`: `low`, `medium`, `high`, `release-blocking`
+- `Agent`: `project-bot`, `implementation-agent`, `ci-surgeon`, `security-reviewer`, `testing-manager`, `release-manager`, `frontend-refactor-agent`
+- `Validation`: `unit`, `domain`, `coverage`, `e2e-smoke`, `e2e-full`, `container-smoke`, `security`, `release-preflight`
+
+Label-to-field sync currently supports:
+
+- `priority/high`, `priority/medium`, `priority/low`
+- `area/*`
+- `risk/*`
+- `agent/*`
+- `validation/*`
+
+If the configured project is inaccessible or missing required field/options, the workflows fail clear. Missing optional routing fields currently warn and skip instead of breaking issue intake during project-schema rollout.

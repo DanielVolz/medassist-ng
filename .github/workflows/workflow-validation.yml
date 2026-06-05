@@ -1,0 +1,44 @@
+name: Workflow Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect workflow changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            workflows:
+              - '.github/workflows/**'
+
+  actionlint:
+    name: Actionlint
+    needs: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Skip workflow validation when no workflow changes are present
+        if: needs.changes.outputs.workflows != 'true'
+        run: echo "No workflow changes detected; required check passes without running actionlint."
+
+      - name: Checkout repository
+        if: needs.changes.outputs.workflows == 'true'
+        uses: actions/checkout@v6
+
+      - name: Run actionlint
+        if: needs.changes.outputs.workflows == 'true'
+        uses: rhysd/actionlint@v1.7.12

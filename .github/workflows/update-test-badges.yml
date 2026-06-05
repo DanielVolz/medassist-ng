@@ -53,9 +53,9 @@ jobs:
           OUTPUT=$(npm run test:run 2>&1) || true
           echo "$OUTPUT"
           # Strip ANSI escape codes, then extract "Tests  X passed" from output
-          CLEAN=$(echo "$OUTPUT" | sed 's/\x1b\[[0-9;]*m//g')
+          CLEAN=$(printf '%s\n' "$OUTPUT" | perl -pe 's/\e\[[0-9;]*m//g')
           PASSED=$(echo "$CLEAN" | grep -oP 'Tests\s+\K\d+(?=\s+passed)' | tail -1)
-          echo "count=$PASSED" >> $GITHUB_OUTPUT
+          echo "count=$PASSED" >> "$GITHUB_OUTPUT"
 
       - name: Run frontend tests and capture count
         id: frontend-tests
@@ -67,9 +67,9 @@ jobs:
           OUTPUT=$(npm run test:run 2>&1) || true
           echo "$OUTPUT"
           # Strip ANSI escape codes, then extract "Tests  X passed" from output
-          CLEAN=$(echo "$OUTPUT" | sed 's/\x1b\[[0-9;]*m//g')
+          CLEAN=$(printf '%s\n' "$OUTPUT" | perl -pe 's/\e\[[0-9;]*m//g')
           PASSED=$(echo "$CLEAN" | grep -oP 'Tests\s+\K\d+(?=\s+passed)' | tail -1)
-          echo "count=$PASSED" >> $GITHUB_OUTPUT
+          echo "count=$PASSED" >> "$GITHUB_OUTPUT"
 
       - name: Update README badges
         run: |

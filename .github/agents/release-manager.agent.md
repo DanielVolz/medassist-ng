@@ -1,7 +1,9 @@
 ---
+
 name: release-manager
 description: Manages the full release lifecycle - from branching and PRs through versioning and GitHub release notes. Use when code changes are complete and ready to ship.
 argument-hint: Describe what was changed, e.g., "fix stock correction bug" or "new refill tracking feature"
+
 ---
 
 # Release Manager Agent
@@ -40,7 +42,7 @@ This repository intentionally uses only two operational agents for CI/CD handoff
 ### Current Workflow Assignment
 
 | Workflow | Primary Owner | Responsibility |
-|---------|----------------|----------------|
+| --- | --- | --- |
 | `.github/workflows/test.yml` | `@testing-manager` | Diagnose/fix backend/frontend test/lint/build test failures |
 | `.github/workflows/e2e.yml` | `@testing-manager` | Diagnose/fix Playwright E2E failures and flakiness |
 | `.github/workflows/codeql.yml` | `@release-manager` | Track required security check state and block merge until green |
@@ -65,10 +67,12 @@ This repository intentionally uses only two operational agents for CI/CD handoff
 
 - The authoritative comparison target is the actual remote default branch used for shipping, normally `github/main` or `origin/main`. Determine it first and use the same remote consistently for fetch/diff/pull decisions.
 - Before any PR split or branch creation, run a source-of-truth audit:
-   1. fetch the authoritative remote
-   2. inspect `git status`
-   3. compare local `main` against `<remote>/main`
-   4. compare intended changes against `<remote>/main`, not only against local `HEAD`
+
+    1. fetch the authoritative remote
+    2. inspect `git status`
+    3. compare local `main` against `<remote>/main`
+    4. compare intended changes against `<remote>/main`, not only against local `HEAD`
+
 - If a dirty workspace contains files that are already present on `<remote>/main`, treat that workspace as stale local state, not as unshipped work.
 - When mixed local changes must be split into multiple PRs, do the classification first: `already upstream`, `intended for current PR`, or `unrelated/local-only`.
 - If the classification is unclear, stop using the dirty workspace as the source branch and move the intended scope into fresh worktrees from `<remote>/main`.
@@ -83,12 +87,14 @@ This repository intentionally uses only two operational agents for CI/CD handoff
 **Each feature or bug fix MUST be submitted as its own separate PR.** Do NOT bundle multiple unrelated changes into a single PR.
 
 **Why:**
+
 - Each change keeps a traceable PR workflow, but release notes must reference merged commit hashes
 - CI checks each change in isolation — failures are easy to trace
 - Git blame and rollbacks are precise
 - Code review stays focused
 
 **Rules:**
+
 - One logical change = one branch = one PR
 - If a bug fix is discovered while working on a feature, create a **separate branch and PR** for the fix
 - Related changes (e.g., feature + implementation refinements) belong in the **same** PR
@@ -96,12 +102,14 @@ This repository intentionally uses only two operational agents for CI/CD handoff
 - Branch naming reflects the change: `fix/bottle-stock-calc`, `feat/theme-dropdown`, etc.
 
 **Example — bad (bundled):**
-```
+
+```javascript
 PR #138: "feat: theme dropdown, fix bottle bugs, fix planner, fix reminders"
 ```
 
 **Example — good (separate):**
-```
+
+```javascript
 PR #138: "fix: bottle-type stock calculations across all subsystems"
 PR #139: "fix: intake reminder past-intake seeding"
 PR #140: "feat: theme dropdown with Light/Dark/System options"
@@ -115,14 +123,15 @@ PR #141: "fix: planner checkbox layout on single line"
 Every Pull Request MUST have the following sidebar fields populated at creation time:
 
 | Field | Value | How |
-|-------|-------|-----|
+| --- | --- | --- |
 | **Assignee** | `DanielVolz` (repo owner) | `--assignee DanielVolz` |
 | **Label** | Match the change type: `enhancement` (feat), `bug` (fix), `documentation` (docs) | `--label <label>` |
 | **Project** | `@DanielVolz's MedAssist-ng project` | `--project "@DanielVolz's MedAssist-ng project"` |
 
 **Label mapping for PRs:**
+
 | Branch prefix / commit type | Label |
-|---|---|
+| --- | --- |
 | `feat/` | `enhancement` |
 | `fix/` | `bug` |
 | `docs/` | `documentation` |
@@ -150,37 +159,47 @@ When code changes (features or bug fixes) are complete:
 ### Step 2: Create Feature Branch
 
 1. Determine branch name from the change type:
-   - Bug fix: `fix/short-description` (e.g., `fix/stock-correction-consumption`)
-   - Feature: `feat/short-description` (e.g., `feat/refill-tracking`)
-   - Chore: `chore/short-description`
+
+    - Bug fix: `fix/short-description` (e.g., `fix/stock-correction-consumption`)
+    - Feature: `feat/short-description` (e.g., `feat/refill-tracking`)
+    - Chore: `chore/short-description`
+
 2. Create the branch from a clean base that matches `<remote>/main`. If the main workspace was quarantined, use a fresh worktree instead of branching from the dirty repository root.
 3. Create and switch to the branch:
-   ```bash
+
+```bash
    git checkout -b feat/short-description
-   ```
+```
+
 4. Move only the intended scope into that branch/worktree. Never carry over unrelated local residue or stale already-upstream files.
 5. Stage and commit changes with a conventional commit message:
-   ```bash
-   git add .
+
+```bash
+  git add .
    git commit -m "fix: short description of what was fixed"
-   ```
+```
+
    Commit message prefixes: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`
 
 ### Step 3: Push and Create PR
 
 1. Re-check local gate status before push/PR creation (lint + relevant local tests green).
 2. Push the branch:
-   ```bash
+
+```bash
    git push -u origin feat/short-description
-   ```
+```
+
 3. Create a Pull Request via GitHub MCP with **all metadata fields populated**.
+
     - Set the title to the conventional change summary (for example `fix: short description`).
     - Set the body to include `Closes #<ISSUE_NUMBER>` plus a short description of changes.
     - Set assignee to `DanielVolz`.
     - Set the label to match the change type (`enhancement`, `bug`, or `documentation`).
     - Link the PR to `@DanielVolz's MedAssist-ng project`.
-   - Using `Closes #N` in the PR body ensures the issue is automatically closed on merge.
-   - Always add an explicit issue comment with the PR link and short fix summary (do not rely on auto-close event only).
+    - Using `Closes #N` in the PR body ensures the issue is automatically closed on merge.
+    - Always add an explicit issue comment with the PR link and short fix summary (do not rely on auto-close event only).
+
 4. **Present the PR URL to the user and wait for confirmation.**
 
 ### Step 4: Wait for CI and Merge
@@ -192,10 +211,11 @@ When code changes (features or bug fixes) are complete:
 4. Re-sync the authoritative local `main` before using it again as a source of truth for any next PR or release step. Do not continue from a previously dirty workspace without another source-of-truth audit.
 5. If the requested end state is a clean local `main`, verify that `git status` is empty and that no task-related stash entry remains as hidden residue.
 6. Switch back to main and pull:
-   ```bash
-   git checkout main
+
+```bash
+  git checkout main
    git pull origin main
-   ```
+```
 
 ---
 
@@ -210,6 +230,7 @@ grep '"version"' backend/package.json
 ```
 
 Also check the latest git tag:
+
 ```bash
 git tag --sort=-v:refname | head -5
 ```
@@ -227,12 +248,13 @@ Read through the commits to understand what changed.
 Apply these rules strictly:
 
 | Change Type | Version Bump | Example |
-|------------|-------------|---------|
+| --- | --- | --- |
 | Bug fixes only, no new features | **patch** | `1.4.2` → `1.4.3` |
 | New features (backward compatible) | **minor** | `1.4.2` → `1.5.0` |
 | Breaking changes (DB schema without migration, removed ENV vars, changed API) | **major** | `1.4.2` → `2.0.0` |
 
 **Guidelines:**
+
 - When in doubt between patch and minor, prefer **minor** if any user-visible behavior is new.
 - Bug fixes that also introduce small UX improvements = **patch**.
 - Multiple bug fixes in one release = still **patch**.
@@ -257,6 +279,7 @@ The version number is displayed in the **About modal** (Settings → About) as a
 - **`frontend/package.json`** → Frontend version, injected at build time via Vite's `__APP_VERSION__` define and used to construct the release link
 
 **Both files MUST be updated to the new version before tagging a release.** If forgotten:
+
 - The About modal will show the old version
 - The version link will point to a non-existent GitHub release page
 
@@ -267,27 +290,30 @@ The documented production `docker-compose.yml` must be pinned to the exact relea
 - On every release branch, update both production image references in `docker-compose.yml` from any previous version to the new release image tag.
 - Use the Docker image tag produced by `docker-build.yml` for release tags: `X.Y.Z` without the leading Git tag `v`.
 - Example for release tag `v1.23.0`:
-  - `ghcr.io/danielvolz/medassist-ng-backend:1.23.0`
-  - `ghcr.io/danielvolz/medassist-ng-frontend:1.23.0`
+    - `ghcr.io/danielvolz/medassist-ng-backend:1.23.0`
+    - `ghcr.io/danielvolz/medassist-ng-frontend:1.23.0`
 - Do not leave production `docker-compose.yml` on `:latest` after a release PR. `:latest` may appear only in explicitly labeled floating/latest examples, not in the default production compose file.
 - If the release changes the image-tagging workflow, update these instructions and the user-facing deployment docs in the same release PR.
 
 ### Manual Release
 
 1. Create release branch:
-   ```bash
-   git checkout main && git pull origin main
+
+```bash
+  git checkout main && git pull origin main
    git checkout -b chore/release-X.Y.Z
-   ```
+```
+
 2. Update versions in **both** `backend/package.json` and `frontend/package.json` to `X.Y.Z`
 3. Update production `docker-compose.yml` image references to `ghcr.io/danielvolz/medassist-ng-backend:X.Y.Z` and `ghcr.io/danielvolz/medassist-ng-frontend:X.Y.Z`
 4. Commit, push, create PR, wait for CI, merge (same as Task 1)
 5. Create signed tag:
-   ```bash
-   git checkout main && git pull origin main
+
+```bash
+  git checkout main && git pull origin main
    git tag -s "vX.Y.Z" -m "Release vX.Y.Z"
    git push origin "vX.Y.Z"
-   ```
+```
 
 ### After Tagging
 
@@ -325,6 +351,7 @@ Read the actual code changes (not just commit messages) to understand what was a
 4. **Breaking Changes Warning** (if applicable): See below
 
 **Style guidelines:**
+
 - Use `### Heading` for sections
 - Use **bold** for feature names in bullet points
 - Keep descriptions on the same line as the feature name
@@ -335,6 +362,7 @@ Read the actual code changes (not just commit messages) to understand what was a
 - End with: `**Full Changelog**: https://github.com/DanielVolz/medassist-ng/compare/vPREV...vNEW`
 
 **ONLY include user-relevant changes.** DO NOT include:
+
 - Technical implementation details (new columns, endpoints, database changes)
 - Internal API changes (unless breaking)
 - Emojis anywhere in the release notes
@@ -373,6 +401,7 @@ The refill button appears in the medication detail modal and in the edit form fo
 If the update breaks existing configurations or stored data, it MUST be prominently warned:
 
 **Breaking Changes include:**
+
 - Database schema changes without automatic migration
 - Removed or renamed ENV variables
 - Changed API endpoints
@@ -397,6 +426,7 @@ Existing installations need to:
 ```
 
 **What is NOT a Breaking Change:**
+
 - ✅ New optional columns with DEFAULT values
 - ✅ New ENV variables (with sensible defaults)
 - ✅ New features that don't affect existing data
@@ -450,8 +480,9 @@ When the release includes **new features** (minor or major version bump), you MU
 All work is tracked in the [GitHub Project board](https://github.com/users/DanielVolz/projects/1) (Project ID: `PVT_kwHOADH82s4BO2OT`).
 
 ### Board Columns (Status)
+
 | Column | Color | Description |
-|--------|-------|-------------|
+| --- | --- | --- |
 | Triage | Purple | New issues needing review |
 | Backlog | Green | Accepted, not yet started |
 | Ready | Blue | Ready to be picked up |
@@ -459,8 +490,9 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
 | Done | Orange | Completed |
 
 ### Custom Fields
+
 | Field | Options | Usage |
-|-------|---------|-------|
+| --- | --- | --- |
 | **Type** | Bug (red), Feature (green), Chore (gray), Documentation (blue) | Categorize the work |
 | **Priority** | High (red), Medium (orange), Low (yellow) | Set urgency |
 | **Size** | XS, S, M, L, XL | Estimate effort |
@@ -474,7 +506,6 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
 
 2. **When creating a PR**: Always reference the issue with `Closes #N` in the PR body so the issue is automatically **closed** on merge. Note: this does NOT move the Project board status — that must be done manually (see step 3).
    Also add a direct issue comment with the PR link and a one-line summary for clear issue-thread traceability.
-
 3. **After merge — verify automation**: The `project-auto-done.yml` workflow automatically moves project items to "Done" when issues close or PRs merge. After merge, verify issue/project status via GitHub MCP.
 
     **Manual fallback** — if the workflow fails or the item wasn't moved, use GitHub MCP GraphQL/project mutation support with the project/item/field IDs below.
@@ -491,8 +522,9 @@ All work is tracked in the [GitHub Project board](https://github.com/users/Danie
    Status field ID: `PVTSSF_lAHOADH82s4BO2OTzg9bdkE`
 
 ### Issue Labels
+
 | Label | Applied by | Purpose |
-|-------|-----------|--------|
+| --- | --- | --- |
 | `enhancement` | Feature request template | New features |
 | `bug` | Bug report template | Bug fixes |
 | `triage` | Both templates | Needs review |
@@ -509,7 +541,7 @@ All three labels trigger the `add-to-project.yml` workflow, which automatically 
 
 ## Complete Workflow Summary
 
-```
+```javascript
 Code complete & validated by testing-manager
         ↓
 1. Ensure a GitHub issue exists (create if not)

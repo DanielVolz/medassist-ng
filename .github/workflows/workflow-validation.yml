@@ -41,4 +41,4 @@ jobs:
 
       - name: Run actionlint
         if: needs.changes.outputs.workflows == 'true'
-        uses: rhysd/actionlint@v1
+        uses: rhysd/actionlint@v1.7.12

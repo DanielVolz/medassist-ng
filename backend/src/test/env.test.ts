@@ -46,6 +46,8 @@ describe("EnvSchema", () => {
 			expect(result.RATE_LIMIT_MAX).toBe(100);
 			expect(result.ACCESS_TOKEN_TTL_MINUTES).toBe(15);
 			expect(result.REFRESH_TOKEN_TTL_DAYS).toBe(7);
+			expect(result.API_KEY_PEPPER).toBeUndefined();
+			expect(result.API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES).toBe(15);
 			expect(result.SHARE_TOKEN_TTL_DAYS).toBe(90);
 			expect(result.OIDC_ENABLED).toBe(false);
 			expect(result.OIDC_SCOPES).toBe("openid profile email");
@@ -174,6 +176,28 @@ describe("EnvSchema", () => {
 		it("should transform SHARE_TOKEN_TTL_DAYS to number", () => {
 			const result = EnvSchema.parse({ SHARE_TOKEN_TTL_DAYS: "120" });
 			expect(result.SHARE_TOKEN_TTL_DAYS).toBe(120);
+		});
+
+		it("should transform API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES to number", () => {
+			const result = EnvSchema.parse({ API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES: "30" });
+			expect(result.API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES).toBe(30);
+		});
+
+		it("should reject invalid API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES", () => {
+			expect(() => EnvSchema.parse({ API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES: "abc" })).toThrow();
+			expect(() => EnvSchema.parse({ API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES: "0" })).toThrow();
+		});
+	});
+
+	describe("API key pepper validation", () => {
+		it("should accept strong API_KEY_PEPPER values", () => {
+			const pepper = "a".repeat(32);
+			const result = EnvSchema.parse({ API_KEY_PEPPER: pepper });
+			expect(result.API_KEY_PEPPER).toBe(pepper);
+		});
+
+		it("should reject short API_KEY_PEPPER values", () => {
+			expect(() => EnvSchema.parse({ API_KEY_PEPPER: "short-api-key-pepper" })).toThrow();
 		});
 	});
 

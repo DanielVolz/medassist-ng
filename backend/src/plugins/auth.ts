@@ -85,6 +85,7 @@ export interface RequestUser {
 }
 
 const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const TEST_API_KEY_PEPPER = "medassist-test-api-key-pepper-v1";
 
 export function isReadOnlyApiKeyRequest(request: FastifyRequest): boolean {
 	return request.authContext?.method === "api_key" && request.authContext.scope === "read";
@@ -95,11 +96,22 @@ function isMutationMethod(method: string): boolean {
 }
 
 function getApiKeyPepper(): string {
-	return env.JWT_SECRET || env.REFRESH_SECRET || "medassist-api-key-pepper";
+	if (env.API_KEY_PEPPER) return env.API_KEY_PEPPER;
+	if (env.JWT_SECRET) return env.JWT_SECRET;
+	if (env.REFRESH_SECRET) return env.REFRESH_SECRET;
+	if (env.NODE_ENV === "test") return TEST_API_KEY_PEPPER;
+	throw new Error("API_KEY_PEPPER_REQUIRED");
 }
 
 export function hashApiKeyToken(token: string): string {
 	return pbkdf2Sync(token, getApiKeyPepper(), 120_000, 64, "sha512").toString("hex");
+}
+
+function shouldUpdateApiKeyLastUsedAt(lastUsedAt: Date | null, now: Date): boolean {
+	if (!lastUsedAt) return true;
+	const intervalMinutes = env.API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES ?? 15;
+	const intervalMs = intervalMinutes * 60 * 1000;
+	return now.getTime() - lastUsedAt.getTime() >= intervalMs;
 }
 
 function getBearerToken(request: FastifyRequest): string | null {
@@ -157,10 +169,13 @@ async function tryApiKeyAuth(request: FastifyRequest, reply: FastifyReply): Prom
 		apiKeyId: keyRow.id,
 	};
 
-	await db
-		.update(apiKeys)
-		.set({ lastUsedAt: new Date(), updatedAt: new Date() })
-		.where(and(eq(apiKeys.id, keyRow.id), eq(apiKeys.userId, user.id)));
+	const now = new Date();
+	if (shouldUpdateApiKeyLastUsedAt(keyRow.lastUsedAt, now)) {
+		await db
+			.update(apiKeys)
+			.set({ lastUsedAt: now, updatedAt: now })
+			.where(and(eq(apiKeys.id, keyRow.id), eq(apiKeys.userId, user.id)));
+	}
 
 	return true;
 }

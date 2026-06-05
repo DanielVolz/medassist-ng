@@ -66,6 +66,28 @@ if (parsed.AUTH_ENABLED) {
 	}
 }
 
+function isStrongApiKeyPepperSource(value: string | undefined): boolean {
+	return (value?.trim().length ?? 0) >= 32;
+}
+
+if (
+	parsed.NODE_ENV === "production" &&
+	parsed.AUTH_ENABLED &&
+	!isStrongApiKeyPepperSource(parsed.API_KEY_PEPPER) &&
+	!isStrongApiKeyPepperSource(parsed.JWT_SECRET) &&
+	!isStrongApiKeyPepperSource(parsed.REFRESH_SECRET)
+) {
+	console.error("=".repeat(60));
+	console.error("API KEY CONFIGURATION ERROR");
+	console.error("=".repeat(60));
+	console.error("Production API key hashing requires API_KEY_PEPPER or a strong JWT_SECRET/REFRESH_SECRET.");
+	console.error("");
+	console.error("To fix this, set API_KEY_PEPPER to a unique random value:");
+	console.error("  openssl rand -hex 32");
+	console.error("=".repeat(60));
+	process.exit(1);
+}
+
 // Validate OIDC configuration when enabled
 if (parsed.OIDC_ENABLED) {
 	const missing: string[] = [];

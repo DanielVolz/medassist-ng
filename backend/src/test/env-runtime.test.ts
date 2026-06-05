@@ -73,6 +73,7 @@ describe("plugins/env runtime validation", () => {
 		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
 		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
 		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.API_KEY_PEPPER = "a".repeat(64);
 		process.env.OPENAPI_DOCS_ENABLED = "true";
 		delete process.env.DOCS_AUTH_REQUIRED;
 
@@ -87,6 +88,7 @@ describe("plugins/env runtime validation", () => {
 		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
 		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
 		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.API_KEY_PEPPER = "a".repeat(64);
 		process.env.OPENAPI_DOCS_ENABLED = "true";
 		process.env.DOCS_AUTH_REQUIRED = "false";
 
@@ -104,6 +106,7 @@ describe("plugins/env runtime validation", () => {
 		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
 		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
 		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.API_KEY_PEPPER = "a".repeat(64);
 		process.env.OPENAPI_DOCS_ENABLED = "no";
 		process.env.DOCS_AUTH_REQUIRED = "yes";
 
@@ -192,6 +195,45 @@ describe("plugins/env runtime validation", () => {
 		await expect(import("../plugins/env.js")).rejects.toThrow("process.exit:1");
 	});
 
+	it("exits in production auth when API key pepper and auth secrets are too weak for API key hashing", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "true";
+		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		delete process.env.API_KEY_PEPPER;
+
+		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new Error(`process.exit:${code ?? 0}`);
+		}) as never);
+
+		await expect(import("../plugins/env.js")).rejects.toThrow("process.exit:1");
+	});
+
+	it("loads in production auth when API_KEY_PEPPER is strong", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "true";
+		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.API_KEY_PEPPER = "b".repeat(64);
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.API_KEY_PEPPER).toBe("b".repeat(64));
+	});
+
+	it("loads in production auth without API_KEY_PEPPER when an auth secret is strong", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "true";
+		process.env.JWT_SECRET = "c".repeat(64);
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		delete process.env.API_KEY_PEPPER;
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.JWT_SECRET).toBe("c".repeat(64));
+	});
+
 	it("exits when oidc is enabled but required settings are missing", async () => {
 		process.env.AUTH_ENABLED = "false";
 		process.env.OIDC_ENABLED = "true";
@@ -212,6 +254,7 @@ describe("plugins/env runtime validation", () => {
 		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
 		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
 		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.API_KEY_PEPPER = "a".repeat(64);
 		process.env.OIDC_ENABLED = "true";
 		process.env.OIDC_ISSUER_URL = "https://auth.example.com";
 		process.env.OIDC_CLIENT_ID = "medassist";

@@ -33,6 +33,7 @@ const { testClient, testDb, mockedEnv, nodemailerSendMail } = vi.hoisted(() => {
 			["COOKIE_SECRET", "test-cookie-secret"],
 			["ACCESS_TOKEN_TTL_MINUTES", 15],
 			["REFRESH_TOKEN_TTL_DAYS", 7],
+			["API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES", 15],
 			["OPENAPI_DOCS_ENABLED", false],
 		]),
 		nodemailerSendMail: vi.fn(),
@@ -75,12 +76,14 @@ async function insertApiKey(options: {
 	scope?: "read" | "write";
 	isActive?: boolean;
 	expiresAt?: Date | null;
+	lastUsedAt?: Date | null;
 }) {
 	const expiresAtValue = options.expiresAt ? Math.floor(options.expiresAt.getTime() / 1000) : null;
+	const lastUsedAtValue = options.lastUsedAt ? Math.floor(options.lastUsedAt.getTime() / 1000) : null;
 
 	const result = await testClient.execute({
-		sql: `INSERT INTO api_keys (user_id, name, key_hash, token_prefix, scope, is_active, expires_at)
-		      VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		sql: `INSERT INTO api_keys (user_id, name, key_hash, token_prefix, scope, is_active, expires_at, last_used_at)
+		      VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		args: [
 			options.userId,
 			"Seeded Key",
@@ -89,6 +92,7 @@ async function insertApiKey(options: {
 			options.scope ?? "write",
 			options.isActive === false ? 0 : 1,
 			expiresAtValue,
+			lastUsedAtValue,
 		],
 	});
 
@@ -187,6 +191,73 @@ describe("Settings and API key security contracts", () => {
 			args: [userId],
 		});
 		expect(Number(settingsRows.rows[0].count)).toBe(0);
+	});
+
+	it("hashes API keys deterministically with the configured pepper", () => {
+		const originalPepper = mockedEnv.API_KEY_PEPPER;
+		try {
+			mockedEnv.API_KEY_PEPPER = "a".repeat(64);
+			const firstHash = hashApiKeyToken("ma_deterministic_hash_token_123");
+			const secondHash = hashApiKeyToken("ma_deterministic_hash_token_123");
+
+			mockedEnv.API_KEY_PEPPER = "b".repeat(64);
+			const differentPepperHash = hashApiKeyToken("ma_deterministic_hash_token_123");
+
+			expect(firstHash).toBe(secondHash);
+			expect(firstHash).not.toBe(differentPepperHash);
+		} finally {
+			mockedEnv.API_KEY_PEPPER = originalPepper;
+		}
+	});
+
+	it("throttles API key lastUsedAt writes", async () => {
+		const userId = await createTestUser(testClient, { username: "settings-api-key-last-used-user" });
+		const apiToken = "ma_last_used_throttle_token_123456789";
+		const recentLastUsedSeconds = Math.floor(Date.now() / 1000) - 60;
+		const keyId = await insertApiKey({
+			userId,
+			token: apiToken,
+			scope: "read",
+			lastUsedAt: new Date(recentLastUsedSeconds * 1000),
+		});
+
+		const firstResponse = await app.inject({
+			method: "GET",
+			url: "/settings",
+			headers: { authorization: `Bearer ${apiToken}` },
+		});
+		const secondResponse = await app.inject({
+			method: "GET",
+			url: "/settings",
+			headers: { authorization: `Bearer ${apiToken}` },
+		});
+		expect(firstResponse.statusCode).toBe(200);
+		expect(secondResponse.statusCode).toBe(200);
+
+		const throttledRow = await testClient.execute({
+			sql: "SELECT last_used_at FROM api_keys WHERE id = ?",
+			args: [keyId],
+		});
+		expect(Number(throttledRow.rows[0].last_used_at)).toBe(recentLastUsedSeconds);
+
+		const staleLastUsedSeconds = Math.floor(Date.now() / 1000) - 20 * 60;
+		await testClient.execute({
+			sql: "UPDATE api_keys SET last_used_at = ? WHERE id = ?",
+			args: [staleLastUsedSeconds, keyId],
+		});
+
+		const refreshResponse = await app.inject({
+			method: "GET",
+			url: "/settings",
+			headers: { authorization: `Bearer ${apiToken}` },
+		});
+		expect(refreshResponse.statusCode).toBe(200);
+
+		const refreshedRow = await testClient.execute({
+			sql: "SELECT last_used_at FROM api_keys WHERE id = ?",
+			args: [keyId],
+		});
+		expect(Number(refreshedRow.rows[0].last_used_at)).toBeGreaterThan(staleLastUsedSeconds);
 	});
 
 	it("rejects PUT /settings with a read-only API key", async () => {

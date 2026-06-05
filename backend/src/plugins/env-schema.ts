@@ -45,6 +45,8 @@ export const EnvSchema = z.object({
 	COOKIE_SECRET: z.string().min(10).optional(),
 	ACCESS_TOKEN_TTL_MINUTES: intEnv({ defaultValue: 15, min: 1, max: 525_600 }),
 	REFRESH_TOKEN_TTL_DAYS: intEnv({ defaultValue: 7, min: 1, max: 3650 }),
+	API_KEY_PEPPER: z.string().min(32).optional(),
+	API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES: intEnv({ defaultValue: 15, min: 1, max: 1440 }),
 	SHARE_TOKEN_TTL_DAYS: intEnv({ defaultValue: 90, min: 1, max: 3650 }),
 	OIDC_ENABLED: boolEnv(false),
 	OIDC_ISSUER_URL: z.string().url().optional(),

@@ -45,6 +45,8 @@ API docs behavior:
 | `COOKIE_SECRET` | — | Cookie signing key; required when auth is enabled |
 | `ACCESS_TOKEN_TTL_MINUTES` | `15` | Access token lifetime |
 | `REFRESH_TOKEN_TTL_DAYS` | `7` | Refresh token lifetime |
+| `API_KEY_PEPPER` | — | Optional dedicated pepper for API key hashes. Strongly recommended for production; if omitted, production requires a strong `JWT_SECRET` or `REFRESH_SECRET` for API key hashing. Generate with `openssl rand -hex 32`. |
+| `API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES` | `15` | Minimum interval between API key `lastUsedAt` database writes per key |
 | `SHARE_TOKEN_TTL_DAYS` | `90` | Default lifetime for newly generated public share links |
 
 Generate secrets with `openssl rand -hex 32`.

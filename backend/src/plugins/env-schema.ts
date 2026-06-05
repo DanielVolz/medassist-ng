@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { parseBoolEnv, parseIntEnv, parseStringListEnv } from "../utils/env-parsing.js";
-
-const DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://localhost:4174";
+import { DEFAULT_CORS_ORIGINS, DEFAULT_RATE_LIMIT_MAX } from "../utils/server-config.js";
 
 function boolEnv(defaultValue: boolean) {
 	return z
@@ -36,7 +35,7 @@ export const EnvSchema = z.object({
 	PUBLIC_APP_URL: z.string().url().optional(),
 	OPENAPI_DOCS_ENABLED: optionalBoolEnv(),
 	DOCS_AUTH_REQUIRED: optionalBoolEnv(),
-	RATE_LIMIT_MAX: intEnv({ defaultValue: 100, min: 1, max: 100_000 }),
+	RATE_LIMIT_MAX: intEnv({ defaultValue: DEFAULT_RATE_LIMIT_MAX, min: 1, max: 100_000 }),
 	AUTH_ENABLED: boolEnv(false),
 	ALLOW_UNAUTHENTICATED: boolEnv(false),
 	REGISTRATION_ENABLED: boolEnv(false),

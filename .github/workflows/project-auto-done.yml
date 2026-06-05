@@ -37,9 +37,22 @@ jobs:
           echo "PROJECT_URL has an unsupported format: ${PROJECT_URL}" >&2
           exit 1
 
+      - name: Check project automation GitHub App configuration
+        id: app-config
+        env:
+          APP_ID: ${{ vars.PROJECT_AUTOMATION_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APP_ID:-}" && -n "${APP_PRIVATE_KEY:-}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+
       - name: Create project automation GitHub App token
         id: app-token
-        if: vars.PROJECT_AUTOMATION_APP_ID != '' && secrets.PROJECT_AUTOMATION_APP_PRIVATE_KEY != ''
+        if: steps.app-config.outputs.enabled == 'true'
         continue-on-error: true
         uses: actions/create-github-app-token@v2
         with:

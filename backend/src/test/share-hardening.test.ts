@@ -189,12 +189,67 @@ describe("share link hardening", () => {
 		expect(response.json()).toMatchObject({ takenBy: "Daniel", allowMarkTaken: true });
 	});
 
+	it("scopes public share schedule and overview data to the selected person", async () => {
+		const start = buildLocalDoseStart();
+		await testClient.execute({
+			sql: `INSERT INTO user_settings (user_id, share_medication_overview, low_stock_days)
+			      VALUES (1, 1, 30)`,
+		});
+		await testClient.execute({
+			sql: `INSERT INTO medications (
+				user_id, name, taken_by_json, medication_form, package_type,
+				pack_count, blisters_per_pack, pills_per_blister, loose_tablets, stock_adjustment,
+				usage_json, every_json, start_json, intakes_json, intake_reminders_enabled
+			) VALUES (1, 'Family Med', ?, 'tablet', 'blister', 1, 1, 10, 10, 0, '[1,2,3]', '[1,1,1]', ?, ?, 0)`,
+			args: [
+				JSON.stringify(["Alice", "Bob"]),
+				JSON.stringify([start, start, start]),
+				JSON.stringify([
+					{ usage: 1, every: 1, start, takenBy: "Alice", intakeRemindersEnabled: false },
+					{ usage: 2, every: 1, start, takenBy: "Bob", intakeRemindersEnabled: false },
+					{ usage: 3, every: 1, start, takenBy: null, intakeRemindersEnabled: false },
+				]),
+			],
+		});
+		await insertShareToken({ token: "abcdef0123456789", takenBy: "Alice" });
+
+		const scheduleResponse = await app.inject({ method: "GET", url: "/share/abcdef0123456789" });
+		expect(scheduleResponse.statusCode, scheduleResponse.body).toBe(200);
+		const schedule = scheduleResponse.json();
+		expect(JSON.stringify(schedule)).not.toContain("Bob");
+		expect(schedule.medications).toHaveLength(1);
+		expect(schedule.medications[0].takenBy).toEqual(["Alice"]);
+		expect(schedule.medications[0].intakes.map((intake: { takenBy: string | null }) => intake.takenBy)).toEqual([
+			"Alice",
+			null,
+		]);
+		expect(schedule.medications[0].blisters.map((blister: { usage: number }) => blister.usage)).toEqual([1, 3]);
+		expect(schedule.medicationOverview[0].daysLeft).toBe(2);
+
+		const overviewResponse = await app.inject({ method: "GET", url: "/share/abcdef0123456789/overview" });
+		expect(overviewResponse.statusCode, overviewResponse.body).toBe(200);
+		const overview = overviewResponse.json();
+		expect(JSON.stringify(overview)).not.toContain("Bob");
+		expect(overview.medications[0].daysLeft).toBe(2);
+	});
+
 	it("does not write plaintext share tokens to logs", async () => {
 		await insertMedication();
 		const token = "feedfacefeedface";
 
 		await app.inject({ method: "GET", url: `/share/${token}` });
 
+		const logs = logLines.join("\n");
+		expect(logs).not.toContain(token);
+		expect(logs).toContain(`tokenFingerprint=${tokenFingerprint(token)}`);
+	});
+
+	it("rejects invalid token format without logging the raw token", async () => {
+		const token = "not-a-valid-share-token";
+
+		const response = await app.inject({ method: "GET", url: `/share/${token}` });
+
+		expect(response.statusCode).toBe(404);
 		const logs = logLines.join("\n");
 		expect(logs).not.toContain(token);
 		expect(logs).toContain(`tokenFingerprint=${tokenFingerprint(token)}`);

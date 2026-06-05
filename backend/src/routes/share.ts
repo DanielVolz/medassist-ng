@@ -21,6 +21,7 @@ import {
 	parseIntakesJson,
 	parseTakenByJson,
 	personTakesMedication,
+	scopeIntakesToTakenBy,
 } from "../utils/scheduler-utils.js";
 
 // =============================================================================
@@ -221,14 +222,16 @@ async function getActiveMedicationsForPerson(userId: number, takenBy: string): P
 	);
 }
 
-function toSharedScheduleMedication(medication: MedicationRow) {
-	const intakes = parseMedicationIntakes(medication);
+function toSharedScheduleMedication(medication: MedicationRow, shareTakenBy: string) {
+	const medicationTakenBy = parseTakenByJson(medication.takenByJson);
+	const intakes = scopeIntakesToTakenBy(parseMedicationIntakes(medication), medicationTakenBy, shareTakenBy);
 	const blisters = intakes.map((intake) => ({
 		usage: intake.usage,
 		every: intake.every,
 		start: intake.start,
 	}));
-	const takenBy = parseTakenByJson(medication.takenByJson);
+	const takenBy =
+		shareTakenBy === "all" ? medicationTakenBy : medicationTakenBy.filter((person) => person === shareTakenBy);
 	const totalPills = isAmountBasedPackageType(medication.packageType)
 		? medication.looseTablets + (medication.stockAdjustment ?? 0)
 		: medication.packCount * medication.blistersPerPack * medication.pillsPerBlister +
@@ -343,7 +346,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
 
 			const meds = await getActiveMedicationsForPerson(share.userId, share.takenBy);
-			const medicationsWithBlisters = meds.map(toSharedScheduleMedication);
+			const medicationsWithBlisters = meds.map((medication) => toSharedScheduleMedication(medication, share.takenBy));
 
 			const shareMedicationOverview = settings?.shareMedicationOverview ?? false;
 			const medicationOverview = shareMedicationOverview
@@ -351,6 +354,7 @@ export async function shareRoutes(app: FastifyInstance) {
 						medications: meds,
 						doses: await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId)),
 						thresholdDays: settings?.lowStockDays ?? 30,
+						shareTakenBy: share.takenBy,
 					})
 				: null;
 
@@ -437,6 +441,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				medications: meds,
 				doses,
 				thresholdDays: settings?.lowStockDays ?? 30,
+				shareTakenBy: share.takenBy,
 			});
 
 			return {

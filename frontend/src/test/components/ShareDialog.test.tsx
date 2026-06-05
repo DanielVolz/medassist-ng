@@ -10,7 +10,7 @@ describe("ShareDialog", () => {
 		onShareSelectedPersonChange: vi.fn(),
 		shareSelectedDays: 30,
 		onShareSelectedDaysChange: vi.fn(),
-		shareSelectedExpiryDays: null,
+		shareSelectedExpiryDays: 90,
 		onShareSelectedExpiryDaysChange: vi.fn(),
 		shareAllowJournalNotes: false,
 		onShareAllowJournalNotesChange: vi.fn(),
@@ -162,6 +162,45 @@ describe("ShareDialog", () => {
 		fireEvent.click(screen.getByText(/share\.manageLinksSummary/i));
 
 		expect(screen.getByRole("button", { name: /share\.revoke/i })).toBeInTheDocument();
+	});
+
+	it("shows active share expiry status for expiring and legacy permanent links", () => {
+		render(
+			<ShareDialog
+				{...defaultProps}
+				activeShareLinks={[
+					{
+						token: "abcdef0123456789",
+						takenBy: "Alice",
+						scheduleDays: 30,
+						createdAt: "2026-05-17T12:00:00.000Z",
+						expiresAt: "2026-08-15T12:00:00.000Z",
+						lastUsedAt: null,
+						allowJournalNotes: false,
+						allowMarkTaken: false,
+						legacyNeverExpires: false,
+						shareUrl: "/share/abcdef0123456789",
+					},
+					{
+						token: "bbbbbbbbbbbbbbbb",
+						takenBy: "Bob",
+						scheduleDays: 30,
+						createdAt: "2026-05-17T12:00:00.000Z",
+						expiresAt: null,
+						lastUsedAt: null,
+						allowJournalNotes: false,
+						allowMarkTaken: false,
+						legacyNeverExpires: true,
+						shareUrl: "/share/bbbbbbbbbbbbbbbb",
+					},
+				]}
+			/>
+		);
+
+		fireEvent.click(screen.getByText(/share\.manageLinksSummary/i));
+
+		expect(screen.getByText(/share\.activeLinkMetaWithExpiry/i)).toBeInTheDocument();
+		expect(screen.getByText(/share\.legacyNeverExpires/i)).toBeInTheDocument();
 	});
 
 	it("uses an in-app confirm modal before revoking an active share link", async () => {

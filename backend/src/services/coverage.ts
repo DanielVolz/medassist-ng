@@ -8,6 +8,8 @@ import {
 	type Intake,
 	normalizeIntakeUsageForStock,
 	parseIntakesJson,
+	parseTakenByJson,
+	scopeIntakesToTakenBy,
 } from "../utils/scheduler-utils.js";
 
 type MedicationRow = typeof medications.$inferSelect;
@@ -138,8 +140,9 @@ export function buildSharedMedicationOverview(options: {
 	medications: MedicationRow[];
 	doses: DoseRow[];
 	thresholdDays: number;
+	shareTakenBy?: string;
 }): SharedMedicationOverviewItem[] {
-	const { medications: medicationRows, doses, thresholdDays } = options;
+	const { medications: medicationRows, doses, thresholdDays, shareTakenBy } = options;
 
 	const dosesByMedication = new Map<number, DoseRow[]>();
 	for (const dose of doses) {
@@ -155,7 +158,7 @@ export function buildSharedMedicationOverview(options: {
 	const todayDate = parseDateOnly(todayDateOnly);
 
 	return medicationRows.map((medication) => {
-		const intakes = parseIntakesJson(
+		const allIntakes = parseIntakesJson(
 			medication.intakesJson,
 			{
 				usageJson: medication.usageJson,
@@ -164,6 +167,10 @@ export function buildSharedMedicationOverview(options: {
 			},
 			medication.intakeRemindersEnabled ?? false
 		);
+		const intakes =
+			shareTakenBy == null
+				? allIntakes
+				: scopeIntakesToTakenBy(allIntakes, parseTakenByJson(medication.takenByJson), shareTakenBy);
 
 		const capacity = computeCapacity(medication);
 		const dailyDoseRate = computeDailyDoseRate(intakes, medication);

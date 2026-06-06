@@ -261,6 +261,7 @@ jobs:
             if (!projectItem) {
               if (shouldAlreadyBeTracked) {
                 core.warning(`Issue #${issueNumber} is labeled for project tracking, but no matching project item was found after retry. Skipping field sync for this event.`);
+                core.notice(`Issue #${issueNumber}: project field synchronization skipped for this event; a later issue event can apply field sync once item lookup resolves.`);
                 return;
               }
 

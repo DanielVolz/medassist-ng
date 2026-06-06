@@ -333,6 +333,52 @@ describe("useAppContext", () => {
 		});
 	});
 
+	it("marks settings as changed when timezone differs", async () => {
+		const settingsValue = mockUseSettings();
+		mockUseSettings.mockReturnValue({
+			...settingsValue,
+			settings: {
+				...settingsValue.settings,
+				timezone: "Europe/Berlin",
+			},
+			savedSettings: {
+				...settingsValue.savedSettings,
+				timezone: "",
+			},
+		});
+
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.settingsChanged).toBe(true);
+		});
+	});
+
+	it("does not mark settings as changed for scheduler metadata refreshes", async () => {
+		const settingsValue = mockUseSettings();
+		mockUseSettings.mockReturnValue({
+			...settingsValue,
+			settings: {
+				...settingsValue.settings,
+				lastAutoEmailSent: "2026-06-06T08:00:00.000Z",
+				lastNotificationType: "stock",
+				lastStockReminderChannel: "both",
+			},
+			savedSettings: {
+				...settingsValue.savedSettings,
+				lastAutoEmailSent: null,
+				lastNotificationType: null,
+				lastStockReminderChannel: null,
+			},
+		});
+
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.settingsChanged).toBe(false);
+		});
+	});
+
 	it("exposes the settings load error from useSettings", async () => {
 		const settingsValue = mockUseSettings();
 		mockUseSettings.mockReturnValue({

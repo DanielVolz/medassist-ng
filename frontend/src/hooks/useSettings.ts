@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { log } from "../utils/logger";
+import { settingsChanged } from "../utils/settings";
 
 export interface Settings {
 	timezone: string;
@@ -471,8 +472,8 @@ export function useSettings(): UseSettingsReturn {
 			return;
 		}
 
-		// Don't save if nothing changed
-		if (JSON.stringify(settings) === JSON.stringify(savedSettings)) {
+		// Don't save if no user-editable setting changed
+		if (!settingsChanged(savedSettings, settings)) {
 			return;
 		}
 
@@ -498,7 +499,7 @@ export function useSettings(): UseSettingsReturn {
 
 	useEffect(() => {
 		const flushPendingSettings = () => {
-			if (JSON.stringify(latestSettingsRef.current) === JSON.stringify(latestSavedSettingsRef.current)) {
+			if (!settingsChanged(latestSavedSettingsRef.current, latestSettingsRef.current)) {
 				return;
 			}
 
@@ -514,7 +515,7 @@ export function useSettings(): UseSettingsReturn {
 				clearTimeout(debounceRef.current);
 			}
 
-			if (JSON.stringify(latestSettingsRef.current) === JSON.stringify(latestSavedSettingsRef.current)) {
+			if (!settingsChanged(latestSavedSettingsRef.current, latestSettingsRef.current)) {
 				return;
 			}
 
@@ -587,7 +588,7 @@ export function useSettings(): UseSettingsReturn {
 	}, [fetchWithRefresh, getErrorMessage, settings.shoutrrrUrl]);
 
 	// Check for unsaved changes
-	const hasUnsavedChanges = JSON.stringify(settings) !== JSON.stringify(savedSettings);
+	const hasUnsavedChanges = settingsChanged(savedSettings, settings);
 
 	return {
 		settings,

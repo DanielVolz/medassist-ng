@@ -23,6 +23,7 @@ import {
 import { getSystemLocale, setDefaultFormattingTimezone } from "../utils/formatters";
 import { mergePersonTags } from "../utils/person-tags";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, getStockStatus } from "../utils/schedule";
+import { settingsChanged as hasSettingsChanged } from "../utils/settings";
 import { ShareContextProvider } from "./ShareContext";
 import { type ImportPreview, useImportExport } from "./useImportExport";
 
@@ -644,34 +645,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	// Compute settingsChanged
 	const settingsChanged = useMemo(() => {
-		const settings = settingsHook.settings;
-		const savedSettings = settingsHook.savedSettings;
-		return (
-			settings.emailEnabled !== savedSettings.emailEnabled ||
-			settings.notificationEmail !== savedSettings.notificationEmail ||
-			settings.emailStockReminders !== savedSettings.emailStockReminders ||
-			settings.emailIntakeReminders !== savedSettings.emailIntakeReminders ||
-			settings.emailPrescriptionReminders !== savedSettings.emailPrescriptionReminders ||
-			settings.reminderDaysBefore !== savedSettings.reminderDaysBefore ||
-			settings.repeatDailyReminders !== savedSettings.repeatDailyReminders ||
-			settings.lowStockDays !== savedSettings.lowStockDays ||
-			settings.normalStockDays !== savedSettings.normalStockDays ||
-			settings.highStockDays !== savedSettings.highStockDays ||
-			settings.shoutrrrEnabled !== savedSettings.shoutrrrEnabled ||
-			settings.shoutrrrUrl !== savedSettings.shoutrrrUrl ||
-			settings.shoutrrrStockReminders !== savedSettings.shoutrrrStockReminders ||
-			settings.shoutrrrIntakeReminders !== savedSettings.shoutrrrIntakeReminders ||
-			settings.shoutrrrPrescriptionReminders !== savedSettings.shoutrrrPrescriptionReminders ||
-			settings.skipRemindersForTakenDoses !== savedSettings.skipRemindersForTakenDoses ||
-			settings.repeatRemindersEnabled !== savedSettings.repeatRemindersEnabled ||
-			settings.reminderRepeatIntervalMinutes !== savedSettings.reminderRepeatIntervalMinutes ||
-			settings.maxNaggingReminders !== savedSettings.maxNaggingReminders ||
-			settings.stockCalculationMode !== savedSettings.stockCalculationMode ||
-			settings.shareMedicationOverview !== savedSettings.shareMedicationOverview ||
-			settings.upcomingTodayOnly !== savedSettings.upcomingTodayOnly ||
-			settings.shareScheduleTodayOnly !== savedSettings.shareScheduleTodayOnly ||
-			settings.expiryWarningDays !== savedSettings.expiryWarningDays
-		);
+		return hasSettingsChanged(settingsHook.savedSettings, settingsHook.settings);
 	}, [settingsHook.settings, settingsHook.savedSettings]);
 
 	const shareValue = useMemo(

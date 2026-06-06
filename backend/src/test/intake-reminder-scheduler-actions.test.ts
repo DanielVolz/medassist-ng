@@ -5,6 +5,9 @@ const {
 	createNotificationActionContextMock,
 	storeNotificationActionGroupNtfyMessageIdMock,
 	sendPushNotificationMock,
+	existsSyncMock,
+	readFileSyncMock,
+	writeFileSyncMock,
 } = vi.hoisted(() => ({
 	mockedEnv: {
 		PUBLIC_APP_URL: undefined as string | undefined,
@@ -13,12 +16,15 @@ const {
 	createNotificationActionContextMock: vi.fn(),
 	storeNotificationActionGroupNtfyMessageIdMock: vi.fn(),
 	sendPushNotificationMock: vi.fn(),
+	existsSyncMock: vi.fn(() => false),
+	readFileSyncMock: vi.fn(),
+	writeFileSyncMock: vi.fn(),
 }));
 
 vi.mock("node:fs", () => ({
-	existsSync: () => false,
-	readFileSync: vi.fn(),
-	writeFileSync: vi.fn(),
+	existsSync: existsSyncMock,
+	readFileSync: readFileSyncMock,
+	writeFileSync: writeFileSyncMock,
 }));
 
 vi.mock("../db/path-utils.js", () => ({
@@ -84,6 +90,7 @@ vi.mock("../utils/scheduler-utils.js", async () => {
 
 import { db } from "../db/client.js";
 import { checkAndSendIntakeRemindersForUser } from "../services/intake-reminder-scheduler.js";
+import { updateReminderSentTime, updateUserReminderSentTime } from "../services/notifications/state.js";
 
 function createLogger() {
 	return {
@@ -102,6 +109,32 @@ function mockSelectWhere<T>(result: T) {
 	} as never;
 }
 
+function createReminderMedicationRow(overrides: Record<string, unknown> = {}) {
+	return {
+		id: 7,
+		userId: 18,
+		name: "Calcium",
+		genericName: null,
+		takenByJson: null,
+		packageType: "blister",
+		medicationForm: "tablet",
+		packCount: 1,
+		blistersPerPack: 1,
+		pillsPerBlister: 10,
+		looseTablets: 0,
+		stockAdjustment: 0,
+		pillWeightMg: null,
+		doseUnit: "mg",
+		isObsolete: false,
+		intakeRemindersEnabled: true,
+		intakesJson: "[]",
+		usageJson: "[]",
+		everyJson: "[]",
+		startJson: "[]",
+		...overrides,
+	};
+}
+
 describe("intake reminder scheduler action wiring", () => {
 	const mockedDb = vi.mocked(db);
 	let originalTz: string | undefined;
@@ -116,6 +149,13 @@ describe("intake reminder scheduler action wiring", () => {
 		createNotificationActionContextMock.mockReset();
 		storeNotificationActionGroupNtfyMessageIdMock.mockReset();
 		sendPushNotificationMock.mockReset();
+		existsSyncMock.mockReset();
+		existsSyncMock.mockReturnValue(false);
+		readFileSyncMock.mockReset();
+		readFileSyncMock.mockReturnValue("");
+		writeFileSyncMock.mockReset();
+		vi.mocked(updateReminderSentTime).mockReset();
+		vi.mocked(updateUserReminderSentTime).mockReset();
 	});
 
 	afterEach(() => {
@@ -577,6 +617,92 @@ describe("intake reminder scheduler action wiring", () => {
 		expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("provider=ntfy"));
 		expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("actionMode=full"));
 		expect(storeNotificationActionGroupNtfyMessageIdMock).not.toHaveBeenCalled();
+		expect(writeFileSyncMock).not.toHaveBeenCalled();
+		expect(updateReminderSentTime).not.toHaveBeenCalled();
+		expect(updateUserReminderSentTime).not.toHaveBeenCalled();
+	});
+
+	it("does not resend an already persisted advance reminder after restart", async () => {
+		const candidateTimeMs = new Date("2026-01-05T11:15:00.000Z").getTime();
+		existsSyncMock.mockReturnValue(true);
+		readFileSyncMock.mockReturnValue(
+			JSON.stringify({
+				reminders: {
+					[`user_18:Calcium:${candidateTimeMs}`]: {
+						firstSentAt: candidateTimeMs - 10 * 60 * 1000,
+						lastSentAt: candidateTimeMs - 10 * 60 * 1000,
+						sendCount: 0,
+						advanceSent: true,
+					},
+				},
+			})
+		);
+
+		const selectMock = vi.mocked(mockedDb.select);
+		selectMock
+			.mockImplementationOnce(() => mockSelectWhere([{ username: "restart-user" }]))
+			.mockImplementationOnce(() => mockSelectWhere([createReminderMedicationRow({ userId: 18 })]))
+			.mockImplementationOnce(() => mockSelectWhere([]));
+
+		const logger = createLogger();
+
+		await checkAndSendIntakeRemindersForUser(
+			{
+				userId: 18,
+				language: "en",
+				stockCalculationMode: "manual",
+				emailEnabled: false,
+				notificationEmail: null,
+				emailIntakeReminders: false,
+				shoutrrrEnabled: true,
+				shoutrrrUrl: "ntfy://ntfy.sh/medassist",
+				shoutrrrIntakeReminders: true,
+				repeatRemindersEnabled: false,
+			} as never,
+			logger as never
+		);
+
+		expect(createNotificationActionContextMock).not.toHaveBeenCalled();
+		expect(sendPushNotificationMock).not.toHaveBeenCalled();
+		expect(writeFileSyncMock).not.toHaveBeenCalled();
+		expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining("No reminders to send"));
+	});
+
+	it("falls back to default intake reminder state and logs when persisted state cannot be read", async () => {
+		existsSyncMock.mockReturnValue(true);
+		readFileSyncMock.mockImplementation(() => {
+			throw new Error("state file unreadable");
+		});
+
+		const selectMock = vi.mocked(mockedDb.select);
+		selectMock
+			.mockImplementationOnce(() => mockSelectWhere([{ username: "corrupt-state-user" }]))
+			.mockImplementationOnce(() => mockSelectWhere([createReminderMedicationRow({ userId: 19 })]))
+			.mockImplementationOnce(() => mockSelectWhere([]));
+
+		sendPushNotificationMock.mockResolvedValue({ success: true });
+
+		const logger = createLogger();
+
+		await checkAndSendIntakeRemindersForUser(
+			{
+				userId: 19,
+				language: "en",
+				stockCalculationMode: "manual",
+				emailEnabled: false,
+				notificationEmail: null,
+				emailIntakeReminders: false,
+				shoutrrrEnabled: true,
+				shoutrrrUrl: "ntfy://ntfy.sh/medassist",
+				shoutrrrIntakeReminders: true,
+				repeatRemindersEnabled: false,
+			} as never,
+			logger as never
+		);
+
+		expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("Failed to load reminder state file"));
+		expect(sendPushNotificationMock).toHaveBeenCalledOnce();
+		expect(writeFileSyncMock).toHaveBeenCalledOnce();
 	});
 
 	it("warns but keeps reminder flow alive when ntfy message id persistence fails", async () => {

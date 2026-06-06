@@ -21,6 +21,8 @@ When an ntfy intake action succeeds, MedAssist publishes the confirmation as the
 - `telegram://`
 - direct `https://` webhooks
 
+Outbound webhook targets are validated before delivery. Localhost, private-network IP ranges, link-local IPv6 addresses, and internal hostnames are rejected to keep notification delivery from becoming a server-side request path into the local network.
+
 ## Configuration
 
 Configure push notifications in the app under `Settings -> Push`, or set defaults for new users with environment variables.

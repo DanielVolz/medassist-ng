@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MedicationEnrichmentViewModel } from "../../components/MedicationEnrichmentSection";
 import { MobileEditModal } from "../../components/MobileEditModal";
+import { MEDICATION_FORM_FIELD_LIMITS } from "../../hooks/medicationFormModel";
 import type { FormState, WeekdayCode } from "../../types";
 
 const defaultForm: FormState = {
@@ -500,10 +501,46 @@ describe("MobileEditModal with form errors", () => {
 		expect(screen.getByText("Name is required")).toBeInTheDocument();
 	});
 
+	it("shows the shared required-name errors when validation is active", () => {
+		render(
+			<MobileEditModal
+				{...defaultProps}
+				hasValidationErrors={true}
+				fieldErrors={{
+					name: "common.validation.nameOrGenericRequired",
+					genericName: "common.validation.nameOrGenericRequired",
+				}}
+			/>
+		);
+
+		expect(screen.getAllByText("common.validation.nameOrGenericRequired")).toHaveLength(2);
+	});
+
 	it("shows notes error when present", () => {
 		render(<MobileEditModal {...defaultProps} fieldErrors={{ notes: "Notes too long" }} />);
 
 		expect(screen.getByText("Notes too long")).toBeInTheDocument();
+	});
+
+	it("uses shared max-length limits for mobile edit fields", () => {
+		render(<MobileEditModal {...defaultProps} />);
+
+		expect(screen.getByPlaceholderText("form.placeholders.commercial")).toHaveAttribute(
+			"maxlength",
+			String(MEDICATION_FORM_FIELD_LIMITS.name.max)
+		);
+		expect(screen.getByPlaceholderText("form.placeholders.generic")).toHaveAttribute(
+			"maxlength",
+			String(MEDICATION_FORM_FIELD_LIMITS.genericName.max)
+		);
+		expect(screen.getByPlaceholderText("form.placeholders.takenBy")).toHaveAttribute(
+			"maxlength",
+			String(MEDICATION_FORM_FIELD_LIMITS.takenBy.max)
+		);
+		expect(screen.getByPlaceholderText("form.placeholders.notes")).toHaveAttribute(
+			"maxlength",
+			String(MEDICATION_FORM_FIELD_LIMITS.notes.max)
+		);
 	});
 });
 

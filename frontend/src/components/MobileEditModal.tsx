@@ -7,6 +7,7 @@
 import { Bell, Minus, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { MEDICATION_FORM_FIELD_LIMITS } from "../hooks/medicationFormModel";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useScrollLock } from "../hooks/useScrollLock";
 import type {
@@ -42,14 +43,6 @@ import { DateInput } from "./DateInput";
 import { FormNumberStepper } from "./FormNumberStepper";
 import type { MedicationEnrichmentViewModel } from "./MedicationEnrichmentSection";
 import { MedicationEnrichmentSection } from "./MedicationEnrichmentSection";
-
-// Field limits for validation
-const FIELD_LIMITS = {
-	name: { max: 100 },
-	genericName: { max: 100 },
-	takenBy: { max: 50 },
-	notes: { max: 1000 },
-};
 
 const MOBILE_TAB_ORDER = ["general", "stock", "schedule", "prescription"] as const;
 type MobileTab = (typeof MOBILE_TAB_ORDER)[number];
@@ -494,7 +487,7 @@ export function MobileEditModal({
 												}}
 												onBlur={() => setShowNameValidation(true)}
 												placeholder={t("form.placeholders.commercial")}
-												maxLength={FIELD_LIMITS.name.max}
+												maxLength={MEDICATION_FORM_FIELD_LIMITS.name.max}
 											/>
 											{!readOnlyMode && showNameValidation && fieldErrors.name && (
 												<span className="field-error">{fieldErrors.name}</span>
@@ -512,7 +505,7 @@ export function MobileEditModal({
 												}}
 												onBlur={() => setShowNameValidation(true)}
 												placeholder={t("form.placeholders.generic")}
-												maxLength={FIELD_LIMITS.genericName.max}
+												maxLength={MEDICATION_FORM_FIELD_LIMITS.genericName.max}
 											/>
 											{!readOnlyMode && showNameValidation && fieldErrors.genericName && (
 												<span className="field-error">{fieldErrors.genericName}</span>
@@ -635,7 +628,7 @@ export function MobileEditModal({
 															? t("form.placeholders.takenBy")
 															: t("form.placeholders.addPerson")
 													}
-													maxLength={FIELD_LIMITS.takenBy.max}
+													maxLength={MEDICATION_FORM_FIELD_LIMITS.takenBy.max}
 													list="takenby-suggestions-modal"
 												/>
 												<datalist id="takenby-suggestions-modal">
@@ -885,7 +878,7 @@ export function MobileEditModal({
 												onChange={(e) => onFormChange({ ...form, notes: e.target.value })}
 												placeholder={t("form.placeholders.notes")}
 												rows={2}
-												maxLength={FIELD_LIMITS.notes.max}
+												maxLength={MEDICATION_FORM_FIELD_LIMITS.notes.max}
 												className="auto-resize"
 												onInput={(e) => {
 													const target = e.target as HTMLTextAreaElement;
@@ -895,9 +888,12 @@ export function MobileEditModal({
 											/>
 											{form.notes.length > 0 && (
 												<span
-													className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}
+													className={`char-count ${form.notes.length > MEDICATION_FORM_FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}
 												>
-													{t("common.validation.tooLong", { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
+													{t("common.validation.tooLong", {
+														current: form.notes.length,
+														max: MEDICATION_FORM_FIELD_LIMITS.notes.max,
+													})}
 												</span>
 											)}
 											{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MEDICATION_FORM_FIELD_LIMITS } from "../../hooks/medicationFormModel";
 import { MedicationsPage } from "../../pages/MedicationsPage";
 
 const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
@@ -323,6 +324,48 @@ describe("MedicationsPage", () => {
 		openNewMedicationForm();
 		expect(screen.getByText(/form\.commercialName/i)).toBeInTheDocument();
 		expect(screen.getByText(/form\.genericName/i)).toBeInTheDocument();
+	});
+
+	it("shows the shared required-name errors on desktop edit submit", async () => {
+		mockFormHookValue = createMockFormHook({
+			hasValidationErrors: true,
+			fieldErrors: {
+				name: "common.validation.nameOrGenericRequired",
+				genericName: "common.validation.nameOrGenericRequired",
+			},
+		});
+
+		renderPage();
+		openNewMedicationForm();
+		fireEvent.submit(document.querySelector("form.form-grid") as HTMLFormElement);
+
+		await waitFor(() => {
+			expect(screen.getAllByText("common.validation.nameOrGenericRequired")).toHaveLength(2);
+		});
+	});
+
+	it("uses shared max-length limits for desktop edit fields", () => {
+		renderPage();
+		openNewMedicationForm();
+
+		expect(screen.getByPlaceholderText("form.placeholders.commercial")).toHaveAttribute(
+			"maxlength",
+			String(MEDICATION_FORM_FIELD_LIMITS.name.max)
+		);
+		expect(screen.getByPlaceholderText("form.placeholders.generic")).toHaveAttribute(
+			"maxlength",
+			String(MEDICATION_FORM_FIELD_LIMITS.genericName.max)
+		);
+		expect(screen.getByPlaceholderText("form.placeholders.takenBy")).toHaveAttribute(
+			"maxlength",
+			String(MEDICATION_FORM_FIELD_LIMITS.takenBy.max)
+		);
+
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.stock" }));
+		expect(screen.getByPlaceholderText("form.placeholders.notes")).toHaveAttribute(
+			"maxlength",
+			String(MEDICATION_FORM_FIELD_LIMITS.notes.max)
+		);
 	});
 
 	it("renders medication start and end dates as one desktop date pair group", () => {

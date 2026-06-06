@@ -87,7 +87,9 @@ jobs:
           echo "Neither GitHub App credentials nor ADD_TO_PROJECT_PAT are configured for project automation." >&2
           exit 1
 
-      - uses: actions/add-to-project@v2.0.0
+      - name: Add issue to project (idempotent)
+        continue-on-error: true
+        uses: actions/add-to-project@v2.0.0
         with:
           project-url: ${{ vars.PROJECT_URL }}
           github-token: ${{ steps.project-token.outputs.token }}

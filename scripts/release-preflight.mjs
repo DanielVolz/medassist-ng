@@ -59,33 +59,6 @@ function parseReleaseTag(tag) {
   return { tag, version: match[1] };
 }
 
-function parseNumericSemver(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(version);
-  if (!match) {
-    fail(`Expected a semver-compatible version, received: ${version}`);
-  }
-
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3])
-  };
-}
-
-function isVersionAhead(candidate, baseline) {
-  const candidateParts = parseNumericSemver(candidate);
-  const baselineParts = parseNumericSemver(baseline);
-
-  if (candidateParts.major !== baselineParts.major) {
-    return candidateParts.major > baselineParts.major;
-  }
-  if (candidateParts.minor !== baselineParts.minor) {
-    return candidateParts.minor > baselineParts.minor;
-  }
-
-  return candidateParts.patch > baselineParts.patch;
-}
-
 function extractImageLine(content, imageName) {
   const pattern = new RegExp(`^\\s*image:\\s*(ghcr\\.io\\/[^\\s]+\\/${imageName}:[^\\s]+)\\s*$`, "m");
   const match = content.match(pattern);
@@ -167,50 +140,139 @@ function validateWorkflowNeeds(workflowPath) {
   }
 }
 
+function validatePackageVersion(packageName, packageJsonPath, packageJson, releaseVersion) {
+  if (packageJson.version !== releaseVersion) {
+    fail(`${packageJsonPath} version must match ${releaseVersion}, found ${packageJson.version}.`);
+  }
+
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(packageJson.version)) {
+    fail(`${packageName} package version must be semver-compatible, found ${packageJson.version}.`);
+  }
+}
+
+function validateSharedDependency(packageName, packageJsonPath, packageJson) {
+  if (packageJson.dependencies?.["@medassist/shared"] !== "file:../shared") {
+    fail(`${packageJsonPath} must consume @medassist/shared through file:../shared.`);
+  }
+
+  if (packageJson.devDependencies?.["@medassist/shared"] || packageJson.peerDependencies?.["@medassist/shared"]) {
+    fail(`${packageName} must declare @medassist/shared only as a runtime local dependency.`);
+  }
+}
+
+function validatePackageLockVersion(lockfilePath, lockfile, packagePath, releaseVersion) {
+  const packageEntry = packagePath === "" ? lockfile.packages?.[""] : lockfile.packages?.[packagePath];
+  const versions = new Set([lockfile.version, packageEntry?.version].filter(Boolean));
+
+  if (!packageEntry) {
+    fail(`${lockfilePath} is missing package lock entry "${packagePath || "<root>"}".`);
+  }
+
+  for (const version of versions) {
+    if (version !== releaseVersion) {
+      fail(`${lockfilePath} package entry "${packagePath || "<root>"}" must use ${releaseVersion}, found ${version}.`);
+    }
+  }
+}
+
+function validateSharedLockEntry(lockfilePath, lockfile, releaseVersion) {
+  const sharedEntry = lockfile.packages?.["../shared"];
+  if (!sharedEntry) {
+    fail(`${lockfilePath} is missing the local ../shared package lock entry.`);
+  }
+
+  if (sharedEntry.version !== releaseVersion) {
+    fail(`${lockfilePath} ../shared version must match ${releaseVersion}, found ${sharedEntry.version}.`);
+  }
+
+  const linkedEntry = lockfile.packages?.["node_modules/@medassist/shared"];
+  if (!linkedEntry || linkedEntry.resolved !== "../shared" || linkedEntry.link !== true) {
+    fail(`${lockfilePath} must lock @medassist/shared as a local link to ../shared.`);
+  }
+}
+
+function requireDockerPattern(dockerfilePath, dockerfile, pattern, description) {
+  if (!pattern.test(dockerfile)) {
+    fail(`${dockerfilePath} must ${description}.`);
+  }
+}
+
+function validateDockerSharedBuild(dockerfilePath, { requiresRuntimeCopy }) {
+  const dockerfile = readText(dockerfilePath);
+
+  requireDockerPattern(
+    dockerfilePath,
+    dockerfile,
+    /COPY shared\/package\.json shared\/package-lock\.json\* \.\/shared\//,
+    "copy the shared package manifest and lockfile before installing dependencies"
+  );
+  requireDockerPattern(
+    dockerfilePath,
+    dockerfile,
+    /COPY shared\/src \.\/shared\/src/,
+    "copy the shared package source into the image build context"
+  );
+  requireDockerPattern(dockerfilePath, dockerfile, /RUN cd shared && npm run build/, "build the shared package from source");
+
+  if (requiresRuntimeCopy) {
+    requireDockerPattern(
+      dockerfilePath,
+      dockerfile,
+      /COPY --from=builder \/app\/shared\/package\.json \/shared\/package\.json/,
+      "copy the built shared package manifest into the runtime image"
+    );
+    requireDockerPattern(
+      dockerfilePath,
+      dockerfile,
+      /COPY --from=builder \/app\/shared\/dist \/shared\/dist/,
+      "copy the built shared package output into the runtime image"
+    );
+  }
+}
+
 function validatePolicy(releaseTag, releaseVersion) {
   const policy = readJson("release-policy.json");
   const backendPackage = readJson("backend/package.json");
   const frontendPackage = readJson("frontend/package.json");
   const sharedPackage = readJson("shared/package.json");
+  const backendLockfile = readJson("backend/package-lock.json");
+  const frontendLockfile = readJson("frontend/package-lock.json");
+  const sharedLockfile = readJson("shared/package-lock.json");
 
-  if (policy.versionPolicy !== "pragmatic") {
-    fail(`Unsupported release policy "${policy.versionPolicy}". Expected "pragmatic".`);
+  if (policy.versionPolicy !== "strict") {
+    fail(`Unsupported release policy "${policy.versionPolicy}". Expected "strict".`);
   }
 
-  if (policy.packages?.backend !== "tag" || policy.packages?.frontend !== "tag") {
-    fail("release-policy.json must require backend/frontend to match the release tag.");
+  for (const packageName of ["backend", "frontend", "shared"]) {
+    if (policy.packages?.[packageName] !== "tag") {
+      fail(`release-policy.json must require ${packageName} to match the release tag.`);
+    }
   }
 
-  if (backendPackage.version !== releaseVersion) {
-    fail(`backend/package.json version must match ${releaseVersion}, found ${backendPackage.version}.`);
-  }
-
-  if (frontendPackage.version !== releaseVersion) {
-    fail(`frontend/package.json version must match ${releaseVersion}, found ${frontendPackage.version}.`);
-  }
-
-  if (policy.packages?.shared !== "independent") {
-    fail("release-policy.json must explicitly mark shared as independently versioned for the pragmatic policy.");
-  }
-
-  if (policy.shared?.allowIndependentVersion !== true) {
-    fail("release-policy.json must explicitly allow the shared package to version independently.");
-  }
-
-  if (policy.shared?.lastReviewedTag !== releaseTag) {
-    fail(
-      `release-policy.json shared.lastReviewedTag must be reviewed for ${releaseTag}; found ${policy.shared?.lastReviewedTag ?? "<missing>"}.`
-    );
+  if (policy.shared?.mustMatchReleaseTag !== true) {
+    fail("release-policy.json must require shared.mustMatchReleaseTag=true for the strict policy.");
   }
 
   if (typeof policy.shared?.rationale !== "string" || policy.shared.rationale.trim().length === 0) {
-    fail("release-policy.json must document why shared is allowed to differ from the release tag.");
+    fail("release-policy.json must document why shared must match the release tag.");
   }
 
-  parseNumericSemver(sharedPackage.version);
-  if (isVersionAhead(sharedPackage.version, releaseVersion)) {
-    fail(`shared/package.json version ${sharedPackage.version} must not be ahead of release version ${releaseVersion}.`);
-  }
+  validatePackageVersion("backend", "backend/package.json", backendPackage, releaseVersion);
+  validatePackageVersion("frontend", "frontend/package.json", frontendPackage, releaseVersion);
+  validatePackageVersion("shared", "shared/package.json", sharedPackage, releaseVersion);
+
+  validateSharedDependency("backend", "backend/package.json", backendPackage);
+  validateSharedDependency("frontend", "frontend/package.json", frontendPackage);
+
+  validatePackageLockVersion("backend/package-lock.json", backendLockfile, "", releaseVersion);
+  validatePackageLockVersion("frontend/package-lock.json", frontendLockfile, "", releaseVersion);
+  validatePackageLockVersion("shared/package-lock.json", sharedLockfile, "", releaseVersion);
+
+  validateSharedLockEntry("backend/package-lock.json", backendLockfile, releaseVersion);
+  validateSharedLockEntry("frontend/package-lock.json", frontendLockfile, releaseVersion);
+
+  validateDockerSharedBuild("backend/Dockerfile", { requiresRuntimeCopy: true });
+  validateDockerSharedBuild("frontend/Dockerfile", { requiresRuntimeCopy: false });
 }
 
 function main() {

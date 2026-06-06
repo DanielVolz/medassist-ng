@@ -8,6 +8,7 @@
     "check": "cd shared && npm run check && cd ../backend && npm run check && cd ../frontend && npm run check",
     "build": "cd shared && npm run build && cd ../backend && npm run build && cd ../frontend && npm run build",
     "test:domain": "cd backend && npm run test:domain && cd ../frontend && npm run test:e2e:domain",
+    "test:release-preflight": "node scripts/test-release-preflight.mjs",
     "release:preflight": "node scripts/release-preflight.mjs"
   },
   "devDependencies": {

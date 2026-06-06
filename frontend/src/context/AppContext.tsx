@@ -20,11 +20,12 @@ import {
 	type StockThresholds,
 } from "../types";
 import { getSystemLocale, setDefaultFormattingTimezone } from "../utils/formatters";
-import { log } from "../utils/logger";
 import { mergePersonTags } from "../utils/person-tags";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, getStockStatus } from "../utils/schedule";
-import { useFeedback } from "./FeedbackContext";
 import { ShareContextProvider } from "./ShareContext";
+import { type ImportPreview, useImportExport } from "./useImportExport";
+
+export type { ImportPreview } from "./useImportExport";
 
 // =============================================================================
 // Types
@@ -52,34 +53,6 @@ export type GroupedDay = {
 	date: Date;
 	isPast: boolean;
 	meds: DayMedEntry[];
-};
-
-export type ImportPreview = {
-	version: string;
-	exportedAt: string;
-	includeSensitiveData: boolean;
-	incoming: {
-		medications: number;
-		doseHistory: number;
-		refillHistory: number;
-		shareLinks: number;
-		journalEntries: number;
-		imageCount: number;
-		hasSettings: boolean;
-	};
-	current: {
-		medications: number;
-		doseHistory: number;
-		refillHistory: number;
-		shareLinks: number;
-		hasSettings: boolean;
-	};
-	warnings: {
-		replacesExistingData: boolean;
-		regeneratesShareLinks: boolean;
-		containsImages: boolean;
-		containsSensitiveData: boolean;
-	};
 };
 
 export interface AppContextValue {
@@ -320,8 +293,7 @@ function userStorageKey(userId: number | undefined, key: string): string {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
 	const { i18n } = useTranslation();
-	const { user, authFetch } = useAuth();
-	const { showFeedback } = useFeedback();
+	const { user } = useAuth();
 
 	// Compose hooks
 	const medications = useMedications();
@@ -331,6 +303,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const collapsed = useCollapsedDays(user?.id);
 	const share = useShare();
 	const refill = useRefill();
+	const handleImportComplete = useCallback(() => {
+		medications.loadMeds();
+		settingsHook.loadSettings();
+		doses.loadTakenDoses();
+	}, [medications.loadMeds, settingsHook.loadSettings, doses.loadTakenDoses]);
+	const importExport = useImportExport({ onImportComplete: handleImportComplete });
 
 	// Schedule UI state
 	const [scheduleDays, setScheduleDays] = useState<number>(30);
@@ -366,20 +344,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [scheduleLightboxImage]);
 
-	// Export/Import state
-	const [exporting, setExporting] = useState(false);
-	const [importing, setImporting] = useState(false);
-	const [showExportModal, setShowExportModal] = useState(false);
-	const [showImportConfirm, setShowImportConfirm] = useState(false);
-	const [pendingImportData, setPendingImportData] = useState<unknown>(null);
-	const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
-	const [importResult, setImportResult] = useState<{
-		medications: number;
-		doses: number;
-		refills: number;
-		shares: number;
-	} | null>(null);
-
 	useEffect(() => {
 		setDefaultFormattingTimezone(settingsHook.settings.timezone || settingsHook.settings.serverTimezone || null);
 	}, [settingsHook.settings.timezone, settingsHook.settings.serverTimezone]);
@@ -414,10 +378,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		setSelectedUser(null);
 		setShowPastDays(false);
 		setShowFutureDays(false);
-		setShowExportModal(false);
-		setShowImportConfirm(false);
-		setPendingImportData(null);
-		setImportResult(null);
+		importExport.resetImportExportState();
 
 		medications.loadMeds();
 		settingsHook.loadSettings();
@@ -433,6 +394,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		intakeJournal.resetJournalState,
 		refill.clearRefillState,
 		share.resetShareDialogState,
+		importExport.resetImportExportState,
 	]);
 
 	// Update selectedMed when meds change (e.g., after refill)
@@ -729,175 +691,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		share.openShareDialog(activeMeds);
 	}, [share, activeMeds]);
 
-	// Get t function for translations
-	const { t } = useTranslation();
-
-	// Export data to JSON file
-	const handleExport = useCallback(
-		async (includeImages: boolean = true, includeSensitive: boolean = false) => {
-			setExporting(true);
-			try {
-				const res = await authFetch(`/api/export?includeSensitive=${includeSensitive}&includeImages=${includeImages}`);
-				if (!res.ok) throw new Error("Export failed");
-				const data = await res.json();
-
-				// Create download
-				const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-				const url = URL.createObjectURL(blob);
-				const a = document.createElement("a");
-				const now = new Date();
-				const dateStr = now.toISOString().replace(/[-:]/g, "").replace(/T/, "-").slice(0, 13);
-				const userPart = user?.username ? `-${user.username}` : "";
-				a.href = url;
-				a.download = `${t("exportImport.downloadFilename")}${userPart}-${dateStr}.json`;
-				document.body.appendChild(a);
-				a.click();
-				document.body.removeChild(a);
-				URL.revokeObjectURL(url);
-			} catch (err) {
-				log.error("Export error:", err);
-			}
-			setExporting(false);
-		},
-		[authFetch, t, user?.username]
-	);
-
-	// Handle file selection for import
-	const handleImportFileSelect = useCallback(
-		(e: React.ChangeEvent<HTMLInputElement>) => {
-			const file = e.target.files?.[0];
-			if (!file) return;
-
-			const reader = new FileReader();
-			reader.onload = async (event) => {
-				try {
-					const data = JSON.parse(event.target?.result as string);
-					if (!data.version || !data.exportedAt) {
-						setPendingImportData(null);
-						setImportPreview(null);
-						showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
-						return;
-					}
-
-					const res = await authFetch("/api/import/preview", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(data),
-					});
-
-					const text = await res.text();
-					let previewResponse: { error?: string; preview?: ImportPreview } = {};
-					try {
-						previewResponse = text ? JSON.parse(text) : {};
-					} catch {
-						log.error("Import preview response parse error:", text);
-						showFeedback({
-							message: `${t("exportImport.importError")}: Server returned invalid response`,
-							tone: "error",
-						});
-						return;
-					}
-
-					if (!res.ok || !previewResponse.preview) {
-						setPendingImportData(null);
-						setImportPreview(null);
-						if (previewResponse.error === "Invalid import data format") {
-							showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
-							return;
-						}
-						showFeedback({
-							message: `${t("exportImport.importError")}: ${previewResponse.error || `HTTP ${res.status}`}`,
-							tone: "error",
-						});
-						return;
-					}
-
-					setImportResult(null);
-					setPendingImportData(data);
-					setImportPreview(previewResponse.preview);
-					setShowImportConfirm(true);
-				} catch {
-					setPendingImportData(null);
-					setImportPreview(null);
-					showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
-				}
-			};
-			reader.readAsText(file);
-			// Reset file input
-			e.target.value = "";
-		},
-		[authFetch, showFeedback, t]
-	);
-
-	// Confirm and execute import
-	const handleImportConfirm = useCallback(async () => {
-		if (!pendingImportData) return;
-		setImporting(true);
-		setShowImportConfirm(false);
-
-		try {
-			const res = await authFetch("/api/import", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(pendingImportData),
-			});
-
-			// Get the response text first to handle non-JSON responses
-			const text = await res.text();
-			let data: {
-				error?: string;
-				message?: string;
-				imported?:
-					| {
-							medications?: number;
-							doseHistory?: number;
-							refillHistory?: number;
-							shareLinks?: number;
-					  }
-					| number;
-			} = {};
-			try {
-				data = text ? JSON.parse(text) : {};
-			} catch {
-				log.error("Import response parse error:", text);
-				showFeedback({
-					message: `${t("exportImport.importError")}: Server returned invalid response`,
-					tone: "error",
-				});
-				return;
-			}
-
-			if (!res.ok) {
-				showFeedback({
-					message: `${t("exportImport.importError")}: ${data.error || `HTTP ${res.status}`}`,
-					tone: "error",
-				});
-				return;
-			}
-
-			// Show success message in UI instead of browser alert
-			const importedCounts = typeof data.imported === "object" && data.imported !== null ? data.imported : null;
-			setImportResult({
-				medications: importedCounts?.medications || 0,
-				doses: importedCounts?.doseHistory || 0,
-				refills: importedCounts?.refillHistory || 0,
-				shares: importedCounts?.shareLinks || 0,
-			});
-
-			// Reload all data
-			medications.loadMeds();
-			settingsHook.loadSettings();
-			doses.loadTakenDoses();
-		} catch (err) {
-			log.error("Import error:", err);
-			showFeedback({ message: t("exportImport.importError"), tone: "error" });
-		} finally {
-			setPendingImportData(null);
-			setImportPreview(null);
-			setImporting(false);
-		}
-	}, [authFetch, pendingImportData, t, medications, settingsHook, doses, showFeedback]);
-
 	// Compute settingsChanged
 	const settingsChanged = useMemo(() => {
 		const settings = settingsHook.settings;
@@ -1132,21 +925,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			closeUserFilter,
 
 			// Export/Import
-			exporting,
-			importing,
-			showExportModal,
-			setShowExportModal,
-			showImportConfirm,
-			setShowImportConfirm,
-			pendingImportData,
-			setPendingImportData,
-			importPreview,
-			setImportPreview,
-			importResult,
-			setImportResult,
-			handleExport,
-			handleImportFileSelect,
-			handleImportConfirm,
+			exporting: importExport.exporting,
+			importing: importExport.importing,
+			showExportModal: importExport.showExportModal,
+			setShowExportModal: importExport.setShowExportModal,
+			showImportConfirm: importExport.showImportConfirm,
+			setShowImportConfirm: importExport.setShowImportConfirm,
+			pendingImportData: importExport.pendingImportData,
+			setPendingImportData: importExport.setPendingImportData,
+			importPreview: importExport.importPreview,
+			setImportPreview: importExport.setImportPreview,
+			importResult: importExport.importResult,
+			setImportResult: importExport.setImportResult,
+			handleExport: importExport.handleExport,
+			handleImportFileSelect: importExport.handleImportFileSelect,
+			handleImportConfirm: importExport.handleImportConfirm,
 			settingsChanged,
 		}),
 		[
@@ -1185,16 +978,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			openUserFilter,
 			closeUserFilter,
 			openShareDialog,
-			exporting,
-			importing,
-			showExportModal,
-			showImportConfirm,
-			pendingImportData,
-			importPreview,
-			importResult,
-			handleExport,
-			handleImportFileSelect,
-			handleImportConfirm,
+			importExport,
 			settingsChanged,
 		]
 	);

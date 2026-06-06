@@ -1,13 +1,12 @@
 {
-  "versionPolicy": "pragmatic",
+  "versionPolicy": "strict",
   "packages": {
     "backend": "tag",
     "frontend": "tag",
-    "shared": "independent"
+    "shared": "tag"
   },
   "shared": {
-    "allowIndependentVersion": true,
-    "lastReviewedTag": "v1.27.4",
-    "rationale": "The shared workspace package is versioned independently from backend/frontend runtime releases and is consumed as a local file dependency."
+    "mustMatchReleaseTag": true,
+    "rationale": "Backend and frontend consume @medassist/shared as a local file dependency, so all runtime workspace packages must carry the same release version."
   }
 }

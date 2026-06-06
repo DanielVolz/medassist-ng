@@ -98,9 +98,10 @@ Use the root-level commands for full-stack validation when a change spans backen
 - Releases also run `npm run release:preflight` in two stages:
   - early static validation of tag, package versions, release policy, compose tags, and release workflow dependencies
   - late validation of generated changelog and `docker-compose.pinned.yml` before GitHub Release creation
-- The release version policy is documented in `release-policy.json`:
-  - `backend` and `frontend` must match the release tag
-  - `shared` may version independently, but the exception must be reviewed explicitly per release tag
+- The release version policy is documented in `docs/release-policy.md` and enforced by `release-policy.json`:
+  - `backend`, `frontend` and `shared` must all match the release tag
+  - backend and frontend must keep consuming `@medassist/shared` through `file:../shared`
+  - Docker builds must copy and build the intended shared package from source
 - Container smoke covers:
   - backend shared-runtime import plus backend `/health` startup check
   - frontend container boot, static asset serving, and `/api/health` proxy wiring

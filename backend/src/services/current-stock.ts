@@ -6,9 +6,8 @@ import {
 	getDateOnlyTimestamp,
 	getNextScheduledOccurrenceTime,
 	normalizeIntakeUsageForStock,
-	parseIntakesJson,
+	normalizeMedicationSchedule,
 	parseLocalDateTime,
-	parseTakenByJson,
 } from "../utils/scheduler-utils.js";
 
 type MedicationRow = typeof medications.$inferSelect;
@@ -31,15 +30,8 @@ export function computeMedicationCurrentStock(options: {
 }): number {
 	const { medication, doses, stockCalculationMode, nowMs = Date.now() } = options;
 
-	const intakes = parseIntakesJson(
-		medication.intakesJson,
-		{
-			usageJson: medication.usageJson,
-			everyJson: medication.everyJson,
-			startJson: medication.startJson,
-		},
-		medication.intakeRemindersEnabled ?? false
-	);
+	const schedule = normalizeMedicationSchedule(medication);
+	const intakes = schedule.intakes;
 
 	const baseStock = isAmountBasedPackageType(medication.packageType)
 		? medication.looseTablets + (medication.stockAdjustment ?? 0)
@@ -54,7 +46,7 @@ export function computeMedicationCurrentStock(options: {
 	let consumed = 0;
 
 	if (stockCalculationMode === "automatic") {
-		const medicationTakenBy = parseTakenByJson(medication.takenByJson);
+		const medicationTakenBy = schedule.takenBy;
 
 		intakes.forEach((intake, intakeIndex) => {
 			const usage = normalizeIntakeUsageForStock(intake, medication.medicationForm, medication.packageType);

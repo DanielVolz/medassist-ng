@@ -30,9 +30,8 @@ import {
 	getTimezone,
 	getTodayInTimezone,
 	normalizeIntakeUsageForStock,
-	parseIntakesJson,
+	normalizeMedicationSchedule,
 	parseLocalDateTime,
-	parseTakenByJson,
 } from "../utils/scheduler-utils.js";
 import {
 	buildPrescriptionReminderPushNotification,
@@ -178,11 +177,8 @@ async function getMedicationsNeedingReminder(
 		// topical usage in grams cannot be mapped reliably to schedule events.
 		if (isTubePackageType(packageType)) continue;
 
-		const intakes = parseIntakesJson(
-			row.intakesJson,
-			{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
-			row.intakeRemindersEnabled ?? false
-		);
+		const schedule = normalizeMedicationSchedule(row);
+		const intakes = schedule.intakes;
 		const blisters: Blister[] = intakes.map((i) => ({
 			usage: normalizeIntakeUsageForStock(i, row.medicationForm, row.packageType),
 			every: i.every,
@@ -213,7 +209,7 @@ async function getMedicationsNeedingReminder(
 
 				const intake = intakes[blisterIdx];
 				const intakePerson = intake?.takenBy;
-				const fallbackPeople = parseTakenByJson(row.takenByJson);
+				const fallbackPeople = schedule.takenBy;
 				let peopleForThisIntake: Array<string | null>;
 				if (intakePerson) {
 					peopleForThisIntake = [intakePerson];

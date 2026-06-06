@@ -24,9 +24,9 @@ import {
 } from "../utils/openapi-route-standards.js";
 import { tokenFingerprint, valueFingerprint } from "../utils/redaction.js";
 import {
-	parseIntakesJson,
+	normalizeMedicationIntakes,
+	normalizeMedicationSchedule,
 	parseLocalDateTime,
-	parseTakenByJson,
 	personTakesMedication,
 } from "../utils/scheduler-utils.js";
 
@@ -175,13 +175,8 @@ async function loadShareVisibleMedicationMap(
 		.where(and(eq(medications.userId, share.userId), eq(medications.isObsolete, false)));
 
 	const visibleMedications = shareMedications.filter((medication) => {
-		const medTakenBy = parseTakenByJson(medication.takenByJson);
-		const intakes = parseIntakesJson(
-			medication.intakesJson,
-			{ usageJson: medication.usageJson, everyJson: medication.everyJson, startJson: medication.startJson },
-			medication.intakeRemindersEnabled ?? false
-		);
-		return personTakesMedication(share.takenBy, medTakenBy, intakes);
+		const schedule = normalizeMedicationSchedule(medication);
+		return personTakesMedication(share.takenBy, schedule.takenBy, schedule.intakes);
 	});
 
 	return new Map(visibleMedications.map((medication) => [medication.id, medication]));
@@ -206,14 +201,10 @@ function validateShareDoseIdWithMedicationMap(
 		return false;
 	}
 
-	const medTakenBy = parseTakenByJson(medication.takenByJson);
-	const intakes = parseIntakesJson(
-		medication.intakesJson,
-		{ usageJson: medication.usageJson, everyJson: medication.everyJson, startJson: medication.startJson },
-		medication.intakeRemindersEnabled ?? false
-	);
+	const schedule = normalizeMedicationSchedule(medication);
+	const intakes = schedule.intakes;
 
-	if (!personTakesMedication(share.takenBy, medTakenBy, intakes)) {
+	if (!personTakesMedication(share.takenBy, schedule.takenBy, intakes)) {
 		return false;
 	}
 
@@ -222,7 +213,7 @@ function validateShareDoseIdWithMedicationMap(
 		return false;
 	}
 
-	const expectedPersons = intake.takenBy ? [intake.takenBy] : medTakenBy;
+	const expectedPersons = intake.takenBy ? [intake.takenBy] : schedule.takenBy;
 	if (expectedPersons.length === 0) {
 		return parsedDose.personSuffix === null;
 	}
@@ -294,11 +285,7 @@ async function isDoseOutOfStock(options: {
 		return false;
 	}
 
-	const intakes = parseIntakesJson(
-		medication.intakesJson,
-		{ usageJson: medication.usageJson, everyJson: medication.everyJson, startJson: medication.startJson },
-		medication.intakeRemindersEnabled ?? false
-	);
+	const intakes = normalizeMedicationIntakes(medication);
 	const intake = intakes[parsedDose.intakeIndex];
 
 	const scheduledOccurrenceMs = intake

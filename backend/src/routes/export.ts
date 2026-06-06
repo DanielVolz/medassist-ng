@@ -27,7 +27,7 @@ import {
 	validationErrorSchema,
 } from "../utils/openapi-route-standards.js";
 import { normalizePackageType, PACKAGE_TYPES } from "../utils/package-profiles.js";
-import { normalizeIntake, parseIntakesJson, parseTakenByJson } from "../utils/scheduler-utils.js";
+import { normalizeIntake, normalizeMedicationIntakes, parseTakenByJson } from "../utils/scheduler-utils.js";
 
 const IMAGES_DIR = resolve(getDataDir(), "images");
 
@@ -357,12 +357,7 @@ function parseIntakesForExport(row: typeof medications.$inferSelect): Array<{
 	remind: boolean;
 	takenBy: string | null;
 }> {
-	// Use the new parseIntakesJson which falls back to legacy format
-	const intakes = parseIntakesJson(
-		row.intakesJson,
-		{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
-		row.intakeRemindersEnabled ?? false
-	);
+	const intakes = normalizeMedicationIntakes(row);
 
 	return intakes.map((intake) => ({
 		usage: intake.usage,

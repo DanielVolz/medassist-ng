@@ -9,7 +9,7 @@ import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { getActiveShareToken } from "../services/share-token-service.js";
 import { getThumbFilename } from "../utils/image-upload.js";
-import { parseIntakesJson, parseTakenByJson, personTakesMedication } from "../utils/scheduler-utils.js";
+import { normalizeMedicationSchedule, personTakesMedication } from "../utils/scheduler-utils.js";
 
 type ImageRoutesOptions = {
 	imagesDir: string;
@@ -130,17 +130,8 @@ async function getAuthorizedSharedMedicationImageFilename(
 			continue;
 		}
 
-		const takenByArray = parseTakenByJson(medication.takenByJson);
-		const intakes = parseIntakesJson(
-			medication.intakesJson,
-			{
-				usageJson: medication.usageJson,
-				everyJson: medication.everyJson,
-				startJson: medication.startJson,
-			},
-			medication.intakeRemindersEnabled ?? false
-		);
-		if (personTakesMedication(share.takenBy, takenByArray, intakes)) {
+		const schedule = normalizeMedicationSchedule(medication);
+		if (personTakesMedication(share.takenBy, schedule.takenBy, schedule.intakes)) {
 			return matchedMedicationFilename;
 		}
 	}

@@ -23,6 +23,7 @@ import {
 	getUpcomingIntakes,
 	type Intake,
 	normalizeIntake,
+	normalizeMedicationSchedule,
 	parseBlisters,
 	parseIntakeReminderState,
 	parseIntakesJson,
@@ -342,6 +343,85 @@ describe("Scheduler Utils - Intake Schedule Normalization", () => {
 					intakeRemindersEnabled: true,
 				},
 			]);
+		});
+	});
+
+	describe("normalizeMedicationSchedule", () => {
+		it("normalizes legacy-only medication rows", () => {
+			const schedule = normalizeMedicationSchedule({
+				intakesJson: "[]",
+				usageJson: "[1,2]",
+				everyJson: "[1,3]",
+				startJson: '["2026-01-01T08:00:00","2026-01-02T20:00:00"]',
+				takenByJson: '["Daniel"]',
+				intakeRemindersEnabled: true,
+			});
+
+			expect(schedule.takenBy).toEqual(["Daniel"]);
+			expect(schedule.intakes).toHaveLength(2);
+			expect(schedule.intakes[0]).toEqual(
+				expect.objectContaining({
+					usage: 1,
+					every: 1,
+					start: "2026-01-01T08:00:00",
+					takenBy: null,
+					intakeRemindersEnabled: true,
+				})
+			);
+		});
+
+		it("prefers unified intakes over mixed legacy fields", () => {
+			const schedule = normalizeMedicationSchedule({
+				intakesJson: JSON.stringify([
+					{
+						usage: 0.5,
+						every: 2,
+						start: "2026-02-01T09:30:00",
+						takenBy: "Anna",
+						intakeRemindersEnabled: false,
+					},
+				]),
+				usageJson: "[99]",
+				everyJson: "[99]",
+				startJson: '["2030-01-01T00:00:00"]',
+				takenByJson: '["Daniel"]',
+				intakeRemindersEnabled: true,
+			});
+
+			expect(schedule.takenBy).toEqual(["Daniel"]);
+			expect(schedule.intakes).toHaveLength(1);
+			expect(schedule.intakes[0]).toEqual(
+				expect.objectContaining({
+					usage: 0.5,
+					every: 2,
+					start: "2026-02-01T09:30:00",
+					takenBy: "Anna",
+					intakeRemindersEnabled: false,
+				})
+			);
+		});
+
+		it("normalizes intakes-only rows and keeps them schedulable", () => {
+			const schedule = normalizeMedicationSchedule({
+				intakesJson: JSON.stringify([
+					{
+						usage: 1,
+						every: 1,
+						start: "2026-03-01T07:15:00",
+						takenBy: null,
+						intakeRemindersEnabled: true,
+					},
+				]),
+				takenByJson: '["Daniel"]',
+			});
+
+			const nextOccurrence = getNextScheduledOccurrenceTime(
+				schedule.intakes[0],
+				new Date("2026-03-01T00:00:00").getTime()
+			);
+
+			expect(schedule.intakes).toHaveLength(1);
+			expect(nextOccurrence).toBe(new Date("2026-03-01T07:15:00").getTime());
 		});
 	});
 });

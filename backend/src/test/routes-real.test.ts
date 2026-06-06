@@ -58,6 +58,7 @@ const { settingsRoutes, sendShoutrrrNotification, loadUserSettings, getAllUserSe
 	"../routes/settings.js"
 );
 const { exportRoutes } = await import("../routes/export.js");
+const { medicationRoutes } = await import("../routes/medications.js");
 const { reportRoutes } = await import("../routes/report.js");
 
 const __filename = fileURLToPath(import.meta.url);
@@ -119,6 +120,7 @@ describe("Real route coverage: settings/export/report", () => {
 		await runAlterMigrations(testClient);
 		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(settingsRoutes);
+		await app.register(medicationRoutes);
 		await app.register(exportRoutes);
 		await app.register(reportRoutes);
 		await app.ready();
@@ -217,6 +219,56 @@ describe("Real route coverage: settings/export/report", () => {
 				smtpUser: "mailer@example.com",
 				smtpFrom: "MedAssist <mailer@example.com>",
 				hasSmtpPassword: true,
+			})
+		);
+	});
+
+	it("GET /medications renders legacy-only schedule fields through normalized intakes", async () => {
+		await testClient.execute({
+			sql: `INSERT INTO medications (
+				user_id, name, generic_name, taken_by_json, package_type,
+				pack_count, blisters_per_pack, pills_per_blister, loose_tablets,
+				usage_json, every_json, start_json, intakes_json,
+				stock_adjustment, intake_reminders_enabled
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			args: [
+				1,
+				"Legacy schedule med",
+				null,
+				JSON.stringify(["Daniel"]),
+				"blister",
+				1,
+				1,
+				10,
+				0,
+				JSON.stringify([1.5]),
+				JSON.stringify([2]),
+				JSON.stringify(["2026-04-01T08:45:00"]),
+				"[]",
+				0,
+				1,
+			],
+		});
+
+		const response = await app.inject({ method: "GET", url: "/medications" });
+
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body).toHaveLength(1);
+		expect(body[0]).toEqual(
+			expect.objectContaining({
+				name: "Legacy schedule med",
+				takenBy: ["Daniel"],
+				blisters: [{ usage: 1.5, every: 2, start: "2026-04-01T08:45:00" }],
+			})
+		);
+		expect(body[0].intakes[0]).toEqual(
+			expect.objectContaining({
+				usage: 1.5,
+				every: 2,
+				start: "2026-04-01T08:45:00",
+				takenBy: null,
+				intakeRemindersEnabled: true,
 			})
 		);
 	});

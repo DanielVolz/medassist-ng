@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { isAmountBasedPackageType, isTubePackageType, normalizePackageType } from "../utils/package-profiles.js";
-import { normalizeIntakeUsageForStock, parseTakenByJson } from "../utils/scheduler-utils.js";
+import { normalizeIntakeUsageForStock, normalizeMedicationSchedule } from "../utils/scheduler-utils.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
 import { calculateUsageInRange, parseIntakesWithUnits } from "./medications-service.js";
 
@@ -55,13 +55,9 @@ export async function calculatePlannerDemandRows(options: PlannerDemandOptions):
 		.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, false)));
 
 	return rows.map((row) => {
-		const intakes = parseIntakesWithUnits(
-			row.intakesJson,
-			{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
-			row.intakeRemindersEnabled ?? false
-		);
+		const intakes = parseIntakesWithUnits(row);
 		const medForm = row.medicationForm ?? "tablet";
-		const medicationTakenBy = parseTakenByJson(row.takenByJson);
+		const medicationTakenBy = normalizeMedicationSchedule(row).takenBy;
 		const blisters = intakes.map((intake) => ({
 			usage: normalizeIntakeUsageForStock(intake, medForm, row.packageType),
 			every: intake.every,

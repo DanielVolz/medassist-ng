@@ -18,8 +18,7 @@ import { isAmountBasedPackageType, normalizePackageType } from "../utils/package
 import { tokenFingerprint } from "../utils/redaction.js";
 import {
 	getAllTakenByForMedication,
-	parseIntakesJson,
-	parseTakenByJson,
+	normalizeMedicationSchedule,
 	personTakesMedication,
 	scopeIntakesToTakenBy,
 } from "../utils/scheduler-utils.js";
@@ -203,35 +202,28 @@ function isShareActive(share: typeof shareTokens.$inferSelect): boolean {
 
 type MedicationRow = typeof medications.$inferSelect;
 
-function parseMedicationIntakes(medication: MedicationRow) {
-	return parseIntakesJson(
-		medication.intakesJson,
-		{ usageJson: medication.usageJson, everyJson: medication.everyJson, startJson: medication.startJson },
-		medication.intakeRemindersEnabled ?? false
-	);
-}
-
 async function getActiveMedicationsForPerson(userId: number, takenBy: string): Promise<MedicationRow[]> {
 	const allMeds = await db
 		.select()
 		.from(medications)
 		.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)));
 
-	return allMeds.filter((medication) =>
-		personTakesMedication(takenBy, parseTakenByJson(medication.takenByJson), parseMedicationIntakes(medication))
-	);
+	return allMeds.filter((medication) => {
+		const schedule = normalizeMedicationSchedule(medication);
+		return personTakesMedication(takenBy, schedule.takenBy, schedule.intakes);
+	});
 }
 
 function toSharedScheduleMedication(medication: MedicationRow, shareTakenBy: string) {
-	const medicationTakenBy = parseTakenByJson(medication.takenByJson);
-	const intakes = scopeIntakesToTakenBy(parseMedicationIntakes(medication), medicationTakenBy, shareTakenBy);
+	const schedule = normalizeMedicationSchedule(medication);
+	const intakes = scopeIntakesToTakenBy(schedule.intakes, schedule.takenBy, shareTakenBy);
 	const blisters = intakes.map((intake) => ({
 		usage: intake.usage,
 		every: intake.every,
 		start: intake.start,
 	}));
 	const takenBy =
-		shareTakenBy === "all" ? medicationTakenBy : medicationTakenBy.filter((person) => person === shareTakenBy);
+		shareTakenBy === "all" ? schedule.takenBy : schedule.takenBy.filter((person) => person === shareTakenBy);
 	const totalPills = isAmountBasedPackageType(medication.packageType)
 		? medication.looseTablets + (medication.stockAdjustment ?? 0)
 		: medication.packCount * medication.blistersPerPack * medication.pillsPerBlister +
@@ -761,13 +753,8 @@ export async function shareRoutes(app: FastifyInstance) {
 			// Collect all unique person names from medication-level AND intake-level takenBy
 			const allPeople = new Set<string>();
 			for (const med of meds) {
-				const takenByArray = parseTakenByJson(med.takenByJson);
-				const intakes = parseIntakesJson(
-					med.intakesJson,
-					{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-					med.intakeRemindersEnabled ?? false
-				);
-				const allForMed = getAllTakenByForMedication(takenByArray, intakes);
+				const schedule = normalizeMedicationSchedule(med);
+				const allForMed = getAllTakenByForMedication(schedule.takenBy, schedule.intakes);
 				for (const person of allForMed) {
 					if (person) allPeople.add(person);
 				}

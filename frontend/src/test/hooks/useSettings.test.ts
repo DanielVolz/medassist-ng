@@ -116,6 +116,31 @@ describe("useSettings", () => {
 		expect(result.current.settings.notificationEmail).toBe("test@example.com");
 	});
 
+	it("tracks unsaved changes only for user-editable settings fields", async () => {
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		act(() => {
+			result.current.setSettings((settings) => ({
+				...settings,
+				lastAutoEmailSent: "2026-06-06T08:00:00.000Z",
+				nextScheduledCheck: "2026-06-06T09:00:00.000Z",
+				lastNotificationType: "stock",
+			}));
+		});
+
+		expect(result.current.hasUnsavedChanges).toBe(false);
+
+		act(() => {
+			result.current.setSettings((settings) => ({ ...settings, timezone: "Europe/Berlin" }));
+		});
+
+		expect(result.current.hasUnsavedChanges).toBe(true);
+	});
+
 	it("handles API error on load", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Network error"));
 

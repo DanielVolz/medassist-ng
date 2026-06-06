@@ -11,6 +11,7 @@ import {
 	useSettings,
 	useShare,
 } from "../hooks";
+import { useModalHistory } from "../hooks/useModalHistory";
 import {
 	type Coverage,
 	type FormState,
@@ -318,31 +319,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	// Modal state
 	const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
 	const selectedMedIdRef = useRef<number | null>(null);
-	const medDetailOpenedAtRef = useRef(0);
-	const medDetailCloseInFlightRef = useRef(false);
 	useEffect(() => {
 		selectedMedIdRef.current = selectedMed?.id ?? null;
-		if (!selectedMed) {
-			medDetailCloseInFlightRef.current = false;
-		}
 	}, [selectedMed]);
 	const [showImageLightbox, setShowImageLightbox] = useState(false);
-	const imageLightboxOpenedAtRef = useRef(0);
-	const imageLightboxCloseInFlightRef = useRef(false);
 	const [scheduleLightboxImage, setScheduleLightboxImage] = useState<string | null>(null);
-	const scheduleLightboxOpenedAtRef = useRef(0);
-	const scheduleLightboxCloseInFlightRef = useRef(false);
 	const [selectedUser, setSelectedUser] = useState<string | null>(null);
-	useEffect(() => {
-		if (!showImageLightbox) {
-			imageLightboxCloseInFlightRef.current = false;
-		}
-	}, [showImageLightbox]);
-	useEffect(() => {
-		if (!scheduleLightboxImage) {
-			scheduleLightboxCloseInFlightRef.current = false;
-		}
-	}, [scheduleLightboxImage]);
+	const dismissMedDetail = useCallback(() => {
+		selectedMedIdRef.current = null;
+		setSelectedMed(null);
+	}, []);
+	const dismissImageLightbox = useCallback(() => {
+		setShowImageLightbox(false);
+	}, []);
+	const dismissScheduleLightbox = useCallback(() => {
+		setScheduleLightboxImage(null);
+	}, []);
+	const dismissUserFilter = useCallback(() => {
+		setSelectedUser(null);
+	}, []);
+	const medDetailHistoryState = useMemo(() => (selectedMed ? { medId: selectedMed.id } : undefined), [selectedMed]);
+	const userFilterHistoryState = useMemo(() => (selectedUser ? { person: selectedUser } : undefined), [selectedUser]);
+	const { closeModal: closeMedDetail } = useModalHistory(Boolean(selectedMed), "medDetail", dismissMedDetail, {
+		state: medDetailHistoryState,
+		minOpenMs: 320,
+	});
+	const { closeModal: closeImageLightbox } = useModalHistory(showImageLightbox, "imageLightbox", dismissImageLightbox, {
+		minOpenMs: 320,
+	});
+	const { closeModal: closeScheduleLightbox } = useModalHistory(
+		Boolean(scheduleLightboxImage),
+		"scheduleLightbox",
+		dismissScheduleLightbox,
+		{ minOpenMs: 320 }
+	);
+	const { closeModal: closeUserFilter } = useModalHistory(Boolean(selectedUser), "userFilter", dismissUserFilter, {
+		state: userFilterHistoryState,
+	});
 
 	useEffect(() => {
 		setDefaultFormattingTimezone(settingsHook.settings.timezone || settingsHook.settings.serverTimezone || null);
@@ -596,95 +609,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		(med: Medication) => {
 			if (selectedMedIdRef.current === med.id) return;
 			selectedMedIdRef.current = med.id;
-			medDetailOpenedAtRef.current = Date.now();
-			medDetailCloseInFlightRef.current = false;
 			setSelectedMed(med);
 			refill.setRefillHistoryExpanded(false);
 			refill.loadRefillHistory(med.id);
-			window.history.pushState({ modal: "medDetail", medId: med.id }, "");
 		},
 		[refill]
 	);
 
-	const closeMedDetail = useCallback(() => {
-		if (!selectedMed || medDetailCloseInFlightRef.current) return;
-
-		// Ignore ultra-fast close requests caused by rapid double-click races
-		if (Date.now() - medDetailOpenedAtRef.current < 320) return;
-
-		const currentState = window.history.state as { modal?: string } | null;
-		if (currentState?.modal !== "medDetail") {
-			// State already popped by another event: close locally without another back step.
-			selectedMedIdRef.current = null;
-			setSelectedMed(null);
-			return;
-		}
-
-		medDetailCloseInFlightRef.current = true;
-		window.history.back();
-	}, [selectedMed]);
-
 	const openImageLightbox = useCallback(() => {
 		if (showImageLightbox) return;
-		imageLightboxOpenedAtRef.current = Date.now();
-		imageLightboxCloseInFlightRef.current = false;
 		setShowImageLightbox(true);
-		window.history.pushState({ modal: "imageLightbox" }, "");
-	}, [showImageLightbox]);
-
-	const closeImageLightbox = useCallback(() => {
-		if (!showImageLightbox || imageLightboxCloseInFlightRef.current) return;
-		if (Date.now() - imageLightboxOpenedAtRef.current < 320) return;
-
-		const currentState = window.history.state as { modal?: string } | null;
-		if (currentState?.modal !== "imageLightbox") {
-			setShowImageLightbox(false);
-			return;
-		}
-
-		imageLightboxCloseInFlightRef.current = true;
-		window.history.back();
 	}, [showImageLightbox]);
 
 	const openScheduleLightbox = useCallback(
 		(imageUrl: string) => {
 			if (scheduleLightboxImage) return;
-			scheduleLightboxOpenedAtRef.current = Date.now();
-			scheduleLightboxCloseInFlightRef.current = false;
 			setScheduleLightboxImage(imageUrl);
-			window.history.pushState({ modal: "scheduleLightbox" }, "");
 		},
 		[scheduleLightboxImage]
 	);
-
-	const closeScheduleLightbox = useCallback(() => {
-		if (!scheduleLightboxImage || scheduleLightboxCloseInFlightRef.current) return;
-		if (Date.now() - scheduleLightboxOpenedAtRef.current < 320) return;
-
-		const currentState = window.history.state as { modal?: string } | null;
-		if (currentState?.modal !== "scheduleLightbox") {
-			setScheduleLightboxImage(null);
-			return;
-		}
-
-		scheduleLightboxCloseInFlightRef.current = true;
-		window.history.back();
-	}, [scheduleLightboxImage]);
 
 	const openUserFilter = useCallback(
 		(person: string) => {
 			if (selectedUser === person) return;
 			setSelectedUser(person);
-			window.history.pushState({ modal: "userFilter", person }, "");
 		},
 		[selectedUser]
 	);
-
-	const closeUserFilter = useCallback(() => {
-		if (selectedUser) {
-			window.history.back();
-		}
-	}, [selectedUser]);
 
 	// Wrapper to pass meds to openShareDialog
 	const openShareDialog = useCallback(() => {

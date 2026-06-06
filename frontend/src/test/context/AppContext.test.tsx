@@ -415,6 +415,39 @@ describe("useAppContext", () => {
 		expect(window.history.back).toHaveBeenCalled();
 	});
 
+	it("closes an AppContext modal when browser back pops the modal history entry", () => {
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		act(() => {
+			result.current.openImageLightbox();
+		});
+
+		expect(result.current.showImageLightbox).toBe(true);
+
+		act(() => {
+			window.dispatchEvent(new PopStateEvent("popstate"));
+		});
+
+		expect(result.current.showImageLightbox).toBe(false);
+	});
+
+	it("uses modal history for direct AppContext modal close", () => {
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		act(() => {
+			result.current.openUserFilter("Max");
+		});
+
+		expect(result.current.selectedUser).toBe("Max");
+
+		act(() => {
+			result.current.closeUserFilter();
+		});
+
+		expect(result.current.selectedUser).toBeNull();
+		expect(window.history.back).toHaveBeenCalledTimes(1);
+	});
+
 	it("imports data and triggers reload plus import result state", async () => {
 		const { result } = renderHook(() => useAppContext(), { wrapper });
 

@@ -225,23 +225,38 @@ jobs:
               return;
             }
 
-            const itemResult = await github.graphql(`
-              query($nodeId: ID!) {
-                node(id: $nodeId) {
-                  ... on Issue {
-                    projectItems(first: 20) {
-                      nodes {
-                        id
-                        project { id }
+            const shouldAlreadyBeTracked = labels.some((label) => qualifyingLabels.includes(label));
+            const fetchProjectItem = async () => {
+              const itemResult = await github.graphql(`
+                query($nodeId: ID!) {
+                  node(id: $nodeId) {
+                    ... on Issue {
+                      projectItems(first: 20) {
+                        nodes {
+                          id
+                          project { id }
+                        }
                       }
                     }
                   }
                 }
-              }
-            `, { nodeId: issueNodeId });
+              `, { nodeId: issueNodeId });
 
-            const projectItem = (itemResult.node?.projectItems?.nodes || []).find((item) => item.project.id === project.id) || null;
-            const shouldAlreadyBeTracked = labels.some((label) => qualifyingLabels.includes(label));
+              return (itemResult.node?.projectItems?.nodes || []).find((item) => item.project.id === project.id) || null;
+            };
+
+            let projectItem = await fetchProjectItem();
+
+            // Project item visibility can lag slightly after intake add calls.
+            if (!projectItem && shouldAlreadyBeTracked) {
+              const attempts = 5;
+              for (let attempt = 1; attempt <= attempts && !projectItem; attempt++) {
+                const delayMs = attempt * 1500;
+                console.log(`Issue #${issueNumber}: waiting for project item propagation (${attempt}/${attempts}, ${delayMs}ms)`);
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+                projectItem = await fetchProjectItem();
+              }
+            }
 
             if (!projectItem) {
               if (shouldAlreadyBeTracked) {

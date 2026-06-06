@@ -260,7 +260,7 @@ jobs:
 
             if (!projectItem) {
               if (shouldAlreadyBeTracked) {
-                core.setFailed(`Issue #${issueNumber} should already be in the project after intake sync, but no matching project item was found.`);
+                core.warning(`Issue #${issueNumber} is labeled for project tracking, but no matching project item was found after retry. Skipping field sync for this event.`);
                 return;
               }
 

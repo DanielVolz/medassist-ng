@@ -27,9 +27,8 @@ import {
 	getUpcomingIntakes,
 	type IntakeReminderState,
 	normalizeIntakeUsageForStock,
+	normalizeMedicationSchedule,
 	parseIntakeReminderState,
-	parseIntakesJson,
-	parseTakenByJson,
 	type UpcomingIntake,
 } from "../utils/scheduler-utils.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
@@ -171,16 +170,13 @@ async function autoMarkDueIntakesAsTaken(
 			continue;
 		}
 
-		const intakes = parseIntakesJson(
-			med.intakesJson,
-			{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-			med.intakeRemindersEnabled ?? false
-		);
+		const schedule = normalizeMedicationSchedule(med);
+		const intakes = schedule.intakes;
 		if (intakes.length === 0) {
 			continue;
 		}
 
-		const medicationTakenBy = parseTakenByJson(med.takenByJson);
+		const medicationTakenBy = schedule.takenBy;
 		const medDisplayName = getMedicationDisplayName({ id: med.id, name: med.name, genericName: med.genericName });
 		let remainingStock = computeMedicationCurrentStock({
 			medication: med,
@@ -500,13 +496,10 @@ export async function checkAndSendIntakeRemindersForUser(
 	// Intake-level reminders are the single source of truth.
 	const reminderEntries = activeRows
 		.map((med) => {
-			const intakes = parseIntakesJson(
-				med.intakesJson,
-				{ usageJson: med.usageJson, everyJson: med.everyJson, startJson: med.startJson },
-				false
-			);
+			const schedule = normalizeMedicationSchedule({ ...med, intakeRemindersEnabled: false });
+			const intakes = schedule.intakes;
 			const intakesWithReminders = intakes.filter((intake) => intake.intakeRemindersEnabled === true);
-			return { med, intakes, intakesWithReminders };
+			return { med, intakes, intakesWithReminders, medicationTakenBy: schedule.takenBy };
 		})
 		.filter((entry) => entry.intakesWithReminders.length > 0);
 
@@ -560,9 +553,7 @@ export async function checkAndSendIntakeRemindersForUser(
 	todayEnd.setHours(23, 59, 59, 999);
 
 	// Find intakes: upcoming ones in reminder window + past ones for repeat reminders
-	for (const { med, intakes, intakesWithReminders } of reminderEntriesEligible) {
-		// Medication-level takenBy (for fallback/display purposes)
-		const medicationTakenBy = parseTakenByJson(med.takenByJson);
+	for (const { med, intakes, intakesWithReminders, medicationTakenBy } of reminderEntriesEligible) {
 		const medDisplayName = getMedicationDisplayName({ id: med.id, name: med.name, genericName: med.genericName });
 
 		// Process each intake separately to track blisterIndex

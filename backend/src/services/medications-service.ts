@@ -1,4 +1,9 @@
-import { forEachScheduledOccurrenceInRange, type Intake, parseIntakesJson } from "../utils/scheduler-utils.js";
+import {
+	forEachScheduledOccurrenceInRange,
+	type Intake,
+	type MedicationScheduleJsonFields,
+	normalizeMedicationIntakes,
+} from "../utils/scheduler-utils.js";
 
 export { normalizeDateTime } from "../utils/date-time.js";
 
@@ -21,13 +26,9 @@ export function parseRawIntakeUnits(intakesJson: string | null | undefined): Arr
 	}
 }
 
-export function parseIntakesWithUnits(
-	intakesJson: string | null | undefined,
-	legacyRow: { usageJson: string; everyJson: string; startJson: string },
-	medicationIntakeRemindersEnabled?: boolean
-): Intake[] {
-	const intakes = parseIntakesJson(intakesJson, legacyRow, medicationIntakeRemindersEnabled);
-	const rawUnits = parseRawIntakeUnits(intakesJson);
+export function parseIntakesWithUnits(row: MedicationScheduleJsonFields): Intake[] {
+	const intakes = normalizeMedicationIntakes(row);
+	const rawUnits = parseRawIntakeUnits(row.intakesJson);
 	if (rawUnits.length === 0) return intakes;
 
 	return intakes.map((intake, idx) => ({

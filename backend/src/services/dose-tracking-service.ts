@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { parseDoseId } from "../utils/dose-id.js";
-import { parseIntakesJson, parseLocalDateTime } from "../utils/scheduler-utils.js";
+import { normalizeMedicationIntakes, parseLocalDateTime } from "../utils/scheduler-utils.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
 
 export type DoseTrackingSource = "manual" | "automatic" | "notification";
@@ -75,11 +75,7 @@ async function isDoseOutOfStock(options: { userId: number; doseId: string }): Pr
 	const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, options.userId));
 	const stockCalculationMode = (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic";
 
-	const intakes = parseIntakesJson(
-		medication.intakesJson,
-		{ usageJson: medication.usageJson, everyJson: medication.everyJson, startJson: medication.startJson },
-		medication.intakeRemindersEnabled ?? false
-	);
+	const intakes = normalizeMedicationIntakes(medication);
 	const intake = intakes[parsedDose.intakeIndex];
 
 	const scheduledOccurrenceMs = intake

@@ -516,12 +516,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				: and(eq(medications.userId, userId), eq(medications.isObsolete, false));
 			const rows = await db.select().from(medications).where(whereClause).orderBy(medications.id);
 			return rows.map((row) => {
-				// Parse intakes from new format, falling back to legacy
-				const intakes = parseIntakesWithUnits(
-					row.intakesJson,
-					{ usageJson: row.usageJson, everyJson: row.everyJson, startJson: row.startJson },
-					row.intakeRemindersEnabled ?? false
-				);
+				const intakes = parseIntakesWithUnits(row);
 
 				return {
 					id: row.id,
@@ -874,12 +869,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			// ---------------------------------------------------------------
 			// Migrate dose tracking IDs when intake schedule changes
 			// ---------------------------------------------------------------
-			// Parse old intakes from the existing medication row
-			const oldIntakes = parseIntakesWithUnits(
-				existing.intakesJson,
-				{ usageJson: existing.usageJson, everyJson: existing.everyJson, startJson: existing.startJson },
-				existing.intakeRemindersEnabled
-			);
+			const oldIntakes = parseIntakesWithUnits(existing);
 
 			// Get all dose tracking entries for this medication
 			const allDoses = await db

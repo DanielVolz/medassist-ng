@@ -72,6 +72,12 @@ services:
       - "127.0.0.1:4000:3000"
 ```
 
+## Medication Schedule Compatibility
+
+Medication rows still retain legacy schedule columns (`usage_json`, `every_json`, `start_json`) next to the unified `intakes_json` column so existing SQLite files and imports keep working without a migration.
+
+Backend code should consume medication schedules through the canonical normalization helpers in `backend/src/utils/scheduler-utils.ts` (`normalizeMedicationSchedule()` or `normalizeMedicationIntakes()`). Direct legacy parsing should stay inside that utility boundary until a reviewed migration policy can remove the old columns safely.
+
 ## Docker Image Pinning
 
 The default `docker-compose.yml` uses readable versioned image tags. Each GitHub release also attaches `docker-compose.pinned.yml` with the same release tags plus immutable image digests for deployments that need stricter reproducibility.

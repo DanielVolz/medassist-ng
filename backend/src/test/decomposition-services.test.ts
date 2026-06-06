@@ -16,15 +16,13 @@ describe("medications-service decomposition regression", () => {
 
 		expect(parseRawIntakeUnits(intakesJson)).toEqual(["ml", null]);
 
-		const parsed = parseIntakesWithUnits(
+		const parsed = parseIntakesWithUnits({
 			intakesJson,
-			{
-				usageJson: "[1,2]",
-				everyJson: "[1,1]",
-				startJson: '["2026-01-01T08:00:00.000Z","2026-01-01T20:00:00.000Z"]',
-			},
-			false
-		);
+			usageJson: "[1,2]",
+			everyJson: "[1,1]",
+			startJson: '["2026-01-01T08:00:00.000Z","2026-01-01T20:00:00.000Z"]',
+			intakeRemindersEnabled: false,
+		});
 
 		expect(parsed[0]?.intakeUnit).toBe("ml");
 		expect(parsed[1]?.intakeUnit).toBeNull();

@@ -73,16 +73,18 @@ vi.mock("../utils/scheduler-utils.js", async () => {
 		...actual,
 		getEffectiveTimezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
 		getDateLocale: () => "en-US",
-		parseTakenByJson: () => [],
-		parseIntakesJson: () => [
-			{
-				usage: 1,
-				every: 1,
-				start: "2026-01-05T10:45:00.000Z",
-				takenBy: null,
-				intakeRemindersEnabled: true,
-			},
-		],
+		normalizeMedicationSchedule: () => ({
+			intakes: [
+				{
+					usage: 1,
+					every: 1,
+					start: "2026-01-05T10:45:00.000Z",
+					takenBy: null,
+					intakeRemindersEnabled: true,
+				},
+			],
+			takenBy: [],
+		}),
 		getTodaysIntakes: () => [candidate],
 		getUpcomingIntakes: () => [candidate],
 	};

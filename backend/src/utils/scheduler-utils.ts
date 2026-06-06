@@ -40,6 +40,20 @@ export type Intake = {
 	intakeRemindersEnabled: boolean;
 };
 
+export type MedicationScheduleJsonFields = {
+	intakesJson?: string | null;
+	usageJson?: string | null;
+	everyJson?: string | null;
+	startJson?: string | null;
+	takenByJson?: string | null;
+	intakeRemindersEnabled?: boolean | null;
+};
+
+export type NormalizedMedicationSchedule = {
+	intakes: Intake[];
+	takenBy: string[];
+};
+
 const isValidIntakeUnit = (value: unknown): value is "ml" | "tsp" | "tbsp" =>
 	value === "ml" || value === "tsp" || value === "tbsp";
 
@@ -506,12 +520,16 @@ export function getMsUntilNextCheck(reminderHour: number, tz?: string): number {
 
 export { parseLocalDateTime };
 
-/** Parse blister schedules from JSON columns (DEPRECATED: use parseIntakesJson instead) */
-export function parseBlisters(row: { usageJson: string; everyJson: string; startJson: string }): Blister[] {
+/** Parse blister schedules from JSON columns (DEPRECATED: use normalizeMedicationSchedule instead) */
+export function parseBlisters(row: {
+	usageJson: string | null | undefined;
+	everyJson: string | null | undefined;
+	startJson: string | null | undefined;
+}): Blister[] {
 	try {
-		const usage = JSON.parse(row.usageJson) as number[];
-		const every = JSON.parse(row.everyJson) as number[];
-		const start = JSON.parse(row.startJson) as string[];
+		const usage = JSON.parse(row.usageJson ?? "[]") as number[];
+		const every = JSON.parse(row.everyJson ?? "[]") as number[];
+		const start = JSON.parse(row.startJson ?? "[]") as string[];
 		const len = Math.min(usage.length, every.length, start.length);
 		const blisters: Blister[] = [];
 		for (let i = 0; i < len; i++) {
@@ -532,7 +550,11 @@ export function parseBlisters(row: { usageJson: string; everyJson: string; start
  */
 export function parseIntakesJson(
 	intakesJson: string | null | undefined,
-	legacyRow?: { usageJson: string; everyJson: string; startJson: string },
+	legacyRow?: {
+		usageJson: string | null | undefined;
+		everyJson: string | null | undefined;
+		startJson: string | null | undefined;
+	},
 	medicationIntakeRemindersEnabled?: boolean
 ): Intake[] {
 	// Try new format first
@@ -565,6 +587,32 @@ export function parseIntakesJson(
 	}
 
 	return [];
+}
+
+/**
+ * Canonical medication schedule normalization boundary.
+ *
+ * New code should pass medication rows through this function instead of reading
+ * legacy schedule columns directly. The legacy columns stay in the schema until
+ * a migration policy can safely remove them.
+ */
+export function normalizeMedicationSchedule(row: MedicationScheduleJsonFields): NormalizedMedicationSchedule {
+	return {
+		intakes: parseIntakesJson(
+			row.intakesJson,
+			{
+				usageJson: row.usageJson,
+				everyJson: row.everyJson,
+				startJson: row.startJson,
+			},
+			row.intakeRemindersEnabled ?? false
+		),
+		takenBy: parseTakenByJson(row.takenByJson),
+	};
+}
+
+export function normalizeMedicationIntakes(row: MedicationScheduleJsonFields): Intake[] {
+	return normalizeMedicationSchedule(row).intakes;
 }
 
 /**

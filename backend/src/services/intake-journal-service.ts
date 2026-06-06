@@ -2,7 +2,7 @@ import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { doseTracking, intakeJournal, medications } from "../db/schema.js";
 import { type ParsedDoseId, parseDoseId } from "../utils/dose-id.js";
-import { parseIntakesJson, parseLocalDateTime } from "../utils/scheduler-utils.js";
+import { normalizeMedicationIntakes, parseLocalDateTime } from "../utils/scheduler-utils.js";
 import type { DoseTrackingSource } from "./dose-tracking-service.js";
 
 type MedicationTimingRow = {
@@ -67,15 +67,7 @@ function getMedicationDisplayName(medication: Pick<MedicationTimingRow, "id" | "
 }
 
 function resolveScheduledFor(parsedDose: ParsedDoseId, medication: MedicationTimingRow): Date {
-	const intakes = parseIntakesJson(
-		medication.intakesJson,
-		{
-			usageJson: medication.usageJson,
-			everyJson: medication.everyJson,
-			startJson: medication.startJson,
-		},
-		medication.intakeRemindersEnabled
-	);
+	const intakes = normalizeMedicationIntakes(medication);
 	const intake = intakes[parsedDose.intakeIndex];
 	if (!intake) {
 		return new Date(parsedDose.timestampMs);

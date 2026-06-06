@@ -7,8 +7,7 @@ import {
 	getTodayInTimezone,
 	type Intake,
 	normalizeIntakeUsageForStock,
-	parseIntakesJson,
-	parseTakenByJson,
+	normalizeMedicationSchedule,
 	scopeIntakesToTakenBy,
 } from "../utils/scheduler-utils.js";
 
@@ -158,19 +157,9 @@ export function buildSharedMedicationOverview(options: {
 	const todayDate = parseDateOnly(todayDateOnly);
 
 	return medicationRows.map((medication) => {
-		const allIntakes = parseIntakesJson(
-			medication.intakesJson,
-			{
-				usageJson: medication.usageJson,
-				everyJson: medication.everyJson,
-				startJson: medication.startJson,
-			},
-			medication.intakeRemindersEnabled ?? false
-		);
+		const schedule = normalizeMedicationSchedule(medication);
 		const intakes =
-			shareTakenBy == null
-				? allIntakes
-				: scopeIntakesToTakenBy(allIntakes, parseTakenByJson(medication.takenByJson), shareTakenBy);
+			shareTakenBy == null ? schedule.intakes : scopeIntakesToTakenBy(schedule.intakes, schedule.takenBy, shareTakenBy);
 
 		const capacity = computeCapacity(medication);
 		const dailyDoseRate = computeDailyDoseRate(intakes, medication);

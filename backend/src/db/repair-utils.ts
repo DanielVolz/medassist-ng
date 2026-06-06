@@ -3,7 +3,7 @@ import {
 	forEachScheduledOccurrenceInRange,
 	getDateOnlyTimestamp,
 	getScheduleMatchWindowMs,
-	parseIntakesJson,
+	normalizeMedicationIntakes,
 	parseLocalDateTime,
 } from "../utils/scheduler-utils.js";
 
@@ -65,15 +65,13 @@ export async function repairOrphanedDoseIds(client: Client): Promise<{ repaired:
 			const medDoses = dosesByMed.get(medId);
 			if (!medDoses || medDoses.length === 0) continue;
 
-			const intakes = parseIntakesJson(
-				med.intakes_json as string | null,
-				{
-					usageJson: (med.usage_json as string) || "[]",
-					everyJson: (med.every_json as string) || "[]",
-					startJson: (med.start_json as string) || "[]",
-				},
-				(med.intake_reminders_enabled as number) === 1
-			);
+			const intakes = normalizeMedicationIntakes({
+				intakesJson: med.intakes_json as string | null,
+				usageJson: med.usage_json as string | null,
+				everyJson: med.every_json as string | null,
+				startJson: med.start_json as string | null,
+				intakeRemindersEnabled: (med.intake_reminders_enabled as number) === 1,
+			});
 
 			if (intakes.length === 0) continue;
 

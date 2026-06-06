@@ -1,5 +1,11 @@
 // Hooks barrel export
 
+export {
+	hasMedicationFormValidationErrors,
+	MEDICATION_FORM_FIELD_LIMITS,
+	validateMedicationForm,
+	validateMedicationFormField,
+} from "./medicationFormModel";
 export type { UseCollapsedDaysReturn } from "./useCollapsedDays";
 export { useCollapsedDays } from "./useCollapsedDays";
 export type { UseDosesReturn } from "./useDoses";

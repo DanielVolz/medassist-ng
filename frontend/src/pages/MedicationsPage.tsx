@@ -21,6 +21,7 @@ import {
 	useModalHistory,
 	useUnsavedChangesWarning,
 } from "../hooks";
+import { MEDICATION_FORM_FIELD_LIMITS } from "../hooks/medicationFormModel";
 import type {
 	DoseUnit,
 	FormState,
@@ -35,7 +36,6 @@ import type {
 import {
 	allowsPillFormSelection,
 	DOSE_UNITS,
-	FIELD_LIMITS,
 	getMedDisplayName,
 	getPackageProfile,
 	getPackageSize,
@@ -1577,7 +1577,7 @@ export function MedicationsPage() {
 									}}
 									onBlur={() => setShowNameValidation(true)}
 									placeholder={t("form.placeholders.commercial")}
-									maxLength={FIELD_LIMITS.name.max}
+									maxLength={MEDICATION_FORM_FIELD_LIMITS.name.max}
 								/>
 								{!readOnlyView && showNameValidation && fieldErrors.name && (
 									<span className="field-error">{fieldErrors.name}</span>
@@ -1593,7 +1593,7 @@ export function MedicationsPage() {
 									}}
 									onBlur={() => setShowNameValidation(true)}
 									placeholder={t("form.placeholders.generic")}
-									maxLength={FIELD_LIMITS.genericName.max}
+									maxLength={MEDICATION_FORM_FIELD_LIMITS.genericName.max}
 								/>
 								{!readOnlyView && showNameValidation && fieldErrors.genericName && (
 									<span className="field-error">{fieldErrors.genericName}</span>
@@ -1716,7 +1716,7 @@ export function MedicationsPage() {
 												placeholder={
 													form.takenBy.length === 0 ? t("form.placeholders.takenBy") : t("form.placeholders.addPerson")
 												}
-												maxLength={FIELD_LIMITS.takenBy.max}
+												maxLength={MEDICATION_FORM_FIELD_LIMITS.takenBy.max}
 												list="takenby-suggestions"
 											/>
 											<datalist id="takenby-suggestions">
@@ -1986,7 +1986,7 @@ export function MedicationsPage() {
 									onChange={(e) => handleValueChange("notes", e.target.value)}
 									placeholder={t("form.placeholders.notes")}
 									rows={2}
-									maxLength={FIELD_LIMITS.notes.max}
+									maxLength={MEDICATION_FORM_FIELD_LIMITS.notes.max}
 									className="auto-resize"
 									onInput={(e) => {
 										const t = e.target as HTMLTextAreaElement;
@@ -1995,8 +1995,13 @@ export function MedicationsPage() {
 									}}
 								/>
 								{form.notes.length > 0 && (
-									<span className={`char-count ${form.notes.length > FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}>
-										{t("common.validation.tooLong", { current: form.notes.length, max: FIELD_LIMITS.notes.max })}
+									<span
+										className={`char-count ${form.notes.length > MEDICATION_FORM_FIELD_LIMITS.notes.max * 0.9 ? "warning" : ""}`}
+									>
+										{t("common.validation.tooLong", {
+											current: form.notes.length,
+											max: MEDICATION_FORM_FIELD_LIMITS.notes.max,
+										})}
 									</span>
 								)}
 								{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}

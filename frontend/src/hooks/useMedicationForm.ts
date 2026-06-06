@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { FieldErrors, FormBlister, FormIntake, FormState, Medication } from "../types";
 import {
-	FIELD_LIMITS,
 	isAmountBasedPackageType,
 	isDiscreteCountPackageType,
 	isLiquidContainerPackageType,
@@ -13,6 +12,12 @@ import {
 import { toDateValue, toTimeValue } from "../utils/formatters";
 import { normalizeWeekdays } from "../utils/intake-schedule";
 import { personTagsMatch } from "../utils/person-tags";
+import {
+	hasMedicationFormValidationErrors,
+	MEDICATION_FORM_FIELD_LIMITS,
+	validateMedicationForm,
+	validateMedicationFormField,
+} from "./medicationFormModel";
 
 export const defaultBlister = (): FormBlister => {
 	const now = new Date();
@@ -131,21 +136,14 @@ export function useMedicationForm(): UseMedicationFormReturn {
 	// Validate form fields
 	const validateField = useCallback(
 		(field: keyof FieldErrors, value: string | string[]): string | undefined => {
-			const limits = FIELD_LIMITS[field];
-			// Skip validation for takenBy array (individual items validated on add)
-			if (field === "takenBy") return undefined;
-			const strValue = typeof value === "string" ? value : "";
-			if ("max" in limits && strValue.length > limits.max) {
-				return t("common.validation.maxLength", { max: limits.max, current: strValue.length });
-			}
-			return undefined;
+			return validateMedicationFormField(field, value, t);
 		},
 		[t]
 	);
 
 	// Check if form has any errors
 	const hasValidationErrors = useMemo(() => {
-		return Object.values(fieldErrors).some((error) => error !== undefined);
+		return hasMedicationFormValidationErrors(fieldErrors);
 	}, [fieldErrors]);
 
 	// Check if form has been modified from original state
@@ -162,21 +160,17 @@ export function useMedicationForm(): UseMedicationFormReturn {
 
 	// Validate all fields when form changes
 	useEffect(() => {
-		const errors: FieldErrors = {};
-		(["name", "genericName", "notes"] as const).forEach((f) => {
-			const error = validateField(f, form[f]);
-			if (error) errors[f] = error;
-		});
-		// Cross-field validation: at least one of name or genericName is required
-		const hasName = form.name && form.name.trim().length > 0;
-		const hasGenericName = form.genericName && form.genericName.trim().length > 0;
-		if (!hasName && !hasGenericName) {
-			const msg = t("common.validation.nameOrGenericRequired");
-			errors.name = errors.name || msg;
-			errors.genericName = errors.genericName || msg;
-		}
-		setFieldErrors(errors);
-	}, [form.name, form.genericName, form.notes, validateField, form, t]);
+		setFieldErrors(
+			validateMedicationForm(
+				{
+					name: form.name,
+					genericName: form.genericName,
+					notes: form.notes,
+				},
+				t
+			)
+		);
+	}, [form.name, form.genericName, form.notes, t]);
 
 	const setBlisterValue = useCallback((idx: number, field: keyof FormBlister, value: string) => {
 		setForm((prev) => {
@@ -490,7 +484,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 		(name: string) => {
 			const trimmed = name.trim();
 			const alreadyExists = form.takenBy.some((person) => personTagsMatch(person, trimmed));
-			if (trimmed && trimmed.length <= FIELD_LIMITS.takenBy.max && !alreadyExists) {
+			if (trimmed && trimmed.length <= MEDICATION_FORM_FIELD_LIMITS.takenBy.max && !alreadyExists) {
 				setForm((prev) => ({ ...prev, takenBy: [...prev.takenBy, trimmed] }));
 			}
 			setTakenByInput("");

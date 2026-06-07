@@ -216,7 +216,6 @@ describe("LoginForm", () => {
 		formLoginEnabled: true,
 		oidcEnabled: false,
 		registrationEnabled: true,
-		hasUsers: true,
 		needsSetup: false,
 		oidcProviderName: "",
 	};
@@ -334,7 +333,6 @@ describe("LoginForm", () => {
 						formLoginEnabled: true,
 						oidcEnabled: false,
 						registrationEnabled: true,
-						hasUsers: true,
 						needsSetup: false,
 						oidcProviderName: "",
 					}),
@@ -370,7 +368,6 @@ describe("RegisterForm", () => {
 		formLoginEnabled: true,
 		oidcEnabled: false,
 		registrationEnabled: true,
-		hasUsers: false,
 		needsSetup: true,
 		oidcProviderName: "",
 	};
@@ -457,7 +454,6 @@ describe("RegisterForm", () => {
 					formLoginEnabled: true,
 					oidcEnabled: false,
 					registrationEnabled: true,
-					hasUsers: false,
 					needsSetup: true,
 					oidcProviderName: "",
 				}),
@@ -492,7 +488,6 @@ describe("AuthPage", () => {
 		formLoginEnabled: true,
 		oidcEnabled: false,
 		registrationEnabled: true,
-		hasUsers: true,
 		needsSetup: false,
 		oidcProviderName: "",
 	};

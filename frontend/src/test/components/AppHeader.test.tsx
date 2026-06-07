@@ -32,7 +32,6 @@ function mockAuthDisabled() {
 				Promise.resolve({
 					authEnabled: false,
 					formLoginEnabled: true,
-					hasUsers: false,
 					needsSetup: false,
 				}),
 		})
@@ -270,7 +269,6 @@ describe("AppHeader", () => {
 						formLoginEnabled: true,
 						oidcEnabled: false,
 						oidcProviderName: "",
-						hasUsers: true,
 						needsSetup: false,
 					}),
 			})

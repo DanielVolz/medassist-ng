@@ -96,8 +96,27 @@ const authErrorSchema = {
 };
 
 const invalidCredentialsResponse = { error: "Invalid username or password", code: "INVALID_CREDENTIALS" } as const;
+const publicAuthStateRateLimitConfig = {
+	max: 60,
+	timeWindow: "1 minute",
+	errorResponseBuilder: () => ({
+		error: "Too many requests. Please try again later.",
+		code: "RATE_LIMIT_EXCEEDED",
+	}),
+};
 
 type LoginFailureReason = "missing_user" | "wrong_password" | "inactive_account" | "sso_only_account";
+
+function toPublicAuthState(state: Awaited<ReturnType<typeof getAuthState>>) {
+	return {
+		authEnabled: state.authEnabled,
+		registrationEnabled: state.registrationEnabled,
+		formLoginEnabled: state.formLoginEnabled,
+		oidcEnabled: state.oidcEnabled,
+		oidcProviderName: state.oidcProviderName,
+		needsSetup: state.needsSetup,
+	};
+}
 
 async function performDummyCredentialWork() {
 	await argon2.hash("dummy", ARGON2_OPTIONS);
@@ -115,33 +134,42 @@ export async function authRoutes(app: FastifyInstance) {
 
 	// ---------------------------------------------------------------------------
 	// GET /auth/state - Public auth state (needed before login)
-	// Exempt from rate limit - lightweight state check called frequently
 	// ---------------------------------------------------------------------------
 	app.get(
 		"/auth/state",
 		{
-			config: { rateLimit: false },
+			config: { rateLimit: publicAuthStateRateLimitConfig },
 			schema: {
 				tags: ["auth"],
 				summary: "Get authentication state",
-				description: "Returns auth and login mode state before user login.",
+				description: "Returns the public auth and login mode state required before user login.",
 				response: {
 					200: {
 						type: "object",
+						additionalProperties: false,
+						required: [
+							"authEnabled",
+							"registrationEnabled",
+							"formLoginEnabled",
+							"oidcEnabled",
+							"oidcProviderName",
+							"needsSetup",
+						],
 						properties: {
 							authEnabled: { type: "boolean" },
 							registrationEnabled: { type: "boolean" },
 							formLoginEnabled: { type: "boolean" },
 							oidcEnabled: { type: "boolean" },
-							hasUsers: { type: "boolean" },
 							oidcProviderName: { type: "string" },
+							needsSetup: { type: "boolean" },
 						},
 					},
 				},
 			},
 		},
-		async () => {
-			return getAuthState();
+		async (_request, reply) => {
+			reply.header("Cache-Control", "no-store");
+			return toPublicAuthState(await getAuthState());
 		}
 	);
 

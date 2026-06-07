@@ -13,6 +13,9 @@ import {
 	buildAppConfig,
 	buildBaseCookieOptions,
 	buildRefreshCookieOptions,
+	DEFAULT_CORS_ORIGINS,
+	DEFAULT_DEV_FRONTEND_ORIGIN,
+	DEFAULT_PREVIEW_FRONTEND_ORIGIN,
 	ensureImagesDirectory,
 	getJwtConfig,
 	parseCorsOrigins,
@@ -20,6 +23,13 @@ import {
 
 describe("Index.ts Utility Functions", () => {
 	describe("parseCorsOrigins", () => {
+		it("should parse canonical default development and preview origins", () => {
+			expect(parseCorsOrigins(DEFAULT_CORS_ORIGINS)).toEqual([
+				DEFAULT_DEV_FRONTEND_ORIGIN,
+				DEFAULT_PREVIEW_FRONTEND_ORIGIN,
+			]);
+		});
+
 		it("should parse comma-separated origins", () => {
 			const origins = parseCorsOrigins("http://localhost:5173,http://localhost:4174");
 			expect(origins).toHaveLength(2);

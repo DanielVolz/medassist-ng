@@ -29,6 +29,7 @@ API docs behavior:
 `CORS_ORIGINS` note:
 
 - The `.env.example` file is optimized for the Docker Compose quickstart, where the frontend runs on `http://localhost:4174`.
+- `http://localhost:4174` is the canonical local preview and Docker quickstart frontend origin.
 - Local frontend development uses the Vite dev server instead, so the backend schema defaults cover `http://localhost:5173` and `http://localhost:4174`.
 - If you use a custom hostname or reverse proxy, include that origin in `CORS_ORIGINS`.
 

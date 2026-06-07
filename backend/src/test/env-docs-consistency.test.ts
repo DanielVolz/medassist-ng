@@ -37,6 +37,8 @@ const docsWithDefaultSettings = [
 ];
 const nonEnvDefaultReferences = new Set(["DEFAULT_USER_SETTINGS"]);
 const removedShareStockStatusEnvVar = ["DEFAULT", "SHARE", "STOCK", "STATUS"].join("_");
+const canonicalPreviewOrigin = "http://localhost:4174";
+const stalePreviewOrigin = "http://localhost:4173";
 
 function readRepoFile(path: string): string {
 	return readFileSync(resolve(process.cwd(), "..", path), "utf-8");
@@ -49,6 +51,15 @@ function extractDefaultEnvVars(content: string): Set<string> {
 }
 
 describe("environment documentation consistency", () => {
+	it("keeps the documented frontend preview port aligned", () => {
+		const content = [".env.example", "README.md", "docs/CONFIGURATION.md", "docker-compose.yml"]
+			.map(readRepoFile)
+			.join("\n");
+
+		expect(content).toContain(canonicalPreviewOrigin);
+		expect(content).not.toContain(stalePreviewOrigin);
+	});
+
 	it("does not mention the removed share stock-status default setting", () => {
 		const content = docsWithDefaultSettings.map(readRepoFile).join("\n");
 

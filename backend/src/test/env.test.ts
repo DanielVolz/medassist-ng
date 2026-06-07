@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { EnvSchema, type ParsedEnv } from "../plugins/env-schema.js";
+import { DEFAULT_CORS_ORIGINS } from "../utils/server-config.js";
 
 // Mock process.exit to prevent tests from exiting
 const mockExit = vi.fn();
@@ -34,7 +35,7 @@ describe("EnvSchema", () => {
 
 			expect(result.NODE_ENV).toBe("production");
 			expect(result.PORT).toBe(3000);
-			expect(result.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4174");
+			expect(result.CORS_ORIGINS).toBe(DEFAULT_CORS_ORIGINS);
 			expect(result.LOG_LEVEL).toBe("info");
 			expect(result.SENSITIVE_LOGGING_ENABLED).toBe(false);
 			expect(result.PUBLIC_APP_URL).toBeUndefined();

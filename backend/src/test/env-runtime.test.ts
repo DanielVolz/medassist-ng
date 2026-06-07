@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_CORS_ORIGINS } from "../utils/server-config.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -32,7 +33,7 @@ describe("plugins/env runtime validation", () => {
 		expect(mod.env.ALLOW_UNAUTHENTICATED).toBe(false);
 		expect(mod.env.OIDC_ENABLED).toBe(false);
 		expect(mod.env.PORT).toBe(3000);
-		expect(mod.env.CORS_ORIGINS).toBe("http://localhost:5173,http://localhost:4174");
+		expect(mod.env.CORS_ORIGINS).toBe(DEFAULT_CORS_ORIGINS);
 		expect(mod.env.RATE_LIMIT_MAX).toBe(100);
 		expect(mod.env.SHARE_TOKEN_TTL_DAYS).toBe(90);
 		expect(mod.env.SENSITIVE_LOGGING_ENABLED).toBe(false);

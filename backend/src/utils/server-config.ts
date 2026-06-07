@@ -9,7 +9,9 @@ import type { CookieSerializeOptions } from "@fastify/cookie";
 import { getDataDir } from "../db/path-utils.js";
 import { parseStringListEnv } from "./env-parsing.js";
 
-export const DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://localhost:4174";
+export const DEFAULT_DEV_FRONTEND_ORIGIN = "http://localhost:5173";
+export const DEFAULT_PREVIEW_FRONTEND_ORIGIN = "http://localhost:4174";
+export const DEFAULT_CORS_ORIGINS = `${DEFAULT_DEV_FRONTEND_ORIGIN},${DEFAULT_PREVIEW_FRONTEND_ORIGIN}`;
 export const DEFAULT_LOG_LEVEL = "info";
 export const DEFAULT_COOKIE_SECRET = "dev-cookie-secret";
 export const DEFAULT_ACCESS_TOKEN_TTL_MINUTES = 15;

@@ -67,6 +67,21 @@ describe("plugins/env runtime validation", () => {
 		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
 	});
 
+	it("keeps docs disabled by default when production auth is enabled", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "true";
+		process.env.JWT_SECRET = "jwt-secret-for-runtime-test";
+		process.env.REFRESH_SECRET = "refresh-secret-runtime-test";
+		process.env.COOKIE_SECRET = "cookie-secret-runtime-test";
+		process.env.API_KEY_PEPPER = "a".repeat(64);
+		delete process.env.OPENAPI_DOCS_ENABLED;
+		delete process.env.DOCS_AUTH_REQUIRED;
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(false);
+		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(true);
+	});
+
 	it("requires docs auth by default when auth is enabled", async () => {
 		process.env.NODE_ENV = "production";
 		process.env.AUTH_ENABLED = "true";
@@ -174,11 +189,15 @@ describe("plugins/env runtime validation", () => {
 		process.env.AUTH_ENABLED = "false";
 		delete process.env.ALLOW_UNAUTHENTICATED;
 		delete process.env.OIDC_ENABLED;
+		delete process.env.OPENAPI_DOCS_ENABLED;
+		delete process.env.DOCS_AUTH_REQUIRED;
 
 		const mod = await import("../plugins/env.js");
 		expect(mod.env.NODE_ENV).toBe("development");
 		expect(mod.env.AUTH_ENABLED).toBe(false);
 		expect(mod.env.ALLOW_UNAUTHENTICATED).toBe(false);
+		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
+		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
 	});
 
 	it("exits when auth is enabled but secrets are missing", async () => {

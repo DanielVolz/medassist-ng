@@ -29,6 +29,12 @@ Credentialed browser CORS is allowed only for configured `CORS_ORIGINS`. An unco
 
 Public notification action routes allow arbitrary browser origins without credentials. This is intentional so external notification providers can send token-based actions without receiving browser session cookies.
 
+## OpenAPI Docs Exposure
+
+`/docs` and `/docs/json` are enabled by default only outside production. Production deployments should leave `OPENAPI_DOCS_ENABLED` unset or set it to `false` unless interactive API docs are intentionally needed.
+
+When docs are enabled while `AUTH_ENABLED=true`, `DOCS_AUTH_REQUIRED` defaults to `true`. If a deployment explicitly sets `DOCS_AUTH_REQUIRED=false`, only the documentation routes become public; protected API routes still require their normal cookie, Bearer JWT, or API-key authentication.
+
 ## CSRF Decision
 
 No additional CSRF token is required for the current browser contract because state-changing session requests rely on `SameSite=Lax`, credentialed CORS allowlists, JSON/fetch-based clients, server-side auth, and current-password checks for sensitive account changes.

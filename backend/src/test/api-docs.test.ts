@@ -35,6 +35,7 @@ vi.mock("../plugins/env.js", () => ({
 }));
 
 const { registerApiDocs } = await import("../plugins/api-docs.js");
+const { requireAuth } = await import("../plugins/auth.js");
 
 async function createSchema(client: Client) {
 	await client.execute(`
@@ -77,6 +78,7 @@ async function buildDocsApp(options: { docsEnabled: boolean; docsAuthRequired: b
 		enabled: options.docsEnabled,
 		authRequired: options.docsAuthRequired,
 	});
+	app.get("/protected", { preHandler: requireAuth }, async () => ({ ok: true }));
 	await app.ready();
 	return app;
 }
@@ -168,6 +170,21 @@ describe("OpenAPI docs protection", () => {
 				openapi: "3.0.3",
 				info: { title: "MedAssist-ng API" },
 			});
+		} finally {
+			await app.close();
+		}
+	});
+
+	it("does not bypass protected API route auth when anonymous docs are enabled", async () => {
+		const app = await buildDocsApp({ docsEnabled: true, docsAuthRequired: false });
+
+		try {
+			const docsResponse = await app.inject({ method: "GET", url: "/docs/json" });
+			const protectedResponse = await app.inject({ method: "GET", url: "/protected" });
+
+			expect(docsResponse.statusCode).toBe(200);
+			expect(protectedResponse.statusCode).toBe(401);
+			expect(protectedResponse.json()).toEqual({ error: "Authentication required", code: "AUTH_REQUIRED" });
 		} finally {
 			await app.close();
 		}

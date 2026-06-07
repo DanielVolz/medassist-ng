@@ -24,7 +24,6 @@ export interface AuthState {
 	formLoginEnabled: boolean;
 	oidcEnabled: boolean;
 	oidcProviderName: string;
-	hasUsers: boolean;
 	needsSetup: boolean;
 }
 

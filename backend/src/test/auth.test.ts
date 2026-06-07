@@ -33,6 +33,7 @@ vi.mock("../plugins/env.js", () => ({
 		FORM_LOGIN_ENABLED: true,
 		REGISTRATION_ENABLED: true,
 		OIDC_ENABLED: false,
+		OIDC_PROVIDER_NAME: "SSO",
 		NODE_ENV: "test",
 		LOG_LEVEL: "silent",
 		PORT: 3000,
@@ -155,17 +156,22 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 	// ---------------------------------------------------------------------------
 
 	describe("GET /auth/state", () => {
-		it("should return auth state", async () => {
+		it("should return only the unauthenticated public auth state", async () => {
 			const response = await app.inject({
 				method: "GET",
 				url: "/auth/state",
 			});
 
 			expect(response.statusCode).toBe(200);
-			const data = response.json();
-			expect(data.authEnabled).toBe(true);
-			expect(data.registrationEnabled).toBe(true);
-			expect(data.formLoginEnabled).toBe(true);
+			expect(response.headers["cache-control"]).toBe("no-store");
+			expect(response.json()).toEqual({
+				authEnabled: true,
+				registrationEnabled: true,
+				formLoginEnabled: true,
+				oidcEnabled: false,
+				oidcProviderName: "SSO",
+				needsSetup: true,
+			});
 		});
 	});
 

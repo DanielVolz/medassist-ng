@@ -23,6 +23,17 @@ Cookie-auth state-changing route groups:
 
 Public token routes are not cookie-auth endpoints. Share links, share dose actions, and notification action tokens are authorized by their own opaque token values and must stay scoped to the token target.
 
+## Public Auth State
+
+`GET /auth/state` is intentionally public because the browser must know which login/setup UI to render before a user can authenticate. The response is limited to UX routing fields:
+
+- whether authentication is enabled
+- whether registration, form login, and OIDC login are available
+- the configured OIDC provider display name
+- whether first-user setup should be shown
+
+The endpoint does not expose user records, usernames, provider issuer URLs, client IDs, secrets, token settings, or the raw user count. It is rate-limited and sends `Cache-Control: no-store` so browser setup state does not become stale after first-user registration.
+
 ## CORS Expectations
 
 Credentialed browser CORS is allowed only for configured `CORS_ORIGINS`. An unconfigured browser origin does not receive `Access-Control-Allow-Origin`, so the browser cannot grant credentialed cross-origin API access. Requests from unconfigured origins may still reach the backend outside browser CORS enforcement, so server-side authentication and authorization remain mandatory.

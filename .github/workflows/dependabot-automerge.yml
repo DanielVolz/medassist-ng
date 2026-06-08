@@ -28,8 +28,8 @@ jobs:
         if: >-
           (steps.metadata.outputs.package-ecosystem == 'npm' ||
           steps.metadata.outputs.package-ecosystem == 'github_actions') &&
-          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-patch')
+          (contains(steps.metadata.outputs.update-type, 'version-update:semver-minor') ||
+          contains(steps.metadata.outputs.update-type, 'version-update:semver-patch'))
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

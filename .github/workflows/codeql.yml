@@ -35,7 +35,7 @@ on:
 
 jobs:
   analyze:
-    name: Analyze
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -45,11 +45,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - language: javascript-typescript
-            autobuild: true
-          - language: actions
-            autobuild: false
+        language:
+          - javascript-typescript
+          - actions
 
     steps:
       - name: Checkout repository
@@ -62,7 +60,7 @@ jobs:
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Autobuild
-        if: matrix.autobuild
+        if: matrix.language == 'javascript-typescript'
         uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis

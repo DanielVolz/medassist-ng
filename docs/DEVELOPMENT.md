@@ -91,6 +91,8 @@ Use the root-level commands for full-stack validation when a change spans backen
 - Within product-relevant PRs, required product checks still emit their stable names and report a no-op success when a backend/frontend lane is not relevant inside that product scope.
 - Workflow-only edits are validated by `Workflow Validation / Actionlint`; they do not trigger backend/frontend/Playwright/container smoke lanes by themselves, but they still run CodeQL for the `actions` language.
 - Release-relevant PRs also run `.github/workflows/container-smoke.yml` as a dedicated container runtime check.
+- Dependabot auto-merge for safe updates is gated by `.github/workflows/dependabot-automerge.yml` and currently allows `npm`, `npm_and_yarn`, and `github_actions` ecosystems for semver minor/patch updates only.
+- The default-branch ruleset requires the stable CodeQL context `Analyze (javascript-typescript)`, so workflow changes must keep the CodeQL job name aligned with that exact required-check context.
 - Docker publishing is handled by `.github/workflows/docker-build.yml`.
 - The reusable container smoke workflow is used in two places:
   - directly on release-relevant PRs as the visible `Container Smoke` check

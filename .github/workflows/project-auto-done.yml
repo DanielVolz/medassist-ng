@@ -56,7 +56,7 @@ jobs:
         id: app-token
         if: steps.app-config.outputs.enabled == 'true'
         continue-on-error: true
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.PROJECT_AUTOMATION_APP_ID }}
           owner: ${{ steps.project.outputs.owner }}

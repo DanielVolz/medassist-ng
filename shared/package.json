@@ -1,6 +1,6 @@
 {
   "name": "@medassist/shared",
-  "version": "1.27.4",
+  "version": "1.27.5",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

@@ -1,7 +1,7 @@
 {
   "name": "medassist-ng-frontend",
   "private": true,
-  "version": "1.27.4",
+  "version": "1.27.5",
   "type": "module",
   "scripts": {
     "dev": "npm --prefix ../shared run build && vite",

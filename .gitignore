@@ -105,9 +105,6 @@ docs/SPEC_KIT.md
 .github/skills/seo/
 .playwright-mcp
 
-# Local copilot generated workspace artifacts (not for upstream)
-.github/agents/copilot-instructions.md
-.github/agents/medassist-feature-orchestrator.agent.md
-.github/agents/speckit.*.agent.md
-.github/prompts/speckit.*.prompt.md
 ops/medtest/
+.kilo/kilo.json
+.kilo/kilo.jsonc

@@ -9,11 +9,14 @@ import test from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const preflightScript = path.join(repoRoot, "scripts/release-preflight.mjs");
-const releaseTag = "v1.27.4";
+const releaseVersion = JSON.parse(readFileSync(path.join(repoRoot, "backend/package.json"), "utf8")).version;
+const releaseTag = `v${releaseVersion}`;
+const escapedReleaseVersion = releaseVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function copyFixture() {
   const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "medassist-release-preflight-"));
   const pathsToCopy = [
+    "package.json",
     "release-policy.json",
     "docker-compose.yml",
     "backend/package.json",
@@ -24,7 +27,9 @@ function copyFixture() {
     "frontend/Dockerfile",
     "shared/package.json",
     "shared/package-lock.json",
-    ".github/workflows/docker-build.yml"
+    ".github/workflows/docker-build.yml",
+    ".github/workflows/test.yml",
+    ".github/workflows/e2e.yml"
   ];
 
   for (const relativePath of pathsToCopy) {
@@ -79,7 +84,7 @@ test("release preflight rejects shared package version drift", () => {
     sharedPackage.version = "1.27.2";
     writeJson(fixtureRoot, "shared/package.json", sharedPackage);
 
-    expectPreflightFailure(fixtureRoot, /shared\/package\.json version must match 1\.27\.4/);
+    expectPreflightFailure(fixtureRoot, new RegExp(`shared/package\\.json version must match ${escapedReleaseVersion}`));
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
@@ -92,7 +97,10 @@ test("release preflight rejects local shared lockfile drift", () => {
     backendLockfile.packages["../shared"].version = "1.27.2";
     writeJson(fixtureRoot, "backend/package-lock.json", backendLockfile);
 
-    expectPreflightFailure(fixtureRoot, /backend\/package-lock\.json \.\.\/shared version must match 1\.27\.4/);
+    expectPreflightFailure(
+      fixtureRoot,
+      new RegExp(`backend/package-lock\\.json \\.\\./shared version must match ${escapedReleaseVersion}`)
+    );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
@@ -109,6 +117,67 @@ test("release preflight rejects Dockerfiles that do not build shared from source
     writeFileSync(frontendDockerfilePath, frontendDockerfile);
 
     expectPreflightFailure(fixtureRoot, /frontend\/Dockerfile must build the shared package from source/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects missing backend domain safety gate script", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const backendPackage = readJson(fixtureRoot, "backend/package.json");
+    backendPackage.scripts["test:domain"] = "vitest run src/test/server.test.ts";
+    writeJson(fixtureRoot, "backend/package.json", backendPackage);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /backend\/package\.json test:domain must run backend\/src\/test\/domain-safety\.test\.ts/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects missing frontend domain E2E gate script", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const frontendPackage = readJson(fixtureRoot, "frontend/package.json");
+    frontendPackage.scripts["test:e2e:domain"] = "playwright test --config=playwright.stable.config.ts e2e/planner.spec.ts";
+    writeJson(fixtureRoot, "frontend/package.json", frontendPackage);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /frontend\/package\.json test:e2e:domain must run frontend\/e2e\/domain-safety\.spec\.ts/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects CI workflow without the domain safety release gate", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/test.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace("run: npm run test:domain", "run: npm run test:run");
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(fixtureRoot, /\.github\/workflows\/test\.yml must run the domain safety release gate/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects CI workflow without the domain E2E release gate", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/e2e.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "run: npm run test:e2e:domain",
+      "run: npx playwright test --project=chromium"
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(fixtureRoot, /\.github\/workflows\/e2e\.yml must run the domain E2E release gate/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

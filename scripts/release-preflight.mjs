@@ -197,6 +197,20 @@ function requireDockerPattern(dockerfilePath, dockerfile, pattern, description) 
   }
 }
 
+function requireScriptPattern(packageJsonPath, packageJson, scriptName, pattern, description) {
+  const script = packageJson.scripts?.[scriptName];
+  if (typeof script !== "string" || !pattern.test(script)) {
+    fail(`${packageJsonPath} ${scriptName} must ${description}.`);
+  }
+}
+
+function requireTextPattern(filePath, pattern, description) {
+  const content = readText(filePath);
+  if (!pattern.test(content)) {
+    fail(`${filePath} must ${description}.`);
+  }
+}
+
 function validateDockerSharedBuild(dockerfilePath, { requiresRuntimeCopy }) {
   const dockerfile = readText(dockerfilePath);
 
@@ -230,7 +244,38 @@ function validateDockerSharedBuild(dockerfilePath, { requiresRuntimeCopy }) {
   }
 }
 
+function validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage) {
+  requireScriptPattern(
+    "package.json",
+    rootPackage,
+    "test:domain",
+    /backend[\s\S]*npm run test:domain[\s\S]*frontend[\s\S]*npm run test:e2e:domain/,
+    "run the backend and frontend domain safety gates"
+  );
+  requireScriptPattern(
+    "backend/package.json",
+    backendPackage,
+    "test:domain",
+    /src\/test\/domain-safety\.test\.ts/,
+    "run backend/src/test/domain-safety.test.ts"
+  );
+  requireScriptPattern(
+    "frontend/package.json",
+    frontendPackage,
+    "test:e2e:domain",
+    /e2e\/domain-safety\.spec\.ts/,
+    "run frontend/e2e/domain-safety.spec.ts"
+  );
+  requireTextPattern(".github/workflows/test.yml", /run:\s*npm run test:domain/, "run the domain safety release gate");
+  requireTextPattern(
+    ".github/workflows/e2e.yml",
+    /run:\s*npm run test:e2e:domain/,
+    "run the domain E2E release gate"
+  );
+}
+
 function validatePolicy(releaseTag, releaseVersion) {
+  const rootPackage = readJson("package.json");
   const policy = readJson("release-policy.json");
   const backendPackage = readJson("backend/package.json");
   const frontendPackage = readJson("frontend/package.json");
@@ -273,6 +318,7 @@ function validatePolicy(releaseTag, releaseVersion) {
 
   validateDockerSharedBuild("backend/Dockerfile", { requiresRuntimeCopy: true });
   validateDockerSharedBuild("frontend/Dockerfile", { requiresRuntimeCopy: false });
+  validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage);
 }
 
 function main() {

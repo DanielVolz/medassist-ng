@@ -104,3 +104,26 @@ export const stockPropertyCorpus = [
 	{ name: "small stock and many repeated historical doses", stock: 3, doseCount: 12 },
 	{ name: "larger stock still clamps after excessive history", stock: 10, doseCount: 30 },
 ] as const;
+
+export const expiryPrescriptionThresholdCorpus = [
+	{
+		name: "expiry warning days and low prescription refill threshold stay explicit",
+		expiryWarningDays: 21,
+		expiryDate: "2026-07-01",
+		prescriptionAuthorizedRefills: 4,
+		prescriptionRemainingRefills: 1,
+		prescriptionLowRefillThreshold: 2,
+		prescriptionExpiryDate: "2026-08-15",
+	},
+] as const;
+
+export const refillBaselineRegressionCorpus = [
+	{
+		name: "manual liquid refill baseline ignores pre-refill history",
+		initialQuantity: 5,
+		refillQuantity: 5,
+		doseUsage: 5,
+		preRefillDoseDate: "2025-01-05",
+		postRefillDoseDates: ["2026-01-06", "2026-01-07"],
+	},
+] as const;

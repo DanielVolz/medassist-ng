@@ -16,7 +16,13 @@ import {
 	getTodayInTimezone,
 	parseLocalDateTime,
 } from "../utils/scheduler-utils.js";
-import { dstCorpus, scheduleCorpus, stockPropertyCorpus } from "./fixtures/domain-safety-corpus.js";
+import {
+	dstCorpus,
+	expiryPrescriptionThresholdCorpus,
+	refillBaselineRegressionCorpus,
+	scheduleCorpus,
+	stockPropertyCorpus,
+} from "./fixtures/domain-safety-corpus.js";
 
 const { testClient, testDb, testDbPath, mockedEnv } = vi.hoisted(() => {
 	const { tmpdir } = require("node:os");
@@ -61,6 +67,7 @@ const { medicationRoutes } = await import("../routes/medications.js");
 const { doseRoutes } = await import("../routes/doses.js");
 const { shareRoutes } = await import("../routes/share.js");
 const { exportRoutes } = await import("../routes/export.js");
+const { refillRoutes } = await import("../routes/refills.js");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -76,6 +83,9 @@ type MedicationPayload = {
 	pillsPerBlister?: number;
 	looseTablets?: number;
 	totalPills?: number | null;
+	packageAmountValue?: number;
+	packageAmountUnit?: "ml" | "g";
+	doseUnit?: "mg" | "g" | "mcg" | "ml" | "IU" | "units" | "drops" | "puffs" | "injections";
 	expiryDate?: string | null;
 	prescriptionEnabled?: boolean;
 	prescriptionAuthorizedRefills?: number | null;
@@ -164,9 +174,10 @@ async function createMedication(
 			pillsPerBlister: isAmountBased ? 1 : (payload.pillsPerBlister ?? 10),
 			looseTablets: payload.looseTablets ?? 0,
 			totalPills: payload.totalPills ?? null,
-			packageAmountValue: packageType === "tube" || packageType === "liquid_container" ? 30 : 0,
-			packageAmountUnit: packageType === "tube" ? "g" : "ml",
-			doseUnit: medicationForm === "liquid" ? "ml" : "mg",
+			packageAmountValue:
+				payload.packageAmountValue ?? (packageType === "tube" || packageType === "liquid_container" ? 30 : 0),
+			packageAmountUnit: payload.packageAmountUnit ?? (packageType === "tube" ? "g" : "ml"),
+			doseUnit: payload.doseUnit ?? (medicationForm === "liquid" ? "ml" : "mg"),
 			takenBy: payload.takenBy ?? [],
 			...payload,
 		},
@@ -311,6 +322,7 @@ describe("Domain safety corpus: real route and service flows", () => {
 		await app.register(shareRoutes);
 		await app.register(doseRoutes);
 		await app.register(exportRoutes);
+		await app.register(refillRoutes);
 		await app.ready();
 	});
 
@@ -447,6 +459,121 @@ describe("Domain safety corpus: real route and service flows", () => {
 			args: [1],
 		});
 		expect(Number(count.rows[0].count)).toBe(0);
+	});
+
+	it.each(expiryPrescriptionThresholdCorpus)("covers $name", async (testCase) => {
+		await seedSettings({ stockCalculationMode: "automatic", expiryWarningDays: testCase.expiryWarningDays });
+		await createMedication(app, {
+			name: "Expiry Prescription Safety",
+			takenBy: ["Alice"],
+			looseTablets: 10,
+			expiryDate: testCase.expiryDate,
+			prescriptionEnabled: true,
+			prescriptionAuthorizedRefills: testCase.prescriptionAuthorizedRefills,
+			prescriptionRemainingRefills: testCase.prescriptionRemainingRefills,
+			prescriptionLowRefillThreshold: testCase.prescriptionLowRefillThreshold,
+			prescriptionExpiryDate: testCase.prescriptionExpiryDate,
+			intakes: [{ usage: 1, every: 1, start: "2026-06-03T08:00:00", takenBy: "Alice" }],
+		});
+
+		const medicationsResponse = await app.inject({ method: "GET", url: "/medications" });
+		expect(medicationsResponse.statusCode).toBe(200);
+		expect(medicationsResponse.json()).toEqual([
+			expect.objectContaining({
+				expiryDate: testCase.expiryDate,
+				prescriptionEnabled: true,
+				prescriptionAuthorizedRefills: testCase.prescriptionAuthorizedRefills,
+				prescriptionRemainingRefills: testCase.prescriptionRemainingRefills,
+				prescriptionLowRefillThreshold: testCase.prescriptionLowRefillThreshold,
+				prescriptionExpiryDate: testCase.prescriptionExpiryDate,
+			}),
+		]);
+
+		const shareResponse = await app.inject({
+			method: "POST",
+			url: "/share",
+			payload: { takenBy: "Alice", scheduleDays: 14, expiryDays: null },
+		});
+		expect(shareResponse.statusCode).toBe(200);
+
+		const shareRead = await app.inject({ method: "GET", url: `/share/${shareResponse.json().token}` });
+		expect(shareRead.statusCode).toBe(200);
+		expect(shareRead.json().stockThresholds.expiryWarningDays).toBe(testCase.expiryWarningDays);
+
+		const invalidThreshold = await app.inject({
+			method: "POST",
+			url: "/medications",
+			payload: {
+				name: "Invalid Prescription Threshold",
+				medicationForm: "tablet",
+				pillForm: "tablet",
+				packageType: "blister",
+				packCount: 1,
+				blistersPerPack: 1,
+				pillsPerBlister: 10,
+				looseTablets: 0,
+				prescriptionEnabled: true,
+				prescriptionAuthorizedRefills: 1,
+				prescriptionRemainingRefills: 1,
+				prescriptionLowRefillThreshold: 2,
+				intakes: [{ usage: 1, every: 1, start: "2026-06-03T08:00:00" }],
+			},
+		});
+		expect(invalidThreshold.statusCode).toBe(400);
+	});
+
+	it.each(refillBaselineRegressionCorpus)("protects known bug regression: $name", async (testCase) => {
+		await seedSettings({ stockCalculationMode: "manual" });
+		const medication = await createMedication(app, {
+			name: "Manual Liquid Refill Safety",
+			medicationForm: "liquid",
+			packageType: "liquid_container",
+			doseUnit: "ml",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			packageAmountValue: testCase.initialQuantity,
+			packageAmountUnit: "ml",
+			totalPills: testCase.initialQuantity,
+			looseTablets: testCase.initialQuantity,
+			intakes: [{ usage: testCase.doseUsage, every: 1, start: "2025-01-01T08:00:00" }],
+		});
+
+		await insertDose({
+			doseId: doseId(medication.id, 0, testCase.preRefillDoseDate),
+			takenAt: `${testCase.preRefillDoseDate}T10:00:00.000Z`,
+		});
+
+		const refillResponse = await app.inject({
+			method: "POST",
+			url: `/medications/${medication.id}/refill`,
+			payload: {
+				packsAdded: 1,
+				loosePillsAdded: testCase.refillQuantity,
+				quantityAdded: testCase.refillQuantity,
+			},
+		});
+		expect(refillResponse.statusCode).toBe(200);
+		expect(refillResponse.json().newStock.totalPills).toBe(testCase.initialQuantity + testCase.refillQuantity);
+
+		await testDb
+			.update(medications)
+			.set({ lastStockCorrectionAt: new Date("2026-01-01T00:00:00.000Z") })
+			.where(eq(medications.id, medication.id));
+
+		for (const postRefillDoseDate of testCase.postRefillDoseDates) {
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				payload: { doseId: doseId(medication.id, 0, postRefillDoseDate) },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ success: true });
+		}
+
+		const usageRow = await getUsageRow(app, medication.name);
+		expect(usageRow.currentPills).toBe(0);
 	});
 
 	it("keeps share schedules scoped to per-intake takenBy and invalidates regenerated tokens", async () => {

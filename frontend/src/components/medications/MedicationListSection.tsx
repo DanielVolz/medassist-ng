@@ -175,7 +175,8 @@ export function MedicationListSection({
 												key={`${med.id}-${intake.start}-${intake.usage}-${intake.takenBy ?? "none"}`}
 												className="blister-row-simple"
 											>
-												{intake.usage} {getMedicationUsageUnitLabel(med, intake.usage)} ·
+												{intake.usage} {getMedicationUsageUnitLabel(med, intake.usage)}
+												{" · "}
 												{getIntakeFrequencyText(intake, t)} · {t("form.blisters.from")} {formatDateTime(intake.start)}
 												{intake.takenBy && <span className="blister-taken-by"> · {intake.takenBy}</span>}
 												{intake.intakeRemindersEnabled && (

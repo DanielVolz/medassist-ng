@@ -4,83 +4,95 @@
 	Owns theme tokens, global element defaults, and app-wide primitives reused
 	across every MedAssist product surface.
 	============================================================================= */
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
 :root {
-	--bg-primary: #0b1220;
-	--bg-secondary: #111827;
-	--bg-tertiary: #0d1424;
-	--bg-input: #0a1018;
-	--bg-gradient: radial-gradient(circle at 20% 20%, #1a2440, #0b1220 40%), #0b1220;
-	--border-primary: #1f2a3d;
-	--border-secondary: #2a3a4d;
-	--text-primary: #e5e7eb;
-	--text-secondary: #a3adc2;
-	--text-muted: #cbd5f5;
-	--accent: #2f86f6;
-	--accent-light: #7ca7ff;
-	--accent-bg: rgba(47, 134, 246, 0.1);
-	--success: #6ee7b7;
-	--success-bg: rgba(57, 217, 138, 0.12);
-	--danger: #fca5a5;
-	--danger-bg: rgba(255, 94, 94, 0.12);
-	--warning: #fcd34d;
-	--warning-bg: rgba(252, 211, 77, 0.12);
-	--info: #93c5fd;
-	--shadow: rgba(0, 0, 0, 0.25);
+	/* Clinical ledger — ink */
+	--font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--font-data: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+	--bg-primary: #101314;
+	--bg-secondary: #16191b;
+	--bg-tertiary: #1b1f22;
+	--bg-input: #121516;
+	--bg-gradient: #101314;
+	--border-primary: #272c30;
+	--border-secondary: #383f45;
+	--text-primary: #f0f2f3;
+	--text-secondary: #8d979e;
+	--text-muted: #c2cad0;
+	--accent: #2bbf99;
+	--accent-light: #4fd6b2;
+	--accent-bg: rgba(43, 191, 153, 0.1);
+	--success: #4fd6b2;
+	--success-bg: rgba(79, 214, 178, 0.09);
+	--danger: #f0796c;
+	--danger-bg: rgba(240, 121, 108, 0.1);
+	--warning: #e8b14e;
+	--warning-bg: rgba(232, 177, 78, 0.1);
+	--info: #7cc0e8;
+	--shadow: rgba(0, 0, 0, 0.4);
+	/* Surface system: flat, hairline, sharp */
+	--surface-radius: 10px;
+	--surface-shadow: none;
+	--surface-border: 1px solid var(--border-primary);
+	--focus-ring: 0 0 0 3px rgba(43, 191, 153, 0.32);
 	/* Button Design System */
-	--btn-radius: 10px;
-	--input-radius: 10px;
+	--btn-radius: 8px;
+	--input-radius: 8px;
 	--btn-radius-round: 50%;
-	--btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-	--btn-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.2);
-	--btn-primary-bg: var(--accent);
-	--btn-primary-hover: #3d94ff;
-	--btn-ghost-hover: rgba(255, 255, 255, 0.08);
+	--btn-shadow: none;
+	--btn-shadow-hover: none;
+	--btn-primary-bg: #1ca583;
+	--btn-primary-hover: #23b993;
+	--btn-ghost-hover: rgba(255, 255, 255, 0.06);
 	--btn-danger-text: #2f0a0a;
 	--btn-success-text: #0a2b1f;
-	--btn-obsolete-bg: linear-gradient(135deg, #f7d14a 0%, #f2b91a 100%);
-	--btn-obsolete-hover: linear-gradient(135deg, #f9db72 0%, #f5c73c 100%);
+	--btn-obsolete-bg: #e8b14e;
+	--btn-obsolete-hover: #f0bf69;
 	--btn-obsolete-text: #2b2205;
-	--btn-obsolete-border: #f8e38a;
-	--btn-obsolete-shadow: 0 6px 14px rgba(252, 211, 77, 0.28);
+	--btn-obsolete-border: #e8b14e;
+	--btn-obsolete-shadow: none;
 }
 
 [data-theme="light"] {
-	--bg-primary: #f8fafc;
+	/* Clinical ledger — paper */
+	--bg-primary: #f6f6f4;
 	--bg-secondary: #ffffff;
-	--bg-tertiary: #f1f5f9;
+	--bg-tertiary: #efefec;
 	--bg-input: #ffffff;
-	--bg-gradient: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
-	--border-primary: #e2e8f0;
-	--border-secondary: #cbd5e1;
-	--text-primary: #1e293b;
-	--text-secondary: #64748b;
-	--text-muted: #475569;
-	--accent: #2563eb;
-	--accent-light: #3b82f6;
-	--accent-bg: rgba(37, 99, 235, 0.1);
-	--success: #10b981;
-	--success-bg: rgba(16, 185, 129, 0.1);
-	--danger: #ef4444;
-	--danger-bg: rgba(239, 68, 68, 0.1);
-	--warning: #f59e0b;
-	--warning-bg: rgba(245, 158, 11, 0.1);
-	--info: #3b82f6;
-	--shadow: rgba(0, 0, 0, 0.08);
+	--bg-gradient: #f6f6f4;
+	--border-primary: #e3e3de;
+	--border-secondary: #c9c9c2;
+	--text-primary: #1b1f21;
+	--text-secondary: #6b7479;
+	--text-muted: #424a4f;
+	--accent: #0d8a6a;
+	--accent-light: #11a37e;
+	--accent-bg: rgba(13, 138, 106, 0.08);
+	--success: #0d8a6a;
+	--success-bg: rgba(13, 138, 106, 0.09);
+	--danger: #cf4537;
+	--danger-bg: rgba(207, 69, 55, 0.08);
+	--warning: #b27c10;
+	--warning-bg: rgba(178, 124, 16, 0.1);
+	--info: #20768f;
+	--shadow: rgba(27, 31, 33, 0.12);
+	/* Surface system */
+	--surface-shadow: none;
+	--focus-ring: 0 0 0 3px rgba(13, 138, 106, 0.25);
 	/* Button Design System */
-	--btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-	--btn-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);
-	--btn-primary-bg: var(--accent);
-	--btn-primary-hover: #1d4ed8;
-	--btn-ghost-hover: rgba(0, 0, 0, 0.06);
+	--btn-shadow: none;
+	--btn-shadow-hover: none;
+	--btn-primary-bg: #0d8a6a;
+	--btn-primary-hover: #0fa07b;
+	--btn-ghost-hover: rgba(27, 31, 33, 0.05);
 	--btn-danger-text: #ffffff;
 	--btn-success-text: #ffffff;
-	--btn-obsolete-bg: linear-gradient(135deg, #f5b52c 0%, #f59e0b 100%);
-	--btn-obsolete-hover: linear-gradient(135deg, #f8c85b 0%, #f7ad2d 100%);
+	--btn-obsolete-bg: #c98e14;
+	--btn-obsolete-hover: #daa02a;
 	--btn-obsolete-text: #ffffff;
-	--btn-obsolete-border: #d48806;
-	--btn-obsolete-shadow: 0 6px 14px rgba(245, 158, 11, 0.22);
+	--btn-obsolete-border: #c98e14;
+	--btn-obsolete-shadow: none;
 }
 
 * {
@@ -92,14 +104,39 @@ html {
 }
 body {
 	margin: 0;
-	font-family: "Space Grotesk", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+	font-family: var(--font-ui);
 	background: var(--bg-gradient);
 	color: var(--text-primary);
 	min-height: 100vh;
 	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 	transition:
 		background 200ms ease,
 		color 200ms ease;
+}
+
+::selection {
+	background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Subtle, theme-aware scrollbars */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-secondary) transparent;
+}
+*::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--border-secondary);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
 }
 
 html.modal-open,
@@ -131,29 +168,41 @@ body.modal-open {
 }
 
 .hero {
-	background: linear-gradient(135deg, rgba(67, 106, 255, 0.08), rgba(115, 195, 255, 0.06));
-	border: 1px solid var(--border-primary);
-	border-radius: 16px;
-	padding: 1.25rem 1.5rem;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--border-primary);
+	border-radius: 0;
+	padding: 0.5rem 0.25rem 1.1rem;
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	gap: 1.5rem;
-	box-shadow: 0 8px 32px var(--shadow);
-	margin-bottom: 1.5rem;
+	box-shadow: none;
+	margin-bottom: 1.75rem;
 	transition:
 		background 200ms ease,
 		border-color 200ms ease;
 }
 
-[data-theme='"light"'] .hero {
-	background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(59, 130, 246, 0.04));
+[data-theme="light"] .hero {
+	background: transparent;
+}
+
+[data-theme="light"] .hero {
+	background: linear-gradient(135deg, rgba(37, 99, 235, 0.07), rgba(37, 99, 235, 0.01) 55%), var(--bg-secondary);
 }
 
 .header-actions {
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
+}
+
+.header-controls {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-shrink: 0;
 }
 
 .icon-btn {
@@ -276,26 +325,29 @@ body.modal-open {
 .hero-title {
 	display: flex;
 	align-items: center;
-	gap: 1rem;
+	gap: 0.85rem;
 }
 .hero-logo {
-	width: 48px;
-	height: 48px;
+	width: 40px;
+	height: 40px;
 }
 .hero h1 {
-	margin: 0.15rem 0 0;
-	font-size: 1.6rem;
+	margin: 0.1rem 0 0;
+	font-size: 1.35rem;
 	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
 }
 .sub {
 	color: var(--text-secondary);
 	margin: 0;
 }
 .eyebrow {
-	letter-spacing: 0.06em;
+	font-family: var(--font-data);
+	letter-spacing: 0.12em;
 	text-transform: uppercase;
-	color: #7ca7ff;
-	font-size: 0.75rem;
+	color: var(--accent);
+	font-size: 0.62rem;
 	margin: 0;
 	font-weight: 500;
 }
@@ -618,10 +670,10 @@ body.modal-open {
 
 .card {
 	background: var(--bg-secondary);
-	border: 1px solid var(--border-primary);
-	border-radius: 14px;
-	padding: 1.25rem;
-	box-shadow: 0 14px 36px var(--shadow);
+	border: var(--surface-border);
+	border-radius: var(--surface-radius);
+	padding: 1.5rem;
+	box-shadow: var(--surface-shadow);
 	transition:
 		background 200ms ease,
 		border-color 200ms ease;
@@ -632,11 +684,13 @@ body.modal-open {
 	align-items: center;
 	justify-content: space-between;
 	gap: 0.75rem;
-	margin-bottom: 1rem;
+	margin-bottom: 1.2rem;
 }
 .card h2 {
 	margin: 0;
-	font-size: 1.2rem;
+	font-size: 1.05rem;
+	font-weight: 600;
+	letter-spacing: -0.005em;
 }
 .card h2.clickable {
 	cursor: pointer;
@@ -654,9 +708,8 @@ body.modal-open {
 .edit-header h2 {
 	margin: 0;
 	font-size: 1.1rem;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .schedule-full {
@@ -715,7 +768,7 @@ body.modal-open {
 	background: rgba(255, 255, 255, 0.04);
 	color: var(--text-muted);
 }
-[data-theme='"light"'] .pill.neutral {
+[data-theme="light"] .pill.neutral {
 	background: rgba(0, 0, 0, 0.04);
 }
 
@@ -723,20 +776,34 @@ body.modal-open {
 	cursor: pointer;
 	transition:
 		background 150ms ease,
-		border-color 150ms ease;
+		color 150ms ease,
+		box-shadow 150ms ease;
 	background: transparent;
-	border: 1px solid var(--border-secondary);
-	color: var(--text-muted);
+	border: none;
+	border-radius: 7px;
+	font-family: var(--font-data);
+	font-size: 0.74rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.09em;
+	color: var(--text-secondary);
+	padding: 0.5rem 0.8rem;
 	box-shadow: none;
 }
 .tabs .pill:hover {
 	background: var(--btn-ghost-hover);
-	border-color: var(--accent);
+	border-color: transparent;
+	color: var(--text-primary);
 }
 .tabs .pill.primary {
-	background: var(--accent-bg);
-	border-color: var(--accent);
-	color: var(--text-primary);
+	background: transparent;
+	border-color: transparent;
+	color: var(--accent);
+	box-shadow: inset 0 -2px 0 var(--accent);
+	border-radius: 7px 7px 0 0;
+}
+[data-theme="light"] .tabs .pill.primary {
+	color: var(--accent);
 }
 
 .badges {

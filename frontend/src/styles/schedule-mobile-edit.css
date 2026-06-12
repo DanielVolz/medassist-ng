@@ -681,6 +681,21 @@
 	overflow-x: auto;
 	-webkit-overflow-scrolling: touch;
 	scrollbar-width: none;
+	scroll-snap-type: x proximity;
+	scroll-padding-inline: 1rem;
+	/* Fade the edges so partially hidden tabs read as scrollable, not cut off. */
+	mask-image: linear-gradient(to right, transparent 0, #000 0.5rem, #000 calc(100% - 2.75rem), transparent 100%);
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent 0,
+		#000 0.5rem,
+		#000 calc(100% - 2.75rem),
+		transparent 100%
+	);
+}
+
+.mobile-edit-form .form-tab {
+	scroll-snap-align: start;
 }
 
 .mobile-edit-form .form-tabs::-webkit-scrollbar {

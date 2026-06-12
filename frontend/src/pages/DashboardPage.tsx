@@ -639,8 +639,15 @@ export function DashboardPage() {
 
 		if (dailyTotal <= 0) return "-";
 
+		// Keep fractional daily totals (e.g. one application every 2 days = 0.5)
+		// visible instead of rounding them up to a misleading whole number.
+		const dailyDecimals = Number.isInteger(dailyTotal) ? 0 : 1;
+
 		if (isLiquidContainerPackageType(med.packageType)) {
-			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: t("form.packageAmountUnitMl") });
+			return t("table.perDayWithUnit", {
+				value: formatNumber(dailyTotal, dailyDecimals),
+				unit: t("form.packageAmountUnitMl"),
+			});
 		}
 
 		if (isTubePackageType(med.packageType)) {
@@ -648,11 +655,11 @@ export function DashboardPage() {
 				med.medicationForm === "liquid"
 					? t("form.packageAmountUnitMl")
 					: t("form.blisters.applications", { count: Math.abs(dailyTotal) });
-			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: tubeUnit });
+			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal, dailyDecimals), unit: tubeUnit });
 		}
 
 		const pillUnit = getDiscreteUnitLabel(med.packageType, dailyTotal);
-		return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: pillUnit });
+		return t("table.perDayWithUnit", { value: formatNumber(dailyTotal, dailyDecimals), unit: pillUnit });
 	};
 
 	const shouldHideNoScheduleStatusForTube = (

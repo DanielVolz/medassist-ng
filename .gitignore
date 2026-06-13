@@ -108,3 +108,11 @@ docs/SPEC_KIT.md
 ops/medtest/
 .kilo/kilo.json
 .kilo/kilo.jsonc
+
+.kilo/
+
+# ===================
+# Codex / agent local files
+# ===================
+.codex/
+.github/agents/*.agent.md

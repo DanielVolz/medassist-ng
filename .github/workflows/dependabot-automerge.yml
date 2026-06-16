@@ -7,6 +7,13 @@ on:
       - reopened
       - synchronize
       - ready_for_review
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: dependabot-automerge
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -14,7 +21,7 @@ permissions:
 
 jobs:
   enable-automerge:
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     steps:
@@ -36,3 +43,44 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           pull-request-number: ${{ github.event.pull_request.number }}
           merge-method: squash
+
+  refresh-stale-automerge-branches:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Update stale Dependabot auto-merge PR branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          prs="$(
+            gh pr list \
+              --repo "$REPO" \
+              --author "app/dependabot" \
+              --state open \
+              --json number,autoMergeRequest,mergeStateStatus \
+              --jq '.[] | select(.autoMergeRequest != null and .mergeStateStatus == "BEHIND") | .number'
+          )"
+
+          if [ -z "$prs" ]; then
+            echo "No stale Dependabot PRs with auto-merge enabled."
+            exit 0
+          fi
+
+          failed=0
+          while IFS= read -r pr_number; do
+            if [ -z "$pr_number" ]; then
+              continue
+            fi
+
+            echo "Updating Dependabot PR #$pr_number with the latest base branch."
+            if ! gh pr update-branch "$pr_number" --repo "$REPO"; then
+              echo "::warning::Failed to update Dependabot PR #$pr_number."
+              failed=1
+            fi
+          done <<< "$prs"
+
+          exit "$failed"

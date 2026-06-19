@@ -2,16 +2,14 @@ import type React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
-import {
-	useCollapsedDays,
-	useDoses,
-	useIntakeJournal,
-	useMedications,
-	useRefill,
-	useSettings,
-	useShare,
-} from "../hooks";
+import { useCollapsedDays } from "../hooks/useCollapsedDays";
+import { useDoses } from "../hooks/useDoses";
+import { useIntakeJournal } from "../hooks/useIntakeJournal";
+import { useMedications } from "../hooks/useMedications";
 import { useModalHistory } from "../hooks/useModalHistory";
+import { useRefill } from "../hooks/useRefill";
+import { useSettings } from "../hooks/useSettings";
+import { useShare } from "../hooks/useShare";
 import {
 	type Coverage,
 	type FormState,
@@ -299,8 +297,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	// Compose hooks
 	const medications = useMedications();
-	const settingsHook = useSettings();
-	const doses = useDoses();
+	const settingsHook = useSettings({ autoLoad: false });
+	const doses = useDoses({ loadOnMount: false });
 	const intakeJournal = useIntakeJournal();
 	const collapsed = useCollapsedDays(user?.id);
 	const share = useShare();

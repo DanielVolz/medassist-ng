@@ -6,7 +6,7 @@
 import { Check, Copy, Link2, RefreshCw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useModalHistory } from "../hooks";
+import { useModalHistory } from "../hooks/useModalHistory";
 import type { ActiveShareLink } from "../hooks/useShare";
 import { ConfirmModal } from "./ConfirmModal";
 import { ModalFrame } from "./ModalFrame";

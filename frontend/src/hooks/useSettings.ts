@@ -164,7 +164,12 @@ export interface UseSettingsReturn {
 	resetSettingsState: () => void;
 }
 
-export function useSettings(): UseSettingsReturn {
+interface UseSettingsOptions {
+	autoLoad?: boolean;
+}
+
+export function useSettings(options: UseSettingsOptions = {}): UseSettingsReturn {
+	const autoLoad = options.autoLoad ?? true;
 	const { i18n } = useTranslation();
 	const getErrorMessage = useCallback((error: unknown): string => {
 		if (error instanceof Error) {
@@ -337,7 +342,8 @@ export function useSettings(): UseSettingsReturn {
 	// Load settings function - exposed for manual refresh (e.g., after auth)
 	const loadSettings = useCallback(() => {
 		setSettingsLoading(true);
-		const generation = loadGenerationRef.current;
+		const generation = loadGenerationRef.current + 1;
+		loadGenerationRef.current = generation;
 		fetchWithRefresh("/api/settings")
 			.then((res) => {
 				// Discard result if a newer loadSettings call (or resetSettingsState) has fired
@@ -381,8 +387,9 @@ export function useSettings(): UseSettingsReturn {
 
 	// Load settings on mount
 	useEffect(() => {
+		if (!autoLoad) return;
 		loadSettings();
-	}, [loadSettings]);
+	}, [autoLoad, loadSettings]);
 
 	// Auto-refresh reminder status (last sent timestamp) every 30 seconds
 	useEffect(() => {

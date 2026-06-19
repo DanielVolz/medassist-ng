@@ -37,14 +37,32 @@ vi.mock("../../context/FeedbackContext", () => ({
 	}),
 }));
 
-vi.mock("../../hooks", () => ({
-	useMedications: () => mockUseMedications(),
-	useSettings: () => mockUseSettings(),
-	useDoses: () => mockUseDoses(),
-	useIntakeJournal: () => mockUseIntakeJournal(),
+vi.mock("../../hooks/useCollapsedDays", () => ({
 	useCollapsedDays: () => mockUseCollapsedDays(),
-	useShare: () => mockUseShare(),
+}));
+
+vi.mock("../../hooks/useDoses", () => ({
+	useDoses: () => mockUseDoses(),
+}));
+
+vi.mock("../../hooks/useIntakeJournal", () => ({
+	useIntakeJournal: () => mockUseIntakeJournal(),
+}));
+
+vi.mock("../../hooks/useMedications", () => ({
+	useMedications: () => mockUseMedications(),
+}));
+
+vi.mock("../../hooks/useRefill", () => ({
 	useRefill: () => mockUseRefill(),
+}));
+
+vi.mock("../../hooks/useSettings", () => ({
+	useSettings: () => mockUseSettings(),
+}));
+
+vi.mock("../../hooks/useShare", () => ({
+	useShare: () => mockUseShare(),
 }));
 
 vi.mock("../../utils/formatters", () => ({

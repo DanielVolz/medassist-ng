@@ -95,6 +95,7 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 								}}
 								radius="xl"
 								size="input-sm"
+								title={t("nav.settings")}
 								variant="subtle"
 							>
 								<Settings size={18} />

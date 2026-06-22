@@ -353,7 +353,7 @@ export function PlannerPage() {
 	return (
 		<PageContainer data-testid="planner-page">
 			<SectionCard title={t("planner.title")} data-testid="planner-form-card">
-				<form className={classes.form} data-testid="planner-form" onSubmit={runPlanner}>
+				<form className={[classes.form, "planner"].join(" ")} data-testid="planner-form" onSubmit={runPlanner}>
 					<div className={classes.rangeGrid}>
 						<label className={classes.dateField} htmlFor="planner-start-date">
 							<span>{t("planner.from")}</span>
@@ -381,7 +381,12 @@ export function PlannerPage() {
 						onChange={setIncludeUntilStart}
 						tooltip={t("planner.includeUntilStartTooltip")}
 					/>
-					<Group className={classes.actions} justify="flex-end" gap="sm" data-testid="planner-actions">
+					<Group
+						className={[classes.actions, "planner-actions"].join(" ")}
+						justify="flex-end"
+						gap="sm"
+						data-testid="planner-actions"
+					>
 						<AppButton type="button" tone="secondary" onClick={resetRange}>
 							{t("common.reset")}
 						</AppButton>

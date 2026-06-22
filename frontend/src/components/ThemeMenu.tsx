@@ -33,6 +33,7 @@ export function ThemeMenu({ resolvedTheme, themePreference, onChange }: ThemeMen
 					data-testid="theme-menu-trigger"
 					radius="xl"
 					size="input-sm"
+					title={t("theme.title")}
 					variant="subtle"
 				>
 					{resolvedTheme === "dark" ? <Moon size={18} /> : <Sun size={18} />}

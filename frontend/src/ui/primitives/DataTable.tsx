@@ -38,13 +38,13 @@ export function DataTable<Row>({
 	return (
 		<ScrollArea className={styles.scrollArea}>
 			<Table
-				className={styles.table}
+				className={[styles.table, "table"].join(" ")}
 				horizontalSpacing="md"
 				verticalSpacing="sm"
 				withTableBorder
 				data-testid={dataTestId}
 			>
-				<Table.Thead className={styles.head}>
+				<Table.Thead className={[styles.head, "table-head"].join(" ")}>
 					<Table.Tr className={styles.headRow}>
 						{columns.map((column) => (
 							<Table.Th
@@ -61,7 +61,7 @@ export function DataTable<Row>({
 					{rows.map((row, index) => {
 						const clickable = typeof onRowClick === "function" && (isRowClickable?.(row) ?? true);
 						const rowProps = getRowProps?.(row, index) ?? {};
-						const rowClassName = [styles.bodyRow, clickable ? styles.clickableRow : "", rowProps.className]
+						const rowClassName = [styles.bodyRow, "table-row", clickable ? styles.clickableRow : "", rowProps.className]
 							.filter(Boolean)
 							.join(" ");
 						const handleRowClick: ComponentPropsWithoutRef<"tr">["onClick"] = (event) => {

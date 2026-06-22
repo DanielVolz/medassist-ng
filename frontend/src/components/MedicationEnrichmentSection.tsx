@@ -551,6 +551,7 @@ export function MedicationEnrichmentSection({
 																					tone={isSelected || isApplyingPending ? "primary" : "secondary"}
 																					size="compact-sm"
 																					aria-pressed={isSelected}
+																					title={packageLabel}
 																					onClick={() =>
 																						isActive && uniqueStatePackageOptions.length > 0
 																							? onApplyPackage(option)

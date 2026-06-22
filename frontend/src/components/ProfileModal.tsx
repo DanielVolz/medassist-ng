@@ -1,5 +1,7 @@
+import { useTranslation } from "react-i18next";
+import { AppModal } from "../ui/modal/AppModal";
 import { UserProfile } from "./Auth";
-import { ModalFrame } from "./ModalFrame";
+import classes from "./ProfileModal.module.css";
 
 interface ProfileModalProps {
 	isOpen: boolean;
@@ -7,13 +9,31 @@ interface ProfileModalProps {
 }
 
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
+	const { t } = useTranslation();
 	// ESC is handled by the global handler in App.tsx to avoid double history.back()
 
 	if (!isOpen) return null;
 
 	return (
-		<ModalFrame contentClassName="profile-modal" onClose={onClose}>
+		<AppModal
+			centered
+			classNames={{
+				body: classes.body,
+				content: classes.modal,
+				header: classes.header,
+				title: classes.title,
+			}}
+			closeButtonProps={{ "aria-label": t("common.close") }}
+			lockScroll={false}
+			manageEscape={false}
+			manageScrollLock={false}
+			onClose={onClose}
+			opened={isOpen}
+			size={420}
+			title={t("auth.profile")}
+			withCloseButton
+		>
 			<UserProfile onClose={onClose} />
-		</ModalFrame>
+		</AppModal>
 	);
 }

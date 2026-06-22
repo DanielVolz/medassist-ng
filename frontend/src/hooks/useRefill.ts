@@ -10,6 +10,7 @@ import {
 	isPackageAmountPackageType,
 	isTubePackageType,
 } from "../types";
+import { useModalHistory } from "./useModalHistory";
 
 export interface UseRefillReturn {
 	// Refill state
@@ -310,14 +311,15 @@ export function useRefill(): UseRefillReturn {
 	const openRefillModal = useCallback(() => {
 		resetRefillForm();
 		setShowRefillModal(true);
-		window.history.pushState({ modal: "refill" }, "");
 	}, [resetRefillForm]);
 
-	const closeRefillModal = useCallback(() => {
-		if (showRefillModal) {
-			window.history.back();
-		}
-	}, [showRefillModal]);
+	const dismissRefillModal = useCallback(() => {
+		setShowRefillModal(false);
+	}, []);
+
+	// History integration: pushes one entry on open, browser back (or closeModal)
+	// dismisses only this modal via the shared modal stack.
+	const { closeModal: closeRefillModal } = useModalHistory(showRefillModal, "refill", dismissRefillModal);
 
 	const openEditStockModal = useCallback((selectedMed: Medication, coverage: { all: Coverage[] }) => {
 		if (!selectedMed) return;
@@ -348,27 +350,13 @@ export function useRefill(): UseRefillReturn {
 		setEditStockPartialBlisterPills(partialPills);
 		setEditStockLoosePills(isAmountPackage || isDiscreteCountPackage ? 0 : knownLoose);
 		setShowEditStockModal(true);
-		window.history.pushState({ modal: "editStock" }, "");
 	}, []);
 
-	const closeEditStockModal = useCallback(() => {
-		if (showEditStockModal) {
-			let popstateHandled = false;
-			const handlePopstate = () => {
-				popstateHandled = true;
-			};
-			window.addEventListener("popstate", handlePopstate, { once: true });
-			window.history.back();
+	const dismissEditStockModal = useCallback(() => {
+		setShowEditStockModal(false);
+	}, []);
 
-			// Fallback for cases where no history entry exists for edit stock.
-			window.setTimeout(() => {
-				if (!popstateHandled) {
-					window.removeEventListener("popstate", handlePopstate);
-					setShowEditStockModal(false);
-				}
-			}, 150);
-		}
-	}, [showEditStockModal]);
+	const { closeModal: closeEditStockModal } = useModalHistory(showEditStockModal, "editStock", dismissEditStockModal);
 
 	useEffect(() => {
 		if (!showEditStockModal) {

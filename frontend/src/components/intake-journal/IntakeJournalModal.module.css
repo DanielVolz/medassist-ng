@@ -1,0 +1,281 @@
+.modal {
+	max-width: 720px;
+}
+
+.header {
+	align-items: flex-start;
+}
+
+.title {
+	width: 100%;
+}
+
+.titleBlock {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	padding-right: 1rem;
+}
+
+.titleBlock h2 {
+	margin: 0;
+	font-size: 1.35rem;
+	line-height: 1.2;
+}
+
+.titleBlock p {
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: 0.92rem;
+	line-height: 1.5;
+}
+
+.state {
+	margin-bottom: 1rem;
+	padding: 1rem;
+	border: 1px dashed var(--border-primary);
+	border-radius: 10px;
+	color: var(--text-secondary);
+}
+
+.eventCard {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	margin-bottom: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 12px;
+	background: var(--bg-primary);
+}
+
+.eventMedication {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.eventMedication p {
+	margin: 0.2rem 0 0;
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+}
+
+.eventGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem;
+}
+
+.eventGrid span {
+	display: block;
+	margin-bottom: 0.35rem;
+	color: var(--text-secondary);
+	font-size: 0.82rem;
+	font-weight: 600;
+}
+
+.eventGrid strong {
+	display: block;
+	color: var(--text-primary);
+	font-size: 0.92rem;
+}
+
+.field {
+	margin-bottom: 1rem;
+}
+
+.fieldLabel {
+	margin-bottom: 0.35rem;
+	color: var(--text-secondary);
+	font-size: 0.82rem;
+	font-weight: 600;
+}
+
+.noteInput {
+	min-height: 10rem;
+	line-height: 1.5;
+	resize: vertical;
+}
+
+.selectInput {
+	width: 100%;
+}
+
+.inlineError {
+	margin-bottom: 1rem;
+	padding: 0.8rem 0.9rem;
+	border: 1px solid rgba(248, 113, 113, 0.3);
+	border-radius: 10px;
+	background: rgba(127, 29, 29, 0.18);
+	color: var(--danger);
+	font-size: 0.9rem;
+}
+
+.filters {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.75rem;
+	margin-bottom: 0.75rem;
+}
+
+.dateFilter :global(.date-input-wrapper),
+.dateFilter :global(.date-input-native) {
+	width: 100%;
+}
+
+.dateFilter :global(.date-input-display) {
+	display: none;
+}
+
+.toolbar {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+.entry {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 12px;
+	background: var(--bg-primary);
+}
+
+.entryMain {
+	display: flex;
+	min-width: 0;
+	flex: 1;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.entryHeader {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.entryHeading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.45rem 0.6rem;
+	min-width: 0;
+}
+
+.entryHeading strong {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.statusPill {
+	display: inline-flex;
+	align-items: center;
+	min-height: 1.45rem;
+	padding: 0.15rem 0.5rem;
+	border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--accent-bg) 72%, transparent);
+	color: var(--accent);
+	font-size: 0.72rem;
+	font-weight: 700;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.noteBlock {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	min-width: 0;
+}
+
+.noteLabel {
+	color: var(--text-secondary);
+	font-size: 0.68rem;
+	font-weight: 700;
+	line-height: 1.1;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.entryNote {
+	margin: 0;
+	color: var(--text-primary);
+	line-height: 1.55;
+	white-space: pre-wrap;
+}
+
+.entryMetaGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+	gap: 0.5rem;
+	margin: 0;
+}
+
+.metaCell {
+	min-width: 0;
+	padding: 0.55rem 0.65rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--bg-tertiary) 58%, transparent);
+}
+
+.metaCell dt {
+	margin: 0 0 0.2rem;
+	color: var(--text-secondary);
+	font-size: 0.68rem;
+	font-weight: 700;
+	line-height: 1.1;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.metaCell dd {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 0.84rem;
+	font-weight: 650;
+	line-height: 1.25;
+	overflow-wrap: break-word;
+}
+
+.entryActions {
+	display: flex;
+	flex: 0 0 auto;
+	justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+	.filters,
+	.eventGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.entry {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.entry > button,
+	.entryActions > button {
+		width: 100%;
+	}
+
+	.entryActions {
+		width: 100%;
+	}
+}

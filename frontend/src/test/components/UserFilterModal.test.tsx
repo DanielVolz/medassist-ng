@@ -63,14 +63,14 @@ describe("UserFilterModal", () => {
 	it("renders modal when selectedUser is provided", () => {
 		renderUserFilterModal();
 
-		expect(screen.getByText(/modal\.userMedications/i)).toBeInTheDocument();
+		expect(screen.getAllByText(/modal\.userMedications/i).length).toBeGreaterThan(0);
 	});
 
 	it("displays user avatar", () => {
 		renderUserFilterModal();
 
 		// Avatar should show first letter
-		expect(screen.getByText("J")).toBeInTheDocument();
+		expect(screen.getByTestId("user-filter-avatar")).toHaveTextContent("J");
 	});
 
 	it("displays medications for selected user", () => {
@@ -95,7 +95,7 @@ describe("UserFilterModal", () => {
 		const onClose = vi.fn();
 		renderUserFilterModal({ onClose });
 
-		const closeBtn = screen.getByText("×");
+		const closeBtn = screen.getAllByRole("button", { name: /common\.close/i })[0];
 		fireEvent.click(closeBtn);
 
 		expect(onClose).toHaveBeenCalledTimes(1);
@@ -105,7 +105,7 @@ describe("UserFilterModal", () => {
 		const onClose = vi.fn();
 		renderUserFilterModal({ onClose });
 
-		const overlay = document.querySelector(".modal-overlay");
+		const overlay = document.querySelector(".mantine-Modal-overlay");
 		if (overlay) {
 			fireEvent.click(overlay);
 		}
@@ -120,10 +120,7 @@ describe("UserFilterModal", () => {
 
 		renderUserFilterModal({ onClose, onClearUser, onOpenMedDetail });
 
-		const medItem = document.querySelector(".user-med-item");
-		if (medItem) {
-			fireEvent.click(medItem);
-		}
+		fireEvent.click(screen.getByRole("button", { name: /Test Med/i }));
 
 		expect(onClearUser).toHaveBeenCalledTimes(1);
 		expect(onOpenMedDetail).toHaveBeenCalledWith(mockMedication);
@@ -133,7 +130,8 @@ describe("UserFilterModal", () => {
 		const onClose = vi.fn();
 		renderUserFilterModal({ onClose });
 
-		const footerCloseBtn = screen.getByText(/common\.close/i);
+		const footerCloseButtons = screen.getAllByRole("button", { name: /common\.close/i });
+		const footerCloseBtn = footerCloseButtons[footerCloseButtons.length - 1];
 		fireEvent.click(footerCloseBtn);
 
 		expect(onClose).toHaveBeenCalledTimes(1);
@@ -143,10 +141,7 @@ describe("UserFilterModal", () => {
 		const onClose = vi.fn();
 		renderUserFilterModal({ onClose });
 
-		const content = document.querySelector(".modal-content");
-		if (content) {
-			fireEvent.click(content);
-		}
+		fireEvent.click(screen.getByRole("dialog"));
 
 		expect(onClose).not.toHaveBeenCalled();
 	});

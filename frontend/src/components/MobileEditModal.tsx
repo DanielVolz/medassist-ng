@@ -4,12 +4,11 @@
  */
 
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: modal uses custom DateInput and static value fields */
-import { Bell, Minus, Plus, Trash2 } from "lucide-react";
+import { ActionIcon } from "@mantine/core";
+import { ArrowLeft, Bell, Minus, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MEDICATION_FORM_FIELD_LIMITS } from "../hooks/medicationFormModel";
-import { useEscapeKey } from "../hooks/useEscapeKey";
-import { useScrollLock } from "../hooks/useScrollLock";
 import type {
 	DoseUnit,
 	FieldErrors,
@@ -31,6 +30,10 @@ import {
 	isTubePackageType,
 	PACKAGE_PROFILES,
 } from "../types";
+import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppCheckbox } from "../ui/primitives/AppCheckbox";
+import { AppTooltip } from "../ui/primitives/AppTooltip";
 import { deriveTotal } from "../utils";
 import {
 	getIntakeScheduleMode,
@@ -43,9 +46,12 @@ import { DateInput } from "./DateInput";
 import { FormNumberStepper } from "./FormNumberStepper";
 import type { MedicationEnrichmentViewModel } from "./MedicationEnrichmentSection";
 import { MedicationEnrichmentSection } from "./MedicationEnrichmentSection";
+import classes from "./MobileEditModal.module.css";
+import formClasses from "./medications/MedicationForm.module.css";
 
 const MOBILE_TAB_ORDER = ["general", "stock", "schedule", "prescription"] as const;
 type MobileTab = (typeof MOBILE_TAB_ORDER)[number];
+const MOBILE_SWIPE_HINT_STORAGE_KEY = "medassist.mobileEditSwipeHintDismissed";
 
 const EMPTY_MEDICATION_ENRICHMENT: MedicationEnrichmentViewModel = {
 	query: "",
@@ -65,6 +71,23 @@ const EMPTY_MEDICATION_ENRICHMENT: MedicationEnrichmentViewModel = {
 	appliedStrengthLabel: null,
 	appliedPackageLabel: null,
 };
+
+function shouldShowInitialSwipeHint() {
+	if (typeof window === "undefined") return true;
+	try {
+		return window.localStorage.getItem(MOBILE_SWIPE_HINT_STORAGE_KEY) !== "true";
+	} catch {
+		return true;
+	}
+}
+
+function persistSwipeHintDismissed() {
+	try {
+		window.localStorage.setItem(MOBILE_SWIPE_HINT_STORAGE_KEY, "true");
+	} catch {
+		// Non-critical: the hint can still be dismissed for the current render.
+	}
+}
 
 export interface MobileEditModalProps {
 	show: boolean;
@@ -175,12 +198,22 @@ export function MobileEditModal({
 	const fieldsetRef = useRef<HTMLFieldSetElement | null>(null);
 	const tabStripRef = useRef<HTMLDivElement | null>(null);
 	const tabViewportRef = useRef<HTMLDivElement | null>(null);
+	const [tabViewportElement, setTabViewportElement] = useState<HTMLDivElement | null>(null);
 	const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 	const swipeAxisRef = useRef<"x" | "y" | null>(null);
 	const [swipeDeltaX, setSwipeDeltaX] = useState(0);
 	const [isHorizontalSwiping, setIsHorizontalSwiping] = useState(false);
+	const [showSwipeHint, setShowSwipeHint] = useState(shouldShowInitialSwipeHint);
 	const [showNameValidation, setShowNameValidation] = useState(false);
 	const activeTabIndexRef = useRef(0);
+	const setTabViewportRef = useCallback((node: HTMLDivElement | null) => {
+		tabViewportRef.current = node;
+		setTabViewportElement(node);
+	}, []);
+	const dismissSwipeHint = useCallback(() => {
+		setShowSwipeHint(false);
+		persistSwipeHintDismissed();
+	}, []);
 
 	const allowFractionalIntake = useMemo(() => {
 		if (isLiquidContainerPackageType(form.packageType)) return true;
@@ -263,11 +296,6 @@ export function MobileEditModal({
 		}
 	}, [show, hasValidationErrors, fieldErrors.name]);
 
-	useEscapeKey(show, onClose);
-
-	// Lock background scroll while modal is open.
-	useScrollLock(show);
-
 	// Keep activeTabIndex ref in sync for native listeners
 	const activeTabIndex = MOBILE_TAB_ORDER.indexOf(activeTab);
 	activeTabIndexRef.current = activeTabIndex;
@@ -285,10 +313,11 @@ export function MobileEditModal({
 	// With native { passive: false } we can block the browser's vertical scroll
 	// when a horizontal swipe is detected, making tab swiping reliable.
 	useEffect(() => {
-		const fieldset = fieldsetRef.current;
-		if (!show || !fieldset) return;
+		const swipeSurface = tabViewportElement;
+		if (!show || !swipeSurface) return;
 
 		const AXIS_LOCK_THRESHOLD = 6;
+		const touchListenerOptions = { capture: true };
 
 		function resetSwipe() {
 			swipeStartRef.current = null;
@@ -359,17 +388,17 @@ export function MobileEditModal({
 			resetSwipe();
 		}
 
-		fieldset.addEventListener("touchstart", onTouchStart, { passive: true });
-		fieldset.addEventListener("touchmove", onTouchMove, { passive: false });
-		fieldset.addEventListener("touchend", onTouchEnd, { passive: true });
-		fieldset.addEventListener("touchcancel", resetSwipe, { passive: true });
+		swipeSurface.addEventListener("touchstart", onTouchStart, { ...touchListenerOptions, passive: true });
+		swipeSurface.addEventListener("touchmove", onTouchMove, { ...touchListenerOptions, passive: false });
+		swipeSurface.addEventListener("touchend", onTouchEnd, { ...touchListenerOptions, passive: true });
+		swipeSurface.addEventListener("touchcancel", resetSwipe, { ...touchListenerOptions, passive: true });
 		return () => {
-			fieldset.removeEventListener("touchstart", onTouchStart);
-			fieldset.removeEventListener("touchmove", onTouchMove);
-			fieldset.removeEventListener("touchend", onTouchEnd);
-			fieldset.removeEventListener("touchcancel", resetSwipe);
+			swipeSurface.removeEventListener("touchstart", onTouchStart, touchListenerOptions);
+			swipeSurface.removeEventListener("touchmove", onTouchMove, touchListenerOptions);
+			swipeSurface.removeEventListener("touchend", onTouchEnd, touchListenerOptions);
+			swipeSurface.removeEventListener("touchcancel", resetSwipe, touchListenerOptions);
 		};
-	}, [show]);
+	}, [show, tabViewportElement]);
 
 	if (!show) return null;
 
@@ -384,97 +413,104 @@ export function MobileEditModal({
 		if (!medicationName) return t("form.editEntry");
 		return t("form.editEntryWithName", { name: medicationName });
 	})();
+	const closeLabel = readOnlyMode || (formSaved && !formChanged) ? t("common.close") : t("common.cancel");
+	const tabPanelTransform = `translateX(calc(${-activeTabIndex * 100}% + ${swipeDeltaX}px))`;
+	const modalHeader = (
+		<div className={classes.headerTitle}>
+			<AppButton
+				type="button"
+				className={classes.backButton}
+				tone="secondary"
+				leftSection={<ArrowLeft size={16} aria-hidden="true" />}
+				onClick={onClose}
+			>
+				{t("common.back")}
+			</AppButton>
+			<h2>{mobileTitle}</h2>
+		</div>
+	);
 
 	return (
-		<div
-			className="modal-overlay mobile-edit-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key !== "Escape") e.stopPropagation();
+		<AppModal
+			centered={false}
+			classNames={{
+				body: classes.body,
+				header: classes.header,
+				inner: classes.inner,
+				title: classes.title,
 			}}
+			closeButtonProps={{ "aria-label": t("common.close") }}
+			contentClassName={classes.content}
+			onClose={onClose}
+			opened={show}
+			size="95vw"
+			title={modalHeader}
+			withCloseButton
 		>
-			<div
-				className="modal-content edit-modal"
-				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => {
-					if (e.key !== "Escape") e.stopPropagation();
+			<form
+				className={classes.form}
+				autoComplete="off"
+				spellCheck={false}
+				autoCorrect="off"
+				autoCapitalize="off"
+				onSubmit={(e) => {
+					// Check native HTML5 validation first
+					const formElement = e.currentTarget;
+					if (!formElement.checkValidity()) {
+						// Let browser show native validation messages
+						formElement.reportValidity();
+						e.preventDefault();
+						return;
+					}
+					onSaveMedication(e);
 				}}
 			>
-				<div className="edit-modal-header">
-					<button type="button" className="ghost small btn-nav" onClick={onClose}>
-						← {t("common.back")}
-					</button>
-					<h2>{mobileTitle}</h2>
+				<div className={classes.tabList} role="tablist" aria-label={t("form.sections.general")} ref={tabStripRef}>
+					{MOBILE_TAB_ORDER.map((tab) => (
+						<button
+							key={tab}
+							type="button"
+							role="tab"
+							aria-selected={activeTab === tab}
+							className={[classes.tab, activeTab === tab ? classes.tabActive : ""].filter(Boolean).join(" ")}
+							onClick={() => setActiveTab(tab)}
+						>
+							{t(`form.sections.${tab}`)}
+						</button>
+					))}
 				</div>
-				<form
-					className="form-grid mobile-edit-form"
-					autoComplete="off"
-					spellCheck={false}
-					autoCorrect="off"
-					autoCapitalize="off"
-					onSubmit={(e) => {
-						// Check native HTML5 validation first
-						const formElement = e.currentTarget;
-						if (!formElement.checkValidity()) {
-							// Let browser show native validation messages
-							formElement.reportValidity();
-							e.preventDefault();
-							return;
-						}
-						onSaveMedication(e);
-					}}
-				>
-					<div className="full form-tabs" role="tablist" aria-label={t("form.sections.general")} ref={tabStripRef}>
-						<button
+				{showSwipeHint && (
+					<div className={classes.swipeHint} role="note">
+						<span>{t("form.mobileSwipeHint")}</span>
+						<ActionIcon
 							type="button"
-							role="tab"
-							aria-selected={activeTab === "general"}
-							className={`form-tab${activeTab === "general" ? " active" : ""}`}
-							onClick={() => setActiveTab("general")}
+							aria-label={t("form.dismissSwipeHint")}
+							className={classes.swipeHintClose}
+							color="gray"
+							onClick={dismissSwipeHint}
+							size="sm"
+							variant="subtle"
 						>
-							{t("form.sections.general")}
-						</button>
-						<button
-							type="button"
-							role="tab"
-							aria-selected={activeTab === "stock"}
-							className={`form-tab${activeTab === "stock" ? " active" : ""}`}
-							onClick={() => setActiveTab("stock")}
-						>
-							{t("form.sections.stock")}
-						</button>
-						<button
-							type="button"
-							role="tab"
-							aria-selected={activeTab === "schedule"}
-							className={`form-tab${activeTab === "schedule" ? " active" : ""}`}
-							onClick={() => setActiveTab("schedule")}
-						>
-							{t("form.sections.schedule")}
-						</button>
-						<button
-							type="button"
-							role="tab"
-							aria-selected={activeTab === "prescription"}
-							className={`form-tab${activeTab === "prescription" ? " active" : ""}`}
-							onClick={() => setActiveTab("prescription")}
-						>
-							{t("form.sections.prescription")}
-						</button>
+							<X size={14} aria-hidden="true" />
+						</ActionIcon>
 					</div>
-					<fieldset
-						ref={fieldsetRef}
-						className={`readonly-fieldset${isHorizontalSwiping ? " swiping-horizontal" : ""}`}
-						disabled={readOnlyMode}
-					>
-						<div className="mobile-tab-viewport" ref={tabViewportRef}>
-							<div
-								className={`mobile-tab-track${isHorizontalSwiping ? " is-swiping" : ""}`}
-								style={{ transform: `translateX(calc(${-activeTabIndex * 100}% + ${swipeDeltaX}px))` }}
-							>
-								<div className={`form-tab-panel${activeTab === "general" ? " active" : ""}`}>
-									<div className="full form-category">
-										<h4 className="form-category-title">{t("form.sections.general")}</h4>
+				)}
+				<fieldset
+					ref={fieldsetRef}
+					className={[classes.fieldset, isHorizontalSwiping ? classes.fieldsetSwiping : ""].filter(Boolean).join(" ")}
+					disabled={readOnlyMode}
+				>
+					<div className={classes.tabViewport} ref={setTabViewportRef} data-testid="mobile-edit-tab-viewport">
+						<div
+							className={[classes.tabTrack, isHorizontalSwiping ? classes.tabTrackSwiping : ""]
+								.filter(Boolean)
+								.join(" ")}
+							style={{ transform: tabPanelTransform }}
+						>
+							<div className={[classes.tabPanel, activeTab === "general" ? classes.tabPanelActive : ""].join(" ")}>
+								<div className={["full", formClasses.category, classes.category].join(" ")}>
+									<h4 className={formClasses.categoryTitle}>{t("form.sections.general")}</h4>
+									<div className={classes.sectionCard}>
 										<label
 											className={`full ${!readOnlyMode && showNameValidation && fieldErrors.name ? "has-error" : ""}`}
 										>
@@ -544,7 +580,7 @@ export function MobileEditModal({
 										<label className="full">
 											{t("form.packageType")}
 											<select
-												className="select-field package-type-select"
+												className={[formClasses.selectField, formClasses.packageTypeSelect].join(" ")}
 												value={form.packageType}
 												onChange={(e) => onHandleValueChange("packageType", e.target.value as FormState["packageType"])}
 											>
@@ -559,7 +595,7 @@ export function MobileEditModal({
 											<label className="full">
 												{t("form.pillForm")}
 												<select
-													className="select-field"
+													className={formClasses.selectField}
 													value={form.pillForm}
 													onChange={(e) => onHandleValueChange("pillForm", e.target.value as FormState["pillForm"])}
 												>
@@ -572,7 +608,7 @@ export function MobileEditModal({
 											<label className="full">
 												{t("form.medicationForm")}
 												<select
-													className="select-field"
+													className={formClasses.selectField}
 													value={"topical"}
 													onChange={() => onHandleValueChange("medicationForm", "topical")}
 												>
@@ -584,7 +620,7 @@ export function MobileEditModal({
 											<label className="full">
 												{t("form.medicationForm")}
 												<select
-													className="select-field"
+													className={formClasses.selectField}
 													value={"liquid"}
 													onChange={() => onHandleValueChange("medicationForm", "liquid")}
 												>
@@ -642,41 +678,49 @@ export function MobileEditModal({
 											{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
 										</label>
 									</div>
+								</div>
 
-									{editingId && (
-										<div className="full form-category image-section">
-											<h4 className="form-category-title">{t("form.medicationImage")}</h4>
-											{currentMed?.imageUrl ? (
-												<div className="image-preview">
-													<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
-													<button
+								{editingId && (
+									<div className={["full", formClasses.category, formClasses.imageSection].join(" ")}>
+										<h4 className={formClasses.categoryTitle}>{t("form.medicationImage")}</h4>
+										{currentMed?.imageUrl ? (
+											<div className={formClasses.imagePreview}>
+												<img
+													className={formClasses.imagePreviewImage}
+													src={`/api/images/${currentMed.imageUrl}`}
+													alt={currentMed.name}
+												/>
+												<AppTooltip label={t("form.removeImage")}>
+													<ActionIcon
 														type="button"
-														className="danger icon-only tooltip-trigger"
+														color="red"
+														variant="filled"
 														onClick={() => onDeleteMedImage(editingId)}
 														aria-label={t("form.removeImage")}
-														data-tooltip={t("form.removeImage")}
 													>
 														<Trash2 size={18} aria-hidden="true" />
-													</button>
-												</div>
-											) : (
-												<input
-													type="file"
-													accept="image/*"
-													onChange={(e) => {
-														const file = e.target.files?.[0];
-														e.target.value = "";
-														if (file) void onUploadMedImage(editingId, file);
-													}}
-												/>
-											)}
-											{imageUploadError && <span className="field-error">{imageUploadError}</span>}
-										</div>
-									)}
-								</div>
-								<div className={`form-tab-panel${activeTab === "stock" ? " active" : ""}`}>
-									<div className="full form-category">
-										<h4 className="form-category-title">{t("form.sections.stock")}</h4>
+													</ActionIcon>
+												</AppTooltip>
+											</div>
+										) : (
+											<input
+												type="file"
+												accept="image/*"
+												onChange={(e) => {
+													const file = e.target.files?.[0];
+													e.target.value = "";
+													if (file) void onUploadMedImage(editingId, file);
+												}}
+											/>
+										)}
+										{imageUploadError && <span className="field-error">{imageUploadError}</span>}
+									</div>
+								)}
+							</div>
+							<div className={[classes.tabPanel, activeTab === "stock" ? classes.tabPanelActive : ""].join(" ")}>
+								<div className={["full", formClasses.category, classes.category].join(" ")}>
+									<h4 className={formClasses.categoryTitle}>{t("form.sections.stock")}</h4>
+									<div className={classes.sectionCard}>
 										{(() => {
 											if (!isAmountBasedPackageType(form.packageType)) {
 												return (
@@ -740,7 +784,7 @@ export function MobileEditModal({
 																<select
 																	value="g"
 																	disabled
-																	className="select-field dose-unit-select"
+																	className={[formClasses.selectField, formClasses.doseUnitSelect].join(" ")}
 																	aria-label={t("form.packageAmountUnitG")}
 																>
 																	<option value="g">{t("form.packageAmountUnitG")}</option>
@@ -785,7 +829,7 @@ export function MobileEditModal({
 																<select
 																	value="ml"
 																	disabled
-																	className="select-field dose-unit-select"
+																	className={[formClasses.selectField, formClasses.doseUnitSelect].join(" ")}
 																	aria-label={t("form.packageAmountUnitMl")}
 																>
 																	<option value="ml">{t("form.packageAmountUnitMl")}</option>
@@ -853,7 +897,7 @@ export function MobileEditModal({
 													<select
 														value={form.doseUnit}
 														onChange={(e) => onFormChange({ ...form, doseUnit: e.target.value as DoseUnit })}
-														className="select-field dose-unit-select"
+														className={[formClasses.selectField, formClasses.doseUnitSelect].join(" ")}
 													>
 														{DOSE_UNITS.map((unit) => (
 															<option key={unit.value} value={unit.value}>
@@ -900,77 +944,80 @@ export function MobileEditModal({
 										</label>
 									</div>
 								</div>
-								<div className={`form-tab-panel${activeTab === "schedule" ? " active" : ""}`}>
-									<div className="full form-category intake-section">
-										<div className="form-category-header">
-											<h4 className="form-category-title">{t("form.blisters.title")}</h4>
-											{!readOnlyMode && (
-												<button
+							</div>
+							<div className={[classes.tabPanel, activeTab === "schedule" ? classes.tabPanelActive : ""].join(" ")}>
+								<div className={["full", formClasses.category, formClasses.intakeSection, classes.category].join(" ")}>
+									<div className={formClasses.categoryHeader}>
+										<h4 className={formClasses.categoryTitle}>{t("form.blisters.title")}</h4>
+										{!readOnlyMode && (
+											<AppTooltip label={t("form.blisters.addIntake")}>
+												<ActionIcon
 													type="button"
-													className="ghost add-blister icon-only tooltip-trigger"
+													color="brand"
+													variant="subtle"
 													onClick={() => onAddIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
 													aria-label={t("form.blisters.addIntake")}
-													data-tooltip={t("form.blisters.addIntake")}
 												>
 													<Plus size={18} aria-hidden="true" />
-												</button>
-											)}
-										</div>
-										{form.intakes.map((intake, idx) => {
-											const scheduleMode = getIntakeScheduleMode(intake);
-											const selectedWeekdays = intake.weekdays ?? [];
-											const intakeKey = `${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${scheduleMode}-${selectedWeekdays.join("")}-${intake.takenBy ?? ""}-${intake.intakeUnit ?? "unit"}-${intake.intakeRemindersEnabled ? "reminder" : "silent"}`;
-											return (
-												<div key={intakeKey} className="blister-row">
+												</ActionIcon>
+											</AppTooltip>
+										)}
+									</div>
+									{form.intakes.map((intake, idx) => {
+										const scheduleMode = getIntakeScheduleMode(intake);
+										const selectedWeekdays = intake.weekdays ?? [];
+										const intakeKey = `${intake.startDate}-${intake.startTime}-${intake.usage}-${intake.every}-${scheduleMode}-${selectedWeekdays.join("")}-${intake.takenBy ?? ""}-${intake.intakeUnit ?? "unit"}-${intake.intakeRemindersEnabled ? "reminder" : "silent"}`;
+										return (
+											<div key={intakeKey} className={`blister-row ${classes.intakeRow}`}>
+												<label className="compact">
+													<span>{getUsageLabel(intake)}</span>
+													<FormNumberStepper
+														value={intake.usage}
+														onChange={(nextValue) => onSetIntakeValue(idx, "usage", nextValue)}
+														min={allowFractionalIntake ? 0.5 : 1}
+														step={allowFractionalIntake ? 0.5 : 1}
+														allowDecimal={allowFractionalIntake}
+														decrementLabel={decrementValueLabel}
+														incrementLabel={incrementValueLabel}
+													/>
+												</label>
+												<label className="compact">
+													<span>{t("form.blisters.scheduleMode")}</span>
+													<select
+														className={formClasses.selectField}
+														value={scheduleMode}
+														onChange={(e) =>
+															onSetIntakeValue(idx, "scheduleMode", e.target.value as "interval" | "weekdays")
+														}
+													>
+														<option value="interval">{t("form.blisters.scheduleModeInterval")}</option>
+														<option value="weekdays">{t("form.blisters.scheduleModeWeekdays")}</option>
+													</select>
+												</label>
+												{scheduleMode === "interval" ? (
 													<label className="compact">
-														<span>{getUsageLabel(intake)}</span>
+														<span>{t("form.blisters.everyDays")}</span>
 														<FormNumberStepper
-															value={intake.usage}
-															onChange={(nextValue) => onSetIntakeValue(idx, "usage", nextValue)}
-															min={allowFractionalIntake ? 0.5 : 1}
-															step={allowFractionalIntake ? 0.5 : 1}
-															allowDecimal={allowFractionalIntake}
+															value={intake.every}
+															onChange={(nextValue) => onSetIntakeValue(idx, "every", nextValue)}
+															min={1}
 															decrementLabel={decrementValueLabel}
 															incrementLabel={incrementValueLabel}
 														/>
 													</label>
-													<label className="compact">
-														<span>{t("form.blisters.scheduleMode")}</span>
-														<select
-															className="select-field"
-															value={scheduleMode}
-															onChange={(e) =>
-																onSetIntakeValue(idx, "scheduleMode", e.target.value as "interval" | "weekdays")
-															}
-														>
-															<option value="interval">{t("form.blisters.scheduleModeInterval")}</option>
-															<option value="weekdays">{t("form.blisters.scheduleModeWeekdays")}</option>
-														</select>
-													</label>
-													{scheduleMode === "interval" ? (
-														<label className="compact">
-															<span>{t("form.blisters.everyDays")}</span>
-															<FormNumberStepper
-																value={intake.every}
-																onChange={(nextValue) => onSetIntakeValue(idx, "every", nextValue)}
-																min={1}
-																decrementLabel={decrementValueLabel}
-																incrementLabel={incrementValueLabel}
-															/>
-														</label>
-													) : (
-														<label className="compact full-row">
-															<span>{t("form.blisters.weekdays")}</span>
-															<div className="badges">
-																{weekdayOptions.map((weekday) => {
-																	const isSelected = selectedWeekdays.includes(weekday.value);
-																	return (
+												) : (
+													<label className="compact full-row">
+														<span>{t("form.blisters.weekdays")}</span>
+														<div className="badges">
+															{weekdayOptions.map((weekday) => {
+																const isSelected = selectedWeekdays.includes(weekday.value);
+																return (
+																	<AppTooltip key={weekday.value} label={weekday.longLabel}>
 																		<button
-																			key={weekday.value}
 																			type="button"
 																			className={isSelected ? "pill clickable" : "pill clickable neutral"}
+																			aria-label={weekday.longLabel}
 																			aria-pressed={isSelected}
-																			title={weekday.longLabel}
 																			onClick={() =>
 																				onSetIntakeValue(
 																					idx,
@@ -981,104 +1028,100 @@ export function MobileEditModal({
 																		>
 																			{weekday.shortLabel}
 																		</button>
-																	);
-																})}
-															</div>
-															{!readOnlyMode && hasWeekdaySelectionError(intake) && (
-																<span className="field-error">{t("form.blisters.weekdaysRequired")}</span>
-															)}
-														</label>
-													)}
+																	</AppTooltip>
+																);
+															})}
+														</div>
+														{!readOnlyMode && hasWeekdaySelectionError(intake) && (
+															<span className="field-error">{t("form.blisters.weekdaysRequired")}</span>
+														)}
+													</label>
+												)}
+												<label className="compact full-row">
+													<span>{t("form.blisters.startDate")}</span>
+													<DateInput
+														value={intake.startDate}
+														onChange={(e) => onSetIntakeValue(idx, "startDate", e.target.value)}
+													/>
+												</label>
+												<label className="compact time-label">
+													<span>{t("form.blisters.startTime")}</span>
+													<input
+														type="time"
+														value={intake.startTime}
+														onChange={(e) => onSetIntakeValue(idx, "startTime", e.target.value)}
+													/>
+												</label>
+												{isLiquidContainerPackageType(form.packageType) && (
 													<label className="compact full-row">
-														<span>{t("form.blisters.startDate")}</span>
-														<DateInput
-															value={intake.startDate}
-															onChange={(e) => onSetIntakeValue(idx, "startDate", e.target.value)}
-														/>
-													</label>
-													<label className="compact time-label">
-														<span>{t("form.blisters.startTime")}</span>
-														<input
-															type="time"
-															value={intake.startTime}
-															onChange={(e) => onSetIntakeValue(idx, "startTime", e.target.value)}
-														/>
-													</label>
-													{isLiquidContainerPackageType(form.packageType) && (
-														<label className="compact full-row">
-															<span>{t("form.blisters.intakeUnit")}</span>
-															<select
-																className="select-field"
-																value={intake.intakeUnit}
-																onChange={(e) =>
-																	onSetIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")
-																}
-															>
-																<option value="ml">{t("form.blisters.intakeUnitMl")}</option>
-																<option value="tsp">{t("form.blisters.intakeUnitTsp")}</option>
-																<option value="tbsp">{t("form.blisters.intakeUnitTbsp")}</option>
-															</select>
-														</label>
-													)}
-													{form.takenBy.length === 0 ? null : (
-														<label className="compact full-row taken-by-field">
-															<span>{t("form.blisters.takenByIntake")}</span>
-															<select
-																className="select-field"
-																value={intake.takenBy}
-																onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}
-															>
-																{form.takenBy.map((person) => (
-																	<option key={person} value={person}>
-																		{person}
-																	</option>
-																))}
-															</select>
-														</label>
-													)}
-													<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
-														<span className="legend-hint">
-															<Bell size={14} aria-hidden="true" />
-														</span>
-														<label className="toggle-switch small">
-															<input
-																type="checkbox"
-																checked={intake.intakeRemindersEnabled}
-																onChange={(e) => onSetIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
-															/>
-															<span className="toggle-slider"></span>
-														</label>
-													</div>
-													{!readOnlyMode && form.intakes.length > 1 && (
-														<button
-															type="button"
-															className="danger remove-blister-btn icon-only tooltip-trigger"
-															onClick={() => onRemoveIntake(idx)}
-															aria-label={t("common.remove")}
-															data-tooltip={t("common.remove")}
+														<span>{t("form.blisters.intakeUnit")}</span>
+														<select
+															className={formClasses.selectField}
+															value={intake.intakeUnit}
+															onChange={(e) =>
+																onSetIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")
+															}
 														>
-															<Minus size={18} aria-hidden="true" />
-														</button>
-													)}
+															<option value="ml">{t("form.blisters.intakeUnitMl")}</option>
+															<option value="tsp">{t("form.blisters.intakeUnitTsp")}</option>
+															<option value="tbsp">{t("form.blisters.intakeUnitTbsp")}</option>
+														</select>
+													</label>
+												)}
+												{form.takenBy.length === 0 ? null : (
+													<label className="compact full-row taken-by-field">
+														<span>{t("form.blisters.takenByIntake")}</span>
+														<select
+															className={formClasses.selectField}
+															value={intake.takenBy}
+															onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}
+														>
+															{form.takenBy.map((person) => (
+																<option key={person} value={person}>
+																	{person}
+																</option>
+															))}
+														</select>
+													</label>
+												)}
+												<div className="remind-toggle-row">
+													<span className="legend-hint">
+														<Bell size={14} aria-hidden="true" />
+													</span>
+													<AppCheckbox
+														checked={intake.intakeRemindersEnabled}
+														label={t("form.blisters.remind")}
+														onChange={(checked) => onSetIntakeValue(idx, "intakeRemindersEnabled", checked)}
+														tooltip={t("form.blisters.remindTooltip")}
+													/>
 												</div>
-											);
-										})}
-									</div>
+												{!readOnlyMode && form.intakes.length > 1 && (
+													<AppButton
+														type="button"
+														tone="secondary"
+														className={classes.removeIntakeButton}
+														leftSection={<Minus size={16} aria-hidden="true" />}
+														onClick={() => onRemoveIntake(idx)}
+													>
+														{t("common.remove")}
+													</AppButton>
+												)}
+											</div>
+										);
+									})}
 								</div>
-								<div className={`form-tab-panel${activeTab === "prescription" ? " active" : ""}`}>
-									<div className="full form-category">
-										<h4 className="form-category-title">{t("form.sections.prescription")}</h4>
-										<label className="full">
-											{t("prescription.enabled")}
-											<span className="toggle-switch small">
-												<input
-													type="checkbox"
-													checked={form.prescriptionEnabled}
-													onChange={(e) => onHandleValueChange("prescriptionEnabled", e.target.checked)}
-												/>
-												<span className="toggle-slider"></span>
-											</span>
-										</label>
+							</div>
+							<div className={[classes.tabPanel, activeTab === "prescription" ? classes.tabPanelActive : ""].join(" ")}>
+								<div className={["full", formClasses.category, classes.category].join(" ")}>
+									<h4 className={formClasses.categoryTitle}>{t("form.sections.prescription")}</h4>
+									<div className={classes.sectionCard}>
+										<div className="full">
+											<AppCheckbox
+												checked={form.prescriptionEnabled}
+												label={t("prescription.enabled")}
+												onChange={(checked) => onHandleValueChange("prescriptionEnabled", checked)}
+											/>
+										</div>
 										{form.prescriptionEnabled && (
 											<>
 												<label className="prescription-field">
@@ -1124,25 +1167,23 @@ export function MobileEditModal({
 								</div>
 							</div>
 						</div>
-					</fieldset>
-					<div className="modal-footer">
-						<button type="button" className="ghost" onClick={onClose}>
-							{readOnlyMode || (formSaved && !formChanged) ? t("common.close") : t("common.cancel")}
-						</button>
-						{!readOnlyMode && (
-							<button
-								type="submit"
-								disabled={saving || (!formChanged && (formSaved || !!editingId))}
-								className={
-									hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError ? "has-validation-error" : ""
-								}
-							>
-								{formSaved && !formChanged ? t("common.saved") : t("common.save")}
-							</button>
-						)}
 					</div>
-				</form>
-			</div>
-		</div>
+				</fieldset>
+				<AppModalFooter>
+					<AppButton type="button" tone="secondary" onClick={onClose}>
+						{closeLabel}
+					</AppButton>
+					{!readOnlyMode && (
+						<AppButton
+							type="submit"
+							disabled={saving || (!formChanged && (formSaved || !!editingId))}
+							tone={hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError ? "warning" : "primary"}
+						>
+							{formSaved && !formChanged ? t("common.saved") : t("common.save")}
+						</AppButton>
+					)}
+				</AppModalFooter>
+			</form>
+		</AppModal>
 	);
 }

@@ -1,0 +1,185 @@
+.scrollArea {
+	border: 1px solid color-mix(in srgb, var(--border-primary) 88%, transparent);
+	border-radius: 10px;
+	overflow: hidden;
+	background: color-mix(in srgb, var(--bg-secondary) 80%, var(--bg-tertiary));
+	box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.table {
+	background: transparent;
+	border-color: transparent;
+}
+
+.headRow {
+	background: linear-gradient(
+		180deg,
+		color-mix(in srgb, var(--bg-secondary) 92%, var(--accent) 8%) 0%,
+		color-mix(in srgb, var(--bg-secondary) 84%, var(--accent) 16%) 100%
+	);
+}
+
+.headCell {
+	padding-top: 0.9rem;
+	padding-bottom: 0.9rem;
+	border-bottom: 1px solid color-mix(in srgb, var(--border-primary) 88%, transparent);
+	color: var(--text-secondary);
+	font-size: 0.82rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	text-transform: none;
+	white-space: nowrap;
+	background: transparent;
+}
+
+.bodyRow {
+	transition:
+		background 150ms ease,
+		transform 150ms ease;
+}
+
+.bodyRow[data-striped="odd"] {
+	background: color-mix(in srgb, var(--bg-secondary) 92%, var(--accent) 8%);
+}
+
+.bodyRow[data-striped="even"] {
+	background: color-mix(in srgb, var(--bg-secondary) 72%, var(--bg-tertiary));
+}
+
+.clickableRow {
+	cursor: pointer;
+}
+
+.clickableRow:hover {
+	background: color-mix(in srgb, var(--accent-bg) 62%, var(--bg-secondary));
+}
+
+.bodyCell {
+	padding-top: 0.95rem;
+	padding-bottom: 0.95rem;
+	border-top: 1px solid color-mix(in srgb, var(--border-primary) 74%, transparent);
+	color: var(--text-primary);
+	background: transparent;
+}
+
+.body :global(tr:first-child) .bodyCell {
+	border-top: none;
+}
+
+@media (max-width: 768px) {
+	.scrollArea {
+		border: none;
+		border-radius: 0;
+		overflow: visible;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	.scrollArea :global(.mantine-ScrollArea-viewport),
+	.scrollArea :global(.mantine-ScrollArea-container) {
+		overflow: visible !important;
+	}
+
+	.table,
+	.head,
+	.body,
+	.headRow,
+	.bodyRow,
+	.bodyCell {
+		display: block;
+		width: 100%;
+		min-width: 0;
+	}
+
+	.table {
+		border: 0;
+	}
+
+	.head {
+		display: none;
+	}
+
+	.body {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.bodyRow {
+		padding: 0.9rem;
+		border: 1px solid color-mix(in srgb, var(--border-primary) 88%, transparent);
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--bg-secondary) 88%, var(--bg-tertiary));
+		box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 8%, transparent);
+	}
+
+	.bodyRow[data-striped="odd"],
+	.bodyRow[data-striped="even"] {
+		background: color-mix(in srgb, var(--bg-secondary) 88%, var(--bg-tertiary));
+	}
+
+	.clickableRow:hover {
+		background: color-mix(in srgb, var(--accent-bg) 48%, var(--bg-secondary));
+	}
+
+	.bodyCell {
+		display: grid;
+		grid-template-columns: minmax(6rem, 38%) minmax(0, 1fr);
+		align-items: start;
+		gap: 0.75rem;
+		padding: 0.55rem 0.8rem;
+		border-top: 1px solid color-mix(in srgb, var(--border-primary) 70%, transparent);
+		text-align: left !important;
+	}
+
+	.bodyCell::before {
+		content: attr(data-label);
+		color: var(--text-secondary);
+		font-size: 0.75rem;
+		font-weight: 700;
+		line-height: 1.35;
+		text-transform: uppercase;
+	}
+
+	.bodyCell:not([data-label]) {
+		display: block;
+	}
+
+	.bodyCell:not([data-label])::before {
+		display: none;
+	}
+
+	.bodyCell:first-child {
+		padding-top: 0;
+		border-top: none;
+	}
+
+	.bodyCell:last-child {
+		padding-bottom: 0;
+	}
+
+	.bodyCell[data-column-key="name"] {
+		display: block;
+		padding-bottom: 0.75rem;
+	}
+
+	.bodyCell[data-column-key="name"]::before {
+		display: none;
+	}
+
+	.bodyCell :global(.hide-on-card) {
+		display: none;
+	}
+
+	.body :global(tr:first-child) .bodyCell {
+		border-top: 1px solid color-mix(in srgb, var(--border-primary) 70%, transparent);
+	}
+
+	.body :global(tr:first-child) .bodyCell:first-child {
+		border-top: none;
+	}
+
+	.headCell {
+		padding-left: 0.8rem;
+		padding-right: 0.8rem;
+	}
+}

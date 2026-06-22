@@ -253,9 +253,9 @@ describe("MedicationEnrichmentSection", () => {
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
 
 		expect(screen.getByText("form.enrichment.details.packageSizes")).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "1 blister pack · 10 tablets" })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "1 blister pack · 20 tablets" })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "1 bottle · 30 tablets" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "1 blister pack - 10 tablets" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "1 blister pack - 20 tablets" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "1 bottle - 30 tablets" })).toBeInTheDocument();
 		expect(screen.queryByText("10 tablets in 1 blister (59651-083-14)")).not.toBeInTheDocument();
 		expect(screen.queryByText("30 tablets in 1 bottle (00093-7424-56)")).not.toBeInTheDocument();
 	});
@@ -316,9 +316,9 @@ describe("MedicationEnrichmentSection", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
 
-		expect(screen.getByText("1 bottle · 60 capsules")).toBeInTheDocument();
+		expect(screen.getByText("1 bottle - 60 capsules")).toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: /60 CAPSULE, DELAYED RELEASE in 1 BOTTLE/ })).not.toBeInTheDocument();
-		expect(screen.getByText("form.enrichment.appliedPackage: 1 bottle · 60 capsules")).toBeInTheDocument();
+		expect(screen.getByText("form.enrichment.appliedPackage: 1 bottle - 60 capsules")).toBeInTheDocument();
 	});
 
 	it("removes inline package codes even when they appear before the slash", () => {
@@ -378,7 +378,7 @@ describe("MedicationEnrichmentSection", () => {
 			/>
 		);
 
-		const cleanedLabel = "1 bottle · 60 capsules";
+		const cleanedLabel = "1 bottle - 60 capsules";
 
 		expect(screen.queryByText(/31722-658-32/)).not.toBeInTheDocument();
 
@@ -429,7 +429,7 @@ describe("MedicationEnrichmentSection", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
 
-		expect(screen.getByText("1 blister pack · 10 × 10 capsules")).toBeInTheDocument();
+		expect(screen.getByText("1 blister pack - 10 × 10 capsules")).toBeInTheDocument();
 	});
 
 	it("renders multiple inline package options as buttons and preserves raw package data in callbacks", () => {
@@ -475,8 +475,8 @@ describe("MedicationEnrichmentSection", () => {
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
 
 		const packageSizesSection = screen.getByText("form.enrichment.details.packageSizes").closest("div");
-		const selectedPackageButton = screen.getByRole("button", { name: "1 blister pack · 10 tablets" });
-		const alternatePackageButton = screen.getByRole("button", { name: "1 bottle · 30 tablets" });
+		const selectedPackageButton = screen.getByRole("button", { name: "1 blister pack - 10 tablets" });
+		const alternatePackageButton = screen.getByRole("button", { name: "1 bottle - 30 tablets" });
 		const packageChoiceList = selectedPackageButton.closest("div");
 
 		expect(packageSizesSection).toHaveClass("medication-enrichment-result-meta-full");
@@ -485,9 +485,9 @@ describe("MedicationEnrichmentSection", () => {
 			"medication-enrichment-package-choice-list"
 		);
 		expect(selectedPackageButton).toHaveAttribute("aria-pressed", "true");
-		expect(selectedPackageButton).toHaveAttribute("title", "1 blister pack · 10 tablets");
+		expect(selectedPackageButton).toHaveAttribute("title", "1 blister pack - 10 tablets");
 		expect(alternatePackageButton).toHaveAttribute("aria-pressed", "false");
-		expect(alternatePackageButton).toHaveAttribute("title", "1 bottle · 30 tablets");
+		expect(alternatePackageButton).toHaveAttribute("title", "1 bottle - 30 tablets");
 		expect(screen.queryByRole("button", { name: packageOptions[1].description })).not.toBeInTheDocument();
 
 		fireEvent.click(alternatePackageButton);
@@ -566,8 +566,8 @@ describe("MedicationEnrichmentSection", () => {
 		expect(screen.getAllByText("form.enrichment.sources.openfda")).toHaveLength(1);
 		fireEvent.click(screen.getAllByRole("button", { name: "form.enrichment.details.showAction" })[0]);
 
-		expect(screen.getByRole("button", { name: "1 blister pack · 10 tablets" })).toBeInTheDocument();
-		expect(screen.getAllByRole("button", { name: "1 bottle · 30 tablets" })).toHaveLength(1);
+		expect(screen.getByRole("button", { name: "1 blister pack - 10 tablets" })).toBeInTheDocument();
+		expect(screen.getAllByRole("button", { name: "1 bottle - 30 tablets" })).toHaveLength(1);
 	});
 
 	it("keeps the original source result and raw package option when clicking grouped package choices", () => {
@@ -615,7 +615,7 @@ describe("MedicationEnrichmentSection", () => {
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
-		fireEvent.click(screen.getByRole("button", { name: "1 bottle · 30 tablets" }));
+		fireEvent.click(screen.getByRole("button", { name: "1 bottle - 30 tablets" }));
 
 		expect(onApplyResult).toHaveBeenCalledWith(secondResult, secondPackageOption);
 	});
@@ -745,7 +745,6 @@ describe("MedicationEnrichmentSection", () => {
 		expect(screen.getByText("form.enrichment.sources.rxnorm")).toBeInTheDocument();
 		const openFdaBadge = screen.getByText("form.enrichment.sources.openfda");
 		expect(openFdaBadge).toBeInTheDocument();
-		expect(openFdaBadge).toHaveClass("warning");
 		expect(screen.getByText("form.enrichment.packageAvailable")).toBeInTheDocument();
 		expect(screen.getByText("form.enrichment.packageUnavailable")).toBeInTheDocument();
 		expect(screen.queryByText("form.enrichment.genericStatus.unknown")).not.toBeInTheDocument();
@@ -861,7 +860,7 @@ describe("MedicationEnrichmentSection", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
 
-		const packageButton = screen.getByRole("button", { name: "1 bottle · 60 capsules" });
+		const packageButton = screen.getByRole("button", { name: "1 bottle - 60 capsules" });
 		expect(packageButton).toBeDisabled();
 		expect(packageButton.querySelector(".medication-enrichment-spinner")).not.toBeNull();
 		expect(screen.getByText("form.enrichment.strengthTitle")).toBeInTheDocument();
@@ -1087,8 +1086,8 @@ describe("MedicationEnrichmentSection", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "form.enrichment.details.showAction" }));
 
-		const selectedPackageButton = screen.getByRole("button", { name: "1 bottle · 100 ml" });
-		const alternatePackageButton = screen.getByRole("button", { name: "1 bottle · 200 ml" });
+		const selectedPackageButton = screen.getByRole("button", { name: "1 bottle - 100 ml" });
+		const alternatePackageButton = screen.getByRole("button", { name: "1 bottle - 200 ml" });
 		const packageChoiceList = selectedPackageButton.closest("div");
 
 		expect(packageChoiceList).toHaveClass(
@@ -1096,11 +1095,11 @@ describe("MedicationEnrichmentSection", () => {
 			"medication-enrichment-package-choice-list"
 		);
 		expect(selectedPackageButton).toHaveAttribute("aria-pressed", "true");
-		expect(selectedPackageButton).toHaveAttribute("title", "1 bottle · 100 ml");
+		expect(selectedPackageButton).toHaveAttribute("title", "1 bottle - 100 ml");
 		expect(alternatePackageButton).toHaveAttribute("aria-pressed", "false");
-		expect(alternatePackageButton).toHaveAttribute("title", "1 bottle · 200 ml");
+		expect(alternatePackageButton).toHaveAttribute("title", "1 bottle - 200 ml");
 		expect(screen.queryByRole("button", { name: selectedPackageOption.label })).not.toBeInTheDocument();
-		expect(screen.getByText("form.enrichment.appliedPackage: 1 bottle · 100 ml")).toBeInTheDocument();
+		expect(screen.getByText("form.enrichment.appliedPackage: 1 bottle - 100 ml")).toBeInTheDocument();
 		expect(screen.queryByText("form.enrichment.packageTitle")).not.toBeInTheDocument();
 		expect(screen.queryByText("form.enrichment.applied")).not.toBeInTheDocument();
 

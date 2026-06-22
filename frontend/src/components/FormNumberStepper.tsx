@@ -1,4 +1,5 @@
 import { Minus, Plus } from "lucide-react";
+import classes from "./FormNumberStepper.module.css";
 
 interface FormNumberStepperProps {
 	value: string;
@@ -64,7 +65,7 @@ export function FormNumberStepper({
 	const canDecrement = baseValue > min;
 	const canIncrement = max == null || baseValue < max;
 
-	const normalizedClassName = ["number-stepper", "form-number-stepper", className].filter(Boolean).join(" ");
+	const normalizedClassName = [classes.numberStepper, className].filter(Boolean).join(" ");
 
 	const handleStep = (direction: -1 | 1) => {
 		const nextRaw = clamp(baseValue + direction * step, min, max);
@@ -96,7 +97,7 @@ export function FormNumberStepper({
 			/>
 			<button
 				type="button"
-				className="stepper-btn decrement"
+				className={[classes.stepperButton, classes.decrement].join(" ")}
 				onClick={() => handleStep(-1)}
 				disabled={!canDecrement}
 				aria-label={decrementLabel}
@@ -105,7 +106,7 @@ export function FormNumberStepper({
 			</button>
 			<button
 				type="button"
-				className="stepper-btn increment"
+				className={[classes.stepperButton, classes.increment].join(" ")}
 				onClick={() => handleStep(1)}
 				disabled={!canIncrement}
 				aria-label={incrementLabel}

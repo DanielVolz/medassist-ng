@@ -1,0 +1,328 @@
+.category {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem 1.25rem;
+	padding: 0.95rem;
+	border: 1px solid var(--border-secondary);
+	border-radius: 12px;
+	background: var(--bg-tertiary);
+}
+
+.category :global(.full) {
+	grid-column: 1 / -1;
+}
+
+.category :global(.date-input-display) {
+	display: none;
+}
+
+.category > label:not(:global(.full)) {
+	align-self: end;
+}
+
+.categoryTitle {
+	grid-column: 1 / -1;
+	margin: 0;
+	color: var(--accent-light);
+	font-size: 0.78rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.categoryHeader {
+	display: flex;
+	grid-column: 1 / -1;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.categoryHeader .categoryTitle {
+	margin: 0;
+}
+
+.imageSection {
+	grid-template-columns: 1fr;
+}
+
+.imagePreview {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 0.75rem;
+	width: 100%;
+	min-width: 0;
+}
+
+.imagePreviewImage {
+	display: block;
+	width: auto;
+	max-width: min(100%, 18rem);
+	max-height: 14rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 10px;
+	background: var(--bg-primary);
+	object-fit: contain;
+}
+
+.imagePreview button {
+	margin-left: auto;
+}
+
+.imageSection input[type="file"] {
+	grid-column: 1 / -1;
+	font-size: 0.9rem;
+}
+
+.imageSection input[type="file"]::file-selector-button {
+	margin-right: 0.75rem;
+	padding: 0.5rem 1rem;
+	border: none;
+	border-radius: 6px;
+	background: var(--accent);
+	color: white;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.imageSection input[type="file"]::file-selector-button:hover {
+	background: var(--accent-light);
+}
+
+@media (max-width: 768px) {
+	.imagePreview {
+		align-items: center;
+		gap: 0.65rem;
+	}
+
+	.imagePreviewImage {
+		max-width: min(100%, 16rem);
+		max-height: 12rem;
+	}
+}
+
+.intakeSection :global(.blister-row) {
+	grid-column: 1 / -1;
+}
+
+.intakeRow {
+	display: block;
+}
+
+.intakeFields {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.85rem;
+	align-items: end;
+}
+
+.intakeFields > label {
+	min-width: 0;
+}
+
+.intakeWideField,
+.intakeTakenByField {
+	grid-column: span 2;
+}
+
+.fieldLabelWithTooltip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	width: fit-content;
+	max-width: 100%;
+}
+
+.intakeActions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.65rem;
+	min-width: 0;
+	min-height: 2.85rem;
+}
+
+.intakeReminderAction {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-width: 0;
+	min-height: 2.65rem;
+	padding: 0.45rem 0.65rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+	color: var(--text-secondary);
+	white-space: nowrap;
+}
+
+.intakeReminderAction > svg {
+	flex: 0 0 auto;
+	color: var(--text-secondary);
+}
+
+.intakeReminderAction :global(.mantine-Group-root) {
+	flex-wrap: nowrap;
+	gap: 0.45rem;
+}
+
+.intakeReminderAction :global(.mantine-Checkbox-root) {
+	min-width: 0;
+}
+
+.intakeReminderAction :global(.mantine-Checkbox-label) {
+	color: var(--text-primary);
+	font-size: 0.85rem;
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+	white-space: nowrap;
+}
+
+.intakeRemoveAction {
+	flex: 0 0 auto;
+	min-height: 2.65rem;
+}
+
+.intakeWideField,
+.intakeTakenByField,
+.intakeActions {
+	grid-column: 1 / -1;
+}
+
+.intakeActions {
+	justify-content: space-between;
+}
+
+@media (max-width: 420px) {
+	.intakeActions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.intakeReminderAction,
+	.intakeRemoveAction {
+		width: 100%;
+	}
+
+	.intakeReminderAction {
+		justify-content: flex-start;
+	}
+}
+
+.tabs {
+	display: flex;
+	grid-column: 1 / -1;
+	gap: 2px;
+	margin-bottom: 0;
+	padding: 3px;
+	min-height: 2.75rem;
+	overflow-x: auto;
+	overflow-y: hidden;
+	border: 1px solid var(--border-primary);
+	border-radius: 10px 10px 0 0;
+	background: var(--bg-tertiary);
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+
+.tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.tab {
+	display: inline-flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	min-height: 2.25rem;
+	padding: 0.5rem 0.75rem;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-align: center;
+	text-decoration: none;
+	text-transform: uppercase;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+	transition:
+		color 0.15s ease,
+		background 0.15s ease,
+		box-shadow 0.15s ease;
+}
+
+.tab:hover {
+	background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+	color: var(--text-primary);
+}
+
+.tabActive {
+	background: color-mix(in srgb, var(--accent) 55%, var(--bg-tertiary));
+	color: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.tabPanel {
+	display: none;
+}
+
+.tabPanelActive {
+	display: contents;
+}
+
+.selectField,
+.packageTypeSelect {
+	width: 100%;
+	padding: 0.6rem 2rem 0.6rem 0.75rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	background-color: var(--bg-secondary);
+	background-position: right 0.9rem center;
+	color: var(--text-primary);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.selectField:hover,
+.packageTypeSelect:hover {
+	border-color: var(--accent);
+}
+
+.selectField:focus,
+.packageTypeSelect:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+.doseUnitSelect {
+	flex-shrink: 0;
+	width: auto;
+	min-width: unset;
+	max-width: 120px;
+	padding: 0.5rem 2rem 0.5rem 0.75rem;
+	border: 1px solid var(--border-primary);
+	border-radius: var(--input-radius);
+	background-color: var(--bg-primary);
+	background-position: right 0.6rem center;
+	color: var(--text-primary);
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: border-color 150ms ease;
+}
+
+.doseUnitSelect:hover,
+.doseUnitSelect:focus {
+	border-color: var(--accent);
+}
+
+.doseUnitSelect:focus {
+	outline: none;
+}

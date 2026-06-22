@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { useEffect, useRef, useState } from "react";
+import classes from "./MedicationAvatar.module.css";
 
 export type MedicationAvatarProps = {
 	name: string;
@@ -28,7 +29,7 @@ export function MedicationAvatar({ name, imageUrl, size = "sm", imageSrcResolver
 			.join("")
 			.toUpperCase()
 			.slice(0, 2) || "?";
-	const sizeClass = `med-avatar med-avatar-${size}`;
+	const sizeClass = [classes.avatar, classes[size], "med-avatar", `med-avatar-${size}`].join(" ");
 
 	if (imageUrl) {
 		const normalizedImageUrl = imageUrl.toLowerCase();
@@ -53,5 +54,5 @@ export function MedicationAvatar({ name, imageUrl, size = "sm", imageSrcResolver
 			/>
 		);
 	}
-	return <div className={`${sizeClass} med-avatar-initials`}>{initials}</div>;
+	return <div className={`${sizeClass} ${classes.initials} med-avatar-initials`}>{initials}</div>;
 }

@@ -3,13 +3,17 @@
  * Allows sharing schedule view for a specific person
  */
 
-import { Check, Copy, Link2, RefreshCw, Trash2, X } from "lucide-react";
+import { Alert } from "@mantine/core";
+import { Check, Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useModalHistory } from "../hooks";
 import type { ActiveShareLink } from "../hooks/useShare";
+import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppTooltip } from "../ui/primitives/AppTooltip";
 import { ConfirmModal } from "./ConfirmModal";
-import { ModalFrame } from "./ModalFrame";
+import classes from "./ShareDialog.module.css";
 
 export interface ShareDialogProps {
 	show: boolean;
@@ -110,58 +114,81 @@ export function ShareDialog({
 		}
 
 		return (
-			<ul className="share-active-list">
+			<ul className={classes.activeList}>
 				{activeShareLinks.map((share) => {
 					const personLabel = getPersonLabel(share.takenBy);
 					const createdAtLabel = new Date(share.createdAt).toLocaleDateString();
 					const expiresAtLabel = share.expiresAt ? new Date(share.expiresAt).toLocaleDateString() : null;
 					const lastUsedAtLabel = share.lastUsedAt ? new Date(share.lastUsedAt).toLocaleDateString() : null;
+					let expiryLabel = t("share.expiryNever");
+					if (share.legacyNeverExpires) {
+						expiryLabel = t("share.activeLinkLegacyExpiry");
+					}
+					if (expiresAtLabel) {
+						expiryLabel = expiresAtLabel;
+					}
+					const permissionLabels = [
+						share.allowMarkTaken ? t("share.markTakenEnabled") : t("share.readOnly"),
+						share.allowJournalNotes ? t("share.journalNotesEnabled") : null,
+					].filter((permission): permission is string => permission !== null);
+
 					return (
-						<li key={share.token} className="share-active-item">
-							<div className="share-active-copy">
-								<a href={`${window.location.origin}${share.shareUrl}`} className="share-link-inline">
-									{personLabel}
-								</a>
-								<span className="hint-text">
-									{expiresAtLabel
-										? t("share.activeLinkMetaWithExpiry", {
-												person: personLabel,
-												days: share.scheduleDays,
-												createdAt: createdAtLabel,
-												expiresAt: expiresAtLabel,
-											})
-										: t("share.activeLinkMeta", {
-												person: personLabel,
-												days: share.scheduleDays,
-												createdAt: createdAtLabel,
-											})}
-									{lastUsedAtLabel ? ` · ${t("share.lastUsedAt", { date: lastUsedAtLabel })}` : ""}
-									{share.legacyNeverExpires ? ` · ${t("share.legacyNeverExpires")}` : ""}
-									{share.allowMarkTaken ? ` · ${t("share.markTakenEnabled")}` : ` · ${t("share.readOnly")}`}
-									{share.allowJournalNotes ? ` · ${t("share.journalNotesEnabled")}` : ""}
-								</span>
+						<li key={share.token} className={classes.activeItem}>
+							<div className={classes.activeCopy}>
+								<div className={classes.activeHeading}>
+									<a href={`${window.location.origin}${share.shareUrl}`} className={classes.linkInline}>
+										{personLabel}
+									</a>
+									<span className={classes.periodPill}>{t("share.activeLinkDays", { count: share.scheduleDays })}</span>
+								</div>
+								<dl className={classes.activeMetaGrid}>
+									<div className={classes.metaCell}>
+										<dt>{t("share.activeLinkCreatedLabel")}</dt>
+										<dd>{createdAtLabel}</dd>
+									</div>
+									<div className={classes.metaCell}>
+										<dt>{t("share.activeLinkExpiresLabel")}</dt>
+										<dd>{expiryLabel}</dd>
+									</div>
+									{lastUsedAtLabel ? (
+										<div className={classes.metaCell}>
+											<dt>{t("share.activeLinkLastUsedLabel")}</dt>
+											<dd>{lastUsedAtLabel}</dd>
+										</div>
+									) : null}
+								</dl>
+								<div className={classes.permissionsBlock}>
+									<span className={classes.permissionsLabel}>{t("share.activeLinkPermissionsLabel")}</span>
+									<div className={classes.permissionChips}>
+										{permissionLabels.map((permission) => (
+											<span key={permission} className={classes.permissionChip}>
+												{permission}
+											</span>
+										))}
+									</div>
+								</div>
 							</div>
-							<div className="share-active-actions">
-								<button
+							<div className={classes.activeActions}>
+								<AppButton
 									type="button"
-									className="ghost"
+									leftSection={<RefreshCw size={14} aria-hidden="true" />}
+									size="xs"
+									tone="secondary"
 									disabled={regeneratingShareToken === share.token || revokingShareToken === share.token}
 									onClick={() => setShareToRegenerate(share)}
 								>
-									<RefreshCw size={14} aria-hidden="true" />
-									<span>
-										{regeneratingShareToken === share.token ? t("share.regenerating") : t("share.regenerate")}
-									</span>
-								</button>
-								<button
+									{regeneratingShareToken === share.token ? t("share.regenerating") : t("share.regenerate")}
+								</AppButton>
+								<AppButton
 									type="button"
-									className="ghost"
+									leftSection={<Trash2 size={14} aria-hidden="true" />}
+									size="xs"
+									tone="secondary"
 									disabled={revokingShareToken === share.token || regeneratingShareToken === share.token}
 									onClick={() => setShareToRevoke(share)}
 								>
-									<Trash2 size={14} aria-hidden="true" />
-									<span>{revokingShareToken === share.token ? t("share.revoking") : t("share.revoke")}</span>
-								</button>
+									{revokingShareToken === share.token ? t("share.revoking") : t("share.revoke")}
+								</AppButton>
 							</div>
 						</li>
 					);
@@ -171,176 +198,188 @@ export function ShareDialog({
 	};
 
 	const renderManageLinks = () => (
-		<div className="share-dialog-manage">
+		<div className={classes.manage}>
 			<button
 				type="button"
-				className="share-dialog-manage-summary"
+				className={classes.manageSummary}
 				onClick={() => setManageLinksOpen((current) => !current)}
 				aria-expanded={manageLinksOpen}
 			>
 				<span>{t("share.manageLinksSummary", { count: activeShareLinks.length })}</span>
-				<span className="share-dialog-manage-count">
-					{manageLinksOpen ? t("common.hide") : activeShareLinks.length}
-				</span>
+				<span className={classes.manageCount}>{manageLinksOpen ? t("common.hide") : activeShareLinks.length}</span>
 			</button>
-			{manageLinksOpen ? <div className="share-dialog-manage-content">{renderActiveShares()}</div> : null}
+			{manageLinksOpen ? <div className={classes.manageContent}>{renderActiveShares()}</div> : null}
 		</div>
 	);
 
 	return (
-		<ModalFrame
-			contentClassName="share-dialog-modal"
+		<AppModal
+			classNames={{
+				body: classes.modalBody,
+				header: classes.modalHeader,
+				title: classes.modalTitle,
+			}}
+			contentClassName={classes.modal}
 			onClose={onClose}
-			closeButton={
-				<button
-					type="button"
-					className="modal-close tooltip-trigger"
-					onClick={onClose}
-					aria-label={closeLabel}
-					data-tooltip={closeLabel}
-				>
-					<X size={18} aria-hidden="true" />
-				</button>
-			}
-		>
-			<div className="share-dialog-header">
-				<h2>
+			opened={show}
+			closeButtonProps={{ "aria-label": closeLabel }}
+			closeOnEscape={false}
+			lockScroll={false}
+			manageEscape={false}
+			manageScrollLock={false}
+			size={640}
+			title={
+				<span className={classes.titleLine}>
 					<Link2 size={18} aria-hidden="true" /> {t("share.title")}
-				</h2>
-				<p className="share-dialog-description">{t("share.description")}</p>
+				</span>
+			}
+			withCloseButton
+		>
+			<div className={classes.header}>
+				<p className={classes.description}>{t("share.description")}</p>
 			</div>
 
 			{(() => {
 				if (sharePeople.length === 0) {
 					return (
-						<div className="share-dialog-empty">
+						<div className={classes.empty}>
 							<p>{t("share.noPeople")}</p>
-							<div className="share-dialog-active-links">{renderManageLinks()}</div>
+							<div className={classes.activeLinks}>{renderManageLinks()}</div>
 						</div>
 					);
 				}
 				if (shareLink) {
 					return (
-						<div className="share-dialog-result">
-							<p className="share-success">{t("share.linkGenerated")}</p>
-							<p className="share-link-label">{t("share.scheduleLink")}</p>
-							<div className="share-link-box">
-								<input
-									type="text"
-									value={shareLink}
-									readOnly
-									className="share-link-input"
-									onClick={(e) => (e.target as HTMLInputElement).select()}
-								/>
-								<button
-									type="button"
-									className="btn-copy icon-only tooltip-trigger"
-									onClick={onCopyShareLink}
-									aria-label={copyLabel}
-									data-tooltip={copyLabel}
-								>
-									{shareCopied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
-								</button>
+						<>
+							<div className={classes.result}>
+								<Alert color="green" variant="light">
+									{t("share.linkGenerated")}
+								</Alert>
+								<p className={classes.linkLabel}>{t("share.scheduleLink")}</p>
+								<div className={classes.linkBox}>
+									<input
+										type="text"
+										value={shareLink}
+										readOnly
+										className={`${classes.linkInput} share-link-input`}
+										onClick={(e) => (e.target as HTMLInputElement).select()}
+									/>
+									<AppTooltip label={copyLabel}>
+										<button
+											type="button"
+											className={`${classes.copyButton} btn-copy`}
+											onClick={onCopyShareLink}
+											aria-label={copyLabel}
+										>
+											{shareCopied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
+										</button>
+									</AppTooltip>
+								</div>
+								{shareCopied && <span className={classes.copiedHint}>{t("share.copied")}</span>}
+								<div className={classes.activeLinks}>{renderManageLinks()}</div>
 							</div>
-							{shareCopied && <span className="share-copied-hint">{t("share.copied")}</span>}
-							<div className="share-dialog-footer">
-								<button
-									className="ghost"
+							<AppModalFooter>
+								<AppButton
+									type="button"
+									tone="ghost"
 									onClick={() => {
 										onShareLinkChange(null);
 										onShareCopiedChange(false);
 									}}
 								>
 									{t("share.generateAnother")}
-								</button>
-								<button onClick={onClose}>{t("common.close")}</button>
-							</div>
-							<div className="share-dialog-active-links">{renderManageLinks()}</div>
-						</div>
+								</AppButton>
+								<AppButton type="button" onClick={onClose} tone="secondary">
+									{t("common.close")}
+								</AppButton>
+							</AppModalFooter>
+						</>
 					);
 				}
 				return (
-					<div className="share-dialog-form">
-						<div className="form-group">
-							<label htmlFor="share-person-select">{t("share.selectPerson")}</label>
-							<select
-								id="share-person-select"
-								className="select-field"
-								value={shareSelectedPerson}
-								onChange={(e) => onShareSelectedPersonChange(e.target.value)}
-							>
-								{sharePeople.map((person) => (
-									<option key={person} value={person}>
-										{getPersonLabel(person)}
-									</option>
-								))}
-							</select>
+					<>
+						<div className={classes.form}>
+							<div className={classes.formGroup}>
+								<label htmlFor="share-person-select">{t("share.selectPerson")}</label>
+								<select
+									id="share-person-select"
+									className={classes.selectField}
+									value={shareSelectedPerson}
+									onChange={(e) => onShareSelectedPersonChange(e.target.value)}
+								>
+									{sharePeople.map((person) => (
+										<option key={person} value={person}>
+											{getPersonLabel(person)}
+										</option>
+									))}
+								</select>
+							</div>
+
+							<div className={classes.formGroup}>
+								<label htmlFor="share-period-select">{t("share.selectPeriod")}</label>
+								<select
+									id="share-period-select"
+									className={classes.selectField}
+									value={shareSelectedDays}
+									onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}
+								>
+									<option value={30}>{t("dashboard.schedules.1month")}</option>
+									<option value={90}>{t("dashboard.schedules.3months")}</option>
+									<option value={180}>{t("dashboard.schedules.6months")}</option>
+								</select>
+							</div>
+
+							<div className={classes.formGroup}>
+								<label htmlFor="share-expiry-select">{t("share.selectExpiry")}</label>
+								<select
+									id="share-expiry-select"
+									className={classes.selectField}
+									value={shareSelectedExpiryDays == null ? "never" : String(shareSelectedExpiryDays)}
+									onChange={(e) =>
+										onShareSelectedExpiryDaysChange(e.target.value === "never" ? null : Number(e.target.value))
+									}
+								>
+									<option value="never">{t("share.expiryNever")}</option>
+									<option value="7">{t("share.expiry7Days")}</option>
+									<option value="30">{t("share.expiry30Days")}</option>
+									<option value="90">{t("share.expiry90Days")}</option>
+								</select>
+								{shareSelectedExpiryDays == null ? (
+									<p className={classes.warningText}>{t("share.neverExpiresWarning")}</p>
+								) : null}
+							</div>
+
+							<label className={classes.inlineCheckbox} htmlFor="share-mark-taken-toggle">
+								<input
+									id="share-mark-taken-toggle"
+									type="checkbox"
+									checked={shareAllowMarkTaken}
+									onChange={(event) => onShareAllowMarkTakenChange(event.target.checked)}
+								/>
+								<span>{t("share.allowMarkTaken")}</span>
+							</label>
+
+							<label className={classes.inlineCheckbox} htmlFor="share-journal-notes-toggle">
+								<input
+									id="share-journal-notes-toggle"
+									type="checkbox"
+									checked={shareAllowJournalNotes}
+									onChange={(event) => onShareAllowJournalNotesChange(event.target.checked)}
+								/>
+								<span>{t("share.allowJournalNotes")}</span>
+							</label>
+
+							<div className={classes.activeLinks}>{renderManageLinks()}</div>
 						</div>
-
-						<div className="form-group">
-							<label htmlFor="share-period-select">{t("share.selectPeriod")}</label>
-							<select
-								id="share-period-select"
-								className="select-field"
-								value={shareSelectedDays}
-								onChange={(e) => onShareSelectedDaysChange(Number(e.target.value))}
-							>
-								<option value={30}>{t("dashboard.schedules.1month")}</option>
-								<option value={90}>{t("dashboard.schedules.3months")}</option>
-								<option value={180}>{t("dashboard.schedules.6months")}</option>
-							</select>
-						</div>
-
-						<div className="form-group">
-							<label htmlFor="share-expiry-select">{t("share.selectExpiry")}</label>
-							<select
-								id="share-expiry-select"
-								className="select-field"
-								value={shareSelectedExpiryDays == null ? "never" : String(shareSelectedExpiryDays)}
-								onChange={(e) =>
-									onShareSelectedExpiryDaysChange(e.target.value === "never" ? null : Number(e.target.value))
-								}
-							>
-								<option value="never">{t("share.expiryNever")}</option>
-								<option value="7">{t("share.expiry7Days")}</option>
-								<option value="30">{t("share.expiry30Days")}</option>
-								<option value="90">{t("share.expiry90Days")}</option>
-							</select>
-							{shareSelectedExpiryDays == null ? (
-								<p className="hint-text warning-text">{t("share.neverExpiresWarning")}</p>
-							) : null}
-						</div>
-
-						<label className="inline-checkbox" htmlFor="share-mark-taken-toggle">
-							<input
-								id="share-mark-taken-toggle"
-								type="checkbox"
-								checked={shareAllowMarkTaken}
-								onChange={(event) => onShareAllowMarkTakenChange(event.target.checked)}
-							/>
-							<span>{t("share.allowMarkTaken")}</span>
-						</label>
-
-						<label className="inline-checkbox" htmlFor="share-journal-notes-toggle">
-							<input
-								id="share-journal-notes-toggle"
-								type="checkbox"
-								checked={shareAllowJournalNotes}
-								onChange={(event) => onShareAllowJournalNotesChange(event.target.checked)}
-							/>
-							<span>{t("share.allowJournalNotes")}</span>
-						</label>
-
-						<div className="share-dialog-footer">
-							<button className="ghost" onClick={onClose}>
+						<AppModalFooter>
+							<AppButton type="button" tone="secondary" onClick={onClose}>
 								{t("common.close")}
-							</button>
-							<button onClick={onGenerateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
+							</AppButton>
+							<AppButton type="button" onClick={onGenerateShareLink} disabled={shareGenerating || !shareSelectedPerson}>
 								{shareGenerating ? t("share.generating") : t("share.generateLink")}
-							</button>
-						</div>
-						<div className="share-dialog-active-links">{renderManageLinks()}</div>
-					</div>
+							</AppButton>
+						</AppModalFooter>
+					</>
 				);
 			})()}
 			{shareToRevoke && (
@@ -380,6 +419,6 @@ export function ShareDialog({
 					overlayClassName="nested-confirm"
 				/>
 			)}
-		</ModalFrame>
+		</AppModal>
 	);
 }

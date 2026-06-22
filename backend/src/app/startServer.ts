@@ -6,6 +6,7 @@ import { startReminderScheduler } from "../services/reminder-scheduler.js";
 export interface StartServerOptions {
 	port: number;
 	host?: string;
+	medicationEnrichmentStartupRefreshEnabled?: boolean;
 }
 
 function buildFastifyServiceLogger(app: FastifyInstance) {
@@ -23,10 +24,17 @@ function buildFastifyServiceLogger(app: FastifyInstance) {
 	};
 }
 
-export function startRuntimeSchedulers(app: FastifyInstance): void {
+export function startRuntimeSchedulers(
+	app: FastifyInstance,
+	options: Pick<StartServerOptions, "medicationEnrichmentStartupRefreshEnabled"> = {}
+): void {
 	const serviceLogger = buildFastifyServiceLogger(app);
+	const medicationEnrichmentOptions =
+		options.medicationEnrichmentStartupRefreshEnabled === undefined
+			? {}
+			: { startupRefreshEnabled: options.medicationEnrichmentStartupRefreshEnabled };
 	startReminderScheduler(serviceLogger);
-	startMedicationEnrichmentCatalogRefresh(serviceLogger);
+	startMedicationEnrichmentCatalogRefresh(serviceLogger, medicationEnrichmentOptions);
 	startIntakeReminderScheduler(serviceLogger);
 }
 
@@ -34,5 +42,9 @@ export async function startServer(app: FastifyInstance, options: StartServerOpti
 	const host = options.host ?? "0.0.0.0";
 	await app.listen({ port: options.port, host });
 	app.log.info(`Server running on ${options.port}`);
-	startRuntimeSchedulers(app);
+	const schedulerOptions =
+		options.medicationEnrichmentStartupRefreshEnabled === undefined
+			? {}
+			: { medicationEnrichmentStartupRefreshEnabled: options.medicationEnrichmentStartupRefreshEnabled };
+	startRuntimeSchedulers(app, schedulerOptions);
 }

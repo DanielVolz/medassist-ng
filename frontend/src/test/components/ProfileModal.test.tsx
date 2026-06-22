@@ -28,7 +28,7 @@ describe("ProfileModal", () => {
 		const onClose = vi.fn();
 		render(<ProfileModal isOpen={true} onClose={onClose} />);
 
-		const closeBtn = screen.getByText("×");
+		const closeBtn = screen.getByRole("button", { name: /common\.close/i });
 		expect(closeBtn).toBeInTheDocument();
 	});
 
@@ -36,7 +36,7 @@ describe("ProfileModal", () => {
 		const onClose = vi.fn();
 		render(<ProfileModal isOpen={true} onClose={onClose} />);
 
-		const closeBtn = screen.getByText("×");
+		const closeBtn = screen.getByRole("button", { name: /common\.close/i });
 		fireEvent.click(closeBtn);
 
 		expect(onClose).toHaveBeenCalledTimes(1);
@@ -46,7 +46,7 @@ describe("ProfileModal", () => {
 		const onClose = vi.fn();
 		render(<ProfileModal isOpen={true} onClose={onClose} />);
 
-		const overlay = document.querySelector(".modal-overlay");
+		const overlay = document.querySelector(".mantine-Modal-overlay");
 		if (overlay) {
 			fireEvent.click(overlay);
 		}
@@ -58,10 +58,7 @@ describe("ProfileModal", () => {
 		const onClose = vi.fn();
 		render(<ProfileModal isOpen={true} onClose={onClose} />);
 
-		const content = document.querySelector(".modal-content");
-		if (content) {
-			fireEvent.click(content);
-		}
+		fireEvent.click(screen.getByRole("dialog"));
 
 		expect(onClose).not.toHaveBeenCalled();
 	});

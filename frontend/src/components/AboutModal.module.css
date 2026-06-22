@@ -1,0 +1,115 @@
+.modal {
+	max-height: min(90vh, 760px);
+	overflow-y: auto;
+}
+
+.modalHeader {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 1rem 1.25rem;
+	background: var(--mantine-other-bg-secondary);
+	border-bottom: 1px solid var(--mantine-other-border-primary);
+}
+
+.modalTitle {
+	font-size: 1rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	color: var(--mantine-other-text-primary);
+}
+
+.body {
+	padding: 0;
+}
+
+.hero {
+	padding: 2rem 1.5rem 1.5rem;
+	background: var(--mantine-other-bg-tertiary);
+	border-bottom: 1px solid var(--mantine-other-border-primary);
+}
+
+.logo {
+	margin: 0 auto 1rem;
+}
+
+.appName {
+	margin: 0 0 0.5rem;
+	font-size: 1.5rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	color: var(--mantine-other-text-primary);
+}
+
+.tagline {
+	margin: 0;
+	font-size: 0.875rem;
+	line-height: 1.4;
+	color: var(--mantine-other-text-secondary);
+}
+
+.section {
+	padding: 1.25rem 1.5rem;
+	border-bottom: 1px solid var(--mantine-other-border-primary);
+}
+
+.versionLabel {
+	font-size: 0.875rem;
+	color: var(--mantine-other-text-secondary);
+}
+
+.versionValue {
+	padding: 0.25rem 0.5rem;
+	font-family: var(--mantine-other-font-data);
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--mantine-other-accent);
+	text-decoration: none;
+	background: var(--mantine-other-bg-tertiary);
+	border-radius: 4px;
+}
+
+.versionValue:hover {
+	text-decoration: underline;
+}
+
+.githubLink {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	min-height: 40px;
+	padding: 0.625rem 1.25rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--mantine-other-text-primary);
+	text-decoration: none;
+	background: var(--mantine-other-bg-secondary);
+	border: 1px solid var(--mantine-other-border-primary);
+	border-radius: var(--mantine-other-button-radius);
+	transition:
+		background 150ms ease,
+		border-color 150ms ease;
+}
+
+.githubLink:hover {
+	background: var(--mantine-other-bg-tertiary);
+	border-color: var(--mantine-other-border-secondary);
+}
+
+.footer {
+	padding: 1.25rem 1.5rem;
+	background: var(--mantine-other-bg-tertiary);
+}
+
+.footerText {
+	margin: 0 0 0.25rem;
+	font-size: 0.75rem;
+	color: var(--mantine-other-text-secondary);
+}
+
+.license {
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--mantine-other-text-muted);
+}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { FormEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MedicationEnrichmentViewModel } from "../../components/MedicationEnrichmentSection";
@@ -94,6 +94,19 @@ const defaultProps = {
 	onSaveMedication: vi.fn(),
 };
 
+function dispatchTouchEvent(
+	element: HTMLElement,
+	type: "touchstart" | "touchmove" | "touchend",
+	point: { clientX: number; clientY: number }
+) {
+	const event = new Event(type, { bubbles: true, cancelable: true });
+	const touches = type === "touchend" ? [] : [point];
+	const changedTouches = [point];
+	Object.defineProperty(event, "touches", { value: touches });
+	Object.defineProperty(event, "changedTouches", { value: changedTouches });
+	fireEvent(element, event);
+}
+
 function createMedicationEnrichmentState(
 	overrides: Partial<MedicationEnrichmentViewModel> = {}
 ): MedicationEnrichmentViewModel {
@@ -132,9 +145,7 @@ describe("MobileEditModal", () => {
 	it("renders modal when show is true", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
-		// Should render the modal overlay
-		const modal = document.querySelector(".modal-overlay");
-		expect(modal).toBeInTheDocument();
+		expect(screen.getByRole("dialog")).toBeInTheDocument();
 	});
 
 	it("shows new entry title when not editing", () => {
@@ -149,21 +160,18 @@ describe("MobileEditModal", () => {
 		expect(screen.getByText(/form\.editEntry/i)).toBeInTheDocument();
 	});
 
-	it("renders close button", () => {
+	it("renders close and back buttons", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
-		const closeBtn = document.querySelector(".btn-nav");
-		expect(closeBtn).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "common.back" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "common.close" })).toBeInTheDocument();
 	});
 
-	it("calls onClose when close button clicked", () => {
+	it("calls onClose when back button is clicked", () => {
 		const onClose = vi.fn();
 		render(<MobileEditModal {...defaultProps} onClose={onClose} />);
 
-		const closeBtn = document.querySelector(".btn-nav");
-		if (closeBtn) {
-			fireEvent.click(closeBtn);
-		}
+		fireEvent.click(screen.getByRole("button", { name: "common.back" }));
 
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
@@ -390,11 +398,12 @@ describe("MobileEditModal", () => {
 		expect(saveBtn).toBeDisabled();
 	});
 
-	it("disables save when has validation errors", () => {
+	it("keeps save available when validation errors need correction", () => {
 		render(<MobileEditModal {...defaultProps} hasValidationErrors={true} />);
 
 		const saveBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
-		expect(saveBtn).toHaveClass("has-validation-error");
+		expect(saveBtn).toBeEnabled();
+		expect(saveBtn).toHaveTextContent("common.save");
 	});
 
 	it("renders add intake button", () => {
@@ -416,15 +425,51 @@ describe("MobileEditModal", () => {
 	it("renders modal content", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
-		const content = document.querySelector(".modal-content.edit-modal");
-		expect(content).toBeInTheDocument();
+		expect(screen.getByRole("dialog").querySelector("form")).toBeInTheDocument();
+	});
+
+	it("shows a dismissible mobile swipe hint and changes sections with horizontal swipes", async () => {
+		render(<MobileEditModal {...defaultProps} />);
+
+		const swipeHint = screen.getByRole("note");
+		expect(swipeHint).toHaveTextContent("form.mobileSwipeHint");
+		fireEvent.click(within(swipeHint).getByRole("button", { name: "form.dismissSwipeHint" }));
+		expect(screen.queryByRole("note")).not.toBeInTheDocument();
+		expect(window.localStorage.setItem).toHaveBeenCalledWith("medassist.mobileEditSwipeHintDismissed", "true");
+		expect(screen.getByRole("tab", { name: "form.sections.general" })).toHaveAttribute("aria-selected", "true");
+
+		const viewport = screen.getByTestId("mobile-edit-tab-viewport");
+		dispatchTouchEvent(viewport, "touchstart", { clientX: 320, clientY: 240 });
+		dispatchTouchEvent(viewport, "touchmove", { clientX: 160, clientY: 246 });
+		dispatchTouchEvent(viewport, "touchend", { clientX: 160, clientY: 246 });
+
+		await waitFor(() =>
+			expect(screen.getByRole("tab", { name: "form.sections.stock" })).toHaveAttribute("aria-selected", "true")
+		);
+
+		dispatchTouchEvent(viewport, "touchstart", { clientX: 160, clientY: 240 });
+		dispatchTouchEvent(viewport, "touchmove", { clientX: 320, clientY: 246 });
+		dispatchTouchEvent(viewport, "touchend", { clientX: 320, clientY: 246 });
+
+		await waitFor(() =>
+			expect(screen.getByRole("tab", { name: "form.sections.general" })).toHaveAttribute("aria-selected", "true")
+		);
+	});
+
+	it("does not show the mobile swipe hint after it was dismissed previously", () => {
+		vi.mocked(window.localStorage.getItem).mockReturnValue("true");
+
+		render(<MobileEditModal {...defaultProps} />);
+
+		expect(screen.queryByText("form.mobileSwipeHint")).not.toBeInTheDocument();
 	});
 
 	it("renders edit modal header", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
-		const header = document.querySelector(".edit-modal-header");
-		expect(header).toBeInTheDocument();
+		const dialog = screen.getByRole("dialog");
+		expect(within(dialog).getByRole("button", { name: "common.back" })).toBeInTheDocument();
+		expect(within(dialog).getByRole("heading", { name: "form.newEntry" })).toBeInTheDocument();
 	});
 
 	it("uses plain numeric input for tube amount without stepper controls", () => {
@@ -485,8 +530,7 @@ describe("MobileEditModal with existing people", () => {
 		render(<MobileEditModal {...defaultProps} existingPeople={["John", "Jane"]} />);
 
 		// Should render the modal - suggestions shown on input focus
-		const modal = document.querySelector(".modal-overlay");
-		expect(modal).toBeInTheDocument();
+		expect(screen.getByRole("dialog")).toBeInTheDocument();
 	});
 });
 
@@ -663,7 +707,7 @@ describe("MobileEditModal blister management", () => {
 		expect(screen.getByText("form.blisters.weekdaysRequired")).toBeInTheDocument();
 		expect(screen.getByText("form.blisters.weekdays")).toBeInTheDocument();
 		expect(screen.queryByLabelText("form.blisters.everyDays")).not.toBeInTheDocument();
-		expect(document.querySelector('button[type="submit"]')).toHaveClass("has-validation-error");
+		expect(document.querySelector('button[type="submit"]')).toBeEnabled();
 	});
 
 	it("toggles weekday selections for weekday schedules", () => {
@@ -688,7 +732,7 @@ describe("MobileEditModal blister management", () => {
 		render(<MobileEditModal {...defaultProps} form={form} onSetIntakeValue={onSetIntakeValue} />);
 
 		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
-		fireEvent.click(screen.getByTitle("form.blisters.weekdaysLong.mon"));
+		fireEvent.click(screen.getByRole("button", { name: "form.blisters.weekdaysLong.mon" }));
 
 		expect(onSetIntakeValue).toHaveBeenCalledWith(0, "weekdays", ["mon", "wed"]);
 	});
@@ -738,8 +782,7 @@ describe("MobileEditModal form submission", () => {
 		render(<MobileEditModal {...defaultProps} formSaved={true} />);
 
 		// Form should still render
-		const modal = document.querySelector(".modal-overlay");
-		expect(modal).toBeInTheDocument();
+		expect(screen.getByRole("dialog")).toBeInTheDocument();
 	});
 });
 
@@ -782,7 +825,8 @@ describe("MobileEditModal field callbacks", () => {
 		const onFormChange = vi.fn();
 		render(<MobileEditModal {...defaultProps} onFormChange={onFormChange} />);
 
-		const doseUnitSelect = document.querySelector(".dose-unit-select") as HTMLSelectElement;
+		const pillWeightLabel = screen.getByText(/form\.pillWeight/i).closest("label") as HTMLElement;
+		const doseUnitSelect = within(pillWeightLabel).getByRole("combobox");
 		fireEvent.change(doseUnitSelect, { target: { value: "g" } });
 
 		expect(onFormChange).toHaveBeenCalledWith(expect.objectContaining({ doseUnit: "g" }));
@@ -792,7 +836,7 @@ describe("MobileEditModal field callbacks", () => {
 		const onHandleValueChange = vi.fn();
 		render(<MobileEditModal {...defaultProps} onHandleValueChange={onHandleValueChange} />);
 
-		const packageSelect = document.querySelector(".package-type-select") as HTMLSelectElement;
+		const packageSelect = screen.getByLabelText("form.packageType");
 		fireEvent.change(packageSelect, { target: { value: "bottle" } });
 
 		expect(onHandleValueChange).toHaveBeenCalledWith("packageType", "bottle");
@@ -940,17 +984,15 @@ describe("MobileEditModal overlay interaction", () => {
 		vi.clearAllMocks();
 	});
 
-	it("calls onClose when clicking overlay", () => {
+	it("calls onClose when clicking the top close affordance", () => {
 		const onClose = vi.fn();
 		const onResetForm = vi.fn();
 
 		render(<MobileEditModal {...defaultProps} onClose={onClose} onResetForm={onResetForm} />);
 
-		const overlay = document.querySelector(".modal-overlay");
-		if (overlay) {
-			fireEvent.click(overlay);
-			expect(onClose).toHaveBeenCalled();
-		}
+		fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+
+		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not close when clicking modal content", () => {
@@ -959,10 +1001,7 @@ describe("MobileEditModal overlay interaction", () => {
 
 		render(<MobileEditModal {...defaultProps} onClose={onClose} onResetForm={onResetForm} />);
 
-		const content = document.querySelector(".modal-content");
-		if (content) {
-			fireEvent.click(content);
-		}
+		fireEvent.click(screen.getByRole("dialog"));
 
 		expect(onClose).not.toHaveBeenCalled();
 	});
@@ -996,8 +1035,7 @@ describe("MobileEditModal optional fields", () => {
 	it("renders intake reminders toggle", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
-		const toggle = document.querySelector('.toggle-switch input[type="checkbox"]');
-		expect(toggle).toBeInTheDocument();
+		expect(screen.getByRole("checkbox", { name: "form.blisters.remind" })).toBeInTheDocument();
 	});
 
 	it("shows intake takenBy select when takenBy list is not empty", () => {

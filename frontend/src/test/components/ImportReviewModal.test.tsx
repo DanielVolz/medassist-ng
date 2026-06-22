@@ -62,7 +62,7 @@ describe("ImportReviewModal", () => {
 		const onClose = vi.fn();
 		const onBackup = vi.fn();
 		const onConfirm = vi.fn();
-		const { container } = render(
+		render(
 			<ImportReviewModal
 				isOpen={true}
 				importPreview={importPreview}
@@ -78,7 +78,7 @@ describe("ImportReviewModal", () => {
 		expect(screen.getByRole("dialog")).toBeInTheDocument();
 		expect(screen.getByText("exportImport.confirmImport")).toBeInTheDocument();
 
-		fireEvent.click(container.querySelector(".modal-content") as Element);
+		fireEvent.click(screen.getByRole("dialog"));
 		expect(onClose).not.toHaveBeenCalled();
 
 		fireEvent.click(screen.getByText("exportImport.backupFirst"));
@@ -90,7 +90,9 @@ describe("ImportReviewModal", () => {
 		fireEvent.keyDown(document, { key: "Escape" });
 		expect(onClose).toHaveBeenCalledTimes(1);
 
-		fireEvent.click(container.querySelector(".modal-overlay") as Element);
+		const overlay = document.querySelector(".mantine-Modal-overlay");
+		expect(overlay).toBeInTheDocument();
+		fireEvent.click(overlay as Element);
 		expect(onClose).toHaveBeenCalledTimes(2);
 	});
 });

@@ -1,0 +1,64 @@
+.root {
+	background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+	border-color: var(--border-primary);
+	box-shadow: 0 12px 32px color-mix(in srgb, var(--shadow) 50%, transparent);
+	backdrop-filter: blur(18px);
+}
+
+.header {
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+.copy {
+	min-width: 0;
+	flex: 1 1 18rem;
+}
+
+.header > :global(button) {
+	min-height: 3rem;
+	padding: 0 1.15rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.title {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	flex-wrap: wrap;
+	font-size: clamp(1.05rem, 1rem + 0.2vw, 1.2rem);
+	line-height: 1.2;
+}
+
+.description {
+	color: var(--text-secondary);
+	line-height: 1.55;
+}
+
+.content {
+	min-width: 0;
+}
+
+.content :global(p) {
+	margin: 0;
+}
+
+.footer {
+	padding-top: 1rem;
+	border-top: 1px solid color-mix(in srgb, var(--border-primary) 82%, transparent);
+}
+
+@media (max-width: 600px) {
+	.root {
+		--paper-radius: 0px !important;
+		border-radius: 0 !important;
+		border-left: none;
+		border-right: none;
+	}
+
+	.copy {
+		flex: 0 1 auto;
+	}
+}

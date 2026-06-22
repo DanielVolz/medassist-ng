@@ -39,6 +39,7 @@ describe("plugins/env runtime validation", () => {
 		expect(mod.env.SENSITIVE_LOGGING_ENABLED).toBe(false);
 		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
 		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
+		expect(mod.env.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED).toBe(false);
 	});
 
 	it("exits when production auth is disabled without explicit unauthenticated override", async () => {
@@ -66,6 +67,7 @@ describe("plugins/env runtime validation", () => {
 		expect(mod.env.ALLOW_UNAUTHENTICATED).toBe(true);
 		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(false);
 		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
+		expect(mod.env.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED).toBe(true);
 	});
 
 	it("keeps docs disabled by default when production auth is enabled", async () => {
@@ -111,6 +113,26 @@ describe("plugins/env runtime validation", () => {
 		const mod = await import("../plugins/env.js");
 		expect(mod.env.OPENAPI_DOCS_ENABLED).toBe(true);
 		expect(mod.env.DOCS_AUTH_REQUIRED).toBe(false);
+		expect(mod.env.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED).toBe(true);
+	});
+
+	it("allows medication enrichment startup refresh to be explicitly enabled in development", async () => {
+		process.env.NODE_ENV = "development";
+		process.env.AUTH_ENABLED = "false";
+		process.env.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED = "true";
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED).toBe(true);
+	});
+
+	it("allows medication enrichment startup refresh to be explicitly disabled in production", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.AUTH_ENABLED = "false";
+		process.env.ALLOW_UNAUTHENTICATED = "true";
+		process.env.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED = "false";
+
+		const mod = await import("../plugins/env.js");
+		expect(mod.env.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED).toBe(false);
 	});
 
 	it("accepts common boolean variants", async () => {

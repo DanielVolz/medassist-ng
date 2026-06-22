@@ -49,7 +49,7 @@ async function fillAndSaveMedication(
 		await form.getByLabel(/(Generic Name|form\.genericName)/i).fill(opts.genericName);
 	}
 
-	const packageTypeSelect = form.locator("select.package-type-select");
+	const packageTypeSelect = form.getByLabel(/(Package Type|form\.packageType)/i);
 	if (opts.packageType === "bottle" || opts.packageType === "inhaler" || opts.packageType === "injection") {
 		await packageTypeSelect.selectOption(opts.packageType ?? "bottle");
 		await page.getByRole("tab", { name: /Package/i }).click();

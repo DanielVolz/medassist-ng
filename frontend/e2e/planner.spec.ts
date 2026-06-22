@@ -37,14 +37,16 @@ test.describe("Planner Page", () => {
 	test("should have a calculate button", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		const calculateBtn = page.getByTestId("planner-form-card").getByRole("button", { name: /Calculate|Calculating/i });
+		const calculateBtn = page
+			.getByTestId("planner-form-card")
+			.getByRole("button", { name: /Calculate|Calculating|Berechnen/i });
 		await expect(calculateBtn).toBeVisible();
 	});
 
 	test("should have a reset button", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		const resetBtn = page.getByTestId("planner-form-card").getByRole("button", { name: /Reset/i });
+		const resetBtn = page.getByTestId("planner-form-card").getByRole("button", { name: /Reset|Zurücksetzen/i });
 		await expect(resetBtn).toBeVisible();
 	});
 
@@ -61,7 +63,7 @@ test.describe("Planner Page", () => {
 		// Submit the planner form (default dates should work)
 		await page
 			.getByTestId("planner-form-card")
-			.getByRole("button", { name: /Calculate/i })
+			.getByRole("button", { name: /Calculate|Berechnen/i })
 			.click();
 
 		// After submit, the form should still be visible (no crash)
@@ -74,9 +76,9 @@ test.describe("Planner Page", () => {
 		await expect(page).toHaveURL(/\/planner/);
 	});
 
-	test("Planner eyebrow shows correct heading", async ({ page }) => {
+	test("Planner page keeps its main content visible", async ({ page }) => {
 		await navigateTo(page, "/planner");
 
-		await expect(page.getByTestId("planner-page-header")).toBeVisible();
+		await expect(page.getByTestId("planner-page")).toBeVisible();
 	});
 });

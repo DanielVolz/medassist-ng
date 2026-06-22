@@ -1,0 +1,77 @@
+.form {
+	display: flex;
+	flex-direction: column;
+	gap: 1.15rem;
+}
+
+.rangeGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.dateField {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	min-width: 0;
+	color: var(--text-secondary);
+	font-size: 0.9rem;
+	font-weight: 700;
+}
+
+.actions {
+	padding-top: 1rem;
+	border-top: 1px solid color-mix(in srgb, var(--border-primary) 82%, transparent);
+}
+
+.feedback {
+	margin-top: 1rem;
+}
+
+.results {
+	margin-top: 1.35rem;
+}
+
+.medicationCell {
+	min-width: 13rem;
+}
+
+.medicationNameLink {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	text-decoration-thickness: 0.08em;
+	text-underline-offset: 0.16em;
+}
+
+.metric,
+.availableValue {
+	font-family: var(--mantine-font-family);
+	line-height: 1.35;
+	white-space: normal;
+}
+
+.emailAction {
+	padding-top: 0.25rem;
+}
+
+@media (max-width: 720px) {
+	.rangeGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.actions {
+		align-items: stretch;
+		flex-direction: column-reverse;
+	}
+
+	.actions :global(button),
+	.emailAction :global(button) {
+		width: 100%;
+	}
+
+	.emailAction {
+		align-items: stretch;
+		flex-direction: column;
+	}
+}

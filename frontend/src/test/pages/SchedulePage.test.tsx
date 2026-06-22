@@ -150,6 +150,7 @@ const createMockContext = (overrides = {}) => ({
 	manuallyExpandedDays: new Set(),
 	toggleDayCollapse: vi.fn(),
 	openUserFilter: vi.fn(),
+	openScheduleLightbox: vi.fn(),
 	isDoseTakenAutomatically: vi.fn(() => false),
 	missedPastDoseIds: [],
 	loadMeds: vi.fn(),
@@ -249,7 +250,7 @@ describe("SchedulePage", () => {
 
 		const noteButton = screen.getByRole("button", { name: "journal.actions.note" });
 		expect(noteButton).toBeDisabled();
-		expect(noteButton.closest("span")).toHaveAttribute("data-tooltip", "journal.actions.noteTakenOnly");
+		expect(noteButton.closest("span")).not.toHaveAttribute("data-tooltip");
 
 		fireEvent.click(noteButton);
 		expect(openJournalEditor).not.toHaveBeenCalled();
@@ -262,8 +263,8 @@ describe("SchedulePage", () => {
 			</MemoryRouter>
 		);
 
-		// With no meds, should show the schedule card but with empty timeline
-		const card = document.querySelector(".card.schedule-full");
+		// With no meds, should show the schedule section but with empty timeline
+		const card = document.querySelector(".schedule-full");
 		expect(card).toBeInTheDocument();
 	});
 
@@ -274,8 +275,7 @@ describe("SchedulePage", () => {
 			</MemoryRouter>
 		);
 
-		const cardHead = document.querySelector(".card-head");
-		expect(cardHead).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: /dashboard\.schedules\.title/i })).toBeInTheDocument();
 	});
 
 	it("renders schedule days options", () => {
@@ -317,6 +317,26 @@ describe("SchedulePage", () => {
 
 		fireEvent.change(select, { target: { value: "90" } });
 		expect(setScheduleDays).toHaveBeenCalledWith(90);
+	});
+
+	it("opens schedule lightbox when clicking a medication image", () => {
+		const openScheduleLightbox = vi.fn();
+		mockContextValue = createMockContext({
+			meds: [{ ...mockMeds[0], imageUrl: "aspirin.png" }],
+			coverageByMed: mockCoverageByMed,
+			futureDays: mockFutureDays,
+			openScheduleLightbox,
+		});
+
+		render(
+			<MemoryRouter>
+				<SchedulePage />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Aspirin" }));
+
+		expect(openScheduleLightbox).toHaveBeenCalledWith("/api/images/aspirin.png");
 	});
 
 	it("posts the computed dismiss-until payload when clearing missed doses", async () => {
@@ -387,8 +407,7 @@ describe("SchedulePage structure", () => {
 			</MemoryRouter>
 		);
 
-		const article = document.querySelector("article");
-		expect(article).toBeInTheDocument();
+		expect(document.querySelector(".schedule-full")).toBeInTheDocument();
 	});
 
 	it("renders section element", () => {
@@ -409,7 +428,7 @@ describe("SchedulePage structure", () => {
 			</MemoryRouter>
 		);
 
-		const card = document.querySelector(".card.schedule-full");
+		const card = document.querySelector(".schedule-full");
 		expect(card).toBeInTheDocument();
 	});
 });
@@ -465,7 +484,7 @@ describe("SchedulePage with medications", () => {
 			</MemoryRouter>
 		);
 
-		const takeBtn = document.querySelector(".dose-btn.take");
+		const takeBtn = screen.getByRole("button", { name: "dose.take" });
 		expect(takeBtn).toBeInTheDocument();
 	});
 
@@ -484,11 +503,8 @@ describe("SchedulePage with medications", () => {
 			</MemoryRouter>
 		);
 
-		const takeBtn = document.querySelector(".dose-btn.take");
-		if (takeBtn) {
-			fireEvent.click(takeBtn);
-			expect(markDoseTaken).toHaveBeenCalled();
-		}
+		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
+		expect(markDoseTaken).toHaveBeenCalled();
 	});
 
 	it("renders person name for dose", () => {
@@ -498,7 +514,7 @@ describe("SchedulePage with medications", () => {
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText("John")).toBeInTheDocument();
+		expect(screen.getAllByText("John").length).toBeGreaterThan(0);
 	});
 
 	it("calls openUserFilter when clicking person name", () => {
@@ -516,7 +532,7 @@ describe("SchedulePage with medications", () => {
 			</MemoryRouter>
 		);
 
-		const personName = screen.getByText("John");
+		const personName = screen.getAllByRole("button", { name: "John" })[0] as HTMLElement;
 		fireEvent.click(personName);
 		expect(openUserFilter).toHaveBeenCalledWith("John");
 	});
@@ -726,7 +742,7 @@ describe("SchedulePage with taken doses", () => {
 		);
 
 		// When dose is taken, the undo button should appear
-		const undoBtn = document.querySelector(".dose-btn.undo");
+		const undoBtn = screen.getByRole("button", { name: "common.undo" });
 		expect(undoBtn).toBeInTheDocument();
 	});
 
@@ -749,11 +765,8 @@ describe("SchedulePage with taken doses", () => {
 			</MemoryRouter>
 		);
 
-		const undoBtn = document.querySelector(".dose-btn.undo");
-		if (undoBtn) {
-			fireEvent.click(undoBtn);
-			expect(undoDoseTaken).toHaveBeenCalled();
-		}
+		fireEvent.click(screen.getByRole("button", { name: "common.undo" }));
+		expect(undoDoseTaken).toHaveBeenCalled();
 	});
 });
 
@@ -775,8 +788,8 @@ describe("SchedulePage skip behavior", () => {
 			</MemoryRouter>
 		);
 
-		expect(document.querySelector(".dose-btn.take")).toBeInTheDocument();
-		expect(document.querySelector(".dose-btn.skip")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "dose.take" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "dose.skip" })).toBeInTheDocument();
 	});
 
 	it("calls markDoseSkipped when clicking skip", () => {
@@ -794,12 +807,10 @@ describe("SchedulePage skip behavior", () => {
 			</MemoryRouter>
 		);
 
-		const skipButton = document.querySelector(".dose-btn.skip");
+		const skipButton = screen.getByRole("button", { name: "dose.skip" });
 		expect(skipButton).toBeInTheDocument();
 
-		if (skipButton) {
-			fireEvent.click(skipButton);
-		}
+		fireEvent.click(skipButton);
 
 		expect(markDoseSkipped).toHaveBeenCalledWith(`1-0-${FIXED_TIMESTAMP}-John`);
 	});
@@ -821,8 +832,8 @@ describe("SchedulePage skip behavior", () => {
 			</MemoryRouter>
 		);
 
-		expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
-		expect(screen.getByText("John").closest(".dose-person")).toHaveClass("skipped");
+		expect(screen.getByRole("button", { name: "common.undo" })).toBeInTheDocument();
+		expect(screen.getByText("John", { selector: ".person-name" }).closest(".dose-person")).toHaveClass("skipped");
 		const noteButton = screen.getByRole("button", { name: "journal.actions.note" });
 		expect(noteButton).not.toBeDisabled();
 
@@ -879,12 +890,10 @@ describe("SchedulePage skip behavior", () => {
 			</MemoryRouter>
 		);
 
-		const undoSkipButton = document.querySelector(".dose-btn.undo.skip");
+		const undoSkipButton = screen.getByRole("button", { name: "common.undo" });
 		expect(undoSkipButton).toBeInTheDocument();
 
-		if (undoSkipButton) {
-			fireEvent.click(undoSkipButton);
-		}
+		fireEvent.click(undoSkipButton);
 
 		expect(undoDoseSkipped).toHaveBeenCalledWith(skippedDoseId);
 	});
@@ -926,7 +935,7 @@ describe("SchedulePage skip behavior", () => {
 			</MemoryRouter>
 		);
 
-		const personRow = screen.getByText("John").closest(".dose-person");
+		const personRow = screen.getByText("John", { selector: ".person-name" }).closest(".dose-person");
 		expect(personRow).toHaveClass("skipped");
 		expect(personRow).not.toHaveClass("overdue");
 

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlannerPage } from "../../pages/PlannerPage";
@@ -39,6 +39,11 @@ const mockPlannerRows = [
 	},
 ];
 
+const savedPlannerRange = {
+	start: "2024-05-01T09:00",
+	end: "2024-05-10T18:00",
+};
+
 // Factory for mock context
 const createMockContext = (overrides = {}) => ({
 	meds: [],
@@ -69,11 +74,31 @@ function mockPlannerResponse(rows: unknown) {
 	});
 }
 
+function mockLocalStorageEntries(entries: Record<string, string>) {
+	vi.mocked(localStorage.getItem).mockImplementation((key) => entries[key] ?? null);
+}
+
+function mockSavedPlannerResults({
+	rows = mockPlannerRows,
+	range = savedPlannerRange,
+	includeUntilStart,
+}: {
+	rows?: unknown;
+	range?: unknown;
+	includeUntilStart?: boolean;
+} = {}) {
+	mockLocalStorageEntries({
+		user_1_plannerRows: JSON.stringify(rows),
+		user_1_plannerRange: JSON.stringify(range),
+		...(includeUntilStart === undefined ? {} : { user_1_plannerIncludeUntilStart: String(includeUntilStart) }),
+	});
+}
+
 async function submitPlannerForm() {
-	const form = document.querySelector("form.planner");
+	const form = screen.getByTestId("planner-form");
 	expect(form).toBeInTheDocument();
 	await act(async () => {
-		fireEvent.submit(form!);
+		fireEvent.submit(form);
 	});
 }
 
@@ -176,19 +201,17 @@ describe("PlannerPage", () => {
 			</MemoryRouter>
 		);
 
-		const form = document.querySelector("form.planner");
-		expect(form).toBeInTheDocument();
+		expect(screen.getByTestId("planner-form")).toBeInTheDocument();
 	});
 
-	it("renders card with title", () => {
+	it("renders planner section card with title", () => {
 		render(
 			<MemoryRouter>
 				<PlannerPage />
 			</MemoryRouter>
 		);
 
-		const card = document.querySelector(".card");
-		expect(card).toBeInTheDocument();
+		expect(screen.getByTestId("planner-form-card")).toBeInTheDocument();
 	});
 
 	it("renders planner actions container", () => {
@@ -198,30 +221,27 @@ describe("PlannerPage", () => {
 			</MemoryRouter>
 		);
 
-		const actions = document.querySelector(".planner-actions");
-		expect(actions).toBeInTheDocument();
+		expect(screen.getByTestId("planner-actions")).toBeInTheDocument();
 	});
 
-	it("renders section grid", () => {
+	it("renders planner page container", () => {
 		render(
 			<MemoryRouter>
 				<PlannerPage />
 			</MemoryRouter>
 		);
 
-		const grid = document.querySelector("section.grid");
-		expect(grid).toBeInTheDocument();
+		expect(screen.getByTestId("planner-page")).toBeInTheDocument();
 	});
 
-	it("reset button has ghost class", () => {
+	it("renders a reset button", () => {
 		render(
 			<MemoryRouter>
 				<PlannerPage />
 			</MemoryRouter>
 		);
 
-		const resetBtn = document.querySelector("button.ghost");
-		expect(resetBtn).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /common\.reset/i })).toBeInTheDocument();
 	});
 
 	it("calculate button is submit type", () => {
@@ -258,14 +278,7 @@ describe("PlannerPage with localStorage", () => {
 	});
 
 	it("loads saved range from localStorage", () => {
-		// Set up saved data in localStorage
-		localStorage.setItem(
-			"user_1_plannerRange",
-			JSON.stringify({
-				start: "2024-05-01T09:00",
-				end: "2024-05-10T18:00",
-			})
-		);
+		mockLocalStorageEntries({ user_1_plannerRange: JSON.stringify(savedPlannerRange) });
 
 		render(
 			<MemoryRouter>
@@ -277,16 +290,8 @@ describe("PlannerPage with localStorage", () => {
 		expect(screen.getByText(/planner\.title/i)).toBeInTheDocument();
 	});
 
-	it("loads saved rows from localStorage", () => {
-		// Set up saved data in localStorage
-		localStorage.setItem("user_1_plannerRows", JSON.stringify([{ medName: "Aspirin", total: 30 }]));
-		localStorage.setItem(
-			"user_1_plannerRange",
-			JSON.stringify({
-				start: "2024-05-01T09:00",
-				end: "2024-05-10T18:00",
-			})
-		);
+	it("loads saved rows from localStorage", async () => {
+		mockSavedPlannerResults();
 
 		render(
 			<MemoryRouter>
@@ -294,14 +299,14 @@ describe("PlannerPage with localStorage", () => {
 			</MemoryRouter>
 		);
 
-		// Page should render with saved data
-		expect(screen.getByText(/planner\.title/i)).toBeInTheDocument();
+		expect(await screen.findByText("Aspirin")).toBeInTheDocument();
 	});
 
 	it("handles invalid localStorage data gracefully", () => {
-		// Set up invalid data in localStorage
-		localStorage.setItem("user_1_plannerRows", "invalid-json");
-		localStorage.setItem("user_1_plannerRange", "invalid-json");
+		mockLocalStorageEntries({
+			user_1_plannerRows: "invalid-json",
+			user_1_plannerRange: "invalid-json",
+		});
 
 		render(
 			<MemoryRouter>
@@ -336,40 +341,33 @@ describe("PlannerPage with saved results", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		localStorage.clear();
-		localStorage.setItem("user_1_plannerRows", JSON.stringify(mockPlannerRows));
-		localStorage.setItem(
-			"user_1_plannerRange",
-			JSON.stringify({
-				start: "2024-05-01T09:00",
-				end: "2024-05-10T18:00",
-			})
-		);
+		mockSavedPlannerResults();
 		mockContextValue = createMockContext({ meds: mockMeds });
 	});
 
-	it("loads saved planner range from localStorage", () => {
+	it("loads saved planner range from localStorage", async () => {
 		render(
 			<MemoryRouter>
 				<PlannerPage />
 			</MemoryRouter>
 		);
 
-		// Range should be loaded from localStorage
 		const dateInputs = document.querySelectorAll('input[type="datetime-local"]');
 		expect(dateInputs.length).toBe(2);
-		// Range values should be set
-		expect((dateInputs[0] as HTMLInputElement).value).toBeTruthy();
-		expect((dateInputs[1] as HTMLInputElement).value).toBeTruthy();
+		await waitFor(() => {
+			expect((dateInputs[0] as HTMLInputElement).value).toBe(savedPlannerRange.start);
+			expect((dateInputs[1] as HTMLInputElement).value).toBe(savedPlannerRange.end);
+		});
 	});
 
-	it("renders page with saved data", () => {
+	it("renders page with saved data", async () => {
 		render(
 			<MemoryRouter>
 				<PlannerPage />
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText(/planner\.title/i)).toBeInTheDocument();
+		expect(await screen.findByText("Aspirin")).toBeInTheDocument();
 	});
 
 	it("preserves form after loading saved range", () => {
@@ -379,8 +377,7 @@ describe("PlannerPage with saved results", () => {
 			</MemoryRouter>
 		);
 
-		const form = document.querySelector("form.planner");
-		expect(form).toBeInTheDocument();
+		expect(screen.getByTestId("planner-form")).toBeInTheDocument();
 	});
 
 	it("shows buttons after loading saved data", () => {
@@ -391,7 +388,7 @@ describe("PlannerPage with saved results", () => {
 		);
 
 		expect(document.querySelector('button[type="submit"]')).toBeInTheDocument();
-		expect(document.querySelector("button.ghost")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /common\.reset/i })).toBeInTheDocument();
 	});
 
 	it("has planner actions section", () => {
@@ -401,8 +398,7 @@ describe("PlannerPage with saved results", () => {
 			</MemoryRouter>
 		);
 
-		const actions = document.querySelector(".planner-actions");
-		expect(actions).toBeInTheDocument();
+		expect(screen.getByTestId("planner-actions")).toBeInTheDocument();
 	});
 });
 
@@ -410,14 +406,7 @@ describe("PlannerPage with email enabled", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		localStorage.clear();
-		localStorage.setItem("user_1_plannerRows", JSON.stringify(mockPlannerRows));
-		localStorage.setItem(
-			"user_1_plannerRange",
-			JSON.stringify({
-				start: "2024-05-01T09:00",
-				end: "2024-05-10T18:00",
-			})
-		);
+		mockSavedPlannerResults();
 		mockContextValue = createMockContext({
 			meds: mockMeds,
 			settings: {
@@ -428,16 +417,14 @@ describe("PlannerPage with email enabled", () => {
 		});
 	});
 
-	it("shows send email button when email is enabled", () => {
+	it("shows send email button when email is enabled", async () => {
 		render(
 			<MemoryRouter>
 				<PlannerPage />
 			</MemoryRouter>
 		);
 
-		// Should have email send button
-		const _emailBtn = document.querySelector(".ghost");
-		// Email button may be present
+		expect(await screen.findByRole("button", { name: /planner\.sendNotification/i })).toBeInTheDocument();
 	});
 
 	it("sends planner notification and shows success message", async () => {
@@ -473,7 +460,7 @@ describe("PlannerPage with email enabled", () => {
 		);
 
 		await act(async () => {
-			fireEvent.submit(document.querySelector("form.planner")!);
+			fireEvent.submit(screen.getByTestId("planner-form"));
 		});
 
 		const notifyBtn = await screen.findByRole("button", { name: /planner\.sendNotification/i });
@@ -534,7 +521,7 @@ describe("PlannerPage with email enabled", () => {
 		);
 
 		await act(async () => {
-			fireEvent.submit(document.querySelector("form.planner")!);
+			fireEvent.submit(screen.getByTestId("planner-form"));
 		});
 
 		const notifyBtn = await screen.findByRole("button", { name: /planner\.sendNotification/i });
@@ -567,13 +554,11 @@ describe("PlannerPage form interactions", () => {
 			</MemoryRouter>
 		);
 
-		const form = document.querySelector("form.planner");
-		if (form) {
-			fireEvent.submit(form);
-		}
+		const form = screen.getByTestId("planner-form");
+		fireEvent.submit(form);
 
 		// Form should still be present after submit
-		expect(document.querySelector("form.planner")).toBeInTheDocument();
+		expect(screen.getByTestId("planner-form")).toBeInTheDocument();
 	});
 
 	it("shows calculation error when planner API fails", async () => {
@@ -589,7 +574,7 @@ describe("PlannerPage form interactions", () => {
 		);
 
 		await act(async () => {
-			fireEvent.submit(document.querySelector("form.planner")!);
+			fireEvent.submit(screen.getByTestId("planner-form"));
 		});
 
 		expect(await screen.findByRole("alert")).toHaveTextContent("Invalid date range");
@@ -604,10 +589,7 @@ describe("PlannerPage form interactions", () => {
 			</MemoryRouter>
 		);
 
-		const resetBtn = document.querySelector("button.ghost");
-		if (resetBtn) {
-			fireEvent.click(resetBtn);
-		}
+		fireEvent.click(screen.getByRole("button", { name: /common\.reset/i }));
 
 		// Form should be reset (no results table)
 		expect(screen.getByText(/planner\.title/i)).toBeInTheDocument();
@@ -620,10 +602,12 @@ describe("PlannerPage form interactions", () => {
 			</MemoryRouter>
 		);
 
-		const checkbox = document.querySelector('.planner-checkbox input[type="checkbox"]') as HTMLInputElement;
-		expect(checkbox.checked).toBe(false);
-		fireEvent.click(checkbox);
-		expect(checkbox.checked).toBe(true);
+		const checkbox = screen.getByTestId("planner-include-until-start").querySelector("input[type='checkbox']");
+		expect(checkbox).toBeInstanceOf(HTMLInputElement);
+		const typedCheckbox = checkbox as HTMLInputElement;
+		expect(typedCheckbox.checked).toBe(false);
+		fireEvent.click(typedCheckbox);
+		expect(typedCheckbox.checked).toBe(true);
 	});
 
 	it("submits planner request with includeUntilStart=true", async () => {
@@ -638,10 +622,11 @@ describe("PlannerPage form interactions", () => {
 			</MemoryRouter>
 		);
 
-		const checkbox = document.querySelector('.planner-checkbox input[type="checkbox"]') as HTMLInputElement;
-		fireEvent.click(checkbox);
+		const checkbox = screen.getByTestId("planner-include-until-start").querySelector("input[type='checkbox']");
+		expect(checkbox).toBeInstanceOf(HTMLInputElement);
+		fireEvent.click(checkbox as HTMLInputElement);
 
-		const form = document.querySelector("form.planner") as HTMLFormElement;
+		const form = screen.getByTestId("planner-form");
 		await act(async () => {
 			fireEvent.submit(form);
 		});
@@ -676,7 +661,7 @@ describe("PlannerPage medication detail", () => {
 		);
 	});
 
-	it("calls openMedDetail when clicking medication row", async () => {
+	it("calls openMedDetail only when clicking the medication name link", async () => {
 		mockPlannerResponse(mockPlannerRows);
 		const openMedDetail = vi.fn();
 		mockContextValue = createMockContext({
@@ -687,12 +672,17 @@ describe("PlannerPage medication detail", () => {
 		renderPlannerPage();
 
 		await submitPlannerForm();
-		const medRow = await screen.findByRole("button", { name: /planner\.openMedication/i });
+		const medRow = await screen.findByTestId("planner-result-row");
+		expect(medRow).not.toHaveAttribute("role", "button");
+
 		fireEvent.click(medRow);
+		expect(openMedDetail).not.toHaveBeenCalled();
+
+		fireEvent.click(within(medRow).getByRole("button", { name: "Aspirin" }));
 		expect(openMedDetail).toHaveBeenCalled();
 	});
 
-	it("renders planner rows as native buttons for keyboard access", async () => {
+	it("renders the planner medication name link with keyboard access", async () => {
 		mockPlannerResponse(mockPlannerRows);
 		const openMedDetail = vi.fn();
 		mockContextValue = createMockContext({
@@ -703,9 +693,48 @@ describe("PlannerPage medication detail", () => {
 		renderPlannerPage();
 
 		await submitPlannerForm();
-		const medRow = await screen.findByRole("button", { name: /planner\.openMedication/i });
-		expect(medRow.tagName.toLowerCase()).toBe("button");
-		expect(medRow).not.toBeDisabled();
+		const medRow = await screen.findByTestId("planner-result-row");
+		const medNameLink = within(medRow).getByRole("button", { name: "Aspirin" });
+
+		fireEvent.click(medNameLink);
+		expect(openMedDetail).toHaveBeenCalled();
+	});
+
+	it("uses the medication display name when planner row name is empty", async () => {
+		mockPlannerResponse([
+			{
+				medicationId: 4,
+				medicationName: "",
+				totalPills: 150,
+				plannerUsage: 0,
+				blisterSize: 1,
+				blistersNeeded: 0,
+				fullBlisters: 0,
+				loosePills: 150,
+				enough: true,
+				packageType: "tube",
+			},
+		]);
+		mockContextValue = createMockContext({
+			meds: [
+				{
+					...mockMeds[0],
+					id: 4,
+					name: "",
+					genericName: "testtube",
+					packageType: "tube",
+					medicationForm: "topical",
+				},
+			],
+		});
+
+		renderPlannerPage();
+
+		await submitPlannerForm();
+
+		expect(await screen.findByText("testtube")).toBeInTheDocument();
+		expect(screen.getByText("T")).toHaveClass("med-avatar-initials");
+		expect(screen.queryByText("?")).not.toBeInTheDocument();
 	});
 });
 
@@ -753,13 +782,8 @@ describe("PlannerPage bottle package type", () => {
 
 		await submitPlannerForm();
 
-		// For bottle type, blisters column should show "–"
-		await waitFor(() => {
-			const tableRows = document.querySelectorAll(".table-row");
-			expect(tableRows.length).toBeGreaterThan(0);
-		});
-		const tableRows = document.querySelectorAll(".table-row");
-		const bottleRow = Array.from(tableRows).find((row) => row.textContent?.includes("Ibuprofen"));
+		const bottleName = await screen.findByText("Ibuprofen");
+		const bottleRow = bottleName.closest("tr");
 		expect(bottleRow).toBeTruthy();
 		expect(bottleRow!.textContent).toContain("–");
 	});
@@ -771,13 +795,8 @@ describe("PlannerPage bottle package type", () => {
 
 		await submitPlannerForm();
 
-		// For blister type, should show "2 × 10"
-		await waitFor(() => {
-			const tableRows = document.querySelectorAll(".table-row");
-			expect(tableRows.length).toBeGreaterThan(0);
-		});
-		const tableRows = document.querySelectorAll(".table-row");
-		const blisterRow = Array.from(tableRows).find((row) => row.textContent?.includes("Aspirin"));
+		const blisterName = await screen.findByText("Aspirin");
+		const blisterRow = blisterName.closest("tr");
 		expect(blisterRow).toBeTruthy();
 		expect(blisterRow!.textContent).toContain("2 × 10");
 	});

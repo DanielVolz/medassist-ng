@@ -35,24 +35,23 @@ describe("AboutModal", () => {
 
 	it("calls onClose when close button is clicked", () => {
 		render(<AboutModal {...defaultProps} />);
-		fireEvent.click(screen.getByText("×"));
+		fireEvent.click(screen.getByRole("button", { name: /common\.close/i }));
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 
 	it("calls onClose when overlay is clicked", () => {
-		const { container } = render(<AboutModal {...defaultProps} />);
-		const overlay = container.querySelector(".modal-overlay");
-		fireEvent.click(overlay!);
+		render(<AboutModal {...defaultProps} />);
+		// Mantine renders the modal in a portal; query the document instead of the container
+		const overlay = document.querySelector(".mantine-Modal-overlay");
+		expect(overlay).toBeInTheDocument();
+		fireEvent.click(overlay as HTMLElement);
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 
 	it("does not call onClose when modal content is clicked", () => {
-		const { container } = render(<AboutModal {...defaultProps} />);
-		const content = container.querySelector(".about-modal");
-		if (content) {
-			fireEvent.click(content);
-			expect(defaultProps.onClose).not.toHaveBeenCalled();
-		}
+		render(<AboutModal {...defaultProps} />);
+		fireEvent.click(screen.getByRole("dialog"));
+		expect(defaultProps.onClose).not.toHaveBeenCalled();
 	});
 
 	it("renders GitHub link", () => {

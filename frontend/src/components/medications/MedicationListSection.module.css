@@ -1,0 +1,512 @@
+.headerActions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.groups {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.group {
+	padding: 0.9rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--bg-secondary) 75%, var(--bg-tertiary));
+}
+
+.groupObsolete {
+	border-color: var(--border-primary);
+	background: var(--bg-secondary);
+	opacity: 1;
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-auto-rows: auto;
+	gap: 1rem;
+}
+
+.gridCompact {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.groupHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 0.8rem;
+}
+
+.groupHeadToggle {
+	margin: -0.1rem -0.25rem 0.8rem;
+	padding: 0.1rem 0.25rem;
+	border-radius: 8px;
+	background: none;
+	box-shadow: none;
+	color: inherit;
+	cursor: pointer;
+	user-select: none;
+}
+
+.groupHeadToggle:hover {
+	background: var(--bg-tertiary);
+}
+
+.groupTitle {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 0.92rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.groupHeadToggle:hover .groupTitle {
+	color: var(--text-primary);
+}
+
+.medicationRow {
+	display: grid;
+	grid-template-rows: subgrid;
+	grid-row: span 2;
+	gap: 0.65rem;
+	position: relative;
+	padding: 0.8rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 10px;
+	background: var(--bg-tertiary);
+	font-family: var(--mantine-font-family);
+	min-width: 0;
+	transition:
+		border-color 200ms ease,
+		box-shadow 200ms ease,
+		background 200ms ease,
+		translate 200ms ease;
+}
+
+.medicationRow:hover {
+	border-color: var(--border-secondary);
+	box-shadow: 0 6px 20px color-mix(in srgb, var(--shadow) 35%, transparent);
+	translate: 0 -1px;
+}
+
+.medicationRowEditing {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 8%, var(--bg-tertiary));
+	box-shadow: 0 0 0 1px var(--accent);
+}
+
+.obsoleteRow {
+	border-color: var(--border-primary);
+}
+
+.header {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.info {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-items: start;
+	min-width: 0;
+	flex: 1;
+}
+
+.nameRow {
+	display: flex;
+	grid-column: 1;
+	align-items: flex-start;
+	gap: 0.75rem;
+	min-width: 0;
+	margin-bottom: 0.45rem;
+}
+
+.nameBlock {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: flex-start;
+	min-width: 0;
+}
+
+.imagePreviewStatic,
+.imagePreviewButton {
+	flex: 0 0 auto;
+}
+
+.imagePreviewButton {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.imagePreviewButton:hover,
+.imagePreviewButton:active {
+	background: transparent;
+	box-shadow: none;
+	transform: none;
+}
+
+.imagePreviewButton:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 3px;
+}
+
+.details,
+.total,
+.stockMeter {
+	grid-column: 1 / -1;
+}
+
+.name {
+	margin-bottom: 0.15rem;
+	font-size: 1.05rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	overflow-wrap: anywhere;
+}
+
+.genericName {
+	color: var(--text-secondary);
+	font-size: 0.9rem;
+}
+
+.details {
+	display: grid;
+	grid-template-columns: max-content max-content;
+	gap: 0.3rem 1.75rem;
+	margin: 0.45rem 0 0.55rem;
+	padding-top: 0.55rem;
+	border-top: 1px solid color-mix(in srgb, var(--border-primary) 72%, transparent);
+	color: var(--text-secondary);
+	font-size: 0.86rem;
+}
+
+.details strong {
+	margin-left: 0.3rem;
+	color: var(--text-primary);
+	font-family: var(--mantine-font-family);
+	font-size: 0.84rem;
+	font-weight: 600;
+}
+
+.gridCompact .details {
+	grid-template-columns: repeat(auto-fit, minmax(8.5rem, max-content));
+}
+
+.total {
+	margin-bottom: 0.45rem;
+	color: var(--text-primary);
+	font-size: 0.92rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.stockMeter {
+	height: 4px;
+	margin-bottom: 0.25rem;
+	overflow: hidden;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--border-primary) 80%, transparent);
+}
+
+.stockMeterFill {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--accent);
+	transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.stockMeterFill[data-level="warning"] {
+	background: var(--warning);
+}
+
+.stockMeterFill[data-level="danger"] {
+	background: var(--danger);
+}
+
+.blisterList {
+	display: flex;
+	flex-direction: column;
+	align-self: start;
+	gap: 0.4rem;
+	width: 100%;
+	padding-top: 0.6rem;
+}
+
+.blisterRowSimple {
+	position: relative;
+	display: flex;
+	align-items: baseline;
+	gap: 0.45rem;
+	width: 100%;
+	padding: 0.55rem 0.7rem;
+	border: 1px solid color-mix(in srgb, var(--border-primary) 85%, transparent);
+	border-radius: 8px;
+	background: var(--bg-input);
+	color: var(--text-muted);
+	font-size: 0.86rem;
+	font-variant-numeric: tabular-nums;
+	transition:
+		background 200ms ease,
+		border-color 200ms ease;
+}
+
+.blisterRowSimple:hover {
+	border-color: color-mix(in srgb, var(--accent) 35%, var(--border-primary));
+	background: color-mix(in srgb, var(--accent-bg) 60%, var(--bg-input));
+}
+
+.blisterSummary {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.blisterTakenBy {
+	margin-left: auto;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.actions {
+	grid-column: 1;
+	justify-self: start;
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	flex-wrap: wrap;
+	margin-top: 0;
+}
+
+.actionIcon {
+	--ai-bg: var(--bg-input);
+	--ai-hover: var(--bg-input);
+	--ai-color: var(--text-secondary);
+	--ai-bd: 1px solid var(--border-secondary);
+
+	border: 1px solid var(--border-secondary) !important;
+	background: var(--bg-input) !important;
+	box-shadow: none;
+	color: var(--text-secondary) !important;
+	transition:
+		background 160ms ease,
+		border-color 160ms ease,
+		color 160ms ease,
+		box-shadow 160ms ease;
+}
+
+.actionButton {
+	--button-bg: var(--bg-input);
+	--button-hover: var(--bg-input);
+	--button-color: var(--text-secondary);
+	--button-bd: 1px solid var(--border-secondary);
+
+	border: 1px solid var(--border-secondary) !important;
+	background: var(--bg-input) !important;
+	box-shadow: none;
+	color: var(--text-secondary) !important;
+	white-space: nowrap;
+	transition:
+		background 160ms ease,
+		border-color 160ms ease,
+		color 160ms ease,
+		box-shadow 160ms ease;
+}
+
+.actionButton :global(.mantine-Button-inner),
+.actionButton :global(.mantine-Button-label),
+.actionButton :global(.mantine-Button-section) {
+	color: inherit !important;
+}
+
+.actionBrand:hover,
+.actionBrand:focus-visible {
+	--ai-bg: color-mix(in srgb, var(--bg-input) 82%, var(--accent) 18%);
+	--ai-hover: color-mix(in srgb, var(--bg-input) 82%, var(--accent) 18%);
+	--ai-color: var(--accent);
+	--ai-bd: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border-secondary));
+
+	border-color: color-mix(in srgb, var(--accent) 55%, var(--border-secondary)) !important;
+	background: color-mix(in srgb, var(--bg-input) 82%, var(--accent) 18%) !important;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent),
+		0 0 14px color-mix(in srgb, var(--accent) 24%, transparent);
+	color: var(--accent) !important;
+}
+
+.actionWarning:hover,
+.actionWarning:focus-visible {
+	--button-bg: color-mix(in srgb, var(--bg-input) 86%, var(--warning) 14%);
+	--button-hover: color-mix(in srgb, var(--bg-input) 86%, var(--warning) 14%);
+	--button-color: var(--warning);
+	--button-bd: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border-secondary));
+
+	border-color: color-mix(in srgb, var(--warning) 45%, var(--border-secondary)) !important;
+	background: color-mix(in srgb, var(--bg-input) 86%, var(--warning) 14%) !important;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--warning) 18%, transparent),
+		0 0 14px color-mix(in srgb, var(--warning) 22%, transparent);
+	color: var(--warning) !important;
+}
+
+.actionDanger:hover,
+.actionDanger:focus-visible {
+	--ai-bg: color-mix(in srgb, var(--bg-input) 84%, var(--danger) 16%);
+	--ai-hover: color-mix(in srgb, var(--bg-input) 84%, var(--danger) 16%);
+	--ai-color: var(--danger);
+	--ai-bd: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border-secondary));
+
+	border-color: color-mix(in srgb, var(--danger) 55%, var(--border-secondary)) !important;
+	background: color-mix(in srgb, var(--bg-input) 84%, var(--danger) 16%) !important;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--danger) 18%, transparent),
+		0 0 14px color-mix(in srgb, var(--danger) 24%, transparent);
+	color: var(--danger) !important;
+}
+
+.actionSuccess:hover,
+.actionSuccess:focus-visible {
+	--button-bg: color-mix(in srgb, var(--bg-input) 84%, var(--success) 16%);
+	--button-hover: color-mix(in srgb, var(--bg-input) 84%, var(--success) 16%);
+	--button-color: var(--success);
+	--button-bd: 1px solid color-mix(in srgb, var(--success) 45%, var(--border-secondary));
+
+	border-color: color-mix(in srgb, var(--success) 45%, var(--border-secondary)) !important;
+	background: color-mix(in srgb, var(--bg-input) 84%, var(--success) 16%) !important;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--success) 18%, transparent),
+		0 0 14px color-mix(in srgb, var(--success) 22%, transparent);
+	color: var(--success) !important;
+}
+
+:global([data-theme="light"]) .actionBrand:hover,
+:global([data-theme="light"]) .actionBrand:focus-visible {
+	--ai-bg: color-mix(in srgb, #ffffff 86%, var(--accent) 14%);
+	--ai-hover: color-mix(in srgb, #ffffff 86%, var(--accent) 14%);
+
+	background: color-mix(in srgb, #ffffff 86%, var(--accent) 14%) !important;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent),
+		0 0 10px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+:global([data-theme="light"]) .actionWarning:hover,
+:global([data-theme="light"]) .actionWarning:focus-visible {
+	--button-bg: color-mix(in srgb, #ffffff 88%, var(--warning) 12%);
+	--button-hover: color-mix(in srgb, #ffffff 88%, var(--warning) 12%);
+
+	background: color-mix(in srgb, #ffffff 88%, var(--warning) 12%) !important;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--warning) 14%, transparent),
+		0 0 10px color-mix(in srgb, var(--warning) 15%, transparent);
+}
+
+:global([data-theme="light"]) .actionDanger:hover,
+:global([data-theme="light"]) .actionDanger:focus-visible {
+	--ai-bg: color-mix(in srgb, #ffffff 86%, var(--danger) 14%);
+	--ai-hover: color-mix(in srgb, #ffffff 86%, var(--danger) 14%);
+
+	background: color-mix(in srgb, #ffffff 86%, var(--danger) 14%) !important;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--danger) 16%, transparent),
+		0 0 10px color-mix(in srgb, var(--danger) 16%, transparent);
+}
+
+:global([data-theme="light"]) .actionSuccess:hover,
+:global([data-theme="light"]) .actionSuccess:focus-visible {
+	--button-bg: color-mix(in srgb, #ffffff 88%, var(--success) 12%);
+	--button-hover: color-mix(in srgb, #ffffff 88%, var(--success) 12%);
+
+	background: color-mix(in srgb, #ffffff 88%, var(--success) 12%) !important;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--success) 14%, transparent),
+		0 0 10px color-mix(in srgb, var(--success) 15%, transparent);
+}
+
+.obsoleteRow .actions button {
+	opacity: 0.72;
+	filter: saturate(0.72);
+	box-shadow: none;
+}
+
+.obsoleteRow .actions button:hover {
+	opacity: 0.9;
+	filter: saturate(0.85);
+}
+
+.fullDetail {
+	grid-column: 1 / -1;
+}
+
+:global([data-theme="light"]) .medicationRow {
+	background: var(--bg-secondary);
+	border-color: var(--border-primary);
+}
+
+@media (max-width: 768px) {
+	.grid {
+		grid-template-columns: 1fr;
+	}
+
+	.group,
+	.groups {
+		padding: 0 !important;
+		border: none !important;
+		border-radius: 0 !important;
+		background: transparent !important;
+	}
+
+	.groupHead {
+		padding: 0 0.25rem;
+	}
+
+	.medicationRow {
+		padding: 0.65rem;
+		border-radius: 8px;
+	}
+
+	.details {
+		gap: 0.2rem 0.75rem;
+		font-size: 0.82rem;
+	}
+
+	.blisterRowSimple {
+		padding: 0.45rem 0.5rem 0.45rem 0.65rem;
+		font-size: 0.82rem;
+	}
+}
+
+@media (max-width: 600px) {
+	.headerActions {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
+	.nameRow,
+	.details,
+	.total,
+	.stockMeter {
+		grid-column: 1;
+	}
+
+	.actions {
+		margin-top: 0.1rem;
+	}
+}

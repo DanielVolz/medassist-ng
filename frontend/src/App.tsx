@@ -1,6 +1,9 @@
+import { Alert, Box, Center, Paper, Stack, Text, Title } from "@mantine/core";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import classes from "./App.module.css";
+import "./AppSurfaces.css";
 import {
 	AboutModal,
 	Lightbox,
@@ -13,7 +16,9 @@ import {
 import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
 import { AppProvider, FeedbackProvider, UnsavedChangesProvider, useAppContext, useShareContext } from "./context";
+import { useModalHistory } from "./hooks/useModalHistory";
 import { useScrollLock } from "./hooks/useScrollLock";
+import { AppButton } from "./ui/primitives/AppButton";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const MedicationsPage = lazy(() =>
@@ -35,17 +40,23 @@ export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 function RouteLoadingFallback() {
 	const { t } = useTranslation();
 
-	return <div style={{ padding: "1rem", textAlign: "center" }}>{t("common.loading")}</div>;
+	return (
+		<Center className={classes.routeLoading}>
+			<Text>{t("common.loading")}</Text>
+		</Center>
+	);
 }
 
 function AuthStatusCard({ theme, children }: { theme: "light" | "dark"; children: React.ReactNode }) {
 	return (
-		<div className="auth-container" data-theme={theme}>
-			<div className="auth-card" style={{ textAlign: "center" }}>
-				<h1 className="auth-title">💊 MedAssist-ng</h1>
+		<Center className={classes.authStatusShell} data-testid="auth-status" data-theme={theme}>
+			<Paper className={classes.authStatusCard}>
+				<Title className={classes.authStatusTitle} order={1}>
+					💊 MedAssist-ng
+				</Title>
 				{children}
-			</div>
-		</div>
+			</Paper>
+		</Center>
 	);
 }
 
@@ -53,44 +64,6 @@ function AuthStatusCard({ theme, children }: { theme: "light" | "dark"; children
 // Main App Wrapper with Auth
 // =============================================================================
 export default function App() {
-	// Close tooltips on scroll/touch (for mobile). Keep this in the public
-	// wrapper too so shared links get the same tooltip behavior as the app.
-	useEffect(() => {
-		const closeAllTooltips = () => {
-			document.querySelectorAll(".info-tooltip.tooltip-active, .tooltip-trigger.tooltip-active").forEach((el) => {
-				el.classList.remove("tooltip-active");
-			});
-		};
-
-		const handleTooltipClick = (e: Event) => {
-			const target = e.target as HTMLElement;
-			const tooltipTrigger = target.closest(".info-tooltip, .tooltip-trigger") as HTMLElement | null;
-			if (tooltipTrigger) {
-				closeAllTooltips();
-				tooltipTrigger.classList.add("tooltip-active");
-				if (window.innerWidth <= 640) {
-					const rect = tooltipTrigger.getBoundingClientRect();
-					tooltipTrigger.style.setProperty("--tooltip-bottom", `${window.innerHeight - rect.top + 8}px`);
-				}
-			} else {
-				closeAllTooltips();
-			}
-		};
-
-		const handleTouchMove = () => {
-			closeAllTooltips();
-		};
-
-		document.addEventListener("click", handleTooltipClick, { capture: true });
-		document.addEventListener("touchmove", handleTouchMove, { passive: true });
-		document.addEventListener("scroll", handleTouchMove, { passive: true });
-		return () => {
-			document.removeEventListener("click", handleTooltipClick, { capture: true });
-			document.removeEventListener("touchmove", handleTouchMove);
-			document.removeEventListener("scroll", handleTouchMove);
-		};
-	}, []);
-
 	return (
 		<AuthProvider>
 			<FeedbackProvider>
@@ -132,7 +105,7 @@ function AppRouter() {
 	if (loading) {
 		return (
 			<AuthStatusCard theme={authTheme}>
-				<p>{t("common.loading")}</p>
+				<Text>{t("common.loading")}</Text>
 			</AuthStatusCard>
 		);
 	}
@@ -141,15 +114,15 @@ function AppRouter() {
 	if (authError) {
 		return (
 			<AuthStatusCard theme={authTheme}>
-				<div className="auth-error" style={{ marginBottom: "1rem" }}>
-					<strong>{t("auth.connectionErrorTitle")}</strong>
-					<br />
-					{authError}
-				</div>
-				<p style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>{t("auth.connectionErrorHelp")}</p>
-				<button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: "1rem" }}>
-					{t("common.retry")}
-				</button>
+				<Stack align="center" gap="md">
+					<Alert className={classes.authStatusError} color="red" title={t("auth.connectionErrorTitle")}>
+						{authError}
+					</Alert>
+					<Text className={classes.authStatusHelp}>{t("auth.connectionErrorHelp")}</Text>
+					<AppButton onClick={() => window.location.reload()} tone="primary">
+						{t("common.retry")}
+					</AppButton>
+				</Stack>
 			</AuthStatusCard>
 		);
 	}
@@ -158,7 +131,7 @@ function AppRouter() {
 	if (!authState) {
 		return (
 			<AuthStatusCard theme={authTheme}>
-				<p>{t("common.initializing")}</p>
+				<Text>{t("common.initializing")}</Text>
 			</AuthStatusCard>
 		);
 	}
@@ -234,7 +207,6 @@ function AppContent() {
 		showImageLightbox,
 		setShowImageLightbox,
 		scheduleLightboxImage,
-		setScheduleLightboxImage,
 		selectedUser,
 		setSelectedUser,
 		// Modal helpers
@@ -243,6 +215,7 @@ function AppContent() {
 		openImageLightbox,
 		closeImageLightbox,
 		closeScheduleLightbox,
+		openUserFilter,
 		closeUserFilter,
 	} = ctx;
 
@@ -273,7 +246,6 @@ function AppContent() {
 		regenerateShareLink,
 		copyShareLink,
 		closeShareDialog,
-		resetShareDialogState,
 	} = shareCtx;
 
 	// Local-only state (not shared across components)
@@ -282,67 +254,26 @@ function AppContent() {
 	const [routeTransitionMaskActive, setRouteTransitionMaskActive] = useState(false);
 	const routeTransitionMinEndRef = useRef(0);
 	const routeTransitionFallbackTimerRef = useRef<number | null>(null);
-	const closeProfile = useCallback(() => {
-		if (showProfile) {
-			window.history.back();
-		}
-	}, [showProfile]);
-
-	const closeAbout = useCallback(() => {
-		if (showAbout) {
-			window.history.back();
-		}
-	}, [showAbout]);
+	const dismissProfile = useCallback(() => {
+		setShowProfile(false);
+	}, []);
+	const dismissAbout = useCallback(() => {
+		setShowAbout(false);
+	}, []);
+	// History integration via the shared modal stack: pushes one entry on open,
+	// browser back (or closeModal) dismisses only the topmost modal.
+	const { closeModal: closeProfile } = useModalHistory(showProfile, "profile", dismissProfile);
+	const { closeModal: closeAbout } = useModalHistory(showAbout, "about", dismissAbout);
 
 	// Get centralized stockThresholds from context
 	const { stockThresholds } = ctx;
 
-	// Handle browser back button to close modals (in priority order)
-	useEffect(() => {
-		const handlePopState = () => {
-			// Close modals in order of priority (topmost first)
-			// NOTE: This handler MUST NOT call history.back() or it will cause infinite loops
-			// Only use direct state setters here
-			if (showImageLightbox) {
-				setShowImageLightbox(false);
-			} else if (scheduleLightboxImage) {
-				setScheduleLightboxImage(null);
-			} else if (showEditStockModal) {
-				setShowEditStockModal(false);
-			} else if (showRefillModal) {
-				setShowRefillModal(false);
-			} else if (showShareDialog) {
-				resetShareDialogState();
-			} else if (showAbout) {
-				setShowAbout(false);
-			} else if (showProfile) {
-				setShowProfile(false);
-			} else if (selectedUser) {
-				setSelectedUser(null);
-			} else if (selectedMed) {
-				setSelectedMed(null);
-			}
-		};
-		window.addEventListener("popstate", handlePopState);
-		return () => window.removeEventListener("popstate", handlePopState);
-	}, [
-		selectedMed,
-		showImageLightbox,
-		scheduleLightboxImage,
-		selectedUser,
-		showProfile,
-		showAbout,
-		showShareDialog,
-		showRefillModal,
-		showEditStockModal,
-		resetShareDialogState,
-		setScheduleLightboxImage,
-		setSelectedMed,
-		setSelectedUser,
-		setShowEditStockModal,
-		setShowImageLightbox,
-		setShowRefillModal,
-	]);
+	// Browser-back handling for ALL modals goes through useModalHistory's shared
+	// modal stack (capture-phase popstate listener per modal). There must be no
+	// additional app-level popstate handler: a second handler closing modals by
+	// its own priority order desynchronizes from the stack and dismisses the
+	// wrong (parent) modal, e.g. closing the medication detail modal while the
+	// nested refill modal stays stuck open.
 
 	// Global Escape handling in priority order.
 	// This keeps behavior consistent even when child modals are mocked in tests.
@@ -518,16 +449,15 @@ function AppContent() {
 
 	const openProfile = useCallback(() => {
 		setShowProfile(true);
-		window.history.pushState({ modal: "profile" }, "");
 	}, []);
 
 	const openAbout = useCallback(() => {
 		setShowAbout(true);
-		window.history.pushState({ modal: "about" }, "");
 	}, []);
 
 	return (
-		<main className="page">
+		<Box className={classes.page} component="main" data-testid="app-shell">
+			<div aria-hidden="true" className={classes.topBlur} data-testid="app-shell-top-blur" />
 			<AppHeader onOpenProfile={openProfile} onOpenAbout={openAbout} />
 
 			{/* Profile Modal */}
@@ -570,6 +500,7 @@ function AppContent() {
 				onOpenMedicationEdit={handleOpenMedicationEdit}
 				onOpenEditStockModal={handleOpenEditStockFromDetail}
 				onCloseEditStockModal={closeEditStockModal}
+				onOpenUserFilter={openUserFilter}
 				refillPacks={refillPacks}
 				onRefillPacksChange={setRefillPacks}
 				refillLoose={refillLoose}
@@ -641,7 +572,10 @@ function AppContent() {
 				<Lightbox src={scheduleLightboxImage} alt="Medication" onClose={closeScheduleLightbox} />
 			)}
 
-			<div className={`route-transition-mask${routeTransitionMaskActive ? " active" : ""}`} aria-hidden="true" />
-		</main>
+			<Box
+				aria-hidden="true"
+				className={`${classes.routeTransitionMask}${routeTransitionMaskActive ? ` ${classes.routeTransitionMaskActive}` : ""}`}
+			/>
+		</Box>
 	);
 }

@@ -1,0 +1,10 @@
+.badge {
+	flex-shrink: 0;
+	max-width: none;
+}
+
+.badge :global(.mantine-Badge-label) {
+	overflow: visible;
+	text-overflow: clip;
+	white-space: nowrap;
+}

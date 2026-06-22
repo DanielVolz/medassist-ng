@@ -1,0 +1,80 @@
+.overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 2400;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2rem;
+	background: rgba(0, 0, 0, 0.9);
+	animation: fadeIn 0.2s ease;
+}
+
+.container {
+	position: relative;
+	display: inline-flex;
+}
+
+.close {
+	position: absolute;
+	top: 0.75rem;
+	right: 0.75rem;
+	z-index: 1;
+	width: 2.5rem;
+	min-width: 2.5rem;
+	height: 2.25rem;
+	padding: 0;
+	border: 1px solid rgba(255, 255, 255, 0.24);
+	border-radius: var(--button-radius, 8px);
+	background: rgba(255, 255, 255, 0.15);
+	color: white;
+	box-shadow: none;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease;
+}
+
+.close:hover {
+	border-color: rgba(255, 255, 255, 0.42);
+	background: rgba(255, 255, 255, 0.3);
+}
+
+.close:active {
+	transform: none;
+}
+
+.close :global(.mantine-Button-inner) {
+	justify-content: center;
+}
+
+.close :global(.mantine-Button-label) {
+	display: inline-flex;
+	align-items: center;
+}
+
+.image {
+	max-width: 50vw;
+	max-height: 50vh;
+	object-fit: contain;
+	border-radius: 12px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+	animation: zoomIn 0.3s ease;
+}
+
+@media (max-width: 768px) {
+	.image {
+		max-width: 90vw;
+		max-height: 70vh;
+	}
+}
+
+@keyframes zoomIn {
+	from {
+		opacity: 0;
+		transform: scale(0.8);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}

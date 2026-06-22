@@ -9,6 +9,7 @@ import { useFeedback } from "../context/FeedbackContext";
 import type { Medication } from "../types";
 import { withCorrelation } from "../utils/correlation";
 import { log } from "../utils/logger";
+import { useModalHistory } from "./useModalHistory";
 
 const SHARE_ALL_VALUE = "all";
 
@@ -98,7 +99,6 @@ export function useShare(): UseShareReturn {
 	const openShareDialog = useCallback(
 		(meds: Medication[]) => {
 			setShowShareDialog(true);
-			window.history.pushState({ modal: "share" }, "");
 			setShareLink(null);
 			setShareCopied(false);
 			setShareSelectedPerson("");
@@ -299,14 +299,7 @@ export function useShare(): UseShareReturn {
 		}
 	}, [shareLink]);
 
-	const closeShareDialog = useCallback(() => {
-		if (showShareDialog) {
-			log.debug("[ShareDialog] Closing dialog");
-			window.history.back();
-		}
-	}, [showShareDialog]);
-
-	// Internal function to reset share dialog state (called by popstate handler)
+	// Internal function to reset share dialog state (used as modal-history dismiss handler)
 	const resetShareDialogState = useCallback(() => {
 		log.debug("[ShareDialog] Reset dialog state");
 		setShowShareDialog(false);
@@ -320,6 +313,10 @@ export function useShare(): UseShareReturn {
 		setRevokingShareToken(null);
 		setRegeneratingShareToken(null);
 	}, []);
+
+	// History integration: pushes one entry on open, browser back (or closeModal)
+	// dismisses only this dialog via the shared modal stack.
+	const { closeModal: closeShareDialog } = useModalHistory(showShareDialog, "share", resetShareDialogState);
 
 	return {
 		showShareDialog,

@@ -41,6 +41,7 @@ describe("EnvSchema", () => {
 			expect(result.PUBLIC_APP_URL).toBeUndefined();
 			expect(result.OPENAPI_DOCS_ENABLED).toBeUndefined();
 			expect(result.DOCS_AUTH_REQUIRED).toBeUndefined();
+			expect(result.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED).toBeUndefined();
 			expect(result.AUTH_ENABLED).toBe(false);
 			expect(result.ALLOW_UNAUTHENTICATED).toBe(false);
 			expect(result.REGISTRATION_ENABLED).toBe(false);
@@ -139,6 +140,17 @@ describe("EnvSchema", () => {
 			expect(EnvSchema.parse({ OPENAPI_DOCS_ENABLED: "0" }).OPENAPI_DOCS_ENABLED).toBe(false);
 			expect(EnvSchema.parse({ DOCS_AUTH_REQUIRED: "1" }).DOCS_AUTH_REQUIRED).toBe(true);
 			expect(EnvSchema.parse({ DOCS_AUTH_REQUIRED: "no" }).DOCS_AUTH_REQUIRED).toBe(false);
+		});
+
+		it("should transform medication enrichment startup refresh boolean correctly", () => {
+			expect(
+				EnvSchema.parse({ MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED: "yes" })
+					.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED
+			).toBe(true);
+			expect(
+				EnvSchema.parse({ MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED: "0" })
+					.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED
+			).toBe(false);
 		});
 	});
 

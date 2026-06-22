@@ -115,6 +115,49 @@ test.describe("Dashboard with medications", () => {
 		await expect(todayBlock.getByText(MED_2)).toBeVisible();
 	});
 
+	test("keeps schedule medication identity tight to the day header", async ({ page }) => {
+		for (const viewport of [
+			{ width: 1280, height: 720 },
+			{ width: 390, height: 844 },
+		]) {
+			await page.setViewportSize(viewport);
+			await navigateTo(page, "/dashboard");
+
+			const todayBlock = page.locator(".day-block.today");
+			await expect(todayBlock).toBeVisible({ timeout: 10000 });
+			const row = todayBlock.locator(".time-row").filter({ hasText: MED_1 }).first();
+			await expect(row).toBeVisible();
+
+			const metrics = await row.evaluate((node) => {
+				const timeRow = node as HTMLElement;
+				const dayDivider = timeRow.closest(".day-block")?.querySelector(".day-divider") as HTMLElement | null;
+				const identity = timeRow.querySelector(".time-main .med-name") as HTMLElement | null;
+				const avatarWrap = identity?.firstElementChild as HTMLElement | null;
+				const nameText = identity?.querySelector(".med-name-text") as HTMLElement | null;
+				if (!dayDivider || !identity || !avatarWrap || !nameText) {
+					throw new Error("Schedule medication identity markup was not found");
+				}
+
+				const rowRect = timeRow.getBoundingClientRect();
+				const dividerRect = dayDivider.getBoundingClientRect();
+				const avatarRect = avatarWrap.getBoundingClientRect();
+				const nameRect = nameText.getBoundingClientRect();
+
+				return {
+					avatarNameGap: nameRect.left - avatarRect.right,
+					avatarTopFromRow: avatarRect.top - rowRect.top,
+					dayHeaderToRowGap: rowRect.top - dividerRect.bottom,
+					nameAvatarTopDelta: Math.abs(nameRect.top - avatarRect.top),
+				};
+			});
+
+			expect(metrics.dayHeaderToRowGap).toBeLessThanOrEqual(10);
+			expect(metrics.avatarTopFromRow).toBeLessThanOrEqual(8);
+			expect(metrics.avatarNameGap).toBeLessThanOrEqual(10);
+			expect(metrics.nameAvatarTopDelta).toBeLessThanOrEqual(4);
+		}
+	});
+
 	test("should show day summary with dose progress", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 		const overviewTable = page.locator(".dashboard-overview-section .table").first();

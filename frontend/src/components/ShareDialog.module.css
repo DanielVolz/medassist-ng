@@ -1,0 +1,434 @@
+.modal {
+	max-width: 640px;
+	max-height: min(96dvh, 760px);
+	overflow: hidden;
+}
+
+.modalHeader {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	padding: 1rem 1.25rem;
+	background: var(--bg-secondary);
+	border-bottom: 1px solid var(--border-primary);
+}
+
+.modalTitle {
+	font-size: 1rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	color: var(--text-primary);
+}
+
+.titleLine {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.modalBody {
+	--app-modal-footer-bottom-offset: 1.5rem;
+	--app-modal-footer-inline-offset: 1.5rem;
+
+	padding: 1.5rem;
+}
+
+.header {
+	text-align: center;
+	margin-bottom: 1.5rem;
+}
+
+.description {
+	font-size: 0.85rem;
+	line-height: 1.5;
+	text-align: left;
+	color: var(--warning);
+	background: var(--warning-bg);
+	padding: 0.75rem 1rem;
+	border-radius: 8px;
+	border: 1px solid color-mix(in srgb, var(--warning) 24%, transparent);
+	margin: 0.5rem 0 0;
+}
+
+.empty {
+	text-align: center;
+	padding: 2rem;
+	color: var(--text-secondary);
+}
+
+.form .formGroup {
+	margin-bottom: 1rem;
+}
+
+.form label {
+	display: block;
+	font-size: 0.875rem;
+	font-weight: 500;
+	margin-bottom: 0.5rem;
+	color: var(--text-primary);
+}
+
+.selectField {
+	width: 100%;
+	padding: 0.6rem 2rem 0.6rem 0.75rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	background-color: var(--bg-secondary);
+	color: var(--text-primary);
+	font-size: 0.9rem;
+	cursor: pointer;
+	background-position: right 0.9rem center;
+}
+
+.selectField:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+.form .inlineCheckbox {
+	display: grid;
+	grid-template-columns: 1.15rem minmax(0, 1fr);
+	align-items: start;
+	column-gap: 0.65rem;
+	width: 100%;
+	min-width: 0;
+	margin: 0.9rem 0 0;
+	color: var(--text-primary);
+	font-size: 0.875rem;
+	font-weight: 500;
+	line-height: 1.35;
+	white-space: normal;
+	cursor: pointer;
+}
+
+.form .inlineCheckbox + .inlineCheckbox {
+	margin-top: 0.75rem;
+}
+
+.form .inlineCheckbox input[type="checkbox"] {
+	width: 1rem;
+	height: 1rem;
+	min-width: 1rem;
+	margin-top: 0.15rem;
+	margin-inline: 0;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
+.form .inlineCheckbox span {
+	min-width: 0;
+	overflow-wrap: break-word;
+	line-height: 1.35;
+}
+
+.form,
+.result {
+	min-height: 0;
+}
+
+.activeLinks {
+	margin-top: 1.35rem;
+	margin-bottom: 1.35rem;
+}
+
+.manage {
+	border: 1px solid var(--border-primary);
+	border-radius: 10px;
+	background: var(--bg-secondary);
+	overflow: hidden;
+}
+
+.manageSummary {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 0.75rem;
+	width: 100%;
+	padding: 0.85rem 1rem;
+	font-weight: 600;
+	color: var(--text-primary);
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+	text-align: left;
+}
+
+.manageSummary:hover {
+	background: color-mix(in srgb, var(--bg-tertiary) 68%, transparent);
+	color: var(--text-primary);
+}
+
+.manageSummary:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+	outline-offset: -2px;
+}
+
+.manageCount {
+	font-size: 0.8rem;
+	font-weight: 500;
+	color: var(--text-secondary);
+}
+
+.manageContent {
+	padding: 0 1rem 1rem;
+	border-top: 1px solid var(--border-primary);
+}
+
+.activeList {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.activeItem {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) max-content;
+	align-items: flex-start;
+	gap: 1rem;
+	padding-top: 1rem;
+}
+
+.activeItem + .activeItem {
+	border-top: 1px solid var(--border-primary);
+}
+
+.activeCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.activeHeading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.45rem 0.6rem;
+	min-width: 0;
+}
+
+.periodPill {
+	display: inline-flex;
+	align-items: center;
+	min-height: 1.45rem;
+	padding: 0.15rem 0.5rem;
+	border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--accent-bg) 72%, transparent);
+	color: var(--accent);
+	font-size: 0.72rem;
+	font-weight: 700;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.activeMetaGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+	gap: 0.5rem;
+	margin: 0;
+}
+
+.metaCell {
+	min-width: 0;
+	padding: 0.55rem 0.65rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--bg-tertiary) 58%, transparent);
+}
+
+.metaCell dt {
+	margin: 0 0 0.2rem;
+	color: var(--text-secondary);
+	font-size: 0.68rem;
+	font-weight: 700;
+	line-height: 1.1;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.metaCell dd {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 0.84rem;
+	font-weight: 650;
+	line-height: 1.25;
+	overflow-wrap: break-word;
+}
+
+.permissionsBlock {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	min-width: 0;
+}
+
+.permissionsLabel {
+	color: var(--text-secondary);
+	font-size: 0.68rem;
+	font-weight: 700;
+	line-height: 1.1;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.permissionChips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	min-width: 0;
+}
+
+.permissionChip {
+	display: inline-flex;
+	align-items: center;
+	max-width: 100%;
+	min-height: 1.55rem;
+	padding: 0.2rem 0.55rem;
+	border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--accent-bg) 48%, var(--bg-secondary));
+	color: var(--text-primary);
+	font-size: 0.76rem;
+	font-weight: 650;
+	line-height: 1.15;
+	overflow-wrap: anywhere;
+}
+
+.activeActions {
+	display: grid;
+	grid-template-columns: repeat(2, max-content);
+	align-self: start;
+	justify-content: flex-end;
+	gap: 0.4rem;
+	min-width: max-content;
+}
+
+.activeActions button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	white-space: nowrap;
+}
+
+.linkInline {
+	font-weight: 600;
+	color: var(--accent);
+	text-decoration: none;
+	word-break: break-word;
+}
+
+.linkInline:hover {
+	text-decoration: underline;
+}
+
+.result {
+	text-align: center;
+}
+
+.linkLabel {
+	margin: 0.75rem 0 0.4rem;
+	text-align: left;
+	font-size: 0.8rem;
+	color: var(--text-secondary);
+	font-weight: 600;
+}
+
+.linkBox {
+	display: flex;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.linkInput {
+	flex: 1;
+	padding: 0.75rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	background: var(--bg-input);
+	color: var(--text-primary);
+	font-size: 0.875rem;
+	font-family: monospace;
+}
+
+.copyButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.5rem;
+	min-width: 2.25rem;
+	min-height: 2.25rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	background: var(--bg-tertiary);
+	color: var(--text-primary);
+	cursor: pointer;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease;
+}
+
+.copyButton:hover {
+	background: var(--accent-bg);
+	border-color: var(--accent);
+}
+
+.copiedHint {
+	color: var(--success);
+	font-size: 0.875rem;
+}
+
+.warningText {
+	margin-top: 0.4rem;
+	color: var(--warning);
+}
+
+@media (max-width: 640px) {
+	.activeMetaGrid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.manageContent {
+		padding: 0 0.75rem 0.85rem;
+	}
+
+	.activeItem {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.75rem;
+		padding-top: 1rem;
+	}
+
+	.activeCopy {
+		width: 100%;
+	}
+
+	.activeActions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		width: 100%;
+		gap: 0.5rem;
+		justify-content: stretch;
+	}
+
+	.activeActions button {
+		width: 100%;
+		min-width: 0;
+		justify-content: center;
+		padding-inline: 0.55rem;
+	}
+}
+
+@media (max-width: 360px) {
+	.activeMetaGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.activeActions {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

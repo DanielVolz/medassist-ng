@@ -15,6 +15,7 @@ Configure MedAssist with environment variables in `.env`. Start from `.env.examp
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error`, or `silent` |
 | `SENSITIVE_LOGGING_ENABLED` | `false` | Allows sensitive dose/person details only in debug logging paths. Leave disabled outside local troubleshooting. |
 | `RATE_LIMIT_MAX` | `100` | Maximum requests per minute per IP |
+| `MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED` | `auto` | Eagerly refresh the EMA medication catalog on backend startup. Defaults to `true` in production and `false` outside production; enrichment still refreshes lazily on request. |
 | `OPENAPI_DOCS_ENABLED` | `auto` | Explicitly enable or disable `/docs` and `/docs/json` |
 | `DOCS_AUTH_REQUIRED` | `auto` | Require authentication for enabled docs; defaults to `true` when `AUTH_ENABLED=true` |
 

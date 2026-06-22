@@ -1,0 +1,159 @@
+.sidebar {
+	display: none;
+	min-width: 0;
+	padding: 0;
+}
+
+.sidebarOpen {
+	display: block;
+}
+
+@media (min-width: 769px) {
+	.sidebarOpen {
+		--desktop-editor-sticky-top: 6.5rem;
+
+		position: sticky;
+		top: var(--desktop-editor-sticky-top);
+		max-height: calc(100dvh - var(--desktop-editor-sticky-top) - 1rem);
+		overflow: hidden;
+		overscroll-behavior: contain;
+		scrollbar-gutter: stable;
+		-webkit-overflow-scrolling: touch;
+	}
+}
+
+.editorShell {
+	--desktop-editor-panel-bg: color-mix(in srgb, var(--bg-secondary) 88%, var(--bg-tertiary));
+
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	max-height: inherit;
+	overflow: hidden;
+	padding-top: 1.25rem;
+	border: none;
+	background: transparent;
+	box-shadow: none;
+	backdrop-filter: none;
+}
+
+.cardContent {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.header {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 0.9rem;
+	min-width: 0;
+	margin-bottom: 1rem;
+}
+
+.backButton {
+	flex: 0 0 auto;
+	min-width: 4.75rem;
+	min-height: 2rem;
+}
+
+.header h2 {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+	font-size: 1.25rem;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
+.toolbar {
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.form {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.formBody {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem 1.25rem;
+	min-height: 0;
+	padding: 0.95rem 1rem 1rem;
+	border: 1px solid var(--border-primary);
+	border-top: none;
+	border-bottom: none;
+	background: var(--desktop-editor-panel-bg);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	-webkit-overflow-scrolling: touch;
+}
+
+.form label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+	font-weight: 500;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+}
+
+.form :global(.full) {
+	grid-column: 1 / -1;
+}
+
+.form :global(.optional-label) {
+	font-size: 0.75rem;
+	font-weight: 400;
+	letter-spacing: normal;
+	text-transform: none;
+}
+
+.formActions {
+	display: grid;
+	flex: 0 0 auto;
+	align-items: center;
+	grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+	gap: 0.75rem;
+	margin-top: 0;
+	padding: 0.85rem 1rem 0.9rem;
+	border: 1px solid var(--border-primary);
+	border-top-color: color-mix(in srgb, var(--border-primary) 78%, transparent);
+	border-radius: 0 0 12px 12px;
+	background: var(--desktop-editor-panel-bg);
+}
+
+.formActions :global(.mantine-Button-root) {
+	width: 100%;
+	min-width: 7.5rem;
+}
+
+.form :global(label.has-error input),
+.form :global(label.has-error textarea) {
+	border-color: var(--danger) !important;
+	background-color: rgba(239, 68, 68, 0.05);
+}
+
+.form :global(label.has-error input:focus),
+.form :global(label.has-error textarea:focus) {
+	box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+@media (max-width: 768px) {
+	.sidebar,
+	.sidebarOpen {
+		display: none;
+	}
+}

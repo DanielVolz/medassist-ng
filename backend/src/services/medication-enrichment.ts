@@ -104,6 +104,10 @@ export type MedicationEnrichmentEnrichResponse = {
 
 type MedicationEnrichmentLogger = Pick<FastifyBaseLogger, "debug" | "error" | "info" | "warn">;
 
+type MedicationEnrichmentSchedulerOptions = {
+	startupRefreshEnabled?: boolean;
+};
+
 type EmaMedicineRow = Record<string, unknown>;
 
 type EmaCatalogEntry = {
@@ -1120,17 +1124,24 @@ function buildSelectionNameAndGeneric(request: MedicationEnrichmentEnrichRequest
 	};
 }
 
-export function startMedicationEnrichmentService(logger: MedicationEnrichmentLogger): void {
+export function startMedicationEnrichmentService(
+	logger: MedicationEnrichmentLogger,
+	options: MedicationEnrichmentSchedulerOptions = {}
+): void {
 	activeLogger = logger;
 	if (schedulerStarted) return;
 
 	schedulerStarted = true;
-	void refreshEmaCatalog("startup").catch((error: unknown) => {
-		activeLogger.error(
-			`[MedicationEnrichment] startup refresh failed: ${error instanceof Error ? error.message : String(error)}`
-		);
-		return undefined;
-	});
+	if (options.startupRefreshEnabled ?? true) {
+		void refreshEmaCatalog("startup").catch((error: unknown) => {
+			activeLogger.error(
+				`[MedicationEnrichment] startup refresh failed: ${error instanceof Error ? error.message : String(error)}`
+			);
+			return undefined;
+		});
+	} else {
+		activeLogger.info("[MedicationEnrichment] EMA catalog startup refresh disabled; refresh will run on demand.");
+	}
 
 	refreshTimer = setInterval(() => {
 		void refreshEmaCatalog("scheduled").catch((error: unknown) => {

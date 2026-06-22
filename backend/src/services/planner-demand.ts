@@ -29,6 +29,16 @@ type PlannerDemandOptions = {
 	now?: Date;
 };
 
+function getPlannerMedicationDisplayName(row: { id: number; name: string | null; genericName: string | null }): string {
+	const commercialName = row.name?.trim() ?? "";
+	if (commercialName.length > 0) return commercialName;
+
+	const genericName = row.genericName?.trim() ?? "";
+	if (genericName.length > 0) return genericName;
+
+	return `Medication #${row.id}`;
+}
+
 export async function calculatePlannerDemandRows(options: PlannerDemandOptions): Promise<PlannerDemandRow[]> {
 	const { userId, startDate, endDate, includeUntilStart = false, medicationIds, now = new Date() } = options;
 	const uniqueMedicationIds = medicationIds ? [...new Set(medicationIds.filter((id) => Number.isInteger(id)))] : [];
@@ -116,7 +126,7 @@ export async function calculatePlannerDemandRows(options: PlannerDemandOptions):
 
 		return {
 			medicationId: row.id,
-			medicationName: row.name,
+			medicationName: getPlannerMedicationDisplayName(row),
 			totalPills: currentStock,
 			currentPills: currentStock,
 			plannerUsage: usageTotal,

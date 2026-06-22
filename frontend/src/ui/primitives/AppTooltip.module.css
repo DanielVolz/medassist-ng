@@ -1,0 +1,100 @@
+.tooltipRoot {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	vertical-align: middle;
+}
+
+.tooltipBubble {
+	position: absolute;
+	bottom: calc(100% + 0.45rem);
+	left: 50%;
+	z-index: 2600;
+	width: max-content;
+	max-width: min(var(--app-tooltip-max-width, 20rem), calc(100vw - 2rem));
+	padding: 0.45rem 0.6rem;
+	border: 1px solid var(--mantine-other-border-primary);
+	border-radius: 8px;
+	background: var(--mantine-other-bg-secondary);
+	box-shadow: 0 0.75rem 1.75rem rgb(0 0 0 / 18%);
+	color: var(--mantine-other-text-primary);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	line-height: 1.35;
+	text-align: center;
+	white-space: normal;
+	pointer-events: none;
+	transform: translateX(-50%);
+}
+
+.tooltipBubble::after {
+	position: absolute;
+	bottom: -0.32rem;
+	left: 50%;
+	width: 0.55rem;
+	height: 0.55rem;
+	border-right: 1px solid var(--mantine-other-border-primary);
+	border-bottom: 1px solid var(--mantine-other-border-primary);
+	background: var(--mantine-other-bg-secondary);
+	content: "";
+	transform: translateX(-50%) rotate(45deg);
+}
+
+.tooltipTrigger {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	font: inherit;
+	line-height: inherit;
+	cursor: help;
+}
+
+.tooltipTrigger:hover,
+.tooltipTrigger:active {
+	background: transparent;
+	box-shadow: none;
+	transform: none;
+}
+
+.tooltipTrigger:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 3px;
+}
+
+.tooltipIcon {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.25rem;
+	height: 1.25rem;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--mantine-color-dimmed);
+	cursor: help;
+	transition:
+		color 150ms ease,
+		background 150ms ease;
+}
+
+.tooltipIcon:hover,
+.tooltipIcon:active {
+	background: color-mix(in srgb, var(--mantine-color-brand-5) 10%, transparent);
+	color: var(--mantine-color-brand-5);
+	box-shadow: none;
+	transform: none;
+}
+
+.tooltipIcon:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 3px;
+}

@@ -1,0 +1,408 @@
+.inner {
+	align-items: flex-start;
+	padding-top: 0.35rem;
+	padding-bottom: 0.35rem;
+}
+
+.content {
+	width: min(95vw, 720px);
+	max-width: 95vw;
+	height: min(96dvh, 96vh);
+	max-height: min(96dvh, 96vh);
+}
+
+.header {
+	padding: 0.6rem 0.75rem;
+}
+
+.title {
+	flex: 1;
+	min-width: 0;
+	margin-right: 0.75rem;
+}
+
+.headerTitle {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.backButton {
+	flex: 0 0 auto;
+	min-width: 4.75rem;
+	min-height: 2rem;
+}
+
+.headerTitle h2 {
+	min-width: 0;
+	margin: 0;
+	font-size: 1.25rem;
+	line-height: 1.2;
+	text-align: left;
+	overflow-wrap: anywhere;
+}
+
+.body {
+	--app-modal-footer-bottom-offset: 0.6rem;
+	--app-modal-footer-inline-offset: 0.6rem;
+
+	display: flex;
+	min-height: 0;
+	flex-direction: column;
+	overflow: hidden;
+	padding: 0.6rem;
+}
+
+.form {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	flex-direction: column;
+	gap: 0.5rem;
+	overflow: hidden;
+}
+
+.form input,
+.form textarea,
+.form select {
+	width: 100%;
+	font-size: 16px !important;
+}
+
+.form :global(label.has-error input),
+.form :global(label.has-error textarea) {
+	border-color: var(--danger) !important;
+	background-color: rgba(239, 68, 68, 0.05);
+}
+
+.form :global(label.has-error input:focus),
+.form :global(label.has-error textarea:focus) {
+	box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.form :global(.date-input-display) {
+	font-size: 16px !important;
+}
+
+.tabList {
+	display: flex;
+	gap: 2px;
+	overflow-x: auto;
+	margin-bottom: 0;
+	padding: 3px;
+	border: 1px solid var(--border-primary);
+	border-radius: 10px;
+	background: var(--bg-tertiary);
+	scroll-padding-inline: 1rem;
+	scroll-snap-type: x proximity;
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+	mask-image: linear-gradient(to right, transparent 0, #000 0.5rem, #000 calc(100% - 2.75rem), transparent 100%);
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent 0,
+		#000 0.5rem,
+		#000 calc(100% - 2.75rem),
+		transparent 100%
+	);
+}
+
+.tabList::-webkit-scrollbar {
+	display: none;
+}
+
+.tab {
+	flex: 0 0 auto;
+	min-width: max-content;
+	padding: 0.5rem 0.75rem;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-align: center;
+	text-decoration: none;
+	text-transform: uppercase;
+	white-space: nowrap;
+	cursor: pointer;
+	scroll-snap-align: start;
+	transition:
+		color 0.15s ease,
+		background 0.15s ease,
+		box-shadow 0.15s ease;
+}
+
+.tab:hover {
+	background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+	color: var(--text-primary);
+}
+
+.tabActive {
+	background: color-mix(in srgb, var(--accent) 55%, var(--bg-tertiary));
+	color: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.swipeHint {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.35rem;
+	align-self: center;
+	max-width: 100%;
+	margin: -0.05rem 0 0.1rem;
+	padding: 0.25rem 0.35rem 0.25rem 0.6rem;
+	border: 1px solid color-mix(in srgb, var(--border-primary) 72%, transparent);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
+	color: var(--text-secondary);
+	font-size: 0.75rem;
+	line-height: 1.35;
+	text-align: center;
+}
+
+.swipeHint span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.swipeHintClose {
+	flex: 0 0 auto;
+	color: var(--text-secondary);
+}
+
+.swipeHintClose:hover {
+	color: var(--text-primary);
+}
+
+.fieldset {
+	display: flex;
+	flex: 1;
+	min-inline-size: 0;
+	min-height: 0;
+	flex-direction: column;
+	overflow: hidden;
+	overscroll-behavior: contain;
+	border: 0;
+	margin: 0;
+	padding: 0;
+}
+
+.fieldsetSwiping {
+	overflow-y: hidden;
+}
+
+.fieldset:disabled input,
+.fieldset:disabled select,
+.fieldset:disabled textarea,
+.fieldset:disabled :global(.date-input-wrapper) {
+	opacity: 0.55;
+	cursor: default;
+	border-color: transparent;
+	background: var(--bg-input);
+	pointer-events: none;
+}
+
+.fieldset:disabled :global(.date-input-display),
+.fieldset:disabled :global(.tag) {
+	opacity: 0.55;
+}
+
+.fieldset:disabled :global(.tag),
+.fieldset:disabled :global(.tag-remove) {
+	pointer-events: none;
+}
+
+.fieldset:disabled :global(.static-value) {
+	opacity: 0.55;
+	border-color: transparent;
+}
+
+.fieldset:disabled :global(.tag-input-container) {
+	border-color: transparent;
+}
+
+.fieldset:disabled label {
+	opacity: 0.7;
+}
+
+.tabViewport {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	touch-action: pan-y;
+}
+
+.tabTrack {
+	display: flex;
+	height: 100%;
+	will-change: transform;
+	transition: transform 220ms ease;
+}
+
+.tabTrackSwiping {
+	transition: none;
+}
+
+.tabPanel {
+	display: block;
+	flex: 0 0 100%;
+	min-width: 100%;
+	height: 100%;
+	overflow-x: hidden;
+	overflow-y: auto;
+	padding-right: 0.1rem;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+}
+
+.tabPanelActive {
+	display: block;
+}
+
+.category {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.75rem;
+	padding: 0.5rem;
+	border-color: color-mix(in srgb, var(--border-primary) 50%, transparent);
+}
+
+.sectionCard {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.75rem;
+	align-items: end;
+	padding: 0.75rem;
+	border-radius: 8px;
+	background: var(--bg-secondary);
+}
+
+.sectionCard :global(.full),
+.sectionCard :global(.date-pair-group),
+.sectionCard :global(.stock-total-row) {
+	grid-column: 1 / -1;
+}
+
+.sectionCard :global(label) {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 0.25rem;
+	color: var(--text-secondary);
+	font-size: 0.75rem;
+	font-weight: 500;
+	line-height: 1.35;
+}
+
+.sectionCard :global(label input),
+.sectionCard :global(label select),
+.sectionCard :global(label textarea),
+.sectionCard :global(label .date-input-wrapper),
+.sectionCard :global(label .static-value),
+.sectionCard :global(label .tag-input-container) {
+	color: var(--text-primary);
+	font-size: 16px;
+	font-weight: 400;
+}
+
+.sectionCard :global(.mantine-Checkbox-label) {
+	color: var(--text-primary);
+	font-size: 0.95rem;
+	font-weight: 500;
+	line-height: 1.35;
+}
+
+.sectionCard :global(.mantine-Checkbox-root) {
+	align-items: center;
+}
+
+.intakeRow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.5rem;
+	align-items: end;
+	margin-bottom: 0.5rem;
+	padding: 0.75rem;
+	border-radius: 8px;
+	background: var(--bg-secondary);
+}
+
+.category :global(.blister-row).intakeRow {
+	background: var(--bg-secondary);
+}
+
+.intakeRow :global(label.compact) {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.intakeRow :global(label.compact) span {
+	color: var(--text-secondary);
+	font-size: 0.75rem;
+	font-weight: 500;
+}
+
+.intakeRow :global(label.compact.full-row) {
+	grid-column: 1 / -1;
+}
+
+.intakeRow :global(.remind-toggle-row) {
+	display: flex;
+	grid-column: 1 / 2;
+	align-items: center;
+	gap: 0.5rem;
+	min-width: 0;
+	min-height: 2.5rem;
+	padding: 0.3rem 0;
+}
+
+.intakeRow :global(.remind-toggle-row .mantine-Group-root) {
+	flex-wrap: nowrap;
+	gap: 0.45rem;
+	min-width: 0;
+}
+
+.intakeRow :global(.remind-toggle-row .mantine-Checkbox-label) {
+	color: var(--text-primary);
+	font-size: 0.85rem;
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+	white-space: nowrap;
+}
+
+.intakeRow :global(.datetime-inputs) {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.intakeRow :global(.datetime-inputs input[type="date"]) {
+	flex: 2;
+	min-width: 0;
+}
+
+.intakeRow :global(.datetime-inputs input[type="time"]) {
+	flex: 1;
+	min-width: 0;
+}
+
+.intakeRow :global(label.compact.time-label) {
+	width: fit-content;
+}
+
+.intakeRow :global(label.compact.time-label) input[type="time"] {
+	width: auto;
+}
+
+.removeIntakeButton {
+	grid-column: 2 / 3;
+	justify-self: end;
+}

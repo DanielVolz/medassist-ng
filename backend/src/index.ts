@@ -22,7 +22,11 @@ async function main(): Promise<void> {
 
 	const imagesDir = ensureImagesDirectory();
 	const app = await createApp(buildRuntimeAppOptions(env, imagesDir));
-	await startServer(app, { port: env.PORT, host: "0.0.0.0" });
+	await startServer(app, {
+		port: env.PORT,
+		host: "0.0.0.0",
+		medicationEnrichmentStartupRefreshEnabled: env.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED,
+	});
 }
 
 try {

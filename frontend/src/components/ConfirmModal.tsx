@@ -2,8 +2,10 @@
 // ConfirmModal Component - Simple confirmation dialog
 // =============================================================================
 
+import { Stack, Text } from "@mantine/core";
 import type { ReactNode } from "react";
-import { useEscapeKey } from "../hooks/useEscapeKey";
+import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
 
 export interface ConfirmModalProps {
 	title: string;
@@ -28,38 +30,40 @@ export function ConfirmModal({
 	confirmVariant = "primary",
 	overlayClassName,
 }: ConfirmModalProps) {
-	useEscapeKey(true, onCancel);
-
 	return (
-		<div
-			className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`}
-			onClick={onCancel}
-			onKeyDown={(e) => {
-				if (e.key !== "Escape") e.stopPropagation();
-			}}
+		<AppModal
+			closeButtonProps={{ "aria-label": "Close" }}
+			onClose={onCancel}
+			opened
+			rootClassName={overlayClassName}
+			size="sm"
+			title={title}
+			withCloseButton
 		>
-			<div
-				className="modal-content confirm-modal"
-				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => {
-					if (e.key !== "Escape") e.stopPropagation();
-				}}
-				style={{ maxWidth: "450px" }}
-			>
-				<button className="modal-close" onClick={onCancel}>
-					×
-				</button>
-				<h2 style={{ marginBottom: "16px", paddingRight: "2rem" }}>{title}</h2>
-				<div style={{ marginBottom: "24px" }}>{typeof message === "string" ? <p>{message}</p> : message}</div>
-				<div className="modal-footer" style={{ padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end" }}>
-					<button type="button" className="ghost" onClick={onCancel} disabled={isLoading}>
+			<Stack gap="lg">
+				{typeof message === "string" ? <Text>{message}</Text> : message}
+				<AppModalFooter>
+					<AppButton
+						type="button"
+						tone="secondary"
+						onClick={onCancel}
+						disabled={isLoading}
+						data-testid="confirm-modal-cancel"
+					>
 						{cancelLabel}
-					</button>
-					<button type="button" className={confirmVariant} onClick={onConfirm} disabled={isLoading}>
+					</AppButton>
+					<AppButton
+						type="button"
+						tone={confirmVariant}
+						onClick={onConfirm}
+						disabled={isLoading}
+						data-confirm-variant={confirmVariant}
+						data-testid="confirm-modal-confirm"
+					>
 						{confirmLabel}
-					</button>
-				</div>
-			</div>
-		</div>
+					</AppButton>
+				</AppModalFooter>
+			</Stack>
+		</AppModal>
 	);
 }

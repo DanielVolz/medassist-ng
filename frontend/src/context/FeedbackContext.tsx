@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import classes from "./FeedbackContext.module.css";
 
 export type FeedbackTone = "info" | "success" | "warning" | "error";
 
@@ -75,17 +76,17 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
 	return (
 		<FeedbackContext.Provider value={value}>
 			{children}
-			<div className="app-feedback-stack" aria-live="polite" aria-atomic="false">
+			<div className={classes.stack} aria-live="polite" aria-atomic="false">
 				{notices.map((notice) => (
 					<div
 						key={notice.id}
-						className={`app-feedback app-feedback-${notice.tone}`}
+						className={`${classes.notice} ${classes[notice.tone]}`}
 						role={notice.tone === "error" ? "alert" : "status"}
 					>
-						<div className="app-feedback-message">{notice.message}</div>
+						<div className={classes.message}>{notice.message}</div>
 						<button
 							type="button"
-							className="app-feedback-close"
+							className={classes.close}
 							onClick={() => dismissFeedback(notice.id)}
 							aria-label={t("common.close")}
 						>

@@ -1,0 +1,24 @@
+.layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 1rem;
+	width: 100%;
+	align-items: start;
+}
+
+@media (min-width: 769px) {
+	.layoutEditing {
+		grid-template-columns: minmax(20rem, 0.9fr) minmax(28rem, 1.1fr);
+		gap: 1.25rem;
+	}
+
+	.layoutEditing > * {
+		min-width: 0;
+	}
+}
+
+@media (min-width: 1280px) {
+	.layoutEditing {
+		grid-template-columns: minmax(22rem, 0.95fr) minmax(32rem, 1.05fr);
+	}
+}

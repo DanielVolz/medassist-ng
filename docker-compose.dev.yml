@@ -17,6 +17,7 @@ services:
       - NODE_ENV=development
       - DATA_DIR=/app/data
       - RATE_LIMIT_MAX=1000
+      - MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED=false
     ports:
       - "3000:3000"
     security_opt:

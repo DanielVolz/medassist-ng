@@ -1,5 +1,8 @@
+import { Text } from "@mantine/core";
 import type { Coverage, Medication, StockThresholds } from "../../types";
 import { getMedDisplayName } from "../../types";
+import { SectionCard } from "../../ui/components/SectionCard";
+import { AppTextAction } from "../../ui/primitives/AppTextAction";
 import { getStockStatus } from "../../utils/schedule";
 
 type DashboardStatusSectionProps = {
@@ -19,10 +22,10 @@ export function DashboardStatusSection({
 	stockThresholds,
 	onOpenMedicationDetail,
 }: DashboardStatusSectionProps) {
-	const getStatusTextClass = (statusClassName: string): string => {
-		if (statusClassName === "danger") return "danger-text";
-		if (statusClassName === "warning") return "warning-text";
-		return "";
+	const getStatusTextColor = (statusClassName: string): string | undefined => {
+		if (statusClassName === "danger") return "red";
+		if (statusClassName === "warning") return "yellow";
+		return undefined;
 	};
 
 	if (!show) {
@@ -31,10 +34,7 @@ export function DashboardStatusSection({
 
 	return (
 		<section className="grid">
-			<article className="card">
-				<div className="card-head">
-					<h2>{t("dashboard.reorder.title")}</h2>
-				</div>
+			<SectionCard title={t("dashboard.reorder.title")}>
 				{(() => {
 					if (meds.length === 0) {
 						return <p className="muted">{t("dashboard.reorder.noMeds")}</p>;
@@ -55,7 +55,11 @@ export function DashboardStatusSection({
 					const lowStockMeds = Array.from(lowStockMap.values());
 					const lowStockCount = lowStockMeds.length;
 					if (lowStockCount === 0) {
-						return <p className="success-text">{t("dashboard.reorder.allGood")}</p>;
+						return (
+							<Text c="green" component="p" fw={700} m={0}>
+								{t("dashboard.reorder.allGood")}
+							</Text>
+						);
 					}
 
 					return (
@@ -64,25 +68,23 @@ export function DashboardStatusSection({
 							{lowStockMeds.map((c, idx) => {
 								const med = meds.find((m) => getMedDisplayName(m) === c.name);
 								const status = getStockStatus(c.daysLeft, c.medsLeft, stockThresholds, med?.packageType);
-								const textClass = getStatusTextClass(status.className);
+								const textColor = getStatusTextColor(status.className);
 								return (
 									<span key={c.name}>
 										{idx > 0 && ", "}
-										<span
-											className={`med-link clickable ${textClass}`}
-											onClick={() => med && onOpenMedicationDetail(med)}
-											onKeyDown={(e) => {
-												if ((e.key === "Enter" || e.key === " ") && med) {
-													onOpenMedicationDetail(med);
-												}
-											}}
-										>
-											{c.name}
-										</span>
-										<span className={`reminder-days-left ${textClass}`}>
+										{med ? (
+											<AppTextAction color={textColor} fontWeight={700} onClick={() => onOpenMedicationDetail(med)}>
+												{c.name}
+											</AppTextAction>
+										) : (
+											<Text c={textColor} component="span" fw={700}>
+												{c.name}
+											</Text>
+										)}
+										<Text c={textColor} component="span" fw={textColor ? 700 : undefined}>
 											{" "}
 											({t("dashboard.reminders.daysLeft", { count: c.daysLeft ?? 0, days: c.daysLeft ?? 0 })})
-										</span>
+										</Text>
 									</span>
 								);
 							})}{" "}
@@ -90,7 +92,7 @@ export function DashboardStatusSection({
 						</p>
 					);
 				})()}
-			</article>
+			</SectionCard>
 		</section>
 	);
 }

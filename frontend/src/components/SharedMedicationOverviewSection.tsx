@@ -7,6 +7,7 @@ import {
 } from "../types";
 import { formatDate } from "../utils/formatters";
 import { MedicationAvatar } from "./MedicationAvatar";
+import sharedClasses from "./SharedSchedule.module.css";
 
 function formatPackageAmountUnit(medication: SharedMedicationOverviewItem, t: (key: string) => string): string | null {
 	if (isTubePackageType(medication.packageType)) {
@@ -77,6 +78,7 @@ export function SharedMedicationOverviewSection({
 	imageSrcResolver,
 }: SharedMedicationOverviewSectionProps) {
 	const { t } = useTranslation();
+	const cx = (...classNames: Array<string | false | null | undefined>) => classNames.filter(Boolean).join(" ");
 	const renderMedicationAvatar = (name: string, imageUrl: string | null) => {
 		const isClickable = Boolean(imageUrl && onMedicationImageClick);
 
@@ -98,18 +100,21 @@ export function SharedMedicationOverviewSection({
 	};
 
 	return (
-		<section className="shared-overview-inline-section" aria-label={t("sharedOverview.title", { person: takenBy })}>
+		<section
+			className={sharedClasses["shared-overview-inline-section"]}
+			aria-label={t("sharedOverview.title", { person: takenBy })}
+		>
 			{showTitle ? (
-				<div className="shared-overview-section-header">
+				<div className={sharedClasses["shared-overview-section-header"]}>
 					<h2>{t("sharedOverview.title", { person: takenBy })}</h2>
 				</div>
 			) : null}
 			{medications.length === 0 ? (
-				<p className="shared-schedule-empty">{t("sharedOverview.noMedications")}</p>
+				<p className={sharedClasses["shared-schedule-empty"]}>{t("sharedOverview.noMedications")}</p>
 			) : (
 				<>
-					<div className="shared-overview-table-wrap">
-						<table className="shared-overview-table">
+					<div className={sharedClasses["shared-overview-table-wrap"]}>
+						<table className={sharedClasses["shared-overview-table"]}>
 							<thead>
 								<tr>
 									<th>{t("sharedOverview.columns.name")}</th>
@@ -127,13 +132,15 @@ export function SharedMedicationOverviewSection({
 									return (
 										<tr key={`${medication.name}-${medication.medicationStartDate ?? "no-start"}`}>
 											<td>
-												<div className="shared-overview-medication-cell">
+												<div className={sharedClasses["shared-overview-medication-cell"]}>
 													{renderMedicationAvatar(medication.name, medication.imageUrl)}
-													<div className="shared-overview-medication-text">
-														<div className="shared-overview-med-name">
+													<div className={sharedClasses["shared-overview-medication-text"]}>
+														<div className={sharedClasses["shared-overview-med-name"]}>
 															<strong>{medication.name}</strong>
 															{medication.genericName ? (
-																<span className="shared-overview-med-generic">{medication.genericName}</span>
+																<span className={sharedClasses["shared-overview-med-generic"]}>
+																	{medication.genericName}
+																</span>
 															) : null}
 														</div>
 													</div>
@@ -141,7 +148,7 @@ export function SharedMedicationOverviewSection({
 											</td>
 											<td>{formatPackageInfo(medication, t)}</td>
 											<td>
-												<span className="shared-overview-stock-value">
+												<span className={sharedClasses["shared-overview-stock-value"]}>
 													{medication.currentStock === null || medication.capacity === null
 														? "-"
 														: t("sharedOverview.stock.of", {
@@ -152,13 +159,20 @@ export function SharedMedicationOverviewSection({
 											</td>
 											<td>{medication.daysLeft === null ? "-" : medication.daysLeft}</td>
 											<td>
-												<span className="shared-overview-date-value">{formatDate(medication.depletionDate)}</span>
+												<span className={sharedClasses["shared-overview-date-value"]}>
+													{formatDate(medication.depletionDate)}
+												</span>
 											</td>
 											<td>
 												{overviewStatus === null ? (
 													"-"
 												) : (
-													<span className={`shared-overview-priority ${overviewStatus.className}`}>
+													<span
+														className={cx(
+															sharedClasses["shared-overview-priority"],
+															sharedClasses[overviewStatus.className]
+														)}
+													>
 														{t(overviewStatus.labelKey)}
 													</span>
 												)}
@@ -170,32 +184,32 @@ export function SharedMedicationOverviewSection({
 						</table>
 					</div>
 
-					<div className="shared-overview-cards">
+					<div className={sharedClasses["shared-overview-cards"]}>
 						{medications.map((medication) => {
 							const overviewStatus = getOverviewStatus(medication.priority);
 
 							return (
 								<article
-									className="shared-overview-card"
+									className={sharedClasses["shared-overview-card"]}
 									key={`${medication.name}-${medication.medicationStartDate ?? "no-start"}`}
 								>
-									<div className="shared-overview-card-title">
+									<div className={sharedClasses["shared-overview-card-title"]}>
 										{renderMedicationAvatar(medication.name, medication.imageUrl)}
-										<div className="shared-overview-medication-text">
-											<div className="shared-overview-med-name">
+										<div className={sharedClasses["shared-overview-medication-text"]}>
+											<div className={sharedClasses["shared-overview-med-name"]}>
 												<strong>{medication.name}</strong>
 												{medication.genericName ? (
-													<span className="shared-overview-med-generic">{medication.genericName}</span>
+													<span className={sharedClasses["shared-overview-med-generic"]}>{medication.genericName}</span>
 												) : null}
 											</div>
 										</div>
 									</div>
-									<div className="shared-overview-card-grid">
+									<div className={sharedClasses["shared-overview-card-grid"]}>
 										<span>{t("sharedOverview.columns.package")}</span>
 										<strong>{formatPackageInfo(medication, t)}</strong>
 										<span>{t("sharedOverview.columns.stock")}</span>
 										<strong>
-											<span className="shared-overview-stock-value">
+											<span className={sharedClasses["shared-overview-stock-value"]}>
 												{medication.currentStock === null || medication.capacity === null
 													? "-"
 													: t("sharedOverview.stock.of", {
@@ -209,11 +223,15 @@ export function SharedMedicationOverviewSection({
 
 										<span>{t("sharedOverview.columns.depletion")}</span>
 										<strong>
-											<span className="shared-overview-date-value">{formatDate(medication.depletionDate)}</span>
+											<span className={sharedClasses["shared-overview-date-value"]}>
+												{formatDate(medication.depletionDate)}
+											</span>
 										</strong>
 									</div>
 									{overviewStatus ? (
-										<span className={`shared-overview-priority ${overviewStatus.className}`}>
+										<span
+											className={cx(sharedClasses["shared-overview-priority"], sharedClasses[overviewStatus.className])}
+										>
 											{t(overviewStatus.labelKey)}
 										</span>
 									) : null}

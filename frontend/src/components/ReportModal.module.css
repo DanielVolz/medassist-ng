@@ -1,0 +1,265 @@
+.modal {
+	max-width: 520px;
+	overflow: hidden;
+}
+
+.modalHeader {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	padding: 1rem 1.25rem;
+	background: var(--bg-secondary);
+	border-bottom: 1px solid var(--border-primary);
+}
+
+.modalBody {
+	--app-modal-footer-bottom-offset: 1.5rem;
+	--app-modal-footer-inline-offset: 1.5rem;
+
+	padding: 1.5rem;
+}
+
+.modalTitle {
+	font-size: 1.25rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	color: var(--text-primary);
+}
+
+.description {
+	color: var(--text-secondary);
+	font-size: 0.875rem;
+	margin: 0 0 1.25rem;
+}
+
+.range {
+	margin-bottom: 1.25rem;
+}
+
+.range h4,
+.personFilter h4,
+.format h4,
+.previewHeader h4 {
+	font-size: 0.85rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin: 0 0 0.5rem;
+}
+
+.rangeGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem;
+}
+
+.rangeField {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	font-size: 0.85rem;
+	color: var(--text-secondary);
+}
+
+.rangeField :global(.date-input-wrapper) {
+	width: 100%;
+}
+
+.personFilter {
+	margin-bottom: 1.25rem;
+}
+
+.selection {
+	height: 280px;
+	overflow-y: auto;
+	border: 1px solid var(--border-primary);
+	border-radius: 10px;
+	padding: 0.75rem;
+	margin-bottom: 1.25rem;
+	background: color-mix(in srgb, var(--bg-secondary) 75%, var(--bg-tertiary));
+}
+
+.selectionHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 0.5rem;
+}
+
+.selectionCount {
+	font-size: 0.8rem;
+	color: var(--text-secondary);
+	font-weight: 500;
+}
+
+.group {
+	margin-bottom: 0.5rem;
+}
+
+.groupTitle {
+	font-size: 0.78rem;
+	font-weight: 700;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin: 0.5rem 0 0.35rem;
+}
+
+.medList {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+}
+
+.medItem {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.4rem 0.5rem;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.medItem:hover {
+	background: var(--accent-bg);
+}
+
+.medItem input[type="checkbox"] {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	padding: 0;
+	flex-shrink: 0;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
+.medName {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.9rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.obsoleteName {
+	color: var(--text-secondary);
+	font-style: italic;
+}
+
+.medGeneric {
+	color: var(--text-secondary);
+	font-size: 0.8rem;
+}
+
+.format {
+	margin-bottom: 1.25rem;
+}
+
+.formatOptions {
+	display: flex;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.personOptions {
+	min-height: 4.5rem;
+	align-content: flex-start;
+}
+
+.formatOption {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.45rem 0.85rem;
+	border: 1px solid var(--border-secondary);
+	border-radius: 8px;
+	cursor: pointer;
+	font-size: 0.85rem;
+	font-weight: 500;
+	color: var(--text-secondary);
+	background: transparent;
+	transition:
+		border-color 0.15s ease,
+		background 0.15s ease,
+		color 0.15s ease;
+}
+
+.formatOption:hover {
+	border-color: var(--accent);
+	color: var(--text-primary);
+	background: var(--accent-bg);
+}
+
+.formatOption.selected {
+	border-color: var(--accent);
+	background: var(--accent-bg);
+	color: var(--accent-light);
+	font-weight: 600;
+}
+
+.formatOption input[type="radio"] {
+	display: none;
+}
+
+.hiddenOptionInput {
+	display: none;
+}
+
+.error {
+	margin: 0 0 1rem;
+	padding: 0.75rem 0.9rem;
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--danger-bg, #fee2e2) 75%, transparent);
+	color: var(--danger-text, #b91c1c);
+	font-size: 0.9rem;
+}
+
+.preview {
+	margin-bottom: 1.25rem;
+	padding: 0.9rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--bg-secondary) 75%, var(--bg-tertiary));
+}
+
+.previewHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 0.75rem;
+	margin-bottom: 0.35rem;
+}
+
+.previewHeader h4 {
+	margin: 0;
+}
+
+.previewDesc {
+	margin: 0 0 0.75rem;
+	font-size: 0.85rem;
+	color: var(--text-secondary);
+}
+
+.previewContent {
+	margin: 0;
+	padding: 0.85rem;
+	border-radius: 8px;
+	background: var(--bg-primary);
+	border: 1px solid var(--border-secondary);
+	max-height: 280px;
+	overflow: auto;
+	font-size: 0.82rem;
+	line-height: 1.45;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+@media (max-width: 720px) {
+	.rangeGrid {
+		grid-template-columns: 1fr;
+	}
+}

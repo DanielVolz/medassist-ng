@@ -8,11 +8,11 @@
   },
   "header": {
     "eyebrow": {
-      "overview": "MedAssist-ng · Overview",
-      "inventory": "MedAssist-ng · Inventory",
-      "planner": "MedAssist-ng · Planner",
-      "settings": "MedAssist-ng · Configuration",
-      "schedule": "MedAssist-ng · Schedule"
+      "overview": "MedAssist-ng Overview",
+      "inventory": "MedAssist-ng Inventory",
+      "planner": "MedAssist-ng Planner",
+      "settings": "MedAssist-ng Configuration",
+      "schedule": "MedAssist-ng Schedule"
     }
   },
   "dashboard": {
@@ -129,6 +129,7 @@
       "resetFilters": "Reset filters",
       "reopen": "Reopen note",
       "updatedAt": "Updated {{date}}",
+      "updatedLabel": "Updated",
       "filters": {
         "medication": "Medication",
         "allMedications": "All medications",
@@ -226,6 +227,8 @@
       "prescriptionAndRefill": "Rx & Refill",
       "schedule": "Schedule"
     },
+    "mobileSwipeHint": "Swipe sideways to switch sections.",
+    "dismissSwipeHint": "Dismiss swipe hint",
     "commercialName": "Commercial Name",
     "genericName": "Generic Name",
     "takenBy": "Taken by",
@@ -391,12 +394,15 @@
       "teaspoons": "teaspoons",
       "teaspoons_one": "teaspoon",
       "teaspoons_other": "teaspoons",
+      "teaspoonsShort": "tsp.",
       "tablespoons": "tablespoons",
       "tablespoons_one": "tablespoon",
       "tablespoons_other": "tablespoons",
+      "tablespoonsShort": "tbsp.",
       "applications": "applications",
       "applications_one": "application",
       "applications_other": "applications",
+      "applicationsShort": "app.",
       "scheduleMode": "Schedule mode",
       "scheduleModeInterval": "Every X days",
       "scheduleModeWeekdays": "Specific weekdays",
@@ -464,7 +470,7 @@
     "timezone": {
       "select": "Timezone",
       "hint": "Select an IANA timezone. When set, this overrides server TZ for your reminder timing.",
-      "useServerDefault": "Use server default",
+      "useServerDefault": "Use default",
       "currentServerTz": "Server default timezone: {{timezone}}",
       "saving": "Saving timezone...",
       "saved": "Timezone saved"
@@ -719,6 +725,8 @@
     "puffs": "puffs",
     "injection": "injection",
     "injections": "injections",
+    "injectionShort": "inj.",
+    "injectionsShort": "inj.",
     "of": "of",
     "loose": "loose",
     "none": "None",
@@ -776,6 +784,13 @@
     "regenerateFailed": "Failed to regenerate share link",
     "activeLinkMeta": "{{days}} days, created {{createdAt}}",
     "activeLinkMetaWithExpiry": "{{days}} days, created {{createdAt}}, expires {{expiresAt}}",
+    "activeLinkDays": "{{count}} day",
+    "activeLinkDays_other": "{{count}} days",
+    "activeLinkCreatedLabel": "Created",
+    "activeLinkExpiresLabel": "Expires",
+    "activeLinkLastUsedLabel": "Last used",
+    "activeLinkPermissionsLabel": "Permissions",
+    "activeLinkLegacyExpiry": "Legacy, no expiry",
     "lastUsedAt": "last used {{date}}",
     "legacyNeverExpires": "legacy never expires",
     "revoke": "Revoke",

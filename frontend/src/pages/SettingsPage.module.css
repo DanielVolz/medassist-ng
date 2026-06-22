@@ -1,0 +1,113 @@
+.languageSettingsContent {
+	--settings-timezone-default-button-width: 9.75rem;
+	--settings-field-gap: 0.75rem;
+	--settings-field-width: calc((100% - var(--settings-timezone-default-button-width) - var(--settings-field-gap)) / 3);
+}
+
+.languageSelectRoot {
+	justify-self: start;
+	flex: 0 1 auto;
+	width: var(--settings-field-width);
+	min-width: 140px;
+	max-width: 100%;
+}
+
+.languageSelect {
+	width: 100%;
+	height: 2.75rem;
+	min-height: 2.75rem;
+	padding: 0 2.25rem 0 0.75rem;
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	background-color: var(--bg-secondary);
+	background-position: right 0.9rem center;
+	color: var(--text-primary);
+	font-size: 0.95rem;
+	line-height: 1.2;
+	cursor: pointer;
+}
+
+.languageSelect:hover {
+	border-color: var(--accent);
+}
+
+.languageSelect:focus {
+	border-color: var(--accent);
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+
+.languageSelect option {
+	background: var(--bg-secondary);
+	color: var(--text-primary);
+}
+
+.timezoneActions {
+	--settings-timezone-default-button-width: 9.75rem;
+}
+
+.timezoneInput {
+	flex: 0 1 var(--settings-field-width);
+	width: var(--settings-field-width);
+	min-width: 140px;
+	max-width: none;
+}
+
+.timezoneDefaultButton {
+	flex: 0 0 var(--settings-timezone-default-button-width);
+	min-width: max-content;
+	white-space: nowrap;
+}
+
+.notificationTestField {
+	--settings-notification-input-width: 50%;
+}
+
+.notificationTestRow {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+
+.notificationTestInput {
+	flex: 0 1 var(--settings-notification-input-width);
+	width: var(--settings-notification-input-width);
+	min-width: min(100%, 20rem);
+}
+
+.notificationTestButton {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+.notificationTestResult {
+	flex: 1 1 12rem;
+	min-width: 10rem;
+}
+
+@media (max-width: 700px) {
+	.languageSelectRoot {
+		width: 100%;
+		max-width: none;
+	}
+
+	.timezoneInput {
+		flex-basis: 100%;
+		width: 100%;
+	}
+
+	.timezoneDefaultButton {
+		flex-basis: 100%;
+	}
+
+	.notificationTestInput {
+		flex: 1 1 0;
+		width: auto;
+		min-width: 0;
+	}
+
+	.notificationTestResult {
+		flex-basis: 100%;
+	}
+}

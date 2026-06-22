@@ -30,13 +30,43 @@ export const TEST_USER = {
 // ---------------------------------------------------------------------------
 let mockMeBody: string | null = null;
 
+type StoredCookie = {
+	name: string;
+	value: string;
+	expires?: number;
+};
+
+function decodeJwtPayload(token: string): { exp?: number; sub?: number | string; username?: string } | null {
+	try {
+		return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+	} catch {
+		return null;
+	}
+}
+
+function isUsableJwt(token: string): boolean {
+	const payload = decodeJwtPayload(token);
+	return typeof payload?.exp === "number" && Date.now() / 1000 < payload.exp - 30;
+}
+
+function pickCookieValue(cookies: StoredCookie[] | undefined, name: string): string | null {
+	const matchingCookies = cookies?.filter((cookie) => cookie.name === name) ?? [];
+	const validCookie = [...matchingCookies].reverse().find((cookie) => isUsableJwt(cookie.value));
+	if (validCookie) {
+		return validCookie.value;
+	}
+	const fallbackCookie = matchingCookies[matchingCookies.length - 1];
+	return fallbackCookie?.value ?? null;
+}
+
 function getMockAuthMeBody(): string | null {
 	if (mockMeBody) return mockMeBody;
 	try {
 		const state = JSON.parse(fs.readFileSync(authFile, "utf-8"));
-		const token = state.cookies?.find((c: { name: string }) => c.name === "access_token")?.value;
+		const token = pickCookieValue(state.cookies, "access_token");
 		if (!token) return null;
-		const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
+		const payload = decodeJwtPayload(token);
+		if (!payload) return null;
 		mockMeBody = JSON.stringify({
 			id: payload.sub,
 			username: payload.username,
@@ -107,10 +137,10 @@ export const test = base.extend<object>({
  * rate-limit failures.
  */
 export async function waitForAppReady(page: Page): Promise<void> {
-	const hero = page.locator("header.hero");
+	const appHeader = page.getByTestId("app-header");
 	for (let attempt = 0; attempt < 3; attempt++) {
 		try {
-			await expect(hero).toBeVisible({ timeout: 15000 });
+			await expect(appHeader).toBeVisible({ timeout: 15000 });
 			return;
 		} catch {
 			if (attempt === 2) throw new Error("App failed to become ready after 3 attempts");
@@ -148,15 +178,15 @@ export async function navigateTo(page: Page, path: string): Promise<void> {
  * Click a navigation tab by its text.
  */
 export async function clickNavTab(page: Page, tabName: string): Promise<void> {
-	await page.locator(`button.pill:has-text("${tabName}")`).click();
+	await page.getByTestId("main-nav").getByRole("button", { name: tabName }).click();
 }
 
 /**
  * Open the user dropdown menu (when auth is enabled).
  */
 export async function openUserMenu(page: Page): Promise<void> {
-	await page.locator(".user-menu-btn").click();
-	await expect(page.locator(".user-dropdown")).toBeVisible();
+	await page.getByTestId("user-menu-trigger").click();
+	await expect(page.getByTestId("user-menu-dropdown")).toBeVisible();
 }
 
 /**
@@ -164,7 +194,7 @@ export async function openUserMenu(page: Page): Promise<void> {
  */
 export async function signOut(page: Page): Promise<void> {
 	await openUserMenu(page);
-	await page.locator('.dropdown-item:has-text("Sign Out")').click();
+	await page.getByTestId("user-menu-signout").click();
 	// Should redirect to login page
 	await expect(page.locator(".auth-container")).toBeVisible({ timeout: 10000 });
 }
@@ -212,7 +242,7 @@ let cachedAuthCookie: string | null = null;
 function readAuthCookieFromFile(): string | null {
 	try {
 		const state = JSON.parse(fs.readFileSync(authFile, "utf-8"));
-		return state.cookies?.find((c: { name: string }) => c.name === "access_token")?.value ?? null;
+		return pickCookieValue(state.cookies, "access_token");
 	} catch {
 		return null;
 	}

@@ -1,20 +1,33 @@
 /* biome-ignore-all lint/style/noNestedTernary: schedule timeline branches are intentionally explicit */
+import { Group } from "@mantine/core";
 import { Archive, Bell, ClipboardList, NotebookPen } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmModal, IntakeJournalHistoryModal, IntakeJournalModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
+import doseButtonClasses from "../components/DoseActionButton.module.css";
+import journalHistoryActionClasses from "../components/intake-journal/JournalHistoryAction.module.css";
 import { useFeedback } from "../context/FeedbackContext";
 import { ScheduleUsageTag } from "../features/schedule/components";
+import scheduleActionClasses from "../features/schedule/components/ScheduleHeaderActions.module.css";
 import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
 import { useModalHistory, useScheduleController } from "../hooks";
 import type { Coverage, IntakeUnit } from "../types";
 import { getMedDisplayName, isLiquidContainerPackageType, isTubePackageType } from "../types";
+import { SectionCard } from "../ui/components/SectionCard";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppSelect } from "../ui/primitives/AppSelect";
+import { AppTextAction } from "../ui/primitives/AppTextAction";
+import { AppTooltip, AppTooltipTrigger } from "../ui/primitives/AppTooltip";
 import { buildClearMissedPayload, isDoseDismissed } from "../utils/schedule";
 
 // Helper for user-specific localStorage keys
 function userStorageKey(userId: number | undefined, key: string): string {
 	return userId ? `user_${userId}_${key}` : key;
+}
+
+function cx(...classNames: Array<string | false | null | undefined>) {
+	return classNames.filter(Boolean).join(" ");
 }
 
 // Helper function to get stock status based on thresholds
@@ -70,6 +83,20 @@ function getDoseId(baseId: string, person: string | null): string {
 	return person ? `${baseId}-${person}` : baseId;
 }
 
+function getDosePeople(takenBy: string[] | null | undefined): Array<string | null> {
+	return takenBy && takenBy.length > 0 ? takenBy : [null];
+}
+
+function getNamedDosePeople(people: Array<string | null>): string[] {
+	return people.filter((person): person is string => typeof person === "string" && person.trim().length > 0);
+}
+
+function getDosePersonTextColor(isTaken: boolean, isSkipped: boolean): string {
+	if (isTaken) return "var(--success)";
+	if (isSkipped) return "color-mix(in srgb, var(--warning) 82%, var(--text-primary))";
+	return "var(--text-secondary)";
+}
+
 export function SchedulePage() {
 	const { t } = useTranslation();
 	const { user, authFetch } = useAuth();
@@ -118,6 +145,7 @@ export function SchedulePage() {
 		setJournalHistoryFilters,
 		reloadJournalHistory,
 		reopenJournalHistoryEntry,
+		openScheduleLightbox,
 	} = useScheduleController();
 	const [showClearMissedConfirm, setShowClearMissedConfirm] = useState(false);
 	const [clearingMissed, setClearingMissed] = useState(false);
@@ -200,6 +228,11 @@ export function SchedulePage() {
 		setShowObsoleteConfirm(true);
 	};
 
+	const openMedicationImage = (imageUrl: string | null | undefined) => {
+		if (!imageUrl) return;
+		openScheduleLightbox(`/api/images/${imageUrl}`);
+	};
+
 	const handleConfirmMarkObsolete = async () => {
 		if (!obsoleteCandidate) return;
 		try {
@@ -225,28 +258,67 @@ export function SchedulePage() {
 		intakeUnit?: IntakeUnit | null
 	) => formatScheduleDoseUsageLabel(med, usage, t, intakeUnit);
 
+	const formatCompactDoseUsageLabel = (
+		med: (typeof meds)[number] | undefined,
+		usage: number,
+		intakeUnit?: IntakeUnit | null
+	) => formatScheduleDoseUsageLabel(med, usage, t, intakeUnit, { variant: "compact" });
+
 	const formatTotalUsageLabel = (
 		med: (typeof meds)[number] | undefined,
 		total: number,
 		doses?: Array<{ usage: number; intakeUnit?: IntakeUnit | null }>
 	) => formatScheduleTotalUsageLabel(med, total, t, doses);
 
+	const renderDoseRecipients = (people: string[]) => {
+		if (people.length === 0) {
+			return null;
+		}
+
+		return (
+			<div className="dose-recipients">
+				{people.map((person) => (
+					<AppTextAction
+						key={person}
+						className="dose-recipient-name"
+						color="var(--text-secondary)"
+						fontWeight={600}
+						lineHeight={1.15}
+						onClick={() => openUserFilter(person)}
+						textAlign="right"
+					>
+						{person}
+					</AppTextAction>
+				))}
+			</div>
+		);
+	};
+
 	const renderDoseSummary = (
 		med: (typeof meds)[number] | undefined,
-		dose: { timeStr: string; usage: number; intakeUnit?: IntakeUnit | null; intakeRemindersEnabled: boolean }
+		dose: { timeStr: string; usage: number; intakeUnit?: IntakeUnit | null; intakeRemindersEnabled: boolean },
+		people: string[]
 	) => (
 		<>
 			<span className="dose-time">{dose.timeStr}</span>
-			<span className="dose-usage">
-				<span className="dose-usage-main">{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}</span>
-				{med?.pillWeightMg && (
-					<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-				)}
-			</span>
-			{dose.intakeRemindersEnabled && (
-				<span className="reminder-icon info-tooltip" data-tooltip={t("tooltips.intakeReminders")}>
-					<Bell size={14} aria-hidden="true" />
+			<div className="dose-summary">
+				<span className="dose-usage">
+					<span className="dose-usage-main dose-usage-main-full">
+						{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+					</span>
+					<span className="dose-usage-main dose-usage-main-compact">
+						{formatCompactDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+					</span>
+					{med?.pillWeightMg && (
+						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+					)}
 				</span>
+				{renderDoseRecipients(people)}
+			</div>
+			{dose.intakeRemindersEnabled && (
+				<AppTooltipTrigger label={t("tooltips.intakeReminders")} className="reminder-icon">
+					<Bell size={14} aria-hidden="true" />
+				</AppTooltipTrigger>
 			)}
 		</>
 	);
@@ -259,64 +331,86 @@ export function SchedulePage() {
 		isEmpty: boolean;
 	}) => {
 		const journalUnavailable = !(options.isTaken || options.isSkipped);
-		const takeButton = options.isTaken ? (
-			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
-				{options.isAutomaticallyTaken && (
-					<span className="info-tooltip" data-tooltip={t("tooltips.automaticTaken")}>
-						🤖
-					</span>
-				)}
-				<span className="dose-btn-label">{t("common.undo")}</span>
+		const takeButtonControl = options.isTaken ? (
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoTake)}
+				onClick={() => undoDoseTaken(options.doseId)}
+			>
+				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
+				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
 				<span aria-hidden="true">↩</span>
-			</button>
+			</AppButton>
 		) : (
-			<button
-				className={`dose-btn take${options.isEmpty ? " out-of-stock" : ""}`}
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(
+					doseButtonClasses.button,
+					doseButtonClasses.take,
+					options.isEmpty && doseButtonClasses.outOfStock
+				)}
 				onClick={() => markDoseTaken(options.doseId)}
 				disabled={options.isEmpty || options.isSkipped}
-				title={options.isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
 			>
-				<span className="dose-btn-label">{t("dose.take")}</span>
+				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
 				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
-			</button>
+			</AppButton>
 		);
+		const takeButton =
+			!options.isTaken && options.isEmpty ? (
+				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
+					<span className={doseButtonClasses.tooltipTarget}>{takeButtonControl}</span>
+				</AppTooltip>
+			) : (
+				takeButtonControl
+			);
 
 		const skipButton = options.isSkipped ? (
-			<button className="dose-btn undo skip" onClick={() => undoDoseSkipped(options.doseId)} title={t("common.undo")}>
-				<span className="dose-btn-label">{t("common.undo")}</span>
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoSkip)}
+				onClick={() => undoDoseSkipped(options.doseId)}
+			>
+				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
 				<span aria-hidden="true">↩</span>
-			</button>
+			</AppButton>
 		) : (
-			<button
-				className="dose-btn skip"
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(doseButtonClasses.button, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
-				title={t("dose.markAsSkipped")}
 				disabled={options.isTaken}
 			>
-				<span className="dose-btn-label">{t("dose.skip")}</span>
-			</button>
+				<span className={doseButtonClasses.label}>{t("dose.skip")}</span>
+			</AppButton>
 		);
 
-		const journalButton = (
-			<span
-				className={journalUnavailable ? "tooltip-trigger" : undefined}
-				data-tooltip={journalUnavailable ? t("journal.actions.noteTakenOnly") : undefined}
+		const journalButtonControl = (
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(doseButtonClasses.button, doseButtonClasses.journal)}
+				onClick={() => {
+					if (!journalUnavailable) {
+						void openJournalEditor(options.doseId);
+					}
+				}}
+				disabled={journalUnavailable}
 			>
-				<button
-					type="button"
-					className="dose-btn journal"
-					onClick={() => {
-						if (!journalUnavailable) {
-							void openJournalEditor(options.doseId);
-						}
-					}}
-					title={!journalUnavailable ? t("journal.actions.note") : undefined}
-					disabled={journalUnavailable}
-				>
-					<NotebookPen size={14} aria-hidden="true" />
-					<span className="dose-btn-label">{t("journal.actions.note")}</span>
-				</button>
-			</span>
+				<NotebookPen size={14} aria-hidden="true" />
+				<span className={doseButtonClasses.label}>{t("journal.actions.note")}</span>
+			</AppButton>
+		);
+		const journalButton = journalUnavailable ? (
+			<AppTooltip label={t("journal.actions.noteTakenOnly")}>
+				<span className={doseButtonClasses.tooltipTarget}>{journalButtonControl}</span>
+			</AppTooltip>
+		) : (
+			journalButtonControl
 		);
 
 		return (
@@ -330,36 +424,52 @@ export function SchedulePage() {
 
 	return (
 		<section className="grid">
-			<article className="card schedule-full">
-				<div className="card-head">
-					<h2>{t("dashboard.schedules.title")}</h2>
-					<div className="card-head-actions">
-						<select
-							className="select-field schedule-days-select"
-							value={scheduleDays}
+			<SectionCard
+				className="schedule-full"
+				title={t("dashboard.schedules.title")}
+				actions={
+					<Group className={scheduleActionClasses.actions} gap={0} justify="flex-end" wrap="wrap">
+						<AppSelect
+							size="sm"
+							classNames={{
+								root: scheduleActionClasses.selectRoot,
+								input: cx("schedule-days-select", scheduleActionClasses.selectInput),
+							}}
+							value={String(scheduleDays)}
 							onChange={(e) => {
-								const val = Number(e.target.value);
+								const val = Number(e.currentTarget.value);
 								setScheduleDays(val);
 								if (user?.id) localStorage.setItem(userStorageKey(user.id, "scheduleDays"), String(val));
 							}}
-						>
-							<option value={30}>{t("dashboard.schedules.1month")}</option>
-							<option value={90}>{t("dashboard.schedules.3months")}</option>
-							<option value={180}>{t("dashboard.schedules.6months")}</option>
-						</select>
-						<button
+							data={[
+								{ value: "30", label: t("dashboard.schedules.1month") },
+								{ value: "90", label: t("dashboard.schedules.3months") },
+								{ value: "180", label: t("dashboard.schedules.6months") },
+							]}
+						/>
+						<AppButton
 							type="button"
-							className="ghost journal-history-button"
+							tone="secondary"
+							size="sm"
+							className={cx(
+								"journal-history-button",
+								journalHistoryActionClasses.button,
+								scheduleActionClasses.historyButton
+							)}
 							onClick={openJournalHistory}
 							aria-label={t("journal.actions.history")}
-							title={t("journal.actions.history")}
+							leftSection={<ClipboardList size={16} aria-hidden="true" />}
 						>
-							<ClipboardList size={16} aria-hidden="true" />
-							<span className="journal-history-label-full">{t("journal.actions.history")}</span>
-							<span className="journal-history-label-short">{t("journal.actions.historyShort")}</span>
-						</button>
-					</div>
-				</div>
+							<span className={cx("journal-history-label-full", journalHistoryActionClasses.labelFull)}>
+								{t("journal.actions.history")}
+							</span>
+							<span className={cx("journal-history-label-short", journalHistoryActionClasses.labelShort)}>
+								{t("journal.actions.historyShort")}
+							</span>
+						</AppButton>
+					</Group>
+				}
+			>
 				<div className="timeline">
 					{/* Past days (when expanded) — rendered above toggle */}
 					{showPastDays &&
@@ -407,7 +517,6 @@ export function SchedulePage() {
 										onKeyDown={(e) => {
 											if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, true);
 										}}
-										title={isCollapsed ? t("common.expand") : t("common.collapse")}
 									>
 										<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
 										<span className="day-date">{day.dateStr}</span>
@@ -417,12 +526,12 @@ export function SchedulePage() {
 											) : (
 												<>
 													{hasRealMissed && (
-														<span
+														<AppTooltipTrigger
+															label={t("dashboard.schedules.missedDoses", { count: missedNotDismissedCount })}
 															className="day-warning"
-															title={t("dashboard.schedules.missedDoses", { count: missedNotDismissedCount })}
 														>
 															⚠️
-														</span>
+														</AppTooltipTrigger>
 													)}
 													<span className="day-progress">
 														{takenCount}/{allDoseIds.length}
@@ -448,7 +557,20 @@ export function SchedulePage() {
 												<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 													<div className="time-main">
 														<div className="med-name">
-															<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+															<div
+																className={med?.imageUrl ? "med-avatar clickable" : ""}
+																onClick={() => openMedicationImage(med?.imageUrl)}
+																onKeyDown={(e) => {
+																	if (e.key === "Enter" || e.key === " ") {
+																		e.preventDefault();
+																		openMedicationImage(med?.imageUrl);
+																	}
+																}}
+																role={med?.imageUrl ? "button" : undefined}
+																tabIndex={med?.imageUrl ? 0 : undefined}
+															>
+																<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+															</div>
 															<span className="med-name-text">{item.medName}</span>
 														</div>
 														<div className="tag-row">
@@ -458,7 +580,8 @@ export function SchedulePage() {
 													<div className="doses-col">
 														{item.doses.map((dose) => {
 															// If no takenBy, show single checkbox; otherwise show one per person
-															const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+															const people = getDosePeople(dose.takenBy);
+															const namedPeople = getNamedDosePeople(people);
 															const allTaken = people.every((person) =>
 																isDoseTakenForDisplay(getDoseId(dose.id, person))
 															);
@@ -466,10 +589,17 @@ export function SchedulePage() {
 															if (allTaken) doseClasses.push("all-taken");
 															if (isEmpty) doseClasses.push("med-empty");
 															else if (isLowStock) doseClasses.push("med-low");
+															if (namedPeople.length > 0) doseClasses.push("has-recipients");
 															return (
 																<div key={dose.id} className={doseClasses.join(" ")}>
-																	{renderDoseSummary(med, dose)}{" "}
-																	<div className="dose-checks">
+																	{renderDoseSummary(med, dose, namedPeople)}{" "}
+																	<div
+																		className={cx(
+																			"dose-checks",
+																			namedPeople.length > 0 && "has-recipient-summary",
+																			namedPeople.length > 1 && "multi-person"
+																		)}
+																	>
 																		{people.map((person) => {
 																			const doseId = getDoseId(dose.id, person);
 																			const isTaken = isDoseTakenForDisplay(doseId);
@@ -482,15 +612,13 @@ export function SchedulePage() {
 																			return (
 																				<div key={doseId} className={personClasses.join(" ")}>
 																					{person && (
-																						<span
-																							className="person-name clickable"
+																						<AppTextAction
+																							className="person-name"
+																							color={getDosePersonTextColor(isTaken, isSkipped)}
 																							onClick={() => openUserFilter(person)}
-																							onKeyDown={(e) => {
-																								if (e.key === "Enter" || e.key === " ") openUserFilter(person);
-																							}}
 																						>
 																							{person}
-																						</span>
+																						</AppTextAction>
 																					)}
 																					{renderDoseActionButtons({
 																						doseId,
@@ -554,18 +682,24 @@ export function SchedulePage() {
 											({t("dashboard.schedules.pastDaysCount", { count: pastDays.length })})
 										</span>
 										{missedCount > 0 && (
-											<span
+											<AppTooltipTrigger
+												label={t("dashboard.schedules.missedDoses", { count: missedCount })}
 												className="past-days-warning"
-												title={t("dashboard.schedules.missedDoses", { count: missedCount })}
 											>
 												⚠️ {missedCount}
-											</span>
+											</AppTooltipTrigger>
 										)}
 									</div>
 									{missedCount > 0 && (
-										<button type="button" className="clear-missed-btn" onClick={() => setShowClearMissedConfirm(true)}>
+										<AppButton
+											type="button"
+											tone="warningOutline"
+											size="sm"
+											className="clear-missed-btn"
+											onClick={() => setShowClearMissedConfirm(true)}
+										>
 											{t("dashboard.schedules.clearMissed")}
-										</button>
+										</AppButton>
 									)}
 								</div>
 							);
@@ -626,7 +760,20 @@ export function SchedulePage() {
 										<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
 											<div className="time-main">
 												<div className="med-name">
-													<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+													<div
+														className={med?.imageUrl ? "med-avatar clickable" : ""}
+														onClick={() => openMedicationImage(med?.imageUrl)}
+														onKeyDown={(e) => {
+															if (e.key === "Enter" || e.key === " ") {
+																e.preventDefault();
+																openMedicationImage(med?.imageUrl);
+															}
+														}}
+														role={med?.imageUrl ? "button" : undefined}
+														tabIndex={med?.imageUrl ? 0 : undefined}
+													>
+														<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
+													</div>
 													<span className="med-name-text">{item.medName}</span>
 												</div>
 												<div className="tag-row">
@@ -650,7 +797,8 @@ export function SchedulePage() {
 											</div>
 											<div className="doses-col">
 												{item.doses.map((dose) => {
-													const people = (dose.takenBy || []).length > 0 ? dose.takenBy : [null];
+													const people = getDosePeople(dose.takenBy);
+													const namedPeople = getNamedDosePeople(people);
 													const now = Date.now();
 													const dayStart = new Date(day.date).setHours(0, 0, 0, 0);
 													const isPastDay = dayStart < new Date().setHours(0, 0, 0, 0);
@@ -659,10 +807,17 @@ export function SchedulePage() {
 													if (allTaken) doseClasses.push("all-taken");
 													if (isEmpty) doseClasses.push("med-empty");
 													else if (isLowStock) doseClasses.push("med-low");
+													if (namedPeople.length > 0) doseClasses.push("has-recipients");
 													return (
 														<div key={dose.id} className={doseClasses.join(" ")}>
-															{renderDoseSummary(med, dose)}
-															<div className="dose-checks">
+															{renderDoseSummary(med, dose, namedPeople)}
+															<div
+																className={cx(
+																	"dose-checks",
+																	namedPeople.length > 0 && "has-recipient-summary",
+																	namedPeople.length > 1 && "multi-person"
+																)}
+															>
 																{people.map((person) => {
 																	const doseId = getDoseId(dose.id, person);
 																	const isTaken = isDoseTakenForDisplay(doseId);
@@ -677,15 +832,13 @@ export function SchedulePage() {
 																	return (
 																		<div key={doseId} className={personClasses.join(" ")}>
 																			{person && (
-																				<span
-																					className="person-name clickable"
+																				<AppTextAction
+																					className="person-name"
+																					color={getDosePersonTextColor(isTaken, isSkipped)}
 																					onClick={() => openUserFilter(person)}
-																					onKeyDown={(e) => {
-																						if (e.key === "Enter" || e.key === " ") openUserFilter(person);
-																					}}
 																				>
 																					{person}
-																				</span>
+																				</AppTextAction>
 																			)}
 																			{renderDoseActionButtons({
 																				doseId,
@@ -733,7 +886,7 @@ export function SchedulePage() {
 					onResetFilters={handleResetJournalFilters}
 					onReopen={reopenJournalHistoryEntry}
 				/>
-			</article>
+			</SectionCard>
 		</section>
 	);
 }

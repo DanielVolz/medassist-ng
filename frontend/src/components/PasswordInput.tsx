@@ -1,4 +1,5 @@
 import { useState } from "react";
+import classes from "./PasswordInput.module.css";
 
 interface PasswordInputProps {
 	id: string;
@@ -24,7 +25,7 @@ export function PasswordInput({
 	const [showPassword, setShowPassword] = useState(false);
 
 	return (
-		<div className="password-input-wrapper">
+		<div className={classes.wrapper}>
 			<input
 				id={id}
 				type={showPassword ? "text" : "password"}
@@ -38,7 +39,7 @@ export function PasswordInput({
 			/>
 			<button
 				type="button"
-				className="password-toggle-btn"
+				className={classes.toggleButton}
 				onClick={() => setShowPassword(!showPassword)}
 				tabIndex={-1}
 				aria-label={showPassword ? "Hide password" : "Show password"}

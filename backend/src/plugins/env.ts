@@ -9,6 +9,7 @@ dotenv.config({ path: envPath });
 export type Env = ParsedEnv & {
 	OPENAPI_DOCS_ENABLED: boolean;
 	DOCS_AUTH_REQUIRED: boolean;
+	MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED: boolean;
 };
 
 // Parse and validate
@@ -140,4 +141,7 @@ export const env: Env = {
 	OPENAPI_DOCS_ENABLED: parsed.OPENAPI_DOCS_ENABLED ?? parsed.NODE_ENV !== "production",
 	// Authenticated deployments protect docs by default when docs are enabled.
 	DOCS_AUTH_REQUIRED: parsed.DOCS_AUTH_REQUIRED ?? parsed.AUTH_ENABLED,
+	// Development starts should not depend on external EMA catalog availability.
+	MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED:
+		parsed.MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED ?? parsed.NODE_ENV === "production",
 };

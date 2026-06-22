@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useModalHistory } from "../hooks/useModalHistory";
-import { useScrollLock } from "../hooks/useScrollLock";
 import type { Medication } from "../types";
 import {
 	getMedDisplayName,
@@ -12,13 +10,15 @@ import {
 	isLiquidContainerPackageType,
 	isTubePackageType,
 } from "../types";
+import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
 import { formatDate, formatDateTime, toInputValue } from "../utils/formatters";
 import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
 import { mergePersonTags, personTagsMatch } from "../utils/person-tags";
 import { useAuth } from "./Auth";
 import { DateTimeInput } from "./DateTimeInput";
 import { MedicationAvatar } from "./MedicationAvatar";
-import { ModalFrame } from "./ModalFrame";
+import classes from "./ReportModal.module.css";
 
 type ReportFormat = "txt" | "md" | "pdf";
 
@@ -77,8 +77,6 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 	const [preview, setPreview] = useState<ReportPreview | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-	useScrollLock(isOpen);
-	useEscapeKey(isOpen, onClose);
 	useModalHistory(isOpen, "report", onClose);
 
 	// Collect all unique "taken by" people across all medications
@@ -159,6 +157,8 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 	}, []);
 
 	const selectedMeds = useMemo(() => filteredMeds.filter((m) => selectedIds.has(m.id)), [filteredMeds, selectedIds]);
+	const getOptionClassName = (selected: boolean) =>
+		selected ? `${classes.formatOption} ${classes.selected}` : classes.formatOption;
 	let generateButtonLabel = t("report.generate");
 	if (generating) {
 		generateButtonLabel = t("report.generating");
@@ -220,14 +220,26 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 	if (!isOpen) return null;
 
 	return (
-		<ModalFrame contentClassName="report-modal" onClose={onClose}>
-			<h2 className="report-modal-title">{t("report.title")}</h2>
-			<p className="report-modal-desc">{t("report.description")}</p>
+		<AppModal
+			classNames={{
+				body: classes.modalBody,
+				header: classes.modalHeader,
+				title: classes.modalTitle,
+			}}
+			contentClassName={classes.modal}
+			onClose={onClose}
+			opened={isOpen}
+			closeButtonProps={{ "aria-label": t("common.close") }}
+			size={520}
+			title={t("report.title")}
+			withCloseButton
+		>
+			<p className={classes.description}>{t("report.description")}</p>
 
-			<div className="report-range">
+			<div className={classes.range}>
 				<h4>{t("report.dateRange")}</h4>
-				<div className="report-range-grid">
-					<div className="report-range-field">
+				<div className={classes.rangeGrid}>
+					<div className={classes.rangeField}>
 						<span>{t("report.from")}</span>
 						<DateTimeInput
 							step="60"
@@ -235,7 +247,7 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 							onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))}
 						/>
 					</div>
-					<div className="report-range-field">
+					<div className={classes.rangeField}>
 						<span>{t("report.until")}</span>
 						<DateTimeInput
 							step="60"
@@ -248,16 +260,26 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 
 			{/* Person filter */}
 			{allPeople.length > 1 && (
-				<div className="report-person-filter">
+				<div className={classes.personFilter}>
 					<h4>{t("report.filterByPerson")}</h4>
-					<div className="report-format-options">
-						<label className={`report-format-option${takenByFilter.size === 0 ? " selected" : ""}`}>
-							<input type="checkbox" checked={takenByFilter.size === 0} onChange={selectAllPeople} />
+					<div className={`${classes.formatOptions} ${classes.personOptions}`}>
+						<label className={getOptionClassName(takenByFilter.size === 0)}>
+							<input
+								type="checkbox"
+								className={classes.hiddenOptionInput}
+								checked={takenByFilter.size === 0}
+								onChange={selectAllPeople}
+							/>
 							<span>{t("report.allPeople")}</span>
 						</label>
 						{allPeople.map((person) => (
-							<label key={person} className={`report-format-option${takenByFilter.has(person) ? " selected" : ""}`}>
-								<input type="checkbox" checked={takenByFilter.has(person)} onChange={() => togglePerson(person)} />
+							<label key={person} className={getOptionClassName(takenByFilter.has(person))}>
+								<input
+									type="checkbox"
+									className={classes.hiddenOptionInput}
+									checked={takenByFilter.has(person)}
+									onChange={() => togglePerson(person)}
+								/>
 								<span>{person}</span>
 							</label>
 						))}
@@ -266,31 +288,32 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 			)}
 
 			{/* Medication selection */}
-			<div className="report-selection">
-				<div className="report-selection-header">
-					<button
+			<div className={classes.selection}>
+				<div className={classes.selectionHeader}>
+					<AppButton
 						type="button"
-						className="ghost small"
+						size="xs"
+						tone="ghost"
 						onClick={selectedIds.size === filteredMeds.length ? deselectAll : selectAll}
 					>
 						{selectedIds.size === filteredMeds.length ? t("report.deselectAll") : t("report.selectAll")}
-					</button>
-					<span className="report-selection-count">
+					</AppButton>
+					<span className={classes.selectionCount}>
 						{selectedIds.size} / {filteredMeds.length}
 					</span>
 				</div>
 
 				{activeMeds.length > 0 && (
-					<div className="report-group">
-						<h4 className="report-group-title">{t("report.activeMeds")}</h4>
-						<div className="report-med-list">
+					<div className={classes.group}>
+						<h4 className={classes.groupTitle}>{t("report.activeMeds")}</h4>
+						<div className={classes.medList}>
 							{activeMeds.map((med) => (
-								<label key={med.id} className="report-med-item">
+								<label key={med.id} className={classes.medItem}>
 									<input type="checkbox" checked={selectedIds.has(med.id)} onChange={() => toggleMed(med.id)} />
 									<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
-									<span className="report-med-name">
+									<span className={classes.medName}>
 										{getMedDisplayName(med)}
-										{med.name && med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
+										{med.name && med.genericName && <span className={classes.medGeneric}> ({med.genericName})</span>}
 									</span>
 								</label>
 							))}
@@ -299,16 +322,16 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 				)}
 
 				{obsoleteMeds.length > 0 && (
-					<div className="report-group">
-						<h4 className="report-group-title">{t("report.obsoleteMeds")}</h4>
-						<div className="report-med-list">
+					<div className={classes.group}>
+						<h4 className={classes.groupTitle}>{t("report.obsoleteMeds")}</h4>
+						<div className={classes.medList}>
 							{obsoleteMeds.map((med) => (
-								<label key={med.id} className="report-med-item">
+								<label key={med.id} className={classes.medItem}>
 									<input type="checkbox" checked={selectedIds.has(med.id)} onChange={() => toggleMed(med.id)} />
 									<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
-									<span className="report-med-name obsolete-name">
+									<span className={`${classes.medName} ${classes.obsoleteName}`}>
 										{getMedDisplayName(med)}
-										{med.name && med.genericName && <span className="report-med-generic"> ({med.genericName})</span>}
+										{med.name && med.genericName && <span className={classes.medGeneric}> ({med.genericName})</span>}
 									</span>
 								</label>
 							))}
@@ -318,10 +341,10 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 			</div>
 
 			{/* Format selection */}
-			<div className="report-format">
+			<div className={classes.format}>
 				<h4>{t("report.format")}</h4>
-				<div className="report-format-options">
-					<label className={`report-format-option${format === "pdf" ? " selected" : ""}`}>
+				<div className={classes.formatOptions}>
+					<label className={getOptionClassName(format === "pdf")}>
 						<input
 							type="radio"
 							name="format"
@@ -331,7 +354,7 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 						/>
 						<span>{t("report.formatPdf")}</span>
 					</label>
-					<label className={`report-format-option${format === "txt" ? " selected" : ""}`}>
+					<label className={getOptionClassName(format === "txt")}>
 						<input
 							type="radio"
 							name="format"
@@ -341,43 +364,50 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 						/>
 						<span>{t("report.formatTxt")}</span>
 					</label>
-					<label className={`report-format-option${format === "md" ? " selected" : ""}`}>
+					<label className={getOptionClassName(format === "md")}>
 						<input type="radio" name="format" value="md" checked={format === "md"} onChange={() => setFormat("md")} />
 						<span>{t("report.formatMd")}</span>
 					</label>
 				</div>
 			</div>
 
-			{errorMessage && <p className="report-error">{errorMessage}</p>}
+			{errorMessage && <p className={classes.error}>{errorMessage}</p>}
 
 			{preview && (
-				<div className="report-preview">
-					<div className="report-preview-header">
+				<div className={classes.preview} data-testid="report-preview">
+					<div className={classes.previewHeader}>
 						<h4>{t("report.preview")}</h4>
-						<button type="button" className="ghost small" onClick={() => downloadFile(preview.content, preview.format)}>
+						<AppButton
+							type="button"
+							size="xs"
+							tone="ghost"
+							onClick={() => downloadFile(preview.content, preview.format)}
+						>
 							{t("report.download")}
-						</button>
+						</AppButton>
 					</div>
-					<p className="report-preview-desc">{t("report.previewDescription")}</p>
-					<pre className="report-preview-content">{preview.content}</pre>
+					<p className={classes.previewDesc}>{t("report.previewDescription")}</p>
+					<pre className={classes.previewContent} data-testid="report-preview-content">
+						{preview.content}
+					</pre>
 				</div>
 			)}
 
 			{/* Actions */}
-			<div className="report-actions">
-				<button type="button" className="ghost" onClick={onClose}>
+			<AppModalFooter>
+				<AppButton type="button" tone="secondary" onClick={onClose}>
 					{t("common.close")}
-				</button>
-				<button
+				</AppButton>
+				<AppButton
 					type="button"
-					className="primary"
+					tone="primary"
 					onClick={handleGenerate}
 					disabled={selectedIds.size === 0 || generating}
 				>
 					{generateButtonLabel}
-				</button>
-			</div>
-		</ModalFrame>
+				</AppButton>
+			</AppModalFooter>
+		</AppModal>
 	);
 }
 
@@ -385,9 +415,11 @@ export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) 
 
 type TFn = (key: string, opts?: Record<string, unknown>) => string;
 
-function getTubeUnitKey(med: Medication): "form.ml" | "blisters.applications" {
-	if (isLiquidContainerPackageType(med.packageType)) return "form.ml";
-	return med.medicationForm === "liquid" ? "form.ml" : "blisters.applications";
+function getAmountBasedUnitText(med: Medication, value: number, t: TFn): string {
+	if (isLiquidContainerPackageType(med.packageType) || med.medicationForm === "liquid") {
+		return t("form.packageAmountUnitMl");
+	}
+	return t("form.blisters.applications", { count: Math.abs(value) });
 }
 
 function getDiscreteUnitText(med: Medication, value: number, t: TFn): string {
@@ -398,21 +430,21 @@ function getDiscreteUnitText(med: Medication, value: number, t: TFn): string {
 
 function getUsageText(med: Medication, usage: number, t: TFn): string {
 	if (isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)) {
-		return `${usage} ${t(getTubeUnitKey(med))}`;
+		return `${usage} ${getAmountBasedUnitText(med, usage, t)}`;
 	}
 	return `${usage} ${getDiscreteUnitText(med, usage, t)}`;
 }
 
 function getTotalCapacityLabel(med: Medication, t: TFn): string {
 	if (isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)) {
-		return t("form.totalAmountLabel", { unit: t(getTubeUnitKey(med)) });
+		return t("form.totalAmountLabel", { unit: getAmountBasedUnitText(med, getStockDisplayCapacity(med), t) });
 	}
 	return t("report.docTotalCapacity");
 }
 
 function getCurrentStockText(med: Medication, t: TFn): string {
 	if (isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)) {
-		return `${getMedTotal(med)} ${t(getTubeUnitKey(med))}`;
+		return `${getMedTotal(med)} ${getAmountBasedUnitText(med, getMedTotal(med), t)}`;
 	}
 	return `${getMedTotal(med)} ${getDiscreteUnitText(med, getMedTotal(med), t)}`;
 }
@@ -537,7 +569,7 @@ function generateTextReport(
 				for (const r of data.refills) {
 					let entry = `${formatDate(r.refillDate)}: +${r.packsAdded} ${t("report.docPacks")}, +${r.quantityAdded} ${
 						isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)
-							? t(getTubeUnitKey(med))
+							? getAmountBasedUnitText(med, r.quantityAdded, t)
 							: getDiscreteUnitText(med, r.quantityAdded, t)
 					}`;
 					if (r.usedPrescription) entry += ` ${t("report.docRefillPrescription")}`;
@@ -749,7 +781,7 @@ function buildPrintHtml(
 				for (const r of data.refills) {
 					let entry = `${formatDate(r.refillDate)}: +${r.packsAdded} ${escHtml(t("report.docPacks"))}, +${r.quantityAdded} ${escHtml(
 						isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)
-							? t(getTubeUnitKey(med))
+							? getAmountBasedUnitText(med, r.quantityAdded, t)
 							: getDiscreteUnitText(med, r.quantityAdded, t)
 					)}`;
 					if (r.usedPrescription) entry += ` <em>${escHtml(t("report.docRefillPrescription"))}</em>`;

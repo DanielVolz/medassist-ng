@@ -296,7 +296,10 @@ test.describe("Stock Status Levels", () => {
 		const criticalRow = overviewTable.locator(".table-row").filter({ hasText: MED_CRITICAL });
 		await criticalRow.click();
 
-		const modal = page.locator(".modal-overlay");
+		const modal = page
+			.getByRole("dialog")
+			.filter({ has: page.getByRole("heading", { name: MED_CRITICAL }) })
+			.last();
 		await expect(modal).toBeVisible({ timeout: 5000 });
 		await expect(modal.getByText(MED_CRITICAL)).toBeVisible();
 
@@ -305,7 +308,8 @@ test.describe("Stock Status Levels", () => {
 		expect(modalText).toBeTruthy();
 
 		// Close modal
-		await page.locator("button.modal-close").click();
+		await page.waitForTimeout(350);
+		await modal.getByLabel(/Close|common\.close/i).click();
 		await expect(modal).not.toBeVisible();
 	});
 
@@ -319,12 +323,15 @@ test.describe("Stock Status Levels", () => {
 		const normalRow = overviewTable.locator(".table-row").filter({ hasText: MED_NORMAL });
 		await normalRow.click();
 
-		const modal = page.locator(".modal-overlay");
+		const modal = page
+			.getByRole("dialog")
+			.filter({ has: page.getByRole("heading", { name: MED_NORMAL }) })
+			.last();
 		await expect(modal).toBeVisible({ timeout: 5000 });
 		// Modal should show the generic name somewhere
 		await expect(modal.getByText("Ibuprofen 400mg")).toBeVisible();
 
-		await page.locator("button.modal-close").click();
+		await modal.getByLabel(/Close|common\.close/i).click();
 	});
 
 	test("should show different stock levels in planner results", async ({ page }) => {
@@ -332,7 +339,7 @@ test.describe("Stock Status Levels", () => {
 		await page.waitForLoadState("networkidle");
 
 		// Calculate for 30-day default range
-		await page.locator('form.planner button[type="submit"]').click();
+		await page.getByRole("button", { name: /Calculate|planner\.calculate/i }).click();
 		await expect(page.locator(".table")).toBeVisible({ timeout: 15000 });
 
 		const resultsTable = page.locator(".table");

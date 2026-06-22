@@ -1,0 +1,33 @@
+.option {
+	width: 100%;
+	padding: 0.95rem 1rem;
+	text-align: left;
+	border: 1px solid color-mix(in srgb, var(--border-primary) 86%, transparent);
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--bg-secondary) 82%, var(--bg-tertiary));
+	transition:
+		border-color 150ms ease,
+		background 150ms ease;
+}
+
+.option:hover:not(:disabled) {
+	border-color: color-mix(in srgb, var(--accent) 48%, var(--border-primary));
+	background: color-mix(in srgb, var(--accent-bg) 54%, var(--bg-secondary));
+}
+
+.option:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+
+.option:disabled {
+	cursor: not-allowed;
+	opacity: 0.58;
+}
+
+.sensitivePanel {
+	padding: 0.95rem 1rem;
+	border: 1px solid color-mix(in srgb, var(--border-primary) 86%, transparent);
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--bg-secondary) 86%, var(--warning-bg));
+}

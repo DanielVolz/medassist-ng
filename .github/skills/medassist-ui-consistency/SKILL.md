@@ -30,11 +30,14 @@ Use `medassist-frontend-polish` only after these guardrails are satisfied.
 
 Every modal/overlay **must** follow these rules:
 
-1. **Escape key**: Call `useEscapeKey(active, onClose)` from `hooks/useEscapeKey`. This registers a document-level `keydown` listener that works regardless of focus. **Never** rely on `onKeyDown` on an overlay div — it only fires when the overlay has focus, which almost never happens.
-2. **Scroll lock**: Call `useScrollLock(active)` from `hooks/useScrollLock` if the modal is **not** already covered by App.tsx's centralized `useScrollLock` call. Page-local modals (e.g. `ReportModal`, `ExportModal`) must call it themselves.
-3. **Click-outside close**: The overlay div gets `onClick={onClose}`, and `.modal-content` gets `onClick={(e) => e.stopPropagation()}`.
-4. **Key event containment**: `.modal-content` gets `onKeyDown={(e) => { if (e.key !== "Escape") e.stopPropagation(); }}` — this prevents non-Escape keys from leaking out while still allowing Escape to propagate to the document-level handler.
-5. **Nested sub-modals** (e.g. edit-stock inside MedDetailModal): Use `useEscapeKey` with `{ capture: true }` so the innermost modal intercepts Escape before the parent's handler fires.
+1. Use `AppModal` for app-owned dialogs. Do not create new raw overlay/modal DOM for product UI.
+2. Use `AppModalFooter` for modal action bars. Do not add `className` to `AppModalFooter`; use its props (`left`, `layout`, `stackOnMobile`) for approved variants.
+3. Do not add local modal footer layout CSS such as shadows, `justify-content: space-between`, zero horizontal padding, or custom sticky/footer scroll behavior.
+4. Keep exactly one modal scroll owner: the shared `AppModal` body. Do not add a second `overflow-y: auto` on modal content unless a nested scroll region is the explicit product requirement.
+5. For nested sub-modals, keep them on `AppModal`/`useModalHistory` patterns so only the top modal handles close/back behavior.
+6. For any modal/footer work, run or explicitly hand off the guard tests:
+   - `npm --prefix frontend run test:run -- src/test/ui/modal-footer-contract.test.ts`
+   - `npx playwright test --config=playwright.stable.config.ts e2e/modal-layout-contract.spec.ts`
 
 ## Decision Heuristics
 

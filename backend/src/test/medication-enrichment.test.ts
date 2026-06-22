@@ -101,6 +101,30 @@ describe("medication enrichment", () => {
 		});
 	});
 
+	it("can skip eager EMA startup refresh for development startup", async () => {
+		vi.useFakeTimers();
+		try {
+			const { startMedicationEnrichmentService } = await import("../services/medication-enrichment.js");
+			const logger = {
+				debug: vi.fn(),
+				error: vi.fn(),
+				info: vi.fn(),
+				warn: vi.fn(),
+			};
+
+			startMedicationEnrichmentService(logger, { startupRefreshEnabled: false });
+			await Promise.resolve();
+
+			expect(fetchMock).not.toHaveBeenCalled();
+			expect(logger.info).toHaveBeenCalledWith(
+				"[MedicationEnrichment] EMA catalog startup refresh disabled; refresh will run on demand."
+			);
+		} finally {
+			vi.clearAllTimers();
+			vi.useRealTimers();
+		}
+	});
+
 	it("requires auth and returns EMA search results from the route", async () => {
 		const app = await buildApp();
 		fetchMock.mockImplementation((url: string) => {

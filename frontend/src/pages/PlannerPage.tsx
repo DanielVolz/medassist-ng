@@ -317,10 +317,7 @@ export function PlannerPage() {
 			header: t("planner.table.usage"),
 			render: (row) => (
 				<Text className={classes.metric}>
-					<Text span fw={700} inherit>
-						{row.plannerUsage}
-					</Text>{" "}
-					{getUsageUnitLabel(row.medicationId, row.plannerUsage)}
+					<strong>{row.plannerUsage}</strong> {getUsageUnitLabel(row.medicationId, row.plannerUsage)}
 				</Text>
 			),
 		},

@@ -339,7 +339,7 @@ setup("authenticate", async ({ page }) => {
 		// Fallback path for environments where API login flow is unavailable.
 		const loginWithForm = async () => {
 			const usernameField = page.locator("#username");
-			const passwordField = page.locator("#password");
+			const passwordField = page.locator("#password, input#password").first();
 
 			// Make sure we're on the login form (not register)
 			const isOnRegister = await page
@@ -356,9 +356,9 @@ setup("authenticate", async ({ page }) => {
 				}
 			}
 
-			await usernameField.clear();
+			await expect(usernameField).toBeVisible({ timeout: 15000 });
 			await usernameField.fill(TEST_USER.username);
-			await passwordField.clear();
+			await expect(passwordField).toBeVisible({ timeout: 15000 });
 			await passwordField.fill(TEST_USER.password);
 
 			// Click the submit button (not the SSO button)

@@ -70,7 +70,7 @@ jobs:
 
       - name: Checkout repository
         if: needs.changes.outputs.backend == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         if: needs.changes.outputs.backend == 'true'
@@ -141,7 +141,7 @@ jobs:
 
       - name: Checkout repository
         if: needs.changes.outputs.frontend == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         if: needs.changes.outputs.frontend == 'true'

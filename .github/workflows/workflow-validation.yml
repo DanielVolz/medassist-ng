@@ -39,7 +39,7 @@ jobs:
 
       - name: Checkout repository
         if: needs.changes.outputs.workflows == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run actionlint
         if: needs.changes.outputs.workflows == 'true'

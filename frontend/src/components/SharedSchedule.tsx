@@ -611,7 +611,12 @@ export function SharedSchedule() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoTake)}
+				className={cx(
+					"dose-btn undo take",
+					doseButtonClasses.button,
+					doseButtonClasses.undo,
+					doseButtonClasses.undoTake
+				)}
 				onClick={() => undoDoseTaken(options.doseId)}
 			>
 				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
@@ -623,6 +628,7 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
+					"dose-btn take",
 					doseButtonClasses.button,
 					doseButtonClasses.take,
 					doseButtonClasses.dashboardTake,
@@ -648,7 +654,12 @@ export function SharedSchedule() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoSkip)}
+				className={cx(
+					"dose-btn undo skip",
+					doseButtonClasses.button,
+					doseButtonClasses.undo,
+					doseButtonClasses.undoSkip
+				)}
 				onClick={() => undoDoseSkipped(options.doseId)}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.undoSkip")}</span>
@@ -658,7 +669,7 @@ export function SharedSchedule() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.skip)}
+				className={cx("dose-btn skip", doseButtonClasses.button, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken}
 			>

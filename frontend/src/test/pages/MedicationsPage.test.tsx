@@ -123,15 +123,17 @@ let mockContextValue = createMockContext();
 let mockFormHookValue = createMockFormHook();
 const fetchMock = vi.fn();
 
-vi.mock("../../hooks", async () => {
-	const actual = await vi.importActual<typeof import("../../hooks")>("../../hooks");
-	return {
-		...actual,
-		useMedicationForm: () => mockFormHookValue,
-		useUnsavedChangesWarning: () => ({}),
-		useModalHistory: vi.fn(),
-	};
-});
+vi.mock("../../hooks/useMedicationForm", () => ({
+	useMedicationForm: () => mockFormHookValue,
+}));
+
+vi.mock("../../hooks/useUnsavedChangesWarning", () => ({
+	useUnsavedChangesWarning: () => ({}),
+}));
+
+vi.mock("../../hooks/useModalHistory", () => ({
+	useModalHistory: vi.fn(),
+}));
 
 vi.mock("../../context", () => ({
 	useAppContext: () => mockContextValue,
@@ -146,46 +148,15 @@ vi.mock("../../components/Auth", () => ({
 	useAuth: () => ({ user: { id: 1, username: "testuser" }, isAuthenticated: true, authFetch: authFetchMock }),
 }));
 
-vi.mock("../../components", async () => {
-	const actual = await vi.importActual<typeof import("../../components")>("../../components");
-	return {
-		...actual,
-		MedicationAvatar: ({ name }: { name: string }) => <span data-testid={`avatar-${name}`}></span>,
-		DateInput: ({ value, onChange }: { value: string; onChange: (e: { target: { value: string } }) => void }) => (
-			<input value={value} onChange={onChange} />
-		),
-		Lightbox: () => null,
-		ConfirmModal: ({
-			title,
-			message,
-			confirmLabel,
-			cancelLabel,
-			onConfirm,
-			onCancel,
-		}: {
-			title: string;
-			message: string;
-			confirmLabel: string;
-			cancelLabel: string;
-			onConfirm: () => void;
-			onCancel: () => void;
-		}) => (
-			<div data-testid="confirm-modal">
-				<h3>{title}</h3>
-				<p>{message}</p>
-				<button type="button" onClick={onConfirm}>
-					{confirmLabel}
-				</button>
-				<button type="button" onClick={onCancel}>
-					{cancelLabel}
-				</button>
-			</div>
-		),
-		MobileEditModal: () => null,
-		ReportModal: ({ isOpen }: { isOpen: boolean }) =>
-			isOpen ? <div data-testid="report-modal-open">Report Modal</div> : null,
-	};
-});
+vi.mock("../../components/DateInput", () => ({
+	DateInput: ({ value, onChange }: { value: string; onChange: (e: { target: { value: string } }) => void }) => (
+		<input value={value} onChange={onChange} />
+	),
+}));
+
+vi.mock("../../components/MobileEditModal", () => ({
+	MobileEditModal: () => null,
+}));
 
 vi.mock("../../components/medications/MedicationDialogs", () => ({
 	MedicationDialogs: ({

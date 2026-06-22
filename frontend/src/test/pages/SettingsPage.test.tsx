@@ -143,24 +143,19 @@ const createImportPreview = (overrides = {}) => ({
 	...overrides,
 });
 
-vi.mock("../../components", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../../components")>();
-
-	return {
-		...actual,
-		ExportModal: ({ isOpen, onClose, onExport }: MockExportModalProps) =>
-			isOpen ? (
-				<div>
-					<button type="button" onClick={() => onExport(true, false)}>
-						export-modal-export
-					</button>
-					<button type="button" onClick={onClose}>
-						export-modal-close
-					</button>
-				</div>
-			) : null,
-	};
-});
+vi.mock("../../components/ExportModal", () => ({
+	default: ({ isOpen, onClose, onExport }: MockExportModalProps) =>
+		isOpen ? (
+			<div>
+				<button type="button" onClick={() => onExport(true, false)}>
+					export-modal-export
+				</button>
+				<button type="button" onClick={onClose}>
+					export-modal-close
+				</button>
+			</div>
+		) : null,
+}));
 
 function renderPage() {
 	render(

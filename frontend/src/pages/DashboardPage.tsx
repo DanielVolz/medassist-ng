@@ -3,13 +3,16 @@ import { Archive, Bell, ClipboardList, NotebookPen, Share2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
-import { ConfirmModal, IntakeJournalHistoryModal, IntakeJournalModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { DashboardReminderSection } from "../components/dashboard/DashboardReminderSection";
 import { DashboardStatusSection } from "../components/dashboard/DashboardStatusSection";
+import { IntakeJournalHistoryModal } from "../components/intake-journal/IntakeJournalHistoryModal";
+import { IntakeJournalModal } from "../components/intake-journal/IntakeJournalModal";
+import { MedicationAvatar } from "../components/MedicationAvatar";
 import { useAppContext } from "../context";
 import { useFeedback } from "../context/FeedbackContext";
-import { useModalHistory } from "../hooks";
+import { useModalHistory } from "../hooks/useModalHistory";
 import {
 	allowsPillFormSelection,
 	getMedDisplayName,

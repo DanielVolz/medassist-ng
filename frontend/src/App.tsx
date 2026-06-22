@@ -1,15 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import {
-	AboutModal,
-	Lightbox,
-	MedDetailModal,
-	ProfileModal,
-	ShareDialog,
-	SharedSchedule,
-	UserFilterModal,
-} from "./components";
 import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
 import { AppProvider, FeedbackProvider, UnsavedChangesProvider, useAppContext, useShareContext } from "./context";
@@ -25,6 +16,19 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => 
 const SharedOverviewPage = lazy(() =>
 	import("./pages/SharedOverviewPage").then((module) => ({ default: module.SharedOverviewPage }))
 );
+const SharedSchedule = lazy(() =>
+	import("./components/SharedSchedule").then((module) => ({ default: module.SharedSchedule }))
+);
+const AboutModal = lazy(() => import("./components/AboutModal"));
+const ProfileModal = lazy(() => import("./components/ProfileModal"));
+const MedDetailModal = lazy(() =>
+	import("./components/MedDetailModal").then((module) => ({ default: module.MedDetailModal }))
+);
+const ShareDialog = lazy(() => import("./components/ShareDialog").then((module) => ({ default: module.ShareDialog })));
+const UserFilterModal = lazy(() =>
+	import("./components/UserFilterModal").then((module) => ({ default: module.UserFilterModal }))
+);
+const Lightbox = lazy(() => import("./components/Lightbox").then((module) => ({ default: module.Lightbox })));
 
 // Vite injects this at build time from package.json
 declare const __APP_VERSION__: string;
@@ -531,10 +535,18 @@ function AppContent() {
 			<AppHeader onOpenProfile={openProfile} onOpenAbout={openAbout} />
 
 			{/* Profile Modal */}
-			<ProfileModal isOpen={showProfile} onClose={closeProfile} />
+			{showProfile && (
+				<Suspense fallback={null}>
+					<ProfileModal isOpen={showProfile} onClose={closeProfile} />
+				</Suspense>
+			)}
 
 			{/* About Modal */}
-			<AboutModal isOpen={showAbout} onClose={closeAbout} />
+			{showAbout && (
+				<Suspense fallback={null}>
+					<AboutModal isOpen={showAbout} onClose={closeAbout} />
+				</Suspense>
+			)}
 
 			<Suspense fallback={<RouteLoadingFallback />}>
 				<Routes>
@@ -554,91 +566,105 @@ function AppContent() {
 			</Suspense>
 
 			{/* Medication Detail Modal */}
-			<MedDetailModal
-				selectedMed={stockCorrectionMed}
-				coverage={coverage}
-				settings={stockThresholds}
-				showImageLightbox={showImageLightbox}
-				showRefillModal={showRefillModal}
-				showEditStockModal={showEditStockModal}
-				editStockOnly={showEditStockModal && !selectedMed}
-				onClose={closeMedDetail}
-				onOpenImageLightbox={openImageLightbox}
-				onCloseImageLightbox={closeImageLightbox}
-				onOpenRefillModal={openRefillModal}
-				onCloseRefillModal={closeRefillModal}
-				onOpenMedicationEdit={handleOpenMedicationEdit}
-				onOpenEditStockModal={handleOpenEditStockFromDetail}
-				onCloseEditStockModal={closeEditStockModal}
-				refillPacks={refillPacks}
-				onRefillPacksChange={setRefillPacks}
-				refillLoose={refillLoose}
-				onRefillLooseChange={setRefillLoose}
-				usePrescriptionRefill={usePrescriptionRefill}
-				onUsePrescriptionRefillChange={setUsePrescriptionRefill}
-				refillSaving={refillSaving}
-				refillHistory={refillHistory}
-				refillHistoryExpanded={refillHistoryExpanded}
-				onRefillHistoryExpandedChange={setRefillHistoryExpanded}
-				onSubmitRefill={handleSubmitRefill}
-				editStockFullBlisters={editStockFullBlisters}
-				onEditStockFullBlistersChange={setEditStockFullBlisters}
-				editStockPartialBlisterPills={editStockPartialBlisterPills}
-				onEditStockPartialBlisterPillsChange={setEditStockPartialBlisterPills}
-				editStockLoosePills={editStockLoosePills}
-				onEditStockLoosePillsChange={setEditStockLoosePills}
-				editStockSaving={editStockSaving}
-				onSubmitStockCorrection={handleSubmitStockCorrection}
-			/>
+			{stockCorrectionMed && (
+				<Suspense fallback={null}>
+					<MedDetailModal
+						selectedMed={stockCorrectionMed}
+						coverage={coverage}
+						settings={stockThresholds}
+						showImageLightbox={showImageLightbox}
+						showRefillModal={showRefillModal}
+						showEditStockModal={showEditStockModal}
+						editStockOnly={showEditStockModal && !selectedMed}
+						onClose={closeMedDetail}
+						onOpenImageLightbox={openImageLightbox}
+						onCloseImageLightbox={closeImageLightbox}
+						onOpenRefillModal={openRefillModal}
+						onCloseRefillModal={closeRefillModal}
+						onOpenMedicationEdit={handleOpenMedicationEdit}
+						onOpenEditStockModal={handleOpenEditStockFromDetail}
+						onCloseEditStockModal={closeEditStockModal}
+						refillPacks={refillPacks}
+						onRefillPacksChange={setRefillPacks}
+						refillLoose={refillLoose}
+						onRefillLooseChange={setRefillLoose}
+						usePrescriptionRefill={usePrescriptionRefill}
+						onUsePrescriptionRefillChange={setUsePrescriptionRefill}
+						refillSaving={refillSaving}
+						refillHistory={refillHistory}
+						refillHistoryExpanded={refillHistoryExpanded}
+						onRefillHistoryExpandedChange={setRefillHistoryExpanded}
+						onSubmitRefill={handleSubmitRefill}
+						editStockFullBlisters={editStockFullBlisters}
+						onEditStockFullBlistersChange={setEditStockFullBlisters}
+						editStockPartialBlisterPills={editStockPartialBlisterPills}
+						onEditStockPartialBlisterPillsChange={setEditStockPartialBlisterPills}
+						editStockLoosePills={editStockLoosePills}
+						onEditStockLoosePillsChange={setEditStockLoosePills}
+						editStockSaving={editStockSaving}
+						onSubmitStockCorrection={handleSubmitStockCorrection}
+					/>
+				</Suspense>
+			)}
 
 			{/* User Medications Modal */}
-			<UserFilterModal
-				selectedUser={selectedUser}
-				meds={meds}
-				coverage={coverage}
-				settings={stockThresholds}
-				onClose={closeUserFilter}
-				onClearUser={() => {
-					setSelectedUser(null);
-					// Replace the userFilter history entry so it doesn't remain on the stack
-					window.history.replaceState(null, "");
-				}}
-				onOpenMedDetail={openMedDetail}
-			/>
+			{selectedUser && (
+				<Suspense fallback={null}>
+					<UserFilterModal
+						selectedUser={selectedUser}
+						meds={meds}
+						coverage={coverage}
+						settings={stockThresholds}
+						onClose={closeUserFilter}
+						onClearUser={() => {
+							setSelectedUser(null);
+							// Replace the userFilter history entry so it doesn't remain on the stack
+							window.history.replaceState(null, "");
+						}}
+						onOpenMedDetail={openMedDetail}
+					/>
+				</Suspense>
+			)}
 
 			{/* Share Dialog Modal */}
-			<ShareDialog
-				show={showShareDialog}
-				sharePeople={sharePeople}
-				shareSelectedPerson={shareSelectedPerson}
-				onShareSelectedPersonChange={setShareSelectedPerson}
-				shareSelectedDays={shareSelectedDays}
-				onShareSelectedDaysChange={setShareSelectedDays}
-				shareSelectedExpiryDays={shareSelectedExpiryDays}
-				onShareSelectedExpiryDaysChange={setShareSelectedExpiryDays}
-				shareAllowJournalNotes={shareAllowJournalNotes}
-				onShareAllowJournalNotesChange={setShareAllowJournalNotes}
-				shareAllowMarkTaken={shareAllowMarkTaken}
-				onShareAllowMarkTakenChange={setShareAllowMarkTaken}
-				shareGenerating={shareGenerating}
-				shareLink={shareLink}
-				onShareLinkChange={setShareLink}
-				shareCopied={shareCopied}
-				onShareCopiedChange={setShareCopied}
-				activeShareLinks={activeShareLinks}
-				activeSharesLoading={activeSharesLoading}
-				revokingShareToken={revokingShareToken}
-				regeneratingShareToken={regeneratingShareToken}
-				onClose={closeShareDialog}
-				onGenerateShareLink={generateShareLink}
-				onRevokeShareLink={revokeShareLink}
-				onRegenerateShareLink={regenerateShareLink}
-				onCopyShareLink={copyShareLink}
-			/>
+			{showShareDialog && (
+				<Suspense fallback={null}>
+					<ShareDialog
+						show={showShareDialog}
+						sharePeople={sharePeople}
+						shareSelectedPerson={shareSelectedPerson}
+						onShareSelectedPersonChange={setShareSelectedPerson}
+						shareSelectedDays={shareSelectedDays}
+						onShareSelectedDaysChange={setShareSelectedDays}
+						shareSelectedExpiryDays={shareSelectedExpiryDays}
+						onShareSelectedExpiryDaysChange={setShareSelectedExpiryDays}
+						shareAllowJournalNotes={shareAllowJournalNotes}
+						onShareAllowJournalNotesChange={setShareAllowJournalNotes}
+						shareAllowMarkTaken={shareAllowMarkTaken}
+						onShareAllowMarkTakenChange={setShareAllowMarkTaken}
+						shareGenerating={shareGenerating}
+						shareLink={shareLink}
+						onShareLinkChange={setShareLink}
+						shareCopied={shareCopied}
+						onShareCopiedChange={setShareCopied}
+						activeShareLinks={activeShareLinks}
+						activeSharesLoading={activeSharesLoading}
+						revokingShareToken={revokingShareToken}
+						regeneratingShareToken={regeneratingShareToken}
+						onClose={closeShareDialog}
+						onGenerateShareLink={generateShareLink}
+						onRevokeShareLink={revokeShareLink}
+						onRegenerateShareLink={regenerateShareLink}
+						onCopyShareLink={copyShareLink}
+					/>
+				</Suspense>
+			)}
 
 			{/* Schedule Lightbox - for clicking medication images in schedule */}
 			{scheduleLightboxImage && (
-				<Lightbox src={scheduleLightboxImage} alt="Medication" onClose={closeScheduleLightbox} />
+				<Suspense fallback={null}>
+					<Lightbox src={scheduleLightboxImage} alt="Medication" onClose={closeScheduleLightbox} />
+				</Suspense>
 			)}
 
 			<div className={`route-transition-mask${routeTransitionMaskActive ? " active" : ""}`} aria-hidden="true" />

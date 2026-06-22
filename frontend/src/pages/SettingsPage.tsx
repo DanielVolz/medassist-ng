@@ -1,10 +1,11 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: settings rows use label-styled text with adjacent custom toggle controls */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExportModal, ImportReviewModal } from "../components";
 import { useAuth } from "../components/Auth";
+import ExportModal from "../components/ExportModal";
+import { ImportReviewModal } from "../components/ImportReviewModal";
 import { useAppContext } from "../context";
-import { useModalHistory } from "../hooks";
+import { useModalHistory } from "../hooks/useModalHistory";
 import { getSystemLocale, withFormattingTimezone } from "../utils/formatters";
 
 export function SettingsPage() {

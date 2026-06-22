@@ -3,7 +3,6 @@
  * Allows clicking through to medication details
  */
 import { useTranslation } from "react-i18next";
-import { MedicationAvatar } from "../components";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, IntakeUnit, Medication, StockThresholds } from "../types";
 import { getMedDisplayName, getMedTotal, getStockDisplayCapacity } from "../types";
@@ -14,6 +13,7 @@ import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-sc
 import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { personTagsMatch } from "../utils/person-tags";
 import { getStockStatus } from "../utils/schedule";
+import { MedicationAvatar } from "./MedicationAvatar";
 import { ModalFrame } from "./ModalFrame";
 
 export interface UserFilterModalProps {

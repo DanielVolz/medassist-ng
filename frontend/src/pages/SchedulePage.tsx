@@ -2,12 +2,16 @@
 import { Archive, Bell, ClipboardList, NotebookPen } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ConfirmModal, IntakeJournalHistoryModal, IntakeJournalModal, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
+import { ConfirmModal } from "../components/ConfirmModal";
+import { IntakeJournalHistoryModal } from "../components/intake-journal/IntakeJournalHistoryModal";
+import { IntakeJournalModal } from "../components/intake-journal/IntakeJournalModal";
+import { MedicationAvatar } from "../components/MedicationAvatar";
 import { useFeedback } from "../context/FeedbackContext";
 import { ScheduleUsageTag } from "../features/schedule/components";
 import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
-import { useModalHistory, useScheduleController } from "../hooks";
+import { useModalHistory } from "../hooks/useModalHistory";
+import { useScheduleController } from "../hooks/useScheduleController";
 import type { Coverage, IntakeUnit } from "../types";
 import { getMedDisplayName, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { buildClearMissedPayload, isDoseDismissed } from "../utils/schedule";

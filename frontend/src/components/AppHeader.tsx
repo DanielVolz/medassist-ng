@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useUnsavedChanges } from "../context";
-import { useTheme } from "../hooks";
+import { useTheme } from "../hooks/useTheme";
 import { useAuth } from "./Auth";
 
 interface AppHeaderProps {

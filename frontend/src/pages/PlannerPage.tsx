@@ -1,8 +1,9 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: planner uses custom DateTimeInput control wrappers */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DateTimeInput, MedicationAvatar } from "../components";
 import { useAuth } from "../components/Auth";
+import { DateTimeInput } from "../components/DateTimeInput";
+import { MedicationAvatar } from "../components/MedicationAvatar";
 import { useAppContext } from "../context";
 import type { PlannerRow } from "../types";
 import { getMedDisplayName, isAmountBasedPackageType, isLiquidContainerPackageType, isTubePackageType } from "../types";

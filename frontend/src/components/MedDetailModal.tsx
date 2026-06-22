@@ -12,8 +12,7 @@
 import { Bell, Calendar, ClipboardList, FilePenLine, Minus, NotebookPen, Pencil, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lightbox, MedicationAvatar } from "../components";
-import { useEscapeKey } from "../hooks";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
 import {
 	allowsPillFormSelection,
@@ -31,6 +30,8 @@ import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-sc
 import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { getStockStatus } from "../utils/schedule";
 import { splitCurrentBlisterStock } from "../utils/stock";
+import { Lightbox } from "./Lightbox";
+import { MedicationAvatar } from "./MedicationAvatar";
 
 // =============================================================================
 // Local Helper Functions

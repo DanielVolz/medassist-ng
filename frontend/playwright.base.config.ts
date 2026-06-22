@@ -98,13 +98,13 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			{
 				command: "cd ../backend && npm run dev",
 				url: `${apiBaseURL}/health`,
-				reuseExistingServer: true,
+				reuseExistingServer: !env.CI,
 				timeout: 120 * 1000,
 			},
 			{
 				command: `npm run dev -- --host 127.0.0.1 --port ${frontendPort} --strictPort`,
 				url: baseURL,
-				reuseExistingServer: true,
+				reuseExistingServer: !env.CI,
 				timeout: 120 * 1000,
 			},
 		],

@@ -1126,7 +1126,7 @@ export function SharedSchedule() {
 
 	return (
 		<div className={sharedClasses["shared-schedule-page"]}>
-			<div className={sharedClasses["shared-schedule-container"]}>
+			<div className={cx(sharedClasses["shared-schedule-container"], "shared-schedule-container")}>
 				<header className={sharedClasses["shared-schedule-header"]}>
 					<h1>{pageTitle}</h1>
 					<div className={sharedClasses["shared-schedule-help"]}>

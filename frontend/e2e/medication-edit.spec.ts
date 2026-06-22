@@ -299,7 +299,7 @@ test.describe("Medication Editing", () => {
 		await expect(page.locator(".blister-row")).toHaveCount(1);
 
 		// Add a second intake
-		await page.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
+		await page.getByTestId("add-intake-button").click();
 		await expect(page.locator(".blister-row")).toHaveCount(2);
 
 		// Fill the new intake row

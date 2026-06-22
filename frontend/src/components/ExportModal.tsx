@@ -72,14 +72,16 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 					</UnstyledButton>
 				</Stack>
 				<Stack className={classes.sensitivePanel} gap="sm">
-					<AppCheckbox
-						aria-describedby={includeSensitive ? "sensitive-export-warning" : undefined}
-						checked={includeSensitive}
-						data-testid="sensitive-export-toggle"
-						disabled={exporting}
-						label={t("exportImport.includeSensitive")}
-						onChange={setIncludeSensitive}
-					/>
+					<div className="sensitive-export-confirmation">
+						<AppCheckbox
+							aria-describedby={includeSensitive ? "sensitive-export-warning" : undefined}
+							checked={includeSensitive}
+							data-testid="sensitive-export-toggle"
+							disabled={exporting}
+							label={t("exportImport.includeSensitive")}
+							onChange={setIncludeSensitive}
+						/>
+					</div>
 					{includeSensitive ? (
 						<Alert color="yellow" id="sensitive-export-warning" variant="light">
 							{t("exportImport.sensitiveWarning")}

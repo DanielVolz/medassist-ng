@@ -117,7 +117,7 @@ test.describe("Medications Page", () => {
 		).toBeVisible();
 
 		// Should have an add intake button
-		const addIntake = form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i });
+		const addIntake = form.getByTestId("add-intake-button");
 		await expect(addIntake).toBeVisible();
 	});
 

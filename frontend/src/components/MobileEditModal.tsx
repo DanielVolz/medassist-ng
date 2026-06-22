@@ -952,6 +952,7 @@ export function MobileEditModal({
 										{!readOnlyMode && (
 											<AppTooltip label={t("form.blisters.addIntake")}>
 												<ActionIcon
+													data-testid="add-intake-button"
 													type="button"
 													color="brand"
 													variant="subtle"

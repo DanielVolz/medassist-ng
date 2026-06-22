@@ -1065,6 +1065,7 @@ export function SettingsPage() {
 									description={t("exportImport.exportDesc")}
 									action={
 										<AppButton
+											className="secondary"
 											type="button"
 											tone="secondary"
 											onClick={() => setShowExportModal(true)}
@@ -1081,6 +1082,7 @@ export function SettingsPage() {
 									description={t("exportImport.importDesc")}
 									action={
 										<AppButton
+											className="secondary"
 											type="button"
 											tone="secondary"
 											onClick={() => document.getElementById("import-file-input")?.click()}

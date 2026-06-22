@@ -550,7 +550,7 @@ export function LoginForm({
 	}
 
 	return (
-		<div className={classes["auth-container"]}>
+		<div className={cx(classes["auth-container"], "auth-container")}>
 			<div className={classes["auth-panel"]}>
 				<h1 className={classes["auth-title"]}>💊 MedAssist-ng</h1>
 				<h2 className={classes["auth-subtitle"]}>{t("auth.login", "Login")}</h2>
@@ -678,7 +678,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 	}
 
 	return (
-		<div className={classes["auth-container"]}>
+		<div className={cx(classes["auth-container"], "auth-container")}>
 			<div className={classes["auth-panel"]}>
 				<h1 className={classes["auth-title"]}>💊 MedAssist-ng</h1>
 				<h2 className={classes["auth-subtitle"]}>{t("auth.register", "Create Account")}</h2>

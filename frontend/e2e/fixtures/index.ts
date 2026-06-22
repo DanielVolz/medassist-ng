@@ -545,7 +545,8 @@ export async function createShareTokenViaAPI(
 export async function updateSettingsViaAPI(settings: Record<string, unknown>): Promise<void> {
 	let token = await ensureAuthCookie();
 	const apiBase = await getRuntimeApiBase();
-	for (let attempt = 0; attempt < 3; attempt++) {
+	const maxAttempts = 5;
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		const currentRes = await fetch(`${apiBase}/settings`, {
 			headers: token ? { Cookie: `access_token=${token}` } : {},
 		});
@@ -608,5 +609,5 @@ export async function updateSettingsViaAPI(settings: Record<string, unknown>): P
 		const text = await res.text();
 		throw new Error(`Failed to update settings: ${res.status} ${text}`);
 	}
-	throw new Error("Failed to update settings after 3 retries (rate limited)");
+	throw new Error(`Failed to update settings after ${maxAttempts} retries (rate limited)`);
 }

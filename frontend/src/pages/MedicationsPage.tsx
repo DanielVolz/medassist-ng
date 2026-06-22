@@ -2133,6 +2133,7 @@ export function MedicationsPage() {
 								{!readOnlyView && (
 									<AppTooltip label={t("form.blisters.addIntake")}>
 										<ActionIcon
+											data-testid="add-intake-button"
 											type="button"
 											color="brand"
 											variant="filled"

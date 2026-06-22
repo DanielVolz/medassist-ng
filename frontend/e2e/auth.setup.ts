@@ -192,7 +192,7 @@ setup("authenticate", async ({ page }) => {
 	}
 
 	// ---- 2. Fast path: already authenticated session ----
-	await page.goto("/");
+	await page.goto("/", { waitUntil: "domcontentloaded" });
 	let authEnabled = true;
 	let formLoginEnabled = true;
 	let oidcEnabled = false;
@@ -230,7 +230,7 @@ setup("authenticate", async ({ page }) => {
 		.then((response) => response.ok())
 		.catch(() => false);
 	if (hasAuthenticatedSession) {
-		await page.goto("/");
+		await page.goto("/", { waitUntil: "domcontentloaded" });
 		await expect(page.getByTestId("user-menu-trigger")).toBeVisible({ timeout: 15000 });
 		await page.context().storageState({ path: authFile });
 		return;
@@ -338,8 +338,10 @@ setup("authenticate", async ({ page }) => {
 
 		// Fallback path for environments where API login flow is unavailable.
 		const loginWithForm = async () => {
-			const usernameField = page.locator("#username");
-			const passwordField = page.locator("#password, input#password").first();
+			const usernameField = page.locator('#username, input[name="username"], input[type="text"]').first();
+			const passwordField = page
+				.locator('#password, input#password, input[name="password"], input[type="password"]')
+				.first();
 
 			// Make sure we're on the login form (not register)
 			const isOnRegister = await page

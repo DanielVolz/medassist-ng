@@ -682,6 +682,7 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
+					"dose-btn journal",
 					doseButtonClasses.button,
 					doseButtonClasses.journal,
 					hasSharedJournalNote && doseButtonClasses.hasNote

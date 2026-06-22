@@ -57,7 +57,7 @@ export function MedicationEditCoordinator({
 				</div>
 				{toolbar ? <div className={classes.toolbar}>{toolbar}</div> : null}
 				<form
-					className={classes.form}
+					className={[classes.form, "form-grid"].join(" ")}
 					onSubmit={onSubmit}
 					autoComplete="off"
 					spellCheck={false}

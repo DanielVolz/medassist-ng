@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Checkout repository
         if: github.event_name != 'workflow_call' || inputs.image_source != 'published'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         if: github.event_name != 'workflow_call' || inputs.image_source != 'published'

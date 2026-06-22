@@ -1,0 +1,51 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+:global(*) {
+	box-sizing: border-box;
+	scrollbar-color: var(--mantine-other-border-secondary) transparent;
+	scrollbar-width: thin;
+}
+
+:global(*::-webkit-scrollbar) {
+	width: 10px;
+	height: 10px;
+}
+
+:global(*::-webkit-scrollbar-thumb) {
+	border: 2px solid transparent;
+	border-radius: 999px;
+	background: var(--mantine-other-border-secondary);
+	background-clip: padding-box;
+}
+
+:global(*::-webkit-scrollbar-track) {
+	background: transparent;
+}
+
+:global(html) {
+	overflow-x: clip;
+	background: var(--mantine-other-bg-primary);
+}
+
+:global(body) {
+	min-height: 100vh;
+	margin: 0;
+	overflow-x: clip;
+	background: var(--mantine-other-bg-gradient);
+	color: var(--mantine-other-text-primary);
+	font-family: var(--mantine-font-family);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	transition:
+		background 200ms ease,
+		color 200ms ease;
+}
+
+:global(::selection) {
+	background: color-mix(in srgb, var(--mantine-other-accent) 35%, transparent);
+}
+
+:global(html.modal-open),
+:global(body.modal-open) {
+	overflow: hidden !important;
+}

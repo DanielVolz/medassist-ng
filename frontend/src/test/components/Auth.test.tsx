@@ -30,6 +30,10 @@ async function openDeleteAccountConfirmation() {
 	});
 }
 
+function getUsernameInput() {
+	return screen.getByRole("textbox", { name: /auth\.username/i });
+}
+
 describe("AuthProvider", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
@@ -257,7 +261,7 @@ describe("LoginForm", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByLabelText(/auth\.username/i)).toBeInTheDocument();
+			expect(getUsernameInput()).toBeInTheDocument();
 			expect(screen.getByLabelText(/auth\.password/i)).toBeInTheDocument();
 		});
 	});
@@ -297,13 +301,13 @@ describe("LoginForm", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByLabelText(/auth\.username/i)).toBeInTheDocument();
+			expect(getUsernameInput()).toBeInTheDocument();
 		});
 
-		fireEvent.change(screen.getByLabelText(/auth\.username/i), { target: { value: "testuser" } });
+		fireEvent.change(getUsernameInput(), { target: { value: "testuser" } });
 		fireEvent.change(screen.getByLabelText(/auth\.password/i), { target: { value: "password123" } });
 
-		expect(screen.getByLabelText(/auth\.username/i)).toHaveValue("testuser");
+		expect(getUsernameInput()).toHaveValue("testuser");
 		expect(screen.getByLabelText(/auth\.password/i)).toHaveValue("password123");
 	});
 
@@ -349,10 +353,10 @@ describe("LoginForm", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByLabelText(/auth\.username/i)).toBeInTheDocument();
+			expect(getUsernameInput()).toBeInTheDocument();
 		});
 
-		fireEvent.change(screen.getByLabelText(/auth\.username/i), { target: { value: "testuser" } });
+		fireEvent.change(getUsernameInput(), { target: { value: "testuser" } });
 		fireEvent.change(screen.getByLabelText(/auth\.password/i), { target: { value: "password123" } });
 		fireEvent.click(screen.getByRole("button", { name: /auth\.login/i }));
 
@@ -406,7 +410,7 @@ describe("RegisterForm", () => {
 
 		await waitFor(() => {
 			// Check for username field
-			expect(screen.getByLabelText(/auth\.username/i)).toBeInTheDocument();
+			expect(getUsernameInput()).toBeInTheDocument();
 			// Check for password field
 			expect(screen.getByLabelText(/auth\.password/i)).toBeInTheDocument();
 		});
@@ -466,10 +470,10 @@ describe("RegisterForm", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByLabelText(/auth\.username/i)).toBeInTheDocument();
+			expect(getUsernameInput()).toBeInTheDocument();
 		});
 
-		fireEvent.change(screen.getByLabelText(/auth\.username/i), { target: { value: "new-user" } });
+		fireEvent.change(getUsernameInput(), { target: { value: "new-user" } });
 		fireEvent.change(screen.getByLabelText(/auth\.password/i), { target: { value: "password123" } });
 		fireEvent.change(screen.getByLabelText(/auth\.confirmPassword/i), { target: { value: "different123" } });
 		fireEvent.click(screen.getByRole("button", { name: /auth\.register/i }));
@@ -514,7 +518,7 @@ describe("AuthPage", () => {
 
 		await waitFor(() => {
 			// Should show login form with username field
-			expect(screen.getByLabelText(/auth\.username/i)).toBeInTheDocument();
+			expect(getUsernameInput()).toBeInTheDocument();
 		});
 	});
 

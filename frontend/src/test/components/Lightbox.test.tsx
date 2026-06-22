@@ -24,14 +24,16 @@ describe("Lightbox", () => {
 	it("renders close button", () => {
 		render(<Lightbox {...defaultProps} />);
 
-		expect(screen.getByText("×")).toBeInTheDocument();
+		const closeButton = screen.getByRole("button", { name: "common.close" });
+		expect(closeButton).toBeInTheDocument();
+		expect(closeButton).not.toHaveTextContent("common.close");
 	});
 
 	it("calls onClose when close button is clicked", () => {
 		const onClose = vi.fn();
 		render(<Lightbox {...defaultProps} onClose={onClose} />);
 
-		fireEvent.click(screen.getByText("×"));
+		fireEvent.click(screen.getByRole("button", { name: "common.close" }));
 
 		expect(onClose).toHaveBeenCalled();
 	});
@@ -40,7 +42,7 @@ describe("Lightbox", () => {
 		const onClose = vi.fn();
 		const { container } = render(<Lightbox {...defaultProps} onClose={onClose} />);
 
-		const overlay = container.querySelector(".lightbox-overlay");
+		const overlay = container.firstElementChild;
 		fireEvent.click(overlay!);
 
 		expect(onClose).toHaveBeenCalled();
@@ -48,10 +50,9 @@ describe("Lightbox", () => {
 
 	it("calls onClose when Escape key is pressed", () => {
 		const onClose = vi.fn();
-		const { container } = render(<Lightbox {...defaultProps} onClose={onClose} />);
+		render(<Lightbox {...defaultProps} onClose={onClose} />);
 
-		const overlay = container.querySelector(".lightbox-overlay");
-		fireEvent.keyDown(overlay!, { key: "Escape" });
+		fireEvent.keyDown(document, { key: "Escape" });
 
 		expect(onClose).toHaveBeenCalled();
 	});
@@ -65,11 +66,14 @@ describe("Lightbox", () => {
 		expect(onClose).not.toHaveBeenCalled();
 	});
 
-	it("applies correct CSS classes", () => {
+	it("renders the overlay, close control, and image", () => {
 		const { container } = render(<Lightbox {...defaultProps} />);
 
-		expect(container.querySelector(".lightbox-overlay")).toBeInTheDocument();
-		expect(container.querySelector(".lightbox-close")).toBeInTheDocument();
-		expect(container.querySelector(".lightbox-image")).toBeInTheDocument();
+		const overlay = container.firstElementChild;
+		const image = screen.getByAltText("Test Image");
+
+		expect(overlay).toBeInTheDocument();
+		expect(overlay).toContainElement(screen.getByRole("button", { name: "common.close" }));
+		expect(overlay).toContainElement(image);
 	});
 });

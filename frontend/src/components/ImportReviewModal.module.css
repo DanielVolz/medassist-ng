@@ -1,0 +1,12 @@
+.modal {
+	width: min(100%, 720px);
+	max-width: 720px;
+}
+
+.summaryCard {
+	background: color-mix(in srgb, var(--bg-secondary) 86%, var(--bg-tertiary));
+}
+
+.meta {
+	color: var(--text-secondary);
+}

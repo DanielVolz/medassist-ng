@@ -3,9 +3,13 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useR
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useModalHistory } from "../hooks/useModalHistory";
+import { AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppTooltip, AppTooltipIcon } from "../ui/primitives/AppTooltip";
 import { createCorrelationId, withCorrelation } from "../utils/correlation";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
+import classes from "./Auth.module.css";
 import { ConfirmModal } from "./ConfirmModal";
 import { PasswordInput } from "./PasswordInput";
 
@@ -42,6 +46,10 @@ interface AuthContextType {
 	deleteAvatar: () => Promise<void>;
 	deleteAccount: () => Promise<void>;
 	authFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+}
+
+function cx(...classNames: Array<string | false | null | undefined>) {
+	return classNames.filter(Boolean).join(" ");
 }
 
 // =============================================================================
@@ -542,20 +550,26 @@ export function LoginForm({
 	}
 
 	return (
-		<div className="auth-container">
-			<div className="auth-card">
-				<h1 className="auth-title">💊 MedAssist-ng</h1>
-				<h2 className="auth-subtitle">{t("auth.login", "Login")}</h2>
+		<div className={cx(classes["auth-container"], "auth-container")}>
+			<div className={classes["auth-panel"]}>
+				<h1 className={classes["auth-title"]}>💊 MedAssist-ng</h1>
+				<h2 className={classes["auth-subtitle"]}>{t("auth.login", "Login")}</h2>
 
 				{/* SSO Login Button */}
 				{authState?.oidcEnabled && (
-					<div className="auth-sso">
+					<div className={classes["auth-sso"]}>
 						<button
 							type="button"
-							className="btn btn-secondary auth-submit sso-btn"
+							className={cx(classes["auth-submit"], classes["sso-btn"])}
 							onClick={() => (window.location.href = "/api/auth/oidc/login")}
 						>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sso-icon">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								className={classes["sso-icon"]}
+							>
 								<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
 								<polyline points="10 17 15 12 10 7" />
 								<line x1="15" y1="12" x2="3" y2="12" />
@@ -563,7 +577,7 @@ export function LoginForm({
 							{t("auth.loginWithSSO", "Login with {{provider}}", { provider: authState.oidcProviderName || "SSO" })}
 						</button>
 						{authState?.formLoginEnabled && (
-							<div className="auth-divider">
+							<div className={classes["auth-divider"]}>
 								<span>{t("auth.or", "or")}</span>
 							</div>
 						)}
@@ -572,17 +586,17 @@ export function LoginForm({
 
 				{/* Local login form - only show if form login is enabled */}
 				{authState?.formLoginEnabled && (
-					<form onSubmit={handleSubmit} className="auth-form">
+					<form onSubmit={handleSubmit} className={classes["auth-form"]}>
 						{sessionExpired && (
-							<div className="auth-error">
+							<div className={classes["auth-error"]}>
 								<strong>{t("auth.sessionExpiredTitle")}</strong>
 								<br />
 								{t("auth.sessionExpiredHelp")}
 							</div>
 						)}
-						{error && <div className="auth-error">{error}</div>}
+						{error && <div className={classes["auth-error"]}>{error}</div>}
 
-						<div className="form-group">
+						<div className={classes.formGroup}>
 							<label htmlFor="username">{t("auth.username", "Username")}</label>
 							<input
 								id="username"
@@ -594,7 +608,7 @@ export function LoginForm({
 							/>
 						</div>
 
-						<div className="form-group">
+						<div className={classes.formGroup}>
 							<label htmlFor="password">{t("auth.password", "Password")}</label>
 							<PasswordInput
 								id="password"
@@ -605,22 +619,22 @@ export function LoginForm({
 							/>
 						</div>
 
-						<div className="form-group checkbox-group">
-							<label className="checkbox-label">
+						<div className={cx(classes.formGroup, classes["checkbox-group"])}>
+							<label className={classes["checkbox-label"]}>
 								<input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
 								<span>{t("auth.rememberMe", "Remember me")}</span>
 							</label>
 						</div>
 
-						<button type="submit" className="btn btn-primary auth-submit" disabled={loading}>
+						<AppButton type="submit" className={classes["auth-submit"]} disabled={loading}>
 							{loading ? t("common.loading", "Loading...") : t("auth.login", "Login")}
-						</button>
+						</AppButton>
 					</form>
 				)}
 
 				{authState?.registrationEnabled && authState?.formLoginEnabled && onSwitchToRegister && (
-					<div className="auth-links">
-						<button type="button" className="auth-link-btn" onClick={onSwitchToRegister}>
+					<div className={classes["auth-links"]}>
+						<button type="button" className={classes["auth-link-btn"]} onClick={onSwitchToRegister}>
 							{t("auth.createAccount", "Create account")}
 						</button>
 					</div>
@@ -664,20 +678,26 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 	}
 
 	return (
-		<div className="auth-container">
-			<div className="auth-card">
-				<h1 className="auth-title">💊 MedAssist-ng</h1>
-				<h2 className="auth-subtitle">{t("auth.register", "Create Account")}</h2>
+		<div className={cx(classes["auth-container"], "auth-container")}>
+			<div className={classes["auth-panel"]}>
+				<h1 className={classes["auth-title"]}>💊 MedAssist-ng</h1>
+				<h2 className={classes["auth-subtitle"]}>{t("auth.register", "Create Account")}</h2>
 
 				{/* SSO Login Button - also show on registration */}
 				{authState?.oidcEnabled && (
-					<div className="auth-sso">
+					<div className={classes["auth-sso"]}>
 						<button
 							type="button"
-							className="btn btn-secondary auth-submit sso-btn"
+							className={cx(classes["auth-submit"], classes["sso-btn"])}
 							onClick={() => (window.location.href = "/api/auth/oidc/login")}
 						>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sso-icon">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								className={classes["sso-icon"]}
+							>
 								<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
 								<polyline points="10 17 15 12 10 7" />
 								<line x1="15" y1="12" x2="3" y2="12" />
@@ -685,7 +705,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 							{t("auth.loginWithSSO", "Login with {{provider}}", { provider: authState.oidcProviderName || "SSO" })}
 						</button>
 						{authState?.formLoginEnabled && (
-							<div className="auth-divider">
+							<div className={classes["auth-divider"]}>
 								<span>{t("auth.or", "or")}</span>
 							</div>
 						)}
@@ -694,11 +714,14 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 
 				{/* Local Registration Form - only show if local auth is enabled */}
 				{authState?.formLoginEnabled && (
-					<form onSubmit={handleSubmit} className="auth-form">
-						{error && <div className="auth-error">{error}</div>}
+					<form onSubmit={handleSubmit} className={classes["auth-form"]}>
+						{error && <div className={classes["auth-error"]}>{error}</div>}
 
-						<div className="form-group">
-							<label htmlFor="username">{t("auth.username", "Username")} *</label>
+						<div className={classes.formGroup}>
+							<label htmlFor="username" className={classes.labelWithTooltip}>
+								<span>{t("auth.username", "Username")} *</span>
+								<AppTooltipIcon label={t("auth.usernameHint", "Letters, numbers, underscores, and hyphens only")} />
+							</label>
 							<input
 								id="username"
 								type="text"
@@ -709,11 +732,10 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 								minLength={3}
 								maxLength={50}
 								pattern="[a-zA-Z0-9_-]+"
-								title={t("auth.usernameHint", "Letters, numbers, underscores, and hyphens only")}
 							/>
 						</div>
 
-						<div className="form-group">
+						<div className={classes.formGroup}>
 							<label htmlFor="password">{t("auth.password", "Password")} *</label>
 							<PasswordInput
 								id="password"
@@ -726,7 +748,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 							/>
 						</div>
 
-						<div className="form-group">
+						<div className={classes.formGroup}>
 							<label htmlFor="confirmPassword">{t("auth.confirmPassword", "Confirm Password")} *</label>
 							<PasswordInput
 								id="confirmPassword"
@@ -737,15 +759,15 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 							/>
 						</div>
 
-						<button type="submit" className="btn btn-primary auth-submit" disabled={loading}>
+						<AppButton type="submit" className={classes["auth-submit"]} disabled={loading}>
 							{loading ? t("common.loading", "Loading...") : t("auth.register", "Create Account")}
-						</button>
+						</AppButton>
 					</form>
 				)}
 
 				{onSwitchToLogin && (
-					<div className="auth-links">
-						<button type="button" className="auth-link-btn" onClick={onSwitchToLogin}>
+					<div className={classes["auth-links"]}>
+						<button type="button" className={classes["auth-link-btn"]} onClick={onSwitchToLogin}>
 							{t("auth.alreadyHaveAccount", "Already have an account? Login")}
 						</button>
 					</div>
@@ -869,13 +891,13 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 	const hasChanges = currentPassword || newPassword || confirmPassword;
 
 	return (
-		<div className="profile-container">
-			<div className="profile-user-section">
-				<div className="profile-avatar-wrapper">
+		<div className={classes["profile-container"]}>
+			<div className={classes["profile-user-section"]}>
+				<div className={classes["profile-avatar-wrapper"]}>
 					{user.avatarUrl ? (
-						<img src={`/api/images/${user.avatarUrl}`} alt={user.username} className="profile-avatar-img" />
+						<img src={`/api/images/${user.avatarUrl}`} alt={user.username} className={classes["profile-avatar-img"]} />
 					) : (
-						<div className="profile-avatar">{user.username.charAt(0).toUpperCase()}</div>
+						<div className={classes["profile-avatar"]}>{user.username.charAt(0).toUpperCase()}</div>
 					)}
 					<input
 						type="file"
@@ -884,41 +906,49 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 						accept="image/jpeg,image/png,image/webp,image/gif"
 						style={{ display: "none" }}
 					/>
-					<div className="profile-avatar-actions">
-						<button
-							type="button"
-							className="avatar-btn"
-							onClick={() => fileInputRef.current?.click()}
-							disabled={avatarLoading}
-							title={t("auth.uploadAvatar", "Upload avatar")}
-						>
-							📷
-						</button>
+					<div className={classes["profile-avatar-actions"]}>
+						<AppTooltip label={t("auth.uploadAvatar", "Upload avatar")}>
+							<span>
+								<button
+									type="button"
+									className={classes["avatar-btn"]}
+									onClick={() => fileInputRef.current?.click()}
+									disabled={avatarLoading}
+									aria-label={t("auth.uploadAvatar", "Upload avatar")}
+								>
+									📷
+								</button>
+							</span>
+						</AppTooltip>
 						{user.avatarUrl && (
-							<button
-								type="button"
-								className="avatar-btn danger"
-								onClick={handleAvatarDelete}
-								disabled={avatarLoading}
-								title={t("auth.removeAvatar", "Remove avatar")}
-							>
-								🗑
-							</button>
+							<AppTooltip label={t("auth.removeAvatar", "Remove avatar")}>
+								<span>
+									<button
+										type="button"
+										className={cx(classes["avatar-btn"], classes["avatar-btn-delete"])}
+										onClick={handleAvatarDelete}
+										disabled={avatarLoading}
+										aria-label={t("auth.removeAvatar", "Remove avatar")}
+									>
+										🗑
+									</button>
+								</span>
+							</AppTooltip>
 						)}
 					</div>
 				</div>
-				<span className="profile-username">{user.username}</span>
+				<span className={classes["profile-username"]}>{user.username}</span>
 				{avatarError && <span className="field-error">{avatarError}</span>}
 			</div>
 
-			<form onSubmit={handleUpdate} className="profile-form">
-				<div className="profile-section">
-					<h3 className="profile-section-title">{t("auth.changePassword", "Change Password")}</h3>
+			<form id="profile-password-form" onSubmit={handleUpdate} className={classes["profile-form"]}>
+				<div className={classes["profile-section"]}>
+					<h3 className={classes["profile-section-title"]}>{t("auth.changePassword", "Change Password")}</h3>
 
-					{error && <div className="auth-error">{error}</div>}
-					{success && <div className="auth-success">{success}</div>}
+					{error && <div className={classes["auth-error"]}>{error}</div>}
+					{success && <div className={classes["auth-success"]}>{success}</div>}
 
-					<div className="form-group">
+					<div className={classes.formGroup}>
 						<label htmlFor="current-password">{t("auth.currentPassword", "Current Password")}</label>
 						<PasswordInput
 							id="current-password"
@@ -929,7 +959,7 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 						/>
 					</div>
 
-					<div className="form-group">
+					<div className={classes.formGroup}>
 						<label htmlFor="new-password">{t("auth.newPassword", "New Password")}</label>
 						<PasswordInput
 							id="new-password"
@@ -941,7 +971,7 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 						/>
 					</div>
 
-					<div className="form-group">
+					<div className={classes.formGroup}>
 						<label htmlFor="confirm-new-password">{t("auth.confirmPassword", "Confirm Password")}</label>
 						<PasswordInput
 							id="confirm-new-password"
@@ -952,24 +982,24 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 						/>
 					</div>
 				</div>
-
-				<div className="profile-actions">
-					<button type="button" className="btn btn-ghost" onClick={onClose}>
-						{t("common.close", "Close")}
-					</button>
-					<button type="submit" className="btn btn-primary" disabled={loading || !hasChanges}>
-						{loading ? t("common.saving", "Saving...") : t("auth.updatePassword", "Update Password")}
-					</button>
-				</div>
 			</form>
 
 			{/* Delete Account Section */}
-			<div className="profile-section profile-danger-zone">
-				<h3 className="profile-section-title">{t("auth.deleteAccount", "Delete Account")}</h3>
-				<button type="button" className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+			<div className={cx(classes["profile-section"], classes["profile-critical-zone"])}>
+				<h3 className={classes["profile-section-title"]}>{t("auth.deleteAccount", "Delete Account")}</h3>
+				<AppButton type="button" tone="danger" onClick={() => setShowDeleteConfirm(true)}>
 					{t("auth.deleteAccount", "Delete Account")}
-				</button>
+				</AppButton>
 			</div>
+
+			<AppModalFooter>
+				<AppButton type="button" tone="secondary" onClick={onClose}>
+					{t("common.close", "Close")}
+				</AppButton>
+				<AppButton type="submit" form="profile-password-form" disabled={loading || !hasChanges}>
+					{loading ? t("common.saving", "Saving...") : t("auth.updatePassword", "Update Password")}
+				</AppButton>
+			</AppModalFooter>
 
 			{/* Delete Confirmation Modal */}
 			{showDeleteConfirm && (
@@ -983,7 +1013,7 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 									"This will permanently delete your account and all your data (medications, settings, history). This action cannot be undone."
 								)}
 							</p>
-							{error && <div className="auth-error">{error}</div>}
+							{error && <div className={classes["auth-error"]}>{error}</div>}
 						</>
 					}
 					confirmLabel={t("auth.deleteAccountButton", "Yes, delete my account")}

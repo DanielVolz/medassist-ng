@@ -8,11 +8,11 @@
   },
   "header": {
     "eyebrow": {
-      "overview": "MedAssist-ng · Übersicht",
-      "inventory": "MedAssist-ng · Inventar",
-      "planner": "MedAssist-ng · Planer",
-      "settings": "MedAssist-ng · Einstellungen",
-      "schedule": "MedAssist-ng · Zeitplan"
+      "overview": "MedAssist-ng Übersicht",
+      "inventory": "MedAssist-ng Inventar",
+      "planner": "MedAssist-ng Planer",
+      "settings": "MedAssist-ng Einstellungen",
+      "schedule": "MedAssist-ng Zeitplan"
     }
   },
   "dashboard": {
@@ -129,6 +129,7 @@
       "resetFilters": "Filter zurücksetzen",
       "reopen": "Notiz erneut öffnen",
       "updatedAt": "Aktualisiert {{date}}",
+      "updatedLabel": "Aktualisiert",
       "filters": {
         "medication": "Medikament",
         "allMedications": "Alle Medikamente",
@@ -226,6 +227,8 @@
       "prescriptionAndRefill": "Rezept & Nachfüllen",
       "schedule": "Einnahme"
     },
+    "mobileSwipeHint": "Wische seitlich, um die Bereiche zu wechseln.",
+    "dismissSwipeHint": "Hinweis ausblenden",
     "commercialName": "Handelsname",
     "genericName": "Wirkstoff",
     "takenBy": "Eingenommen von",
@@ -391,12 +394,15 @@
       "teaspoons": "Teelöffel",
       "teaspoons_one": "Teelöffel",
       "teaspoons_other": "Teelöffel",
+      "teaspoonsShort": "TL.",
       "tablespoons": "Esslöffel",
       "tablespoons_one": "Esslöffel",
       "tablespoons_other": "Esslöffel",
+      "tablespoonsShort": "EL.",
       "applications": "Anwendungen",
       "applications_one": "Anwendung",
       "applications_other": "Anwendungen",
+      "applicationsShort": "Anw.",
       "scheduleMode": "Planmodus",
       "scheduleModeInterval": "Alle X Tage",
       "scheduleModeWeekdays": "Bestimmte Wochentage",
@@ -464,7 +470,7 @@
     "timezone": {
       "select": "Zeitzone",
       "hint": "IANA-Zeitzone wählen. Wenn gesetzt, überschreibt sie die Server-TZ für deine Reminder-Zeitpunkte.",
-      "useServerDefault": "Server-Standard nutzen",
+      "useServerDefault": "Standard nutzen",
       "currentServerTz": "Server-Standardzeitzone: {{timezone}}",
       "saving": "Zeitzone wird gespeichert...",
       "saved": "Zeitzone gespeichert"
@@ -719,6 +725,8 @@
     "puffs": "Hübe",
     "injection": "Injektion",
     "injections": "Injektionen",
+    "injectionShort": "Inj.",
+    "injectionsShort": "Inj.",
     "of": "von",
     "loose": "lose",
     "none": "Kein",
@@ -776,6 +784,13 @@
     "regenerateFailed": "Freigabelink konnte nicht neu generiert werden",
     "activeLinkMeta": "{{days}} Tage, erstellt {{createdAt}}",
     "activeLinkMetaWithExpiry": "{{days}} Tage, erstellt {{createdAt}}, Ablauf {{expiresAt}}",
+    "activeLinkDays": "{{count}} Tag",
+    "activeLinkDays_other": "{{count}} Tage",
+    "activeLinkCreatedLabel": "Erstellt",
+    "activeLinkExpiresLabel": "Ablauf",
+    "activeLinkLastUsedLabel": "Zuletzt genutzt",
+    "activeLinkPermissionsLabel": "Rechte",
+    "activeLinkLegacyExpiry": "Legacy, kein Ablauf",
     "lastUsedAt": "zuletzt genutzt {{date}}",
     "legacyNeverExpires": "Legacy ohne Ablauf",
     "revoke": "Widerrufen",

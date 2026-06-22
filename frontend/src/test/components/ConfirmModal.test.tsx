@@ -51,58 +51,54 @@ describe("ConfirmModal", () => {
 
 	it("calls onCancel when close button is clicked", () => {
 		render(<ConfirmModal {...defaultProps} />);
-		fireEvent.click(screen.getByText("×"));
+		fireEvent.click(screen.getByRole("button", { name: /close/i }));
 		expect(defaultProps.onCancel).toHaveBeenCalled();
 	});
 
 	it("calls onCancel when overlay is clicked", () => {
-		const { container } = render(<ConfirmModal {...defaultProps} />);
-		const overlay = container.querySelector(".modal-overlay");
-		fireEvent.click(overlay!);
+		render(<ConfirmModal {...defaultProps} />);
+		const overlay = document.querySelector(".mantine-Modal-overlay");
+		expect(overlay).toBeInTheDocument();
+		fireEvent.click(overlay as HTMLElement);
 		expect(defaultProps.onCancel).toHaveBeenCalled();
 	});
 
 	it("does not call onCancel when modal content is clicked", () => {
-		const { container } = render(<ConfirmModal {...defaultProps} />);
-		const content = container.querySelector(".modal-content");
-		fireEvent.click(content!);
+		render(<ConfirmModal {...defaultProps} />);
+		fireEvent.click(screen.getByRole("dialog"));
 		expect(defaultProps.onCancel).not.toHaveBeenCalled();
 	});
 
 	it("disables buttons when loading", () => {
 		render(<ConfirmModal {...defaultProps} isLoading={true} />);
-		expect(screen.getByText("Yes")).toBeDisabled();
-		expect(screen.getByText("No")).toBeDisabled();
+		expect(screen.getByRole("button", { name: "Yes" })).toBeDisabled();
+		expect(screen.getByRole("button", { name: "No" })).toBeDisabled();
 	});
 
 	it("applies primary variant by default", () => {
 		render(<ConfirmModal {...defaultProps} />);
-		const confirmBtn = screen.getByText("Yes");
-		expect(confirmBtn.className).toContain("primary");
+		expect(screen.getByTestId("confirm-modal-confirm")).toHaveAttribute("data-confirm-variant", "primary");
 	});
 
 	it("applies danger variant when specified", () => {
 		render(<ConfirmModal {...defaultProps} confirmVariant="danger" />);
-		const confirmBtn = screen.getByText("Yes");
-		expect(confirmBtn.className).toContain("danger");
+		expect(screen.getByTestId("confirm-modal-confirm")).toHaveAttribute("data-confirm-variant", "danger");
 	});
 
 	it("applies success variant when specified", () => {
 		render(<ConfirmModal {...defaultProps} confirmVariant="success" />);
-		const confirmBtn = screen.getByText("Yes");
-		expect(confirmBtn.className).toContain("success");
+		expect(screen.getByTestId("confirm-modal-confirm")).toHaveAttribute("data-confirm-variant", "success");
 	});
 
 	it("applies warning variant when specified", () => {
 		render(<ConfirmModal {...defaultProps} confirmVariant="warning" />);
-		const confirmBtn = screen.getByText("Yes");
-		expect(confirmBtn.className).toContain("warning");
+		expect(screen.getByTestId("confirm-modal-confirm")).toHaveAttribute("data-confirm-variant", "warning");
 	});
 
 	it("applies custom overlay class", () => {
-		const { container } = render(<ConfirmModal {...defaultProps} overlayClassName="nested-confirm" />);
-		const overlay = container.querySelector(".modal-overlay");
-		expect(overlay?.className).toContain("nested-confirm");
+		render(<ConfirmModal {...defaultProps} overlayClassName="nested-confirm" />);
+		const modalRoot = document.querySelector(".nested-confirm");
+		expect(modalRoot).toBeInTheDocument();
 	});
 
 	it("calls onCancel when Escape is pressed", () => {

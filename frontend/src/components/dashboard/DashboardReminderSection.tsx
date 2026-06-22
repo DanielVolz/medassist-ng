@@ -1,4 +1,8 @@
+import { Text } from "@mantine/core";
 import { type Coverage, getMedDisplayName, type Medication, type StockThresholds } from "../../types";
+import { AppButton } from "../../ui/primitives/AppButton";
+import { AppTextAction } from "../../ui/primitives/AppTextAction";
+import { StatusBadge, type StatusTone } from "../../ui/primitives/StatusBadge";
 import { getStockStatus } from "../../utils/schedule";
 
 type ReminderData = {
@@ -53,6 +57,13 @@ function NotificationBellIcon() {
 	);
 }
 
+function getStatusTone(className?: string): StatusTone {
+	if (className === "danger" || className === "warning" || className === "high" || className === "success") {
+		return className;
+	}
+	return "info";
+}
+
 export function DashboardReminderSection({
 	t,
 	remindersLoading,
@@ -71,10 +82,10 @@ export function DashboardReminderSection({
 	onSendManualReminder,
 	onOpenMedicationDetail,
 }: DashboardReminderSectionProps) {
-	const getStatusTextClass = (statusClassName: string | undefined): string => {
-		if (statusClassName === "danger") return "danger-text";
-		if (statusClassName === "warning") return "warning-text";
-		return "";
+	const getStatusTextColor = (statusClassName: string | undefined): string | undefined => {
+		if (statusClassName === "danger") return "red";
+		if (statusClassName === "warning") return "yellow";
+		return undefined;
 	};
 
 	if (remindersLoading) {
@@ -107,10 +118,14 @@ export function DashboardReminderSection({
 				</span>
 				<span className="reminder-status-title">{t("dashboard.reminders.active")}</span>
 				{stockRemindersEnabled && (
-					<span className={`status-chip small ${reminderData.status.className}`}>{reminderData.status.text}</span>
+					<StatusBadge size="xs" tone={getStatusTone(reminderData.status.className)}>
+						{reminderData.status.text}
+					</StatusBadge>
 				)}
 				{prescriptionStatus && (
-					<span className={`status-chip small ${prescriptionStatus.className}`}>{prescriptionStatus.text}</span>
+					<StatusBadge size="xs" tone={getStatusTone(prescriptionStatus.className)}>
+						{prescriptionStatus.text}
+					</StatusBadge>
 				)}
 			</div>
 			{(reminderData.lowStockMeds.length > 0 ||
@@ -128,25 +143,27 @@ export function DashboardReminderSection({
 									const status = cov
 										? getStockStatus(cov.daysLeft, cov.medsLeft, stockThresholds, medication?.packageType)
 										: null;
-									const textClass = getStatusTextClass(status?.className);
+									const textColor = getStatusTextColor(status?.className);
 									return (
 										<span key={med.name}>
 											{idx > 0 && ", "}
-											<span
-												className={`med-link clickable ${textClass}`}
-												onClick={() => medication && onOpenMedicationDetail(medication)}
-												onKeyDown={(e) => {
-													if ((e.key === "Enter" || e.key === " ") && medication) {
-														onOpenMedicationDetail(medication);
-													}
-												}}
-											>
-												{med.name}
-											</span>
-											<span className={`reminder-days-left ${textClass}`}>
+											{medication ? (
+												<AppTextAction
+													color={textColor}
+													fontWeight={700}
+													onClick={() => onOpenMedicationDetail(medication)}
+												>
+													{med.name}
+												</AppTextAction>
+											) : (
+												<Text c={textColor} component="span" fw={700}>
+													{med.name}
+												</Text>
+											)}
+											<Text c={textColor} component="span" fw={textColor ? 700 : undefined}>
 												{" "}
 												{t("dashboard.reminders.daysLeft", { count: med.daysLeft, days: med.daysLeft })}
-											</span>
+											</Text>
 										</span>
 									);
 								})}
@@ -159,25 +176,26 @@ export function DashboardReminderSection({
 							<span className="reminder-status-value">
 								{prescriptionLowMeds.map((med, idx) => {
 									const medication = meds.find((m) => m.id === med.id);
-									const textClass = med.remainingRefills <= 0 ? "danger-text" : "warning-text";
+									const textColor = med.remainingRefills <= 0 ? "red" : "yellow";
 									return (
 										<span key={med.id}>
 											{idx > 0 && ", "}
-											<span className={`reminder-days-left ${textClass}`}>
-												{t("prescription.remainingRefills")}: {med.remainingRefills} · {t("dashboard.reminders.usedBy")}
-												:{" "}
-												<span
-													className={`med-link clickable ${textClass}`}
-													onClick={() => medication && onOpenMedicationDetail(medication)}
-													onKeyDown={(e) => {
-														if ((e.key === "Enter" || e.key === " ") && medication) {
-															onOpenMedicationDetail(medication);
-														}
-													}}
+											<Text c={textColor} component="span" fw={700}>
+												{t("prescription.remainingRefills")}: {med.remainingRefills}, {t("dashboard.reminders.usedBy")}:{" "}
+											</Text>
+											{medication ? (
+												<AppTextAction
+													color={textColor}
+													fontWeight={700}
+													onClick={() => onOpenMedicationDetail(medication)}
 												>
 													{med.name}
-												</span>
-											</span>
+												</AppTextAction>
+											) : (
+												<Text c={textColor} component="span" fw={700}>
+													{med.name}
+												</Text>
+											)}
 										</span>
 									);
 								})}
@@ -197,15 +215,7 @@ export function DashboardReminderSection({
 												<span key={name}>
 													{idx > 0 && ", "}
 													{medication ? (
-														<span
-															className="med-link clickable"
-															onClick={() => onOpenMedicationDetail(medication)}
-															onKeyDown={(e) => {
-																if (e.key === "Enter" || e.key === " ") onOpenMedicationDetail(medication);
-															}}
-														>
-															{name}
-														</span>
+														<AppTextAction onClick={() => onOpenMedicationDetail(medication)}>{name}</AppTextAction>
 													) : (
 														<span className="reminder-med-name">{name}</span>
 													)}
@@ -225,15 +235,9 @@ export function DashboardReminderSection({
 									(() => {
 										const medication = meds.find((m) => getMedDisplayName(m) === reminderData.lastIntakeSent?.medName);
 										return medication ? (
-											<span
-												className="med-link clickable"
-												onClick={() => onOpenMedicationDetail(medication)}
-												onKeyDown={(e) => {
-													if (e.key === "Enter" || e.key === " ") onOpenMedicationDetail(medication);
-												}}
-											>
+											<AppTextAction onClick={() => onOpenMedicationDetail(medication)}>
 												{reminderData.lastIntakeSent?.medName}
-											</span>
+											</AppTextAction>
 										) : (
 											<span className="reminder-med-name">{reminderData.lastIntakeSent?.medName}</span>
 										);
@@ -250,9 +254,9 @@ export function DashboardReminderSection({
 			{((stockRemindersEnabled && reminderData.lowStockMeds.length > 0) ||
 				(prescriptionRemindersEnabled && prescriptionLowMeds.length > 0)) && (
 				<div className="reminder-send-row">
-					<button type="button" className="ghost" onClick={onSendManualReminder} disabled={sendingReminder}>
+					<AppButton type="button" tone="secondary" onClick={onSendManualReminder} disabled={sendingReminder}>
 						{sendingReminder ? t("common.sending") : t("dashboard.reorder.sendReminder")}
-					</button>
+					</AppButton>
 					{reminderResult && (
 						<span className={`reminder-send-result ${reminderResult.success ? "success" : "error"}`}>
 							{reminderResult.message}

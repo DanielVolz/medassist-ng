@@ -1,0 +1,133 @@
+.modal {
+	overflow: hidden;
+}
+
+.modalHeader {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	padding: 1rem 1.25rem;
+	background: var(--mantine-other-bg-secondary);
+	border-bottom: 1px solid var(--mantine-other-border-primary);
+}
+
+.modalTitle {
+	font-size: 1rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	color: var(--mantine-other-text-primary);
+}
+
+.body {
+	--app-modal-footer-bottom-offset: 0px;
+	--app-modal-footer-inline-offset: 0px;
+
+	padding: 0;
+}
+
+.hero {
+	padding: 1.5rem 2rem;
+	background: linear-gradient(
+		135deg,
+		var(--mantine-other-accent) 0%,
+		color-mix(in srgb, var(--mantine-other-info) 58%, #1e5bb8) 100%
+	);
+}
+
+.userAvatar {
+	flex: 0 0 auto;
+	color: #ffffff;
+	background: rgba(255, 255, 255, 0.2);
+}
+
+.heroTitle {
+	margin: 0;
+	font-size: 1.3rem;
+	font-weight: 700;
+	line-height: 1.2;
+	color: #ffffff;
+}
+
+.list {
+	padding: 1rem;
+}
+
+.medicationItem {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	gap: 0.75rem;
+	padding: 0.75rem;
+	text-align: left;
+	color: inherit;
+	background: transparent;
+	border: 0;
+	border-radius: var(--mantine-other-button-radius);
+	cursor: pointer;
+	transition: background 150ms ease;
+}
+
+.medicationItem:hover,
+.medicationItem:focus-visible {
+	background: var(--mantine-other-accent-bg);
+	outline: none;
+}
+
+.medicationInfo {
+	flex: 1 1 150px;
+	min-width: 0;
+}
+
+.medicationName {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+	color: var(--mantine-other-text-primary);
+}
+
+.medicationGeneric {
+	font-size: 0.8rem;
+	color: var(--mantine-other-text-secondary);
+}
+
+.intakeList {
+	margin-top: 0.15rem;
+}
+
+.intakeItem {
+	font-size: 0.78rem;
+	line-height: 1.3;
+	color: var(--mantine-other-text-secondary);
+}
+
+.medicationStats {
+	flex: 0 0 auto;
+}
+
+.stockSummary {
+	font-size: 0.85rem;
+	color: var(--mantine-other-text-secondary);
+}
+
+.empty {
+	padding: 2rem;
+	text-align: center;
+	color: var(--mantine-other-text-secondary);
+}
+
+@media (max-width: 520px) {
+	.hero {
+		padding: 1.25rem;
+	}
+
+	.medicationItem {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.medicationStats {
+		width: 100%;
+		padding-left: 2.75rem;
+	}
+}

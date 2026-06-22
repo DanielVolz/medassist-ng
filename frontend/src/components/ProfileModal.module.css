@@ -1,0 +1,27 @@
+.modal {
+	max-height: min(90vh, 760px);
+	overflow: hidden;
+}
+
+.header {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 1rem 1.25rem;
+	background: var(--mantine-other-bg-secondary);
+	border-bottom: 1px solid var(--mantine-other-border-primary);
+}
+
+.title {
+	font-size: 1rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	color: var(--mantine-other-text-primary);
+}
+
+.body {
+	--app-modal-footer-bottom-offset: 0px;
+	--app-modal-footer-inline-offset: 0px;
+
+	padding: 0;
+}

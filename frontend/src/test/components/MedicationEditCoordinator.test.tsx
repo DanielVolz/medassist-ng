@@ -25,9 +25,9 @@ describe("MedicationEditCoordinator", () => {
 		);
 
 		expect(screen.getByText("form.newEntry")).toBeInTheDocument();
-		expect(document.querySelector(".edit-sidebar.open")).not.toBeInTheDocument();
+		expect(document.querySelector("aside[data-open='true']")).not.toBeInTheDocument();
 
-		fireEvent.click(screen.getByRole("button", { name: "<- common.back" }));
+		fireEvent.click(screen.getByRole("button", { name: "common.back" }));
 		expect(onBack).toHaveBeenCalledTimes(1);
 
 		fireEvent.submit(document.querySelector("form") as HTMLFormElement);
@@ -50,7 +50,7 @@ describe("MedicationEditCoordinator", () => {
 			</MedicationEditCoordinator>
 		);
 
-		expect(document.querySelector(".edit-sidebar.open")).toBeInTheDocument();
+		expect(document.querySelector("aside[data-open='true']")).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: "form.editEntry: Aspirin" })).toBeInTheDocument();
 
 		rerender(

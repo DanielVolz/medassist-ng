@@ -35,6 +35,7 @@ export const EnvSchema = z.object({
 	PUBLIC_APP_URL: z.string().url().optional(),
 	OPENAPI_DOCS_ENABLED: optionalBoolEnv(),
 	DOCS_AUTH_REQUIRED: optionalBoolEnv(),
+	MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED: optionalBoolEnv(),
 	RATE_LIMIT_MAX: intEnv({ defaultValue: DEFAULT_RATE_LIMIT_MAX, min: 1, max: 100_000 }),
 	AUTH_ENABLED: boolEnv(false),
 	ALLOW_UNAUTHENTICATED: boolEnv(false),

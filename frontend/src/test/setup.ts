@@ -1,5 +1,29 @@
+import { MantineProvider } from "@mantine/core";
+import { createElement, type ReactElement } from "react";
 import "@testing-library/jest-dom";
 import { beforeEach, vi } from "vitest";
+
+// Wrap every rendered component tree in MantineProvider so components using
+// Mantine primitives can render without each test wiring the provider itself.
+function wrapWithMantineProvider(ui: ReactElement) {
+	return createElement(MantineProvider, { withCssVariables: false, withGlobalClasses: false }, ui);
+}
+
+vi.mock("@testing-library/react", async () => {
+	const actual = await vi.importActual<typeof import("@testing-library/react")>("@testing-library/react");
+
+	return {
+		...actual,
+		render: (ui: ReactElement, options?: Parameters<typeof actual.render>[1]) => {
+			const result = actual.render(wrapWithMantineProvider(ui), options);
+
+			return {
+				...result,
+				rerender: (nextUi: ReactElement) => result.rerender(wrapWithMantineProvider(nextUi)),
+			};
+		},
+	};
+});
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -26,6 +50,23 @@ Object.defineProperty(window, "matchMedia", {
 		removeEventListener: vi.fn(),
 		dispatchEvent: vi.fn(),
 	})),
+});
+
+// Mock ResizeObserver for components that rely on element measurements
+class ResizeObserverMock {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+
+Object.defineProperty(window, "ResizeObserver", {
+	writable: true,
+	value: ResizeObserverMock,
+});
+
+Object.defineProperty(global, "ResizeObserver", {
+	writable: true,
+	value: ResizeObserverMock,
 });
 
 // Mock navigator.clipboard

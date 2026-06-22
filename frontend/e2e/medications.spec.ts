@@ -28,7 +28,10 @@ test.describe("Medications Page", () => {
 		await navigateTo(page, "/medications");
 
 		// Medications tab should be active
-		await expect(page.locator('button.pill.primary:has-text("Medications")')).toBeVisible();
+		await expect(page.getByTestId("main-nav").getByRole("button", { name: "Medications" })).toHaveAttribute(
+			"aria-current",
+			"page"
+		);
 	});
 
 	test("should show medication list or empty state", async ({ page }) => {
@@ -90,7 +93,7 @@ test.describe("Medications Page", () => {
 	test("should expose all supported package type options", async ({ page }) => {
 		await openMedicationForm(page);
 		const form = visibleMedForm(page);
-		const packageSelect = form.locator("select.package-type-select");
+		const packageSelect = form.getByLabel(/(Package Type|form\.packageType)/i);
 		await expect(packageSelect).toBeVisible();
 
 		const optionValues = await packageSelect
@@ -114,7 +117,7 @@ test.describe("Medications Page", () => {
 		).toBeVisible();
 
 		// Should have an add intake button
-		const addIntake = form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i });
+		const addIntake = form.getByTestId("add-intake-button");
 		await expect(addIntake).toBeVisible();
 	});
 
@@ -138,7 +141,7 @@ test.describe("Medications Page", () => {
 		await form.getByLabel(/(Commercial Name|form\.commercialName)/i).fill("Unsaved Medication");
 
 		// Try to navigate away
-		await page.locator('button.pill:has-text("Dashboard")').click();
+		await page.getByTestId("main-nav").getByRole("button", { name: "Dashboard" }).click();
 
 		// Should show unsaved changes warning modal
 		const modal = page.locator(".confirm-modal-overlay, .modal-overlay");

@@ -1,0 +1,18 @@
+.trigger {
+	color: var(--mantine-other-text-secondary);
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	transition:
+		background 150ms ease,
+		color 150ms ease;
+}
+
+.trigger:hover {
+	color: var(--mantine-other-text-primary);
+	background: var(--mantine-other-button-subtle-hover);
+}
+
+.check {
+	color: var(--mantine-other-accent);
+}

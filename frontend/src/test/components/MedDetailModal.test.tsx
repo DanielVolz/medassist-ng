@@ -72,6 +72,32 @@ const defaultProps = {
 	onSubmitStockCorrection: vi.fn(),
 };
 
+function getDialogByHeading(name: string | RegExp): HTMLElement {
+	const heading = screen.getByRole("heading", { name });
+	const dialog = heading.closest('[role="dialog"]');
+	expect(dialog).toBeInTheDocument();
+	return dialog as HTMLElement;
+}
+
+function getRefillDialog(): HTMLElement {
+	return getDialogByHeading("refill.title");
+}
+
+function getEditStockDialog(): HTMLElement {
+	return getDialogByHeading("editStock.title");
+}
+
+function getDetailValue(label: string | RegExp): HTMLElement {
+	const labelElement = screen.getByText(label);
+	const valueElement = labelElement.nextElementSibling;
+	expect(valueElement).toBeInTheDocument();
+	return valueElement as HTMLElement;
+}
+
+function getRefillNumberInputs(): HTMLInputElement[] {
+	return within(getRefillDialog()).getAllByRole("spinbutton") as HTMLInputElement[];
+}
+
 describe("MedDetailModal", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -87,6 +113,18 @@ describe("MedDetailModal", () => {
 		render(<MedDetailModal {...defaultProps} />);
 
 		expect(screen.getByText("Test Med")).toBeInTheDocument();
+	});
+
+	it("opens the user filter from medication-level person names", () => {
+		const onOpenUserFilter = vi.fn();
+		render(<MedDetailModal {...defaultProps} onOpenUserFilter={onOpenUserFilter} />);
+
+		const person = screen.getByRole("button", { name: "John" });
+		fireEvent.click(person);
+
+		expect(person.tagName).toBe("BUTTON");
+		expect(onOpenUserFilter).toHaveBeenCalledTimes(1);
+		expect(onOpenUserFilter).toHaveBeenCalledWith("John");
 	});
 
 	it("displays medication name", () => {
@@ -124,7 +162,7 @@ describe("MedDetailModal", () => {
 		const onClose = vi.fn();
 		render(<MedDetailModal {...defaultProps} onClose={onClose} />);
 
-		const overlay = document.querySelector(".modal-overlay");
+		const overlay = document.querySelector(".mantine-Modal-overlay");
 		if (overlay) {
 			fireEvent.click(overlay);
 		}
@@ -136,10 +174,7 @@ describe("MedDetailModal", () => {
 		const onClose = vi.fn();
 		render(<MedDetailModal {...defaultProps} onClose={onClose} />);
 
-		const content = document.querySelector(".modal-content");
-		if (content) {
-			fireEvent.click(content);
-		}
+		fireEvent.click(screen.getByRole("dialog"));
 
 		expect(onClose).not.toHaveBeenCalled();
 	});
@@ -200,23 +235,22 @@ describe("MedDetailModal", () => {
 	it("displays schedule information", () => {
 		render(<MedDetailModal {...defaultProps} />);
 
-		// Should have schedule section
-		const scheduleSection = document.querySelector(".med-detail-schedules");
-		expect(scheduleSection).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "modal.intakeSchedule" })).toBeInTheDocument();
+		expect(screen.getByText("1 common.pill")).toBeInTheDocument();
 	});
 
 	it("renders med detail header", () => {
 		render(<MedDetailModal {...defaultProps} />);
 
-		const header = document.querySelector(".med-detail-header");
-		expect(header).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Test Med" })).toBeInTheDocument();
+		expect(screen.getByText("Generic Name")).toBeInTheDocument();
 	});
 
 	it("renders med detail body", () => {
 		render(<MedDetailModal {...defaultProps} />);
 
-		const body = document.querySelector(".med-detail-body");
-		expect(body).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "modal.stockInfo" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: /modal\.packageDetails/i })).toBeInTheDocument();
 	});
 
 	it("shows configured pack count in package details, independent from current stock", () => {
@@ -240,9 +274,7 @@ describe("MedDetailModal", () => {
 			/>
 		);
 
-		const packsLabel = screen.getByText(/modal\.packs/i);
-		const packsValue = packsLabel.closest(".med-detail-item")?.querySelector(".med-detail-value");
-		expect(packsValue?.textContent).toBe("11");
+		expect(getDetailValue(/modal\.packs/i)).toHaveTextContent("11");
 	});
 });
 
@@ -301,30 +333,24 @@ describe("MedDetailModal with refill modal", () => {
 	it("shows refill modal when open", () => {
 		render(<MedDetailModal {...defaultProps} showRefillModal={true} />);
 
-		// Modal should show refill section
-		const modal = document.querySelector(".modal-overlay");
-		expect(modal).toBeInTheDocument();
+		expect(getRefillDialog()).toBeInTheDocument();
 	});
 
 	it("calls onCloseRefillModal when refill modal closed", () => {
 		const onCloseRefillModal = vi.fn();
 		render(<MedDetailModal {...defaultProps} showRefillModal={true} onCloseRefillModal={onCloseRefillModal} />);
 
-		// Modal close button
-		const closeButtons = document.querySelectorAll("button");
-		const cancelBtn = Array.from(closeButtons).find(
-			(btn) => btn.textContent?.includes("cancel") || btn.textContent?.includes("Cancel")
-		);
-		if (cancelBtn) {
-			fireEvent.click(cancelBtn);
-		}
+		const closeButtons = within(getRefillDialog()).getAllByRole("button", { name: "common.close" });
+		fireEvent.click(closeButtons.at(-1)!);
+
+		expect(onCloseRefillModal).toHaveBeenCalledTimes(1);
 	});
 
 	it("calls onSubmitRefill when refill submitted", () => {
 		const onSubmitRefill = vi.fn();
 		render(<MedDetailModal {...defaultProps} showRefillModal={true} onSubmitRefill={onSubmitRefill} refillLoose={1} />);
 
-		const submitBtn = document.querySelector(".refill-modal .modal-footer .success") as HTMLButtonElement;
+		const submitBtn = within(getRefillDialog()).getByRole("button", { name: "refill.button" });
 		fireEvent.click(submitBtn);
 		expect(onSubmitRefill).toHaveBeenCalledWith(mockMedication.id, false);
 	});
@@ -332,7 +358,7 @@ describe("MedDetailModal with refill modal", () => {
 	it("disables refill submit button when no pills are entered", () => {
 		render(<MedDetailModal {...defaultProps} showRefillModal={true} refillPacks={0} refillLoose={0} />);
 
-		const submitBtn = document.querySelector(".refill-modal .modal-footer .success") as HTMLButtonElement;
+		const submitBtn = within(getRefillDialog()).getByRole("button", { name: "refill.button" });
 		expect(submitBtn).toBeDisabled();
 	});
 
@@ -363,7 +389,7 @@ describe("MedDetailModal with refill modal", () => {
 			/>
 		);
 
-		const numberInputs = document.querySelectorAll(".refill-modal input[type='number']");
+		const numberInputs = getRefillNumberInputs();
 		fireEvent.change(numberInputs[0], { target: { value: "3" } });
 		fireEvent.change(numberInputs[1], { target: { value: "5" } });
 
@@ -383,7 +409,7 @@ describe("MedDetailModal with refill modal", () => {
 			/>
 		);
 
-		const numberInputs = document.querySelectorAll(".refill-modal input[type='number']");
+		const numberInputs = getRefillNumberInputs();
 		fireEvent.change(numberInputs[0], { target: { value: "NaN" } });
 		fireEvent.change(numberInputs[1], { target: { value: "" } });
 
@@ -395,7 +421,7 @@ describe("MedDetailModal with refill modal", () => {
 		render(<MedDetailModal {...defaultProps} showEditStockModal={true} />);
 
 		expect(screen.queryByText("editStock.packageSizeBreakdown")).not.toBeInTheDocument();
-		expect(document.querySelector(".edit-stock-live-breakdown")).toBeInTheDocument();
+		expect(screen.getByText("editStock.currentComposition")).toBeInTheDocument();
 	});
 
 	it("shows numeric package size text for bottle stock correction", () => {
@@ -425,9 +451,8 @@ describe("MedDetailModal with refill modal", () => {
 
 		render(<MedDetailModal {...defaultProps} selectedMed={liquidMed} showRefillModal={true} refillLoose={150} />);
 
-		const refillModal = document.querySelector(".refill-modal");
-		expect(refillModal).not.toBeNull();
-		expect(within(refillModal as HTMLElement).getByText(/form\.bottles/i)).toBeInTheDocument();
+		const refillModal = getRefillDialog();
+		expect(within(refillModal).getByText(/form\.bottles/i)).toBeInTheDocument();
 		expect(screen.queryByText(/refill\.pillsToAdd/i)).not.toBeInTheDocument();
 		expect(screen.getByText(/\+150 form\.packageAmountUnitMl/i)).toBeInTheDocument();
 	});
@@ -457,7 +482,7 @@ describe("MedDetailModal with refill modal", () => {
 			/>
 		);
 
-		const input = document.querySelector(".refill-modal input[type='number']") as HTMLInputElement;
+		const input = getRefillNumberInputs()[0];
 		fireEvent.change(input, { target: { value: "2" } });
 
 		expect(onRefillPacksChange).toHaveBeenCalledWith(2);
@@ -478,9 +503,8 @@ describe("MedDetailModal with refill modal", () => {
 
 		render(<MedDetailModal {...defaultProps} selectedMed={tubeMed} showRefillModal={true} refillLoose={150} />);
 
-		const refillModal = document.querySelector(".refill-modal");
-		expect(refillModal).not.toBeNull();
-		expect(within(refillModal as HTMLElement).getByText(/form\.tubes/i)).toBeInTheDocument();
+		const refillModal = getRefillDialog();
+		expect(within(refillModal).getByText(/form\.tubes/i)).toBeInTheDocument();
 		expect(screen.queryByText(/refill\.pillsToAdd/i)).not.toBeInTheDocument();
 		expect(screen.getByText(/\+150 form\.packageAmountUnitG/i)).toBeInTheDocument();
 	});
@@ -510,7 +534,7 @@ describe("MedDetailModal with refill modal", () => {
 			/>
 		);
 
-		const input = document.querySelector(".refill-modal input[type='number']") as HTMLInputElement;
+		const input = getRefillNumberInputs()[0];
 		fireEvent.change(input, { target: { value: "2" } });
 
 		expect(onRefillPacksChange).toHaveBeenCalledWith(2);
@@ -620,7 +644,7 @@ describe("MedDetailModal with image", () => {
 		const med = { ...mockMedication, imageUrl: "test-image.jpg" };
 		render(<MedDetailModal {...defaultProps} selectedMed={med} showImageLightbox={true} />);
 
-		expect(document.querySelector(".lightbox-overlay")).toBeInTheDocument();
+		expect(screen.getAllByAltText("Test Med")).toHaveLength(2);
 	});
 });
 
@@ -633,8 +657,8 @@ describe("MedDetailModal nested modal overlays", () => {
 		const onCloseRefillModal = vi.fn();
 		render(<MedDetailModal {...defaultProps} showRefillModal={true} onCloseRefillModal={onCloseRefillModal} />);
 
-		const overlays = document.querySelectorAll(".modal-overlay");
-		fireEvent.click(overlays[1]);
+		const overlays = document.querySelectorAll(".mantine-Modal-overlay");
+		fireEvent.click(overlays[overlays.length - 1]);
 		expect(onCloseRefillModal).toHaveBeenCalledTimes(1);
 	});
 
@@ -644,8 +668,8 @@ describe("MedDetailModal nested modal overlays", () => {
 			<MedDetailModal {...defaultProps} showEditStockModal={true} onCloseEditStockModal={onCloseEditStockModal} />
 		);
 
-		const overlays = document.querySelectorAll(".modal-overlay");
-		fireEvent.click(overlays[1]);
+		const overlays = document.querySelectorAll(".mantine-Modal-overlay");
+		fireEvent.click(overlays[overlays.length - 1]);
 		expect(onCloseEditStockModal).toHaveBeenCalledTimes(1);
 	});
 
@@ -702,9 +726,7 @@ describe("MedDetailModal with refill history", () => {
 
 		render(<MedDetailModal {...defaultProps} refillHistory={refillHistory} refillHistoryExpanded={true} />);
 
-		// Refill history should be visible
-		const modal = document.querySelector(".modal-overlay");
-		expect(modal).toBeInTheDocument();
+		expect(screen.getByText("+30 common.pills")).toBeInTheDocument();
 	});
 
 	it("calls onRefillHistoryExpandedChange when toggle clicked", () => {
@@ -721,11 +743,9 @@ describe("MedDetailModal with refill history", () => {
 			/>
 		);
 
-		// Click expand toggle if exists
-		const expandButton = document.querySelector('[class*="expand"], [class*="toggle"]');
-		if (expandButton) {
-			fireEvent.click(expandButton);
-		}
+		fireEvent.click(screen.getByRole("heading", { name: /refill\.history \(1\)/i }));
+
+		expect(onRefillHistoryExpandedChange).toHaveBeenCalledWith(true);
 	});
 });
 
@@ -750,12 +770,29 @@ describe("MedDetailModal intake schedule usage display", () => {
 		};
 		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
 
-		const rows = document.querySelectorAll(".med-schedule-row .med-schedule-usage");
-		// Each intake should show "1" in usage (not "2")
-		rows.forEach((el) => {
-			expect(el.textContent).toContain("1");
-			expect(el.textContent).not.toMatch(/^2\b/);
-		});
+		expect(screen.getAllByText("1 common.pill")).toHaveLength(2);
+		expect(screen.queryByText(/^2 common\.pills$/)).not.toBeInTheDocument();
+	});
+
+	it("opens the user filter from per-intake person names", () => {
+		const onOpenUserFilter = vi.fn();
+		const med: Medication = {
+			...mockMedication,
+			takenBy: ["Alice", "Bob"],
+			blisters: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00" }],
+			intakes: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00", takenBy: "Alice", intakeRemindersEnabled: false }],
+		};
+		render(<MedDetailModal {...defaultProps} selectedMed={med} onOpenUserFilter={onOpenUserFilter} />);
+
+		const aliceButtons = screen.getAllByRole("button", { name: "Alice" });
+		expect(aliceButtons.length).toBeGreaterThan(1);
+		const person = aliceButtons[1];
+
+		fireEvent.click(person);
+
+		expect(person.tagName).toBe("BUTTON");
+		expect(onOpenUserFilter).toHaveBeenCalledTimes(1);
+		expect(onOpenUserFilter).toHaveBeenCalledWith("Alice");
 	});
 
 	it("multiplies usage by personCount for legacy blisters without per-intake takenBy", () => {
@@ -768,10 +805,7 @@ describe("MedDetailModal intake schedule usage display", () => {
 		};
 		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
 
-		const rows = document.querySelectorAll(".med-schedule-row .med-schedule-usage");
-		// Legacy: 1 pill * 2 people = "2 pills"
-		expect(rows.length).toBe(1);
-		expect(rows[0].textContent).toContain("2");
+		expect(screen.getByText(/^2 common\.pills$/)).toBeInTheDocument();
 	});
 
 	it("shows correct usage for single person with per-intake takenBy", () => {
@@ -784,11 +818,7 @@ describe("MedDetailModal intake schedule usage display", () => {
 		};
 		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
 
-		const rows = document.querySelectorAll(".med-schedule-row .med-schedule-usage");
-		expect(rows.length).toBe(1);
-		// Should show "2 pills (1000 mg)" - usage=2, not multiplied
-		expect(rows[0].textContent).toContain("2");
-		expect(rows[0].textContent).toContain("1000");
+		expect(screen.getByText("2 common.pills (1000 mg)")).toBeInTheDocument();
 	});
 });
 
@@ -824,7 +854,7 @@ describe("MedDetailModal partial blister normalization", () => {
 
 		// Find the increment button for the partial blister pills stepper
 		// The partial stepper is the second stepper in the modal
-		const incrementButtons = document.querySelectorAll(".stepper-btn.increment");
+		const incrementButtons = within(getEditStockDialog()).getAllByRole("button", { name: "editStock.increaseValue" });
 		const partialIncrementBtn = incrementButtons[1]; // full[0], partial[1], loose[2]
 		expect(partialIncrementBtn).not.toBeDisabled();
 
@@ -862,7 +892,7 @@ describe("MedDetailModal partial blister normalization", () => {
 			/>
 		);
 
-		const incrementButtons = document.querySelectorAll(".stepper-btn.increment");
+		const incrementButtons = within(getEditStockDialog()).getAllByRole("button", { name: "editStock.increaseValue" });
 		const partialIncrementBtn = incrementButtons[1];
 		fireEvent.click(partialIncrementBtn);
 
@@ -891,16 +921,14 @@ describe("MedDetailModal stock overflow warning", () => {
 		render(<MedDetailModal {...defaultProps} coverage={{ all: [overflowCoverage] }} />);
 
 		// For blister meds, denominator is package capacity (not current stock), so overflow is shown.
-		const warningIcon = document.querySelector(".info-tooltip.tooltip-align-left.warning-text");
-		expect(warningIcon).toBeInTheDocument();
+		expect(screen.getByText("49 / 30").querySelector("svg")).toBeInTheDocument();
 	});
 
 	it("does not show warning icon when stock is within package capacity", () => {
 		render(<MedDetailModal {...defaultProps} />);
 
 		// packageSize = 30, currentStock = 25 < 30
-		const warningIcon = document.querySelector(".info-tooltip.tooltip-align-left.warning-text");
-		expect(warningIcon).not.toBeInTheDocument();
+		expect(screen.getByText("25 / 30").querySelector("svg")).not.toBeInTheDocument();
 	});
 
 	it("does not show warning icon when stock equals package capacity", () => {
@@ -916,8 +944,7 @@ describe("MedDetailModal stock overflow warning", () => {
 		render(<MedDetailModal {...defaultProps} coverage={{ all: [exactCoverage] }} />);
 
 		// packageSize = 30, currentStock = 30 — equal, no warning
-		const warningIcon = document.querySelector(".info-tooltip.tooltip-align-left.warning-text");
-		expect(warningIcon).not.toBeInTheDocument();
+		expect(screen.getByText("30 / 30").querySelector("svg")).not.toBeInTheDocument();
 	});
 });
 
@@ -1019,16 +1046,14 @@ describe("MedDetailModal bottle package type", () => {
 		expect(screen.getByText(/refill\.pillsToAdd/i)).toBeInTheDocument();
 
 		// Should NOT show packs label in refill
-		const _refillModal = document.querySelector(".refill-modal");
-		// Packs label should not be present for bottle type
-		expect(screen.queryByText("refill.packs")).not.toBeInTheDocument();
+		expect(within(getRefillDialog()).queryByText("refill.packs")).not.toBeInTheDocument();
 	});
 
 	it("parses bottle refill pills input", () => {
 		const onRefillLooseChange = vi.fn();
 		render(<MedDetailModal {...bottleProps} showRefillModal={true} onRefillLooseChange={onRefillLooseChange} />);
 
-		const input = document.querySelector(".refill-modal input[type='number']") as HTMLInputElement;
+		const input = getRefillNumberInputs()[0];
 		fireEvent.change(input, { target: { value: "7" } });
 		expect(onRefillLooseChange).toHaveBeenCalledWith(7);
 	});
@@ -1037,7 +1062,7 @@ describe("MedDetailModal bottle package type", () => {
 		const onRefillLooseChange = vi.fn();
 		render(<MedDetailModal {...bottleProps} showRefillModal={true} onRefillLooseChange={onRefillLooseChange} />);
 
-		const input = document.querySelector(".refill-modal input[type='number']") as HTMLInputElement;
+		const input = getRefillNumberInputs()[0];
 		fireEvent.change(input, { target: { value: "" } });
 		expect(onRefillLooseChange).toHaveBeenCalledWith(0);
 	});
@@ -1060,9 +1085,7 @@ describe("MedDetailModal bottle package type", () => {
 		render(<MedDetailModal {...bottleProps} selectedMed={oldBottleMed} coverage={{ all: [oldCoverage] }} />);
 
 		// Total Capacity should show 180 (looseTablets), not "—"
-		const capacityLabel = screen.getByText(/form\.totalCapacity/i);
-		const capacityValue = capacityLabel.closest(".med-detail-item")?.querySelector(".med-detail-value");
-		expect(capacityValue?.textContent).toBe("180");
+		expect(getDetailValue(/form\.totalCapacity/i)).toHaveTextContent("180");
 	});
 
 	it("shows total pills input in edit stock modal for bottle type", () => {

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useEscapeKey } from "../../hooks/useEscapeKey";
 import type { IntakeJournalEntry } from "../../hooks/useIntakeJournal";
-import { useScrollLock } from "../../hooks/useScrollLock";
+import { AppModal, AppModalFooter } from "../../ui/modal/AppModal";
+import { AppButton } from "../../ui/primitives/AppButton";
+import { AppTextarea } from "../../ui/primitives/AppTextarea";
 import { MedicationAvatar } from "../MedicationAvatar";
+import classes from "./IntakeJournalModal.module.css";
 import { formatJournalDisplayDateTime, getJournalSourceLabel } from "./journal-display";
 
 interface IntakeJournalModalProps {
@@ -36,9 +38,6 @@ export function IntakeJournalModal({
 	const [showSavedState, setShowSavedState] = useState(false);
 	const activeDoseTrackingIdRef = useRef<number | null>(null);
 	const wasSavingRef = useRef(false);
-
-	useScrollLock(isOpen);
-	useEscapeKey(isOpen, onClose);
 
 	useEffect(() => {
 		if (!isOpen) {
@@ -98,19 +97,19 @@ export function IntakeJournalModal({
 	let bodyContent: React.ReactNode;
 
 	if (isLoading) {
-		bodyContent = <div className="journal-modal-state">{t("journal.editor.loading")}</div>;
+		bodyContent = <div className={classes.state}>{t("journal.editor.loading")}</div>;
 	} else if (entry) {
 		bodyContent = (
 			<>
-				<div className="journal-event-card">
-					<div className="journal-event-medication">
+				<div className={classes.eventCard}>
+					<div className={classes.eventMedication}>
 						<MedicationAvatar name={entry.medicationName} size="sm" />
 						<div>
 							<strong>{entry.medicationName}</strong>
 							<p>{entry.dismissed ? t("journal.context.statusSkipped") : t("journal.context.statusTaken")}</p>
 						</div>
 					</div>
-					<div className="journal-event-grid">
+					<div className={classes.eventGrid}>
 						<div>
 							<span>{t("journal.context.scheduledFor")}</span>
 							<strong>{scheduledForLabel ?? t("common.notAvailable")}</strong>
@@ -130,86 +129,76 @@ export function IntakeJournalModal({
 					</div>
 				</div>
 
-				<label className="journal-field" htmlFor="journal-note-input">
-					<span>{t("journal.editor.noteLabel")}</span>
-					<textarea
-						id="journal-note-input"
-						className="journal-note-input"
-						rows={7}
-						value={note}
-						onChange={(event) => {
-							setNote(event.target.value);
-							setShowSavedState(false);
-						}}
-						placeholder={t("journal.editor.notePlaceholder")}
-						maxLength={4000}
-					/>
-				</label>
+				<AppTextarea
+					id="journal-note-input"
+					autosize={false}
+					className={classes.field}
+					classNames={{ input: classes.noteInput, label: classes.fieldLabel }}
+					label={t("journal.editor.noteLabel")}
+					maxLength={4000}
+					minRows={7}
+					onChange={(event) => {
+						setNote(event.target.value);
+						setShowSavedState(false);
+					}}
+					placeholder={t("journal.editor.notePlaceholder")}
+					value={note}
+				/>
 
-				{error && <div className="journal-inline-error">{error}</div>}
+				{error && <div className={classes.inlineError}>{error}</div>}
 			</>
 		);
 	} else {
-		bodyContent = <div className="journal-modal-state">{error ?? t("journal.errors.loadFailed")}</div>;
+		bodyContent = <div className={classes.state}>{error ?? t("journal.errors.loadFailed")}</div>;
 	}
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(event) => {
-				if (event.key !== "Escape") {
-					event.stopPropagation();
-				}
+		<AppModal
+			classNames={{
+				header: classes.header,
+				title: classes.title,
 			}}
-		>
-			<div
-				className="modal-content journal-modal"
-				onClick={(event) => event.stopPropagation()}
-				onKeyDown={(event) => {
-					if (event.key !== "Escape") {
-						event.stopPropagation();
-					}
-				}}
-			>
-				<button type="button" className="modal-close" onClick={onClose} aria-label={t("common.close")}>
-					×
-				</button>
-				<div className="journal-modal-header">
+			closeButtonProps={{ "aria-label": t("common.close") }}
+			contentClassName={`${classes.modal} journal-modal`}
+			onClose={onClose}
+			opened={isOpen}
+			size={720}
+			title={
+				<div className={classes.titleBlock}>
 					<h2>{title}</h2>
 					<p>{t("journal.editor.description")}</p>
 				</div>
+			}
+			withCloseButton
+		>
+			{bodyContent}
 
-				{bodyContent}
-
-				<div className="modal-footer journal-modal-footer">
-					<div className="footer-left">
-						{allowDelete && (
-							<button
-								type="button"
-								className="ghost"
-								onClick={() => void onDelete()}
-								disabled={isLoading || isSaving || isDeleting || !entry?.note}
-							>
-								{isDeleting ? t("journal.editor.deleting") : t("common.delete")}
-							</button>
-						)}
-					</div>
-					<div className="footer-right">
-						<button type="button" className="ghost" onClick={onClose} disabled={isSaving || isDeleting}>
-							{t("common.cancel")}
-						</button>
-						<button
+			<AppModalFooter
+				left={
+					allowDelete ? (
+						<AppButton
 							type="button"
-							className="primary"
-							onClick={() => void handleSave()}
-							disabled={isLoading || isSaving || isDeleting || !entry}
+							tone="ghost"
+							onClick={() => void onDelete()}
+							disabled={isLoading || isSaving || isDeleting || !entry?.note}
 						>
-							{saveLabel}
-						</button>
-					</div>
-				</div>
-			</div>
-		</div>
+							{isDeleting ? t("journal.editor.deleting") : t("common.delete")}
+						</AppButton>
+					) : null
+				}
+			>
+				<AppButton type="button" tone="secondary" onClick={onClose} disabled={isSaving || isDeleting}>
+					{t("common.cancel")}
+				</AppButton>
+				<AppButton
+					type="button"
+					tone="primary"
+					onClick={() => void handleSave()}
+					disabled={isLoading || isSaving || isDeleting || !entry}
+				>
+					{saveLabel}
+				</AppButton>
+			</AppModalFooter>
+		</AppModal>
 	);
 }

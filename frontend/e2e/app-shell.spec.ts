@@ -24,9 +24,10 @@ test.describe("App Shell", () => {
 		await (await requireUserMenu(page)).click();
 		await page.getByTestId("user-menu-profile").click();
 
-		await expect(page.locator(".modal-content.profile-modal")).toBeVisible();
-		await page.locator(".modal-content.profile-modal .modal-close").click();
-		await expect(page.locator(".modal-content.profile-modal")).not.toBeVisible();
+		const dialog = page.getByRole("dialog");
+		await expect(dialog).toBeVisible();
+		await dialog.getByLabel(/close/i).click();
+		await expect(dialog).not.toBeVisible();
 	});
 
 	test("opens and closes about modal from user menu", async ({ page }) => {
@@ -35,10 +36,11 @@ test.describe("App Shell", () => {
 		await (await requireUserMenu(page)).click();
 		await page.getByTestId("user-menu-about").click();
 
-		await expect(page.locator(".modal-content.about-modal")).toBeVisible();
-		await expect(page.locator(".about-header h2")).toContainText("MedAssist-ng");
-		await page.locator(".modal-content.about-modal .modal-close").click();
-		await expect(page.locator(".modal-content.about-modal")).not.toBeVisible();
+		const dialog = page.getByRole("dialog");
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByRole("heading", { name: "MedAssist-ng" })).toBeVisible();
+		await dialog.getByLabel(/close/i).click();
+		await expect(dialog).not.toBeVisible();
 	});
 
 	test("signs out from user menu", async ({ page }) => {
@@ -49,6 +51,48 @@ test.describe("App Shell", () => {
 
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 	});
+
+	for (const viewport of [
+		{ name: "desktop", size: { width: 1280, height: 720 } },
+		{ name: "mobile", size: { width: 390, height: 844 } },
+	]) {
+		test(`keeps scrolled dashboard content below the main header shield on ${viewport.name}`, async ({
+			page,
+		}, testInfo) => {
+			await page.setViewportSize(viewport.size);
+			await navigateTo(page, "/dashboard");
+			await page.evaluate(() => window.scrollTo(0, 180));
+			await expect(page.getByTestId("app-header")).toBeVisible();
+			await page.screenshot({ path: testInfo.outputPath(`top-header-blur-${viewport.name}.png`), fullPage: false });
+
+			const metrics = await page.getByTestId("app-shell-top-blur").evaluate((topBlur) => {
+				const style = window.getComputedStyle(topBlur);
+				const styleWithWebkit = style as CSSStyleDeclaration & { webkitBackdropFilter?: string };
+				const appHeader = document.querySelector<HTMLElement>('[data-testid="app-header"]');
+				const topBlurRect = topBlur.getBoundingClientRect();
+				const appHeaderRect = appHeader?.getBoundingClientRect();
+
+				return {
+					backdropFilter: style.backdropFilter || styleWithWebkit.webkitBackdropFilter,
+					height: topBlurRect.height,
+					bottom: topBlurRect.bottom,
+					position: style.position,
+					top: topBlurRect.top,
+					appHeaderTop: appHeaderRect?.top ?? 0,
+					appHeaderBottom: appHeaderRect?.bottom ?? 0,
+				};
+			});
+
+			expect(metrics.position).toBe("fixed");
+			expect(metrics.height).toBeGreaterThan(0);
+			expect(metrics.top).toBe(0);
+			expect(metrics.appHeaderTop).toBeGreaterThan(0);
+			expect(metrics.bottom).toBeGreaterThanOrEqual(metrics.appHeaderTop + 24);
+			expect(metrics.bottom).toBeLessThanOrEqual(metrics.appHeaderBottom - 8);
+			expect(metrics.appHeaderTop).toBeGreaterThanOrEqual(0);
+			expect(metrics.backdropFilter).toContain("blur");
+		});
+	}
 });
 
 test.describe("Public Share Routes", () => {

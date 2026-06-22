@@ -6,8 +6,11 @@ import type {
 	MedicationEnrichmentSearchResult,
 	MedicationEnrichmentStrengthOption,
 } from "../types";
+import { AppButton } from "../ui/primitives/AppButton";
+import { StatusBadge } from "../ui/primitives/StatusBadge";
 import { formatDate } from "../utils/formatters";
 import { getMedicationEnrichmentDisplayResultKey } from "../utils/medication-enrichment";
+import formClasses from "./medications/MedicationForm.module.css";
 
 const OPEN_FDA_PACKAGE_CODE_PATTERN = /\s*\(([0-9A-Z]{4,}(?:-[0-9A-Z]{1,})+)\)\s*/gi;
 const PACKAGE_CONTENT_UNIT_PATTERNS = [
@@ -159,7 +162,7 @@ function formatPackageOptionDisplayText(
 
 	if (value.packageType === "blister") {
 		if (value.blistersPerPack !== null && value.blistersPerPack > 1 && value.pillsPerBlister !== null) {
-			return `${packageContainerLabel} · ${value.blistersPerPack} × ${formatSolidPackageCount(
+			return `${packageContainerLabel} - ${value.blistersPerPack} × ${formatSolidPackageCount(
 				value.pillsPerBlister,
 				cleanedText,
 				t
@@ -168,7 +171,7 @@ function formatPackageOptionDisplayText(
 
 		const blisterCount = value.pillsPerBlister ?? value.totalPills;
 		if (blisterCount !== null && blisterCount > 0) {
-			return `${packageContainerLabel} · ${formatSolidPackageCount(blisterCount, cleanedText, t)}`;
+			return `${packageContainerLabel} - ${formatSolidPackageCount(blisterCount, cleanedText, t)}`;
 		}
 	}
 
@@ -177,7 +180,7 @@ function formatPackageOptionDisplayText(
 		if (totalCount !== null && totalCount > 0) {
 			const countPerContainer =
 				value.packCount > 1 && totalCount % value.packCount === 0 ? totalCount / value.packCount : totalCount;
-			return `${packageContainerLabel} · ${formatSolidPackageCount(countPerContainer, cleanedText, t)}`;
+			return `${packageContainerLabel} - ${formatSolidPackageCount(countPerContainer, cleanedText, t)}`;
 		}
 	}
 
@@ -186,7 +189,7 @@ function formatPackageOptionDisplayText(
 		value.packageAmountValue !== null &&
 		value.packageAmountUnit
 	) {
-		return `${packageContainerLabel} · ${value.packageAmountValue} ${value.packageAmountUnit}`;
+		return `${packageContainerLabel} - ${value.packageAmountValue} ${value.packageAmountUnit}`;
 	}
 
 	return cleanedText || rawText;
@@ -317,31 +320,38 @@ export function MedicationEnrichmentSection({
 		<div className="full medication-enrichment-section">
 			<div className="medication-enrichment-header">
 				<div>
-					<h5 className="form-category-title medication-enrichment-title">{t("form.enrichment.title")}</h5>
+					<h5 className={[formClasses.categoryTitle, "medication-enrichment-title"].join(" ")}>
+						{t("form.enrichment.title")}
+					</h5>
 					<p className="sub medication-enrichment-collapsed-hint">{t("form.enrichment.collapsedHint")}</p>
 				</div>
-				<button
+				<AppButton
 					type="button"
-					className={`medication-enrichment-toggle-button ${isExpanded ? "secondary small" : "primary small"}`}
+					className="medication-enrichment-toggle-button"
+					tone={isExpanded ? "secondary" : "primary"}
+					size="compact-sm"
 					aria-expanded={isExpanded}
 					onClick={() => setIsExpanded((current) => !current)}
 				>
 					{isExpanded ? t("form.enrichment.toggleHide") : t("form.enrichment.toggleShow")}
-				</button>
+				</AppButton>
 			</div>
 
 			{isExpanded ? (
 				<div className="medication-enrichment-body">
 					<div className="medication-enrichment-helper-row">
-						<span className="status-chip small warning">{t("form.enrichment.coverageLabel")}</span>
-						<button
+						<StatusBadge tone="warning" size="sm">
+							{t("form.enrichment.coverageLabel")}
+						</StatusBadge>
+						<AppButton
 							type="button"
-							className="ghost small"
+							tone="secondary"
+							size="compact-sm"
 							aria-expanded={showInfo}
 							onClick={() => setShowInfo((current) => !current)}
 						>
 							{showInfo ? t("form.enrichment.infoHide") : t("form.enrichment.infoShow")}
-						</button>
+						</AppButton>
 					</div>
 
 					{showInfo ? (
@@ -367,9 +377,11 @@ export function MedicationEnrichmentSection({
 								}}
 								placeholder={t("form.enrichment.searchPlaceholder")}
 							/>
-							<button
+							<AppButton
 								type="button"
-								className={`secondary small medication-enrichment-action-button${isLoadingInitialSearch ? " is-loading" : ""}`}
+								className={`medication-enrichment-action-button${isLoadingInitialSearch ? " is-loading" : ""}`}
+								tone="secondary"
+								size="compact-sm"
 								onClick={onSearch}
 								disabled={!canSearch}
 							>
@@ -377,15 +389,17 @@ export function MedicationEnrichmentSection({
 								<span>
 									{isLoadingInitialSearch ? t("form.enrichment.loadingSearch") : t("form.enrichment.searchAction")}
 								</span>
-							</button>
+							</AppButton>
 						</div>
 					</label>
 
-					{state.searchError ? <p className="danger-text">{state.searchError}</p> : null}
-					{state.enrichError ? <p className="danger-text">{state.enrichError}</p> : null}
-					{state.meta?.partial ? <p className="info-text">{t("form.enrichment.partialNote")}</p> : null}
+					{state.searchError ? <p className="medication-enrichment-error-text">{state.searchError}</p> : null}
+					{state.enrichError ? <p className="medication-enrichment-error-text">{state.enrichError}</p> : null}
+					{state.meta?.partial ? (
+						<p className="medication-enrichment-info-text">{t("form.enrichment.partialNote")}</p>
+					) : null}
 					{state.hasSearched && !state.isSearching && state.results.length === 0 && !state.searchError ? (
-						<p className="info-text">{t("form.enrichment.noResults")}</p>
+						<p className="medication-enrichment-info-text">{t("form.enrichment.noResults")}</p>
 					) : null}
 
 					{displayResults.length > 0 ? (
@@ -416,8 +430,8 @@ export function MedicationEnrichmentSection({
 										? uniqueStatePackageOptions
 										: packageChoices.map((choice) => choice.option);
 								const showInlinePackageChoices = activePackageOptions.length > 1;
-								const genericStatusClass = representative.genericStatus === "generic" ? "success" : "neutral";
-								const sourceClass = representative.source === "openfda" ? "warning" : "neutral";
+								const genericStatusTone = representative.genericStatus === "generic" ? "success" : "info";
+								const sourceTone = representative.source === "openfda" ? "warning" : "info";
 								let applyLabel = t("form.enrichment.applyAction");
 								if (isActive && state.applyingCode !== null) {
 									applyLabel = t("form.enrichment.applying");
@@ -446,23 +460,24 @@ export function MedicationEnrichmentSection({
 												) : null}
 											</div>
 											<div className="medication-enrichment-result-actions">
-												<span className={`pill ${hasPackageOptions ? "success" : "neutral"}`}>
+												<StatusBadge tone={hasPackageOptions ? "success" : "info"} size="sm">
 													{hasPackageOptions
 														? t("form.enrichment.packageAvailable")
 														: t("form.enrichment.packageUnavailable")}
-												</span>
-												<span className={`pill ${sourceClass}`}>
+												</StatusBadge>
+												<StatusBadge tone={sourceTone} size="sm">
 													{t(`form.enrichment.sources.${representative.source}`)}
-												</span>
+												</StatusBadge>
 												{representative.source === "ema" ? (
-													<span className={`pill ${genericStatusClass}`}>
+													<StatusBadge tone={genericStatusTone} size="sm">
 														{t(`form.enrichment.genericStatus.${representative.genericStatus}`)}
-													</span>
+													</StatusBadge>
 												) : null}
 												{hasDetails ? (
-													<button
+													<AppButton
 														type="button"
-														className="ghost small"
+														tone="secondary"
+														size="compact-sm"
 														aria-expanded={isDetailsExpanded}
 														onClick={() =>
 															setExpandedResultCode((current) => (current === displayKey ? null : displayKey))
@@ -471,12 +486,13 @@ export function MedicationEnrichmentSection({
 														{isDetailsExpanded
 															? t("form.enrichment.details.hideAction")
 															: t("form.enrichment.details.showAction")}
-													</button>
+													</AppButton>
 												) : null}
 												{showInlinePackageChoices ? null : (
-													<button
+													<AppButton
 														type="button"
-														className={isActive ? "secondary small" : "primary small"}
+														tone={isActive ? "secondary" : "primary"}
+														size="compact-sm"
 														onClick={() => {
 															setExpandedResultCode(displayKey);
 															onApplyResult(representative);
@@ -484,7 +500,7 @@ export function MedicationEnrichmentSection({
 														disabled={isActive && state.applyingCode !== null}
 													>
 														{applyLabel}
-													</button>
+													</AppButton>
 												)}
 											</div>
 										</div>
@@ -528,10 +544,12 @@ export function MedicationEnrichmentSection({
 																			const packageLabel = formatPackageOptionDisplayText(option, t);
 
 																			return (
-																				<button
+																				<AppButton
 																					key={option.label}
 																					type="button"
-																					className={`medication-enrichment-package-choice-button ${isSelected || isApplyingPending ? "primary small" : "secondary small"}${isApplyingPending ? " is-loading" : ""}`}
+																					className={`medication-enrichment-package-choice-button${isApplyingPending ? " is-loading" : ""}`}
+																					tone={isSelected || isApplyingPending ? "primary" : "secondary"}
+																					size="compact-sm"
 																					aria-pressed={isSelected}
 																					title={packageLabel}
 																					onClick={() =>
@@ -549,7 +567,7 @@ export function MedicationEnrichmentSection({
 																						<span className="medication-enrichment-spinner" aria-hidden="true" />
 																					) : null}
 																					<span>{packageLabel}</span>
-																				</button>
+																				</AppButton>
 																			);
 																		})}
 																	</div>
@@ -561,7 +579,7 @@ export function MedicationEnrichmentSection({
 																	</ul>
 																)}
 																{isActive && state.appliedPackageLabel ? (
-																	<p className="success-text medication-enrichment-applied-note">
+																	<p className="medication-enrichment-applied-note">
 																		{t("form.enrichment.appliedPackage", {
 																			label: formatPackageOptionDisplayText(
 																				appliedPackageOption ?? state.appliedPackageLabel,
@@ -598,21 +616,24 @@ export function MedicationEnrichmentSection({
 																		const isSelected = state.appliedStrengthLabel === option.label;
 
 																		return (
-																			<button
+																			<AppButton
 																				key={option.label}
 																				type="button"
-																				className={isSelected ? "primary small" : "secondary small"}
+																				tone={isSelected ? "primary" : "secondary"}
+																				size="compact-sm"
 																				onClick={() => onApplyStrength(option)}
 																			>
 																				{option.label}
-																			</button>
+																			</AppButton>
 																		);
 																	})}
 																</div>
 																{hasMoreStrengthOptions ? (
-																	<button
+																	<AppButton
 																		type="button"
-																		className="secondary small medication-enrichment-inline-action"
+																		className="medication-enrichment-inline-action"
+																		tone="secondary"
+																		size="compact-sm"
 																		onClick={() =>
 																			setVisibleStrengthOptionCount(
 																				(current) => current + INITIAL_VISIBLE_STRENGTH_OPTIONS
@@ -620,10 +641,10 @@ export function MedicationEnrichmentSection({
 																		}
 																	>
 																		{t("form.enrichment.showMoreStrengthsAction")}
-																	</button>
+																	</AppButton>
 																) : null}
 																{state.appliedStrengthLabel ? (
-																	<p className="success-text medication-enrichment-applied-note">
+																	<p className="medication-enrichment-applied-note">
 																		{t("form.enrichment.appliedStrength", { label: state.appliedStrengthLabel })}
 																	</p>
 																) : null}
@@ -641,9 +662,11 @@ export function MedicationEnrichmentSection({
 
 					{showLoadMoreAction ? (
 						<div className="medication-enrichment-results-footer">
-							<button
+							<AppButton
 								type="button"
-								className={`secondary small medication-enrichment-action-button medication-enrichment-load-more-button${isLoadingMoreResults ? " is-loading" : ""}`}
+								className={`medication-enrichment-action-button medication-enrichment-load-more-button${isLoadingMoreResults ? " is-loading" : ""}`}
+								tone="secondary"
+								size="compact-sm"
 								onClick={onLoadMoreResults}
 								disabled={state.isSearching || Boolean(state.applyingCode)}
 							>
@@ -651,7 +674,7 @@ export function MedicationEnrichmentSection({
 								<span>
 									{isLoadingMoreResults ? t("form.enrichment.loadingMoreResults") : t("form.enrichment.showMoreAction")}
 								</span>
-							</button>
+							</AppButton>
 						</div>
 					) : null}
 				</div>

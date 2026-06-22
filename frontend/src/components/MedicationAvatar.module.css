@@ -1,0 +1,56 @@
+.avatar {
+	flex-shrink: 0;
+	border-radius: 8px;
+	object-fit: cover;
+}
+
+.sm {
+	width: 28px;
+	height: 28px;
+}
+
+.md {
+	width: 40px;
+	height: 40px;
+}
+
+.lg {
+	width: 56px;
+	height: 56px;
+}
+
+.initials {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+	color: white;
+	font-weight: 600;
+	font-size: 0.7em;
+}
+
+.sm.initials {
+	font-size: 0.65em;
+}
+
+.lg.initials {
+	font-size: 1.1em;
+}
+
+:global(.med-avatar-clickable) {
+	display: inline-flex;
+	cursor: pointer;
+}
+
+:global(.med-avatar-clickable) .avatar,
+.clickable {
+	transition:
+		transform 0.15s,
+		box-shadow 0.15s;
+}
+
+:global(.med-avatar-clickable:hover) .avatar,
+.clickable:hover {
+	transform: scale(1.1);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}

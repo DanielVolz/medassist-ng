@@ -1,30 +1,43 @@
 /* biome-ignore-all lint/style/noNestedTernary: timeline rendering uses explicit UI-state branching */
+import { ActionIcon, Group } from "@mantine/core";
 import { Archive, Bell, ClipboardList, NotebookPen, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../components/Auth";
 import { ConfirmModal } from "../components/ConfirmModal";
+import doseButtonClasses from "../components/DoseActionButton.module.css";
 import { DashboardReminderSection } from "../components/dashboard/DashboardReminderSection";
 import { DashboardStatusSection } from "../components/dashboard/DashboardStatusSection";
 import { IntakeJournalHistoryModal } from "../components/intake-journal/IntakeJournalHistoryModal";
 import { IntakeJournalModal } from "../components/intake-journal/IntakeJournalModal";
+import journalHistoryActionClasses from "../components/intake-journal/JournalHistoryAction.module.css";
 import { MedicationAvatar } from "../components/MedicationAvatar";
 import { useAppContext } from "../context";
 import { useFeedback } from "../context/FeedbackContext";
+import scheduleActionClasses from "../features/schedule/components/ScheduleHeaderActions.module.css";
 import { useModalHistory } from "../hooks/useModalHistory";
 import {
 	allowsPillFormSelection,
+	type Coverage,
 	getMedDisplayName,
 	type IntakeUnit,
 	isAmountBasedPackageType,
 	isLiquidContainerPackageType,
 	isTubePackageType,
 } from "../types";
+import { SectionCard } from "../ui/components/SectionCard";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppSelect } from "../ui/primitives/AppSelect";
+import { AppTextAction } from "../ui/primitives/AppTextAction";
+import { AppTooltip, AppTooltipTrigger } from "../ui/primitives/AppTooltip";
+import { DataTable, type DataTableColumn } from "../ui/primitives/DataTable";
+import { StatusBadge, type StatusTone } from "../ui/primitives/StatusBadge";
 import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
 import { getIntakeDailyRate, getMedicationIntakes } from "../utils/intake-schedule";
-import { convertLiquidUsageToMl, getLiquidCountUnitLabel } from "../utils/intake-units";
+import { convertLiquidUsageToMl, getLiquidCountUnitLabel, type UnitLabelVariant } from "../utils/intake-units";
 import { buildClearMissedPayload, expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
+import classes from "./DashboardPage.module.css";
 import {
 	formatFullBlisters,
 	formatOpenBlisterAndLoose,
@@ -48,6 +61,17 @@ function getMedicationIdFromNotificationDoseId(doseId: string | null): string | 
 
 	const [rawMedicationId] = doseId.split("-");
 	return rawMedicationId?.trim() ? rawMedicationId : null;
+}
+
+function getStatusTone(className?: string): StatusTone {
+	if (className === "danger" || className === "warning" || className === "high" || className === "success") {
+		return className;
+	}
+	return "info";
+}
+
+function cx(...classNames: Array<string | false | null | undefined>) {
+	return classNames.filter(Boolean).join(" ");
 }
 
 function findFocusTargetElement(doseId: string | null, medId: string | null): HTMLElement | null {
@@ -74,6 +98,16 @@ function findFocusTargetElement(doseId: string | null, medId: string | null): HT
 function getDosePeople(takenBy: unknown): Array<string | null> {
 	const takenByArray = Array.isArray(takenBy) ? takenBy : [];
 	return takenByArray.length > 0 ? takenByArray : [null];
+}
+
+function getNamedDosePeople(people: Array<string | null>): string[] {
+	return people.filter((person): person is string => typeof person === "string" && person.trim().length > 0);
+}
+
+function getDosePersonTextColor(isTaken: boolean, isSkipped: boolean): string {
+	if (isTaken) return "var(--success)";
+	if (isSkipped) return "color-mix(in srgb, var(--warning) 82%, var(--text-primary))";
+	return "var(--text-secondary)";
 }
 
 const EMPTY_DOSE_SET = new Set<string>();
@@ -423,48 +457,65 @@ export function DashboardPage() {
 		isEmpty: boolean;
 	}) => {
 		const journalUnavailable = !(options.isTaken || options.isSkipped);
-		const takeButton = options.isTaken ? (
-			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
-				{options.isAutomaticallyTaken && (
-					<span className="info-tooltip" data-tooltip={t("tooltips.automaticTaken")}>
-						🤖
-					</span>
-				)}
-				<span className="dose-btn-label">{t("common.undo")}</span>
+		const takeButtonControl = options.isTaken ? (
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoTake)}
+				onClick={() => undoDoseTaken(options.doseId)}
+			>
+				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
+				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
 				<span aria-hidden="true">↩</span>
-			</button>
+			</AppButton>
 		) : (
-			<button
-				className={`dose-btn take${options.isEmpty ? " out-of-stock" : ""}`}
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(
+					doseButtonClasses.button,
+					doseButtonClasses.take,
+					doseButtonClasses.dashboardTake,
+					options.isEmpty && doseButtonClasses.outOfStock
+				)}
 				onClick={() => markDoseTaken(options.doseId)}
-				title={options.isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
 				disabled={options.isEmpty || options.isSkipped}
 			>
-				<span className="dose-btn-label">{t("dose.take")}</span>
+				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
 				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
-			</button>
+			</AppButton>
 		);
+		const takeButton =
+			!options.isTaken && options.isEmpty ? (
+				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
+					<span className={doseButtonClasses.tooltipTarget}>{takeButtonControl}</span>
+				</AppTooltip>
+			) : (
+				takeButtonControl
+			);
 
-		const journalButton = (
-			<span
-				className={journalUnavailable ? "tooltip-trigger" : undefined}
-				data-tooltip={journalUnavailable ? t("journal.actions.noteTakenOnly") : undefined}
+		const journalButtonControl = (
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(doseButtonClasses.button, doseButtonClasses.journal)}
+				onClick={() => {
+					if (!journalUnavailable) {
+						void openJournalEditor(options.doseId);
+					}
+				}}
+				disabled={journalUnavailable}
 			>
-				<button
-					type="button"
-					className="dose-btn journal"
-					onClick={() => {
-						if (!journalUnavailable) {
-							void openJournalEditor(options.doseId);
-						}
-					}}
-					title={!journalUnavailable ? t("journal.actions.note") : undefined}
-					disabled={journalUnavailable}
-				>
-					<NotebookPen size={14} aria-hidden="true" />
-					<span className="dose-btn-label">{t("journal.actions.note")}</span>
-				</button>
-			</span>
+				<NotebookPen size={14} aria-hidden="true" />
+				<span className={doseButtonClasses.label}>{t("journal.actions.note")}</span>
+			</AppButton>
+		);
+		const journalButton = journalUnavailable ? (
+			<AppTooltip label={t("journal.actions.noteTakenOnly")}>
+				<span className={doseButtonClasses.tooltipTarget}>{journalButtonControl}</span>
+			</AppTooltip>
+		) : (
+			journalButtonControl
 		);
 
 		if (!canManageSkippedDoses) {
@@ -477,19 +528,25 @@ export function DashboardPage() {
 		}
 
 		const skipButton = options.isSkipped ? (
-			<button className="dose-btn undo skip" onClick={() => undoDoseSkipped(options.doseId)} title={t("common.undo")}>
-				<span className="dose-btn-label">{t("common.undo")}</span>
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoSkip)}
+				onClick={() => undoDoseSkipped(options.doseId)}
+			>
+				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
 				<span aria-hidden="true">↩</span>
-			</button>
+			</AppButton>
 		) : (
-			<button
-				className="dose-btn skip"
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(doseButtonClasses.button, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
-				title={t("dose.markAsSkipped")}
 				disabled={options.isTaken}
 			>
-				<span className="dose-btn-label">{t("dose.skip")}</span>
-			</button>
+				<span className={doseButtonClasses.label}>{t("dose.skip")}</span>
+			</AppButton>
 		);
 
 		return (
@@ -498,6 +555,30 @@ export function DashboardPage() {
 				{skipButton}
 				{journalButton}
 			</>
+		);
+	};
+
+	const renderDoseRecipients = (people: string[]) => {
+		if (people.length === 0) {
+			return null;
+		}
+
+		return (
+			<div className="dose-recipients">
+				{people.map((person) => (
+					<AppTextAction
+						key={person}
+						className="dose-recipient-name"
+						color="var(--text-secondary)"
+						fontWeight={600}
+						lineHeight={1.15}
+						onClick={() => openUserFilter(person)}
+						textAlign="right"
+					>
+						{person}
+					</AppTextAction>
+				))}
+			</div>
 		);
 	};
 
@@ -525,16 +606,27 @@ export function DashboardPage() {
 		closeObsoleteConfirm();
 	};
 
-	const getDiscreteUnitLabel = (packageType: string | undefined, count: number) => {
+	const getDiscreteUnitLabel = (packageType: string | undefined, count: number, variant: UnitLabelVariant = "full") => {
 		if (packageType === "inhaler") return count === 1 ? t("common.puff") : t("common.puffs");
-		if (packageType === "injection") return count === 1 ? t("common.injection") : t("common.injections");
+		if (packageType === "injection") {
+			if (variant === "compact") return count === 1 ? t("common.injectionShort") : t("common.injectionsShort");
+			return count === 1 ? t("common.injection") : t("common.injections");
+		}
 		return count === 1 ? t("common.pill") : t("common.pills");
 	};
 
-	const getTubeUnitLabel = (med: (typeof meds)[number] | undefined, value: number) =>
-		isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid"
-			? t("form.packageAmountUnitMl")
+	const getTubeUnitLabel = (
+		med: (typeof meds)[number] | undefined,
+		value: number,
+		variant: UnitLabelVariant = "full"
+	) => {
+		if (isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid") {
+			return t("form.packageAmountUnitMl");
+		}
+		return variant === "compact"
+			? t("form.blisters.applicationsShort")
 			: t("form.blisters.applications", { count: Math.abs(value) });
+	};
 
 	const getTubeStockUnitLabel = () => t("form.packageAmountUnitG");
 
@@ -552,7 +644,11 @@ export function DashboardPage() {
 		return `${roundedCount} ${getDiscreteUnitLabel(med?.packageType, roundedCount)}`;
 	};
 
-	const formatLiquidUsageLabel = (usage: number, unit: IntakeUnit | null | undefined): string => {
+	const formatLiquidUsageLabel = (
+		usage: number,
+		unit: IntakeUnit | null | undefined,
+		variant: UnitLabelVariant = "full"
+	): string => {
 		const normalizedUsage = Number(usage);
 		if (!Number.isFinite(normalizedUsage) || normalizedUsage <= 0) {
 			return `0 ${t("form.packageAmountUnitMl")}`;
@@ -563,21 +659,22 @@ export function DashboardPage() {
 		}
 
 		const mlTotal = convertLiquidUsageToMl(normalizedUsage, unit);
-		return `${formatNumber(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage, t)} ${formatNumber(mlTotal)} ${t("form.packageAmountUnitMl")}`;
+		return `${formatNumber(normalizedUsage)} ${getLiquidCountUnitLabel(unit, normalizedUsage, t, variant)} ${formatNumber(mlTotal)} ${t("form.packageAmountUnitMl")}`;
 	};
 
 	const formatDoseUsageLabel = (
 		med: (typeof meds)[number] | undefined,
 		usage: number,
-		intakeUnit?: IntakeUnit | null
+		intakeUnit?: IntakeUnit | null,
+		variant: UnitLabelVariant = "full"
 	) => {
 		if (isLiquidContainerPackageType(med?.packageType)) {
-			return formatLiquidUsageLabel(usage, intakeUnit);
+			return formatLiquidUsageLabel(usage, intakeUnit, variant);
 		}
 		if (isTubePackageType(med?.packageType)) {
-			return `${usage} ${getTubeUnitLabel(med, usage)}`;
+			return `${usage} ${getTubeUnitLabel(med, usage, variant)}`;
 		}
-		return `${usage} ${getDiscreteUnitLabel(med?.packageType, usage)}`;
+		return `${usage} ${getDiscreteUnitLabel(med?.packageType, usage, variant)}`;
 	};
 
 	const formatTotalUsageLabel = (
@@ -642,8 +739,15 @@ export function DashboardPage() {
 
 		if (dailyTotal <= 0) return "-";
 
+		// Keep fractional daily totals (e.g. one application every 2 days = 0.5)
+		// visible instead of rounding them up to a misleading whole number.
+		const dailyDecimals = Number.isInteger(dailyTotal) ? 0 : 1;
+
 		if (isLiquidContainerPackageType(med.packageType)) {
-			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: t("form.packageAmountUnitMl") });
+			return t("table.perDayWithUnit", {
+				value: formatNumber(dailyTotal, dailyDecimals),
+				unit: t("form.packageAmountUnitMl"),
+			});
 		}
 
 		if (isTubePackageType(med.packageType)) {
@@ -651,11 +755,11 @@ export function DashboardPage() {
 				med.medicationForm === "liquid"
 					? t("form.packageAmountUnitMl")
 					: t("form.blisters.applications", { count: Math.abs(dailyTotal) });
-			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: tubeUnit });
+			return t("table.perDayWithUnit", { value: formatNumber(dailyTotal, dailyDecimals), unit: tubeUnit });
 		}
 
 		const pillUnit = getDiscreteUnitLabel(med.packageType, dailyTotal);
-		return t("table.perDayWithUnit", { value: formatNumber(dailyTotal), unit: pillUnit });
+		return t("table.perDayWithUnit", { value: formatNumber(dailyTotal, dailyDecimals), unit: pillUnit });
 	};
 
 	const shouldHideNoScheduleStatusForTube = (
@@ -764,6 +868,239 @@ export function DashboardPage() {
 		setSendingReminder(false);
 	}
 
+	const overviewColumns = [
+		{
+			key: "name",
+			header: t("table.name"),
+			width: "38%",
+			render: (row) => {
+				const med = getMedByName(row.name);
+				return (
+					<span data-label={t("table.name")} className={classes.overviewNameCell}>
+						<span className={classes.overviewNameLine}>
+							<span
+								className={med?.imageUrl ? "med-avatar-clickable" : undefined}
+								onClick={(e) => {
+									e.stopPropagation();
+									if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
+								}}
+								onKeyDown={(e) => {
+									e.stopPropagation();
+									if (e.key === "Enter" || e.key === " ") {
+										if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
+									}
+								}}
+							>
+								<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
+							</span>
+							<span className={classes.overviewNameBlock}>
+								<span className={classes.overviewMedicationTitle}>
+									{med ? (
+										<AppTextAction
+											className={classes.overviewMedicationName}
+											onClick={(event) => {
+												event.stopPropagation();
+												openMedDetail(med);
+											}}
+											textAlign="left"
+										>
+											{row.name}
+										</AppTextAction>
+									) : (
+										<span className={classes.overviewMedicationName}>{row.name}</span>
+									)}
+									{med?.notes && (
+										<AppTooltipTrigger label={t("tooltips.hasNotes")} className="notes-icon">
+											<NotebookPen size={13} aria-hidden="true" />
+										</AppTooltipTrigger>
+									)}
+									{med?.prescriptionEnabled && (
+										<AppTooltipTrigger label={t("tooltips.hasPrescription")} className="prescription-icon">
+											<ClipboardList size={13} aria-hidden="true" />
+										</AppTooltipTrigger>
+									)}
+								</span>
+								{med?.takenBy && med.takenBy.length > 0 && (
+									<span className={classes.overviewTakenByLine}>
+										{med.takenBy.map((person) => (
+											<button
+												type="button"
+												key={person}
+												className={cx(classes.overviewTakenByBadge, classes.overviewTakenByBadgeClickable)}
+												onClick={(e) => {
+													e.stopPropagation();
+													openUserFilter(person);
+												}}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === " ") {
+														e.stopPropagation();
+														openUserFilter(person);
+													}
+												}}
+											>
+												{person}
+												{med.intakes?.some((i) => i.takenBy === person && i.intakeRemindersEnabled) && (
+													<Bell size={11} aria-hidden="true" className={classes.overviewTakenByReminderIcon} />
+												)}
+											</button>
+										))}
+									</span>
+								)}
+							</span>
+						</span>
+					</span>
+				);
+			},
+		},
+		{
+			key: "stock",
+			header: t("table.stock"),
+			render: (row) => {
+				const med = getMedByName(row.name);
+				const rawStatus = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds, med?.packageType);
+				const textClass =
+					rawStatus.className === "danger"
+						? "danger-text"
+						: rawStatus.className === "warning"
+							? "warning-text"
+							: "success-text";
+				const stock = getBlisterStock(
+					Math.round(row.medsLeft),
+					med?.pillsPerBlister ?? 1,
+					med?.looseTablets ?? 0,
+					med ? getMedTotal(med) : Math.round(row.medsLeft)
+				);
+				return (
+					<span data-label={t("table.stock")} className={textClass}>
+						{isAmountBasedPackageType(med?.packageType)
+							? formatStockLabel(med, row.medsLeft)
+							: formatFullBlisters(stock.fullBlisters, t)}
+					</span>
+				);
+			},
+		},
+		{
+			key: "dailyConsumption",
+			header: t("table.dailyConsumption"),
+			render: (row) => {
+				const med = getMedByName(row.name);
+				const rawStatus = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds, med?.packageType);
+				const textClass =
+					rawStatus.className === "danger"
+						? "danger-text"
+						: rawStatus.className === "warning"
+							? "warning-text"
+							: "success-text";
+				return (
+					<span data-label={t("table.dailyConsumption")} className={textClass}>
+						{formatDailyConsumption(med)}
+					</span>
+				);
+			},
+		},
+		{
+			key: "stockDetails",
+			header: t("table.stockDetails"),
+			render: (row) => {
+				const med = getMedByName(row.name);
+				const rawStatus = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds, med?.packageType);
+				const textClass =
+					rawStatus.className === "danger"
+						? "danger-text"
+						: rawStatus.className === "warning"
+							? "warning-text"
+							: "success-text";
+				const stock = getBlisterStock(
+					Math.round(row.medsLeft),
+					med?.pillsPerBlister ?? 1,
+					med?.looseTablets ?? 0,
+					med ? getMedTotal(med) : Math.round(row.medsLeft)
+				);
+				return (
+					<span
+						data-label={t("table.stockDetails")}
+						className={`${textClass}${isAmountBasedPackageType(med?.packageType) ? " hide-on-card" : ""}`}
+					>
+						{isAmountBasedPackageType(med?.packageType)
+							? "—"
+							: formatOpenBlisterAndLoose(stock.openBlisterPills, stock.loosePills, med?.pillsPerBlister ?? 1, t)}
+					</span>
+				);
+			},
+		},
+		{
+			key: "daysLeft",
+			header: t("table.daysLeft"),
+			render: (row) => {
+				const med = getMedByName(row.name);
+				const rawStatus = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds, med?.packageType);
+				const textClass =
+					rawStatus.className === "danger"
+						? "danger-text"
+						: rawStatus.className === "warning"
+							? "warning-text"
+							: "success-text";
+				return (
+					<span data-label={t("table.daysLeft")} className={textClass}>
+						{formatNumber(row.daysLeft)}
+					</span>
+				);
+			},
+		},
+		{
+			key: "datePair",
+			header: (
+				<span className="date-pair-stack-header">
+					<span className="date-pair-label">{t("table.runsOut")}</span>
+					<span className="date-pair-label">{t("table.expiry")}</span>
+				</span>
+			),
+			render: (row) => {
+				const med = getMedByName(row.name);
+				const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
+				return (
+					<span className="date-pair-stack">
+						<span className="date-pair-entry">
+							<span className="date-pair-label">{t("table.runsOut")}</span>
+							<span className="date-pair-value">{row.depletionDate ?? "-"}</span>
+						</span>
+						<span className="date-pair-entry">
+							<span className="date-pair-label">{t("table.expiry")}</span>
+							<span className={`date-pair-value ${expiryClass}`}>
+								{med?.expiryDate
+									? new Date(med.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), {
+											day: "2-digit",
+											month: "short",
+											year: "2-digit",
+										})
+									: "-"}
+							</span>
+						</span>
+					</span>
+				);
+			},
+		},
+		{
+			key: "status",
+			header: t("table.status"),
+			width: "7.5rem",
+			render: (row) => {
+				const med = getMedByName(row.name);
+				const rawStatus = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds, med?.packageType);
+				const status = getVisibleStockStatus(med, rawStatus);
+				return status ? (
+					<span data-label={t("table.status")}>
+						<StatusBadge size="xs" tone={getStatusTone(status.className)}>
+							{t(status.label)}
+						</StatusBadge>
+					</span>
+				) : (
+					<span data-label={t("table.status")}>-</span>
+				);
+			},
+		},
+	] satisfies DataTableColumn<Coverage>[];
+
 	return (
 		<>
 			<DashboardReminderSection
@@ -795,13 +1132,16 @@ export function DashboardPage() {
 			/>
 
 			<div
-				className={`dashboard-main-sections${settings.swapDashboardMainSections ? " dashboard-main-sections-swapped" : ""}`}
+				className={[
+					"dashboard-main-sections",
+					classes.mainSections,
+					settings.swapDashboardMainSections ? classes.mainSectionsSwapped : "",
+				]
+					.filter(Boolean)
+					.join(" ")}
 			>
-				<section className="grid dashboard-overview-section">
-					<article className="card">
-						<div className="card-head">
-							<h2>{t("dashboard.overview.title")}</h2>
-						</div>
+				<section className={`grid dashboard-overview-section ${classes.overviewSection}`}>
+					<SectionCard title={t("dashboard.overview.title")}>
 						{loading ? (
 							<div className="dashboard-card-skeleton" aria-busy="true">
 								<span className="screen-reader-only">{t("common.loading")}</span>
@@ -811,220 +1151,87 @@ export function DashboardPage() {
 								<span className="skeleton-line skeleton-line-short" />
 							</div>
 						) : (
-							<div className="table table-8">
-								<div className="table-head">
-									<span>{t("table.name")}</span>
-									<span>{t("table.stock")}</span>
-									<span>{t("table.dailyConsumption")}</span>
-									<span>{t("table.stockDetails")}</span>
-									<span>{t("table.daysLeft")}</span>
-									<span className="date-pair-stack-header">
-										<span className="date-pair-label">{t("table.runsOut")}</span>
-										<span className="date-pair-label">{t("table.expiry")}</span>
-									</span>
-									<span>{t("table.status")}</span>
-								</div>
-								{coverage.all.map((row) => {
-									const med = meds.find((m) => getMedDisplayName(m) === row.name);
-									const rawStatus = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds, med?.packageType);
-									const status = getVisibleStockStatus(med, rawStatus);
-									const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
-									const textClass =
-										rawStatus.className === "danger"
-											? "danger-text"
-											: rawStatus.className === "warning"
-												? "warning-text"
-												: "success-text";
-									const stock = getBlisterStock(
-										Math.round(row.medsLeft),
-										med?.pillsPerBlister ?? 1,
-										med?.looseTablets ?? 0,
-										med ? getMedTotal(med) : Math.round(row.medsLeft)
-									);
-									return (
-										<div
-											key={row.name}
-											className="table-row clickable"
-											onClick={() => med && openMedDetail(med)}
-											onKeyDown={(e) => {
-												if (e.key === "Enter" || e.key === " ") {
-													if (med) openMedDetail(med);
-												}
-											}}
-										>
-											<span data-label={t("table.name")} className="cell-with-avatar">
-												<span className="med-name-line">
-													<span
-														className={med?.imageUrl ? "med-avatar-clickable" : undefined}
-														onClick={(e) => {
-															e.stopPropagation();
-															if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
-														}}
-														onKeyDown={(e) => {
-															e.stopPropagation();
-															if (e.key === "Enter" || e.key === " ") {
-																if (med?.imageUrl) openScheduleLightbox(`/api/images/${med.imageUrl}`);
-															}
-														}}
-													>
-														<MedicationAvatar name={row.name} imageUrl={med?.imageUrl} />
-													</span>
-													<span className="med-name-block-dash">
-														<span className="med-name-text">
-															{row.name}
-															{med?.notes && (
-																<>
-																	{" "}
-																	<span className="notes-icon info-tooltip" data-tooltip={t("tooltips.hasNotes")}>
-																		<NotebookPen size={13} aria-hidden="true" />
-																	</span>
-																</>
-															)}
-															{med?.prescriptionEnabled && (
-																<>
-																	{" "}
-																	<span
-																		className="prescription-icon info-tooltip"
-																		data-tooltip={t("tooltips.hasPrescription")}
-																	>
-																		<ClipboardList size={13} aria-hidden="true" />
-																	</span>
-																</>
-															)}
-														</span>
-														{med?.takenBy && med.takenBy.length > 0 && (
-															<span className="med-taken-by-line">
-																{med.takenBy.map((person) => (
-																	<span
-																		key={person}
-																		className="taken-by-badge clickable"
-																		onClick={(e) => {
-																			e.stopPropagation();
-																			openUserFilter(person);
-																		}}
-																		onKeyDown={(e) => {
-																			if (e.key === "Enter" || e.key === " ") {
-																				e.stopPropagation();
-																				openUserFilter(person);
-																			}
-																		}}
-																	>
-																		{person}
-																		{med.intakes?.some((i) => i.takenBy === person && i.intakeRemindersEnabled) && (
-																			<Bell
-																				size={11}
-																				aria-hidden="true"
-																				className="blister-reminder-icon"
-																				style={{ display: "inline", verticalAlign: "middle", marginLeft: "2px" }}
-																			/>
-																		)}
-																	</span>
-																))}
-															</span>
-														)}
-													</span>
-												</span>
-											</span>
-											<span data-label={t("table.stock")} className={textClass}>
-												{isAmountBasedPackageType(med?.packageType)
-													? formatStockLabel(med, row.medsLeft)
-													: formatFullBlisters(stock.fullBlisters, t)}
-											</span>
-											<span data-label={t("table.dailyConsumption")} className={textClass}>
-												{formatDailyConsumption(med)}
-											</span>
-											<span
-												data-label={t("table.stockDetails")}
-												className={`${textClass}${isAmountBasedPackageType(med?.packageType) ? " hide-on-card" : ""}`}
-											>
-												{isAmountBasedPackageType(med?.packageType)
-													? "—"
-													: formatOpenBlisterAndLoose(
-															stock.openBlisterPills,
-															stock.loosePills,
-															med?.pillsPerBlister ?? 1,
-															t
-														)}
-											</span>
-											<span data-label={t("table.daysLeft")} className={textClass}>
-												{formatNumber(row.daysLeft)}
-											</span>
-											<span className="date-pair-stack">
-												<span className="date-pair-entry">
-													<span className="date-pair-label">{t("table.runsOut")}</span>
-													<span className="date-pair-value">{row.depletionDate ?? "-"}</span>
-												</span>
-												<span className="date-pair-entry">
-													<span className="date-pair-label">{t("table.expiry")}</span>
-													<span className={`date-pair-value ${expiryClass}`}>
-														{med?.expiryDate
-															? new Date(med.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), {
-																	day: "2-digit",
-																	month: "short",
-																	year: "2-digit",
-																})
-															: "-"}
-													</span>
-												</span>
-											</span>
-											<span data-label={t("table.status")} className={status ? `status-chip ${status.className}` : ""}>
-												{status ? t(status.label) : "-"}
-											</span>
-										</div>
-									);
+							<DataTable
+								columns={overviewColumns}
+								data-testid="dashboard-overview-table"
+								rows={coverage.all}
+								rowKey={(row) => row.name}
+								getRowProps={(row) => ({
+									"aria-label": row.name,
+									"data-testid": "dashboard-overview-row",
 								})}
-							</div>
+							/>
 						)}
-					</article>
+					</SectionCard>
 				</section>
 
-				<section className="grid dashboard-schedules-section">
-					<article className="card">
-						<div className="card-head">
-							<h2>{t("dashboard.schedules.title")}</h2>
-							{loading ? (
-								<div className="card-head-actions dashboard-actions-skeleton" aria-hidden="true">
+				<section className={`grid dashboard-schedules-section ${classes.schedulesSection}`}>
+					<SectionCard
+						title={t("dashboard.schedules.title")}
+						actions={
+							loading ? (
+								<Group gap="sm" aria-hidden="true">
 									<span className="skeleton-line skeleton-pill" />
-								</div>
+								</Group>
 							) : (
-								<div className="card-head-actions">
-									<select
-										className="select-field schedule-days-select"
-										value={scheduleDays}
+								<Group className={scheduleActionClasses.actions} gap={0} justify="flex-end" wrap="wrap">
+									<AppSelect
+										size="sm"
+										classNames={{
+											root: scheduleActionClasses.selectRoot,
+											input: cx("schedule-days-select", scheduleActionClasses.selectInput),
+										}}
+										value={String(scheduleDays)}
 										onChange={(e) => {
-											const val = Number(e.target.value);
+											const val = Number(e.currentTarget.value);
 											setScheduleDays(val);
 											if (user?.id) localStorage.setItem(userStorageKey(user.id, "scheduleDays"), String(val));
 										}}
-									>
-										<option value={30}>{t("dashboard.schedules.1month")}</option>
-										<option value={90}>{t("dashboard.schedules.3months")}</option>
-										<option value={180}>{t("dashboard.schedules.6months")}</option>
-									</select>
-									<button
+										data={[
+											{ value: "30", label: t("dashboard.schedules.1month") },
+											{ value: "90", label: t("dashboard.schedules.3months") },
+											{ value: "180", label: t("dashboard.schedules.6months") },
+										]}
+									/>
+									<AppButton
 										type="button"
-										className="ghost journal-history-button"
+										tone="secondary"
+										size="sm"
+										className={cx(
+											"journal-history-button",
+											journalHistoryActionClasses.button,
+											scheduleActionClasses.historyButton
+										)}
 										onClick={openJournalHistory}
 										aria-label={t("journal.actions.history")}
-										title={t("journal.actions.history")}
+										leftSection={<ClipboardList size={16} aria-hidden="true" />}
 									>
-										<ClipboardList size={16} aria-hidden="true" />
-										<span className="journal-history-label-full">{t("journal.actions.history")}</span>
-										<span className="journal-history-label-short">{t("journal.actions.historyShort")}</span>
-									</button>
+										<span className={cx("journal-history-label-full", journalHistoryActionClasses.labelFull)}>
+											{t("journal.actions.history")}
+										</span>
+										<span className={cx("journal-history-label-short", journalHistoryActionClasses.labelShort)}>
+											{t("journal.actions.historyShort")}
+										</span>
+									</AppButton>
 									{meds.some((m) => m.takenBy && m.takenBy.length > 0) && (
-										<button
-											className="ghost share-btn icon-only tooltip-trigger"
-											onClick={openShareDialog}
-											aria-label={t("share.button")}
-											data-tooltip={t("share.button")}
-										>
-											<Share2 size={18} aria-hidden="true" />
-										</button>
+										<AppTooltip label={t("share.button")}>
+											<ActionIcon
+												type="button"
+												size="input-sm"
+												className={cx("share-btn", scheduleActionClasses.shareButton)}
+												color="brand"
+												variant="default"
+												onClick={openShareDialog}
+												aria-label={t("share.button")}
+											>
+												<Share2 size={18} aria-hidden="true" />
+											</ActionIcon>
+										</AppTooltip>
 									)}
-								</div>
-							)}
-						</div>
+								</Group>
+							)
+						}
+					>
 						{loading ? (
 							<div className="dashboard-card-skeleton" aria-busy="true">
 								<span className="screen-reader-only">{t("common.loading")}</span>
@@ -1085,7 +1292,6 @@ export function DashboardPage() {
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
 													}}
-													title={isCollapsed ? t("common.expand") : t("common.collapse")}
 												>
 													<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
 													<span className="day-date">{day.dateStr}</span>
@@ -1095,12 +1301,12 @@ export function DashboardPage() {
 														) : (
 															<>
 																{hasRealMissed && (
-																	<span
+																	<AppTooltipTrigger
+																		label={t("dashboard.schedules.missedDoses", { count: missedNotDismissedCount })}
 																		className="day-warning"
-																		title={t("dashboard.schedules.missedDoses", { count: missedNotDismissedCount })}
 																	>
 																		⚠️
-																	</span>
+																	</AppTooltipTrigger>
 																)}
 																<span className="day-progress">
 																	{takenCount}/{allDoseIds.length}
@@ -1146,27 +1352,30 @@ export function DashboardPage() {
 																		>
 																			<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																		</div>
-																		<div
-																			className="med-name-stack clickable"
+																		<AppTextAction
+																			className="med-name-stack"
 																			onClick={() => med && openMedDetail(med)}
-																			onKeyDown={(e) => {
-																				if (e.key === "Enter" || e.key === " ") {
-																					if (med) openMedDetail(med);
-																				}
+																			style={{
+																				alignItems: "flex-start",
+																				display: "inline-flex",
+																				flexDirection: "column",
 																			}}
+																			textAlign="left"
 																		>
 																			<span className="med-name-text">{item.medName}</span>
 																			{med?.genericName && (
 																				<span className="med-generic-inline">{med.genericName}</span>
 																			)}
-																		</div>
+																		</AppTextAction>
 																	</div>
 																	<div className="tag-row">
 																		<span className="tag subtle">
 																			{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
 																		</span>
 																		{status && (
-																			<span className={`status-chip small ${status.className}`}>{t(status.label)}</span>
+																			<StatusBadge size="xs" tone={getStatusTone(status.className)}>
+																				{t(status.label)}
+																			</StatusBadge>
 																		)}
 																	</div>
 																</div>
@@ -1174,6 +1383,7 @@ export function DashboardPage() {
 																	{item.doses.map((dose) => {
 																		// If no takenBy, show single checkbox; otherwise show one per person
 																		const people = getDosePeople(dose.takenBy);
+																		const namedPeople = getNamedDosePeople(people);
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
@@ -1181,26 +1391,39 @@ export function DashboardPage() {
 																		if (allTaken) doseClasses.push("all-taken");
 																		if (isEmpty) doseClasses.push("med-empty");
 																		else if (isLowStock) doseClasses.push("med-low");
+																		if (namedPeople.length > 0) doseClasses.push("has-recipients");
 																		return (
 																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
-																				<span className="dose-usage">
-																					<span className="dose-usage-main">
-																						{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																				<div className="dose-summary">
+																					<span className="dose-usage">
+																						<span className="dose-usage-main dose-usage-main-full">
+																							{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																						</span>
+																						<span className="dose-usage-main dose-usage-main-compact">
+																							{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit, "compact")}
+																						</span>
+																						{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
+																							<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																						)}
 																					</span>
-																					{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																					)}
-																				</span>
+																					{renderDoseRecipients(namedPeople)}
+																				</div>
 																				{dose.intakeRemindersEnabled && (
-																					<span
-																						className="reminder-icon info-tooltip"
-																						data-tooltip={t("tooltips.intakeReminders")}
+																					<AppTooltipTrigger
+																						label={t("tooltips.intakeReminders")}
+																						className="reminder-icon"
 																					>
 																						<Bell size={13} aria-hidden="true" />
-																					</span>
+																					</AppTooltipTrigger>
 																				)}
-																				<div className="dose-checks">
+																				<div
+																					className={cx(
+																						"dose-checks",
+																						namedPeople.length > 0 && "has-recipient-summary",
+																						namedPeople.length > 1 && "multi-person"
+																					)}
+																				>
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
@@ -1219,15 +1442,13 @@ export function DashboardPage() {
 																								className={personClasses.join(" ")}
 																							>
 																								{person && (
-																									<span
-																										className="person-name clickable"
+																									<AppTextAction
+																										className="person-name"
+																										color={getDosePersonTextColor(isTaken, isSkipped)}
 																										onClick={() => openUserFilter(person)}
-																										onKeyDown={(e) => {
-																											if (e.key === "Enter" || e.key === " ") openUserFilter(person);
-																										}}
 																									>
 																										{person}
-																									</span>
+																									</AppTextAction>
 																								)}
 																								{renderDoseActionButtons({
 																									doseId,
@@ -1295,26 +1516,28 @@ export function DashboardPage() {
 														({t("dashboard.schedules.pastDaysCount", { count: pastDays.length })})
 													</span>
 													{missedCount > 0 ? (
-														<span
+														<AppTooltipTrigger
+															label={t("dashboard.schedules.missedDoses", { count: missedCount })}
 															className="past-days-warning"
-															title={t("dashboard.schedules.missedDoses", { count: missedCount })}
 														>
 															⚠️ {missedCount}
-														</span>
+														</AppTooltipTrigger>
 													) : totalPastDoses.length > 0 ? (
-														<span className="past-days-complete" title={t("dashboard.schedules.allTaken")}>
+														<AppTooltipTrigger label={t("dashboard.schedules.allTaken")} className="past-days-complete">
 															✓
-														</span>
+														</AppTooltipTrigger>
 													) : null}
 												</div>
 												{missedCount > 0 && (
-													<button
+													<AppButton
 														type="button"
+														tone="warningOutline"
+														size="sm"
 														className="clear-missed-btn"
 														onClick={() => setShowClearMissedConfirm(true)}
 													>
 														{t("dashboard.schedules.clearMissed")}
-													</button>
+													</AppButton>
 												)}
 											</div>
 										);
@@ -1391,7 +1614,6 @@ export function DashboardPage() {
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
 													}}
-													title={isCollapsed ? t("common.expand") : t("common.collapse")}
 												>
 													<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
 													<span className="day-date">{day.dateStr}</span>
@@ -1451,29 +1673,30 @@ export function DashboardPage() {
 																		>
 																			<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																		</div>
-																		<div
-																			className="med-name-stack clickable"
+																		<AppTextAction
+																			className="med-name-stack"
 																			onClick={() => med && openMedDetail(med)}
-																			onKeyDown={(e) => {
-																				if (e.key === "Enter" || e.key === " ") {
-																					if (med) openMedDetail(med);
-																				}
+																			style={{
+																				alignItems: "flex-start",
+																				display: "inline-flex",
+																				flexDirection: "column",
 																			}}
+																			textAlign="left"
 																		>
 																			<span className="med-name-text">{item.medName}</span>
 																			{med?.genericName && (
 																				<span className="med-generic-inline">{med.genericName}</span>
 																			)}
-																		</div>
+																		</AppTextAction>
 																	</div>
 																	<div className="tag-row">
 																		<span className="tag subtle">
 																			{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
 																		</span>
 																		{visibleStatus && (
-																			<span className={`status-chip small ${visibleStatus.className}`}>
+																			<StatusBadge size="xs" tone={getStatusTone(visibleStatus.className)}>
 																				{t(visibleStatus.label)}
-																			</span>
+																			</StatusBadge>
 																		)}
 																	</div>
 																	{isEmpty && med && !med.isObsolete && (
@@ -1495,6 +1718,7 @@ export function DashboardPage() {
 																	{item.doses.map((dose) => {
 																		const isOverdue = dose.when < Date.now() && !isEmpty;
 																		const people = getDosePeople(dose.takenBy);
+																		const namedPeople = getNamedDosePeople(people);
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
@@ -1503,26 +1727,39 @@ export function DashboardPage() {
 																		if (allTaken) doseClasses.push("all-taken");
 																		if (isEmpty) doseClasses.push("med-empty");
 																		else if (isLowStock) doseClasses.push("med-low");
+																		if (namedPeople.length > 0) doseClasses.push("has-recipients");
 																		return (
 																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
-																				<span className="dose-usage">
-																					<span className="dose-usage-main">
-																						{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																				<div className="dose-summary">
+																					<span className="dose-usage">
+																						<span className="dose-usage-main dose-usage-main-full">
+																							{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																						</span>
+																						<span className="dose-usage-main dose-usage-main-compact">
+																							{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit, "compact")}
+																						</span>
+																						{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
+																							<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																						)}
 																					</span>
-																					{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																					)}
-																				</span>
+																					{renderDoseRecipients(namedPeople)}
+																				</div>
 																				{dose.intakeRemindersEnabled && (
-																					<span
-																						className="reminder-icon info-tooltip"
-																						data-tooltip={t("tooltips.intakeReminders")}
+																					<AppTooltipTrigger
+																						label={t("tooltips.intakeReminders")}
+																						className="reminder-icon"
 																					>
 																						<Bell size={13} aria-hidden="true" />
-																					</span>
+																					</AppTooltipTrigger>
 																				)}
-																				<div className="dose-checks">
+																				<div
+																					className={cx(
+																						"dose-checks",
+																						namedPeople.length > 0 && "has-recipient-summary",
+																						namedPeople.length > 1 && "multi-person"
+																					)}
+																				>
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
@@ -1541,15 +1778,13 @@ export function DashboardPage() {
 																								className={personClasses.join(" ")}
 																							>
 																								{person && (
-																									<span
-																										className="person-name clickable"
+																									<AppTextAction
+																										className="person-name"
+																										color={getDosePersonTextColor(isTaken, isSkipped)}
 																										onClick={() => openUserFilter(person)}
-																										onKeyDown={(e) => {
-																											if (e.key === "Enter" || e.key === " ") openUserFilter(person);
-																										}}
 																									>
 																										{person}
-																									</span>
+																									</AppTextAction>
 																								)}
 																								{renderDoseActionButtons({
 																									doseId,
@@ -1657,7 +1892,6 @@ export function DashboardPage() {
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
 													}}
-													title={isCollapsed ? t("common.expand") : t("common.collapse")}
 												>
 													<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
 													<span className="day-date">{day.dateStr}</span>
@@ -1717,29 +1951,30 @@ export function DashboardPage() {
 																		>
 																			<MedicationAvatar name={item.medName} imageUrl={med?.imageUrl} size="sm" />
 																		</div>
-																		<div
-																			className="med-name-stack clickable"
+																		<AppTextAction
+																			className="med-name-stack"
 																			onClick={() => med && openMedDetail(med)}
-																			onKeyDown={(e) => {
-																				if (e.key === "Enter" || e.key === " ") {
-																					if (med) openMedDetail(med);
-																				}
+																			style={{
+																				alignItems: "flex-start",
+																				display: "inline-flex",
+																				flexDirection: "column",
 																			}}
+																			textAlign="left"
 																		>
 																			<span className="med-name-text">{item.medName}</span>
 																			{med?.genericName && (
 																				<span className="med-generic-inline">{med.genericName}</span>
 																			)}
-																		</div>
+																		</AppTextAction>
 																	</div>
 																	<div className="tag-row">
 																		<span className="tag subtle">
 																			{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
 																		</span>
 																		{visibleStatus && (
-																			<span className={`status-chip small ${visibleStatus.className}`}>
+																			<StatusBadge size="xs" tone={getStatusTone(visibleStatus.className)}>
 																				{t(visibleStatus.label)}
-																			</span>
+																			</StatusBadge>
 																		)}
 																	</div>
 																	{isEmpty && med && !med.isObsolete && (
@@ -1760,6 +1995,7 @@ export function DashboardPage() {
 																<div className="doses-col">
 																	{item.doses.map((dose) => {
 																		const people = getDosePeople(dose.takenBy);
+																		const namedPeople = getNamedDosePeople(people);
 																		const allTaken = people.every((person) =>
 																			isDoseTakenForDisplay(getDoseId(dose.id, person))
 																		);
@@ -1767,26 +2003,39 @@ export function DashboardPage() {
 																		if (allTaken) doseClasses.push("all-taken");
 																		if (isEmpty) doseClasses.push("med-empty");
 																		else if (isLowStock) doseClasses.push("med-low");
+																		if (namedPeople.length > 0) doseClasses.push("has-recipients");
 																		return (
 																			<div key={dose.id} className={doseClasses.join(" ")}>
 																				<span className="dose-time">{dose.timeStr}</span>
-																				<span className="dose-usage">
-																					<span className="dose-usage-main">
-																						{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																				<div className="dose-summary">
+																					<span className="dose-usage">
+																						<span className="dose-usage-main dose-usage-main-full">
+																							{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit)}
+																						</span>
+																						<span className="dose-usage-main dose-usage-main-compact">
+																							{formatDoseUsageLabel(med, dose.usage, dose.intakeUnit, "compact")}
+																						</span>
+																						{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
+																							<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																						)}
 																					</span>
-																					{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
-																					)}
-																				</span>
+																					{renderDoseRecipients(namedPeople)}
+																				</div>
 																				{dose.intakeRemindersEnabled && (
-																					<span
-																						className="reminder-icon info-tooltip"
-																						data-tooltip={t("tooltips.intakeReminders")}
+																					<AppTooltipTrigger
+																						label={t("tooltips.intakeReminders")}
+																						className="reminder-icon"
 																					>
 																						<Bell size={13} aria-hidden="true" />
-																					</span>
+																					</AppTooltipTrigger>
 																				)}
-																				<div className="dose-checks">
+																				<div
+																					className={cx(
+																						"dose-checks",
+																						namedPeople.length > 0 && "has-recipient-summary",
+																						namedPeople.length > 1 && "multi-person"
+																					)}
+																				>
 																					{people.map((person) => {
 																						const doseId = getDoseId(dose.id, person);
 																						const isTaken = isDoseTakenForDisplay(doseId);
@@ -1805,15 +2054,13 @@ export function DashboardPage() {
 																								className={personClasses.join(" ")}
 																							>
 																								{person && (
-																									<span
-																										className="person-name clickable"
+																									<AppTextAction
+																										className="person-name"
+																										color={getDosePersonTextColor(isTaken, isSkipped)}
 																										onClick={() => openUserFilter(person)}
-																										onKeyDown={(e) => {
-																											if (e.key === "Enter" || e.key === " ") openUserFilter(person);
-																										}}
 																									>
 																										{person}
-																									</span>
+																									</AppTextAction>
 																								)}
 																								{renderDoseActionButtons({
 																									doseId,
@@ -1862,7 +2109,7 @@ export function DashboardPage() {
 							onResetFilters={handleResetJournalFilters}
 							onReopen={reopenJournalHistoryEntry}
 						/>
-					</article>
+					</SectionCard>
 				</section>
 			</div>
 		</>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPage } from "../../pages/DashboardPage";
@@ -409,9 +409,8 @@ describe("DashboardPage", () => {
 			</MemoryRouter>
 		);
 
-		// With no meds, should show the dashboard cards
-		const cards = document.querySelectorAll(".card");
-		expect(cards.length).toBeGreaterThan(0);
+		expect(screen.getByText(/dashboard\.overview\.title/i)).toBeInTheDocument();
+		expect(screen.getByText(/dashboard\.schedules\.title/i)).toBeInTheDocument();
 	});
 
 	it("renders today doses even when schedule data omits takenBy arrays", () => {
@@ -484,7 +483,7 @@ describe("DashboardPage", () => {
 
 		const noteButton = screen.getByRole("button", { name: "journal.actions.note" });
 		expect(noteButton).toBeDisabled();
-		expect(noteButton.closest("span")).toHaveAttribute("data-tooltip", "journal.actions.noteTakenOnly");
+		expect(noteButton.closest("span")).not.toHaveAttribute("data-tooltip");
 
 		fireEvent.click(noteButton);
 		expect(openJournalEditor).not.toHaveBeenCalled();
@@ -612,12 +611,12 @@ describe("DashboardPage", () => {
 			</MemoryRouter>
 		);
 
-		const headerPair = document.querySelector(".table-head .date-pair-stack-header");
+		const headerPair = document.querySelector(".date-pair-stack-header");
 		expect(headerPair).toBeInTheDocument();
 		expect(headerPair).toHaveTextContent("table.runsOut");
 		expect(headerPair).toHaveTextContent("table.expiry");
 
-		const rowPair = document.querySelector(".table-row .date-pair-stack");
+		const rowPair = screen.getAllByTestId("dashboard-overview-row")[0].querySelector(".date-pair-stack");
 		expect(rowPair).toBeInTheDocument();
 
 		const rowEntries = Array.from(rowPair?.querySelectorAll(".date-pair-entry") ?? []);
@@ -634,9 +633,9 @@ describe("DashboardPage", () => {
 			</MemoryRouter>
 		);
 
-		// Dashboard has multiple cards
-		const cards = document.querySelectorAll(".card");
-		expect(cards.length).toBeGreaterThan(2);
+		expect(screen.getByText(/dashboard\.overview\.title/i)).toBeInTheDocument();
+		expect(screen.getByText(/dashboard\.schedules\.title/i)).toBeInTheDocument();
+		expect(screen.getByText(/dashboard\.reorder\.title/i)).toBeInTheDocument();
 	});
 
 	it("renders card heads", () => {
@@ -646,9 +645,8 @@ describe("DashboardPage", () => {
 			</MemoryRouter>
 		);
 
-		// Should have card heads for each section
-		const cardHeads = document.querySelectorAll(".card-head");
-		expect(cardHeads.length).toBeGreaterThan(0);
+		expect(screen.getByRole("heading", { name: /dashboard\.overview\.title/i })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: /dashboard\.schedules\.title/i })).toBeInTheDocument();
 	});
 
 	it("renders table headers", () => {
@@ -658,9 +656,7 @@ describe("DashboardPage", () => {
 			</MemoryRouter>
 		);
 
-		// Should have table head
-		const tableHead = document.querySelector(".table-head");
-		expect(tableHead).toBeInTheDocument();
+		expect(screen.getByRole("columnheader", { name: /table\.name/i })).toBeInTheDocument();
 	});
 
 	it("renders table structure", () => {
@@ -670,9 +666,7 @@ describe("DashboardPage", () => {
 			</MemoryRouter>
 		);
 
-		// Should have table class
-		const table = document.querySelector(".table");
-		expect(table).toBeInTheDocument();
+		expect(screen.getByTestId("dashboard-overview-table")).toBeInTheDocument();
 	});
 
 	it("renders no meds message for reorder section", () => {
@@ -744,8 +738,8 @@ describe("DashboardPage interactions", () => {
 		);
 
 		expect(screen.getByText("Today")).toBeInTheDocument();
-		expect(document.querySelector(".day-block.today .dose-btn.take")).toBeInTheDocument();
-		expect(document.querySelector(".day-block.today .dose-btn.skip")).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "dose.take" })).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "dose.skip" })).not.toBeInTheDocument();
 	});
 
 	it("keeps the dashboard rendered when notification focus scrolling fails", async () => {
@@ -912,8 +906,8 @@ describe("DashboardPage structure", () => {
 			</MemoryRouter>
 		);
 
-		const cardHeadActions = document.querySelector(".card-head-actions");
-		expect(cardHeadActions).toBeInTheDocument();
+		expect(document.querySelector(".schedule-days-select")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "journal.actions.history" })).toBeInTheDocument();
 	});
 
 	it("renders all table columns", () => {
@@ -1027,7 +1021,7 @@ describe("DashboardPage with medications", () => {
 		expect(dayBlocks.length).toBeGreaterThan(0);
 	});
 
-	it("calls openMedDetail when clicking medication row", () => {
+	it("calls openMedDetail only when clicking medication name link", () => {
 		const openMedDetail = vi.fn();
 		mockContextValue = createMockAppContext({
 			meds: mockMeds,
@@ -1042,12 +1036,14 @@ describe("DashboardPage with medications", () => {
 			</MemoryRouter>
 		);
 
-		// Click on medication row
-		const aspirinRow = screen.getAllByText("Aspirin")[0].closest(".table-row");
-		if (aspirinRow) {
-			fireEvent.click(aspirinRow);
-			expect(openMedDetail).toHaveBeenCalled();
-		}
+		const aspirinRow = screen.getAllByTestId("dashboard-overview-row")[0];
+		expect(aspirinRow).not.toHaveAttribute("role", "button");
+
+		fireEvent.click(aspirinRow);
+		expect(openMedDetail).not.toHaveBeenCalled();
+
+		fireEvent.click(within(aspirinRow).getByRole("button", { name: "Aspirin" }));
+		expect(openMedDetail).toHaveBeenCalled();
 	});
 
 	it("calls openUserFilter when clicking taken by badge", () => {
@@ -1428,8 +1424,9 @@ describe("DashboardPage additional branches", () => {
 			</MemoryRouter>
 		);
 
-		const reminderMedLink = document.querySelector(".reminder-status-bar .med-link") as HTMLElement;
-		expect(reminderMedLink).toBeInTheDocument();
+		const statusBar = document.querySelector(".reminder-status-bar") as HTMLElement;
+		expect(statusBar).toBeInTheDocument();
+		const reminderMedLink = within(statusBar).getByRole("button", { name: "Vitamin D" });
 		fireEvent.click(reminderMedLink);
 		expect(openMedDetail).toHaveBeenCalled();
 	});
@@ -1531,7 +1528,7 @@ describe("DashboardPage additional branches", () => {
 		);
 
 		expect(screen.getByText("Today")).toBeInTheDocument();
-		const takeButton = document.querySelector(".day-block.today .dose-btn.take") as HTMLButtonElement;
+		const takeButton = screen.getByRole("button", { name: "dose.take" });
 		expect(takeButton).toBeInTheDocument();
 		fireEvent.click(takeButton);
 		expect(markDoseTaken).toHaveBeenCalled();
@@ -1555,7 +1552,7 @@ describe("DashboardPage additional branches", () => {
 			</MemoryRouter>
 		);
 
-		const undoButton = document.querySelector(".day-block.today .dose-btn.undo") as HTMLButtonElement;
+		const undoButton = screen.getByRole("button", { name: "common.undo" });
 		expect(undoButton).toBeInTheDocument();
 		fireEvent.click(undoButton);
 		expect(undoDoseTaken).toHaveBeenCalled();
@@ -1599,13 +1596,28 @@ describe("DashboardPage dose interactions", () => {
 
 	it("calls markDoseTaken when clicking take button", () => {
 		const markDoseTaken = vi.fn();
+		const todayDoseId = "1-0-1000";
+		const todayDay = {
+			dateStr: "Today",
+			date: new Date(),
+			isPast: false,
+			meds: [
+				{
+					medName: "Aspirin",
+					total: 1,
+					doses: [{ id: todayDoseId, timeStr: "09:00", when: Date.now() - 1000, usage: 1, takenBy: ["John"] }],
+					lastWhen: Date.now() - 1000,
+				},
+			],
+		};
 		mockContextValue = createMockAppContext({
 			meds: mockMeds,
 			coverage: mockCoverage,
 			coverageByMed: { Aspirin: mockCoverage.all[0] },
 			depletionByMed: { Aspirin: Date.now() + 25 * 86400000 },
-			futureDays: mockFutureDays,
+			todayDay,
 			markDoseTaken,
+			getDoseId: vi.fn((id: string, person: string | null) => (person ? `${id}-${person}` : id)),
 		});
 
 		render(
@@ -1614,25 +1626,36 @@ describe("DashboardPage dose interactions", () => {
 			</MemoryRouter>
 		);
 
-		// Find and click take button
-		const takeBtn = document.querySelector(".dose-btn.take");
-		if (takeBtn) {
-			fireEvent.click(takeBtn);
-			expect(markDoseTaken).toHaveBeenCalled();
-		}
+		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
+		expect(markDoseTaken).toHaveBeenCalled();
 	});
 
 	it("calls undoDoseTaken when clicking undo button", () => {
 		const undoDoseTaken = vi.fn();
-		const doseId = `1-0-${Date.now()}-John`;
+		const todayDoseId = "1-0-1000";
+		const doseId = `${todayDoseId}-John`;
+		const todayDay = {
+			dateStr: "Today",
+			date: new Date(),
+			isPast: false,
+			meds: [
+				{
+					medName: "Aspirin",
+					total: 1,
+					doses: [{ id: todayDoseId, timeStr: "09:00", when: Date.now() - 1000, usage: 1, takenBy: ["John"] }],
+					lastWhen: Date.now() - 1000,
+				},
+			],
+		};
 		mockContextValue = createMockAppContext({
 			meds: mockMeds,
 			coverage: mockCoverage,
 			coverageByMed: { Aspirin: mockCoverage.all[0] },
 			depletionByMed: { Aspirin: Date.now() + 25 * 86400000 },
-			futureDays: mockFutureDays,
+			todayDay,
 			takenDoses: new Set([doseId]),
 			undoDoseTaken,
+			manuallyExpandedDays: new Set<string>(["Today"]),
 			getDoseId: vi.fn(() => doseId),
 		});
 
@@ -1642,12 +1665,8 @@ describe("DashboardPage dose interactions", () => {
 			</MemoryRouter>
 		);
 
-		// Find and click undo button
-		const undoBtn = document.querySelector(".dose-btn.undo");
-		if (undoBtn) {
-			fireEvent.click(undoBtn);
-			expect(undoDoseTaken).toHaveBeenCalled();
-		}
+		fireEvent.click(screen.getByRole("button", { name: "common.undo" }));
+		expect(undoDoseTaken).toHaveBeenCalled();
 	});
 });
 

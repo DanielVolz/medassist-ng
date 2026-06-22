@@ -19,7 +19,7 @@ import {
 
 /** Helper: click Edit button on a medication row */
 async function clickEditMed(page: Page, medName: string): Promise<void> {
-	const medRow = page.locator(".med-row").filter({ hasText: medName });
+	const medRow = page.getByTestId("medication-row").filter({ hasText: medName });
 	for (let attempt = 0; attempt < 3; attempt++) {
 		if (await medRow.isVisible().catch(() => false)) break;
 		await page.reload();
@@ -27,21 +27,24 @@ async function clickEditMed(page: Page, medName: string): Promise<void> {
 		await page.waitForTimeout(1000);
 	}
 	await expect(medRow).toBeVisible({ timeout: 10000 });
-	await medRow.locator("button.info").click();
+	await medRow.getByRole("button", { name: /Edit|common\.edit/i }).click();
 	await expect(page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })).toBeVisible({
 		timeout: 5000,
 	});
 }
 
 async function openMedicationDetailFromDashboard(page: Page, medName: string) {
-	const overviewTable = page.locator(".dashboard-overview-section .table").first();
+	const overviewTable = page.getByTestId("dashboard-overview-table");
 	for (let attempt = 0; attempt < 3; attempt++) {
 		try {
 			await expect(overviewTable).toBeVisible({ timeout: 10000 });
-			const medRow = overviewTable.locator(".table-row").filter({ hasText: medName });
+			const medRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: medName });
 			await expect(medRow).toBeVisible({ timeout: 10000 });
 			await medRow.click();
-			const modal = page.locator(".modal-content.med-detail-modal");
+			const modal = page
+				.getByRole("dialog")
+				.filter({ has: page.getByRole("heading", { name: medName }) })
+				.last();
 			await expect(modal).toBeVisible({ timeout: 5000 });
 			await expect(modal.getByText(medName)).toBeVisible({ timeout: 5000 });
 			return modal;
@@ -86,7 +89,7 @@ async function saveEditAndVerify(page: Page, medName: string): Promise<void> {
 	await page.waitForLoadState("networkidle");
 
 	// Verify the med row is visible in the list
-	const medRow = page.locator(".med-row").filter({ hasText: medName });
+	const medRow = page.getByTestId("medication-row").filter({ hasText: medName });
 	await expect(medRow).toBeVisible({ timeout: 10000 });
 }
 
@@ -296,7 +299,7 @@ test.describe("Medication Editing", () => {
 		await expect(page.locator(".blister-row")).toHaveCount(1);
 
 		// Add a second intake
-		await page.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
+		await page.getByTestId("add-intake-button").click();
 		await expect(page.locator(".blister-row")).toHaveCount(2);
 
 		// Fill the new intake row
@@ -406,26 +409,32 @@ test.describe("Medication Editing", () => {
 			const modal = await openMedicationDetailFromDashboard(page, scenario.name);
 
 			await modal.getByRole("button", { name: /Refill|refill\.button/i }).click();
-			const refillModal = page.locator(".modal-content.refill-modal");
+			const refillModal = page
+				.getByRole("dialog")
+				.filter({ has: page.getByRole("heading", { name: /Refill|refill\.title/i }) })
+				.last();
 			await expect(refillModal).toBeVisible({ timeout: 5000 });
 			const refillInput = refillModal.locator('input[type="number"]').first();
 			await refillInput.fill(String(scenario.refillAmount));
-			await expect(refillModal.locator(".refill-preview")).toContainText(`+${scenario.refillAmount}`);
-			await expect(refillModal.locator(".refill-preview")).toContainText(scenario.unitLabel);
+			const refillPreview = refillModal
+				.getByText(new RegExp(`\\+${scenario.refillAmount}`))
+				.filter({ hasText: scenario.unitLabel })
+				.first();
+			await expect(refillPreview).toBeVisible();
 
-			await refillModal.locator(".modal-footer .success").click();
+			await refillModal.getByRole("button", { name: /Refill|refill\.button/i }).click();
 			await expect(refillModal).not.toBeVisible({ timeout: 10000 });
 
-			const refillHistoryHeader = modal.locator(".med-detail-section h3").filter({
-				hasText: /Refill History|refill\.history/i,
-			});
+			const refillHistoryHeader = modal.getByRole("heading", { name: /Refill History|refill\.history/i });
 			await expect(refillHistoryHeader).toBeVisible({ timeout: 10000 });
 			await refillHistoryHeader.click();
-			const refillAmount = modal.locator(".refill-history-item .refill-amount").first();
-			await expect(refillAmount).toContainText(`+${scenario.refillAmount}`);
-			await expect(refillAmount).toContainText(scenario.unitLabel);
+			const refillAmount = modal
+				.getByText(new RegExp(`\\+${scenario.refillAmount}`))
+				.filter({ hasText: scenario.unitLabel })
+				.first();
+			await expect(refillAmount).toBeVisible();
 
-			await page.locator("button.modal-close").click();
+			await modal.getByLabel(/Close|common\.close/i).click();
 			await expect(modal).not.toBeVisible({ timeout: 5000 });
 
 			await navigateTo(page, "/medications");
@@ -450,7 +459,7 @@ test.describe("Medication Editing", () => {
 		const form = page.locator("form.form-grid:visible").first();
 
 		// Should be blister type initially
-		const packageSelect = form.locator("select.package-type-select");
+		const packageSelect = form.getByLabel(/(Package Type|form\.packageType)/i);
 		await expect(packageSelect).toHaveValue("blister");
 
 		// Blister-specific fields are shown in the Package tab.
@@ -497,7 +506,8 @@ test.describe("Medication Editing", () => {
 
 		// Verify final package type persisted
 		await clickEditMed(page, "PackType Change Med");
-		await expect(page.locator("select.package-type-select")).toHaveValue("injection");
+		const editedForm = page.locator("form.form-grid:visible").first();
+		await expect(editedForm.getByLabel(/(Package Type|form\.packageType)/i)).toHaveValue("injection");
 	});
 
 	test("should edit multiple fields at once (name, notes, generic, taken-by)", async ({ page }) => {

@@ -385,19 +385,10 @@ describe("App", () => {
 		expect(await screen.findByText("lightbox-open-med-image.png")).toBeInTheDocument();
 	});
 
-	it("handles popstate by closing selected medication", () => {
-		appContextMock.selectedMed = { id: 1, packCount: 1, looseTablets: 0, updatedAt: null };
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		window.dispatchEvent(new PopStateEvent("popstate"));
-
-		expect(appContextMock.setSelectedMed).toHaveBeenCalledWith(null);
-	});
+	// NOTE: App no longer owns a popstate handler. Browser-back modal dismissal
+	// is handled per modal by useModalHistory (shared modal stack) and is
+	// covered in AppContext.test.tsx ("closes an AppContext modal when browser
+	// back pops the modal history entry").
 
 	it("adds modal-open class when modal state is active", () => {
 		shareContextMock.showShareDialog = true;
@@ -427,19 +418,6 @@ describe("App", () => {
 		expect(window.history.pushState).toHaveBeenCalled();
 	});
 
-	it("handles popstate by resetting share dialog state", () => {
-		shareContextMock.showShareDialog = true;
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		window.dispatchEvent(new PopStateEvent("popstate"));
-		expect(shareContextMock.resetShareDialogState).toHaveBeenCalled();
-	});
-
 	it("redirects unknown routes to dashboard", async () => {
 		render(
 			<MemoryRouter initialEntries={["/unknown-route"]}>
@@ -448,34 +426,5 @@ describe("App", () => {
 		);
 
 		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
-	});
-
-	it("popstate closes image lightbox before other modals", () => {
-		appContextMock.showImageLightbox = true;
-		appContextMock.scheduleLightboxImage = "img.png";
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		window.dispatchEvent(new PopStateEvent("popstate"));
-		expect(appContextMock.setShowImageLightbox).toHaveBeenCalledWith(false);
-		expect(appContextMock.setScheduleLightboxImage).not.toHaveBeenCalledWith(null);
-	});
-
-	it("popstate closes schedule lightbox when image lightbox is not open", () => {
-		appContextMock.showImageLightbox = false;
-		appContextMock.scheduleLightboxImage = "img.png";
-
-		render(
-			<MemoryRouter initialEntries={["/dashboard"]}>
-				<App />
-			</MemoryRouter>
-		);
-
-		window.dispatchEvent(new PopStateEvent("popstate"));
-		expect(appContextMock.setScheduleLightboxImage).toHaveBeenCalledWith(null);
 	});
 });

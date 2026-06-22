@@ -1,0 +1,109 @@
+.numberStepper {
+	--stepper-size: 2.75rem;
+	display: grid;
+	grid-template-columns: var(--stepper-size) minmax(0, 1fr) var(--stepper-size);
+	align-items: stretch;
+	border: 1px solid var(--border-primary);
+	border-radius: var(--input-radius);
+	overflow: hidden;
+	background: var(--bg-input);
+	transition:
+		border-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.numberStepper:focus-within {
+	border-color: var(--accent);
+	box-shadow: var(--focus-ring);
+}
+
+.numberStepper input {
+	order: 0;
+	width: 100%;
+	min-width: 0;
+	min-height: var(--stepper-size);
+	margin: 0;
+	padding: 0.5rem;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	color: var(--text-primary);
+	font-size: 1rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.numberStepper input[type="number"]::-webkit-outer-spin-button,
+.numberStepper input[type="number"]::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+.numberStepper input[type="number"] {
+	-moz-appearance: textfield;
+	appearance: textfield;
+}
+
+.numberStepper input:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.stepperButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: var(--stepper-size);
+	min-height: var(--stepper-size);
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: color-mix(in srgb, var(--bg-tertiary) 85%, transparent);
+	color: var(--text-secondary);
+	box-shadow: none;
+	cursor: pointer;
+	transition:
+		background 150ms ease,
+		color 150ms ease,
+		opacity 150ms ease;
+}
+
+.stepperButton svg {
+	width: 1.1rem;
+	height: 1.1rem;
+	flex-shrink: 0;
+	stroke-width: 2.5;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.decrement {
+	order: -1;
+	border-right: 1px solid var(--border-primary);
+}
+
+.increment {
+	order: 1;
+	border-left: 1px solid var(--border-primary);
+}
+
+.stepperButton:hover:not(:disabled) {
+	background: var(--accent-bg);
+	color: var(--accent);
+}
+
+.stepperButton:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+	.numberStepper {
+		--stepper-size: 3rem;
+	}
+
+	.numberStepper input {
+		font-size: 1.05rem;
+	}
+}

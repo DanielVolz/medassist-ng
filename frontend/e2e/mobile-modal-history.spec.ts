@@ -37,7 +37,7 @@ test.describe("Mobile modal browser back", () => {
 		await expect(exportButton).toBeVisible({ timeout: 10000 });
 		await exportButton.click();
 
-		const exportModal = page.locator(".modal-content").filter({ hasText: /Export Options|Export-Optionen/i });
+		const exportModal = page.getByRole("dialog").filter({ hasText: /Export Options|Export-Optionen/i });
 		await expect(exportModal).toBeVisible({ timeout: 10000 });
 		await page.goBack();
 		await expect(exportModal).toBeHidden({ timeout: 10000 });
@@ -63,7 +63,7 @@ test.describe("Mobile modal browser back", () => {
 			.getByRole("button", { name: /Report|Bericht/i })
 			.first()
 			.click();
-		const reportModal = page.locator(".modal-content.report-modal");
+		const reportModal = page.getByRole("dialog").filter({ hasText: /Medication Report|Medikamentenbericht/i });
 		await expect(reportModal).toBeVisible({ timeout: 10000 });
 
 		const medicationsUrl = page.url();

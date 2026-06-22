@@ -15,10 +15,10 @@ import {
  */
 async function calculatePlanner(page: Page): Promise<void> {
 	await page.waitForLoadState("networkidle");
-	await page.locator('form.planner button[type="submit"]').click();
+	await page.getByTestId("planner-form").locator('button[type="submit"]').click();
 	// Wait for the results table to appear (more reliable than waitForResponse
 	// since 429 responses would satisfy waitForResponse but not populate results)
-	await expect(page.locator(".table")).toBeVisible({ timeout: 15000 });
+	await expect(page.getByTestId("planner-results-table")).toBeVisible({ timeout: 15000 });
 }
 
 /**
@@ -80,7 +80,7 @@ test.describe("Planner with medications", () => {
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 	});
 
@@ -88,7 +88,7 @@ test.describe("Planner with medications", () => {
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
 		await expect(resultsTable.getByText(MED_HIGH)).toBeVisible();
@@ -99,10 +99,10 @@ test.describe("Planner with medications", () => {
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
-		const statusChips = resultsTable.locator(".status-chip");
+		const statusChips = resultsTable.getByText(/Enough|Ausreichend|Empty|Leer/i);
 		expect(await statusChips.count()).toBeGreaterThanOrEqual(2);
 	});
 
@@ -110,20 +110,17 @@ test.describe("Planner with medications", () => {
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
-		const rows = resultsTable.locator(".table-row");
+		const rows = resultsTable.getByTestId("planner-result-row");
 		expect(await rows.count()).toBeGreaterThanOrEqual(2);
 
 		// Each medication has usage=1, every=1 → plannerUsage should reflect the period
-		// Verify the usage column contains a numeric <strong> value and "pill(s)"
+		// Verify the usage column starts with a positive numeric value and a unit.
 		for (const row of await rows.all()) {
-			const usageCell = row.locator("[data-label]").nth(1); // Usage is 2nd column
-			const usageStrong = usageCell.locator("strong");
-			await expect(usageStrong).toBeVisible();
-			const usageText = await usageStrong.textContent();
-			expect(Number(usageText)).toBeGreaterThan(0);
+			const usageText = await row.locator("td").nth(1).textContent();
+			expect(Number(usageText?.match(/\d+/)?.[0] ?? "0")).toBeGreaterThan(0);
 		}
 	});
 
@@ -131,7 +128,7 @@ test.describe("Planner with medications", () => {
 		await navigateTo(page, "/planner");
 
 		// Set the "until" date to 90 days from now
-		const dateInputs = page.locator('form.planner input[type="datetime-local"]');
+		const dateInputs = page.getByTestId("planner-form").locator('input[type="datetime-local"]');
 		const untilInput = dateInputs.last();
 		const fromValue = await dateInputs.first().inputValue();
 		const fromDate = new Date(fromValue);
@@ -141,17 +138,15 @@ test.describe("Planner with medications", () => {
 		await untilInput.fill(untilValue);
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
-		// Low-stock med (3 pills, usage 1/day, 90 days) should have danger status
-		const dangerChips = resultsTable.locator(".status-chip.danger");
-		expect(await dangerChips.count()).toBeGreaterThanOrEqual(1);
-
 		// Find the low-stock med row and verify its usage value ~90 pills
-		const lowStockRow = resultsTable.locator(".table-row", { hasText: MED_LOW });
+		const lowStockRow = resultsTable.getByTestId("planner-result-row").filter({ hasText: MED_LOW });
 		await expect(lowStockRow).toBeVisible();
-		const lowUsage = await lowStockRow.locator("[data-label] strong").first().textContent();
+		await expect(lowStockRow.getByText(/Empty|Leer/i)).toBeVisible();
+		const lowUsageText = await lowStockRow.locator("td").nth(1).textContent();
+		const lowUsage = lowUsageText?.match(/\d+/)?.[0] ?? "0";
 		expect(Number(lowUsage)).toBeGreaterThanOrEqual(85); // ~90 pills needed
 		expect(Number(lowUsage)).toBeLessThanOrEqual(95);
 	});
@@ -160,7 +155,7 @@ test.describe("Planner with medications", () => {
 		await navigateTo(page, "/planner");
 
 		// Set a short date range: 7 days
-		const dateInputs = page.locator('form.planner input[type="datetime-local"]');
+		const dateInputs = page.getByTestId("planner-form").locator('input[type="datetime-local"]');
 		const untilInput = dateInputs.last();
 		const fromValue = await dateInputs.first().inputValue();
 		const fromDate = new Date(fromValue);
@@ -170,17 +165,17 @@ test.describe("Planner with medications", () => {
 		await untilInput.fill(untilValue);
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
 		// High-stock med (60 pills, usage 1/day, 7 days → needs ~7, has 60) should be "Enough"
-		const highStockRow = resultsTable.locator(".table-row", { hasText: MED_HIGH });
+		const highStockRow = resultsTable.getByTestId("planner-result-row").filter({ hasText: MED_HIGH });
 		await expect(highStockRow).toBeVisible();
-		const highStatus = highStockRow.locator(".status-chip.success");
-		await expect(highStatus).toBeVisible();
+		await expect(highStockRow.getByText(/Enough|Ausreichend/i)).toBeVisible();
 
 		// Verify usage is ~7 pills for the 7-day range
-		const highUsage = await highStockRow.locator("[data-label] strong").first().textContent();
+		const highUsageText = await highStockRow.locator("td").nth(1).textContent();
+		const highUsage = highUsageText?.match(/\d+/)?.[0] ?? "0";
 		expect(Number(highUsage)).toBeGreaterThanOrEqual(5);
 		expect(Number(highUsage)).toBeLessThanOrEqual(10);
 	});
@@ -189,32 +184,30 @@ test.describe("Planner with medications", () => {
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
-		const tableHead = resultsTable.locator(".table-head");
-		await expect(tableHead).toBeVisible();
-		await expect(tableHead.getByText(/Medication/i)).toBeVisible();
-		await expect(tableHead.getByText(/Usage/i)).toBeVisible();
-		await expect(tableHead.getByText(/Status/i)).toBeVisible();
+		await expect(resultsTable.getByRole("columnheader", { name: /Medication|Medikament/i })).toBeVisible();
+		await expect(resultsTable.getByRole("columnheader", { name: /Usage|Verbrauch/i })).toBeVisible();
+		await expect(resultsTable.getByRole("columnheader", { name: /Status/i })).toBeVisible();
 	});
 
 	test("should display available stock for each medication", async ({ page }) => {
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
 		// High-stock med should show a blister + loose-pill stock breakdown
-		const highStockRow = resultsTable.locator(".table-row", { hasText: MED_HIGH });
+		const highStockRow = resultsTable.getByTestId("planner-result-row").filter({ hasText: MED_HIGH });
 		await expect(highStockRow).toBeVisible();
 		const highStockText = await highStockRow.textContent();
 		expect(highStockText).toMatch(/\d+\s*(blisters|Blister)/i);
 		expect(highStockText).toMatch(/\d+\s*(pill|pills|Tablette|Tabletten)/i);
 
 		// Low-stock med: 1 pack × 1 blister × 3 pills = 3 pills = 0 full blisters + 3 loose
-		const lowStockRow = resultsTable.locator(".table-row", { hasText: MED_LOW });
+		const lowStockRow = resultsTable.getByTestId("planner-result-row").filter({ hasText: MED_LOW });
 		await expect(lowStockRow).toBeVisible();
 		const lowStockText = await lowStockRow.textContent();
 		// The exact loose-pill amount can vary due already-taken doses; ensure stock details are still rendered.
@@ -226,30 +219,46 @@ test.describe("Planner with medications", () => {
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
 		// Click Reset
-		await page.locator("form.planner button.ghost").click();
+		await page
+			.getByTestId("planner-form")
+			.getByRole("button", { name: /Reset|Zurücksetzen/i })
+			.click();
 
 		// Results should be cleared
 		await expect(resultsTable).not.toBeVisible({ timeout: 5000 });
 	});
 
-	test("should make results rows clickable for medication detail", async ({ page }) => {
+	test("should open medication detail from the medication name link", async ({ page }) => {
+		const pageErrors: string[] = [];
+		page.on("pageerror", (error) => {
+			pageErrors.push(error.message);
+		});
+
 		await navigateTo(page, "/planner");
 		await calculatePlanner(page);
 
-		const resultsTable = page.locator(".table");
+		const resultsTable = page.getByTestId("planner-results-table");
 		await expect(resultsTable).toBeVisible({ timeout: 10000 });
 
-		// Click on a results row
-		await resultsTable.locator(".table-row").first().click();
+		const firstRow = resultsTable.getByTestId("planner-result-row").first();
+		await expect(firstRow).not.toHaveAttribute("role", "button");
+		const medicationName = (await firstRow.getByRole("button").first().innerText()).trim();
+		await firstRow.getByRole("button").first().click();
 
-		const modal = page.locator(".modal-overlay");
+		const modal = page.getByRole("dialog").filter({ hasText: medicationName });
 		await expect(modal).toBeVisible({ timeout: 5000 });
-
-		await page.locator("button.modal-close").click();
-		await expect(modal).not.toBeVisible();
+		await expect(modal.getByRole("heading", { name: medicationName })).toBeVisible();
+		await expect(modal).toContainText("Current Stock");
+		await expect(modal).toContainText("Package Details");
+		await expect(page.locator("#root")).toContainText(medicationName);
+		expect(
+			pageErrors.filter(
+				(message) => message.includes("Element type is invalid") || message.includes("aria-describedby")
+			)
+		).toEqual([]);
 	});
 });

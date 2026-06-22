@@ -4,9 +4,25 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import ExportModal from "../components/ExportModal";
 import { ImportReviewModal } from "../components/ImportReviewModal";
+import { SettingsActionCard, SettingsOptionCard, SettingsSuccessNotice } from "../components/settings/SettingsCards";
 import { useAppContext } from "../context";
 import { useModalHistory } from "../hooks/useModalHistory";
+import { SectionCard } from "../ui/components/SectionCard";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppSelect } from "../ui/primitives/AppSelect";
+import { AppTooltipIcon } from "../ui/primitives/AppTooltip";
+import { StatusBadge } from "../ui/primitives/StatusBadge";
 import { getSystemLocale, withFormattingTimezone } from "../utils/formatters";
+import classes from "./SettingsPage.module.css";
+import surfaceClasses from "./SettingsPageSurfaces.module.css";
+
+function sx(...classNames: Array<string | false | null | undefined>) {
+	return classNames.filter(Boolean).join(" ");
+}
+
+function surfaceClass(...classNames: Array<string | false | null | undefined>) {
+	return sx(...classNames.map((className) => (className ? (surfaceClasses[className] ?? className) : className)));
+}
 
 export function SettingsPage() {
 	const { t, i18n } = useTranslation();
@@ -165,7 +181,7 @@ export function SettingsPage() {
 	} else if (showTimezoneSaved) {
 		timezoneStatusText = t("settings.timezone.saved");
 	}
-	const timezoneStatusClassName = showTimezoneSaved ? "timezone-status timezone-status-saved" : "timezone-status";
+	const timezoneStatusClassName = surfaceClass("timezone-status", showTimezoneSaved && "timezone-status-saved");
 	const availableTimezones = Array.isArray(settings.availableTimezones) ? settings.availableTimezones : [];
 	const timezoneSuggestions =
 		availableTimezones.length > 0
@@ -190,30 +206,31 @@ export function SettingsPage() {
 			{settingsLoading ? (
 				<div className="page-loading-skeleton" aria-busy="true">
 					<span className="screen-reader-only">{t("settings.loading")}</span>
-					<article className="card skeleton-card">
+					<SectionCard padding="md">
 						<span className="skeleton-line skeleton-line-short" />
 						<span className="skeleton-line skeleton-line-medium" />
-					</article>
-					<article className="card skeleton-card">
+					</SectionCard>
+					<SectionCard padding="md">
 						<span className="skeleton-line skeleton-line-short" />
 						<span className="skeleton-line skeleton-line-long" />
 						<span className="skeleton-line skeleton-line-medium" />
 						<span className="skeleton-line skeleton-line-long" />
-					</article>
+					</SectionCard>
 				</div>
 			) : (
-				<div className="settings-form" data-testid="settings-page">
+				<div className={surfaceClass("settings-form")} data-testid="settings-page">
 					{/* Language */}
-					<article className="card">
-						<div className="card-head">
-							<h2>{t("settings.language.title")}</h2>
-						</div>
-						<label className="setting-row language-row" data-testid="settings-language-select">
-							<span className="setting-label">{t("settings.language.select")}</span>
-							<select
+					<SectionCard title={t("settings.language.title")} contentClassName={classes.languageSettingsContent}>
+						<label
+							className={surfaceClass("settings-control-row", "language-row")}
+							data-testid="settings-language-select"
+						>
+							<span className={surfaceClass("setting-label")}>{t("settings.language.select")}</span>
+							<AppSelect
 								value={i18n.language}
+								size="md"
 								onChange={(e) => {
-									const lang = e.target.value;
+									const lang = e.currentTarget.value;
 									i18n.changeLanguage(lang);
 									authFetch("/api/settings/language", {
 										method: "PUT",
@@ -221,23 +238,22 @@ export function SettingsPage() {
 										body: JSON.stringify({ language: lang }),
 									});
 								}}
-								className="select-field language-select"
-							>
-								<option value="en">🇬🇧 English</option>
-								<option value="de">🇩🇪 Deutsch</option>
-							</select>
+								classNames={{ root: classes.languageSelectRoot, input: classes.languageSelect }}
+								data={[
+									{ value: "en", label: "🇬🇧 English" },
+									{ value: "de", label: "🇩🇪 Deutsch" },
+								]}
+							/>
 						</label>
-						<div className="setting-row language-row" style={{ marginTop: "12px" }}>
-							<div className="setting-label">
+						<div className={surfaceClass("settings-control-row", "language-row", "timezone-row")}>
+							<div className={surfaceClass("setting-label")}>
 								<span>{t("settings.timezone.select")}</span>
-								<span className="info-tooltip small tooltip-align-left" data-tooltip={t("settings.timezone.hint")}>
-									ⓘ
-								</span>
+								<AppTooltipIcon label={t("settings.timezone.hint")} />
 							</div>
-							<div className="setting-actions" style={{ margin: 0, flexWrap: "nowrap", gap: "8px", width: "auto" }}>
+							<div className={sx(surfaceClass("setting-actions"), classes.timezoneActions)}>
 								<input
 									type="text"
-									className="select-field language-select"
+									className={sx(classes.languageSelect, classes.timezoneInput)}
 									value={timezoneDraft}
 									onChange={(e) => {
 										setTimezoneDraft(e.target.value);
@@ -257,9 +273,10 @@ export function SettingsPage() {
 										<option key={zone} value={zone} />
 									))}
 								</datalist>
-								<button
+								<AppButton
 									type="button"
-									className="ghost"
+									tone="secondary"
+									className={classes.timezoneDefaultButton}
 									onClick={() => {
 										setTimezoneTouched(true);
 										setTimezoneDraft("");
@@ -267,161 +284,158 @@ export function SettingsPage() {
 									}}
 								>
 									{t("settings.timezone.useServerDefault")}
-								</button>
+								</AppButton>
 							</div>
 						</div>
 						<p className={timezoneStatusClassName}>{timezoneStatusText || " "}</p>
-						<p className="hint-text" style={{ marginTop: "8px" }}>
+						<p className={surfaceClass("hint-text")} style={{ marginTop: "8px" }}>
 							{t("settings.timezone.currentServerTz", { timezone: settings.serverTimezone || "UTC" })}
 						</p>
-					</article>
+					</SectionCard>
 
-					<article className="card" data-testid="settings-notification-card">
-						<div className="card-head">
-							<h2>{t("settings.apiKey.title")}</h2>
-						</div>
-						<div className="setting-section">
-							<div className="setting-group" style={{ gridTemplateColumns: "1fr" }}>
-								<div className="action-card">
-									<div className="action-card-content">
-										<span className="action-card-title">{t("settings.apiKey.generateTitle")}</span>
-										<span className="action-card-desc">{t("settings.apiKey.generateDesc")}</span>
-									</div>
-									<button type="button" className="secondary" onClick={generateApiKey} disabled={apiKeyGenerating}>
-										{apiKeyGenerating ? t("settings.apiKey.generating") : t("settings.apiKey.generateButton")}
-									</button>
-								</div>
+					<SectionCard title={t("settings.apiKey.title")} data-testid="settings-notification-card">
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("setting-group")} style={{ gridTemplateColumns: "1fr" }}>
+								<SettingsActionCard
+									title={t("settings.apiKey.generateTitle")}
+									description={t("settings.apiKey.generateDesc")}
+									action={
+										<AppButton type="button" tone="secondary" onClick={generateApiKey} disabled={apiKeyGenerating}>
+											{apiKeyGenerating ? t("settings.apiKey.generating") : t("settings.apiKey.generateButton")}
+										</AppButton>
+									}
+								/>
 
 								{apiKeyToken ? (
 									<div>
-										<span className="field-label">{t("settings.apiKey.currentToken")}</span>
-										<div className="setting-actions api-key-actions">
+										<span className={surfaceClass("field-label")}>{t("settings.apiKey.currentToken")}</span>
+										<div className={surfaceClass("setting-actions", "api-key-actions")}>
 											<input
 												type="text"
-												className="api-key-token-input"
+												className={surfaceClass("api-key-token-input")}
 												value={apiKeyToken}
 												readOnly
 												onClick={(e) => (e.target as HTMLInputElement).select()}
 											/>
-											<button type="button" className="ghost" onClick={copyApiKeyToken}>
+											<AppButton type="button" tone="secondary" onClick={copyApiKeyToken}>
 												{apiKeyCopied ? t("settings.apiKey.copied") : t("settings.apiKey.copyButton")}
-											</button>
+											</AppButton>
 										</div>
-										<p className="hint-text">{t("settings.apiKey.copyHint")}</p>
+										<p className={surfaceClass("hint-text")}>{t("settings.apiKey.copyHint")}</p>
 									</div>
 								) : null}
 
 								{apiKeyError ? <p className="danger-text">{apiKeyError}</p> : null}
 							</div>
 						</div>
-					</article>
+					</SectionCard>
 
 					{/* Notifications */}
-					<article className="card">
-						<div className="card-head">
-							<h2>{t("settings.notifications.title")}</h2>
-						</div>
-
-						<div className="setting-section">
-							<div className="section-header">
+					<SectionCard title={t("settings.notifications.title")}>
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.notifications.channels")}</h3>
 							</div>
-							<div className="notification-matrix" data-testid="settings-notification-matrix">
-								<div className="matrix-header">
-									<div className="matrix-label"></div>
-									<div className="matrix-channel">{t("settings.notifications.email")}</div>
-									<div className="matrix-channel">{t("settings.notifications.push")}</div>
+							<div className={surfaceClass("notification-matrix")} data-testid="settings-notification-matrix">
+								<div className={surfaceClass("matrix-header")}>
+									<div className={surfaceClass("matrix-label")}></div>
+									<div className={surfaceClass("matrix-channel")}>{t("settings.notifications.email")}</div>
+									<div className={surfaceClass("matrix-channel")}>{t("settings.notifications.push")}</div>
 								</div>
-								<div className="matrix-row">
-									<div className="matrix-label">{t("settings.notifications.stockReminders")}</div>
-									<div className="matrix-cell">
-										<label className={`toggle-switch small${!settings.emailEnabled ? " disabled" : ""}`}>
+								<div className={surfaceClass("matrix-row")}>
+									<div className={surfaceClass("matrix-label")}>{t("settings.notifications.stockReminders")}</div>
+									<div className={surfaceClass("matrix-cell")}>
+										<label className={surfaceClass("toggle-switch", "small", !settings.emailEnabled && "disabled")}>
 											<input
 												type="checkbox"
 												checked={settings.emailStockReminders}
 												onChange={(e) => setSettings({ ...settings, emailStockReminders: e.target.checked })}
 												disabled={!settings.emailEnabled}
 											/>
-											<span className="toggle-slider"></span>
+											<span className={surfaceClass("toggle-slider")}></span>
 										</label>
 									</div>
-									<div className="matrix-cell">
-										<label className={`toggle-switch small${!settings.shoutrrrEnabled ? " disabled" : ""}`}>
+									<div className={surfaceClass("matrix-cell")}>
+										<label className={surfaceClass("toggle-switch", "small", !settings.shoutrrrEnabled && "disabled")}>
 											<input
 												type="checkbox"
 												checked={settings.shoutrrrStockReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrStockReminders: e.target.checked })}
 												disabled={!settings.shoutrrrEnabled}
 											/>
-											<span className="toggle-slider"></span>
+											<span className={surfaceClass("toggle-slider")}></span>
 										</label>
 									</div>
 								</div>
-								<div className="matrix-row">
-									<div className="matrix-label">{t("settings.notifications.intakeReminders")}</div>
-									<div className="matrix-cell">
-										<label className={`toggle-switch small${!settings.emailEnabled ? " disabled" : ""}`}>
+								<div className={surfaceClass("matrix-row")}>
+									<div className={surfaceClass("matrix-label")}>{t("settings.notifications.intakeReminders")}</div>
+									<div className={surfaceClass("matrix-cell")}>
+										<label className={surfaceClass("toggle-switch", "small", !settings.emailEnabled && "disabled")}>
 											<input
 												type="checkbox"
 												checked={settings.emailIntakeReminders}
 												onChange={(e) => setSettings({ ...settings, emailIntakeReminders: e.target.checked })}
 												disabled={!settings.emailEnabled}
 											/>
-											<span className="toggle-slider"></span>
+											<span className={surfaceClass("toggle-slider")}></span>
 										</label>
 									</div>
-									<div className="matrix-cell">
-										<label className={`toggle-switch small${!settings.shoutrrrEnabled ? " disabled" : ""}`}>
+									<div className={surfaceClass("matrix-cell")}>
+										<label className={surfaceClass("toggle-switch", "small", !settings.shoutrrrEnabled && "disabled")}>
 											<input
 												type="checkbox"
 												checked={settings.shoutrrrIntakeReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrIntakeReminders: e.target.checked })}
 												disabled={!settings.shoutrrrEnabled}
 											/>
-											<span className="toggle-slider"></span>
+											<span className={surfaceClass("toggle-slider")}></span>
 										</label>
 									</div>
 								</div>
-								<div className="matrix-row">
-									<div className="matrix-label">{t("settings.notifications.prescriptionReminders")}</div>
-									<div className="matrix-cell">
-										<label className={`toggle-switch small${!settings.emailEnabled ? " disabled" : ""}`}>
+								<div className={surfaceClass("matrix-row")}>
+									<div className={surfaceClass("matrix-label")}>
+										{t("settings.notifications.prescriptionReminders")}
+									</div>
+									<div className={surfaceClass("matrix-cell")}>
+										<label className={surfaceClass("toggle-switch", "small", !settings.emailEnabled && "disabled")}>
 											<input
 												type="checkbox"
 												checked={settings.emailPrescriptionReminders}
 												onChange={(e) => setSettings({ ...settings, emailPrescriptionReminders: e.target.checked })}
 												disabled={!settings.emailEnabled}
 											/>
-											<span className="toggle-slider"></span>
+											<span className={surfaceClass("toggle-slider")}></span>
 										</label>
 									</div>
-									<div className="matrix-cell">
-										<label className={`toggle-switch small${!settings.shoutrrrEnabled ? " disabled" : ""}`}>
+									<div className={surfaceClass("matrix-cell")}>
+										<label className={surfaceClass("toggle-switch", "small", !settings.shoutrrrEnabled && "disabled")}>
 											<input
 												type="checkbox"
 												checked={settings.shoutrrrPrescriptionReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrPrescriptionReminders: e.target.checked })}
 												disabled={!settings.shoutrrrEnabled}
 											/>
-											<span className="toggle-slider"></span>
+											<span className={surfaceClass("toggle-slider")}></span>
 										</label>
 									</div>
 								</div>
 							</div>
 							{!settings.emailEnabled && !settings.shoutrrrEnabled && (
-								<p className="hint-text">{t("settings.notifications.enableHint")}</p>
+								<p className={surfaceClass("hint-text")}>{t("settings.notifications.enableHint")}</p>
 							)}
 
 							{/* Skip reminders for taken doses */}
-							<div className="setting-row compact" style={{ marginTop: "16px" }}>
-								<label className="setting-label">
+							<div className={surfaceClass("settings-control-row", "compact")} style={{ marginTop: "16px" }}>
+								<label className={surfaceClass("setting-label")}>
 									{t("settings.notifications.skipTakenDoses")}
-									<span className="info-tooltip small" data-tooltip={t("settings.notifications.skipTakenDosesTooltip")}>
-										ⓘ
-									</span>
+									<AppTooltipIcon label={t("settings.notifications.skipTakenDosesTooltip")} />
 								</label>
 								<label
-									className={`toggle-switch small${!settings.emailEnabled && !settings.shoutrrrEnabled ? " disabled" : ""}`}
+									className={surfaceClass(
+										"toggle-switch",
+										"small",
+										!settings.emailEnabled && !settings.shoutrrrEnabled && "disabled"
+									)}
 								>
 									<input
 										type="checkbox"
@@ -429,23 +443,22 @@ export function SettingsPage() {
 										onChange={(e) => setSettings({ ...settings, skipRemindersForTakenDoses: e.target.checked })}
 										disabled={!settings.emailEnabled && !settings.shoutrrrEnabled}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 
 							{/* Repeat reminders for missed doses */}
-							<div className="setting-row compact" style={{ marginTop: "12px" }}>
-								<label className="setting-label">
+							<div className={surfaceClass("settings-control-row", "compact")} style={{ marginTop: "12px" }}>
+								<label className={surfaceClass("setting-label")}>
 									{t("settings.notifications.repeatReminders")}
-									<span
-										className="info-tooltip small"
-										data-tooltip={t("settings.notifications.repeatRemindersTooltip")}
-									>
-										ⓘ
-									</span>
+									<AppTooltipIcon label={t("settings.notifications.repeatRemindersTooltip")} />
 								</label>
 								<label
-									className={`toggle-switch small${!settings.emailEnabled && !settings.shoutrrrEnabled ? " disabled" : ""}`}
+									className={surfaceClass(
+										"toggle-switch",
+										"small",
+										!settings.emailEnabled && !settings.shoutrrrEnabled && "disabled"
+									)}
 								>
 									<input
 										type="checkbox"
@@ -453,22 +466,20 @@ export function SettingsPage() {
 										onChange={(e) => setSettings({ ...settings, repeatRemindersEnabled: e.target.checked })}
 										disabled={!settings.emailEnabled && !settings.shoutrrrEnabled}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 
 							{/* Reminder interval (only shown when repeat is enabled) */}
 							{settings.repeatRemindersEnabled && (
 								<>
-									<div className="setting-row compact" style={{ marginTop: "12px", marginLeft: "24px" }}>
-										<label className="setting-label">
+									<div
+										className={surfaceClass("settings-control-row", "compact")}
+										style={{ marginTop: "12px", marginLeft: "24px" }}
+									>
+										<label className={surfaceClass("setting-label")}>
 											{t("settings.notifications.reminderInterval")}
-											<span
-												className="info-tooltip small"
-												data-tooltip={t("settings.notifications.reminderIntervalTooltip")}
-											>
-												ⓘ
-											</span>
+											<AppTooltipIcon label={t("settings.notifications.reminderIntervalTooltip")} />
 										</label>
 										<input
 											type="text"
@@ -481,15 +492,13 @@ export function SettingsPage() {
 											style={{ width: "80px", textAlign: "center" }}
 										/>
 									</div>
-									<div className="setting-row compact" style={{ marginTop: "8px", marginLeft: "24px" }}>
-										<label className="setting-label">
+									<div
+										className={surfaceClass("settings-control-row", "compact")}
+										style={{ marginTop: "8px", marginLeft: "24px" }}
+									>
+										<label className={surfaceClass("setting-label")}>
 											{t("settings.notifications.maxNaggingReminders")}
-											<span
-												className="info-tooltip small"
-												data-tooltip={t("settings.notifications.maxNaggingRemindersTooltip")}
-											>
-												ⓘ
-											</span>
+											<AppTooltipIcon label={t("settings.notifications.maxNaggingRemindersTooltip")} />
 										</label>
 										<input
 											type="text"
@@ -509,19 +518,21 @@ export function SettingsPage() {
 							)}
 						</div>
 
-						<div className="setting-section">
-							<div className="section-header">
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.stockReminder.title")}</h3>
 							</div>
-							<div className="setting-row compact">
-								<label className="setting-label">
+							<div className={surfaceClass("settings-control-row", "compact")}>
+								<label className={surfaceClass("setting-label")}>
 									{t("settings.stockReminder.description")}{" "}
-									<span className="info-tooltip small" data-tooltip={t("settings.stockReminder.infoTooltip")}>
-										ⓘ
-									</span>{" "}
+									<AppTooltipIcon label={t("settings.stockReminder.infoTooltip")} />{" "}
 								</label>
 								<label
-									className={`toggle-switch small${!settings.emailEnabled && !settings.shoutrrrEnabled ? " disabled" : ""}`}
+									className={surfaceClass(
+										"toggle-switch",
+										"small",
+										!settings.emailEnabled && !settings.shoutrrrEnabled && "disabled"
+									)}
 								>
 									<input
 										type="checkbox"
@@ -548,22 +559,24 @@ export function SettingsPage() {
 										}}
 										disabled={!settings.emailEnabled && !settings.shoutrrrEnabled}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 
-							<div className="setting-row compact" style={{ marginTop: "4px" }}>
-								<label className="setting-label">
+							<div className={surfaceClass("settings-control-row", "compact")} style={{ marginTop: "4px" }}>
+								<label className={surfaceClass("setting-label")}>
 									{t("settings.stockReminder.repeatDaily")}
-									<span
-										className="info-tooltip small tooltip-align-left"
-										data-tooltip={t("settings.stockReminder.repeatTooltip")}
-									>
-										ⓘ
-									</span>
+									<AppTooltipIcon label={t("settings.stockReminder.repeatTooltip")} />
 								</label>
 								<label
-									className={`toggle-switch small${!((settings.emailEnabled && settings.emailStockReminders) || (settings.shoutrrrEnabled && settings.shoutrrrStockReminders)) ? " disabled" : ""}`}
+									className={surfaceClass(
+										"toggle-switch",
+										"small",
+										!(
+											(settings.emailEnabled && settings.emailStockReminders) ||
+											(settings.shoutrrrEnabled && settings.shoutrrrStockReminders)
+										) && "disabled"
+									)}
 								>
 									<input
 										type="checkbox"
@@ -576,16 +589,16 @@ export function SettingsPage() {
 											)
 										}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 						</div>
 
-						<div className="setting-section">
-							<div className="section-header">
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.notifications.email")}</h3>
 								<label
-									className={`toggle-switch small${!settings.smtpHost ? " disabled" : ""}`}
+									className={surfaceClass("toggle-switch", "small", !settings.smtpHost && "disabled")}
 									data-testid="settings-email-enabled-toggle"
 								>
 									<input
@@ -609,29 +622,27 @@ export function SettingsPage() {
 										}}
 										disabled={!settings.smtpHost}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 							{emailUnavailableReason && (
-								<div className="setting-actions">
+								<div className={surfaceClass("setting-actions")}>
 									<span className={settingsLoadError ? "danger-text" : "info-text"}>{emailUnavailableReason}</span>
 								</div>
 							)}
 							{settings.emailEnabled && (
-								<>
-									<div className="setting-group">
-										<div className="full">
-											<span className="field-label">
-												{t("settings.email.recipient")}
-												<span
-													className="info-tooltip"
-													data-tooltip={`SMTP: ${settings.smtpHost || t("settings.email.notConfigured")}:${settings.smtpPort}${settings.hasSmtpPassword ? "\nPassword: ✓" : ""}`}
-												>
-													ⓘ
-												</span>
-											</span>
+								<div className={surfaceClass("setting-group")}>
+									<div className={sx(surfaceClass("full"), classes.notificationTestField)}>
+										<span className={surfaceClass("field-label")}>
+											{t("settings.email.recipient")}
+											<AppTooltipIcon
+												label={`SMTP: ${settings.smtpHost || t("settings.email.notConfigured")}:${settings.smtpPort}${settings.hasSmtpPassword ? "\nPassword: ✓" : ""}`}
+											/>
+										</span>
+										<div className={classes.notificationTestRow}>
 											<input
 												type="text"
+												className={classes.notificationTestInput}
 												value={settings.notificationEmail}
 												onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
 												placeholder="recipient address"
@@ -645,31 +656,35 @@ export function SettingsPage() {
 												data-lpignore="true"
 												data-1p-ignore="true"
 											/>
+											<AppButton
+												type="button"
+												tone="secondary"
+												className={classes.notificationTestButton}
+												onClick={testEmail}
+												disabled={testingEmail || !settings.notificationEmail}
+											>
+												{testingEmail ? t("common.sending") : t("common.test")}
+											</AppButton>
+											{testEmailResult && (
+												<span
+													className={sx(
+														classes.notificationTestResult,
+														testEmailResult.success ? "success-text" : "danger-text"
+													)}
+												>
+													{testEmailResult.message}
+												</span>
+											)}
 										</div>
 									</div>
-									<div className="setting-actions">
-										<button
-											type="button"
-											className="ghost"
-											onClick={testEmail}
-											disabled={testingEmail || !settings.notificationEmail}
-										>
-											{testingEmail ? t("common.sending") : t("common.test")}
-										</button>
-										{testEmailResult && (
-											<span className={testEmailResult.success ? "success-text" : "danger-text"}>
-												{testEmailResult.message}
-											</span>
-										)}
-									</div>
-								</>
+								</div>
 							)}
 						</div>
 
-						<div className="setting-section">
-							<div className="section-header">
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.notifications.push")}</h3>
-								<label className="toggle-switch small">
+								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
 										type="checkbox"
 										checked={settings.shoutrrrEnabled}
@@ -690,72 +705,70 @@ export function SettingsPage() {
 											}
 										}}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 							{settings.shoutrrrEnabled && (
-								<>
-									<div className="setting-group">
-										<div className="full">
-											<span className="field-label">
-												{t("settings.push.url")}
-												<span
-													className="info-tooltip"
-													data-tooltip={`${t("settings.push.supports")}\n\n${t("settings.push.docsLink")}`}
-												>
-													ⓘ
-												</span>
-											</span>
+								<div className={surfaceClass("setting-group")}>
+									<div className={sx(surfaceClass("full"), classes.notificationTestField)}>
+										<span className={surfaceClass("field-label")}>
+											{t("settings.push.url")}
+											<AppTooltipIcon label={`${t("settings.push.supports")}\n\n${t("settings.push.docsLink")}`} />
+										</span>
+										<div className={classes.notificationTestRow}>
 											<input
 												type="text"
+												className={classes.notificationTestInput}
 												value={settings.shoutrrrUrl}
 												onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
 												placeholder={t("settings.push.urlPlaceholder")}
 											/>
+											<AppButton
+												type="button"
+												tone="secondary"
+												className={classes.notificationTestButton}
+												onClick={testShoutrrr}
+												disabled={testingShoutrrr || !settings.shoutrrrUrl}
+											>
+												{testingShoutrrr ? t("common.sending") : t("common.test")}
+											</AppButton>
+											{testShoutrrrResult && (
+												<span
+													className={sx(
+														classes.notificationTestResult,
+														testShoutrrrResult.success ? "success-text" : "danger-text"
+													)}
+												>
+													{testShoutrrrResult.message}
+												</span>
+											)}
 										</div>
 									</div>
-									<div className="setting-actions">
-										<button
-											type="button"
-											className="ghost"
-											onClick={testShoutrrr}
-											disabled={testingShoutrrr || !settings.shoutrrrUrl}
-										>
-											{testingShoutrrr ? t("common.sending") : t("common.test")}
-										</button>
-										{testShoutrrrResult && (
-											<span className={testShoutrrrResult.success ? "success-text" : "danger-text"}>
-												{testShoutrrrResult.message}
-											</span>
-										)}
-									</div>
-								</>
+								</div>
 							)}
 						</div>
 
-						<div className="schedule-overview">
-							<div className="schedule-header">
-								<span className="schedule-title">{t("settings.schedule.title")}</span>
-								<span className="info-tooltip" data-tooltip={t("settings.schedule.envHint")}>
-									ⓘ
-								</span>
+						<div className={surfaceClass("schedule-overview")}>
+							<div className={surfaceClass("schedule-header")}>
+								<span className={surfaceClass("schedule-title")}>{t("settings.schedule.title")}</span>
+								<AppTooltipIcon label={t("settings.schedule.envHint")} />
 							</div>
-							<div className="schedule-row">
-								<span className="schedule-label">{t("settings.schedule.stockCheck")}</span>
-								<span className="schedule-value">
+							<div className={surfaceClass("schedule-row")}>
+								<span className={surfaceClass("schedule-label")}>{t("settings.schedule.stockCheck")}</span>
+								<span className={surfaceClass("schedule-value")}>
 									{t("settings.schedule.dailyAtHour", { hour: settings.reminderHour })}
 								</span>
 							</div>
-							<div className="schedule-row">
-								<span className="schedule-label">{t("settings.schedule.intakeCheck")}</span>
-								<span className="schedule-value">
+							<div className={surfaceClass("schedule-row")}>
+								<span className={surfaceClass("schedule-label")}>{t("settings.schedule.intakeCheck")}</span>
+								<span className={surfaceClass("schedule-value")}>
 									{t("settings.schedule.minutesBefore", { minutes: settings.reminderMinutesBefore })}
 								</span>
 							</div>
 							{settings.nextScheduledCheck && (
-								<div className="schedule-row">
-									<span className="schedule-label">{t("settings.schedule.nextCheck")}</span>
-									<span className="schedule-value">
+								<div className={surfaceClass("schedule-row")}>
+									<span className={surfaceClass("schedule-label")}>{t("settings.schedule.nextCheck")}</span>
+									<span className={surfaceClass("schedule-value")}>
 										{new Date(settings.nextScheduledCheck).toLocaleString(
 											getSystemLocale(i18n.language),
 											withFormattingTimezone({
@@ -770,9 +783,9 @@ export function SettingsPage() {
 								</div>
 							)}
 							{settings.lastStockReminderSent && (
-								<div className="schedule-row">
-									<span className="schedule-label">{t("settings.schedule.lastStockSent")}</span>
-									<span className="schedule-value">
+								<div className={surfaceClass("schedule-row")}>
+									<span className={surfaceClass("schedule-label")}>{t("settings.schedule.lastStockSent")}</span>
+									<span className={surfaceClass("schedule-value")}>
 										{new Date(settings.lastStockReminderSent).toLocaleString(
 											getSystemLocale(i18n.language),
 											withFormattingTimezone({
@@ -787,9 +800,9 @@ export function SettingsPage() {
 								</div>
 							)}
 							{settings.lastAutoEmailSent && (
-								<div className="schedule-row">
-									<span className="schedule-label">{t("settings.schedule.lastIntakeSent")}</span>
-									<span className="schedule-value">
+								<div className={surfaceClass("schedule-row")}>
+									<span className={surfaceClass("schedule-label")}>{t("settings.schedule.lastIntakeSent")}</span>
+									<span className={surfaceClass("schedule-value")}>
 										{new Date(settings.lastAutoEmailSent).toLocaleString(
 											getSystemLocale(i18n.language),
 											withFormattingTimezone({
@@ -804,9 +817,9 @@ export function SettingsPage() {
 								</div>
 							)}
 							{settings.lastPrescriptionReminderSent && (
-								<div className="schedule-row">
-									<span className="schedule-label">{t("settings.schedule.lastPrescriptionSent")}</span>
-									<span className="schedule-value">
+								<div className={surfaceClass("schedule-row")}>
+									<span className={surfaceClass("schedule-label")}>{t("settings.schedule.lastPrescriptionSent")}</span>
+									<span className={surfaceClass("schedule-value")}>
 										{new Date(settings.lastPrescriptionReminderSent).toLocaleString(
 											getSystemLocale(i18n.language),
 											withFormattingTimezone({
@@ -821,81 +834,57 @@ export function SettingsPage() {
 								</div>
 							)}
 						</div>
-					</article>
+					</SectionCard>
 
 					{/* Stock Settings */}
-					<article className="card" data-testid="settings-security-card">
-						<div className="card-head">
-							<h2>{t("settings.stock.title")}</h2>
-						</div>
-
-						<div className="setting-section">
-							<div className="section-header">
+					<SectionCard title={t("settings.stock.title")} data-testid="settings-security-card">
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.stock.calculationMode")}</h3>
 							</div>
-							<div className="setting-group calculation-mode-group" data-testid="settings-calculation-mode">
-								<label
-									className={`radio-card ${settings.stockCalculationMode === "automatic" ? "selected" : ""}`}
-									htmlFor={automaticStockCalculationId}
-								>
-									<input
-										id={automaticStockCalculationId}
-										type="radio"
-										name="stockCalculationMode"
-										value="automatic"
-										checked={settings.stockCalculationMode === "automatic"}
-										onChange={(e) =>
-											setSettings({ ...settings, stockCalculationMode: e.target.value as "automatic" | "manual" })
-										}
-									/>
-									<div className="radio-card-content">
-										<div className="radio-card-text">
-											<span className="radio-card-title">{t("settings.stock.automatic")}</span>
-											<span className="radio-card-desc">{t("settings.stock.automaticDesc")}</span>
-										</div>
-									</div>
-								</label>
-								<label
-									className={`radio-card ${settings.stockCalculationMode === "manual" ? "selected" : ""}`}
-									htmlFor={manualStockCalculationId}
-								>
-									<input
-										id={manualStockCalculationId}
-										type="radio"
-										name="stockCalculationMode"
-										value="manual"
-										checked={settings.stockCalculationMode === "manual"}
-										onChange={(e) =>
-											setSettings({ ...settings, stockCalculationMode: e.target.value as "automatic" | "manual" })
-										}
-									/>
-									<div className="radio-card-content">
-										<div className="radio-card-text">
-											<span className="radio-card-title">{t("settings.stock.manual")}</span>
-											<span className="radio-card-desc">{t("settings.stock.manualDesc")}</span>
-										</div>
-									</div>
-								</label>
+							<div
+								className={surfaceClass("setting-group", "calculation-mode-group")}
+								data-testid="settings-calculation-mode"
+							>
+								<SettingsOptionCard
+									id={automaticStockCalculationId}
+									name="stockCalculationMode"
+									value="automatic"
+									checked={settings.stockCalculationMode === "automatic"}
+									title={t("settings.stock.automatic")}
+									description={t("settings.stock.automaticDesc")}
+									onChange={(value) =>
+										setSettings({ ...settings, stockCalculationMode: value as "automatic" | "manual" })
+									}
+								/>
+								<SettingsOptionCard
+									id={manualStockCalculationId}
+									name="stockCalculationMode"
+									value="manual"
+									checked={settings.stockCalculationMode === "manual"}
+									title={t("settings.stock.manual")}
+									description={t("settings.stock.manualDesc")}
+									onChange={(value) =>
+										setSettings({ ...settings, stockCalculationMode: value as "automatic" | "manual" })
+									}
+								/>
 							</div>
 						</div>
 
-						<div className="setting-section">
-							<div className="section-header">
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.stock.thresholds")}</h3>
 							</div>
-							<div className="setting-group threshold-chips-group">
+							<div className={surfaceClass("setting-group", "threshold-chips-group")}>
 								<div
-									className={settings.reminderDaysBefore >= settings.lowStockDays ? "threshold-invalid" : ""}
+									className={surfaceClass(settings.reminderDaysBefore >= settings.lowStockDays && "threshold-invalid")}
 									data-testid="settings-threshold-critical"
 								>
-									<span className="field-label threshold-chip-label">
-										<span className="status-chip small danger">{t("status.criticalStock")}</span>
-										<span
-											className="info-tooltip small tooltip-align-left"
-											data-tooltip={t("settings.stock.criticalStockTooltip")}
-										>
-											ⓘ
-										</span>
+									<span className={surfaceClass("field-label", "threshold-chip-label")}>
+										<StatusBadge size="xs" tone="danger">
+											{t("status.criticalStock")}
+										</StatusBadge>
+										<AppTooltipIcon label={t("settings.stock.criticalStockTooltip")} />
 									</span>
 									<input
 										type="text"
@@ -906,22 +895,19 @@ export function SettingsPage() {
 									/>
 								</div>
 								<div
-									className={
+									className={surfaceClass(
 										settings.lowStockDays <= settings.reminderDaysBefore ||
-										settings.lowStockDays >= settings.highStockDays
+											settings.lowStockDays >= settings.highStockDays
 											? "threshold-invalid"
 											: ""
-									}
+									)}
 									data-testid="settings-threshold-low"
 								>
-									<span className="field-label threshold-chip-label">
-										<span className="status-chip small warning">{t("status.lowStock")}</span>
-										<span
-											className="info-tooltip small tooltip-align-left"
-											data-tooltip={t("settings.stock.lowStockTooltip")}
-										>
-											ⓘ
-										</span>
+									<span className={surfaceClass("field-label", "threshold-chip-label")}>
+										<StatusBadge size="xs" tone="warning">
+											{t("status.lowStock")}
+										</StatusBadge>
+										<AppTooltipIcon label={t("settings.stock.lowStockTooltip")} />
 									</span>
 									<input
 										type="text"
@@ -932,17 +918,14 @@ export function SettingsPage() {
 									/>
 								</div>
 								<div
-									className={settings.highStockDays <= settings.lowStockDays ? "threshold-invalid" : ""}
+									className={surfaceClass(settings.highStockDays <= settings.lowStockDays && "threshold-invalid")}
 									data-testid="settings-threshold-high"
 								>
-									<span className="field-label threshold-chip-label">
-										<span className="status-chip small high">{t("status.highStock")}</span>
-										<span
-											className="info-tooltip small tooltip-align-left"
-											data-tooltip={t("settings.stock.highStockTooltip")}
-										>
-											ⓘ
-										</span>
+									<span className={surfaceClass("field-label", "threshold-chip-label")}>
+										<StatusBadge size="xs" tone="high">
+											{t("status.highStock")}
+										</StatusBadge>
+										<AppTooltipIcon label={t("settings.stock.highStockTooltip")} />
 									</span>
 									<input
 										type="text"
@@ -955,209 +938,164 @@ export function SettingsPage() {
 							</div>
 							{(settings.reminderDaysBefore >= settings.lowStockDays ||
 								settings.lowStockDays >= settings.highStockDays) && (
-								<p className="threshold-validation-error" data-testid="settings-threshold-validation">
+								<p className={surfaceClass("threshold-validation-error")} data-testid="settings-threshold-validation">
 									{t("settings.stock.thresholdValidation")}
 								</p>
 							)}
-							<p className="hint-text" style={{ marginTop: "12px" }}>
+							<p className={surfaceClass("hint-text")} style={{ marginTop: "12px" }}>
 								ℹ️ {t("settings.stock.packageTypesNote")}
 							</p>
 						</div>
-					</article>
+					</SectionCard>
 
 					{/* General UI */}
-					<article className="card">
-						<div className="card-head">
-							<h2>{t("settings.timeline.title")}</h2>
-						</div>
-
-						<div className="setting-section">
-							<div className="section-header">
+					<SectionCard title={t("settings.timeline.title")}>
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.timeline.dashboardSectionOrder")}</h3>
 							</div>
-							<div className="setting-row compact">
-								<div className="setting-label">
+							<div className={surfaceClass("settings-control-row", "compact")}>
+								<div className={surfaceClass("setting-label")}>
 									<span>{t("settings.timeline.swapDashboardSections")}</span>
-									<span className="info-tooltip small" data-tooltip={t("settings.timeline.swapDashboardSectionsDesc")}>
-										ⓘ
-									</span>
+									<AppTooltipIcon label={t("settings.timeline.swapDashboardSectionsDesc")} />
 								</div>
-								<label className="toggle-switch small">
+								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
 										type="checkbox"
 										checked={settings.swapDashboardMainSections}
 										onChange={(e) => setSettings({ ...settings, swapDashboardMainSections: e.target.checked })}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 						</div>
 
-						<div className="setting-section">
-							<div className="section-header">
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.timeline.upcomingSection")}</h3>
 							</div>
-							<div className="setting-row compact">
-								<div className="setting-label">
+							<div className={surfaceClass("settings-control-row", "compact")}>
+								<div className={surfaceClass("setting-label")}>
 									<span>{t("settings.timeline.upcomingTodayOnly")}</span>
-									<span className="info-tooltip small" data-tooltip={t("settings.timeline.upcomingTodayOnlyDesc")}>
-										ⓘ
-									</span>
+									<AppTooltipIcon label={t("settings.timeline.upcomingTodayOnlyDesc")} />
 								</div>
-								<label className="toggle-switch small">
+								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
 										type="checkbox"
 										checked={settings.upcomingTodayOnly}
 										onChange={(e) => setSettings({ ...settings, upcomingTodayOnly: e.target.checked })}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 						</div>
 
-						<div className="setting-section">
-							<div className="section-header">
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("section-header")}>
 								<h3>{t("settings.timeline.sharedSection")}</h3>
 							</div>
-							<div className="setting-row compact" style={{ marginTop: "10px" }}>
-								<div className="setting-label">
+							<div className={surfaceClass("settings-control-row", "compact")} style={{ marginTop: "10px" }}>
+								<div className={surfaceClass("setting-label")}>
 									<span>{t("settings.timeline.shareMedicationOverview")}</span>
-									<span
-										className="info-tooltip small"
-										data-tooltip={t("settings.timeline.shareMedicationOverviewDesc")}
-									>
-										ⓘ
-									</span>
+									<AppTooltipIcon label={t("settings.timeline.shareMedicationOverviewDesc")} />
 								</div>
-								<label className="toggle-switch small">
+								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
 										type="checkbox"
 										checked={settings.shareMedicationOverview}
 										onChange={(e) => setSettings({ ...settings, shareMedicationOverview: e.target.checked })}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
-							<div className="setting-row compact" style={{ marginTop: "10px" }}>
-								<div className="setting-label">
+							<div className={surfaceClass("settings-control-row", "compact")} style={{ marginTop: "10px" }}>
+								<div className={surfaceClass("setting-label")}>
 									<span>{t("settings.timeline.shareScheduleTodayOnly")}</span>
-									<span className="info-tooltip small" data-tooltip={t("settings.timeline.shareScheduleTodayOnlyDesc")}>
-										ⓘ
-									</span>
+									<AppTooltipIcon label={t("settings.timeline.shareScheduleTodayOnlyDesc")} />
 								</div>
-								<label className="toggle-switch small">
+								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
 										type="checkbox"
 										checked={settings.shareScheduleTodayOnly}
 										onChange={(e) => setSettings({ ...settings, shareScheduleTodayOnly: e.target.checked })}
 									/>
-									<span className="toggle-slider"></span>
+									<span className={surfaceClass("toggle-slider")}></span>
 								</label>
 							</div>
 						</div>
-					</article>
+					</SectionCard>
 
 					{/* Export/Import Section */}
-					<article className="card" data-testid="settings-danger-zone-card">
-						<div className="card-head">
-							<h2>
+					<SectionCard
+						title={
+							<>
 								{t("exportImport.title")}
-								<span className="info-tooltip" data-tooltip={t("exportImport.description")}>
-									ⓘ
-								</span>
-							</h2>
-						</div>
-						<div className="setting-section">
-							<div className="setting-group">
+								<AppTooltipIcon label={t("exportImport.description")} />
+							</>
+						}
+						data-testid="settings-danger-zone-card"
+					>
+						<div className={surfaceClass("setting-section")}>
+							<div className={surfaceClass("setting-group")}>
+								<input
+									type="file"
+									id="import-file-input"
+									accept=".json,application/json"
+									onChange={handleImportFileSelect}
+									disabled={importing}
+									style={{ display: "none" }}
+								/>
 								{/* Import Success Message */}
 								{importResult && (
-									<div
-										className="success-banner"
-										style={{
-											marginBottom: "16px",
-											padding: "12px 16px",
-											borderRadius: "8px",
-											backgroundColor: "var(--success-bg)",
-											border: "1px solid var(--success)",
-											color: "var(--text-primary)",
-										}}
+									<SettingsSuccessNotice
+										title={`✓ ${t("exportImport.importSuccess")}`}
+										closeLabel={t("common.close")}
+										onClose={() => setImportResult(null)}
 									>
-										<div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-											<div>
-												<strong style={{ display: "block", marginBottom: "4px", color: "var(--success)" }}>
-													✓ {t("exportImport.importSuccess")}
-												</strong>
-												<span style={{ fontSize: "0.9em" }}>
-													{t("exportImport.importSuccessDetails", {
-														medications: importResult.medications,
-														doses: importResult.doses,
-														refills: importResult.refills,
-														shares: importResult.shares,
-													})}
-												</span>
-											</div>
-											<button
-												type="button"
-												onClick={() => setImportResult(null)}
-												aria-label={t("common.close")}
-												style={{
-													background: "none",
-													border: "none",
-													cursor: "pointer",
-													fontSize: "1.2em",
-													padding: "0",
-													lineHeight: "1",
-													color: "inherit",
-													opacity: 0.7,
-												}}
-											>
-												×
-											</button>
-										</div>
-									</div>
+										{t("exportImport.importSuccessDetails", {
+											medications: importResult.medications,
+											doses: importResult.doses,
+											refills: importResult.refills,
+											shares: importResult.shares,
+										})}
+									</SettingsSuccessNotice>
 								)}
 								{/* Export */}
-								<div className="action-card">
-									<div className="action-card-content">
-										<span className="action-card-title">{t("exportImport.exportTitle")}</span>
-										<span className="action-card-desc">{t("exportImport.exportDesc")}</span>
-									</div>
-									<button
-										type="button"
-										className="secondary"
-										onClick={() => setShowExportModal(true)}
-										disabled={exporting}
-									>
-										{exporting ? t("exportImport.exporting") : t("exportImport.export")}
-									</button>
-								</div>
+								<SettingsActionCard
+									title={t("exportImport.exportTitle")}
+									description={t("exportImport.exportDesc")}
+									action={
+										<AppButton
+											className="secondary"
+											type="button"
+											tone="secondary"
+											onClick={() => setShowExportModal(true)}
+											disabled={exporting}
+										>
+											{exporting ? t("exportImport.exporting") : t("exportImport.export")}
+										</AppButton>
+									}
+								/>
 
 								{/* Import */}
-								<div className="action-card">
-									<div className="action-card-content">
-										<span className="action-card-title">{t("exportImport.importTitle")}</span>
-										<span className="action-card-desc">{t("exportImport.importDesc")}</span>
-									</div>
-									<input
-										type="file"
-										id="import-file-input"
-										accept=".json,application/json"
-										onChange={handleImportFileSelect}
-										disabled={importing}
-										style={{ display: "none" }}
-									/>
-									<button
-										type="button"
-										className="secondary"
-										onClick={() => document.getElementById("import-file-input")?.click()}
-										disabled={importing}
-									>
-										{importing ? t("exportImport.importing") : t("exportImport.import")}
-									</button>
-								</div>
+								<SettingsActionCard
+									title={t("exportImport.importTitle")}
+									description={t("exportImport.importDesc")}
+									action={
+										<AppButton
+											className="secondary"
+											type="button"
+											tone="secondary"
+											onClick={() => document.getElementById("import-file-input")?.click()}
+											disabled={importing}
+										>
+											{importing ? t("exportImport.importing") : t("exportImport.import")}
+										</AppButton>
+									}
+								/>
 							</div>
 						</div>
-					</article>
+					</SectionCard>
 				</div>
 			)}
 

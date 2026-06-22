@@ -1,6 +1,8 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: form uses custom inputs and display fields wrapped in label-like layout */
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: modal-history callbacks are intentionally managed outside hook deps */
 /* biome-ignore-all lint/suspicious/noArrayIndexKey: local draft intake rows do not have stable ids before persistence */
+
+import { ActionIcon } from "@mantine/core";
 import { Bell, Minus, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,6 +14,7 @@ import { MedicationEnrichmentSection } from "../components/MedicationEnrichmentS
 import { MobileEditModal } from "../components/MobileEditModal";
 import { MedicationDialogs } from "../components/medications/MedicationDialogs";
 import { MedicationEditCoordinator } from "../components/medications/MedicationEditCoordinator";
+import formClasses from "../components/medications/MedicationForm.module.css";
 import { MedicationListSection } from "../components/medications/MedicationListSection";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useFeedback } from "../context/FeedbackContext";
@@ -50,6 +53,9 @@ import {
 	normalizePackageType,
 	PACKAGE_PROFILES,
 } from "../types";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppCheckbox } from "../ui/primitives/AppCheckbox";
+import { AppTooltip, AppTooltipIcon } from "../ui/primitives/AppTooltip";
 import { combineDateAndTime, formatNumber } from "../utils/formatters";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import {
@@ -61,6 +67,7 @@ import {
 } from "../utils/intake-schedule";
 import { log } from "../utils/logger";
 import { countMedicationEnrichmentDisplayResults } from "../utils/medication-enrichment";
+import pageClasses from "./MedicationsPage.module.css";
 
 function userStorageKey(userId: number | undefined, key: string): string {
 	return userId ? `user_${userId}_${key}` : key;
@@ -1498,11 +1505,15 @@ export function MedicationsPage() {
 	}
 
 	return (
-		<section className={`med-grid-wrapper${viewMode === "form" ? " desktop-edit-open" : ""}`}>
+		<section
+			className={[pageClasses.layout, viewMode === "form" ? pageClasses.layoutEditing : ""].filter(Boolean).join(" ")}
+			data-testid="medications-layout"
+		>
 			<MedicationListSection
 				orderedMeds={orderedMeds}
 				obsoleteMeds={obsoleteMeds}
 				editingId={editingId}
+				isCompact={viewMode === "form"}
 				showObsolete={showObsolete}
 				coverageByMed={coverageByMed}
 				onNewEntry={handleNewEntryClick}
@@ -1527,49 +1538,79 @@ export function MedicationsPage() {
 				selectedMedicationName={selectedMedication?.name}
 				onBack={handleDesktopFormLeave}
 				onSubmit={saveMedication}
+				toolbar={
+					<div className={formClasses.tabs} role="tablist" aria-label={t("form.sections.general")}>
+						<button
+							type="button"
+							role="tab"
+							aria-selected={activeTab === "general"}
+							className={[formClasses.tab, activeTab === "general" ? formClasses.tabActive : ""]
+								.filter(Boolean)
+								.join(" ")}
+							onClick={() => setActiveTab("general")}
+						>
+							{t("form.sections.general")}
+						</button>
+						<button
+							type="button"
+							role="tab"
+							aria-selected={activeTab === "stock"}
+							className={[formClasses.tab, activeTab === "stock" ? formClasses.tabActive : ""]
+								.filter(Boolean)
+								.join(" ")}
+							onClick={() => setActiveTab("stock")}
+						>
+							{t("form.sections.stock")}
+						</button>
+						<button
+							type="button"
+							role="tab"
+							aria-selected={activeTab === "schedule"}
+							className={[formClasses.tab, activeTab === "schedule" ? formClasses.tabActive : ""]
+								.filter(Boolean)
+								.join(" ")}
+							onClick={() => setActiveTab("schedule")}
+						>
+							{t("form.sections.schedule")}
+						</button>
+						<button
+							type="button"
+							role="tab"
+							aria-selected={activeTab === "prescription"}
+							className={[formClasses.tab, activeTab === "prescription" ? formClasses.tabActive : ""]
+								.filter(Boolean)
+								.join(" ")}
+							onClick={() => setActiveTab("prescription")}
+						>
+							{t("form.sections.prescription")}
+						</button>
+					</div>
+				}
+				actions={
+					<>
+						<AppButton type="button" tone="secondary" onClick={handleDesktopFormLeave}>
+							{readOnlyView || (formSaved && !formChanged) ? t("common.close") : t("common.cancel")}
+						</AppButton>
+						{!readOnlyView && (
+							<AppButton
+								type="submit"
+								disabled={saving || (!formChanged && (formSaved || !!editingId))}
+								tone={hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError ? "warning" : "primary"}
+							>
+								{formSaved && !formChanged ? t("common.saved") : t("common.save")}
+							</AppButton>
+						)}
+					</>
+				}
 			>
-				<div className="full form-tabs" role="tablist" aria-label={t("form.sections.general")}>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={activeTab === "general"}
-						className={`form-tab${activeTab === "general" ? " active" : ""}`}
-						onClick={() => setActiveTab("general")}
-					>
-						{t("form.sections.general")}
-					</button>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={activeTab === "stock"}
-						className={`form-tab${activeTab === "stock" ? " active" : ""}`}
-						onClick={() => setActiveTab("stock")}
-					>
-						{t("form.sections.stock")}
-					</button>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={activeTab === "schedule"}
-						className={`form-tab${activeTab === "schedule" ? " active" : ""}`}
-						onClick={() => setActiveTab("schedule")}
-					>
-						{t("form.sections.schedule")}
-					</button>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={activeTab === "prescription"}
-						className={`form-tab${activeTab === "prescription" ? " active" : ""}`}
-						onClick={() => setActiveTab("prescription")}
-					>
-						{t("form.sections.prescription")}
-					</button>
-				</div>
 				<fieldset className="readonly-fieldset" disabled={readOnlyView}>
-					<div className={`form-tab-panel${activeTab === "general" ? " active" : ""}`}>
-						<div className="full form-category">
-							<h4 className="form-category-title">{t("form.sections.general")}</h4>
+					<div
+						className={[formClasses.tabPanel, activeTab === "general" ? formClasses.tabPanelActive : ""]
+							.filter(Boolean)
+							.join(" ")}
+					>
+						<div className={["full", formClasses.category].join(" ")}>
+							<h4 className={formClasses.categoryTitle}>{t("form.sections.general")}</h4>
 							<label className={!readOnlyView && showNameValidation && fieldErrors.name ? "has-error" : ""}>
 								{t("form.commercialName")}
 								<input
@@ -1633,7 +1674,7 @@ export function MedicationsPage() {
 							<label>
 								{t("form.packageType")}
 								<select
-									className="select-field package-type-select"
+									className={[formClasses.selectField, formClasses.packageTypeSelect].join(" ")}
 									value={form.packageType}
 									onChange={(e) => handleValueChange("packageType", e.target.value as PackageType)}
 								>
@@ -1648,7 +1689,7 @@ export function MedicationsPage() {
 								<label>
 									{t("form.pillForm")}
 									<select
-										className="select-field"
+										className={formClasses.selectField}
 										value={form.pillForm}
 										onChange={(e) => handleValueChange("pillForm", e.target.value as FormState["pillForm"])}
 									>
@@ -1661,7 +1702,7 @@ export function MedicationsPage() {
 								<label>
 									{t("form.medicationForm")}
 									<select
-										className="select-field"
+										className={formClasses.selectField}
 										value={"topical"}
 										onChange={() => handleValueChange("medicationForm", "topical")}
 									>
@@ -1673,7 +1714,7 @@ export function MedicationsPage() {
 								<label>
 									{t("form.medicationForm")}
 									<select
-										className="select-field"
+										className={formClasses.selectField}
 										value={"liquid"}
 										onChange={() => handleValueChange("medicationForm", "liquid")}
 									>
@@ -1736,24 +1777,30 @@ export function MedicationsPage() {
 							</label>
 						</div>
 
-						<div className="full form-category image-section">
-							<h4 className="form-category-title">{t("form.medicationImage")}</h4>
+						<div className={["full", formClasses.category, formClasses.imageSection].join(" ")}>
+							<h4 className={formClasses.categoryTitle}>{t("form.medicationImage")}</h4>
 							{(() => {
 								if (editingId) {
 									const currentMed = meds.find((m) => m.id === editingId);
 									if (currentMed?.imageUrl) {
 										return (
-											<div className="image-preview">
-												<img src={`/api/images/${currentMed.imageUrl}`} alt={currentMed.name} />
-												<button
-													type="button"
-													className="danger icon-only tooltip-trigger"
-													onClick={() => handleDeleteMedImage(editingId)}
-													aria-label={t("form.removeImage")}
-													data-tooltip={t("form.removeImage")}
-												>
-													<Trash2 size={18} aria-hidden="true" />
-												</button>
+											<div className={formClasses.imagePreview}>
+												<img
+													className={formClasses.imagePreviewImage}
+													src={`/api/images/${currentMed.imageUrl}`}
+													alt={currentMed.name}
+												/>
+												<AppTooltip label={t("form.removeImage")}>
+													<ActionIcon
+														type="button"
+														color="red"
+														variant="subtle"
+														onClick={() => handleDeleteMedImage(editingId)}
+														aria-label={t("form.removeImage")}
+													>
+														<Trash2 size={18} aria-hidden="true" />
+													</ActionIcon>
+												</AppTooltip>
 											</div>
 										);
 									}
@@ -1772,20 +1819,22 @@ export function MedicationsPage() {
 								}
 								if (pendingImagePreview) {
 									return (
-										<div className="image-preview">
-											<img src={pendingImagePreview} alt="Preview" />
-											<button
-												type="button"
-												className="danger icon-only tooltip-trigger"
-												onClick={() => {
-													setPendingImage(null);
-													setPendingImagePreview(null);
-												}}
-												aria-label={t("form.removeImage")}
-												data-tooltip={t("form.removeImage")}
-											>
-												<Trash2 size={18} aria-hidden="true" />
-											</button>
+										<div className={formClasses.imagePreview}>
+											<img className={formClasses.imagePreviewImage} src={pendingImagePreview} alt="Preview" />
+											<AppTooltip label={t("form.removeImage")}>
+												<ActionIcon
+													type="button"
+													color="red"
+													variant="subtle"
+													onClick={() => {
+														setPendingImage(null);
+														setPendingImagePreview(null);
+													}}
+													aria-label={t("form.removeImage")}
+												>
+													<Trash2 size={18} aria-hidden="true" />
+												</ActionIcon>
+											</AppTooltip>
 										</div>
 									);
 								}
@@ -1802,9 +1851,13 @@ export function MedicationsPage() {
 					</div>
 					{/* end general tab */}
 
-					<div className={`form-tab-panel${activeTab === "stock" ? " active" : ""}`}>
-						<div className="full form-category">
-							<h4 className="form-category-title">{t("form.sections.stock")}</h4>
+					<div
+						className={[formClasses.tabPanel, activeTab === "stock" ? formClasses.tabPanelActive : ""]
+							.filter(Boolean)
+							.join(" ")}
+					>
+						<div className={["full", formClasses.category].join(" ")}>
+							<h4 className={formClasses.categoryTitle}>{t("form.sections.stock")}</h4>
 							{(() => {
 								if (!isAmountBasedPackageType(form.packageType)) {
 									return (
@@ -1874,7 +1927,7 @@ export function MedicationsPage() {
 													<select
 														value="g"
 														disabled
-														className="select-field dose-unit-select"
+														className={[formClasses.selectField, formClasses.doseUnitSelect].join(" ")}
 														aria-label={t("form.packageAmountUnitG")}
 													>
 														<option value="g">{t("form.packageAmountUnitG")}</option>
@@ -1932,7 +1985,7 @@ export function MedicationsPage() {
 										<select
 											value={form.doseUnit}
 											onChange={(e) => handleValueChange("doseUnit", e.target.value as DoseUnit)}
-											className="select-field dose-unit-select"
+											className={[formClasses.selectField, formClasses.doseUnitSelect].join(" ")}
 										>
 											{DOSE_UNITS.map((unit) => (
 												<option key={unit.value} value={unit.value}>
@@ -1966,7 +2019,7 @@ export function MedicationsPage() {
 										<select
 											value="ml"
 											disabled
-											className="select-field dose-unit-select"
+											className={[formClasses.selectField, formClasses.doseUnitSelect].join(" ")}
 											aria-label={t("form.packageAmountUnitMl")}
 										>
 											<option value="ml">{t("form.packageAmountUnitMl")}</option>
@@ -2013,20 +2066,20 @@ export function MedicationsPage() {
 					</div>
 					{/* end stock tab */}
 
-					<div className={`form-tab-panel${activeTab === "prescription" ? " active" : ""}`}>
-						<div className="full form-category">
-							<h4 className="form-category-title">{t("form.sections.prescription")}</h4>
-							<label className="full">
-								{t("prescription.enabled")}
-								<label className="toggle-switch small">
-									<input
-										type="checkbox"
-										checked={form.prescriptionEnabled}
-										onChange={(e) => handleValueChange("prescriptionEnabled", e.target.checked)}
-									/>
-									<span className="toggle-slider"></span>
-								</label>
-							</label>
+					<div
+						className={[formClasses.tabPanel, activeTab === "prescription" ? formClasses.tabPanelActive : ""]
+							.filter(Boolean)
+							.join(" ")}
+					>
+						<div className={["full", formClasses.category].join(" ")}>
+							<h4 className={formClasses.categoryTitle}>{t("form.sections.prescription")}</h4>
+							<div className="full">
+								<AppCheckbox
+									checked={form.prescriptionEnabled}
+									label={t("prescription.enabled")}
+									onChange={(checked) => handleValueChange("prescriptionEnabled", checked)}
+								/>
+							</div>
 							{form.prescriptionEnabled && (
 								<>
 									<label className="prescription-field">
@@ -2072,28 +2125,35 @@ export function MedicationsPage() {
 					</div>
 					{/* end prescription tab */}
 
-					<div className={`form-tab-panel${activeTab === "schedule" ? " active" : ""}`}>
-						<div className="full form-category intake-section">
-							<div className="form-category-header">
-								<h4 className="form-category-title">{t("form.blisters.title")}</h4>
+					<div
+						className={[formClasses.tabPanel, activeTab === "schedule" ? formClasses.tabPanelActive : ""]
+							.filter(Boolean)
+							.join(" ")}
+					>
+						<div className={["full", formClasses.category, formClasses.intakeSection].join(" ")}>
+							<div className={formClasses.categoryHeader}>
+								<h4 className={formClasses.categoryTitle}>{t("form.blisters.title")}</h4>
 								{!readOnlyView && (
-									<button
-										type="button"
-										className="primary icon-only tooltip-trigger"
-										onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
-										aria-label={t("form.blisters.addIntake")}
-										data-tooltip={t("form.blisters.addIntake")}
-									>
-										<Plus size={18} aria-hidden="true" />
-									</button>
+									<AppTooltip label={t("form.blisters.addIntake")}>
+										<ActionIcon
+											data-testid="add-intake-button"
+											type="button"
+											color="brand"
+											variant="filled"
+											onClick={() => addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined)}
+											aria-label={t("form.blisters.addIntake")}
+										>
+											<Plus size={18} aria-hidden="true" />
+										</ActionIcon>
+									</AppTooltip>
 								)}
 							</div>
 							{form.intakes.map((intake, idx) => {
 								const scheduleMode = getIntakeScheduleMode(intake);
 								const selectedWeekdays = intake.weekdays ?? [];
 								return (
-									<div key={idx} className="blister-row">
-										<div className="blister-inputs">
+									<div key={idx} className={["blister-row", formClasses.intakeRow].join(" ")}>
+										<div className={formClasses.intakeFields}>
 											<label>
 												{getUsageLabel(intake.intakeUnit ?? "ml")}
 												<FormNumberStepper
@@ -2109,7 +2169,7 @@ export function MedicationsPage() {
 											<label>
 												{t("form.blisters.scheduleMode")}
 												<select
-													className="select-field"
+													className={formClasses.selectField}
 													value={scheduleMode}
 													onChange={(e) =>
 														setIntakeValue(idx, "scheduleMode", e.target.value as "interval" | "weekdays")
@@ -2131,28 +2191,29 @@ export function MedicationsPage() {
 													/>
 												</label>
 											) : (
-												<label className="taken-by-field">
+												<label className={formClasses.intakeWideField}>
 													{t("form.blisters.weekdays")}
 													<div className="badges">
 														{weekdayOptions.map((weekday) => {
 															const isSelected = selectedWeekdays.includes(weekday.value);
 															return (
-																<button
-																	key={weekday.value}
-																	type="button"
-																	className={isSelected ? "pill clickable" : "pill clickable neutral"}
-																	aria-pressed={isSelected}
-																	title={weekday.longLabel}
-																	onClick={() =>
-																		setIntakeValue(
-																			idx,
-																			"weekdays",
-																			toggleWeekdaySelection(selectedWeekdays, weekday.value)
-																		)
-																	}
-																>
-																	{weekday.shortLabel}
-																</button>
+																<AppTooltip key={weekday.value} label={weekday.longLabel}>
+																	<button
+																		type="button"
+																		className={isSelected ? "pill clickable" : "pill clickable neutral"}
+																		aria-label={weekday.longLabel}
+																		aria-pressed={isSelected}
+																		onClick={() =>
+																			setIntakeValue(
+																				idx,
+																				"weekdays",
+																				toggleWeekdaySelection(selectedWeekdays, weekday.value)
+																			)
+																		}
+																	>
+																		{weekday.shortLabel}
+																	</button>
+																</AppTooltip>
 															);
 														})}
 													</div>
@@ -2180,7 +2241,7 @@ export function MedicationsPage() {
 												<label>
 													{t("form.blisters.intakeUnit")}
 													<select
-														className="select-field"
+														className={formClasses.selectField}
 														value={intake.intakeUnit}
 														onChange={(e) => setIntakeValue(idx, "intakeUnit", e.target.value as "ml" | "tsp" | "tbsp")}
 													>
@@ -2191,10 +2252,13 @@ export function MedicationsPage() {
 												</label>
 											)}
 											{form.takenBy.length === 0 ? null : (
-												<label className="taken-by-field" title={t("form.blisters.takenByTooltip")}>
-													{t("form.blisters.takenByIntake")}
+												<label className={formClasses.intakeTakenByField}>
+													<span className={formClasses.fieldLabelWithTooltip}>
+														{t("form.blisters.takenByIntake")}
+														<AppTooltipIcon label={t("form.blisters.takenByTooltip")} />
+													</span>
 													<select
-														className="select-field"
+														className={formClasses.selectField}
 														value={intake.takenBy}
 														onChange={(e) => setIntakeValue(idx, "takenBy", e.target.value)}
 													>
@@ -2206,31 +2270,30 @@ export function MedicationsPage() {
 													</select>
 												</label>
 											)}
-											<div className="remind-toggle-row" title={t("form.blisters.remindTooltip")}>
-												<span className="blister-reminder-icon">
+											<div className={formClasses.intakeActions}>
+												<div className={formClasses.intakeReminderAction}>
 													<Bell size={14} aria-hidden="true" />
-												</span>
-												<label className="toggle-switch small">
-													<input
-														type="checkbox"
+													<AppCheckbox
 														checked={intake.intakeRemindersEnabled}
-														onChange={(e) => setIntakeValue(idx, "intakeRemindersEnabled", e.target.checked)}
+														label={t("form.blisters.remind")}
+														onChange={(checked) => setIntakeValue(idx, "intakeRemindersEnabled", checked)}
+														tooltip={t("form.blisters.remindTooltip")}
 													/>
-													<span className="toggle-slider"></span>
-												</label>
+												</div>
+												{!readOnlyView && form.intakes.length > 1 && (
+													<AppButton
+														type="button"
+														tone="secondary"
+														size="compact-sm"
+														className={formClasses.intakeRemoveAction}
+														leftSection={<Minus size={16} aria-hidden="true" />}
+														onClick={() => removeIntake(idx)}
+													>
+														{t("common.remove")}
+													</AppButton>
+												)}
 											</div>
 										</div>
-										{!readOnlyView && form.intakes.length > 1 && (
-											<button
-												type="button"
-												className="danger icon-only tooltip-trigger"
-												onClick={() => removeIntake(idx)}
-												aria-label={t("common.remove")}
-												data-tooltip={t("common.remove")}
-											>
-												<Minus size={18} aria-hidden="true" />
-											</button>
-										)}
 									</div>
 								);
 							})}
@@ -2238,22 +2301,6 @@ export function MedicationsPage() {
 					</div>
 					{/* end schedule tab */}
 				</fieldset>
-				<div className="full align-end gap">
-					<button type="button" className="ghost" onClick={handleDesktopFormLeave}>
-						{readOnlyView || (formSaved && !formChanged) ? t("common.close") : t("common.cancel")}
-					</button>
-					{!readOnlyView && (
-						<button
-							type="submit"
-							disabled={saving || (!formChanged && (formSaved || !!editingId))}
-							className={
-								hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError ? "has-validation-error" : ""
-							}
-						>
-							{formSaved && !formChanged ? t("common.saved") : t("common.save")}
-						</button>
-					)}
-				</div>
 			</MedicationEditCoordinator>
 
 			<MedicationDialogs

@@ -2,11 +2,14 @@
  * UserFilterModal - Shows medications for a specific person (takenBy filter)
  * Allows clicking through to medication details
  */
+import { Avatar, Box, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, IntakeUnit, Medication, StockThresholds } from "../types";
 import { getMedDisplayName, getMedTotal, getStockDisplayCapacity } from "../types";
 import { allowsPillFormSelection, isLiquidContainerPackageType, isTubePackageType } from "../types/package-profiles";
+import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
+import { StatusBadge, type StatusTone } from "../ui/primitives/StatusBadge";
 import { formatNumber } from "../utils";
 import { getSystemLocale } from "../utils/formatters";
 import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
@@ -14,7 +17,7 @@ import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { personTagsMatch } from "../utils/person-tags";
 import { getStockStatus } from "../utils/schedule";
 import { MedicationAvatar } from "./MedicationAvatar";
-import { ModalFrame } from "./ModalFrame";
+import classes from "./UserFilterModal.module.css";
 
 export interface UserFilterModalProps {
 	selectedUser: string | null;
@@ -70,7 +73,12 @@ export function UserFilterModal({
 		return `${formatNumber(currentStock)}/${formatNumber(packageSize)} ${getDiscreteUnitLabel(med, packageSize)}`;
 	};
 
-	useEscapeKey(!!selectedUser, onClose);
+	const getStatusTone = (className: string): StatusTone => {
+		if (className === "danger") return "danger";
+		if (className === "warning") return "warning";
+		if (className === "success") return "success";
+		return "info";
+	};
 
 	if (!selectedUser) return null;
 
@@ -80,83 +88,110 @@ export function UserFilterModal({
 	);
 
 	return (
-		<ModalFrame contentClassName="user-meds-modal" onClose={onClose}>
-			<div className="user-meds-header">
-				<div className="user-avatar">{selectedUser.charAt(0).toUpperCase()}</div>
-				<h2>{t("modal.userMedications", { name: selectedUser })}</h2>
-			</div>
+		<AppModal
+			centered
+			classNames={{
+				body: classes.body,
+				content: classes.modal,
+				header: classes.modalHeader,
+				title: classes.modalTitle,
+			}}
+			closeButtonProps={{ "aria-label": t("common.close") }}
+			lockScroll={false}
+			manageEscape={false}
+			manageScrollLock={false}
+			onClose={onClose}
+			opened={!!selectedUser}
+			size={500}
+			title={t("modal.userMedications", { name: selectedUser })}
+			withCloseButton
+		>
+			<Stack gap={0}>
+				<Group className={classes.hero} gap="md" wrap="nowrap">
+					<Avatar className={classes.userAvatar} data-testid="user-filter-avatar" radius="xl" size={50}>
+						{selectedUser.charAt(0).toUpperCase()}
+					</Avatar>
+					<Text className={classes.heroTitle}>{t("modal.userMedications", { name: selectedUser })}</Text>
+				</Group>
 
-			<div className="user-meds-list">
-				{userMeds.map((med) => {
-					const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(med));
-					// Fallback: if no coverage data (e.g. obsolete med), compute basic status from total pills
-					const status = medCoverage
-						? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med.packageType)
-						: getStockStatus(null, getMedTotal(med), settings, med.packageType);
-					const packageSize = getStockDisplayCapacity(med);
-					const currentStock = medCoverage ? medCoverage.medsLeft : getMedTotal(med);
+				<ScrollArea.Autosize className={classes.list} mah={400} type="auto">
+					<Stack gap="xs">
+						{userMeds.map((med) => {
+							const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(med));
+							// Fallback: if no coverage data (e.g. obsolete med), compute basic status from total pills
+							const status = medCoverage
+								? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings, med.packageType)
+								: getStockStatus(null, getMedTotal(med), settings, med.packageType);
+							const packageSize = getStockDisplayCapacity(med);
+							const currentStock = medCoverage ? medCoverage.medsLeft : getMedTotal(med);
 
-					// Get intakes relevant to this person
-					const personIntakes = getMedicationIntakes(med).filter(
-						(intake) => intake.takenBy === null || personTagsMatch(intake.takenBy, selectedUser)
-					);
+							// Get intakes relevant to this person
+							const personIntakes = getMedicationIntakes(med).filter(
+								(intake) => intake.takenBy === null || personTagsMatch(intake.takenBy, selectedUser)
+							);
 
-					return (
-						<div
-							key={med.id}
-							className="user-med-item clickable"
-							onClick={() => {
-								onClearUser();
-								onOpenMedDetail(med);
-							}}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									onClearUser();
-									onOpenMedDetail(med);
-								}
-							}}
-						>
-							<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
-							<div className="user-med-info">
-								<span className="user-med-name">{getMedDisplayName(med)}</span>
-								{med.name && med.genericName && <span className="user-med-generic">{med.genericName}</span>}
-								{personIntakes.length > 0 && (
-									<div className="user-med-intakes">
-										{personIntakes.map((intake) => {
-											const timeStr = new Date(intake.start).toLocaleTimeString(getSystemLocale(i18n.language), {
-												hour: "2-digit",
-												minute: "2-digit",
-											});
-											const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.scheduleMode ?? "interval"}-${(intake.weekdays ?? []).join("")}-${intake.takenBy ?? ""}`;
-											const intakeUnit = "intakeUnit" in intake ? intake.intakeUnit : undefined;
-											return (
-												<span key={intakeKey} className="user-med-intake-item">
-													{formatIntakeUsageLabel(med, intake.usage, intakeUnit)}
-													{allowsPillFormSelection(med.packageType) &&
-														med.pillWeightMg != null &&
-														` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}
-													{getIntakeFrequencyText(intake, t)} {t("modal.at")} {timeStr}
-												</span>
-											);
-										})}
-									</div>
-								)}
-							</div>
-							<div className="user-med-stats">
-								<span className="user-med-pills">{formatStockSummaryLabel(med, currentStock, packageSize)}</span>
-								{status && <span className={`status-chip ${status.className}`}>{t(status.label)}</span>}
-							</div>
-						</div>
-					);
-				})}
-				{userMeds.length === 0 && (
-					<div className="user-meds-empty">{t("modal.noMedsForUser", { name: selectedUser })}</div>
-				)}
-			</div>
+							return (
+								<Box
+									key={med.id}
+									className={classes.medicationItem}
+									component="button"
+									onClick={() => {
+										onClearUser();
+										onOpenMedDetail(med);
+									}}
+									type="button"
+								>
+									<MedicationAvatar name={getMedDisplayName(med)} imageUrl={med.imageUrl} size="sm" />
+									<Stack className={classes.medicationInfo} gap={2}>
+										<Text className={classes.medicationName}>{getMedDisplayName(med)}</Text>
+										{med.name && med.genericName ? (
+											<Text className={classes.medicationGeneric}>{med.genericName}</Text>
+										) : null}
+										{personIntakes.length > 0 ? (
+											<Stack className={classes.intakeList} gap={2}>
+												{personIntakes.map((intake) => {
+													const timeStr = new Date(intake.start).toLocaleTimeString(getSystemLocale(i18n.language), {
+														hour: "2-digit",
+														minute: "2-digit",
+													});
+													const intakeKey = `${intake.start}-${intake.usage}-${intake.every}-${intake.scheduleMode ?? "interval"}-${(intake.weekdays ?? []).join("")}-${intake.takenBy ?? ""}`;
+													const intakeUnit = "intakeUnit" in intake ? intake.intakeUnit : undefined;
+													return (
+														<Text key={intakeKey} className={classes.intakeItem}>
+															{formatIntakeUsageLabel(med, intake.usage, intakeUnit)}
+															{allowsPillFormSelection(med.packageType) &&
+																med.pillWeightMg != null &&
+																` (${intake.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"})`}{" "}
+															{getIntakeFrequencyText(intake, t)} {t("modal.at")} {timeStr}
+														</Text>
+													);
+												})}
+											</Stack>
+										) : null}
+									</Stack>
+									<Stack align="flex-start" className={classes.medicationStats} gap={4}>
+										<Text className={classes.stockSummary}>
+											{formatStockSummaryLabel(med, currentStock, packageSize)}
+										</Text>
+										{status ? (
+											<StatusBadge tone={getStatusTone(status.className)}>{t(status.label)}</StatusBadge>
+										) : null}
+									</Stack>
+								</Box>
+							);
+						})}
+						{userMeds.length === 0 ? (
+							<Text className={classes.empty}>{t("modal.noMedsForUser", { name: selectedUser })}</Text>
+						) : null}
+					</Stack>
+				</ScrollArea.Autosize>
 
-			<div className="user-meds-footer">
-				<button onClick={onClose}>{t("common.close")}</button>
-			</div>
-		</ModalFrame>
+				<AppModalFooter>
+					<AppButton onClick={onClose} tone="secondary">
+						{t("common.close")}
+					</AppButton>
+				</AppModalFooter>
+			</Stack>
+		</AppModal>
 	);
 }

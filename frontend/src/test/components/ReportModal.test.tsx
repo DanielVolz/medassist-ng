@@ -11,19 +11,11 @@ vi.mock("../../components/Auth", () => ({
 }));
 
 function getPreviewContent() {
-	const preview = document.querySelector(".report-preview-content");
-	if (!(preview instanceof HTMLElement)) {
-		throw new Error("Expected report preview content to be rendered");
-	}
-	return preview.textContent ?? "";
+	return screen.getByTestId("report-preview-content").textContent ?? "";
 }
 
 function expectPreviewToBeVisible() {
-	const preview = document.querySelector(".report-preview");
-	if (!(preview instanceof HTMLElement)) {
-		throw new Error("Expected report preview to be rendered");
-	}
-	expect(preview).toBeInTheDocument();
+	expect(screen.getByTestId("report-preview")).toBeInTheDocument();
 }
 
 function createMedication(overrides: Partial<Medication> = {}): Medication {
@@ -76,7 +68,8 @@ describe("ReportModal", () => {
 		render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
 
 		expect(screen.getByText(/report\.title/i)).toBeInTheDocument();
-		fireEvent.click(screen.getByRole("button", { name: /common\.close/i }));
+		const closeButtons = screen.getAllByRole("button", { name: /common\.close/i });
+		fireEvent.click(closeButtons[closeButtons.length - 1]);
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 

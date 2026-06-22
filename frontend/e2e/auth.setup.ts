@@ -1,9 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { type APIResponse, expect, type Page, test as setup } from "@playwright/test";
-import { applyVideoSafetyMode, TEST_USER } from "./fixtures";
-
-const authFile = path.join(import.meta.dirname, ".auth", "user.json");
+import { applyVideoSafetyMode, authFile, TEST_USER } from "./fixtures";
 
 type StoredAuthCookie = {
 	name: string;
@@ -194,7 +192,7 @@ setup("authenticate", async ({ page }) => {
 	}
 
 	// ---- 2. Fast path: already authenticated session ----
-	await page.goto("/");
+	await page.goto("/", { waitUntil: "domcontentloaded" });
 	let authEnabled = true;
 	let formLoginEnabled = true;
 	let oidcEnabled = false;
@@ -219,7 +217,7 @@ setup("authenticate", async ({ page }) => {
 	}
 
 	const hasUserMenu = await page
-		.locator(".user-menu-btn")
+		.getByTestId("user-menu-trigger")
 		.isVisible({ timeout: 5000 })
 		.catch(() => false);
 	if (hasUserMenu) {
@@ -232,8 +230,8 @@ setup("authenticate", async ({ page }) => {
 		.then((response) => response.ok())
 		.catch(() => false);
 	if (hasAuthenticatedSession) {
-		await page.goto("/");
-		await expect(page.locator(".user-menu-btn")).toBeVisible({ timeout: 15000 });
+		await page.goto("/", { waitUntil: "domcontentloaded" });
+		await expect(page.getByTestId("user-menu-trigger")).toBeVisible({ timeout: 15000 });
 		await page.context().storageState({ path: authFile });
 		return;
 	}
@@ -249,7 +247,7 @@ setup("authenticate", async ({ page }) => {
 			.catch(() => false);
 		if (!hasLoginFields) {
 			const becameAuthenticated = await page
-				.locator("header.hero")
+				.getByTestId("app-header")
 				.isVisible({ timeout: 5000 })
 				.catch(() => false);
 			if (becameAuthenticated) {
@@ -305,7 +303,7 @@ setup("authenticate", async ({ page }) => {
 
 	const ensureAuthenticated = async () => {
 		const hasHeader = await page
-			.locator("header.hero")
+			.getByTestId("app-header")
 			.isVisible({ timeout: 8000 })
 			.catch(() => false);
 		if (hasHeader) return true;
@@ -340,8 +338,10 @@ setup("authenticate", async ({ page }) => {
 
 		// Fallback path for environments where API login flow is unavailable.
 		const loginWithForm = async () => {
-			const usernameField = page.locator("#username");
-			const passwordField = page.locator("#password");
+			const usernameField = page.locator('#username, input[name="username"], input[type="text"]').first();
+			const passwordField = page
+				.locator('#password, input#password, input[name="password"], input[type="password"]')
+				.first();
 
 			// Make sure we're on the login form (not register)
 			const isOnRegister = await page
@@ -358,9 +358,9 @@ setup("authenticate", async ({ page }) => {
 				}
 			}
 
-			await usernameField.clear();
+			await expect(usernameField).toBeVisible({ timeout: 15000 });
 			await usernameField.fill(TEST_USER.username);
-			await passwordField.clear();
+			await expect(passwordField).toBeVisible({ timeout: 15000 });
 			await passwordField.fill(TEST_USER.password);
 
 			// Click the submit button (not the SSO button)
@@ -371,7 +371,7 @@ setup("authenticate", async ({ page }) => {
 
 		await loginWithForm();
 		const hasHeroAfterFirstLogin = await page
-			.locator("header.hero")
+			.getByTestId("app-header")
 			.isVisible({ timeout: 5000 })
 			.catch(() => false);
 

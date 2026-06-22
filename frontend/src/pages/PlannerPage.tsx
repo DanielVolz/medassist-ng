@@ -1,13 +1,28 @@
-/* biome-ignore-all lint/a11y/noLabelWithoutControl: planner uses custom DateTimeInput control wrappers */
+import { Alert, Group, Stack, Text } from "@mantine/core";
+import type { FormEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { MedicationAvatar } from "../components/MedicationAvatar";
 import { useAppContext } from "../context";
-import type { PlannerRow } from "../types";
+import type { Medication, PlannerRow } from "../types";
 import { getMedDisplayName, isAmountBasedPackageType, isLiquidContainerPackageType, isTubePackageType } from "../types";
+import { SectionCard } from "../ui/components/SectionCard";
+import { PageContainer } from "../ui/layout/PageContainer";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppCheckbox } from "../ui/primitives/AppCheckbox";
+import { AppTextAction } from "../ui/primitives/AppTextAction";
+import { DataTable, type DataTableColumn } from "../ui/primitives/DataTable";
+import { StatusBadge } from "../ui/primitives/StatusBadge";
 import { toInputValue } from "../utils/formatters";
+import classes from "./PlannerPage.module.css";
+
+type PlannerDisplayRow = PlannerRow & {
+	displayName: string;
+	medication?: Medication;
+	remainingRefills: number | null;
+};
 
 function localDateAtStartOfDay(days = 0): Date {
 	const d = new Date();
@@ -95,7 +110,7 @@ export function PlannerPage() {
 		}
 	}, [user?.id]);
 
-	async function runPlanner(e: React.FormEvent) {
+	async function runPlanner(e: FormEvent) {
 		e.preventDefault();
 		const start = toDate(range.start);
 		const end = toDate(range.end);
@@ -173,10 +188,12 @@ export function PlannerPage() {
 	const getUsageUnitLabel = (medicationId: number, count: number): string => {
 		const med = meds.find((m) => m.id === medicationId);
 		if (isLiquidContainerPackageType(med?.packageType)) {
-			return t("form.ml");
+			return t("form.packageAmountUnitMl");
 		}
 		if (isTubePackageType(med?.packageType)) {
-			return med?.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
+			return med?.medicationForm === "liquid"
+				? t("form.packageAmountUnitMl")
+				: t("form.blisters.applications", { count: Math.abs(count) });
 		}
 		return getDiscreteUnitLabel(med?.packageType, count);
 	};
@@ -185,10 +202,13 @@ export function PlannerPage() {
 		const med = meds.find((m) => m.id === medicationId);
 		const roundedLoose = Math.round(loosePills * 10) / 10;
 		if (isLiquidContainerPackageType(med?.packageType)) {
-			return `${roundedLoose} ${t("form.ml")}`;
+			return `${roundedLoose} ${t("form.packageAmountUnitMl")}`;
 		}
 		if (isTubePackageType(med?.packageType)) {
-			const unit = med?.medicationForm === "liquid" ? t("form.ml") : t("blisters.applications");
+			const unit =
+				med?.medicationForm === "liquid"
+					? t("form.packageAmountUnitMl")
+					: t("form.blisters.applications", { count: Math.abs(roundedLoose) });
 			return `${roundedLoose} ${unit}`;
 		}
 		return `${roundedLoose} ${getDiscreteUnitLabel(med?.packageType, roundedLoose)}`;
@@ -238,138 +258,182 @@ export function PlannerPage() {
 		setSendingPlannerEmail(false);
 	}
 
+	const plannerDisplayRows: PlannerDisplayRow[] = plannerRows.map((row) => {
+		const medication =
+			meds.find((med) => med.id === row.medicationId) ||
+			meds.find((med) => getMedDisplayName(med) === row.medicationName);
+		const displayName = medication ? getMedDisplayName(medication) : row.medicationName;
+		const remainingRefills = medication?.prescriptionEnabled ? (medication.prescriptionRemainingRefills ?? 0) : null;
+
+		return {
+			...row,
+			displayName,
+			medication,
+			remainingRefills,
+		};
+	});
+
+	function getAvailableContent(row: PlannerDisplayRow): ReactNode {
+		if (isAmountBasedPackageType(row.packageType)) {
+			return getAvailableLabel(row.medicationId, row.loosePills);
+		}
+
+		const roundedLoose = Math.round(row.loosePills * 10) / 10;
+		if (row.loosePills <= 0) {
+			return `${row.fullBlisters} ${t("common.blisters")}`;
+		}
+
+		const looseUnit = roundedLoose === 1 ? t("common.pill") : t("common.pills");
+		return `${row.fullBlisters} ${t("common.blisters")} + ${roundedLoose} ${looseUnit}`;
+	}
+
+	const plannerColumns = [
+		{
+			key: "medication",
+			header: t("planner.table.medication"),
+			render: (row) => {
+				const medication = row.medication;
+
+				return (
+					<Group gap="sm" wrap="nowrap" className={classes.medicationCell}>
+						<MedicationAvatar name={row.displayName} imageUrl={medication?.imageUrl} />
+						{medication ? (
+							<AppTextAction
+								className={classes.medicationNameLink}
+								fontWeight={600}
+								onClick={() => openMedDetail(medication)}
+								textAlign="left"
+							>
+								{row.displayName}
+							</AppTextAction>
+						) : (
+							<Text fw={600}>{row.displayName}</Text>
+						)}
+					</Group>
+				);
+			},
+		},
+		{
+			key: "usage",
+			header: t("planner.table.usage"),
+			render: (row) => (
+				<Text className={classes.metric}>
+					<strong>{row.plannerUsage}</strong> {getUsageUnitLabel(row.medicationId, row.plannerUsage)}
+				</Text>
+			),
+		},
+		{
+			key: "blistersNeeded",
+			header: t("planner.table.blistersNeeded"),
+			render: (row) => (isAmountBasedPackageType(row.packageType) ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`),
+		},
+		{
+			key: "prescriptionRefills",
+			header: t("planner.table.prescriptionRefills"),
+			render: (row) => row.remainingRefills ?? "–",
+		},
+		{
+			key: "available",
+			header: t("planner.table.available"),
+			render: (row) => <Text className={classes.availableValue}>{getAvailableContent(row)}</Text>,
+		},
+		{
+			key: "status",
+			header: t("table.status"),
+			render: (row) => (
+				<StatusBadge tone={row.enough ? "success" : "danger"}>
+					{row.enough ? t("status.enough") : t("status.outOfStock")}
+				</StatusBadge>
+			),
+		},
+	] satisfies DataTableColumn<PlannerDisplayRow>[];
+
 	return (
-		<section className="grid">
-			<article className="card" data-testid="planner-form-card">
-				<div className="card-head" data-testid="planner-page-header">
-					<h2>{t("planner.title")}</h2>
-				</div>
-				<form className="planner" onSubmit={runPlanner}>
-					<label>
-						{t("planner.from")}
-						<DateTimeInput
-							step="60"
-							value={range.start}
-							onChange={(e) => setRange({ ...range, start: e.target.value })}
-						/>
-					</label>
-					<label>
-						{t("planner.until")}
-						<DateTimeInput step="60" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} />
-					</label>
-					<div className="planner-checkbox-row">
-						<label className="planner-checkbox" data-testid="planner-include-until-start">
-							<input
-								type="checkbox"
-								checked={includeUntilStart}
-								onChange={(e) => setIncludeUntilStart(e.target.checked)}
+		<PageContainer data-testid="planner-page">
+			<SectionCard title={t("planner.title")} data-testid="planner-form-card">
+				<form className={[classes.form, "planner"].join(" ")} data-testid="planner-form" onSubmit={runPlanner}>
+					<div className={classes.rangeGrid}>
+						<label className={classes.dateField} htmlFor="planner-start-date">
+							<span>{t("planner.from")}</span>
+							<DateTimeInput
+								id="planner-start-date"
+								step="60"
+								value={range.start}
+								onChange={(e) => setRange({ ...range, start: e.target.value })}
 							/>
-							{t("planner.includeUntilStart")}
 						</label>
-						<span className="info-tooltip small" data-tooltip={t("planner.includeUntilStartTooltip")}>
-							ⓘ
-						</span>
+						<label className={classes.dateField} htmlFor="planner-end-date">
+							<span>{t("planner.until")}</span>
+							<DateTimeInput
+								id="planner-end-date"
+								step="60"
+								value={range.end}
+								onChange={(e) => setRange({ ...range, end: e.target.value })}
+							/>
+						</label>
 					</div>
-					<div className="planner-actions">
-						<button type="button" className="ghost" onClick={resetRange}>
+					<AppCheckbox
+						checked={includeUntilStart}
+						data-testid="planner-include-until-start"
+						label={t("planner.includeUntilStart")}
+						onChange={setIncludeUntilStart}
+						tooltip={t("planner.includeUntilStartTooltip")}
+					/>
+					<Group
+						className={[classes.actions, "planner-actions"].join(" ")}
+						justify="flex-end"
+						gap="sm"
+						data-testid="planner-actions"
+					>
+						<AppButton type="button" tone="secondary" onClick={resetRange}>
 							{t("common.reset")}
-						</button>
-						<button type="submit" disabled={plannerLoading}>
+						</AppButton>
+						<AppButton type="submit" loading={plannerLoading}>
 							{plannerLoading ? t("planner.calculating") : t("planner.calculate")}
-						</button>
-					</div>
+						</AppButton>
+					</Group>
 				</form>
-				{plannerError && (
-					<p className="danger-text" role="alert">
+				{plannerError ? (
+					<Alert className={classes.feedback} color="red" role="alert" variant="light">
 						{plannerError}
-					</p>
-				)}
-				{hasCalculated && !plannerError && plannerRows.length === 0 && (
-					<p className="info-text">{t("planner.noResults")}</p>
-				)}
-				{plannerRows.length > 0 && (
-					<>
-						<div className="table table-6">
-							<div className="table-head">
-								<span>{t("planner.table.medication")}</span>
-								<span>{t("planner.table.usage")}</span>
-								<span>{t("planner.table.blistersNeeded")}</span>
-								<span>{t("planner.table.prescriptionRefills")}</span>
-								<span>{t("planner.table.available")}</span>
-								<span>{t("table.status")}</span>
-							</div>
-							{plannerRows.map((row) => {
-								const med =
-									meds.find((m) => m.id === row.medicationId) ||
-									meds.find((m) => getMedDisplayName(m) === row.medicationName);
-								const remainingRefills = med?.prescriptionEnabled ? (med.prescriptionRemainingRefills ?? 0) : null;
-								const openMedication = () => {
-									if (med) openMedDetail(med);
-								};
-								return (
-									<button
-										type="button"
-										key={row.medicationId}
-										className={med ? "table-row clickable" : "table-row"}
-										disabled={!med}
-										aria-label={t("planner.openMedication", { name: row.medicationName })}
-										onClick={openMedication}
-									>
-										<span data-label={t("planner.table.medication")} className="cell-with-avatar">
-											<MedicationAvatar name={row.medicationName} imageUrl={med?.imageUrl} />
-											{row.medicationName}
-										</span>
-										<span data-label={t("planner.table.usage")}>
-											<span>
-												<strong>{row.plannerUsage}</strong>&nbsp;
-												{getUsageUnitLabel(row.medicationId, row.plannerUsage)}
-											</span>
-										</span>
-										<span data-label={t("planner.table.blistersNeeded")}>
-											{isAmountBasedPackageType(row.packageType) ? "–" : `${row.blistersNeeded} × ${row.blisterSize}`}
-										</span>
-										<span data-label={t("planner.table.prescriptionRefills")}>{remainingRefills ?? "–"}</span>
-										<span data-label={t("planner.table.available")}>
-											{isAmountBasedPackageType(row.packageType) ? (
-												getAvailableLabel(row.medicationId, row.loosePills)
-											) : (
-												<>
-													{row.fullBlisters} {t("common.blisters")}
-													{row.loosePills > 0 &&
-														` + ${Math.round(row.loosePills * 10) / 10} ${Math.round(row.loosePills * 10) / 10 === 1 ? t("common.pill") : t("common.pills")}`}
-												</>
-											)}
-										</span>
-										<span
-											data-label={t("table.status")}
-											className={row.enough ? "status-chip success" : "status-chip danger"}
-										>
-											{row.enough ? t("status.enough") : t("status.outOfStock")}
-										</span>
-									</button>
-								);
+					</Alert>
+				) : null}
+				{hasCalculated && !plannerError && plannerRows.length === 0 ? (
+					<Alert className={classes.feedback} color="blue" variant="light">
+						{t("planner.noResults")}
+					</Alert>
+				) : null}
+				{plannerDisplayRows.length > 0 ? (
+					<Stack className={classes.results} gap="md">
+						<DataTable
+							columns={plannerColumns}
+							data-testid="planner-results-table"
+							rows={plannerDisplayRows}
+							rowKey={(row) => row.medicationId}
+							getRowProps={() => ({
+								"data-testid": "planner-result-row",
 							})}
-						</div>
-						{canSendNotification && (
-							<div className="planner-email-action">
-								<button
+						/>
+						{canSendNotification ? (
+							<Group className={classes.emailAction} justify="flex-end" align="center" gap="sm">
+								<AppButton
 									type="button"
-									className="ghost"
+									tone="secondary"
 									onClick={sendPlannerNotification}
-									disabled={sendingPlannerEmail}
+									loading={sendingPlannerEmail}
 								>
 									{sendingPlannerEmail ? t("common.sending") : t("planner.sendNotification")}
-								</button>
-								{plannerEmailResult && (
-									<span className={plannerEmailResult.success ? "success-text" : "danger-text"}>
+								</AppButton>
+								{plannerEmailResult ? (
+									<Text c={plannerEmailResult.success ? "green" : "red"} fw={600}>
 										{plannerEmailResult.message}
-									</span>
-								)}
-							</div>
-						)}
-					</>
-				)}
-			</article>
-		</section>
+									</Text>
+								) : null}
+							</Group>
+						) : null}
+					</Stack>
+				) : null}
+			</SectionCard>
+		</PageContainer>
 	);
 }

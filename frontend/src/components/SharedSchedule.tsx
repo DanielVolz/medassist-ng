@@ -26,13 +26,20 @@ import {
 	isTubePackageType,
 	type StockThresholds,
 } from "../types";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppTooltip, AppTooltipTrigger } from "../ui/primitives/AppTooltip";
 import { getSystemLocale } from "../utils/formatters";
 import { getIntakeDailyRate, getMedicationIntakes, iterateIntakeOccurrences } from "../utils/intake-schedule";
 import { convertLiquidUsageToMl } from "../utils/intake-units";
 import { getStockStatus, isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
+import authClasses from "./Auth.module.css";
+import doseButtonClasses from "./DoseActionButton.module.css";
 import { IntakeJournalModal } from "./intake-journal/IntakeJournalModal";
+import { Lightbox } from "./Lightbox";
 import { MedicationAvatar } from "./MedicationAvatar";
 import { SharedMedicationOverviewSection } from "./SharedMedicationOverviewSection";
+import sharedClasses from "./SharedSchedule.module.css";
+import { ThemeMenu } from "./ThemeMenu";
 
 async function readSharedJournalError(response: Response, fallbackMessage: string): Promise<string> {
 	try {
@@ -48,6 +55,10 @@ async function readSharedJournalError(response: Response, fallbackMessage: strin
 	}
 
 	return fallbackMessage;
+}
+
+function cx(...classNames: Array<string | false | null | undefined>) {
+	return classNames.filter(Boolean).join(" ");
 }
 
 export function SharedSchedule() {
@@ -143,21 +154,6 @@ export function SharedSchedule() {
 		mq.addEventListener("change", handler);
 		return () => mq.removeEventListener("change", handler);
 	}, [themePreference]);
-
-	// Theme dropdown state
-	const [themeMenuOpen, setThemeMenuOpen] = useState(false);
-	const themeMenuRef = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		if (!themeMenuOpen) return;
-		const handleClickOutside = (e: MouseEvent) => {
-			if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
-				setThemeMenuOpen(false);
-			}
-		};
-		document.addEventListener("click", handleClickOutside);
-		return () => document.removeEventListener("click", handleClickOutside);
-	}, [themeMenuOpen]);
 
 	// Collapsed days state for SharedSchedule (token-specific localStorage)
 	const [manuallyCollapsedDays, setManuallyCollapsedDays] = useState<Set<string>>(new Set());
@@ -612,65 +608,105 @@ export function SharedSchedule() {
 		const canMarkTaken = data?.allowMarkTaken !== false;
 		const canOpenSharedJournal = showSharedJournalAction && (options.isTaken || options.isSkipped);
 		const hasSharedJournalNote = sharedJournalDoseIdsWithNotes.has(options.doseId);
-		const takeButton = options.isTaken ? (
-			<button className="dose-btn undo take" onClick={() => undoDoseTaken(options.doseId)} title={t("common.undo")}>
-				{options.isAutomaticallyTaken && (
-					<span className="info-tooltip" data-tooltip={t("tooltips.automaticTaken")}>
-						🤖
-					</span>
+		const takeButtonControl = options.isTaken ? (
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(
+					"dose-btn undo take",
+					doseButtonClasses.button,
+					doseButtonClasses.undo,
+					doseButtonClasses.undoTake
 				)}
-				<span className="dose-btn-label">{t("common.undo")}</span>
+				onClick={() => undoDoseTaken(options.doseId)}
+			>
+				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
+				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
 				<span aria-hidden="true">↩</span>
-			</button>
+			</AppButton>
 		) : (
-			<button
-				className={`dose-btn take${options.isEmpty ? " out-of-stock" : ""}`}
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(
+					"dose-btn take",
+					doseButtonClasses.button,
+					doseButtonClasses.take,
+					doseButtonClasses.dashboardTake,
+					options.isEmpty && doseButtonClasses.outOfStock
+				)}
 				onClick={() => markDoseTaken(options.doseId)}
 				disabled={options.isEmpty}
-				title={options.isEmpty ? t("common.outOfStockTakeBlocked") : t("dose.markAsTaken")}
 			>
-				<span className="dose-btn-label">{t("dose.take")}</span>
+				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
 				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
-			</button>
+			</AppButton>
 		);
+		const takeButton =
+			!options.isTaken && options.isEmpty ? (
+				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
+					<span className={doseButtonClasses.tooltipTarget}>{takeButtonControl}</span>
+				</AppTooltip>
+			) : (
+				takeButtonControl
+			);
 
 		const skipButton = options.isSkipped ? (
-			<button className="dose-btn undo skip" onClick={() => undoDoseSkipped(options.doseId)} title={t("common.undo")}>
-				<span className="dose-btn-label">{t("dose.undoSkip")}</span>
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(
+					"dose-btn undo skip",
+					doseButtonClasses.button,
+					doseButtonClasses.undo,
+					doseButtonClasses.undoSkip
+				)}
+				onClick={() => undoDoseSkipped(options.doseId)}
+			>
+				<span className={doseButtonClasses.label}>{t("dose.undoSkip")}</span>
 				<span aria-hidden="true">↩</span>
-			</button>
+			</AppButton>
 		) : (
-			<button
-				className="dose-btn skip"
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx("dose-btn skip", doseButtonClasses.button, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
-				title={t("dose.markAsSkipped")}
 				disabled={options.isTaken}
 			>
-				<span className="dose-btn-label">{t("dose.skip")}</span>
-			</button>
+				<span className={doseButtonClasses.label}>{t("dose.skip")}</span>
+			</AppButton>
 		);
 
-		const journalButton = showSharedJournalAction ? (
-			<span
-				className={!canOpenSharedJournal ? "tooltip-trigger" : undefined}
-				data-tooltip={!canOpenSharedJournal ? t("journal.actions.noteTakenOnly") : undefined}
+		const journalButtonControl = showSharedJournalAction ? (
+			<AppButton
+				type="button"
+				size="sm"
+				className={cx(
+					"dose-btn journal",
+					doseButtonClasses.button,
+					doseButtonClasses.journal,
+					hasSharedJournalNote && doseButtonClasses.hasNote
+				)}
+				onClick={() => {
+					if (canOpenSharedJournal) {
+						void openSharedJournalEditor(options.doseId);
+					}
+				}}
+				disabled={!canOpenSharedJournal}
 			>
-				<button
-					type="button"
-					className={`dose-btn journal${hasSharedJournalNote ? " has-note" : ""}`}
-					onClick={() => {
-						if (canOpenSharedJournal) {
-							void openSharedJournalEditor(options.doseId);
-						}
-					}}
-					disabled={!canOpenSharedJournal}
-					title={canOpenSharedJournal ? t("journal.actions.note") : undefined}
-				>
-					<NotebookPen size={14} aria-hidden="true" />
-					<span className="dose-btn-label">{t("journal.actions.note")}</span>
-				</button>
-			</span>
+				<NotebookPen size={14} aria-hidden="true" />
+				<span className={doseButtonClasses.label}>{t("journal.actions.note")}</span>
+			</AppButton>
 		) : null;
+		const journalButton =
+			showSharedJournalAction && journalButtonControl && !canOpenSharedJournal ? (
+				<AppTooltip label={t("journal.actions.noteTakenOnly")}>
+					<span className={doseButtonClasses.tooltipTarget}>{journalButtonControl}</span>
+				</AppTooltip>
+			) : (
+				journalButtonControl
+			);
 
 		return (
 			<>
@@ -1045,11 +1081,10 @@ export function SharedSchedule() {
 
 	if (loading) {
 		return (
-			<div className="auth-container" data-theme={resolvedTheme}>
-				<div className="auth-card" style={{ textAlign: "center" }} aria-busy="true">
-					<h1 className="auth-title">💊 MedAssist-ng</h1>
+			<div className={authClasses["auth-container"]} data-theme={resolvedTheme}>
+				<div className={sharedClasses["shared-auth-panel"]} aria-busy="true">
+					<h1 className={authClasses["auth-title"]}>💊 MedAssist-ng</h1>
 					<p>{t("common.loading")}</p>
-					<span className="screen-reader-only">{t("common.loading")}</span>
 				</div>
 			</div>
 		);
@@ -1058,14 +1093,18 @@ export function SharedSchedule() {
 	if (expiredData) {
 		const expiredPersonLabel = expiredData.takenBy === "all" ? t("share.allPeople") : expiredData.takenBy;
 		return (
-			<div className="shared-schedule-page">
-				<div className="shared-schedule-error expired">
+			<div className={sharedClasses["shared-schedule-page"]}>
+				<div className={[sharedClasses["shared-schedule-error"], sharedClasses.expired].join(" ")}>
 					<h1>💊 MedAssist-ng</h1>
-					<div className="expired-icon">⏰</div>
+					<div className={sharedClasses["expired-icon"]}>⏰</div>
 					<h2>{t("share.expired.title")}</h2>
-					<p className="expired-message">{t("share.expired.message", { takenBy: expiredPersonLabel })}</p>
-					<p className="expired-contact">{t("share.expired.contact", { username: expiredData.ownerUsername })}</p>
-					<p className="expired-date">
+					<p className={sharedClasses["expired-message"]}>
+						{t("share.expired.message", { takenBy: expiredPersonLabel })}
+					</p>
+					<p className={sharedClasses["expired-contact"]}>
+						{t("share.expired.contact", { username: expiredData.ownerUsername })}
+					</p>
+					<p className={sharedClasses["expired-date"]}>
 						{t("share.expired.expiredOn", {
 							date: new Date(expiredData.expiredAt).toLocaleDateString(getSystemLocale(i18n.language)),
 						})}
@@ -1077,92 +1116,43 @@ export function SharedSchedule() {
 
 	if (error || !data) {
 		return (
-			<div className="shared-schedule-page">
-				<div className="shared-schedule-error">
+			<div className={sharedClasses["shared-schedule-page"]}>
+				<div className={sharedClasses["shared-schedule-error"]}>
 					<h1>💊 MedAssist-ng</h1>
-					<p className="error-message">{error || "Unknown error"}</p>
+					<p className={sharedClasses["error-message"]}>{error || "Unknown error"}</p>
 				</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className="shared-schedule-page">
-			<div className="shared-schedule-container">
-				<header className="shared-schedule-header">
+		<div className={sharedClasses["shared-schedule-page"]}>
+			<div className={cx(sharedClasses["shared-schedule-container"], "shared-schedule-container")}>
+				<header className={sharedClasses["shared-schedule-header"]}>
 					<h1>{pageTitle}</h1>
-					<div className="shared-schedule-help">
+					<div className={sharedClasses["shared-schedule-help"]}>
 						<button
 							type="button"
-							className="shared-schedule-help-toggle"
+							className={sharedClasses["shared-schedule-help-toggle"]}
 							onClick={() => setShareHelpOpen((current) => !current)}
 							aria-expanded={shareHelpOpen}
-							title={shareHelpOpen ? t("common.collapse") : t("common.expand")}
 						>
 							<span>{t("share.publicAccessSummary")}</span>
-							<span className={`shared-schedule-help-icon${shareHelpOpen ? " open" : ""}`} aria-hidden="true">
+							<span
+								className={[sharedClasses["shared-schedule-help-icon"], shareHelpOpen ? sharedClasses.open : ""]
+									.filter(Boolean)
+									.join(" ")}
+								aria-hidden="true"
+							>
 								▼
 							</span>
 						</button>
-						{shareHelpOpen ? <p className="shared-schedule-boundary">{t("share.publicAccessHelp")}</p> : null}
+						{shareHelpOpen ? (
+							<p className={sharedClasses["shared-schedule-boundary"]}>{t("share.publicAccessHelp")}</p>
+						) : null}
 					</div>
-					<div className="shared-schedule-header-actions">
-						<div className={`theme-menu ${themeMenuOpen ? "open" : ""}`} ref={themeMenuRef}>
-							<button className="icon-btn" onClick={() => setThemeMenuOpen(!themeMenuOpen)} title={t("theme.title")}>
-								{resolvedTheme === "dark" ? "🌙" : "☀️"}
-							</button>
-							<div className="theme-dropdown">
-								<button
-									className={`theme-dropdown-item${themePreference === "light" ? " active" : ""}`}
-									onClick={() => {
-										setThemePreference("light");
-										setThemeMenuOpen(false);
-									}}
-								>
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-										<circle cx="12" cy="12" r="5" />
-										<line x1="12" y1="1" x2="12" y2="3" />
-										<line x1="12" y1="21" x2="12" y2="23" />
-										<line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-										<line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-										<line x1="1" y1="12" x2="3" y2="12" />
-										<line x1="21" y1="12" x2="23" y2="12" />
-										<line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-										<line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-									</svg>
-									{t("theme.light")}
-									{themePreference === "light" && <span className="theme-check">✓</span>}
-								</button>
-								<button
-									className={`theme-dropdown-item${themePreference === "dark" ? " active" : ""}`}
-									onClick={() => {
-										setThemePreference("dark");
-										setThemeMenuOpen(false);
-									}}
-								>
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-										<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-									</svg>
-									{t("theme.dark")}
-									{themePreference === "dark" && <span className="theme-check">✓</span>}
-								</button>
-								<button
-									className={`theme-dropdown-item${themePreference === "system" ? " active" : ""}`}
-									onClick={() => {
-										setThemePreference("system");
-										setThemeMenuOpen(false);
-									}}
-								>
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-										<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-										<line x1="8" y1="21" x2="16" y2="21" />
-										<line x1="12" y1="17" x2="12" y2="21" />
-									</svg>
-									{t("theme.system")}
-									{themePreference === "system" && <span className="theme-check">✓</span>}
-								</button>
-							</div>
-						</div>
+					<div className={sharedClasses["shared-schedule-header-actions"]}>
+						<ThemeMenu resolvedTheme={resolvedTheme} themePreference={themePreference} onChange={setThemePreference} />
 					</div>
 					{!showOnlyToday &&
 						(() => {
@@ -1173,7 +1163,7 @@ export function SharedSchedule() {
 										? t("dashboard.schedules.3months")
 										: t("dashboard.schedules.6months");
 							return (
-								<p className="shared-schedule-period">
+								<p className={sharedClasses["shared-schedule-period"]}>
 									{t("share.period")}: {periodLabel}
 								</p>
 							);
@@ -1191,13 +1181,13 @@ export function SharedSchedule() {
 					/>
 				) : null}
 
-				<section className="shared-schedule-section" aria-label={t("dashboard.schedules.title")}>
-					<div className="shared-overview-section-header">
+				<section className={sharedClasses["shared-schedule-section"]} aria-label={t("dashboard.schedules.title")}>
+					<div className={sharedClasses["shared-overview-section-header"]}>
 						<h2>{t("dashboard.schedules.title")}</h2>
 					</div>
 					<div className="timeline">
 						{schedule.length === 0 ? (
-							<p className="shared-schedule-empty">{t("share.noSchedule")}</p>
+							<p className={sharedClasses["shared-schedule-empty"]}>{t("share.noSchedule")}</p>
 						) : (
 							<>
 								{/* Past days (when expanded) — rendered above toggle */}
@@ -1241,7 +1231,6 @@ export function SharedSchedule() {
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, true);
 													}}
-													title={isCollapsed ? t("common.expand") : t("common.collapse")}
 												>
 													<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
 													<span className="day-date">{day.dateStr}</span>
@@ -1251,12 +1240,12 @@ export function SharedSchedule() {
 														) : (
 															<>
 																{hasRealMissed && (
-																	<span
+																	<AppTooltipTrigger
+																		label={t("dashboard.schedules.missedDoses", { count: missedNotDismissedCount })}
 																		className="day-warning"
-																		title={t("dashboard.schedules.missedDoses", { count: missedNotDismissedCount })}
 																	>
 																		⚠️
-																	</span>
+																	</AppTooltipTrigger>
 																)}
 																<span className="day-progress">
 																	{takenCount}/{allDoseIds.length}
@@ -1307,9 +1296,12 @@ export function SharedSchedule() {
 																			}
 																			onKeyDown={(e) => {
 																				if (e.key === "Enter" || e.key === " ") {
+																					e.preventDefault();
 																					if (med?.imageUrl) openLightbox(med.imageUrl, getMedDisplayName(med));
 																				}
 																			}}
+																			role={med?.imageUrl ? "button" : undefined}
+																			tabIndex={med?.imageUrl ? 0 : undefined}
 																		>
 																			<MedicationAvatar
 																				name={item.medName}
@@ -1329,7 +1321,11 @@ export function SharedSchedule() {
 																		<ScheduleUsageTag>
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
 																		</ScheduleUsageTag>
-																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
+																		{isEmpty ? (
+																			<span className="tag danger">{t("status.outOfStock")}</span>
+																		) : (
+																			isLowStock && <span className="tag warning">{t("status.lowStock")}</span>
+																		)}
 																	</div>
 																</div>
 																<div className="doses-col">
@@ -1412,16 +1408,16 @@ export function SharedSchedule() {
 														({t("dashboard.schedules.pastDaysCount", { count: pastDays.length })})
 													</span>
 													{missedCount > 0 ? (
-														<span
+														<AppTooltipTrigger
+															label={t("dashboard.schedules.missedDoses", { count: missedCount })}
 															className="past-days-warning"
-															title={t("dashboard.schedules.missedDoses", { count: missedCount })}
 														>
 															⚠️ {missedCount}
-														</span>
+														</AppTooltipTrigger>
 													) : totalPastDoses.length > 0 ? (
-														<span className="past-days-complete" title={t("dashboard.schedules.allTaken")}>
+														<AppTooltipTrigger label={t("dashboard.schedules.allTaken")} className="past-days-complete">
 															✓
-														</span>
+														</AppTooltipTrigger>
 													) : null}
 												</div>
 											</div>
@@ -1453,7 +1449,6 @@ export function SharedSchedule() {
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
 													}}
-													title={isCollapsed ? t("common.expand") : t("common.collapse")}
 												>
 													<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
 													<span className="day-date">{day.dateStr}</span>
@@ -1508,9 +1503,12 @@ export function SharedSchedule() {
 																			}
 																			onKeyDown={(e) => {
 																				if (e.key === "Enter" || e.key === " ") {
+																					e.preventDefault();
 																					if (med?.imageUrl) openLightbox(med.imageUrl, getMedDisplayName(med));
 																				}
 																			}}
+																			role={med?.imageUrl ? "button" : undefined}
+																			tabIndex={med?.imageUrl ? 0 : undefined}
 																		>
 																			<MedicationAvatar
 																				name={item.medName}
@@ -1530,7 +1528,11 @@ export function SharedSchedule() {
 																		<ScheduleUsageTag>
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
 																		</ScheduleUsageTag>
-																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
+																		{isEmpty ? (
+																			<span className="tag danger">{t("status.outOfStock")}</span>
+																		) : (
+																			isLowStock && <span className="tag warning">{t("status.lowStock")}</span>
+																		)}
 																	</div>
 																</div>
 																<div className="doses-col">
@@ -1639,7 +1641,6 @@ export function SharedSchedule() {
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === " ") toggleDayCollapse(day.dateStr, isAutoCollapsed);
 													}}
-													title={isCollapsed ? t("common.expand") : t("common.collapse")}
 												>
 													<span className="day-collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
 													<span className="day-date">{day.dateStr}</span>
@@ -1694,9 +1695,12 @@ export function SharedSchedule() {
 																			}
 																			onKeyDown={(e) => {
 																				if (e.key === "Enter" || e.key === " ") {
+																					e.preventDefault();
 																					if (med?.imageUrl) openLightbox(med.imageUrl, getMedDisplayName(med));
 																				}
 																			}}
+																			role={med?.imageUrl ? "button" : undefined}
+																			tabIndex={med?.imageUrl ? 0 : undefined}
 																		>
 																			<MedicationAvatar
 																				name={item.medName}
@@ -1716,7 +1720,11 @@ export function SharedSchedule() {
 																		<ScheduleUsageTag>
 																			{formatTotalUsageLabel(med, item.total, item.doses)}
 																		</ScheduleUsageTag>
-																		{isLowStock && <span className="tag warning">{t("status.lowStock")}</span>}
+																		{isEmpty ? (
+																			<span className="tag danger">{t("status.outOfStock")}</span>
+																		) : (
+																			isLowStock && <span className="tag warning">{t("status.lowStock")}</span>
+																		)}
 																	</div>
 																</div>
 																<div className="doses-col">
@@ -1767,12 +1775,13 @@ export function SharedSchedule() {
 					</div>
 				</section>
 
-				<footer className="shared-schedule-footer">
+				<footer className={sharedClasses["shared-schedule-footer"]}>
 					<p>
 						{t("share.generatedBy")}{" "}
 						{data?.sharedBy && (
 							<>
-								<strong>{data.sharedBy}</strong> ·{" "}
+								<strong>{data.sharedBy}</strong>
+								{" - "}
 							</>
 						)}
 						<a href="/">MedAssist</a>
@@ -1782,26 +1791,7 @@ export function SharedSchedule() {
 
 			{/* Image Lightbox */}
 			{lightboxImage && (
-				<div
-					className="lightbox-overlay"
-					onClick={closeLightbox}
-					onKeyDown={(e) => {
-						if (e.key !== "Escape") e.stopPropagation();
-					}}
-				>
-					<button className="lightbox-close" onClick={closeLightbox}>
-						×
-					</button>
-					<img
-						src={sharedImageSrc(lightboxImage.url)}
-						alt={lightboxImage.name}
-						className="lightbox-image"
-						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => {
-							if (e.key !== "Escape") e.stopPropagation();
-						}}
-					/>
-				</div>
+				<Lightbox src={sharedImageSrc(lightboxImage.url)} alt={lightboxImage.name} onClose={closeLightbox} />
 			)}
 
 			<IntakeJournalModal

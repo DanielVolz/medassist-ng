@@ -169,6 +169,7 @@ vi.mock("../../components/medications/MedicationDialogs", () => ({
 		showDeleteConfirm,
 		deleteConfirmLabel,
 		onConfirmDelete,
+		lightboxImage,
 		showReportModal,
 	}: {
 		showUnsavedConfirm: boolean;
@@ -180,6 +181,7 @@ vi.mock("../../components/medications/MedicationDialogs", () => ({
 		showDeleteConfirm: boolean;
 		deleteConfirmLabel: string;
 		onConfirmDelete: () => void;
+		lightboxImage: { src: string; alt: string } | null;
 		showReportModal: boolean;
 	}) => (
 		<>
@@ -204,6 +206,7 @@ vi.mock("../../components/medications/MedicationDialogs", () => ({
 					</button>
 				</div>
 			) : null}
+			{lightboxImage ? <div data-testid="lightbox-open">{`${lightboxImage.src}|${lightboxImage.alt}`}</div> : null}
 			{showReportModal ? <div data-testid="report-modal-open">Report Modal</div> : null}
 		</>
 	),
@@ -218,9 +221,9 @@ function renderPage(initialEntry = "/medications") {
 }
 
 function openNewMedicationForm() {
-	const newButton = document.querySelector(".card-head .btn.primary") as HTMLButtonElement | null;
+	const newButton = screen.getByRole("button", { name: "form.newEntry" });
 	expect(newButton).toBeInTheDocument();
-	fireEvent.click(newButton as HTMLButtonElement);
+	fireEvent.click(newButton);
 }
 
 function getEnrichmentPackageButtons() {
@@ -308,7 +311,7 @@ describe("MedicationsPage", () => {
 
 		renderPage();
 		openNewMedicationForm();
-		fireEvent.submit(document.querySelector("form.form-grid") as HTMLFormElement);
+		fireEvent.submit(document.querySelector("form") as HTMLFormElement);
 
 		await waitFor(() => {
 			expect(screen.getAllByText("common.validation.nameOrGenericRequired")).toHaveLength(2);
@@ -401,7 +404,7 @@ describe("MedicationsPage", () => {
 		expect(screen.getByText("form.blisters.weekdaysRequired")).toBeInTheDocument();
 		expect(screen.getByText("form.blisters.weekdays")).toBeInTheDocument();
 		expect(screen.queryByLabelText("form.blisters.everyDays")).not.toBeInTheDocument();
-		expect(document.querySelector('button[type="submit"]')).toHaveClass("has-validation-error");
+		expect(screen.getByRole("button", { name: "common.save" })).toBeEnabled();
 	});
 
 	it("toggles weekday selections in the desktop schedule form", () => {
@@ -429,7 +432,7 @@ describe("MedicationsPage", () => {
 		renderPage();
 		openNewMedicationForm();
 		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
-		fireEvent.click(screen.getByTitle("form.blisters.weekdaysLong.mon"));
+		fireEvent.click(screen.getByRole("button", { name: "form.blisters.weekdaysLong.mon" }));
 
 		expect(setIntakeValue).toHaveBeenCalledWith(0, "weekdays", ["mon", "wed"]);
 	});
@@ -452,8 +455,18 @@ describe("MedicationsPage with items", () => {
 	it("renders medication rows", () => {
 		renderPage();
 		expect(screen.getByText("Aspirin")).toBeInTheDocument();
-		const rows = document.querySelectorAll(".med-row");
+		const rows = screen.getAllByTestId("medication-row");
 		expect(rows.length).toBeGreaterThan(0);
+	});
+
+	it("opens the medication image lightbox from the list avatar", () => {
+		const medicationWithImage = { ...mockMeds[0], imageUrl: "aspirin.webp" };
+		mockContextValue = createMockContext({ meds: [medicationWithImage] });
+
+		renderPage();
+		fireEvent.click(screen.getByRole("button", { name: "Aspirin" }));
+
+		expect(screen.getByTestId("lightbox-open")).toHaveTextContent("/api/images/aspirin.webp|Aspirin");
 	});
 
 	it("calls startEdit from list action", () => {
@@ -461,9 +474,7 @@ describe("MedicationsPage with items", () => {
 		mockFormHookValue = createMockFormHook({ startEdit });
 		fetchMock.mockResolvedValue({ ok: true, json: async () => mockMeds });
 		renderPage();
-		const editButton = document.querySelector(".med-actions .info") as HTMLButtonElement | null;
-		expect(editButton).toBeInTheDocument();
-		fireEvent.click(editButton as HTMLButtonElement);
+		fireEvent.click(screen.getAllByRole("button", { name: "common.edit" })[0]);
 		expect(startEdit).toHaveBeenCalledTimes(1);
 	});
 
@@ -481,9 +492,7 @@ describe("MedicationsPage with items", () => {
 
 		renderPage();
 
-		const editButton = document.querySelector(".med-actions .info") as HTMLButtonElement | null;
-		expect(editButton).toBeInTheDocument();
-		fireEvent.click(editButton as HTMLButtonElement);
+		fireEvent.click(screen.getAllByRole("button", { name: "common.edit" })[0]);
 
 		expect(startEdit).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 1, takenBy: ["Alice", "Bob"] }),
@@ -534,8 +543,7 @@ describe("MedicationsPage with items", () => {
 		});
 
 		renderPage();
-		const editButton = document.querySelector(".med-actions .info") as HTMLButtonElement;
-		fireEvent.click(editButton);
+		fireEvent.click(screen.getAllByRole("button", { name: "common.edit" })[0]);
 
 		expect(screen.getByTestId("confirm-modal")).toBeInTheDocument();
 		fireEvent.click(screen.getByText("common.unsavedChanges.leave"));
@@ -602,7 +610,10 @@ describe("MedicationsPage with items", () => {
 		renderPage();
 		expect(screen.getByText("medications.list.reactivate")).toBeInTheDocument();
 
-		const obsoleteToggleButton = document.querySelector(".med-group-head-toggle") as HTMLButtonElement;
+		const obsoleteToggleButton = screen.getByRole("button", {
+			name: /medications\.list\.obsoleteTitle/,
+			expanded: true,
+		});
 		expect(obsoleteToggleButton).toBeInTheDocument();
 		fireEvent.click(obsoleteToggleButton);
 
@@ -610,7 +621,12 @@ describe("MedicationsPage with items", () => {
 			expect(screen.queryByText("medications.list.reactivate")).not.toBeInTheDocument();
 		});
 
-		fireEvent.click(obsoleteToggleButton);
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: /medications\.list\.obsoleteTitle/,
+				expanded: false,
+			})
+		);
 		expect(screen.getByText("medications.list.reactivate")).toBeInTheDocument();
 	});
 });
@@ -624,17 +640,15 @@ describe("MedicationsPage form interactions", () => {
 		vi.stubGlobal("fetch", fetchMock);
 	});
 
-	it("calls handleValueChange when typing name", () => {
-		const handleValueChange = vi.fn();
-		mockFormHookValue = createMockFormHook({ handleValueChange });
+	it("updates form state when typing name", () => {
+		const setForm = vi.fn();
+		mockFormHookValue = createMockFormHook({ setForm });
 		renderPage();
 		openNewMedicationForm();
-		const nameInput =
-			(document.querySelector('input[name="name"]') as HTMLInputElement | null) ??
-			(document.querySelector(".card.form input[type='text']") as HTMLInputElement | null);
+		const nameInput = screen.getByPlaceholderText("form.placeholders.commercial") as HTMLInputElement;
 		expect(nameInput).toBeInTheDocument();
 		fireEvent.change(nameInput as HTMLInputElement, { target: { value: "Test Med" } });
-		expect(handleValueChange).toHaveBeenCalled();
+		expect(setForm).toHaveBeenCalledWith(expect.objectContaining({ name: "Test Med" }));
 	});
 
 	it("opens mobile edit flow when creating new entry on mobile viewport", () => {

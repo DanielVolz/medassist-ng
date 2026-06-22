@@ -78,7 +78,7 @@ test.describe("Authentication", () => {
 		await page.goto("/dashboard");
 
 		// Should NOT show the app header (redirected to login)
-		await expect(page.locator("header.hero")).not.toBeVisible({ timeout: 10000 });
+		await expect(page.getByTestId("app-header")).not.toBeVisible({ timeout: 10000 });
 
 		// Should show auth form instead
 		await expect(page.locator(".auth-container")).toBeVisible();

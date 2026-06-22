@@ -286,6 +286,14 @@ describe("SharedSchedule", () => {
 		vi.restoreAllMocks();
 	});
 
+	it("renders a single loading message while the shared link is loading", () => {
+		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
+
+		renderSharedSchedule("/share/token-123");
+
+		expect(screen.getAllByText("common.loading")).toHaveLength(1);
+	});
+
 	it("renders shared schedule shell for valid token", async () => {
 		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
 			if (url === "/api/share/token-123/doses" && (!init?.method || init.method === "GET")) {
@@ -315,6 +323,59 @@ describe("SharedSchedule", () => {
 		expect(screen.getByText("share.publicAccessHelp")).toBeInTheDocument();
 	});
 
+	it("shows low and out-of-stock markers on shared schedule rows", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		sharedData.medications = [
+			{
+				...sharedData.medications[0],
+				name: "Low Shared Med",
+			},
+			{
+				...sharedData.medications[0],
+				id: 2,
+				name: "Empty Shared Med",
+			},
+		];
+		const sharedDataWithStock = {
+			...sharedData,
+			stockThresholds: {
+				lowStockDays: 30,
+				normalStockDays: 60,
+				highStockDays: 90,
+				reminderDaysBefore: 7,
+				expiryWarningDays: 90,
+			},
+			medicationOverview: [
+				{
+					name: "Low Shared Med",
+					currentStock: 10,
+					daysLeft: 10,
+				},
+				{
+					name: "Empty Shared Med",
+					currentStock: 0,
+					daysLeft: 0,
+				},
+			],
+		};
+
+		mockSharedScheduleRead(sharedDataWithStock);
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(screen.getByText("status.lowStock")).toHaveClass("tag", "warning");
+			expect(screen.getByText("status.outOfStock")).toHaveClass("tag", "danger");
+		});
+		expect(document.querySelector(".time-row.med-low")).toBeInTheDocument();
+		expect(document.querySelector(".time-row.med-empty")).toBeInTheDocument();
+		expect(document.querySelector(".dose-item.med-low")).toBeInTheDocument();
+		expect(document.querySelector(".dose-item.med-empty")).toBeInTheDocument();
+	});
+
 	it("opens and saves a shared journal note when the share link allows notes", async () => {
 		const referenceNow = new Date();
 		referenceNow.setHours(12, 0, 0, 0);
@@ -331,15 +392,15 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(document.querySelector(".dose-btn.take")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.take" })).toBeInTheDocument();
 		});
 
-		const unavailableJournalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
+		const unavailableJournalButton = screen.getByRole("button", { name: "journal.actions.note" });
 		expect(unavailableJournalButton).toBeDisabled();
-		expect(unavailableJournalButton).not.toHaveClass("has-note");
-		expect(unavailableJournalButton.closest("span")).toHaveAttribute("data-tooltip", "journal.actions.noteTakenOnly");
+		expect(unavailableJournalButton.className).not.toContain("hasNote");
+		expect(unavailableJournalButton.closest("[data-tooltip]")).toBeNull();
 
-		fireEvent.click(screen.getByText("dose.take"));
+		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
 
 		await waitFor(() => {
 			expect(requests).toContainEqual({
@@ -351,13 +412,13 @@ describe("SharedSchedule", () => {
 		});
 
 		await waitFor(() => {
-			const availableJournalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
+			const availableJournalButton = screen.getByRole("button", { name: "journal.actions.note" });
 			expect(availableJournalButton).not.toBeDisabled();
-			expect(availableJournalButton).not.toHaveClass("has-note");
-			expect(availableJournalButton.closest("span")).not.toHaveAttribute("data-tooltip");
+			expect(availableJournalButton.className).not.toContain("hasNote");
+			expect(availableJournalButton.closest("[data-tooltip]")).toBeNull();
 		});
 
-		fireEvent.click(document.querySelector(".dose-btn.journal") as Element);
+		fireEvent.click(screen.getByRole("button", { name: "journal.actions.note" }));
 
 		await waitFor(() => {
 			expect(requests).toContainEqual({
@@ -385,8 +446,8 @@ describe("SharedSchedule", () => {
 
 		await waitFor(() => {
 			expect(screen.queryByLabelText("journal.editor.noteLabel")).not.toBeInTheDocument();
-			const savedJournalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
-			expect(savedJournalButton).toHaveClass("has-note");
+			const savedJournalButton = screen.getByRole("button", { name: "journal.actions.note" });
+			expect(savedJournalButton.className).toContain("hasNote");
 		});
 	});
 
@@ -407,9 +468,9 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			const journalButton = document.querySelector(".dose-btn.journal") as HTMLButtonElement;
+			const journalButton = screen.getByRole("button", { name: "journal.actions.note" });
 			expect(journalButton).not.toBeDisabled();
-			expect(journalButton).toHaveClass("has-note");
+			expect(journalButton.className).toContain("hasNote");
 		});
 	});
 
@@ -427,6 +488,16 @@ describe("SharedSchedule", () => {
 		await waitFor(() => {
 			const image = screen.getByAltText("Ibuprofen");
 			expect(image).toHaveAttribute("src", "/api/images/med-1-123-thumb.webp?shareToken=token-123");
+		});
+
+		fireEvent.click(screen.getByRole("button", { name: "Ibuprofen" }));
+
+		await waitFor(() => {
+			expect(screen.getAllByAltText("Ibuprofen")).toHaveLength(2);
+			expect(screen.getAllByAltText("Ibuprofen")[1]).toHaveAttribute(
+				"src",
+				"/api/images/med-1-123.webp?shareToken=token-123"
+			);
 		});
 	});
 
@@ -552,10 +623,10 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(document.querySelector(".dose-btn.skip")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.skip" })).toBeInTheDocument();
 		});
 
-		fireEvent.click(screen.getByText("dose.skip"));
+		fireEvent.click(screen.getByRole("button", { name: "dose.skip" }));
 
 		await waitFor(() => {
 			expect(requests).toContainEqual({
@@ -563,7 +634,7 @@ describe("SharedSchedule", () => {
 				method: "POST",
 				body: { doseId: sharedData.automaticDoseId },
 			});
-			expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.undoSkip" })).toBeInTheDocument();
 		});
 	});
 
@@ -581,17 +652,17 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.undoSkip" })).toBeInTheDocument();
 		});
 
-		fireEvent.click(screen.getByText("dose.undoSkip"));
+		fireEvent.click(screen.getByRole("button", { name: "dose.undoSkip" }));
 
 		await waitFor(() => {
 			expect(requests).toContainEqual({
 				url: `/api/share/token-123/doses/skip/${sharedData.automaticDoseId}`,
 				method: "DELETE",
 			});
-			expect(document.querySelector(".dose-btn.skip")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.skip" })).toBeInTheDocument();
 		});
 	});
 
@@ -609,10 +680,10 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(document.querySelector(".dose-btn.undo.skip")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.undoSkip" })).toBeInTheDocument();
 		});
 
-		fireEvent.click(screen.getByText("dose.take"));
+		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
 
 		await waitFor(() => {
 			expect(requests).toContainEqual({

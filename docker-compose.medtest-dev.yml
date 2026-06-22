@@ -1,0 +1,25 @@
+services:
+  backend-dev:
+    environment:
+      - PUBLIC_APP_URL=https://medtest.danielvolz.org
+      - CORS_ORIGINS=https://medtest.danielvolz.org,http://localhost:5173,http://127.0.0.1:5173
+      - OIDC_REDIRECT_URI=https://medtest.danielvolz.org/api/auth/oidc/callback
+
+  frontend-dev:
+    environment:
+      - VITE_ALLOWED_HOSTS=localhost,127.0.0.1,medtest.danielvolz.org
+      - VITE_HMR_HOST=medtest.danielvolz.org
+      - VITE_HMR_PROTOCOL=wss
+      - VITE_HMR_CLIENT_PORT=443
+      - VITE_HMR_PORT=5173
+    labels:
+      caddy: medtest.danielvolz.org
+      caddy.import: common_headers
+      caddy.reverse_proxy: "{{upstreams 5173}}"
+    networks:
+      - default
+      - caddy-proxy
+
+networks:
+  caddy-proxy:
+    external: true

@@ -72,42 +72,42 @@ test.describe("Share Schedule", () => {
 	test("should show taken-by badges on dashboard overview table", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = page.getByTestId("dashboard-overview-table");
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Alice's medication should show "Alice" badge
-		const aliceRow = overviewTable.locator(".table-row").filter({ hasText: MED_ALICE });
+		const aliceRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_ALICE }).first();
 		await expect(aliceRow).toBeVisible();
-		await expect(aliceRow.locator(".taken-by-badge").filter({ hasText: PERSON_ALICE })).toBeVisible();
+		await expect(aliceRow.getByRole("button", { name: PERSON_ALICE })).toBeVisible();
 
 		// Bob's medication should show "Bob" badge
-		const bobRow = overviewTable.locator(".table-row").filter({ hasText: MED_BOB });
+		const bobRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_BOB }).first();
 		await expect(bobRow).toBeVisible();
-		await expect(bobRow.locator(".taken-by-badge").filter({ hasText: PERSON_BOB })).toBeVisible();
+		await expect(bobRow.getByRole("button", { name: PERSON_BOB })).toBeVisible();
 	});
 
 	test("should show Share button on dashboard when medications have taken-by", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
 		// Share button should appear near the schedules section
-		const shareBtn = page.locator("button.share-btn");
+		const shareBtn = page.getByRole("button", { exact: true, name: "Share" });
 		await expect(shareBtn).toBeVisible({ timeout: 10000 });
 	});
 
 	test("should open share dialog with person list", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = page.getByTestId("dashboard-overview-table");
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 		await expect(overviewTable.getByText(MED_ALICE)).toBeVisible({ timeout: 10000 });
 		await expect(overviewTable.getByText(MED_BOB)).toBeVisible({ timeout: 10000 });
 
 		// Click the share button
-		const shareBtn = page.locator("button.share-btn");
+		const shareBtn = page.getByRole("button", { exact: true, name: "Share" });
 		await expect(shareBtn).toBeVisible({ timeout: 10000 });
 		await shareBtn.click();
 
 		// Share dialog modal should appear
-		const modal = page.locator(".modal-overlay");
+		const modal = page.getByRole("dialog");
 		await expect(modal).toBeVisible({ timeout: 5000 });
 
 		// Should show a person select dropdown (first select in the modal)
@@ -120,7 +120,7 @@ test.describe("Share Schedule", () => {
 		await expect(personSelect.locator('option[value="Bob"]')).toBeAttached();
 
 		// Close
-		await page.locator("button.modal-close").click();
+		await modal.getByLabel(/close/i).click();
 		await expect(modal).not.toBeVisible();
 	});
 
@@ -128,8 +128,8 @@ test.describe("Share Schedule", () => {
 		await navigateTo(page, "/dashboard");
 
 		// Open share dialog
-		await page.locator("button.share-btn").click();
-		const modal = page.locator(".modal-overlay");
+		await page.getByRole("button", { exact: true, name: "Share" }).click();
+		const modal = page.getByRole("dialog");
 		await expect(modal).toBeVisible({ timeout: 5000 });
 
 		// Select Alice
@@ -153,7 +153,7 @@ test.describe("Share Schedule", () => {
 		await expect(modal.locator("button.btn-copy").first()).toBeVisible();
 
 		// Close
-		await page.locator("button.modal-close").click();
+		await modal.getByLabel(/close/i).click();
 	});
 
 	test("should navigate to shared schedule page via API-created token", async ({ page }) => {
@@ -273,32 +273,35 @@ test.describe("Share Schedule", () => {
 	test("should show notes icon on dashboard for medication with notes", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = page.getByTestId("dashboard-overview-table");
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Alice's med has notes — should show the 📝 icon
-		const aliceRow = overviewTable.locator(".table-row").filter({ hasText: MED_ALICE });
+		const aliceRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_ALICE }).first();
 		await expect(aliceRow).toBeVisible();
-		await expect(aliceRow.locator(".notes-icon")).toBeVisible();
+		await expect(aliceRow.getByRole("button", { name: "Has notes" })).toBeVisible();
 	});
 
 	test("should show notes in medication detail modal", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = page.getByTestId("dashboard-overview-table");
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Click on Alice's med to open detail modal
-		const aliceRow = overviewTable.locator(".table-row").filter({ hasText: MED_ALICE });
-		await aliceRow.click();
+		const aliceRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_ALICE }).first();
+		await aliceRow.getByRole("button", { name: MED_ALICE }).click();
 
-		const modal = page.locator(".modal-overlay");
+		const modal = page
+			.getByRole("dialog")
+			.filter({ has: page.getByRole("heading", { name: MED_ALICE }) })
+			.last();
 		await expect(modal).toBeVisible({ timeout: 5000 });
 
 		// Modal should show the notes
 		await expect(modal.getByText("Take every 6 hours as needed")).toBeVisible();
 
-		await page.locator("button.modal-close").click();
+		await modal.getByLabel(/close/i).click();
 	});
 
 	test("should let a shared recipient add and reopen a journal note", async ({ page }) => {
@@ -351,7 +354,7 @@ test.describe("Share Schedule", () => {
 		await expect(noteInput).toHaveValue("");
 
 		await noteInput.fill(journalNote);
-		await page.locator(".journal-modal-footer button.primary").click();
+		await page.getByRole("button", { name: /Save|Speichern/i }).click();
 		await expect(page.locator(".journal-modal")).toBeHidden({ timeout: 10000 });
 
 		await noteButton.click();

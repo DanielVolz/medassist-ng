@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
@@ -165,6 +165,15 @@ function renderPage() {
 	);
 }
 
+function checkboxForSetting(label: string) {
+	const labelText = screen.getByText(label);
+	const row = labelText.closest("div")?.parentElement;
+	const checkbox = row?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+
+	expect(checkbox).toBeInTheDocument();
+	return checkbox as HTMLInputElement;
+}
+
 describe("SettingsPage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -176,7 +185,7 @@ describe("SettingsPage", () => {
 
 	it("renders settings form container", () => {
 		renderPage();
-		expect(document.querySelector(".settings-form")).toBeInTheDocument();
+		expect(screen.getByTestId("settings-page")).toBeInTheDocument();
 	});
 
 	it("renders loading text while settings are loading", () => {
@@ -215,7 +224,7 @@ describe("SettingsPage", () => {
 
 	it("renders language select and switches language", () => {
 		renderPage();
-		const select = document.querySelector(".language-select") as HTMLSelectElement | null;
+		const select = screen.getByTestId("settings-language-select").querySelector("select") as HTMLSelectElement | null;
 		expect(select).toBeInTheDocument();
 		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
 		expect(changeLanguageMock).toHaveBeenCalledWith("de");
@@ -253,20 +262,10 @@ describe("SettingsPage", () => {
 
 		renderPage();
 
-		const swapRow = screen.getByText("settings.timeline.swapDashboardSections").closest(".setting-row");
-		const upcomingRow = screen.getByText("settings.timeline.upcomingTodayOnly").closest(".setting-row");
-		const overviewRow = screen.getByText("settings.timeline.shareMedicationOverview").closest(".setting-row");
-		const sharedRow = screen.getByText("settings.timeline.shareScheduleTodayOnly").closest(".setting-row");
-
-		const swapToggle = swapRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
-		const upcomingToggle = upcomingRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
-		const overviewToggle = overviewRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
-		const sharedToggle = sharedRow?.querySelector('input[type="checkbox"]') as HTMLInputElement;
-
-		expect(swapToggle).toBeInTheDocument();
-		expect(upcomingToggle).toBeInTheDocument();
-		expect(overviewToggle).toBeInTheDocument();
-		expect(sharedToggle).toBeInTheDocument();
+		const swapToggle = checkboxForSetting("settings.timeline.swapDashboardSections");
+		const upcomingToggle = checkboxForSetting("settings.timeline.upcomingTodayOnly");
+		const overviewToggle = checkboxForSetting("settings.timeline.shareMedicationOverview");
+		const sharedToggle = checkboxForSetting("settings.timeline.shareScheduleTodayOnly");
 
 		fireEvent.click(swapToggle);
 		fireEvent.click(upcomingToggle);
@@ -434,24 +433,28 @@ describe("SettingsPage", () => {
 
 	it("renders notification matrix with toggle switches", () => {
 		renderPage();
-		expect(document.querySelector(".notification-matrix")).toBeInTheDocument();
-		const toggles = document.querySelectorAll(".toggle-switch");
+		const matrix = screen.getByTestId("settings-notification-matrix");
+		expect(matrix).toBeInTheDocument();
+		const toggles = within(matrix).getAllByRole("checkbox");
 		expect(toggles.length).toBeGreaterThan(0);
 	});
 
 	it("renders stock thresholds with three text inputs", () => {
 		renderPage();
-		const thresholdGroup = document.querySelector(".threshold-chips-group");
-		expect(thresholdGroup).toBeInTheDocument();
-		const inputs = thresholdGroup?.querySelectorAll('input[type="text"]') ?? [];
+		const thresholdGroup = [
+			screen.getByTestId("settings-threshold-critical"),
+			screen.getByTestId("settings-threshold-low"),
+			screen.getByTestId("settings-threshold-high"),
+		];
+		const inputs = thresholdGroup.flatMap((group) => Array.from(group.querySelectorAll('input[type="text"]')));
 		expect(inputs.length).toBe(3);
 	});
 
-	it("renders calculation mode radio cards", () => {
+	it("renders calculation mode radio options", () => {
 		renderPage();
-		const modeGroup = document.querySelector(".calculation-mode-group");
+		const modeGroup = screen.getByTestId("settings-calculation-mode");
 		expect(modeGroup).toBeInTheDocument();
-		expect(modeGroup?.querySelectorAll(".radio-card").length).toBe(2);
+		expect(within(modeGroup).getAllByRole("radio")).toHaveLength(2);
 	});
 
 	it("renders threshold validation message when critical/low/high order is invalid", () => {

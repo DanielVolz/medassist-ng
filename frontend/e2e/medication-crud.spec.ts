@@ -49,7 +49,7 @@ async function fillAndSaveMedication(
 		await form.getByLabel(/(Generic Name|form\.genericName)/i).fill(opts.genericName);
 	}
 
-	const packageTypeSelect = form.locator("select.package-type-select");
+	const packageTypeSelect = form.getByLabel(/(Package Type|form\.packageType)/i);
 	if (opts.packageType === "bottle" || opts.packageType === "inhaler" || opts.packageType === "injection") {
 		await packageTypeSelect.selectOption(opts.packageType ?? "bottle");
 		await page.getByRole("tab", { name: /Package/i }).click();
@@ -97,7 +97,7 @@ async function fillAndSaveMedication(
 	await page.getByRole("tab", { name: /Schedule/i }).click();
 	for (let i = 0; i < intakes.length; i++) {
 		if (i > 0) {
-			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
+			await form.getByTestId("add-intake-button").click();
 		}
 		const row = form.locator(".blister-row").nth(i);
 		const usageField = row.getByRole("textbox", {
@@ -498,10 +498,10 @@ test.describe("Medication CRUD", () => {
 
 			expect(await form.locator(".blister-row").count()).toBe(1);
 
-			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
+			await form.getByTestId("add-intake-button").click();
 			expect(await form.locator(".blister-row").count()).toBe(2);
 
-			await form.getByRole("button", { name: /(Intake|form\.blisters\.addIntake)/i }).click();
+			await form.getByTestId("add-intake-button").click();
 			expect(await form.locator(".blister-row").count()).toBe(3);
 
 			const removeBtn = page

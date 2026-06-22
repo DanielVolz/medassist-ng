@@ -1,8 +1,9 @@
-import { X } from "lucide-react";
+import { Alert, Group, List, Paper, SimpleGrid, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import type { ImportPreview } from "../context/AppContext";
-import { useEscapeKey } from "../hooks/useEscapeKey";
-import { useScrollLock } from "../hooks/useScrollLock";
+import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
+import classes from "./ImportReviewModal.module.css";
 
 interface ImportReviewModalProps {
 	isOpen: boolean;
@@ -26,7 +27,6 @@ export function ImportReviewModal({
 	onConfirm,
 }: ImportReviewModalProps) {
 	const { t } = useTranslation();
-	const titleId = "import-review-modal-title";
 	const hasExistingData = importPreview?.warnings.replacesExistingData ?? false;
 	const hasWarnings = Boolean(
 		importPreview?.warnings.replacesExistingData ||
@@ -35,127 +35,132 @@ export function ImportReviewModal({
 			importPreview?.warnings.containsSensitiveData
 	);
 
-	useScrollLock(isOpen);
-	useEscapeKey(isOpen, onClose);
-
 	if (!isOpen || !importPreview) {
 		return null;
 	}
 
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(event) => {
-				if (event.key !== "Escape") {
-					event.stopPropagation();
-				}
-			}}
+		<AppModal
+			closeButtonProps={{ "aria-label": t("common.close") }}
+			contentClassName={`${classes.modal} import-review-modal`}
+			onClose={onClose}
+			opened={isOpen}
+			size="lg"
+			title={t(hasExistingData ? "exportImport.confirmImport" : "exportImport.confirmImportEmpty")}
+			withCloseButton
 		>
-			<div
-				className="modal-content confirm-modal import-review-modal"
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby={titleId}
-				onClick={(event) => event.stopPropagation()}
-				onKeyDown={(event) => {
-					if (event.key !== "Escape") {
-						event.stopPropagation();
-					}
-				}}
-			>
-				<button className="modal-close" onClick={onClose} type="button" aria-label={t("common.close")}>
-					<X size={20} aria-hidden="true" />
-				</button>
-				<h2 id={titleId}>{t(hasExistingData ? "exportImport.confirmImport" : "exportImport.confirmImportEmpty")}</h2>
-				<div className="import-review-body">
-					<p>{t(hasExistingData ? "exportImport.reviewDescription" : "exportImport.reviewDescriptionEmpty")}</p>
-					<div className="import-review-summary">
-						<div className="action-card">
-							<div className="action-card-content">
-								<span className="action-card-title">{t("exportImport.incomingData")}</span>
-								<span className="action-card-desc">
+			<Stack gap="md">
+				<Text>{t(hasExistingData ? "exportImport.reviewDescription" : "exportImport.reviewDescriptionEmpty")}</Text>
+				<SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+					<Paper withBorder radius={10} p="md" className={classes.summaryCard}>
+						<Stack gap="xs">
+							<div>
+								<Text fw={700}>{t("exportImport.incomingData")}</Text>
+								<Text c="dimmed" size="sm">
 									{t("exportImport.summaryCounts", {
 										medications: importPreview.incoming.medications,
 										doses: importPreview.incoming.doseHistory,
 										refills: importPreview.incoming.refillHistory,
 										shares: importPreview.incoming.shareLinks,
 									})}
-								</span>
+								</Text>
 							</div>
-							<div className="import-review-meta">
-								<span>{t("exportImport.formatVersion", { version: importPreview.version })}</span>
-								<span>{t("exportImport.exportedAt", { date: formattedExportedAt })}</span>
-								{importPreview.incoming.hasSettings && <span>{t("exportImport.settingsIncluded")}</span>}
+							<Stack gap={4} className={classes.meta}>
+								<Text size="sm">{t("exportImport.formatVersion", { version: importPreview.version })}</Text>
+								<Text size="sm">{t("exportImport.exportedAt", { date: formattedExportedAt })}</Text>
+								{importPreview.incoming.hasSettings ? (
+									<Text size="sm">{t("exportImport.settingsIncluded")}</Text>
+								) : null}
 								{importPreview.incoming.journalEntries > 0 && (
-									<span>{t("exportImport.journalEntries", { count: importPreview.incoming.journalEntries })}</span>
+									<Text size="sm">
+										{t("exportImport.journalEntries", { count: importPreview.incoming.journalEntries })}
+									</Text>
 								)}
 								{importPreview.incoming.imageCount > 0 && (
-									<span>{t("exportImport.imageCount", { count: importPreview.incoming.imageCount })}</span>
+									<Text size="sm">{t("exportImport.imageCount", { count: importPreview.incoming.imageCount })}</Text>
 								)}
-							</div>
-						</div>
-						<div className="action-card">
-							<div className="action-card-content">
-								<span className="action-card-title">{t("exportImport.currentData")}</span>
-								<span className="action-card-desc">
+							</Stack>
+						</Stack>
+					</Paper>
+					<Paper withBorder radius={10} p="md" className={classes.summaryCard}>
+						<Stack gap="xs">
+							<div>
+								<Text fw={700}>{t("exportImport.currentData")}</Text>
+								<Text c="dimmed" size="sm">
 									{t("exportImport.summaryCounts", {
 										medications: importPreview.current.medications,
 										doses: importPreview.current.doseHistory,
 										refills: importPreview.current.refillHistory,
 										shares: importPreview.current.shareLinks,
 									})}
-								</span>
+								</Text>
 							</div>
-							{importPreview.current.hasSettings && (
-								<span className="import-review-meta">{t("exportImport.settingsConfigured")}</span>
-							)}
-						</div>
-					</div>
+							{importPreview.current.hasSettings ? (
+								<Text c="dimmed" size="sm">
+									{t("exportImport.settingsConfigured")}
+								</Text>
+							) : null}
+						</Stack>
+					</Paper>
+				</SimpleGrid>
 
-					{hasWarnings && (
-						<div className="import-review-warnings">
-							<strong>{t("exportImport.warningListTitle")}</strong>
-							<ul>
-								{importPreview.warnings.replacesExistingData && <li>{t("exportImport.warningReplaceData")}</li>}
-								{importPreview.warnings.regeneratesShareLinks && <li>{t("exportImport.warningShareLinks")}</li>}
-								{importPreview.warnings.containsImages && <li>{t("exportImport.warningImages")}</li>}
-								{importPreview.warnings.containsSensitiveData && <li>{t("exportImport.warningSensitive")}</li>}
-							</ul>
-						</div>
-					)}
+				{hasWarnings ? (
+					<Alert color="yellow" variant="light">
+						<Stack gap="xs">
+							<Text fw={700}>{t("exportImport.warningListTitle")}</Text>
+							<List spacing={4}>
+								{importPreview.warnings.replacesExistingData ? (
+									<List.Item>{t("exportImport.warningReplaceData")}</List.Item>
+								) : null}
+								{importPreview.warnings.regeneratesShareLinks ? (
+									<List.Item>{t("exportImport.warningShareLinks")}</List.Item>
+								) : null}
+								{importPreview.warnings.containsImages ? (
+									<List.Item>{t("exportImport.warningImages")}</List.Item>
+								) : null}
+								{importPreview.warnings.containsSensitiveData ? (
+									<List.Item>{t("exportImport.warningSensitive")}</List.Item>
+								) : null}
+							</List>
+						</Stack>
+					</Alert>
+				) : null}
 
-					{hasExistingData ? (
-						<p className="warning-text">{t("exportImport.confirmImportWarning")}</p>
-					) : (
-						<p className="hint-text">{t("exportImport.confirmImportEmptyMessage")}</p>
-					)}
+				{hasExistingData ? (
+					<Alert color="yellow" variant="light">
+						{t("exportImport.confirmImportWarning")}
+					</Alert>
+				) : (
+					<Text c="dimmed">{t("exportImport.confirmImportEmptyMessage")}</Text>
+				)}
 
-					<p className="hint-text">{t("exportImport.backupHint")}</p>
-				</div>
-				<div className="modal-footer import-review-footer">
-					<button type="button" className="ghost" onClick={onClose} disabled={importing || exporting}>
+				<Text c="dimmed" size="sm">
+					{t("exportImport.backupHint")}
+				</Text>
+
+				<AppModalFooter>
+					<AppButton type="button" tone="secondary" onClick={onClose} disabled={importing || exporting}>
 						{t("exportImport.cancelButton")}
-					</button>
-					<div className="import-review-actions">
-						{hasExistingData && (
-							<button type="button" className="secondary" onClick={onBackup} disabled={exporting || importing}>
+					</AppButton>
+					<Group gap="sm">
+						{hasExistingData ? (
+							<AppButton type="button" tone="secondary" onClick={onBackup} disabled={exporting || importing}>
 								{exporting ? t("exportImport.exporting") : t("exportImport.backupFirst")}
-							</button>
-						)}
-						<button
+							</AppButton>
+						) : null}
+						<AppButton
 							type="button"
-							className={hasExistingData ? "danger" : "primary"}
+							tone={hasExistingData ? "danger" : "primary"}
 							onClick={onConfirm}
 							disabled={importing}
 						>
 							{importing
 								? t("exportImport.importing")
 								: t(hasExistingData ? "exportImport.confirmButton" : "exportImport.confirmButtonEmpty")}
-						</button>
-					</div>
-				</div>
-			</div>
-		</div>
+						</AppButton>
+					</Group>
+				</AppModalFooter>
+			</Stack>
+		</AppModal>
 	);
 }

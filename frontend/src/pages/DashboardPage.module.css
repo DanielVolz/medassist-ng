@@ -1,0 +1,114 @@
+.mainSections {
+	display: flex;
+	flex-direction: column;
+}
+
+.schedulesSection {
+	overflow: visible;
+}
+
+.mainSectionsSwapped .schedulesSection {
+	order: 1;
+}
+
+.mainSectionsSwapped .overviewSection {
+	order: 2;
+}
+
+.overviewNameCell {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	width: 100%;
+}
+
+.overviewNameLine {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.65rem;
+	min-width: 0;
+	width: 100%;
+}
+
+.overviewNameBlock {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.4rem;
+	min-width: 0;
+}
+
+.overviewMedicationTitle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	max-width: 100%;
+	min-width: 0;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
+.overviewMedicationName {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	text-decoration-thickness: 0.08em;
+	text-underline-offset: 0.16em;
+}
+
+.overviewTakenByLine {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 0.45rem;
+	max-width: 100%;
+}
+
+.overviewTakenByBadge {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.22rem;
+	max-width: 100%;
+	min-height: 1.35rem;
+	padding: 0.12rem 0.45rem;
+	border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--accent-bg) 72%, transparent);
+	color: var(--accent-light);
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 700;
+	line-height: 1.2;
+	text-align: left;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.overviewTakenByBadgeClickable {
+	cursor: pointer;
+	text-decoration-line: none;
+	text-decoration-thickness: 0.08em;
+	text-underline-offset: 0.16em;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease,
+		color 150ms ease;
+}
+
+.overviewTakenByBadgeClickable:hover {
+	border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+	background: color-mix(in srgb, var(--accent-bg) 86%, transparent);
+	color: var(--accent);
+	text-decoration-line: underline;
+}
+
+.overviewTakenByBadgeClickable:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+	outline-offset: 2px;
+	text-decoration-line: underline;
+}
+
+.overviewTakenByReminderIcon {
+	flex: 0 0 auto;
+}

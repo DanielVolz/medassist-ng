@@ -77,10 +77,21 @@ describe("ShareDialog", () => {
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 
+	it("keeps the main action footer outside the scrollable form content", () => {
+		render(<ShareDialog {...defaultProps} />);
+
+		const footer = screen.getByTestId("app-modal-footer");
+		expect(footer.parentElement?.className).toContain("modalBody");
+		expect(footer.closest('[class*="form"]')).toBeNull();
+		expect(footer.closest('[class*="result"]')).toBeNull();
+	});
+
 	it("calls onClose when overlay is clicked", () => {
-		const { container } = render(<ShareDialog {...defaultProps} />);
-		const overlay = container.querySelector(".modal-overlay");
-		fireEvent.click(overlay!);
+		render(<ShareDialog {...defaultProps} />);
+		// Mantine renders the modal in a portal; query the document instead of the container
+		const overlay = document.querySelector(".mantine-Modal-overlay");
+		expect(overlay).toBeInTheDocument();
+		fireEvent.click(overlay as HTMLElement);
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 
@@ -199,8 +210,10 @@ describe("ShareDialog", () => {
 
 		fireEvent.click(screen.getByText(/share\.manageLinksSummary/i));
 
-		expect(screen.getByText(/share\.activeLinkMetaWithExpiry/i)).toBeInTheDocument();
-		expect(screen.getByText(/share\.legacyNeverExpires/i)).toBeInTheDocument();
+		expect(screen.getAllByText(/share\.activeLinkCreatedLabel/i).length).toBeGreaterThan(0);
+		expect(screen.getAllByText(/share\.activeLinkExpiresLabel/i).length).toBeGreaterThan(0);
+		expect(screen.getAllByText(/share\.activeLinkDays_30/i).length).toBeGreaterThan(0);
+		expect(screen.getByText(/share\.activeLinkLegacyExpiry/i)).toBeInTheDocument();
 	});
 
 	it("uses an in-app confirm modal before revoking an active share link", async () => {

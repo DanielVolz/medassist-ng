@@ -26,36 +26,34 @@ describe("ExportModal", () => {
 
 	it("calls onClose when close button is clicked", () => {
 		render(<ExportModal {...defaultProps} />);
-		fireEvent.click(screen.getByText("×"));
+		fireEvent.click(screen.getAllByRole("button", { name: /common\.close/i })[0]);
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 
 	it("calls onClose when overlay is clicked", () => {
-		const { container } = render(<ExportModal {...defaultProps} />);
-		const overlay = container.querySelector(".modal-overlay");
+		render(<ExportModal {...defaultProps} />);
+		const overlay = document.querySelector(".mantine-Modal-overlay");
+		expect(overlay).toBeInTheDocument();
 		fireEvent.click(overlay!);
 		expect(defaultProps.onClose).toHaveBeenCalled();
 	});
 
 	it("renders export options", () => {
-		const { container } = render(<ExportModal {...defaultProps} />);
-		// Should have action card buttons
-		const actionCards = container.querySelectorAll(".action-card");
-		expect(actionCards.length).toBe(2);
+		render(<ExportModal {...defaultProps} />);
+		expect(screen.getByTestId("export-option-with-images")).toBeInTheDocument();
+		expect(screen.getByTestId("export-option-data-only")).toBeInTheDocument();
 	});
 
 	it("calls onExport with true when export with images button clicked", () => {
-		const { container } = render(<ExportModal {...defaultProps} />);
-		const actionCards = container.querySelectorAll(".action-card");
-		fireEvent.click(actionCards[0]);
+		render(<ExportModal {...defaultProps} />);
+		fireEvent.click(screen.getByTestId("export-option-with-images"));
 		expect(defaultProps.onClose).toHaveBeenCalled();
 		expect(defaultProps.onExport).toHaveBeenCalledWith(true, false);
 	});
 
 	it("calls onExport with false when export data only button clicked", () => {
-		const { container } = render(<ExportModal {...defaultProps} />);
-		const actionCards = container.querySelectorAll(".action-card");
-		fireEvent.click(actionCards[1]);
+		render(<ExportModal {...defaultProps} />);
+		fireEvent.click(screen.getByTestId("export-option-data-only"));
 		expect(defaultProps.onClose).toHaveBeenCalled();
 		expect(defaultProps.onExport).toHaveBeenCalledWith(false, false);
 	});
@@ -73,19 +71,16 @@ describe("ExportModal", () => {
 	});
 
 	it("passes sensitive export opt-in when selected", () => {
-		const { container } = render(<ExportModal {...defaultProps} />);
+		render(<ExportModal {...defaultProps} />);
 		fireEvent.click(screen.getByLabelText(/exportImport\.includeSensitive/i));
-		const actionCards = container.querySelectorAll(".action-card");
-		fireEvent.click(actionCards[0]);
+		fireEvent.click(screen.getByTestId("export-option-with-images"));
 		expect(defaultProps.onExport).toHaveBeenCalledWith(true, true);
 	});
 
 	it("disables buttons when exporting", () => {
-		const { container } = render(<ExportModal {...defaultProps} exporting={true} />);
-		const actionCards = container.querySelectorAll(".action-card");
-		actionCards.forEach((card) => {
-			expect(card).toBeDisabled();
-		});
+		render(<ExportModal {...defaultProps} exporting={true} />);
+		expect(screen.getByTestId("export-option-with-images")).toBeDisabled();
+		expect(screen.getByTestId("export-option-data-only")).toBeDisabled();
 	});
 
 	it("renders cancel button", () => {
@@ -100,11 +95,10 @@ describe("ExportModal", () => {
 	});
 
 	it("does not trigger export actions while exporting", () => {
-		const { container } = render(<ExportModal {...defaultProps} exporting={true} />);
-		const actionCards = container.querySelectorAll(".action-card");
+		render(<ExportModal {...defaultProps} exporting={true} />);
 
-		fireEvent.click(actionCards[0]);
-		fireEvent.click(actionCards[1]);
+		fireEvent.click(screen.getByTestId("export-option-with-images"));
+		fireEvent.click(screen.getByTestId("export-option-data-only"));
 
 		expect(defaultProps.onExport).not.toHaveBeenCalled();
 	});

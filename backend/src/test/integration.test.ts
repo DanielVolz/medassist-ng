@@ -1011,6 +1011,41 @@ describe("Integration Tests", () => {
 			expect(data[0].enough).toBe(true);
 		});
 
+		it("should use generic name as planner display name when commercial name is empty", async () => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "",
+					genericName: "testtube",
+					packageType: "tube",
+					medicationForm: "topical",
+					packCount: 1,
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					packageAmountValue: 150,
+					packageAmountUnit: "g",
+					looseTablets: 150,
+					blisters: [{ usage: 1, every: 1, start: futureDailyStart }],
+				},
+			});
+			expect(createResponse.statusCode, createResponse.body).toBe(200);
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications/usage",
+				payload: {
+					startDate: plannerWindowStart,
+					endDate: tenDayPlanEnd,
+				},
+			});
+
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data).toHaveLength(1);
+			expect(data[0].medicationName).toBe("testtube");
+		});
+
 		it("should detect insufficient stock", async () => {
 			// Create medication: 1 pack × 1 blister × 5 pills = 5 pills total
 			// Schedule: 1 pill daily starting on a fixed future winter date.

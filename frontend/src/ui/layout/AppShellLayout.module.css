@@ -1,0 +1,114 @@
+.shell {
+	min-height: 100vh;
+	background: var(--mantine-other-bg-gradient);
+}
+
+.header {
+	--app-shell-top-blur-top: 0;
+	--app-shell-top-blur-height: calc(3.15rem + env(safe-area-inset-top, 0px));
+
+	background: transparent;
+	border-bottom: none;
+}
+
+.topBlur {
+	position: fixed;
+	top: var(--app-shell-top-blur-top);
+	right: 0;
+	left: 0;
+	z-index: 0;
+	height: var(--app-shell-top-blur-height);
+	background: var(--mantine-other-bg-gradient);
+	backdrop-filter: blur(16px) saturate(1.2);
+	-webkit-backdrop-filter: blur(16px) saturate(1.2);
+	pointer-events: none;
+}
+
+:global([data-theme="light"]) .header {
+	background: transparent;
+}
+
+:global([data-theme="light"]) .topBlur {
+	background: var(--mantine-other-bg-gradient);
+}
+
+.headerInner {
+	position: relative;
+	z-index: 1;
+	width: 100%;
+	max-width: none;
+	margin: 0;
+	padding: 0 0 0.2rem;
+}
+
+.navbar {
+	background: rgba(11, 18, 32, 0.94);
+	border-inline-end: 1px solid var(--mantine-other-border-primary);
+}
+
+:global([data-theme="light"]) .navbar {
+	background: rgba(255, 255, 255, 0.94);
+}
+
+.navScroll {
+	height: 100%;
+}
+
+.main {
+	padding-top: calc(72px + 1rem);
+	padding-bottom: 1.25rem;
+}
+
+.page {
+	width: 100%;
+	max-width: 1200px;
+	margin-left: auto;
+	margin-right: auto;
+	padding-top: 0;
+	padding-left: 1.25rem;
+	padding-right: 1.25rem;
+	padding-bottom: 0;
+}
+
+.mobileNavLink {
+	border: 1px solid transparent;
+	border-radius: 10px;
+	background: transparent;
+	transition:
+		background 160ms ease,
+		border-color 160ms ease,
+		transform 160ms ease;
+}
+
+.mobileNavLink:hover {
+	transform: translateY(-1px);
+	border-color: var(--mantine-other-border-secondary);
+	background: var(--mantine-other-accent-bg);
+}
+
+.mobileNavLink[data-active="true"] {
+	border-color: color-mix(in srgb, var(--mantine-other-accent) 45%, transparent);
+	background: color-mix(in srgb, var(--mantine-other-accent-bg) 70%, transparent);
+}
+
+@media (max-width: 48em) {
+	.header {
+		--app-shell-top-blur-top: 0;
+		--app-shell-top-blur-height: calc(3.15rem + env(safe-area-inset-top, 0px));
+
+		transition: transform 120ms ease-out !important;
+	}
+
+	.headerInner {
+		padding: 0 0 0.1rem;
+	}
+
+	.main {
+		padding-top: calc(132px + 0.5rem);
+	}
+
+	.page {
+		padding-left: 0;
+		padding-right: 0;
+	}
+}

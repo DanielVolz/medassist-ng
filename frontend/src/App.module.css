@@ -1,0 +1,91 @@
+.routeLoading {
+	min-height: 8rem;
+	padding: 1rem;
+	text-align: center;
+}
+
+.authStatusShell {
+	min-height: 100vh;
+	padding: 1rem;
+	background: var(--mantine-other-bg-gradient);
+	color: var(--mantine-other-text-primary);
+}
+
+.authStatusCard {
+	width: min(100%, 420px);
+	padding: 2rem;
+	text-align: center;
+	background: var(--mantine-other-bg-secondary);
+	border: 1px solid var(--mantine-other-border-primary);
+	border-radius: var(--mantine-other-surface-radius);
+	box-shadow: 0 10px 30px color-mix(in srgb, var(--mantine-other-shadow) 30%, transparent);
+}
+
+.authStatusTitle {
+	margin: 0 0 1rem;
+	font-size: 2rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	color: var(--mantine-other-text-primary);
+}
+
+.authStatusError {
+	width: 100%;
+	text-align: left;
+}
+
+.authStatusHelp {
+	max-width: 30rem;
+	font-size: 0.9rem;
+	color: var(--mantine-other-text-muted);
+}
+
+.page {
+	--page-pad-x: 1.5rem;
+	--app-shell-top-blur-top: 0;
+	--app-shell-top-blur-height: calc(3.15rem + env(safe-area-inset-top, 0px));
+
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 0 var(--page-pad-x) 1.5rem;
+}
+
+.topBlur {
+	position: fixed;
+	top: var(--app-shell-top-blur-top);
+	right: 0;
+	left: 0;
+	z-index: 139;
+	height: var(--app-shell-top-blur-height);
+	background: var(--mantine-other-bg-gradient);
+	backdrop-filter: blur(16px) saturate(1.2);
+	-webkit-backdrop-filter: blur(16px) saturate(1.2);
+	pointer-events: none;
+}
+
+:global([data-theme="light"]) .topBlur {
+	background: var(--mantine-other-bg-gradient);
+}
+
+.routeTransitionMask {
+	position: fixed;
+	inset: 0;
+	z-index: 1500;
+	background: var(--mantine-other-bg-primary);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 140ms ease-out;
+}
+
+.routeTransitionMaskActive {
+	opacity: 1;
+	transition: none;
+}
+
+@media (max-width: 700px) {
+	.page {
+		--page-pad-x: 0.4rem;
+		--app-shell-top-blur-top: 0;
+		--app-shell-top-blur-height: calc(3.15rem + env(safe-area-inset-top, 0px));
+	}
+}

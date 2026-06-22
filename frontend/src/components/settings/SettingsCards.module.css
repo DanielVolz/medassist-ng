@@ -1,0 +1,135 @@
+.actionCard {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 1rem 1.25rem;
+	background: color-mix(in srgb, var(--bg-tertiary) 88%, var(--accent-bg));
+	border: 1px solid var(--border-secondary);
+	border-radius: 10px;
+	transition:
+		border-color 150ms ease,
+		background 150ms ease;
+}
+
+.actionCard:hover {
+	border-color: var(--border-primary);
+}
+
+.actionCopy {
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.actionTitle {
+	font-weight: 600;
+	color: var(--text-primary);
+	font-size: 0.95rem;
+}
+
+.actionDescription {
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+	line-height: 1.4;
+}
+
+.actionControl {
+	flex: 0 0 auto;
+}
+
+.optionCard {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 1rem;
+	background: var(--bg-secondary);
+	border: 2px solid var(--border-primary);
+	border-radius: 10px;
+	cursor: pointer;
+	transition:
+		border-color 150ms ease,
+		background 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.optionCard:hover {
+	border-color: var(--accent-light);
+	background: var(--bg-tertiary);
+}
+
+.optionCardSelected {
+	border-color: var(--accent);
+	background: var(--bg-tertiary);
+	box-shadow: 0 0 0 1px var(--accent);
+}
+
+.optionInput {
+	position: absolute;
+	inline-size: 1px;
+	block-size: 1px;
+	margin: -1px;
+	padding: 0;
+	border: 0;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.optionTitle {
+	font-size: 0.95rem;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.optionDescription {
+	font-size: 0.8rem;
+	color: var(--text-secondary);
+	line-height: 1.4;
+}
+
+.successNotice {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.9rem 1rem;
+	background: var(--success-bg);
+	border: 1px solid var(--success);
+	border-radius: 10px;
+	color: var(--text-primary);
+}
+
+.successNoticeBody {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.successNoticeTitle {
+	font-weight: 700;
+	color: var(--success);
+}
+
+.successNoticeText {
+	font-size: 0.9rem;
+	line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+	.actionCard {
+		align-items: stretch;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.actionControl > :global(button) {
+		width: 100%;
+		justify-content: center;
+	}
+}

@@ -1,3 +1,5 @@
+import { SectionCard } from "../../../ui/components/SectionCard";
+
 type ScheduleSectionCardProps = {
 	title: string;
 	children: React.ReactNode;
@@ -7,12 +9,8 @@ type ScheduleSectionCardProps = {
 
 export function ScheduleSectionCard({ title, children, headerRight, className }: ScheduleSectionCardProps) {
 	return (
-		<article className={className ?? "card schedule-full"}>
-			<div className="card-head">
-				<h2>{title}</h2>
-				{headerRight}
-			</div>
+		<SectionCard className={className ?? "schedule-full"} title={title} actions={headerRight}>
 			{children}
-		</article>
+		</SectionCard>
 	);
 }

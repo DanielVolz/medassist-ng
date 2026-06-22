@@ -110,7 +110,7 @@ describe("AppHeader", () => {
 		);
 
 		await waitFor(() => {
-			const themeBtn = screen.getByTitle(/theme\.title/i);
+			const themeBtn = screen.getByRole("button", { name: /theme\.title/i });
 			expect(themeBtn).toBeInTheDocument();
 		});
 	});
@@ -127,14 +127,15 @@ describe("AppHeader", () => {
 			</MemoryRouter>
 		);
 
-		await waitFor(() => {
-			const themeBtn = screen.getByTitle(/theme\.title/i);
-			fireEvent.click(themeBtn);
-		});
+		const themeBtn = await screen.findByTitle(/theme\.title/i);
+		fireEvent.click(themeBtn);
 
-		expect(screen.getByText(/theme\.light/i)).toBeInTheDocument();
-		expect(screen.getByText(/theme\.dark/i)).toBeInTheDocument();
-		expect(screen.getByText(/theme\.system/i)).toBeInTheDocument();
+		// Mantine renders menu items into a portal after the open transition
+		await waitFor(() => {
+			expect(screen.getByText(/theme\.light/i)).toBeInTheDocument();
+			expect(screen.getByText(/theme\.dark/i)).toBeInTheDocument();
+			expect(screen.getByText(/theme\.system/i)).toBeInTheDocument();
+		});
 	});
 
 	it("renders settings button when auth is disabled", async () => {
@@ -280,7 +281,7 @@ describe("AppHeader", () => {
 				ok: true,
 			});
 
-		const { container } = render(
+		render(
 			<MemoryRouter initialEntries={["/dashboard"]}>
 				<AuthProvider>
 					<AppHeader onOpenProfile={onOpenProfile} onOpenAbout={onOpenAbout} />
@@ -288,30 +289,29 @@ describe("AppHeader", () => {
 			</MemoryRouter>
 		);
 
-		await waitFor(() => {
-			expect(container.querySelector(".user-menu-btn")).toBeInTheDocument();
-		});
+		const userMenuBtn = await screen.findByTestId("user-menu-trigger");
 
 		// Settings icon should not be shown when auth is enabled
 		expect(screen.queryByTitle(/nav\.settings/i)).not.toBeInTheDocument();
 
-		const userMenuBtn = container.querySelector(".user-menu-btn") as HTMLButtonElement;
+		// Mantine renders menu items into a portal after the open transition,
+		// so each item must be awaited after opening the menu.
 		fireEvent.click(userMenuBtn);
-		fireEvent.click(screen.getByText(/auth\.profile/i));
+		fireEvent.click(await screen.findByText(/auth\.profile/i));
 		expect(onOpenProfile).toHaveBeenCalled();
 
 		fireEvent.click(userMenuBtn);
-		fireEvent.click(screen.getByText(/about\.title/i));
+		fireEvent.click(await screen.findByText(/about\.title/i));
 		expect(onOpenAbout).toHaveBeenCalled();
 
 		fireEvent.click(userMenuBtn);
-		fireEvent.click(screen.getByText(/^nav\.settings$/i));
+		fireEvent.click(await screen.findByText(/^nav\.settings$/i));
 		await waitFor(() => {
 			expect(mockNavigate).toHaveBeenCalledWith("/settings");
 		});
 
 		fireEvent.click(userMenuBtn);
-		fireEvent.click(screen.getByText(/auth\.signOut/i));
+		fireEvent.click(await screen.findByText(/auth\.signOut/i));
 		await waitFor(() => {
 			expect(fetch).toHaveBeenCalledWith(
 				"/api/auth/logout",

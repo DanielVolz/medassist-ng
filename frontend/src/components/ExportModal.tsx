@@ -1,7 +1,10 @@
+import { Alert, Stack, Text, UnstyledButton } from "@mantine/core";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useEscapeKey } from "../hooks/useEscapeKey";
-import { useScrollLock } from "../hooks/useScrollLock";
+import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
+import { AppCheckbox } from "../ui/primitives/AppCheckbox";
+import classes from "./ExportModal.module.css";
 
 interface ExportModalProps {
 	isOpen: boolean;
@@ -14,8 +17,6 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 	const { t } = useTranslation();
 	const [includeSensitive, setIncludeSensitive] = useState(false);
 
-	useScrollLock(isOpen);
-	useEscapeKey(isOpen, onClose);
 	useEffect(() => {
 		if (!isOpen) {
 			setIncludeSensitive(false);
@@ -24,91 +25,75 @@ export default function ExportModal({ isOpen, onClose, onExport, exporting }: Ex
 
 	if (!isOpen) return null;
 
+	const handleExport = (includeImages: boolean) => {
+		if (exporting) return;
+		onClose();
+		onExport(includeImages, includeSensitive);
+	};
+
 	return (
-		<div
-			className="modal-overlay"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.key !== "Escape") e.stopPropagation();
-			}}
+		<AppModal
+			closeButtonProps={{ "aria-label": t("common.close") }}
+			onClose={onClose}
+			opened={isOpen}
+			size="sm"
+			title={t("exportImport.exportOptions")}
+			withCloseButton
 		>
-			<div
-				className="modal-content"
-				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => {
-					if (e.key !== "Escape") e.stopPropagation();
-				}}
-				style={{ maxWidth: "450px" }}
-			>
-				<button className="modal-close" onClick={onClose}>
-					×
-				</button>
-				<h2 style={{ marginBottom: "16px", paddingRight: "2rem" }}>{t("exportImport.exportOptions")}</h2>
-				<div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-					<button
-						type="button"
-						className="action-card"
-						onClick={() => {
-							onClose();
-							onExport(true, includeSensitive);
-						}}
+			<Stack gap="md">
+				<Stack gap="sm">
+					<UnstyledButton
+						className={classes.option}
+						data-testid="export-option-with-images"
 						disabled={exporting}
-						style={{ textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", borderRadius: "8px" }}
-					>
-						<div className="action-card-content" style={{ flex: 1 }}>
-							<span className="action-card-title">{t("exportImport.exportWithImages")}</span>
-							<span className="action-card-desc">{t("exportImport.exportWithImagesDesc")}</span>
-						</div>
-					</button>
-					<button
+						onClick={() => handleExport(true)}
 						type="button"
-						className="action-card"
-						onClick={() => {
-							onClose();
-							onExport(false, includeSensitive);
-						}}
+					>
+						<Stack gap={4}>
+							<Text fw={700}>{t("exportImport.exportWithImages")}</Text>
+							<Text c="dimmed" size="sm">
+								{t("exportImport.exportWithImagesDesc")}
+							</Text>
+						</Stack>
+					</UnstyledButton>
+					<UnstyledButton
+						className={classes.option}
+						data-testid="export-option-data-only"
 						disabled={exporting}
-						style={{ textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", borderRadius: "8px" }}
+						onClick={() => handleExport(false)}
+						type="button"
 					>
-						<div className="action-card-content" style={{ flex: 1 }}>
-							<span className="action-card-title">{t("exportImport.exportDataOnly")}</span>
-							<span className="action-card-desc">{t("exportImport.exportDataOnlyDesc")}</span>
-						</div>
-					</button>
-				</div>
-				<div
-					className="sensitive-export-confirmation"
-					style={{ marginTop: "14px", padding: "12px", border: "1px solid var(--border)", borderRadius: "8px" }}
-				>
-					<label
-						style={{
-							display: "flex",
-							alignItems: "flex-start",
-							gap: "10px",
-							cursor: exporting ? "default" : "pointer",
-						}}
-					>
-						<input
-							type="checkbox"
-							checked={includeSensitive}
-							onChange={(event) => setIncludeSensitive(event.target.checked)}
-							disabled={exporting}
+						<Stack gap={4}>
+							<Text fw={700}>{t("exportImport.exportDataOnly")}</Text>
+							<Text c="dimmed" size="sm">
+								{t("exportImport.exportDataOnlyDesc")}
+							</Text>
+						</Stack>
+					</UnstyledButton>
+				</Stack>
+				<Stack className={classes.sensitivePanel} gap="sm">
+					<div className="sensitive-export-confirmation">
+						<AppCheckbox
 							aria-describedby={includeSensitive ? "sensitive-export-warning" : undefined}
+							checked={includeSensitive}
+							data-testid="sensitive-export-toggle"
+							disabled={exporting}
+							label={t("exportImport.includeSensitive")}
+							onChange={setIncludeSensitive}
 						/>
-						<span>{t("exportImport.includeSensitive")}</span>
-					</label>
-					{includeSensitive && (
-						<p id="sensitive-export-warning" className="warning-text" style={{ margin: "10px 0 0 0" }}>
+					</div>
+					{includeSensitive ? (
+						<Alert color="yellow" id="sensitive-export-warning" variant="light">
 							{t("exportImport.sensitiveWarning")}
-						</p>
-					)}
-				</div>
-				<div className="modal-footer" style={{ padding: "1rem 0 0 0", borderTop: "none", justifyContent: "flex-end" }}>
-					<button type="button" className="ghost" onClick={onClose}>
+						</Alert>
+					) : null}
+				</Stack>
+				<AppModalFooter>
+					<AppButton type="button" tone="secondary" onClick={onClose}>
 						{t("common.close")}
-					</button>
-				</div>
-			</div>
-		</div>
+					</AppButton>
+				</AppModalFooter>
+			</Stack>
+		</AppModal>
 	);
 }

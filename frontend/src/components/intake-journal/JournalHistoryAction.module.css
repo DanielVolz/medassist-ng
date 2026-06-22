@@ -1,0 +1,40 @@
+.button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	white-space: nowrap;
+}
+
+.labelShort {
+	display: none;
+}
+
+@media (max-width: 768px) {
+	.button {
+		flex: 1 1 7.5rem;
+		min-width: 0;
+		justify-content: center;
+		padding-block: 0;
+	}
+
+	.labelFull,
+	.labelShort {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.labelFull {
+		display: none;
+	}
+
+	.labelShort {
+		display: inline;
+	}
+}
+
+@media (max-width: 380px) {
+	.button {
+		flex: 1 1 0;
+	}
+}

@@ -6,7 +6,7 @@ import { Info, LogOut, Settings, User as UserIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useUnsavedChanges } from "../context";
-import { useTheme } from "../hooks";
+import { useTheme } from "../hooks/useTheme";
 import { AppTooltip } from "../ui/primitives/AppTooltip";
 import classes from "./AppHeader.module.css";
 import { useAuth } from "./Auth";

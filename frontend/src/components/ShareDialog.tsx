@@ -7,7 +7,7 @@ import { Alert } from "@mantine/core";
 import { Check, Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useModalHistory } from "../hooks";
+import { useModalHistory } from "../hooks/useModalHistory";
 import type { ActiveShareLink } from "../hooks/useShare";
 import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
 import { AppButton } from "../ui/primitives/AppButton";

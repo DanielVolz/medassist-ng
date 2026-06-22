@@ -24,8 +24,7 @@ import {
 } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lightbox, MedicationAvatar } from "../components";
-import { useEscapeKey } from "../hooks";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
 import {
 	allowsPillFormSelection,
@@ -49,7 +48,9 @@ import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { getStockStatus } from "../utils/schedule";
 import { splitCurrentBlisterStock } from "../utils/stock";
 import stepperClasses from "./FormNumberStepper.module.css";
+import { Lightbox } from "./Lightbox";
 import classes from "./MedDetailModal.module.css";
+import { MedicationAvatar } from "./MedicationAvatar";
 
 // =============================================================================
 // Local Helper Functions

@@ -7,24 +7,27 @@ import { Bell, Minus, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import { DateInput, FormNumberStepper, MedicationEnrichmentSection, MobileEditModal } from "../components";
 import { useAuth } from "../components/Auth";
+import { DateInput } from "../components/DateInput";
+import { FormNumberStepper } from "../components/FormNumberStepper";
+import { MedicationEnrichmentSection } from "../components/MedicationEnrichmentSection";
+import { MobileEditModal } from "../components/MobileEditModal";
 import { MedicationDialogs } from "../components/medications/MedicationDialogs";
 import { MedicationEditCoordinator } from "../components/medications/MedicationEditCoordinator";
 import formClasses from "../components/medications/MedicationForm.module.css";
 import { MedicationListSection } from "../components/medications/MedicationListSection";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useFeedback } from "../context/FeedbackContext";
+import { MEDICATION_FORM_FIELD_LIMITS } from "../hooks/medicationFormModel";
 import {
 	MEDICATION_ENRICHMENT_INITIAL_LIMIT,
 	MEDICATION_ENRICHMENT_LIMIT_STEP,
 	MEDICATION_ENRICHMENT_MAX_LIMIT,
 	useMedicationEnrichmentController,
-	useMedicationForm,
-	useModalHistory,
-	useUnsavedChangesWarning,
-} from "../hooks";
-import { MEDICATION_FORM_FIELD_LIMITS } from "../hooks/medicationFormModel";
+} from "../hooks/useMedicationEnrichmentController";
+import { useMedicationForm } from "../hooks/useMedicationForm";
+import { useModalHistory } from "../hooks/useModalHistory";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import type {
 	DoseUnit,
 	FormState,

@@ -44,14 +44,8 @@ let authMock: AuthStateMock = {
 let appContextMock: Record<string, unknown>;
 let shareContextMock: Record<string, unknown>;
 
-vi.mock("../components", () => ({
-	AboutModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>about-modal-open</div> : null),
-	Lightbox: ({ src }: { src: string }) => <div>lightbox-open-{src}</div>,
-	MedDetailModal: () => null,
-	ProfileModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>profile-modal-open</div> : null),
-	ShareDialog: () => null,
-	SharedSchedule: () => <div>shared-schedule-page</div>,
-	UserFilterModal: () => null,
+vi.mock("../components/AboutModal", () => ({
+	default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>about-modal-open</div> : null),
 }));
 
 vi.mock("../components/AppHeader", () => ({
@@ -62,6 +56,30 @@ vi.mock("../components/AppHeader", () => ({
 			<button onClick={onOpenAbout}>open-about</button>
 		</header>
 	),
+}));
+
+vi.mock("../components/Lightbox", () => ({
+	Lightbox: ({ src }: { src: string }) => <div>lightbox-open-{src}</div>,
+}));
+
+vi.mock("../components/MedDetailModal", () => ({
+	MedDetailModal: () => null,
+}));
+
+vi.mock("../components/ProfileModal", () => ({
+	default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>profile-modal-open</div> : null),
+}));
+
+vi.mock("../components/ShareDialog", () => ({
+	ShareDialog: () => null,
+}));
+
+vi.mock("../components/SharedSchedule", () => ({
+	SharedSchedule: () => <div>shared-schedule-page</div>,
+}));
+
+vi.mock("../components/UserFilterModal", () => ({
+	UserFilterModal: () => null,
 }));
 
 vi.mock("../components/Auth", () => ({
@@ -209,14 +227,14 @@ describe("App", () => {
 		vi.clearAllMocks();
 	});
 
-	it("renders public shared schedule route without auth", () => {
+	it("renders public shared schedule route without auth", async () => {
 		render(
 			<MemoryRouter initialEntries={["/share/test-token"]}>
 				<App />
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText("shared-schedule-page")).toBeInTheDocument();
+		expect(await screen.findByText("shared-schedule-page")).toBeInTheDocument();
 	});
 
 	it("renders loading state while auth is being checked", () => {
@@ -355,7 +373,7 @@ describe("App", () => {
 		expect(screen.getByText("Initializing...")).toBeInTheDocument();
 	});
 
-	it("renders schedule lightbox when schedule image is set", () => {
+	it("renders schedule lightbox when schedule image is set", async () => {
 		appContextMock.scheduleLightboxImage = "med-image.png";
 
 		render(
@@ -364,7 +382,7 @@ describe("App", () => {
 			</MemoryRouter>
 		);
 
-		expect(screen.getByText("lightbox-open-med-image.png")).toBeInTheDocument();
+		expect(await screen.findByText("lightbox-open-med-image.png")).toBeInTheDocument();
 	});
 
 	// NOTE: App no longer owns a popstate handler. Browser-back modal dismissal
@@ -385,7 +403,7 @@ describe("App", () => {
 		expect(document.body.classList.contains("modal-open")).toBe(true);
 	});
 
-	it("opens profile and about modals from header actions", () => {
+	it("opens profile and about modals from header actions", async () => {
 		render(
 			<MemoryRouter initialEntries={["/dashboard"]}>
 				<App />
@@ -393,10 +411,10 @@ describe("App", () => {
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "open-profile" }));
-		expect(screen.getByText("profile-modal-open")).toBeInTheDocument();
+		expect(await screen.findByText("profile-modal-open")).toBeInTheDocument();
 
 		fireEvent.click(screen.getByRole("button", { name: "open-about" }));
-		expect(screen.getByText("about-modal-open")).toBeInTheDocument();
+		expect(await screen.findByText("about-modal-open")).toBeInTheDocument();
 		expect(window.history.pushState).toHaveBeenCalled();
 	});
 

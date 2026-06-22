@@ -26,11 +26,16 @@ export interface UseDosesReturn {
 	loadTakenDoses: () => Promise<void>;
 }
 
+interface UseDosesOptions {
+	loadOnMount?: boolean;
+}
+
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-export function useDoses(): UseDosesReturn {
+export function useDoses(options: UseDosesOptions = {}): UseDosesReturn {
+	const loadOnMount = options.loadOnMount ?? true;
 	const { t } = useTranslation();
 	const { authFetch } = useAuth();
 	const { showFeedback } = useFeedback();
@@ -41,6 +46,8 @@ export function useDoses(): UseDosesReturn {
 
 	// Track in-flight mutations to prevent polling from overwriting optimistic updates
 	const mutationInFlightRef = useRef(0);
+	const loadInFlightRef = useRef(false);
+	const loadGenerationRef = useRef(0);
 
 	const clearDosesState = useCallback(() => {
 		setTakenDoses(new Set());
@@ -48,6 +55,8 @@ export function useDoses(): UseDosesReturn {
 		setTakenDoseSources(new Map());
 		setDismissedDoses(new Set());
 		mutationInFlightRef.current = 0;
+		loadGenerationRef.current += 1;
+		loadInFlightRef.current = false;
 	}, []);
 
 	const clearTakenDoseState = useCallback((doseId: string) => {
@@ -105,14 +114,21 @@ export function useDoses(): UseDosesReturn {
 		// Skip polling while mutations are in-flight to prevent race conditions
 		// where a poll response with stale data overwrites optimistic updates
 		if (mutationInFlightRef.current > 0) return;
+		if (loadInFlightRef.current) return;
+		const generation = loadGenerationRef.current + 1;
+		loadGenerationRef.current = generation;
+		loadInFlightRef.current = true;
 
 		try {
 			const res = await authFetch("/api/doses/taken");
+			if (loadGenerationRef.current !== generation) return;
 			if (res.ok) {
 				// Double-check no mutation started while we were fetching
 				if (mutationInFlightRef.current > 0) return;
+				if (loadGenerationRef.current !== generation) return;
 
 				const data = await res.json();
+				if (loadGenerationRef.current !== generation) return;
 				const taken = new Set<string>();
 				const timestamps = new Map<string, number>();
 				const sources = new Map<string, "manual" | "automatic">();
@@ -140,17 +156,23 @@ export function useDoses(): UseDosesReturn {
 		} catch (error) {
 			log.debug("[useDoses] dose polling request failed", { error: getErrorMessage(error) });
 			// Don't reset on error - keep current state
+		} finally {
+			if (loadGenerationRef.current === generation) {
+				loadInFlightRef.current = false;
+			}
 		}
 	}, [authFetch, clearDosesState]);
 
 	// Poll for taken doses from server (works with or without auth)
 	useEffect(() => {
-		loadTakenDoses();
+		if (loadOnMount) {
+			void loadTakenDoses();
+		}
 
 		// Poll for updates every 5 seconds (real-time sync with share links)
 		const interval = setInterval(loadTakenDoses, 5000);
 		return () => clearInterval(interval);
-	}, [loadTakenDoses]);
+	}, [loadOnMount, loadTakenDoses]);
 
 	// Get dose ID with optional person suffix
 	const getDoseId = useCallback((baseDoseId: string, person: string | null): string => {

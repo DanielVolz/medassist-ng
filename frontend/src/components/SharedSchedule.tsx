@@ -13,8 +13,9 @@ import { ScheduleUsageTag } from "../features/schedule/components";
 import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
 import { toggleDateInSet } from "../features/schedule/interactions";
 import { loadScheduleCollapseState, saveCollapsedDaySet } from "../features/schedule/storage";
-import { useEscapeKey, useModalHistory } from "../hooks";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { IntakeJournalEntry } from "../hooks/useIntakeJournal";
+import { useModalHistory } from "../hooks/useModalHistory";
 import type { ExpiredLinkData, SharedScheduleData } from "../types";
 import {
 	allowsPillFormSelection,

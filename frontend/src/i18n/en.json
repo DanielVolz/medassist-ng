@@ -388,6 +388,7 @@
       "intakeUnitMl": "Milliliters (ml)",
       "intakeUnitTsp": "Teaspoon (5 ml)",
       "intakeUnitTbsp": "Tablespoon (15 ml)",
+      "takenByTooltip": "Assign this intake to one person. Leave it empty when everyone assigned to the medication should take it.",
       "intakes": "intakes",
       "intakes_one": "intake",
       "intakes_other": "intakes",

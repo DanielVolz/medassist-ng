@@ -28,6 +28,7 @@
 
 .tooltipTarget {
 	display: inline-flex;
+	width: 100%;
 }
 
 .label {
@@ -202,4 +203,18 @@
 .hasNote {
 	border-color: color-mix(in srgb, var(--accent) 50%, var(--border-primary));
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+@media (max-width: 600px) {
+	.takeAction {
+		grid-column: 2;
+	}
+
+	.skipAction {
+		grid-column: 3;
+	}
+
+	.journalAction {
+		grid-column: 4;
+	}
 }

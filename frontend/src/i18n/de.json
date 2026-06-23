@@ -388,6 +388,7 @@
       "intakeUnitMl": "Milliliter (ml)",
       "intakeUnitTsp": "Teelöffel (5 ml)",
       "intakeUnitTbsp": "Esslöffel (15 ml)",
+      "takenByTooltip": "Ordnet diese Einnahme einer Person zu. Leer lassen, wenn alle beim Medikament hinterlegten Personen sie einnehmen sollen.",
       "intakes": "Einnahmen",
       "intakes_one": "Einnahme",
       "intakes_other": "Einnahmen",

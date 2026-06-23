@@ -38,7 +38,7 @@
 .row {
 	display: grid;
 	grid-template-columns: minmax(9rem, max-content) minmax(0, 1fr);
-	gap: 0.5rem 0.85rem;
+	gap: 0.5rem 0.35rem;
 	align-items: baseline;
 	line-height: 1.5;
 }

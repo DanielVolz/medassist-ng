@@ -461,7 +461,6 @@ function AppContent() {
 
 	return (
 		<Box className={classes.page} component="main" data-testid="app-shell">
-			<div aria-hidden="true" className={classes.topBlur} data-testid="app-shell-top-blur" />
 			<AppHeader onOpenProfile={openProfile} onOpenAbout={openAbout} />
 
 			{/* Profile Modal */}

@@ -62,6 +62,18 @@
 	background: transparent;
 }
 
+.bodyCell[data-column-key="stock"],
+.bodyCell[data-column-key="dailyConsumption"],
+.bodyCell[data-column-key="stockDetails"],
+.bodyCell[data-column-key="daysLeft"],
+.bodyCell[data-column-key="status"] {
+	white-space: nowrap;
+}
+
+.bodyCell[data-column-key="datePair"] :global(.date-pair-value) {
+	white-space: nowrap;
+}
+
 .body :global(tr:first-child) .bodyCell {
 	border-top: none;
 }
@@ -123,8 +135,8 @@
 
 	.bodyCell {
 		display: grid;
-		grid-template-columns: minmax(6rem, 38%) minmax(0, 1fr);
-		align-items: center;
+		grid-template-columns: minmax(11rem, 48%) minmax(0, 1fr);
+		align-items: start;
 		gap: 0.75rem;
 		padding: 0.55rem 0.8rem;
 		border-top: 1px solid color-mix(in srgb, var(--border-primary) 70%, transparent);

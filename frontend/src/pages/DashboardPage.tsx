@@ -461,7 +461,12 @@ export function DashboardPage() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoTake)}
+				className={cx(
+					doseButtonClasses.button,
+					doseButtonClasses.takeAction,
+					doseButtonClasses.undo,
+					doseButtonClasses.undoTake
+				)}
 				onClick={() => undoDoseTaken(options.doseId)}
 			>
 				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
@@ -474,6 +479,7 @@ export function DashboardPage() {
 				size="sm"
 				className={cx(
 					doseButtonClasses.button,
+					doseButtonClasses.takeAction,
 					doseButtonClasses.take,
 					doseButtonClasses.dashboardTake,
 					options.isEmpty && doseButtonClasses.outOfStock
@@ -488,7 +494,7 @@ export function DashboardPage() {
 		const takeButton =
 			!options.isTaken && options.isEmpty ? (
 				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
-					<span className={doseButtonClasses.tooltipTarget}>{takeButtonControl}</span>
+					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
 				</AppTooltip>
 			) : (
 				takeButtonControl
@@ -498,7 +504,7 @@ export function DashboardPage() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.journal)}
+				className={cx(doseButtonClasses.button, doseButtonClasses.journal, doseButtonClasses.journalAction)}
 				onClick={() => {
 					if (!journalUnavailable) {
 						void openJournalEditor(options.doseId);
@@ -512,7 +518,9 @@ export function DashboardPage() {
 		);
 		const journalButton = journalUnavailable ? (
 			<AppTooltip label={t("journal.actions.noteTakenOnly")}>
-				<span className={doseButtonClasses.tooltipTarget}>{journalButtonControl}</span>
+				<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.journalAction)}>
+					{journalButtonControl}
+				</span>
 			</AppTooltip>
 		) : (
 			journalButtonControl
@@ -531,7 +539,12 @@ export function DashboardPage() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoSkip)}
+				className={cx(
+					doseButtonClasses.button,
+					doseButtonClasses.skipAction,
+					doseButtonClasses.undo,
+					doseButtonClasses.undoSkip
+				)}
 				onClick={() => undoDoseSkipped(options.doseId)}
 			>
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
@@ -541,7 +554,7 @@ export function DashboardPage() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.skip)}
+				className={cx(doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken}
 			>
@@ -1090,7 +1103,7 @@ export function DashboardPage() {
 				const status = getVisibleStockStatus(med, rawStatus);
 				return status ? (
 					<span data-label={t("table.status")}>
-						<StatusBadge size="xs" tone={getStatusTone(status.className)}>
+						<StatusBadge size="sm" tone={getStatusTone(status.className)}>
 							{t(status.label)}
 						</StatusBadge>
 					</span>
@@ -1372,11 +1385,7 @@ export function DashboardPage() {
 																		<span className="tag subtle">
 																			{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
 																		</span>
-																		{status && (
-																			<StatusBadge size="xs" tone={getStatusTone(status.className)}>
-																				{t(status.label)}
-																			</StatusBadge>
-																		)}
+																		{status && <span className={`tag ${status.className}`}>{t(status.label)}</span>}
 																	</div>
 																</div>
 																<div className="doses-col">
@@ -1694,9 +1703,7 @@ export function DashboardPage() {
 																			{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
 																		</span>
 																		{visibleStatus && (
-																			<StatusBadge size="xs" tone={getStatusTone(visibleStatus.className)}>
-																				{t(visibleStatus.label)}
-																			</StatusBadge>
+																			<span className={`tag ${visibleStatus.className}`}>{t(visibleStatus.label)}</span>
 																		)}
 																	</div>
 																	{isEmpty && med && !med.isObsolete && (
@@ -1972,9 +1979,7 @@ export function DashboardPage() {
 																			{formatTotalUsageLabel(med, item.total, item.doses[0]?.intakeUnit, item.doses)}
 																		</span>
 																		{visibleStatus && (
-																			<StatusBadge size="xs" tone={getStatusTone(visibleStatus.className)}>
-																				{t(visibleStatus.label)}
-																			</StatusBadge>
+																			<span className={`tag ${visibleStatus.className}`}>{t(visibleStatus.label)}</span>
 																		)}
 																	</div>
 																	{isEmpty && med && !med.isObsolete && (

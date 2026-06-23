@@ -615,6 +615,7 @@ export function SharedSchedule() {
 				className={cx(
 					"dose-btn undo take",
 					doseButtonClasses.button,
+					doseButtonClasses.takeAction,
 					doseButtonClasses.undo,
 					doseButtonClasses.undoTake
 				)}
@@ -631,6 +632,7 @@ export function SharedSchedule() {
 				className={cx(
 					"dose-btn take",
 					doseButtonClasses.button,
+					doseButtonClasses.takeAction,
 					doseButtonClasses.take,
 					doseButtonClasses.dashboardTake,
 					options.isEmpty && doseButtonClasses.outOfStock
@@ -645,7 +647,7 @@ export function SharedSchedule() {
 		const takeButton =
 			!options.isTaken && options.isEmpty ? (
 				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
-					<span className={doseButtonClasses.tooltipTarget}>{takeButtonControl}</span>
+					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
 				</AppTooltip>
 			) : (
 				takeButtonControl
@@ -658,6 +660,7 @@ export function SharedSchedule() {
 				className={cx(
 					"dose-btn undo skip",
 					doseButtonClasses.button,
+					doseButtonClasses.skipAction,
 					doseButtonClasses.undo,
 					doseButtonClasses.undoSkip
 				)}
@@ -670,7 +673,7 @@ export function SharedSchedule() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx("dose-btn skip", doseButtonClasses.button, doseButtonClasses.skip)}
+				className={cx("dose-btn skip", doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken}
 			>
@@ -685,6 +688,7 @@ export function SharedSchedule() {
 				className={cx(
 					"dose-btn journal",
 					doseButtonClasses.button,
+					doseButtonClasses.journalAction,
 					doseButtonClasses.journal,
 					hasSharedJournalNote && doseButtonClasses.hasNote
 				)}
@@ -702,7 +706,9 @@ export function SharedSchedule() {
 		const journalButton =
 			showSharedJournalAction && journalButtonControl && !canOpenSharedJournal ? (
 				<AppTooltip label={t("journal.actions.noteTakenOnly")}>
-					<span className={doseButtonClasses.tooltipTarget}>{journalButtonControl}</span>
+					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.journalAction)}>
+						{journalButtonControl}
+					</span>
 				</AppTooltip>
 			) : (
 				journalButtonControl

@@ -612,6 +612,11 @@ textarea.auto-resize {
 	color: var(--text-secondary);
 	line-height: 1.2;
 }
+.date-pair-stack-header .date-pair-label {
+	font-size: 0.95rem;
+	font-weight: 750;
+	letter-spacing: 0;
+}
 
 .date-pair-value {
 	font-size: 0.9rem;
@@ -1716,9 +1721,26 @@ button.has-validation-error {
 	min-width: 0;
 }
 
+.time-main .med-name-stack {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.1rem;
+}
+
 .time-main .med-name-text {
 	overflow-wrap: anywhere;
 }
+
+.time-main .med-generic-inline {
+	display: block;
+	font-size: 0.875rem;
+	font-weight: 600;
+	line-height: 1.2;
+	color: var(--text-secondary);
+	overflow-wrap: anywhere;
+}
+
 .time-col {
 	display: flex;
 	align-items: center;
@@ -2422,7 +2444,15 @@ button.has-validation-error {
 	.dose-person {
 		width: 100%;
 		min-width: 0;
-		justify-content: flex-end;
+		--dose-action-take-width: clamp(4.9rem, 22vw, 7rem);
+		--dose-action-skip-width: clamp(4.25rem, 18vw, 5.2rem);
+		--dose-action-journal-width: clamp(4.9rem, 20vw, 6.25rem);
+
+		display: grid;
+		grid-template-columns:
+			minmax(0, 1fr) var(--dose-action-take-width) var(--dose-action-skip-width)
+			var(--dose-action-journal-width);
+		align-items: center;
 		gap: 0.35rem;
 		padding: 0.28rem 0.35rem;
 	}
@@ -2441,6 +2471,8 @@ button.has-validation-error {
 	.dose-person .dose-btn {
 		height: 26px;
 		min-height: 26px;
+		width: 100%;
+		min-width: 0;
 		padding: 0 0.5rem;
 		font-size: 0.72rem;
 	}

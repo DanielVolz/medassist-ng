@@ -24,8 +24,8 @@
 	padding-bottom: 0.9rem;
 	border-bottom: 1px solid color-mix(in srgb, var(--border-primary) 88%, transparent);
 	color: var(--text-secondary);
-	font-size: 0.82rem;
-	font-weight: 700;
+	font-size: 0.95rem;
+	font-weight: 750;
 	letter-spacing: 0;
 	text-transform: none;
 	white-space: nowrap;
@@ -124,7 +124,7 @@
 	.bodyCell {
 		display: grid;
 		grid-template-columns: minmax(6rem, 38%) minmax(0, 1fr);
-		align-items: start;
+		align-items: center;
 		gap: 0.75rem;
 		padding: 0.55rem 0.8rem;
 		border-top: 1px solid color-mix(in srgb, var(--border-primary) 70%, transparent);
@@ -134,7 +134,7 @@
 	.bodyCell::before {
 		content: attr(data-label);
 		color: var(--text-secondary);
-		font-size: 0.75rem;
+		font-size: 0.82rem;
 		font-weight: 700;
 		line-height: 1.35;
 		text-transform: uppercase;
@@ -164,6 +164,18 @@
 
 	.bodyCell[data-column-key="name"]::before {
 		display: none;
+	}
+
+	.bodyCell[data-column-key="datePair"] :global(.date-pair-entry) {
+		display: grid;
+		grid-template-columns: minmax(6rem, 38%) minmax(0, 1fr);
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.bodyCell[data-column-key="datePair"] :global(.date-pair-value) {
+		justify-self: end;
+		text-align: right;
 	}
 
 	.bodyCell :global(.hide-on-card) {

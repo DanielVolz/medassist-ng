@@ -80,9 +80,13 @@ test.describe("Dashboard with medications", () => {
 		const overviewTable = page.locator(".dashboard-overview-section .table").first();
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
-		// Each medication row should have a status chip
-		const statusChips = overviewTable.locator(".status-chip");
-		expect(await statusChips.count()).toBeGreaterThanOrEqual(2);
+		// Each medication row should expose a readable stock status.
+		await expect(
+			overviewTable.locator(".table-row").filter({ hasText: MED_1 }).getByRole("cell", { name: "Normal" })
+		).toBeVisible();
+		await expect(
+			overviewTable.locator(".table-row").filter({ hasText: MED_2 }).getByRole("cell", { name: "Normal" })
+		).toBeVisible();
 	});
 
 	test("should show stock information in overview", async ({ page }) => {
@@ -175,7 +179,7 @@ test.describe("Dashboard with medications", () => {
 		const todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 10000 });
 
-		const takeButtons = todayBlock.locator("button.dose-btn.take");
+		const takeButtons = todayBlock.getByRole("button", { name: /^Take$/ });
 		expect(await takeButtons.count()).toBeGreaterThanOrEqual(1);
 	});
 
@@ -185,7 +189,7 @@ test.describe("Dashboard with medications", () => {
 		let todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 10000 });
 
-		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
+		const takeBtn = todayBlock.getByRole("button", { name: /^Take$/ }).first();
 		test.skip(!(await takeBtn.isVisible().catch(() => false)), "No actionable take-dose button is visible for today");
 
 		const takeResponsePromise = page.waitForResponse(
@@ -200,7 +204,7 @@ test.describe("Dashboard with medications", () => {
 		await page.waitForLoadState("networkidle");
 		todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 10000 });
-		await expect(todayBlock.locator("button.dose-btn.undo").first()).toBeVisible({ timeout: 5000 });
+		await expect(todayBlock.getByRole("button", { name: /^Undo/ }).first()).toBeVisible({ timeout: 5000 });
 	});
 
 	test("should undo a taken dose", async ({ page }) => {
@@ -216,14 +220,14 @@ test.describe("Dashboard with medications", () => {
 
 		// Normalize state first: if a dose is already taken, undo it so we can
 		// always execute the same take -> undo flow deterministically.
-		const existingUndo = todayBlock.locator("button.dose-btn.undo").first();
+		const existingUndo = todayBlock.getByRole("button", { name: /^Undo/ }).first();
 		if (await existingUndo.isVisible().catch(() => false)) {
 			await existingUndo.click();
 			await page.waitForLoadState("networkidle");
 		}
 
 		// Mark a dose as taken first
-		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
+		const takeBtn = todayBlock.getByRole("button", { name: /^Take$/ }).first();
 		await expect(takeBtn).toBeVisible({ timeout: 10000 });
 		const takeResponsePromise = page.waitForResponse(
 			(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
@@ -241,13 +245,13 @@ test.describe("Dashboard with medications", () => {
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 
 		// Wait for undo button to appear (confirms the take succeeded)
-		const undoBtn = todayBlock.locator("button.dose-btn.undo").first();
+		const undoBtn = todayBlock.getByRole("button", { name: /^Undo/ }).first();
 		await expect(undoBtn).toBeVisible({ timeout: 10000 });
 		await undoBtn.click();
 		await page.waitForLoadState("networkidle");
 
 		// Take button should reappear
-		await expect(todayBlock.locator("button.dose-btn.take:not([disabled])").first()).toBeVisible({ timeout: 10000 });
+		await expect(todayBlock.getByRole("button", { name: /^Take$/ }).first()).toBeVisible({ timeout: 10000 });
 	});
 
 	test("should show multiple day blocks in timeline", async ({ page }) => {
@@ -279,13 +283,13 @@ test.describe("Dashboard with medications", () => {
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		const medRow = overviewTable.locator(".table-row").filter({ hasText: MED_1 }).first();
-		await medRow.click();
+		await medRow.getByRole("button", { name: MED_1 }).click();
 
-		const modal = page.locator(".modal-overlay");
+		const modal = page.getByRole("dialog");
 		await expect(modal).toBeVisible({ timeout: 5000 });
 		await expect(modal.getByText(MED_1)).toBeVisible();
 
-		await page.locator("button.modal-close").click();
+		await modal.getByLabel(/close/i).click();
 		await expect(modal).not.toBeVisible();
 	});
 

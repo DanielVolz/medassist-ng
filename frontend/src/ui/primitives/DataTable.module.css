@@ -71,6 +71,8 @@
 }
 
 .bodyCell[data-column-key="datePair"] :global(.date-pair-value) {
+	justify-self: end;
+	text-align: right;
 	white-space: nowrap;
 }
 
@@ -136,7 +138,7 @@
 	.bodyCell {
 		display: grid;
 		grid-template-columns: minmax(11rem, 48%) minmax(0, 1fr);
-		align-items: start;
+		align-items: center;
 		gap: 0.75rem;
 		padding: 0.55rem 0.8rem;
 		border-top: 1px solid color-mix(in srgb, var(--border-primary) 70%, transparent);

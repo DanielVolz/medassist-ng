@@ -42,29 +42,10 @@
 
 .page {
 	--page-pad-x: 1.5rem;
-	--app-shell-top-blur-top: 0;
-	--app-shell-top-blur-height: calc(3.15rem + env(safe-area-inset-top, 0px));
 
 	max-width: 1200px;
 	margin: 0 auto;
 	padding: 0 var(--page-pad-x) 1.5rem;
-}
-
-.topBlur {
-	position: fixed;
-	top: var(--app-shell-top-blur-top);
-	right: 0;
-	left: 0;
-	z-index: 139;
-	height: var(--app-shell-top-blur-height);
-	background: var(--mantine-other-bg-gradient);
-	backdrop-filter: blur(16px) saturate(1.2);
-	-webkit-backdrop-filter: blur(16px) saturate(1.2);
-	pointer-events: none;
-}
-
-:global([data-theme="light"]) .topBlur {
-	background: var(--mantine-other-bg-gradient);
 }
 
 .routeTransitionMask {
@@ -85,7 +66,5 @@
 @media (max-width: 700px) {
 	.page {
 		--page-pad-x: 0.4rem;
-		--app-shell-top-blur-top: 0;
-		--app-shell-top-blur-height: calc(3.15rem + env(safe-area-inset-top, 0px));
 	}
 }

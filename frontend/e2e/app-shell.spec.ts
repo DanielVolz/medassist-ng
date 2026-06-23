@@ -65,31 +65,29 @@ test.describe("App Shell", () => {
 			await expect(page.getByTestId("app-header")).toBeVisible();
 			await page.screenshot({ path: testInfo.outputPath(`top-header-blur-${viewport.name}.png`), fullPage: false });
 
-			const metrics = await page.getByTestId("app-shell-top-blur").evaluate((topBlur) => {
-				const style = window.getComputedStyle(topBlur);
-				const styleWithWebkit = style as CSSStyleDeclaration & { webkitBackdropFilter?: string };
-				const appHeader = document.querySelector<HTMLElement>('[data-testid="app-header"]');
-				const topBlurRect = topBlur.getBoundingClientRect();
-				const appHeaderRect = appHeader?.getBoundingClientRect();
+			const metrics = await page.getByTestId("app-header").evaluate((appHeader) => {
+				const style = window.getComputedStyle(appHeader);
+				const beforeStyle = window.getComputedStyle(appHeader, "::before");
+				const beforeStyleWithWebkit = beforeStyle as CSSStyleDeclaration & { webkitBackdropFilter?: string };
+				const appHeaderRect = appHeader.getBoundingClientRect();
 
 				return {
-					backdropFilter: style.backdropFilter || styleWithWebkit.webkitBackdropFilter,
-					height: topBlurRect.height,
-					bottom: topBlurRect.bottom,
+					backdropFilter: beforeStyle.backdropFilter || beforeStyleWithWebkit.webkitBackdropFilter,
+					borderRadius: style.borderRadius,
+					bottom: appHeaderRect.bottom,
+					height: appHeaderRect.height,
+					overflow: style.overflow,
 					position: style.position,
-					top: topBlurRect.top,
-					appHeaderTop: appHeaderRect?.top ?? 0,
-					appHeaderBottom: appHeaderRect?.bottom ?? 0,
+					top: appHeaderRect.top,
 				};
 			});
 
-			expect(metrics.position).toBe("fixed");
+			expect(metrics.position).toBe("sticky");
 			expect(metrics.height).toBeGreaterThan(0);
-			expect(metrics.top).toBe(0);
-			expect(metrics.appHeaderTop).toBeGreaterThan(0);
-			expect(metrics.bottom).toBeGreaterThanOrEqual(metrics.appHeaderTop + 24);
-			expect(metrics.bottom).toBeLessThanOrEqual(metrics.appHeaderBottom - 8);
-			expect(metrics.appHeaderTop).toBeGreaterThanOrEqual(0);
+			expect(metrics.top).toBeLessThanOrEqual(0);
+			expect(metrics.bottom).toBeGreaterThan(24);
+			expect(metrics.overflow).toBe("hidden");
+			expect(metrics.borderRadius).not.toBe("0px");
 			expect(metrics.backdropFilter).toContain("blur");
 		});
 	}

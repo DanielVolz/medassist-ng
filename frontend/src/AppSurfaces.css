@@ -612,10 +612,15 @@ textarea.auto-resize {
 	color: var(--text-secondary);
 	line-height: 1.2;
 }
+
 .date-pair-stack-header .date-pair-label {
-	font-size: 0.95rem;
-	font-weight: 750;
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: inherit;
 	letter-spacing: 0;
+	text-transform: none;
+	color: inherit;
+	line-height: 1.25;
 }
 
 .date-pair-value {
@@ -624,6 +629,15 @@ textarea.auto-resize {
 	color: var(--text-primary);
 	line-height: 1.3;
 	word-break: break-word;
+}
+
+@media (max-width: 768px) {
+	.date-pair-entry {
+		display: grid;
+		grid-template-columns: minmax(11rem, 48%) minmax(0, 1fr);
+		align-items: baseline;
+		gap: 0.75rem;
+	}
 }
 
 .form-category {
@@ -2442,13 +2456,13 @@ button.has-validation-error {
 	}
 
 	.dose-person {
+		display: grid;
 		width: 100%;
 		min-width: 0;
 		--dose-action-take-width: clamp(4.9rem, 22vw, 7rem);
 		--dose-action-skip-width: clamp(4.25rem, 18vw, 5.2rem);
 		--dose-action-journal-width: clamp(4.9rem, 20vw, 6.25rem);
 
-		display: grid;
 		grid-template-columns:
 			minmax(0, 1fr) var(--dose-action-take-width) var(--dose-action-skip-width)
 			var(--dose-action-journal-width);
@@ -2468,6 +2482,18 @@ button.has-validation-error {
 		display: none;
 	}
 
+	.dose-checks.has-recipient-summary:not(.multi-person) .dose-person {
+		grid-template-columns:
+			var(--dose-action-take-width) var(--dose-action-skip-width)
+			var(--dose-action-journal-width);
+	}
+
+	.dose-person:not(:has(.person-name)) {
+		grid-template-columns:
+			var(--dose-action-take-width) var(--dose-action-skip-width)
+			var(--dose-action-journal-width);
+	}
+
 	.dose-person .dose-btn {
 		height: 26px;
 		min-height: 26px;
@@ -2475,6 +2501,11 @@ button.has-validation-error {
 		min-width: 0;
 		padding: 0 0.5rem;
 		font-size: 0.72rem;
+	}
+
+	.dose-person button {
+		width: 100%;
+		justify-content: center;
 	}
 
 	.dose-btn .dose-btn-label {

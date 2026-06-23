@@ -1094,6 +1094,7 @@ describe("DashboardPage with email notifications", () => {
 		// Should show reminder status bar
 		const statusBar = document.querySelector(".reminder-status-bar");
 		expect(statusBar).toBeInTheDocument();
+		expect(within(statusBar as HTMLElement).getByTestId("dashboard-reminder-card")).toBeInTheDocument();
 	});
 
 	it("hides reorder reminder card when reminders are enabled (to avoid redundancy)", () => {

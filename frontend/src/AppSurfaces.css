@@ -1831,22 +1831,22 @@ button.has-validation-error {
 	color: var(--warning);
 }
 
-.dose-item.overdue .dose-btn.take:not(.undo):not(:disabled) {
-	box-shadow: 0 0 0 2px var(--warning);
-	animation: overduePulse 1.5s ease-in-out infinite;
+.dose-item.overdue :is(.dose-btn.take:not(.undo), .take-action-button):not(:disabled) {
+	box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--warning) 88%, transparent);
+	animation: overduePulse 1.8s ease-in-out infinite;
 }
 
-.dose-item.overdue .dose-btn.take:not(.undo):hover {
+.dose-item.overdue :is(.dose-btn.take:not(.undo), .take-action-button):hover {
 	filter: brightness(0.87);
 }
 
 @keyframes overduePulse {
 	0%,
 	100% {
-		box-shadow: 0 0 0 2px var(--warning);
+		box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--warning) 88%, transparent);
 	}
 	50% {
-		box-shadow: 0 0 0 0 var(--warning);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--warning) 20%, transparent);
 	}
 }
 

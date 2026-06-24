@@ -106,8 +106,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
-    // On macOS Docker volume mounts, inotify events don't reach the
-    // Linux container reliably. Polling ensures HMR sees file edits.
-    watch: existsSync("/.dockerenv") ? { usePolling: true, interval: 300 } : undefined,
+    // Ignore generated artifacts that otherwise trigger massive reload storms during local dev.
+    // On macOS Docker volume mounts, inotify events don't reach the Linux container reliably,
+    // so polling remains enabled only in Docker.
+    watch: {
+      ignored: ["**/coverage/**", "**/playwright-report/**", "**/test-results/**"],
+      ...(existsSync("/.dockerenv") ? { usePolling: true, interval: 300 } : {}),
+    },
   },
 });

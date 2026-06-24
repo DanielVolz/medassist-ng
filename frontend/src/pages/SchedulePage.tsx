@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/style/noNestedTernary: schedule timeline branches are intentionally explicit */
 import { Group } from "@mantine/core";
-import { Archive, Bell, ClipboardList, NotebookPen } from "lucide-react";
+import { Archive, Bell, Check, ClipboardList, NotebookPen, Undo2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
@@ -339,12 +339,17 @@ export function SchedulePage() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoTake)}
+				className={cx(
+					doseButtonClasses.button,
+					doseButtonClasses.takeAction,
+					doseButtonClasses.undo,
+					doseButtonClasses.undoTake
+				)}
 				onClick={() => undoDoseTaken(options.doseId)}
 			>
 				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
-				<span aria-hidden="true">↩</span>
+				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
@@ -352,6 +357,7 @@ export function SchedulePage() {
 				size="sm"
 				className={cx(
 					doseButtonClasses.button,
+					doseButtonClasses.takeAction,
 					doseButtonClasses.take,
 					options.isEmpty && doseButtonClasses.outOfStock
 				)}
@@ -359,13 +365,17 @@ export function SchedulePage() {
 				disabled={options.isEmpty || options.isSkipped}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
-				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
+				{options.isEmpty ? (
+					<span aria-hidden="true">⊘</span>
+				) : (
+					<Check className={doseButtonClasses.actionIcon} aria-hidden="true" />
+				)}
 			</AppButton>
 		);
 		const takeButton =
 			!options.isTaken && options.isEmpty ? (
 				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
-					<span className={doseButtonClasses.tooltipTarget}>{takeButtonControl}</span>
+					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
 				</AppTooltip>
 			) : (
 				takeButtonControl
@@ -375,17 +385,22 @@ export function SchedulePage() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.undo, doseButtonClasses.undoSkip)}
+				className={cx(
+					doseButtonClasses.button,
+					doseButtonClasses.skipAction,
+					doseButtonClasses.undo,
+					doseButtonClasses.undoSkip
+				)}
 				onClick={() => undoDoseSkipped(options.doseId)}
 			>
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
-				<span aria-hidden="true">↩</span>
+				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.skip)}
+				className={cx(doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken}
 			>
@@ -397,7 +412,7 @@ export function SchedulePage() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.journal)}
+				className={cx(doseButtonClasses.button, doseButtonClasses.journalAction, doseButtonClasses.journal)}
 				onClick={() => {
 					if (!journalUnavailable) {
 						void openJournalEditor(options.doseId);
@@ -411,7 +426,9 @@ export function SchedulePage() {
 		);
 		const journalButton = journalUnavailable ? (
 			<AppTooltip label={t("journal.actions.noteTakenOnly")}>
-				<span className={doseButtonClasses.tooltipTarget}>{journalButtonControl}</span>
+				<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.journalAction)}>
+					{journalButtonControl}
+				</span>
 			</AppTooltip>
 		) : (
 			journalButtonControl

@@ -4,7 +4,7 @@
 /* biome-ignore-all lint/style/noNestedTernary: rendering branches are intentionally explicit in schedule UI */
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: modal and helper callbacks are stable at runtime */
 
-import { NotebookPen } from "lucide-react";
+import { Check, NotebookPen, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
@@ -623,7 +623,7 @@ export function SharedSchedule() {
 			>
 				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
-				<span aria-hidden="true">↩</span>
+				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
@@ -641,7 +641,11 @@ export function SharedSchedule() {
 				disabled={options.isEmpty}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
-				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
+				{options.isEmpty ? (
+					<span aria-hidden="true">⊘</span>
+				) : (
+					<Check className={doseButtonClasses.actionIcon} aria-hidden="true" />
+				)}
 			</AppButton>
 		);
 		const takeButton =
@@ -667,7 +671,7 @@ export function SharedSchedule() {
 				onClick={() => undoDoseSkipped(options.doseId)}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.undoSkip")}</span>
-				<span aria-hidden="true">↩</span>
+				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton

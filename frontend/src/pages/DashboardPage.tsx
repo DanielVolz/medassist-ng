@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/style/noNestedTernary: timeline rendering uses explicit UI-state branching */
 import { ActionIcon, Group } from "@mantine/core";
-import { Archive, Bell, ClipboardList, NotebookPen, Share2 } from "lucide-react";
+import { Archive, Bell, Check, ClipboardList, NotebookPen, Share2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
@@ -471,7 +471,7 @@ export function DashboardPage() {
 			>
 				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
-				<span aria-hidden="true">↩</span>
+				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
@@ -488,7 +488,11 @@ export function DashboardPage() {
 				disabled={options.isEmpty || options.isSkipped}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
-				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
+				{options.isEmpty ? (
+					<span aria-hidden="true">⊘</span>
+				) : (
+					<Check className={doseButtonClasses.actionIcon} aria-hidden="true" />
+				)}
 			</AppButton>
 		);
 		const takeButton =
@@ -548,7 +552,7 @@ export function DashboardPage() {
 				onClick={() => undoDoseSkipped(options.doseId)}
 			>
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
-				<span aria-hidden="true">↩</span>
+				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton

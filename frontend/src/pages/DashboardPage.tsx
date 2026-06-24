@@ -469,7 +469,13 @@ export function DashboardPage() {
 				)}
 				onClick={() => undoDoseTaken(options.doseId)}
 			>
-				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
+				{options.isAutomaticallyTaken && (
+					<AppTooltip label={t("tooltips.automaticTaken")}>
+						<span className={doseButtonClasses.actionIcon} aria-hidden="true">
+							🤖
+						</span>
+					</AppTooltip>
+				)}
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
 				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>

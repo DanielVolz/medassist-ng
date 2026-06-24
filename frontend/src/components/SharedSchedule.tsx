@@ -630,7 +630,8 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn take take-action-button",
+					"dose-btn take",
+					"take-action-button",
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
 					doseButtonClasses.take,

@@ -4,7 +4,7 @@
 /* biome-ignore-all lint/style/noNestedTernary: rendering branches are intentionally explicit in schedule UI */
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: modal and helper callbacks are stable at runtime */
 
-import { NotebookPen } from "lucide-react";
+import { Check, NotebookPen, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
@@ -613,7 +613,6 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn undo take",
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
 					doseButtonClasses.undo,
@@ -623,14 +622,13 @@ export function SharedSchedule() {
 			>
 				{options.isAutomaticallyTaken && <AppTooltipTrigger label={t("tooltips.automaticTaken")}>🤖</AppTooltipTrigger>}
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
-				<span aria-hidden="true">↩</span>
+				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn take",
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
 					doseButtonClasses.take,
@@ -641,7 +639,11 @@ export function SharedSchedule() {
 				disabled={options.isEmpty}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
-				<span aria-hidden="true">{options.isEmpty ? "⊘" : "✓"}</span>
+				{options.isEmpty ? (
+					<span aria-hidden="true">⊘</span>
+				) : (
+					<Check className={doseButtonClasses.actionIcon} aria-hidden="true" />
+				)}
 			</AppButton>
 		);
 		const takeButton =
@@ -658,7 +660,6 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn undo skip",
 					doseButtonClasses.button,
 					doseButtonClasses.skipAction,
 					doseButtonClasses.undo,
@@ -667,13 +668,13 @@ export function SharedSchedule() {
 				onClick={() => undoDoseSkipped(options.doseId)}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.undoSkip")}</span>
-				<span aria-hidden="true">↩</span>
+				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx("dose-btn skip", doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
+				className={cx(doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken}
 			>
@@ -686,7 +687,6 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn journal",
 					doseButtonClasses.button,
 					doseButtonClasses.journalAction,
 					doseButtonClasses.journal,

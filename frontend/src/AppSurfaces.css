@@ -2459,9 +2459,9 @@ button.has-validation-error {
 		display: grid;
 		width: 100%;
 		min-width: 0;
-		--dose-action-take-width: clamp(4.9rem, 22vw, 7rem);
-		--dose-action-skip-width: clamp(4.25rem, 18vw, 5.2rem);
-		--dose-action-journal-width: clamp(4.9rem, 20vw, 6.25rem);
+		--dose-action-take-width: clamp(5.35rem, 23vw, 7.1rem);
+		--dose-action-skip-width: clamp(4.45rem, 19vw, 5.35rem);
+		--dose-action-journal-width: clamp(5rem, 21vw, 6.35rem);
 
 		grid-template-columns:
 			minmax(0, 1fr) var(--dose-action-take-width) var(--dose-action-skip-width)
@@ -2480,18 +2480,6 @@ button.has-validation-error {
 
 	.dose-checks.has-recipient-summary:not(.multi-person) .person-name {
 		display: none;
-	}
-
-	.dose-checks.has-recipient-summary:not(.multi-person) .dose-person {
-		grid-template-columns:
-			var(--dose-action-take-width) var(--dose-action-skip-width)
-			var(--dose-action-journal-width);
-	}
-
-	.dose-person:not(:has(.person-name)) {
-		grid-template-columns:
-			var(--dose-action-take-width) var(--dose-action-skip-width)
-			var(--dose-action-journal-width);
 	}
 
 	.dose-person .dose-btn {

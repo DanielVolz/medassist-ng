@@ -23,7 +23,14 @@
 .button :global(.mantine-Button-label) {
 	display: inline-flex;
 	align-items: center;
+	justify-content: center;
 	gap: 0.35rem;
+}
+
+.actionIcon {
+	width: 0.9rem;
+	height: 0.9rem;
+	flex-shrink: 0;
 }
 
 .tooltipTarget {

@@ -99,9 +99,9 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		const tooltipTarget = blockFor(buttonCss, ".tooltipTarget");
 
 		expect(dosePerson).toMatch(/display\s*:\s*grid/);
-		expect(dosePerson).toMatch(/--dose-action-take-width\s*:\s*clamp\(4\.9rem, 22vw, 7rem\)/);
-		expect(dosePerson).toMatch(/--dose-action-skip-width\s*:\s*clamp\(4\.25rem, 18vw, 5\.2rem\)/);
-		expect(dosePerson).toMatch(/--dose-action-journal-width\s*:\s*clamp\(4\.9rem, 20vw, 6\.25rem\)/);
+		expect(dosePerson).toMatch(/--dose-action-take-width\s*:\s*clamp\(5\.35rem, 23vw, 7\.1rem\)/);
+		expect(dosePerson).toMatch(/--dose-action-skip-width\s*:\s*clamp\(4\.45rem, 19vw, 5\.35rem\)/);
+		expect(dosePerson).toMatch(/--dose-action-journal-width\s*:\s*clamp\(5rem, 21vw, 6\.35rem\)/);
 		expect(dosePerson).toMatch(
 			/grid-template-columns\s*:\s*minmax\(0, 1fr\) var\(--dose-action-take-width\) var\(--dose-action-skip-width\)\s*var\(--dose-action-journal-width\)/
 		);

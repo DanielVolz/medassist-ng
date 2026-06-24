@@ -613,7 +613,6 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn undo take",
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
 					doseButtonClasses.undo,
@@ -630,7 +629,6 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn take",
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
 					doseButtonClasses.take,
@@ -662,7 +660,6 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn undo skip",
 					doseButtonClasses.button,
 					doseButtonClasses.skipAction,
 					doseButtonClasses.undo,
@@ -677,7 +674,7 @@ export function SharedSchedule() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx("dose-btn skip", doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
+				className={cx(doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken}
 			>
@@ -690,7 +687,6 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
-					"dose-btn journal",
 					doseButtonClasses.button,
 					doseButtonClasses.journalAction,
 					doseButtonClasses.journal,

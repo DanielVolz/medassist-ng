@@ -356,6 +356,7 @@ export function SchedulePage() {
 				type="button"
 				size="sm"
 				className={cx(
+					"take-action-button",
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
 					doseButtonClasses.take,

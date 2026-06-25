@@ -52,17 +52,32 @@ jobs:
         run: echo "value=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
   # =============================================================================
+  # Smoke-test locally built images before publishing anything to GHCR.
+  # If this gate fails, the expensive backend/frontend publish builds do not run.
+  # =============================================================================
+  container-smoke:
+    name: Container Smoke
+    permissions:
+      checks: read
+      contents: read
+      packages: read
+    uses: ./.github/workflows/container-smoke.yml
+    secrets: inherit
+    with:
+      image_source: build
+
+  # =============================================================================
   # Build and Push Docker Images
   # Triggered on pushes to main (tagged as "main") and version tags (v*).
-  # Tests are NOT run here — branch protection on main requires all PR checks
-  # (backend-test + frontend-build from test.yml) to pass before merge.
-  # Tags are created from main, so code is already tested.
+  # Fast PR checks run before merge. This publish step is additionally gated by
+  # container-smoke above, which builds local smoke images and verifies runtime
+  # health before anything is pushed to GHCR.
   #
   # main push  → "main" tag only (for testing before release)
   # Tag builds → semver tags (e.g., 1.9.0, 1.9) plus "latest"
   # =============================================================================
   build-and-push:
-    needs: prepare-image-coordinates
+    needs: [prepare-image-coordinates, container-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -147,23 +162,6 @@ jobs:
           name: image-digest-${{ matrix.image }}
           path: image-digests/${{ matrix.image }}.digest
           retention-days: 1
-
-  # =============================================================================
-  # Smoke-test published images before completing a release
-  # =============================================================================
-  container-smoke:
-    name: Container Smoke
-    needs: [prepare-image-coordinates, build-and-push]
-    permissions:
-      checks: read
-      contents: read
-      packages: read
-    uses: ./.github/workflows/container-smoke.yml
-    secrets: inherit
-    with:
-      image_source: published
-      backend_image_ref: ghcr.io/${{ needs.prepare-image-coordinates.outputs.owner_lc }}/medassist-ng-backend:sha-${{ github.sha }}
-      frontend_image_ref: ghcr.io/${{ needs.prepare-image-coordinates.outputs.owner_lc }}/medassist-ng-frontend:sha-${{ github.sha }}
 
   # =============================================================================
   # Create GitHub Release (on tag push or manual dispatch with create_release)

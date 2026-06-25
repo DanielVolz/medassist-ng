@@ -645,7 +645,7 @@ export function SharedSchedule() {
 					options.isEmpty && doseButtonClasses.outOfStock
 				)}
 				onClick={() => markDoseTaken(options.doseId)}
-				disabled={options.isEmpty}
+				disabled={options.isEmpty || !canMarkTaken}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
 				{options.isEmpty ? (
@@ -658,6 +658,10 @@ export function SharedSchedule() {
 		const takeButton =
 			!options.isTaken && options.isEmpty ? (
 				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
+					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
+				</AppTooltip>
+			) : !canMarkTaken ? (
+				<AppTooltip label={t("share.readOnly")}>
 					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
 				</AppTooltip>
 			) : (
@@ -686,10 +690,17 @@ export function SharedSchedule() {
 				size="sm"
 				className={cx("dose-btn skip", doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
-				disabled={options.isTaken}
+				disabled={options.isTaken || !canMarkTaken}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.skip")}</span>
 			</AppButton>
+		);
+		const skipButtonWithReadOnlyTooltip = !canMarkTaken ? (
+			<AppTooltip label={t("share.readOnly")}>
+				<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.skipAction)}>{skipButton}</span>
+			</AppTooltip>
+		) : (
+			skipButton
 		);
 
 		const journalButtonControl = showSharedJournalAction ? (
@@ -727,8 +738,8 @@ export function SharedSchedule() {
 
 		return (
 			<>
-				{canMarkTaken ? takeButton : null}
-				{canMarkTaken ? skipButton : null}
+				{takeButton}
+				{skipButtonWithReadOnlyTooltip}
 				{journalButton}
 			</>
 		);

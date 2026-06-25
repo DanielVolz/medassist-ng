@@ -154,6 +154,7 @@ jobs:
     name: Container Smoke
     needs: [prepare-image-coordinates, build-and-push]
     permissions:
+      checks: read
       contents: read
       packages: read
     uses: ./.github/workflows/container-smoke.yml

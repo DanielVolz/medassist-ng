@@ -213,20 +213,20 @@ test.describe("Domain safety flows", () => {
 		const todayBlock = page.locator(".day-block.today");
 		const doseItem = page.locator(".dose-item").first();
 		await expect(doseItem).toBeVisible({ timeout: 15000 });
-		await expect(doseItem.locator(".dose-btn.take:not(.undo)")).toBeVisible();
+		await expect(doseItem.getByRole("button", { name: /take/i })).toBeVisible();
 
-		await doseItem.locator(".dose-btn.take:not(.undo)").click();
+		await doseItem.getByRole("button", { name: /take/i }).click();
 		await expect.poll(async () => (await getShareDoses(page, share.token)).length).toBe(1);
 		const markedDoses = await getShareDoses(page, share.token);
 		const markedDoseId = markedDoses[0].doseId;
 
-		const undoButton = todayBlock.locator(".dose-btn.undo.take").first();
+		const undoButton = todayBlock.getByRole("button", { name: /undo/i }).first();
 		if (!(await undoButton.isVisible().catch(() => false))) {
 			await todayBlock.locator(".day-divider.clickable").click();
 		}
 		await expect(undoButton).toBeVisible({ timeout: 10000 });
 		await undoButton.click();
-		await expect(todayBlock.locator(".dose-btn.take:not(.undo)").first()).toBeVisible({ timeout: 10000 });
+		await expect(todayBlock.getByRole("button", { name: /take/i }).first()).toBeVisible({ timeout: 10000 });
 		await expect
 			.poll(async () => (await getShareDoses(page, share.token)).some((dose) => dose.doseId === markedDoseId))
 			.toBe(false);

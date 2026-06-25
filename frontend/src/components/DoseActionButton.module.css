@@ -48,6 +48,20 @@
 		--button-padding-x: 0.62rem;
 		--button-fz: 0.78rem;
 	}
+
+	.undo:global(.mantine-Button-root) {
+		--button-padding-x: 0.5rem;
+		--button-fz: 0.74rem;
+	}
+
+	.undo :global(.mantine-Button-label) {
+		gap: 0.22rem;
+	}
+
+	.undo .actionIcon {
+		width: 0.8rem;
+		height: 0.8rem;
+	}
 }
 
 .take {

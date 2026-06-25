@@ -115,3 +115,4 @@ ops/medtest/
 # ===================
 .codex/
 .github/agents/*.agent.md
+.kilocode/rules/rtk-rules.md

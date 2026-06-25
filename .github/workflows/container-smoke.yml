@@ -1,17 +1,9 @@
 name: Container Smoke
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'shared/**'
-      - 'package*.json'
-      - 'backend/package*.json'
-      - 'frontend/package*.json'
-      - 'shared/package*.json'
-      - 'docker-compose*.yml'
+  workflow_run:
+    workflows: ['Test', 'E2E Tests']
+    types: [completed]
   workflow_call:
     inputs:
       image_source:
@@ -31,15 +23,78 @@ on:
         default: ''
 
 concurrency:
-  group: container-smoke-${{ github.ref }}
+  group: container-smoke-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
+  gate:
+    name: Evaluate CI Gate
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.required_check_gate.outputs.should_run || steps.workflow_call_gate.outputs.should_run || 'false' }}
+    steps:
+      - name: Allow smoke when called as reusable workflow
+        id: workflow_call_gate
+        if: github.event_name == 'workflow_call'
+        run: echo "should_run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure triggering workflow succeeded
+        id: trigger_conclusion
+        if: github.event_name == 'workflow_run'
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "Triggering workflow conclusion is '${{ github.event.workflow_run.conclusion }}'; skipping smoke."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify required checks for this commit
+        id: required_check_gate
+        if: github.event_name == 'workflow_run' && steps.trigger_conclusion.outputs.should_run == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const ref = context.payload.workflow_run.head_sha;
+            const requiredChecks = ['Backend Tests', 'Frontend Build', 'Playwright E2E'];
+
+            const response = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref,
+              per_page: 100,
+            });
+
+            const checkMap = new Map();
+            for (const run of response.data.check_runs) {
+              checkMap.set(run.name, run.conclusion);
+            }
+
+            let shouldRun = true;
+            for (const checkName of requiredChecks) {
+              const conclusion = checkMap.get(checkName);
+              core.info(`${checkName}: ${conclusion ?? 'missing'}`);
+              if (conclusion !== 'success') {
+                shouldRun = false;
+              }
+            }
+
+            core.setOutput('should_run', shouldRun ? 'true' : 'false');
+
+      - name: Skip smoke when required checks are not all green
+        if: github.event_name == 'workflow_run' && (steps.trigger_conclusion.outputs.should_run != 'true' || steps.required_check_gate.outputs.should_run != 'true')
+        run: echo "Skipping Container Smoke because required checks are not all successful for this commit."
+
   smoke:
     name: Container Smoke
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -53,6 +108,8 @@ jobs:
       - name: Checkout repository
         if: github.event_name != 'workflow_call' || inputs.image_source != 'published'
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Docker Buildx
         if: github.event_name != 'workflow_call' || inputs.image_source != 'published'

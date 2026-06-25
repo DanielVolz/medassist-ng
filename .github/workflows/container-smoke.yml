@@ -39,7 +39,7 @@ jobs:
     steps:
       - name: Allow smoke when called as reusable workflow
         id: workflow_call_gate
-        if: github.event_name == 'workflow_call'
+        if: github.event_name != 'workflow_run'
         run: echo "should_run=true" >> "$GITHUB_OUTPUT"
 
       - name: Ensure triggering workflow succeeded
@@ -106,17 +106,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        if: github.event_name != 'workflow_call' || inputs.image_source != 'published'
+        if: inputs.image_source != 'published'
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Docker Buildx
-        if: github.event_name != 'workflow_call' || inputs.image_source != 'published'
+        if: inputs.image_source != 'published'
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        if: github.event_name == 'workflow_call' && inputs.image_source == 'published'
+        if: inputs.image_source == 'published'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -124,7 +124,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate published image references
-        if: github.event_name == 'workflow_call' && inputs.image_source == 'published'
+        if: inputs.image_source == 'published'
         run: |
           if [ -z "${{ inputs.backend_image_ref }}" ] || [ -z "${{ inputs.frontend_image_ref }}" ]; then
             echo "Published smoke mode requires both backend_image_ref and frontend_image_ref."
@@ -135,7 +135,7 @@ jobs:
         run: mkdir -p smoke-logs
 
       - name: Build backend image for local smoke
-        if: github.event_name != 'workflow_call' || inputs.image_source != 'published'
+        if: inputs.image_source != 'published'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -147,7 +147,7 @@ jobs:
           platforms: linux/amd64
 
       - name: Build frontend image for local smoke
-        if: github.event_name != 'workflow_call' || inputs.image_source != 'published'
+        if: inputs.image_source != 'published'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -159,7 +159,7 @@ jobs:
           platforms: linux/amd64
 
       - name: Pull published images
-        if: github.event_name == 'workflow_call' && inputs.image_source == 'published'
+        if: inputs.image_source == 'published'
         run: |
           docker pull "${{ inputs.backend_image_ref }}"
           docker pull "${{ inputs.frontend_image_ref }}"
@@ -167,7 +167,7 @@ jobs:
       - name: Resolve smoke image references
         id: image_refs
         run: |
-          if [ "${{ github.event_name }}" = "workflow_call" ] && [ "${{ inputs.image_source }}" = "published" ]; then
+          if [ "${{ inputs.image_source }}" = "published" ]; then
             echo "backend=${{ inputs.backend_image_ref }}" >> "$GITHUB_OUTPUT"
             echo "frontend=${{ inputs.frontend_image_ref }}" >> "$GITHUB_OUTPUT"
           else

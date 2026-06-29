@@ -37,7 +37,7 @@
     "@mantine/core": "^8.3.18",
     "@mantine/dates": "^8.3.18",
     "@mantine/hooks": "^8.3.18",
-    "@mantine/modals": "^8.3.18",
+    "@mantine/modals": "^9.4.1",
     "@mantine/notifications": "^8.3.18",
     "@medassist/shared": "file:../shared",
     "dayjs": "^1.11.21",

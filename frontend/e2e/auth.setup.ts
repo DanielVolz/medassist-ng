@@ -139,13 +139,26 @@ async function syncResponseCookiesToBrowserContext(page: Page, baseURL: string, 
 setup("authenticate", async ({ page }) => {
 	setup.setTimeout(120000);
 	await applyVideoSafetyMode(page);
-	const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
+	const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:4174";
+	const apiBaseURL = process.env.PLAYWRIGHT_API_BASE_URL || "http://localhost:4175";
+	const waitForApiReady = async () => {
+		for (let attempt = 0; attempt < 30; attempt += 1) {
+			const response = await page.request.get(`${apiBaseURL}/health`).catch(() => null);
+			if (response?.ok()) {
+				return;
+			}
+			await page.waitForTimeout(1000);
+		}
+		throw new Error(`Playwright backend did not become ready at ${apiBaseURL}`);
+	};
 
 	// Create .auth directory if it doesn't exist
 	const authDir = path.dirname(authFile);
 	if (!fs.existsSync(authDir)) {
 		fs.mkdirSync(authDir, { recursive: true });
 	}
+
+	await waitForApiReady();
 
 	// ---- 1. Try to reuse an existing auth file (offline check only) ----
 	if (fs.existsSync(authFile)) {
@@ -160,7 +173,7 @@ setup("authenticate", async ({ page }) => {
 
 			if (accessCookie?.value && isTokenValid(accessCookie.value)) {
 				const hasSavedSession = await page.request
-					.get(`${baseURL}/api/auth/me`)
+					.get(`${apiBaseURL}/auth/me`)
 					.then((response) => response.ok())
 					.catch(() => false);
 
@@ -171,12 +184,12 @@ setup("authenticate", async ({ page }) => {
 			}
 
 			if (refreshCookie?.value) {
-				const refreshResponse = await page.request.post(`${baseURL}/api/auth/refresh`).catch(() => null);
+				const refreshResponse = await page.request.post(`${apiBaseURL}/auth/refresh`).catch(() => null);
 				if (refreshResponse?.ok()) {
 					await syncResponseCookiesToBrowserContext(page, baseURL, refreshResponse);
 
 					const refreshedSession = await page.request
-						.get(`${baseURL}/api/auth/me`)
+						.get(`${apiBaseURL}/auth/me`)
 						.then((response) => response.ok())
 						.catch(() => false);
 
@@ -198,7 +211,7 @@ setup("authenticate", async ({ page }) => {
 	let oidcEnabled = false;
 	let registrationEnabled = true;
 	try {
-		const stateRes = await page.request.get(`${baseURL}/api/auth/state`);
+		const stateRes = await page.request.get(`${apiBaseURL}/auth/state`);
 		if (stateRes.ok()) {
 			const state = await stateRes.json();
 			authEnabled = state.authEnabled === true;
@@ -226,7 +239,7 @@ setup("authenticate", async ({ page }) => {
 	}
 
 	const hasAuthenticatedSession = await page.request
-		.get(`${baseURL}/api/auth/me`)
+		.get(`${apiBaseURL}/auth/me`)
 		.then((response) => response.ok())
 		.catch(() => false);
 	if (hasAuthenticatedSession) {
@@ -258,7 +271,7 @@ setup("authenticate", async ({ page }) => {
 	}
 
 	const loginWithApi = async () => {
-		const res = await page.request.post(`${baseURL}/api/auth/login`, {
+		const res = await page.request.post(`${apiBaseURL}/auth/login`, {
 			data: { username: TEST_USER.username, password: TEST_USER.password, rememberMe: false },
 		});
 
@@ -295,7 +308,7 @@ setup("authenticate", async ({ page }) => {
 
 	const registerWithApi = async () => {
 		await page.request
-			.post(`${baseURL}/api/auth/register`, {
+			.post(`${apiBaseURL}/auth/register`, {
 				data: { username: TEST_USER.username, password: TEST_USER.password },
 			})
 			.catch(() => {});
@@ -308,7 +321,7 @@ setup("authenticate", async ({ page }) => {
 			.catch(() => false);
 		if (hasHeader) return true;
 
-		const meRes = await page.request.get(`${baseURL}/api/auth/me`).catch(() => null);
+		const meRes = await page.request.get(`${apiBaseURL}/auth/me`).catch(() => null);
 		return Boolean(meRes?.ok());
 	};
 

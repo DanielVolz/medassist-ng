@@ -595,10 +595,13 @@ describe("SharedSchedule", () => {
 
 	it("renders the embedded medication overview on the shared page when enabled", async () => {
 		const sharedData = createSharedDataWithEmbeddedOverview();
+		const currentYear = new Date().getFullYear();
+		sharedData.medicationOverview[0].depletionDate = `${currentYear}-07-14`;
+		sharedData.medicationOverview[1].depletionDate = `${currentYear + 1}-05-01`;
 
 		mockSharedScheduleRead(sharedData);
 
-		renderSharedSchedule("/share/token-123");
+		const { container } = renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
 			expect(screen.getAllByText("Aspirin").length).toBeGreaterThan(0);
@@ -610,6 +613,14 @@ describe("SharedSchedule", () => {
 		expect(screen.getAllByText("2 x 40 form.packageAmountUnitG").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("3 x 150 form.packageAmountUnitMl").length).toBeGreaterThan(0);
 		expect(screen.getByText("share.noSchedule")).toBeInTheDocument();
+
+		const dateValues = Array.from(container.querySelectorAll('[class*="shared-overview-date-value"]')).map(
+			(element) => element.textContent ?? ""
+		);
+		expect(
+			dateValues.some((value) => /14/.test(value) && /Jul/i.test(value) && !value.includes(String(currentYear)))
+		).toBe(true);
+		expect(dateValues.some((value) => /May/i.test(value) && value.includes(String(currentYear + 1)))).toBe(true);
 	});
 
 	it("skips a neutral shared dose via the skip endpoint", async () => {

@@ -33,7 +33,7 @@ function lastBlockFor(css: string, selector: string) {
 }
 
 describe("dashboard and shared mobile polish contract", () => {
-	it("keeps overview table headers readable and mobile date values right aligned", () => {
+	it("keeps overview table headers readable and mobile date values left aligned", () => {
 		const css = readSource("ui/primitives/DataTable.module.css");
 		const headCell = blockFor(css, ".headCell");
 		const mobileCell = lastBlockFor(css, ".bodyCell");
@@ -44,8 +44,8 @@ describe("dashboard and shared mobile polish contract", () => {
 		expect(headCell).toMatch(/font-weight\s*:\s*750/);
 		expect(mobileCell).toMatch(/align-items\s*:\s*center/);
 		expect(mobileLabel).toMatch(/font-size\s*:\s*0\.82rem/);
-		expect(mobileDateValue).toMatch(/justify-self\s*:\s*end/);
-		expect(mobileDateValue).toMatch(/text-align\s*:\s*right/);
+		expect(mobileDateValue).toMatch(/justify-self\s*:\s*start/);
+		expect(mobileDateValue).toMatch(/text-align\s*:\s*left/);
 	});
 
 	it("keeps shared medication generic names and mobile dose actions in stable slots", () => {

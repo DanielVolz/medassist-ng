@@ -203,22 +203,44 @@ describe("MedDetailModal", () => {
 	});
 
 	it("shows prescription details section when prescription is enabled", () => {
-		const med: Medication = {
-			...mockMedication,
-			prescriptionEnabled: true,
-			prescriptionAuthorizedRefills: 5,
-			prescriptionRemainingRefills: 2,
-			prescriptionLowRefillThreshold: 1,
-			prescriptionExpiryDate: "2026-12-31",
-		};
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2026, 6, 1, 12, 0, 0));
 
-		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
+		try {
+			const med: Medication = {
+				...mockMedication,
+				expiryDate: "2026-07-14",
+				prescriptionEnabled: true,
+				prescriptionAuthorizedRefills: 5,
+				prescriptionRemainingRefills: 2,
+				prescriptionLowRefillThreshold: 1,
+				prescriptionExpiryDate: "2027-05-01",
+			};
 
-		expect(screen.getByText(/form\.sections\.prescription/i)).toBeInTheDocument();
-		expect(screen.getByText(/prescription\.authorizedRefills/i)).toBeInTheDocument();
-		expect(screen.getByText(/prescription\.remainingRefills/i)).toBeInTheDocument();
-		expect(screen.getByText(/prescription\.lowThreshold/i)).toBeInTheDocument();
-		expect(screen.getByText(/prescription\.expiryDate/i)).toBeInTheDocument();
+			render(<MedDetailModal {...defaultProps} selectedMed={med} />);
+
+			expect(screen.getByText(/form\.sections\.prescription/i)).toBeInTheDocument();
+			expect(screen.getByText(/prescription\.authorizedRefills/i)).toBeInTheDocument();
+			expect(screen.getByText(/prescription\.remainingRefills/i)).toBeInTheDocument();
+			expect(screen.getByText(/prescription\.lowThreshold/i)).toBeInTheDocument();
+			expect(screen.getByText(/prescription\.expiryDate/i)).toBeInTheDocument();
+
+			const medicationExpiry = getDetailValue(/modal\.expiryDate/i);
+			expect(medicationExpiry).toHaveTextContent(/Jul/i);
+			expect(medicationExpiry).toHaveTextContent(/26/);
+			expect(medicationExpiry).not.toHaveTextContent(/Tue/i);
+			expect(medicationExpiry).not.toHaveTextContent(/14/);
+			expect(medicationExpiry).not.toHaveTextContent(/2026/);
+
+			const prescriptionExpiry = getDetailValue(/prescription\.expiryDate/i);
+			expect(prescriptionExpiry).toHaveTextContent(/May/i);
+			expect(prescriptionExpiry).toHaveTextContent(/27/);
+			expect(prescriptionExpiry).not.toHaveTextContent(/Sat/i);
+			expect(prescriptionExpiry).not.toHaveTextContent(/01/);
+			expect(prescriptionExpiry).not.toHaveTextContent(/2027/);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("does not show prescription details section when prescription is disabled", () => {

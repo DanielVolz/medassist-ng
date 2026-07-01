@@ -71,8 +71,8 @@
 }
 
 .bodyCell[data-column-key="datePair"] :global(.date-pair-value) {
-	justify-self: end;
-	text-align: right;
+	justify-self: start;
+	text-align: left;
 	white-space: nowrap;
 }
 
@@ -182,14 +182,14 @@
 
 	.bodyCell[data-column-key="datePair"] :global(.date-pair-entry) {
 		display: grid;
-		grid-template-columns: minmax(6rem, 38%) minmax(0, 1fr);
+		grid-template-columns: minmax(11rem, 48%) minmax(0, 1fr);
 		align-items: center;
 		gap: 0.75rem;
 	}
 
 	.bodyCell[data-column-key="datePair"] :global(.date-pair-value) {
-		justify-self: end;
-		text-align: right;
+		justify-self: start;
+		text-align: left;
 	}
 
 	.bodyCell :global(.hide-on-card) {

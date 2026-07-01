@@ -28,7 +28,7 @@ import {
 } from "../types";
 import { AppButton } from "../ui/primitives/AppButton";
 import { AppTooltip, AppTooltipTrigger } from "../ui/primitives/AppTooltip";
-import { getSystemLocale } from "../utils/formatters";
+import { formatDisplayDate, getSystemLocale } from "../utils/formatters";
 import { getIntakeDailyRate, getMedicationIntakes, iterateIntakeOccurrences } from "../utils/intake-schedule";
 import { convertLiquidUsageToMl } from "../utils/intake-units";
 import { getStockStatus, isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
@@ -860,11 +860,7 @@ export function SharedSchedule() {
 						isPast,
 						takenBy: intake.takenBy, // Per-intake takenBy (string | null)
 						timeStr: d.toLocaleTimeString(getSystemLocale(i18n.language), { hour: "2-digit", minute: "2-digit" }),
-						dateStr: d.toLocaleDateString(getSystemLocale(i18n.language), {
-							weekday: "short",
-							day: "2-digit",
-							month: "short",
-						}),
+						dateStr: formatDisplayDate(d, getSystemLocale(i18n.language), { weekday: true }),
 					});
 				});
 			});
@@ -926,11 +922,7 @@ export function SharedSchedule() {
 	// Separate today from future days
 	const { todayDay, futureDays } = useMemo(() => {
 		const today = new Date();
-		const todayStr = today.toLocaleDateString(getSystemLocale(i18n.language), {
-			weekday: "short",
-			day: "2-digit",
-			month: "short",
-		});
+		const todayStr = formatDisplayDate(today, getSystemLocale(i18n.language), { weekday: true });
 		const nonPastDays = schedule.filter((d) => !d.isPast).slice(0, data?.scheduleDays ?? 30);
 
 		const todayEntry = nonPastDays.find((d) => d.dateStr === todayStr);
@@ -1160,7 +1152,7 @@ export function SharedSchedule() {
 					</p>
 					<p className={sharedClasses["expired-date"]}>
 						{t("share.expired.expiredOn", {
-							date: new Date(expiredData.expiredAt).toLocaleDateString(getSystemLocale(i18n.language)),
+							date: formatDisplayDate(expiredData.expiredAt, getSystemLocale(i18n.language)),
 						})}
 					</p>
 				</div>

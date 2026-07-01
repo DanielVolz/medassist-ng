@@ -1723,16 +1723,16 @@ export function MedicationsPage() {
 								</label>
 							)}
 							{form.medicationEndDate && (
-								<label className="full">
-									{t("form.autoMarkObsoleteAfterEndDate")}
-									<label className="toggle-switch small">
+								<label className={`full ${formClasses.inlineToggleField}`}>
+									<span className={formClasses.inlineToggleText}>{t("form.autoMarkObsoleteAfterEndDate")}</span>
+									<span className="toggle-switch small">
 										<input
 											type="checkbox"
 											checked={form.autoMarkObsoleteAfterEndDate}
 											onChange={(e) => handleValueChange("autoMarkObsoleteAfterEndDate", e.target.checked)}
 										/>
 										<span className="toggle-slider"></span>
-									</label>
+									</span>
 								</label>
 							)}
 							<label className={`full ${fieldErrors.takenBy ? "has-error" : ""}`}>

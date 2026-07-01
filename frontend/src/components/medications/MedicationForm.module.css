@@ -21,6 +21,26 @@
 	align-self: end;
 }
 
+.category .inlineToggleField {
+	display: inline-flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 0.65rem;
+	width: fit-content;
+	max-width: 100%;
+	min-width: 0;
+	justify-self: start;
+}
+
+.category .inlineToggleText {
+	min-width: 0;
+}
+
+.category .inlineToggleField :global(.toggle-switch.small) {
+	flex: 0 0 auto;
+}
+
 .categoryTitle {
 	grid-column: 1 / -1;
 	margin: 0;

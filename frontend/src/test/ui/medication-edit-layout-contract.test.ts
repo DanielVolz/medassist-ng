@@ -31,4 +31,18 @@ describe("desktop medication edit layout contract", () => {
 		expect(cssBlock(coordinatorCss, ".formActions")).toMatch(/background\s*:\s*var\(--desktop-editor-panel-bg\)/);
 		expect(cssBlock(formCss, ".tabs")).toMatch(/border-radius\s*:\s*10px 10px 0 0/);
 	});
+
+	it("keeps the obsolete-after-end-date toggle inline with its label on desktop and mobile", () => {
+		const formCss = readSource("components/medications/MedicationForm.module.css");
+		const pageSource = readSource("pages/MedicationsPage.tsx");
+		const mobileSource = readSource("components/MobileEditModal.tsx");
+		const inlineToggleField = cssBlock(formCss, ".category .inlineToggleField");
+
+		expect(inlineToggleField).toMatch(/display\s*:\s*inline-flex/);
+		expect(inlineToggleField).toMatch(/flex-direction\s*:\s*row/);
+		expect(inlineToggleField).toMatch(/align-items\s*:\s*center/);
+		expect(inlineToggleField).toMatch(/width\s*:\s*fit-content/);
+		expect(pageSource).toContain("formClasses.inlineToggleField");
+		expect(mobileSource).toContain("formClasses.inlineToggleField");
+	});
 });

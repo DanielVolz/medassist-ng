@@ -629,8 +629,8 @@ export function MobileEditModal({
 											</label>
 										)}
 										{form.medicationEndDate && (
-											<label className="full">
-												{t("form.autoMarkObsoleteAfterEndDate")}
+											<label className={`full ${formClasses.inlineToggleField}`}>
+												<span className={formClasses.inlineToggleText}>{t("form.autoMarkObsoleteAfterEndDate")}</span>
 												<span className="toggle-switch small">
 													<input
 														type="checkbox"

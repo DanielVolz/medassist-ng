@@ -33,7 +33,13 @@ import { AppTextAction } from "../ui/primitives/AppTextAction";
 import { AppTooltip, AppTooltipTrigger } from "../ui/primitives/AppTooltip";
 import { DataTable, type DataTableColumn } from "../ui/primitives/DataTable";
 import { StatusBadge, type StatusTone } from "../ui/primitives/StatusBadge";
-import { formatNumber, getExpiryClass, getSystemLocale } from "../utils/formatters";
+import {
+	formatDisplayDate,
+	formatExpiryDate,
+	formatNumber,
+	getExpiryClass,
+	getSystemLocale,
+} from "../utils/formatters";
 import { getIntakeDailyRate, getMedicationIntakes } from "../utils/intake-schedule";
 import { convertLiquidUsageToMl, getLiquidCountUnitLabel, type UnitLabelVariant } from "../utils/intake-units";
 import { buildClearMissedPayload, expandDoseIds, getStockStatus, isDoseDismissed } from "../utils/schedule";
@@ -1082,22 +1088,21 @@ export function DashboardPage() {
 			render: (row) => {
 				const med = getMedByName(row.name);
 				const expiryClass = getExpiryClass(med?.expiryDate, settings.expiryWarningDays);
+				const displayLocale = getSystemLocale(i18n.language);
+				const runsOutValue = formatDisplayDate(row.depletionTime ?? row.depletionDate, displayLocale, {
+					weekday: true,
+					fallback: row.depletionDate ?? "-",
+				});
 				return (
 					<span className="date-pair-stack">
 						<span className="date-pair-entry">
 							<span className="date-pair-label">{t("table.runsOut")}</span>
-							<span className="date-pair-value">{row.depletionDate ?? "-"}</span>
+							<span className="date-pair-value">{runsOutValue}</span>
 						</span>
 						<span className="date-pair-entry">
 							<span className="date-pair-label">{t("table.expiry")}</span>
 							<span className={`date-pair-value ${expiryClass}`}>
-								{med?.expiryDate
-									? new Date(med.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), {
-											day: "2-digit",
-											month: "short",
-											year: "2-digit",
-										})
-									: "-"}
+								{med?.expiryDate ? formatExpiryDate(med.expiryDate, displayLocale) : "-"}
 							</span>
 						</span>
 					</span>

@@ -66,15 +66,18 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 	});
 
 	it("keeps mobile runs-out and expiry dates in the same value column as other overview values", () => {
-		const css = readSource("AppSurfaces.css");
-		const desktopDatePairEntry = blockFor(css, ".date-pair-entry");
-		const mobileDatePairEntry = lastBlockFor(css, ".date-pair-entry");
+		const surfacesCss = readSource("AppSurfaces.css");
+		const tableCss = readSource("ui/primitives/DataTable.module.css");
+		const desktopDatePairEntry = blockFor(surfacesCss, ".date-pair-entry");
+		const mobileDatePairEntry = lastBlockFor(surfacesCss, ".date-pair-entry");
+		const overviewDatePairEntry = blockFor(tableCss, '.bodyCell[data-column-key="datePair"] :global(.date-pair-entry)');
 
 		expect(desktopDatePairEntry).toMatch(/display\s*:\s*flex/);
 		expect(desktopDatePairEntry).toMatch(/flex-direction\s*:\s*column/);
 		expect(mobileDatePairEntry).toMatch(/display\s*:\s*grid/);
 		expect(mobileDatePairEntry).toMatch(/grid-template-columns\s*:\s*minmax\(11rem, 48%\) minmax\(0, 1fr\)/);
 		expect(mobileDatePairEntry).toMatch(/align-items\s*:\s*baseline/);
+		expect(overviewDatePairEntry).toMatch(/grid-template-columns\s*:\s*minmax\(11rem, 48%\) minmax\(0, 1fr\)/);
 	});
 
 	it("keeps reminder label/value spacing close to a single typed space", () => {

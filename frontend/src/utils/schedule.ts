@@ -5,6 +5,7 @@
 import { parseLocalDateTime } from "@medassist/shared";
 import type { Coverage, Intake, Medication, PackageType, ScheduleEvent, StockStatus, StockThresholds } from "../types";
 import { getMedDisplayName, getMedTotal, isLiquidContainerPackageType, isTubePackageType } from "../types";
+import { formatDisplayDate, formatDisplayDateTime } from "./formatters";
 import { getIntakeDailyRate, getMedicationIntakes, iterateIntakeOccurrences } from "./intake-schedule";
 import { convertLiquidUsageToMl } from "./intake-units";
 
@@ -58,7 +59,7 @@ export function buildSchedulePreview(
 					when: whenMs,
 					isPast,
 					timeStr: d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
-					dateStr: d.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" }),
+					dateStr: formatDisplayDate(d, locale, { weekday: true }),
 					intakeRemindersEnabled: intake.intakeRemindersEnabled,
 				});
 			});
@@ -235,10 +236,7 @@ export function calculateCoverage(
 		const rawDaysLeft = dailyRate > 0 ? medsLeft / dailyRate : null;
 		const daysLeft = rawDaysLeft !== null ? Math.max(0, Math.floor(rawDaysLeft)) : null;
 		const depletionMs = daysLeft !== null ? now + daysLeft * MS_PER_DAY : null;
-		const depletionDate =
-			depletionMs !== null
-				? new Date(depletionMs).toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" })
-				: null;
+		const depletionDate = depletionMs !== null ? formatDisplayDate(depletionMs, locale, { weekday: true }) : null;
 		const displayName = getMedDisplayName(m);
 		const nextEvent = events.find((e) => e.medName === displayName);
 
@@ -248,15 +246,7 @@ export function calculateCoverage(
 			daysLeft,
 			depletionDate,
 			depletionTime: depletionMs,
-			nextDose: nextEvent
-				? new Date(nextEvent.when).toLocaleString(locale, {
-						weekday: "short",
-						day: "2-digit",
-						month: "short",
-						hour: "2-digit",
-						minute: "2-digit",
-					})
-				: null,
+			nextDose: nextEvent ? formatDisplayDateTime(nextEvent.when, locale, { weekday: true }) : null,
 		};
 	});
 
@@ -337,10 +327,7 @@ export function getNextReminderForMed(med: Coverage, reminderDaysBefore: number,
 		return "Due now";
 	}
 
-	return new Date(reminderTime).toLocaleDateString(locale, {
-		day: "2-digit",
-		month: "short",
-	});
+	return formatDisplayDate(reminderTime, locale, { weekday: true });
 }
 
 /**
@@ -366,8 +353,7 @@ export function getReminderStatusText(
 	);
 
 	const formatLastSent = (iso: string) => {
-		const date = new Date(iso);
-		return date.toLocaleDateString(locale, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+		return formatDisplayDateTime(iso, locale);
 	};
 
 	const getTypeLabel = () =>

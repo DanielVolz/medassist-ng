@@ -22,7 +22,7 @@ import {
 	Pencil,
 	Plus,
 } from "lucide-react";
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import { Fragment, type MouseEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
@@ -42,7 +42,15 @@ import { AppButton } from "../ui/primitives/AppButton";
 import { AppTextAction } from "../ui/primitives/AppTextAction";
 import { AppTooltip, AppTooltipTrigger } from "../ui/primitives/AppTooltip";
 import { StatusBadge, type StatusTone } from "../ui/primitives/StatusBadge";
-import { formatNumber, generateICS, getExpiryClass, getSystemLocale } from "../utils";
+import {
+	formatDisplayDate,
+	formatDisplayDateTime,
+	formatExpiryDate,
+	formatNumber,
+	generateICS,
+	getExpiryClass,
+	getSystemLocale,
+} from "../utils";
 import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
 import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { getStockStatus } from "../utils/schedule";
@@ -264,6 +272,7 @@ export function MedDetailModal({
 	]);
 
 	if (!selectedMed) return null;
+	const displayLocale = getSystemLocale(i18n.language);
 	const isAmountPackage =
 		isTubePackageType(selectedMed.packageType) || isLiquidContainerPackageType(selectedMed.packageType);
 	const getDiscreteUnitLabel = (value: number) => {
@@ -278,6 +287,12 @@ export function MedDetailModal({
 	const stockUnitLabel = isAmountPackage ? amountUnitLabel : null;
 
 	const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(selectedMed));
+	const runsOutLabel = medCoverage
+		? formatDisplayDate(medCoverage.depletionTime ?? medCoverage.depletionDate, displayLocale, {
+				weekday: true,
+				fallback: medCoverage.depletionDate ?? "—",
+			})
+		: "—";
 	const packageSize = getPackageSize(selectedMed);
 	const stockDisplayCapacity = getStockDisplayCapacity(selectedMed);
 	// Structural max = sealed package capacity only (excludes pre-existing looseTablets).
@@ -856,7 +871,7 @@ export function MedDetailModal({
 						<h3>{t("modal.stockInfo")}</h3>
 						<div className={classes["med-detail-grid"]}>
 							{!isAmountBasedPackageType(selectedMed.packageType) && (
-								<>
+								<Fragment key="discrete-stock-details">
 									<div className={classes["med-detail-item"]}>
 										<span className={classes["med-detail-label"]}>{t("table.fullBlisters")}</span>
 										<span className={cx(classes["med-detail-value"], textClass)}>
@@ -874,7 +889,7 @@ export function MedDetailModal({
 											)}
 										</span>
 									</div>
-								</>
+								</Fragment>
 							)}
 							<div className={cx(classes["med-detail-item"], classes["full-width"])}>
 								<span className={classes["med-detail-label"]}>
@@ -937,7 +952,7 @@ export function MedDetailModal({
 						</h3>
 						<div className={classes["med-detail-grid"]}>
 							{!isAmountBasedPackageType(selectedMed.packageType) ? (
-								<>
+								<Fragment key="blister-package-details">
 									<div className={classes["med-detail-item"]}>
 										<span className={classes["med-detail-label"]}>{t("modal.packs")}</span>
 										<span className={classes["med-detail-value"]}>{selectedMed.packCount}</span>
@@ -950,9 +965,9 @@ export function MedDetailModal({
 										<span className={classes["med-detail-label"]}>{t("modal.pillsPerBlister")}</span>
 										<span className={classes["med-detail-value"]}>{selectedMed.pillsPerBlister}</span>
 									</div>
-								</>
+								</Fragment>
 							) : isLiquidContainerPackageType(selectedMed.packageType) ? (
-								<>
+								<Fragment key="liquid-package-details">
 									<div className={classes["med-detail-item"]}>
 										<span className={classes["med-detail-label"]}>{t("form.bottles")}</span>
 										<span className={classes["med-detail-value"]}>{packageCount}</span>
@@ -969,9 +984,9 @@ export function MedDetailModal({
 											{formatNumber(stockDisplayTotal)} {amountUnitLabel}
 										</span>
 									</div>
-								</>
+								</Fragment>
 							) : isTubePackageType(selectedMed.packageType) ? (
-								<>
+								<Fragment key="tube-package-details">
 									<div className={classes["med-detail-item"]}>
 										<span className={classes["med-detail-label"]}>{t("form.tubes")}</span>
 										<span className={classes["med-detail-value"]}>{packageCount}</span>
@@ -988,7 +1003,7 @@ export function MedDetailModal({
 											{formatNumber(stockDisplayTotal)} {amountUnitLabel}
 										</span>
 									</div>
-								</>
+								</Fragment>
 							) : (
 								<div className={classes["med-detail-item"]}>
 									<span className={classes["med-detail-label"]}>{t("form.totalCapacity")}</span>
@@ -1012,11 +1027,7 @@ export function MedDetailModal({
 											getValueToneClass(getExpiryClass(selectedMed.expiryDate, settings.expiryWarningDays))
 										)}
 									>
-										{new Date(selectedMed.expiryDate).toLocaleDateString(getSystemLocale(i18n.language), {
-											day: "2-digit",
-											month: "short",
-											year: "numeric",
-										})}
+										{formatExpiryDate(selectedMed.expiryDate, displayLocale)}
 									</span>
 								</div>
 							)}
@@ -1104,14 +1115,7 @@ export function MedDetailModal({
 									<span className={classes["med-detail-label"]}>{t("prescription.expiryDate")}</span>
 									<span className={classes["med-detail-value"]}>
 										{selectedMed.prescriptionExpiryDate
-											? new Date(selectedMed.prescriptionExpiryDate).toLocaleDateString(
-													getSystemLocale(i18n.language),
-													{
-														day: "2-digit",
-														month: "short",
-														year: "numeric",
-													}
-												)
+											? formatExpiryDate(selectedMed.prescriptionExpiryDate, displayLocale)
 											: "—"}
 									</span>
 								</div>
@@ -1137,7 +1141,7 @@ export function MedDetailModal({
 								</div>
 								<div className={classes["med-detail-item"]}>
 									<span className={classes["med-detail-label"]}>{t("modal.runsOut")}</span>
-									<span className={classes["med-detail-value"]}>{medCoverage.depletionDate ?? "—"}</span>
+									<span className={classes["med-detail-value"]}>{runsOutLabel}</span>
 								</div>
 							</div>
 						</div>
@@ -1174,16 +1178,7 @@ export function MedDetailModal({
 									{refillHistory.map((entry) => (
 										<div key={entry.id} className={classes["refill-history-item"]}>
 											<span className={classes["refill-date"]}>
-												{new Date(entry.refillDate).toLocaleDateString(getSystemLocale(i18n.language), {
-													day: "2-digit",
-													month: "short",
-													year: "numeric",
-												})}
-												,{" "}
-												{new Date(entry.refillDate).toLocaleTimeString(getSystemLocale(i18n.language), {
-													hour: "2-digit",
-													minute: "2-digit",
-												})}
+												{formatDisplayDateTime(entry.refillDate, displayLocale)}
 											</span>
 											<span className={classes["refill-amount"]}>
 												{(() => {

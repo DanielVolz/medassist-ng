@@ -5,6 +5,9 @@ import {
 	compareSemver,
 	deriveTotal,
 	formatDateTime,
+	formatDisplayDate,
+	formatDisplayDateTime,
+	formatExpiryDate,
 	formatNumber,
 	getBlisterStock,
 	getExpiryClass,
@@ -62,6 +65,60 @@ describe("formatDateTime", () => {
 		const result = formatDateTime("2024-03-15T10:30:00Z", "en-US");
 		expect(result).toMatch(/\d{2}\/\d{2}\/\d{4}/); // Contains date in some format
 		expect(result).toMatch(/\d{1,2}:\d{2}/); // Contains time
+	});
+});
+
+describe("formatDisplayDate", () => {
+	const currentYear = new Date(2026, 6, 1, 12, 0, 0);
+
+	it("formats same-year deadline dates with weekday and no year", () => {
+		expect(formatDisplayDate("2026-07-14", "en-DE", { weekday: true, now: currentYear })).toBe("Tue, 14 Jul");
+	});
+
+	it("adds the year for deadline dates outside the current year", () => {
+		expect(formatDisplayDate("2027-05-01", "en-DE", { weekday: true, now: currentYear })).toBe("Sat, 01 May 2027");
+	});
+
+	it("formats metadata dates without weekday using the same conditional-year rule", () => {
+		expect(formatDisplayDate("2026-07-14", "en-DE", { now: currentYear })).toBe("14 Jul");
+		expect(formatDisplayDate("2027-05-01", "en-DE", { now: currentYear })).toBe("01 May 2027");
+	});
+
+	it("uses the configured fallback for missing and invalid values", () => {
+		expect(formatDisplayDate(null, "en-DE", { fallback: "—", now: currentYear })).toBe("—");
+		expect(formatDisplayDate("not-a-date", "en-DE", { fallback: "—", now: currentYear })).toBe("—");
+	});
+
+	it("keeps date-only strings on their calendar day", () => {
+		expect(formatDisplayDate("2027-01-01", "en-DE", { weekday: true, now: new Date(2027, 0, 1) })).toBe("Fri, 01 Jan");
+	});
+});
+
+describe("formatDisplayDateTime", () => {
+	const currentYear = new Date(2026, 6, 1, 12, 0, 0);
+
+	it("formats visible date-time metadata without weekday by default", () => {
+		expect(formatDisplayDateTime("2026-07-14T20:30:00", "en-DE", { now: currentYear })).toBe("14 Jul, 20:30");
+	});
+
+	it("adds the year to date-time metadata outside the current year", () => {
+		expect(formatDisplayDateTime("2027-05-01T20:30:00", "en-DE", { now: currentYear })).toBe("01 May 2027, 20:30");
+	});
+});
+
+describe("formatExpiryDate", () => {
+	it("formats medication expiry dates as month and 2-digit year only", () => {
+		expect(formatExpiryDate("2028-09-03", "en-DE")).toBe("Sept 28");
+		expect(formatExpiryDate("2027-05-01", "en-DE")).toBe("May 27");
+	});
+
+	it("keeps date-only expiry strings on their calendar month", () => {
+		expect(formatExpiryDate("2027-01-01", "en-DE")).toBe("Jan 27");
+	});
+
+	it("uses the configured fallback for missing and invalid values", () => {
+		expect(formatExpiryDate(null, "en-DE", { fallback: "—" })).toBe("—");
+		expect(formatExpiryDate("not-a-date", "en-DE", { fallback: "—" })).toBe("—");
 	});
 });
 

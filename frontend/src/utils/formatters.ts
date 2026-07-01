@@ -190,6 +190,121 @@ export function formatDate(dateStr: string | null | undefined, locale?: string):
 	return d.toLocaleDateString(effectiveLocale, { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
+type DisplayDateValue = Date | number | string | null | undefined;
+type DisplayDateYearPolicy = "auto" | "always" | "never";
+
+interface DisplayDateOptions {
+	weekday?: boolean;
+	year?: DisplayDateYearPolicy;
+	fallback?: string;
+	now?: Date | number | string;
+}
+
+function parseDisplayDateValue(value: DisplayDateValue): Date | null {
+	if (value === null || value === undefined || value === "") return null;
+
+	if (value instanceof Date) {
+		return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
+	}
+
+	if (typeof value === "number") {
+		const date = new Date(value);
+		return Number.isNaN(date.getTime()) ? null : date;
+	}
+
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+
+	const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	if (dateOnlyMatch) {
+		const [, year, month, day] = dateOnlyMatch;
+		const date = new Date(Number(year), Number(month) - 1, Number(day));
+		return Number.isNaN(date.getTime()) ? null : date;
+	}
+
+	const localDateTimeMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?$/);
+	if (localDateTimeMatch) {
+		const [, year, month, day, hour, minute, second = "0"] = localDateTimeMatch;
+		const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+		return Number.isNaN(date.getTime()) ? null : date;
+	}
+
+	const parsed = new Date(trimmed);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function shouldIncludeDisplayYear(date: Date, policy: DisplayDateYearPolicy, now: Date): boolean {
+	if (policy === "always") return true;
+	if (policy === "never") return false;
+	return date.getFullYear() !== now.getFullYear();
+}
+
+function getDisplayDateOptions(date: Date, options: DisplayDateOptions): Intl.DateTimeFormatOptions {
+	const yearPolicy = options.year ?? "auto";
+	const now = parseDisplayDateValue(options.now) ?? new Date();
+	const dateOptions: Intl.DateTimeFormatOptions = {
+		day: "2-digit",
+		month: "short",
+	};
+
+	if (options.weekday === true) {
+		dateOptions.weekday = "short";
+	}
+
+	if (shouldIncludeDisplayYear(date, yearPolicy, now)) {
+		dateOptions.year = "numeric";
+	}
+
+	return dateOptions;
+}
+
+/**
+ * Format visible app dates with contextual year display.
+ * Date-only strings are treated as local calendar dates to prevent timezone day shifts.
+ */
+export function formatDisplayDate(value: DisplayDateValue, locale?: string, options: DisplayDateOptions = {}): string {
+	const date = parseDisplayDateValue(value);
+	if (!date) return options.fallback ?? "-";
+	const effectiveLocale = locale ?? getSystemLocale();
+	return date.toLocaleDateString(effectiveLocale, getDisplayDateOptions(date, options));
+}
+
+/**
+ * Format medication expiry dates as month + 2-digit year.
+ * Medication package expiries are month-accurate, not day-accurate.
+ */
+export function formatExpiryDate(
+	value: DisplayDateValue,
+	locale?: string,
+	options: Pick<DisplayDateOptions, "fallback"> = {}
+): string {
+	const date = parseDisplayDateValue(value);
+	if (!date) return options.fallback ?? "-";
+	const effectiveLocale = locale ?? getSystemLocale();
+	return date.toLocaleDateString(effectiveLocale, {
+		month: "short",
+		year: "2-digit",
+	});
+}
+
+/**
+ * Format visible app date+time metadata with contextual year display.
+ */
+export function formatDisplayDateTime(
+	value: DisplayDateValue,
+	locale?: string,
+	options: DisplayDateOptions = {}
+): string {
+	const date = parseDisplayDateValue(value);
+	if (!date) return options.fallback ?? "-";
+	const effectiveLocale = locale ?? getSystemLocale();
+	return date.toLocaleString(effectiveLocale, {
+		...getDisplayDateOptions(date, options),
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+}
+
 /**
  * Pad a number to 2 digits with leading zero
  */

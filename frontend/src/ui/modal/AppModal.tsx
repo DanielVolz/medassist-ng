@@ -34,7 +34,7 @@ function splitModalChildren(children: ReactNode): { content: ReactNode[]; footer
 	const content: ReactNode[] = [];
 	const footers: ReactNode[] = [];
 
-	Children.forEach(children, (child) => {
+	Children.toArray(children).forEach((child) => {
 		if (isAppModalFooterElement(child)) {
 			footers.push(child);
 			return;
@@ -44,7 +44,7 @@ function splitModalChildren(children: ReactNode): { content: ReactNode[]; footer
 			const nested = splitModalChildren((child.props as { children?: ReactNode }).children);
 			footers.push(...nested.footers);
 			if (nested.content.length > 0) {
-				content.push(cloneElement(child as ElementWithChildren, undefined, nested.content));
+				content.push(cloneElement(child as ElementWithChildren, undefined, Children.toArray(nested.content)));
 			}
 			return;
 		}
@@ -81,6 +81,8 @@ export function AppModal({
 	const resolvedLockScroll = manageScrollLock ? false : (lockScroll ?? true);
 	const providedClassNames = typeof classNames === "function" ? undefined : classNames;
 	const { content, footers } = splitModalChildren(children);
+	const modalContent = Children.toArray(content);
+	const modalFooters = Children.toArray(footers);
 	const hasFooterSlot = footers.length > 0;
 
 	return (
@@ -110,9 +112,9 @@ export function AppModal({
 			{hasFooterSlot ? (
 				<>
 					<div className={classes.scrollArea} data-testid="app-modal-scroll-area">
-						{content}
+						{modalContent}
 					</div>
-					{footers}
+					{modalFooters}
 				</>
 			) : (
 				children

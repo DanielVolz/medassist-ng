@@ -12,6 +12,7 @@ import type { ActiveShareLink } from "../hooks/useShare";
 import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
 import { AppButton } from "../ui/primitives/AppButton";
 import { AppTooltip } from "../ui/primitives/AppTooltip";
+import { formatDisplayDate, getSystemLocale } from "../utils/formatters";
 import { ConfirmModal } from "./ConfirmModal";
 import classes from "./ShareDialog.module.css";
 
@@ -72,10 +73,11 @@ export function ShareDialog({
 	onRegenerateShareLink,
 	onCopyShareLink,
 }: ShareDialogProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const [manageLinksOpen, setManageLinksOpen] = useState(false);
 	const [shareToRevoke, setShareToRevoke] = useState<ActiveShareLink | null>(null);
 	const [shareToRegenerate, setShareToRegenerate] = useState<ActiveShareLink | null>(null);
+	const displayLocale = getSystemLocale(i18n.language);
 	const closeLabel = t("common.close");
 	const copyLabel = shareCopied ? t("share.copied") : t("share.copyLink");
 	const getPersonLabel = (person: string) => (person === "all" ? t("share.allPeople") : person);
@@ -117,9 +119,9 @@ export function ShareDialog({
 			<ul className={classes.activeList}>
 				{activeShareLinks.map((share) => {
 					const personLabel = getPersonLabel(share.takenBy);
-					const createdAtLabel = new Date(share.createdAt).toLocaleDateString();
-					const expiresAtLabel = share.expiresAt ? new Date(share.expiresAt).toLocaleDateString() : null;
-					const lastUsedAtLabel = share.lastUsedAt ? new Date(share.lastUsedAt).toLocaleDateString() : null;
+					const createdAtLabel = formatDisplayDate(share.createdAt, displayLocale);
+					const expiresAtLabel = share.expiresAt ? formatDisplayDate(share.expiresAt, displayLocale) : null;
+					const lastUsedAtLabel = share.lastUsedAt ? formatDisplayDate(share.lastUsedAt, displayLocale) : null;
 					let expiryLabel = t("share.expiryNever");
 					if (share.legacyNeverExpires) {
 						expiryLabel = t("share.activeLinkLegacyExpiry");

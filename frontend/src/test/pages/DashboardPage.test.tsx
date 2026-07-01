@@ -600,30 +600,55 @@ describe("DashboardPage", () => {
 	});
 
 	it("renders runs-out and expiry as a stacked date pair in overview rows", () => {
-		mockContextValue = createMockAppContext({
-			meds: mockMeds,
-			coverage: mockCoverage,
-		});
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2026, 6, 1, 12, 0, 0));
 
-		render(
-			<MemoryRouter>
-				<DashboardPage />
-			</MemoryRouter>
-		);
+		try {
+			mockContextValue = createMockAppContext({
+				meds: [{ ...mockMeds[0], expiryDate: "2027-05-01" }, mockMeds[1]],
+				coverage: {
+					...mockCoverage,
+					all: [
+						{
+							...mockCoverage.all[0],
+							depletionDate: "2026-07-14",
+							depletionTime: new Date(2026, 6, 14, 12, 0, 0).getTime(),
+						},
+						mockCoverage.all[1],
+					],
+				},
+			});
 
-		const headerPair = document.querySelector(".date-pair-stack-header");
-		expect(headerPair).toBeInTheDocument();
-		expect(headerPair).toHaveTextContent("table.runsOut");
-		expect(headerPair).toHaveTextContent("table.expiry");
+			render(
+				<MemoryRouter>
+					<DashboardPage />
+				</MemoryRouter>
+			);
 
-		const rowPair = screen.getAllByTestId("dashboard-overview-row")[0].querySelector(".date-pair-stack");
-		expect(rowPair).toBeInTheDocument();
+			const headerPair = document.querySelector(".date-pair-stack-header");
+			expect(headerPair).toBeInTheDocument();
+			expect(headerPair).toHaveTextContent("table.runsOut");
+			expect(headerPair).toHaveTextContent("table.expiry");
 
-		const rowEntries = Array.from(rowPair?.querySelectorAll(".date-pair-entry") ?? []);
-		expect(rowEntries).toHaveLength(2);
-		expect(rowEntries[0]).toHaveTextContent("table.runsOut");
-		expect(rowEntries[0]).toHaveTextContent("2025-02-15");
-		expect(rowEntries[1]).toHaveTextContent("table.expiry");
+			const rowPair = screen.getAllByTestId("dashboard-overview-row")[0].querySelector(".date-pair-stack");
+			expect(rowPair).toBeInTheDocument();
+
+			const rowEntries = Array.from(rowPair?.querySelectorAll(".date-pair-entry") ?? []);
+			expect(rowEntries).toHaveLength(2);
+			expect(rowEntries[0]).toHaveTextContent("table.runsOut");
+			expect(rowEntries[0]).toHaveTextContent(/Tue/i);
+			expect(rowEntries[0]).toHaveTextContent(/14/);
+			expect(rowEntries[0]).toHaveTextContent(/Jul/i);
+			expect(rowEntries[0]).not.toHaveTextContent(/2026/);
+			expect(rowEntries[1]).toHaveTextContent("table.expiry");
+			expect(rowEntries[1]).toHaveTextContent(/May/i);
+			expect(rowEntries[1]).toHaveTextContent(/27/);
+			expect(rowEntries[1]).not.toHaveTextContent(/Sat/i);
+			expect(rowEntries[1]).not.toHaveTextContent(/01/);
+			expect(rowEntries[1]).not.toHaveTextContent(/2027/);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("renders multiple cards", () => {

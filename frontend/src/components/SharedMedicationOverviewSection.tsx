@@ -5,7 +5,7 @@ import {
 	isTubePackageType,
 	type SharedMedicationOverviewItem,
 } from "../types";
-import { formatDate } from "../utils/formatters";
+import { formatDisplayDate, getSystemLocale } from "../utils/formatters";
 import { MedicationAvatar } from "./MedicationAvatar";
 import sharedClasses from "./SharedSchedule.module.css";
 
@@ -77,7 +77,8 @@ export function SharedMedicationOverviewSection({
 	onMedicationImageClick,
 	imageSrcResolver,
 }: SharedMedicationOverviewSectionProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
+	const displayLocale = getSystemLocale(i18n.language);
 	const cx = (...classNames: Array<string | false | null | undefined>) => classNames.filter(Boolean).join(" ");
 	const renderMedicationAvatar = (name: string, imageUrl: string | null) => {
 		const isClickable = Boolean(imageUrl && onMedicationImageClick);
@@ -160,7 +161,7 @@ export function SharedMedicationOverviewSection({
 											<td>{medication.daysLeft === null ? "-" : medication.daysLeft}</td>
 											<td>
 												<span className={sharedClasses["shared-overview-date-value"]}>
-													{formatDate(medication.depletionDate)}
+													{formatDisplayDate(medication.depletionDate, displayLocale, { weekday: true })}
 												</span>
 											</td>
 											<td>
@@ -224,7 +225,7 @@ export function SharedMedicationOverviewSection({
 										<span>{t("sharedOverview.columns.depletion")}</span>
 										<strong>
 											<span className={sharedClasses["shared-overview-date-value"]}>
-												{formatDate(medication.depletionDate)}
+												{formatDisplayDate(medication.depletionDate, displayLocale, { weekday: true })}
 											</span>
 										</strong>
 									</div>

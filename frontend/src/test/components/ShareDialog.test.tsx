@@ -176,6 +176,9 @@ describe("ShareDialog", () => {
 	});
 
 	it("shows active share expiry status for expiring and legacy permanent links", () => {
+		const currentYear = new Date().getFullYear();
+		const nextYear = currentYear + 1;
+
 		render(
 			<ShareDialog
 				{...defaultProps}
@@ -184,8 +187,8 @@ describe("ShareDialog", () => {
 						token: "abcdef0123456789",
 						takenBy: "Alice",
 						scheduleDays: 30,
-						createdAt: "2026-05-17T12:00:00.000Z",
-						expiresAt: "2026-08-15T12:00:00.000Z",
+						createdAt: `${currentYear}-07-14T12:00:00.000Z`,
+						expiresAt: `${nextYear}-05-01T12:00:00.000Z`,
 						lastUsedAt: null,
 						allowJournalNotes: false,
 						allowMarkTaken: false,
@@ -214,6 +217,17 @@ describe("ShareDialog", () => {
 		expect(screen.getAllByText(/share\.activeLinkExpiresLabel/i).length).toBeGreaterThan(0);
 		expect(screen.getAllByText(/share\.activeLinkDays_30/i).length).toBeGreaterThan(0);
 		expect(screen.getByText(/share\.activeLinkLegacyExpiry/i)).toBeInTheDocument();
+
+		const createdLabels = screen.getAllByText(/share\.activeLinkCreatedLabel/i);
+		const createdValue = createdLabels[0].parentElement?.querySelector("dd")?.textContent ?? "";
+		expect(createdValue).toMatch(/14/);
+		expect(createdValue).toMatch(/Jul/i);
+		expect(createdValue).not.toContain(String(currentYear));
+
+		const expiryLabels = screen.getAllByText(/share\.activeLinkExpiresLabel/i);
+		const expiringValue = expiryLabels[0].parentElement?.querySelector("dd")?.textContent ?? "";
+		expect(expiringValue).toMatch(/May/i);
+		expect(expiringValue).toContain(String(nextYear));
 	});
 
 	it("uses an in-app confirm modal before revoking an active share link", async () => {

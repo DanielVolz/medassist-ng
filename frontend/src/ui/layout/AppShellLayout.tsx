@@ -19,7 +19,7 @@ export function AppShellLayout({
 	onOpenProfile,
 	onOpenAbout,
 }: AppShellLayoutProps) {
-	const pinned = useHeadroom({ fixedAt: 60 });
+	const { pinned } = useHeadroom({ fixedAt: 60 });
 	const keepHeaderVisible = currentPath.startsWith("/medications") && currentPath.includes("editMedId=");
 
 	return (

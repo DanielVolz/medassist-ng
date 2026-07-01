@@ -7,6 +7,7 @@ import {
 	Menu,
 	Popover,
 	Tooltip,
+	v8CssVariablesResolver,
 } from "@mantine/core";
 
 /**
@@ -283,7 +284,8 @@ const legacyVarMap: Record<string, string> = {
 	buttonObsoleteShadow: "--button-obsolete-shadow",
 };
 
-export const cssVariablesResolver: CSSVariablesResolver = () => {
+export const cssVariablesResolver: CSSVariablesResolver = (theme) => {
+	const v8VariantVars = v8CssVariablesResolver(theme);
 	// Map Mantine core component variables onto the clinical palette so built-in
 	// components (Menu, Modal, Paper, inputs) match the app surfaces automatically.
 	const darkVars: Record<string, string> = {
@@ -319,7 +321,11 @@ export const cssVariablesResolver: CSSVariablesResolver = () => {
 			lightVars[legacyName] = lightTokens[key];
 		}
 	}
-	return { variables: {}, dark: darkVars, light: lightVars };
+	return {
+		variables: { ...v8VariantVars.variables },
+		dark: { ...v8VariantVars.dark, ...darkVars },
+		light: { ...v8VariantVars.light, ...lightVars },
+	};
 };
 
 export const mantineTheme = createTheme({

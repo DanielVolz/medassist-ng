@@ -47,7 +47,7 @@ export function AppUiProvider({ children }: { children: ReactNode }) {
 		>
 			<ModalsProvider>
 				{children}
-				<Notifications autoClose={4000} position="top-right" />
+				<Notifications autoClose={4000} pauseResetOnHover="notification" position="top-right" />
 			</ModalsProvider>
 		</MantineProvider>
 	);

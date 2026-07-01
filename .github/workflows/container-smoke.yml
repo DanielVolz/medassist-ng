@@ -56,7 +56,7 @@ jobs:
       - name: Verify required checks for this commit
         id: required_check_gate
         if: github.event_name == 'workflow_run' && steps.trigger_conclusion.outputs.should_run == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const owner = context.repo.owner;

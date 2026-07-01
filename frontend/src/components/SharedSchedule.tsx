@@ -613,6 +613,8 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
+					"shared-dose-action-button",
+					"shared-dose-action-take",
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
 					doseButtonClasses.undo,
@@ -636,6 +638,8 @@ export function SharedSchedule() {
 				size="sm"
 				className={cx(
 					"take-action-button",
+					"shared-dose-action-button",
+					"shared-dose-action-take",
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
 					doseButtonClasses.take,
@@ -656,11 +660,19 @@ export function SharedSchedule() {
 		const takeButton =
 			!options.isTaken && options.isEmpty ? (
 				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
-					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
+					<span
+						className={cx("shared-dose-action-take", doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}
+					>
+						{takeButtonControl}
+					</span>
 				</AppTooltip>
 			) : !canMarkTaken ? (
 				<AppTooltip label={t("share.readOnly")}>
-					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
+					<span
+						className={cx("shared-dose-action-take", doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}
+					>
+						{takeButtonControl}
+					</span>
 				</AppTooltip>
 			) : (
 				takeButtonControl
@@ -671,6 +683,8 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
+					"shared-dose-action-button",
+					"shared-dose-action-skip",
 					doseButtonClasses.button,
 					doseButtonClasses.skipAction,
 					doseButtonClasses.undo,
@@ -685,7 +699,13 @@ export function SharedSchedule() {
 			<AppButton
 				type="button"
 				size="sm"
-				className={cx(doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
+				className={cx(
+					"shared-dose-action-button",
+					"shared-dose-action-skip",
+					doseButtonClasses.button,
+					doseButtonClasses.skipAction,
+					doseButtonClasses.skip
+				)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken || !canMarkTaken}
 			>
@@ -694,7 +714,9 @@ export function SharedSchedule() {
 		);
 		const skipButtonWithReadOnlyTooltip = !canMarkTaken ? (
 			<AppTooltip label={t("share.readOnly")}>
-				<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.skipAction)}>{skipButton}</span>
+				<span className={cx("shared-dose-action-skip", doseButtonClasses.tooltipTarget, doseButtonClasses.skipAction)}>
+					{skipButton}
+				</span>
 			</AppTooltip>
 		) : (
 			skipButton
@@ -705,6 +727,8 @@ export function SharedSchedule() {
 				type="button"
 				size="sm"
 				className={cx(
+					"shared-dose-action-button",
+					"shared-dose-action-journal",
 					doseButtonClasses.button,
 					doseButtonClasses.journalAction,
 					doseButtonClasses.journal,
@@ -724,7 +748,13 @@ export function SharedSchedule() {
 		const journalButton =
 			showSharedJournalAction && journalButtonControl && !canOpenSharedJournal ? (
 				<AppTooltip label={t("journal.actions.noteTakenOnly")}>
-					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.journalAction)}>
+					<span
+						className={cx(
+							"shared-dose-action-journal",
+							doseButtonClasses.tooltipTarget,
+							doseButtonClasses.journalAction
+						)}
+					>
 						{journalButtonControl}
 					</span>
 				</AppTooltip>
@@ -1149,6 +1179,61 @@ export function SharedSchedule() {
 		);
 	}
 
+	const getDoseRecipientNames = (
+		takenBy: string | null,
+		med: SharedScheduleData["medications"][number] | undefined
+	): string[] => {
+		const directRecipient = takenBy?.trim();
+		if (directRecipient) {
+			return [directRecipient];
+		}
+
+		return Array.from(
+			new Set((med?.takenBy ?? []).map((person) => person.trim()).filter((person) => person.length > 0))
+		);
+	};
+
+	const renderDoseRecipients = (people: string[]) => {
+		if (people.length === 0) {
+			return null;
+		}
+
+		return (
+			<div className={cx("dose-recipients", sharedClasses["shared-dose-recipients"])}>
+				{people.map((person) => (
+					<span key={person} className={cx("dose-recipient-name", sharedClasses["shared-dose-recipient-name"])}>
+						{person}
+					</span>
+				))}
+			</div>
+		);
+	};
+
+	const renderDosePersonName = (people: string[]) =>
+		people.length > 0 ? (
+			<span className={cx("person-name", sharedClasses["shared-action-recipient-name"])}>{people.join(", ")}</span>
+		) : null;
+
+	const renderDoseSummary = (
+		med: SharedScheduleData["medications"][number] | undefined,
+		dose: { timeStr: string; usage: number; intakeUnit?: IntakeUnit | null; takenBy: string | null },
+		people: string[]
+	) => (
+		<>
+			<span className="dose-time">{dose.timeStr}</span>
+			<div className="dose-summary">
+				<span className="dose-usage">
+					<span className="dose-usage-main dose-usage-main-full">{renderDoseUsage(med, dose)}</span>
+					<span className="dose-usage-main dose-usage-main-compact">{renderDoseUsage(med, dose)}</span>
+					{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
+						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+					)}
+				</span>
+				{renderDoseRecipients(people)}
+			</div>
+		</>
+	);
+
 	return (
 		<div className={sharedClasses["shared-schedule-page"]}>
 			<div className={cx(sharedClasses["shared-schedule-container"], "shared-schedule-container")}>
@@ -1358,24 +1443,25 @@ export function SharedSchedule() {
 																		const isAutomaticallyTaken =
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
 																		const isSkipped = dismissedDoses.has(dose.id);
+																		const namedPeople = getDoseRecipientNames(dose.takenBy, med);
 																		const doseClasses = ["dose-item", "past"];
 																		if (isTaken) doseClasses.push("all-taken");
 																		if (isEmpty) doseClasses.push("med-empty");
 																		else if (isLowStock) doseClasses.push("med-low");
+																		if (namedPeople.length > 0) doseClasses.push("has-recipients");
 																		return (
 																			<div key={dose.id} className={doseClasses.join(" ")}>
-																				<span className="dose-time">{dose.timeStr}</span>
-																				<span className="dose-usage">
-																					<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>
-																					{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				{renderDoseSummary(med, dose, namedPeople)}
+																				<div
+																					className={cx(
+																						"dose-checks",
+																						namedPeople.length > 0 && "has-recipient-summary"
 																					)}
-																				</span>
-																				<div className="dose-checks">
+																				>
 																					<div
 																						className={`dose-person ${isTaken ? "taken" : ""} ${isSkipped ? "skipped" : ""}`}
 																					>
-																						{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
+																						{renderDosePersonName(namedPeople)}
 																						{renderDoseActionButtons({
 																							doseId: dose.id,
 																							isTaken,
@@ -1566,25 +1652,26 @@ export function SharedSchedule() {
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
 																		const isSkipped = dismissedDoses.has(dose.id);
 																		const isOverdue = dose.when < Date.now() && !isTaken && !isSkipped && !isEmpty;
+																		const namedPeople = getDoseRecipientNames(dose.takenBy, med);
 																		const doseClasses = ["dose-item"];
 																		if (isOverdue) doseClasses.push("overdue");
 																		if (isTaken) doseClasses.push("all-taken");
 																		if (isEmpty) doseClasses.push("med-empty");
 																		else if (isLowStock) doseClasses.push("med-low");
+																		if (namedPeople.length > 0) doseClasses.push("has-recipients");
 																		return (
 																			<div key={dose.id} className={doseClasses.join(" ")}>
-																				<span className="dose-time">{dose.timeStr}</span>
-																				<span className="dose-usage">
-																					<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>
-																					{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				{renderDoseSummary(med, dose, namedPeople)}
+																				<div
+																					className={cx(
+																						"dose-checks",
+																						namedPeople.length > 0 && "has-recipient-summary"
 																					)}
-																				</span>
-																				<div className="dose-checks">
+																				>
 																					<div
 																						className={`dose-person ${isTaken ? "taken" : ""} ${isSkipped ? "skipped" : ""} ${isOverdue ? "overdue" : ""}`}
 																					>
-																						{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
+																						{renderDosePersonName(namedPeople)}
 																						{renderDoseActionButtons({
 																							doseId: dose.id,
 																							isTaken,
@@ -1757,24 +1844,25 @@ export function SharedSchedule() {
 																		const isAutomaticallyTaken =
 																			isTaken && isDoseTakenAutomatically(dose.id) && dose.when <= Date.now();
 																		const isSkipped = dismissedDoses.has(dose.id);
+																		const namedPeople = getDoseRecipientNames(dose.takenBy, med);
 																		const doseClasses = ["dose-item", "future"];
 																		if (isTaken) doseClasses.push("all-taken");
 																		if (isEmpty) doseClasses.push("med-empty");
 																		else if (isLowStock) doseClasses.push("med-low");
+																		if (namedPeople.length > 0) doseClasses.push("has-recipients");
 																		return (
 																			<div key={dose.id} className={doseClasses.join(" ")}>
-																				<span className="dose-time">{dose.timeStr}</span>
-																				<span className="dose-usage">
-																					<span className="dose-usage-main">{renderDoseUsage(med, dose)}</span>
-																					{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
-																						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
+																				{renderDoseSummary(med, dose, namedPeople)}
+																				<div
+																					className={cx(
+																						"dose-checks",
+																						namedPeople.length > 0 && "has-recipient-summary"
 																					)}
-																				</span>
-																				<div className="dose-checks">
+																				>
 																					<div
 																						className={`dose-person ${isTaken ? "taken" : ""} ${isSkipped ? "skipped" : ""}`}
 																					>
-																						{dose.takenBy && <span className="person-name">{dose.takenBy}</span>}
+																						{renderDosePersonName(namedPeople)}
 																						{renderDoseActionButtons({
 																							doseId: dose.id,
 																							isTaken,

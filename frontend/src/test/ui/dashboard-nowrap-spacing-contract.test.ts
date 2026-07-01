@@ -111,4 +111,36 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		expect(dosePersonRawButton).toMatch(/width\s*:\s*100%/);
 		expect(tooltipTarget).toMatch(/width\s*:\s*100%/);
 	});
+
+	it("keeps shared mobile recipient names in the dose summary row", () => {
+		const sharedCss = readSource("components/SharedSchedule.module.css");
+		const doseSummary = blockFor(sharedCss, ".shared-schedule-section :global(.dose-summary)");
+		const recipients = lastBlockFor(sharedCss, ".shared-dose-recipients");
+		const recipientName = lastBlockFor(sharedCss, ".shared-dose-recipient-name");
+		const actionRecipientName = blockFor(sharedCss, ".shared-action-recipient-name");
+		const hiddenActionRowName = blockFor(
+			sharedCss,
+			".shared-schedule-section :global(.dose-checks.has-recipient-summary:not(.multi-person) .person-name)"
+		);
+		const takeAction = blockFor(sharedCss, ".shared-schedule-section :global(.shared-dose-action-take)");
+		const skipAction = blockFor(sharedCss, ".shared-schedule-section :global(.shared-dose-action-skip)");
+		const journalAction = blockFor(sharedCss, ".shared-schedule-section :global(.shared-dose-action-journal)");
+
+		expect(sharedCss).not.toContain(".shared-timeline");
+		expect(sharedCss).not.toContain(".shared-dose {");
+		expect(sharedCss).not.toContain(".shared-schedule-section :global(.dose-recipients)");
+		expect(sharedCss).not.toMatch(
+			/\.shared-schedule-section\s+\.(timeline|day-block|time-row|time-main|doses-col|dose-item|dose-checks|dose-person)/
+		);
+		expect(doseSummary).toMatch(/grid-column\s*:\s*2/);
+		expect(doseSummary).toMatch(/display\s*:\s*flex/);
+		expect(recipients).toMatch(/display\s*:\s*flex/);
+		expect(recipients).toMatch(/justify-content\s*:\s*flex-end/);
+		expect(recipientName).toMatch(/text-overflow\s*:\s*ellipsis/);
+		expect(hiddenActionRowName).toMatch(/display\s*:\s*none/);
+		expect(actionRecipientName).toMatch(/display\s*:\s*none/);
+		expect(takeAction).toMatch(/grid-column\s*:\s*2/);
+		expect(skipAction).toMatch(/grid-column\s*:\s*3/);
+		expect(journalAction).toMatch(/grid-column\s*:\s*4/);
+	});
 });

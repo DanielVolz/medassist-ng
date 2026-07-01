@@ -202,10 +202,10 @@ export async function signOut(page: Page): Promise<void> {
 // Re-export expect for convenience
 export { expect };
 
-const APP_BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
+const APP_BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:4174";
 // Seed helpers talk to the backend directly so Vite proxy readiness does not consume
 // the 30s beforeAll budget for API-created test data.
-const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL || "http://localhost:3000";
+const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL || "http://localhost:4175";
 
 let cachedAuthEnabled: boolean | null = null;
 
@@ -258,6 +258,12 @@ function extractCookieValue(setCookieHeaders: string[], name: string): string | 
 		if (value) return value;
 	}
 	return null;
+}
+
+async function waitForRetryAfter(response: Response, attempt: number): Promise<void> {
+	const retryAfterSeconds = Number.parseInt(response.headers.get("retry-after") ?? "", 10);
+	const delayMs = Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : 3000 * (attempt + 1);
+	await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 async function refreshAuthCookieViaLogin(): Promise<string | null> {
@@ -408,8 +414,7 @@ export async function createMedicationViaAPI(data: {
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			// Rate limited — exponential backoff: 3s, 6s, 9s, 12s, 15s
-			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			await waitForRetryAfter(res, attempt);
 			continue;
 		}
 		if (!res.ok) {
@@ -438,7 +443,7 @@ export async function deleteMedicationViaAPI(id: number): Promise<void> {
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			await waitForRetryAfter(res, attempt);
 			continue;
 		}
 		return;
@@ -461,7 +466,7 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			await waitForRetryAfter(res, attempt);
 			continue;
 		}
 		if (!res.ok) return;
@@ -477,7 +482,7 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
 					if (token) continue;
 				}
 				if (delRes.status === 429) {
-					await new Promise((r) => setTimeout(r, 3000));
+					await waitForRetryAfter(delRes, delAttempt);
 					continue;
 				}
 				break;
@@ -518,7 +523,7 @@ export async function createShareTokenViaAPI(
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			await waitForRetryAfter(res, attempt);
 			continue;
 		}
 		if (res.status === 400) {
@@ -555,7 +560,7 @@ export async function updateSettingsViaAPI(settings: Record<string, unknown>): P
 			if (token) continue;
 		}
 		if (currentRes.status === 429) {
-			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			await waitForRetryAfter(currentRes, attempt);
 			continue;
 		}
 		const current = currentRes.ok ? ((await currentRes.json()) as Record<string, unknown>) : {};
@@ -602,7 +607,7 @@ export async function updateSettingsViaAPI(settings: Record<string, unknown>): P
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+			await waitForRetryAfter(res, attempt);
 			continue;
 		}
 		if (res.ok) return;

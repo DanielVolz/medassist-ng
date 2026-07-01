@@ -45,7 +45,7 @@ function normalizeText(value: string | null | undefined): string {
 async function calculatePlanner(page: Page): Promise<void> {
 	await page.waitForLoadState("networkidle");
 	await page.locator('form.planner button[type="submit"]').click();
-	await expect(page.locator(".table")).toBeVisible({ timeout: 15000 });
+	await expect(page.getByTestId("planner-results-table")).toBeVisible({ timeout: 15000 });
 }
 
 async function calculatePlannerWithRequest(page: Page): Promise<PlannerUsageRequest> {
@@ -56,7 +56,7 @@ async function calculatePlannerWithRequest(page: Page): Promise<PlannerUsageRequ
 	await page.locator('form.planner button[type="submit"]').click();
 	const response = await responsePromise;
 	expect(response.ok()).toBe(true);
-	await expect(page.locator(".table")).toBeVisible({ timeout: 15000 });
+	await expect(page.getByTestId("planner-results-table")).toBeVisible({ timeout: 15000 });
 
 	return JSON.parse(response.request().postData() ?? "{}") as PlannerUsageRequest;
 }
@@ -98,7 +98,7 @@ async function expectPlannerStartDisplay(page: Page, start: string, locale: stri
 }
 
 async function getPlannerUsage(page: Page, medicationName: string): Promise<string> {
-	const row = page.locator(".table-row", { hasText: medicationName });
+	const row = page.getByTestId("planner-result-row").filter({ hasText: medicationName });
 	await expect(row).toBeVisible({ timeout: 15000 });
 	const usage = await row.locator("[data-label] strong").first().textContent();
 	expect(usage).toBeTruthy();
@@ -106,7 +106,7 @@ async function getPlannerUsage(page: Page, medicationName: string): Promise<stri
 }
 
 async function getPlannerRowSnapshot(page: Page, medicationName: string): Promise<string[]> {
-	const row = page.locator(".table-row", { hasText: medicationName });
+	const row = page.getByTestId("planner-result-row").filter({ hasText: medicationName });
 	await expect(row).toBeVisible({ timeout: 15000 });
 	const cells = await row.locator("[data-label]").allTextContents();
 	expect(cells.length).toBeGreaterThanOrEqual(6);

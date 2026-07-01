@@ -1,5 +1,9 @@
 import { defineConfig, devices, type PlaywrightTestConfig } from "@playwright/test";
 
+const DEFAULT_E2E_BASE_URL = "http://localhost:4174";
+const DEFAULT_E2E_API_BASE_URL = "http://localhost:4175";
+const DEFAULT_E2E_DATA_DIR = "../frontend/test-results/e2e-data";
+
 function parseOptionalPort(value: string | undefined) {
 	if (!value) {
 		return undefined;
@@ -9,18 +13,32 @@ function parseOptionalPort(value: string | undefined) {
 	return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function shellQuote(value: string) {
+	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 	const env =
 		typeof globalThis === "object" && "process" in globalThis
 			? ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {})
 			: {};
-	const baseURL = env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
-	const apiBaseURL = env.PLAYWRIGHT_API_BASE_URL || "http://localhost:3000";
-	const frontendPort = parseOptionalPort(env.PLAYWRIGHT_FRONTEND_PORT) ?? parseOptionalPort(new URL(baseURL).port) ?? 5173;
+	const baseURL = env.PLAYWRIGHT_BASE_URL || DEFAULT_E2E_BASE_URL;
+	const apiBaseURL = env.PLAYWRIGHT_API_BASE_URL || DEFAULT_E2E_API_BASE_URL;
+	const frontendPort = parseOptionalPort(env.PLAYWRIGHT_FRONTEND_PORT) ?? parseOptionalPort(new URL(baseURL).port) ?? 4174;
+	const backendPort = parseOptionalPort(new URL(apiBaseURL).port) ?? 4175;
+	const dataDir = env.PLAYWRIGHT_DATA_DIR || DEFAULT_E2E_DATA_DIR;
 	const parsedWorkers = Number.parseInt(env.PLAYWRIGHT_WORKERS ?? "", 10);
 	// Default to single-worker execution to keep API-seeded E2E suites deterministic.
 	// Still allow explicit local overrides via PLAYWRIGHT_WORKERS.
 	const workers = Number.isFinite(parsedWorkers) && parsedWorkers > 0 ? parsedWorkers : 1;
+	const backendEnv = [
+		["PORT", String(backendPort)],
+		["DATA_DIR", dataDir],
+		["DOTENV_PATH", "/tmp/medassist-playwright-empty.env"],
+		["CORS_ORIGINS", baseURL],
+		["RATE_LIMIT_MAX", env.PLAYWRIGHT_RATE_LIMIT_MAX || "100000"],
+	];
+	const frontendEnv = [["BACKEND_URL", apiBaseURL]];
 
 	const projects: NonNullable<PlaywrightTestConfig["projects"]> = [
 		{
@@ -96,13 +114,15 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		outputDir: "test-results/",
 		webServer: [
 			{
-				command: "cd ../backend && npm run dev",
+				command: `cd ../backend && ${backendEnv
+					.map(([key, value]) => `${key}=${shellQuote(value)}`)
+					.join(" ")} npm run dev`,
 				url: `${apiBaseURL}/health`,
 				reuseExistingServer: !env.CI,
 				timeout: 120 * 1000,
 			},
 			{
-				command: `npm run dev -- --host 127.0.0.1 --port ${frontendPort} --strictPort`,
+				command: `${frontendEnv.map(([key, value]) => `${key}=${shellQuote(value)}`).join(" ")} npm run dev -- --host 127.0.0.1 --port ${frontendPort} --strictPort`,
 				url: baseURL,
 				reuseExistingServer: !env.CI,
 				timeout: 120 * 1000,

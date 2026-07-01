@@ -34,6 +34,16 @@ docker compose -p medassist-dev -f docker-compose.dev.yml -f docker-compose.medt
 - OpenAPI JSON: `http://localhost:3000/docs/json` when docs are enabled
 - Docs are open in no-auth local development; authenticated setups protect docs by default unless `DOCS_AUTH_REQUIRED=false` is set.
 
+## Playwright Runtime Isolation
+
+Local Playwright runs start their own backend and frontend servers instead of reusing the always-on development stack:
+
+- Frontend: `http://localhost:4174`
+- Backend: `http://localhost:4175`
+- Backend data: `frontend/test-results/e2e-data`
+
+This keeps `npm --prefix frontend run test:e2e` from colliding with the Docker dev stack on `3000`/`5173` or mutating the normal local SQLite data. Override these defaults with `PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_API_BASE_URL`, `PLAYWRIGHT_FRONTEND_PORT`, or `PLAYWRIGHT_DATA_DIR` when an E2E run must target a specific external server.
+
 ## Frontend Dev Server Behind a Proxy
 
 If the frontend dev server runs behind a reverse proxy or on a remote host, set these frontend-only environment variables before starting Vite:

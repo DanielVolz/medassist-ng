@@ -110,14 +110,17 @@ test.describe("Mobile modal browser back", () => {
 
 		const doseItem = page.locator(".dose-item").first();
 		await expect(doseItem).toBeVisible({ timeout: 15000 });
-		await doseItem.locator(".dose-btn.take").click();
+		await doseItem.getByRole("button", { name: /Take|Nehmen/i }).click();
 
 		const collapsedTodayDivider = page.locator(".day-block.today.collapsed .day-divider.clickable").first();
 		if (await collapsedTodayDivider.isVisible().catch(() => false)) {
 			await collapsedTodayDivider.click();
 		}
 
-		const noteButton = page.locator(".dose-item").first().locator(".dose-btn.journal");
+		const noteButton = page
+			.locator(".dose-item")
+			.first()
+			.getByRole("button", { name: /Note|Notiz/i });
 		await expect(noteButton).toBeEnabled({ timeout: 10000 });
 		await noteButton.click();
 

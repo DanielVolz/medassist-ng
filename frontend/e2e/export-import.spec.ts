@@ -55,11 +55,22 @@ async function downloadExportFromSettings(page: Page, options: { includeSensitiv
 
 async function exportDataViaAPI(page: Page): Promise<ExportPayload> {
 	return page.evaluate(async () => {
-		const response = await fetch("/api/export?includeSensitive=false&includeImages=false", { credentials: "include" });
-		if (!response.ok) {
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			const response = await fetch("/api/export?includeSensitive=false&includeImages=false", {
+				credentials: "include",
+			});
+			if (response.ok) {
+				return response.json();
+			}
+			if (response.status === 429 && attempt < 4) {
+				const retryAfterSeconds = Number.parseInt(response.headers.get("retry-after") ?? "", 10);
+				const delayMs = Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : 3000 * (attempt + 1);
+				await new Promise((resolve) => setTimeout(resolve, delayMs));
+				continue;
+			}
 			throw new Error(`Export failed: ${response.status} ${await response.text()}`);
 		}
-		return response.json();
+		throw new Error("Export failed after retries");
 	});
 }
 

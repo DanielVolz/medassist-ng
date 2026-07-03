@@ -13,9 +13,11 @@ import {
 	useCallback,
 	useEffect,
 	useId,
+	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
+import { createPortal } from "react-dom";
 import classes from "./AppTooltip.module.css";
 
 type AppTooltipEvents = {
@@ -52,8 +54,30 @@ interface AppTooltipTargetProps {
 	onMouseEnter?: (event: MouseEvent<HTMLElement>) => void;
 	onMouseLeave?: (event: MouseEvent<HTMLElement>) => void;
 	onPointerDown?: (event: PointerEvent<HTMLElement>) => void;
+	onPointerMove?: (event: PointerEvent<HTMLElement>) => void;
 	onTouchStart?: (event: TouchEvent<HTMLElement>) => void;
+	onTouchMove?: (event: TouchEvent<HTMLElement>) => void;
 	"aria-describedby"?: string;
+}
+
+type TooltipPlacement = "top" | "bottom";
+
+interface TooltipPosition {
+	arrowOffset: number;
+	left: number;
+	placement: TooltipPlacement;
+	top: number;
+	viewportMaxWidth: number;
+}
+
+const VIEWPORT_MARGIN = 8;
+const TOOLTIP_GAP = 8;
+const MIN_READABLE_WIDTH = 160;
+const MIN_ARROW_OFFSET = 10;
+const TOUCH_FOCUS_SUPPRESSION_MS = 3000;
+
+function clamp(value: number, min: number, max: number) {
+	return Math.min(Math.max(value, min), max);
 }
 
 export function AppTooltip({
@@ -66,15 +90,20 @@ export function AppTooltip({
 	disabled = false,
 }: AppTooltipProps) {
 	const tooltipId = useId();
+	const rootRef = useRef<HTMLSpanElement | null>(null);
+	const bubbleRef = useRef<HTMLSpanElement | null>(null);
 	const [hoverFocusedOpened, setHoverFocusedOpened] = useState(false);
 	const [touchOpened, setTouchOpened] = useState(false);
+	const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition | null>(null);
 	const openTimerRef = useRef<number | null>(null);
 	const closeTouchTimerRef = useRef<number | null>(null);
+	const lastTouchInteractionRef = useRef(0);
 	const controlled = typeof opened === "boolean";
 	const childProps = (children.props ?? {}) as AppTooltipTargetProps;
 	const touchEnabled = events.touch !== false && !controlled;
 	const isOpen = !disabled && (controlled ? opened : hoverFocusedOpened || touchOpened);
 	const maxWidth = typeof maw === "number" ? `${maw}px` : maw;
+	const canUseDom = typeof document !== "undefined";
 
 	const clearTouchTimer = useCallback(() => {
 		if (closeTouchTimerRef.current) {
@@ -123,6 +152,19 @@ export function AppTooltip({
 		setTouchOpened(false);
 	}, [clearTouchTimer]);
 
+	const closeFromViewportMovement = useCallback(() => {
+		closeFromHoverOrFocus();
+		closeFromTouch();
+	}, [closeFromHoverOrFocus, closeFromTouch]);
+
+	const noteTouchInteraction = useCallback(() => {
+		lastTouchInteractionRef.current = Date.now();
+	}, []);
+
+	const focusFollowsRecentTouch = useCallback(() => {
+		return Date.now() - lastTouchInteractionRef.current < TOUCH_FOCUS_SUPPRESSION_MS;
+	}, []);
+
 	useEffect(
 		() => () => {
 			clearOpenTimer();
@@ -130,6 +172,111 @@ export function AppTooltip({
 		},
 		[clearOpenTimer, clearTouchTimer]
 	);
+
+	useEffect(() => {
+		if (!isOpen || controlled || !canUseDom) return;
+
+		const closeTooltipOnPointerMove = (event: globalThis.PointerEvent) => {
+			if (event.pointerType === "touch") {
+				closeFromViewportMovement();
+			}
+		};
+
+		const visualViewport = window.visualViewport;
+
+		document.addEventListener("pointermove", closeTooltipOnPointerMove, { capture: true, passive: true });
+		document.addEventListener("scroll", closeFromViewportMovement, { capture: true, passive: true });
+		document.addEventListener("touchmove", closeFromViewportMovement, { capture: true, passive: true });
+		document.addEventListener("wheel", closeFromViewportMovement, { capture: true, passive: true });
+		window.addEventListener("scroll", closeFromViewportMovement, { capture: true, passive: true });
+		visualViewport?.addEventListener("resize", closeFromViewportMovement, { passive: true });
+		visualViewport?.addEventListener("scroll", closeFromViewportMovement, { passive: true });
+
+		return () => {
+			document.removeEventListener("pointermove", closeTooltipOnPointerMove, true);
+			document.removeEventListener("scroll", closeFromViewportMovement, true);
+			document.removeEventListener("touchmove", closeFromViewportMovement, true);
+			document.removeEventListener("wheel", closeFromViewportMovement, true);
+			window.removeEventListener("scroll", closeFromViewportMovement, true);
+			visualViewport?.removeEventListener("resize", closeFromViewportMovement);
+			visualViewport?.removeEventListener("scroll", closeFromViewportMovement);
+		};
+	}, [canUseDom, closeFromViewportMovement, controlled, isOpen]);
+
+	const updateTooltipPosition = useCallback(() => {
+		const root = rootRef.current;
+		const bubble = bubbleRef.current;
+		if (!root || !bubble) return;
+
+		const anchorRect = root.getBoundingClientRect();
+		const anchorCenterX = anchorRect.left + anchorRect.width / 2;
+		const viewportWidth = window.innerWidth;
+		const viewportHeight = window.innerHeight;
+		const viewportMaxWidth = Math.max(0, viewportWidth - VIEWPORT_MARGIN * 2);
+		const centeredMaxWidth = Math.max(
+			0,
+			2 * Math.min(anchorCenterX - VIEWPORT_MARGIN, viewportWidth - VIEWPORT_MARGIN - anchorCenterX)
+		);
+		const readableMaxWidth = Math.min(MIN_READABLE_WIDTH, viewportMaxWidth);
+		const effectiveViewportMaxWidth = Math.max(Math.min(viewportMaxWidth, centeredMaxWidth), readableMaxWidth);
+
+		bubble.style.setProperty("--app-tooltip-viewport-max-width", `${effectiveViewportMaxWidth}px`);
+
+		const bubbleRect = bubble.getBoundingClientRect();
+		const bubbleWidth = bubbleRect.width;
+		const bubbleHeight = bubbleRect.height;
+		const left = clamp(
+			anchorCenterX - bubbleWidth / 2,
+			VIEWPORT_MARGIN,
+			Math.max(VIEWPORT_MARGIN, viewportWidth - VIEWPORT_MARGIN - bubbleWidth)
+		);
+		const topCandidate = anchorRect.top - TOOLTIP_GAP - bubbleHeight;
+		const bottomCandidate = anchorRect.bottom + TOOLTIP_GAP;
+		const availableAbove = anchorRect.top - VIEWPORT_MARGIN;
+		const availableBelow = viewportHeight - anchorRect.bottom - VIEWPORT_MARGIN;
+		const placement: TooltipPlacement =
+			topCandidate < VIEWPORT_MARGIN && availableBelow > availableAbove ? "bottom" : "top";
+		const verticalCandidate = placement === "top" ? topCandidate : bottomCandidate;
+		const top = clamp(
+			verticalCandidate,
+			VIEWPORT_MARGIN,
+			Math.max(VIEWPORT_MARGIN, viewportHeight - VIEWPORT_MARGIN - bubbleHeight)
+		);
+		const arrowOffset = clamp(
+			anchorCenterX - left,
+			MIN_ARROW_OFFSET,
+			Math.max(MIN_ARROW_OFFSET, bubbleWidth - MIN_ARROW_OFFSET)
+		);
+
+		setTooltipPosition({
+			arrowOffset,
+			left,
+			placement,
+			top,
+			viewportMaxWidth: effectiveViewportMaxWidth,
+		});
+	}, []);
+
+	useLayoutEffect(() => {
+		if (!isOpen || !canUseDom) {
+			setTooltipPosition(null);
+			return;
+		}
+
+		updateTooltipPosition();
+		let frame = 0;
+		const scheduleUpdate = () => {
+			window.cancelAnimationFrame(frame);
+			frame = window.requestAnimationFrame(updateTooltipPosition);
+		};
+
+		window.addEventListener("resize", scheduleUpdate);
+
+		return () => {
+			window.cancelAnimationFrame(frame);
+			window.removeEventListener("resize", scheduleUpdate);
+		};
+	}, [canUseDom, isOpen, updateTooltipPosition]);
 
 	const target = cloneElement(children as ReactElement<AppTooltipTargetProps>, {
 		"aria-describedby": isOpen ? tooltipId : childProps["aria-describedby"],
@@ -142,7 +289,7 @@ export function AppTooltip({
 		},
 		onFocus: (event: FocusEvent<HTMLElement>) => {
 			childProps.onFocus?.(event);
-			if (events.focus !== false) {
+			if (events.focus !== false && !focusFollowsRecentTouch()) {
 				openFromHoverOrFocus();
 			}
 		},
@@ -168,28 +315,61 @@ export function AppTooltip({
 		onPointerDown: (event: PointerEvent<HTMLElement>) => {
 			childProps.onPointerDown?.(event);
 			if (event.pointerType === "touch") {
+				noteTouchInteraction();
 				openFromTouch();
+			}
+		},
+		onPointerMove: (event: PointerEvent<HTMLElement>) => {
+			childProps.onPointerMove?.(event);
+			if (event.pointerType === "touch") {
+				noteTouchInteraction();
+				closeFromViewportMovement();
 			}
 		},
 		onTouchStart: (event: TouchEvent<HTMLElement>) => {
 			childProps.onTouchStart?.(event);
+			noteTouchInteraction();
 			openFromTouch();
+		},
+		onTouchMove: (event: TouchEvent<HTMLElement>) => {
+			childProps.onTouchMove?.(event);
+			noteTouchInteraction();
+			closeFromViewportMovement();
 		},
 	} satisfies AppTooltipTargetProps);
 
+	const tooltipBubble =
+		isOpen && canUseDom
+			? createPortal(
+					<span
+						className={classes.tooltipBubble}
+						data-placement={tooltipPosition?.placement ?? "top"}
+						data-ready={tooltipPosition ? "true" : "false"}
+						id={tooltipId}
+						ref={bubbleRef}
+						role="tooltip"
+						style={
+							{
+								"--app-tooltip-arrow-offset": tooltipPosition ? `${tooltipPosition.arrowOffset}px` : "50%",
+								"--app-tooltip-left": tooltipPosition ? `${tooltipPosition.left}px` : "-9999px",
+								"--app-tooltip-max-width": maxWidth,
+								"--app-tooltip-top": tooltipPosition ? `${tooltipPosition.top}px` : "-9999px",
+								"--app-tooltip-viewport-max-width": tooltipPosition
+									? `${tooltipPosition.viewportMaxWidth}px`
+									: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
+							} as CSSProperties
+						}
+					>
+						{label}
+					</span>,
+					document.body
+				)
+			: null;
+
 	return (
-		<span className={classes.tooltipRoot}>
+		<span className={classes.tooltipRoot} ref={rootRef}>
 			{target}
-			{isOpen ? (
-				<span
-					className={classes.tooltipBubble}
-					id={tooltipId}
-					role="tooltip"
-					style={{ "--app-tooltip-max-width": maxWidth } as CSSProperties}
-				>
-					{label}
-				</span>
-			) : null}
+			{tooltipBubble}
 		</span>
 	);
 }

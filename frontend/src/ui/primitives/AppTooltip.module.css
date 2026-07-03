@@ -6,12 +6,12 @@
 }
 
 .tooltipBubble {
-	position: absolute;
-	bottom: calc(100% + 0.45rem);
-	left: 50%;
+	position: fixed;
+	top: var(--app-tooltip-top, -9999px);
+	left: var(--app-tooltip-left, -9999px);
 	z-index: 2600;
 	width: max-content;
-	max-width: min(var(--app-tooltip-max-width, 20rem), calc(100vw - 2rem));
+	max-width: min(var(--app-tooltip-max-width, 20rem), var(--app-tooltip-viewport-max-width, calc(100vw - 1rem)));
 	padding: 0.45rem 0.6rem;
 	border: 1px solid var(--mantine-other-border-primary);
 	border-radius: 8px;
@@ -24,13 +24,16 @@
 	text-align: center;
 	white-space: normal;
 	pointer-events: none;
-	transform: translateX(-50%);
+}
+
+.tooltipBubble[data-ready="false"] {
+	visibility: hidden;
 }
 
 .tooltipBubble::after {
 	position: absolute;
 	bottom: -0.32rem;
-	left: 50%;
+	left: var(--app-tooltip-arrow-offset, 50%);
 	width: 0.55rem;
 	height: 0.55rem;
 	border-right: 1px solid var(--mantine-other-border-primary);
@@ -38,6 +41,15 @@
 	background: var(--mantine-other-bg-secondary);
 	content: "";
 	transform: translateX(-50%) rotate(45deg);
+}
+
+.tooltipBubble[data-placement="bottom"]::after {
+	top: -0.32rem;
+	bottom: auto;
+	border-top: 1px solid var(--mantine-other-border-primary);
+	border-right: 0;
+	border-bottom: 0;
+	border-left: 1px solid var(--mantine-other-border-primary);
 }
 
 .tooltipTrigger {

@@ -61,6 +61,7 @@ jobs:
       checks: read
       contents: read
       packages: read
+      pull-requests: read
     uses: ./.github/workflows/container-smoke.yml
     secrets: inherit
     with:

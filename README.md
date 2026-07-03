@@ -152,7 +152,7 @@ Share your medication schedule with others via a public link.
 
 ### Reports
 - Generate medication reports as PDF, Markdown, or plain text
-- Include intake history, refill history, and prescription details
+- Include intake history with mood summaries, refill history, and prescription details
 
 ### Multi-Person Support
 - Manage medications for multiple people
@@ -161,7 +161,7 @@ Share your medication schedule with others via a public link.
 - Optionally embed the medication overview directly on shared links via a settings toggle
 
 ### Data Export & Import
-- Export all your data (medications, dose history, intake journal notes, settings) as JSON
+- Export all your data (medications, dose history, intake journal notes and moods, settings) as JSON
 - Review validated import contents before replacing current data
 - Optionally download a fresh backup before confirming import
 - Import previously exported data with automatic ID remapping

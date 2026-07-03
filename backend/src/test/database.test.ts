@@ -480,6 +480,14 @@ describe("Database Client", () => {
 			expect(columnNames).toContain("packs_added");
 			expect(columnNames).toContain("loose_pills_added");
 		});
+
+		it("should have intake_journal mood column with an empty default", async () => {
+			const columns = await client.execute("PRAGMA table_info(intake_journal)");
+			const moodColumn = columns.rows.find((r) => r.name === "mood");
+
+			expect(moodColumn).toBeDefined();
+			expect(moodColumn).toEqual(expect.objectContaining({ notnull: 1, dflt_value: "''" }));
+		});
 	});
 
 	describe("Default Values", () => {

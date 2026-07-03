@@ -143,6 +143,7 @@ const mockJournalEntry = {
 	dismissed: false,
 	takenSource: "manual" as const,
 	markedBy: null,
+	mood: null,
 	note: "",
 	updatedAt: null,
 	createdAt: null,
@@ -558,7 +559,7 @@ describe("DashboardPage", () => {
 		fireEvent.click(screen.getByRole("button", { name: "common.save" }));
 
 		await waitFor(() => {
-			expect(saveJournalNote).toHaveBeenCalledWith("Main app note");
+			expect(saveJournalNote).toHaveBeenCalledWith("Main app note", null);
 			expect(closeJournalEditor).toHaveBeenCalled();
 		});
 	});

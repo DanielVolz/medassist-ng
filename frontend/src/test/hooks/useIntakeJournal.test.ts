@@ -21,6 +21,7 @@ function buildEntry(overrides: Partial<IntakeJournalEntry> = {}): IntakeJournalE
 		dismissed: false,
 		takenSource: "manual",
 		markedBy: "Daniel",
+		mood: null,
 		note: null,
 		updatedAt: null,
 		createdAt: null,
@@ -42,6 +43,7 @@ describe("useIntakeJournal", () => {
 		const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
 		const initialEntry = buildEntry();
 		const savedEntry = buildEntry({
+			mood: "good",
 			note: "Took after breakfast",
 			createdAt: "2026-02-10T08:06:00.000Z",
 			updatedAt: "2026-02-10T08:07:00.000Z",
@@ -74,7 +76,7 @@ describe("useIntakeJournal", () => {
 
 		let saveResult = false;
 		await act(async () => {
-			saveResult = await result.current.saveJournalNote("Took after breakfast");
+			saveResult = await result.current.saveJournalNote("Took after breakfast", "good");
 		});
 
 		expect(saveResult).toBe(true);
@@ -84,10 +86,11 @@ describe("useIntakeJournal", () => {
 			expect.objectContaining({
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ note: "Took after breakfast" }),
+				body: JSON.stringify({ note: "Took after breakfast", mood: "good" }),
 			})
 		);
 		expect(result.current.journalEvent?.note).toBe("Took after breakfast");
+		expect(result.current.journalEvent?.mood).toBe("good");
 
 		let deleteResult = false;
 		await act(async () => {
@@ -103,6 +106,7 @@ describe("useIntakeJournal", () => {
 		expect(result.current.journalEvent).toEqual(
 			expect.objectContaining({
 				doseId: initialEntry.doseId,
+				mood: null,
 				note: null,
 				createdAt: null,
 				updatedAt: null,
@@ -114,6 +118,7 @@ describe("useIntakeJournal", () => {
 		const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
 		const historyEntry = buildEntry({
 			doseId: "11-0-1760086400000-Daniel",
+			mood: "neutral",
 			note: "Evening note",
 			updatedAt: "2026-02-11T18:30:00.000Z",
 			createdAt: "2026-02-11T18:20:00.000Z",

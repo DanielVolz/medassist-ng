@@ -1,12 +1,23 @@
+import { Angry, Frown, Laugh, type LucideIcon, Meh, Smile } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { IntakeJournalEntry } from "../../hooks/useIntakeJournal";
 import { AppModal, AppModalFooter } from "../../ui/modal/AppModal";
 import { AppButton } from "../../ui/primitives/AppButton";
 import { AppTextarea } from "../../ui/primitives/AppTextarea";
+import { AppTooltip } from "../../ui/primitives/AppTooltip";
+import { getIntakeMoodLabel, INTAKE_MOODS, type IntakeMood } from "../../utils/intake-mood";
 import { MedicationAvatar } from "../MedicationAvatar";
 import classes from "./IntakeJournalModal.module.css";
 import { formatJournalDisplayDateTime, getJournalSourceLabel } from "./journal-display";
+
+const INTAKE_MOOD_ICONS: Record<IntakeMood, LucideIcon> = {
+	very_bad: Angry,
+	bad: Frown,
+	neutral: Meh,
+	good: Smile,
+	very_good: Laugh,
+};
 
 interface IntakeJournalModalProps {
 	isOpen: boolean;
@@ -16,7 +27,7 @@ interface IntakeJournalModalProps {
 	isDeleting: boolean;
 	error: string | null;
 	onClose: () => void;
-	onSave: (note: string) => Promise<boolean> | boolean;
+	onSave: (note: string, mood: IntakeMood | null) => Promise<boolean> | boolean;
 	onDelete: () => Promise<void> | void;
 	allowDelete?: boolean;
 }
@@ -35,6 +46,7 @@ export function IntakeJournalModal({
 }: IntakeJournalModalProps) {
 	const { t } = useTranslation();
 	const [note, setNote] = useState("");
+	const [mood, setMood] = useState<IntakeMood | null>(null);
 	const [showSavedState, setShowSavedState] = useState(false);
 	const activeDoseTrackingIdRef = useRef<number | null>(null);
 	const wasSavingRef = useRef(false);
@@ -42,6 +54,7 @@ export function IntakeJournalModal({
 	useEffect(() => {
 		if (!isOpen) {
 			setNote("");
+			setMood(null);
 			setShowSavedState(false);
 			activeDoseTrackingIdRef.current = null;
 			wasSavingRef.current = false;
@@ -53,6 +66,7 @@ export function IntakeJournalModal({
 		}
 
 		setNote(entry.note ?? "");
+		setMood(entry.mood ?? null);
 		if (activeDoseTrackingIdRef.current !== entry.doseTrackingId) {
 			activeDoseTrackingIdRef.current = entry.doseTrackingId;
 			setShowSavedState(false);
@@ -73,18 +87,18 @@ export function IntakeJournalModal({
 
 		if (wasSavingRef.current) {
 			wasSavingRef.current = false;
-			if (entry && !error && note === (entry.note ?? "")) {
+			if (entry && !error && note === (entry.note ?? "") && mood === (entry.mood ?? null)) {
 				setShowSavedState(true);
 			}
 		}
-	}, [entry, error, isOpen, isSaving, note]);
+	}, [entry, error, isOpen, isSaving, mood, note]);
 
 	if (!isOpen) {
 		return null;
 	}
 
 	const handleSave = async () => {
-		const saved = await onSave(note);
+		const saved = await onSave(note, mood);
 		if (saved) {
 			onClose();
 		}
@@ -92,7 +106,7 @@ export function IntakeJournalModal({
 
 	const scheduledForLabel = formatJournalDisplayDateTime(entry?.scheduledFor ?? null);
 	const takenAtLabel = formatJournalDisplayDateTime(entry?.takenAt ?? null);
-	const title = entry?.note ? t("journal.editor.editTitle") : t("journal.editor.addTitle");
+	const title = entry?.note || entry?.mood ? t("journal.editor.editTitle") : t("journal.editor.addTitle");
 	const saveLabel = showSavedState ? t("common.saved") : t("common.save");
 	let bodyContent: React.ReactNode;
 
@@ -128,6 +142,48 @@ export function IntakeJournalModal({
 						</div>
 					</div>
 				</div>
+
+				<fieldset className={classes.moodField}>
+					<legend className={classes.fieldLabel}>{t("journal.mood.label")}</legend>
+					{mood ? (
+						<div className={classes.moodHeader}>
+							<AppButton
+								type="button"
+								size="xs"
+								tone="ghost"
+								onClick={() => {
+									setMood(null);
+									setShowSavedState(false);
+								}}
+							>
+								{t("journal.mood.clear")}
+							</AppButton>
+						</div>
+					) : null}
+					<div className={classes.moodOptions}>
+						{INTAKE_MOODS.map((option) => {
+							const selected = mood === option;
+							const MoodIcon = INTAKE_MOOD_ICONS[option];
+							const label = getIntakeMoodLabel(option, t);
+							return (
+								<AppTooltip key={option} label={label} maw={160}>
+									<button
+										type="button"
+										aria-label={label}
+										aria-pressed={selected}
+										className={`${classes.moodOption} ${selected ? classes.moodOptionSelected : ""}`}
+										onClick={() => {
+											setMood(selected ? null : option);
+											setShowSavedState(false);
+										}}
+									>
+										<MoodIcon aria-hidden="true" />
+									</button>
+								</AppTooltip>
+							);
+						})}
+					</div>
+				</fieldset>
 
 				<AppTextarea
 					id="journal-note-input"
@@ -180,7 +236,7 @@ export function IntakeJournalModal({
 							type="button"
 							tone="ghost"
 							onClick={() => void onDelete()}
-							disabled={isLoading || isSaving || isDeleting || !entry?.note}
+							disabled={isLoading || isSaving || isDeleting || (!entry?.note && !entry?.mood)}
 						>
 							{isDeleting ? t("journal.editor.deleting") : t("common.delete")}
 						</AppButton>

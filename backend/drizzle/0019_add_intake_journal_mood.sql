@@ -1,0 +1,1 @@
+ALTER TABLE `intake_journal` ADD `mood` text(20) DEFAULT '' NOT NULL;

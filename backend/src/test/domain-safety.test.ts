@@ -663,13 +663,14 @@ describe("Domain safety corpus: real route and service flows", () => {
 			markedBy: "Alice",
 		});
 		await testClient.execute({
-			sql: `INSERT INTO intake_journal (user_id, dose_tracking_id, medication_id, scheduled_for, note, created_at, updated_at)
-			      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			sql: `INSERT INTO intake_journal (user_id, dose_tracking_id, medication_id, scheduled_for, mood, note, created_at, updated_at)
+			      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			args: [
 				1,
 				doseTrackingId,
 				medication.id,
 				Math.floor(new Date("2026-06-01T00:00:00.000Z").getTime() / 1000),
+				"good",
 				"Took after breakfast",
 				Math.floor(new Date("2026-06-01T08:05:00.000Z").getTime() / 1000),
 				Math.floor(new Date("2026-06-01T08:06:00.000Z").getTime() / 1000),
@@ -736,6 +737,7 @@ describe("Domain safety corpus: real route and service flows", () => {
 				markedBy: dose.markedBy,
 				takenByPerson: dose.takenByPerson,
 				journalNote: dose.journalNote,
+				journalMood: dose.journalMood,
 			})),
 			refillHistory: payload.refillHistory.map((refill: Record<string, unknown>) => ({
 				packsAdded: refill.packsAdded,

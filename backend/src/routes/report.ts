@@ -1,8 +1,9 @@
-import { and, eq, gte, lt } from "drizzle-orm";
+import { INTAKE_MOODS, type IntakeMood, normalizeIntakeMood } from "@medassist/shared";
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { doseTracking, medications, refillHistory } from "../db/schema.js";
+import { doseTracking, intakeJournal, medications, refillHistory } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -95,6 +96,12 @@ function matchesTakenByFilter(doseId: string, takenByFilter: Set<string> | null)
 	return takenByFilter.has(getPersonTagKey(takenBy));
 }
 
+function getDoseTakenByPerson(doseId: string): string | null {
+	const match = trackedDoseIdPattern.exec(doseId);
+	const takenBy = match?.[4]?.trim();
+	return takenBy && takenBy.length > 0 ? takenBy : null;
+}
+
 function getDoseScheduledAtMs(doseId: string): number | null {
 	const match = trackedDoseIdPattern.exec(doseId);
 	if (!match) {
@@ -127,6 +134,26 @@ const reportDataResponseSchema = {
 			dosesSkipped: { type: "integer" },
 			firstDoseAt: { type: "string" },
 			lastDoseAt: { type: "string" },
+			moodSummary: {
+				type: "object",
+				properties: Object.fromEntries(INTAKE_MOODS.map((mood) => [mood, { type: "integer" }])),
+				additionalProperties: false,
+			},
+			journalEntries: {
+				type: "array",
+				items: {
+					type: "object",
+					properties: {
+						scheduledFor: { type: "string", format: "date-time" },
+						takenAt: { type: ["string", "null"], format: "date-time" },
+						dismissed: { type: "boolean" },
+						takenSource: { type: "string" },
+						takenByPerson: { type: ["string", "null"] },
+						mood: { type: ["string", "null"], enum: [...INTAKE_MOODS, null] },
+						note: { type: ["string", "null"] },
+					},
+				},
+			},
 			refills: {
 				type: "array",
 				items: {
@@ -214,6 +241,7 @@ export async function reportRoutes(app: FastifyInstance) {
 			// doseId format: "{medicationId}-{blisterIndex}-{dateMs}" or "{medicationId}-{blisterIndex}-{dateMs}-{takenBy}"
 			const allDoses = await db
 				.select({
+					id: doseTracking.id,
 					doseId: doseTracking.doseId,
 					takenAt: doseTracking.takenAt,
 					dismissed: doseTracking.dismissed,
@@ -223,18 +251,57 @@ export async function reportRoutes(app: FastifyInstance) {
 				.where(eq(doseTracking.userId, userId));
 
 			// Group doses by medication ID
-			const dosesByMed = new Map<number, { takenAt: Date; dismissed: boolean; takenSource: string }[]>();
+			const dosesByMed = new Map<
+				number,
+				{
+					id: number;
+					doseId: string;
+					scheduledAtMs: number | null;
+					takenAt: Date;
+					dismissed: boolean;
+					takenSource: string;
+					takenByPerson: string | null;
+				}[]
+			>();
+			const filteredDoseTrackingIds: number[] = [];
 			for (const dose of allDoses) {
 				const medId = Number.parseInt(dose.doseId.split("-")[0], 10);
 				if (Number.isNaN(medId) || !medicationIds.includes(medId)) continue;
 				if (!matchesTakenByFilter(dose.doseId, normalizedTakenByFilter)) continue;
-				if (!isWithinDateRange(getDoseScheduledAtMs(dose.doseId), dateRange)) continue;
+				const scheduledAtMs = getDoseScheduledAtMs(dose.doseId);
+				if (!isWithinDateRange(scheduledAtMs, dateRange)) continue;
 				if (!dosesByMed.has(medId)) dosesByMed.set(medId, []);
+				filteredDoseTrackingIds.push(dose.id);
 				dosesByMed.get(medId)!.push({
+					id: dose.id,
+					doseId: dose.doseId,
+					scheduledAtMs,
 					takenAt: dose.takenAt,
 					dismissed: dose.dismissed,
 					takenSource: dose.takenSource ?? "manual",
+					takenByPerson: getDoseTakenByPerson(dose.doseId),
 				});
+			}
+
+			const journalByDoseTrackingId = new Map<number, { scheduledFor: Date; mood: IntakeMood | null; note: string }>();
+			if (filteredDoseTrackingIds.length > 0) {
+				const journalRows = await db
+					.select({
+						doseTrackingId: intakeJournal.doseTrackingId,
+						scheduledFor: intakeJournal.scheduledFor,
+						mood: intakeJournal.mood,
+						note: intakeJournal.note,
+					})
+					.from(intakeJournal)
+					.where(and(eq(intakeJournal.userId, userId), inArray(intakeJournal.doseTrackingId, filteredDoseTrackingIds)));
+
+				for (const row of journalRows) {
+					journalByDoseTrackingId.set(row.doseTrackingId, {
+						scheduledFor: row.scheduledFor,
+						mood: normalizeIntakeMood(row.mood),
+						note: row.note,
+					});
+				}
 			}
 
 			// Fetch refill history for requested medications
@@ -246,6 +313,16 @@ export async function reportRoutes(app: FastifyInstance) {
 					dosesSkipped: number;
 					firstDoseAt: string | null;
 					lastDoseAt: string | null;
+					moodSummary: Record<IntakeMood, number>;
+					journalEntries: {
+						scheduledFor: string;
+						takenAt: string | null;
+						dismissed: boolean;
+						takenSource: string;
+						takenByPerson: string | null;
+						mood: IntakeMood | null;
+						note: string | null;
+					}[];
 					refills: {
 						packsAdded: number;
 						loosePillsAdded: number;
@@ -263,6 +340,38 @@ export async function reportRoutes(app: FastifyInstance) {
 				const skippedDoses = doses.filter((d) => d.dismissed);
 
 				const sortedTaken = takenDoses.map((d) => d.takenAt.getTime()).sort((a, b) => a - b);
+				const moodSummary = Object.fromEntries(INTAKE_MOODS.map((mood) => [mood, 0])) as Record<IntakeMood, number>;
+				const journalEntries = doses
+					.map((dose) => {
+						const journal = journalByDoseTrackingId.get(dose.id);
+						if (!journal) {
+							return null;
+						}
+
+						const mood = journal.mood;
+						if (mood) {
+							moodSummary[mood] += 1;
+						}
+
+						const scheduledFor =
+							journal.scheduledFor instanceof Date && !Number.isNaN(journal.scheduledFor.getTime())
+								? journal.scheduledFor
+								: new Date(dose.scheduledAtMs ?? dose.takenAt.getTime());
+						const hasRecordedTakenAt =
+							dose.takenAt instanceof Date && !Number.isNaN(dose.takenAt.getTime()) && dose.takenAt.getTime() > 0;
+
+						return {
+							scheduledFor: scheduledFor.toISOString(),
+							takenAt: hasRecordedTakenAt ? dose.takenAt.toISOString() : null,
+							dismissed: dose.dismissed,
+							takenSource: dose.takenSource,
+							takenByPerson: dose.takenByPerson,
+							mood,
+							note: journal.note.trim().length > 0 ? journal.note : null,
+						};
+					})
+					.filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+					.sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime());
 				const medication = medMap.get(medId);
 				const pillsPerPack = Math.max(1, (medication?.blistersPerPack ?? 1) * (medication?.pillsPerBlister ?? 1));
 				const isAmountBased = medication?.packageType === "liquid_container" || medication?.packageType === "tube";
@@ -284,6 +393,8 @@ export async function reportRoutes(app: FastifyInstance) {
 					dosesSkipped: skippedDoses.length,
 					firstDoseAt: sortedTaken.length > 0 ? new Date(sortedTaken[0]).toISOString() : null,
 					lastDoseAt: sortedTaken.length > 0 ? new Date(sortedTaken[sortedTaken.length - 1]).toISOString() : null,
+					moodSummary,
+					journalEntries,
 					refills: refills.map((r) => ({
 						packsAdded: r.packsAdded,
 						loosePillsAdded: r.loosePillsAdded,

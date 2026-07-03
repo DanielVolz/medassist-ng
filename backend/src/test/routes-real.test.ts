@@ -816,6 +816,70 @@ describe("Real route coverage: settings/export/report", () => {
 		});
 	});
 
+	it("POST /medications/report-data includes filtered mood and journal entries", async () => {
+		const medId = await seedMedication("Report Mood Med");
+		const windowStart = "2026-01-10T00:00:00.000Z";
+		const windowEnd = "2026-01-20T00:00:00.000Z";
+
+		const inWindowDose = await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?) RETURNING id",
+			args: [
+				1,
+				`${medId}-0-${Date.parse("2026-01-15T09:00:00.000Z")}-Alice`,
+				Math.floor(Date.parse("2026-01-15T09:05:00.000Z") / 1000),
+				0,
+			],
+		});
+		const outOfFilterDose = await testClient.execute({
+			sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed) VALUES (?, ?, ?, ?) RETURNING id",
+			args: [
+				1,
+				`${medId}-0-${Date.parse("2026-01-16T09:00:00.000Z")}-Bob`,
+				Math.floor(Date.parse("2026-01-16T09:05:00.000Z") / 1000),
+				0,
+			],
+		});
+
+		await testClient.execute({
+			sql: `INSERT INTO intake_journal (user_id, dose_tracking_id, medication_id, scheduled_for, mood, note)
+			      VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)`,
+			args: [
+				1,
+				Number(inWindowDose.rows[0].id),
+				medId,
+				Math.floor(Date.parse("2026-01-15T09:00:00.000Z") / 1000),
+				"good",
+				"Felt steady",
+				1,
+				Number(outOfFilterDose.rows[0].id),
+				medId,
+				Math.floor(Date.parse("2026-01-16T09:00:00.000Z") / 1000),
+				"bad",
+				"Filtered out",
+			],
+		});
+
+		const response = await app.inject({
+			method: "POST",
+			url: "/medications/report-data",
+			payload: { medicationIds: [medId], startDate: windowStart, endDate: windowEnd, takenByFilter: ["Alice"] },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body[medId].moodSummary).toMatchObject({
+			good: 1,
+			bad: 0,
+		});
+		expect(body[medId].journalEntries).toEqual([
+			expect.objectContaining({
+				mood: "good",
+				note: "Felt steady",
+				takenByPerson: "Alice",
+			}),
+		]);
+	});
+
 	it("GET /export includes medications, settings, doseHistory and refillHistory", async () => {
 		const medId = await seedMedication("Export Med");
 		await testClient.execute({

@@ -172,14 +172,26 @@ function createSharedDoseFetchMock(options: {
 }) {
 	const token = options.token ?? "token-123";
 	const doseState = new Map((options.initialDoses ?? []).map((dose) => [dose.doseId, { ...dose }]));
-	const journalState = new Map<string, { note: string | null; createdAt: string | null; updatedAt: string | null }>();
+	const journalState = new Map<
+		string,
+		{
+			note: string | null;
+			mood: "very_bad" | "bad" | "neutral" | "good" | "very_good" | null;
+			createdAt: string | null;
+			updatedAt: string | null;
+		}
+	>();
 	const requests: Array<{ url: string; method: string; body?: unknown }> = [];
 
 	const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
 		const method = init?.method ?? "GET";
 		const body =
 			typeof init?.body === "string" && init.body.length > 0
-				? (JSON.parse(init.body) as { doseId?: string; note?: string | null })
+				? (JSON.parse(init.body) as {
+						doseId?: string;
+						note?: string | null;
+						mood?: "very_bad" | "bad" | "neutral" | "good" | "very_good" | null;
+					})
 				: undefined;
 		requests.push({ url, method, body });
 
@@ -190,7 +202,10 @@ function createSharedDoseFetchMock(options: {
 		if (url === `/api/share/${token}/doses` && method === "GET") {
 			const doses = Array.from(doseState.values()).map((dose) => ({
 				...dose,
-				hasJournalNote: dose.hasJournalNote === true || Boolean(journalState.get(dose.doseId)?.note?.trim()),
+				hasJournalNote:
+					dose.hasJournalNote === true ||
+					Boolean(journalState.get(dose.doseId)?.note?.trim()) ||
+					Boolean(journalState.get(dose.doseId)?.mood),
 			}));
 			return { ok: true, json: async () => ({ doses }) };
 		}
@@ -207,7 +222,7 @@ function createSharedDoseFetchMock(options: {
 
 		if (url.startsWith(`/api/share/${token}/journal/event/`) && method === "GET") {
 			const doseId = decodeURIComponent(url.split("/").at(-1) ?? "");
-			const journal = journalState.get(doseId) ?? { note: null, createdAt: null, updatedAt: null };
+			const journal = journalState.get(doseId) ?? { note: null, mood: null, createdAt: null, updatedAt: null };
 			return {
 				ok: true,
 				json: async () => ({
@@ -221,6 +236,7 @@ function createSharedDoseFetchMock(options: {
 						dismissed: false,
 						takenSource: "manual",
 						markedBy: "Max",
+						mood: journal.mood,
 						note: journal.note,
 						createdAt: journal.createdAt,
 						updatedAt: journal.updatedAt,
@@ -232,7 +248,12 @@ function createSharedDoseFetchMock(options: {
 		if (url.startsWith(`/api/share/${token}/journal/event/`) && method === "PUT") {
 			const doseId = decodeURIComponent(url.split("/").at(-1) ?? "");
 			const timestamp = new Date().toISOString();
-			journalState.set(doseId, { note: body?.note ?? null, createdAt: timestamp, updatedAt: timestamp });
+			journalState.set(doseId, {
+				note: body?.note ?? null,
+				mood: body?.mood ?? null,
+				createdAt: timestamp,
+				updatedAt: timestamp,
+			});
 			return {
 				ok: true,
 				json: async () => ({
@@ -246,6 +267,7 @@ function createSharedDoseFetchMock(options: {
 						dismissed: false,
 						takenSource: "manual",
 						markedBy: "Max",
+						mood: body?.mood ?? null,
 						note: body?.note ?? null,
 						createdAt: timestamp,
 						updatedAt: timestamp,
@@ -434,13 +456,14 @@ describe("SharedSchedule", () => {
 		expect(screen.queryByRole("button", { name: "common.delete" })).not.toBeInTheDocument();
 
 		fireEvent.change(screen.getByLabelText("journal.editor.noteLabel"), { target: { value: "Shared note" } });
+		fireEvent.click(screen.getByRole("button", { name: "journal.mood.values.good" }));
 		fireEvent.click(screen.getByRole("button", { name: "common.save" }));
 
 		await waitFor(() => {
 			expect(requests).toContainEqual({
 				url: `/api/share/token-123/journal/event/${sharedData.automaticDoseId}`,
 				method: "PUT",
-				body: { note: "Shared note" },
+				body: { note: "Shared note", mood: "good" },
 			});
 		});
 

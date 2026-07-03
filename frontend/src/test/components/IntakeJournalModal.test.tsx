@@ -29,6 +29,7 @@ function buildEntry(overrides: Partial<IntakeJournalEntry> = {}): IntakeJournalE
 		dismissed: false,
 		takenSource: "manual",
 		markedBy: "pillamn",
+		mood: null,
 		note: "",
 		updatedAt: null,
 		createdAt: null,
@@ -111,10 +112,73 @@ describe("IntakeJournalModal", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: "common.save" }));
 
-		expect(onSave).toHaveBeenCalledWith("Shared note");
+		expect(onSave).toHaveBeenCalledWith("Shared note", null);
 		await waitFor(() => {
 			expect(onClose).toHaveBeenCalled();
 		});
+	});
+
+	it("saves the selected mood with the note", async () => {
+		const onSave = vi.fn(async () => true);
+		const onClose = vi.fn();
+		const entry = buildEntry({ mood: "bad" });
+		render(
+			<IntakeJournalModal
+				isOpen
+				entry={entry}
+				isLoading={false}
+				isSaving={false}
+				isDeleting={false}
+				error={null}
+				onClose={onClose}
+				onSave={onSave}
+				onDelete={vi.fn()}
+			/>
+		);
+
+		expect(screen.getByRole("button", { name: "journal.mood.values.bad" })).toHaveAttribute("aria-pressed", "true");
+		fireEvent.click(screen.getByRole("button", { name: "journal.mood.values.good" }));
+		fireEvent.change(screen.getByLabelText("journal.editor.noteLabel"), {
+			target: { value: "Mood note" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+		expect(onSave).toHaveBeenCalledWith("Mood note", "good");
+		await waitFor(() => {
+			expect(onClose).toHaveBeenCalled();
+		});
+	});
+
+	it("shows mood labels as tooltips on hover and touch", async () => {
+		const entry = buildEntry();
+		render(
+			<IntakeJournalModal
+				isOpen
+				entry={entry}
+				isLoading={false}
+				isSaving={false}
+				isDeleting={false}
+				error={null}
+				onClose={vi.fn()}
+				onSave={vi.fn()}
+				onDelete={vi.fn()}
+			/>
+		);
+
+		const goodMoodButton = screen.getByRole("button", { name: "journal.mood.values.good" });
+		fireEvent.mouseEnter(goodMoodButton);
+
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("journal.mood.values.good");
+
+		fireEvent.mouseLeave(goodMoodButton);
+		await waitFor(() => {
+			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		});
+
+		const veryGoodMoodButton = screen.getByRole("button", { name: "journal.mood.values.very_good" });
+		fireEvent.touchStart(veryGoodMoodButton);
+
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("journal.mood.values.very_good");
 	});
 
 	it("keeps the modal open when save fails", async () => {
@@ -141,7 +205,7 @@ describe("IntakeJournalModal", () => {
 		fireEvent.click(screen.getByRole("button", { name: "common.save" }));
 
 		await waitFor(() => {
-			expect(onSave).toHaveBeenCalledWith("Shared note");
+			expect(onSave).toHaveBeenCalledWith("Shared note", null);
 		});
 		expect(onClose).not.toHaveBeenCalled();
 	});

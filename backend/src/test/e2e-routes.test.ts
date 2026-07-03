@@ -200,6 +200,7 @@ async function createSchema(client: Client) {
       dose_tracking_id integer NOT NULL UNIQUE,
       medication_id integer NOT NULL,
       scheduled_for integer NOT NULL,
+      mood text NOT NULL DEFAULT '',
       note text NOT NULL,
       created_at integer NOT NULL DEFAULT (strftime('%s','now')),
       updated_at integer NOT NULL DEFAULT (strftime('%s','now')),

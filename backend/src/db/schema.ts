@@ -260,6 +260,7 @@ export const intakeJournal = sqliteTable("intake_journal", {
 		.notNull()
 		.references(() => medications.id, { onDelete: "cascade" }),
 	scheduledFor: integer("scheduled_for", { mode: "timestamp" }).notNull(),
+	mood: text("mood", { length: 20 }).notNull().default(""),
 	note: text("note").notNull(),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),

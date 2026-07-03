@@ -85,11 +85,84 @@
 	margin-bottom: 1rem;
 }
 
+.moodField {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+	padding: 0;
+	border: 0;
+}
+
+.moodHeader {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.75rem;
+}
+
 .fieldLabel {
 	margin-bottom: 0.35rem;
 	color: var(--text-secondary);
 	font-size: 0.82rem;
 	font-weight: 600;
+}
+
+.moodHeader .fieldLabel {
+	margin-bottom: 0;
+}
+
+.moodOptions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 0.45rem;
+}
+
+.moodOption {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	padding: 0;
+	border: 1px solid var(--border-primary);
+	border-radius: 8px;
+	background: var(--bg-primary);
+	color: var(--text-primary);
+	line-height: 1;
+	cursor: pointer;
+	transition:
+		border-color 0.16s ease,
+		background 0.16s ease,
+		box-shadow 0.16s ease,
+		transform 0.16s ease;
+}
+
+.moodOption svg {
+	width: 1.2rem;
+	height: 1.2rem;
+	stroke-width: 2.15;
+}
+
+.moodOption:hover {
+	border-color: color-mix(in srgb, var(--accent) 45%, var(--border-primary));
+	background: color-mix(in srgb, var(--accent-bg) 50%, var(--bg-primary));
+	color: var(--accent);
+	transform: translateY(-1px);
+}
+
+.moodOption:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.moodOptionSelected {
+	border-color: color-mix(in srgb, var(--accent) 70%, var(--border-primary));
+	background: color-mix(in srgb, var(--accent-bg) 75%, var(--bg-primary));
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+	color: var(--accent);
 }
 
 .noteInput {
@@ -201,6 +274,21 @@
 	flex-direction: column;
 	gap: 0.3rem;
 	min-width: 0;
+}
+
+.moodBadge {
+	display: inline-flex;
+	align-items: center;
+	width: fit-content;
+	min-height: 1.55rem;
+	padding: 0.18rem 0.55rem;
+	border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--accent-bg) 70%, transparent);
+	color: var(--text-primary);
+	font-size: 0.8rem;
+	font-weight: 700;
+	line-height: 1.15;
 }
 
 .noteLabel {

@@ -1,3 +1,4 @@
+import { type IntakeMood, normalizeIntakeMood } from "@medassist/shared";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { intakeJournal } from "../db/schema.js";
@@ -6,6 +7,7 @@ type IntakeJournalWriteDatabase = Pick<typeof db, "insert">;
 
 export type IntakeJournalExportPayload = {
 	journalNote: string;
+	journalMood?: IntakeMood | null;
 	journalCreatedAt?: string | null;
 	journalUpdatedAt?: string | null;
 };
@@ -50,6 +52,7 @@ export async function listIntakeJournalExportPayloadsForUser(
 			row.doseTrackingId,
 			{
 				journalNote: row.note,
+				journalMood: normalizeIntakeMood(row.mood),
 				journalCreatedAt: toIsoStringOrNull(row.createdAt),
 				journalUpdatedAt: toIsoStringOrNull(row.updatedAt),
 			},
@@ -63,12 +66,14 @@ export async function restoreIntakeJournalForImportedDose(input: {
 	medicationId: number;
 	scheduledFor: Date;
 	journalNote?: string | null;
+	journalMood?: IntakeMood | null;
 	journalCreatedAt?: string | null;
 	journalUpdatedAt?: string | null;
 	database?: IntakeJournalWriteDatabase;
 }): Promise<boolean> {
 	const normalizedNote = input.journalNote?.trim() ?? "";
-	if (normalizedNote.length === 0) {
+	const normalizedMood = input.journalMood ?? null;
+	if (normalizedNote.length === 0 && normalizedMood === null) {
 		return false;
 	}
 
@@ -81,6 +86,7 @@ export async function restoreIntakeJournalForImportedDose(input: {
 		doseTrackingId: input.doseTrackingId,
 		medicationId: input.medicationId,
 		scheduledFor: input.scheduledFor,
+		mood: normalizedMood ?? "",
 		note: normalizedNote,
 		createdAt,
 		updatedAt,

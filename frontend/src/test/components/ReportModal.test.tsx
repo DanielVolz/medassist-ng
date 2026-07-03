@@ -104,6 +104,18 @@ describe("ReportModal", () => {
 						dosesSkipped: 0,
 						firstDoseAt: "2026-01-01T08:00:00.000Z",
 						lastDoseAt: "2026-01-02T08:00:00.000Z",
+						moodSummary: { good: 1 },
+						journalEntries: [
+							{
+								scheduledFor: "2026-01-01T08:00:00.000Z",
+								takenAt: "2026-01-01T08:05:00.000Z",
+								dismissed: false,
+								takenSource: "manual",
+								takenByPerson: "Alice",
+								mood: "good",
+								note: "Journal note",
+							},
+						],
 						refills: [],
 					},
 				}),
@@ -124,6 +136,9 @@ describe("ReportModal", () => {
 			expect(onClose).not.toHaveBeenCalled();
 			expect(URL.createObjectURL).not.toHaveBeenCalled();
 			expect(getPreviewContent()).toContain("report.docTitle");
+			expect(getPreviewContent()).toContain("report.docJournal");
+			expect(getPreviewContent()).toContain("journal.mood.values.good");
+			expect(getPreviewContent()).toContain("Journal note");
 
 			view.unmount();
 		}
@@ -297,6 +312,18 @@ describe("ReportModal", () => {
 					dosesSkipped: 0,
 					firstDoseAt: "2026-03-03T12:00:00.000Z",
 					lastDoseAt: null,
+					moodSummary: { very_good: 1 },
+					journalEntries: [
+						{
+							scheduledFor: "2026-03-03T08:00:00.000Z",
+							takenAt: "2026-03-03T12:00:00.000Z",
+							dismissed: false,
+							takenSource: "manual",
+							takenByPerson: null,
+							mood: "very_good",
+							note: "PDF mood note",
+						},
+					],
 					refills: [
 						{
 							packsAdded: 1,
@@ -334,6 +361,8 @@ describe("ReportModal", () => {
 		expect(html).toContain(formatDate("2026-03-01"));
 		expect(html).toContain(formatDateTime("2026-03-02T08:30:00.000Z"));
 		expect(html).toContain(formatDate("2026-03-03T12:00:00.000Z"));
+		expect(html).toContain("journal.mood.values.very_good");
+		expect(html).toContain("PDF mood note");
 		expect(html).toContain(formatDate("2026-03-04"));
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});

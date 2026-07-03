@@ -113,7 +113,7 @@ export interface AppContextValue {
 	journalHistoryError: string | null;
 	openJournalEditor: (doseId: string) => Promise<void>;
 	closeJournalEditor: () => void;
-	saveJournalNote: (note: string) => Promise<boolean>;
+	saveJournalNote: ReturnType<typeof useIntakeJournal>["saveJournalNote"];
 	deleteJournalNote: () => Promise<boolean>;
 	openJournalHistory: () => void;
 	closeJournalHistory: () => void;

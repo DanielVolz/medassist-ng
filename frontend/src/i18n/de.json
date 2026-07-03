@@ -119,6 +119,17 @@
       "saving": "Speichern...",
       "deleting": "Löschen..."
     },
+    "mood": {
+      "label": "Stimmung",
+      "clear": "Stimmung löschen",
+      "values": {
+        "very_bad": "Sehr schlecht",
+        "bad": "Schlecht",
+        "neutral": "Neutral",
+        "good": "Gut",
+        "very_good": "Sehr gut"
+      }
+    },
     "history": {
       "title": "Journal-Verlauf",
       "description": "Durchsuche gespeicherte Einnahme-Notizen nach Medikament oder Zeitraum und öffne einen Eintrag erneut im Bearbeitungsmodus.",
@@ -1034,6 +1045,17 @@
     "docDosesSkipped": "Übersprungene Dosen",
     "docFirstDose": "Erste Dosis",
     "docLastDose": "Letzte Dosis",
+    "docJournal": "Journal und Stimmung",
+    "docJournalMoodSummary": "Stimmungsübersicht",
+    "docJournalMood": "Stimmung",
+    "docJournalEntries": "Journal-Einträge",
+    "docJournalScheduledFor": "Geplant für",
+    "docJournalTakenAt": "Eingenommen um",
+    "docJournalStatusTaken": "Eingenommen",
+    "docJournalStatusSkipped": "Übersprungen",
+    "docJournalNote": "Notiz",
+    "docJournalNoMood": "Keine Stimmung",
+    "docJournalNoEntries": "Keine Journal-Einträge erfasst",
     "docRefillHistory": "Nachfüll-Verlauf",
     "docRefillEntry": "{{date}}: +{{packs}} Packungen, +{{loose}} Tabletten",
     "docRefillPrescription": "(Rezept-Nachfüllung)",

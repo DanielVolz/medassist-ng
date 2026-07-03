@@ -672,6 +672,7 @@ describe("Dose Tracking API", () => {
 				expect.objectContaining({
 					doseId,
 					markedBy: "Max",
+					mood: null,
 					note: null,
 				})
 			);
@@ -692,13 +693,14 @@ describe("Dose Tracking API", () => {
 			const saveResponse = await app.inject({
 				method: "PUT",
 				url: `/share/cccccccccccccccc/journal/event/${encodeURIComponent(doseId)}`,
-				payload: { note: "Shared note from Max" },
+				payload: { note: "Shared note from Max", mood: "very_good" },
 			});
 
 			expect(saveResponse.statusCode).toBe(200);
 			expect(saveResponse.json().entry).toEqual(
 				expect.objectContaining({
 					doseId,
+					mood: "very_good",
 					note: "Shared note from Max",
 				})
 			);
@@ -715,6 +717,21 @@ describe("Dose Tracking API", () => {
 					hasJournalNote: true,
 				}),
 			]);
+
+			const moodOnlySaveResponse = await app.inject({
+				method: "PUT",
+				url: `/share/cccccccccccccccc/journal/event/${encodeURIComponent(doseId)}`,
+				payload: { note: "   ", mood: "bad" },
+			});
+
+			expect(moodOnlySaveResponse.statusCode).toBe(200);
+			expect(moodOnlySaveResponse.json().entry).toEqual(
+				expect.objectContaining({
+					doseId,
+					mood: "bad",
+					note: "",
+				})
+			);
 
 			const blankSaveResponse = await app.inject({
 				method: "PUT",
@@ -740,12 +757,13 @@ describe("Dose Tracking API", () => {
 			});
 
 			const journalRows = await testClient.execute({
-				sql: "SELECT note FROM intake_journal WHERE user_id = ? AND medication_id = ?",
+				sql: "SELECT note, mood FROM intake_journal WHERE user_id = ? AND medication_id = ?",
 				args: [userId, 8],
 			});
 
 			expect(journalRows.rows).toHaveLength(1);
-			expect(journalRows.rows[0].note).toBe("Shared note from Max");
+			expect(journalRows.rows[0].note).toBe("");
+			expect(journalRows.rows[0].mood).toBe("bad");
 		});
 	});
 });

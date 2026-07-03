@@ -206,11 +206,12 @@ When code changes (features or bug fixes) are complete:
 
 1. Monitor CI status via GitHub MCP until all required checks complete.
    Required checks: all repository-required checks must pass.
-2. If CI fails: analyze the failure, fix it, push again, and re-check.
-3. Once CI is green, **ask the user for merge confirmation**, then merge the PR via GitHub MCP using squash merge and branch deletion.
-4. Re-sync the authoritative local `main` before using it again as a source of truth for any next PR or release step. Do not continue from a previously dirty workspace without another source-of-truth audit.
-5. If the requested end state is a clean local `main`, verify that `git status` is empty and that no task-related stash entry remains as hidden residue.
-6. Switch back to main and pull:
+2. For release-relevant PRs (backend, frontend, shared, package, Docker, or workflow/runtime changes), also require the visible `Container Smoke` PR check to complete successfully. If it is missing, skipped for a smoke-relevant diff, or failed, treat CI as not green even if branch protection would allow a bypass merge.
+3. If CI fails: analyze the failure, fix it, push again, and re-check.
+4. Once CI is green, **ask the user for merge confirmation**, then merge the PR via GitHub MCP using squash merge and branch deletion.
+5. Re-sync the authoritative local `main` before using it again as a source of truth for any next PR or release step. Do not continue from a previously dirty workspace without another source-of-truth audit.
+6. If the requested end state is a clean local `main`, verify that `git status` is empty and that no task-related stash entry remains as hidden residue.
+7. Switch back to main and pull:
 
 ```bash
   git checkout main
@@ -540,7 +541,7 @@ Code complete & validated by testing-manager
 1. Ensure a GitHub issue exists (create if not)
 2. Create feature branch (fix/... or feat/...)
 3. Commit, push, create PR (with "Closes #N" in body, assignee, label, project)
-4. Wait for CI (all required checks)
+4. Wait for CI (all required checks plus visible `Container Smoke` when release-relevant)
 5. Merge PR to main (squash + delete branch)
 6. Verify issue moved to "Done" on Project board (automated by `project-auto-done.yml`; fallback: GraphQL, see Task 6)
         ↓

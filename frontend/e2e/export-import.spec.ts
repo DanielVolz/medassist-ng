@@ -130,7 +130,7 @@ test.describe("Export/import E2E", () => {
 		});
 
 		const nonSensitive = await downloadExportFromSettings(page, { includeSensitive: false });
-		expect(nonSensitive.version).toBe("1.7");
+		expect(nonSensitive.version).toBe("1.8");
 		expect(nonSensitive.includeSensitiveData).toBe(false);
 		expect(nonSensitive.settings?.timezone).toBe("Europe/Berlin");
 		expect(nonSensitive.settings?.upcomingTodayOnly).toBe(true);

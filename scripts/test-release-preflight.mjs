@@ -28,6 +28,7 @@ function copyFixture() {
     "shared/package.json",
     "shared/package-lock.json",
     ".github/workflows/docker-build.yml",
+    ".github/workflows/container-smoke.yml",
     ".github/workflows/test.yml",
     ".github/workflows/e2e.yml"
   ];
@@ -178,6 +179,59 @@ test("release preflight rejects CI workflow without the domain E2E release gate"
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(fixtureRoot, /\.github\/workflows\/e2e\.yml must run the domain E2E release gate/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects hidden workflow-run container smoke", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflow = readFileSync(workflowPath, "utf8")
+      .replace("pull_request:", "workflow_run:\n    workflows: ['Test', 'E2E Tests']\n    types: [completed]")
+      .replace("    branches: [main]\n", "");
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(fixtureRoot, /\.github\/workflows\/container-smoke\.yml must run directly on pull_request/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects fatal container smoke cache export", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "cache-to: type=gha,mode=max,scope=container-smoke-backend,ignore-error=true",
+      "cache-to: type=gha,mode=max"
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/container-smoke\.yml backend smoke build must ignore GitHub Actions cache export failures/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects fatal Docker publish cache export", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/docker-build.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "cache-to: type=gha,mode=max,scope=docker-${{ matrix.image }},ignore-error=true",
+      "cache-to: type=gha,mode=max"
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/docker-build\.yml build-and-push cache-to must ignore GitHub Actions cache export failures/
+    );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

@@ -95,18 +95,19 @@ Use the root-level commands for full-stack validation when a change spans backen
 
 ## Release Workflow Safeguards
 
-- PR validation is enforced through `.github/workflows/test.yml` and `.github/workflows/e2e.yml`.
+- PR validation is enforced through `.github/workflows/test.yml`, `.github/workflows/e2e.yml`, and `.github/workflows/container-smoke.yml`.
 - Workflow syntax validation is enforced through `.github/workflows/workflow-validation.yml` with `actionlint` on PRs that change workflow files under `.github/workflows/**`.
 - CodeQL scans both `javascript-typescript` source code and GitHub Actions workflow changes under `.github/workflows/**` / `.github/actions/**`.
 - Within product-relevant PRs, required product checks still emit their stable names and report a no-op success when a backend/frontend lane is not relevant inside that product scope.
 - Workflow-only edits are validated by `Workflow Validation / Actionlint`; they do not trigger backend/frontend/Playwright/container smoke lanes by themselves, but they still run CodeQL for the `actions` language.
-- Release-relevant PRs also run `.github/workflows/container-smoke.yml` as a dedicated container runtime check.
+- Release-relevant PRs also run `.github/workflows/container-smoke.yml` as a dedicated visible `Container Smoke` PR check after `Backend Tests`, `Frontend Build`, and `Playwright E2E` are green.
 - Dependabot auto-merge for safe updates is gated by `.github/workflows/dependabot-automerge.yml` and currently allows `npm`, `npm_and_yarn`, and `github_actions` ecosystems for semver minor/patch updates only.
 - The default-branch ruleset requires the stable CodeQL context `Analyze (javascript-typescript)`, so workflow changes must keep the CodeQL job name aligned with that exact required-check context.
 - Docker publishing is handled by `.github/workflows/docker-build.yml`.
 - The reusable container smoke workflow is used in two places:
   - directly on release-relevant PRs as the visible `Container Smoke` check
   - from `docker-build.yml` before release completion
+- Docker Buildx cache export is allowed to fail in smoke/publish builds (`ignore-error=true`) because cache reservation is an optimization; container build, startup, health, static asset, and proxy checks remain the required signal.
 - Releases also run `npm run release:preflight` in two stages:
   - early static validation of tag, package versions, release policy, compose tags, and release workflow dependencies
   - late validation of generated changelog and `docker-compose.pinned.yml` before GitHub Release creation

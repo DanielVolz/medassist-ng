@@ -140,6 +140,49 @@ function validateWorkflowNeeds(workflowPath) {
   }
 }
 
+function validateDockerBuildCachePolicy(workflowPath) {
+  const workflow = readText(workflowPath);
+  const requiredCacheTo = "cache-to: type=gha,mode=max,scope=docker-${{ matrix.image }},ignore-error=true";
+  const requiredCacheFrom = "cache-from: type=gha,scope=docker-${{ matrix.image }}";
+
+  if (!workflow.includes(requiredCacheFrom)) {
+    fail(`${workflowPath} build-and-push cache-from must use a Docker image-specific GitHub Actions cache scope.`);
+  }
+
+  if (!workflow.includes(requiredCacheTo)) {
+    fail(`${workflowPath} build-and-push cache-to must ignore GitHub Actions cache export failures.`);
+  }
+}
+
+function validateContainerSmokeWorkflow(workflowPath) {
+  const workflow = readText(workflowPath);
+
+  if (!/\n\s*pull_request:\s*\n\s*branches:\s*\[main\]/.test(workflow)) {
+    fail(`${workflowPath} must run directly on pull_request for main so Container Smoke is visible as a PR check.`);
+  }
+
+  if (/\n\s*workflow_run:/.test(workflow)) {
+    fail(`${workflowPath} must not use workflow_run; it hides Container Smoke from PR check rollups and creates duplicate post-check runs.`);
+  }
+
+  if (!workflow.includes("Wait for required PR checks")) {
+    fail(`${workflowPath} must wait for Backend Tests, Frontend Build, and Playwright E2E before running smoke on PRs.`);
+  }
+
+  for (const imageName of ["backend", "frontend"]) {
+    const cacheFrom = `cache-from: type=gha,scope=container-smoke-${imageName}`;
+    const cacheTo = `cache-to: type=gha,mode=max,scope=container-smoke-${imageName},ignore-error=true`;
+
+    if (!workflow.includes(cacheFrom)) {
+      fail(`${workflowPath} ${imageName} smoke build must use an image-specific GitHub Actions cache scope.`);
+    }
+
+    if (!workflow.includes(cacheTo)) {
+      fail(`${workflowPath} ${imageName} smoke build must ignore GitHub Actions cache export failures.`);
+    }
+  }
+}
+
 function validatePackageVersion(packageName, packageJsonPath, packageJson, releaseVersion) {
   if (packageJson.version !== releaseVersion) {
     fail(`${packageJsonPath} version must match ${releaseVersion}, found ${packageJson.version}.`);
@@ -335,6 +378,10 @@ function main() {
 
   const workflowPath = String(args.workflow || ".github/workflows/docker-build.yml");
   validateWorkflowNeeds(workflowPath);
+  validateDockerBuildCachePolicy(workflowPath);
+
+  const containerSmokeWorkflowPath = String(args["container-smoke-workflow"] || ".github/workflows/container-smoke.yml");
+  validateContainerSmokeWorkflow(containerSmokeWorkflowPath);
 
   if (args["static-only"]) {
     console.log(`release-preflight: static checks passed for ${tag}`);

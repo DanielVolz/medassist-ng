@@ -8,7 +8,7 @@ If `AGENTS.md` exists in the checkout or is provided in the session context, tre
 
 1. Read this file first.
 2. Apply `AGENTS.md` when available.
-3. Ensure `doku/memory_notes.md` exists, read its current-state/relevant durable notes before meaningful work, and keep it updated with concise continuity notes. It is local-only and must not be staged or committed unless explicitly requested.
+3. Ensure root `MEMORY.md` exists, read its current-state/relevant durable notes before meaningful work, and keep it updated with concise durable context: project decisions, conventions, recurring pitfalls, validation state, and open risks. It is local-only and must not be staged or committed unless explicitly requested.
 4. Identify triggered skills and read only the matching `.github/skills/*/SKILL.md` files before changing code.
 5. Keep work scoped to the user's current objective and existing repository patterns.
 
@@ -54,5 +54,5 @@ shell commands, and other important information, read the current plan.
 
 Do not stage or commit local workspace state unless the user explicitly asks for that exact action:
 
-- `doku/memory_notes.md`
+- `MEMORY.md`
 - local planning, agent, or scratch artifacts

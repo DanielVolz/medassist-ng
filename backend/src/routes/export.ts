@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { extname, isAbsolute, relative, resolve } from "node:path";
+import { INTAKE_MOODS, normalizeIntakeMood } from "@medassist/shared";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -34,7 +35,7 @@ const IMAGES_DIR = resolve(getDataDir(), "images");
 // =============================================================================
 // Export Format Version (bump this when format changes)
 // =============================================================================
-const EXPORT_VERSION = "1.7";
+const EXPORT_VERSION = "1.8";
 
 const currentExportVersion = parseExportVersion(EXPORT_VERSION);
 
@@ -128,6 +129,7 @@ const doseHistorySchema = z.object({
 	dismissed: z.boolean().default(false),
 	takenByPerson: z.string().nullable().optional(), // Person suffix from dose ID (e.g., "Daniel")
 	journalNote: z.string().nullable().optional(),
+	journalMood: z.enum(INTAKE_MOODS).nullable().optional(),
 	journalCreatedAt: nullableDateLikeStringSchema,
 	journalUpdatedAt: nullableDateLikeStringSchema,
 });
@@ -273,6 +275,7 @@ const importBodyOpenApiSchema = {
 				dismissed: false,
 				takenByPerson: "Daniel",
 				journalNote: "Took after breakfast.",
+				journalMood: "good",
 				journalUpdatedAt: "2026-03-11T08:05:00.000Z",
 			},
 		],
@@ -482,7 +485,9 @@ function buildImportPreview(
 	}
 ) {
 	const journalEntries = importData.doseHistory.filter(
-		(dose) => typeof dose.journalNote === "string" && dose.journalNote.trim()
+		(dose) =>
+			(typeof dose.journalNote === "string" && dose.journalNote.trim()) ||
+			normalizeIntakeMood(dose.journalMood) !== null
 	).length;
 	const imageCount = importData.medications.filter(
 		(med) => typeof med.image === "string" && med.image.startsWith("data:")
@@ -1097,6 +1102,7 @@ export async function exportRoutes(app: FastifyInstance) {
 							medicationId: newMedId,
 							scheduledFor,
 							journalNote: dose.journalNote,
+							journalMood: normalizeIntakeMood(dose.journalMood),
 							journalCreatedAt: dose.journalCreatedAt,
 							journalUpdatedAt: dose.journalUpdatedAt,
 							database: tx,

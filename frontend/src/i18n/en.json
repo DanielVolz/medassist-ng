@@ -119,6 +119,17 @@
       "saving": "Saving...",
       "deleting": "Deleting..."
     },
+    "mood": {
+      "label": "Mood",
+      "clear": "Clear mood",
+      "values": {
+        "very_bad": "Very bad",
+        "bad": "Bad",
+        "neutral": "Neutral",
+        "good": "Good",
+        "very_good": "Very good"
+      }
+    },
     "history": {
       "title": "Journal history",
       "description": "Browse saved intake notes by medication or date, then reopen an entry in edit mode.",
@@ -1034,6 +1045,17 @@
     "docDosesSkipped": "Doses skipped",
     "docFirstDose": "First dose",
     "docLastDose": "Last dose",
+    "docJournal": "Journal and Mood",
+    "docJournalMoodSummary": "Mood summary",
+    "docJournalMood": "Mood",
+    "docJournalEntries": "Journal entries",
+    "docJournalScheduledFor": "Scheduled for",
+    "docJournalTakenAt": "Taken at",
+    "docJournalStatusTaken": "Taken",
+    "docJournalStatusSkipped": "Skipped",
+    "docJournalNote": "Note",
+    "docJournalNoMood": "No mood",
+    "docJournalNoEntries": "No journal entries recorded",
     "docRefillHistory": "Refill History",
     "docRefillEntry": "{{date}}: +{{packs}} packs, +{{loose}} pills",
     "docRefillPrescription": "(prescription refill)",

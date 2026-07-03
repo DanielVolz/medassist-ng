@@ -207,8 +207,8 @@ export function SchedulePage() {
 		}
 	};
 
-	const handleSaveJournalNote = async (note: string) => {
-		return saveJournalNote(note);
+	const handleSaveJournalNote = async (note: string, mood: Parameters<typeof saveJournalNote>[1]) => {
+		return saveJournalNote(note, mood);
 	};
 
 	const handleDeleteJournalNote = async () => {

@@ -13,6 +13,7 @@ import {
 import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
 import { AppButton } from "../ui/primitives/AppButton";
 import { formatDate, formatDateTime, toInputValue } from "../utils/formatters";
+import { getIntakeMoodDisplay, INTAKE_MOODS, type IntakeMood } from "../utils/intake-mood";
 import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
 import { mergePersonTags, personTagsMatch } from "../utils/person-tags";
 import { useAuth } from "./Auth";
@@ -36,6 +37,8 @@ type ReportData = Record<
 		dosesSkipped: number;
 		firstDoseAt: string | null;
 		lastDoseAt: string | null;
+		moodSummary?: Partial<Record<IntakeMood, number>>;
+		journalEntries?: ReportJournalEntry[];
 		refills: {
 			packsAdded: number;
 			loosePillsAdded?: number;
@@ -45,6 +48,16 @@ type ReportData = Record<
 		}[];
 	}
 >;
+
+type ReportJournalEntry = {
+	scheduledFor: string;
+	takenAt: string | null;
+	dismissed: boolean;
+	takenSource: string;
+	takenByPerson: string | null;
+	mood: IntakeMood | null;
+	note: string | null;
+};
 
 type ReportDateRange = {
 	startDate: string;
@@ -458,6 +471,31 @@ function getReportPackageTypeLabel(med: Medication, t: TFn): string {
 	return t("report.docBlister");
 }
 
+function getMoodSummaryItems(summary: Partial<Record<IntakeMood, number>> | undefined, t: TFn): string[] {
+	return INTAKE_MOODS.map((mood) => {
+		const count = summary?.[mood] ?? 0;
+		return count > 0 ? `${getIntakeMoodDisplay(mood, t)}: ${count}` : null;
+	}).filter((item): item is string => item !== null);
+}
+
+function formatJournalReportEntry(entry: ReportJournalEntry, t: TFn): string {
+	const mood = entry.mood ? getIntakeMoodDisplay(entry.mood, t) : t("report.docJournalNoMood");
+	const status = entry.dismissed ? t("report.docJournalStatusSkipped") : t("report.docJournalStatusTaken");
+	const parts = [
+		`${t("report.docJournalScheduledFor")}: ${formatDateTime(entry.scheduledFor)}`,
+		`${t("report.docJournalTakenAt")}: ${entry.takenAt ? formatDateTime(entry.takenAt) : "-"}`,
+		`${t("report.docStatus")}: ${status}`,
+		`${t("report.docJournalMood")}: ${mood}`,
+	];
+	if (entry.takenByPerson) {
+		parts.push(`${t("report.docTakenBy")}: ${entry.takenByPerson}`);
+	}
+	if (entry.note) {
+		parts.push(`${t("report.docJournalNote")}: ${entry.note}`);
+	}
+	return parts.join("; ");
+}
+
 function generateTextReport(
 	meds: Medication[],
 	reportData: ReportData,
@@ -562,6 +600,28 @@ function generateTextReport(
 				lines.push(fmt === "md" ? `- ${t("report.docNoDoses")}` : `  ${t("report.docNoDoses")}`);
 			}
 			lines.push("");
+
+			const moodSummaryItems = getMoodSummaryItems(data.moodSummary, t);
+			const journalEntries = data.journalEntries ?? [];
+			if (moodSummaryItems.length > 0 || journalEntries.length > 0) {
+				lines.push(h3(t("report.docJournal")));
+				if (moodSummaryItems.length > 0) {
+					lines.push(item(t("report.docJournalMoodSummary"), moodSummaryItems.join(", ")));
+				}
+				if (journalEntries.length > 0) {
+					lines.push(
+						fmt === "md" ? `- ${bold(t("report.docJournalEntries"))}:` : `  ${t("report.docJournalEntries")}:`
+					);
+					for (const entry of journalEntries) {
+						lines.push(
+							fmt === "md" ? `  - ${formatJournalReportEntry(entry, t)}` : `    • ${formatJournalReportEntry(entry, t)}`
+						);
+					}
+				} else {
+					lines.push(fmt === "md" ? `- ${t("report.docJournalNoEntries")}` : `  ${t("report.docJournalNoEntries")}`);
+				}
+				lines.push("");
+			}
 
 			// Refill history
 			if (data.refills.length > 0) {
@@ -772,6 +832,24 @@ function buildPrintHtml(
 				s += `</tbody></table>`;
 			} else {
 				s += `<p class="no-data">${escHtml(t("report.docNoDoses"))}</p>`;
+			}
+
+			const moodSummaryItems = getMoodSummaryItems(data.moodSummary, t);
+			const journalEntries = data.journalEntries ?? [];
+			if (moodSummaryItems.length > 0 || journalEntries.length > 0) {
+				s += `<h3>${escHtml(t("report.docJournal"))}</h3>`;
+				if (moodSummaryItems.length > 0) {
+					s += `<table><tbody><tr><td class="label">${escHtml(t("report.docJournalMoodSummary"))}</td><td>${escHtml(moodSummaryItems.join(", "))}</td></tr></tbody></table>`;
+				}
+				if (journalEntries.length > 0) {
+					s += `<ul>`;
+					for (const entry of journalEntries) {
+						s += `<li>${escHtml(formatJournalReportEntry(entry, t))}</li>`;
+					}
+					s += `</ul>`;
+				} else {
+					s += `<p class="no-data">${escHtml(t("report.docJournalNoEntries"))}</p>`;
+				}
 			}
 
 			// Refill history

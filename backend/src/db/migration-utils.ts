@@ -125,6 +125,7 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE share_tokens ADD COLUMN allow_mark_taken integer NOT NULL DEFAULT 1`,
 		`ALTER TABLE share_tokens ADD COLUMN last_used_at integer`,
 		`ALTER TABLE share_tokens ADD COLUMN revoked_at integer`,
+		`ALTER TABLE intake_journal ADD COLUMN mood text NOT NULL DEFAULT ''`,
 	];
 
 	for (const sql of alterMigrations) {
@@ -152,6 +153,7 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 			dose_tracking_id INTEGER NOT NULL REFERENCES dose_tracking(id) ON DELETE CASCADE,
 			medication_id INTEGER NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
 			scheduled_for INTEGER NOT NULL,
+			mood TEXT NOT NULL DEFAULT '',
 			note TEXT NOT NULL,
 			created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP

@@ -1,3 +1,4 @@
+import { INTAKE_MOODS, normalizeIntakeMood } from "@medassist/shared";
 import { and, eq, inArray, like, or } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -43,6 +44,7 @@ const shareDoseSchema = z.object({
 
 const shareJournalUpsertSchema = z.object({
 	note: z.string().max(4000),
+	mood: z.enum(INTAKE_MOODS).nullable().optional(),
 });
 
 const dismissDosesSchema = z.object({
@@ -98,6 +100,7 @@ const shareJournalEntrySchema = {
 		"scheduledFor",
 		"dismissed",
 		"takenSource",
+		"mood",
 		"note",
 		"updatedAt",
 	],
@@ -109,8 +112,9 @@ const shareJournalEntrySchema = {
 		scheduledFor: { type: "string", format: "date-time" },
 		takenAt: { type: ["string", "null"], format: "date-time" },
 		dismissed: { type: "boolean" },
-		takenSource: { type: "string", enum: ["manual", "automatic"] },
+		takenSource: { type: "string", enum: ["manual", "automatic", "notification"] },
 		markedBy: { type: ["string", "null"] },
+		mood: { type: ["string", "null"], enum: [...INTAKE_MOODS, null] },
 		note: { type: ["string", "null"] },
 		updatedAt: { type: ["string", "null"], format: "date-time" },
 		createdAt: { type: ["string", "null"], format: "date-time" },
@@ -385,6 +389,7 @@ function buildSharedJournalEntryDto(input: {
 		dismissed: event.dismissed,
 		takenSource: event.takenSource,
 		markedBy: event.markedBy,
+		mood: normalizeIntakeMood(journalEntry?.mood),
 		note: journalEntry?.note ?? null,
 		updatedAt: journalEntry?.updatedAt?.toISOString() ?? null,
 		createdAt: journalEntry?.createdAt?.toISOString() ?? null,
@@ -892,6 +897,7 @@ export async function doseRoutes(app: FastifyInstance) {
 					required: ["note"],
 					properties: {
 						note: { type: "string", maxLength: 4000 },
+						mood: { type: ["string", "null"], enum: [...INTAKE_MOODS, null] },
 					},
 					additionalProperties: false,
 				},
@@ -913,7 +919,8 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			const normalizedNote = parsed.data.note.trim();
-			if (normalizedNote.length === 0) {
+			const normalizedMood = parsed.data.mood ?? null;
+			if (normalizedNote.length === 0 && normalizedMood === null) {
 				return reply.status(400).send({ error: "Journal note cannot be empty", code: "EMPTY_NOTE" });
 			}
 
@@ -948,6 +955,7 @@ export async function doseRoutes(app: FastifyInstance) {
 				userId: share.userId,
 				doseId,
 				note: normalizedNote,
+				mood: normalizedMood,
 			});
 
 			return { entry: buildSharedJournalEntryDto({ event, journalEntry }) };

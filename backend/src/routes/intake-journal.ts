@@ -1,3 +1,4 @@
+import { INTAKE_MOODS, normalizeIntakeMood } from "@medassist/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
@@ -41,6 +42,7 @@ const intakeJournalEntrySchema = {
 		"scheduledFor",
 		"dismissed",
 		"takenSource",
+		"mood",
 		"note",
 		"updatedAt",
 	],
@@ -52,8 +54,9 @@ const intakeJournalEntrySchema = {
 		scheduledFor: { type: "string", format: "date-time" },
 		takenAt: { type: ["string", "null"], format: "date-time" },
 		dismissed: { type: "boolean" },
-		takenSource: { type: "string", enum: ["manual", "automatic"] },
+		takenSource: { type: "string", enum: ["manual", "automatic", "notification"] },
 		markedBy: { type: ["string", "null"] },
+		mood: { type: ["string", "null"], enum: [...INTAKE_MOODS, null] },
 		note: { type: ["string", "null"] },
 		updatedAt: { type: ["string", "null"], format: "date-time" },
 		createdAt: { type: ["string", "null"], format: "date-time" },
@@ -91,6 +94,7 @@ const intakeJournalHistoryQuerySchema = z.object({
 
 const intakeJournalUpsertSchema = z.object({
 	note: z.string().max(4000),
+	mood: z.enum(INTAKE_MOODS).nullable().optional(),
 });
 
 function getValidationErrorMessage(error: z.ZodError): string {
@@ -143,6 +147,7 @@ function buildJournalEntryDto(input: {
 		dismissed: event.dismissed,
 		takenSource: event.takenSource,
 		markedBy: event.markedBy,
+		mood: normalizeIntakeMood(journalEntry?.mood),
 		note: journalEntry?.note ?? null,
 		updatedAt: journalEntry?.updatedAt?.toISOString() ?? null,
 		createdAt: journalEntry?.createdAt?.toISOString() ?? null,
@@ -231,6 +236,7 @@ export async function intakeJournalRoutes(app: FastifyInstance) {
 					dismissed: entry.dismissed,
 					takenSource: entry.takenSource,
 					markedBy: entry.markedBy,
+					mood: entry.mood,
 					note: entry.note,
 					updatedAt: entry.updatedAt.toISOString(),
 					createdAt: entry.createdAt.toISOString(),
@@ -288,6 +294,7 @@ export async function intakeJournalRoutes(app: FastifyInstance) {
 					required: ["note"],
 					properties: {
 						note: { type: "string", maxLength: 4000 },
+						mood: { type: ["string", "null"], enum: [...INTAKE_MOODS, null] },
 					},
 					additionalProperties: false,
 				},
@@ -323,6 +330,7 @@ export async function intakeJournalRoutes(app: FastifyInstance) {
 				userId,
 				doseId,
 				note: parsed.data.note,
+				mood: parsed.data.mood ?? null,
 			});
 
 			return { entry: buildJournalEntryDto({ event, journalEntry }) };

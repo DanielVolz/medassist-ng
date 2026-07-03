@@ -1,3 +1,4 @@
+import { type IntakeMood, normalizeIntakeMood } from "@medassist/shared";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { doseTracking, intakeJournal, medications } from "../db/schema.js";
@@ -43,6 +44,7 @@ export type IntakeJournalHistoryEntry = {
 	markedBy: string | null;
 	takenSource: DoseTrackingSource;
 	dismissed: boolean;
+	mood: IntakeMood | null;
 	note: string;
 	createdAt: Date;
 	updatedAt: Date;
@@ -175,9 +177,11 @@ export async function upsertIntakeJournalForDoseEvent(input: {
 	userId: number;
 	doseId: string;
 	note: string;
+	mood?: IntakeMood | null;
 }): Promise<IntakeJournalEntry | null> {
 	const normalizedNote = input.note.trim();
-	if (normalizedNote.length === 0) {
+	const normalizedMood = input.mood ?? null;
+	if (normalizedNote.length === 0 && normalizedMood === null) {
 		await deleteIntakeJournalForDoseEvent({ userId: input.userId, doseId: input.doseId });
 		return null;
 	}
@@ -196,6 +200,7 @@ export async function upsertIntakeJournalForDoseEvent(input: {
 			doseTrackingId: event.doseTrackingId,
 			medicationId: event.medicationId,
 			scheduledFor: event.scheduledFor,
+			mood: normalizedMood ?? "",
 			note: normalizedNote,
 			createdAt: now,
 			updatedAt: now,
@@ -205,6 +210,7 @@ export async function upsertIntakeJournalForDoseEvent(input: {
 			set: {
 				userId: input.userId,
 				medicationId: event.medicationId,
+				mood: normalizedMood ?? "",
 				note: normalizedNote,
 				updatedAt: now,
 			},
@@ -260,6 +266,7 @@ export async function listIntakeJournalEntriesForUser(input: {
 			markedBy: doseTracking.markedBy,
 			takenSource: doseTracking.takenSource,
 			dismissed: doseTracking.dismissed,
+			mood: intakeJournal.mood,
 			note: intakeJournal.note,
 			createdAt: intakeJournal.createdAt,
 			updatedAt: intakeJournal.updatedAt,
@@ -286,6 +293,7 @@ export async function listIntakeJournalEntriesForUser(input: {
 		markedBy: row.markedBy,
 		takenSource: row.takenSource as DoseTrackingSource,
 		dismissed: row.dismissed ?? false,
+		mood: normalizeIntakeMood(row.mood),
 		note: row.note,
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,

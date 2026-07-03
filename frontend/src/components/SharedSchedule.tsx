@@ -237,7 +237,7 @@ export function SharedSchedule() {
 				setSharedJournalEntry(payload.entry);
 				setSharedJournalDoseIdsWithNotes((current) => {
 					const next = new Set(current);
-					if (payload.entry.note?.trim()) {
+					if (payload.entry.note?.trim() || payload.entry.mood) {
 						next.add(payload.entry.doseId);
 					} else {
 						next.delete(payload.entry.doseId);
@@ -255,13 +255,13 @@ export function SharedSchedule() {
 	);
 
 	const saveSharedJournalNote = useCallback(
-		async (note: string) => {
+		async (note: string, mood: IntakeJournalEntry["mood"]) => {
 			if (!token || !sharedJournalDoseId) {
 				setSharedJournalError(t("journal.errors.noEventSelected"));
 				return false;
 			}
 
-			if (note.trim().length === 0) {
+			if (note.trim().length === 0 && mood === null) {
 				setSharedJournalError(t("journal.errors.emptySharedNote"));
 				return false;
 			}
@@ -273,7 +273,7 @@ export function SharedSchedule() {
 				const response = await fetch(`/api/share/${token}/journal/event/${encodeURIComponent(sharedJournalDoseId)}`, {
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ note }),
+					body: JSON.stringify({ note, mood }),
 				});
 
 				if (!response.ok) {
@@ -285,7 +285,7 @@ export function SharedSchedule() {
 				setSharedJournalEntry(payload.entry);
 				setSharedJournalDoseIdsWithNotes((current) => {
 					const next = new Set(current);
-					if (payload.entry.note?.trim()) {
+					if (payload.entry.note?.trim() || payload.entry.mood) {
 						next.add(payload.entry.doseId);
 					} else {
 						next.delete(payload.entry.doseId);

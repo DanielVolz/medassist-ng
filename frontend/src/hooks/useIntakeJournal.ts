@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
+import type { IntakeMood } from "../utils/intake-mood";
 import { useModalHistory } from "./useModalHistory";
 
 export type IntakeJournalEntry = {
@@ -11,8 +12,9 @@ export type IntakeJournalEntry = {
 	scheduledFor: string;
 	takenAt: string | null;
 	dismissed: boolean;
-	takenSource: "manual" | "automatic";
+	takenSource: "manual" | "automatic" | "notification";
 	markedBy: string | null;
+	mood: IntakeMood | null;
 	note: string | null;
 	updatedAt: string | null;
 	createdAt: string | null;
@@ -41,7 +43,7 @@ export interface UseIntakeJournalReturn {
 	resetJournalState: () => void;
 	openJournalEditor: (doseId: string) => Promise<void>;
 	closeJournalEditor: () => void;
-	saveJournalNote: (note: string) => Promise<boolean>;
+	saveJournalNote: (note: string, mood?: IntakeMood | null) => Promise<boolean>;
 	deleteJournalNote: () => Promise<boolean>;
 	openJournalHistory: () => void;
 	closeJournalHistory: () => void;
@@ -206,7 +208,7 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 	}, []);
 
 	const saveJournalNote = useCallback(
-		async (note: string) => {
+		async (note: string, mood: IntakeMood | null = null) => {
 			if (!journalTargetDoseId) {
 				setJournalEventError(t("journal.errors.noEventSelected"));
 				return false;
@@ -219,7 +221,7 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 				const response = await authFetch(`/api/intake-journal/event/${encodeURIComponent(journalTargetDoseId)}`, {
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ note }),
+					body: JSON.stringify({ note, mood }),
 				});
 
 				if (!response.ok) {
@@ -265,7 +267,7 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 			}
 
 			setJournalEvent((previous) =>
-				previous ? { ...previous, note: null, updatedAt: null, createdAt: null } : previous
+				previous ? { ...previous, mood: null, note: null, updatedAt: null, createdAt: null } : previous
 			);
 			if (journalHistoryOpen) {
 				void loadJournalHistory(journalHistoryFilters);

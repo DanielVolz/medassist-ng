@@ -199,7 +199,7 @@ describe("Intake journal routes", () => {
 			method: "PUT",
 			url: `/intake-journal/event/${encodeURIComponent(ownerDoseId)}`,
 			headers: { cookie: ownerCookie },
-			payload: { note: "Took after breakfast." },
+			payload: { note: "Took after breakfast.", mood: "good" },
 		});
 
 		expect(ownerPutResponse.statusCode).toBe(200);
@@ -208,6 +208,7 @@ describe("Intake journal routes", () => {
 				doseId: ownerDoseId,
 				medicationId: ownerMedicationId,
 				scheduledFor: expect.stringContaining("T08:00:00"),
+				mood: "good",
 				note: "Took after breakfast.",
 			})
 		);
@@ -232,10 +233,36 @@ describe("Intake journal routes", () => {
 			expect.objectContaining({
 				doseId: ownerDoseId,
 				medicationId: ownerMedicationId,
+				mood: "good",
 				note: "Took after breakfast.",
 				markedBy: "Daniel",
 			}),
 		]);
+
+		const moodOnlyResponse = await app.inject({
+			method: "PUT",
+			url: `/intake-journal/event/${encodeURIComponent(ownerDoseId)}`,
+			headers: { cookie: ownerCookie },
+			payload: { note: "   ", mood: "neutral" },
+		});
+
+		expect(moodOnlyResponse.statusCode).toBe(200);
+		expect(moodOnlyResponse.json().entry).toEqual(
+			expect.objectContaining({
+				doseId: ownerDoseId,
+				mood: "neutral",
+				note: "",
+			})
+		);
+
+		const invalidMoodResponse = await app.inject({
+			method: "PUT",
+			url: `/intake-journal/event/${encodeURIComponent(ownerDoseId)}`,
+			headers: { cookie: ownerCookie },
+			payload: { note: "Took after breakfast.", mood: "excellent" },
+		});
+
+		expect(invalidMoodResponse.statusCode).toBe(400);
 
 		const otherEventResponse = await app.inject({
 			method: "GET",
@@ -287,13 +314,14 @@ describe("Intake journal routes", () => {
 		const updatedAt = new Date("2026-02-03T07:50:00.000Z");
 		await testClient.execute({
 			sql: `INSERT INTO intake_journal (
-			  user_id, dose_tracking_id, medication_id, scheduled_for, note, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			  user_id, dose_tracking_id, medication_id, scheduled_for, mood, note, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			args: [
 				userId,
 				doseTrackingId,
 				medicationId,
 				Math.floor(new Date(start).getTime() / 1000),
+				"good",
 				"Roundtrip journal note",
 				Math.floor(createdAt.getTime() / 1000),
 				Math.floor(updatedAt.getTime() / 1000),
@@ -314,6 +342,7 @@ describe("Intake journal routes", () => {
 				scheduleIndex: 0,
 				takenByPerson: "Daniel-Volz",
 				journalNote: "Roundtrip journal note",
+				journalMood: "good",
 				journalCreatedAt: createdAt.toISOString(),
 				journalUpdatedAt: updatedAt.toISOString(),
 			})
@@ -340,18 +369,20 @@ describe("Intake journal routes", () => {
 				scheduleIndex: 0,
 				takenByPerson: "Daniel-Volz",
 				journalNote: "Roundtrip journal note",
+				journalMood: "good",
 				journalCreatedAt: createdAt.toISOString(),
 				journalUpdatedAt: updatedAt.toISOString(),
 			}),
 		]);
 
 		const restoredJournalRows = await testClient.execute({
-			sql: "SELECT note FROM intake_journal WHERE user_id = ?",
+			sql: "SELECT note, mood FROM intake_journal WHERE user_id = ?",
 			args: [userId],
 		});
 
 		expect(restoredJournalRows.rows).toHaveLength(1);
 		expect(restoredJournalRows.rows[0].note).toBe("Roundtrip journal note");
+		expect(restoredJournalRows.rows[0].mood).toBe("good");
 	});
 
 	it("preserves the shared journal-note permission through authenticated export and import", async () => {

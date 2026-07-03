@@ -28,6 +28,50 @@ test.describe("Settings Page", () => {
 		await expect(languageSelect.locator("option")).toHaveCount(2);
 	});
 
+	test.describe("mobile tooltip positioning", () => {
+		test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+		test("should keep the timezone info tooltip inside a mobile viewport", async ({ page }) => {
+			await page.setViewportSize({ width: 390, height: 844 });
+			await navigateTo(page, "/settings");
+
+			const timezoneHint = /IANA timezone|IANA-Zeitzone/i;
+			const timezoneInfoIcon = page.getByRole("button", { name: timezoneHint }).first();
+			await expect(timezoneInfoIcon).toBeVisible();
+
+			await timezoneInfoIcon.tap();
+
+			const tooltip = page.getByRole("tooltip").filter({ hasText: timezoneHint }).first();
+			await expect(tooltip).toBeVisible();
+			await expect
+				.poll(async () => {
+					const bounds = await tooltip.boundingBox();
+					if (!bounds) {
+						return "missing";
+					}
+
+					return bounds.x >= 8 && bounds.x + bounds.width <= 390 - 8 && bounds.y >= 0
+						? "inside"
+						: JSON.stringify({
+								left: Math.round(bounds.x),
+								right: Math.round(bounds.x + bounds.width),
+								top: Math.round(bounds.y),
+								width: Math.round(bounds.width),
+							});
+				})
+				.toBe("inside");
+
+			await page.evaluate(() => document.dispatchEvent(new Event("touchmove", { bubbles: true })));
+			await expect(tooltip).toBeHidden();
+
+			await timezoneInfoIcon.tap();
+			await expect(tooltip).toBeVisible();
+
+			await page.evaluate(() => window.scrollBy(0, 240));
+			await expect(tooltip).toBeHidden();
+		});
+	});
+
 	test("should allow switching language", async ({ page }) => {
 		await navigateTo(page, "/settings");
 

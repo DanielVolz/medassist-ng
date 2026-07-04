@@ -4,7 +4,9 @@
     "medications": "Medications",
     "planner": "Planner",
     "settings": "Settings",
-    "schedule": "Schedule"
+    "schedule": "Schedule",
+    "mobileSwipeHint": "Swipe sideways to switch Dashboard, Medications, and Planner.",
+    "dismissSwipeHint": "Dismiss navigation swipe hint"
   },
   "header": {
     "eyebrow": {

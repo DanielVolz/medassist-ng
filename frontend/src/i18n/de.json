@@ -4,7 +4,9 @@
     "medications": "Medikamente",
     "planner": "Planer",
     "settings": "Einstellungen",
-    "schedule": "Zeitplan"
+    "schedule": "Zeitplan",
+    "mobileSwipeHint": "Wische seitlich, um zwischen Übersicht, Medikamente und Planer zu wechseln.",
+    "dismissSwipeHint": "Navigationshinweis ausblenden"
   },
   "header": {
     "eyebrow": {

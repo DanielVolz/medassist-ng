@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { authFile, navigateTo, test } from "./fixtures";
 
 /**
@@ -9,6 +9,24 @@ import { authFile, navigateTo, test } from "./fixtures";
  */
 test.describe("Dashboard", () => {
 	test.use({ storageState: authFile });
+
+	async function swipeMainRoute(page: Page, fromX: number, toX: number) {
+		const surface = page.getByTestId("main-route-swipe-surface");
+		const y = 360;
+		for (const point of [
+			{ type: "touchstart", clientX: fromX, clientY: y },
+			{ type: "touchmove", clientX: toX, clientY: y + 6 },
+			{ type: "touchend", clientX: toX, clientY: y + 6 },
+		] as const) {
+			await surface.evaluate((element, eventPoint) => {
+				const event = new Event(eventPoint.type, { bubbles: true, cancelable: true });
+				const touch = { clientX: eventPoint.clientX, clientY: eventPoint.clientY };
+				Object.defineProperty(event, "touches", { value: eventPoint.type === "touchend" ? [] : [touch] });
+				Object.defineProperty(event, "changedTouches", { value: [touch] });
+				element.dispatchEvent(event);
+			}, point);
+		}
+	}
 
 	test("should display the dashboard page with header", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
@@ -51,6 +69,39 @@ test.describe("Dashboard", () => {
 			.getByRole("button", { name: /Planner/i })
 			.click();
 		await expect(page).toHaveURL(/\/planner/);
+	});
+
+	test.describe("mobile swipe navigation", () => {
+		test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+		test("swipes between Dashboard, Medications, and Planner", async ({ page }) => {
+			await page.addInitScript(() => window.localStorage.removeItem("medassist.mainRouteSwipeHintDismissed"));
+			await navigateTo(page, "/dashboard");
+			await expect(page).toHaveURL(/\/dashboard/);
+			await expect(page.getByTestId("main-swipe-hint")).toBeVisible();
+			await page.getByTestId("main-swipe-hint-dismiss").tap();
+			await expect(page.getByTestId("main-swipe-hint")).toBeHidden();
+			await expect
+				.poll(() => page.evaluate(() => window.localStorage.getItem("medassist.mainRouteSwipeHintDismissed")))
+				.toBe("true");
+
+			await swipeMainRoute(page, 340, 80);
+			await expect(page).toHaveURL(/\/medications/);
+			await expect(page.getByTestId("main-nav").getByRole("button", { name: /Medications/i })).toHaveAttribute(
+				"aria-current",
+				"page"
+			);
+
+			await swipeMainRoute(page, 340, 80);
+			await expect(page).toHaveURL(/\/planner/);
+			await expect(page.getByTestId("main-nav").getByRole("button", { name: /Planner/i })).toHaveAttribute(
+				"aria-current",
+				"page"
+			);
+
+			await swipeMainRoute(page, 80, 340);
+			await expect(page).toHaveURL(/\/medications/);
+		});
 	});
 
 	test("should display medication overview section", async ({ page }) => {

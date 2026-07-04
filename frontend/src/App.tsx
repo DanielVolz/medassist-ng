@@ -1,4 +1,5 @@
-import { Alert, Box, Center, Paper, Stack, Text, Title } from "@mantine/core";
+import { ActionIcon, Alert, Box, Center, Paper, Stack, Text, Title } from "@mantine/core";
+import { X } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -6,7 +7,14 @@ import classes from "./App.module.css";
 import "./AppSurfaces.css";
 import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
-import { AppProvider, FeedbackProvider, UnsavedChangesProvider, useAppContext, useShareContext } from "./context";
+import {
+	AppProvider,
+	FeedbackProvider,
+	UnsavedChangesProvider,
+	useAppContext,
+	useShareContext,
+	useUnsavedChanges,
+} from "./context";
 import { useModalHistory } from "./hooks/useModalHistory";
 import { useScrollLock } from "./hooks/useScrollLock";
 import { AppButton } from "./ui/primitives/AppButton";
@@ -40,6 +48,59 @@ declare const __APP_VERSION__: string;
 export const FRONTEND_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
 const GITHUB_REPO = "DanielVolz/medassist-ng";
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
+
+const MAIN_SWIPE_ROUTES = ["/dashboard", "/medications", "/planner"] as const;
+const MAIN_SWIPE_HINT_STORAGE_KEY = "medassist.mainRouteSwipeHintDismissed";
+
+function getMainSwipeRouteIndex(pathname: string): number {
+	return (MAIN_SWIPE_ROUTES as readonly string[]).indexOf(pathname);
+}
+
+function isMobileRouteSwipeEnabled(): boolean {
+	if (typeof window === "undefined") return false;
+	return window.matchMedia?.("(max-width: 700px)").matches ?? window.innerWidth <= 700;
+}
+
+function shouldShowInitialMainSwipeHint() {
+	if (typeof window === "undefined") return true;
+	try {
+		return window.localStorage.getItem(MAIN_SWIPE_HINT_STORAGE_KEY) !== "true";
+	} catch {
+		return true;
+	}
+}
+
+function persistMainSwipeHintDismissed() {
+	try {
+		window.localStorage.setItem(MAIN_SWIPE_HINT_STORAGE_KEY, "true");
+	} catch {
+		// Non-critical: the hint can still be dismissed for the current render.
+	}
+}
+
+function shouldIgnoreRouteSwipeTarget(target: EventTarget | null): boolean {
+	if (!(target instanceof Element)) return true;
+
+	return Boolean(
+		target.closest(
+			[
+				"input",
+				"textarea",
+				"select",
+				"button",
+				"a",
+				'[role="button"]',
+				'[role="link"]',
+				'[role="tab"]',
+				'[role="dialog"]',
+				'[contenteditable="true"]',
+				"[data-app-swipe-ignore]",
+				".mantine-Menu-dropdown",
+				".mantine-Modal-root",
+			].join(", ")
+		)
+	);
+}
 
 function RouteLoadingFallback() {
 	const { t } = useTranslation();
@@ -167,8 +228,10 @@ function AppRouter() {
 // =============================================================================
 
 function AppContent() {
+	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const location = useLocation();
+	const { confirmNavigation } = useUnsavedChanges();
 	// Get shared state from AppContext
 	const ctx = useAppContext();
 	const shareCtx = useShareContext();
@@ -256,8 +319,17 @@ function AppContent() {
 	const [showProfile, setShowProfile] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
 	const [routeTransitionMaskActive, setRouteTransitionMaskActive] = useState(false);
+	const [showMainSwipeHint, setShowMainSwipeHint] = useState(shouldShowInitialMainSwipeHint);
+	const [mainSwipeHintViewport, setMainSwipeHintViewport] = useState(isMobileRouteSwipeEnabled);
 	const routeTransitionMinEndRef = useRef(0);
 	const routeTransitionFallbackTimerRef = useRef<number | null>(null);
+	const routeSwipeSurfaceRef = useRef<HTMLDivElement | null>(null);
+	const routeSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+	const routeSwipeAxisRef = useRef<"x" | "y" | null>(null);
+	const dismissMainSwipeHint = useCallback(() => {
+		setShowMainSwipeHint(false);
+		persistMainSwipeHintDismissed();
+	}, []);
 	const dismissProfile = useCallback(() => {
 		setShowProfile(false);
 	}, []);
@@ -361,6 +433,125 @@ function AppContent() {
 		)
 	);
 
+	const hasBlockingOverlay = !!(
+		selectedMed ||
+		selectedUser ||
+		showProfile ||
+		showAbout ||
+		showShareDialog ||
+		showRefillModal ||
+		showEditStockModal ||
+		showImageLightbox ||
+		scheduleLightboxImage ||
+		routeTransitionMaskActive
+	);
+	const routeSupportsMainSwipe = getMainSwipeRouteIndex(location.pathname) >= 0;
+	const shouldRenderMainSwipeHint =
+		showMainSwipeHint && mainSwipeHintViewport && routeSupportsMainSwipe && !hasBlockingOverlay;
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+
+		const mediaQuery = window.matchMedia?.("(max-width: 700px)");
+		const updateViewport = () => {
+			setMainSwipeHintViewport(mediaQuery?.matches ?? window.innerWidth <= 700);
+		};
+
+		updateViewport();
+		if (mediaQuery?.addEventListener) {
+			mediaQuery.addEventListener("change", updateViewport);
+			return () => mediaQuery.removeEventListener("change", updateViewport);
+		}
+
+		window.addEventListener("resize", updateViewport);
+		return () => window.removeEventListener("resize", updateViewport);
+	}, []);
+
+	useEffect(() => {
+		const swipeSurface = routeSwipeSurfaceRef.current;
+		if (!swipeSurface) return;
+
+		const AXIS_LOCK_THRESHOLD = 8;
+		const touchListenerOptions = { capture: true };
+
+		function resetSwipe() {
+			routeSwipeStartRef.current = null;
+			routeSwipeAxisRef.current = null;
+		}
+
+		function onTouchStart(e: TouchEvent) {
+			if (e.touches.length !== 1 || hasBlockingOverlay || !isMobileRouteSwipeEnabled()) {
+				resetSwipe();
+				return;
+			}
+			if (getMainSwipeRouteIndex(location.pathname) === -1 || shouldIgnoreRouteSwipeTarget(e.target)) {
+				resetSwipe();
+				return;
+			}
+
+			const touch = e.touches[0];
+			routeSwipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+			routeSwipeAxisRef.current = null;
+		}
+
+		function onTouchMove(e: TouchEvent) {
+			if (!routeSwipeStartRef.current || e.touches.length !== 1) return;
+
+			const touch = e.touches[0];
+			const dx = touch.clientX - routeSwipeStartRef.current.x;
+			const dy = touch.clientY - routeSwipeStartRef.current.y;
+			const ax = Math.abs(dx);
+			const ay = Math.abs(dy);
+
+			if (!routeSwipeAxisRef.current) {
+				if (ax < AXIS_LOCK_THRESHOLD && ay < AXIS_LOCK_THRESHOLD) return;
+				routeSwipeAxisRef.current = ax >= ay ? "x" : "y";
+			}
+
+			if (routeSwipeAxisRef.current === "x") {
+				e.preventDefault();
+			}
+		}
+
+		function onTouchEnd(e: TouchEvent) {
+			if (!routeSwipeStartRef.current || e.changedTouches.length !== 1) {
+				resetSwipe();
+				return;
+			}
+
+			if (routeSwipeAxisRef.current === "x") {
+				const touch = e.changedTouches[0];
+				const dx = touch.clientX - routeSwipeStartRef.current.x;
+				const surfaceWidth = routeSwipeSurfaceRef.current?.clientWidth || window.innerWidth || 360;
+				const minSwipe = Math.max(64, surfaceWidth * 0.16);
+				if (Math.abs(dx) >= minSwipe) {
+					const direction = dx < 0 ? 1 : -1;
+					const idx = getMainSwipeRouteIndex(location.pathname);
+					const next = Math.min(Math.max(idx + direction, 0), MAIN_SWIPE_ROUTES.length - 1);
+					if (idx >= 0 && next !== idx) {
+						void (async () => {
+							if (await confirmNavigation()) {
+								navigate(MAIN_SWIPE_ROUTES[next]);
+							}
+						})();
+					}
+				}
+			}
+			resetSwipe();
+		}
+
+		swipeSurface.addEventListener("touchstart", onTouchStart, { ...touchListenerOptions, passive: true });
+		swipeSurface.addEventListener("touchmove", onTouchMove, { ...touchListenerOptions, passive: false });
+		swipeSurface.addEventListener("touchend", onTouchEnd, { ...touchListenerOptions, passive: true });
+		swipeSurface.addEventListener("touchcancel", resetSwipe, { ...touchListenerOptions, passive: true });
+		return () => {
+			swipeSurface.removeEventListener("touchstart", onTouchStart, touchListenerOptions);
+			swipeSurface.removeEventListener("touchmove", onTouchMove, touchListenerOptions);
+			swipeSurface.removeEventListener("touchend", onTouchEnd, touchListenerOptions);
+			swipeSurface.removeEventListener("touchcancel", resetSwipe, touchListenerOptions);
+		};
+	}, [confirmNavigation, hasBlockingOverlay, location.pathname, navigate]);
+
 	// Update selectedMed when meds change (e.g., after refill)
 	useEffect(() => {
 		if (selectedMed) {
@@ -463,6 +654,24 @@ function AppContent() {
 		<Box className={classes.page} component="main" data-testid="app-shell">
 			<AppHeader onOpenProfile={openProfile} onOpenAbout={openAbout} />
 
+			{shouldRenderMainSwipeHint && (
+				<div className={classes.mainSwipeHint} role="note" data-testid="main-swipe-hint">
+					<span>{t("nav.mobileSwipeHint")}</span>
+					<ActionIcon
+						type="button"
+						aria-label={t("nav.dismissSwipeHint")}
+						className={classes.mainSwipeHintClose}
+						color="gray"
+						data-testid="main-swipe-hint-dismiss"
+						onClick={dismissMainSwipeHint}
+						size="sm"
+						variant="subtle"
+					>
+						<X size={14} aria-hidden="true" />
+					</ActionIcon>
+				</div>
+			)}
+
 			{/* Profile Modal */}
 			{showProfile && (
 				<Suspense fallback={null}>
@@ -477,22 +686,24 @@ function AppContent() {
 				</Suspense>
 			)}
 
-			<Suspense fallback={<RouteLoadingFallback />}>
-				<Routes>
-					<Route path="/" element={<Navigate to={{ pathname: "/dashboard", search: location.search }} replace />} />
-					<Route path="/dashboard" element={<DashboardPage />} />
+			<div ref={routeSwipeSurfaceRef} className={classes.routeSwipeSurface} data-testid="main-route-swipe-surface">
+				<Suspense fallback={<RouteLoadingFallback />}>
+					<Routes>
+						<Route path="/" element={<Navigate to={{ pathname: "/dashboard", search: location.search }} replace />} />
+						<Route path="/dashboard" element={<DashboardPage />} />
 
-					<Route path="/medications" element={<MedicationsPage />} />
+						<Route path="/medications" element={<MedicationsPage />} />
 
-					<Route path="/planner" element={<PlannerPage />} />
+						<Route path="/planner" element={<PlannerPage />} />
 
-					<Route path="/settings" element={<SettingsPage />} />
+						<Route path="/settings" element={<SettingsPage />} />
 
-					<Route path="/schedule" element={<SchedulePage />} />
-					{/* Catch-all: redirect unknown routes to dashboard */}
-					<Route path="*" element={<Navigate to="/dashboard" replace />} />
-				</Routes>
-			</Suspense>
+						<Route path="/schedule" element={<SchedulePage />} />
+						{/* Catch-all: redirect unknown routes to dashboard */}
+						<Route path="*" element={<Navigate to="/dashboard" replace />} />
+					</Routes>
+				</Suspense>
+			</div>
 
 			{/* Medication Detail Modal */}
 			{stockCorrectionMed && (

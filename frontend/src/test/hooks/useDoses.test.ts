@@ -359,6 +359,64 @@ describe("useDoses", () => {
 		});
 	});
 
+	it("shows a future-dose alert and reverts the optimistic take", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 409,
+				json: () => Promise.resolve({ code: "FUTURE_DOSE" }),
+			})
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
+
+		const { result } = renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.size).toBe(0);
+		});
+
+		await act(async () => {
+			await result.current.markDoseTaken("future-dose");
+		});
+
+		await waitFor(() => {
+			expect(result.current.takenDoses.has("future-dose")).toBe(false);
+		});
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({
+			message: "dose.actionBlocked.futureTake",
+			tone: "error",
+		});
+	});
+
+	it("shows a future-dose alert and reverts the optimistic skip", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) })
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 409,
+				json: () => Promise.resolve({ code: "FUTURE_DOSE" }),
+			})
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ doses: [] }) });
+
+		const { result } = renderHook(() => useDoses());
+
+		await waitFor(() => {
+			expect(result.current.dismissedDoses.size).toBe(0);
+		});
+
+		await act(async () => {
+			await result.current.markDoseSkipped("future-dose");
+		});
+
+		await waitFor(() => {
+			expect(result.current.dismissedDoses.has("future-dose")).toBe(false);
+		});
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({
+			message: "dose.actionBlocked.futureSkip",
+			tone: "error",
+		});
+	});
+
 	it("undoDoseTaken encodes special characters in dose ID", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({

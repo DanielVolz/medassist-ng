@@ -638,11 +638,15 @@
   "dose": {
     "takenBy": "eingenommen von",
     "markAsTaken": "Als eingenommen markieren",
-  "take": "Nehmen",
-  "skip": "Überspringen",
-  "markAsSkipped": "Als übersprungen markieren",
-  "undoTake": "Nehmen rückgängig",
-  "undoSkip": "Überspringen rückgängig"
+    "take": "Nehmen",
+    "skip": "Überspringen",
+    "markAsSkipped": "Als übersprungen markieren",
+    "undoTake": "Nehmen rückgängig",
+    "undoSkip": "Überspringen rückgängig",
+    "actionBlocked": {
+      "futureTake": "Zukuenftige Einnahmen koennen noch nicht als eingenommen markiert werden.",
+      "futureSkip": "Zukuenftige Einnahmen koennen noch nicht uebersprungen werden."
+    }
   },
   "auth": {
     "login": "Anmelden",
@@ -772,6 +776,11 @@
     "allowJournalNotes": "Diesem geteilten Link das Anzeigen und Bearbeiten von Journal-Notizen erlauben",
     "markTakenEnabled": "Dosisaktionen erlaubt",
     "readOnly": "Nur Lesen",
+    "actionBlocked": {
+      "futureTake": "Zukuenftige Einnahmen koennen noch nicht als eingenommen markiert werden.",
+      "futureSkip": "Zukuenftige Einnahmen koennen noch nicht uebersprungen werden.",
+      "alreadyTakenMainApp": "Diese Einnahme wurde bereits in der Haupt-App als eingenommen markiert."
+    },
     "journalNotesEnabled": "Journal anzeigen/bearbeiten erlaubt",
     "expiryNever": "Laeuft nicht ab",
     "neverExpiresWarning": "Links ohne Ablauf bleiben gueltig, bis du sie widerrufst oder neu generierst.",

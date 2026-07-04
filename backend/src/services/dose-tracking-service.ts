@@ -14,7 +14,7 @@ export type MarkDoseTakenResult =
 	  }
 	| {
 			success: false;
-			code: "OUT_OF_STOCK" | "INVALID_DOSE" | "ALREADY_SKIPPED";
+			code: "OUT_OF_STOCK" | "INVALID_DOSE" | "ALREADY_SKIPPED" | "FUTURE_DOSE";
 			message: string;
 	  };
 
@@ -33,6 +33,16 @@ export type SkipDosesResult = {
 
 function hasRealTakenTimestamp(takenAt: Date | null): boolean {
 	return takenAt instanceof Date && takenAt.getTime() > 0;
+}
+
+function getLocalDayStartMs(value: Date | number): number {
+	const date = typeof value === "number" ? new Date(value) : new Date(value.getTime());
+	date.setHours(0, 0, 0, 0);
+	return date.getTime();
+}
+
+function isFutureDoseDay(timestampMs: number): boolean {
+	return getLocalDayStartMs(timestampMs) > getLocalDayStartMs(new Date());
 }
 
 function isDoseTrackingUniqueConflict(error: unknown): boolean {
@@ -119,6 +129,14 @@ export async function markDoseTakenForUser(input: {
 			success: false,
 			code: "INVALID_DOSE",
 			message: "Invalid dose ID",
+		};
+	}
+
+	if (isFutureDoseDay(parsedDose.timestampMs)) {
+		return {
+			success: false,
+			code: "FUTURE_DOSE",
+			message: "Future doses cannot be marked as taken",
 		};
 	}
 

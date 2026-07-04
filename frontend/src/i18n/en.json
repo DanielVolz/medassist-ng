@@ -638,11 +638,15 @@
   "dose": {
     "takenBy": "taken by",
     "markAsTaken": "Mark as taken",
-  "take": "Take",
-  "skip": "Skip",
-  "markAsSkipped": "Mark as skipped",
-  "undoTake": "Undo take",
-  "undoSkip": "Undo skip"
+    "take": "Take",
+    "skip": "Skip",
+    "markAsSkipped": "Mark as skipped",
+    "undoTake": "Undo take",
+    "undoSkip": "Undo skip",
+    "actionBlocked": {
+      "futureTake": "Future intakes cannot be marked as taken yet.",
+      "futureSkip": "Future intakes cannot be skipped yet."
+    }
   },
   "auth": {
     "login": "Login",
@@ -772,6 +776,11 @@
     "allowJournalNotes": "Allow this shared link to view and edit journal notes",
     "markTakenEnabled": "Dose actions enabled",
     "readOnly": "Read-only",
+    "actionBlocked": {
+      "futureTake": "Future intakes cannot be marked as taken yet.",
+      "futureSkip": "Future intakes cannot be skipped yet.",
+      "alreadyTakenMainApp": "This intake was already marked as taken in the main app."
+    },
     "journalNotesEnabled": "Journal view/edit enabled",
     "expiryNever": "Never expires",
     "neverExpiresWarning": "Never-expiring links stay valid until you revoke or regenerate them.",

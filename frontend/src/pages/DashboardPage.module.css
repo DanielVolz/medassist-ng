@@ -28,6 +28,12 @@
 	gap: 0.65rem;
 	min-width: 0;
 	width: 100%;
+	--overview-name-stack-height: calc(1rem * 1.55 + 0.4rem + 0.78rem * 1.2);
+}
+
+.overviewNameLine:has(.overviewTakenByLine) :global(.med-avatar-sm) {
+	width: var(--overview-name-stack-height);
+	height: var(--overview-name-stack-height);
 }
 
 .overviewNameBlock {
@@ -70,12 +76,10 @@
 	align-items: center;
 	gap: 0.22rem;
 	max-width: 100%;
-	min-height: 1.35rem;
-	padding: 0.12rem 0.45rem;
-	border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
-	border-radius: 999px;
-	background: color-mix(in srgb, var(--accent-bg) 72%, transparent);
-	color: var(--accent-light);
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--accent);
 	font: inherit;
 	font-size: 0.78rem;
 	font-weight: 700;
@@ -87,25 +91,23 @@
 
 .overviewTakenByBadgeClickable {
 	cursor: pointer;
-	text-decoration-line: none;
+	text-decoration-line: underline;
 	text-decoration-thickness: 0.08em;
 	text-underline-offset: 0.16em;
-	transition:
-		background 150ms ease,
-		border-color 150ms ease,
-		color 150ms ease;
+	transition: color 150ms ease;
 }
 
 .overviewTakenByBadgeClickable:hover {
-	border-color: color-mix(in srgb, var(--accent) 58%, transparent);
-	background: color-mix(in srgb, var(--accent-bg) 86%, transparent);
-	color: var(--accent);
-	text-decoration-line: underline;
+	background: transparent;
+	color: var(--accent-light);
+	box-shadow: none;
 }
 
 .overviewTakenByBadgeClickable:focus-visible {
+	background: transparent;
 	outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
 	outline-offset: 2px;
+	box-shadow: none;
 	text-decoration-line: underline;
 }
 

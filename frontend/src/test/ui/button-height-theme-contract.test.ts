@@ -11,6 +11,12 @@ function readSource(filePath: string) {
 	return readFileSync(resolve(srcRoot, filePath), "utf8");
 }
 
+function cssBlock(css: string, selector: string) {
+	const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const match = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, "s").exec(css);
+	return match?.[1] ?? "";
+}
+
 function collectSourceFiles(dir: string): string[] {
 	return readdirSync(dir).flatMap((entry) => {
 		const fullPath = resolve(dir, entry);
@@ -50,6 +56,33 @@ describe("button height theme contract", () => {
 
 		expect(existsSync(resolve(srcRoot, "ui/primitives/AppButton.module.css"))).toBe(false);
 		expect(appButton).not.toMatch(/AppButton\.module\.css|data-app-button-size|--button-height|height\s*:/);
+	});
+
+	it("keeps text-bearing buttons from clipping their labels", () => {
+		const appSurfaces = readSource("AppSurfaces.css");
+		const authCss = readSource("components/Auth.module.css");
+		const globalButton = cssBlock(appSurfaces, "button");
+		const authSubmit = cssBlock(authCss, ".auth-submit");
+		const authSubmitRoot = cssBlock(authCss, ".auth-submit:global(.mantine-Button-root)");
+		const authSubmitInner = cssBlock(
+			authCss,
+			".auth-submit:global(.mantine-Button-root) :global(.mantine-Button-inner)"
+		);
+		const authSubmitLabel = cssBlock(
+			authCss,
+			".auth-submit:global(.mantine-Button-root) :global(.mantine-Button-label)"
+		);
+
+		expect(globalButton).toMatch(/line-height\s*:\s*1\.25/);
+		expect(authSubmit).toMatch(/min-height\s*:\s*3rem/);
+		expect(authSubmit).toMatch(/line-height\s*:\s*1\.25/);
+		expect(authSubmit).toMatch(/overflow\s*:\s*visible/);
+		expect(authSubmitRoot).toMatch(/height\s*:\s*auto/);
+		expect(authSubmitRoot).toMatch(/min-height\s*:\s*3rem/);
+		expect(authSubmitInner).toMatch(/height\s*:\s*auto/);
+		expect(authSubmitInner).toMatch(/overflow\s*:\s*visible/);
+		expect(authSubmitLabel).toMatch(/overflow\s*:\s*visible/);
+		expect(authSubmitLabel).toMatch(/line-height\s*:\s*1\.25/);
 	});
 
 	it("does not reintroduce legacy app action height tokens", () => {

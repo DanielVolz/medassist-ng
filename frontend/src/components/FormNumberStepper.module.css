@@ -1,7 +1,13 @@
 .numberStepper {
-	--stepper-size: 2.75rem;
+	--stepper-height: 2.75rem;
+	--stepper-button-width: 2.75rem;
+	--stepper-value-min-width: 2.75rem;
+
 	display: grid;
-	grid-template-columns: var(--stepper-size) minmax(0, 1fr) var(--stepper-size);
+	grid-template-columns:
+		var(--stepper-button-width)
+		minmax(var(--stepper-value-min-width), 1fr)
+		var(--stepper-button-width);
 	align-items: stretch;
 	border: 1px solid var(--border-primary);
 	border-radius: var(--input-radius);
@@ -21,9 +27,10 @@
 	order: 0;
 	width: 100%;
 	min-width: 0;
-	min-height: var(--stepper-size);
+	min-height: var(--stepper-height);
 	margin: 0;
-	padding: 0.5rem;
+	padding-block: 0.5rem;
+	padding-inline: 0.5rem;
 	border: none;
 	border-radius: 0;
 	background: transparent;
@@ -32,6 +39,11 @@
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 	text-align: center;
+}
+
+.numberStepper input[type="text"] {
+	/* Keep shared stepper values consistent inside broader form input scopes. */
+	font-weight: 600;
 }
 
 .numberStepper input[type="number"]::-webkit-outer-spin-button,
@@ -54,8 +66,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	min-width: var(--stepper-size);
-	min-height: var(--stepper-size);
+	min-width: var(--stepper-button-width);
+	min-height: var(--stepper-height);
 	padding: 0;
 	border: none;
 	border-radius: 0;
@@ -100,10 +112,13 @@
 
 @media (max-width: 640px) {
 	.numberStepper {
-		--stepper-size: 3rem;
+		--stepper-height: 3rem;
+		--stepper-button-width: clamp(2.375rem, 29%, 2.75rem);
+		--stepper-value-min-width: 2.5rem;
 	}
 
 	.numberStepper input {
+		padding-inline: 0.25rem;
 		font-size: 1.05rem;
 	}
 }

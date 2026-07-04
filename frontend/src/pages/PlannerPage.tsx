@@ -275,16 +275,33 @@ export function PlannerPage() {
 
 	function getAvailableContent(row: PlannerDisplayRow): ReactNode {
 		if (isAmountBasedPackageType(row.packageType)) {
-			return getAvailableLabel(row.medicationId, row.loosePills);
+			return (
+				<span className={classes.availableChunk} data-planner-available-chunk>
+					{getAvailableLabel(row.medicationId, row.loosePills)}
+				</span>
+			);
 		}
 
 		const roundedLoose = Math.round(row.loosePills * 10) / 10;
 		if (row.loosePills <= 0) {
-			return `${row.fullBlisters} ${t("common.blisters")}`;
+			return (
+				<span className={classes.availableChunk} data-planner-available-chunk>
+					{row.fullBlisters} {t("common.blisters")}
+				</span>
+			);
 		}
 
 		const looseUnit = roundedLoose === 1 ? t("common.pill") : t("common.pills");
-		return `${row.fullBlisters} ${t("common.blisters")} + ${roundedLoose} ${looseUnit}`;
+		return (
+			<span className={classes.availableInline}>
+				<span className={classes.availableChunk} data-planner-available-chunk>
+					{row.fullBlisters} {t("common.blisters")}
+				</span>
+				<span className={classes.availableChunk} data-planner-available-chunk>
+					+ {roundedLoose} {looseUnit}
+				</span>
+			</span>
+		);
 	}
 
 	const plannerColumns = [
@@ -293,22 +310,28 @@ export function PlannerPage() {
 			header: t("planner.table.medication"),
 			render: (row) => {
 				const medication = row.medication;
+				const showGenericName = Boolean(medication?.name && medication.genericName);
 
 				return (
-					<Group gap="sm" wrap="nowrap" className={classes.medicationCell}>
+					<Group gap="sm" wrap="nowrap" align="flex-start" className={classes.medicationCell}>
 						<MedicationAvatar name={row.displayName} imageUrl={medication?.imageUrl} />
-						{medication ? (
-							<AppTextAction
-								className={classes.medicationNameLink}
-								fontWeight={600}
-								onClick={() => openMedDetail(medication)}
-								textAlign="left"
-							>
-								{row.displayName}
-							</AppTextAction>
-						) : (
-							<Text fw={600}>{row.displayName}</Text>
-						)}
+						<Stack className={classes.medicationIdentity} gap={2}>
+							{medication ? (
+								<AppTextAction
+									className={classes.medicationNameLink}
+									fontWeight={600}
+									onClick={() => openMedDetail(medication)}
+									textAlign="left"
+								>
+									{row.displayName}
+								</AppTextAction>
+							) : (
+								<Text className={classes.medicationNameText} fw={600}>
+									{row.displayName}
+								</Text>
+							)}
+							{showGenericName ? <Text className={classes.medicationGeneric}>{medication?.genericName}</Text> : null}
+						</Stack>
 					</Group>
 				);
 			},
@@ -330,6 +353,7 @@ export function PlannerPage() {
 		{
 			key: "prescriptionRefills",
 			header: t("planner.table.prescriptionRefills"),
+			mobileLabel: t("planner.table.prescriptionRefillsMobile"),
 			render: (row) => row.remainingRefills ?? "–",
 		},
 		{
@@ -405,15 +429,17 @@ export function PlannerPage() {
 				) : null}
 				{plannerDisplayRows.length > 0 ? (
 					<Stack className={classes.results} gap="md">
-						<DataTable
-							columns={plannerColumns}
-							data-testid="planner-results-table"
-							rows={plannerDisplayRows}
-							rowKey={(row) => row.medicationId}
-							getRowProps={() => ({
-								"data-testid": "planner-result-row",
-							})}
-						/>
+						<div className={classes.resultsTable}>
+							<DataTable
+								columns={plannerColumns}
+								data-testid="planner-results-table"
+								rows={plannerDisplayRows}
+								rowKey={(row) => row.medicationId}
+								getRowProps={() => ({
+									"data-testid": "planner-result-row",
+								})}
+							/>
+						</div>
 						{canSendNotification ? (
 							<Group className={classes.emailAction} justify="flex-end" align="center" gap="sm">
 								<AppButton

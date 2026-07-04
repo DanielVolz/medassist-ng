@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../components/Auth";
-import { DateInput } from "../components/DateInput";
+import { DateInput, MonthInput } from "../components/DateInput";
 import { FormNumberStepper } from "../components/FormNumberStepper";
 import { MedicationEnrichmentSection } from "../components/MedicationEnrichmentSection";
 import { MobileEditModal } from "../components/MobileEditModal";
@@ -56,7 +56,7 @@ import {
 import { AppButton } from "../ui/primitives/AppButton";
 import { AppCheckbox } from "../ui/primitives/AppCheckbox";
 import { AppTooltip, AppTooltipIcon } from "../ui/primitives/AppTooltip";
-import { combineDateAndTime, formatNumber } from "../utils/formatters";
+import { combineDateAndTime, formatNumber, toMonthEndDateValue } from "../utils/formatters";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import {
 	getIntakeScheduleMode,
@@ -1141,7 +1141,7 @@ export function MedicationsPage() {
 			medicationStartDate: form.medicationStartDate || null,
 			medicationEndDate: form.medicationEndDate || null,
 			autoMarkObsoleteAfterEndDate: form.autoMarkObsoleteAfterEndDate,
-			expiryDate: form.expiryDate || null,
+			expiryDate: toMonthEndDateValue(form.expiryDate) || null,
 			notes: form.notes.trim() || null,
 			intakeRemindersEnabled: form.intakeRemindersEnabled,
 			prescriptionEnabled: form.prescriptionEnabled,
@@ -2029,7 +2029,7 @@ export function MedicationsPage() {
 							)}
 							<label>
 								{t("form.expiryDate")}
-								<DateInput
+								<MonthInput
 									value={form.expiryDate}
 									onChange={(e) => handleValueChange("expiryDate", e.target.value)}
 									placeholder={t("common.optional")}

@@ -542,23 +542,26 @@
 
 	.shared-schedule-section :global(.dose-person) {
 		display: grid;
-		width: 100%;
+		width: calc(100% + 1rem);
 		min-width: 0;
+		margin-inline: -0.5rem;
 		--dose-action-take-width: clamp(5.35rem, 23vw, 7.1rem);
-		--dose-action-skip-width: clamp(4.45rem, 19vw, 5.35rem);
+		--dose-action-skip-width: clamp(5.75rem, 24vw, 6.75rem);
 		--dose-action-journal-width: clamp(5rem, 21vw, 6.35rem);
 
 		grid-template-columns:
-			minmax(0, 1fr) var(--dose-action-take-width) var(--dose-action-skip-width)
-			var(--dose-action-journal-width);
+			minmax(var(--dose-action-take-width), 1fr) minmax(var(--dose-action-skip-width), 1fr)
+			minmax(var(--dose-action-journal-width), 1fr);
 		align-items: center;
-		gap: 0.35rem;
-		padding: 0.28rem 0.35rem;
+		gap: 0.25rem;
+		padding: 0.28rem;
 	}
 
 	.shared-schedule-section :global(.dose-person .person-name) {
 		min-width: 0;
 		max-width: none;
+		grid-column: 1 / -1;
+		justify-self: end;
 		margin-right: 0;
 	}
 
@@ -576,15 +579,15 @@
 	}
 
 	.shared-schedule-section :global(.shared-dose-action-take) {
-		grid-column: 2;
+		grid-column: 1;
 	}
 
 	.shared-schedule-section :global(.shared-dose-action-skip) {
-		grid-column: 3;
+		grid-column: 2;
 	}
 
 	.shared-schedule-section :global(.shared-dose-action-journal) {
-		grid-column: 4;
+		grid-column: 3;
 	}
 
 	.shared-overview-table-wrap {

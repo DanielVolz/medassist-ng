@@ -8,6 +8,7 @@ import {
 	formatDisplayDate,
 	formatDisplayDateTime,
 	formatExpiryDate,
+	formatMonth,
 	formatNumber,
 	getBlisterStock,
 	getExpiryClass,
@@ -15,6 +16,8 @@ import {
 	toDateValue,
 	toInputValue,
 	toIsoString,
+	toMonthEndDateValue,
+	toMonthValue,
 	toTimeValue,
 } from "../../utils/formatters";
 
@@ -122,6 +125,19 @@ describe("formatExpiryDate", () => {
 	});
 });
 
+describe("formatMonth", () => {
+	it("formats date strings as localized month and year only", () => {
+		expect(formatMonth("2028-09-03", "de-DE")).toMatch(/^09\D2028$/);
+		expect(formatMonth("2028-09", "de-DE")).toMatch(/^09\D2028$/);
+	});
+
+	it("uses fallback for missing and invalid month strings", () => {
+		expect(formatMonth(null, "de-DE")).toBe("-");
+		expect(formatMonth("not-a-month", "de-DE")).toBe("-");
+		expect(formatMonth("2028-13", "de-DE")).toBe("-");
+	});
+});
+
 describe("pad2", () => {
 	it("pads single digit with leading zero", () => {
 		expect(pad2(5)).toBe("05");
@@ -156,6 +172,38 @@ describe("toDateValue", () => {
 	it("converts Date to date string", () => {
 		const date = new Date(2024, 2, 15);
 		expect(toDateValue(date)).toBe("2024-03-15");
+	});
+});
+
+describe("toMonthValue", () => {
+	it("extracts month from date strings", () => {
+		expect(toMonthValue("2027-01-01")).toBe("2027-01");
+		expect(toMonthValue("2028-09")).toBe("2028-09");
+	});
+
+	it("converts Date to month string", () => {
+		const date = new Date(2024, 2, 15);
+		expect(toMonthValue(date)).toBe("2024-03");
+	});
+
+	it("returns empty string for invalid month values", () => {
+		expect(toMonthValue(null)).toBe("");
+		expect(toMonthValue("not-a-month")).toBe("");
+		expect(toMonthValue("2028-13")).toBe("");
+	});
+});
+
+describe("toMonthEndDateValue", () => {
+	it("converts month values to the last day of the month", () => {
+		expect(toMonthEndDateValue("2028-09")).toBe("2028-09-30");
+		expect(toMonthEndDateValue("2028-02")).toBe("2028-02-29");
+		expect(toMonthEndDateValue("2027-02")).toBe("2027-02-28");
+	});
+
+	it("returns empty string for missing and invalid values", () => {
+		expect(toMonthEndDateValue(null)).toBe("");
+		expect(toMonthEndDateValue("not-a-month")).toBe("");
+		expect(toMonthEndDateValue("2028-13")).toBe("");
 	});
 });
 

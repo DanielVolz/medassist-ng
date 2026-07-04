@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import {
 	authFile,
 	createMedicationViaAPI,
@@ -28,7 +28,12 @@ async function clickEditMed(page: Page, medName: string): Promise<void> {
 	}
 	await expect(medRow).toBeVisible({ timeout: 10000 });
 	await medRow.getByRole("button", { name: /Edit|common\.edit/i }).click();
-	await expect(page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })).toBeVisible({
+	await expect(
+		page
+			.locator("h2:visible")
+			.filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })
+			.first()
+	).toBeVisible({
 		timeout: 5000,
 	});
 }
@@ -91,6 +96,47 @@ async function saveEditAndVerify(page: Page, medName: string): Promise<void> {
 	// Verify the med row is visible in the list
 	const medRow = page.getByTestId("medication-row").filter({ hasText: medName });
 	await expect(medRow).toBeVisible({ timeout: 10000 });
+}
+
+async function expectStepperValueToFit(input: Locator): Promise<void> {
+	await expect(input).toBeVisible();
+
+	const metrics = await input.evaluate((element) => {
+		const inputElement = element as HTMLInputElement;
+		const styles = window.getComputedStyle(inputElement);
+		const parsePixels = (value: string) => Number.parseFloat(value) || 0;
+		const canvas = document.createElement("canvas");
+		const context = canvas.getContext("2d");
+		let textWidth = 0;
+		if (context) {
+			context.font = [styles.fontStyle, styles.fontVariant, styles.fontWeight, styles.fontSize, styles.fontFamily].join(
+				" "
+			);
+			textWidth = context.measureText(inputElement.value).width;
+		}
+		const buttons = Array.from(inputElement.parentElement?.querySelectorAll("button") ?? []);
+		return {
+			buttonHeights: buttons.map((button) => button.getBoundingClientRect().height),
+			buttonWidths: buttons.map((button) => button.getBoundingClientRect().width),
+			clientWidth: inputElement.clientWidth,
+			contentWidth:
+				inputElement.clientWidth - parsePixels(styles.paddingInlineStart) - parsePixels(styles.paddingInlineEnd),
+			scrollWidth: inputElement.scrollWidth,
+			textWidth,
+		};
+	});
+
+	expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
+	expect(metrics.contentWidth).toBeGreaterThanOrEqual(metrics.textWidth + 1);
+	expect(Math.min(...metrics.buttonHeights)).toBeGreaterThanOrEqual(44);
+	expect(Math.max(...metrics.buttonWidths)).toBeLessThanOrEqual(45);
+}
+
+async function readNumericFontWeight(input: Locator): Promise<number> {
+	const fontWeight = await input.evaluate((element) => window.getComputedStyle(element).fontWeight);
+	if (fontWeight === "bold") return 700;
+	if (fontWeight === "normal") return 400;
+	return Number.parseInt(fontWeight, 10);
 }
 
 test.describe("Medication Editing", () => {
@@ -221,11 +267,19 @@ test.describe("Medication Editing", () => {
 		await clickEditMed(page, "Expiry Date Med");
 		await page.getByRole("tab", { name: /Package/i }).click();
 
-		// Set expiry date to 6 months from now
-		const expiryDate = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+		// Set expiry month with the picker, not by typing into a free-text field.
+		const expiryTarget = new Date();
+		const expiryDisplayPattern = new RegExp(
+			`${String(expiryTarget.getMonth() + 1).padStart(2, "0")}\\D${expiryTarget.getFullYear()}`
+		);
 		const expiryField = page.getByLabel(/(Expiry Date|form\.expiryDate)/i);
-		await expiryField.fill(expiryDate);
-		await expect(expiryField).toHaveValue(expiryDate);
+		await expect(expiryField).toHaveAttribute("type", "button");
+		await expect(expiryField).toHaveAttribute("data-dates-input", "true");
+		await expiryField.click();
+		const expiryPicker = page.locator("[data-dates-dropdown]");
+		await expect(expiryPicker).toBeVisible();
+		await expiryPicker.locator("[data-picker-control]").nth(expiryTarget.getMonth()).click();
+		await expect(expiryField).toContainText(expiryDisplayPattern);
 
 		// Also touch the name field to ensure form is dirty
 		// Expiry change itself is enough to persist in the current edit flow.
@@ -234,7 +288,48 @@ test.describe("Medication Editing", () => {
 
 		// Verify expiry date was saved
 		await clickEditMed(page, "Expiry Date Med");
-		await expect(page.getByLabel(/(Expiry Date|form\.expiryDate)/i)).toHaveValue(expiryDate);
+		await expect(page.getByLabel(/(Expiry Date|form\.expiryDate)/i)).toContainText(expiryDisplayPattern);
+	});
+
+	test("should keep mobile package stepper values unclipped and consistently weighted", async ({ page }) => {
+		const medName = `Mobile Stepper ${Date.now().toString(36)}`;
+		await page.setViewportSize({ width: 390, height: 844 });
+		createdMeds.push(
+			await createMedicationViaAPI({
+				name: medName,
+				packageType: "blister",
+				packCount: 1,
+				blistersPerPack: 10,
+				pillsPerBlister: 10,
+			})
+		);
+		await navigateTo(page, "/medications");
+
+		await clickEditMed(page, medName);
+		const modal = page.getByRole("dialog").filter({ hasText: medName }).last();
+		await expect(modal).toBeVisible();
+		await modal.getByRole("tab", { name: /Package/i }).click();
+
+		const packCount = modal.getByLabel(/(Packs|form\.packCount)/i);
+		const blistersPerPack = modal.getByLabel(/(Blisters per pack|form\.blistersPerPack)/i);
+		const pillsPerBlister = modal.getByLabel(/(Pills per blister|form\.pillsPerBlister)/i);
+		await expect(packCount).toHaveValue("1");
+		await expect(blistersPerPack).toHaveValue("10");
+		await expect(pillsPerBlister).toHaveValue("10");
+		await expectStepperValueToFit(blistersPerPack);
+		await expectStepperValueToFit(pillsPerBlister);
+
+		await modal.getByRole("tab", { name: /Schedule/i }).click();
+		const intakeRow = modal.locator(".blister-row").first();
+		const usage = intakeRow.getByLabel(/(Usage|form\.blisters\.usage)/i);
+		const every = intakeRow.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i);
+		await expect(usage).toHaveValue("1");
+		await expect(every).toHaveValue("1");
+
+		const stepperWeights = await Promise.all(
+			[packCount, blistersPerPack, pillsPerBlister, usage, every].map(readNumericFontWeight)
+		);
+		expect(new Set(stepperWeights)).toEqual(new Set([600]));
 	});
 
 	test("should edit intake schedule usage and interval", async ({ page }) => {

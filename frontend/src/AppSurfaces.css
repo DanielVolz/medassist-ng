@@ -147,6 +147,7 @@ button {
 	font-weight: 600;
 	font-size: 0.9rem;
 	font-family: inherit;
+	line-height: 1.25;
 	box-shadow: var(--button-shadow);
 	transition:
 		background 150ms ease,
@@ -813,7 +814,8 @@ button.has-validation-error {
 .readonly-fieldset:disabled input,
 .readonly-fieldset:disabled select,
 .readonly-fieldset:disabled textarea,
-.readonly-fieldset:disabled .date-input-wrapper {
+.readonly-fieldset:disabled .date-input-wrapper,
+.readonly-fieldset:disabled .month-picker-wrapper {
 	opacity: 0.55;
 	cursor: default;
 	border-color: transparent;
@@ -821,7 +823,8 @@ button.has-validation-error {
 	pointer-events: none;
 }
 
-.readonly-fieldset:disabled .date-input-display {
+.readonly-fieldset:disabled .date-input-display,
+.readonly-fieldset:disabled .month-picker-input {
 	opacity: 0.55;
 }
 
@@ -1702,6 +1705,7 @@ button.has-validation-error {
 	align-items: flex-start;
 	gap: 0.45rem;
 	min-width: 0;
+	--schedule-med-name-stack-height: calc(1rem * 1.55 + 0.1rem + 0.875rem * 1.2);
 	font-size: 1rem;
 	font-weight: 600;
 	color: var(--text-primary);
@@ -1717,6 +1721,11 @@ button.has-validation-error {
 .time-main .med-name .med-avatar-sm {
 	width: 36px;
 	height: 36px;
+}
+
+.time-main .med-name:has(.med-generic-inline) .med-avatar-sm {
+	width: var(--schedule-med-name-stack-height);
+	height: var(--schedule-med-name-stack-height);
 }
 
 .time-main .med-name > .med-avatar.clickable,
@@ -1953,7 +1962,7 @@ button.has-validation-error {
 	font: inherit;
 	font-size: 0.76rem;
 	font-weight: 600;
-	line-height: 1.15;
+	line-height: 1.3;
 	letter-spacing: 0;
 	padding: 0;
 	text-align: right;
@@ -2168,7 +2177,7 @@ button.has-validation-error {
 
 	.dose-item {
 		display: grid;
-		grid-template-columns: 5rem minmax(12rem, 1fr) auto auto;
+		grid-template-columns: 5rem minmax(8rem, 1fr) auto max-content;
 		align-items: center;
 		column-gap: 0.8rem;
 		padding: 0.45rem 0.7rem;
@@ -2200,16 +2209,23 @@ button.has-validation-error {
 		grid-column: 4;
 		margin-left: 0;
 		align-items: flex-end;
+		min-width: max-content;
+		max-width: 100%;
 	}
 
 	.dose-person {
 		padding: 3px 8px;
 		gap: 8px;
+		flex-wrap: nowrap;
+		max-width: 100%;
 	}
 
 	.dose-person .person-name {
-		min-width: 80px;
-		max-width: 16rem;
+		flex: 0 0 auto;
+		min-width: max-content;
+		max-width: none;
+		white-space: nowrap;
+		overflow-wrap: normal;
 	}
 }
 
@@ -2457,24 +2473,27 @@ button.has-validation-error {
 
 	.dose-person {
 		display: grid;
-		width: 100%;
+		width: calc(100% + 1rem);
 		min-width: 0;
+		margin-inline: -0.5rem;
 		--dose-action-take-width: clamp(5.35rem, 23vw, 7.1rem);
-		--dose-action-skip-width: clamp(4.45rem, 19vw, 5.35rem);
+		--dose-action-skip-width: clamp(5.75rem, 24vw, 6.75rem);
 		--dose-action-journal-width: clamp(5rem, 21vw, 6.35rem);
 
 		grid-template-columns:
-			minmax(0, 1fr) var(--dose-action-take-width) var(--dose-action-skip-width)
-			var(--dose-action-journal-width);
+			minmax(var(--dose-action-take-width), 1fr) minmax(var(--dose-action-skip-width), 1fr)
+			minmax(var(--dose-action-journal-width), 1fr);
 		align-items: center;
-		gap: 0.35rem;
-		padding: 0.28rem 0.35rem;
+		gap: 0.25rem;
+		padding: 0.28rem;
 	}
 
 	.dose-person .person-name {
 		flex: 1 1 auto;
 		min-width: 0;
 		max-width: none;
+		grid-column: 1 / -1;
+		justify-self: end;
 		margin-right: 0;
 	}
 

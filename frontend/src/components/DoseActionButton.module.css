@@ -42,6 +42,18 @@
 	display: inline;
 }
 
+@media (min-width: 601px) {
+	.takeAction:global(.mantine-Button-root),
+	.skipAction:global(.mantine-Button-root),
+	.journalAction:global(.mantine-Button-root),
+	.tooltipTarget.takeAction,
+	.tooltipTarget.skipAction,
+	.tooltipTarget.journalAction {
+		width: 7.5rem;
+		min-width: 7.5rem;
+	}
+}
+
 @media (max-width: 600px) {
 	.button:global(.mantine-Button-root) {
 		--button-height: 2rem;
@@ -228,14 +240,14 @@
 
 @media (max-width: 600px) {
 	.takeAction {
-		grid-column: 2;
+		grid-column: 1;
 	}
 
 	.skipAction {
-		grid-column: 3;
+		grid-column: 2;
 	}
 
 	.journalAction {
-		grid-column: 4;
+		grid-column: 3;
 	}
 }

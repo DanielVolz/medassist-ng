@@ -9,7 +9,7 @@ import {
 	isTubePackageType,
 	normalizePackageType,
 } from "../types";
-import { toDateValue, toTimeValue } from "../utils/formatters";
+import { toDateValue, toMonthValue, toTimeValue } from "../utils/formatters";
 import { normalizeWeekdays } from "../utils/intake-schedule";
 import { personTagsMatch } from "../utils/person-tags";
 import {
@@ -320,7 +320,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 			medicationStartDate: med.medicationStartDate ?? "",
 			medicationEndDate: med.medicationEndDate ?? "",
 			autoMarkObsoleteAfterEndDate: med.autoMarkObsoleteAfterEndDate ?? true,
-			expiryDate: med.expiryDate ? med.expiryDate.slice(0, 10) : "",
+			expiryDate: toMonthValue(med.expiryDate),
 			notes: med.notes ?? "",
 			prescriptionEnabled: med.prescriptionEnabled ?? false,
 			prescriptionAuthorizedRefills: med.prescriptionAuthorizedRefills != null ? String(authorizedRefills) : "",

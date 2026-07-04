@@ -50,6 +50,7 @@ test.describe("Planner with medications", () => {
 		createdMeds.push(
 			await createMedicationViaAPI({
 				name: MED_HIGH,
+				genericName: "Ibuprofen",
 				packageType: "blister",
 				packCount: 2,
 				blistersPerPack: 3,
@@ -93,6 +94,67 @@ test.describe("Planner with medications", () => {
 
 		await expect(resultsTable.getByText(MED_HIGH)).toBeVisible();
 		await expect(resultsTable.getByText(MED_LOW)).toBeVisible();
+	});
+
+	test.describe("mobile layout", () => {
+		test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+		test("renders medication identity as the full card header", async ({ page }) => {
+			await navigateTo(page, "/planner");
+			await calculatePlanner(page);
+
+			const row = page.getByTestId("planner-result-row").filter({ hasText: MED_HIGH }).first();
+			await expect(row).toBeVisible();
+			await expect(row.getByRole("button", { name: MED_HIGH })).toBeVisible();
+			await expect(row.getByText("Ibuprofen")).toBeVisible();
+
+			const medicationCell = row.locator('td[data-column-key="medication"]');
+			const layout = await medicationCell.evaluate((cell) => {
+				const avatar = cell.querySelector<HTMLElement>(".med-avatar-sm");
+				const cellRect = cell.getBoundingClientRect();
+				const rowRect = cell.closest("tr")?.getBoundingClientRect();
+				return {
+					avatarWidth: avatar?.getBoundingClientRect().width ?? 0,
+					beforeDisplay: getComputedStyle(cell, "::before").display,
+					cellDisplay: getComputedStyle(cell).display,
+					cellWidth: cellRect.width,
+					rowLeft: rowRect?.left ?? 0,
+					rowRight: rowRect?.right ?? 0,
+					viewportWidth: window.innerWidth,
+				};
+			});
+
+			expect(layout.cellDisplay).toBe("block");
+			expect(layout.beforeDisplay).toBe("none");
+			expect(layout.avatarWidth).toBeGreaterThanOrEqual(40);
+			expect(layout.cellWidth).toBeGreaterThan(250);
+			expect(layout.rowLeft).toBeGreaterThanOrEqual(0);
+			expect(layout.rowRight).toBeLessThanOrEqual(layout.viewportWidth + 1);
+
+			const availableCell = row.locator('td[data-column-key="available"]');
+			const availableLayout = await availableCell.evaluate((cell) => {
+				const chunks = Array.from(cell.querySelectorAll<HTMLElement>("[data-planner-available-chunk]"));
+				return chunks.map((chunk) => {
+					const rect = chunk.getBoundingClientRect();
+					const style = getComputedStyle(chunk);
+					const parsedLineHeight = Number.parseFloat(style.lineHeight);
+					const parsedFontSize = Number.parseFloat(style.fontSize);
+					const singleLineHeight = Number.isFinite(parsedLineHeight)
+						? parsedLineHeight
+						: Math.max(1, parsedFontSize * 1.5);
+					return {
+						height: rect.height,
+						singleLineHeight,
+						text: chunk.textContent?.trim() ?? "",
+					};
+				});
+			});
+
+			expect(availableLayout.some((chunk) => /\d+\s+(blisters|Blister)/i.test(chunk.text))).toBe(true);
+			for (const chunk of availableLayout) {
+				expect(chunk.height).toBeLessThanOrEqual(chunk.singleLineHeight * 1.35);
+			}
+		});
 	});
 
 	test("should show status chips in results", async ({ page }) => {

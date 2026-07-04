@@ -42,7 +42,7 @@ import {
 	toggleWeekdaySelection,
 	WEEKDAY_CODES,
 } from "../utils/intake-schedule";
-import { DateInput } from "./DateInput";
+import { DateInput, MonthInput } from "./DateInput";
 import { FormNumberStepper } from "./FormNumberStepper";
 import type { MedicationEnrichmentViewModel } from "./MedicationEnrichmentSection";
 import { MedicationEnrichmentSection } from "./MedicationEnrichmentSection";
@@ -910,7 +910,7 @@ export function MobileEditModal({
 										)}
 										<label className="full">
 											{t("form.expiryDate")}
-											<DateInput
+											<MonthInput
 												value={form.expiryDate}
 												onChange={(e) => onFormChange({ ...form, expiryDate: e.target.value })}
 											/>

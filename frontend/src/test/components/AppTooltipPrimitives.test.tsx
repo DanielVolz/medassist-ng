@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AppCheckbox } from "../../ui/primitives/AppCheckbox";
 import { AppSwitch } from "../../ui/primitives/AppSwitch";
@@ -111,36 +111,40 @@ describe("tooltip-enabled form primitives", () => {
 		}
 	});
 
-	it("closes touch-opened app tooltips when the page scrolls or touch moves", async () => {
-		render(<AppTooltipIcon label="Scroll help" />);
+	it("keeps touch-opened app tooltips open until outside touch or scrolling", () => {
+		vi.useFakeTimers();
+		try {
+			render(<AppTooltipIcon label="Scroll help" />);
 
-		const trigger = screen.getByRole("button", { name: "Scroll help" });
-		fireEvent.touchStart(trigger);
-		expect(await screen.findByRole("tooltip")).toHaveTextContent("Scroll help");
+			const trigger = screen.getByRole("button", { name: "Scroll help" });
+			fireEvent.touchStart(trigger);
+			expect(screen.getByRole("tooltip")).toHaveTextContent("Scroll help");
 
-		fireEvent.touchMove(trigger);
+			act(() => {
+				vi.advanceTimersByTime(5000);
+			});
+			expect(screen.getByRole("tooltip")).toHaveTextContent("Scroll help");
 
-		await waitFor(() => {
+			fireEvent.touchMove(trigger);
+			fireEvent.pointerMove(trigger, { pointerType: "touch" });
+			expect(screen.getByRole("tooltip")).toHaveTextContent("Scroll help");
+
+			fireEvent.touchStart(document.body);
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-		});
 
-		fireEvent.touchStart(trigger);
-		expect(await screen.findByRole("tooltip")).toHaveTextContent("Scroll help");
+			fireEvent.touchStart(trigger);
+			expect(screen.getByRole("tooltip")).toHaveTextContent("Scroll help");
 
-		fireEvent.scroll(document);
-
-		await waitFor(() => {
+			fireEvent.scroll(document);
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-		});
 
-		fireEvent.touchStart(trigger);
-		expect(await screen.findByRole("tooltip")).toHaveTextContent("Scroll help");
-
-		fireEvent.pointerMove(trigger, { pointerType: "touch" });
-
-		await waitFor(() => {
+			fireEvent.touchStart(trigger);
+			expect(screen.getByRole("tooltip")).toHaveTextContent("Scroll help");
+			fireEvent.wheel(document);
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-		});
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("does not reopen from focus after a touch scroll closes the tooltip", async () => {
@@ -150,7 +154,7 @@ describe("tooltip-enabled form primitives", () => {
 		fireEvent.touchStart(trigger);
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("Focus after touch help");
 
-		fireEvent.touchMove(trigger);
+		fireEvent.scroll(document);
 		await waitFor(() => {
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 		});

@@ -717,7 +717,7 @@ export function SharedSchedule() {
 				onClick={() => undoDoseSkipped(options.doseId)}
 				disabled={Boolean(skipBlockLabel)}
 			>
-				<span className={doseButtonClasses.label}>{t("dose.undoSkip")}</span>
+				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
 				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (

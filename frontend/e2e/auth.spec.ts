@@ -23,6 +23,76 @@ async function isAuthEnabled(page: Page): Promise<boolean> {
 	return state?.authEnabled !== false;
 }
 
+async function expectVisibleButtonTextNotClipped(page: Page, scopeSelector: string): Promise<void> {
+	const violations = await page.locator(scopeSelector).evaluate((scope) => {
+		function isVisible(element: HTMLElement) {
+			const rect = element.getBoundingClientRect();
+			const style = window.getComputedStyle(element);
+			return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+		}
+
+		function textRect(element: HTMLElement) {
+			const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+			let rect: DOMRect | null = null;
+			while (walker.nextNode()) {
+				const node = walker.currentNode;
+				const text = node.textContent?.trim();
+				if (!text) continue;
+
+				const range = document.createRange();
+				range.selectNodeContents(node);
+				const nextRect = range.getBoundingClientRect();
+				range.detach();
+				if (nextRect.width <= 0 || nextRect.height <= 0) continue;
+
+				rect = rect
+					? DOMRect.fromRect({
+							x: Math.min(rect.left, nextRect.left),
+							y: Math.min(rect.top, nextRect.top),
+							width: Math.max(rect.right, nextRect.right) - Math.min(rect.left, nextRect.left),
+							height: Math.max(rect.bottom, nextRect.bottom) - Math.min(rect.top, nextRect.top),
+						})
+					: nextRect;
+			}
+			return rect;
+		}
+
+		return Array.from(scope.querySelectorAll<HTMLElement>("button"))
+			.filter(isVisible)
+			.flatMap((button) => {
+				const text = button.textContent?.trim().replace(/\s+/g, " ");
+				if (!text) return [];
+
+				const label = button.querySelector<HTMLElement>(".mantine-Button-label") ?? button;
+				const rect = button.getBoundingClientRect();
+				const labelRect = textRect(label) ?? label.getBoundingClientRect();
+				const buttonStyle = window.getComputedStyle(button);
+				const labelStyle = window.getComputedStyle(label);
+				const tolerance = 1.5;
+				const boundsClip = labelRect.top < rect.top - tolerance || labelRect.bottom > rect.bottom + tolerance;
+				const buttonOverflow =
+					button.scrollHeight > button.clientHeight + tolerance && buttonStyle.overflowY !== "visible";
+				const labelOverflow = label.scrollHeight > label.clientHeight + tolerance && labelStyle.overflowY !== "visible";
+
+				if (!boundsClip && !buttonOverflow && !labelOverflow) return [];
+
+				return [
+					{
+						boundsClip,
+						buttonHeight: Math.round(rect.height * 10) / 10,
+						buttonOverflow,
+						labelBottom: Math.round(labelRect.bottom * 10) / 10,
+						labelOverflow,
+						labelTop: Math.round(labelRect.top * 10) / 10,
+						text,
+					},
+				];
+			});
+	});
+
+	expect(violations).toEqual([]);
+}
+
 /**
  * Authentication E2E Tests
  *
@@ -70,6 +140,23 @@ test.describe("Authentication", () => {
 		const submitButton = page.locator('button.auth-submit[type="submit"]');
 		await expect(submitButton).toBeVisible();
 		await expect(submitButton).toBeEnabled();
+	});
+
+	test("should keep auth button text fully visible on mobile", async ({ page }) => {
+		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
+
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto("/");
+		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
+
+		await expectVisibleButtonTextNotClipped(page, ".auth-container");
+
+		const toggleButton = page.locator("button.auth-link-btn");
+		if (await toggleButton.isVisible().catch(() => false)) {
+			await toggleButton.click();
+			await expect(page.locator(".auth-container")).toBeVisible();
+			await expectVisibleButtonTextNotClipped(page, ".auth-container");
+		}
 	});
 
 	test("should not navigate to dashboard without credentials", async ({ page }) => {

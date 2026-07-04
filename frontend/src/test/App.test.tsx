@@ -9,6 +9,8 @@ const appTranslations: Record<string, string> = {
 	"common.initializing": "Initializing...",
 	"common.loading": "Loading...",
 	"common.retry": "Retry",
+	"nav.dismissSwipeHint": "Dismiss navigation swipe hint",
+	"nav.mobileSwipeHint": "Swipe sideways to switch Dashboard, Medications, and Planner.",
 };
 
 vi.mock("react-i18next", async () => {
@@ -43,6 +45,36 @@ let authMock: AuthStateMock = {
 
 let appContextMock: Record<string, unknown>;
 let shareContextMock: Record<string, unknown>;
+const confirmNavigationMock = vi.fn(async () => true);
+
+function dispatchTouchEvent(
+	element: HTMLElement,
+	type: "touchstart" | "touchmove" | "touchend",
+	point: { clientX: number; clientY: number }
+) {
+	const event = new Event(type, { bubbles: true, cancelable: true });
+	const touches = type === "touchend" ? [] : [point];
+	const changedTouches = [point];
+	Object.defineProperty(event, "touches", { value: touches });
+	Object.defineProperty(event, "changedTouches", { value: changedTouches });
+	fireEvent(element, event);
+}
+
+function mockMobileMediaQuery(matches: boolean) {
+	Object.defineProperty(window, "matchMedia", {
+		writable: true,
+		value: vi.fn().mockImplementation((query: string) => ({
+			matches: query === "(max-width: 700px)" ? matches : false,
+			media: query,
+			onchange: null,
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			dispatchEvent: vi.fn(),
+		})),
+	});
+}
 
 vi.mock("../components/AboutModal", () => ({
 	default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>about-modal-open</div> : null),
@@ -95,6 +127,11 @@ vi.mock("../context", async () => {
 		AppProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 		ShareContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 		UnsavedChangesProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+		useUnsavedChanges: () => ({
+			hasUnsavedChanges: false,
+			setHasUnsavedChanges: vi.fn(),
+			confirmNavigation: confirmNavigationMock,
+		}),
 		useAppContext: () => appContextMock,
 		useShareContext: () => shareContextMock,
 	};
@@ -224,6 +261,8 @@ describe("App", () => {
 		document.body.classList.remove("modal-open");
 		vi.spyOn(window.history, "back").mockImplementation(() => {});
 		vi.spyOn(window.history, "pushState").mockImplementation(() => {});
+		confirmNavigationMock.mockClear();
+		mockMobileMediaQuery(true);
 		vi.clearAllMocks();
 	});
 
@@ -343,6 +382,61 @@ describe("App", () => {
 		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
 	});
 
+	it("shows and dismisses the mobile main route swipe hint", async () => {
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+		expect(screen.getByTestId("main-swipe-hint")).toHaveTextContent(
+			"Swipe sideways to switch Dashboard, Medications, and Planner."
+		);
+
+		fireEvent.click(screen.getByTestId("main-swipe-hint-dismiss"));
+
+		expect(screen.queryByTestId("main-swipe-hint")).not.toBeInTheDocument();
+		expect(window.localStorage.setItem).toHaveBeenCalledWith("medassist.mainRouteSwipeHintDismissed", "true");
+	});
+
+	it("does not show the main route swipe hint on desktop or non-swipe routes", async () => {
+		mockMobileMediaQuery(false);
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+		expect(screen.queryByTestId("main-swipe-hint")).not.toBeInTheDocument();
+
+		mockMobileMediaQuery(true);
+		render(
+			<MemoryRouter initialEntries={["/settings"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		expect(await screen.findByText("settings-page")).toBeInTheDocument();
+		expect(screen.queryByTestId("main-swipe-hint")).not.toBeInTheDocument();
+	});
+
+	it("does not show the main route swipe hint after it was dismissed", async () => {
+		vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+			key === "medassist.mainRouteSwipeHintDismissed" ? "true" : null
+		);
+
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+		expect(screen.queryByTestId("main-swipe-hint")).not.toBeInTheDocument();
+	});
+
 	it("preserves notification query params when redirecting root to dashboard", async () => {
 		const search = "?date=2026-05-06&medId=4332&doseId=4332-0-1778104500000";
 
@@ -426,5 +520,51 @@ describe("App", () => {
 		);
 
 		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+	});
+
+	it("swipes between main app routes on mobile", async () => {
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+		const swipeSurface = screen.getByTestId("main-route-swipe-surface");
+
+		dispatchTouchEvent(swipeSurface, "touchstart", { clientX: 330, clientY: 260 });
+		dispatchTouchEvent(swipeSurface, "touchmove", { clientX: 110, clientY: 266 });
+		dispatchTouchEvent(swipeSurface, "touchend", { clientX: 110, clientY: 266 });
+		expect(await screen.findByText("medications-page")).toBeInTheDocument();
+
+		dispatchTouchEvent(swipeSurface, "touchstart", { clientX: 330, clientY: 260 });
+		dispatchTouchEvent(swipeSurface, "touchmove", { clientX: 110, clientY: 266 });
+		dispatchTouchEvent(swipeSurface, "touchend", { clientX: 110, clientY: 266 });
+		expect(await screen.findByText("planner-page")).toBeInTheDocument();
+
+		dispatchTouchEvent(swipeSurface, "touchstart", { clientX: 110, clientY: 260 });
+		dispatchTouchEvent(swipeSurface, "touchmove", { clientX: 330, clientY: 266 });
+		dispatchTouchEvent(swipeSurface, "touchend", { clientX: 330, clientY: 266 });
+		expect(await screen.findByText("medications-page")).toBeInTheDocument();
+		expect(confirmNavigationMock).toHaveBeenCalled();
+	});
+
+	it("does not swipe between main app routes on desktop", async () => {
+		mockMobileMediaQuery(false);
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+		const swipeSurface = screen.getByTestId("main-route-swipe-surface");
+
+		dispatchTouchEvent(swipeSurface, "touchstart", { clientX: 330, clientY: 260 });
+		dispatchTouchEvent(swipeSurface, "touchmove", { clientX: 110, clientY: 266 });
+		dispatchTouchEvent(swipeSurface, "touchend", { clientX: 110, clientY: 266 });
+
+		expect(screen.getByText("dashboard-page")).toBeInTheDocument();
+		expect(screen.queryByText("medications-page")).not.toBeInTheDocument();
 	});
 });

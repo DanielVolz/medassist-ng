@@ -48,6 +48,23 @@
 	padding: 0 var(--page-pad-x) 1.5rem;
 }
 
+.routeSwipeSurface {
+	min-width: 0;
+}
+
+.mainSwipeHint {
+	display: none;
+}
+
+.mainSwipeHintClose {
+	flex: 0 0 auto;
+	color: var(--mantine-other-text-muted);
+}
+
+.mainSwipeHintClose:hover {
+	color: var(--mantine-other-text-primary);
+}
+
 .routeTransitionMask {
 	position: fixed;
 	inset: 0;
@@ -66,5 +83,35 @@
 @media (max-width: 700px) {
 	.page {
 		--page-pad-x: 0.4rem;
+	}
+
+	.routeSwipeSurface {
+		touch-action: pan-y;
+	}
+
+	.mainSwipeHint {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.35rem;
+		width: fit-content;
+		max-width: calc(100% - 1rem);
+		margin: 0.65rem auto 0.2rem;
+		padding: 0.28rem 0.35rem 0.28rem 0.7rem;
+		border: 1px solid color-mix(in srgb, var(--mantine-other-border-primary) 72%, transparent);
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--mantine-other-bg-tertiary) 76%, transparent);
+		color: var(--mantine-other-text-muted);
+		font-size: 0.75rem;
+		font-weight: 650;
+		line-height: 1.35;
+		text-align: center;
+	}
+
+	.mainSwipeHint span {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 }

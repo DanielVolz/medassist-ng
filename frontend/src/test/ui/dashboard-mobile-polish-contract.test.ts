@@ -56,9 +56,9 @@ describe("dashboard and shared mobile polish contract", () => {
 		expect(blockFor(appSurfacesCss, ".time-main .med-generic-inline")).toMatch(/display\s*:\s*block/);
 		expect(lastBlockFor(appSurfacesCss, ".dose-person")).toMatch(/grid-template-columns/);
 		expect(blockFor(doseButtonCss, ".tooltipTarget")).toMatch(/width\s*:\s*100%/);
-		expect(blockFor(doseButtonCss, ".takeAction")).toMatch(/grid-column\s*:\s*2/);
-		expect(blockFor(doseButtonCss, ".skipAction")).toMatch(/grid-column\s*:\s*3/);
-		expect(blockFor(doseButtonCss, ".journalAction")).toMatch(/grid-column\s*:\s*4/);
+		expect(blockFor(doseButtonCss, ".takeAction")).toMatch(/grid-column\s*:\s*1/);
+		expect(blockFor(doseButtonCss, ".skipAction")).toMatch(/grid-column\s*:\s*2/);
+		expect(blockFor(doseButtonCss, ".journalAction")).toMatch(/grid-column\s*:\s*3/);
 	});
 
 	it("keeps the taken-by intake tooltip translated in English and German", () => {

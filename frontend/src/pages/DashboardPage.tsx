@@ -461,8 +461,15 @@ export function DashboardPage() {
 		isSkipped: boolean;
 		isAutomaticallyTaken: boolean;
 		isEmpty: boolean;
+		isFuture: boolean;
 	}) => {
 		const journalUnavailable = !(options.isTaken || options.isSkipped);
+		const takeBlockLabel = (() => {
+			if (options.isFuture) return t("dose.actionBlocked.futureTake");
+			if (!options.isTaken && options.isEmpty) return t("common.outOfStockTakeBlocked");
+			return null;
+		})();
+		const skipBlockLabel = options.isFuture ? t("dose.actionBlocked.futureSkip") : null;
 		const takeButtonControl = options.isTaken ? (
 			<AppButton
 				type="button"
@@ -474,6 +481,7 @@ export function DashboardPage() {
 					doseButtonClasses.undoTake
 				)}
 				onClick={() => undoDoseTaken(options.doseId)}
+				disabled={Boolean(takeBlockLabel)}
 			>
 				{options.isAutomaticallyTaken && (
 					<AppTooltip label={t("tooltips.automaticTaken")}>
@@ -498,7 +506,7 @@ export function DashboardPage() {
 					options.isEmpty && doseButtonClasses.outOfStock
 				)}
 				onClick={() => markDoseTaken(options.doseId)}
-				disabled={options.isEmpty || options.isSkipped}
+				disabled={Boolean(takeBlockLabel) || options.isSkipped}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
 				{options.isEmpty ? (
@@ -508,14 +516,13 @@ export function DashboardPage() {
 				)}
 			</AppButton>
 		);
-		const takeButton =
-			!options.isTaken && options.isEmpty ? (
-				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
-					<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
-				</AppTooltip>
-			) : (
-				takeButtonControl
-			);
+		const takeButton = takeBlockLabel ? (
+			<AppTooltip label={takeBlockLabel}>
+				<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>{takeButtonControl}</span>
+			</AppTooltip>
+		) : (
+			takeButtonControl
+		);
 
 		const journalButtonControl = (
 			<AppButton
@@ -563,6 +570,7 @@ export function DashboardPage() {
 					doseButtonClasses.undoSkip
 				)}
 				onClick={() => undoDoseSkipped(options.doseId)}
+				disabled={Boolean(skipBlockLabel)}
 			>
 				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
 				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
@@ -573,16 +581,23 @@ export function DashboardPage() {
 				size="sm"
 				className={cx(doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
-				disabled={options.isTaken}
+				disabled={options.isTaken || Boolean(skipBlockLabel)}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.skip")}</span>
 			</AppButton>
+		);
+		const skipButtonWithTooltip = skipBlockLabel ? (
+			<AppTooltip label={skipBlockLabel}>
+				<span className={cx(doseButtonClasses.tooltipTarget, doseButtonClasses.skipAction)}>{skipButton}</span>
+			</AppTooltip>
+		) : (
+			skipButton
 		);
 
 		return (
 			<>
 				{takeButton}
-				{skipButton}
+				{skipButtonWithTooltip}
 				{journalButton}
 			</>
 		);
@@ -1481,6 +1496,7 @@ export function DashboardPage() {
 																									isSkipped,
 																									isAutomaticallyTaken,
 																									isEmpty,
+																									isFuture: false,
 																								})}
 																							</div>
 																						);
@@ -1815,6 +1831,7 @@ export function DashboardPage() {
 																									isSkipped,
 																									isAutomaticallyTaken,
 																									isEmpty,
+																									isFuture: false,
 																								})}
 																							</div>
 																						);
@@ -2088,7 +2105,8 @@ export function DashboardPage() {
 																									isTaken,
 																									isSkipped,
 																									isAutomaticallyTaken,
-																									isEmpty: true,
+																									isEmpty,
+																									isFuture: true,
 																								})}
 																							</div>
 																						);

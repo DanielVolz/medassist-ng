@@ -270,6 +270,24 @@ function isDoseInsideShareScheduleWindow(share: typeof shareTokens.$inferSelect,
 	return doseDayStart >= earliestVisible.getTime() && doseDayStart < latestVisibleExclusive.getTime();
 }
 
+function isFutureDoseDay(parsedDose: ParsedDoseId): boolean {
+	return getLocalDayStartMs(parsedDose.timestampMs) > getLocalDayStartMs(new Date());
+}
+
+function getExpectedShareMarkedBy(share: typeof shareTokens.$inferSelect, parsedDose: ParsedDoseId): string {
+	if (share.takenBy !== "all") return share.takenBy;
+	return parsedDose.personSuffix ?? "all";
+}
+
+function isDoseMarkedOutsideShareLink(
+	share: typeof shareTokens.$inferSelect,
+	parsedDose: ParsedDoseId,
+	existing: typeof doseTracking.$inferSelect
+): boolean {
+	if (existing.dismissed) return false;
+	return existing.markedBy !== getExpectedShareMarkedBy(share, parsedDose);
+}
+
 async function isDoseOutOfStock(options: {
 	userId: number;
 	doseId: string;
@@ -585,6 +603,7 @@ export async function doseRoutes(app: FastifyInstance) {
 						},
 					},
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
+					409: genericErrorSchema,
 					401: genericErrorSchema,
 				},
 			},
@@ -596,7 +615,16 @@ export async function doseRoutes(app: FastifyInstance) {
 				return reply.status(400).send({ error: getValidationErrorMessage(parsed.error) });
 			}
 
-			const status = await markDoseSkippedForUser({ userId, doseId: parsed.data.doseId });
+			const { doseId } = parsed.data;
+			const parsedDose = parseDoseId(doseId);
+			if (parsedDose && isFutureDoseDay(parsedDose)) {
+				return reply.status(409).send({
+					error: "Future doses cannot be skipped",
+					code: "FUTURE_DOSE",
+				});
+			}
+
+			const status = await markDoseSkippedForUser({ userId, doseId });
 			if (status === "already_skipped") {
 				return { success: true, message: "Already skipped" };
 			}
@@ -665,6 +693,7 @@ export async function doseRoutes(app: FastifyInstance) {
 					},
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
 					401: genericErrorSchema,
+					409: genericErrorSchema,
 				},
 			},
 		},
@@ -679,6 +708,16 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			const { doseIds } = parsed.data;
+			const hasFutureDose = doseIds.some((doseId) => {
+				const parsedDose = parseDoseId(doseId);
+				return parsedDose ? isFutureDoseDay(parsedDose) : false;
+			});
+			if (hasFutureDose) {
+				return reply.status(409).send({
+					error: "Future doses cannot be skipped",
+					code: "FUTURE_DOSE",
+				});
+			}
 
 			// Preserve the existing route semantics for dismiss: any non-dismissed record
 			// becomes dismissed, regardless of whether it already has a taken timestamp.
@@ -1030,6 +1069,7 @@ export async function doseRoutes(app: FastifyInstance) {
 					},
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
 					403: genericErrorSchema,
+					409: genericErrorSchema,
 					404: genericErrorSchema,
 				},
 			},
@@ -1083,6 +1123,25 @@ export async function doseRoutes(app: FastifyInstance) {
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
 
+			const parsedShareDose = parseDoseId(doseId);
+			if (parsedShareDose && isFutureDoseDay(parsedShareDose)) {
+				return reply.status(409).send({
+					error: "Future doses cannot be skipped via share link",
+					code: "FUTURE_DOSE",
+				});
+			}
+
+			const [existing] = await db
+				.select()
+				.from(doseTracking)
+				.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
+			if (existing && parsedShareDose && isDoseMarkedOutsideShareLink(share, parsedShareDose, existing)) {
+				return reply.status(409).send({
+					error: "Dose was already marked as taken in the main app",
+					code: "MAIN_APP_TAKEN",
+				});
+			}
+
 			const status = await markDoseSkippedForUser({ userId: share.userId, doseId });
 			if (status === "already_skipped") {
 				return { success: true, message: "Already skipped" };
@@ -1121,6 +1180,7 @@ export async function doseRoutes(app: FastifyInstance) {
 					200: { type: "object", properties: { success: { type: "boolean" } } },
 					400: genericErrorSchema,
 					403: genericErrorSchema,
+					409: genericErrorSchema,
 					404: genericErrorSchema,
 				},
 			},
@@ -1252,6 +1312,14 @@ export async function doseRoutes(app: FastifyInstance) {
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
 
+			const parsedShareDose = parseDoseId(doseId);
+			if (parsedShareDose && isFutureDoseDay(parsedShareDose)) {
+				return reply.status(409).send({
+					error: "Future doses cannot be marked as taken via share link",
+					code: "FUTURE_DOSE",
+				});
+			}
+
 			// Check if already marked
 			const [existing] = await db
 				.select()
@@ -1259,6 +1327,12 @@ export async function doseRoutes(app: FastifyInstance) {
 				.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
 
 			if (existing) {
+				if (parsedShareDose && isDoseMarkedOutsideShareLink(share, parsedShareDose, existing)) {
+					return reply.status(409).send({
+						error: "Dose was already marked as taken in the main app",
+						code: "MAIN_APP_TAKEN",
+					});
+				}
 				logShareDoseDebug(request, "[ShareDose] Duplicate mark ignored", {
 					token,
 					doseId,
@@ -1288,7 +1362,6 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			// Insert new record - marked by the shared person, or the concrete intake person for an "all" link.
-			const parsedShareDose = parseDoseId(doseId);
 			const markedBy = share.takenBy === "all" ? (parsedShareDose?.personSuffix ?? share.takenBy) : share.takenBy;
 
 			await db.insert(doseTracking).values({
@@ -1332,6 +1405,7 @@ export async function doseRoutes(app: FastifyInstance) {
 					200: { type: "object", properties: { success: { type: "boolean" } } },
 					400: genericErrorSchema,
 					403: genericErrorSchema,
+					409: genericErrorSchema,
 					404: genericErrorSchema,
 				},
 			},
@@ -1384,6 +1458,14 @@ export async function doseRoutes(app: FastifyInstance) {
 				.select()
 				.from(doseTracking)
 				.where(and(eq(doseTracking.userId, share.userId), eq(doseTracking.doseId, doseId)));
+
+			const parsedShareDose = parseDoseId(doseId);
+			if (existing && parsedShareDose && isDoseMarkedOutsideShareLink(share, parsedShareDose, existing)) {
+				return reply.status(409).send({
+					error: "Dose was already marked as taken in the main app",
+					code: "MAIN_APP_TAKEN",
+				});
+			}
 
 			if (existing?.dismissed) {
 				// Already dismissed - keep the record as-is

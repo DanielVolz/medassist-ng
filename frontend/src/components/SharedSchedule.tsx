@@ -61,6 +61,18 @@ function cx(...classNames: Array<string | false | null | undefined>) {
 	return classNames.filter(Boolean).join(" ");
 }
 
+function getDosePersonSuffix(doseId: string): string | null {
+	const parts = doseId.split("-");
+	if (parts.length <= 3) return null;
+	return parts.slice(3).join("-");
+}
+
+function getExpectedSharedDoseMarker(doseId: string, sharedTakenBy: string | null | undefined): string | null {
+	if (!sharedTakenBy) return null;
+	if (sharedTakenBy !== "all") return sharedTakenBy;
+	return getDosePersonSuffix(doseId) ?? "all";
+}
+
 export function SharedSchedule() {
 	const { token } = useParams<{ token: string }>();
 	const { t, i18n } = useTranslation();
@@ -71,6 +83,7 @@ export function SharedSchedule() {
 	const [expiredData, setExpiredData] = useState<ExpiredLinkData | null>(null);
 	const [takenDoses, setTakenDoses] = useState<Set<string>>(new Set());
 	const [automaticTakenDoses, setAutomaticTakenDoses] = useState<Set<string>>(new Set());
+	const [mainAppTakenDoses, setMainAppTakenDoses] = useState<Set<string>>(new Set());
 	const [dismissedDoses, setDismissedDoses] = useState<Set<string>>(new Set());
 	const [sharedJournalDoseIdsWithNotes, setSharedJournalDoseIdsWithNotes] = useState<Set<string>>(new Set());
 	const mutationInFlightRef = useRef(0);
@@ -324,15 +337,17 @@ export function SharedSchedule() {
 			if (res.ok) {
 				if (mutationInFlightRef.current > 0) return;
 
-				const data = await res.json();
+				const dosePayload = await res.json();
 				const taken = new Set<string>();
 				const automatic = new Set<string>();
+				const mainAppTaken = new Set<string>();
 				const dismissed = new Set<string>();
 				const journalDoseIds = new Set<string>();
-				for (const d of data.doses as Array<{
+				for (const d of dosePayload.doses as Array<{
 					doseId: string;
 					dismissed?: boolean;
 					skipped?: boolean;
+					markedBy?: string | null;
 					takenSource?: string;
 					hasJournalNote?: boolean;
 				}>) {
@@ -343,6 +358,9 @@ export function SharedSchedule() {
 						if (d.takenSource === "automatic") {
 							automatic.add(d.doseId);
 						}
+						if (Object.hasOwn(d, "markedBy") && d.markedBy !== getExpectedSharedDoseMarker(d.doseId, data?.takenBy)) {
+							mainAppTaken.add(d.doseId);
+						}
 					}
 					if (d.hasJournalNote === true) {
 						journalDoseIds.add(d.doseId);
@@ -350,13 +368,14 @@ export function SharedSchedule() {
 				}
 				setTakenDoses(taken);
 				setAutomaticTakenDoses(automatic);
+				setMainAppTakenDoses(mainAppTaken);
 				setDismissedDoses(dismissed);
 				setSharedJournalDoseIdsWithNotes(journalDoseIds);
 			}
 		} catch {
 			// Keep the current optimistic/shared state on transient read errors.
 		}
-	}, [token]);
+	}, [data?.takenBy, token]);
 
 	useEffect(() => {
 		if (!token) return;
@@ -602,12 +621,27 @@ export function SharedSchedule() {
 		isTaken: boolean;
 		isSkipped: boolean;
 		isAutomaticallyTaken: boolean;
+		isTakenInMainApp: boolean;
 		isEmpty: boolean;
+		isFuture: boolean;
 	}) => {
 		const showSharedJournalAction = Boolean(data?.allowJournalNotes);
 		const canMarkTaken = data?.allowMarkTaken !== false;
 		const canOpenSharedJournal = showSharedJournalAction && (options.isTaken || options.isSkipped);
 		const hasSharedJournalNote = sharedJournalDoseIdsWithNotes.has(options.doseId);
+		const takeBlockLabel = (() => {
+			if (options.isFuture) return t("share.actionBlocked.futureTake");
+			if (options.isTakenInMainApp) return t("share.actionBlocked.alreadyTakenMainApp");
+			if (!options.isTaken && options.isEmpty) return t("common.outOfStockTakeBlocked");
+			if (!canMarkTaken) return t("share.readOnly");
+			return null;
+		})();
+		const skipBlockLabel = (() => {
+			if (options.isFuture) return t("share.actionBlocked.futureSkip");
+			if (options.isTakenInMainApp) return t("share.actionBlocked.alreadyTakenMainApp");
+			if (!canMarkTaken) return t("share.readOnly");
+			return null;
+		})();
 		const takeButtonControl = options.isTaken ? (
 			<AppButton
 				type="button"
@@ -621,6 +655,7 @@ export function SharedSchedule() {
 					doseButtonClasses.undoTake
 				)}
 				onClick={() => undoDoseTaken(options.doseId)}
+				disabled={Boolean(takeBlockLabel)}
 			>
 				{options.isAutomaticallyTaken && (
 					<AppTooltip label={t("tooltips.automaticTaken")}>
@@ -647,7 +682,7 @@ export function SharedSchedule() {
 					options.isEmpty && doseButtonClasses.outOfStock
 				)}
 				onClick={() => markDoseTaken(options.doseId)}
-				disabled={options.isEmpty || !canMarkTaken}
+				disabled={Boolean(takeBlockLabel)}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
 				{options.isEmpty ? (
@@ -657,26 +692,15 @@ export function SharedSchedule() {
 				)}
 			</AppButton>
 		);
-		const takeButton =
-			!options.isTaken && options.isEmpty ? (
-				<AppTooltip label={t("common.outOfStockTakeBlocked")}>
-					<span
-						className={cx("shared-dose-action-take", doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}
-					>
-						{takeButtonControl}
-					</span>
-				</AppTooltip>
-			) : !canMarkTaken ? (
-				<AppTooltip label={t("share.readOnly")}>
-					<span
-						className={cx("shared-dose-action-take", doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}
-					>
-						{takeButtonControl}
-					</span>
-				</AppTooltip>
-			) : (
-				takeButtonControl
-			);
+		const takeButton = takeBlockLabel ? (
+			<AppTooltip label={takeBlockLabel}>
+				<span className={cx("shared-dose-action-take", doseButtonClasses.tooltipTarget, doseButtonClasses.takeAction)}>
+					{takeButtonControl}
+				</span>
+			</AppTooltip>
+		) : (
+			takeButtonControl
+		);
 
 		const skipButton = options.isSkipped ? (
 			<AppButton
@@ -691,6 +715,7 @@ export function SharedSchedule() {
 					doseButtonClasses.undoSkip
 				)}
 				onClick={() => undoDoseSkipped(options.doseId)}
+				disabled={Boolean(skipBlockLabel)}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.undoSkip")}</span>
 				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
@@ -707,13 +732,13 @@ export function SharedSchedule() {
 					doseButtonClasses.skip
 				)}
 				onClick={() => markDoseSkipped(options.doseId)}
-				disabled={options.isTaken || !canMarkTaken}
+				disabled={options.isTaken || Boolean(skipBlockLabel)}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.skip")}</span>
 			</AppButton>
 		);
-		const skipButtonWithReadOnlyTooltip = !canMarkTaken ? (
-			<AppTooltip label={t("share.readOnly")}>
+		const skipButtonWithTooltip = skipBlockLabel ? (
+			<AppTooltip label={skipBlockLabel}>
 				<span className={cx("shared-dose-action-skip", doseButtonClasses.tooltipTarget, doseButtonClasses.skipAction)}>
 					{skipButton}
 				</span>
@@ -765,13 +790,14 @@ export function SharedSchedule() {
 		return (
 			<>
 				{takeButton}
-				{skipButtonWithReadOnlyTooltip}
+				{skipButtonWithTooltip}
 				{journalButton}
 			</>
 		);
 	};
 
 	const isDoseTakenAutomatically = (doseId: string) => automaticTakenDoses.has(doseId);
+	const isDoseTakenInMainApp = (doseId: string) => mainAppTakenDoses.has(doseId);
 
 	useEffect(() => {
 		async function fetchData() {
@@ -1459,7 +1485,9 @@ export function SharedSchedule() {
 																							isTaken,
 																							isSkipped,
 																							isAutomaticallyTaken,
+																							isTakenInMainApp: isDoseTakenInMainApp(dose.id),
 																							isEmpty,
+																							isFuture: false,
 																						})}
 																					</div>
 																				</div>
@@ -1669,7 +1697,9 @@ export function SharedSchedule() {
 																							isTaken,
 																							isSkipped,
 																							isAutomaticallyTaken,
+																							isTakenInMainApp: isDoseTakenInMainApp(dose.id),
 																							isEmpty,
+																							isFuture: false,
 																						})}
 																					</div>
 																				</div>
@@ -1860,7 +1890,9 @@ export function SharedSchedule() {
 																							isTaken,
 																							isSkipped,
 																							isAutomaticallyTaken,
-																							isEmpty: true,
+																							isTakenInMainApp: isDoseTakenInMainApp(dose.id),
+																							isEmpty,
+																							isFuture: true,
 																						})}
 																					</div>
 																				</div>

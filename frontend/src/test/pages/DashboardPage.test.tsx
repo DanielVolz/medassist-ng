@@ -156,6 +156,12 @@ function getRouteDateKey(value: Date): string {
 	return `${year}-${month}-${day}`;
 }
 
+function openButtonTooltip(button: HTMLElement) {
+	const target = button.closest("span");
+	expect(target).not.toBeNull();
+	fireEvent.touchStart(target as HTMLElement);
+}
+
 // Default mock factory
 const createMockAppContext = (overrides = {}) => ({
 	meds: [],
@@ -1655,6 +1661,72 @@ describe("DashboardPage dose interactions", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
 		expect(markDoseTaken).toHaveBeenCalled();
+	});
+
+	it("explains that future dashboard doses cannot be taken or skipped", async () => {
+		const markDoseTaken = vi.fn();
+		const markDoseSkipped = vi.fn();
+		const futureAt = new Date();
+		futureAt.setDate(futureAt.getDate() + 1);
+		futureAt.setHours(9, 0, 0, 0);
+		const futureDayStart = new Date(futureAt.getFullYear(), futureAt.getMonth(), futureAt.getDate()).getTime();
+		const doseId = `1-0-${futureDayStart}`;
+		const futureDay = [
+			{
+				dateStr: "Tomorrow",
+				date: futureAt,
+				isPast: false,
+				meds: [
+					{
+						medName: "Aspirin",
+						total: 1,
+						doses: [{ id: doseId, timeStr: "09:00", when: futureAt.getTime(), usage: 1, takenBy: ["John"] }],
+						lastWhen: futureAt.getTime(),
+					},
+				],
+			},
+		];
+		mockContextValue = createMockAppContext({
+			meds: mockMeds,
+			coverage: mockCoverage,
+			coverageByMed: { Aspirin: mockCoverage.all[0] },
+			depletionByMed: { Aspirin: Date.now() + 25 * 86400000 },
+			futureDays: futureDay,
+			showFutureDays: true,
+			manuallyExpandedDays: new Set(["Tomorrow"]),
+			markDoseTaken,
+			markDoseSkipped,
+			undoDoseSkipped: vi.fn(),
+			getDoseId: vi.fn((id: string, person: string | null) => (person ? `${id}-${person}` : id)),
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const takeButton = screen.getByRole("button", { name: "dose.take" });
+		const skipButton = screen.getByRole("button", { name: "dose.skip" });
+		expect(takeButton).toBeDisabled();
+		expect(skipButton).toBeDisabled();
+		expect(document.querySelector(".dose-item.future.med-empty")).toBeNull();
+
+		fireEvent.click(takeButton);
+		fireEvent.click(skipButton);
+		expect(markDoseTaken).not.toHaveBeenCalled();
+		expect(markDoseSkipped).not.toHaveBeenCalled();
+
+		openButtonTooltip(takeButton);
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("dose.actionBlocked.futureTake");
+
+		fireEvent.touchMove(takeButton.closest("span") as HTMLElement);
+		await waitFor(() => {
+			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		});
+
+		openButtonTooltip(skipButton);
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("dose.actionBlocked.futureSkip");
 	});
 
 	it("calls undoDoseTaken when clicking undo button", () => {

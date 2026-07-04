@@ -128,6 +128,19 @@ function buildDoseId(medicationId: number, person = "Daniel"): string {
 	return `${medicationId}-0-${new Date(buildLocalDoseStart()).getTime()}-${person}`;
 }
 
+function buildFutureDoseId(medicationId: number, person = "Daniel"): string {
+	const start = new Date(buildLocalDoseStart());
+	start.setDate(start.getDate() + 1);
+	return `${medicationId}-0-${start.getTime()}-${person}`;
+}
+
+async function insertDoseTracking(options: { doseId: string; markedBy?: string | null; dismissed?: boolean }) {
+	await testClient.execute({
+		sql: "INSERT INTO dose_tracking (user_id, dose_id, marked_by, dismissed, taken_source) VALUES (1, ?, ?, ?, 'manual')",
+		args: [options.doseId, options.markedBy ?? null, options.dismissed ? 1 : 0],
+	});
+}
+
 describe("share link hardening", () => {
 	let app: FastifyInstance;
 
@@ -312,6 +325,59 @@ describe("share link hardening", () => {
 		expect(readResponse.statusCode, readResponse.body).toBe(200);
 		expect(markResponse.statusCode).toBe(403);
 		expect(unmarkResponse.statusCode).toBe(403);
+	});
+
+	it("rejects future shared take and skip mutations", async () => {
+		const medId = await insertMedication();
+		const token = "5555555555555555";
+		const doseId = buildFutureDoseId(medId);
+		await insertShareToken({ token, allowMarkTaken: true });
+
+		const markResponse = await app.inject({
+			method: "POST",
+			url: `/share/${token}/doses`,
+			payload: { doseId },
+		});
+		const skipResponse = await app.inject({
+			method: "POST",
+			url: `/share/${token}/doses/skip`,
+			payload: { doseId },
+		});
+
+		expect(markResponse.statusCode).toBe(409);
+		expect(markResponse.json()).toMatchObject({ code: "FUTURE_DOSE" });
+		expect(skipResponse.statusCode).toBe(409);
+		expect(skipResponse.json()).toMatchObject({ code: "FUTURE_DOSE" });
+	});
+
+	it("rejects shared changes to doses already marked as taken in the main app", async () => {
+		const medId = await insertMedication();
+		const token = "6666666666666666";
+		const doseId = buildDoseId(medId);
+		await insertShareToken({ token, allowMarkTaken: true });
+		await insertDoseTracking({ doseId, markedBy: null });
+
+		const markResponse = await app.inject({
+			method: "POST",
+			url: `/share/${token}/doses`,
+			payload: { doseId },
+		});
+		const skipResponse = await app.inject({
+			method: "POST",
+			url: `/share/${token}/doses/skip`,
+			payload: { doseId },
+		});
+		const unmarkResponse = await app.inject({
+			method: "DELETE",
+			url: `/share/${token}/doses/${encodeURIComponent(doseId)}`,
+		});
+
+		expect(markResponse.statusCode).toBe(409);
+		expect(markResponse.json()).toMatchObject({ code: "MAIN_APP_TAKEN" });
+		expect(skipResponse.statusCode).toBe(409);
+		expect(skipResponse.json()).toMatchObject({ code: "MAIN_APP_TAKEN" });
+		expect(unmarkResponse.statusCode).toBe(409);
+		expect(unmarkResponse.json()).toMatchObject({ code: "MAIN_APP_TAKEN" });
 	});
 
 	it("rate limits public share dose mutations per IP and token", async () => {

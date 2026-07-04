@@ -159,6 +159,25 @@ function createSharedDataWithTodayDose(referenceNow: Date) {
 	};
 }
 
+function createSharedDataWithFutureDose(referenceNow: Date) {
+	const data = createSharedDataWithTodayDose(referenceNow);
+	const scheduledAt = new Date(referenceNow);
+	scheduledAt.setDate(scheduledAt.getDate() + 1);
+	scheduledAt.setHours(9, 0, 0, 0);
+	const dateOnlyMs = new Date(scheduledAt.getFullYear(), scheduledAt.getMonth(), scheduledAt.getDate()).getTime();
+	const start = `${scheduledAt.getFullYear()}-${String(scheduledAt.getMonth() + 1).padStart(2, "0")}-${String(
+		scheduledAt.getDate()
+	).padStart(
+		2,
+		"0"
+	)}T${String(scheduledAt.getHours()).padStart(2, "0")}:${String(scheduledAt.getMinutes()).padStart(2, "0")}:00`;
+
+	data.automaticDoseId = `1-0-${dateOnlyMs}`;
+	data.medications[0].blisters[0].start = start;
+	data.medications[0].intakes[0].start = start;
+	return data;
+}
+
 function createSharedDoseFetchMock(options: {
 	token?: string;
 	sharedData: ReturnType<typeof createSharedDataWithTodayDose>;
@@ -166,6 +185,7 @@ function createSharedDoseFetchMock(options: {
 		doseId: string;
 		skipped?: boolean;
 		dismissed?: boolean;
+		markedBy?: string | null;
 		takenSource?: string;
 		hasJournalNote?: boolean;
 	}>;
@@ -292,6 +312,12 @@ function createSharedDoseFetchMock(options: {
 	});
 
 	return { fetchMock, requests, getDoses: () => Array.from(doseState.values()) };
+}
+
+function openButtonTooltip(button: HTMLElement) {
+	const target = button.closest("span");
+	expect(target).not.toBeNull();
+	fireEvent.touchStart(target as HTMLElement);
 }
 
 describe("SharedSchedule", () => {
@@ -670,6 +696,90 @@ describe("SharedSchedule", () => {
 			});
 			expect(screen.getByRole("button", { name: "dose.undoSkip" })).toBeInTheDocument();
 		});
+	});
+
+	it("explains that future shared doses cannot be taken or skipped", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithFutureDose(referenceNow);
+		const { fetchMock, requests } = createSharedDoseFetchMock({ sharedData });
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(screen.getByText("dashboard.schedules.showFutureDays")).toBeInTheDocument();
+		});
+
+		const futureToggle = screen.getByText("dashboard.schedules.showFutureDays").closest(".future-days-toggle");
+		expect(futureToggle).not.toBeNull();
+		fireEvent.click(futureToggle as HTMLElement);
+		const futureDayToggle = document.querySelector(".day-block:not(.today) .day-divider.clickable");
+		expect(futureDayToggle).not.toBeNull();
+		fireEvent.click(futureDayToggle as HTMLElement);
+
+		const takeButton = await screen.findByRole("button", { name: "dose.take" });
+		const skipButton = screen.getByRole("button", { name: "dose.skip" });
+		expect(takeButton).toBeDisabled();
+		expect(skipButton).toBeDisabled();
+		expect(document.querySelector(".dose-item.future.med-empty")).toBeNull();
+
+		fireEvent.click(takeButton);
+		fireEvent.click(skipButton);
+		expect(requests.some((request) => request.method === "POST")).toBe(false);
+
+		openButtonTooltip(takeButton);
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("share.actionBlocked.futureTake");
+
+		fireEvent.touchMove(takeButton.closest("span") as HTMLElement);
+		await waitFor(() => {
+			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		});
+
+		openButtonTooltip(skipButton);
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("share.actionBlocked.futureSkip");
+	});
+
+	it("explains that doses already taken in the main app cannot be changed from the shared link", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		const { fetchMock, requests } = createSharedDoseFetchMock({
+			sharedData,
+			initialDoses: [{ doseId: sharedData.automaticDoseId, markedBy: null, takenSource: "manual" }],
+		});
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+		await waitFor(() => {
+			expect(document.querySelector(".day-block.today .day-divider.clickable")).toBeInTheDocument();
+		});
+
+		fireEvent.click(document.querySelector(".day-block.today .day-divider.clickable") as HTMLElement);
+
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: "common.undo" })).toBeDisabled();
+			expect(screen.getByRole("button", { name: "dose.skip" })).toBeDisabled();
+		});
+
+		const undoButton = screen.getByRole("button", { name: "common.undo" });
+		const skipButton = screen.getByRole("button", { name: "dose.skip" });
+		fireEvent.click(undoButton);
+		fireEvent.click(skipButton);
+		expect(requests.some((request) => request.method === "DELETE" || request.method === "POST")).toBe(false);
+
+		openButtonTooltip(undoButton);
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("share.actionBlocked.alreadyTakenMainApp");
+
+		fireEvent.touchMove(undoButton.closest("span") as HTMLElement);
+		await waitFor(() => {
+			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		});
+
+		openButtonTooltip(skipButton);
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("share.actionBlocked.alreadyTakenMainApp");
 	});
 
 	it("undoes a skipped shared dose via the delete skip endpoint", async () => {

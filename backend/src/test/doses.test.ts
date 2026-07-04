@@ -137,6 +137,13 @@ function buildLocalDoseStart(hours = 8): string {
 	return `${year}-${month}-${day}T${hour}:00:00.000`;
 }
 
+function buildFutureDoseId(medicationId = 1): string {
+	const future = new Date();
+	future.setDate(future.getDate() + 1);
+	future.setHours(0, 0, 0, 0);
+	return `${medicationId}-0-${future.getTime()}`;
+}
+
 async function buildSessionCookie(app: FastifyInstance, userId: number, username: string) {
 	const token = await app.jwt.sign({ sub: userId, username });
 	return `access_token=${token}`;
@@ -276,6 +283,29 @@ describe("Dose Tracking API", () => {
 
 			expect(response.statusCode).toBe(400);
 			expect(response.json()).toEqual({ error: "Required" });
+		});
+
+		it("rejects future doses before stock checks or tracking changes", async () => {
+			const doseId = buildFutureDoseId();
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+				payload: { doseId },
+			});
+
+			expect(response.statusCode).toBe(409);
+			expect(response.json()).toEqual({
+				error: "Future doses cannot be marked as taken",
+				code: "FUTURE_DOSE",
+			});
+
+			const result = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(Number(result.rows[0].count)).toBe(0);
 		});
 
 		it("accepts dose IDs with a person suffix and special characters", async () => {
@@ -511,6 +541,29 @@ describe("Dose Tracking API", () => {
 			expect(missingResponse.statusCode).toBe(400);
 			expect(missingResponse.json()).toEqual({ error: "Required" });
 		});
+
+		it("rejects future doses instead of dismissing them", async () => {
+			const doseId = buildFutureDoseId();
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/dismiss",
+				headers: { cookie: cookieHeader },
+				payload: { doseIds: [doseId] },
+			});
+
+			expect(response.statusCode).toBe(409);
+			expect(response.json()).toEqual({
+				error: "Future doses cannot be skipped",
+				code: "FUTURE_DOSE",
+			});
+
+			const result = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(Number(result.rows[0].count)).toBe(0);
+		});
 	});
 
 	describe("single-dose skip routes", () => {
@@ -532,6 +585,29 @@ describe("Dose Tracking API", () => {
 				args: [userId, doseId],
 			});
 			expect(result.rows).toEqual([expect.objectContaining({ dose_id: doseId, marked_by: null, dismissed: 1 })]);
+		});
+
+		it("rejects future doses instead of marking them skipped", async () => {
+			const doseId = buildFutureDoseId();
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/skip",
+				headers: { cookie: cookieHeader },
+				payload: { doseId },
+			});
+
+			expect(response.statusCode).toBe(409);
+			expect(response.json()).toEqual({
+				error: "Future doses cannot be skipped",
+				code: "FUTURE_DOSE",
+			});
+
+			const result = await testClient.execute({
+				sql: "SELECT COUNT(*) AS count FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, doseId],
+			});
+			expect(Number(result.rows[0].count)).toBe(0);
 		});
 
 		it("undoes a skipped-only owner dose through the frontend route", async () => {

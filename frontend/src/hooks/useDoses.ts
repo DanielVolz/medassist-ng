@@ -260,6 +260,8 @@ export function useDoses(options: UseDosesOptions = {}): UseDosesReturn {
 					failureCode = await getErrorCode(response);
 					if (failureCode === "OUT_OF_STOCK") {
 						showFeedback({ message: t("common.outOfStockTakeBlocked"), tone: "error" });
+					} else if (failureCode === "FUTURE_DOSE") {
+						showFeedback({ message: t("dose.actionBlocked.futureTake"), tone: "error" });
 					}
 					throw new Error(`HTTP ${response.status}`);
 				}
@@ -345,6 +347,7 @@ export function useDoses(options: UseDosesOptions = {}): UseDosesReturn {
 			clearTakenDoseState(doseId);
 
 			let failureStatus: number | null = null;
+			let failureCode: string | null = null;
 			try {
 				const response = await authFetch("/api/doses/skip", {
 					method: "POST",
@@ -353,11 +356,16 @@ export function useDoses(options: UseDosesOptions = {}): UseDosesReturn {
 				});
 				if (!response.ok) {
 					failureStatus = response.status;
+					failureCode = await getErrorCode(response);
+					if (failureCode === "FUTURE_DOSE") {
+						showFeedback({ message: t("dose.actionBlocked.futureSkip"), tone: "error" });
+					}
 					throw new Error(`HTTP ${response.status}`);
 				}
 			} catch (error) {
 				log.warn("[useDoses] mark dose skipped failed", {
 					status: failureStatus,
+					code: failureCode,
 					error: getErrorMessage(error),
 				});
 				setDismissedDoses((prev) => {
@@ -379,8 +387,11 @@ export function useDoses(options: UseDosesOptions = {}): UseDosesReturn {
 			authFetch,
 			clearTakenDoseState,
 			dismissedDoses,
+			getErrorCode,
 			loadTakenDoses,
 			restoreTakenDoseState,
+			showFeedback,
+			t,
 			takenDoseSources,
 			takenDoseTimestamps,
 			takenDoses,

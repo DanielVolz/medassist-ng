@@ -694,7 +694,7 @@ describe("SharedSchedule", () => {
 				method: "POST",
 				body: { doseId: sharedData.automaticDoseId },
 			});
-			expect(screen.getByRole("button", { name: "dose.undoSkip" })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "common.undo" })).toBeInTheDocument();
 		});
 	});
 
@@ -733,6 +733,9 @@ describe("SharedSchedule", () => {
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("share.actionBlocked.futureTake");
 
 		fireEvent.touchMove(takeButton.closest("span") as HTMLElement);
+		expect(screen.getByRole("tooltip")).toHaveTextContent("share.actionBlocked.futureTake");
+
+		fireEvent.touchStart(document.body);
 		await waitFor(() => {
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 		});
@@ -774,6 +777,9 @@ describe("SharedSchedule", () => {
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("share.actionBlocked.alreadyTakenMainApp");
 
 		fireEvent.touchMove(undoButton.closest("span") as HTMLElement);
+		expect(screen.getByRole("tooltip")).toHaveTextContent("share.actionBlocked.alreadyTakenMainApp");
+
+		fireEvent.touchStart(document.body);
 		await waitFor(() => {
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 		});
@@ -796,10 +802,10 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: "dose.undoSkip" })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "common.undo" })).toBeInTheDocument();
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: "dose.undoSkip" }));
+		fireEvent.click(screen.getByRole("button", { name: "common.undo" }));
 
 		await waitFor(() => {
 			expect(requests).toContainEqual({
@@ -824,7 +830,7 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: "dose.undoSkip" })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "common.undo" })).toBeInTheDocument();
 		});
 
 		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));

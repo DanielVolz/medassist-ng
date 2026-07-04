@@ -44,6 +44,25 @@ async function openMedicationDetailModal(page: Page) {
 	return modal;
 }
 
+async function openUserFilterModal(page: Page) {
+	await navigateTo(page, "/dashboard");
+	const overviewTable = page.getByTestId("dashboard-overview-table");
+	await expect(overviewTable).toBeVisible({ timeout: 10000 });
+	const medRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_NAME }).first();
+	await expect(medRow).toBeVisible({ timeout: 10000 });
+
+	const personName = medRow.getByRole("button", { exact: true, name: PERSON_NAME });
+	await expect(personName).toBeVisible();
+	await personName.click();
+
+	const modal = page
+		.getByRole("dialog")
+		.filter({ has: page.getByTestId("user-filter-avatar") })
+		.last();
+	await expect(modal).toBeVisible({ timeout: 5000 });
+	return modal;
+}
+
 async function scrollModalContentToBottom(modal: Locator) {
 	await modal.evaluate((element) => {
 		const scrollContainers = Array.from(element.querySelectorAll<HTMLElement>("*")).filter((candidate) => {
@@ -186,6 +205,22 @@ async function expectModalFooterContract(modal: Locator, options: { mobile: bool
 	}
 }
 
+async function expectMedicationDetailModalViewportGap(modal: Locator) {
+	const metrics = await modal.evaluate((element) => {
+		const rect = element.getBoundingClientRect();
+		return {
+			bottomGap: window.innerHeight - rect.bottom,
+			height: rect.height,
+			topGap: rect.top,
+			viewportHeight: window.innerHeight,
+		};
+	});
+
+	expect(metrics.height).toBeGreaterThanOrEqual(metrics.viewportHeight * 0.92);
+	expect(metrics.topGap).toBeGreaterThanOrEqual(16);
+	expect(metrics.bottomGap).toBeGreaterThanOrEqual(16);
+}
+
 test.describe("Modal layout contract", () => {
 	test.use({ storageState: authFile });
 	test.describe.configure({ mode: "serial", timeout: 90000 });
@@ -218,6 +253,15 @@ test.describe("Modal layout contract", () => {
 		await deleteAllMedicationsViaAPI();
 	});
 
+	test("user filter modal hero uses the app surface instead of a bright gradient", async ({ page }) => {
+		const modal = await openUserFilterModal(page);
+		const hero = page.getByTestId("user-filter-avatar").locator("xpath=..");
+
+		await expect(modal).toBeVisible();
+		await expect(hero).toHaveCSS("background-image", "none");
+		await expect(hero).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	});
+
 	for (const viewport of [
 		{ name: "desktop", mobile: false, size: { width: 1280, height: 720 } },
 		{ name: "mobile", mobile: true, size: { width: 390, height: 844 } },
@@ -235,11 +279,26 @@ test.describe("Modal layout contract", () => {
 
 			test("medication detail modal keeps the shared footer contract", async ({ page }) => {
 				const modal = await openMedicationDetailModal(page);
+				if (!viewport.mobile) {
+					await expectMedicationDetailModalViewportGap(modal);
+				}
 				await expectMouseWheelScrollsModalContent(page, modal);
 				await expectModalFooterContract(modal, {
 					mobile: viewport.mobile,
 					strictBottomCoverage: true,
 				});
+			});
+
+			test("medication detail taken-by names stay plain on hover", async ({ page }) => {
+				const modal = await openMedicationDetailModal(page);
+				const personName = modal.locator("button").filter({ hasText: PERSON_NAME }).first();
+
+				await expect(personName).toBeVisible();
+				await personName.hover();
+				await expect(personName).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+				await expect(personName).toHaveCSS("border-top-left-radius", "0px");
+				await expect(personName).toHaveCSS("box-shadow", "none");
+				await expect(personName).toHaveCSS("text-decoration-line", "underline");
 			});
 		});
 	}

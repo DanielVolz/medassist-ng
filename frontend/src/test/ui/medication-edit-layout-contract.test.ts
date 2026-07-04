@@ -45,4 +45,29 @@ describe("desktop medication edit layout contract", () => {
 		expect(pageSource).toContain("formClasses.inlineToggleField");
 		expect(mobileSource).toContain("formClasses.inlineToggleField");
 	});
+
+	it("keeps mobile number steppers roomy enough for multi-digit values", () => {
+		const stepperCss = readSource("components/FormNumberStepper.module.css");
+		const rootBlock = cssBlock(stepperCss, ".numberStepper");
+		const inputBlock = cssBlock(stepperCss, ".numberStepper input");
+		const textInputBlock = cssBlock(stepperCss, '.numberStepper input[type="text"]');
+		const buttonBlock = cssBlock(stepperCss, ".stepperButton");
+
+		expect(rootBlock).toMatch(/--stepper-height\s*:\s*2\.75rem/);
+		expect(rootBlock).toMatch(/--stepper-button-width\s*:\s*2\.75rem/);
+		expect(rootBlock).toMatch(/--stepper-value-min-width\s*:\s*2\.75rem/);
+		expect(rootBlock).toMatch(/var\(--stepper-button-width\)/);
+		expect(rootBlock).toMatch(/minmax\(var\(--stepper-value-min-width\),\s*1fr\)/);
+		expect(inputBlock).toMatch(/min-height\s*:\s*var\(--stepper-height\)/);
+		expect(inputBlock).toMatch(/padding-inline\s*:\s*0\.5rem/);
+		expect(textInputBlock).toMatch(/font-weight\s*:\s*600/);
+		expect(buttonBlock).toMatch(/min-width\s*:\s*var\(--stepper-button-width\)/);
+		expect(buttonBlock).toMatch(/min-height\s*:\s*var\(--stepper-height\)/);
+		expect(stepperCss).toMatch(/@media \(max-width: 640px\)[\s\S]*--stepper-height\s*:\s*3rem/);
+		expect(stepperCss).toMatch(
+			/@media \(max-width: 640px\)[\s\S]*--stepper-button-width\s*:\s*clamp\(2\.375rem,\s*29%,\s*2\.75rem\)/
+		);
+		expect(stepperCss).toMatch(/@media \(max-width: 640px\)[\s\S]*--stepper-value-min-width\s*:\s*2\.5rem/);
+		expect(stepperCss).toMatch(/@media \(max-width: 640px\)[\s\S]*padding-inline\s*:\s*0\.25rem/);
+	});
 });

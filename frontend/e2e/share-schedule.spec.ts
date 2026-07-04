@@ -9,6 +9,10 @@ import {
 	test,
 } from "./fixtures";
 
+function expectHeightsToAlign(actual: number, expected: number) {
+	expect(Math.abs(actual - expected)).toBeLessThanOrEqual(2);
+}
+
 /**
  * Share Schedule E2E Tests
  *
@@ -69,21 +73,90 @@ test.describe("Share Schedule", () => {
 		await deleteAllMedicationsViaAPI();
 	});
 
-	test("should show taken-by badges on dashboard overview table", async ({ page }) => {
+	test("should show underlined taken-by names on dashboard overview table", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
 		const overviewTable = page.getByTestId("dashboard-overview-table");
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
-		// Alice's medication should show "Alice" badge
+		// Alice's medication should show an underlined name link without the old pill background.
 		const aliceRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_ALICE }).first();
 		await expect(aliceRow).toBeVisible();
-		await expect(aliceRow.getByRole("button", { name: PERSON_ALICE })).toBeVisible();
+		const aliceName = aliceRow.getByRole("button", { name: PERSON_ALICE, exact: true });
+		await expect(aliceName).toBeVisible();
+		await aliceName.hover();
+		await expect(aliceName).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+		await expect(aliceName).toHaveCSS("border-top-width", "0px");
+		await expect(aliceName).toHaveCSS("box-shadow", "none");
+		await expect(aliceName).toHaveCSS("text-decoration-line", "underline");
+		const aliceOverviewMetrics = await aliceRow.evaluate(
+			(row, labels) => {
+				const avatar = row.querySelector<HTMLElement>(".med-avatar-sm");
+				const buttons = Array.from(row.querySelectorAll<HTMLElement>("button"));
+				const stackItems = labels
+					.map((label) => buttons.find((button) => button.textContent?.trim() === label))
+					.filter((item): item is HTMLElement => Boolean(item));
+				const avatarRect = avatar?.getBoundingClientRect();
+				const stackRects = stackItems.map((item) => item.getBoundingClientRect());
+				return {
+					avatarHeight: avatarRect?.height ?? 0,
+					stackHeight:
+						stackRects.length > 0
+							? Math.max(...stackRects.map((rect) => rect.bottom)) - Math.min(...stackRects.map((rect) => rect.top))
+							: 0,
+				};
+			},
+			[MED_ALICE, PERSON_ALICE]
+		);
+		expectHeightsToAlign(aliceOverviewMetrics.avatarHeight, aliceOverviewMetrics.stackHeight);
 
-		// Bob's medication should show "Bob" badge
+		// Bob's medication should show the same plain name treatment.
 		const bobRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_BOB }).first();
 		await expect(bobRow).toBeVisible();
-		await expect(bobRow.getByRole("button", { name: PERSON_BOB })).toBeVisible();
+		const bobName = bobRow.getByRole("button", { name: PERSON_BOB, exact: true });
+		await expect(bobName).toBeVisible();
+		await expect(bobName).toHaveCSS("text-decoration-line", "underline");
+
+		const aliceScheduleRow = page
+			.locator(".dashboard-schedules-section .time-row")
+			.filter({ hasText: MED_ALICE })
+			.first();
+		await expect(aliceScheduleRow).toBeVisible();
+		const aliceScheduleMetrics = await aliceScheduleRow.evaluate((row) => {
+			const avatar = row.querySelector<HTMLElement>(".time-main .med-avatar-sm");
+			const stack = row.querySelector<HTMLElement>(".time-main .med-name-stack");
+			return {
+				avatarHeight: avatar?.getBoundingClientRect().height ?? 0,
+				stackHeight: stack?.getBoundingClientRect().height ?? 0,
+			};
+		});
+		expectHeightsToAlign(aliceScheduleMetrics.avatarHeight, aliceScheduleMetrics.stackHeight);
+	});
+
+	test("should keep mobile schedule recipient underlines unclipped", async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await navigateTo(page, "/dashboard");
+
+		const aliceScheduleRow = page
+			.locator(".dashboard-schedules-section .time-row")
+			.filter({ hasText: MED_ALICE })
+			.first();
+		await expect(aliceScheduleRow).toBeVisible({ timeout: 10000 });
+
+		const recipientName = aliceScheduleRow.getByRole("button", { exact: true, name: PERSON_ALICE });
+		await expect(recipientName).toBeVisible();
+		await expect(recipientName).toHaveCSS("text-decoration-line", "underline");
+
+		const metrics = await recipientName.evaluate((element) => {
+			const styles = window.getComputedStyle(element);
+			return {
+				fontSize: Number.parseFloat(styles.fontSize),
+				lineHeight: Number.parseFloat(styles.lineHeight),
+				paddingBlockEnd: Number.parseFloat(styles.paddingBlockEnd),
+			};
+		});
+		expect(metrics.lineHeight).toBeGreaterThanOrEqual(metrics.fontSize * 1.25);
+		expect(metrics.paddingBlockEnd).toBeGreaterThan(0);
 	});
 
 	test("should show Share button on dashboard when medications have taken-by", async ({ page }) => {

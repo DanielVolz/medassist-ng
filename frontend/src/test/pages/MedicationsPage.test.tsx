@@ -152,6 +152,11 @@ vi.mock("../../components/DateInput", () => ({
 	DateInput: ({ value, onChange }: { value: string; onChange: (e: { target: { value: string } }) => void }) => (
 		<input value={value} onChange={onChange} />
 	),
+	MonthInput: ({ value, onChange }: { value: string; onChange: (e: { target: { value: string } }) => void }) => (
+		<button type="button" data-testid="month-picker-input" onClick={() => onChange({ target: { value: "2026-02" } })}>
+			{value}
+		</button>
+	),
 }));
 
 vi.mock("../../components/MobileEditModal", () => ({

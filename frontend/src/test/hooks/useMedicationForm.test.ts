@@ -423,6 +423,7 @@ describe("useMedicationForm", () => {
 
 		expect(result.current.editingId).toBe(10);
 		expect(result.current.formSaved).toBe(true);
+		expect(result.current.form.expiryDate).toBe("2027-01");
 		expect(result.current.form.intakes[0].takenBy).toBe("Max");
 		expect(openEditModal).toHaveBeenCalled();
 	});

@@ -33,8 +33,17 @@
 	margin-top: 1.35rem;
 }
 
+.resultsTable {
+	min-width: 0;
+}
+
 .medicationCell {
 	min-width: 13rem;
+}
+
+.medicationIdentity {
+	min-width: 0;
+	line-height: 1.25;
 }
 
 .medicationNameLink {
@@ -44,11 +53,37 @@
 	text-underline-offset: 0.16em;
 }
 
+.medicationNameText {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	line-height: 1.25;
+}
+
+.medicationGeneric {
+	min-width: 0;
+	color: var(--text-secondary);
+	font-size: 0.88rem;
+	font-weight: 650;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
 .metric,
 .availableValue {
 	font-family: var(--mantine-font-family);
 	line-height: 1.35;
 	white-space: normal;
+}
+
+.availableInline {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 0.35rem;
+	align-items: baseline;
+}
+
+.availableChunk {
+	white-space: nowrap;
 }
 
 .emailAction {
@@ -73,5 +108,55 @@
 	.emailAction {
 		align-items: stretch;
 		flex-direction: column;
+	}
+}
+
+@media (max-width: 768px) {
+	.resultsTable :global(td[data-column-key="medication"]) {
+		display: block;
+		padding: 0.15rem 0.8rem 0.85rem;
+	}
+
+	.resultsTable :global(td[data-column-key="medication"])::before {
+		display: none;
+		content: none;
+	}
+
+	.resultsTable :global(td[data-column-key="usage"]),
+	.resultsTable :global(td[data-column-key="blistersNeeded"]),
+	.resultsTable :global(td[data-column-key="prescriptionRefills"]),
+	.resultsTable :global(td[data-column-key="available"]),
+	.resultsTable :global(td[data-column-key="status"]) {
+		grid-template-columns: minmax(8.5rem, 40%) minmax(0, 1fr);
+		gap: 0.6rem;
+	}
+
+	.resultsTable :global(td[data-column-key="available"]) {
+		align-items: baseline;
+	}
+
+	.medicationCell {
+		width: 100%;
+		min-width: 0;
+	}
+
+	.medicationCell :global(.med-avatar-sm) {
+		width: 2.75rem;
+		height: 2.75rem;
+	}
+
+	.medicationIdentity {
+		flex: 1 1 auto;
+		padding-top: 0.05rem;
+	}
+
+	.medicationNameLink,
+	.medicationNameText {
+		font-size: 1.05rem;
+		line-height: 1.2;
+	}
+
+	.medicationGeneric {
+		font-size: 0.92rem;
 	}
 }

@@ -10,12 +10,16 @@
 	padding: 0;
 	width: min(100vw - 1rem, 711px);
 	max-width: 711px;
-	max-height: 90vh;
+	max-height: min(94dvh, calc(100dvh - 2.5rem));
 	background: var(--bg-primary);
 	overscroll-behavior: contain;
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+}
+
+:global(.mantine-Modal-content).med-detail-modal {
+	max-height: min(94dvh, calc(100dvh - 2.5rem));
 }
 
 .med-detail-modal-shell-header {
@@ -108,26 +112,27 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 0.2rem;
-	padding: 0.1rem 0.55rem 0.14rem;
-	border: 1px solid rgba(255, 255, 255, 0.58);
-	border-radius: 999px;
-	background: rgba(5, 20, 28, 0.74);
+	padding: 0;
 	color: white;
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
-	text-shadow: none;
-}
-
-.taken-by-person:hover {
-	background: rgba(5, 20, 28, 0.84);
+	text-shadow: inherit;
 }
 
 .taken-by-name {
+	background: transparent;
+	border-radius: 0;
 	color: white;
 	font-weight: 700;
+	box-shadow: none;
+	text-decoration-line: underline;
+	text-decoration-thickness: 0.08em;
+	text-underline-offset: 0.16em;
 }
 
-.taken-by-name:hover {
+.taken-by-name:hover,
+.taken-by-name:focus-visible {
+	background: transparent;
 	color: white;
+	box-shadow: none;
 }
 
 .taken-by-badge {

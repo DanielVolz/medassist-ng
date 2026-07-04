@@ -109,9 +109,31 @@
 
 .auth-submit {
 	margin-top: 0.5rem;
-	padding: 0.875rem;
+	min-height: 3rem;
+	padding: 0.875rem 1rem;
 	font-size: 1rem;
 	font-weight: 600;
+	line-height: 1.25;
+	white-space: normal;
+	overflow: visible;
+}
+
+.auth-submit:global(.mantine-Button-root) {
+	height: auto;
+	min-height: 3rem;
+	padding: 0.875rem 1rem;
+}
+
+.auth-submit:global(.mantine-Button-root) :global(.mantine-Button-inner) {
+	height: auto;
+	overflow: visible;
+}
+
+.auth-submit:global(.mantine-Button-root) :global(.mantine-Button-label) {
+	overflow: visible;
+	line-height: 1.25;
+	text-align: center;
+	white-space: normal;
 }
 
 /* SSO Login Button */

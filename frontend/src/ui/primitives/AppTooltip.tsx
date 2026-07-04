@@ -96,7 +96,6 @@ export function AppTooltip({
 	const [touchOpened, setTouchOpened] = useState(false);
 	const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition | null>(null);
 	const openTimerRef = useRef<number | null>(null);
-	const closeTouchTimerRef = useRef<number | null>(null);
 	const lastTouchInteractionRef = useRef(0);
 	const controlled = typeof opened === "boolean";
 	const childProps = (children.props ?? {}) as AppTooltipTargetProps;
@@ -104,13 +103,6 @@ export function AppTooltip({
 	const isOpen = !disabled && (controlled ? opened : hoverFocusedOpened || touchOpened);
 	const maxWidth = typeof maw === "number" ? `${maw}px` : maw;
 	const canUseDom = typeof document !== "undefined";
-
-	const clearTouchTimer = useCallback(() => {
-		if (closeTouchTimerRef.current) {
-			window.clearTimeout(closeTouchTimerRef.current);
-			closeTouchTimerRef.current = null;
-		}
-	}, []);
 
 	const clearOpenTimer = useCallback(() => {
 		if (openTimerRef.current) {
@@ -139,18 +131,12 @@ export function AppTooltip({
 	const openFromTouch = useCallback(() => {
 		if (!touchEnabled) return;
 
-		clearTouchTimer();
 		setTouchOpened(true);
-		closeTouchTimerRef.current = window.setTimeout(() => {
-			setTouchOpened(false);
-			closeTouchTimerRef.current = null;
-		}, 2500);
-	}, [clearTouchTimer, touchEnabled]);
+	}, [touchEnabled]);
 
 	const closeFromTouch = useCallback(() => {
-		clearTouchTimer();
 		setTouchOpened(false);
-	}, [clearTouchTimer]);
+	}, []);
 
 	const closeFromViewportMovement = useCallback(() => {
 		closeFromHoverOrFocus();
@@ -168,34 +154,40 @@ export function AppTooltip({
 	useEffect(
 		() => () => {
 			clearOpenTimer();
-			clearTouchTimer();
 		},
-		[clearOpenTimer, clearTouchTimer]
+		[clearOpenTimer]
 	);
 
 	useEffect(() => {
 		if (!isOpen || controlled || !canUseDom) return;
 
-		const closeTooltipOnPointerMove = (event: globalThis.PointerEvent) => {
-			if (event.pointerType === "touch") {
+		const isInsideTooltip = (target: EventTarget | null) => {
+			if (!(target instanceof Node)) return false;
+			return Boolean(rootRef.current?.contains(target) || bubbleRef.current?.contains(target));
+		};
+
+		const closeTooltipOnOutsideInteraction = (event: Event) => {
+			if (!isInsideTooltip(event.target)) {
 				closeFromViewportMovement();
 			}
 		};
 
 		const visualViewport = window.visualViewport;
 
-		document.addEventListener("pointermove", closeTooltipOnPointerMove, { capture: true, passive: true });
+		document.addEventListener("pointerdown", closeTooltipOnOutsideInteraction, { capture: true, passive: true });
+		document.addEventListener("touchstart", closeTooltipOnOutsideInteraction, { capture: true, passive: true });
+		document.addEventListener("mousedown", closeTooltipOnOutsideInteraction, { capture: true, passive: true });
 		document.addEventListener("scroll", closeFromViewportMovement, { capture: true, passive: true });
-		document.addEventListener("touchmove", closeFromViewportMovement, { capture: true, passive: true });
 		document.addEventListener("wheel", closeFromViewportMovement, { capture: true, passive: true });
 		window.addEventListener("scroll", closeFromViewportMovement, { capture: true, passive: true });
 		visualViewport?.addEventListener("resize", closeFromViewportMovement, { passive: true });
 		visualViewport?.addEventListener("scroll", closeFromViewportMovement, { passive: true });
 
 		return () => {
-			document.removeEventListener("pointermove", closeTooltipOnPointerMove, true);
+			document.removeEventListener("pointerdown", closeTooltipOnOutsideInteraction, true);
+			document.removeEventListener("touchstart", closeTooltipOnOutsideInteraction, true);
+			document.removeEventListener("mousedown", closeTooltipOnOutsideInteraction, true);
 			document.removeEventListener("scroll", closeFromViewportMovement, true);
-			document.removeEventListener("touchmove", closeFromViewportMovement, true);
 			document.removeEventListener("wheel", closeFromViewportMovement, true);
 			window.removeEventListener("scroll", closeFromViewportMovement, true);
 			visualViewport?.removeEventListener("resize", closeFromViewportMovement);
@@ -323,7 +315,6 @@ export function AppTooltip({
 			childProps.onPointerMove?.(event);
 			if (event.pointerType === "touch") {
 				noteTouchInteraction();
-				closeFromViewportMovement();
 			}
 		},
 		onTouchStart: (event: TouchEvent<HTMLElement>) => {
@@ -334,7 +325,6 @@ export function AppTooltip({
 		onTouchMove: (event: TouchEvent<HTMLElement>) => {
 			childProps.onTouchMove?.(event);
 			noteTouchInteraction();
-			closeFromViewportMovement();
 		},
 	} satisfies AppTooltipTargetProps);
 

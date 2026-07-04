@@ -700,6 +700,40 @@ describe("PlannerPage medication detail", () => {
 		expect(openMedDetail).toHaveBeenCalled();
 	});
 
+	it("renders medication identity with generic name in planner results", async () => {
+		mockPlannerResponse(mockPlannerRows);
+		mockContextValue = createMockContext({
+			meds: [{ ...mockMeds[0], genericName: "Acetylsalicylic acid" }],
+		});
+
+		renderPlannerPage();
+
+		await submitPlannerForm();
+		const medRow = await screen.findByTestId("planner-result-row");
+
+		expect(within(medRow).getByRole("button", { name: "Aspirin" })).toBeInTheDocument();
+		expect(within(medRow).getByText("Acetylsalicylic acid")).toBeInTheDocument();
+	});
+
+	it("uses compact mobile labels and non-breaking available stock chunks", async () => {
+		mockPlannerResponse([{ ...mockPlannerRows[0], fullBlisters: 9, loosePills: 4 }]);
+		mockContextValue = createMockContext({ meds: mockMeds });
+
+		renderPlannerPage();
+
+		await submitPlannerForm();
+		const medRow = await screen.findByTestId("planner-result-row");
+		const prescriptionCell = medRow.querySelector('td[data-column-key="prescriptionRefills"]');
+		const availableCell = medRow.querySelector('td[data-column-key="available"]');
+
+		expect(prescriptionCell).toHaveAttribute("data-label", "planner.table.prescriptionRefillsMobile");
+		expect(
+			Array.from(availableCell?.querySelectorAll("[data-planner-available-chunk]") ?? []).map((chunk) =>
+				chunk.textContent?.trim()
+			)
+		).toEqual(["9 common.blisters", "+ 4 common.pills"]);
+	});
+
 	it("uses the medication display name when planner row name is empty", async () => {
 		mockPlannerResponse([
 			{

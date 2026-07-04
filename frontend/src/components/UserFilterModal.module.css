@@ -27,17 +27,15 @@
 
 .hero {
 	padding: 1.5rem 2rem;
-	background: linear-gradient(
-		135deg,
-		var(--mantine-other-accent) 0%,
-		color-mix(in srgb, var(--mantine-other-info) 58%, #1e5bb8) 100%
-	);
+	border-top: 1px solid color-mix(in srgb, var(--mantine-other-accent) 42%, transparent);
+	border-bottom: 1px solid var(--mantine-other-border-primary);
+	background: color-mix(in srgb, var(--mantine-other-bg-tertiary) 86%, var(--mantine-other-accent-bg));
 }
 
 .userAvatar {
 	flex: 0 0 auto;
-	color: #ffffff;
-	background: rgba(255, 255, 255, 0.2);
+	color: var(--mantine-other-accent-light);
+	background: var(--mantine-other-accent-bg);
 }
 
 .heroTitle {
@@ -45,7 +43,7 @@
 	font-size: 1.3rem;
 	font-weight: 700;
 	line-height: 1.2;
-	color: #ffffff;
+	color: var(--mantine-other-text-primary);
 }
 
 .list {

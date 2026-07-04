@@ -18,13 +18,21 @@ function cssBlock(css: string, selector: string) {
 }
 
 describe("medication detail header contrast contract", () => {
-	it("keeps taken-by names readable on the green detail header", () => {
+	it("keeps taken-by names readable without pill backgrounds on the green detail header", () => {
 		const css = readSource("components/MedDetailModal.module.css");
 
-		expect(cssBlock(css, ".taken-by-person")).toMatch(/background\s*:\s*rgba\(5,\s*20,\s*28,\s*0\.7[0-9]\)/);
-		expect(cssBlock(css, ".taken-by-person")).toMatch(/border\s*:\s*1px solid rgba\(255,\s*255,\s*255,\s*0\.58\)/);
-		expect(cssBlock(css, ".taken-by-person")).toMatch(/box-shadow\s*:/);
+		expect(cssBlock(css, ".taken-by-person")).not.toMatch(/background\s*:/);
+		expect(cssBlock(css, ".taken-by-person")).not.toMatch(/border\s*:/);
+		expect(cssBlock(css, ".taken-by-person")).not.toMatch(/box-shadow\s*:/);
 		expect(cssBlock(css, ".taken-by-name")).toMatch(/color\s*:\s*white/);
+		expect(cssBlock(css, ".taken-by-name")).toMatch(/background\s*:\s*transparent/);
+		expect(cssBlock(css, ".taken-by-name")).toMatch(/border-radius\s*:\s*0/);
+		expect(cssBlock(css, ".taken-by-name")).toMatch(/box-shadow\s*:\s*none/);
+		expect(cssBlock(css, ".taken-by-name")).toMatch(/text-decoration-line\s*:\s*underline/);
+		expect(cssBlock(css, ".taken-by-name:hover,\n.taken-by-name:focus-visible")).toMatch(
+			/background\s*:\s*transparent/
+		);
+		expect(cssBlock(css, ".taken-by-name:hover,\n.taken-by-name:focus-visible")).toMatch(/box-shadow\s*:\s*none/);
 		expect(cssBlock(css, ".taken-by-badge")).toMatch(/color\s*:\s*#fef3c7/);
 		expect(cssBlock(css, ".taken-by-badge")).not.toMatch(/var\(--accent\)/);
 	});

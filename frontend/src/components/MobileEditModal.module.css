@@ -70,6 +70,10 @@
 	font-size: 16px !important;
 }
 
+.form :global(.month-picker-input) {
+	font-size: 16px !important;
+}
+
 .form :global(label.has-error input),
 .form :global(label.has-error textarea) {
 	border-color: var(--danger) !important;
@@ -305,6 +309,7 @@
 .sectionCard :global(label select),
 .sectionCard :global(label textarea),
 .sectionCard :global(label .date-input-wrapper),
+.sectionCard :global(label .month-picker-wrapper),
 .sectionCard :global(label .static-value),
 .sectionCard :global(label .tag-input-container) {
 	color: var(--text-primary);

@@ -190,6 +190,19 @@ export function formatDate(dateStr: string | null | undefined, locale?: string):
 	return d.toLocaleDateString(effectiveLocale, { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
+export function formatMonth(monthStr: string | null | undefined, locale?: string): string {
+	if (!monthStr) return "-";
+	const match = monthStr.match(/^(\d{4})-(\d{2})(?:-\d{2})?/);
+	if (!match) return "-";
+	const [, year, month] = match;
+	const monthNumber = Number(month);
+	if (!Number.isFinite(monthNumber) || monthNumber < 1 || monthNumber > 12) return "-";
+	const d = new Date(Number(year), monthNumber - 1, 1);
+	if (Number.isNaN(d.getTime())) return "-";
+	const effectiveLocale = locale ?? getNumericLocale();
+	return d.toLocaleDateString(effectiveLocale, { year: "numeric", month: "2-digit" });
+}
+
 type DisplayDateValue = Date | number | string | null | undefined;
 type DisplayDateYearPolicy = "auto" | "always" | "never";
 
@@ -327,6 +340,27 @@ export function toDateValue(input: string | Date): string {
 		return toIsoString(input);
 	}
 	return input.slice(0, 10);
+}
+
+export function toMonthValue(input: string | Date | null | undefined): string {
+	if (!input) return "";
+	if (input instanceof Date) {
+		return `${input.getFullYear()}-${pad2(input.getMonth() + 1)}`;
+	}
+	const match = input.match(/^(\d{4})-(\d{2})/);
+	if (!match) return "";
+	const monthNumber = Number(match[2]);
+	return monthNumber >= 1 && monthNumber <= 12 ? `${match[1]}-${match[2]}` : "";
+}
+
+export function toMonthEndDateValue(monthValue: string | null | undefined): string {
+	const month = toMonthValue(monthValue);
+	if (!month) return "";
+	const [yearPart, monthPart] = month.split("-");
+	const year = Number(yearPart);
+	const monthNumber = Number(monthPart);
+	if (!Number.isFinite(year) || !Number.isFinite(monthNumber) || monthNumber < 1 || monthNumber > 12) return "";
+	return toIsoString(new Date(year, monthNumber, 0));
 }
 
 /**

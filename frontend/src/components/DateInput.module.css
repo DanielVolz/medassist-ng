@@ -1,0 +1,43 @@
+.monthPickerRoot {
+	width: 100%;
+}
+
+.monthPickerInput {
+	width: 100%;
+	min-height: 44px;
+	padding: 0.7rem 2.5rem 0.7rem 0.85rem;
+	border: 1px solid var(--border-secondary);
+	border-radius: var(--button-radius);
+	background: var(--bg-input);
+	color: var(--text-primary);
+	font-family: inherit;
+	font-size: 0.95rem;
+	font-weight: 400;
+	line-height: 1.35;
+	text-align: left;
+	transition:
+		border-color 150ms ease,
+		box-shadow 150ms ease,
+		background 200ms ease;
+}
+
+.monthPickerInput:hover {
+	border-color: var(--border-primary);
+}
+
+.monthPickerInput:focus,
+.monthPickerInput:focus-visible {
+	border-color: var(--accent);
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+
+.monthPickerInput:disabled,
+.monthPickerInput[data-disabled] {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.monthPickerSection {
+	color: var(--text-secondary);
+}

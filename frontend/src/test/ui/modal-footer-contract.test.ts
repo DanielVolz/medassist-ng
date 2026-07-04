@@ -139,6 +139,12 @@ describe("modal footer UI contract", () => {
 		const css = readSourceBySuffix(cssSources, "components/MedDetailModal.module.css");
 
 		expect(css).toMatch(/(?:^|\n)\.med-detail-modal\s*\{[^}]*overflow\s*:\s*hidden/s);
+		expect(css).toMatch(
+			/(?:^|\n)\.med-detail-modal\s*\{[^}]*max-height\s*:\s*min\(94dvh,\s*calc\(100dvh - 2\.5rem\)\)/s
+		);
+		expect(css).toMatch(
+			/:global\(\.mantine-Modal-content\)\.med-detail-modal\s*\{[^}]*max-height\s*:\s*min\(94dvh,\s*calc\(100dvh - 2\.5rem\)\)/s
+		);
 		expect(css).not.toMatch(/(?:^|\n)\.med-detail-modal\s*\{[^}]*overflow\s*:\s*visible/s);
 		expect(css).toMatch(/(?:^|\n)\.med-detail-modal-shell-body\s*\{[^}]*--app-modal-footer-bottom-offset\s*:\s*0px/s);
 		expect(css).toMatch(/(?:^|\n)\.med-detail-modal-shell-body\s*\{[^}]*display\s*:\s*flex/s);

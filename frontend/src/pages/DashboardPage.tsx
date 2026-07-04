@@ -616,8 +616,12 @@ export function DashboardPage() {
 						className="dose-recipient-name"
 						color="var(--text-secondary)"
 						fontWeight={600}
-						lineHeight={1.15}
+						lineHeight={1.3}
 						onClick={() => openUserFilter(person)}
+						style={{
+							marginBlockEnd: "-0.08em",
+							paddingBlockEnd: "0.08em",
+						}}
 						textAlign="right"
 					>
 						{person}

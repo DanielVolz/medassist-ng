@@ -62,6 +62,10 @@ test.describe("Settings Page", () => {
 				.toBe("inside");
 
 			await page.evaluate(() => document.dispatchEvent(new Event("touchmove", { bubbles: true })));
+			await page.waitForTimeout(2800);
+			await expect(tooltip).toBeVisible();
+
+			await page.touchscreen.tap(20, 820);
 			await expect(tooltip).toBeHidden();
 
 			await timezoneInfoIcon.tap();

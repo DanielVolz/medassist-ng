@@ -1,10 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { DateInput } from "../../components/DateInput";
+import { DateInput, MonthInput } from "../../components/DateInput";
 
 vi.mock("../../utils/formatters", () => ({
 	formatDate: vi.fn(() => "14.02.2026"),
+	formatMonth: vi.fn(() => "02.2026"),
 	getNumericLocale: vi.fn(() => "de-DE"),
+	toMonthValue: vi.fn((value: string) => value.slice(0, 7)),
 }));
 
 describe("DateInput", () => {
@@ -20,6 +22,15 @@ describe("DateInput", () => {
 
 		expect(screen.getByText("14.02.2026")).toBeInTheDocument();
 		expect(screen.getByDisplayValue("2026-02-14")).toBeInTheDocument();
+	});
+
+	it("renders month input with month/year display", () => {
+		render(<MonthInput value="2026-02-14" onChange={vi.fn()} />);
+
+		const picker = screen.getByRole("button", { name: "02.2026" });
+		expect(picker).toHaveAttribute("data-dates-input", "true");
+		expect(picker).toHaveAttribute("type", "button");
+		expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
 	});
 
 	it("tries showPicker on wrapper click", () => {

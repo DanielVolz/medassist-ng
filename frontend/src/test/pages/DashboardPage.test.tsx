@@ -1721,6 +1721,9 @@ describe("DashboardPage dose interactions", () => {
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("dose.actionBlocked.futureTake");
 
 		fireEvent.touchMove(takeButton.closest("span") as HTMLElement);
+		expect(screen.getByRole("tooltip")).toHaveTextContent("dose.actionBlocked.futureTake");
+
+		fireEvent.touchStart(document.body);
 		await waitFor(() => {
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 		});

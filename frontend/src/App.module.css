@@ -90,16 +90,16 @@
 	}
 
 	.mainSwipeHint {
-		display: flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
-		justify-content: center;
-		gap: 0.35rem;
-		width: fit-content;
+		gap: 0.45rem;
+		width: calc(100% - 1rem);
 		max-width: calc(100% - 1rem);
 		margin: 0.65rem auto 0.2rem;
-		padding: 0.28rem 0.35rem 0.28rem 0.7rem;
+		padding: 0.42rem 0.35rem 0.42rem 0.85rem;
 		border: 1px solid color-mix(in srgb, var(--mantine-other-border-primary) 72%, transparent);
-		border-radius: 999px;
+		border-radius: 1.35rem;
 		background: color-mix(in srgb, var(--mantine-other-bg-tertiary) 76%, transparent);
 		color: var(--mantine-other-text-muted);
 		font-size: 0.75rem;
@@ -110,8 +110,7 @@
 
 	.mainSwipeHint span {
 		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
+		white-space: normal;
 	}
 }

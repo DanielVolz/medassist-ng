@@ -114,7 +114,7 @@
     "editor": {
       "addTitle": "Journal-Notiz hinzufügen",
       "editTitle": "Journal-Notiz bearbeiten",
-      "description": "Halte fest, was bei dieser Einnahme passiert ist, ohne den bestehenden Einnahme- oder Überspringen-Status zu ändern.",
+      "description": "Halte fest, was bei dieser Einnahme passiert ist, ohne den bestehenden Einnahme- oder Auslassen-Status zu ändern.",
       "loading": "Journal-Eintrag wird geladen...",
       "noteLabel": "Notiz",
       "notePlaceholder": "Möchtest du mehr dazu notieren?",
@@ -642,10 +642,11 @@
     "takenBy": "eingenommen von",
     "markAsTaken": "Als eingenommen markieren",
     "take": "Nehmen",
-    "skip": "Überspringen",
-    "markAsSkipped": "Als übersprungen markieren",
+    "skip": "Auslassen",
+    "undoAction": "Rückg.",
+    "markAsSkipped": "Als ausgelassen markieren",
     "undoTake": "Nehmen rückgängig",
-    "undoSkip": "Überspringen rückgängig",
+    "undoSkip": "Auslassen rückgängig",
     "actionBlocked": {
       "futureTake": "Zukuenftige Einnahmen koennen noch nicht als eingenommen markiert werden.",
       "futureSkip": "Zukuenftige Einnahmen koennen noch nicht uebersprungen werden."

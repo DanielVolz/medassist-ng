@@ -80,4 +80,15 @@ describe("dashboard and shared mobile polish contract", () => {
 		expect(en.form.blisters.takenByTooltip).not.toBe("form.blisters.takenByTooltip");
 		expect(de.form.blisters.takenByTooltip).not.toBe("form.blisters.takenByTooltip");
 	});
+
+	it("keeps German mobile dose action labels concise without changing English copy", () => {
+		expect(en.dose.take).toBe("Take");
+		expect(en.dose.skip).toBe("Skip");
+		expect(en.dose.undoAction).toBe("Undo");
+		expect(de.dose.take).toBe("Nehmen");
+		expect(de.dose.skip).toBe("Auslassen");
+		expect(de.dose.undoAction).toBe("Rückg.");
+		expect(de.dose.skip.length).toBeLessThan("Überspringen".length);
+		expect(de.dose.undoAction.length).toBeLessThan("Rückgängig".length);
+	});
 });

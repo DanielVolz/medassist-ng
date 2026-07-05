@@ -643,6 +643,7 @@
     "markAsTaken": "Mark as taken",
     "take": "Take",
     "skip": "Skip",
+    "undoAction": "Undo",
     "markAsSkipped": "Mark as skipped",
     "undoTake": "Undo take",
     "undoSkip": "Undo skip",

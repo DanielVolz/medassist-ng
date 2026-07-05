@@ -694,7 +694,7 @@ describe("SharedSchedule", () => {
 				method: "POST",
 				body: { doseId: sharedData.automaticDoseId },
 			});
-			expect(screen.getByRole("button", { name: "common.undo" })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.undoAction" })).toBeInTheDocument();
 		});
 	});
 
@@ -763,11 +763,11 @@ describe("SharedSchedule", () => {
 		fireEvent.click(document.querySelector(".day-block.today .day-divider.clickable") as HTMLElement);
 
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: "common.undo" })).toBeDisabled();
+			expect(screen.getByRole("button", { name: "dose.undoAction" })).toBeDisabled();
 			expect(screen.getByRole("button", { name: "dose.skip" })).toBeDisabled();
 		});
 
-		const undoButton = screen.getByRole("button", { name: "common.undo" });
+		const undoButton = screen.getByRole("button", { name: "dose.undoAction" });
 		const skipButton = screen.getByRole("button", { name: "dose.skip" });
 		fireEvent.click(undoButton);
 		fireEvent.click(skipButton);
@@ -802,10 +802,10 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: "common.undo" })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.undoAction" })).toBeInTheDocument();
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: "common.undo" }));
+		fireEvent.click(screen.getByRole("button", { name: "dose.undoAction" }));
 
 		await waitFor(() => {
 			expect(requests).toContainEqual({
@@ -830,7 +830,7 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: "common.undo" })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "dose.undoAction" })).toBeInTheDocument();
 		});
 
 		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));

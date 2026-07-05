@@ -20,11 +20,21 @@
 	--button-radius: var(--button-radius);
 }
 
-.button :global(.mantine-Button-label) {
+.buttonInner {
+	width: 100%;
+	overflow: visible;
+}
+
+.buttonLabel {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 0.35rem;
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+	overflow: visible;
+	line-height: 1.1;
 }
 
 .actionIcon {
@@ -39,7 +49,16 @@
 }
 
 .label {
-	display: inline;
+	display: inline-block;
+	min-width: 0;
+	max-width: 100%;
+	overflow: visible;
+	text-align: center;
+	text-overflow: clip;
+}
+
+.skipAction .label {
+	width: 100%;
 }
 
 @media (min-width: 601px) {
@@ -66,7 +85,7 @@
 		--button-fz: 0.74rem;
 	}
 
-	.undo :global(.mantine-Button-label) {
+	.undo .buttonLabel {
 		gap: 0.22rem;
 	}
 

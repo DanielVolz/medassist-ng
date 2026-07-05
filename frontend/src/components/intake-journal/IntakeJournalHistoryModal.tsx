@@ -4,10 +4,11 @@ import type { Medication } from "../../types";
 import { AppModal, AppModalFooter } from "../../ui/modal/AppModal";
 import { AppButton } from "../../ui/primitives/AppButton";
 import { AppSelect } from "../../ui/primitives/AppSelect";
-import { getIntakeMoodDisplay } from "../../utils/intake-mood";
+import { getIntakeMoodLabel } from "../../utils/intake-mood";
 import { DateTimeInput } from "../DateTimeInput";
 import { MedicationAvatar } from "../MedicationAvatar";
 import classes from "./IntakeJournalModal.module.css";
+import { INTAKE_MOOD_ICONS } from "./intake-mood-icons";
 import { formatJournalDisplayDateTime, getJournalSourceLabel } from "./journal-display";
 
 interface IntakeJournalHistoryModalProps {
@@ -58,6 +59,8 @@ export function IntakeJournalHistoryModal({
 					: null;
 				const statusLabel = t(entry.dismissed ? "journal.context.statusSkipped" : "journal.context.statusTaken");
 				const sourceLabel = getJournalSourceLabel(entry, t);
+				const MoodIcon = entry.mood ? INTAKE_MOOD_ICONS[entry.mood] : null;
+				const moodLabel = entry.mood ? getIntakeMoodLabel(entry.mood, t) : null;
 
 				return (
 					<article key={entry.doseTrackingId} className={classes.entry}>
@@ -71,7 +74,12 @@ export function IntakeJournalHistoryModal({
 							</div>
 							<div className={classes.noteBlock}>
 								<span className={classes.noteLabel}>{t("journal.actions.note")}</span>
-								{entry.mood ? <span className={classes.moodBadge}>{getIntakeMoodDisplay(entry.mood, t)}</span> : null}
+								{MoodIcon && moodLabel ? (
+									<span className={classes.moodBadge}>
+										<MoodIcon aria-hidden="true" className={classes.moodBadgeIcon} />
+										<span>{moodLabel}</span>
+									</span>
+								) : null}
 								<p className={classes.entryNote}>{entry.note ?? t("journal.history.noNote")}</p>
 							</div>
 							<dl className={classes.entryMetaGrid}>

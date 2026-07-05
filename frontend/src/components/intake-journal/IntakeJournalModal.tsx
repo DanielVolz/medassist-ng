@@ -1,4 +1,3 @@
-import { Angry, Frown, Laugh, type LucideIcon, Meh, Smile } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { IntakeJournalEntry } from "../../hooks/useIntakeJournal";
@@ -9,15 +8,8 @@ import { AppTooltip } from "../../ui/primitives/AppTooltip";
 import { getIntakeMoodLabel, INTAKE_MOODS, type IntakeMood } from "../../utils/intake-mood";
 import { MedicationAvatar } from "../MedicationAvatar";
 import classes from "./IntakeJournalModal.module.css";
+import { INTAKE_MOOD_ICONS } from "./intake-mood-icons";
 import { formatJournalDisplayDateTime, getJournalSourceLabel } from "./journal-display";
-
-const INTAKE_MOOD_ICONS: Record<IntakeMood, LucideIcon> = {
-	very_bad: Angry,
-	bad: Frown,
-	neutral: Meh,
-	good: Smile,
-	very_good: Laugh,
-};
 
 interface IntakeJournalModalProps {
 	isOpen: boolean;

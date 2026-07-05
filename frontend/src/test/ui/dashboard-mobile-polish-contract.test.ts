@@ -33,6 +33,16 @@ function lastBlockFor(css: string, selector: string) {
 }
 
 describe("dashboard and shared mobile polish contract", () => {
+	it("keeps mobile browser text autosizing pinned to the app scale where supported", () => {
+		const baselineCss = readSource("ui/providers/AppGlobalBaseline.module.css");
+		const html = blockFor(baselineCss, ":global(html)");
+
+		expect(baselineCss).toContain('@import "@fontsource/ibm-plex-sans/latin-400.css"');
+		expect(baselineCss).not.toContain("fonts.googleapis.com");
+		expect(html).toMatch(/-webkit-text-size-adjust\s*:\s*100%/);
+		expect(html).toMatch(/text-size-adjust\s*:\s*100%/);
+	});
+
 	it("lets the mobile main swipe hint wrap instead of clipping the text", () => {
 		const appCss = readSource("App.module.css");
 		const hint = lastBlockFor(appCss, ".mainSwipeHint");
@@ -90,5 +100,17 @@ describe("dashboard and shared mobile polish contract", () => {
 		expect(de.dose.undoAction).toBe("Rückg.");
 		expect(de.dose.skip.length).toBeLessThan("Überspringen".length);
 		expect(de.dose.undoAction.length).toBeLessThan("Rückgängig".length);
+	});
+
+	it("keeps the shared-link help copy concise, user-facing, and properly localized", () => {
+		expect(de.share.publicAccessHelp).toBe(
+			"Du siehst nur den freigegebenen Zeitplan. Falls erlaubt, kannst du Einnahmen markieren und Notizen hinzufügen. Kein Zugriff auf Konto, Einstellungen oder andere Medikamente."
+		);
+		expect(en.share.publicAccessHelp).toBe(
+			"You only see the shared schedule. If allowed, you can mark intakes and add notes. No access to the account, settings, or other medications."
+		);
+		expect(de.share.publicAccessHelp).toMatch(/[äöüÄÖÜß]/);
+		expect(de.share.publicAccessHelp).not.toMatch(/ae|oe|ue/);
+		expect(de.share.publicAccessHelp.length).toBeLessThanOrEqual(180);
 	});
 });

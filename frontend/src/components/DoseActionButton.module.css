@@ -4,6 +4,7 @@
 	flex-shrink: 0;
 	margin-left: auto;
 	box-shadow: none;
+	font-size-adjust: 0.52;
 	font-weight: 700;
 	white-space: nowrap;
 	transition:
@@ -18,15 +19,23 @@
 	--button-padding-x: 0.78rem;
 	--button-fz: 0.85rem;
 	--button-radius: var(--button-radius);
+
+	height: 2.25rem;
+	min-height: 2.25rem;
+	padding-inline: 0.78rem;
+	font-size: 0.85rem;
 }
 
 .buttonInner {
+	display: flex;
+	justify-content: center;
 	width: 100%;
 	overflow: visible;
 }
 
 .buttonLabel {
 	display: inline-flex;
+	flex: 1 1 auto;
 	align-items: center;
 	justify-content: center;
 	gap: 0.35rem;
@@ -34,6 +43,7 @@
 	min-width: 0;
 	max-width: 100%;
 	overflow: visible;
+	text-align: center;
 	line-height: 1.1;
 }
 
@@ -58,6 +68,7 @@
 }
 
 .skipAction .label {
+	flex: 1 1 100%;
 	width: 100%;
 }
 
@@ -78,11 +89,25 @@
 		--button-height: 2rem;
 		--button-padding-x: 0.62rem;
 		--button-fz: 0.78rem;
+
+		height: 2rem;
+		min-height: 2rem;
+		padding-inline: 0.62rem;
+		font-size: 0.78rem;
 	}
 
 	.undo:global(.mantine-Button-root) {
-		--button-padding-x: 0.5rem;
+		--button-padding-x: 0.25rem;
 		--button-fz: 0.74rem;
+
+		padding-inline: 0.25rem;
+		font-size: 0.74rem;
+	}
+
+	.skipAction:global(.mantine-Button-root) {
+		--button-padding-x: 0.25rem;
+
+		padding-inline: 0.25rem;
 	}
 
 	.undo .buttonLabel {
@@ -92,6 +117,28 @@
 	.undo .actionIcon {
 		width: 0.8rem;
 		height: 0.8rem;
+	}
+
+	@supports (-moz-appearance: none) {
+		.button:global(.mantine-Button-root) {
+			--button-fz: 0.72rem;
+
+			font-size: 0.72rem;
+		}
+
+		.undo:global(.mantine-Button-root) {
+			--button-fz: 0.68rem;
+
+			font-size: 0.68rem;
+		}
+
+		.buttonLabel {
+			gap: 0.28rem;
+		}
+
+		.undo .buttonLabel {
+			gap: 0.24rem;
+		}
 	}
 }
 

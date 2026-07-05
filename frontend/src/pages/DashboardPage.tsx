@@ -667,6 +667,7 @@ export function DashboardPage() {
 			if (variant === "compact") return count === 1 ? t("common.injectionShort") : t("common.injectionsShort");
 			return count === 1 ? t("common.injection") : t("common.injections");
 		}
+		if (variant === "compact") return count === 1 ? t("common.pillShort") : t("common.pillsShort");
 		return count === 1 ? t("common.pill") : t("common.pills");
 	};
 

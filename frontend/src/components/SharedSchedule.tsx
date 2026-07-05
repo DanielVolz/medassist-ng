@@ -30,7 +30,7 @@ import { AppButton } from "../ui/primitives/AppButton";
 import { AppTooltip, AppTooltipTrigger } from "../ui/primitives/AppTooltip";
 import { formatDisplayDate, getSystemLocale } from "../utils/formatters";
 import { getIntakeDailyRate, getMedicationIntakes, iterateIntakeOccurrences } from "../utils/intake-schedule";
-import { convertLiquidUsageToMl } from "../utils/intake-units";
+import { convertLiquidUsageToMl, type UnitLabelVariant } from "../utils/intake-units";
 import { getStockStatus, isDoseDismissed, parseLocalDateTime } from "../utils/schedule";
 import authClasses from "./Auth.module.css";
 import doseButtonClasses from "./DoseActionButton.module.css";
@@ -121,8 +121,9 @@ export function SharedSchedule() {
 	const formatDoseUsageLabel = (
 		med: SharedScheduleData["medications"][number] | undefined,
 		usage: number,
-		intakeUnit?: IntakeUnit | null
-	) => formatScheduleDoseUsageLabel(med, usage, t, intakeUnit);
+		intakeUnit?: IntakeUnit | null,
+		variant: UnitLabelVariant = "full"
+	) => formatScheduleDoseUsageLabel(med, usage, t, intakeUnit, { variant });
 
 	const formatTotalUsageLabel = (
 		med: SharedScheduleData["medications"][number] | undefined,
@@ -1131,8 +1132,9 @@ export function SharedSchedule() {
 
 	const renderDoseUsage = (
 		med: SharedScheduleData["medications"][number] | undefined,
-		dose: { usage: number; intakeUnit?: IntakeUnit | null }
-	) => formatDoseUsageLabel(med, dose.usage, dose.intakeUnit);
+		dose: { usage: number; intakeUnit?: IntakeUnit | null },
+		variant: UnitLabelVariant = "full"
+	) => formatDoseUsageLabel(med, dose.usage, dose.intakeUnit, variant);
 
 	// Helper: check if a dose is "done" (taken, per-dose dismissed, or med-level dismissed)
 	function isDoseIdDone(doseId: string): boolean {
@@ -1248,7 +1250,7 @@ export function SharedSchedule() {
 			<div className="dose-summary">
 				<span className="dose-usage">
 					<span className="dose-usage-main dose-usage-main-full">{renderDoseUsage(med, dose)}</span>
-					<span className="dose-usage-main dose-usage-main-compact">{renderDoseUsage(med, dose)}</span>
+					<span className="dose-usage-main dose-usage-main-compact">{renderDoseUsage(med, dose, "compact")}</span>
 					{allowsPillFormSelection(med?.packageType) && med?.pillWeightMg && (
 						<span className="dose-usage-weight">{`${dose.usage * med.pillWeightMg} ${med.doseUnit ?? "mg"}`}</span>
 					)}

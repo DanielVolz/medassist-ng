@@ -49,6 +49,7 @@ function getDiscreteUnitLabel(
 		if (variant === "compact") return value === 1 ? t("common.injectionShort") : t("common.injectionsShort");
 		return value === 1 ? t("common.injection") : t("common.injections");
 	}
+	if (variant === "compact") return value === 1 ? t("common.pillShort") : t("common.pillsShort");
 	return value === 1 ? t("common.pill") : t("common.pills");
 }
 

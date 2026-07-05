@@ -118,6 +118,12 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		const sharedScheduleSource = readSource("components/SharedSchedule.tsx");
 		const doseActionSources = [dashboardSource, scheduleSource, sharedScheduleSource];
 		const buttonCss = readSource("components/DoseActionButton.module.css");
+		const doseItemHasRecipients = blockFor(surfacesCss, ".dose-item.has-recipients");
+		const doseItemHasRecipientsSummary = blockFor(surfacesCss, ".dose-item.has-recipients .dose-summary");
+		const doseItemHasRecipientsUsage = blockFor(surfacesCss, ".dose-item.has-recipients .dose-usage");
+		const doseItemHasRecipientsRecipients = blockFor(surfacesCss, ".dose-item.has-recipients .dose-recipients");
+		const doseItemHasRecipientsRecipientName = blockFor(surfacesCss, ".dose-item.has-recipients .dose-recipient-name");
+		const doseItemHasRecipientsReminder = blockFor(surfacesCss, ".dose-item.has-recipients .reminder-icon");
 		const doseRecipientName = blockFor(surfacesCss, ".dose-recipient-name");
 		const dosePerson = lastBlockFor(surfacesCss, ".dose-person");
 		const dosePersonName = lastBlockFor(surfacesCss, ".dose-person .person-name");
@@ -129,6 +135,7 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		const dosePersonButton = lastBlockFor(surfacesCss, ".dose-person .dose-btn");
 		const dosePersonRawButton = blockFor(surfacesCss, ".dose-person button");
 		const tooltipTarget = blockFor(buttonCss, ".tooltipTarget");
+		const actionButton = blockFor(buttonCss, ".button");
 		const buttonInner = blockFor(buttonCss, ".buttonInner");
 		const buttonLabel = blockFor(buttonCss, ".buttonLabel");
 		const actionLabel = blockFor(buttonCss, ".label");
@@ -138,6 +145,24 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		const skipAction = blockFor(buttonCss, ".skipAction");
 		const journalAction = blockFor(buttonCss, ".journalAction");
 
+		expect(doseItemHasRecipients).toMatch(
+			/grid-template-columns\s*:\s*minmax\(3\.35rem, auto\) max-content minmax\(0, 1fr\) auto/
+		);
+		expect(doseItemHasRecipients).toMatch(/column-gap\s*:\s*0\.25rem/);
+		expect(doseItemHasRecipientsSummary).toMatch(/grid-column\s*:\s*2 \/ 4/);
+		expect(doseItemHasRecipientsSummary).toMatch(/display\s*:\s*grid/);
+		expect(doseItemHasRecipientsSummary).toMatch(/grid-template-columns\s*:\s*minmax\(0, 1fr\) max-content/);
+		expect(doseItemHasRecipientsSummary).toMatch(/column-gap\s*:\s*0\.4rem/);
+		expect(doseItemHasRecipientsUsage).toMatch(/flex\s*:\s*none/);
+		expect(doseItemHasRecipientsUsage).toMatch(/min-width\s*:\s*max-content/);
+		expect(doseItemHasRecipientsRecipients).toMatch(/justify-self\s*:\s*end/);
+		expect(doseItemHasRecipientsRecipients).toMatch(/width\s*:\s*auto/);
+		expect(doseItemHasRecipientsRecipients).toMatch(/min-width\s*:\s*max-content/);
+		expect(doseItemHasRecipientsRecipients).toMatch(/overflow\s*:\s*visible/);
+		expect(doseItemHasRecipientsRecipientName).toMatch(/max-width\s*:\s*none/);
+		expect(doseItemHasRecipientsRecipientName).toMatch(/overflow\s*:\s*visible/);
+		expect(doseItemHasRecipientsRecipientName).toMatch(/text-overflow\s*:\s*clip/);
+		expect(doseItemHasRecipientsReminder).toMatch(/grid-column\s*:\s*4/);
 		expect(dosePerson).toMatch(/display\s*:\s*grid/);
 		expect(dosePerson).toMatch(/width\s*:\s*calc\(100% \+ 1rem\)/);
 		expect(dosePerson).toMatch(/margin-inline\s*:\s*-0\.5rem/);
@@ -156,9 +181,14 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		expect(dosePersonButton).toMatch(/width\s*:\s*100%/);
 		expect(dosePersonRawButton).toMatch(/width\s*:\s*100%/);
 		expect(tooltipTarget).toMatch(/width\s*:\s*100%/);
+		expect(actionButton).toMatch(/font-size-adjust\s*:\s*0\.52/);
+		expect(buttonInner).toMatch(/display\s*:\s*flex/);
+		expect(buttonInner).toMatch(/justify-content\s*:\s*center/);
 		expect(buttonInner).toMatch(/overflow\s*:\s*visible/);
 		expect(buttonLabel).toMatch(/width\s*:\s*100%/);
+		expect(buttonLabel).toMatch(/flex\s*:\s*1 1 auto/);
 		expect(buttonLabel).toMatch(/overflow\s*:\s*visible/);
+		expect(buttonLabel).toMatch(/text-align\s*:\s*center/);
 		expect(buttonLabel).toMatch(/line-height\s*:\s*1\.1/);
 		expect(actionLabel).toMatch(/text-align\s*:\s*center/);
 		expect(actionLabel).toMatch(/text-overflow\s*:\s*clip/);
@@ -167,6 +197,17 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		expect(undoButtonLabel).toMatch(/gap\s*:\s*0\.22rem/);
 		expect(buttonCss).toMatch(/@media \(max-width: 600px\)[\s\S]*--button-padding-x\s*:\s*0\.62rem/);
 		expect(buttonCss).toMatch(/@media \(max-width: 600px\)[\s\S]*--button-fz\s*:\s*0\.78rem/);
+		expect(buttonCss).toMatch(/@media \(max-width: 600px\)[\s\S]*font-size\s*:\s*0\.78rem/);
+		expect(buttonCss).toMatch(/@media \(max-width: 600px\)[\s\S]*padding-inline\s*:\s*0\.62rem/);
+		expect(buttonCss).toMatch(
+			/@media \(max-width: 600px\)[\s\S]*\.undo:global\(\.mantine-Button-root\)[\s\S]*padding-inline\s*:\s*0\.25rem[\s\S]*font-size\s*:\s*0\.74rem/
+		);
+		expect(buttonCss).toMatch(
+			/@supports \(-moz-appearance: none\)[\s\S]*\.button:global\(\.mantine-Button-root\)[\s\S]*--button-fz\s*:\s*0\.72rem[\s\S]*font-size\s*:\s*0\.72rem/
+		);
+		expect(buttonCss).toMatch(
+			/@supports \(-moz-appearance: none\)[\s\S]*\.undo:global\(\.mantine-Button-root\)[\s\S]*--button-fz\s*:\s*0\.68rem[\s\S]*font-size\s*:\s*0\.68rem/
+		);
 		expect(buttonCss).not.toMatch(/font-size\s*:\s*clamp\(0\.62rem, 2\.45vw, 0\.7rem\)/);
 		expect(buttonCss).toMatch(
 			/@media \(min-width: 601px\)[\s\S]*\.takeAction:global\(\.mantine-Button-root\)[\s\S]*\.skipAction:global\(\.mantine-Button-root\)[\s\S]*width\s*:\s*7\.5rem[\s\S]*min-width\s*:\s*7\.5rem/
@@ -178,6 +219,8 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		expect(dashboardSource).toContain('className="dose-recipient-name"');
 		expect(dashboardSource).toContain("lineHeight={1.3}");
 		expect(dashboardSource).toContain('paddingBlockEnd: "0.08em"');
+		expect(dashboardSource).toContain('t("common.pillShort")');
+		expect(dashboardSource).toContain('t("common.pillsShort")');
 		for (const source of doseActionSources) {
 			expect(source).toContain('const hideDoseActionIcons = i18n.language.startsWith("de");');
 			expect(source).toContain("inner: doseButtonClasses.buttonInner");
@@ -212,7 +255,24 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 
 	it("keeps shared mobile recipient names in the dose summary row", () => {
 		const sharedCss = readSource("components/SharedSchedule.module.css");
+		const doseItemHasRecipients = blockFor(sharedCss, ".shared-schedule-section :global(.dose-item.has-recipients)");
 		const doseSummary = blockFor(sharedCss, ".shared-schedule-section :global(.dose-summary)");
+		const doseItemHasRecipientsSummary = blockFor(
+			sharedCss,
+			".shared-schedule-section :global(.dose-item.has-recipients .dose-summary)"
+		);
+		const doseItemHasRecipientsUsage = blockFor(
+			sharedCss,
+			".shared-schedule-section :global(.dose-item.has-recipients .dose-usage)"
+		);
+		const doseItemHasRecipientsRecipients = blockFor(
+			sharedCss,
+			".shared-schedule-section :global(.dose-item.has-recipients) .shared-dose-recipients"
+		);
+		const doseItemHasRecipientsRecipientName = blockFor(
+			sharedCss,
+			".shared-schedule-section :global(.dose-item.has-recipients) .shared-dose-recipient-name"
+		);
 		const recipients = lastBlockFor(sharedCss, ".shared-dose-recipients");
 		const recipientName = lastBlockFor(sharedCss, ".shared-dose-recipient-name");
 		const actionRecipientName = blockFor(sharedCss, ".shared-action-recipient-name");
@@ -232,11 +292,28 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		expect(sharedCss).not.toMatch(
 			/\.shared-schedule-section\s+\.(timeline|day-block|time-row|time-main|doses-col|dose-item|dose-checks|dose-person)/
 		);
+		expect(doseItemHasRecipients).toMatch(
+			/grid-template-columns\s*:\s*minmax\(3\.35rem, auto\) max-content minmax\(0, 1fr\) auto/
+		);
+		expect(doseItemHasRecipients).toMatch(/column-gap\s*:\s*0\.25rem/);
 		expect(doseSummary).toMatch(/grid-column\s*:\s*2/);
 		expect(doseSummary).toMatch(/display\s*:\s*flex/);
+		expect(doseItemHasRecipientsSummary).toMatch(/grid-column\s*:\s*2 \/ 4/);
+		expect(doseItemHasRecipientsSummary).toMatch(/display\s*:\s*grid/);
+		expect(doseItemHasRecipientsSummary).toMatch(/grid-template-columns\s*:\s*minmax\(0, 1fr\) max-content/);
+		expect(doseItemHasRecipientsSummary).toMatch(/column-gap\s*:\s*0\.4rem/);
+		expect(doseItemHasRecipientsUsage).toMatch(/flex\s*:\s*none/);
+		expect(doseItemHasRecipientsUsage).toMatch(/min-width\s*:\s*max-content/);
 		expect(recipients).toMatch(/display\s*:\s*flex/);
 		expect(recipients).toMatch(/justify-content\s*:\s*flex-end/);
+		expect(doseItemHasRecipientsRecipients).toMatch(/justify-self\s*:\s*end/);
+		expect(doseItemHasRecipientsRecipients).toMatch(/width\s*:\s*auto/);
+		expect(doseItemHasRecipientsRecipients).toMatch(/min-width\s*:\s*max-content/);
+		expect(doseItemHasRecipientsRecipients).toMatch(/overflow\s*:\s*visible/);
 		expect(recipientName).toMatch(/text-overflow\s*:\s*ellipsis/);
+		expect(doseItemHasRecipientsRecipientName).toMatch(/max-width\s*:\s*none/);
+		expect(doseItemHasRecipientsRecipientName).toMatch(/overflow\s*:\s*visible/);
+		expect(doseItemHasRecipientsRecipientName).toMatch(/text-overflow\s*:\s*clip/);
 		expect(hiddenActionRowName).toMatch(/display\s*:\s*none/);
 		expect(actionRecipientName).toMatch(/display\s*:\s*none/);
 		expect(sharedDosePerson).toMatch(/--dose-action-skip-width\s*:\s*clamp\(5\.75rem, 24vw, 6\.75rem\)/);

@@ -2393,7 +2393,8 @@ button.has-validation-error {
 	}
 
 	.dose-item.has-recipients {
-		grid-template-columns: minmax(3.35rem, auto) minmax(0, 1fr) auto;
+		grid-template-columns: minmax(3.35rem, auto) max-content minmax(0, 1fr) auto;
+		column-gap: 0.25rem;
 	}
 
 	.dose-time {
@@ -2411,6 +2412,14 @@ button.has-validation-error {
 		gap: 0.32rem;
 	}
 
+	.dose-item.has-recipients .dose-summary {
+		grid-column: 2 / 4;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) max-content;
+		width: 100%;
+		column-gap: 0.4rem;
+	}
+
 	.dose-usage {
 		flex: 0 1 auto;
 		flex-direction: row;
@@ -2419,6 +2428,11 @@ button.has-validation-error {
 		line-height: 1.15;
 		min-width: 0;
 		gap: 0 0.25rem;
+	}
+
+	.dose-item.has-recipients .dose-usage {
+		flex: none;
+		min-width: max-content;
 	}
 
 	.dose-usage-main-full {
@@ -2447,11 +2461,24 @@ button.has-validation-error {
 		text-align: right;
 	}
 
+	.dose-item.has-recipients .dose-recipients {
+		justify-self: end;
+		width: auto;
+		min-width: max-content;
+		overflow: visible;
+	}
+
 	.dose-recipient-name {
 		max-width: 100%;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.dose-item.has-recipients .dose-recipient-name {
+		max-width: none;
+		overflow: visible;
+		text-overflow: clip;
 	}
 
 	.dose-checks {
@@ -2468,7 +2495,7 @@ button.has-validation-error {
 	}
 
 	.dose-item.has-recipients .reminder-icon {
-		grid-column: 3;
+		grid-column: 4;
 	}
 
 	.dose-person {

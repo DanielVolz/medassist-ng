@@ -348,6 +348,8 @@ export async function createMedicationViaAPI(data: {
 	looseTablets?: number;
 	totalPills?: number;
 	packageAmountValue?: number;
+	pillWeightMg?: number | null;
+	doseUnit?: string | null;
 	intakeRemindersEnabled?: boolean;
 	intakes?: {
 		usage: number;

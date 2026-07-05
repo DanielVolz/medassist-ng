@@ -1,5 +1,13 @@
 import type { Locator, Page } from "@playwright/test";
-import { authFile, createMedicationViaAPI, deleteAllMedicationsViaAPI, expect, navigateTo, test } from "./fixtures";
+import {
+	authFile,
+	createMedicationViaAPI,
+	deleteAllMedicationsViaAPI,
+	expect,
+	navigateTo,
+	test,
+	updateSettingsViaAPI,
+} from "./fixtures";
 
 const MED_NAME = "Button Height Guard Med";
 
@@ -217,6 +225,273 @@ async function expectDoseStatusBackgroundHasEvenButtonPadding(row: Locator) {
 	expect(Math.max(...values) - Math.min(...values)).toBeLessThanOrEqual(2);
 }
 
+async function expectGermanMobileDoseActionButtonsToFit(page: Page) {
+	const metrics = await page.evaluate(() => {
+		type Rect = { left: number; right: number; top: number; bottom: number; width: number; height: number };
+
+		function rectFromDomRect(rect: DOMRect): Rect {
+			return {
+				left: rect.left,
+				right: rect.right,
+				top: rect.top,
+				bottom: rect.bottom,
+				width: rect.width,
+				height: rect.height,
+			};
+		}
+
+		function unionRect(current: Rect | null, next: DOMRect): Rect {
+			if (!current) return rectFromDomRect(next);
+			const left = Math.min(current.left, next.left);
+			const right = Math.max(current.right, next.right);
+			const top = Math.min(current.top, next.top);
+			const bottom = Math.max(current.bottom, next.bottom);
+			return { left, right, top, bottom, width: right - left, height: bottom - top };
+		}
+
+		function isVisible(element: HTMLElement) {
+			const rect = element.getBoundingClientRect();
+			const style = window.getComputedStyle(element);
+			return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+		}
+
+		function textRect(element: HTMLElement): Rect | null {
+			const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+			let rect: Rect | null = null;
+			while (walker.nextNode()) {
+				const node = walker.currentNode;
+				const text = node.textContent?.trim();
+				if (!text) continue;
+
+				const range = document.createRange();
+				range.selectNodeContents(node);
+				const nextRect = range.getBoundingClientRect();
+				range.detach();
+				if (nextRect.width <= 0 || nextRect.height <= 0) continue;
+				rect = unionRect(rect, nextRect);
+			}
+			return rect;
+		}
+
+		const rows = Array.from(document.querySelectorAll<HTMLElement>(".dashboard-schedules-section .dose-person")).filter(
+			isVisible
+		);
+		const violations: Array<Record<string, number | string | boolean>> = [];
+		let checkedAuslassen = 0;
+		let checkedUndo = 0;
+		let checkedNotiz = 0;
+
+		for (const row of rows) {
+			const buttons = Array.from(row.querySelectorAll<HTMLElement>("button")).filter(isVisible);
+			for (const button of buttons) {
+				const text = button.textContent?.trim().replace(/\s+/g, " ") ?? "";
+				if (!/^(Nehmen|Auslassen|Notiz|Rückg\.)/.test(text)) continue;
+
+				const buttonRect = button.getBoundingClientRect();
+				const label = button.querySelector<HTMLElement>(".mantine-Button-label") ?? button;
+				const labelTextRect = textRect(label);
+				if (!labelTextRect) continue;
+				const buttonStyle = window.getComputedStyle(button);
+				const labelStyle = window.getComputedStyle(label);
+
+				const tolerance = 1.5;
+				if (labelTextRect.left < buttonRect.left - tolerance || labelTextRect.right > buttonRect.right + tolerance) {
+					violations.push({
+						buttonWidth: Math.round(buttonRect.width * 10) / 10,
+						labelLeft: Math.round(labelTextRect.left * 10) / 10,
+						labelRight: Math.round(labelTextRect.right * 10) / 10,
+						reason: "text outside button",
+						text,
+					});
+				}
+
+				if (text === "Auslassen") {
+					checkedAuslassen += 1;
+					const centerOffset = labelTextRect.left + labelTextRect.width / 2 - (buttonRect.left + buttonRect.width / 2);
+					const centerDelta = Math.abs(centerOffset);
+					if (centerDelta > 2) {
+						violations.push({
+							centerDelta: Math.round(centerDelta * 10) / 10,
+							centerOffset: Math.round(centerOffset * 10) / 10,
+							fontSize: buttonStyle.fontSize,
+							labelDisplay: labelStyle.display,
+							labelWidth: Math.round(label.getBoundingClientRect().width * 10) / 10,
+							paddingLeft: buttonStyle.paddingLeft,
+							paddingRight: buttonStyle.paddingRight,
+							reason: "Auslassen not centered",
+							text,
+						});
+					}
+				}
+
+				if (text.startsWith("Rückg.")) {
+					checkedUndo += 1;
+					const iconRect = button.querySelector<SVGElement>("svg")?.getBoundingClientRect();
+					if (iconRect) {
+						const gap = iconRect.left - labelTextRect.right;
+						if (gap < 1) {
+							violations.push({
+								fontSize: buttonStyle.fontSize,
+								gap: Math.round(gap * 10) / 10,
+								iconLeft: Math.round(iconRect.left * 10) / 10,
+								labelRight: Math.round(labelTextRect.right * 10) / 10,
+								paddingLeft: buttonStyle.paddingLeft,
+								paddingRight: buttonStyle.paddingRight,
+								reason: "undo label overlaps icon",
+								text,
+							});
+						}
+					}
+				}
+
+				if (text === "Notiz") checkedNotiz += 1;
+			}
+		}
+
+		return { checkedAuslassen, checkedNotiz, checkedUndo, violations };
+	});
+
+	expect(metrics.checkedAuslassen, "German skip action should be visible").toBeGreaterThan(0);
+	expect(metrics.checkedUndo, "German undo action should be visible").toBeGreaterThan(0);
+	expect(metrics.checkedNotiz, "German note action should be visible").toBeGreaterThan(0);
+	expect(metrics.violations).toEqual([]);
+}
+
+async function expectMobileDoseSummariesKeepRecipientNamesReadable(
+	page: Page,
+	expectedRecipient: string,
+	expectedCompactUsage: string,
+	expectedWeight: string
+) {
+	const metrics = await page.evaluate(
+		({ compactUsage, recipient, weight }) => {
+			type Rect = { left: number; right: number; top: number; bottom: number; width: number; height: number };
+
+			function rectFromDomRect(rect: DOMRect): Rect {
+				return {
+					left: rect.left,
+					right: rect.right,
+					top: rect.top,
+					bottom: rect.bottom,
+					width: rect.width,
+					height: rect.height,
+				};
+			}
+
+			function unionRect(current: Rect | null, next: DOMRect): Rect {
+				if (!current) return rectFromDomRect(next);
+				const left = Math.min(current.left, next.left);
+				const right = Math.max(current.right, next.right);
+				const top = Math.min(current.top, next.top);
+				const bottom = Math.max(current.bottom, next.bottom);
+				return { left, right, top, bottom, width: right - left, height: bottom - top };
+			}
+
+			function isVisible(element: HTMLElement) {
+				const rect = element.getBoundingClientRect();
+				const style = window.getComputedStyle(element);
+				return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+			}
+
+			function textRect(element: HTMLElement): Rect | null {
+				const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+				let rect: Rect | null = null;
+				while (walker.nextNode()) {
+					const node = walker.currentNode;
+					const text = node.textContent?.trim();
+					if (!text) continue;
+
+					const range = document.createRange();
+					range.selectNodeContents(node);
+					const nextRect = range.getBoundingClientRect();
+					range.detach();
+					if (nextRect.width <= 0 || nextRect.height <= 0) continue;
+					rect = unionRect(rect, nextRect);
+				}
+				return rect;
+			}
+
+			const rows = Array.from(
+				document.querySelectorAll<HTMLElement>(".dashboard-schedules-section .dose-item.has-recipients")
+			).filter(isVisible);
+			const violations: Array<Record<string, number | string | boolean>> = [];
+			let checked = 0;
+
+			for (const row of rows) {
+				const recipientName = row.querySelector<HTMLElement>(".dose-recipient-name");
+				if (!recipientName?.textContent?.includes(recipient)) continue;
+
+				const usage = row.querySelector<HTMLElement>(".dose-usage");
+				const recipients = row.querySelector<HTMLElement>(".dose-recipients");
+				const compactUsageElement = row.querySelector<HTMLElement>(".dose-usage-main-compact");
+				const weightElement = row.querySelector<HTMLElement>(".dose-usage-weight");
+				const reminderIcon = row.querySelector<HTMLElement>(".reminder-icon");
+				if (!usage || !recipients || !isVisible(recipientName)) continue;
+
+				checked += 1;
+				const rowRect = row.getBoundingClientRect();
+				const usageTextRect = textRect(usage) ?? usage.getBoundingClientRect();
+				const recipientTextRect = textRect(recipientName) ?? recipientName.getBoundingClientRect();
+				const recipientRect = recipientName.getBoundingClientRect();
+				const recipientStyle = window.getComputedStyle(recipientName);
+				const summaryStyle = window.getComputedStyle(row.querySelector<HTMLElement>(".dose-summary") ?? row);
+				const compactUsageText = compactUsageElement?.textContent?.trim() ?? "";
+				const weightText = weightElement?.textContent?.trim() ?? "";
+				const gap = recipientTextRect.left - usageTextRect.right;
+				const reminderIconRect = reminderIcon?.getBoundingClientRect();
+				const recipientToReminderGap =
+					reminderIcon && reminderIconRect && isVisible(reminderIcon)
+						? reminderIconRect.left - recipientTextRect.right
+						: Number.NaN;
+				const recipientClipped =
+					recipientName.scrollWidth > recipientName.clientWidth + 1 && recipientStyle.overflowX !== "visible";
+				const textOutsideRecipient =
+					recipientTextRect.left < recipientRect.left - 1 || recipientTextRect.right > recipientRect.right + 1;
+				const textOutsideRow = recipientTextRect.right > rowRect.right + 1 || usageTextRect.left < rowRect.left - 1;
+				const recipientNotAlignedToReminder =
+					!Number.isFinite(recipientToReminderGap) || recipientToReminderGap < 4 || recipientToReminderGap > 24;
+
+				if (
+					gap < 6 ||
+					recipientClipped ||
+					textOutsideRecipient ||
+					textOutsideRow ||
+					recipientNotAlignedToReminder ||
+					compactUsageText !== compactUsage ||
+					weightText !== weight
+				) {
+					violations.push({
+						compactUsageText,
+						gap: Math.round(gap * 10) / 10,
+						gridTemplateColumns: summaryStyle.gridTemplateColumns,
+						reason: "dose usage and recipient name are cramped",
+						recipientClientWidth: recipientName.clientWidth,
+						recipientRectWidth: Math.round(recipientRect.width * 10) / 10,
+						recipientScrollWidth: recipientName.scrollWidth,
+						recipientText: recipientName.textContent?.trim() ?? "",
+						recipientToReminderGap: Number.isFinite(recipientToReminderGap)
+							? Math.round(recipientToReminderGap * 10) / 10
+							: "missing",
+						recipientTextLeft: Math.round(recipientTextRect.left * 10) / 10,
+						recipientTextRight: Math.round(recipientTextRect.right * 10) / 10,
+						textOutsideRecipient,
+						textOutsideRow,
+						usageText: usage.textContent?.trim().replace(/\s+/g, " ") ?? "",
+						usageTextRight: Math.round(usageTextRect.right * 10) / 10,
+						weightText,
+					});
+				}
+			}
+
+			return { checked, violations };
+		},
+		{ compactUsage: expectedCompactUsage, recipient: expectedRecipient, weight: expectedWeight }
+	);
+
+	expect(metrics.checked, `Expected mobile dose summaries for ${expectedRecipient}`).toBeGreaterThan(0);
+	expect(metrics.violations).toEqual([]);
+}
+
 test.describe("Button height contract", () => {
 	test.use({ storageState: authFile });
 	test.describe.configure({ mode: "serial", timeout: 90000 });
@@ -414,6 +689,92 @@ test.describe("Button height contract", () => {
 					await expect.poll(async () => (await undoButton.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(96);
 					await expectDoseStatusBackgroundHasEvenButtonPadding(todayBlock.locator(".dose-person.skipped").first());
 					await expectVisibleActionGroupsHaveReadableButtonText("mobile /dashboard skipped dose", page);
+				});
+
+				test("/dashboard keeps German dose actions centered and non-overlapping", async ({ page }) => {
+					const takeMedName = `${MED_NAME} German Take`;
+					const skipMedName = `${MED_NAME} German Skip`;
+					const personName = "pillepallemann";
+					await updateSettingsViaAPI({ language: "de" });
+					await page.addInitScript(() => {
+						window.localStorage.setItem("medassist-ng-language", "de");
+					});
+					try {
+						await deleteAllMedicationsViaAPI();
+						await createMedicationViaAPI({
+							name: takeMedName,
+							takenBy: [personName],
+							packageType: "blister",
+							packCount: 2,
+							blistersPerPack: 2,
+							pillsPerBlister: 10,
+							pillWeightMg: 150,
+							doseUnit: "mg",
+							intakes: [
+								{
+									usage: 1,
+									every: 1,
+									start: new Date().toISOString().slice(0, 16),
+									intakeRemindersEnabled: true,
+									takenBy: personName,
+								},
+							],
+						});
+						await createMedicationViaAPI({
+							name: skipMedName,
+							takenBy: [personName],
+							packageType: "blister",
+							packCount: 2,
+							blistersPerPack: 2,
+							pillsPerBlister: 10,
+							pillWeightMg: 150,
+							doseUnit: "mg",
+							intakes: [
+								{
+									usage: 1,
+									every: 1,
+									start: new Date().toISOString().slice(0, 16),
+									intakeRemindersEnabled: true,
+									takenBy: personName,
+								},
+							],
+						});
+						await navigateTo(page, "/dashboard");
+
+						const takeRow = page.locator(".time-row", { hasText: takeMedName }).first();
+						await expect(takeRow).toBeVisible({ timeout: 10000 });
+						const takeButton = takeRow.getByRole("button", { name: /^Nehmen$/ }).first();
+						await expect(takeButton).toBeVisible({ timeout: 10000 });
+						const takeResponsePromise = page.waitForResponse(
+							(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
+							{ timeout: 10000 }
+						);
+						await takeButton.click();
+						expect((await takeResponsePromise).ok()).toBe(true);
+
+						const skipRow = page.locator(".time-row", { hasText: skipMedName }).first();
+						await expect(skipRow).toBeVisible({ timeout: 10000 });
+						const skipButton = skipRow.getByRole("button", { name: /^Auslassen$/ }).first();
+						await expect(skipButton).toBeVisible({ timeout: 10000 });
+						const skipResponsePromise = page.waitForResponse(
+							(response) => response.url().includes("/api/doses/skip") && response.request().method() === "POST",
+							{ timeout: 10000 }
+						);
+						await skipButton.click();
+						expect((await skipResponsePromise).ok()).toBe(true);
+
+						await expect(takeRow.getByRole("button", { name: /^Rückg\./ }).first()).toBeVisible({ timeout: 10000 });
+						await expect(skipRow.getByRole("button", { name: /^Rückg\./ }).first()).toBeVisible({ timeout: 10000 });
+						await expectGermanMobileDoseActionButtonsToFit(page);
+						await expectMobileDoseSummariesKeepRecipientNamesReadable(page, personName, "1 Tbl.", "150 mg");
+					} finally {
+						await updateSettingsViaAPI({ language: "en" });
+						await page
+							.evaluate(() => {
+								window.localStorage.setItem("medassist-ng-language", "en");
+							})
+							.catch(() => {});
+					}
 				});
 			}
 		});

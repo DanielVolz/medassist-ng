@@ -15,6 +15,10 @@ const t = (key: string, options?: Record<string, unknown>): string => {
 			return "pill";
 		case "common.pills":
 			return "pills";
+		case "common.pillShort":
+			return "tab.";
+		case "common.pillsShort":
+			return "tabs.";
 		case "common.puff":
 			return "puff";
 		case "common.puffs":
@@ -44,6 +48,14 @@ describe("schedule formatters", () => {
 		expect(formatScheduleDoseUsageLabel({ packageType: "inhaler" }, 2, t)).toBe("2 puffs");
 		expect(formatScheduleDoseUsageLabel({ packageType: "injection" }, 1, t)).toBe("1 injection");
 		expect(formatScheduleDoseUsageLabel({ packageType: "injection" }, 3, t)).toBe("3 injections");
+	});
+
+	it("shortens tablet dose labels in compact schedule rows", () => {
+		expect(formatScheduleDoseUsageLabel({ packageType: "blister" }, 1, t)).toBe("1 pill");
+		expect(formatScheduleDoseUsageLabel({ packageType: "blister" }, 1, t, null, { variant: "compact" })).toBe("1 tab.");
+		expect(formatScheduleDoseUsageLabel({ packageType: "blister" }, 2, t, null, { variant: "compact" })).toBe(
+			"2 tabs."
+		);
 	});
 
 	it("formats liquid totals from dose units and mixed-unit conversion", () => {

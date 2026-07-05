@@ -279,6 +279,7 @@
 .moodBadge {
 	display: inline-flex;
 	align-items: center;
+	gap: 0.32rem;
 	width: fit-content;
 	min-height: 1.55rem;
 	padding: 0.18rem 0.55rem;
@@ -289,6 +290,14 @@
 	font-size: 0.8rem;
 	font-weight: 700;
 	line-height: 1.15;
+}
+
+.moodBadgeIcon {
+	width: 0.95rem;
+	height: 0.95rem;
+	flex: 0 0 auto;
+	color: var(--accent);
+	stroke-width: 2.2;
 }
 
 .noteLabel {

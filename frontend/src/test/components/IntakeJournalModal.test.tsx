@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { IntakeJournalHistoryModal } from "../../components/intake-journal/IntakeJournalHistoryModal";
 import { IntakeJournalModal } from "../../components/intake-journal/IntakeJournalModal";
 import type { IntakeJournalEntry } from "../../hooks/useIntakeJournal";
 import { setDefaultFormattingTimezone } from "../../utils/formatters";
@@ -179,6 +180,33 @@ describe("IntakeJournalModal", () => {
 		fireEvent.touchStart(veryGoodMoodButton);
 
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("journal.mood.values.very_good");
+	});
+
+	it("renders history mood with the same icon set as the note editor", () => {
+		const entry = buildEntry({ mood: "very_good", note: "Mood note" });
+
+		render(
+			<IntakeJournalHistoryModal
+				isOpen
+				entries={[entry]}
+				filters={{ medicationId: null, from: "", to: "", limit: 100 }}
+				medications={[]}
+				isLoading={false}
+				error={null}
+				onClose={vi.fn()}
+				onFilterChange={vi.fn()}
+				onReload={vi.fn()}
+				onResetFilters={vi.fn()}
+				onReopen={vi.fn()}
+			/>
+		);
+
+		const moodLabel = screen.getByText("journal.mood.values.very_good");
+		const moodBadge = moodLabel.parentElement;
+
+		expect(moodBadge?.querySelector("svg")).not.toBeNull();
+		expect(moodBadge?.textContent).not.toContain("\u{1f604}");
+		expect(screen.getByText("Mood note")).toBeInTheDocument();
 	});
 
 	it("keeps the modal open when save fails", async () => {

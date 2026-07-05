@@ -262,20 +262,18 @@ export function useRefill(): UseRefillReturn {
 					patchBody.stockAdjustment = 0;
 					patchBody.packCount = 0;
 					patchBody.looseTablets = 0;
-					if (isDiscreteCountPackage || isAmountPackage) {
+					if (isPackageAmountPackage) {
 						patchBody.totalPills = 0;
 					}
-					if (isPackageAmountPackage) {
-						patchBody.packageAmountValue = 0;
-					}
 				} else if (isTubePackage) {
-					// Tube has fixed count=1 and no automatic depletion.
-					// Correction must update the base amount fields directly.
+					// Keep the configured amount per tube stable. A correction changes
+					// the amount on hand, not the size of future tube refills.
+					const correctedTubeCount = Math.max(1, Math.ceil(desiredTotal / liquidAmountPerBottle));
 					patchBody.stockAdjustment = 0;
-					patchBody.packCount = 1;
+					patchBody.packCount = correctedTubeCount;
 					patchBody.totalPills = desiredTotal;
 					patchBody.looseTablets = desiredTotal;
-					patchBody.packageAmountValue = desiredTotal;
+					patchBody.packageAmountValue = liquidAmountPerBottle;
 				} else if (isLiquidPackage) {
 					// Liquid correction supports bottle-count updates.
 					// Keep packageAmountValue (ml per bottle) and update capacity base by bottle count.

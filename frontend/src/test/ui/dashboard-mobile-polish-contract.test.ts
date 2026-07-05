@@ -33,6 +33,19 @@ function lastBlockFor(css: string, selector: string) {
 }
 
 describe("dashboard and shared mobile polish contract", () => {
+	it("lets the mobile main swipe hint wrap instead of clipping the text", () => {
+		const appCss = readSource("App.module.css");
+		const hint = lastBlockFor(appCss, ".mainSwipeHint");
+		const hintText = lastBlockFor(appCss, ".mainSwipeHint span");
+
+		expect(hint).toMatch(/grid-template-columns\s*:\s*minmax\(0,\s*1fr\)\s*auto/);
+		expect(hint).toMatch(/width\s*:\s*calc\(100%\s*-\s*1rem\)/);
+		expect(hintText).toMatch(/white-space\s*:\s*normal/);
+		expect(hintText).toMatch(/overflow-wrap\s*:\s*anywhere/);
+		expect(hintText).not.toMatch(/text-overflow\s*:\s*ellipsis/);
+		expect(hintText).not.toMatch(/white-space\s*:\s*nowrap/);
+	});
+
 	it("keeps overview table headers readable and mobile date values left aligned", () => {
 		const css = readSource("ui/primitives/DataTable.module.css");
 		const headCell = blockFor(css, ".headCell");

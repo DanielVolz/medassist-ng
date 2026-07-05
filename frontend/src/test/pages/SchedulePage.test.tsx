@@ -743,7 +743,7 @@ describe("SchedulePage with taken doses", () => {
 		);
 
 		// When dose is taken, the undo button should appear
-		const undoBtn = screen.getByRole("button", { name: "common.undo" });
+		const undoBtn = screen.getByRole("button", { name: "dose.undoAction" });
 		expect(undoBtn).toBeInTheDocument();
 	});
 
@@ -766,7 +766,7 @@ describe("SchedulePage with taken doses", () => {
 			</MemoryRouter>
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: "common.undo" }));
+		fireEvent.click(screen.getByRole("button", { name: "dose.undoAction" }));
 		expect(undoDoseTaken).toHaveBeenCalled();
 	});
 });
@@ -833,7 +833,7 @@ describe("SchedulePage skip behavior", () => {
 			</MemoryRouter>
 		);
 
-		expect(screen.getByRole("button", { name: "common.undo" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "dose.undoAction" })).toBeInTheDocument();
 		expect(screen.getByText("John", { selector: ".person-name" }).closest(".dose-person")).toHaveClass("skipped");
 		const noteButton = screen.getByRole("button", { name: "journal.actions.note" });
 		expect(noteButton).not.toBeDisabled();
@@ -891,7 +891,7 @@ describe("SchedulePage skip behavior", () => {
 			</MemoryRouter>
 		);
 
-		const undoSkipButton = screen.getByRole("button", { name: "common.undo" });
+		const undoSkipButton = screen.getByRole("button", { name: "dose.undoAction" });
 		expect(undoSkipButton).toBeInTheDocument();
 
 		fireEvent.click(undoSkipButton);

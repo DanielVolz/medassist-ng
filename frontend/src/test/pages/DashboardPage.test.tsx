@@ -1585,7 +1585,7 @@ describe("DashboardPage additional branches", () => {
 			</MemoryRouter>
 		);
 
-		const undoButton = screen.getByRole("button", { name: "common.undo" });
+		const undoButton = screen.getByRole("button", { name: "dose.undoAction" });
 		expect(undoButton).toBeInTheDocument();
 		fireEvent.click(undoButton);
 		expect(undoDoseTaken).toHaveBeenCalled();
@@ -1767,7 +1767,7 @@ describe("DashboardPage dose interactions", () => {
 			</MemoryRouter>
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: "common.undo" }));
+		fireEvent.click(screen.getByRole("button", { name: "dose.undoAction" }));
 		expect(undoDoseTaken).toHaveBeenCalled();
 	});
 });

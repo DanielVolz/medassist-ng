@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/style/noNestedTernary: timeline rendering uses explicit UI-state branching */
 import { ActionIcon, Group } from "@mantine/core";
-import { Archive, Bell, Check, ClipboardList, NotebookPen, Share2, Undo2 } from "lucide-react";
+import { Archive, Bell, ClipboardList, NotebookPen, Share2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
@@ -463,6 +463,11 @@ export function DashboardPage() {
 		isEmpty: boolean;
 		isFuture: boolean;
 	}) => {
+		const hideDoseActionIcons = i18n.language.startsWith("de");
+		const doseActionButtonClassNames = {
+			inner: doseButtonClasses.buttonInner,
+			label: doseButtonClasses.buttonLabel,
+		};
 		const journalUnavailable = !(options.isTaken || options.isSkipped);
 		const takeBlockLabel = (() => {
 			if (options.isFuture) return t("dose.actionBlocked.futureTake");
@@ -474,6 +479,7 @@ export function DashboardPage() {
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
@@ -483,20 +489,21 @@ export function DashboardPage() {
 				onClick={() => undoDoseTaken(options.doseId)}
 				disabled={Boolean(takeBlockLabel)}
 			>
-				{options.isAutomaticallyTaken && (
+				{options.isAutomaticallyTaken && !hideDoseActionIcons && (
 					<AppTooltip label={t("tooltips.automaticTaken")}>
 						<span className={doseButtonClasses.actionIcon} aria-hidden="true">
 							🤖
 						</span>
 					</AppTooltip>
 				)}
-				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
+				<span className={doseButtonClasses.label}>{t("dose.undoAction")}</span>
 				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(
 					"take-action-button",
 					doseButtonClasses.button,
@@ -509,11 +516,7 @@ export function DashboardPage() {
 				disabled={Boolean(takeBlockLabel) || options.isSkipped}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
-				{options.isEmpty ? (
-					<span aria-hidden="true">⊘</span>
-				) : (
-					<Check className={doseButtonClasses.actionIcon} aria-hidden="true" />
-				)}
+				{options.isEmpty && !hideDoseActionIcons ? <span aria-hidden="true">⊘</span> : null}
 			</AppButton>
 		);
 		const takeButton = takeBlockLabel ? (
@@ -528,6 +531,7 @@ export function DashboardPage() {
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(doseButtonClasses.button, doseButtonClasses.journal, doseButtonClasses.journalAction)}
 				onClick={() => {
 					if (!journalUnavailable) {
@@ -563,6 +567,7 @@ export function DashboardPage() {
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(
 					doseButtonClasses.button,
 					doseButtonClasses.skipAction,
@@ -572,13 +577,14 @@ export function DashboardPage() {
 				onClick={() => undoDoseSkipped(options.doseId)}
 				disabled={Boolean(skipBlockLabel)}
 			>
-				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
+				<span className={doseButtonClasses.label}>{t("dose.undoAction")}</span>
 				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken || Boolean(skipBlockLabel)}

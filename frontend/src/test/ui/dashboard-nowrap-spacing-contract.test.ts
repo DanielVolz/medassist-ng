@@ -114,6 +114,9 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 	it("keeps mobile dose action buttons in stable slots", () => {
 		const surfacesCss = readSource("AppSurfaces.css");
 		const dashboardSource = readSource("pages/DashboardPage.tsx");
+		const scheduleSource = readSource("pages/SchedulePage.tsx");
+		const sharedScheduleSource = readSource("components/SharedSchedule.tsx");
+		const doseActionSources = [dashboardSource, scheduleSource, sharedScheduleSource];
 		const buttonCss = readSource("components/DoseActionButton.module.css");
 		const doseRecipientName = blockFor(surfacesCss, ".dose-recipient-name");
 		const dosePerson = lastBlockFor(surfacesCss, ".dose-person");
@@ -126,6 +129,11 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		const dosePersonButton = lastBlockFor(surfacesCss, ".dose-person .dose-btn");
 		const dosePersonRawButton = blockFor(surfacesCss, ".dose-person button");
 		const tooltipTarget = blockFor(buttonCss, ".tooltipTarget");
+		const buttonInner = blockFor(buttonCss, ".buttonInner");
+		const buttonLabel = blockFor(buttonCss, ".buttonLabel");
+		const actionLabel = blockFor(buttonCss, ".label");
+		const skipActionLabel = blockFor(buttonCss, ".skipAction .label");
+		const undoButtonLabel = blockFor(buttonCss, ".undo .buttonLabel");
 		const takeAction = blockFor(buttonCss, ".takeAction");
 		const skipAction = blockFor(buttonCss, ".skipAction");
 		const journalAction = blockFor(buttonCss, ".journalAction");
@@ -148,6 +156,18 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		expect(dosePersonButton).toMatch(/width\s*:\s*100%/);
 		expect(dosePersonRawButton).toMatch(/width\s*:\s*100%/);
 		expect(tooltipTarget).toMatch(/width\s*:\s*100%/);
+		expect(buttonInner).toMatch(/overflow\s*:\s*visible/);
+		expect(buttonLabel).toMatch(/width\s*:\s*100%/);
+		expect(buttonLabel).toMatch(/overflow\s*:\s*visible/);
+		expect(buttonLabel).toMatch(/line-height\s*:\s*1\.1/);
+		expect(actionLabel).toMatch(/text-align\s*:\s*center/);
+		expect(actionLabel).toMatch(/text-overflow\s*:\s*clip/);
+		expect(actionLabel).not.toMatch(/text-overflow\s*:\s*ellipsis/);
+		expect(skipActionLabel).toMatch(/width\s*:\s*100%/);
+		expect(undoButtonLabel).toMatch(/gap\s*:\s*0\.22rem/);
+		expect(buttonCss).toMatch(/@media \(max-width: 600px\)[\s\S]*--button-padding-x\s*:\s*0\.62rem/);
+		expect(buttonCss).toMatch(/@media \(max-width: 600px\)[\s\S]*--button-fz\s*:\s*0\.78rem/);
+		expect(buttonCss).not.toMatch(/font-size\s*:\s*clamp\(0\.62rem, 2\.45vw, 0\.7rem\)/);
 		expect(buttonCss).toMatch(
 			/@media \(min-width: 601px\)[\s\S]*\.takeAction:global\(\.mantine-Button-root\)[\s\S]*\.skipAction:global\(\.mantine-Button-root\)[\s\S]*width\s*:\s*7\.5rem[\s\S]*min-width\s*:\s*7\.5rem/
 		);
@@ -158,6 +178,21 @@ describe("dashboard no-wrap and reminder spacing contract", () => {
 		expect(dashboardSource).toContain('className="dose-recipient-name"');
 		expect(dashboardSource).toContain("lineHeight={1.3}");
 		expect(dashboardSource).toContain('paddingBlockEnd: "0.08em"');
+		for (const source of doseActionSources) {
+			expect(source).toContain('const hideDoseActionIcons = i18n.language.startsWith("de");');
+			expect(source).toContain("inner: doseButtonClasses.buttonInner");
+			expect(source).toContain("label: doseButtonClasses.buttonLabel");
+			expect(source).toContain("classNames={doseActionButtonClassNames}");
+			expect(source).toContain("options.isAutomaticallyTaken && !hideDoseActionIcons");
+			expect(source).toContain("options.isEmpty && !hideDoseActionIcons");
+			expect(source).toContain('t("dose.undoAction")');
+			expect(source).toContain("<Undo2");
+			expect(source).not.toContain("{!hideDoseActionIcons && <Undo2");
+			expect(source).toContain("<NotebookPen");
+			expect(source).not.toContain("{!hideDoseActionIcons && <NotebookPen");
+			expect(source).not.toContain('t("common.undo")');
+			expect(source).not.toContain("<Check");
+		}
 	});
 
 	it("lets desktop dose action names use the available row width", () => {

@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/style/noNestedTernary: schedule timeline branches are intentionally explicit */
 import { Group } from "@mantine/core";
-import { Archive, Bell, Check, ClipboardList, NotebookPen, Undo2 } from "lucide-react";
+import { Archive, Bell, ClipboardList, NotebookPen, Undo2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
@@ -102,7 +102,7 @@ function getDosePersonTextColor(isTaken: boolean, isSkipped: boolean): string {
 }
 
 export function SchedulePage() {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const { user, authFetch } = useAuth();
 	const { showFeedback } = useFeedback();
 	const {
@@ -334,11 +334,17 @@ export function SchedulePage() {
 		isAutomaticallyTaken: boolean;
 		isEmpty: boolean;
 	}) => {
+		const hideDoseActionIcons = i18n.language.startsWith("de");
+		const doseActionButtonClassNames = {
+			inner: doseButtonClasses.buttonInner,
+			label: doseButtonClasses.buttonLabel,
+		};
 		const journalUnavailable = !(options.isTaken || options.isSkipped);
 		const takeButtonControl = options.isTaken ? (
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(
 					doseButtonClasses.button,
 					doseButtonClasses.takeAction,
@@ -347,20 +353,21 @@ export function SchedulePage() {
 				)}
 				onClick={() => undoDoseTaken(options.doseId)}
 			>
-				{options.isAutomaticallyTaken && (
+				{options.isAutomaticallyTaken && !hideDoseActionIcons && (
 					<AppTooltip label={t("tooltips.automaticTaken")}>
 						<span className={doseButtonClasses.actionIcon} aria-hidden="true">
 							🤖
 						</span>
 					</AppTooltip>
 				)}
-				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
+				<span className={doseButtonClasses.label}>{t("dose.undoAction")}</span>
 				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(
 					"take-action-button",
 					doseButtonClasses.button,
@@ -372,11 +379,7 @@ export function SchedulePage() {
 				disabled={options.isEmpty || options.isSkipped}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
-				{options.isEmpty ? (
-					<span aria-hidden="true">⊘</span>
-				) : (
-					<Check className={doseButtonClasses.actionIcon} aria-hidden="true" />
-				)}
+				{options.isEmpty && !hideDoseActionIcons ? <span aria-hidden="true">⊘</span> : null}
 			</AppButton>
 		);
 		const takeButton =
@@ -392,6 +395,7 @@ export function SchedulePage() {
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(
 					doseButtonClasses.button,
 					doseButtonClasses.skipAction,
@@ -400,13 +404,14 @@ export function SchedulePage() {
 				)}
 				onClick={() => undoDoseSkipped(options.doseId)}
 			>
-				<span className={doseButtonClasses.label}>{t("common.undo")}</span>
+				<span className={doseButtonClasses.label}>{t("dose.undoAction")}</span>
 				<Undo2 className={doseButtonClasses.actionIcon} aria-hidden="true" />
 			</AppButton>
 		) : (
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(doseButtonClasses.button, doseButtonClasses.skipAction, doseButtonClasses.skip)}
 				onClick={() => markDoseSkipped(options.doseId)}
 				disabled={options.isTaken}
@@ -419,6 +424,7 @@ export function SchedulePage() {
 			<AppButton
 				type="button"
 				size="sm"
+				classNames={doseActionButtonClassNames}
 				className={cx(doseButtonClasses.button, doseButtonClasses.journalAction, doseButtonClasses.journal)}
 				onClick={() => {
 					if (!journalUnavailable) {

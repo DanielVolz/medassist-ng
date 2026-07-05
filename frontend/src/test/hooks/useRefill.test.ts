@@ -455,7 +455,6 @@ describe("useRefill", () => {
 			stockAdjustment: 0,
 			packCount: 0,
 			looseTablets: 0,
-			totalPills: 0,
 		});
 	});
 
@@ -518,7 +517,53 @@ describe("useRefill", () => {
 			packCount: 0,
 			looseTablets: 0,
 			totalPills: 0,
-			packageAmountValue: 0,
+		});
+	});
+
+	it("keeps tube amount per package stable when correcting current stock", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+
+		const tubeMed: Medication = {
+			id: 13,
+			name: "Tube Stable Package Size",
+			medicationForm: "topical",
+			packageType: "tube",
+			doseUnit: "units",
+			packCount: 1,
+			packageAmountValue: 40,
+			packageAmountUnit: "g",
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			totalPills: 40,
+			looseTablets: 40,
+			stockAdjustment: 0,
+			takenBy: [],
+			blisters: [{ usage: 2, every: 1, start: "2026-01-31T20:27:00" }],
+			updatedAt: null,
+		};
+
+		const mockLoadMeds = vi.fn();
+		const { result } = renderHook(() => useRefill());
+
+		act(() => {
+			result.current.openEditStockModal(tubeMed, {
+				all: [{ name: tubeMed.name, medsLeft: 24, daysLeft: 12 }] as Coverage[],
+			});
+			result.current.setEditStockPartialBlisterPills(24);
+		});
+
+		await act(async () => {
+			await result.current.submitStockCorrection(13, tubeMed, mockLoadMeds);
+		});
+
+		const [, requestInit] = authFetchMock.mock.calls[0] ?? [];
+		const body = parseRequestBody(requestInit);
+		expect(body).toEqual({
+			stockAdjustment: 0,
+			packCount: 1,
+			totalPills: 24,
+			looseTablets: 24,
+			packageAmountValue: 40,
 		});
 	});
 

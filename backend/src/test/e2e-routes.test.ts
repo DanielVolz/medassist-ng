@@ -2521,7 +2521,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(med).toBeTruthy();
 			expect(med.packCount).toBe(0);
 			expect(med.looseTablets).toBe(0);
-			expect(med.totalPills).toBe(0);
+			expect(med.totalPills).toBe(payload.totalPills);
 			expect(med.stockAdjustment).toBe(0);
 		});
 
@@ -2592,7 +2592,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(med.packCount).toBe(0);
 			expect(med.looseTablets).toBe(0);
 			expect(med.totalPills).toBe(0);
-			expect(med.packageAmountValue).toBe(0);
+			expect(med.packageAmountValue).toBe(payload.packageAmountValue);
 			expect(med.stockAdjustment).toBe(0);
 		});
 
@@ -3421,6 +3421,161 @@ describe("E2E Tests with Real Routes", () => {
 				);
 			}
 		}
+
+		it.each([
+			{
+				name: "blister",
+				payload: {
+					...blisterMedication,
+					packCount: 2,
+					blistersPerPack: 2,
+					pillsPerBlister: 5,
+					looseTablets: 3,
+				},
+				zeroPayload: { stockAdjustment: 0, packCount: 0, looseTablets: 0 },
+				refillPayload: { packsAdded: 1, loosePillsAdded: 2 },
+				expectedTotalPills: 12,
+				expectedPackCount: 1,
+				expectedLooseTablets: 2,
+				expectedPersistedCapacity: null,
+			},
+			{
+				name: "bottle",
+				payload: {
+					...bottleMedication,
+					totalPills: 100,
+					looseTablets: 40,
+				},
+				zeroPayload: { stockAdjustment: 0, packCount: 0, looseTablets: 0, totalPills: 0 },
+				refillPayload: { packsAdded: 0, loosePillsAdded: 25 },
+				expectedTotalPills: 25,
+				expectedPackCount: 0,
+				expectedLooseTablets: 25,
+				expectedPersistedCapacity: 100,
+			},
+			{
+				name: "tube",
+				payload: {
+					...tubeMedication,
+					packCount: 1,
+					packageAmountValue: 40,
+					totalPills: 40,
+					looseTablets: 40,
+				},
+				zeroPayload: {
+					stockAdjustment: 0,
+					packCount: 0,
+					looseTablets: 0,
+					totalPills: 0,
+					packageAmountValue: 0,
+				},
+				refillPayload: { packsAdded: 1, loosePillsAdded: 40, quantityAdded: 40 },
+				expectedTotalPills: 40,
+				expectedPackCount: 1,
+				expectedLooseTablets: 40,
+				expectedPersistedCapacity: 40,
+			},
+			{
+				name: "liquid_container",
+				payload: {
+					...liquidContainerMedication,
+					packCount: 1,
+					packageAmountValue: 180,
+					packageAmountUnit: "ml",
+					totalPills: 180,
+					looseTablets: 180,
+				},
+				zeroPayload: {
+					stockAdjustment: 0,
+					packCount: 0,
+					looseTablets: 0,
+					totalPills: 0,
+					packageAmountValue: 0,
+				},
+				refillPayload: { packsAdded: 1, loosePillsAdded: 180, quantityAdded: 180 },
+				expectedTotalPills: 180,
+				expectedPackCount: 1,
+				expectedLooseTablets: 180,
+				expectedPersistedCapacity: 180,
+			},
+			{
+				name: "inhaler",
+				payload: {
+					...discreteContainerMedications[0].payload,
+					totalPills: 200,
+					looseTablets: 40,
+				},
+				zeroPayload: { stockAdjustment: 0, packCount: 0, looseTablets: 0, totalPills: 0 },
+				refillPayload: { packsAdded: 1, loosePillsAdded: 60 },
+				expectedTotalPills: 60,
+				expectedPackCount: 0,
+				expectedLooseTablets: 60,
+				expectedPersistedCapacity: 200,
+			},
+			{
+				name: "injection",
+				payload: {
+					...discreteContainerMedications[1].payload,
+					totalPills: 12,
+					looseTablets: 4,
+				},
+				zeroPayload: { stockAdjustment: 0, packCount: 0, looseTablets: 0, totalPills: 0 },
+				refillPayload: { packsAdded: 1, loosePillsAdded: 3 },
+				expectedTotalPills: 3,
+				expectedPackCount: 0,
+				expectedLooseTablets: 3,
+				expectedPersistedCapacity: 12,
+			},
+		])("should refill $name correctly after stock correction to zero", async ({
+			payload,
+			zeroPayload,
+			refillPayload,
+			expectedTotalPills,
+			expectedPackCount,
+			expectedLooseTablets,
+			expectedPersistedCapacity,
+		}) => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload,
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const zeroResponse = await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: zeroPayload,
+			});
+			expect(zeroResponse.statusCode).toBe(200);
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: refillPayload,
+			});
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			expect(refillData.newStock.totalPills).toBe(expectedTotalPills);
+			expect(refillData.newStock.packCount).toBe(expectedPackCount);
+			expect(refillData.newStock.looseTablets).toBe(expectedLooseTablets);
+
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(expectedPackCount);
+			expect(med.looseTablets).toBe(expectedLooseTablets);
+			expect(med.stockAdjustment).toBe(0);
+			if (typeof expectedPersistedCapacity === "number") {
+				if (med.packageType === "tube" || med.packageType === "liquid_container") {
+					expect(med.packageAmountValue).toBe(expectedPersistedCapacity);
+				} else {
+					expect(med.totalPills).toBe(expectedPersistedCapacity);
+				}
+			}
+		});
 
 		it("should create and return bottle type medication", async () => {
 			const response = await app.inject({

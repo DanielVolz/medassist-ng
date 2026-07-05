@@ -1198,9 +1198,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 					updateFields.totalPills = normalizedAmountBase;
 					updateFields.looseTablets = normalizedAmountBase;
 				}
-				if (packageAmountValue !== undefined) updateFields.packageAmountValue = packageAmountValue;
+				if (packageAmountValue !== undefined && packageAmountValue > 0) {
+					updateFields.packageAmountValue = packageAmountValue;
+				}
 			}
-			if (allowsDiscreteCapacityUpdate && totalPills !== undefined) {
+			if (allowsDiscreteCapacityUpdate && totalPills !== undefined && totalPills > 0) {
 				updateFields.totalPills = totalPills;
 			}
 			if (packCount !== undefined) updateFields.packCount = packCount;

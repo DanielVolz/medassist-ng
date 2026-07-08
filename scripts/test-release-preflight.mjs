@@ -29,6 +29,7 @@ function copyFixture() {
     "shared/package-lock.json",
     ".github/workflows/docker-build.yml",
     ".github/workflows/container-smoke.yml",
+    ".github/workflows/dependabot-automerge.yml",
     ".github/workflows/test.yml",
     ".github/workflows/e2e.yml"
   ];
@@ -231,6 +232,63 @@ test("release preflight rejects fatal Docker publish cache export", () => {
     expectPreflightFailure(
       fixtureRoot,
       /\.github\/workflows\/docker-build\.yml build-and-push cache-to must ignore GitHub Actions cache export failures/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects Dependabot automerge without a scheduled stale PR sweep", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/dependabot-automerge.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      /\s{2}schedule:\n(?:\s{4}#.*\n)*\s{4}- cron: '[^']+'\n/,
+      ""
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/dependabot-automerge\.yml must run a scheduled stale Dependabot auto-merge sweep/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects Dependabot automerge when the scheduled sweep does not run the rebase job", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/dependabot-automerge.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
+      "github.event_name == 'push' || github.event_name == 'workflow_dispatch'"
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/dependabot-automerge\.yml stale Dependabot rebase job must run for scheduled sweeps/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects Dependabot automerge without rebase request throttling", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/dependabot-automerge.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "          REBASE_REQUEST_COOLDOWN_SECONDS: \"21600\"\n",
+      ""
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/dependabot-automerge\.yml must throttle repeated scheduled rebase requests/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });

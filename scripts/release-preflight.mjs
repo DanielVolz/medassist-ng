@@ -202,16 +202,12 @@ function validateDependabotAutomergeWorkflow(workflowPath) {
     fail(`${workflowPath} must find open Dependabot auto-merge PRs that are behind main.`);
   }
 
-  if (!/REBASE_REQUEST_COOLDOWN_SECONDS:\s*"[0-9]+"/.test(workflow)) {
-    fail(`${workflowPath} must throttle repeated scheduled rebase requests.`);
+  if (!/gh pr update-branch "\$pr_number"[\s\S]*--repo "\$REPO"[\s\S]*--rebase/.test(workflow)) {
+    fail(`${workflowPath} must rebase stale Dependabot PRs through GitHub's update-branch API.`);
   }
 
-  if (!/--json comments[\s\S]*\.body == "@dependabot rebase"/.test(workflow)) {
-    fail(`${workflowPath} must check recent rebase comments before requesting another rebase.`);
-  }
-
-  if (!workflow.includes('--body "@dependabot rebase"')) {
-    fail(`${workflowPath} must request stale Dependabot PR rebases with the Dependabot command comment.`);
+  if (workflow.includes("@dependabot rebase") || /gh pr comment[\s\S]*dependabot rebase/.test(workflow)) {
+    fail(`${workflowPath} must not rely on Dependabot command comments from github-actions[bot].`);
   }
 }
 

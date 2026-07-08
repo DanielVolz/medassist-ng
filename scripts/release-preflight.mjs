@@ -183,6 +183,38 @@ function validateContainerSmokeWorkflow(workflowPath) {
   }
 }
 
+function validateDependabotAutomergeWorkflow(workflowPath) {
+  const workflow = readText(workflowPath);
+
+  if (!/\n\s*schedule:\s*\n(?:\s*#.*\n)*\s*-\s*cron:\s*['"][^'"]+['"]/.test(workflow)) {
+    fail(`${workflowPath} must run a scheduled stale Dependabot auto-merge sweep.`);
+  }
+
+  if (!workflow.includes("github.event_name == 'schedule'")) {
+    fail(`${workflowPath} stale Dependabot rebase job must run for scheduled sweeps.`);
+  }
+
+  if (
+    !/gh pr list[\s\S]*--author "app\/dependabot"[\s\S]*--json number,autoMergeRequest,mergeStateStatus[\s\S]*mergeStateStatus == "BEHIND"/.test(
+      workflow
+    )
+  ) {
+    fail(`${workflowPath} must find open Dependabot auto-merge PRs that are behind main.`);
+  }
+
+  if (!/REBASE_REQUEST_COOLDOWN_SECONDS:\s*"[0-9]+"/.test(workflow)) {
+    fail(`${workflowPath} must throttle repeated scheduled rebase requests.`);
+  }
+
+  if (!/--json comments[\s\S]*\.body == "@dependabot rebase"/.test(workflow)) {
+    fail(`${workflowPath} must check recent rebase comments before requesting another rebase.`);
+  }
+
+  if (!workflow.includes('--body "@dependabot rebase"')) {
+    fail(`${workflowPath} must request stale Dependabot PR rebases with the Dependabot command comment.`);
+  }
+}
+
 function validatePackageVersion(packageName, packageJsonPath, packageJson, releaseVersion) {
   if (packageJson.version !== releaseVersion) {
     fail(`${packageJsonPath} version must match ${releaseVersion}, found ${packageJson.version}.`);
@@ -382,6 +414,11 @@ function main() {
 
   const containerSmokeWorkflowPath = String(args["container-smoke-workflow"] || ".github/workflows/container-smoke.yml");
   validateContainerSmokeWorkflow(containerSmokeWorkflowPath);
+
+  const dependabotAutomergeWorkflowPath = String(
+    args["dependabot-automerge-workflow"] || ".github/workflows/dependabot-automerge.yml"
+  );
+  validateDependabotAutomergeWorkflow(dependabotAutomergeWorkflowPath);
 
   if (args["static-only"]) {
     console.log(`release-preflight: static checks passed for ${tag}`);

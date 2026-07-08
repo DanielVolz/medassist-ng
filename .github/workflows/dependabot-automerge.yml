@@ -9,6 +9,9 @@ on:
       - ready_for_review
   push:
     branches: [main]
+  schedule:
+    # Bot-created auto-merge commits do not reliably trigger the push sweep.
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -45,7 +48,7 @@ jobs:
           merge-method: squash
 
   request-dependabot-rebase:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -53,6 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          REBASE_REQUEST_COOLDOWN_SECONDS: "21600"
         run: |
           set -euo pipefail
 
@@ -77,6 +81,25 @@ jobs:
             fi
 
             echo "Requesting Dependabot rebase for PR #$pr_number."
+            latest_request="$(
+              gh pr view "$pr_number" \
+                --repo "$REPO" \
+                --json comments \
+                --jq '.comments[] | select(.author.login == "github-actions[bot]" and .body == "@dependabot rebase") | .createdAt' \
+                | tail -n 1
+            )"
+
+            if [ -n "$latest_request" ]; then
+              now_epoch="$(date -u +%s)"
+              request_epoch="$(date -u -d "$latest_request" +%s)"
+              request_age_seconds=$((now_epoch - request_epoch))
+
+              if [ "$request_age_seconds" -lt "$REBASE_REQUEST_COOLDOWN_SECONDS" ]; then
+                echo "Skipping PR #$pr_number because a rebase was requested ${request_age_seconds}s ago."
+                continue
+              fi
+            fi
+
             if ! gh pr comment "$pr_number" --repo "$REPO" --body "@dependabot rebase"; then
               echo "::warning::Failed to request Dependabot rebase for PR #$pr_number."
               failed=1

@@ -44,3 +44,13 @@ jobs:
       - name: Run actionlint
         if: needs.changes.outputs.workflows == 'true'
         uses: rhysd/actionlint@v1.7.12
+
+      - name: Setup Node.js
+        if: needs.changes.outputs.workflows == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Run release preflight workflow contracts
+        if: needs.changes.outputs.workflows == 'true'
+        run: node scripts/test-release-preflight.mjs

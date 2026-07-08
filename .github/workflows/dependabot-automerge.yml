@@ -47,16 +47,15 @@ jobs:
           pull-request-number: ${{ github.event.pull_request.number }}
           merge-method: squash
 
-  request-dependabot-rebase:
+  rebase-stale-dependabot-prs:
     if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Request Dependabot rebase for stale auto-merge PR branches
+      - name: Rebase stale Dependabot auto-merge PR branches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          REBASE_REQUEST_COOLDOWN_SECONDS: "21600"
         run: |
           set -euo pipefail
 
@@ -80,28 +79,9 @@ jobs:
               continue
             fi
 
-            echo "Requesting Dependabot rebase for PR #$pr_number."
-            latest_request="$(
-              gh pr view "$pr_number" \
-                --repo "$REPO" \
-                --json comments \
-                --jq '.comments[] | select(.author.login == "github-actions[bot]" and .body == "@dependabot rebase") | .createdAt' \
-                | tail -n 1
-            )"
-
-            if [ -n "$latest_request" ]; then
-              now_epoch="$(date -u +%s)"
-              request_epoch="$(date -u -d "$latest_request" +%s)"
-              request_age_seconds=$((now_epoch - request_epoch))
-
-              if [ "$request_age_seconds" -lt "$REBASE_REQUEST_COOLDOWN_SECONDS" ]; then
-                echo "Skipping PR #$pr_number because a rebase was requested ${request_age_seconds}s ago."
-                continue
-              fi
-            fi
-
-            if ! gh pr comment "$pr_number" --repo "$REPO" --body "@dependabot rebase"; then
-              echo "::warning::Failed to request Dependabot rebase for PR #$pr_number."
+            echo "Rebasing stale Dependabot PR #$pr_number."
+            if ! gh pr update-branch "$pr_number" --repo "$REPO" --rebase; then
+              echo "::warning::Failed to rebase stale Dependabot PR #$pr_number."
               failed=1
             fi
           done <<< "$prs"

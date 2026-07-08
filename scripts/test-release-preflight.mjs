@@ -276,19 +276,38 @@ test("release preflight rejects Dependabot automerge when the scheduled sweep do
   }
 });
 
-test("release preflight rejects Dependabot automerge without rebase request throttling", () => {
+test("release preflight rejects Dependabot automerge without direct update-branch rebase", () => {
   const fixtureRoot = copyFixture();
   try {
     const workflowPath = path.join(fixtureRoot, ".github/workflows/dependabot-automerge.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      "          REBASE_REQUEST_COOLDOWN_SECONDS: \"21600\"\n",
-      ""
+      'gh pr update-branch "$pr_number" --repo "$REPO" --rebase',
+      'gh pr view "$pr_number" --repo "$REPO"'
     );
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/dependabot-automerge\.yml must throttle repeated scheduled rebase requests/
+      /\.github\/workflows\/dependabot-automerge\.yml must rebase stale Dependabot PRs through GitHub's update-branch API/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects Dependabot automerge command comments from github-actions", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/dependabot-automerge.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      'gh pr update-branch "$pr_number" --repo "$REPO" --rebase',
+      'gh pr update-branch "$pr_number" --repo "$REPO" --rebase\n              gh pr comment "$pr_number" --repo "$REPO" --body "@dependabot rebase"'
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/dependabot-automerge\.yml must not rely on Dependabot command comments from github-actions\[bot\]/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });

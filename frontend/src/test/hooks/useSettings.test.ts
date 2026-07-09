@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type React from "react";
+import { useTranslation } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettings } from "../../hooks/useSettings";
 
@@ -114,6 +115,23 @@ describe("useSettings", () => {
 
 		expect(result.current.settings.emailEnabled).toBe(true);
 		expect(result.current.settings.notificationEmail).toBe("test@example.com");
+	});
+
+	it("syncs the UI language from loaded backend settings", async () => {
+		const { i18n } = useTranslation();
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ language: "de" }),
+		});
+
+		const { result } = renderHook(() => useSettings());
+
+		await waitFor(() => {
+			expect(result.current.settingsLoading).toBe(false);
+		});
+
+		expect(result.current.settings.language).toBe("de");
+		expect(i18n.changeLanguage).toHaveBeenCalledWith("de");
 	});
 
 	it("tracks unsaved changes only for user-editable settings fields", async () => {
@@ -259,16 +277,17 @@ describe("useSettings", () => {
 		const keepaliveCall = fetchMock.mock.calls.find(
 			([url, init]) => url === "/api/settings" && (init as RequestInit | undefined)?.keepalive === true
 		);
+		const keepaliveInit = keepaliveCall?.[1] as RequestInit | undefined;
 
 		expect(keepaliveCall).toBeDefined();
-		expect(keepaliveCall?.[1]).toEqual(
+		expect(keepaliveInit).toEqual(
 			expect.objectContaining({
 				method: "PUT",
 				keepalive: true,
 			})
 		);
 
-		const payload = JSON.parse(((keepaliveCall?.[1] as RequestInit).body as string) ?? "{}");
+		const payload = JSON.parse((keepaliveInit?.body as string | undefined) ?? "{}");
 		expect(payload.shareMedicationOverview).toBe(true);
 
 		vi.useRealTimers();

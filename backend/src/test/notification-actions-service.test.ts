@@ -186,6 +186,52 @@ describe("notification-actions-service", () => {
 		expect(Number(tokens.rows[0].count)).toBe(6);
 	});
 
+	it("refreshes reused active groups with the current language and message", async () => {
+		const userId = await createUser("notify-actions-language-refresh");
+		const scheduledFor = new Date("2026-01-05T08:00:00.000Z");
+		const doseIds = ["9-0-1736064000000"];
+
+		const first = await createNotificationActionContext({
+			userId,
+			title: "Erinnerung",
+			message: "Nimm deine Medikamente",
+			doseIds,
+			scheduledFor,
+			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
+			language: "de",
+		});
+		const second = await createNotificationActionContext({
+			userId,
+			title: "Reminder",
+			message: "Take your medication now",
+			doseIds,
+			scheduledFor,
+			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
+			language: "en",
+		});
+
+		expect(first?.actions.find((action) => action.kind === "taken")?.label).toBe("Einnehmen");
+		expect(second?.sequenceId).toBe(first?.sequenceId);
+		expect(second?.actions.find((action) => action.kind === "taken")?.label).toBe("Take");
+		expect(second?.actions.find((action) => action.kind === "skip")?.label).toBe("Skip");
+
+		const groups = await testClient.execute(
+			"SELECT title, message, language, dose_ids_json FROM notification_action_groups"
+		);
+		expect(groups.rows).toHaveLength(1);
+		expect(groups.rows[0]).toEqual(
+			expect.objectContaining({
+				title: "Reminder",
+				message: "Take your medication now",
+				language: "en",
+				dose_ids_json: JSON.stringify(doseIds),
+			})
+		);
+
+		const tokens = await testClient.execute("SELECT COUNT(*) AS count FROM notification_action_tokens");
+		expect(Number(tokens.rows[0].count)).toBe(6);
+	});
+
 	it("reactivates a resolved group with the same key instead of inserting a duplicate", async () => {
 		const userId = await createUser("notify-actions-reactivate");
 		const scheduledFor = new Date("2026-01-05T08:00:00.000Z");

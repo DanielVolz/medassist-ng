@@ -8,6 +8,7 @@ import {
 } from "../../utils/settings";
 
 const baseSettings: Settings = {
+	language: "en",
 	timezone: "Europe/Berlin",
 	availableTimezones: ["Europe/Berlin", "UTC"],
 	serverTimezone: "UTC",

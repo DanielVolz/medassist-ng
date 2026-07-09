@@ -202,7 +202,21 @@ export async function createNotificationActionContext(input: {
 			)
 		);
 
-	if (!group) {
+	if (group) {
+		[group] = await db
+			.update(notificationActionGroups)
+			.set({
+				doseIdsJson: JSON.stringify(uniqueDoseIds),
+				title: input.title,
+				message: input.message,
+				language: input.language,
+				scheduledFor: input.scheduledFor,
+				expiresAt,
+				updatedAt: now,
+			})
+			.where(eq(notificationActionGroups.id, group.id))
+			.returning();
+	} else {
 		const [existingGroup] = await db
 			.select()
 			.from(notificationActionGroups)

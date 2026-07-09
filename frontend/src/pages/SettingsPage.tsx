@@ -1,5 +1,5 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: settings rows use label-styled text with adjacent custom toggle controls */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import ExportModal from "../components/ExportModal";
@@ -15,6 +15,8 @@ import { StatusBadge } from "../ui/primitives/StatusBadge";
 import { getSystemLocale, withFormattingTimezone } from "../utils/formatters";
 import classes from "./SettingsPage.module.css";
 import surfaceClasses from "./SettingsPageSurfaces.module.css";
+
+type SettingsLanguage = "en" | "de";
 
 function sx(...classNames: Array<string | false | null | undefined>) {
 	return classNames.filter(Boolean).join(" ");
@@ -35,6 +37,7 @@ export function SettingsPage() {
 		settings,
 		savedSettings,
 		setSettings,
+		loadSettings,
 		settingsLoading,
 		settingsSaving,
 		settingsSaved,
@@ -65,10 +68,65 @@ export function SettingsPage() {
 	} = useAppContext();
 	const [timezoneTouched, setTimezoneTouched] = useState(false);
 	const [timezoneDraft, setTimezoneDraft] = useState("");
+	const languageSaveInFlightRef = useRef(false);
+	const pendingLanguageRef = useRef<SettingsLanguage | null>(null);
 
 	const formattedImportPreviewDate = importPreview
 		? new Date(importPreview.exportedAt).toLocaleString(getSystemLocale(i18n.language))
 		: "";
+
+	const flushLanguageSaveQueue = useCallback(
+		function flushLanguageSaveQueue() {
+			if (languageSaveInFlightRef.current) {
+				return;
+			}
+
+			const nextLanguage = pendingLanguageRef.current;
+			if (!nextLanguage) {
+				return;
+			}
+
+			pendingLanguageRef.current = null;
+			languageSaveInFlightRef.current = true;
+
+			void authFetch("/api/settings/language", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ language: nextLanguage }),
+			})
+				.then((response) => {
+					if (!response.ok) {
+						throw new Error(`LANGUAGE_SAVE_FAILED_${response.status}`);
+					}
+				})
+				.catch(() => {
+					if (!pendingLanguageRef.current) {
+						loadSettings();
+					}
+				})
+				.finally(() => {
+					languageSaveInFlightRef.current = false;
+					if (pendingLanguageRef.current) {
+						flushLanguageSaveQueue();
+					}
+				});
+		},
+		[authFetch, loadSettings]
+	);
+
+	const handleLanguageChange = useCallback(
+		(language: string) => {
+			if (language !== "en" && language !== "de") {
+				return;
+			}
+
+			pendingLanguageRef.current = language;
+			setSettings((current) => ({ ...current, language }));
+			void i18n.changeLanguage(language);
+			flushLanguageSaveQueue();
+		},
+		[flushLanguageSaveQueue, i18n, setSettings]
+	);
 
 	const closeExportModal = useCallback(() => {
 		setShowExportModal(false);
@@ -227,17 +285,9 @@ export function SettingsPage() {
 						>
 							<span className={surfaceClass("setting-label")}>{t("settings.language.select")}</span>
 							<AppSelect
-								value={i18n.language}
+								value={settings.language}
 								size="md"
-								onChange={(e) => {
-									const lang = e.currentTarget.value;
-									i18n.changeLanguage(lang);
-									authFetch("/api/settings/language", {
-										method: "PUT",
-										headers: { "Content-Type": "application/json" },
-										body: JSON.stringify({ language: lang }),
-									});
-								}}
+								onChange={(e) => handleLanguageChange(e.currentTarget.value)}
 								classNames={{ root: classes.languageSelectRoot, input: classes.languageSelect }}
 								data={[
 									{ value: "en", label: "🇬🇧 English" },

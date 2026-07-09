@@ -73,6 +73,14 @@ function getExpectedSharedDoseMarker(doseId: string, sharedTakenBy: string | nul
 	return getDosePersonSuffix(doseId) ?? "all";
 }
 
+function getSharedLanguage(language: unknown): "en" | "de" | null {
+	if (language === "en" || language === "de") {
+		return language;
+	}
+
+	return null;
+}
+
 export function SharedSchedule() {
 	const { token } = useParams<{ token: string }>();
 	const { t, i18n } = useTranslation();
@@ -817,14 +825,23 @@ export function SharedSchedule() {
 			try {
 				const res = await fetch(`/api/share/${token}`);
 				if (res.ok) {
-					const json = await res.json();
-					setData(json);
+					const json = (await res.json()) as SharedScheduleData;
+					const sharedLanguage = getSharedLanguage(json.language);
+					if (sharedLanguage && i18n.language !== sharedLanguage) {
+						await i18n.changeLanguage(sharedLanguage);
+					}
+					setData(sharedLanguage ? { ...json, language: sharedLanguage } : json);
 				} else if (res.status === 410) {
 					// Link expired - get owner info
 					const json = await res.json();
+					const sharedLanguage = getSharedLanguage(json.language);
+					if (sharedLanguage && i18n.language !== sharedLanguage) {
+						await i18n.changeLanguage(sharedLanguage);
+					}
 					setExpiredData({
 						ownerUsername: json.ownerUsername,
 						takenBy: json.takenBy,
+						language: sharedLanguage ?? undefined,
 						expiredAt: json.expiredAt,
 					});
 				} else if (res.status === 404) {
@@ -839,7 +856,7 @@ export function SharedSchedule() {
 			}
 		}
 		fetchData();
-	}, [token, t]);
+	}, [i18n, token, t]);
 
 	function buildGroupedSchedule() {
 		if (!data) return [];

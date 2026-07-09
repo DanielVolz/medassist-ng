@@ -327,6 +327,7 @@ export type SharedMedication = {
 export type SharedScheduleData = {
 	takenBy: string;
 	sharedBy: string | null;
+	language?: "en" | "de";
 	scheduleDays: number;
 	allowJournalNotes?: boolean;
 	allowMarkTaken?: boolean;
@@ -348,6 +349,7 @@ export type SharedScheduleData = {
 export type ExpiredLinkData = {
 	ownerUsername: string;
 	takenBy: string;
+	language?: "en" | "de";
 	expiredAt: string;
 };
 

@@ -202,6 +202,22 @@ describe("share link hardening", () => {
 		expect(response.json()).toMatchObject({ takenBy: "Daniel", allowMarkTaken: true });
 	});
 
+	it("returns the owner's saved language for public shared schedules", async () => {
+		await testClient.execute(
+			"INSERT INTO user_settings (user_id, language, share_medication_overview) VALUES (1, 'de', 1)"
+		);
+		await insertMedication();
+		await insertShareToken({ token: "abcdef0123456789" });
+
+		const response = await app.inject({ method: "GET", url: "/share/abcdef0123456789" });
+		const overviewResponse = await app.inject({ method: "GET", url: "/share/abcdef0123456789/overview" });
+
+		expect(response.statusCode, response.body).toBe(200);
+		expect(response.json()).toMatchObject({ takenBy: "Daniel", language: "de" });
+		expect(overviewResponse.statusCode, overviewResponse.body).toBe(200);
+		expect(overviewResponse.json()).toMatchObject({ takenBy: "Daniel", language: "de" });
+	});
+
 	it("scopes public share schedule and overview data to the selected person", async () => {
 		const start = buildLocalDoseStart();
 		await testClient.execute({
@@ -229,6 +245,7 @@ describe("share link hardening", () => {
 		const scheduleResponse = await app.inject({ method: "GET", url: "/share/abcdef0123456789" });
 		expect(scheduleResponse.statusCode, scheduleResponse.body).toBe(200);
 		const schedule = scheduleResponse.json();
+		expect(schedule.language).toBe("en");
 		expect(JSON.stringify(schedule)).not.toContain("Bob");
 		expect(schedule.medications).toHaveLength(1);
 		expect(schedule.medications[0].takenBy).toEqual(["Alice"]);
@@ -242,6 +259,7 @@ describe("share link hardening", () => {
 		const overviewResponse = await app.inject({ method: "GET", url: "/share/abcdef0123456789/overview" });
 		expect(overviewResponse.statusCode, overviewResponse.body).toBe(200);
 		const overview = overviewResponse.json();
+		expect(overview.language).toBe("en");
 		expect(JSON.stringify(overview)).not.toContain("Bob");
 		expect(overview.medications[0].daysLeft).toBe(2);
 	});
@@ -287,6 +305,21 @@ describe("share link hardening", () => {
 
 		expect(readResponse.statusCode).toBe(410);
 		expect(writeResponse.statusCode).not.toBe(200);
+	});
+
+	it("returns the owner's saved language for expired public shared schedules", async () => {
+		await testClient.execute("INSERT INTO user_settings (user_id, language) VALUES (1, 'de')");
+		await insertMedication();
+		const token = "1212121212121212";
+		await insertShareToken({ token, expiresAt: Math.floor(Date.now() / 1000) - 60 });
+
+		const response = await app.inject({ method: "GET", url: `/share/${token}` });
+		const overviewResponse = await app.inject({ method: "GET", url: `/share/${token}/overview` });
+
+		expect(response.statusCode, response.body).toBe(410);
+		expect(response.json()).toMatchObject({ takenBy: "Daniel", language: "de" });
+		expect(overviewResponse.statusCode, overviewResponse.body).toBe(410);
+		expect(overviewResponse.json()).toMatchObject({ language: "de" });
 	});
 
 	it("rejects revoked tokens for read and write", async () => {

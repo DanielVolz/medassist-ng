@@ -103,6 +103,7 @@ const shareReadResponseSchema = {
 	properties: {
 		takenBy: { type: "string" },
 		sharedBy: { type: "string" },
+		language: { type: "string", enum: ["en", "de"] },
 		scheduleDays: { type: "integer" },
 		medications: { type: "array", items: { type: "object", additionalProperties: true } },
 		shareMedicationOverview: { type: "boolean" },
@@ -125,6 +126,7 @@ const shareExpiredResponseSchema = {
 		code: { type: "string" },
 		ownerUsername: { type: "string" },
 		takenBy: { type: "string" },
+		language: { type: "string", enum: ["en", "de"] },
 		expiredAt: { type: "string", format: "date-time" },
 	},
 } as const;
@@ -133,6 +135,7 @@ const shareOverviewExpiredResponseSchema = {
 	type: "object",
 	properties: {
 		error: { type: "string" },
+		language: { type: "string", enum: ["en", "de"] },
 		expiredAt: { type: "string", format: "date-time" },
 	},
 } as const;
@@ -142,6 +145,7 @@ const shareOverviewResponseSchema = {
 	properties: {
 		takenBy: { type: "string" },
 		sharedBy: { type: "string" },
+		language: { type: "string", enum: ["en", "de"] },
 		generatedAt: { type: "string", format: "date-time" },
 		medications: { type: "array", items: { type: "object", additionalProperties: true } },
 	},
@@ -198,6 +202,10 @@ function isShareRevoked(share: typeof shareTokens.$inferSelect): boolean {
 
 function isShareActive(share: typeof shareTokens.$inferSelect): boolean {
 	return !isShareRevoked(share) && !isExpiredTimestamp(share.expiresAt);
+}
+
+function getShareLanguage(language: string | null | undefined): "en" | "de" {
+	return language === "de" ? "de" : "en";
 }
 
 type MedicationRow = typeof medications.$inferSelect;
@@ -322,11 +330,16 @@ export async function shareRoutes(app: FastifyInstance) {
 				);
 				// Get the username of the owner to show in the expired message
 				const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
+				const [settings] = await db
+					.select({ language: userSettings.language })
+					.from(userSettings)
+					.where(eq(userSettings.userId, share.userId));
 				return reply.status(410).send({
 					error: "Share link has expired",
 					code: "EXPIRED",
 					ownerUsername: owner?.username ?? "the owner",
 					takenBy: share.takenBy,
+					language: getShareLanguage(settings?.language),
 					expiredAt: share.expiresAt.toISOString(),
 				});
 			}
@@ -353,6 +366,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			return {
 				takenBy: share.takenBy,
 				sharedBy: owner?.username ?? null,
+				language: getShareLanguage(settings?.language),
 				scheduleDays: share.scheduleDays,
 				allowJournalNotes: share.allowJournalNotes ?? false,
 				allowMarkTaken: share.allowMarkTaken ?? true,
@@ -416,8 +430,13 @@ export async function shareRoutes(app: FastifyInstance) {
 				request.log.warn(
 					`[ShareOverview] Expired token requested: tokenFingerprint=${fingerprint}, ownerUserId=${share.userId}`
 				);
+				const [settings] = await db
+					.select({ language: userSettings.language })
+					.from(userSettings)
+					.where(eq(userSettings.userId, share.userId));
 				return reply.status(410).send({
 					error: "expired",
+					language: getShareLanguage(settings?.language),
 					expiredAt: share.expiresAt.toISOString(),
 				});
 			}
@@ -439,6 +458,7 @@ export async function shareRoutes(app: FastifyInstance) {
 			return {
 				takenBy: share.takenBy,
 				sharedBy: owner?.username ?? null,
+				language: getShareLanguage(settings?.language),
 				generatedAt: new Date().toISOString(),
 				medications: overview,
 			};

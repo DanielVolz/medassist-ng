@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
@@ -66,6 +66,7 @@ const createMockContext = (overrides = {}) => ({
 		lastPrescriptionReminderMedNames: null,
 	},
 	setSettings: vi.fn(),
+	loadSettings: vi.fn(),
 	settingsLoading: false,
 	settingsLoadError: null,
 	settingsSaving: false,
@@ -229,6 +230,56 @@ describe("SettingsPage", () => {
 		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
 		expect(changeLanguageMock).toHaveBeenCalledWith("de");
 		expect(authFetchMock).toHaveBeenCalledWith("/api/settings/language", expect.objectContaining({ method: "PUT" }));
+	});
+
+	it("serializes rapid language changes and persists the final selection last", async () => {
+		let resolveFirstSave: (response: Response) => void = () => {};
+		authFetchMock
+			.mockImplementationOnce(
+				() =>
+					new Promise<Response>((resolve) => {
+						resolveFirstSave = resolve;
+					})
+			)
+			.mockResolvedValueOnce({ ok: true } as Response);
+
+		renderPage();
+		const select = screen.getByTestId("settings-language-select").querySelector("select") as HTMLSelectElement | null;
+		expect(select).toBeInTheDocument();
+
+		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
+		fireEvent.change(select as HTMLSelectElement, { target: { value: "en" } });
+
+		expect(authFetchMock).toHaveBeenCalledTimes(1);
+		expect(JSON.parse((authFetchMock.mock.calls[0]?.[1]?.body as string) ?? "{}")).toEqual({ language: "de" });
+
+		await act(async () => {
+			resolveFirstSave({ ok: true } as Response);
+			await Promise.resolve();
+		});
+
+		await waitFor(() => {
+			expect(authFetchMock).toHaveBeenCalledTimes(2);
+		});
+		expect(JSON.parse((authFetchMock.mock.calls[1]?.[1]?.body as string) ?? "{}")).toEqual({ language: "en" });
+		expect(changeLanguageMock).toHaveBeenCalledWith("de");
+		expect(changeLanguageMock).toHaveBeenCalledWith("en");
+	});
+
+	it("reloads persisted settings when the final language save fails", async () => {
+		const loadSettings = vi.fn();
+		mockContextValue = createMockContext({ loadSettings });
+		authFetchMock.mockResolvedValueOnce({ ok: false, status: 500 } as Response);
+
+		renderPage();
+		const select = screen.getByTestId("settings-language-select").querySelector("select") as HTMLSelectElement | null;
+		expect(select).toBeInTheDocument();
+
+		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
+
+		await waitFor(() => {
+			expect(loadSettings).toHaveBeenCalledTimes(1);
+		});
 	});
 
 	it("generates an API key through authFetch and shows the returned token", async () => {

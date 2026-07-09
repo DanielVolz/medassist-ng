@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { useTranslation } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockSharedScheduleRead, renderSharedSchedule } from "../helpers/shared-schedule";
 
@@ -610,6 +611,17 @@ describe("SharedSchedule", () => {
 
 		await waitFor(() => {
 			expect(screen.getByText("share.error")).toBeInTheDocument();
+		});
+	});
+
+	it("switches shared schedules to the owner language from the share response", async () => {
+		const { i18n } = useTranslation();
+		mockSharedScheduleRead({ ...createSharedData(), language: "de" });
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(i18n.changeLanguage).toHaveBeenCalledWith("de");
 		});
 	});
 

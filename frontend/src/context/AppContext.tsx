@@ -20,7 +20,7 @@ import {
 } from "../types";
 import { getSystemLocale, setDefaultFormattingTimezone } from "../utils/formatters";
 import { mergePersonTags } from "../utils/person-tags";
-import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds, getStockStatus } from "../utils/schedule";
+import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds } from "../utils/schedule";
 import { settingsChanged as hasSettingsChanged } from "../utils/settings";
 import { ShareContextProvider } from "./ShareContext";
 import { type ImportPreview, useImportExport } from "./useImportExport";
@@ -205,7 +205,6 @@ export interface AppContextValue {
 	todayDay: GroupedDay | null;
 	futureDays: GroupedDay[];
 	missedPastDoseIds: string[];
-	getDayStockStatus: (dayMeds: { medName: string; lastWhen: number }[]) => "success" | "warning" | "danger";
 
 	// Schedule UI state
 	scheduleDays: number;
@@ -498,31 +497,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const existingPeople = useMemo(() => {
 		return mergePersonTags(medications.meds.flatMap((medication) => medication.takenBy || []));
 	}, [medications.meds]);
-
-	// Get worst stock status for a day's medications
-	const getDayStockStatus = useCallback(
-		(dayMeds: { medName: string; lastWhen: number }[]): "success" | "warning" | "danger" => {
-			const statuses = dayMeds.map((item) => {
-				const cov = coverageByMed[item.medName];
-				const med = activeMeds.find((m) => m.name === item.medName || m.genericName === item.medName);
-				const depletionTime = depletionByMed[item.medName];
-
-				// Will be out of stock by this day?
-				if (typeof depletionTime === "number" && item.lastWhen > depletionTime) {
-					return "danger";
-				}
-
-				if (!cov) return "success";
-				const status = getStockStatus(cov.daysLeft, cov.medsLeft, stockThresholds, med?.packageType);
-				if (status.className === "danger") return "danger";
-				if (status.className === "warning") return "warning";
-				return "success";
-			});
-			const fallbackStatus = statuses.includes("warning") ? "warning" : "success";
-			return statuses.includes("danger") ? "danger" : fallbackStatus;
-		},
-		[coverageByMed, depletionByMed, activeMeds, stockThresholds]
-	);
 
 	const groupedSchedule = useMemo(() => {
 		const days = new Map<string, { dateStr: string; date: Date; isPast: boolean; meds: Map<string, DayMedEntry> }>();
@@ -817,7 +791,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			todayDay,
 			futureDays,
 			missedPastDoseIds,
-			getDayStockStatus,
 
 			// Schedule UI state
 			scheduleDays,
@@ -884,7 +857,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			todayDay,
 			futureDays,
 			missedPastDoseIds,
-			getDayStockStatus,
 			scheduleDays,
 			showPastDays,
 			showFutureDays,

@@ -53,7 +53,6 @@ export function useScheduleController() {
 		manuallyExpandedDays: ctx.manuallyExpandedDays,
 		toggleDayCollapse: ctx.toggleDayCollapse,
 		missedPastDoseIds: ctx.missedPastDoseIds,
-		getDayStockStatus: ctx.getDayStockStatus,
 		getDoseId: ctx.getDoseId,
 		isDoseTakenAutomatically: ctx.isDoseTakenAutomatically,
 		openMedDetail: ctx.openMedDetail,

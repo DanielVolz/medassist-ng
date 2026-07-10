@@ -79,7 +79,7 @@ function getDefaultDateRange(): ReportDateRange {
 	};
 }
 
-export function ReportModal({ isOpen, onClose, medications }: ReportModalProps) {
+function ReportModal({ isOpen, onClose, medications }: ReportModalProps) {
 	const { t } = useTranslation();
 	const { authFetch } = useAuth();
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());

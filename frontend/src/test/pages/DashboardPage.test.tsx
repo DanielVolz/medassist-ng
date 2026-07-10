@@ -212,7 +212,6 @@ const createMockAppContext = (overrides = {}) => ({
 	openShareDialog: vi.fn(),
 	openScheduleLightbox: vi.fn(),
 	missedPastDoseIds: [],
-	getDayStockStatus: vi.fn(() => "success"),
 	getDoseId: vi.fn((id, person) => (person ? `${id}-${person}` : id)),
 	isDoseTakenAutomatically: vi.fn(() => false),
 	loadMeds: vi.fn(),
@@ -1604,7 +1603,6 @@ describe("DashboardPage with expanded past days", () => {
 			futureDays: mockFutureDays,
 			showPastDays: true,
 			manuallyExpandedDays: new Set(["Sun, Jan 21"]),
-			getDayStockStatus: vi.fn(() => "success"),
 		});
 	});
 

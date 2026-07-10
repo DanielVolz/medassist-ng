@@ -589,7 +589,6 @@ export function MedDetailModal({
 													const rawFull = raw === "" ? 0 : Math.max(0, parseStockInput(raw));
 													const rawPartial = Math.max(0, parseStockInput(editStockPartialInput));
 													const rawLoose = Math.max(0, parseStockInput(editStockLooseInput));
-													const _rawTotal = rawFull * selectedMed.pillsPerBlister + rawPartial + rawLoose;
 													setEditStockFullInput(raw);
 													const normalized = normalizeBlisterStock(rawFull, rawPartial, rawLoose);
 													onEditStockFullBlistersChange(normalized.full);
@@ -618,7 +617,6 @@ export function MedDetailModal({
 													const rawFull = Math.max(0, parseStockInput(editStockFullInput) + delta);
 													const rawPartial = Math.max(0, parseStockInput(editStockPartialInput));
 													const rawLoose = Math.max(0, parseStockInput(editStockLooseInput));
-													const _rawTotal = rawFull * selectedMed.pillsPerBlister + rawPartial + rawLoose;
 													const normalized = normalizeBlisterStock(rawFull, rawPartial, rawLoose);
 													onEditStockFullBlistersChange(normalized.full);
 													onEditStockPartialBlisterPillsChange(normalized.partial);
@@ -675,7 +673,6 @@ export function MedDetailModal({
 													const nextPartial = Math.max(0, parseStockInput(editStockPartialInput) + delta);
 													const nextFull = Math.max(0, parseStockInput(editStockFullInput));
 													const nextLoose = Math.max(0, parseStockInput(editStockLooseInput));
-													const _rawTotal = nextFull * selectedMed.pillsPerBlister + nextPartial + nextLoose;
 													const normalized = normalizeBlisterStock(nextFull, nextPartial, nextLoose);
 													onEditStockFullBlistersChange(normalized.full);
 													onEditStockPartialBlisterPillsChange(normalized.partial);

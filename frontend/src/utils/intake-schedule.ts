@@ -45,13 +45,13 @@ export function getIntakeScheduleMode(schedule: IntakeScheduleLike): ScheduleMod
 	return schedule.scheduleMode === "weekdays" ? "weekdays" : "interval";
 }
 
-export function getNormalizedInterval(schedule: IntakeScheduleLike): number {
+function getNormalizedInterval(schedule: IntakeScheduleLike): number {
 	const parsedEvery = Number(schedule.every);
 	if (!Number.isFinite(parsedEvery) || parsedEvery <= 0) return 1;
 	return Math.floor(parsedEvery);
 }
 
-export function getWeekdayCode(date: Date): WeekdayCode {
+function getWeekdayCode(date: Date): WeekdayCode {
 	return WEEKDAY_CODES[(date.getDay() + 6) % 7];
 }
 

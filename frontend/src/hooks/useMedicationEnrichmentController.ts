@@ -30,7 +30,7 @@ export type MedicationEnrichmentState = {
 	appliedPackageLabel: string | null;
 };
 
-export function createMedicationEnrichmentState(
+function createMedicationEnrichmentState(
 	query = "",
 	resultLimit = MEDICATION_ENRICHMENT_INITIAL_LIMIT
 ): MedicationEnrichmentState {

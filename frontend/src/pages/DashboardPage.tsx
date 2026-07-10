@@ -151,7 +151,6 @@ export function DashboardPage() {
 		manuallyExpandedDays,
 		toggleDayCollapse,
 		missedPastDoseIds,
-		getDayStockStatus,
 		getDoseId,
 		isDoseTakenAutomatically,
 		openMedDetail,
@@ -1333,7 +1332,6 @@ export function DashboardPage() {
 										const isAutoCollapsed = true; // Past days are always auto-collapsed
 										const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 										const isCollapsed = !isManuallyExpanded;
-										const _worstStatus = getDayStockStatus(day.meds);
 
 										return (
 											<div

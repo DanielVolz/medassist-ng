@@ -1,4 +1,4 @@
-export function getPersonTagKey(value: string): string {
+function getPersonTagKey(value: string): string {
 	return value.trim().toLocaleLowerCase();
 }
 

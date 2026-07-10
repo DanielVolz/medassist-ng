@@ -3,7 +3,7 @@ import { INTAKE_MOODS, type IntakeMood } from "@medassist/shared";
 export type { IntakeMood };
 export { INTAKE_MOODS };
 
-export const INTAKE_MOOD_EMOJI: Record<IntakeMood, string> = {
+const INTAKE_MOOD_EMOJI: Record<IntakeMood, string> = {
 	very_bad: "😣",
 	bad: "🙁",
 	neutral: "😐",

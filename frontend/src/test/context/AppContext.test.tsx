@@ -683,31 +683,6 @@ describe("useAppContext", () => {
 		});
 	});
 
-	it("computes day stock status as warning and danger for low/out stock", async () => {
-		mockCalculateCoverage.mockReturnValue({
-			all: [
-				{
-					name: "Aspirin",
-					daysLeft: 8,
-					medsLeft: 5,
-					depletionTime: Date.now() + 100000,
-				},
-				{
-					name: "Vitamin C",
-					daysLeft: 0,
-					medsLeft: 0,
-					depletionTime: Date.now() - 100000,
-				},
-			],
-			low: [],
-		});
-
-		const { result } = renderHook(() => useAppContext(), { wrapper });
-
-		expect(result.current.getDayStockStatus([{ medName: "Aspirin", lastWhen: Date.now() }])).toBe("warning");
-		expect(result.current.getDayStockStatus([{ medName: "Vitamin C", lastWhen: Date.now() }])).toBe("danger");
-	});
-
 	it("does not navigate back when closing modals that are not open", () => {
 		const { result } = renderHook(() => useAppContext(), { wrapper });
 

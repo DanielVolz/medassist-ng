@@ -395,13 +395,6 @@ export function SharedSchedule() {
 		return () => clearInterval(interval);
 	}, [loadTakenDoses, token]);
 
-	// Get dose ID - for per-intake takenBy, the ID already has the person suffix
-	// This helper is kept for compatibility but since dose.id already includes the suffix, it just returns the id
-	function _getDoseId(doseId: string, _person: string | null): string {
-		// The dose.id already includes the person suffix if there's a per-intake takenBy
-		return doseId;
-	}
-
 	async function markDoseTaken(doseId: string) {
 		if (data?.allowMarkTaken === false) {
 			return;

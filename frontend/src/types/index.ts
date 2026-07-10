@@ -2,7 +2,7 @@
 // Core Types for MedAssist
 // =============================================================================
 
-export type { PackageProfile, PackageType } from "./package-profiles";
+export type { PackageType } from "./package-profiles";
 export {
 	allowsPillFormSelection,
 	getPackageProfile,
@@ -13,7 +13,6 @@ export {
 	isTubePackageType,
 	normalizePackageType,
 	PACKAGE_PROFILES,
-	PACKAGE_TYPES,
 } from "./package-profiles";
 
 import type { PackageType } from "./package-profiles";

@@ -632,8 +632,10 @@ describe("MedDetailModal with multiple blisters", () => {
 		};
 		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
 
-		const _scheduleEntries = document.querySelectorAll(".schedule-entry");
-		// Should have multiple schedule entries
+		expect(screen.getAllByText("1 common.pill")).toHaveLength(1);
+		expect(screen.getAllByText("2 common.pills")).toHaveLength(1);
+		expect(screen.getByText("common.daily")).toBeInTheDocument();
+		expect(screen.getByText("common.everyNDays_7")).toBeInTheDocument();
 	});
 });
 
@@ -730,9 +732,9 @@ describe("MedDetailModal with low stock", () => {
 
 		render(<MedDetailModal {...defaultProps} coverage={{ all: [lowCoverage] }} />);
 
-		// Should render status indicator
-		const _statusElements = document.querySelectorAll(".danger, .warning, .success");
-		// Status should be visible
+		expect(screen.getByRole("heading", { name: /modal\.coverageStatus/ })).toBeInTheDocument();
+		expect(screen.getByText("modal.daysLeft")).toBeInTheDocument();
+		expect(screen.getByText("modal.runsOut")).toBeInTheDocument();
 	});
 });
 

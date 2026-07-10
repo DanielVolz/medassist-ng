@@ -16,7 +16,7 @@ import scheduleActionClasses from "../features/schedule/components/ScheduleHeade
 import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
 import { useModalHistory } from "../hooks/useModalHistory";
 import { useScheduleController } from "../hooks/useScheduleController";
-import type { Coverage, IntakeUnit } from "../types";
+import type { IntakeUnit } from "../types";
 import { getMedDisplayName, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { SectionCard } from "../ui/components/SectionCard";
 import { AppButton } from "../ui/primitives/AppButton";
@@ -61,25 +61,6 @@ function getStockStatus(
 	if (daysLeft >= settings.highStockDays) return { className: "high", label: "status.highStock" };
 	// Normal stock
 	return { className: "success", label: "status.normal" };
-}
-
-// Helper function to get worst stock status for a day
-function getDayStockStatus(
-	dayMeds: Array<{ medName: string }>,
-	coverageByMed: Record<string, Coverage>,
-	settings: { lowStockDays: number; normalStockDays: number; highStockDays: number; reminderDaysBefore: number },
-	meds: Array<{ name: string; genericName?: string | null; packageType?: string }>
-): string {
-	let worstLevel = 3; // 3=success, 2=warning, 1=danger
-	for (const item of dayMeds) {
-		const cov = coverageByMed[item.medName];
-		if (!cov) continue;
-		const med = meds.find((m) => getMedDisplayName(m) === item.medName);
-		const status = getStockStatus(cov.daysLeft, cov.medsLeft, settings, med?.packageType);
-		if (status.className === "danger") worstLevel = Math.min(worstLevel, 1);
-		else if (status.className === "warning") worstLevel = Math.min(worstLevel, 2);
-	}
-	return worstLevel === 1 ? "danger" : worstLevel === 2 ? "warning" : "success";
 }
 
 // Helper to get dose ID (with or without person)
@@ -538,7 +519,6 @@ export function SchedulePage() {
 
 							const isManuallyExpanded = manuallyExpandedDays.has(day.dateStr);
 							const isCollapsed = !isManuallyExpanded;
-							const _worstStatus = getDayStockStatus(day.meds, coverageByMed, settings, meds);
 
 							return (
 								<div

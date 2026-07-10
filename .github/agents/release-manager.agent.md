@@ -79,6 +79,8 @@ This repository intentionally uses only two operational agents for CI/CD handoff
 - After a PR is merged, do not continue future PR extraction from an older dirty workspace unless it has been explicitly re-synced and re-audited against the authoritative remote.
 - **Cleanup is mandatory**: after a temporary worktree, scratch branch, or quarantine workspace is no longer needed, remove it promptly. Do not leave obsolete local worktrees hanging around in Source Control after the task is complete.
 - If `git stash` was used temporarily during the flow, either restore and resolve it or intentionally discard it before finishing. Do not end the task with a stash that merely hides leftover scope.
+- **Successful merge end state is mandatory**: when the requested shipping work is complete, return the primary checkout to local `main`, fast-forward it to the authoritative `<remote>/main`, and verify a clean `git status`. Never finish on a release branch or with uncommitted files that are already present in the merged remote state.
+- If the active checkout contains a stale copy of a merged PR, compare it to `<remote>/main` first and then remove that duplicate local residue as part of the handoff. Do not describe an intentionally dirty checkout as a successful completion when the user asked for the change to be shipped.
 
 ---
 

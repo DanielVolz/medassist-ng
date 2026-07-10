@@ -1157,8 +1157,6 @@ export function startMedicationEnrichmentService(
 	}
 }
 
-export const startMedicationEnrichmentCatalogRefresh = startMedicationEnrichmentService;
-
 export async function searchMedicationEnrichment(
 	query: string,
 	limit: number

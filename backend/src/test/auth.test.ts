@@ -547,17 +547,6 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 
 	describe("POST /auth/refresh", () => {
 		it("should refresh access token with valid refresh token", async () => {
-			// Login first to get tokens
-			const _loginResponse = await app.inject({
-				method: "POST",
-				url: "/auth/login",
-				payload: {
-					username: "loginuser",
-					password: "TestPassword123",
-				},
-			});
-
-			// Need to create user first
 			await app.inject({
 				method: "POST",
 				url: "/auth/register",

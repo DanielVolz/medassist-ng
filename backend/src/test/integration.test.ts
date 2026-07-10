@@ -216,7 +216,6 @@ function visibleDoseStartIso(): string {
 
 describe("Integration Tests", () => {
 	let app: FastifyInstance;
-	const _userId = 999999999;
 
 	beforeAll(async () => {
 		await createSchema(testClient);

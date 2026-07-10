@@ -8,7 +8,7 @@ import {
 	type MedicationEnrichmentEnrichRequest,
 	MedicationEnrichmentServiceError,
 	searchMedicationEnrichment,
-} from "../services/medication-enrichment/index.js";
+} from "../services/medication-enrichment.js";
 import {
 	applyOpenApiRouteStandards,
 	genericErrorSchema,

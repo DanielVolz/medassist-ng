@@ -1203,11 +1203,6 @@ describe("E2E Tests with Real Routes", () => {
 	// ---------------------------------------------------------------------------
 
 	describe("Real /medications routes - edge cases", () => {
-		const _validMedication = {
-			name: "Aspirin",
-			blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
-		};
-
 		it("should return 404 when deleting non-existent medication", async () => {
 			const response = await app.inject({
 				method: "DELETE",

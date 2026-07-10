@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { startIntakeReminderScheduler } from "../services/intake-reminder-scheduler.js";
-import { startMedicationEnrichmentCatalogRefresh } from "../services/medication-enrichment/index.js";
+import { startMedicationEnrichmentService } from "../services/medication-enrichment.js";
 import { startReminderScheduler } from "../services/reminder-scheduler.js";
 
 export interface StartServerOptions {
@@ -34,7 +34,7 @@ export function startRuntimeSchedulers(
 			? {}
 			: { startupRefreshEnabled: options.medicationEnrichmentStartupRefreshEnabled };
 	startReminderScheduler(serviceLogger);
-	startMedicationEnrichmentCatalogRefresh(serviceLogger, medicationEnrichmentOptions);
+	startMedicationEnrichmentService(serviceLogger, medicationEnrichmentOptions);
 	startIntakeReminderScheduler(serviceLogger);
 }
 

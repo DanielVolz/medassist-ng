@@ -79,8 +79,6 @@ Thumbs.db
 .turbo/
 .roo/
 .roomodes
-.claude/
-AGENTS.md
 MEMORY.md
 docs/TECH_STACK.md
 /doku/
@@ -115,5 +113,4 @@ ops/medtest/
 # Codex / agent local files
 # ===================
 .codex/
-.github/agents/*.agent.md
 .kilocode/rules/rtk-rules.md

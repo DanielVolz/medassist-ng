@@ -45,15 +45,14 @@ test.describe("Performance with many medications", () => {
 		const start = Date.now();
 		await navigateTo(page, "/schedule");
 
-		// Wait for schedule entries to render
-		const scheduleEntries = page.locator(".schedule-entry, .timeline-entry, .card");
-		await expect(scheduleEntries.first()).toBeVisible({ timeout: 15000 });
+		// Each daily medication is rendered once per day in the default 30-day schedule.
+		await expect(page.getByText(`${MED_PREFIX} 1`, { exact: true })).toHaveCount(30, { timeout: 15000 });
 
 		const renderTime = Date.now() - start;
 
 		// Verify all medications appear
 		for (let i = 1; i <= MED_COUNT; i++) {
-			await expect(page.getByText(`${MED_PREFIX} ${i}`).first()).toBeVisible({ timeout: 5000 });
+			await expect(page.getByText(`${MED_PREFIX} ${i}`, { exact: true })).toHaveCount(30, { timeout: 5000 });
 		}
 
 		// Goal: render under 10 seconds
@@ -64,9 +63,9 @@ test.describe("Performance with many medications", () => {
 		const start = Date.now();
 		await navigateTo(page, "/medications");
 
-		// Wait for medication cards to render
-		const medEntries = page.locator(".medication-card, .card, .table-row");
-		await expect(medEntries.first()).toBeVisible({ timeout: 15000 });
+		// Medication rows have a stable test id across the Mantine layout.
+		const medicationRows = page.getByTestId("medication-row");
+		await expect(medicationRows.first()).toBeVisible({ timeout: 15000 });
 
 		const renderTime = Date.now() - start;
 
@@ -82,14 +81,17 @@ test.describe("Performance with many medications", () => {
 		await navigateTo(page, "/planner");
 
 		const start = Date.now();
-		await page.waitForLoadState("networkidle");
-		await page.locator('form.planner button[type="submit"]').click();
-		await expect(page.locator(".table")).toBeVisible({ timeout: 20000 });
+		await page
+			.getByTestId("planner-form")
+			.getByRole("button", { name: /Calculate|Berechnen/i })
+			.click();
+		const resultsTable = page.getByTestId("planner-results-table");
+		await expect(resultsTable).toBeVisible({ timeout: 20000 });
 
 		const calcTime = Date.now() - start;
 
 		// All medications should appear in the results
-		const rows = page.locator(".table .table-row");
+		const rows = resultsTable.getByTestId("planner-result-row");
 		expect(await rows.count()).toBeGreaterThanOrEqual(MED_COUNT);
 
 		// Goal: calculate and render under 15 seconds

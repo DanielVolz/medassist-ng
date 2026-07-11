@@ -13,7 +13,7 @@ import {
  * Stock Status & Coverage E2E Tests
  *
  * Creates medications with different stock levels, then verifies the dashboard
- * overview table shows correct status chips (High, Normal, Low, Critical, Out of Stock).
+ * overview table shows the correct stock statuses (High, Normal, Low, Critical, Empty).
  * Also tests the reorder reminder card and medication detail modal stock info.
  */
 test.describe("Stock Status Levels", () => {
@@ -30,6 +30,14 @@ test.describe("Stock Status Levels", () => {
 	const MED_CRITICAL = "StockCrit Metformin";
 	// Medication with zero stock → Out of Stock/Danger
 	const MED_DEPLETED = "StockEmpty Omeprazol";
+	const stockStatusText = {
+		high: /^(High|Hoch)$/,
+		normal: /^Normal$/,
+		low: /^(Low|Niedrig)$/,
+		critical: /^(Critical|Kritisch)$/,
+		empty: /^(Empty|Leer)$/,
+		enough: /^(Enough|Ausreichend)$/,
+	};
 
 	const todayMorning = (() => {
 		const d = new Date();
@@ -39,6 +47,10 @@ test.describe("Stock Status Levels", () => {
 	})();
 
 	const createdMeds: TestMedication[] = [];
+
+	const getOverviewTable = (page: Parameters<typeof navigateTo>[0]) => page.getByTestId("dashboard-overview-table");
+	const getOverviewRow = (overviewTable: ReturnType<typeof getOverviewTable>, medicationName: string) =>
+		overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: medicationName }).first();
 
 	test.beforeAll(async () => {
 		await deleteAllMedicationsViaAPI();
@@ -125,7 +137,7 @@ test.describe("Stock Status Levels", () => {
 	test("should show all medications in overview table", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// All 5 medications should appear
@@ -139,58 +151,57 @@ test.describe("Stock Status Levels", () => {
 	test("should show High status chip for well-stocked medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 		await expect(overviewTable.getByText(MED_HIGH)).toBeVisible({ timeout: 10000 });
 
-		// High stock med row should have a .status-chip.high
-		const highRow = overviewTable.locator(".table-row").filter({ hasText: MED_HIGH });
+		const highRow = getOverviewRow(overviewTable, MED_HIGH);
 		await expect(highRow).toBeVisible();
-		await expect(highRow.locator(".status-chip.high")).toBeVisible();
+		await expect(highRow.getByText(stockStatusText.high)).toBeVisible();
 	});
 
 	test("should show Normal status chip for moderate stock medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
-		const normalRow = overviewTable.locator(".table-row").filter({ hasText: MED_NORMAL });
+		const normalRow = getOverviewRow(overviewTable, MED_NORMAL);
 		await expect(normalRow).toBeVisible();
-		await expect(normalRow.locator(".status-chip.success")).toBeVisible();
+		await expect(normalRow.getByText(stockStatusText.normal)).toBeVisible();
 	});
 
 	test("should show Warning status chip for low stock medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
-		const lowRow = overviewTable.locator(".table-row").filter({ hasText: MED_LOW });
+		const lowRow = getOverviewRow(overviewTable, MED_LOW);
 		await expect(lowRow).toBeVisible();
-		await expect(lowRow.locator(".status-chip.warning")).toBeVisible();
+		await expect(lowRow.getByText(stockStatusText.low)).toBeVisible();
 	});
 
 	test("should show Danger status chip for critical stock medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
-		const criticalRow = overviewTable.locator(".table-row").filter({ hasText: MED_CRITICAL });
+		const criticalRow = getOverviewRow(overviewTable, MED_CRITICAL);
 		await expect(criticalRow).toBeVisible();
-		await expect(criticalRow.locator(".status-chip.danger")).toBeVisible();
+		await expect(criticalRow.getByText(stockStatusText.critical)).toBeVisible();
 	});
 
 	test("should show Danger status chip for depleted medication", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
-		const depletedRow = overviewTable.locator(".table-row").filter({ hasText: MED_DEPLETED });
+		const depletedRow = getOverviewRow(overviewTable, MED_DEPLETED);
 		await expect(depletedRow).toBeVisible();
-		await expect(depletedRow.locator(".status-chip.danger")).toBeVisible();
+		await expect(depletedRow.getByText(stockStatusText.empty)).toBeVisible();
 	});
 
 	test("should keep the depleted take button visually dangerous while disabled", async ({ page }) => {
@@ -202,7 +213,7 @@ test.describe("Stock Status Levels", () => {
 		const depletedRow = todayBlock.locator(".time-row").filter({ hasText: MED_DEPLETED });
 		await expect(depletedRow).toBeVisible();
 
-		const takeButton = depletedRow.locator("button.dose-btn.take.out-of-stock");
+		const takeButton = depletedRow.getByRole("button", { name: /Take|Nehmen|dose\.take/i });
 		await expect(takeButton).toBeDisabled();
 
 		const expectedDangerStyles = await page.evaluate(() => {
@@ -227,19 +238,19 @@ test.describe("Stock Status Levels", () => {
 	test("should show days-left and runs-out date in overview", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// High stock should show many days (around 299)
 		await expect(overviewTable.getByText(MED_HIGH)).toBeVisible({ timeout: 10000 });
-		const highRow = overviewTable.locator(".table-row").filter({ hasText: MED_HIGH });
+		const highRow = getOverviewRow(overviewTable, MED_HIGH);
 		const highRowText = (await highRow.textContent()) ?? "";
 		// Should contain a 3-digit number for days
 		expect(highRowText).toMatch(/\d{2,3}/);
 
 		// Depleted rows can now show either explicit zero days left or an em dash placeholder.
 		await expect(overviewTable.getByText(MED_DEPLETED)).toBeVisible({ timeout: 10000 });
-		const depletedRow = overviewTable.locator(".table-row").filter({ hasText: MED_DEPLETED });
+		const depletedRow = getOverviewRow(overviewTable, MED_DEPLETED);
 		const depletedText = (await depletedRow.textContent()) ?? "";
 		expect(depletedText.includes("0") || depletedText.includes("—")).toBeTruthy();
 	});
@@ -258,43 +269,32 @@ test.describe("Stock Status Levels", () => {
 		}
 	});
 
-	test("should color-code stock values depending on status", async ({ page }) => {
+	test("should preserve stock status semantics in overview rows", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
-		// High stock row should have success-text class on stock cells
-		const highRow = overviewTable.locator(".table-row").filter({ hasText: MED_HIGH });
-		const highStockSpan = highRow.locator("span.success-text, span.high-text").first();
-		if (await highStockSpan.isVisible().catch(() => false)) {
-			await expect(highStockSpan).toBeVisible();
-		}
+		// The visible status text is the stable contract after the Mantine migration.
+		const highRow = getOverviewRow(overviewTable, MED_HIGH);
+		await expect(highRow.getByText(stockStatusText.high)).toBeVisible();
 
-		// Critical stock should have danger-text class
-		const criticalRow = overviewTable.locator(".table-row").filter({ hasText: MED_CRITICAL });
-		const criticalSpan = criticalRow.locator("span.danger-text").first();
-		if (await criticalSpan.isVisible().catch(() => false)) {
-			await expect(criticalSpan).toBeVisible();
-		}
+		const criticalRow = getOverviewRow(overviewTable, MED_CRITICAL);
+		await expect(criticalRow.getByText(stockStatusText.critical)).toBeVisible();
 
-		// Low stock should have warning-text class
-		const lowRow = overviewTable.locator(".table-row").filter({ hasText: MED_LOW });
-		const warningSpan = lowRow.locator("span.warning-text").first();
-		if (await warningSpan.isVisible().catch(() => false)) {
-			await expect(warningSpan).toBeVisible();
-		}
+		const lowRow = getOverviewRow(overviewTable, MED_LOW);
+		await expect(lowRow.getByText(stockStatusText.low)).toBeVisible();
 	});
 
 	test("should open medication detail modal showing stock info", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Click on the critical stock medication row
-		const criticalRow = overviewTable.locator(".table-row").filter({ hasText: MED_CRITICAL });
-		await criticalRow.click();
+		const criticalRow = getOverviewRow(overviewTable, MED_CRITICAL);
+		await criticalRow.getByRole("button", { name: MED_CRITICAL }).click();
 
 		const modal = page
 			.getByRole("dialog")
@@ -316,12 +316,12 @@ test.describe("Stock Status Levels", () => {
 	test("should show generic name in overview for medications that have one", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		const overviewTable = page.locator(".dashboard-overview-section .table").first();
+		const overviewTable = getOverviewTable(page);
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		// Click on the normal stock med (has generic name "Ibuprofen 400mg")
-		const normalRow = overviewTable.locator(".table-row").filter({ hasText: MED_NORMAL });
-		await normalRow.click();
+		const normalRow = getOverviewRow(overviewTable, MED_NORMAL);
+		await normalRow.getByRole("button", { name: MED_NORMAL }).click();
 
 		const modal = page
 			.getByRole("dialog")
@@ -340,19 +340,14 @@ test.describe("Stock Status Levels", () => {
 
 		// Calculate for 30-day default range
 		await page.getByRole("button", { name: /Calculate|planner\.calculate/i }).click();
-		await expect(page.locator(".table")).toBeVisible({ timeout: 15000 });
+		const resultsTable = page.getByTestId("planner-results-table");
+		await expect(resultsTable).toBeVisible({ timeout: 15000 });
 
-		const resultsTable = page.locator(".table");
+		const plannerRows = resultsTable.getByTestId("planner-result-row");
+		expect(await plannerRows.count()).toBeGreaterThanOrEqual(2);
 
-		// Should show status chips with different levels
-		const successChips = resultsTable.locator(".status-chip.success");
-		const dangerChips = resultsTable.locator(".status-chip.danger");
-		const warningChips = resultsTable.locator(".status-chip.warning");
-
-		const totalChips = (await successChips.count()) + (await dangerChips.count()) + (await warningChips.count());
-		expect(totalChips).toBeGreaterThanOrEqual(2);
-
-		// The depleted/critical meds should have danger chips
-		expect(await dangerChips.count()).toBeGreaterThanOrEqual(1);
+		// The planner keeps the same semantic split: enough stock versus an empty supply.
+		await expect(resultsTable.getByText(stockStatusText.enough).first()).toBeVisible();
+		await expect(resultsTable.getByText(stockStatusText.empty).first()).toBeVisible();
 	});
 });

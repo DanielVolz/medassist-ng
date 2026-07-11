@@ -47,7 +47,7 @@ test.describe("MedDetail footer tooltip visibility", () => {
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
 		const medRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_NAME }).first();
-		await medRow.click();
+		await medRow.getByRole("button", { name: MED_NAME }).click();
 
 		const modal = page
 			.getByRole("dialog")
@@ -70,10 +70,11 @@ test.describe("MedDetail footer tooltip visibility", () => {
 
 	test("footer action buttons stay visible inside the Mantine detail modal", async ({ page }) => {
 		const modal = await openMedDetailModal(page);
+		const footer = modal.getByTestId("app-modal-footer");
 
-		await expect(modal.getByRole("button", { name: /Refill|refill\.button/i })).toBeVisible();
-		await expect(modal.getByLabel(/Edit|common\.edit/i)).toBeVisible();
-		await expect(modal.getByLabel(/Stock|editStock\.buttonLabel|Bestand/i)).toBeVisible();
+		await expect(footer.getByRole("button", { name: /Refill|refill\.button/i })).toBeVisible();
+		await expect(footer.getByLabel(/Edit|common\.edit/i)).toBeVisible();
+		await expect(footer.getByLabel(/Stock|editStock\.buttonLabel|Bestand/i)).toBeVisible();
 	});
 
 	test("footer Mantine tooltips are visible on hover", async ({ page }) => {
@@ -95,14 +96,10 @@ test.describe("MedDetail footer tooltip visibility", () => {
 	test("close button remains visible after scrolling detail content", async ({ page }) => {
 		const modal = await openMedDetailModal(page);
 		const closeButton = modal.getByLabel(/Close|common\.close/i).first();
+		const scrollArea = modal.getByTestId("app-modal-scroll-area");
 
-		await modal.evaluate((element) => {
-			const scrollable = Array.from(element.querySelectorAll("div")).find(
-				(candidate) => candidate.scrollHeight > candidate.clientHeight
-			);
-			if (scrollable) {
-				scrollable.scrollTop = scrollable.scrollHeight;
-			}
+		await scrollArea.evaluate((element) => {
+			element.scrollTop = element.scrollHeight;
 		});
 
 		await expect(closeButton).toBeVisible();

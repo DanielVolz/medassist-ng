@@ -141,16 +141,16 @@ setup("authenticate", async ({ page }) => {
 	await applyVideoSafetyMode(page);
 	const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:4174";
 	const apiBaseURL = process.env.PLAYWRIGHT_API_BASE_URL || "http://localhost:4175";
-	const waitForApiReady = async () => {
-		for (let attempt = 0; attempt < 30; attempt += 1) {
-			const response = await page.request.get(`${apiBaseURL}/health`).catch(() => null);
-			if (response?.ok()) {
-				return;
-			}
-			await page.waitForTimeout(1000);
-		}
-		throw new Error(`Playwright backend did not become ready at ${apiBaseURL}`);
-	};
+	const waitForApiReady = () =>
+		expect
+			.poll(
+				async () => {
+					const response = await page.request.get(`${apiBaseURL}/health`).catch(() => null);
+					return response?.ok() ?? false;
+				},
+				{ message: `Playwright backend did not become ready at ${apiBaseURL}`, timeout: 30000 }
+			)
+			.toBe(true);
 
 	// Create .auth directory if it doesn't exist
 	const authDir = path.dirname(authFile);
@@ -367,7 +367,6 @@ setup("authenticate", async ({ page }) => {
 				const switchBtn = page.locator("button.auth-link-btn");
 				if (await switchBtn.isVisible().catch(() => false)) {
 					await switchBtn.click();
-					await page.waitForTimeout(500);
 				}
 			}
 

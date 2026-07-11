@@ -27,6 +27,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 	const frontendPort = parseOptionalPort(env.PLAYWRIGHT_FRONTEND_PORT) ?? parseOptionalPort(new URL(baseURL).port) ?? 4174;
 	const backendPort = parseOptionalPort(new URL(apiBaseURL).port) ?? 4175;
 	const dataDir = env.PLAYWRIGHT_DATA_DIR || DEFAULT_E2E_DATA_DIR;
+	const excludeDomainSafety = env.PLAYWRIGHT_EXCLUDE_DOMAIN_SAFETY === "true";
 	const parsedWorkers = Number.parseInt(env.PLAYWRIGHT_WORKERS ?? "", 10);
 	// Default to single-worker execution to keep API-seeded E2E suites deterministic.
 	// Still allow explicit local overrides via PLAYWRIGHT_WORKERS.
@@ -37,8 +38,18 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		["DOTENV_PATH", "/tmp/medassist-playwright-empty.env"],
 		["CORS_ORIGINS", baseURL],
 		["RATE_LIMIT_MAX", env.PLAYWRIGHT_RATE_LIMIT_MAX || "100000"],
+		// The Playwright backend is isolated from local development data, so use
+		// explicit test-only credentials to exercise the authenticated browser path.
+		["AUTH_ENABLED", "true"],
+		["REGISTRATION_ENABLED", "true"],
+		["FORM_LOGIN_ENABLED", "true"],
+		["JWT_SECRET", "playwright-test-jwt-secret-not-for-production"],
+		["REFRESH_SECRET", "playwright-test-refresh-secret-not-for-production"],
+		["COOKIE_SECRET", "playwright-test-cookie-secret-not-for-production"],
 	];
 	const frontendEnv = [["BACKEND_URL", apiBaseURL]];
+	const chromiumTestIgnore = /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/;
+	const testIgnore = excludeDomainSafety ? [chromiumTestIgnore, /.*domain-safety\.spec\.ts/] : chromiumTestIgnore;
 
 	const projects: NonNullable<PlaywrightTestConfig["projects"]> = [
 		{
@@ -50,7 +61,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			use: {
 				...devices["Desktop Chrome"],
 			},
-			testIgnore: /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/,
+			testIgnore,
 			dependencies: ["setup"],
 			retries: 1,
 		},

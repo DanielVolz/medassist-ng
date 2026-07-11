@@ -185,6 +185,39 @@ test("release preflight rejects CI workflow without the domain E2E release gate"
   }
 });
 
+test("release preflight rejects frontend CI without the static check before build", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/test.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace("run: npm run check", "run: npm run lint");
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/test\.yml must run the frontend static check before the frontend build/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects E2E CI without the data-focused Chromium project", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const frontendPackage = readJson(fixtureRoot, "frontend/package.json");
+    frontendPackage.scripts["test:e2e:ci:data"] =
+      "rm -rf test-results && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 playwright test --config=playwright.stable.config.ts --project=chromium";
+    writeJson(fixtureRoot, "frontend/package.json", frontendPackage);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /frontend\/package\.json test:e2e:ci:data must run the data-focused Chromium project non-interactively/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test("release preflight rejects hidden workflow-run container smoke", () => {
   const fixtureRoot = copyFixture();
   try {

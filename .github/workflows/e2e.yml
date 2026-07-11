@@ -10,6 +10,7 @@ on:
       - 'package.json'
       - 'release-policy.json'
       - 'scripts/**'
+      - '.github/workflows/e2e.yml'
 
 # Minimal permissions for security
 permissions:
@@ -36,6 +37,7 @@ jobs:
               - 'package.json'
               - 'release-policy.json'
               - 'scripts/**'
+              - '.github/workflows/e2e.yml'
 
   e2e:
     name: Playwright E2E
@@ -101,10 +103,10 @@ jobs:
           JWT_SECRET: e2e-test-secret-that-is-long-enough
           SESSION_SECRET: e2e-test-session-secret-long-enough
 
-      - name: Run E2E tests (Chromium only)
+      - name: Run core Chromium E2E tests
         if: needs.changes.outputs.e2e_relevant == 'true'
         working-directory: frontend
-        run: npx playwright test --project=chromium
+        run: npm run test:e2e:ci:core
         env:
           CI: true
           PLAYWRIGHT_WORKERS: 1
@@ -125,5 +127,85 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-results
+          path: frontend/test-results/
+          retention-days: 7
+
+  e2e-data:
+    name: Playwright E2E data
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Skip data E2E when change is not release/e2e-relevant
+        if: needs.changes.outputs.e2e_relevant != 'true'
+        run: echo "No E2E-relevant changes detected; required check passes without running Playwright data tests."
+
+      - name: Checkout repository
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            shared/package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install shared dependencies
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        working-directory: shared
+        run: npm ci
+
+      - name: Build shared core
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        working-directory: shared
+        run: npm run build
+
+      - name: Install backend dependencies
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run data-focused Chromium E2E tests
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        working-directory: frontend
+        run: npm run test:e2e:ci:data
+        env:
+          CI: true
+          PLAYWRIGHT_WORKERS: 1
+          PLAYWRIGHT_HTML_OPEN: never
+          JWT_SECRET: e2e-test-secret-that-is-long-enough
+          SESSION_SECRET: e2e-test-session-secret-long-enough
+
+      - name: Upload Playwright data report
+        if: always() && needs.changes.outputs.e2e_relevant == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-data-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+      - name: Upload data test results
+        if: always() && needs.changes.outputs.e2e_relevant == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-data-results
           path: frontend/test-results/
           retention-days: 7

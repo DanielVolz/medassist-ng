@@ -11,6 +11,7 @@ on:
       - 'release-policy.json'
       - 'scripts/**'
       - 'biome.json'
+      - '.github/workflows/test.yml'
 
 # Minimal permissions for security
 permissions:
@@ -41,6 +42,7 @@ jobs:
               - 'release-policy.json'
               - 'scripts/**'
               - 'biome.json'
+              - '.github/workflows/test.yml'
             frontend:
               - 'frontend/**'
               - 'shared/**'
@@ -48,6 +50,7 @@ jobs:
               - 'release-policy.json'
               - 'scripts/**'
               - 'biome.json'
+              - '.github/workflows/test.yml'
 
   # =============================================================================
   # Backend Tests (always emits the required check context)
@@ -167,15 +170,15 @@ jobs:
         if: needs.changes.outputs.frontend == 'true'
         run: npm ci
 
-      - name: Lint
+      - name: Run static checks
         if: needs.changes.outputs.frontend == 'true'
-        run: npm run lint
+        run: npm run check
 
       - name: Run tests with coverage
         if: needs.changes.outputs.frontend == 'true'
         run: npm run test:coverage
 
-      - name: TypeScript type check & build
+      - name: Build
         if: needs.changes.outputs.frontend == 'true'
         run: npm run build
 

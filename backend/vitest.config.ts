@@ -14,12 +14,11 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      include: ["src/**/*.ts"],
+      include: ["src/*.ts", "src/!(services)/**/*.ts", "src/services/coverage.ts"],
       exclude: [
         "src/test/**",
         "src/**/*.d.ts",
         "src/**/index.ts",
-        "src/services/**",
         "src/utils/logger.ts",
       ],
       thresholds: {

@@ -85,7 +85,8 @@ function computeNextIntakeDate(intakes: Intake[], todayDateOnly: string): string
 
 function computeTakenAmount(
 	medication: MedicationRow,
-	intakes: Intake[],
+	allIntakes: Intake[],
+	applicableIntakes: Intake[],
 	dosesByMedication: Map<number, DoseRow[]>
 ): number {
 	const doseRows = dosesByMedication.get(medication.id) ?? [];
@@ -111,8 +112,8 @@ function computeTakenAmount(
 		if (!parsedDose) continue;
 		if (parsedDose.timestampMs < correctionDateOnlyMs) continue;
 
-		const intake = intakes[parsedDose.intakeIndex];
-		if (!intake) continue;
+		const intake = allIntakes[parsedDose.intakeIndex];
+		if (!intake || !applicableIntakes.includes(intake)) continue;
 
 		takenAmount += normalizeIntakeUsageForStock(intake, medication.medicationForm, medication.packageType);
 	}
@@ -163,7 +164,7 @@ export function buildSharedMedicationOverview(options: {
 
 		const capacity = computeCapacity(medication);
 		const dailyDoseRate = computeDailyDoseRate(intakes, medication);
-		const takenAmount = computeTakenAmount(medication, intakes, dosesByMedication);
+		const takenAmount = computeTakenAmount(medication, schedule.intakes, intakes, dosesByMedication);
 		const rawCurrentStock = capacity + (medication.stockAdjustment ?? 0) - takenAmount;
 		const currentStock = Math.max(0, Math.floor(rawCurrentStock));
 		const daysLeft = dailyDoseRate > 0 ? Math.floor(currentStock / dailyDoseRate) : null;

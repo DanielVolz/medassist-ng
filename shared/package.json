@@ -16,10 +16,12 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "npx biome check . && tsc --noEmit -p tsconfig.json"
+    "check": "npx biome check . && tsc --noEmit -p tsconfig.json && npm run test:run",
+    "test:run": "vitest run"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "^4.1.9"
   }
 }

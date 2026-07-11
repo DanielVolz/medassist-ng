@@ -29,12 +29,30 @@ async function clickEditMed(page: Page, medName: string): Promise<void> {
 	await expect(medRow).toBeVisible({ timeout: 10000 });
 	await medRow.getByRole("button", { name: /Edit|common\.edit/i }).click();
 	await expect(
-		page
-			.locator("h2:visible")
-			.filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })
-			.first()
+		page.getByRole("heading", { name: /(Edit(:| (entry|medication))|form\.editEntry)/i }).first()
 	).toBeVisible({
 		timeout: 5000,
+	});
+}
+
+function getMedicationEditForm(page: Page): Locator {
+	return page
+		.locator("form.form-grid:visible")
+		.filter({ has: page.getByRole("button", { name: /Save|common\.save/i }) })
+		.first();
+}
+
+function takenByTag(form: Locator, name: string): Locator {
+	return form.locator(".tag-input-container > .tag:visible").filter({ hasText: name });
+}
+
+function takenByInput(form: Locator): Locator {
+	return form.locator(".tag-input-container input:visible");
+}
+
+function intakeReminderCheckbox(form: Locator): Locator {
+	return form.getByRole("checkbox", {
+		name: /(Remind|Receive a notification.*scheduled intake|form\.blisters\.remind)/i,
 	});
 }
 
@@ -45,7 +63,9 @@ async function openMedicationDetailFromDashboard(page: Page, medName: string) {
 			await expect(overviewTable).toBeVisible({ timeout: 10000 });
 			const medRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: medName });
 			await expect(medRow).toBeVisible({ timeout: 10000 });
-			await medRow.click();
+			const detailButton = medRow.getByRole("button", { name: medName, exact: true });
+			await expect(detailButton).toBeVisible({ timeout: 10000 });
+			await detailButton.click();
 			const modal = page
 				.getByRole("dialog")
 				.filter({ has: page.getByRole("heading", { name: medName }) })
@@ -65,11 +85,11 @@ async function openMedicationDetailFromDashboard(page: Page, medName: string) {
 
 /** Helper: save edit and verify success */
 async function saveEditAndVerify(page: Page, medName: string): Promise<void> {
-	const form = page.locator("form.form-grid:visible").first();
+	const form = getMedicationEditForm(page);
 	// Wait for any pending network before clicking save
 	await page.waitForLoadState("networkidle");
 
-	const submitBtn = form.locator("button[type='submit']");
+	const submitBtn = form.getByRole("button", { name: /Save|common\.save/i });
 	if (
 		(await submitBtn.count()) > 0 &&
 		(await submitBtn
@@ -202,62 +222,58 @@ test.describe("Medication Editing", () => {
 
 		await clickEditMed(page, "TakenBy Med");
 
-		// Find the taken-by input field inside the tag-input-container
-		const takenByContainer = page.locator(".tag-input-container");
-		await expect(takenByContainer).toBeVisible();
-		const takenByInput = takenByContainer.locator("input");
+		// Find the accessible taken-by input field.
+		const form = getMedicationEditForm(page);
+		const personInput = takenByInput(form);
+		await expect(personInput).toBeVisible();
 
 		// Add a person name
-		await takenByInput.fill("Alice");
-		await takenByInput.press("Enter");
+		await personInput.fill("Alice");
+		await personInput.press("Enter");
 
 		// Tag should appear
-		await expect(takenByContainer.locator(".tag").filter({ hasText: "Alice" })).toBeVisible();
+		await expect(takenByTag(form, "Alice")).toBeVisible();
 
 		// Add another person
-		await takenByInput.fill("Bob");
-		await takenByInput.press("Enter");
-		await expect(takenByContainer.locator(".tag").filter({ hasText: "Bob" })).toBeVisible();
+		await personInput.fill("Bob");
+		await personInput.press("Enter");
+		await expect(takenByTag(form, "Bob")).toBeVisible();
 
 		await saveEditAndVerify(page, "TakenBy Med");
 
 		// Verify tags are persisted
 		await clickEditMed(page, "TakenBy Med");
-		await expect(page.locator(".tag-input-container .tag").filter({ hasText: "Alice" })).toBeVisible();
-		await expect(page.locator(".tag-input-container .tag").filter({ hasText: "Bob" })).toBeVisible();
+		await expect(takenByTag(getMedicationEditForm(page), "Alice")).toBeVisible();
+		await expect(takenByTag(getMedicationEditForm(page), "Bob")).toBeVisible();
 	});
 
 	test("should remove a taken-by person from a medication", async ({ page }) => {
-		createdMeds.push(
-			await createMedicationViaAPI({
-				name: "Remove TakenBy Med",
-				takenBy: ["Alice", "Bob"],
-			})
-		);
+		createdMeds.push(await createMedicationViaAPI({ name: "Remove TakenBy Med", takenBy: ["Bob"] }));
 		await navigateTo(page, "/medications");
 
 		await clickEditMed(page, "Remove TakenBy Med");
 
 		// Both persons should appear as tags
-		const container = page.locator(".tag-input-container");
-		await expect(container.locator(".tag")).toHaveCount(2, { timeout: 5000 });
+		const form = getMedicationEditForm(page);
+		const personInput = takenByInput(form);
+		await expect(takenByTag(form, "Bob")).toBeVisible({ timeout: 5000 });
+		await personInput.fill("Alice");
+		await personInput.press("Enter");
+		await expect(takenByTag(form, "Alice")).toBeVisible({ timeout: 5000 });
 
-		// Use Backspace in the empty input to remove the last tag (Bob)
-		// The app handles this: if input empty + backspace → remove last takenBy person
-		const takenByInput = container.locator("input");
-		await takenByInput.click();
-		await takenByInput.press("Backspace");
+		// Remove the existing Bob tag through its visible tag control.
+		await takenByTag(form, "Bob").getByRole("button").click();
 
-		// After backspace, Bob (the last tag) should be removed, leaving Alice
-		await expect(container.locator(".tag")).toHaveCount(1, { timeout: 5000 });
-		await expect(container.locator(".tag").filter({ hasText: "Alice" })).toBeVisible();
+		// Alice remains selected after Bob is removed.
+		await expect(takenByTag(form, "Alice")).toBeVisible({ timeout: 5000 });
+		await expect(takenByTag(form, "Bob")).not.toBeVisible();
 
 		await saveEditAndVerify(page, "Remove TakenBy Med");
 
-		// Verify only Alice remains after save
+		// Verify only Alice remains after save.
 		await clickEditMed(page, "Remove TakenBy Med");
-		await expect(container.locator(".tag")).toHaveCount(1, { timeout: 5000 });
-		await expect(container.locator(".tag").filter({ hasText: "Alice" })).toBeVisible();
+		await expect(takenByTag(getMedicationEditForm(page), "Alice")).toBeVisible({ timeout: 5000 });
+		await expect(takenByTag(getMedicationEditForm(page), "Bob")).not.toBeVisible();
 	});
 
 	test("should add an expiry date to a medication", async ({ page }) => {
@@ -320,9 +336,8 @@ test.describe("Medication Editing", () => {
 		await expectStepperValueToFit(pillsPerBlister);
 
 		await modal.getByRole("tab", { name: /Schedule/i }).click();
-		const intakeRow = modal.locator(".blister-row").first();
-		const usage = intakeRow.getByLabel(/(Usage|form\.blisters\.usage)/i);
-		const every = intakeRow.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i);
+		const usage = modal.getByLabel(/(Usage|form\.blisters\.usage)/i);
+		const every = modal.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i);
 		await expect(usage).toHaveValue("1");
 		await expect(every).toHaveValue("1");
 
@@ -352,9 +367,8 @@ test.describe("Medication Editing", () => {
 		await page.getByRole("tab", { name: /Schedule/i }).click();
 
 		// Change intake from 1 pill daily to 2 pills every 7 days
-		const intakeRow = page.locator(".blister-row").first();
-		const usageField = intakeRow.getByLabel(/(Usage|form\.blisters\.usage)/i);
-		const everyField = intakeRow.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i);
+		const usageField = page.getByLabel(/(Usage|form\.blisters\.usage)/i);
+		const everyField = page.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i);
 
 		await usageField.fill("2");
 		await everyField.fill("7");
@@ -366,9 +380,8 @@ test.describe("Medication Editing", () => {
 
 		// Verify the changes persisted
 		await clickEditMed(page, "Edit Intake Med");
-		const savedRow = page.locator(".blister-row").first();
-		await expect(savedRow.getByLabel(/(Usage|form\.blisters\.usage)/i)).toHaveValue("2");
-		await expect(savedRow.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i)).toHaveValue("7");
+		await expect(page.getByLabel(/(Usage|form\.blisters\.usage)/i)).toHaveValue("2");
+		await expect(page.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i)).toHaveValue("7");
 	});
 
 	test("should add a second intake schedule row", async ({ page }) => {
@@ -391,22 +404,27 @@ test.describe("Medication Editing", () => {
 		await page.getByRole("tab", { name: /Schedule/i }).click();
 
 		// Should have 1 intake row initially
-		await expect(page.locator(".blister-row")).toHaveCount(1);
+		await expect(page.getByLabel(/(Usage|form\.blisters\.usage)/i)).toHaveCount(1);
 
 		// Add a second intake
 		await page.getByTestId("add-intake-button").click();
-		await expect(page.locator(".blister-row")).toHaveCount(2);
+		await expect(page.getByLabel(/(Usage|form\.blisters\.usage)/i)).toHaveCount(2);
 
 		// Fill the new intake row
-		const secondRow = page.locator(".blister-row").nth(1);
-		await secondRow.getByLabel(/(Usage|form\.blisters\.usage)/i).fill("0.5");
-		await secondRow.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i).fill("7");
+		await page
+			.getByLabel(/(Usage|form\.blisters\.usage)/i)
+			.nth(1)
+			.fill("0.5");
+		await page
+			.getByLabel(/(Every \(days\)|form\.blisters\.everyDays)/i)
+			.nth(1)
+			.fill("7");
 
 		await saveEditAndVerify(page, "Add Intake Med");
 
 		// Verify 2 intakes persisted
 		await clickEditMed(page, "Add Intake Med");
-		await expect(page.locator(".blister-row")).toHaveCount(2, { timeout: 10000 });
+		await expect(page.getByLabel(/(Usage|form\.blisters\.usage)/i)).toHaveCount(2, { timeout: 10000 });
 	});
 
 	test("should toggle intake reminder on a medication", async ({ page }) => {
@@ -429,19 +447,18 @@ test.describe("Medication Editing", () => {
 		await page.getByRole("tab", { name: /Schedule/i }).click();
 
 		// Find the remind checkbox in the intake row
-		const intakeRow = page.locator(".blister-row").first();
-		const remindToggle = intakeRow.locator(".toggle-switch");
-		const remindCheckbox = intakeRow.locator('.toggle-switch input[type="checkbox"]');
+		const remindCheckbox = intakeReminderCheckbox(getMedicationEditForm(page));
 
 		await expect(remindCheckbox).not.toBeChecked();
-		await remindToggle.click();
+		await remindCheckbox.check();
 		await expect(remindCheckbox).toBeChecked();
 
 		await saveEditAndVerify(page, "Reminder Toggle Med");
 
 		// Verify reminder was saved
 		await clickEditMed(page, "Reminder Toggle Med");
-		const savedCheckbox = page.locator(".blister-row").first().locator('.toggle-switch input[type="checkbox"]');
+		await page.getByRole("tab", { name: /Schedule/i }).click();
+		const savedCheckbox = intakeReminderCheckbox(getMedicationEditForm(page));
 		await expect(savedCheckbox).toBeChecked();
 	});
 
@@ -487,18 +504,16 @@ test.describe("Medication Editing", () => {
 			await clickEditMed(page, scenario.name);
 			await page.getByRole("tab", { name: /Schedule/i }).click();
 
-			const intakeRow = page.locator(".blister-row").first();
-			const remindToggle = intakeRow.locator(".toggle-switch");
-			const remindCheckbox = intakeRow.locator('.toggle-switch input[type="checkbox"]');
+			const remindCheckbox = intakeReminderCheckbox(getMedicationEditForm(page));
 			await expect(remindCheckbox).not.toBeChecked();
-			await remindToggle.click();
+			await remindCheckbox.check();
 			await expect(remindCheckbox).toBeChecked();
 
 			await saveEditAndVerify(page, scenario.name);
 
 			await clickEditMed(page, scenario.name);
 			await page.getByRole("tab", { name: /Schedule/i }).click();
-			await expect(page.locator(".blister-row").first().locator('.toggle-switch input[type="checkbox"]')).toBeChecked();
+			await expect(intakeReminderCheckbox(getMedicationEditForm(page))).toBeChecked();
 
 			await navigateTo(page, "/dashboard");
 			const modal = await openMedicationDetailFromDashboard(page, scenario.name);
@@ -506,7 +521,7 @@ test.describe("Medication Editing", () => {
 			await modal.getByRole("button", { name: /Refill|refill\.button/i }).click();
 			const refillModal = page
 				.getByRole("dialog")
-				.filter({ has: page.getByRole("heading", { name: /Refill|refill\.title/i }) })
+				.filter({ has: page.getByRole("heading", { name: /^(Refill|refill\.title)$/i }) })
 				.last();
 			await expect(refillModal).toBeVisible({ timeout: 5000 });
 			const refillInput = refillModal.locator('input[type="number"]').first();
@@ -519,6 +534,7 @@ test.describe("Medication Editing", () => {
 
 			await refillModal.getByRole("button", { name: /Refill|refill\.button/i }).click();
 			await expect(refillModal).not.toBeVisible({ timeout: 10000 });
+			await expect(modal).toContainText(`${scenario.expectedStock} / ${scenario.totalCapacity}`, { timeout: 10000 });
 
 			const refillHistoryHeader = modal.getByRole("heading", { name: /Refill History|refill\.history/i });
 			await expect(refillHistoryHeader).toBeVisible({ timeout: 10000 });
@@ -533,8 +549,8 @@ test.describe("Medication Editing", () => {
 			await expect(modal).not.toBeVisible({ timeout: 5000 });
 
 			await navigateTo(page, "/medications");
-			const medRow = page.locator(".med-row").filter({ hasText: scenario.name });
-			await expect(medRow.locator(".med-total")).toContainText(`${scenario.expectedStock} / ${scenario.totalCapacity}`);
+			const medRow = page.getByTestId("medication-row").filter({ hasText: scenario.name });
+			await expect(medRow).toContainText(`${scenario.expectedStock} / ${scenario.totalCapacity}`);
 		});
 	}
 
@@ -551,7 +567,7 @@ test.describe("Medication Editing", () => {
 		await navigateTo(page, "/medications");
 
 		await clickEditMed(page, "PackType Change Med");
-		const form = page.locator("form.form-grid:visible").first();
+		const form = getMedicationEditForm(page);
 
 		// Should be blister type initially
 		const packageSelect = form.getByLabel(/(Package Type|form\.packageType)/i);
@@ -601,7 +617,7 @@ test.describe("Medication Editing", () => {
 
 		// Verify final package type persisted
 		await clickEditMed(page, "PackType Change Med");
-		const editedForm = page.locator("form.form-grid:visible").first();
+		const editedForm = getMedicationEditForm(page);
 		await expect(editedForm.getByLabel(/(Package Type|form\.packageType)/i)).toHaveValue("injection");
 	});
 
@@ -623,10 +639,11 @@ test.describe("Medication Editing", () => {
 		await page.getByRole("tab", { name: /General/i }).click();
 
 		// Add a taken-by person
-		const takenByInput = page.locator(".tag-input-container input");
-		await takenByInput.fill("Charlie");
-		await takenByInput.press("Enter");
-		await expect(page.locator(".tag-input-container .tag").filter({ hasText: "Charlie" })).toBeVisible();
+		const form = getMedicationEditForm(page);
+		const personInput = takenByInput(form);
+		await personInput.fill("Charlie");
+		await personInput.press("Enter");
+		await expect(takenByTag(form, "Charlie")).toBeVisible();
 
 		await saveEditAndVerify(page, "Fully Edited Med");
 
@@ -635,6 +652,6 @@ test.describe("Medication Editing", () => {
 		await expect(page.getByLabel(/(Commercial Name|form\.commercialName)/i)).toHaveValue("Fully Edited Med");
 		await expect(page.getByLabel(/(Generic Name|form\.genericName)/i)).toHaveValue("Ibuprofen Lysinate");
 		await expect(page.getByLabel(/(Notes|form\.notes)/i)).toContainText("Morning dose only");
-		await expect(page.locator(".tag-input-container .tag").filter({ hasText: "Charlie" })).toBeVisible();
+		await expect(takenByTag(getMedicationEditForm(page), "Charlie")).toBeVisible();
 	});
 });

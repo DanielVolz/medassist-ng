@@ -113,7 +113,7 @@ test.describe("Authentication", () => {
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
 		// Should have the app title
-		await expect(page.locator(".auth-title")).toContainText("MedAssist-ng");
+		await expect(page.getByRole("heading", { name: /MedAssist-ng/i })).toBeVisible();
 	});
 
 	test("should have username and password fields", async ({ page }) => {
@@ -137,7 +137,7 @@ test.describe("Authentication", () => {
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-		const submitButton = page.locator('button.auth-submit[type="submit"]');
+		const submitButton = page.getByRole("button", { name: /^Login$/i });
 		await expect(submitButton).toBeVisible();
 		await expect(submitButton).toBeEnabled();
 	});
@@ -151,7 +151,7 @@ test.describe("Authentication", () => {
 
 		await expectVisibleButtonTextNotClipped(page, ".auth-container");
 
-		const toggleButton = page.locator("button.auth-link-btn");
+		const toggleButton = page.getByRole("button", { name: /Create account|Already have an account/i });
 		if (await toggleButton.isVisible().catch(() => false)) {
 			await toggleButton.click();
 			await expect(page.locator(".auth-container")).toBeVisible();
@@ -180,10 +180,10 @@ test.describe("Authentication", () => {
 		// Fill in invalid credentials
 		await page.locator("#username").fill("nonexistent-user");
 		await page.locator("#password").fill("wrongpassword");
-		await page.locator('button.auth-submit[type="submit"]').click();
+		await page.getByRole("button", { name: /^Login$/i }).click();
 
 		// Should show an error message
-		await expect(page.locator(".auth-error")).toBeVisible({ timeout: 5000 });
+		await expect(page.getByText(/invalid|incorrect|failed/i)).toBeVisible({ timeout: 5000 });
 	});
 
 	test("should toggle between login and register forms", async ({ page }) => {
@@ -192,14 +192,14 @@ test.describe("Authentication", () => {
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-		const toggleButton = page.locator("button.auth-link-btn");
+		const toggleButton = page.getByRole("button", { name: /Create account|Already have an account/i });
 		test.skip(
 			!(await toggleButton.isVisible().catch(() => false)),
 			"Registration toggle is unavailable in this environment"
 		);
 
 		// Check current subtitle text
-		const subtitle = page.locator(".auth-subtitle");
+		const subtitle = page.getByRole("heading", { level: 2 });
 		const initialText = await subtitle.textContent();
 
 		// Click the toggle link (Create account / Already have an account)
@@ -218,7 +218,7 @@ test.describe("Authentication", () => {
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
-		const ssoButton = page.locator("button.sso-btn");
+		const ssoButton = page.getByRole("button", { name: /Login with/i });
 		await expect(ssoButton).toBeVisible();
 		await expect(ssoButton).toContainText(state.oidcProviderName || "SSO");
 	});
@@ -236,7 +236,7 @@ test.describe("Authentication", () => {
 		await expect(page.locator("#password")).not.toBeVisible();
 
 		// SSO button should be the only login method
-		await expect(page.locator("button.sso-btn")).toBeVisible();
+		await expect(page.getByRole("button", { name: /Login with/i })).toBeVisible();
 	});
 
 	test("should show both login methods when OIDC and form login are enabled", async ({ page }) => {
@@ -251,6 +251,6 @@ test.describe("Authentication", () => {
 		// Both login methods visible
 		await expect(page.locator("#username")).toBeVisible();
 		await expect(page.locator("#password")).toBeVisible();
-		await expect(page.locator("button.sso-btn")).toBeVisible();
+		await expect(page.getByRole("button", { name: /Login with/i })).toBeVisible();
 	});
 });

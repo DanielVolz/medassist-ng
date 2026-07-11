@@ -1,4 +1,22 @@
+import type { Locator, Page } from "@playwright/test";
 import { authFile, createMedicationViaAPI, deleteAllMedicationsViaAPI, expect, navigateTo, test } from "./fixtures";
+
+function getMedicationRow(page: Page, medicationName: string): Locator {
+	return page.getByTestId("medication-row").filter({ hasText: medicationName });
+}
+
+function getMedicationEditForm(page: Page): Locator {
+	return page
+		.locator("form")
+		.filter({ has: page.getByRole("button", { name: /Save|common\.save/i }) })
+		.first();
+}
+
+async function calculatePlanner(page: Page): Promise<Locator> {
+	const plannerForm = page.getByTestId("planner-form");
+	await plannerForm.getByRole("button", { name: /Calculate|Berechnen|planner\.calculate/i }).click();
+	return page.getByTestId("planner-results-table");
+}
 
 /**
  * Medication Lifecycle Integration Tests
@@ -43,18 +61,23 @@ test.describe("Medication lifecycle", () => {
 
 		// Step 2: Verify on medications page
 		await navigateTo(page, "/medications");
-		await expect(page.getByText(MED_NAME).first()).toBeVisible({ timeout: 10000 });
+		await expect(getMedicationRow(page, MED_NAME)).toBeVisible({ timeout: 10000 });
 
 		// Step 3: Verify in planner
 		await navigateTo(page, "/planner");
 		await page.waitForLoadState("networkidle");
-		await page.locator('form.planner button[type="submit"]').click();
-		await expect(page.locator(".table")).toBeVisible({ timeout: 15000 });
-		await expect(page.locator(".table").getByText(MED_NAME)).toBeVisible();
+		const plannerResults = await calculatePlanner(page);
+		await expect(plannerResults).toBeVisible({ timeout: 15000 });
+		await expect(plannerResults.getByTestId("planner-result-row").filter({ hasText: MED_NAME })).toBeVisible();
 
 		// Step 4: Verify in schedule
 		await navigateTo(page, "/schedule");
-		await expect(page.getByText(MED_NAME).first()).toBeVisible({ timeout: 10000 });
+		await expect(
+			page.locator(".schedule-full").getByRole("heading", { name: /Schedule|dashboard\.schedules\.title/i })
+		).toBeVisible({
+			timeout: 10000,
+		});
+		await expect(page.getByText(MED_NAME, { exact: true }).first()).toBeVisible({ timeout: 10000 });
 	});
 
 	test("edit medication name via UI and verify update propagates", async ({ page }) => {
@@ -80,23 +103,23 @@ test.describe("Medication lifecycle", () => {
 
 		// Navigate to medications page
 		await navigateTo(page, "/medications");
-		await expect(page.getByText(MED_NAME).first()).toBeVisible({ timeout: 10000 });
+		await expect(getMedicationRow(page, MED_NAME)).toBeVisible({ timeout: 10000 });
 
 		// Open edit view from medication row actions
-		const medRow = page.locator(".med-row").filter({ hasText: MED_NAME });
-		await expect(medRow.first()).toBeVisible({ timeout: 10000 });
-		await medRow.first().locator("button.info").click();
-		await expect(page.locator("h2").filter({ hasText: /(Edit(:| (entry|medication))|form\.editEntry)/i })).toBeVisible({
+		const medRow = getMedicationRow(page, MED_NAME);
+		await expect(medRow).toBeVisible({ timeout: 10000 });
+		await medRow.getByRole("button", { name: /Edit|common\.edit/i }).click();
+		await expect(page.getByRole("heading", { name: /(Edit(:| (entry|medication))|form\.editEntry)/i })).toBeVisible({
 			timeout: 5000,
 		});
 
 		// Update the name
-		const form = page.locator("form.form-grid:visible").first();
+		const form = getMedicationEditForm(page);
 		const nameInput = form.getByLabel(/(Commercial Name|Name|form\.name)/i).first();
 		await nameInput.fill(MED_EDITED);
 
 		// Save
-		const submitButton = form.locator('button[type="submit"]').first();
+		const submitButton = form.getByRole("button", { name: /Save|common\.save/i });
 		await expect(submitButton).toBeEnabled({ timeout: 5000 });
 		await submitButton.click();
 
@@ -105,9 +128,9 @@ test.describe("Medication lifecycle", () => {
 
 		// Verify edited name appears on medications page
 		await navigateTo(page, "/medications");
-		await expect(page.getByText(MED_EDITED).first()).toBeVisible({ timeout: 10000 });
+		await expect(getMedicationRow(page, MED_EDITED)).toBeVisible({ timeout: 10000 });
 		// Old name should no longer appear
-		await expect(page.locator(".med-row").filter({ hasText: MED_NAME })).toHaveCount(0, { timeout: 5000 });
+		await expect(getMedicationRow(page, MED_NAME)).toHaveCount(0, { timeout: 5000 });
 	});
 
 	test("delete medication via API and verify it disappears from all pages", async ({ page }) => {
@@ -132,24 +155,22 @@ test.describe("Medication lifecycle", () => {
 
 		// Verify it exists first
 		await navigateTo(page, "/medications");
-		await expect(page.getByText(MED_NAME)).toBeVisible({ timeout: 10000 });
+		await expect(getMedicationRow(page, MED_NAME)).toBeVisible({ timeout: 10000 });
 
 		// Delete via API
 		await deleteAllMedicationsViaAPI();
 
 		// Verify gone from medications page
 		await navigateTo(page, "/medications");
-		await expect(page.getByText(MED_NAME)).not.toBeVisible({ timeout: 5000 });
+		await expect(getMedicationRow(page, MED_NAME)).toHaveCount(0, { timeout: 5000 });
 
 		// Verify planner shows no results for this med
 		await navigateTo(page, "/planner");
 		await page.waitForLoadState("networkidle");
-		await page.locator('form.planner button[type="submit"]').click();
+		const plannerResults = await calculatePlanner(page);
 		// Either no table or table without the medication name
-		const table = page.locator(".table");
-		const tableVisible = await table.isVisible().catch(() => false);
-		if (tableVisible) {
-			await expect(table.getByText(MED_NAME)).not.toBeVisible({ timeout: 3000 });
+		if (await plannerResults.isVisible().catch(() => false)) {
+			await expect(plannerResults.getByTestId("planner-result-row").filter({ hasText: MED_NAME })).toHaveCount(0);
 		}
 	});
 

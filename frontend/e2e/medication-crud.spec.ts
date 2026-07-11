@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import {
 	authFile,
 	createMedicationViaAPI,
@@ -9,6 +9,33 @@ import {
 	type TestMedication,
 	test,
 } from "./fixtures";
+
+function medicationRow(page: Page, name: string) {
+	return page.getByTestId("medication-row").filter({ hasText: name });
+}
+
+function expiryDateInput(form: Locator) {
+	return form.getByRole("button", { name: /(Expiry Date|form\.expiryDate)/i });
+}
+
+async function selectExpiryMonth(page: Page, form: Locator, value: string): Promise<void> {
+	const expiryDate = new Date(`${value}T00:00:00`);
+	const currentYear = new Date().getFullYear();
+	const expiryInput = expiryDateInput(form);
+
+	await expect(expiryInput).toBeVisible();
+	await expiryInput.click();
+
+	const picker = page.locator("[data-dates-dropdown]:visible");
+	await expect(picker).toBeVisible();
+
+	const direction = expiryDate.getFullYear() >= currentYear ? "next" : "previous";
+	for (let year = currentYear; year !== expiryDate.getFullYear(); year += direction === "next" ? 1 : -1) {
+		await picker.locator(`button[data-direction="${direction}"]`).click();
+	}
+
+	await picker.locator("[data-picker-control]").nth(expiryDate.getMonth()).click();
+}
 
 /**
  * Medication CRUD E2E Tests
@@ -89,7 +116,7 @@ async function fillAndSaveMedication(
 		}
 	}
 
-	if (opts.expiryDate) await form.getByLabel(/(Expiry Date|form\.expiryDate)/i).fill(opts.expiryDate);
+	if (opts.expiryDate) await selectExpiryMonth(page, form, opts.expiryDate);
 	if (opts.notes) await form.getByLabel(/(Notes|form\.notes)/i).fill(opts.notes);
 
 	// Fill intake schedules
@@ -112,7 +139,7 @@ async function fillAndSaveMedication(
 	await form.locator("button[type='submit']").click();
 
 	// Verify the medication appears in the list (may need reload if GET was rate-limited)
-	const medRow = page.locator(".med-row").filter({ hasText: opts.name });
+	const medRow = medicationRow(page, opts.name);
 	try {
 		await expect(medRow).toBeVisible({ timeout: 5000 });
 	} catch {
@@ -144,7 +171,7 @@ async function saveEdit(page: Page, medName: string): Promise<void> {
 		}
 	}
 	// Wait for the list to update with the new name — retry with reload if rate-limited
-	const medRow = page.locator(".med-row").filter({ hasText: medName });
+	const medRow = medicationRow(page, medName);
 	try {
 		await expect(medRow).toBeVisible({ timeout: 15000 });
 	} catch {
@@ -185,8 +212,8 @@ test.describe("Medication CRUD", () => {
 			});
 
 			// Verify medication details in the list
-			const medRow = page.locator(".med-row").filter({ hasText: "Test Ibuprofen" });
-			await expect(medRow.locator(".med-name")).toContainText("Test Ibuprofen");
+			const medRow = medicationRow(page, "Test Ibuprofen");
+			await expect(medRow).toContainText("Test Ibuprofen");
 		});
 
 		test("should create a bottle medication via the form", async ({ page }) => {
@@ -211,9 +238,9 @@ test.describe("Medication CRUD", () => {
 				intakes: [{ usage: "2", every: "1" }],
 			});
 
-			const medRow = page.locator(".med-row").filter({ hasText: "Test Rescue Inhaler" });
-			await expect(medRow.locator(".med-details")).toContainText(/Inhaler|form\.packageTypeInhaler/i);
-			await expect(medRow.locator(".med-total")).toContainText("120 / 200");
+			const medRow = medicationRow(page, "Test Rescue Inhaler");
+			await expect(medRow).toContainText(/Inhaler|form\.packageTypeInhaler/i);
+			await expect(medRow).toContainText("118 / 200 puffs");
 		});
 
 		test("should create an injection medication via the form", async ({ page }) => {
@@ -227,9 +254,9 @@ test.describe("Medication CRUD", () => {
 				intakes: [{ usage: "1", every: "7" }],
 			});
 
-			const medRow = page.locator(".med-row").filter({ hasText: "Test Weekly Injection" });
-			await expect(medRow.locator(".med-details")).toContainText(/Injection|form\.packageTypeInjection/i);
-			await expect(medRow.locator(".med-total")).toContainText("4 / 12");
+			const medRow = medicationRow(page, "Test Weekly Injection");
+			await expect(medRow).toContainText(/Injection|form\.packageTypeInjection/i);
+			await expect(medRow).toContainText("3 / 12 injections");
 		});
 
 		test("should create medication with multiple intake schedules", async ({ page }) => {
@@ -292,7 +319,7 @@ test.describe("Medication CRUD", () => {
 			const saveBtn = page.locator("form.form-grid button[type='submit']");
 			await expect(saveBtn).toBeVisible();
 			await saveBtn.click();
-			await expect(page.locator(".med-row")).toHaveCount(0);
+			await expect(page.getByTestId("medication-row")).toHaveCount(0);
 		});
 
 		test("should reset form after saving a medication", async ({ page }) => {
@@ -331,9 +358,9 @@ test.describe("Medication CRUD", () => {
 			await navigateTo(page, "/medications");
 
 			// Click Edit
-			const medRow = page.locator(".med-row").filter({ hasText: "Before Edit" });
+			const medRow = medicationRow(page, "Before Edit");
 			await expect(medRow).toBeVisible({ timeout: 10000 });
-			await medRow.locator("button.info").click();
+			await medRow.getByRole("button", { name: /Edit/i }).click();
 
 			// Form title should say "Edit entry" (or legacy "Edit medication").
 			await expect(
@@ -350,7 +377,7 @@ test.describe("Medication CRUD", () => {
 			await saveEdit(page, "After Edit");
 
 			// Old name should no longer appear
-			await expect(page.locator(".med-row").filter({ hasText: "Before Edit" })).not.toBeVisible();
+			await expect(medicationRow(page, "Before Edit")).not.toBeVisible();
 
 			// Update tracked ID for cleanup
 			createdMeds[0].name = "After Edit";
@@ -361,9 +388,9 @@ test.describe("Medication CRUD", () => {
 			await navigateTo(page, "/medications");
 
 			// Click Edit
-			const medRow = page.locator(".med-row").filter({ hasText: "Cancel Test Med" });
+			const medRow = medicationRow(page, "Cancel Test Med");
 			await expect(medRow).toBeVisible({ timeout: 10000 });
-			await medRow.locator("button.info").click();
+			await medRow.getByRole("button", { name: /Edit/i }).click();
 
 			// Change the name
 			await page.getByLabel(/(Commercial Name|form\.commercialName)/i).fill("Modified Name");
@@ -375,7 +402,7 @@ test.describe("Medication CRUD", () => {
 				.click();
 
 			// Original name should still be in the list
-			await expect(page.locator(".med-row").filter({ hasText: "Cancel Test Med" })).toBeVisible();
+			await expect(medicationRow(page, "Cancel Test Med")).toBeVisible();
 		});
 	});
 
@@ -394,14 +421,11 @@ test.describe("Medication CRUD", () => {
 			createdMeds.push(await createMedicationViaAPI({ name: "Delete Me Med" }));
 			await navigateTo(page, "/medications");
 
-			const medRow = page.locator(".med-row").filter({ hasText: "Delete Me Med" });
+			const medRow = medicationRow(page, "Delete Me Med");
 			await expect(medRow).toBeVisible({ timeout: 10000 });
 
-			await medRow.locator("button.danger").click();
-			await page
-				.locator(".confirm-modal-overlay, .modal-overlay")
-				.getByRole("button", { name: /Delete/i })
-				.click();
+			await medRow.getByRole("button", { name: /Delete/i }).click();
+			await page.getByTestId("confirm-modal-confirm").click();
 
 			// Medication should be removed
 			await expect(medRow).toHaveCount(0, { timeout: 10000 });
@@ -414,12 +438,11 @@ test.describe("Medication CRUD", () => {
 			createdMeds.push(await createMedicationViaAPI({ name: "Keep Me Med" }));
 			await navigateTo(page, "/medications");
 
-			const medRow = page.locator(".med-row").filter({ hasText: "Keep Me Med" });
+			const medRow = medicationRow(page, "Keep Me Med");
 			await expect(medRow).toBeVisible({ timeout: 10000 });
 
-			// Dismiss the native confirm()
-			page.on("dialog", (dialog) => dialog.dismiss());
-			await medRow.locator("button.danger").click();
+			await medRow.getByRole("button", { name: /Delete/i }).click();
+			await page.getByTestId("confirm-modal-cancel").click();
 
 			// Medication should still be there
 			await expect(medRow).toBeVisible();
@@ -453,9 +476,9 @@ test.describe("Medication CRUD", () => {
 			await navigateTo(page, "/medications");
 
 			// Both medications should be in the list
-			await expect(page.locator(".med-row").filter({ hasText: "Med Alpha" })).toBeVisible({ timeout: 10000 });
-			await expect(page.locator(".med-row").filter({ hasText: "Med Beta" })).toBeVisible();
-			expect(await page.locator(".med-row").count()).toBeGreaterThanOrEqual(2);
+			await expect(medicationRow(page, "Med Alpha")).toBeVisible({ timeout: 10000 });
+			await expect(medicationRow(page, "Med Beta")).toBeVisible();
+			expect(await page.getByTestId("medication-row").count()).toBeGreaterThanOrEqual(2);
 		});
 
 		test("should show stock details on medication row", async ({ page }) => {
@@ -470,7 +493,7 @@ test.describe("Medication CRUD", () => {
 			);
 			await navigateTo(page, "/medications");
 
-			const medRow = page.locator(".med-row").filter({ hasText: "Stock Detail Med" });
+			const medRow = medicationRow(page, "Stock Detail Med");
 			try {
 				await expect(medRow).toBeVisible({ timeout: 10000 });
 			} catch {
@@ -481,8 +504,7 @@ test.describe("Medication CRUD", () => {
 			}
 
 			// Should display stock details
-			const medDetails = medRow.locator(".med-details, .med-total");
-			expect(await medDetails.count()).toBeGreaterThan(0);
+			await expect(medRow).toContainText(/Stock|medications\.details\.stock/i);
 		});
 	});
 

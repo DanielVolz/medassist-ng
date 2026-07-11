@@ -343,6 +343,30 @@ function validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage) 
     /run:\s*npm run test:e2e:domain/,
     "run the domain E2E release gate"
   );
+  requireTextPattern(
+    ".github/workflows/test.yml",
+    /run:\s*npm run check[\s\S]*run:\s*npm run build/,
+    "run the frontend static check before the frontend build"
+  );
+  requireTextPattern(
+    ".github/workflows/e2e.yml",
+    /run:\s*npm run test:e2e:ci:core[\s\S]*run:\s*npm run test:e2e:ci:data/,
+    "run the core and data Chromium E2E CI commands"
+  );
+  requireScriptPattern(
+    "frontend/package.json",
+    frontendPackage,
+    "test:e2e:ci:core",
+    /PLAYWRIGHT_EXCLUDE_DOMAIN_SAFETY=true[\s\S]*PLAYWRIGHT_HTML_OPEN=never[\s\S]*PLAYWRIGHT_WORKERS=1[\s\S]*--project=chromium/,
+    "run the core Chromium project non-interactively while excluding the domain safety gate"
+  );
+  requireScriptPattern(
+    "frontend/package.json",
+    frontendPackage,
+    "test:e2e:ci:data",
+    /PLAYWRIGHT_HTML_OPEN=never[\s\S]*PLAYWRIGHT_WORKERS=1[\s\S]*--project=chromium-data/,
+    "run the data-focused Chromium project non-interactively"
+  );
 }
 
 function validatePolicy(releaseTag, releaseVersion) {

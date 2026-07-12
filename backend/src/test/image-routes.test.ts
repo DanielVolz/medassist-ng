@@ -1,13 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import cookie from "@fastify/cookie";
-import sensible from "@fastify/sensible";
 import type { Client } from "@libsql/client";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { jwtPlugin } from "../plugins/jwt.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestApp } from "./setup.js";
 
 const { testClient, testDb } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -38,53 +35,6 @@ vi.mock("../plugins/env.js", () => ({
 }));
 
 const { imageRoutes } = await import("../routes/images.js");
-
-async function createSchema(client: Client) {
-	const tableCreations = [
-		`CREATE TABLE IF NOT EXISTS users (
-			id integer PRIMARY KEY AUTOINCREMENT,
-			username text NOT NULL UNIQUE,
-			password_hash text,
-			avatar_url text,
-			auth_provider text NOT NULL DEFAULT 'local',
-			oidc_subject text,
-			is_active integer NOT NULL DEFAULT 1,
-			last_login_at integer,
-			created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-			updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
-		)`,
-		`CREATE TABLE IF NOT EXISTS medications (
-			id integer PRIMARY KEY AUTOINCREMENT,
-			user_id integer NOT NULL,
-			name text NOT NULL,
-			taken_by_json text NOT NULL DEFAULT '[]',
-			usage_json text NOT NULL DEFAULT '[]',
-			every_json text NOT NULL DEFAULT '[]',
-			start_json text NOT NULL DEFAULT '[]',
-			intakes_json text NOT NULL DEFAULT '[]',
-			image_url text,
-			intake_reminders_enabled integer NOT NULL DEFAULT 0,
-			is_obsolete integer NOT NULL DEFAULT 0
-		)`,
-		`CREATE TABLE IF NOT EXISTS share_tokens (
-			id integer PRIMARY KEY AUTOINCREMENT,
-			user_id integer NOT NULL,
-			token text NOT NULL UNIQUE,
-			taken_by text NOT NULL,
-			schedule_days integer NOT NULL DEFAULT 30,
-			allow_journal_notes integer NOT NULL DEFAULT 0,
-			allow_mark_taken integer NOT NULL DEFAULT 1,
-			created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-			expires_at integer,
-			last_used_at integer,
-			revoked_at integer
-		)`,
-	];
-
-	for (const sql of tableCreations) {
-		await client.execute(sql);
-	}
-}
 
 async function clearData(client: Client) {
 	await client.execute("DELETE FROM share_tokens");
@@ -119,16 +69,17 @@ describe("Image routes", () => {
 	let imagesDir: string;
 
 	beforeAll(async () => {
-		await createSchema(testClient);
 		imagesDir = mkdtempSync(join(tmpdir(), "medassist-image-routes-"));
 
-		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
-		await app.register(sensible);
-		await app.register(cookie, { secret: "test-cookie-secret-12345" });
-		await app.register(jwtPlugin, {
-			secret: "test-jwt-secret-12345",
-			cookie: { cookieName: "access_token", signed: false },
-		});
+		app = (
+			await buildTestApp({
+				client: testClient,
+				config: {
+					accessSecret: "test-jwt-secret-12345",
+					refreshSecret: "test-refresh-secret-12345",
+				},
+			})
+		).app;
 		await app.register(imageRoutes, { imagesDir });
 		await app.ready();
 	});

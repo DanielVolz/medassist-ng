@@ -1,7 +1,5 @@
-import sensible from "@fastify/sensible";
-import Fastify, { type FastifyInstance } from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestApp, closeTestApp, type TestContext } from "./setup.js";
 
 const { fetchMock, requireAuthMock } = vi.hoisted(() => ({
 	fetchMock: vi.fn(),
@@ -39,13 +37,12 @@ function createEmaRow(overrides: Partial<Record<string, unknown>> = {}): Record<
 	};
 }
 
-async function buildApp(): Promise<FastifyInstance> {
+async function buildApp(): Promise<TestContext> {
 	const { medicationEnrichmentRoutes } = await import("../routes/medication-enrichment.js");
-	const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
-	await app.register(sensible);
-	await app.register(medicationEnrichmentRoutes);
-	await app.ready();
-	return app;
+	const testContext = await buildTestApp();
+	await testContext.app.register(medicationEnrichmentRoutes);
+	await testContext.app.ready();
+	return testContext;
 }
 
 describe("medication enrichment", () => {
@@ -126,7 +123,7 @@ describe("medication enrichment", () => {
 	});
 
 	it("requires auth and returns EMA search results from the route", async () => {
-		const app = await buildApp();
+		const testContext = await buildApp();
 		fetchMock.mockImplementation((url: string) => {
 			if (url.includes("/drugs.json?name=")) {
 				return Promise.resolve(jsonResponse({ drugGroup: { conceptGroup: [] } }));
@@ -140,7 +137,7 @@ describe("medication enrichment", () => {
 			return Promise.reject(new Error(`Unexpected URL: ${url}`));
 		});
 
-		const response = await app.inject({
+		const response = await testContext.app.inject({
 			method: "GET",
 			url: "/medication-enrichment/search?q=aspirin&limit=1",
 		});
@@ -160,7 +157,7 @@ describe("medication enrichment", () => {
 			],
 		});
 
-		await app.close();
+		await closeTestApp(testContext);
 	});
 
 	it("falls back from EMA to RxNorm and openFDA search results when EMA has no match", async () => {
@@ -362,9 +359,9 @@ describe("medication enrichment", () => {
 	});
 
 	it("validates malformed search requests", async () => {
-		const app = await buildApp();
+		const testContext = await buildApp();
 
-		const response = await app.inject({
+		const response = await testContext.app.inject({
 			method: "GET",
 			url: "/medication-enrichment/search?q=",
 		});
@@ -372,11 +369,11 @@ describe("medication enrichment", () => {
 		expect(response.statusCode).toBe(400);
 		expect(fetchMock).not.toHaveBeenCalled();
 
-		await app.close();
+		await closeTestApp(testContext);
 	});
 
 	it("returns enrichment suggestions with optional RxNorm strength data", async () => {
-		const app = await buildApp();
+		const testContext = await buildApp();
 		fetchMock
 			.mockResolvedValueOnce(
 				jsonResponse([
@@ -404,7 +401,7 @@ describe("medication enrichment", () => {
 				})
 			);
 
-		const response = await app.inject({
+		const response = await testContext.app.inject({
 			method: "POST",
 			url: "/medication-enrichment/enrich",
 			payload: {
@@ -436,11 +433,11 @@ describe("medication enrichment", () => {
 			},
 		});
 
-		await app.close();
+		await closeTestApp(testContext);
 	});
 
 	it("includes package suggestions from openFDA fallback in route responses", async () => {
-		const app = await buildApp();
+		const testContext = await buildApp();
 		fetchMock.mockImplementation((url: string) => {
 			if (url.includes("medicines-output-medicines_json-report_en.json")) {
 				return Promise.resolve(
@@ -476,7 +473,7 @@ describe("medication enrichment", () => {
 			return Promise.reject(new Error(`Unexpected URL: ${url}`));
 		});
 
-		const response = await app.inject({
+		const response = await testContext.app.inject({
 			method: "POST",
 			url: "/medication-enrichment/enrich",
 			payload: {
@@ -519,7 +516,7 @@ describe("medication enrichment", () => {
 			},
 		});
 
-		await app.close();
+		await closeTestApp(testContext);
 	});
 
 	it("keeps incomplete-coverage messaging honest when RxNorm enrichment fails", async () => {
@@ -708,10 +705,10 @@ describe("medication enrichment", () => {
 	});
 
 	it("returns not found when an explicit selection cannot be resolved", async () => {
-		const app = await buildApp();
+		const testContext = await buildApp();
 		fetchMock.mockResolvedValueOnce(jsonResponse([createEmaRow()]));
 
-		const response = await app.inject({
+		const response = await testContext.app.inject({
 			method: "POST",
 			url: "/medication-enrichment/enrich",
 			payload: {
@@ -727,14 +724,14 @@ describe("medication enrichment", () => {
 			error: "Selected medication could not be resolved.",
 		});
 
-		await app.close();
+		await closeTestApp(testContext);
 	});
 
 	it("returns transport-safe 503 payload when search lookup fails unexpectedly", async () => {
-		const app = await buildApp();
+		const testContext = await buildApp();
 		fetchMock.mockRejectedValue(new Error("network unavailable"));
 
-		const response = await app.inject({
+		const response = await testContext.app.inject({
 			method: "GET",
 			url: "/medication-enrichment/search?q=aspirin&limit=1",
 		});
@@ -745,6 +742,6 @@ describe("medication enrichment", () => {
 			code: "MEDICATION_ENRICHMENT_UNAVAILABLE",
 		});
 
-		await app.close();
+		await closeTestApp(testContext);
 	});
 });

@@ -45,6 +45,7 @@ function lastBlockForSelector(css: string, selector: string) {
 	);
 }
 
+// Regression rationale: planner result cards must remain compact and legible on mobile without a deterministic browser data fixture.
 describe("planner font contract", () => {
 	it("uses the app standard font for planner table values", () => {
 		const css = readSource("pages/PlannerPage.module.css");

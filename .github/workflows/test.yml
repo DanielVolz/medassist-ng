@@ -113,7 +113,7 @@ jobs:
 
       - name: Run tests with coverage
         if: needs.changes.outputs.backend == 'true'
-        run: npm run test:coverage
+        run: npm run test:coverage:ci
 
       - name: Upload coverage report
         if: always() && needs.changes.outputs.backend == 'true'

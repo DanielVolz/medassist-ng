@@ -16,6 +16,7 @@
     "test:domain": "vitest run src/test/domain-safety.test.ts",
     "pretest:coverage": "npm --prefix ../shared run build",
     "test:coverage": "vitest run --coverage",
+    "test:coverage:ci": "vitest run --coverage --exclude src/test/domain-safety.test.ts",
     "lint": "npx biome check .",
     "lint:fix": "npx biome check --write .",
     "format": "npx biome format --write .",

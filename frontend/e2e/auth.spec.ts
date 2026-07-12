@@ -18,11 +18,6 @@ async function getAuthState(page: Page): Promise<AuthStateResponse | null> {
 	}
 }
 
-async function isAuthEnabled(page: Page): Promise<boolean> {
-	const state = await getAuthState(page);
-	return state?.authEnabled !== false;
-}
-
 async function expectVisibleButtonTextNotClipped(page: Page, scopeSelector: string): Promise<void> {
 	const violations = await page.locator(scopeSelector).evaluate((scope) => {
 		function isVisible(element: HTMLElement) {
@@ -107,8 +102,6 @@ test.describe("Authentication", () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
 	test("should show login page for unauthenticated users", async ({ page }) => {
-		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
-
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
@@ -117,8 +110,6 @@ test.describe("Authentication", () => {
 	});
 
 	test("should have username and password fields", async ({ page }) => {
-		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
-
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
@@ -132,8 +123,6 @@ test.describe("Authentication", () => {
 	});
 
 	test("should have a submit button", async ({ page }) => {
-		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
-
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
@@ -143,8 +132,6 @@ test.describe("Authentication", () => {
 	});
 
 	test("should keep auth button text fully visible on mobile", async ({ page }) => {
-		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
-
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
@@ -160,8 +147,6 @@ test.describe("Authentication", () => {
 	});
 
 	test("should not navigate to dashboard without credentials", async ({ page }) => {
-		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
-
 		await page.goto("/dashboard");
 
 		// Should NOT show the app header (redirected to login)
@@ -172,8 +157,6 @@ test.describe("Authentication", () => {
 	});
 
 	test("should show error for invalid credentials", async ({ page }) => {
-		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
-
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
@@ -187,8 +170,6 @@ test.describe("Authentication", () => {
 	});
 
 	test("should toggle between login and register forms", async ({ page }) => {
-		test.skip(!(await isAuthEnabled(page)), "Auth is disabled in this environment");
-
 		await page.goto("/");
 		await expect(page.locator(".auth-container")).toBeVisible({ timeout: 15000 });
 
@@ -212,7 +193,10 @@ test.describe("Authentication", () => {
 
 	test("should show SSO button when OIDC is enabled", async ({ page }) => {
 		const state = await getAuthState(page);
-		test.skip(!state?.authEnabled, "Auth is disabled in this environment");
+		if (!state) {
+			throw new Error("The isolated auth server did not return its auth state");
+		}
+		expect(state.authEnabled).toBe(true);
 		test.skip(!state?.oidcEnabled, "OIDC is not enabled in this environment");
 
 		await page.goto("/");
@@ -225,7 +209,6 @@ test.describe("Authentication", () => {
 
 	test("should hide form login when formLoginEnabled is false", async ({ page }) => {
 		const state = await getAuthState(page);
-		test.skip(!state?.authEnabled, "Auth is disabled in this environment");
 		test.skip(state?.formLoginEnabled !== false, "Form login is enabled — cannot test hidden state");
 
 		await page.goto("/");
@@ -241,7 +224,6 @@ test.describe("Authentication", () => {
 
 	test("should show both login methods when OIDC and form login are enabled", async ({ page }) => {
 		const state = await getAuthState(page);
-		test.skip(!state?.authEnabled, "Auth is disabled in this environment");
 		test.skip(!state?.oidcEnabled, "OIDC is not enabled");
 		test.skip(!state?.formLoginEnabled, "Form login is not enabled");
 

@@ -11,8 +11,9 @@ import sensible from "@fastify/sensible";
 import { type Client, createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { afterEach } from "vitest";
+import { runAlterMigrations } from "../db/migration-utils.js";
 import { jwtPlugin } from "../plugins/jwt.js";
 import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 
@@ -33,20 +34,48 @@ export interface TestContext {
 	client: Client;
 }
 
+export interface BuildTestAppOptions {
+	/**
+	 * Reuse a hoisted client when routes are mocked to use the same database.
+	 * The caller retains ownership and must close it through closeTestApp.
+	 */
+	client?: Client;
+	/**
+	 * Fastify options needed by a test without duplicating the common app setup.
+	 */
+	fastifyOptions?: Omit<FastifyServerOptions, "ajv">;
+	/**
+	 * Override only the runtime configuration that a route test intentionally
+	 * exercises, while retaining the shared test-safe defaults.
+	 */
+	config?: Partial<TestAppConfig>;
+}
+
+interface TestAppConfig {
+	accessSecret: string;
+	refreshSecret: string;
+	accessTtl: number;
+	refreshTtl: number;
+	cookieOptions: { httpOnly: boolean; sameSite: "lax"; secure: boolean; path: string; maxAge?: number };
+	refreshCookieOptions: { httpOnly: boolean; sameSite: "lax"; secure: boolean; path: string; maxAge?: number };
+}
+
 /**
  * Build a test Fastify app with in-memory SQLite.
  * Each test file gets its own isolated database.
  */
-export async function buildTestApp(): Promise<TestContext> {
-	// Create in-memory SQLite database
-	const client = createClient({ url: ":memory:" });
+export async function buildTestApp(options: BuildTestAppOptions = {}): Promise<TestContext> {
+	// Create an isolated in-memory SQLite database unless the test needs to
+	// share a hoisted client with a mocked database module.
+	const client = options.client ?? createClient({ url: ":memory:" });
 	const db = drizzle(client);
 
-	// Run schema creation
+	// Run the production schema and SQLite compatibility migrations.
 	await runTestMigrations(client);
+	await runAlterMigrations(client);
 
 	// Create Fastify app with minimal plugins
-	const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
+	const app = Fastify({ logger: false, ajv: documentationSchemaAjv, ...options.fastifyOptions });
 
 	await app.register(sensible);
 	await app.register(cookie, { secret: "test-cookie-secret" });
@@ -57,14 +86,15 @@ export async function buildTestApp(): Promise<TestContext> {
 	await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 
 	// Decorate config (matches index.ts structure)
-	app.decorate("config", {
+	const config: TestAppConfig = {
 		accessSecret: "test-jwt-secret",
 		refreshSecret: "test-refresh-secret",
 		accessTtl: 15,
 		refreshTtl: 7,
 		cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
 		refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
-	});
+	};
+	app.decorate("config", { ...config, ...options.config });
 
 	return { app, db, client };
 }

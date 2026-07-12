@@ -1,7 +1,7 @@
 import type { Client } from "@libsql/client";
-import Fastify, { type FastifyInstance } from "fastify";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import type { FastifyInstance } from "fastify";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildTestApp } from "./setup.js";
 
 // Create test database and mocks before anything else (hoisted)
 const {
@@ -78,122 +78,6 @@ import { plannerRoutes } from "../routes/planner.js";
 // Test Setup
 // =============================================================================
 
-async function createSchema(client: Client) {
-	const tableCreations = [
-		`CREATE TABLE IF NOT EXISTS users (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      username text NOT NULL UNIQUE,
-      password_hash text,
-      auth_provider text NOT NULL DEFAULT 'local',
-      is_active integer NOT NULL DEFAULT 1,
-      created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-      updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
-    )`,
-		`CREATE TABLE IF NOT EXISTS medications (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      user_id integer NOT NULL,
-      name text NOT NULL,
-      generic_name text,
-      taken_by_json text NOT NULL DEFAULT '[]',
-		medication_form text NOT NULL DEFAULT 'tablet',
-		pill_form text,
-		lifecycle_category text NOT NULL DEFAULT 'refill_when_empty',
-      package_type text NOT NULL DEFAULT 'blister',
-		package_amount_value integer NOT NULL DEFAULT 0,
-		package_amount_unit text NOT NULL DEFAULT 'ml',
-      pack_count integer NOT NULL DEFAULT 1,
-      blisters_per_pack integer NOT NULL DEFAULT 1,
-      pills_per_blister integer NOT NULL DEFAULT 1,
-      total_pills integer,
-      loose_tablets integer NOT NULL DEFAULT 0,
-      stock_adjustment integer NOT NULL DEFAULT 0,
-      last_stock_correction_at integer,
-      pill_weight_mg integer,
-      dose_unit text DEFAULT 'mg',
-      usage_json text NOT NULL DEFAULT '[]',
-      every_json text NOT NULL DEFAULT '[]',
-      start_json text NOT NULL DEFAULT '[]',
-      intakes_json text NOT NULL DEFAULT '[]',
-      image_url text,
-      expiry_date text,
-      notes text,
-      intake_reminders_enabled integer NOT NULL DEFAULT 0,
-      medication_start_date text NOT NULL DEFAULT '',
-	medication_end_date text,
-	auto_mark_obsolete_after_end_date integer NOT NULL DEFAULT 1,
-      is_obsolete integer NOT NULL DEFAULT 0,
-      obsolete_at integer,
-      prescription_enabled integer NOT NULL DEFAULT 0,
-      prescription_authorized_refills integer,
-      prescription_remaining_refills integer,
-      prescription_low_refill_threshold integer NOT NULL DEFAULT 1,
-      prescription_expiry_date text,
-      dismissed_until text,
-      updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )`,
-		`CREATE TABLE IF NOT EXISTS user_settings (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      user_id integer NOT NULL UNIQUE,
-		timezone text NOT NULL DEFAULT '',
-      email_enabled integer NOT NULL DEFAULT 0,
-      notification_email text,
-      email_stock_reminders integer NOT NULL DEFAULT 1,
-      email_intake_reminders integer NOT NULL DEFAULT 1,
-		email_prescription_reminders integer NOT NULL DEFAULT 1,
-      shoutrrr_enabled integer NOT NULL DEFAULT 0,
-      shoutrrr_url text,
-      shoutrrr_stock_reminders integer NOT NULL DEFAULT 1,
-      shoutrrr_intake_reminders integer NOT NULL DEFAULT 1,
-		shoutrrr_prescription_reminders integer NOT NULL DEFAULT 1,
-      reminder_days_before integer NOT NULL DEFAULT 7,
-      repeat_daily_reminders integer NOT NULL DEFAULT 0,
-      skip_reminders_for_taken_doses integer NOT NULL DEFAULT 0,
-      repeat_reminders_enabled integer NOT NULL DEFAULT 0,
-      reminder_repeat_interval_minutes integer NOT NULL DEFAULT 30,
-      max_nagging_reminders integer NOT NULL DEFAULT 5,
-      low_stock_days integer NOT NULL DEFAULT 30,
-      normal_stock_days integer NOT NULL DEFAULT 90,
-      high_stock_days integer NOT NULL DEFAULT 180,
-      expiry_warning_days integer NOT NULL DEFAULT 90,
-      language text NOT NULL DEFAULT 'en',
-      stock_calculation_mode text NOT NULL DEFAULT 'automatic',
-      share_stock_status integer NOT NULL DEFAULT 1,
-	share_medication_overview integer NOT NULL DEFAULT 0,
-	upcoming_today_only integer NOT NULL DEFAULT 0,
-	share_schedule_today_only integer NOT NULL DEFAULT 0,
-	swap_dashboard_main_sections integer NOT NULL DEFAULT 0,
-      last_auto_email_sent text,
-      last_notification_type text,
-      last_notification_channel text,
-      last_reminder_med_name text,
-      last_reminder_taken_by text,
-      last_stock_reminder_sent text,
-      last_stock_reminder_channel text,
-      last_stock_reminder_med_names text,
-			last_prescription_reminder_sent text,
-	      last_prescription_reminder_channel text,
-	      last_prescription_reminder_med_names text,
-	      updated_at integer NOT NULL DEFAULT (strftime('%s','now')),
-	      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	    )`,
-		`CREATE TABLE IF NOT EXISTS dose_tracking (
-	      id integer PRIMARY KEY AUTOINCREMENT,
-	      user_id integer NOT NULL,
-	      dose_id text NOT NULL,
-	      taken_at integer NOT NULL DEFAULT (strftime('%s','now')),
-	      marked_by text,
-	      taken_source text NOT NULL DEFAULT 'manual',
-	      dismissed integer NOT NULL DEFAULT 0,
-	      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	    )`,
-	];
-
-	for (const sql of tableCreations) {
-		await client.execute(sql);
-	}
-}
-
 async function clearData(client: Client) {
 	await client.execute("DELETE FROM dose_tracking");
 	await client.execute("DELETE FROM medications");
@@ -205,11 +89,9 @@ async function clearData(client: Client) {
 describe("Planner Routes", () => {
 	let app: FastifyInstance;
 
-	beforeAll(async () => {
-		await createSchema(testClient);
-	});
-
 	beforeEach(async () => {
+		await app?.close();
+		app = (await buildTestApp({ client: testClient })).app;
 		await clearData(testClient);
 
 		// Create anonymous user
@@ -229,7 +111,6 @@ describe("Planner Routes", () => {
 			args: [],
 		});
 
-		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(plannerRoutes);
 		await app.ready();
 

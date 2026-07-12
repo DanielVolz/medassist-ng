@@ -11,6 +11,7 @@ function readFrontendFile(filePath: string) {
 	return readFileSync(resolve(frontendRoot, filePath), "utf8");
 }
 
+// Regression rationale: browser icon declarations and packaged assets are build inputs, not interactive UI behavior.
 describe("favicon contract", () => {
 	it("declares explicit browser favicon sizes in index.html", () => {
 		const html = readFrontendFile("index.html");

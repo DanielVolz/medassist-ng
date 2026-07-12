@@ -140,6 +140,54 @@ test("release preflight rejects missing backend domain safety gate script", () =
   }
 });
 
+test("release preflight rejects CI coverage that re-executes the backend domain safety gate", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const backendPackage = readJson(fixtureRoot, "backend/package.json");
+    backendPackage.scripts["test:coverage:ci"] = "vitest run --coverage";
+    writeJson(fixtureRoot, "backend/package.json", backendPackage);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /backend\/package\.json test:coverage:ci must exclude the already-run domain safety release gate from CI coverage/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects CI coverage that does not use the deduplicated backend command", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/test.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace("run: npm run test:coverage:ci", "run: npm run test:coverage");
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/test\.yml must run CI coverage after the domain safety release gate without re-executing it/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects local backend coverage that excludes the domain safety gate", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const backendPackage = readJson(fixtureRoot, "backend/package.json");
+    backendPackage.scripts["test:coverage"] = "vitest run --coverage --exclude src/test/domain-safety.test.ts";
+    writeJson(fixtureRoot, "backend/package.json", backendPackage);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /backend\/package\.json test:coverage must keep full developer coverage without excluding the domain safety release gate/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test("release preflight rejects missing frontend domain E2E gate script", () => {
   const fixtureRoot = copyFixture();
   try {

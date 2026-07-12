@@ -24,6 +24,7 @@ function cssBlock(css: string, selector: string) {
 	return match?.[1] ?? "";
 }
 
+// Regression rationale: medication safety data must not regress to a monospace/data font through a local CSS override.
 describe("medications page font contract", () => {
 	it("keeps medication page surfaces on the standard app font", () => {
 		const offenders = medicationPageCssFiles.filter((filePath) => {

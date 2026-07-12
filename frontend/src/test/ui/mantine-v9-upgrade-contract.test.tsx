@@ -92,6 +92,7 @@ function readCssVariable(section: object, key: string) {
 	return (section as Record<string, string | undefined>)[key];
 }
 
+// Regression rationale: these provider, modal, and headroom behaviors are exercised as component integration contracts after the framework upgrade.
 describe("Mantine v9 upgrade contract", () => {
 	beforeEach(() => {
 		setHeadroomPinned(true);

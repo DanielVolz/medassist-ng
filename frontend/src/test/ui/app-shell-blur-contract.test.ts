@@ -22,6 +22,7 @@ function blockFor(css: string, selector: string) {
 	return extractSimpleCssBlocks(css).find((block) => block.selector === selector)?.body ?? "";
 }
 
+// Regression rationale: the header’s clipped blur and sticky boundary cannot be asserted reliably in jsdom.
 describe("app shell header blur contract", () => {
 	it("does not keep a disabled outer top blur in the active app shell", () => {
 		const appSource = readSource("App.tsx");

@@ -32,6 +32,7 @@ function lastBlockFor(css: string, selector: string) {
 	);
 }
 
+// Regression rationale: these mobile overflow, typography, and localization invariants need deterministic coverage without viewport rendering.
 describe("dashboard and shared mobile polish contract", () => {
 	it("keeps mobile browser text autosizing pinned to the app scale where supported", () => {
 		const baselineCss = readSource("ui/providers/AppGlobalBaseline.module.css");

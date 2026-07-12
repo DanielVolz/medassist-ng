@@ -1,9 +1,7 @@
-import cookie from "@fastify/cookie";
 import type { Client } from "@libsql/client";
-import Fastify, { type FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { jwtPlugin } from "../plugins/jwt.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import type { FastifyInstance } from "fastify";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { buildTestApp } from "./setup.js";
 
 const { testClient, testDb } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -37,42 +35,15 @@ vi.mock("../plugins/env.js", () => ({
 const { registerApiDocs } = await import("../plugins/api-docs.js");
 const { requireAuth } = await import("../plugins/auth.js");
 
-async function createSchema(client: Client) {
-	await client.execute(`
-		CREATE TABLE IF NOT EXISTS users (
-			id integer PRIMARY KEY AUTOINCREMENT,
-			username text NOT NULL UNIQUE,
-			password_hash text,
-			avatar_url text,
-			auth_provider text NOT NULL DEFAULT 'local',
-			oidc_subject text,
-			is_active integer NOT NULL DEFAULT 1,
-			last_login_at integer,
-			created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-			updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
-		)
-	`);
-}
-
-async function clearData(client: Client) {
-	await client.execute("DELETE FROM users");
-	await client.execute("DELETE FROM sqlite_sequence");
-}
-
 async function buildDocsApp(options: { docsEnabled: boolean; docsAuthRequired: boolean }): Promise<FastifyInstance> {
-	const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
-	await app.register(cookie, { secret: "test-cookie-secret-12345" });
-	await app.register(jwtPlugin, {
-		secret: "test-jwt-secret-12345",
-		cookie: { cookieName: "access_token", signed: false },
-	});
-	app.decorate("config", {
-		accessSecret: "test-jwt-secret-12345",
-		refreshSecret: "test-refresh-secret-12345",
-		accessTtl: 15,
-		refreshTtl: 7,
-		cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: 15 * 60 },
-		refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth", maxAge: 7 * 24 * 60 * 60 },
+	const { app } = await buildTestApp({
+		client: testClient,
+		config: {
+			accessSecret: "test-jwt-secret-12345",
+			refreshSecret: "test-refresh-secret-12345",
+			cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: 15 * 60 },
+			refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth", maxAge: 7 * 24 * 60 * 60 },
+		},
 	});
 	await registerApiDocs(app, {
 		enabled: options.docsEnabled,
@@ -99,10 +70,6 @@ async function createActiveUser(client: Client): Promise<{ id: number; username:
 }
 
 describe("OpenAPI docs protection", () => {
-	beforeAll(async () => {
-		await createSchema(testClient);
-	});
-
 	afterAll(() => {
 		testClient.close();
 	});
@@ -136,7 +103,8 @@ describe("OpenAPI docs protection", () => {
 	});
 
 	it("allows authenticated docs access when docs auth is required", async () => {
-		await clearData(testClient);
+		await testClient.execute("DELETE FROM users");
+		await testClient.execute("DELETE FROM sqlite_sequence");
 		const app = await buildDocsApp({ docsEnabled: true, docsAuthRequired: true });
 
 		try {

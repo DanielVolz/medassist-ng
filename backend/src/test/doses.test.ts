@@ -1,12 +1,6 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import cookie from "@fastify/cookie";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/db-utils.js";
-import { jwtPlugin } from "../plugins/jwt.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestApp, closeTestApp } from "./setup.js";
 
 const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -44,10 +38,6 @@ vi.mock("../db/client.js", () => ({
 vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
 
 const { doseRoutes } = await import("../routes/doses.js");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM intake_journal");
@@ -177,22 +167,14 @@ describe("Dose Tracking API", () => {
 	let cookieHeader: string;
 
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
-
-		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
-		await app.register(cookie, { secret: "test-cookie-secret" });
-		await app.register(jwtPlugin, {
-			secret: "test-jwt-secret",
-			cookie: { cookieName: "access_token", signed: false },
-		});
+		const context = await buildTestApp({ client: testClient });
+		app = context.app;
 		await app.register(doseRoutes);
 		await app.ready();
 	});
 
 	afterAll(async () => {
-		await app.close();
-		testClient.close();
+		await closeTestApp({ app, db: testDb, client: testClient });
 	});
 
 	beforeEach(async () => {

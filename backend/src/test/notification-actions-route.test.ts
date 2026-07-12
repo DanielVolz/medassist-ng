@@ -1,11 +1,6 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import Fastify from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/db-utils.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
-import { insertScheduledTestMedication } from "./setup.js";
+import { buildTestApp, closeTestApp, insertScheduledTestMedication } from "./setup.js";
 
 const { testClient, testDb, mockedEnv, fetchMock, mockLogger } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -55,10 +50,6 @@ vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
 
 const { notificationActionRoutes } = await import("../routes/notification-actions.js");
 const { createNotificationActionContext } = await import("../services/notification-actions-service.js");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 function extractToken(url: string): string {
 	return url.split("/").at(-1) ?? "";
@@ -128,19 +119,20 @@ async function seedContext(options: { userId: number; doseId: string }) {
 }
 
 describe("notification action routes", () => {
-	let app: Awaited<ReturnType<typeof Fastify>>;
+	let app: FastifyInstance;
 
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
-		app = Fastify({ loggerInstance: mockLogger, disableRequestLogging: true, ajv: documentationSchemaAjv });
+		const context = await buildTestApp({
+			client: testClient,
+			fastifyOptions: { loggerInstance: mockLogger, disableRequestLogging: true },
+		});
+		app = context.app;
 		await app.register(notificationActionRoutes);
 		await app.ready();
 	});
 
 	afterAll(async () => {
-		await app.close();
-		testClient.close();
+		await closeTestApp({ app, db: testDb, client: testClient });
 	});
 
 	beforeEach(async () => {

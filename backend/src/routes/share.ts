@@ -6,6 +6,11 @@ import { doseTracking, medications, shareTokens, userSettings, users } from "../
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { buildSharedMedicationOverview } from "../services/coverage.js";
+import {
+	getPublicShareContext,
+	getPublicShareLanguage,
+	getPublicShareOwnerName,
+} from "../services/public-share-service.js";
 import { generateShareToken, getActiveShareToken, isShareTokenFormat } from "../services/share-token-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
@@ -204,10 +209,6 @@ function isShareActive(share: typeof shareTokens.$inferSelect): boolean {
 	return !isShareRevoked(share) && !isExpiredTimestamp(share.expiresAt);
 }
 
-function getShareLanguage(language: string | null | undefined): "en" | "de" {
-	return language === "de" ? "de" : "en";
-}
-
 type MedicationRow = typeof medications.$inferSelect;
 
 async function getActiveMedicationsForPerson(userId: number, takenBy: string): Promise<MedicationRow[]> {
@@ -337,9 +338,9 @@ export async function shareRoutes(app: FastifyInstance) {
 				return reply.status(410).send({
 					error: "Share link has expired",
 					code: "EXPIRED",
-					ownerUsername: owner?.username ?? "the owner",
+					ownerUsername: getPublicShareOwnerName(owner?.username, "the owner"),
 					takenBy: share.takenBy,
-					language: getShareLanguage(settings?.language),
+					language: getPublicShareLanguage(settings?.language),
 					expiredAt: share.expiresAt.toISOString(),
 				});
 			}
@@ -364,12 +365,11 @@ export async function shareRoutes(app: FastifyInstance) {
 				: null;
 
 			return {
-				takenBy: share.takenBy,
-				sharedBy: owner?.username ?? null,
-				language: getShareLanguage(settings?.language),
-				scheduleDays: share.scheduleDays,
-				allowJournalNotes: share.allowJournalNotes ?? false,
-				allowMarkTaken: share.allowMarkTaken ?? true,
+				...getPublicShareContext({
+					share,
+					ownerUsername: owner?.username,
+					language: settings?.language,
+				}),
 				medications: medicationsWithBlisters,
 				shareMedicationOverview,
 				medicationOverview,
@@ -436,7 +436,7 @@ export async function shareRoutes(app: FastifyInstance) {
 					.where(eq(userSettings.userId, share.userId));
 				return reply.status(410).send({
 					error: "expired",
-					language: getShareLanguage(settings?.language),
+					language: getPublicShareLanguage(settings?.language),
 					expiredAt: share.expiresAt.toISOString(),
 				});
 			}
@@ -457,8 +457,8 @@ export async function shareRoutes(app: FastifyInstance) {
 
 			return {
 				takenBy: share.takenBy,
-				sharedBy: owner?.username ?? null,
-				language: getShareLanguage(settings?.language),
+				sharedBy: getPublicShareOwnerName(owner?.username),
+				language: getPublicShareLanguage(settings?.language),
 				generatedAt: new Date().toISOString(),
 				medications: overview,
 			};

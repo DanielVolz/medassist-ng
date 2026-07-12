@@ -2,14 +2,11 @@
  * E2E Tests for auth routes with AUTH_ENABLED=true
  */
 
-import cookie from "@fastify/cookie";
-import sensible from "@fastify/sensible";
 import type { Client } from "@libsql/client";
 import argon2 from "argon2";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { jwtPlugin } from "../plugins/jwt.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestApp } from "./setup.js";
 
 // Use vi.hoisted to create the db BEFORE mocks are set up
 const { testClient, testDb } = vi.hoisted(() => {
@@ -53,37 +50,6 @@ const { authRoutes } = await import("../routes/auth.js");
 // Test Setup
 // =============================================================================
 
-async function createSchema(client: Client) {
-	const tableCreations = [
-		`CREATE TABLE IF NOT EXISTS users (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      username text NOT NULL UNIQUE,
-      password_hash text,
-      avatar_url text,
-      auth_provider text NOT NULL DEFAULT 'local',
-      oidc_subject text,
-      is_active integer NOT NULL DEFAULT 1,
-      last_login_at integer,
-      created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-      updated_at integer NOT NULL DEFAULT (strftime('%s','now'))
-    )`,
-		`CREATE TABLE IF NOT EXISTS refresh_tokens (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      user_id integer NOT NULL,
-      token_id text NOT NULL UNIQUE,
-      expires_at integer NOT NULL,
-      revoked integer NOT NULL DEFAULT 0,
-      rotated_at integer,
-      created_at integer NOT NULL DEFAULT (strftime('%s','now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )`,
-	];
-
-	for (const sql of tableCreations) {
-		await client.execute(sql);
-	}
-}
-
 async function clearData(client: Client) {
 	await client.execute("DELETE FROM refresh_tokens");
 	await client.execute("DELETE FROM users");
@@ -117,26 +83,25 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 	let app: FastifyInstance;
 
 	beforeAll(async () => {
-		await createSchema(testClient);
-
-		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
-
-		await app.register(sensible);
-		await app.register(cookie, { secret: "test-cookie-secret-12345" });
-		await app.register(jwtPlugin, {
-			secret: "test-jwt-secret-12345",
-			cookie: { cookieName: "access_token", signed: false },
-		});
-
-		// Decorate with config needed by auth routes
-		app.decorate("config", {
-			accessSecret: "test-jwt-secret-12345",
-			refreshSecret: "test-refresh-secret-12345",
-			accessTtl: 2,
-			refreshTtl: 3,
-			cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: 2 * 60 },
-			refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth", maxAge: 3 * 24 * 60 * 60 },
-		});
+		app = (
+			await buildTestApp({
+				client: testClient,
+				config: {
+					accessSecret: "test-jwt-secret-12345",
+					refreshSecret: "test-refresh-secret-12345",
+					accessTtl: 2,
+					refreshTtl: 3,
+					cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: 2 * 60 },
+					refreshCookieOptions: {
+						httpOnly: true,
+						sameSite: "lax",
+						secure: false,
+						path: "/auth",
+						maxAge: 3 * 24 * 60 * 60,
+					},
+				},
+			})
+		).app;
 
 		await app.register(authRoutes);
 		await app.ready();

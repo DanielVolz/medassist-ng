@@ -1,7 +1,5 @@
-import cookie from "@fastify/cookie";
-import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestApp, closeTestApp } from "./setup.js";
 
 type OidcMocks = {
 	discovery: ReturnType<typeof vi.fn>;
@@ -95,28 +93,20 @@ async function buildOidcApp(envOverrides: Record<string, unknown>, options: Oidc
 		fetchUserInfo,
 	}));
 
-	const { jwtPlugin } = await import("../plugins/jwt.js");
 	const { oidcRoutes } = await import("../routes/oidc.js");
 
-	const app = Fastify({ logger: false, ajv: documentationSchemaAjv });
-	await app.register(cookie, { secret: "test-cookie-secret" });
-	await app.register(jwtPlugin, {
-		secret: "test-jwt-secret-12345",
-		cookie: { cookieName: "access_token", signed: false },
+	const testContext = await buildTestApp({
+		config: {
+			accessSecret: "test-jwt-secret-12345",
+			refreshSecret: "test-refresh-secret-12345",
+			refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth" },
+		},
 	});
-	app.decorate("config", {
-		accessSecret: "test-jwt-secret-12345",
-		refreshSecret: "test-refresh-secret-12345",
-		accessTtl: 15,
-		refreshTtl: 7,
-		cookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/" },
-		refreshCookieOptions: { httpOnly: true, sameSite: "lax", secure: false, path: "/auth" },
-	});
-	await app.register(oidcRoutes);
-	await app.ready();
+	await testContext.app.register(oidcRoutes);
+	await testContext.app.ready();
 
 	return {
-		app,
+		...testContext,
 		mocks: { discovery, buildAuthorizationUrl, authorizationCodeGrant, fetchUserInfo, db: dbMock } as OidcMocks,
 	};
 }
@@ -127,38 +117,38 @@ afterEach(() => {
 
 describe("OIDC routes", () => {
 	it("returns 400 on login and callback when oidc is disabled", async () => {
-		const { app } = await buildOidcApp({ OIDC_ENABLED: false });
+		const testContext = await buildOidcApp({ OIDC_ENABLED: false });
 		try {
-			const login = await app.inject({ method: "GET", url: "/auth/oidc/login" });
-			const callback = await app.inject({ method: "GET", url: "/auth/oidc/callback" });
+			const login = await testContext.app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const callback = await testContext.app.inject({ method: "GET", url: "/auth/oidc/callback" });
 
 			expect(login.statusCode).toBe(400);
 			expect(callback.statusCode).toBe(400);
 		} finally {
-			await app.close();
+			await closeTestApp(testContext);
 		}
 	});
 
 	it("redirects to provider and sets PKCE cookies on /auth/oidc/login", async () => {
-		const { app, mocks } = await buildOidcApp({ OIDC_ENABLED: true });
+		const testContext = await buildOidcApp({ OIDC_ENABLED: true });
 		try {
-			const res = await app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const res = await testContext.app.inject({ method: "GET", url: "/auth/oidc/login" });
 
 			expect(res.statusCode).toBe(302);
 			expect(res.headers.location).toContain("https://issuer.example.com/authorize");
 			expect(res.cookies.some((c) => c.name === "oidc_code_verifier")).toBe(true);
 			expect(res.cookies.some((c) => c.name === "oidc_state")).toBe(true);
-			expect(mocks.discovery).toHaveBeenCalledTimes(1);
-			expect(mocks.buildAuthorizationUrl).toHaveBeenCalledTimes(1);
+			expect(testContext.mocks.discovery).toHaveBeenCalledTimes(1);
+			expect(testContext.mocks.buildAuthorizationUrl).toHaveBeenCalledTimes(1);
 		} finally {
-			await app.close();
+			await closeTestApp(testContext);
 		}
 	});
 
 	it("redirects with provider error when callback contains error params", async () => {
-		const { app } = await buildOidcApp({ OIDC_ENABLED: true });
+		const testContext = await buildOidcApp({ OIDC_ENABLED: true });
 		try {
-			const res = await app.inject({
+			const res = await testContext.app.inject({
 				method: "GET",
 				url: "/auth/oidc/callback?error=access_denied&error_description=user_cancelled",
 			});
@@ -166,26 +156,26 @@ describe("OIDC routes", () => {
 			expect(res.statusCode).toBe(302);
 			expect(res.headers.location).toBe("http://localhost:5173");
 		} finally {
-			await app.close();
+			await closeTestApp(testContext);
 		}
 	});
 
 	it("redirects when callback is missing required params", async () => {
-		const { app } = await buildOidcApp({ OIDC_ENABLED: true });
+		const testContext = await buildOidcApp({ OIDC_ENABLED: true });
 		try {
-			const res = await app.inject({ method: "GET", url: "/auth/oidc/callback" });
+			const res = await testContext.app.inject({ method: "GET", url: "/auth/oidc/callback" });
 
 			expect(res.statusCode).toBe(302);
 			expect(res.headers.location).toBe("http://localhost:5173");
 		} finally {
-			await app.close();
+			await closeTestApp(testContext);
 		}
 	});
 
 	it("redirects when callback state validation fails", async () => {
-		const { app } = await buildOidcApp({ OIDC_ENABLED: true });
+		const testContext = await buildOidcApp({ OIDC_ENABLED: true });
 		try {
-			const res = await app.inject({
+			const res = await testContext.app.inject({
 				method: "GET",
 				url: "/auth/oidc/callback?code=abc123&state=state123",
 			});
@@ -193,12 +183,12 @@ describe("OIDC routes", () => {
 			expect(res.statusCode).toBe(302);
 			expect(res.headers.location).toBe("http://localhost:5173");
 		} finally {
-			await app.close();
+			await closeTestApp(testContext);
 		}
 	});
 
 	it("does not auto-link an OIDC subject to an existing local username", async () => {
-		const { app, mocks } = await buildOidcApp(
+		const testContext = await buildOidcApp(
 			{ OIDC_ENABLED: true },
 			{
 				selectResults: [[], [{ id: 42, username: "victim", authProvider: "local", oidcSubject: null }]],
@@ -210,10 +200,10 @@ describe("OIDC routes", () => {
 			}
 		);
 		try {
-			const login = await app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const login = await testContext.app.inject({ method: "GET", url: "/auth/oidc/login" });
 			const state = getLocationState(login.headers.location);
 
-			const callback = await app.inject({
+			const callback = await testContext.app.inject({
 				method: "GET",
 				url: `/auth/oidc/callback?code=abc123&state=${state}`,
 				headers: { cookie: buildCookieHeader(login.cookies) },
@@ -221,15 +211,15 @@ describe("OIDC routes", () => {
 
 			expect(callback.statusCode).toBe(302);
 			expect(callback.headers.location).toBe("http://localhost:5173");
-			expect(mocks.db.update).not.toHaveBeenCalled();
-			expect(mocks.db.insert).not.toHaveBeenCalled();
+			expect(testContext.mocks.db.update).not.toHaveBeenCalled();
+			expect(testContext.mocks.db.insert).not.toHaveBeenCalled();
 		} finally {
-			await app.close();
+			await closeTestApp(testContext);
 		}
 	});
 
 	it("signs OIDC refresh tokens with the configured refresh secret", async () => {
-		const { app } = await buildOidcApp(
+		const testContext = await buildOidcApp(
 			{ OIDC_ENABLED: true },
 			{
 				selectResults: [[], []],
@@ -237,10 +227,10 @@ describe("OIDC routes", () => {
 			}
 		);
 		try {
-			const login = await app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const login = await testContext.app.inject({ method: "GET", url: "/auth/oidc/login" });
 			const state = getLocationState(login.headers.location);
 
-			const callback = await app.inject({
+			const callback = await testContext.app.inject({
 				method: "GET",
 				url: `/auth/oidc/callback?code=abc123&state=${state}`,
 				headers: { cookie: buildCookieHeader(login.cookies) },
@@ -252,14 +242,14 @@ describe("OIDC routes", () => {
 			const refreshCookie = callback.cookies.find((c) => c.name === "refresh_token");
 			expect(refreshCookie).toBeDefined();
 
-			const refreshPayload = await app.jwt.verify<JwtPayloadWithExp>(refreshCookie?.value ?? "", {
-				key: app.config.refreshSecret,
+			const refreshPayload = await testContext.app.jwt.verify<JwtPayloadWithExp>(refreshCookie?.value ?? "", {
+				key: testContext.app.config.refreshSecret,
 			});
 			expect(refreshPayload.sub).toBe(7);
 			expect(refreshPayload.type).toBe("refresh");
-			await expect(app.jwt.verify(refreshCookie?.value ?? "")).rejects.toThrow();
+			await expect(testContext.app.jwt.verify(refreshCookie?.value ?? "")).rejects.toThrow();
 		} finally {
-			await app.close();
+			await closeTestApp(testContext);
 		}
 	});
 });

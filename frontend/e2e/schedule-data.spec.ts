@@ -22,9 +22,10 @@ test.describe("Schedule with medications", () => {
 	const MED_PAST = "SchedData PastMed";
 	const MED_WEEKLY = "SchedData WeeklyMed";
 
-	const todayMorning = (() => {
+	const todayDue = (() => {
 		const d = new Date();
-		d.setHours(8, 0, 0, 0);
+		// Keep the dose safely in today's past so the take action is always valid.
+		d.setHours(0, 1, 0, 0);
 		const pad = (n: number) => n.toString().padStart(2, "0");
 		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 	})();
@@ -49,7 +50,7 @@ test.describe("Schedule with medications", () => {
 				packCount: 1,
 				blistersPerPack: 2,
 				pillsPerBlister: 14,
-				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
+				intakes: [{ usage: 1, every: 1, start: todayDue, intakeRemindersEnabled: false }],
 			})
 		);
 		createdMeds.push(
@@ -67,7 +68,7 @@ test.describe("Schedule with medications", () => {
 				name: MED_WEEKLY,
 				packageType: "bottle",
 				totalPills: 52,
-				intakes: [{ usage: 1, every: 7, start: todayMorning, intakeRemindersEnabled: false }],
+				intakes: [{ usage: 1, every: 7, start: todayDue, intakeRemindersEnabled: false }],
 			})
 		);
 	});
@@ -175,11 +176,12 @@ test.describe("Schedule with medications", () => {
 		await expect(daysSelect).toBeVisible();
 
 		await daysSelect.selectOption("30");
-		await page.waitForTimeout(500);
+		await expect(daysSelect).toHaveValue("30");
 		const count30 = await page.locator(".day-block").count();
 
 		await daysSelect.selectOption("90");
-		await page.waitForTimeout(500);
+		await expect(daysSelect).toHaveValue("90");
+		await expect.poll(async () => page.locator(".day-block").count()).toBeGreaterThanOrEqual(count30);
 		const count90 = await page.locator(".day-block").count();
 
 		expect(count90).toBeGreaterThanOrEqual(count30);
@@ -192,8 +194,14 @@ test.describe("Schedule with medications", () => {
 		let todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
 
-		const takeBtn = todayBlock.locator("button.dose-btn.take:not([disabled])").first();
-		test.skip(!(await takeBtn.isVisible().catch(() => false)), "No actionable take-dose button is visible for today");
+		const dailyDoseRow = todayBlock.locator(".time-row").filter({ hasText: MED_DAILY });
+		await expect(dailyDoseRow).toHaveCount(1);
+		const takeBtn = dailyDoseRow.getByRole("button", { name: "Take", exact: true });
+		await expect(takeBtn).toBeVisible();
+		await expect(takeBtn).toBeEnabled();
+		const doseDate = new Date();
+		doseDate.setHours(0, 0, 0, 0);
+		const expectedDoseId = `${createdMeds[0]?.id}-0-${doseDate.getTime()}`;
 
 		const takeResponsePromise = page.waitForResponse(
 			(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
@@ -201,13 +209,17 @@ test.describe("Schedule with medications", () => {
 		);
 		await takeBtn.click();
 		const takeResponse = await takeResponsePromise;
-		test.skip(!takeResponse.ok(), "Backend did not accept dose take request");
+		expect(takeResponse.ok(), `Dose take request failed with status ${takeResponse.status()}`).toBeTruthy();
+		expect(takeResponse.request().postDataJSON()).toEqual({ doseId: expectedDoseId });
+		expect(await takeResponse.json()).toMatchObject({ success: true });
 
 		await page.reload();
 		await page.waitForLoadState("networkidle");
 		todayBlock = page.locator(".day-block.today");
 		await expect(todayBlock).toBeVisible({ timeout: 15000 });
-		await expect(todayBlock.locator("button.dose-btn.undo").first()).toBeVisible({ timeout: 10000 });
+		await expect(
+			todayBlock.locator(".time-row").filter({ hasText: MED_DAILY }).getByRole("button", { name: "Undo", exact: true })
+		).toBeVisible({ timeout: 10000 });
 	});
 
 	test("should undo taken doses", async ({ page }) => {
@@ -225,7 +237,7 @@ test.describe("Schedule with medications", () => {
 			const btn = todayBlock.locator("button.dose-btn.undo").first();
 			if (await btn.isVisible().catch(() => false)) {
 				await btn.click();
-				await page.waitForTimeout(300);
+				await expect(todayBlock.locator("button.dose-btn.take:not([disabled])").first()).toBeVisible();
 			}
 		}
 

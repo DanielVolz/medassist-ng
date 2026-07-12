@@ -363,6 +363,7 @@ export function SettingsPage() {
 											<input
 												type="text"
 												className={surfaceClass("api-key-token-input")}
+												data-testid="settings-api-key-token"
 												value={apiKeyToken}
 												readOnly
 												onClick={(e) => (e.target as HTMLInputElement).select()}
@@ -398,6 +399,7 @@ export function SettingsPage() {
 										<label className={surfaceClass("toggle-switch", "small", !settings.emailEnabled && "disabled")}>
 											<input
 												type="checkbox"
+												data-testid="settings-email-stock-reminders-toggle"
 												checked={settings.emailStockReminders}
 												onChange={(e) => setSettings({ ...settings, emailStockReminders: e.target.checked })}
 												disabled={!settings.emailEnabled}

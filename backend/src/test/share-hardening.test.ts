@@ -1,13 +1,8 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import rateLimit from "@fastify/rate-limit";
-import sensible from "@fastify/sensible";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/migration-utils.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 import { tokenFingerprint } from "../utils/redaction.js";
+import { buildTestApp, closeTestApp } from "./setup.js";
 
 const { testClient, testDb, logLines, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -55,10 +50,6 @@ vi.mock("../plugins/auth.js", () => ({
 const { shareTokenRateLimitKey } = await import("../services/share-token-service.js");
 const { doseRoutes } = await import("../routes/doses.js");
 const { shareRoutes } = await import("../routes/share.js");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM intake_journal");
@@ -145,20 +136,20 @@ describe("share link hardening", () => {
 	let app: FastifyInstance;
 
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
-		app = Fastify({
-			logger: {
-				level: "info",
-				stream: {
-					write(message: string) {
-						logLines.push(message);
+		const context = await buildTestApp({
+			client: testClient,
+			fastifyOptions: {
+				logger: {
+					level: "info",
+					stream: {
+						write(message: string) {
+							logLines.push(message);
+						},
 					},
 				},
 			},
-			ajv: documentationSchemaAjv,
 		});
-		await app.register(sensible);
+		app = context.app;
 		await app.register(rateLimit, { max: 1000, timeWindow: "1 minute" });
 		await app.register(doseRoutes);
 		await app.register(shareRoutes);
@@ -166,8 +157,7 @@ describe("share link hardening", () => {
 	});
 
 	afterAll(async () => {
-		await app.close();
-		testClient.close();
+		await closeTestApp({ app, db: testDb, client: testClient });
 	});
 
 	beforeEach(async () => {

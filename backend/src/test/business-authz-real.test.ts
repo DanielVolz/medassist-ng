@@ -1,13 +1,6 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import cookie from "@fastify/cookie";
-import sensible from "@fastify/sensible";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/db-utils.js";
-import { jwtPlugin } from "../plugins/jwt.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestApp, closeTestApp } from "./setup.js";
 
 const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -52,10 +45,6 @@ const { shareRoutes } = await import("../routes/share.js");
 const { reportRoutes } = await import("../routes/report.js");
 const { exportRoutes } = await import("../routes/export.js");
 const { hashApiKeyToken } = await import("../plugins/auth.js");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM refill_history");
@@ -224,16 +213,8 @@ describe("Real business route authz contracts", () => {
 	let app: FastifyInstance;
 
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
-
-		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
-		await app.register(sensible);
-		await app.register(cookie, { secret: "test-cookie-secret" });
-		await app.register(jwtPlugin, {
-			secret: "test-jwt-secret",
-			cookie: { cookieName: "access_token", signed: false },
-		});
+		const context = await buildTestApp({ client: testClient });
+		app = context.app;
 		await app.register(medicationRoutes);
 		await app.register(doseRoutes);
 		await app.register(refillRoutes);
@@ -244,8 +225,7 @@ describe("Real business route authz contracts", () => {
 	});
 
 	afterAll(async () => {
-		await app.close();
-		testClient.close();
+		await closeTestApp({ app, db: testDb, client: testClient });
 	});
 
 	beforeEach(async () => {

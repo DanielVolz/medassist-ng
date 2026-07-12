@@ -1,8 +1,5 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/libsql/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/db-utils.js";
+import { buildTestApp, closeTestApp, type TestContext } from "./setup.js";
 
 const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -31,10 +28,6 @@ const { createNotificationActionContext, getNotificationActionTokenRecord, hashA
 	"../services/notification-actions-service.js"
 );
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
-
 function extractToken(url: string): string {
 	return url.split("/").at(-1) ?? "";
 }
@@ -60,13 +53,14 @@ async function createUser(username: string) {
 }
 
 describe("notification-actions-service", () => {
+	let context: TestContext;
+
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
+		context = await buildTestApp({ client: testClient });
 	});
 
-	afterAll(() => {
-		testClient.close();
+	afterAll(async () => {
+		await closeTestApp(context);
 	});
 
 	beforeEach(async () => {

@@ -22,6 +22,7 @@ function blockFor(css: string, selector: string) {
 	return extractSimpleCssBlocks(css).find((block) => block.selector === selector)?.body ?? "";
 }
 
+// Regression rationale: adjacent tooltip controls need a shared spacing invariant to avoid target overlap.
 describe("settings tooltip spacing contract", () => {
 	it("uses the same inline gap for section title and setting label tooltip icons", () => {
 		const sectionCardCss = readSource("ui/components/SectionCard.module.css");

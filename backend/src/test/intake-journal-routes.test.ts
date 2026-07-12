@@ -1,15 +1,7 @@
 import { existsSync, unlinkSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import cookie from "@fastify/cookie";
-import sensible from "@fastify/sensible";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/db-utils.js";
-import { jwtPlugin } from "../plugins/jwt.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
-import { buildTestSessionCookie, createTestUser } from "./setup.js";
+import { buildTestApp, buildTestSessionCookie, closeTestApp, createTestUser } from "./setup.js";
 
 const { testClient, testDb, testDbPath, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -54,10 +46,6 @@ vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
 
 const { exportRoutes } = await import("../routes/export.js");
 const { intakeJournalRoutes } = await import("../routes/intake-journal.js");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM intake_journal");
@@ -139,24 +127,15 @@ describe("Intake journal routes", () => {
 	let app: FastifyInstance;
 
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
-
-		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
-		await app.register(sensible);
-		await app.register(cookie, { secret: "test-cookie-secret" });
-		await app.register(jwtPlugin, {
-			secret: "test-jwt-secret",
-			cookie: { cookieName: "access_token", signed: false },
-		});
+		const context = await buildTestApp({ client: testClient });
+		app = context.app;
 		await app.register(intakeJournalRoutes);
 		await app.register(exportRoutes);
 		await app.ready();
 	});
 
 	afterAll(async () => {
-		await app.close();
-		testClient.close();
+		await closeTestApp({ app, db: testDb, client: testClient });
 		for (const path of [testDbPath, `${testDbPath}-shm`, `${testDbPath}-wal`]) {
 			if (existsSync(path)) {
 				unlinkSync(path);

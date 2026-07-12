@@ -11,6 +11,7 @@ function readSource(filePath: string) {
 	return readFileSync(resolve(srcRoot, filePath), "utf8");
 }
 
+// Regression rationale: destructive share actions must remain visible together on desktop instead of wrapping apart.
 describe("share dialog layout contract", () => {
 	it("keeps active share regenerate and revoke actions in one stable desktop row", () => {
 		const css = readSource("components/ShareDialog.module.css");

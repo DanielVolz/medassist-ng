@@ -17,6 +17,7 @@ function blockFor(css: string, selector: string) {
 	return match?.[1] ?? "";
 }
 
+// Regression rationale: settings controls must remain compact enough to keep their labels and actions usable in the shared card.
 describe("settings language select layout contract", () => {
 	it("keeps the language select compact inside the settings card", () => {
 		const css = readSource("pages/SettingsPage.module.css");

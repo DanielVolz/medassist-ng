@@ -17,6 +17,7 @@ function cssBlock(css: string, selector: string) {
 	return match?.[1] ?? "";
 }
 
+// Regression rationale: desktop and mobile form controls must retain readable, usable layout across both edit implementations.
 describe("desktop medication edit layout contract", () => {
 	it("keeps tabs, scroll body, and action footer visually connected", () => {
 		const coordinatorCss = readSource("components/medications/MedicationEditCoordinator.module.css");

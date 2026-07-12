@@ -308,7 +308,6 @@ test.describe("Stock Status Levels", () => {
 		expect(modalText).toBeTruthy();
 
 		// Close modal
-		await page.waitForTimeout(350);
 		await modal.getByLabel(/Close|common\.close/i).click();
 		await expect(modal).not.toBeVisible();
 	});

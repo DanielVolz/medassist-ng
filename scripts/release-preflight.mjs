@@ -331,6 +331,20 @@ function validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage) 
     "run backend/src/test/domain-safety.test.ts"
   );
   requireScriptPattern(
+    "backend/package.json",
+    backendPackage,
+    "test:coverage",
+    /^vitest run --coverage$/,
+    "keep full developer coverage without excluding the domain safety release gate"
+  );
+  requireScriptPattern(
+    "backend/package.json",
+    backendPackage,
+    "test:coverage:ci",
+    /vitest run --coverage[\s\S]*--exclude[\s\S]*src\/test\/domain-safety\.test\.ts/,
+    "exclude the already-run domain safety release gate from CI coverage"
+  );
+  requireScriptPattern(
     "frontend/package.json",
     frontendPackage,
     "test:e2e:domain",
@@ -338,6 +352,11 @@ function validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage) 
     "run frontend/e2e/domain-safety.spec.ts"
   );
   requireTextPattern(".github/workflows/test.yml", /run:\s*npm run test:domain/, "run the domain safety release gate");
+  requireTextPattern(
+    ".github/workflows/test.yml",
+    /run:\s*npm run test:domain[\s\S]*run:\s*npm run test:coverage:ci/,
+    "run CI coverage after the domain safety release gate without re-executing it"
+  );
   requireTextPattern(
     ".github/workflows/e2e.yml",
     /run:\s*npm run test:e2e:domain/,

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// Intentional direct bootstrap harness: this suite verifies db/client's
+// import-time filesystem checks, client construction, migrations, repairs,
+// and fatal startup behavior. buildTestApp would bypass those production paths.
+
 type ClientTestOptions = {
 	dirWritable?: boolean;
 	authEnabled?: boolean;

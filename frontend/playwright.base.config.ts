@@ -28,6 +28,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 	const backendPort = parseOptionalPort(new URL(apiBaseURL).port) ?? 4175;
 	const dataDir = env.PLAYWRIGHT_DATA_DIR || DEFAULT_E2E_DATA_DIR;
 	const excludeDomainSafety = env.PLAYWRIGHT_EXCLUDE_DOMAIN_SAFETY === "true";
+	const reuseExistingServer = env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "true";
 	const parsedWorkers = Number.parseInt(env.PLAYWRIGHT_WORKERS ?? "", 10);
 	// Default to single-worker execution to keep API-seeded E2E suites deterministic.
 	// Still allow explicit local overrides via PLAYWRIGHT_WORKERS.
@@ -46,6 +47,12 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		["JWT_SECRET", "playwright-test-jwt-secret-not-for-production"],
 		["REFRESH_SECRET", "playwright-test-refresh-secret-not-for-production"],
 		["COOKIE_SECRET", "playwright-test-cookie-secret-not-for-production"],
+		// Exercise the SMTP-enabled settings branch without contacting a real mail provider.
+		// E2E tests do not send mail; they only verify the server-configured UI state.
+		["SMTP_HOST", "smtp.playwright.test"],
+		["SMTP_PORT", "2525"],
+		["SMTP_USER", "e2e@playwright.test"],
+		["SMTP_PASS", "playwright-test-smtp-password"],
 	];
 	const frontendEnv = [["BACKEND_URL", apiBaseURL]];
 	const chromiumTestIgnore = /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/;
@@ -125,17 +132,17 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		outputDir: "test-results/",
 		webServer: [
 			{
-				command: `cd ../backend && ${backendEnv
+				command: `cd ../backend && npm --prefix ../shared run build && ${backendEnv
 					.map(([key, value]) => `${key}=${shellQuote(value)}`)
-					.join(" ")} npm run dev`,
+					.join(" ")} NODE_ENV=development exec node --import tsx src/index.ts`,
 				url: `${apiBaseURL}/health`,
-				reuseExistingServer: !env.CI,
+				reuseExistingServer,
 				timeout: 120 * 1000,
 			},
 			{
-				command: `${frontendEnv.map(([key, value]) => `${key}=${shellQuote(value)}`).join(" ")} npm run dev -- --host 127.0.0.1 --port ${frontendPort} --strictPort`,
+				command: `npm --prefix ../shared run build && ${frontendEnv.map(([key, value]) => `${key}=${shellQuote(value)}`).join(" ")} exec ./node_modules/.bin/vite --host 127.0.0.1 --port ${frontendPort} --strictPort`,
 				url: baseURL,
-				reuseExistingServer: !env.CI,
+				reuseExistingServer,
 				timeout: 120 * 1000,
 			},
 		],

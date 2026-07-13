@@ -24,7 +24,6 @@ async function clickEditMed(page: Page, medName: string): Promise<void> {
 		if (await medRow.isVisible().catch(() => false)) break;
 		await page.reload();
 		await page.waitForLoadState("networkidle");
-		await page.waitForTimeout(1000);
 	}
 	await expect(medRow).toBeVisible({ timeout: 10000 });
 	await medRow.getByRole("button", { name: /Edit|common\.edit/i }).click();

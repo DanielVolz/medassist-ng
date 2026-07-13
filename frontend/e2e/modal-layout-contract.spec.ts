@@ -6,7 +6,7 @@ const PERSON_NAME = "Guard Person";
 
 async function openUserMenu(page: Page) {
 	const userMenuButton = page.getByTestId("user-menu-trigger");
-	test.skip(!(await userMenuButton.isVisible().catch(() => false)), "User menu is unavailable in this environment");
+	await expect(userMenuButton).toBeVisible();
 	await userMenuButton.click();
 }
 

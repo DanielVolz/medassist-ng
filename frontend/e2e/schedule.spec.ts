@@ -21,25 +21,21 @@ test.describe("Schedule Timeline", () => {
 	})();
 
 	async function waitForSeededScheduleData(page: Parameters<Parameters<typeof test>[0]>[0]["page"]) {
-		for (let attempt = 0; attempt < 5; attempt++) {
-			const response = await page.request.get("/api/medications").catch(() => null);
-			const medications = response?.ok() ? ((await response.json()) as Array<{ name?: string }>) : [];
-			const hasSeededMedication = medications.some((medication) => medication.name === seededName);
-
-			if (hasSeededMedication) {
-				await page.reload();
-				await page.waitForLoadState("networkidle");
-				return;
-			}
-
-			await page.waitForTimeout(1000 * (attempt + 1));
-		}
-
-		throw new Error(`Seeded medication ${seededName} did not become available via /api/medications`);
+		await expect
+			.poll(
+				async () => {
+					const response = await page.request.get("/api/medications").catch(() => null);
+					const medications = response?.ok() ? ((await response.json()) as Array<{ name?: string }>) : [];
+					return medications.some((medication) => medication.name === seededName);
+				},
+				{ message: `Seeded medication ${seededName} should be available via /api/medications` }
+			)
+			.toBeTruthy();
+		await page.reload();
+		await page.waitForLoadState("networkidle");
 	}
 
 	test.beforeAll(async () => {
-		test.setTimeout(60000);
 		await deleteAllMedicationsViaAPI();
 		await createMedicationViaAPI({
 			name: seededName,
@@ -171,13 +167,8 @@ test.describe("Schedule Timeline", () => {
 
 	test("should display share button in schedules section", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
+		await waitForSeededScheduleData(page);
 		const shareBtn = page.locator("button.share-btn");
-		const shareVisible = await shareBtn
-			.waitFor({ state: "visible", timeout: 10000 })
-			.then(() => true)
-			.catch(() => false);
-		test.skip(!shareVisible, "Share button is unavailable in this environment");
-
 		await expect(shareBtn).toBeVisible();
 	});
 });

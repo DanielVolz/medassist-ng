@@ -190,7 +190,7 @@ test.describe("Dashboard with medications", () => {
 		await expect(todayBlock).toBeVisible({ timeout: 10000 });
 
 		const takeBtn = todayBlock.getByRole("button", { name: /^Take$/ }).first();
-		test.skip(!(await takeBtn.isVisible().catch(() => false)), "No actionable take-dose button is visible for today");
+		await expect(takeBtn).toBeVisible();
 
 		const takeResponsePromise = page.waitForResponse(
 			(response) => response.url().includes("/api/doses/taken") && response.request().method() === "POST",
@@ -198,7 +198,7 @@ test.describe("Dashboard with medications", () => {
 		);
 		await takeBtn.click();
 		const takeResponse = await takeResponsePromise;
-		test.skip(!takeResponse.ok(), "Backend did not accept dose take request");
+		expect(takeResponse.ok(), `Dose take request failed with status ${takeResponse.status()}`).toBeTruthy();
 
 		await page.reload();
 		await page.waitForLoadState("networkidle");
@@ -235,7 +235,7 @@ test.describe("Dashboard with medications", () => {
 		);
 		await takeBtn.click();
 		const takeResponse = await takeResponsePromise;
-		test.skip(!takeResponse.ok(), "Backend did not accept dose take request");
+		expect(takeResponse.ok(), `Dose take request failed with status ${takeResponse.status()}`).toBeTruthy();
 
 		await page.reload();
 		await page.waitForLoadState("networkidle");

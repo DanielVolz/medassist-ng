@@ -14,7 +14,16 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      include: ["src/*.ts", "src/!(services)/**/*.ts", "src/services/coverage.ts"],
+      include: [
+        "src/*.ts",
+        "src/!(services)/**/*.ts",
+        "src/services/coverage.ts",
+        "src/services/current-stock.ts",
+        "src/services/planner-demand.ts",
+        "src/services/reminder-scheduler.ts",
+        "src/services/public-share-service.ts",
+        "src/services/share-token-service.ts",
+      ],
       exclude: [
         "src/test/**",
         "src/**/*.d.ts",

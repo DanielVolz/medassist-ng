@@ -1,9 +1,5 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/libsql/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/db-utils.js";
-import { insertScheduledTestMedication } from "./setup.js";
+import { buildTestApp, closeTestApp, insertScheduledTestMedication, type TestContext } from "./setup.js";
 
 const { testClient, testDb } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -23,10 +19,6 @@ vi.mock("../db/client.js", () => ({
 }));
 
 const { dismissDosesForUser, markDoseTakenForUser } = await import("../services/dose-tracking-service.js");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM dose_tracking");
@@ -74,13 +66,14 @@ async function insertDose(options: {
 }
 
 describe("dose-tracking-service", () => {
+	let context: TestContext;
+
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
+		context = await buildTestApp({ client: testClient });
 	});
 
-	afterAll(() => {
-		testClient.close();
+	afterAll(async () => {
+		await closeTestApp(context);
 	});
 
 	beforeEach(async () => {

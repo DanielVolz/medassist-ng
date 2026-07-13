@@ -133,8 +133,7 @@ export const test = base.extend<object>({
 
 /**
  * Wait for the app to be fully loaded past any loading/initializing screens.
- * Retries up to 2 times with page reload to handle transient auth or
- * rate-limit failures.
+ * Retries with a page reload when the observable app shell does not render.
  */
 export async function waitForAppReady(page: Page): Promise<void> {
 	const appHeader = page.getByTestId("app-header");
@@ -144,16 +143,6 @@ export async function waitForAppReady(page: Page): Promise<void> {
 			return;
 		} catch {
 			if (attempt === 2) throw new Error("App failed to become ready after 3 attempts");
-			// Check for rate-limit error displayed in UI
-			const rateLimited = await page
-				.locator("text=rate limit, text=429, text=too many")
-				.first()
-				.isVisible()
-				.catch(() => false);
-			if (rateLimited) {
-				// Wait longer before retrying if rate-limited
-				await page.waitForTimeout(5000);
-			}
 			await page.reload();
 		}
 	}
@@ -161,14 +150,11 @@ export async function waitForAppReady(page: Page): Promise<void> {
 
 /**
  * Navigate to a page and wait for it to be ready.
- * Handles transient navigation failures with a single retry.
  */
 export async function navigateTo(page: Page, path: string): Promise<void> {
 	const response = await page.goto(path);
 	if (response && response.status() === 429) {
-		// Rate-limited — wait and retry once
-		await page.waitForTimeout(5000);
-		await page.goto(path);
+		throw new Error(`E2E server rate-limited navigation to ${path}; expected RATE_LIMIT_MAX to prevent this`);
 	}
 	await waitForAppReady(page);
 	await page.waitForLoadState("networkidle");
@@ -258,12 +244,6 @@ function extractCookieValue(setCookieHeaders: string[], name: string): string | 
 		if (value) return value;
 	}
 	return null;
-}
-
-async function waitForRetryAfter(response: Response, attempt: number): Promise<void> {
-	const retryAfterSeconds = Number.parseInt(response.headers.get("retry-after") ?? "", 10);
-	const delayMs = Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : 3000 * (attempt + 1);
-	await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 async function refreshAuthCookieViaLogin(): Promise<string | null> {
@@ -416,8 +396,7 @@ export async function createMedicationViaAPI(data: {
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await waitForRetryAfter(res, attempt);
-			continue;
+			throw new Error("E2E server rate-limited medication creation; expected RATE_LIMIT_MAX to prevent this");
 		}
 		if (!res.ok) {
 			const text = await res.text();
@@ -445,8 +424,7 @@ export async function deleteMedicationViaAPI(id: number): Promise<void> {
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await waitForRetryAfter(res, attempt);
-			continue;
+			throw new Error("E2E server rate-limited medication deletion; expected RATE_LIMIT_MAX to prevent this");
 		}
 		return;
 	}
@@ -468,8 +446,7 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await waitForRetryAfter(res, attempt);
-			continue;
+			throw new Error("E2E server rate-limited medication cleanup; expected RATE_LIMIT_MAX to prevent this");
 		}
 		if (!res.ok) return;
 		const meds = (await res.json()) as TestMedication[];
@@ -484,8 +461,7 @@ export async function deleteAllMedicationsViaAPI(): Promise<void> {
 					if (token) continue;
 				}
 				if (delRes.status === 429) {
-					await waitForRetryAfter(delRes, delAttempt);
-					continue;
+					throw new Error("E2E server rate-limited medication cleanup; expected RATE_LIMIT_MAX to prevent this");
 				}
 				break;
 			}
@@ -525,15 +501,12 @@ export async function createShareTokenViaAPI(
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await waitForRetryAfter(res, attempt);
-			continue;
+			throw new Error("E2E server rate-limited share token creation; expected RATE_LIMIT_MAX to prevent this");
 		}
 		if (res.status === 400) {
 			const text = await res.text();
 			if (text.includes('"code":"NO_MEDICATIONS"') && attempt < 4) {
-				// Freshly seeded E2E medication data can lag briefly behind the share lookup.
-				await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-				continue;
+				throw new Error("Share token creation did not observe the medication returned by the E2E seed request");
 			}
 			throw new Error(`Failed to create share token: ${res.status} ${text}`);
 		}

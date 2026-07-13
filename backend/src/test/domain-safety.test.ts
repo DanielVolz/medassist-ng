@@ -1,14 +1,9 @@
 import { existsSync, unlinkSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/db-utils.js";
 import { doseTracking, medications } from "../db/schema.js";
 import { computeMedicationCurrentStock } from "../services/current-stock.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
 import {
 	countScheduledOccurrencesInRange,
 	forEachScheduledOccurrenceInRange,
@@ -23,6 +18,7 @@ import {
 	scheduleCorpus,
 	stockPropertyCorpus,
 } from "./fixtures/domain-safety-corpus.js";
+import { buildTestApp, closeTestApp } from "./setup.js";
 
 const { testClient, testDb, testDbPath, mockedEnv } = vi.hoisted(() => {
 	const { tmpdir } = require("node:os");
@@ -68,10 +64,6 @@ const { doseRoutes } = await import("../routes/doses.js");
 const { shareRoutes } = await import("../routes/share.js");
 const { exportRoutes } = await import("../routes/export.js");
 const { refillRoutes } = await import("../routes/refills.js");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 type MedicationPayload = {
 	name: string;
@@ -315,9 +307,8 @@ describe("Domain safety corpus: real route and service flows", () => {
 	let app: FastifyInstance;
 
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
-		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
+		const context = await buildTestApp({ client: testClient });
+		app = context.app;
 		await app.register(medicationRoutes);
 		await app.register(shareRoutes);
 		await app.register(doseRoutes);
@@ -327,8 +318,7 @@ describe("Domain safety corpus: real route and service flows", () => {
 	});
 
 	afterAll(async () => {
-		await app.close();
-		testClient.close();
+		await closeTestApp({ app, db: testDb, client: testClient });
 		if (existsSync(testDbPath)) {
 			unlinkSync(testDbPath);
 		}

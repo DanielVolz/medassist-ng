@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { authFile, navigateTo, test } from "./fixtures";
+import { authFile, navigateTo, test, updateSettingsViaAPI } from "./fixtures";
 
 const smtpUnavailablePattern = /stay unavailable until SMTP is configured|bleiben deaktiviert, bis SMTP/i;
 
@@ -11,6 +11,16 @@ const smtpUnavailablePattern = /stay unavailable until SMTP is configured|bleibe
  */
 test.describe("Settings Page", () => {
 	test.use({ storageState: authFile });
+
+	test.beforeEach(async () => {
+		await updateSettingsViaAPI({
+			emailEnabled: true,
+			notificationEmail: "settings-e2e@playwright.test",
+			emailStockReminders: true,
+			emailIntakeReminders: true,
+			emailPrescriptionReminders: true,
+		});
+	});
 
 	test("should display settings form", async ({ page }) => {
 		await navigateTo(page, "/settings");
@@ -62,7 +72,6 @@ test.describe("Settings Page", () => {
 				.toBe("inside");
 
 			await page.evaluate(() => document.dispatchEvent(new Event("touchmove", { bubbles: true })));
-			await page.waitForTimeout(2800);
 			await expect(tooltip).toBeVisible();
 
 			await page.touchscreen.tap(20, 820);
@@ -129,24 +138,14 @@ test.describe("Settings Page", () => {
 	test("should keep the email toggle enabled when the settings API returns smtp configuration", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const settingsResponse = await page.evaluate(async () => {
-			const response = await fetch("/api/settings", { credentials: "include" });
-			const body = await response.json().catch(() => null);
-			return {
-				ok: response.ok,
-				status: response.status,
-				body,
-			};
-		});
-
-		test.skip(!settingsResponse.ok, `Settings request failed with status ${settingsResponse.status}`);
-		test.skip(!settingsResponse.body?.smtpHost, "SMTP is not configured in this environment");
-
-		const emailSection = page.getByTestId("settings-notification-card");
 		const emailToggle = page.getByTestId("settings-email-enabled-toggle").locator('input[type="checkbox"]');
+		const smtpTooltip = page.getByRole("button", { name: /SMTP: smtp\.playwright\.test:2525/ });
 
+		await expect(emailToggle).toBeChecked();
 		await expect(emailToggle).toBeEnabled();
-		await expect(emailSection.getByText(smtpUnavailablePattern)).toHaveCount(0);
+		await expect(smtpTooltip).toBeVisible();
+		await smtpTooltip.hover();
+		await expect(page.getByRole("tooltip").filter({ hasText: /SMTP: smtp\.playwright\.test:2525/ })).toBeVisible();
 	});
 
 	test("should show stock settings section with threshold inputs", async ({ page }) => {
@@ -203,20 +202,11 @@ test.describe("Settings Page", () => {
 		await navigateTo(page, "/settings");
 
 		const generateButton = page.getByRole("button", { name: /Generate key|Key erzeugen/i });
-		test.skip(
-			!(await generateButton.isVisible().catch(() => false)),
-			"API key action is unavailable in this environment"
-		);
+		await expect(generateButton).toBeVisible();
 
 		await generateButton.click();
 
-		const tokenInput = page.locator(".api-key-token-input");
-		const tokenVisible = await tokenInput
-			.waitFor({ state: "visible", timeout: 5000 })
-			.then(() => true)
-			.catch(() => false);
-		test.skip(!tokenVisible, "API key token UI is unavailable in this environment");
-
+		const tokenInput = page.getByTestId("settings-api-key-token");
 		await expect(tokenInput).toBeVisible();
 		await expect(tokenInput).toHaveValue(/^ma_/);
 	});
@@ -233,35 +223,17 @@ test.describe("Settings Page", () => {
 	test("should toggle a notification switch", async ({ page }) => {
 		await navigateTo(page, "/settings");
 
-		const matrix = page.getByTestId("settings-notification-matrix");
-		const toggles = matrix.locator('input[type="checkbox"]');
-		const count = await toggles.count();
+		const emailStockToggle = page.getByTestId("settings-email-stock-reminders-toggle");
 
-		let enabledToggle = null as null | ReturnType<typeof toggles.nth>;
-		for (let i = 0; i < count; i++) {
-			const toggle = toggles.nth(i);
-			const isDisabled = !(await toggle.isEnabled());
-			if (!isDisabled) {
-				enabledToggle = toggle;
-				break;
-			}
-		}
+		await expect(emailStockToggle).toBeEnabled();
+		await expect(emailStockToggle).toBeChecked();
 
-		test.skip(!enabledToggle, "All notification toggles are disabled in this environment");
-
-		const initialState = await enabledToggle.isChecked();
-
-		await enabledToggle.click();
-
-		if (initialState) {
-			await expect(enabledToggle).not.toBeChecked();
-		} else {
-			await expect(enabledToggle).toBeChecked();
-		}
-
-		// Toggle back to restore original state
-		await enabledToggle.click();
-		await expect(enabledToggle).toHaveJSProperty("checked", initialState);
+		const settingsSaved = page.waitForResponse(
+			(response) => response.url().includes("/api/settings") && response.request().method() === "PUT"
+		);
+		await emailStockToggle.locator("..").click();
+		await expect((await settingsSaved).ok()).toBe(true);
+		await expect(emailStockToggle).not.toBeChecked();
 	});
 
 	test("should validate stock thresholds", async ({ page }) => {
@@ -280,7 +252,7 @@ test.describe("Settings Page", () => {
 		await navigateTo(page, "/dashboard");
 
 		const userMenuButton = page.getByTestId("user-menu-trigger");
-		test.skip(!(await userMenuButton.isVisible().catch(() => false)), "User menu is unavailable when auth is disabled");
+		await expect(userMenuButton).toBeVisible();
 
 		// Open user menu
 		await userMenuButton.click();

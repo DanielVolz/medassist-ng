@@ -10,7 +10,7 @@ import {
 
 async function requireUserMenu(page: Parameters<Parameters<typeof test>[0]>[0]["page"]) {
 	const userMenuButton = page.getByTestId("user-menu-trigger");
-	test.skip(!(await userMenuButton.isVisible().catch(() => false)), "User menu is unavailable in this environment");
+	await expect(userMenuButton).toBeVisible();
 	return userMenuButton;
 }
 

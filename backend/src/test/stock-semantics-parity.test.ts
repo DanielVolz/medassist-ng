@@ -1,10 +1,6 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlterMigrations } from "../db/db-utils.js";
-import { documentationSchemaAjv } from "../utils/documentation-schema-keywords.js";
+import { buildTestApp, closeTestApp } from "./setup.js";
 
 const { testClient, testDb, mockedEnv } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
@@ -38,10 +34,6 @@ vi.mock("../plugins/auth.js", () => ({
 
 const { medicationRoutes } = await import("../routes/medications.js");
 const { getMedicationsNeedingReminderForTests } = await import("../services/reminder-scheduler.js");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const migrationsFolder = resolve(__dirname, "../../drizzle");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM refill_history");
@@ -176,16 +168,14 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 	let app: FastifyInstance;
 
 	beforeAll(async () => {
-		await migrate(testDb, { migrationsFolder });
-		await runAlterMigrations(testClient);
-		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
+		const context = await buildTestApp({ client: testClient });
+		app = context.app;
 		await app.register(medicationRoutes);
 		await app.ready();
 	});
 
 	afterAll(async () => {
-		await app.close();
-		testClient.close();
+		await closeTestApp({ app, db: testDb, client: testClient });
 	});
 
 	beforeEach(async () => {

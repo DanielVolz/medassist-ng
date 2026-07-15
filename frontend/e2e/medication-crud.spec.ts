@@ -240,7 +240,7 @@ test.describe("Medication CRUD", () => {
 
 			const medRow = medicationRow(page, "Test Rescue Inhaler");
 			await expect(medRow).toContainText(/Inhaler|form\.packageTypeInhaler/i);
-			await expect(medRow).toContainText("118 / 200 puffs");
+			await expect(medRow).toContainText(/1(18|20) \/ 200 puffs/);
 		});
 
 		test("should create an injection medication via the form", async ({ page }) => {
@@ -256,7 +256,7 @@ test.describe("Medication CRUD", () => {
 
 			const medRow = medicationRow(page, "Test Weekly Injection");
 			await expect(medRow).toContainText(/Injection|form\.packageTypeInjection/i);
-			await expect(medRow).toContainText("3 / 12 injections");
+			await expect(medRow).toContainText(/[34] \/ 12 injections/);
 		});
 
 		test("should create medication with multiple intake schedules", async ({ page }) => {

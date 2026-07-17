@@ -1057,6 +1057,7 @@ describe("MobileEditModal optional fields", () => {
 		render(<MobileEditModal {...defaultProps} form={form} />);
 
 		expect(screen.getByText(/form\.blisters\.takenByIntake/i)).toBeInTheDocument();
+		expect(document.querySelector('.blister-row select option[value=""]')).toHaveTextContent("common.none");
 		expect(document.querySelector('.blister-row select option[value="John"]')).toBeInTheDocument();
 	});
 

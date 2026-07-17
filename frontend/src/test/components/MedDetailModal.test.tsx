@@ -778,24 +778,28 @@ describe("MedDetailModal intake schedule usage display", () => {
 		vi.clearAllMocks();
 	});
 
-	it("does not multiply usage by personCount when intakes have per-intake takenBy", () => {
+	it("shows the assigned person for every per-intake schedule row", () => {
 		// Two people at medication level, but each intake has its own takenBy
 		const med: Medication = {
 			...mockMedication,
 			takenBy: ["Alice", "Bob"],
 			blisters: [
-				{ usage: 1, every: 1, start: "2024-01-01T09:00:00" },
-				{ usage: 1, every: 1, start: "2024-01-01T21:00:00" },
+				{ usage: 1, every: 1, start: "2024-01-01T07:00:00" },
+				{ usage: 1, every: 1, start: "2024-01-01T20:00:00" },
 			],
 			intakes: [
-				{ usage: 1, every: 1, start: "2024-01-01T09:00:00", takenBy: "Alice", intakeRemindersEnabled: false },
-				{ usage: 1, every: 1, start: "2024-01-01T21:00:00", takenBy: "Bob", intakeRemindersEnabled: false },
+				{ usage: 1, every: 1, start: "2024-01-01T07:00:00", takenBy: "Alice", intakeRemindersEnabled: false },
+				{ usage: 1, every: 1, start: "2024-01-01T20:00:00", takenBy: "Bob", intakeRemindersEnabled: false },
 			],
 		};
 		render(<MedDetailModal {...defaultProps} selectedMed={med} />);
 
 		expect(screen.getAllByText("1 common.pill")).toHaveLength(2);
 		expect(screen.queryByText(/^2 common\.pills$/)).not.toBeInTheDocument();
+		const scheduleRows = document.querySelectorAll<HTMLElement>('[class*="med-schedule-row"]');
+		expect(scheduleRows).toHaveLength(2);
+		expect(within(scheduleRows[0]).getByText("Alice")).toBeInTheDocument();
+		expect(within(scheduleRows[1]).getByText("Bob")).toBeInTheDocument();
 	});
 
 	it("opens the user filter from per-intake person names", () => {

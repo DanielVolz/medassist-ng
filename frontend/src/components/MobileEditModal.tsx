@@ -1077,6 +1077,7 @@ export function MobileEditModal({
 															value={intake.takenBy}
 															onChange={(e) => onSetIntakeValue(idx, "takenBy", e.target.value)}
 														>
+															<option value="">{t("common.none")}</option>
 															{form.takenBy.map((person) => (
 																<option key={person} value={person}>
 																	{person}

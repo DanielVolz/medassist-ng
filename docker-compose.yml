@@ -2,7 +2,7 @@ name: medassist-ng
 
 services:
   backend:
-    image: ghcr.io/danielvolz/medassist-ng-backend:1.30.4
+    image: ghcr.io/danielvolz/medassist-ng-backend:1.31.0
     container_name: medassist-ng-backend
     env_file:
       - .env
@@ -35,7 +35,7 @@ services:
       start_period: 30s
 
   frontend:
-    image: ghcr.io/danielvolz/medassist-ng-frontend:1.30.4
+    image: ghcr.io/danielvolz/medassist-ng-frontend:1.31.0
     container_name: medassist-ng-frontend
     env_file:
       - .env

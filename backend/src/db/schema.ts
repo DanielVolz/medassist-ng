@@ -1,21 +1,29 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // =============================================================================
 // Users - Simple auth, no roles (every user is equal)
 // =============================================================================
-export const users = sqliteTable("users", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
-	username: text("username", { length: 100 }).notNull().unique(),
-	passwordHash: text("password_hash", { length: 255 }),
-	avatarUrl: text("avatar_url", { length: 255 }),
-	authProvider: text("auth_provider", { length: 50 }).notNull().default("local"),
-	oidcSubject: text("oidc_subject", { length: 255 }), // OIDC provider's unique user ID (sub claim)
-	isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-	lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
-	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+export const users = sqliteTable(
+	"users",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		username: text("username", { length: 100 }).notNull().unique(),
+		email: text("email", { length: 255 }),
+		passwordHash: text("password_hash", { length: 255 }),
+		credentialVersion: integer("credential_version").notNull().default(0),
+		avatarUrl: text("avatar_url", { length: 255 }),
+		authProvider: text("auth_provider", { length: 50 }).notNull().default("local"),
+		oidcSubject: text("oidc_subject", { length: 255 }), // OIDC provider's unique user ID (sub claim)
+		isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+		lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+		updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+	},
+	(table) => [
+		uniqueIndex("users_email_lower_unique").on(sql`lower(${table.email})`).where(sql`${table.email} IS NOT NULL`),
+	]
+);
 
 // =============================================================================
 // Medications - Per user
@@ -149,6 +157,27 @@ export const refreshTokens = sqliteTable("refresh_tokens", {
 	revoked: integer("revoked", { mode: "boolean" }).notNull().default(false),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// =============================================================================
+// Password Reset Tokens - Hashed, one-time local-password recovery credentials
+// =============================================================================
+export const passwordResetTokens = sqliteTable(
+	"password_reset_tokens",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		userId: integer("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		tokenHash: text("token_hash", { length: 64 }).notNull().unique(),
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		usedAt: integer("used_at", { mode: "timestamp" }),
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+	},
+	(table) => [
+		index("password_reset_tokens_user_id_idx").on(table.userId),
+		index("password_reset_tokens_expires_at_idx").on(table.expiresAt),
+	]
+);
 
 // =============================================================================
 // API Keys - Personal access tokens for programmatic API access

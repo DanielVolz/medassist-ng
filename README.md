@@ -248,7 +248,8 @@ Optional but commonly needed:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PUBLIC_APP_URL` | — | Public base URL for notification action and share links |
+| `PUBLIC_APP_URL` | — | Public base URL for notification, share, and local password-reset links; production reset links require HTTPS and never use request Host headers |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` or `SMTP_TOKEN`, `SMTP_FROM` | — | Required with `PUBLIC_APP_URL` to enable local-password reset emails; OIDC-only accounts are excluded |
 
 Detailed configuration references:
 

@@ -31,7 +31,7 @@ async function openDeleteAccountConfirmation() {
 }
 
 function getUsernameInput() {
-	return screen.getByRole("textbox", { name: /auth\.username/i });
+	return screen.getByRole("textbox", { name: /auth\.(username|emailOrUsername)/i });
 }
 
 describe("AuthProvider", () => {
@@ -377,7 +377,7 @@ describe("RegisterForm", () => {
 	};
 
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.resetAllMocks();
 		(global.fetch as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({
 				ok: true,
@@ -474,6 +474,7 @@ describe("RegisterForm", () => {
 		});
 
 		fireEvent.change(getUsernameInput(), { target: { value: "new-user" } });
+		fireEvent.change(screen.getByLabelText(/auth\.email/i), { target: { value: "new-user@example.com" } });
 		fireEvent.change(screen.getByLabelText(/auth\.password/i), { target: { value: "password123" } });
 		fireEvent.change(screen.getByLabelText(/auth\.confirmPassword/i), { target: { value: "different123" } });
 		fireEvent.click(screen.getByRole("button", { name: /auth\.register/i }));
@@ -539,26 +540,210 @@ describe("AuthPage", () => {
 			expect(screen.getByRole("button", { name: /^auth\.register$/i })).toBeInTheDocument();
 		});
 	});
+
+	it("submits a generic password-recovery request when the capability is enabled", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockReset()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ ...mockAuthState, passwordResetEnabled: true }),
+			})
+			.mockResolvedValueOnce({ status: 401, ok: false })
+			.mockResolvedValueOnce({ ok: true });
+
+		render(
+			<AuthProvider>
+				<AuthPage />
+			</AuthProvider>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: /auth\.forgotPassword/i })).toBeInTheDocument();
+		});
+		fireEvent.click(screen.getByRole("button", { name: /auth\.forgotPassword/i }));
+		fireEvent.change(screen.getByLabelText(/auth\.emailOrUsername/i), { target: { value: "user@example.com" } });
+		fireEvent.click(screen.getByRole("button", { name: /auth\.sendResetLink/i }));
+
+		await waitFor(() => {
+			expect(fetch).toHaveBeenCalledWith("/api/auth/forgot-password", expect.objectContaining({ method: "POST" }));
+		});
+		expect(screen.getByText(/auth\.resetEmailSent/i)).toBeInTheDocument();
+	});
+
+	it("disables forgot-password submit while its request is in flight", async () => {
+		let resolveForgotPassword: (value: { ok: boolean }) => void;
+		const forgotPasswordRequest = new Promise<{ ok: boolean }>((resolve) => {
+			resolveForgotPassword = resolve;
+		});
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockReset()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ ...mockAuthState, passwordResetEnabled: true }),
+			})
+			.mockResolvedValueOnce({ status: 401, ok: false })
+			.mockReturnValueOnce(forgotPasswordRequest);
+
+		render(
+			<AuthProvider>
+				<AuthPage />
+			</AuthProvider>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: /auth\.forgotPassword/i })).toBeInTheDocument();
+		});
+		fireEvent.click(screen.getByRole("button", { name: /auth\.forgotPassword/i }));
+		fireEvent.change(screen.getByLabelText(/auth\.emailOrUsername/i), { target: { value: "user@example.com" } });
+		const submit = screen.getByRole("button", { name: /auth\.sendResetLink/i });
+		fireEvent.click(submit);
+
+		await waitFor(() => {
+			expect(submit).toBeDisabled();
+		});
+		resolveForgotPassword!({ ok: true });
+		await waitFor(() => {
+			expect(screen.getByText(/auth\.resetEmailSent/i)).toBeInTheDocument();
+		});
+	});
+
+	it("shows password recovery when registration is disabled", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockReset()
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ ...mockAuthState, registrationEnabled: false, passwordResetEnabled: true }),
+			})
+			.mockResolvedValueOnce({ status: 401, ok: false });
+
+		render(
+			<AuthProvider>
+				<AuthPage />
+			</AuthProvider>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: /auth\.forgotPassword/i })).toBeInTheDocument();
+		});
+		expect(screen.queryByRole("button", { name: /auth\.createAccount/i })).not.toBeInTheDocument();
+	});
+
+	it("scrubs the reset fragment before submitting the token to the reset endpoint", async () => {
+		const token = "a".repeat(64);
+		window.location.hash = `reset-password?token=${token}`;
+		const replaceStateSpy = vi.spyOn(window.history, "replaceState");
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockReset()
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAuthState) })
+			.mockResolvedValueOnce({ status: 401, ok: false })
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 1, username: "reset-user" }) })
+			.mockResolvedValueOnce({ ok: true });
+
+		render(
+			<AuthProvider>
+				<AuthPage />
+			</AuthProvider>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByLabelText(/auth\.newPassword/i)).toBeInTheDocument();
+		});
+		expect(replaceStateSpy).toHaveBeenCalledWith({}, "", `${window.location.pathname}${window.location.search}`);
+		fireEvent.change(screen.getByLabelText(/auth\.newPassword/i), { target: { value: "NewPassword456" } });
+		fireEvent.change(screen.getByLabelText(/auth\.confirmPassword/i), { target: { value: "NewPassword456" } });
+		fireEvent.click(screen.getByRole("button", { name: /auth\.resetPassword/i }));
+
+		await waitFor(() => {
+			expect(fetch).toHaveBeenCalledWith(
+				"/api/auth/reset-password",
+				expect.objectContaining({ method: "POST", body: JSON.stringify({ token, newPassword: "NewPassword456" }) })
+			);
+		});
+		window.history.replaceState({}, "", "/");
+		replaceStateSpy.mockRestore();
+	});
+
+	it("returns to login shortly after a successful password reset", async () => {
+		vi.useFakeTimers();
+		const token = "b".repeat(64);
+		window.location.hash = `reset-password?token=${token}`;
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockReset()
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAuthState) })
+			.mockResolvedValueOnce({ status: 401, ok: false })
+			.mockResolvedValueOnce({ ok: true })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 1, username: "reset-user" }) })
+			.mockResolvedValueOnce({ ok: true });
+
+		try {
+			render(
+				<AuthProvider>
+					<AuthPage />
+				</AuthProvider>
+			);
+
+			await act(async () => {});
+			expect(screen.getByLabelText(/auth\.newPassword/i)).toBeInTheDocument();
+			fireEvent.change(screen.getByLabelText(/auth\.newPassword/i), { target: { value: "NewPassword456" } });
+			fireEvent.change(screen.getByLabelText(/auth\.confirmPassword/i), { target: { value: "NewPassword456" } });
+			await act(async () => {
+				fireEvent.click(screen.getByRole("button", { name: /auth\.resetPassword/i }));
+				await Promise.resolve();
+			});
+			expect(screen.getByText(/auth\.passwordResetSuccess/i)).toBeInTheDocument();
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(3000);
+			});
+			expect(screen.getByLabelText(/auth\.emailOrUsername/i)).toBeInTheDocument();
+			expect(screen.queryByText(/auth\.sessionExpiredTitle/i)).not.toBeInTheDocument();
+		} finally {
+			vi.useRealTimers();
+			window.history.replaceState({}, "", "/");
+		}
+	});
 });
 
 describe("UserProfile", () => {
 	const mockUser = {
 		id: 1,
 		username: "testuser",
+		email: null,
 		avatarUrl: null,
 	};
+	type ProfileUser = Omit<typeof mockUser, "email"> & { authProvider?: string; email?: string | null };
+
+	function mockProfileRequests(
+		users: ProfileUser[],
+		deleteResponse: { ok: boolean; json?: () => Promise<{ error: string }> } = { ok: true }
+	) {
+		let userResponseIndex = 0;
+		(global.fetch as ReturnType<typeof vi.fn>).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+			const path = input.toString();
+			if (path === "/api/auth/state") {
+				return Promise.resolve({
+					ok: true,
+					json: () => Promise.resolve({ authEnabled: true, formLoginEnabled: true }),
+				});
+			}
+			if (path === "/api/auth/me" && init?.method === "DELETE") {
+				return Promise.resolve(deleteResponse);
+			}
+			if (path === "/api/auth/me" && init?.method === "PUT") {
+				return Promise.resolve({ ok: true });
+			}
+			if (path === "/api/auth/me") {
+				const user = users[Math.min(userResponseIndex, users.length - 1)];
+				userResponseIndex += 1;
+				return Promise.resolve({ ok: true, json: () => Promise.resolve(user) });
+			}
+			return Promise.resolve({ ok: true });
+		});
+	}
 
 	beforeEach(() => {
-		vi.clearAllMocks();
-		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () => Promise.resolve({ authEnabled: true, formLoginEnabled: true }),
-			})
-			.mockResolvedValueOnce({
-				ok: true,
-				json: () => Promise.resolve(mockUser),
-			});
+		vi.resetAllMocks();
+		mockProfileRequests([mockUser]);
 	});
 
 	it("renders user profile when user is logged in", async () => {
@@ -594,7 +779,132 @@ describe("UserProfile", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByText(/auth\.changePassword/i)).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /^auth\.changePassword$/i })).toBeInTheDocument();
+		});
+	});
+
+	it("shows the recovery email field for a local account without an email", async () => {
+		render(
+			<AuthProvider>
+				<UserProfile />
+			</AuthProvider>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByLabelText(/auth\.email/i)).toHaveValue("");
+		});
+	});
+
+	it("refreshes a stale local user without email once to show the stored recovery email", async () => {
+		const staleUser: ProfileUser = {
+			id: 1,
+			username: "testuser",
+			avatarUrl: null,
+		};
+		mockProfileRequests([staleUser, { ...mockUser, email: "testuser@example.com" }]);
+
+		render(
+			<AuthProvider>
+				<UserProfile />
+			</AuthProvider>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByLabelText(/auth\.email/i)).toHaveValue("testuser@example.com");
+		});
+
+		const userRequests = (fetch as ReturnType<typeof vi.fn>).mock.calls.filter((call) => call[0] === "/api/auth/me");
+		expect(userRequests).toHaveLength(2);
+	});
+
+	it("shows the saved recovery email for a local account", async () => {
+		mockProfileRequests([{ ...mockUser, email: "testuser@example.com" }]);
+
+		render(
+			<AuthProvider>
+				<UserProfile />
+			</AuthProvider>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByLabelText(/auth\.email/i)).toHaveValue("testuser@example.com");
+		});
+	});
+
+	it("hides the recovery email field for an OIDC account", async () => {
+		mockProfileRequests([{ ...mockUser, authProvider: "oidc" }]);
+
+		render(
+			<AuthProvider>
+				<UserProfile />
+			</AuthProvider>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("testuser")).toBeInTheDocument();
+		});
+		expect(screen.queryByLabelText(/auth\.email/i)).not.toBeInTheDocument();
+		expect(screen.queryByLabelText(/auth\.currentPassword/i)).not.toBeInTheDocument();
+		expect(screen.queryByLabelText(/auth\.newPassword/i)).not.toBeInTheDocument();
+		expect(screen.queryByLabelText(/auth\.confirmPassword/i)).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /auth\.saveChanges/i })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^auth\.changePassword$/i })).not.toBeInTheDocument();
+	});
+
+	it("requires confirmation only after the recovery email changes and saves it separately", async () => {
+		mockProfileRequests([mockUser]);
+
+		renderUserProfile();
+
+		await waitFor(() => {
+			expect(screen.getByLabelText(/auth\.email/i)).toBeInTheDocument();
+		});
+		expect(screen.queryByLabelText(/auth\.currentPassword/i)).not.toBeInTheDocument();
+
+		fireEvent.change(screen.getByLabelText(/auth\.email/i), { target: { value: "recovery@example.com" } });
+		await waitFor(() => {
+			expect(screen.getByLabelText(/auth\.currentPassword/i)).toBeInTheDocument();
+		});
+		fireEvent.change(screen.getByLabelText(/auth\.currentPassword/i), { target: { value: "current-password" } });
+		fireEvent.click(screen.getByRole("button", { name: /auth\.saveChanges/i }));
+
+		await waitFor(() => {
+			expect(fetch).toHaveBeenCalledWith(
+				"/api/auth/me",
+				expect.objectContaining({
+					method: "PUT",
+					body: JSON.stringify({ currentPassword: "current-password", email: "recovery@example.com" }),
+				})
+			);
+		});
+	});
+
+	it("keeps password fields hidden until Change Password is selected and saves the password form separately", async () => {
+		mockProfileRequests([mockUser]);
+
+		renderUserProfile();
+
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: /^auth\.changePassword$/i })).toBeInTheDocument();
+		});
+		expect(screen.queryByLabelText(/auth\.currentPassword/i)).not.toBeInTheDocument();
+		expect(screen.queryByLabelText(/auth\.newPassword/i)).not.toBeInTheDocument();
+		expect(screen.queryByLabelText(/auth\.confirmPassword/i)).not.toBeInTheDocument();
+
+		fireEvent.click(screen.getByRole("button", { name: /^auth\.changePassword$/i }));
+		fireEvent.change(screen.getByLabelText(/auth\.currentPassword/i), { target: { value: "current-password" } });
+		fireEvent.change(screen.getByLabelText(/auth\.newPassword/i), { target: { value: "new-password-123" } });
+		fireEvent.change(screen.getByLabelText(/auth\.confirmPassword/i), { target: { value: "new-password-123" } });
+		fireEvent.click(screen.getByRole("button", { name: /auth\.updatePassword/i }));
+
+		await waitFor(() => {
+			expect(fetch).toHaveBeenCalledWith(
+				"/api/auth/me",
+				expect.objectContaining({
+					method: "PUT",
+					body: JSON.stringify({ currentPassword: "current-password", newPassword: "new-password-123" }),
+				})
+			);
 		});
 	});
 
@@ -623,9 +933,11 @@ describe("UserProfile", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByText("testuser")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /^auth\.changePassword$/i })).toBeInTheDocument();
 		});
 
+		fireEvent.click(screen.getByRole("button", { name: /^auth\.changePassword$/i }));
+		fireEvent.change(screen.getByLabelText(/auth\.currentPassword/i), { target: { value: "current-password" } });
 		fireEvent.change(screen.getByLabelText(/auth\.newPassword/i), { target: { value: "new-password-123" } });
 		fireEvent.change(screen.getByLabelText(/auth\.confirmPassword/i), { target: { value: "different-password" } });
 
@@ -638,8 +950,6 @@ describe("UserProfile", () => {
 	});
 
 	it("opens delete confirmation and executes account deletion", async () => {
-		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
-
 		renderUserProfile();
 		await openDeleteAccountConfirmation();
 
@@ -664,7 +974,7 @@ describe("UserProfile", () => {
 	});
 
 	it("shows delete error when account deletion fails", async () => {
-		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+		mockProfileRequests([mockUser], {
 			ok: false,
 			json: () => Promise.resolve({ error: "Delete failed badly" }),
 		});
@@ -696,7 +1006,7 @@ describe("AuthProvider methods", () => {
 		});
 
 		await act(async () => {
-			await result.current.register("newuser", "secure-password-123");
+			await result.current.register("newuser", "newuser@example.com", "secure-password-123");
 		});
 
 		expect(fetch).toHaveBeenCalledWith(
@@ -881,7 +1191,30 @@ describe("AuthProvider methods", () => {
 	it("marks the session as expired when refreshUser cannot recover from 401", async () => {
 		vi.clearAllMocks();
 		(global.fetch as ReturnType<typeof vi.fn>)
-			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ authEnabled: false, formLoginEnabled: true }) })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ authEnabled: true, formLoginEnabled: true }) })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 1, username: "expired-user" }) });
+
+		const { result } = renderHook(() => useAuth(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.user?.username).toBe("expired-user");
+		});
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: false, status: 401 })
+			.mockResolvedValueOnce({ ok: false, status: 401 });
+
+		await act(async () => {
+			await result.current.refreshUser();
+		});
+
+		expect(result.current.user).toBeNull();
+		expect(result.current.sessionExpired).toBe(true);
+	});
+
+	it("does not mark an initially unauthenticated visitor session as expired", async () => {
+		vi.clearAllMocks();
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ authEnabled: true, formLoginEnabled: true }) })
 			.mockResolvedValueOnce({ ok: false, status: 401 })
 			.mockResolvedValueOnce({ ok: false, status: 401 });
 
@@ -890,13 +1223,8 @@ describe("AuthProvider methods", () => {
 		await waitFor(() => {
 			expect(result.current.loading).toBe(false);
 		});
-
-		await act(async () => {
-			await result.current.refreshUser();
-		});
-
 		expect(result.current.user).toBeNull();
-		expect(result.current.sessionExpired).toBe(true);
+		expect(result.current.sessionExpired).toBe(false);
 	});
 
 	it("updateProfile throws default message when backend has no error field", async () => {

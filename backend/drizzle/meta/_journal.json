@@ -141,6 +141,13 @@
       "when": 1783107344203,
       "tag": "0019_add_intake_journal_mood",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1784389672478,
+      "tag": "0020_add_password_reset_recovery",
+      "breakpoints": true
     }
   ]
 }

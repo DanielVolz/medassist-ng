@@ -3,6 +3,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
 import { apiKeys, users } from "../db/schema.js";
+import { getSmtpConfig } from "../services/notifications/delivery.js";
 import { log } from "../utils/logger.js";
 import { env } from "./env.js";
 
@@ -50,10 +51,27 @@ export interface AuthState {
 	authEnabled: boolean;
 	registrationEnabled: boolean;
 	formLoginEnabled: boolean;
+	passwordResetEnabled: boolean;
 	oidcEnabled: boolean;
 	oidcProviderName: string;
 	hasUsers: boolean;
 	needsSetup: boolean;
+}
+
+function hasSafePublicAppUrl(): boolean {
+	if (!env.PUBLIC_APP_URL) return false;
+
+	try {
+		const publicUrl = new URL(env.PUBLIC_APP_URL);
+		return env.NODE_ENV !== "production" || publicUrl.protocol === "https:";
+	} catch {
+		return false;
+	}
+}
+
+function hasPasswordResetEmailDelivery(): boolean {
+	const smtp = getSmtpConfig();
+	return Boolean(smtp.host && smtp.user && smtp.from);
 }
 
 export async function getAuthState(): Promise<AuthState> {
@@ -69,11 +87,23 @@ export async function getAuthState(): Promise<AuthState> {
 		registrationEnabled: env.REGISTRATION_ENABLED || !hasUsers,
 		// Form login: enabled when auth + form login are both on, or forced on for first-user setup
 		formLoginEnabled: needsSetup || (env.AUTH_ENABLED && env.FORM_LOGIN_ENABLED),
+		passwordResetEnabled:
+			env.AUTH_ENABLED && env.FORM_LOGIN_ENABLED && hasSafePublicAppUrl() && hasPasswordResetEmailDelivery(),
 		oidcEnabled: env.OIDC_ENABLED,
 		oidcProviderName: env.OIDC_PROVIDER_NAME,
 		hasUsers,
 		needsSetup,
 	};
+}
+
+type SessionJwtPayload = {
+	sub: number;
+	username?: string;
+	credentialVersion?: number;
+};
+
+function hasCurrentCredentialVersion(user: typeof users.$inferSelect, credentialVersion: number | undefined): boolean {
+	return (credentialVersion ?? 0) === (user.credentialVersion ?? 0);
 }
 
 // =============================================================================
@@ -229,9 +259,9 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
 	}
 
 	try {
-		const decoded = await request.jwtVerify<{ sub: number; username: string }>();
+		const decoded = await request.jwtVerify<SessionJwtPayload>();
 		const [user] = await db.select().from(users).where(sql`${users.id} = ${decoded.sub}`);
-		if (user?.isActive) {
+		if (user?.isActive && hasCurrentCredentialVersion(user, decoded.credentialVersion)) {
 			request.user = {
 				id: user.id,
 				username: user.username,
@@ -290,6 +320,10 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 			throw new Error("ACCOUNT_DISABLED");
 		}
 
+		if (!hasCurrentCredentialVersion(user, decoded.credentialVersion)) {
+			throw new Error("CREDENTIAL_VERSION_MISMATCH");
+		}
+
 		request.user = {
 			id: user.id,
 			username: user.username,
@@ -317,8 +351,8 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 	}
 }
 
-async function appJwtVerify(request: FastifyRequest, token: string): Promise<{ sub: number; username: string }> {
-	return request.server.jwt.verify<{ sub: number; username: string }>(token);
+async function appJwtVerify(request: FastifyRequest, token: string): Promise<SessionJwtPayload> {
+	return request.server.jwt.verify<SessionJwtPayload>(token);
 }
 
 /**

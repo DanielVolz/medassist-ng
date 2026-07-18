@@ -22,6 +22,7 @@ test.describe("Auth browser session", () => {
 		page,
 	}) => {
 		const username = `auth-session-${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
+		const email = `${username}@medassist.test`;
 		const password = `E2e-${crypto.randomUUID()}-Pass1`;
 
 		await expect(context.cookies()).resolves.toEqual([]);
@@ -35,6 +36,7 @@ test.describe("Auth browser session", () => {
 		await page.getByRole("button", { name: /create account/i }).click();
 		await expect(page.getByRole("heading", { name: /create account/i })).toBeVisible();
 		await page.locator("#username").fill(username);
+		await page.locator("#email").fill(email);
 		await page.locator("#password").fill(password);
 		await page.locator("#confirmPassword").fill(password);
 		await page.getByRole("button", { name: /create account/i }).click();
@@ -104,7 +106,7 @@ test.describe("Auth browser session", () => {
 		expect((await expiredContext.request.get(`${baseURL}/api/medications`)).status()).toBe(401);
 		const expiredPage = await expiredContext.newPage();
 		await expiredPage.goto(`${baseURL}/dashboard`, { waitUntil: "domcontentloaded" });
-		await expect(expiredPage.getByText(/session expired/i)).toBeVisible();
+		await expect(expiredPage.getByText(/session expired/i)).not.toBeVisible();
 		await expect(expiredPage.getByTestId("app-header")).not.toBeVisible();
 		await expiredContext.close();
 		await restoredContext.close();

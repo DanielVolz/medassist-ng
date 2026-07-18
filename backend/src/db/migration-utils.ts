@@ -126,6 +126,8 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE share_tokens ADD COLUMN last_used_at integer`,
 		`ALTER TABLE share_tokens ADD COLUMN revoked_at integer`,
 		`ALTER TABLE intake_journal ADD COLUMN mood text NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN email text`,
+		`ALTER TABLE users ADD COLUMN credential_version integer NOT NULL DEFAULT 0`,
 	];
 
 	for (const sql of alterMigrations) {
@@ -196,6 +198,14 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 			created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
 			updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 		)`,
+		`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash TEXT NOT NULL UNIQUE,
+			expires_at INTEGER NOT NULL,
+			used_at INTEGER,
+			created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+		)`,
 	];
 
 	for (const sql of createTableMigrations) {
@@ -232,12 +242,15 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 
 	const createIndexMigrations = [
 		`CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_unique ON users(lower(username))`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique ON users(lower(email)) WHERE email IS NOT NULL`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS api_keys_key_hash_unique ON api_keys(key_hash)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS intake_journal_dose_tracking_id_unique ON intake_journal(dose_tracking_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS notification_action_groups_group_key_unique ON notification_action_groups(group_key)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS notification_action_tokens_token_hash_unique ON notification_action_tokens(token_hash)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS dose_tracking_user_id_dose_id_unique ON dose_tracking(user_id, dose_id)`,
 		`CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys(user_id)`,
+		`CREATE INDEX IF NOT EXISTS password_reset_tokens_user_id_idx ON password_reset_tokens(user_id)`,
+		`CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_at_idx ON password_reset_tokens(expires_at)`,
 	];
 
 	for (const sql of createIndexMigrations) {

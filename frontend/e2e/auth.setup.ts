@@ -307,11 +307,21 @@ setup("authenticate", async ({ page }) => {
 	};
 
 	const registerWithApi = async () => {
-		await page.request
-			.post(`${apiBaseURL}/auth/register`, {
-				data: { username: TEST_USER.username, password: TEST_USER.password },
-			})
-			.catch(() => {});
+		const response = await page.request.post(`${apiBaseURL}/auth/register`, {
+			data: {
+				username: TEST_USER.username,
+				email: "playwright@medassist.test",
+				password: TEST_USER.password,
+			},
+		});
+
+		if (response.ok() || response.status() === 409) {
+			return;
+		}
+
+		throw new Error(
+			`Playwright test-user registration failed with status ${response.status()}: ${await response.text()}`
+		);
 	};
 
 	const ensureAuthenticated = async () => {
@@ -364,7 +374,7 @@ setup("authenticate", async ({ page }) => {
 				.catch(() => false);
 
 			if (isOnRegister) {
-				const switchBtn = page.locator("button.auth-link-btn");
+				const switchBtn = page.getByRole("button", { name: /log in/i });
 				if (await switchBtn.isVisible().catch(() => false)) {
 					await switchBtn.click();
 				}

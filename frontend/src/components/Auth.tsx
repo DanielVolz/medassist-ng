@@ -19,13 +19,16 @@ import { PasswordInput } from "./PasswordInput";
 export interface User {
 	id: number;
 	username: string;
+	email?: string | null;
 	avatarUrl?: string | null;
+	authProvider?: string;
 }
 
 export interface AuthState {
 	authEnabled: boolean;
 	registrationEnabled: boolean;
 	formLoginEnabled: boolean;
+	passwordResetEnabled: boolean;
 	oidcEnabled: boolean;
 	oidcProviderName: string;
 	needsSetup: boolean;
@@ -38,10 +41,12 @@ interface AuthContextType {
 	authError: string | null;
 	sessionExpired: boolean;
 	login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
-	register: (username: string, password: string) => Promise<void>;
+	register: (username: string, email: string, password: string) => Promise<void>;
+	forgotPassword: (emailOrUsername: string) => Promise<void>;
+	resetPassword: (token: string, newPassword: string) => Promise<void>;
 	logout: () => Promise<void>;
 	refreshUser: () => Promise<void>;
-	updateProfile: (data: { currentPassword?: string; newPassword?: string }) => Promise<void>;
+	updateProfile: (data: { currentPassword?: string; email?: string; newPassword?: string }) => Promise<void>;
 	uploadAvatar: (file: File) => Promise<void>;
 	deleteAvatar: () => Promise<void>;
 	deleteAccount: () => Promise<void>;
@@ -135,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const [sessionExpired, setSessionExpired] = useState(false);
 	// Track if initial fetch has been done to prevent duplicate calls
 	const initialFetchDone = useRef(false);
+	const hadAuthenticatedSession = useRef(false);
 
 	// Fetch auth state on mount (only once)
 	useEffect(() => {
@@ -183,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			if (state.authEnabled) {
 				await refreshUser();
 			} else {
+				hadAuthenticatedSession.current = false;
 				setSessionExpired(false);
 			}
 			setLoading(false);
@@ -209,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			if (res.ok) {
 				const userData = await res.json();
 				setUser(userData);
+				hadAuthenticatedSession.current = true;
 				setSessionExpired(false);
 				log.debug("[Auth] Session user loaded", { userId: userData.id, correlationId });
 			} else if (res.status === 401) {
@@ -222,6 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					if (retryRes.ok) {
 						const userData = await retryRes.json();
 						setUser(userData);
+						hadAuthenticatedSession.current = true;
 						setSessionExpired(false);
 						log.info("[Auth] Session restored after token refresh", {
 							userId: userData.id,
@@ -232,7 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				}
 				log.debug("[Auth] Session refresh unavailable, clearing local user state", { correlationId });
 				setUser(null);
-				setSessionExpired(true);
+				setSessionExpired(hadAuthenticatedSession.current);
 			} else {
 				log.warn("[Auth] Unexpected /auth/me response", { status: res.status, correlationId });
 				setUser(null);
@@ -289,17 +298,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 		const data = await res.json();
 		setUser(data.user);
+		hadAuthenticatedSession.current = true;
 		setSessionExpired(false);
 		log.info("[Auth] Login successful", { userId: data.user?.id, username: data.user?.username, correlationId });
 	}
 
-	async function register(username: string, password: string) {
+	async function register(username: string, email: string, password: string) {
 		const { correlationId, init } = withCorrelation(
 			{
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				credentials: "include",
-				body: JSON.stringify({ username, password }),
+				body: JSON.stringify({ username, email, password }),
 			},
 			"fe-auth-register"
 		);
@@ -319,6 +329,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		await fetchAuthState();
 	}
 
+	async function forgotPassword(emailOrUsername: string) {
+		const { init } = withCorrelation(
+			{ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ emailOrUsername }) },
+			"fe-auth-forgot-password"
+		);
+		await fetch("/api/auth/forgot-password", init);
+	}
+
+	async function resetPassword(token: string, newPassword: string) {
+		const { init } = withCorrelation(
+			{ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, newPassword }) },
+			"fe-auth-reset-password"
+		);
+		const res = await fetch("/api/auth/reset-password", init);
+		if (!res.ok) throw new Error("RESET_FAILED");
+		setUser(null);
+		hadAuthenticatedSession.current = false;
+		setSessionExpired(false);
+	}
+
 	async function logout() {
 		const { correlationId, init } = withCorrelation(
 			{
@@ -330,11 +360,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		log.info("[Auth] Logout requested", { userId: user?.id ?? null, correlationId });
 		await fetch("/api/auth/logout", init);
 		setUser(null);
+		hadAuthenticatedSession.current = false;
 		setSessionExpired(false);
 		log.info("[Auth] Logout completed", { correlationId });
 	}
 
-	async function updateProfile(data: { currentPassword?: string; newPassword?: string }) {
+	async function updateProfile(data: { currentPassword?: string; email?: string; newPassword?: string }) {
 		const { correlationId, init } = withCorrelation(
 			{
 				method: "PUT",
@@ -425,6 +456,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		}
 
 		setUser(null);
+		hadAuthenticatedSession.current = false;
+		setSessionExpired(false);
 	}
 
 	// Fetch wrapper that automatically refreshes token on 401
@@ -473,7 +506,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				} else {
 					// Refresh failed - user needs to login again
 					setUser(null);
-					setSessionExpired(true);
+					setSessionExpired(hadAuthenticatedSession.current);
 				}
 			}
 
@@ -502,6 +535,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				sessionExpired,
 				login,
 				register,
+				forgotPassword,
+				resetPassword,
 				logout,
 				refreshUser,
 				updateProfile,
@@ -522,9 +557,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function LoginForm({
 	onSuccess,
 	onSwitchToRegister,
+	onSwitchToForgot,
 }: {
 	onSuccess?: () => void;
 	onSwitchToRegister?: () => void;
+	onSwitchToForgot?: () => void;
 }) {
 	const { t } = useTranslation();
 	const { login, authState, sessionExpired } = useAuth();
@@ -597,7 +634,7 @@ export function LoginForm({
 						{error && <div className={classes["auth-error"]}>{error}</div>}
 
 						<div className={classes.formGroup}>
-							<label htmlFor="username">{t("auth.username", "Username")}</label>
+							<label htmlFor="username">{t("auth.emailOrUsername")}</label>
 							<input
 								id="username"
 								type="text"
@@ -632,13 +669,21 @@ export function LoginForm({
 					</form>
 				)}
 
-				{authState?.registrationEnabled && authState?.formLoginEnabled && onSwitchToRegister && (
-					<div className={classes["auth-links"]}>
-						<button type="button" className={classes["auth-link-btn"]} onClick={onSwitchToRegister}>
-							{t("auth.createAccount", "Create account")}
-						</button>
-					</div>
-				)}
+				{authState?.formLoginEnabled &&
+					(onSwitchToForgot || (authState?.registrationEnabled && onSwitchToRegister)) && (
+						<div className={classes["auth-links"]}>
+							{authState.passwordResetEnabled && onSwitchToForgot && (
+								<button type="button" className={classes["auth-link-btn"]} onClick={onSwitchToForgot}>
+									{t("auth.forgotPassword")}
+								</button>
+							)}
+							{authState.registrationEnabled && onSwitchToRegister && (
+								<button type="button" className={classes["auth-link-btn"]} onClick={onSwitchToRegister}>
+									{t("auth.createAccount", "Create account")}
+								</button>
+							)}
+						</div>
+					)}
 			</div>
 		</div>
 	);
@@ -651,6 +696,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 	const { t } = useTranslation();
 	const { register, authState } = useAuth();
 	const [username, setUsername] = useState("");
+	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [error, setError] = useState("");
@@ -668,7 +714,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 		setLoading(true);
 
 		try {
-			await register(username, password);
+			await register(username, email, password);
 			onSuccess?.();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Registration failed");
@@ -736,6 +782,18 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 						</div>
 
 						<div className={classes.formGroup}>
+							<label htmlFor="email">{t("auth.email")} *</label>
+							<input
+								id="email"
+								type="email"
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								required
+								autoComplete="email"
+							/>
+						</div>
+
+						<div className={classes.formGroup}>
 							<label htmlFor="password">{t("auth.password", "Password")} *</label>
 							<PasswordInput
 								id="password"
@@ -777,15 +835,146 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: { onSuccess?: () =>
 	);
 }
 
+function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+	const { t } = useTranslation();
+	const { forgotPassword } = useAuth();
+	const [emailOrUsername, setEmailOrUsername] = useState("");
+	const [sent, setSent] = useState(false);
+	const [sending, setSending] = useState(false);
+	return (
+		<div className={cx(classes["auth-container"], "auth-container")}>
+			<div className={classes["auth-panel"]}>
+				<h1 className={classes["auth-title"]}>MedAssist-ng</h1>
+				<h2 className={classes["auth-subtitle"]}>{t("auth.passwordReset")}</h2>
+				{sent ? (
+					<div className={classes["auth-success"]}>{t("auth.resetEmailSent")}</div>
+				) : (
+					<form
+						className={classes["auth-form"]}
+						onSubmit={async (event) => {
+							event.preventDefault();
+							if (sending) return;
+							setSending(true);
+							try {
+								await forgotPassword(emailOrUsername);
+								setSent(true);
+							} finally {
+								setSending(false);
+							}
+						}}
+					>
+						<div className={classes.formGroup}>
+							<label htmlFor="recovery-identifier">{t("auth.emailOrUsername")}</label>
+							<input
+								id="recovery-identifier"
+								value={emailOrUsername}
+								onChange={(event) => setEmailOrUsername(event.target.value)}
+								required
+							/>
+						</div>
+						<AppButton type="submit" className={classes["auth-submit"]} disabled={sending}>
+							{sending ? t("common.sending") : t("auth.sendResetLink")}
+						</AppButton>
+					</form>
+				)}
+				<div className={classes["auth-links"]}>
+					<button type="button" className={classes["auth-link-btn"]} onClick={onBack}>
+						{t("auth.backToLogin")}
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function ResetPasswordForm({ token, onBack }: { token: string; onBack: () => void }) {
+	const { t } = useTranslation();
+	const { resetPassword } = useAuth();
+	const [password, setPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
+	const [error, setError] = useState("");
+	const [success, setSuccess] = useState(false);
+
+	useEffect(() => {
+		if (!success) return;
+
+		const redirectTimer = window.setTimeout(onBack, 3000);
+		return () => window.clearTimeout(redirectTimer);
+	}, [onBack, success]);
+
+	return (
+		<div className={cx(classes["auth-container"], "auth-container")}>
+			<div className={classes["auth-panel"]}>
+				<h1 className={classes["auth-title"]}>MedAssist-ng</h1>
+				<h2 className={classes["auth-subtitle"]}>{t("auth.resetPassword")}</h2>
+				{success ? (
+					<div className={classes["auth-success"]}>{t("auth.passwordResetSuccess")}</div>
+				) : (
+					<form
+						className={classes["auth-form"]}
+						onSubmit={async (event) => {
+							event.preventDefault();
+							if (password !== confirmPassword) {
+								setError(t("auth.passwordMismatch"));
+								return;
+							}
+							try {
+								await resetPassword(token, password);
+								setSuccess(true);
+							} catch {
+								setError(t("auth.resetLinkInvalid"));
+							}
+						}}
+					>
+						{error && <div className={classes["auth-error"]}>{error}</div>}
+						<div className={classes.formGroup}>
+							<label htmlFor="reset-password">{t("auth.newPassword")}</label>
+							<PasswordInput
+								id="reset-password"
+								value={password}
+								onChange={(event) => setPassword(event.target.value)}
+								minLength={8}
+								required
+								autoComplete="new-password"
+							/>
+						</div>
+						<div className={classes.formGroup}>
+							<label htmlFor="reset-password-confirm">{t("auth.confirmPassword")}</label>
+							<PasswordInput
+								id="reset-password-confirm"
+								value={confirmPassword}
+								onChange={(event) => setConfirmPassword(event.target.value)}
+								required
+								autoComplete="new-password"
+							/>
+						</div>
+						<AppButton type="submit" className={classes["auth-submit"]}>
+							{t("auth.resetPassword")}
+						</AppButton>
+					</form>
+				)}
+				<div className={classes["auth-links"]}>
+					<button type="button" className={classes["auth-link-btn"]} onClick={onBack}>
+						{t("auth.backToLogin")}
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 // =============================================================================
 // User Profile Component
 // =============================================================================
 export function UserProfile({ onClose }: { onClose?: () => void }) {
 	const { t } = useTranslation();
-	const { user, updateProfile, uploadAvatar, deleteAvatar, deleteAccount } = useAuth();
+	const { user, refreshUser, updateProfile, uploadAvatar, deleteAvatar, deleteAccount } = useAuth();
+	const [email, setEmail] = useState("");
+	const [emailConfirmationPassword, setEmailConfirmationPassword] = useState("");
 	const [currentPassword, setCurrentPassword] = useState("");
 	const [newPassword, setNewPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
+	const [isPasswordChangeOpen, setIsPasswordChangeOpen] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [avatarError, setAvatarError] = useState("");
@@ -794,6 +983,17 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [deleteLoading, setDeleteLoading] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const refreshedMissingEmail = useRef(false);
+
+	useEffect(() => {
+		setEmail(user?.email ?? "");
+	}, [user?.email]);
+
+	useEffect(() => {
+		if (user?.authProvider === "oidc" || user?.email !== undefined || refreshedMissingEmail.current) return;
+		refreshedMissingEmail.current = true;
+		void refreshUser();
+	}, [refreshUser, user?.authProvider, user?.email]);
 
 	const closeDeleteConfirm = useCallback(() => {
 		if (!deleteLoading) {
@@ -841,18 +1041,17 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 		}
 	}
 
-	async function handleUpdate(e: React.FormEvent) {
+	async function handleEmailUpdate(e: React.FormEvent) {
 		e.preventDefault();
 		setError("");
 		setSuccess("");
 
-		if (newPassword && newPassword !== confirmPassword) {
-			setError(t("auth.passwordMismatch", "Passwords do not match"));
+		if (email === (user?.email ?? "")) {
 			return;
 		}
 
-		if (!currentPassword || !newPassword) {
-			setError(t("auth.fillAllFields", "Please fill in all password fields"));
+		if (!emailConfirmationPassword) {
+			setError(t("auth.currentPasswordRequired"));
 			return;
 		}
 
@@ -860,10 +1059,47 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
 		try {
 			await updateProfile({
-				currentPassword: currentPassword || undefined,
-				newPassword: newPassword || undefined,
+				currentPassword: emailConfirmationPassword,
+				email,
 			});
 			setSuccess(t("auth.profileUpdated", "Profile updated successfully"));
+			setEmailConfirmationPassword("");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Update failed");
+		} finally {
+			setLoading(false);
+		}
+	}
+
+	function closePasswordChange() {
+		setIsPasswordChangeOpen(false);
+		setCurrentPassword("");
+		setNewPassword("");
+		setConfirmPassword("");
+		setError("");
+	}
+
+	async function handlePasswordUpdate(e: React.FormEvent) {
+		e.preventDefault();
+		setError("");
+		setSuccess("");
+
+		if (newPassword !== confirmPassword) {
+			setError(t("auth.passwordMismatch", "Passwords do not match"));
+			return;
+		}
+
+		if (!currentPassword || !newPassword || !confirmPassword) {
+			setError(t("auth.fillAllFields", "Please fill in all password fields"));
+			return;
+		}
+
+		setLoading(true);
+
+		try {
+			await updateProfile({ currentPassword, newPassword });
+			setSuccess(t("auth.profileUpdated", "Profile updated successfully"));
+			setIsPasswordChangeOpen(false);
 			setCurrentPassword("");
 			setNewPassword("");
 			setConfirmPassword("");
@@ -888,7 +1124,8 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 
 	if (!user) return null;
 
-	const hasChanges = currentPassword || newPassword || confirmPassword;
+	const canManageLocalCredentials = user.authProvider !== "oidc";
+	const emailChanged = email !== (user.email ?? "");
 
 	return (
 		<div className={classes["profile-container"]}>
@@ -937,67 +1174,131 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 						)}
 					</div>
 				</div>
-				<span className={classes["profile-username"]}>{user.username}</span>
+				<div className={classes["profile-identity"]}>
+					<span className={classes["profile-username"]}>{user.username}</span>
+					<span className={classes["profile-account-type"]}>
+						{canManageLocalCredentials ? t("auth.localAccount") : user.authProvider}
+					</span>
+				</div>
 				{avatarError && <span className="field-error">{avatarError}</span>}
 			</div>
 
-			<form id="profile-password-form" onSubmit={handleUpdate} className={classes["profile-form"]}>
-				<div className={classes["profile-section"]}>
-					<h3 className={classes["profile-section-title"]}>{t("auth.changePassword", "Change Password")}</h3>
+			<div className={classes["profile-form"]}>
+				{error && <div className={classes["auth-error"]}>{error}</div>}
+				{success && <div className={classes["auth-success"]}>{success}</div>}
 
-					{error && <div className={classes["auth-error"]}>{error}</div>}
-					{success && <div className={classes["auth-success"]}>{success}</div>}
+				{canManageLocalCredentials && (
+					<>
+						<form className={classes["profile-section"]} onSubmit={handleEmailUpdate}>
+							<div className={classes["profile-section-header"]}>
+								<h3 className={classes["profile-section-title"]}>{t("auth.recoveryEmail")}</h3>
+								<p className={classes["profile-section-description"]}>{t("auth.recoveryEmailDescription")}</p>
+							</div>
+							<div className={classes.formGroup}>
+								<label htmlFor="profile-email">{t("auth.email")}</label>
+								<input
+									id="profile-email"
+									type="email"
+									value={email}
+									onChange={(event) => setEmail(event.target.value)}
+									autoComplete="email"
+								/>
+							</div>
+							{emailChanged && (
+								<div className={classes.formGroup}>
+									<label htmlFor="profile-email-current-password">{t("auth.currentPassword")}</label>
+									<p className={classes["profile-field-description"]}>
+										{t("auth.recoveryEmailConfirmationDescription")}
+									</p>
+									<PasswordInput
+										id="profile-email-current-password"
+										value={emailConfirmationPassword}
+										onChange={(event) => setEmailConfirmationPassword(event.target.value)}
+										required
+										autoComplete="current-password"
+									/>
+								</div>
+							)}
+							<div className={classes["profile-action-row"]}>
+								<AppButton type="submit" disabled={loading || !emailChanged}>
+									{loading ? t("common.saving") : t("auth.saveChanges")}
+								</AppButton>
+							</div>
+						</form>
 
-					<div className={classes.formGroup}>
-						<label htmlFor="current-password">{t("auth.currentPassword", "Current Password")}</label>
-						<PasswordInput
-							id="current-password"
-							value={currentPassword}
-							onChange={(e) => setCurrentPassword(e.target.value)}
-							autoComplete="current-password"
-							placeholder="••••••••"
-						/>
-					</div>
+						<div className={classes["profile-section"]}>
+							<div className={classes["profile-section-header"]}>
+								<h3 className={classes["profile-section-title"]}>{t("auth.changePassword")}</h3>
+								<p className={classes["profile-section-description"]}>{t("auth.passwordChangeDescription")}</p>
+							</div>
 
-					<div className={classes.formGroup}>
-						<label htmlFor="new-password">{t("auth.newPassword", "New Password")}</label>
-						<PasswordInput
-							id="new-password"
-							value={newPassword}
-							onChange={(e) => setNewPassword(e.target.value)}
-							autoComplete="new-password"
-							minLength={8}
-							placeholder="••••••••"
-						/>
-					</div>
+							{isPasswordChangeOpen ? (
+								<form className={classes["profile-password-change-form"]} onSubmit={handlePasswordUpdate}>
+									<div className={classes.formGroup}>
+										<label htmlFor="current-password">{t("auth.currentPassword")}</label>
+										<PasswordInput
+											id="current-password"
+											value={currentPassword}
+											onChange={(event) => setCurrentPassword(event.target.value)}
+											required
+											autoComplete="current-password"
+										/>
+									</div>
 
-					<div className={classes.formGroup}>
-						<label htmlFor="confirm-new-password">{t("auth.confirmPassword", "Confirm Password")}</label>
-						<PasswordInput
-							id="confirm-new-password"
-							value={confirmPassword}
-							onChange={(e) => setConfirmPassword(e.target.value)}
-							autoComplete="new-password"
-							placeholder="••••••••"
-						/>
-					</div>
-				</div>
-			</form>
+									<div className={classes.formGroup}>
+										<label htmlFor="new-password">{t("auth.newPassword")}</label>
+										<PasswordInput
+											id="new-password"
+											value={newPassword}
+											onChange={(event) => setNewPassword(event.target.value)}
+											required
+											autoComplete="new-password"
+											minLength={8}
+										/>
+									</div>
+
+									<div className={classes.formGroup}>
+										<label htmlFor="confirm-new-password">{t("auth.confirmPassword")}</label>
+										<PasswordInput
+											id="confirm-new-password"
+											value={confirmPassword}
+											onChange={(event) => setConfirmPassword(event.target.value)}
+											required
+											autoComplete="new-password"
+										/>
+									</div>
+
+									<div className={classes["profile-action-row"]}>
+										<AppButton type="button" tone="secondary" onClick={closePasswordChange} disabled={loading}>
+											{t("common.cancel")}
+										</AppButton>
+										<AppButton type="submit" disabled={loading}>
+											{loading ? t("common.saving") : t("auth.updatePassword")}
+										</AppButton>
+									</div>
+								</form>
+							) : (
+								<AppButton type="button" tone="secondary" onClick={() => setIsPasswordChangeOpen(true)}>
+									{t("auth.changePassword")}
+								</AppButton>
+							)}
+						</div>
+					</>
+				)}
+			</div>
 
 			{/* Delete Account Section */}
 			<div className={cx(classes["profile-section"], classes["profile-critical-zone"])}>
-				<h3 className={classes["profile-section-title"]}>{t("auth.deleteAccount", "Delete Account")}</h3>
+				<h3 className={classes["profile-section-title"]}>{t("auth.dangerZone")}</h3>
+				<p className={classes["profile-section-description"]}>{t("auth.deleteAccountDescription")}</p>
 				<AppButton type="button" tone="danger" onClick={() => setShowDeleteConfirm(true)}>
-					{t("auth.deleteAccount", "Delete Account")}
+					{t("auth.deleteAccount")}
 				</AppButton>
 			</div>
 
 			<AppModalFooter>
 				<AppButton type="button" tone="secondary" onClick={onClose}>
 					{t("common.close", "Close")}
-				</AppButton>
-				<AppButton type="submit" form="profile-password-form" disabled={loading || !hasChanges}>
-					{loading ? t("common.saving", "Saving...") : t("auth.updatePassword", "Update Password")}
 				</AppButton>
 			</AppModalFooter>
 
@@ -1033,7 +1334,19 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 // =============================================================================
 export function AuthPage() {
 	const { authState } = useAuth();
-	const [mode, setMode] = useState<"login" | "register">("login");
+	const [mode, setMode] = useState<"login" | "register" | "forgot" | "reset">("login");
+	const [resetToken, setResetToken] = useState<string | null>(null);
+
+	useEffect(() => {
+		const fragment = window.location.hash;
+		if (!fragment.startsWith("#reset-password?")) return;
+		const token = new URLSearchParams(fragment.slice(fragment.indexOf("?") + 1)).get("token");
+		window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+		if (token) {
+			setResetToken(token);
+			setMode("reset");
+		}
+	}, []);
 
 	// Auto-show register if no users exist yet (first setup)
 	useEffect(() => {
@@ -1045,6 +1358,13 @@ export function AuthPage() {
 	if (mode === "register") {
 		return <RegisterForm onSuccess={() => setMode("login")} onSwitchToLogin={() => setMode("login")} />;
 	}
+	if (mode === "forgot") return <ForgotPasswordForm onBack={() => setMode("login")} />;
+	if (mode === "reset" && resetToken) return <ResetPasswordForm token={resetToken} onBack={() => setMode("login")} />;
 
-	return <LoginForm onSwitchToRegister={authState?.registrationEnabled ? () => setMode("register") : undefined} />;
+	return (
+		<LoginForm
+			onSwitchToRegister={authState?.registrationEnabled ? () => setMode("register") : undefined}
+			onSwitchToForgot={() => setMode("forgot")}
+		/>
+	);
 }

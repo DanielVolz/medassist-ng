@@ -6,8 +6,15 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/path-utils.js";
-import { refreshTokens, users } from "../db/schema.js";
+import { refreshTokens, userSettings, users } from "../db/schema.js";
+import type { Language } from "../i18n/translations.js";
 import { getAuthState, requireAuth } from "../plugins/auth.js";
+import {
+	consumePasswordResetToken,
+	createPasswordResetToken,
+	discardPasswordResetToken,
+	sendPasswordResetEmail,
+} from "../services/password-reset-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import { normalizeDateTime } from "../utils/date-time.js";
 import {
@@ -40,6 +47,7 @@ const authRateLimitConfig = {
 	max: 10, // 10 requests
 	timeWindow: "1 minute", // per minute
 	errorResponseBuilder: () => ({
+		statusCode: 429,
 		error: "Too many requests. Please try again later.",
 		code: "RATE_LIMIT_EXCEEDED",
 	}),
@@ -50,6 +58,17 @@ const sensitiveRateLimitConfig = {
 	max: 5, // 5 requests
 	timeWindow: "15 minutes", // per 15 minutes (for login/register)
 	errorResponseBuilder: () => ({
+		statusCode: 429,
+		error: "Too many attempts. Please try again later.",
+		code: "RATE_LIMIT_EXCEEDED",
+	}),
+};
+
+const forgotPasswordRateLimitConfig = {
+	max: 3,
+	timeWindow: "15 minutes",
+	errorResponseBuilder: () => ({
+		statusCode: 429,
 		error: "Too many attempts. Please try again later.",
 		code: "RATE_LIMIT_EXCEEDED",
 	}),
@@ -65,6 +84,7 @@ const registerSchema = z.object({
 		.min(3, "Username must be at least 3 characters")
 		.max(50, "Username must be at most 50 characters")
 		.regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, underscores, and hyphens"),
+	email: z.string().trim().email("Email must be valid").max(255, "Email must be at most 255 characters"),
 	password: z
 		.string()
 		.min(8, "Password must be at least 8 characters")
@@ -79,11 +99,24 @@ const loginSchema = z.object({
 
 const updateProfileSchema = z.object({
 	currentPassword: z.string().optional(),
+	email: z.string().trim().email("Email must be valid").max(255, "Email must be at most 255 characters").optional(),
 	newPassword: z
 		.string()
 		.min(8, "Password must be at least 8 characters")
 		.max(128, "Password must be at most 128 characters")
 		.optional(),
+});
+
+const forgotPasswordSchema = z.object({
+	emailOrUsername: z.string().trim().min(1).max(255),
+});
+
+const resetPasswordSchema = z.object({
+	token: z.string().regex(/^[a-f0-9]{64}$/i, "Invalid reset token"),
+	newPassword: z
+		.string()
+		.min(8, "Password must be at least 8 characters")
+		.max(128, "Password must be at most 128 characters"),
 });
 
 const authEndpointSecurity: ReadonlyArray<Record<string, readonly string[]>> = [{ bearerAuth: [] }, { cookieAuth: [] }];
@@ -96,10 +129,15 @@ const authErrorSchema = {
 };
 
 const invalidCredentialsResponse = { error: "Invalid username or password", code: "INVALID_CREDENTIALS" } as const;
+const genericForgotPasswordResponse = {
+	ok: true,
+	message: "If an eligible account exists, a reset link has been sent.",
+};
 const publicAuthStateRateLimitConfig = {
 	max: 60,
 	timeWindow: "1 minute",
 	errorResponseBuilder: () => ({
+		statusCode: 429,
 		error: "Too many requests. Please try again later.",
 		code: "RATE_LIMIT_EXCEEDED",
 	}),
@@ -112,6 +150,7 @@ function toPublicAuthState(state: Awaited<ReturnType<typeof getAuthState>>) {
 		authEnabled: state.authEnabled,
 		registrationEnabled: state.registrationEnabled,
 		formLoginEnabled: state.formLoginEnabled,
+		passwordResetEnabled: state.passwordResetEnabled,
 		oidcEnabled: state.oidcEnabled,
 		oidcProviderName: state.oidcProviderName,
 		needsSetup: state.needsSetup,
@@ -151,6 +190,7 @@ export async function authRoutes(app: FastifyInstance) {
 							"authEnabled",
 							"registrationEnabled",
 							"formLoginEnabled",
+							"passwordResetEnabled",
 							"oidcEnabled",
 							"oidcProviderName",
 							"needsSetup",
@@ -159,6 +199,7 @@ export async function authRoutes(app: FastifyInstance) {
 							authEnabled: { type: "boolean" },
 							registrationEnabled: { type: "boolean" },
 							formLoginEnabled: { type: "boolean" },
+							passwordResetEnabled: { type: "boolean" },
 							oidcEnabled: { type: "boolean" },
 							oidcProviderName: { type: "string" },
 							needsSetup: { type: "boolean" },
@@ -185,13 +226,15 @@ export async function authRoutes(app: FastifyInstance) {
 				summary: "Register local user",
 				body: {
 					type: "object",
-					required: ["username", "password"],
+					required: ["username", "email", "password"],
 					properties: {
 						username: { type: "string", minLength: 3, maxLength: 50 },
+						email: { type: "string", format: "email", maxLength: 255 },
 						password: { type: "string", minLength: 8, maxLength: 128 },
 					},
 					example: {
 						username: "daniel",
+						email: "daniel@example.com",
 						password: "correct-horse-battery-staple",
 					},
 				},
@@ -240,12 +283,16 @@ export async function authRoutes(app: FastifyInstance) {
 				});
 			}
 
-			const { username, password } = parsed.data;
+			const { username, email, password } = parsed.data;
 
 			// Check if username already exists
 			const [existingUser] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
 			if (existingUser) {
 				return reply.status(409).send({ error: "Username already taken", code: "USERNAME_EXISTS" });
+			}
+			const [existingEmail] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${email})`);
+			if (existingEmail) {
+				return reply.status(409).send({ error: "Email already in use", code: "EMAIL_EXISTS" });
 			}
 
 			// Hash password with Argon2id
@@ -256,6 +303,7 @@ export async function authRoutes(app: FastifyInstance) {
 				.insert(users)
 				.values({
 					username,
+					email,
 					passwordHash,
 					authProvider: "local",
 				})
@@ -339,8 +387,10 @@ export async function authRoutes(app: FastifyInstance) {
 
 			const { username, password, rememberMe } = parsed.data;
 
-			// Find user by username
-			const [user] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
+			const [user] = await db
+				.select()
+				.from(users)
+				.where(sql`lower(${users.username}) = lower(${username}) OR lower(${users.email}) = lower(${username})`);
 
 			// Generic error to prevent user enumeration
 			const invalidCredentialsError = (reason: LoginFailureReason, rejectedUser?: typeof users.$inferSelect) => {
@@ -379,7 +429,7 @@ export async function authRoutes(app: FastifyInstance) {
 
 			// Generate tokens
 			const accessToken = await app.jwt.sign(
-				{ sub: user.id, username: user.username },
+				{ sub: user.id, username: user.username, credentialVersion: user.credentialVersion ?? 0 },
 				{ expiresIn: `${accessTtlMinutes}m` }
 			);
 
@@ -393,7 +443,7 @@ export async function authRoutes(app: FastifyInstance) {
 			});
 
 			const refreshToken = await app.jwt.sign(
-				{ sub: user.id, jti: tokenId },
+				{ sub: user.id, jti: tokenId, credentialVersion: user.credentialVersion ?? 0 },
 				{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
 			);
 
@@ -422,6 +472,106 @@ export async function authRoutes(app: FastifyInstance) {
 	);
 
 	// ---------------------------------------------------------------------------
+	// POST /auth/forgot-password - Generic local account recovery request
+	// ---------------------------------------------------------------------------
+	app.post<{ Body: unknown }>(
+		"/auth/forgot-password",
+		{
+			config: { rateLimit: forgotPasswordRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Request a password reset link",
+				response: {
+					200: {
+						type: "object",
+						properties: { ok: { type: "boolean" }, message: { type: "string" } },
+					},
+				},
+			},
+		},
+		async (request, reply) => {
+			const parsed = forgotPasswordSchema.safeParse(request.body);
+			const state = await getAuthState();
+
+			if (!parsed.success || !state.passwordResetEnabled) {
+				await performDummyCredentialWork();
+				return reply.send(genericForgotPasswordResponse);
+			}
+
+			const { emailOrUsername } = parsed.data;
+			const [user] = await db
+				.select()
+				.from(users)
+				.where(
+					sql`lower(${users.username}) = lower(${emailOrUsername}) OR lower(${users.email}) = lower(${emailOrUsername})`
+				);
+
+			if (!user?.isActive || !user.passwordHash || !user.email) {
+				await performDummyCredentialWork();
+				return reply.send(genericForgotPasswordResponse);
+			}
+
+			const [settings] = await db
+				.select({ language: userSettings.language })
+				.from(userSettings)
+				.where(eq(userSettings.userId, user.id));
+			const language: Language = settings?.language === "de" ? "de" : "en";
+			const { token, tokenHash } = await createPasswordResetToken(user.id);
+			const delivery = await sendPasswordResetEmail({ email: user.email, token, language });
+
+			if (!delivery.success) {
+				await discardPasswordResetToken(tokenHash);
+				request.log.error(
+					{ userId: user.id, deliveryError: delivery.error ?? "unknown" },
+					"[Auth] Password reset email delivery failed"
+				);
+			}
+
+			return reply.send(genericForgotPasswordResponse);
+		}
+	);
+
+	// ---------------------------------------------------------------------------
+	// POST /auth/reset-password - Atomically consume a local reset token
+	// ---------------------------------------------------------------------------
+	app.post<{ Body: z.infer<typeof resetPasswordSchema> }>(
+		"/auth/reset-password",
+		{
+			config: { rateLimit: sensitiveRateLimitConfig },
+			schema: {
+				tags: ["auth"],
+				summary: "Reset a local account password",
+				body: {
+					type: "object",
+					required: ["token", "newPassword"],
+					properties: {
+						token: { type: "string", minLength: 64, maxLength: 64 },
+						newPassword: { type: "string", minLength: 8, maxLength: 128 },
+					},
+				},
+				response: {
+					200: { type: "object", properties: { ok: { type: "boolean" } } },
+					400: authErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const parsed = resetPasswordSchema.safeParse(request.body);
+			if (!parsed.success) {
+				return reply.status(400).send({ error: "Invalid or expired reset link", code: "INVALID_RESET_TOKEN" });
+			}
+
+			const passwordHash = await argon2.hash(parsed.data.newPassword, ARGON2_OPTIONS);
+			const consumed = await consumePasswordResetToken(parsed.data.token, passwordHash);
+			if (!consumed) {
+				return reply.status(400).send({ error: "Invalid or expired reset link", code: "INVALID_RESET_TOKEN" });
+			}
+
+			return { ok: true };
+		}
+	);
+
+	// ---------------------------------------------------------------------------
 	// POST /auth/refresh - Refresh access token
 	// ---------------------------------------------------------------------------
 	app.post(
@@ -446,9 +596,12 @@ export async function authRoutes(app: FastifyInstance) {
 
 			try {
 				// Verify refresh token
-				const decoded = await app.jwt.verify<{ sub: number; jti: string }>(refreshTokenCookie, {
-					key: app.config.refreshSecret,
-				});
+				const decoded = await app.jwt.verify<{ sub: number; jti: string; credentialVersion?: number }>(
+					refreshTokenCookie,
+					{
+						key: app.config.refreshSecret,
+					}
+				);
 
 				// Check if token exists and is valid
 				const [token] = await db.select().from(refreshTokens).where(eq(refreshTokens.tokenId, decoded.jti));
@@ -461,6 +614,10 @@ export async function authRoutes(app: FastifyInstance) {
 				const [user] = await db.select().from(users).where(eq(users.id, decoded.sub));
 				if (!user?.isActive) {
 					return reply.status(401).send({ error: "User not found or disabled", code: "USER_INVALID" });
+				}
+
+				if ((decoded.credentialVersion ?? 0) !== (user.credentialVersion ?? 0)) {
+					return reply.status(401).send({ error: "Invalid refresh token", code: "INVALID_REFRESH_TOKEN" });
 				}
 
 				// Rotate refresh token (revoke old, create new)
@@ -480,12 +637,12 @@ export async function authRoutes(app: FastifyInstance) {
 
 				// Generate new tokens
 				const newAccessToken = await app.jwt.sign(
-					{ sub: user.id, username: user.username },
+					{ sub: user.id, username: user.username, credentialVersion: user.credentialVersion ?? 0 },
 					{ expiresIn: `${accessTtlMinutes}m` }
 				);
 
 				const newRefreshToken = await app.jwt.sign(
-					{ sub: user.id, jti: newTokenId },
+					{ sub: user.id, jti: newTokenId, credentialVersion: user.credentialVersion ?? 0 },
 					{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
 				);
 
@@ -554,6 +711,7 @@ export async function authRoutes(app: FastifyInstance) {
 						properties: {
 							id: { type: "number" },
 							username: { type: "string" },
+							email: { type: ["string", "null"], format: "email" },
 							avatarUrl: { type: ["string", "null"] },
 							authProvider: { type: "string" },
 							createdAt: { type: "string", format: "date-time" },
@@ -585,6 +743,7 @@ export async function authRoutes(app: FastifyInstance) {
 				username: user.username,
 				avatarUrl: user.avatarUrl,
 				authProvider: user.authProvider ?? "local",
+				...(user.passwordHash ? { email: user.email } : {}),
 				createdAt,
 				lastLoginAt,
 			};
@@ -607,6 +766,7 @@ export async function authRoutes(app: FastifyInstance) {
 					type: "object",
 					properties: {
 						currentPassword: { type: "string" },
+						email: { type: "string", format: "email", maxLength: 255 },
 						newPassword: { type: "string", minLength: 8, maxLength: 128 },
 					},
 					example: {
@@ -642,7 +802,7 @@ export async function authRoutes(app: FastifyInstance) {
 				});
 			}
 
-			const { currentPassword, newPassword } = parsed.data;
+			const { currentPassword, email, newPassword } = parsed.data;
 			const [user] = await db.select().from(users).where(eq(users.id, authUser.id));
 
 			if (!user) {
@@ -653,8 +813,8 @@ export async function authRoutes(app: FastifyInstance) {
 				updatedAt: new Date(),
 			};
 
-			// Update password if provided
-			if (newPassword) {
+			const emailChanged = email !== undefined && email !== user.email;
+			if (newPassword || emailChanged) {
 				if (!currentPassword) {
 					return reply.status(400).send({ error: "Current password required", code: "CURRENT_PASSWORD_REQUIRED" });
 				}
@@ -668,18 +828,40 @@ export async function authRoutes(app: FastifyInstance) {
 					return reply.status(401).send({ error: "Current password is incorrect", code: "INVALID_PASSWORD" });
 				}
 
-				updates.passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
+				if (emailChanged) {
+					const [existingEmail] = await db
+						.select({ id: users.id })
+						.from(users)
+						.where(sql`lower(${users.email}) = lower(${email})`);
+					if (existingEmail && existingEmail.id !== user.id) {
+						return reply.status(409).send({ error: "Email already in use", code: "EMAIL_EXISTS" });
+					}
+					updates.email = email;
+				}
+
+				if (newPassword) {
+					updates.passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
+					updates.credentialVersion = (user.credentialVersion ?? 0) + 1;
+				}
 			}
 
 			if (newPassword) {
 				const newTokenId = randomBytes(32).toString("hex");
 				const refreshExp = new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000);
 				const newAccessToken = await app.jwt.sign(
-					{ sub: user.id, username: user.username },
+					{
+						sub: user.id,
+						username: user.username,
+						credentialVersion: updates.credentialVersion ?? user.credentialVersion ?? 0,
+					},
 					{ expiresIn: `${accessTtlMinutes}m` }
 				);
 				const newRefreshToken = await app.jwt.sign(
-					{ sub: user.id, jti: newTokenId },
+					{
+						sub: user.id,
+						jti: newTokenId,
+						credentialVersion: updates.credentialVersion ?? user.credentialVersion ?? 0,
+					},
 					{ expiresIn: `${refreshTtlDays}d`, key: app.config.refreshSecret }
 				);
 

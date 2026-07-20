@@ -202,7 +202,7 @@ jobs:
           echo "value=$CURRENT_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js for release checks
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 

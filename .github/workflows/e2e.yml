@@ -58,7 +58,7 @@ jobs:
 
       - name: Setup Node.js
         if: needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -149,7 +149,7 @@ jobs:
 
       - name: Setup Node.js
         if: needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'

@@ -92,11 +92,35 @@ describe("OpenAPI docs protection", () => {
 		try {
 			const docsResponse = await app.inject({ method: "GET", url: "/docs" });
 			const jsonResponse = await app.inject({ method: "GET", url: "/docs/json" });
+			const staticResponse = await app.inject({ method: "GET", url: "/docs/static/swagger-ui.css" });
 
 			expect(docsResponse.statusCode).toBe(401);
 			expect(docsResponse.json()).toEqual({ error: "Authentication required", code: "AUTH_REQUIRED" });
 			expect(jsonResponse.statusCode).toBe(401);
 			expect(jsonResponse.json()).toEqual({ error: "Authentication required", code: "AUTH_REQUIRED" });
+			expect(staticResponse.statusCode).toBe(401);
+			expect(staticResponse.json()).toEqual({ error: "Authentication required", code: "AUTH_REQUIRED" });
+		} finally {
+			await app.close();
+		}
+	});
+
+	it("rejects anonymous Swagger assets and noncanonical docs paths when docs auth is required", async () => {
+		const app = await buildDocsApp({ docsEnabled: true, docsAuthRequired: true });
+
+		try {
+			for (const url of [
+				"//docs/static/swagger-ui.css",
+				"/docs//static/swagger-ui.css",
+				"/docs/%2e%2e/docs/static/swagger-ui.css",
+				"/docs/./static/swagger-ui.css",
+			]) {
+				const response = await app.inject({ method: "GET", url });
+
+				expect(response.statusCode, url).toBeGreaterThanOrEqual(400);
+				expect(response.body, url).not.toContain('"openapi"');
+				expect(response.body, url).not.toContain(".swagger-ui");
+			}
 		} finally {
 			await app.close();
 		}

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
-import argon2 from "argon2";
+import argon2, { type HashOptions } from "argon2";
 import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -27,7 +27,7 @@ import {
 // =============================================================================
 // Argon2id Configuration - State of the Art Password Hashing
 // =============================================================================
-const ARGON2_OPTIONS: argon2.Options = {
+const ARGON2_OPTIONS: HashOptions = {
 	type: argon2.argon2id, // Argon2id - best for password hashing
 	memoryCost: 65536, // 64 MB memory
 	timeCost: 3, // 3 iterations
@@ -419,7 +419,7 @@ export async function authRoutes(app: FastifyInstance) {
 			}
 
 			// Verify password
-			const valid = await argon2.verify(user.passwordHash, password, ARGON2_OPTIONS);
+			const valid = await argon2.verify(user.passwordHash, password);
 			if (!valid) {
 				return invalidCredentialsError("wrong_password", user);
 			}
@@ -823,7 +823,7 @@ export async function authRoutes(app: FastifyInstance) {
 					return reply.status(400).send({ error: "Cannot change password for SSO account", code: "SSO_ACCOUNT" });
 				}
 
-				const valid = await argon2.verify(user.passwordHash, currentPassword, ARGON2_OPTIONS);
+				const valid = await argon2.verify(user.passwordHash, currentPassword);
 				if (!valid) {
 					return reply.status(401).send({ error: "Current password is incorrect", code: "INVALID_PASSWORD" });
 				}

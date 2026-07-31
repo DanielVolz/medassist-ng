@@ -7,6 +7,7 @@ on:
 
 # Minimal permissions for security
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -36,11 +37,18 @@ jobs:
         if: needs.changes.outputs.e2e_relevant != 'true'
         run: echo "No E2E-relevant changes detected; required check passes without running Playwright."
 
-      - name: Checkout repository
+      - name: Download tested source
         if: needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/checkout@v7
+        uses: actions/download-artifact@v8
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          name: e2e-source
+          path: ${{ runner.temp }}/e2e-source
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Extract tested source
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        run: tar -xzf "$RUNNER_TEMP/e2e-source/e2e-source.tar.gz" -C "$GITHUB_WORKSPACE"
 
       - name: Setup Node.js
         if: needs.changes.outputs.e2e_relevant == 'true'
@@ -129,11 +137,18 @@ jobs:
         if: needs.changes.outputs.e2e_relevant != 'true'
         run: echo "No E2E-relevant changes detected; required check passes without running Playwright data tests."
 
-      - name: Checkout repository
+      - name: Download tested source
         if: needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/checkout@v7
+        uses: actions/download-artifact@v8
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          name: e2e-source
+          path: ${{ runner.temp }}/e2e-source
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Extract tested source
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        run: tar -xzf "$RUNNER_TEMP/e2e-source/e2e-source.tar.gz" -C "$GITHUB_WORKSPACE"
 
       - name: Setup Node.js
         if: needs.changes.outputs.e2e_relevant == 'true'

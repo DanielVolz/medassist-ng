@@ -12,6 +12,7 @@ on:
       - 'scripts/**'
       - 'biome.json'
       - '.github/workflows/test.yml'
+      - '.github/workflows/e2e.yml'
 
 # Minimal permissions for security
 permissions:
@@ -51,6 +52,7 @@ jobs:
               - 'scripts/**'
               - 'biome.json'
               - '.github/workflows/test.yml'
+              - '.github/workflows/e2e.yml'
 
   # =============================================================================
   # Backend Tests (always emits the required check context)
@@ -189,3 +191,14 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage/
           retention-days: 7
+
+  e2e:
+    name: Playwright E2E
+    if: always()
+    needs: [backend-test, frontend-build]
+    uses: ./.github/workflows/e2e.yml
+    with:
+      run_e2e: ${{ needs.backend-test.result == 'success' && needs.frontend-build.result == 'success' }}
+    permissions:
+      contents: read
+      pull-requests: read

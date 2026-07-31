@@ -2,6 +2,11 @@ name: E2E Tests
 
 on:
   workflow_call:
+    inputs:
+      run_e2e:
+        required: false
+        type: boolean
+        default: false
 
 # Minimal permissions for security
 permissions:
@@ -18,7 +23,7 @@ jobs:
       e2e_relevant: ${{ steps.filter.outputs.e2e_relevant }}
     steps:
       - id: filter
-        run: echo "e2e_relevant=true" >> "$GITHUB_OUTPUT"
+        run: echo "e2e_relevant=${{ inputs.run_e2e }}" >> "$GITHUB_OUTPUT"
 
   e2e:
     name: Playwright E2E

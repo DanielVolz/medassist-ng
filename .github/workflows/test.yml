@@ -52,19 +52,7 @@ jobs:
               - 'scripts/**'
               - 'biome.json'
               - '.github/workflows/test.yml'
-
-      - name: Archive tested source
-        uses: actions/checkout@v7
-
-      - name: Create E2E source artifact
-        run: git archive --format=tar.gz --output="$RUNNER_TEMP/e2e-source.tar.gz" "$GITHUB_SHA"
-
-      - name: Upload E2E source artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: e2e-source
-          path: ${{ runner.temp }}/e2e-source.tar.gz
-          retention-days: 1
+              - '.github/workflows/e2e.yml'
 
   # =============================================================================
   # Backend Tests (always emits the required check context)
@@ -206,8 +194,11 @@ jobs:
 
   e2e:
     name: Playwright E2E
+    if: always()
     needs: [backend-test, frontend-build]
     uses: ./.github/workflows/e2e.yml
+    with:
+      run_e2e: ${{ needs.backend-test.result == 'success' && needs.frontend-build.result == 'success' }}
     permissions:
       contents: read
       pull-requests: read

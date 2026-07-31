@@ -203,3 +203,10 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage/
           retention-days: 7
+
+  e2e:
+    name: Playwright E2E
+    needs: [backend-test, frontend-build]
+    uses: ./.github/workflows/e2e.yml
+    permissions:
+      contents: read

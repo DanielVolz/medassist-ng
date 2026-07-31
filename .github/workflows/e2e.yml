@@ -1,19 +1,15 @@
 name: E2E Tests
 
 on:
-  workflow_run:
-    workflows: ["Test"]
-    types: [completed]
+  workflow_call:
 
 # Minimal permissions for security
 permissions:
-  actions: read
   contents: read
 
 jobs:
   changes:
     name: Detect E2E relevance
-    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,18 +33,9 @@ jobs:
         if: needs.changes.outputs.e2e_relevant != 'true'
         run: echo "No E2E-relevant changes detected; required check passes without running Playwright."
 
-      - name: Download tested source
+      - name: Checkout repository
         if: needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: e2e-source
-          path: ${{ runner.temp }}/e2e-source
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
-
-      - name: Extract tested source
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        run: tar -xzf "$RUNNER_TEMP/e2e-source/e2e-source.tar.gz" -C "$GITHUB_WORKSPACE"
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         if: needs.changes.outputs.e2e_relevant == 'true'
@@ -137,18 +124,9 @@ jobs:
         if: needs.changes.outputs.e2e_relevant != 'true'
         run: echo "No E2E-relevant changes detected; required check passes without running Playwright data tests."
 
-      - name: Download tested source
+      - name: Checkout repository
         if: needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: e2e-source
-          path: ${{ runner.temp }}/e2e-source
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
-
-      - name: Extract tested source
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        run: tar -xzf "$RUNNER_TEMP/e2e-source/e2e-source.tar.gz" -C "$GITHUB_WORKSPACE"
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         if: needs.changes.outputs.e2e_relevant == 'true'

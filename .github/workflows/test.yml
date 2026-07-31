@@ -1,5 +1,6 @@
 name: Test
 
+# Keep required PR checks active for workflow-only synchronization changes.
 on:
   pull_request:
     branches: [main]

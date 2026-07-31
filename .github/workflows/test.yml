@@ -12,6 +12,7 @@ on:
       - 'scripts/**'
       - 'biome.json'
       - '.github/workflows/test.yml'
+      - '.github/workflows/e2e.yml'
 
 # Minimal permissions for security
 permissions:

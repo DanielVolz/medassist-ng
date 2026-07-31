@@ -1,16 +1,9 @@
 name: E2E Tests
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'shared/**'
-      - 'package.json'
-      - 'release-policy.json'
-      - 'scripts/**'
-      - '.github/workflows/e2e.yml'
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
 
 # Minimal permissions for security
 permissions:
@@ -19,6 +12,7 @@ permissions:
 jobs:
   changes:
     name: Detect E2E relevance
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,18 +20,8 @@ jobs:
     outputs:
       e2e_relevant: ${{ steps.filter.outputs.e2e_relevant }}
     steps:
-      - uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            e2e_relevant:
-              - 'frontend/**'
-              - 'backend/**'
-              - 'shared/**'
-              - 'package.json'
-              - 'release-policy.json'
-              - 'scripts/**'
-              - '.github/workflows/e2e.yml'
+      - id: filter
+        run: echo "e2e_relevant=true" >> "$GITHUB_OUTPUT"
 
   e2e:
     name: Playwright E2E
@@ -55,6 +39,8 @@ jobs:
       - name: Checkout repository
         if: needs.changes.outputs.e2e_relevant == 'true'
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Node.js
         if: needs.changes.outputs.e2e_relevant == 'true'
@@ -146,6 +132,8 @@ jobs:
       - name: Checkout repository
         if: needs.changes.outputs.e2e_relevant == 'true'
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Node.js
         if: needs.changes.outputs.e2e_relevant == 'true'

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
-import argon2 from "argon2";
+import argon2, { type HashOptions } from "argon2";
 import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -27,7 +27,7 @@ import {
 // =============================================================================
 // Argon2id Configuration - State of the Art Password Hashing
 // =============================================================================
-const ARGON2_OPTIONS: argon2.Options = {
+const ARGON2_OPTIONS: HashOptions = {
 	type: argon2.argon2id, // Argon2id - best for password hashing
 	memoryCost: 65536, // 64 MB memory
 	timeCost: 3, // 3 iterations

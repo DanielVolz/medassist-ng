@@ -210,3 +210,4 @@ jobs:
     uses: ./.github/workflows/e2e.yml
     permissions:
       contents: read
+      pull-requests: read

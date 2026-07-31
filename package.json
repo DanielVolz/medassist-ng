@@ -12,9 +12,9 @@
     "release:preflight": "node scripts/release-preflight.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.3",
+    "@biomejs/biome": "^2.5.5",
     "husky": "^9.1.0",
-    "lint-staged": "^17.0.8"
+    "lint-staged": "^17.2.0"
   },
   "overrides": {
     "yaml": "^2.8.3"

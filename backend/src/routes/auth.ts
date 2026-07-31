@@ -419,7 +419,7 @@ export async function authRoutes(app: FastifyInstance) {
 			}
 
 			// Verify password
-			const valid = await argon2.verify(user.passwordHash, password, ARGON2_OPTIONS);
+			const valid = await argon2.verify(user.passwordHash, password);
 			if (!valid) {
 				return invalidCredentialsError("wrong_password", user);
 			}
@@ -823,7 +823,7 @@ export async function authRoutes(app: FastifyInstance) {
 					return reply.status(400).send({ error: "Cannot change password for SSO account", code: "SSO_ACCOUNT" });
 				}
 
-				const valid = await argon2.verify(user.passwordHash, currentPassword, ARGON2_OPTIONS);
+				const valid = await argon2.verify(user.passwordHash, currentPassword);
 				if (!valid) {
 					return reply.status(401).send({ error: "Current password is incorrect", code: "INVALID_PASSWORD" });
 				}

@@ -1,16 +1,12 @@
 name: E2E Tests
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'shared/**'
-      - 'package.json'
-      - 'release-policy.json'
-      - 'scripts/**'
-      - '.github/workflows/e2e.yml'
+  workflow_call:
+    inputs:
+      run_e2e:
+        required: false
+        type: boolean
+        default: false
 
 # Minimal permissions for security
 permissions:
@@ -26,18 +22,8 @@ jobs:
     outputs:
       e2e_relevant: ${{ steps.filter.outputs.e2e_relevant }}
     steps:
-      - uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            e2e_relevant:
-              - 'frontend/**'
-              - 'backend/**'
-              - 'shared/**'
-              - 'package.json'
-              - 'release-policy.json'
-              - 'scripts/**'
-              - '.github/workflows/e2e.yml'
+      - id: filter
+        run: echo "e2e_relevant=${{ inputs.run_e2e }}" >> "$GITHUB_OUTPUT"
 
   e2e:
     name: Playwright E2E

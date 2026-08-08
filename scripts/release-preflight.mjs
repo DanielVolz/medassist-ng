@@ -169,6 +169,10 @@ function validateContainerSmokeWorkflow(workflowPath) {
     fail(`${workflowPath} must wait for Backend Tests, Frontend Build, and Playwright E2E before running smoke on PRs.`);
   }
 
+  if (!workflow.includes("name === checkName || name.endsWith(` / ${checkName}`)")) {
+    fail(`${workflowPath} must recognize exact and reusable-workflow-suffixed required check names.`);
+  }
+
   for (const imageName of ["backend", "frontend"]) {
     const cacheFrom = `cache-from: type=gha,scope=container-smoke-${imageName}`;
     const cacheTo = `cache-to: type=gha,mode=max,scope=container-smoke-${imageName},ignore-error=true`;
@@ -180,6 +184,30 @@ function validateContainerSmokeWorkflow(workflowPath) {
     if (!workflow.includes(cacheTo)) {
       fail(`${workflowPath} ${imageName} smoke build must ignore GitHub Actions cache export failures.`);
     }
+  }
+}
+
+function validateLegacyPlaywrightStatus(workflowPath) {
+  const workflow = readText(workflowPath);
+
+  if (!/legacy-playwright-e2e-status:[\s\S]*?needs:\s*e2e/.test(workflow)) {
+    fail(`${workflowPath} must publish the legacy Playwright E2E status after the reusable E2E caller.`);
+  }
+
+  if (!/legacy-playwright-e2e-status:[\s\S]*?permissions:\s*\n\s*statuses:\s*write/.test(workflow)) {
+    fail(`${workflowPath} legacy Playwright E2E status publisher must grant only statuses: write.`);
+  }
+
+  if (!/legacy-playwright-e2e-status:[\s\S]*?actions\/github-script@v9/.test(workflow)) {
+    fail(`${workflowPath} must publish the legacy Playwright E2E status through actions/github-script.`);
+  }
+
+  if (!workflow.includes("sha: context.payload.pull_request.head.sha")) {
+    fail(`${workflowPath} legacy Playwright E2E status publisher must target the pull request head SHA.`);
+  }
+
+  if (!workflow.includes("context: 'Playwright E2E'")) {
+    fail(`${workflowPath} must preserve the legacy Playwright E2E commit-status context.`);
   }
 }
 
@@ -433,6 +461,7 @@ function validatePolicy(releaseTag, releaseVersion) {
   validateDockerSharedBuild("backend/Dockerfile", { requiresRuntimeCopy: true });
   validateDockerSharedBuild("frontend/Dockerfile", { requiresRuntimeCopy: false });
   validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage);
+  validateLegacyPlaywrightStatus(".github/workflows/test.yml");
 }
 
 function main() {

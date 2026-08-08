@@ -2,7 +2,7 @@
 
 Committed entry point for Copilot and remote/cloud agent sessions.
 
-If `AGENTS.md` exists in the checkout or is provided in the session context, treat it as the canonical repository governance file. This file is the complete portable baseline for Copilot/cloud sessions where the local-only overlay is unavailable.
+If `AGENTS.md` exists in the checkout or is provided in the session context, treat it as the canonical repository governance file. This file is only the portable fallback for sessions where that local file is unavailable.
 
 ## Startup
 
@@ -18,21 +18,15 @@ For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan.
 <!-- SPECKIT END -->
 
-## Baseline Rules
+## Portable Safety Baseline
 
 - Use English for code, comments, docs, and commit messages.
-- Frontend browser code must call `/api/*`; do not hardcode backend hosts.
-- Shared TypeScript contracts and helpers belong in `shared/`; do not duplicate them across backend and frontend.
-- Keep behavior, setup, config, workflow, and operations docs aligned with changes.
-- Preserve backward compatibility for existing SQLite files: add defaults in schema, add `runAlterMigrations()` compatibility handling, read new fields null-safe, and never remove or rename DB columns.
-- Validate and surface errors clearly; do not add silent fallbacks that hide broken releases.
-- Keep health checks and structured operational logging intact.
-- Keep changes scoped and avoid unrelated cleanup.
-- Do not commit automatically. Keep one logical change per PR and split scope that crosses unrelated domains.
-- Remove obsolete code paths when replacing behavior; do not leave dead fallbacks, commented-out implementations, or stale tests.
-- For authenticated UI work, inspect the real logged-in screen before editing. Ask for login context if it is unavailable.
-- Do not push, tag, merge, create PRs, or publish releases from a normal agent session; hand off release work to `release-manager`.
-- Route implementation, testing, CI, and repository operations through `model-router` before work starts. It hands off to `fast-task`, `standard-task`, or `complex-task` based on task risk. Model choice is developer or organization configuration; PR, push, release coordination, and workflow monitoring remain standard-tier work through `release-manager` unless the underlying change has a concrete complex trigger.
+- Frontend browser code must call `/api/*`; shared contracts belong in `shared/`.
+- Preserve existing SQLite compatibility; schema changes are additive and null-safe.
+- Validate and surface errors clearly; keep health checks and operational logging intact.
+- Do not commit automatically or perform remote release operations from a normal session; use `release-manager`.
+- Keep authenticated UI changes grounded in the real logged-in screen.
+- Keep one logical objective per change and remove obsolete paths when replacing behavior.
 
 ## Placement
 
@@ -57,6 +51,7 @@ shell commands, and other important information, read the current plan.
 - Use `testing-manager` for test planning, test execution, and CI test triage.
 - Use `release-manager` for PR shipping, merge, release, and workflow monitoring.
 - Use `project-bot` for issue, PR metadata, and GitHub Project board coordination when no product code change is required.
+- Use `model-router` for implementation, testing, CI, and repository-operation routing when delegation is available.
 
 ## Validation
 

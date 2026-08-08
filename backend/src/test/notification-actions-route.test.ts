@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTestApp, closeTestApp, insertScheduledTestMedication } from "./setup.js";
 
-const { testClient, testDb, mockedEnv, fetchMock, mockLogger } = vi.hoisted(() => {
+const { testClient, testDb, mockedEnv, fetchMock, lookupMock, mockLogger } = vi.hoisted(() => {
 	const { createClient } = require("@libsql/client");
 	const { drizzle } = require("drizzle-orm/libsql");
 	const client = createClient({ url: ":memory:" });
@@ -24,6 +24,7 @@ const { testClient, testDb, mockedEnv, fetchMock, mockLogger } = vi.hoisted(() =
 		testClient: client,
 		testDb: db,
 		fetchMock: vi.fn(),
+		lookupMock: vi.fn(),
 		mockLogger: logger,
 		mockedEnv: {
 			AUTH_ENABLED: false,
@@ -35,6 +36,7 @@ const { testClient, testDb, mockedEnv, fetchMock, mockLogger } = vi.hoisted(() =
 			CORS_ORIGINS: "*",
 			PUBLIC_APP_URL: "https://app.example.com",
 			OPENAPI_DOCS_ENABLED: false,
+			TRUSTED_PRIVATE_NOTIFICATION_HOSTS: ["ntfy.local.danielvolz.org"],
 		},
 	};
 });
@@ -47,6 +49,8 @@ vi.mock("../db/client.js", () => ({
 }));
 
 vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
+
+vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 
 const { notificationActionRoutes } = await import("../routes/notification-actions.js");
 const { createNotificationActionContext } = await import("../services/notification-actions-service.js");
@@ -139,6 +143,8 @@ describe("notification action routes", () => {
 		await clearTables();
 		mockedEnv.PUBLIC_APP_URL = "https://app.example.com";
 		mockedEnv.NODE_ENV = "test";
+		lookupMock.mockReset();
+		lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 		fetchMock.mockReset();
 		fetchMock.mockResolvedValue({ ok: true });
 		mockLogger.info.mockClear();
@@ -442,6 +448,31 @@ describe("notification action routes", () => {
 			args: [userId],
 		});
 		expect(groupRow.rows).toEqual([expect.objectContaining({ ntfy_original_message_id: "ntfy-msg-3" })]);
+	});
+
+	it("allows a configured ntfy hostname that resolves to RFC1918 during action replacement and deletion", async () => {
+		lookupMock.mockResolvedValue([{ address: "192.168.23.123", family: 4 }]);
+		const userId = await createUser("notification-route-trusted-private-ntfy");
+		await insertNotificationMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });
+		await insertUserSettings(userId, "automatic", {
+			shoutrrrEnabled: true,
+			shoutrrrUrl: "ntfy://user:pass@ntfy.local.danielvolz.org/medassist",
+		});
+		const { takenToken } = await seedContext({ userId, doseId: "5-0-1736064000000" });
+		await testClient.execute({
+			sql: "UPDATE notification_action_groups SET ntfy_original_message_id = ? WHERE user_id = ?",
+			args: ["ntfy-msg-private", userId],
+		});
+		fetchMock.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: "ntfy-msg-updated" }) });
+		fetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve("") });
+
+		const response = await app.inject({ method: "POST", url: `/notification-actions/${takenToken}` });
+
+		expect(response.statusCode).toBe(200);
+		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+			"https://ntfy.local.danielvolz.org/medassist",
+			"https://ntfy.local.danielvolz.org/medassist/ntfy-msg-private",
+		]);
 	});
 
 	it("warns when ntfy replacement, delete, and fallback clear all fail", async () => {

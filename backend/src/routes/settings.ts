@@ -849,7 +849,9 @@ export async function sendShoutrrrNotification(
 		// - redirect: "error" prevents redirect-based bypass attacks
 		// This is an intentional feature: users configure their own external notification services
 		// lgtm [js/request-forgery]
-		const targetValidationError = await validateNotificationTargetUrl(targetUrl);
+		const targetValidationError = await validateNotificationTargetUrl(targetUrl, {
+			allowTrustedPrivateNtfyHostname: isNtfy,
+		});
 		if (targetValidationError) {
 			return { success: false, error: targetValidationError };
 		}

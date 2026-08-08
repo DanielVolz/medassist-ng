@@ -36,7 +36,6 @@ const { testClient, testDb, mockedEnv, fetchMock, lookupMock, mockLogger } = vi.
 			CORS_ORIGINS: "*",
 			PUBLIC_APP_URL: "https://app.example.com",
 			OPENAPI_DOCS_ENABLED: false,
-			TRUSTED_PRIVATE_NOTIFICATION_HOSTS: ["ntfy.local.danielvolz.org"],
 		},
 	};
 });
@@ -450,7 +449,7 @@ describe("notification action routes", () => {
 		expect(groupRow.rows).toEqual([expect.objectContaining({ ntfy_original_message_id: "ntfy-msg-3" })]);
 	});
 
-	it("allows a configured ntfy hostname that resolves to RFC1918 during action replacement and deletion", async () => {
+	it("allows local ntfy targets during action replacement and deletion", async () => {
 		lookupMock.mockResolvedValue([{ address: "192.168.23.123", family: 4 }]);
 		const userId = await createUser("notification-route-trusted-private-ntfy");
 		await insertNotificationMedication({ id: 5, userId, packCount: 1, looseTablets: 0 });

@@ -101,9 +101,6 @@ describe("settings-service decomposition regression", () => {
 		vi.doMock("../db/schema.js", () => ({ userSettings: { userId: "userId" } }));
 		const lookupMock = vi.fn();
 		vi.doMock("node:dns/promises", () => ({ lookup: lookupMock }));
-		vi.doMock("../plugins/env.js", () => ({
-			env: { TRUSTED_PRIVATE_NOTIFICATION_HOSTS: ["ntfy.local.danielvolz.org"] },
-		}));
 
 		const {
 			classifyTestEmailFailure,
@@ -140,11 +137,19 @@ describe("settings-service decomposition regression", () => {
 			isNtfy: true,
 			auth: { user: "user", pass: "pass" },
 		});
+		expect(sanitizeNotificationUrl("ntfy://localhost/medis")).toEqual({
+			url: "https://localhost/medis",
+			isNtfy: true,
+		});
+		expect(sanitizeNotificationUrl("ntfy://192.168.23.123/medis")).toEqual({
+			url: "https://192.168.23.123/medis",
+			isNtfy: true,
+		});
 
 		lookupMock.mockResolvedValue([{ address: "192.168.23.123", family: 4 }]);
 		expect(
 			await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
-				allowTrustedPrivateNtfyHostname: true,
+				allowLocalNtfyTarget: true,
 			})
 		).toBeNull();
 		expect(await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis")).toContain(
@@ -152,39 +157,27 @@ describe("settings-service decomposition regression", () => {
 		);
 		expect(
 			await validateNotificationTargetUrl("https://untrusted.local.danielvolz.org/medis", {
-				allowTrustedPrivateNtfyHostname: true,
+				allowLocalNtfyTarget: true,
 			})
-		).toContain("resolves to a private IP");
+		).toBeNull();
 		expect(
 			await validateNotificationTargetUrl("http://ntfy.local.danielvolz.org/medis", {
-				allowTrustedPrivateNtfyHostname: true,
+				allowLocalNtfyTarget: true,
 			})
-		).toContain("resolves to a private IP");
+		).toBeNull();
 		expect(
 			await validateNotificationTargetUrl("https://192.168.23.123/medis", {
-				allowTrustedPrivateNtfyHostname: true,
+				allowLocalNtfyTarget: true,
 			})
-		).toContain("Private IP addresses are not allowed");
+		).toBeNull();
 
-		lookupMock.mockResolvedValue([{ address: "169.254.169.254", family: 4 }]);
-		expect(
-			await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
-				allowTrustedPrivateNtfyHostname: true,
-			})
-		).toContain("resolves to a private IP");
-
-		lookupMock.mockResolvedValue([{ address: "::1", family: 6 }]);
-		expect(
-			await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
-				allowTrustedPrivateNtfyHostname: true,
-			})
-		).toContain("resolves to a private IP");
-
-		lookupMock.mockResolvedValue([{ address: "fd00::1", family: 6 }]);
-		expect(
-			await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
-				allowTrustedPrivateNtfyHostname: true,
-			})
-		).toContain("resolves to a private IP");
+		for (const address of ["169.254.169.254", "::1", "fd00::1"]) {
+			lookupMock.mockResolvedValue([{ address, family: address.includes(":") ? 6 : 4 }]);
+			expect(
+				await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
+					allowLocalNtfyTarget: true,
+				})
+			).toBeNull();
+		}
 	});
 });

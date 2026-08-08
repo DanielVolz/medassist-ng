@@ -274,22 +274,6 @@ describe("EnvSchema", () => {
 			expect(result.CORS_ORIGINS).toBe("http://a.com,http://b.com");
 		});
 	});
-
-	describe("TRUSTED_PRIVATE_NOTIFICATION_HOSTS", () => {
-		it("normalizes exact trusted notification hostnames", () => {
-			expect(
-				EnvSchema.parse({
-					TRUSTED_PRIVATE_NOTIFICATION_HOSTS: " NTFY.LOCAL.DANIELVOLZ.ORG., ntfy.example.com ",
-				}).TRUSTED_PRIVATE_NOTIFICATION_HOSTS
-			).toEqual(["ntfy.local.danielvolz.org", "ntfy.example.com"]);
-		});
-
-		it("rejects IP literals, local names, and wildcard values", () => {
-			for (const value of ["192.168.23.123", "localhost", "ntfy.local", "*.example.com"]) {
-				expect(() => EnvSchema.parse({ TRUSTED_PRIVATE_NOTIFICATION_HOSTS: value })).toThrow();
-			}
-		});
-	});
 });
 
 describe("Auth validation", () => {

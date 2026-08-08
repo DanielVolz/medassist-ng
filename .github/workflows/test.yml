@@ -203,3 +203,29 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+
+  legacy-playwright-e2e-status:
+    name: Publish legacy Playwright E2E status
+    if: always() && github.event_name == 'pull_request'
+    needs: e2e
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Publish required legacy status
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const e2eResult = '${{ needs.e2e.result }}';
+            const state = e2eResult === 'success' ? 'success' : e2eResult === 'cancelled' ? 'error' : 'failure';
+            const description = `Reusable Playwright E2E caller finished with ${e2eResult}.`;
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.pull_request.head.sha,
+              state,
+              context: 'Playwright E2E',
+              description,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });

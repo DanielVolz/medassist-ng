@@ -469,6 +469,18 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
+	it("sendShoutrrrNotification allows explicit local ntfy targets and blocks redirects", async () => {
+		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-local-message-id" }) });
+
+		const result = await sendShoutrrrNotification("ntfy://localhost/medassist", "Title", "Message");
+
+		expect(result).toEqual({ success: true, providerMessageId: "ntfy-local-message-id" });
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://localhost/medassist",
+			expect.objectContaining({ method: "POST", redirect: "error" })
+		);
+	});
+
 	it("sendShoutrrrNotification handles ntfy auth and safe URL reconstruction", async () => {
 		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-message-id" }) });
 

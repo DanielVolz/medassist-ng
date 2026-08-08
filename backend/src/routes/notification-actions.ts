@@ -136,7 +136,7 @@ async function clearNtfyNotificationSequence(userId: number, sequenceId: string)
 	const clearUrl = new URL(sanitized.url);
 	clearUrl.pathname = `${clearUrl.pathname.replace(/\/+$/, "")}/${encodeURIComponent(sequenceId)}/clear`;
 	const targetValidationError = await validateNotificationTargetUrl(clearUrl.toString(), {
-		allowTrustedPrivateNtfyHostname: sanitized.isNtfy,
+		allowLocalNtfyTarget: sanitized.isNtfy,
 	});
 	if (targetValidationError) {
 		throw new Error(targetValidationError);
@@ -182,7 +182,7 @@ async function deleteNtfyNotificationSequence(userId: number, sequenceId: string
 	const deleteUrl = new URL(sanitized.url);
 	deleteUrl.pathname = `${deleteUrl.pathname.replace(/\/+$/, "")}/${encodeURIComponent(normalizedSequenceId)}`;
 	const targetValidationError = await validateNotificationTargetUrl(deleteUrl.toString(), {
-		allowTrustedPrivateNtfyHostname: sanitized.isNtfy,
+		allowLocalNtfyTarget: sanitized.isNtfy,
 	});
 	if (targetValidationError) {
 		throw new Error(targetValidationError);

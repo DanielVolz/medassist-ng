@@ -850,7 +850,7 @@ export async function sendShoutrrrNotification(
 		// This is an intentional feature: users configure their own external notification services
 		// lgtm [js/request-forgery]
 		const targetValidationError = await validateNotificationTargetUrl(targetUrl, {
-			allowTrustedPrivateNtfyHostname: isNtfy,
+			allowLocalNtfyTarget: isNtfy,
 		});
 		if (targetValidationError) {
 			return { success: false, error: targetValidationError };

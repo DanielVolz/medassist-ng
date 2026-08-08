@@ -4,7 +4,6 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
 import type { Language } from "../i18n/translations.js";
-import { env } from "../plugins/env.js";
 import { parseBoolEnv, parseIntEnv } from "../utils/env-parsing.js";
 import { isNtfyNotificationUrl } from "./notifications/action-renderer.js";
 
@@ -221,14 +220,6 @@ function getRestrictedIpv4AddressError(address: [number, number, number, number]
 	return null;
 }
 
-function isRfc1918Ipv4Address(address: string): boolean {
-	const parsed = parseIpv4Address(address);
-	if (!parsed) return false;
-
-	const [a, b] = parsed;
-	return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
-}
-
 function parseIpv4MappedIpv6(hostname: string): [number, number, number, number] | null {
 	if (!hostname.startsWith("::ffff:")) return null;
 
@@ -306,12 +297,12 @@ export function validateNotificationHostname(hostnameRaw: string): string | null
 
 export async function validateNotificationTargetUrl(
 	urlStr: string,
-	options: { allowTrustedPrivateNtfyHostname?: boolean } = {}
+	options: { allowLocalNtfyTarget?: boolean } = {}
 ): Promise<string | null> {
 	try {
 		const parsed = new URL(urlStr);
 		const hostnameError = validateNotificationHostname(parsed.hostname);
-		if (hostnameError) {
+		if (hostnameError && !options.allowLocalNtfyTarget) {
 			return hostnameError;
 		}
 
@@ -320,15 +311,10 @@ export async function validateNotificationTargetUrl(
 			return null;
 		}
 
-		const allowTrustedPrivateNtfyHostname =
-			options.allowTrustedPrivateNtfyHostname &&
-			parsed.protocol === "https:" &&
-			(env.TRUSTED_PRIVATE_NOTIFICATION_HOSTS?.includes(hostname) ?? false);
-
 		const addresses = await lookup(hostname, { all: true, verbatim: true });
 		for (const { address } of addresses) {
 			const addressError = validateNotificationHostname(address);
-			if (addressError && !(allowTrustedPrivateNtfyHostname && isRfc1918Ipv4Address(address))) {
+			if (addressError && !options.allowLocalNtfyTarget) {
 				return resolvedPrivateNotificationTargetError;
 			}
 		}
@@ -373,7 +359,7 @@ export function sanitizeNotificationUrl(
 		}
 
 		const hostValidationError = validateNotificationHostname(parsed.hostname);
-		if (hostValidationError) {
+		if (hostValidationError && !isNtfy) {
 			return { error: hostValidationError };
 		}
 

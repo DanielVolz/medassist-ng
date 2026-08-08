@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { z } from "zod";
 import { parseBoolEnv, parseIntEnv, parseStringListEnv } from "../utils/env-parsing.js";
 import { DEFAULT_CORS_ORIGINS, DEFAULT_RATE_LIMIT_MAX } from "../utils/server-config.js";
@@ -23,6 +24,35 @@ function intEnv(options: { defaultValue: number; min?: number; max?: number }) {
 		.transform((value) => parseIntEnv(value, options));
 }
 
+function trustedPrivateNotificationHostnamesEnv() {
+	return z
+		.string()
+		.optional()
+		.transform((value, context) => {
+			const hostnames = parseStringListEnv(value).map((entry) => entry.toLowerCase().replace(/\.$/, ""));
+			for (const hostname of hostnames) {
+				if (
+					!hostname ||
+					!/^([a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(hostname) ||
+					isIP(hostname) ||
+					hostname === "localhost" ||
+					hostname.endsWith(".localhost") ||
+					hostname.endsWith(".local") ||
+					hostname.endsWith(".internal") ||
+					hostname.endsWith(".lan") ||
+					hostname === "metadata.google.internal"
+				) {
+					context.addIssue({
+						code: "custom",
+						message: "TRUSTED_PRIVATE_NOTIFICATION_HOSTS must contain only non-localhost DNS hostnames",
+					});
+					return z.NEVER;
+				}
+			}
+			return hostnames;
+		});
+}
+
 export const EnvSchema = z.object({
 	NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
 	PORT: intEnv({ defaultValue: 3000, min: 1, max: 65535 }),
@@ -37,6 +67,7 @@ export const EnvSchema = z.object({
 	DOCS_AUTH_REQUIRED: optionalBoolEnv(),
 	MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED: optionalBoolEnv(),
 	RATE_LIMIT_MAX: intEnv({ defaultValue: DEFAULT_RATE_LIMIT_MAX, min: 1, max: 100_000 }),
+	TRUSTED_PRIVATE_NOTIFICATION_HOSTS: trustedPrivateNotificationHostnamesEnv(),
 	AUTH_ENABLED: boolEnv(false),
 	ALLOW_UNAUTHENTICATED: boolEnv(false),
 	REGISTRATION_ENABLED: boolEnv(false),

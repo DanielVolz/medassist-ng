@@ -23,6 +23,8 @@ When an ntfy intake action succeeds, MedAssist publishes the confirmation as the
 
 Outbound webhook targets are validated before delivery. Localhost, private-network IP ranges, link-local IPv6 addresses, and internal hostnames are rejected to keep notification delivery from becoming a server-side request path into the local network.
 
+For a self-hosted ntfy service with a DNS hostname that resolves to an RFC1918 address, the server operator may set `TRUSTED_PRIVATE_NOTIFICATION_HOSTS` to a comma-separated list of exact hostnames. This exception applies only to HTTPS ntfy targets after URL sanitization, including ntfy action updates and deletes. It does not allow direct IP URLs, localhost, `.local`, `.internal`, `.lan`, loopback, link-local, metadata, IPv6 private addresses, redirects, wildcard/suffix matches, or any unconfigured hostname.
+
 ## Configuration
 
 Configure push notifications in the app under `Settings -> Push`, or set defaults for new users with environment variables.
@@ -50,6 +52,7 @@ Push-related default variables:
 |----------|---------|-------------|
 | `DEFAULT_SHOUTRRR_ENABLED` | `false` | Enable push notifications by default |
 | `DEFAULT_SHOUTRRR_URL` | — | Default Shoutrrr URL |
+| `TRUSTED_PRIVATE_NOTIFICATION_HOSTS` | — | Exact trusted HTTPS ntfy hostnames allowed to resolve to RFC1918 IPv4 addresses |
 | `DEFAULT_SHOUTRRR_STOCK_REMINDERS` | `true` | Send stock reminders via push |
 | `DEFAULT_SHOUTRRR_INTAKE_REMINDERS` | `true` | Send intake reminders via push |
 | `DEFAULT_SHOUTRRR_PRESCRIPTION_REMINDERS` | `true` | Send prescription reminders via push |

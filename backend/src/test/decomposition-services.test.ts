@@ -99,9 +99,19 @@ describe("settings-service decomposition regression", () => {
 		vi.resetModules();
 		vi.doMock("../db/client.js", () => ({ db: {} }));
 		vi.doMock("../db/schema.js", () => ({ userSettings: { userId: "userId" } }));
+		const lookupMock = vi.fn();
+		vi.doMock("node:dns/promises", () => ({ lookup: lookupMock }));
+		vi.doMock("../plugins/env.js", () => ({
+			env: { TRUSTED_PRIVATE_NOTIFICATION_HOSTS: ["ntfy.local.danielvolz.org"] },
+		}));
 
-		const { classifyTestEmailFailure, getNotificationProvider, sanitizeNotificationUrl, validateNotificationHostname } =
-			await import("../services/settings-service.js");
+		const {
+			classifyTestEmailFailure,
+			getNotificationProvider,
+			sanitizeNotificationUrl,
+			validateNotificationHostname,
+			validateNotificationTargetUrl,
+		} = await import("../services/settings-service.js");
 
 		expect(classifyTestEmailFailure(new Error("SMTP rejected all recipients: person@example.com"))).toMatchObject({
 			status: 400,
@@ -130,5 +140,51 @@ describe("settings-service decomposition regression", () => {
 			isNtfy: true,
 			auth: { user: "user", pass: "pass" },
 		});
+
+		lookupMock.mockResolvedValue([{ address: "192.168.23.123", family: 4 }]);
+		expect(
+			await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
+				allowTrustedPrivateNtfyHostname: true,
+			})
+		).toBeNull();
+		expect(await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis")).toContain(
+			"resolves to a private IP"
+		);
+		expect(
+			await validateNotificationTargetUrl("https://untrusted.local.danielvolz.org/medis", {
+				allowTrustedPrivateNtfyHostname: true,
+			})
+		).toContain("resolves to a private IP");
+		expect(
+			await validateNotificationTargetUrl("http://ntfy.local.danielvolz.org/medis", {
+				allowTrustedPrivateNtfyHostname: true,
+			})
+		).toContain("resolves to a private IP");
+		expect(
+			await validateNotificationTargetUrl("https://192.168.23.123/medis", {
+				allowTrustedPrivateNtfyHostname: true,
+			})
+		).toContain("Private IP addresses are not allowed");
+
+		lookupMock.mockResolvedValue([{ address: "169.254.169.254", family: 4 }]);
+		expect(
+			await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
+				allowTrustedPrivateNtfyHostname: true,
+			})
+		).toContain("resolves to a private IP");
+
+		lookupMock.mockResolvedValue([{ address: "::1", family: 6 }]);
+		expect(
+			await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
+				allowTrustedPrivateNtfyHostname: true,
+			})
+		).toContain("resolves to a private IP");
+
+		lookupMock.mockResolvedValue([{ address: "fd00::1", family: 6 }]);
+		expect(
+			await validateNotificationTargetUrl("https://ntfy.local.danielvolz.org/medis", {
+				allowTrustedPrivateNtfyHostname: true,
+			})
+		).toContain("resolves to a private IP");
 	});
 });

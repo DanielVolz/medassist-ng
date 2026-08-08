@@ -187,6 +187,30 @@ function validateContainerSmokeWorkflow(workflowPath) {
   }
 }
 
+function validateLegacyPlaywrightStatus(workflowPath) {
+  const workflow = readText(workflowPath);
+
+  if (!/legacy-playwright-e2e-status:[\s\S]*?needs:\s*e2e/.test(workflow)) {
+    fail(`${workflowPath} must publish the legacy Playwright E2E status after the reusable E2E caller.`);
+  }
+
+  if (!/legacy-playwright-e2e-status:[\s\S]*?permissions:\s*\n\s*statuses:\s*write/.test(workflow)) {
+    fail(`${workflowPath} legacy Playwright E2E status publisher must grant only statuses: write.`);
+  }
+
+  if (!/legacy-playwright-e2e-status:[\s\S]*?actions\/github-script@v9/.test(workflow)) {
+    fail(`${workflowPath} must publish the legacy Playwright E2E status through actions/github-script.`);
+  }
+
+  if (!workflow.includes("sha: context.payload.pull_request.head.sha")) {
+    fail(`${workflowPath} legacy Playwright E2E status publisher must target the pull request head SHA.`);
+  }
+
+  if (!workflow.includes("context: 'Playwright E2E'")) {
+    fail(`${workflowPath} must preserve the legacy Playwright E2E commit-status context.`);
+  }
+}
+
 function validateDependabotAutomergeWorkflow(workflowPath) {
   const workflow = readText(workflowPath);
 
@@ -437,6 +461,7 @@ function validatePolicy(releaseTag, releaseVersion) {
   validateDockerSharedBuild("backend/Dockerfile", { requiresRuntimeCopy: true });
   validateDockerSharedBuild("frontend/Dockerfile", { requiresRuntimeCopy: false });
   validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage);
+  validateLegacyPlaywrightStatus(".github/workflows/test.yml");
 }
 
 function main() {

@@ -249,6 +249,25 @@ test("release preflight rejects frontend CI without the static check before buil
   }
 });
 
+test("release preflight rejects a legacy Playwright status publisher without the PR head SHA", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/test.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "sha: context.payload.pull_request.head.sha",
+      "sha: context.sha"
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/test\.yml legacy Playwright E2E status publisher must target the pull request head SHA/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test("release preflight rejects E2E CI without the data-focused Chromium project", () => {
   const fixtureRoot = copyFixture();
   try {

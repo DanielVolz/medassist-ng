@@ -94,7 +94,9 @@ jobs:
 
               const waitingFor = [];
               for (const checkName of requiredChecks) {
-                const check = checkMap.get(checkName);
+                const check = Array.from(checkMap.entries()).find(
+                  ([name]) => name === checkName || name.endsWith(` / ${checkName}`)
+                )?.[1];
                 core.info(`${checkName}: ${check?.status ?? 'missing'} / ${check?.conclusion ?? 'pending'}`);
                 if (check?.conclusion === 'success') {
                   continue;

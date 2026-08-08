@@ -169,6 +169,10 @@ function validateContainerSmokeWorkflow(workflowPath) {
     fail(`${workflowPath} must wait for Backend Tests, Frontend Build, and Playwright E2E before running smoke on PRs.`);
   }
 
+  if (!workflow.includes("name === checkName || name.endsWith(` / ${checkName}`)")) {
+    fail(`${workflowPath} must recognize exact and reusable-workflow-suffixed required check names.`);
+  }
+
   for (const imageName of ["backend", "frontend"]) {
     const cacheFrom = `cache-from: type=gha,scope=container-smoke-${imageName}`;
     const cacheTo = `cache-to: type=gha,mode=max,scope=container-smoke-${imageName},ignore-error=true`;

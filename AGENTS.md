@@ -157,6 +157,7 @@ Before each task, infer applicable skills from intent and touched paths, then re
 | Test planning, test writing, test execution, CI test failures | `Testing Handoff` |
 | Push, PR, merge, tag, or release requests | `Release Handoff` |
 | Changes under `.github/skills/**` | `Skill Quality Review` |
+| Ambiguous or scope-sensitive non-trivial implementation tasks | `Karpathy Core` |
 
 Skill files:
 
@@ -174,6 +175,7 @@ Skill files:
 | Testing Handoff | `.github/skills/medassist-testing-handoff/SKILL.md` |
 | Release Handoff | `.github/skills/medassist-release-handoff/SKILL.md` |
 | Skill Quality Review | `.github/skills/medassist-skill-quality-review/SKILL.md` |
+| Karpathy Core | `.github/skills/medassist-karpathy-core/SKILL.md` |
 
 ## Delegation
 
@@ -188,7 +190,7 @@ Skill files:
 
 This routing policy applies to Codex and GitHub Copilot. Classify the task before choosing a model, agent, or delegation path. Start with the lowest capable tier and escalate only when concrete evidence requires it.
 
-For Codex, the main agent must delegate task classification to `model-router` before implementation whenever the task changes code, runs tests, coordinates CI, or performs repository operations. The router must then spawn the matching task agent: `fast-task`, `standard-task`, or `complex-task`. This is automatic delegation policy, not a suggestion to ask the user to pick a model.
+For implementation, test execution, CI coordination, or repository operations, classify the work through `model-router` before delegating to `fast-task`, `standard-task`, or `complex-task`. Read-only discovery and small governance edits may use the fast tier directly when no specialist action is required.
 
 | Tier | Use for | Required agent role |
 |---|---|---|
@@ -231,5 +233,5 @@ npm run build
 - `AGENTS.md`: canonical local governance, skill routing, and ownership.
 - `.github/copilot-instructions.md`: committed entry point for Copilot/cloud agents; it should stay short and defer to `AGENTS.md` when present.
 - `.github/skills/*/SKILL.md`: detailed skill rules, read only when triggered.
-- `.github/agents/*.agent.md`: shared Copilot specialist definitions and routing roles.
+- `.github/agents/*.agent.md`: Copilot specialist definitions and routing roles; ignored Spec Kit definitions are local generated integrations.
 - `.codex/agents/*.toml`: local Codex custom-agent definitions; these are intentionally local-only.

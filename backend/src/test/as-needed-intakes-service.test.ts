@@ -166,18 +166,15 @@ describe.sequential("as-needed intake service", () => {
 		["ended", { endDate: "2000-01-01" }, undefined, "NOT_ELIGIBLE"],
 		["obsolete", { isObsolete: true }, undefined, "NOT_ELIGIBLE"],
 		["unassigned person", { people: ["Ava"] }, "Ben", "INVALID_PERSON"],
-	] as const)(
-		"rejects %s medication eligibility without an anchor or event",
-		async (_case, options, personName, code) => {
-			const medicationId = await seedMedication(options);
-			await expectCode(
-				createAsNeededIntake({ userId: 1, medicationId, quantity: 1, personName, idempotencyKey: intentKey() }),
-				code
-			);
-			expect(await eventCount()).toBe(0);
-			expect((await db.select().from(doseTracking)).length).toBe(0);
-		}
-	);
+	] as const)("rejects %s medication eligibility without an anchor or event", async (_case, options, personName, code) => {
+		const medicationId = await seedMedication(options);
+		await expectCode(
+			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, personName, idempotencyKey: intentKey() }),
+			code
+		);
+		expect(await eventCount()).toBe(0);
+		expect((await db.select().from(doseTracking)).length).toBe(0);
+	});
 
 	it.each([
 		["insufficient stock", { stock: 1 }, 2, "INSUFFICIENT_STOCK"],

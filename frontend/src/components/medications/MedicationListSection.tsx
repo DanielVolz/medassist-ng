@@ -116,6 +116,7 @@ export function MedicationListSection({
 					<div className={cx(classes.grid, isCompact && classes.gridCompact)}>
 						{orderedMeds.map((med) => {
 							const displayName = getMedDisplayName(med);
+							const medicationIntakes = getMedicationIntakes(med);
 							const stockDisplayCapacity = getStockDisplayCapacity(med);
 							const currentStock = coverageByMed[displayName]
 								? Math.round(coverageByMed[displayName].medsLeft)
@@ -229,7 +230,12 @@ export function MedicationListSection({
 										</div>
 									</div>
 									<div className={classes.blisterList}>
-										{getMedicationIntakes(med).map((intake) => (
+										{medicationIntakes.length === 0 && (
+											<div className={cx(classes.blisterRowSimple, classes.noRegularSchedule)}>
+												{t("form.blisters.noRegularSchedule")}
+											</div>
+										)}
+										{medicationIntakes.map((intake) => (
 											<div
 												key={`${med.id}-${intake.start}-${intake.usage}-${intake.takenBy ?? "none"}`}
 												className={classes.blisterRowSimple}

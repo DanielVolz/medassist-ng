@@ -37,6 +37,18 @@ describe("getMedTotal", () => {
 		expect(getMedTotal(med)).toBe(7); // 10 - 3 = 7
 	});
 
+	it("includes the persisted millistock schedule rebase exactly", () => {
+		const med = {
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 10,
+			looseTablets: 0,
+			scheduleStockRebaseMilli: -1500,
+		};
+
+		expect(getMedTotal(med)).toBe(8.5);
+	});
+
 	it("handles undefined stock adjustment", () => {
 		const med = {
 			packCount: 1,

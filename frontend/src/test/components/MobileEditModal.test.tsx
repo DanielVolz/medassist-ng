@@ -78,6 +78,7 @@ const defaultProps = {
 	onSetIntakeValue: vi.fn(),
 	onAddIntake: vi.fn(),
 	onRemoveIntake: vi.fn(),
+	onNoRegularScheduleChange: vi.fn(),
 	onHandleValueChange: vi.fn(),
 	refillPacks: 0,
 	onRefillPacksChange: vi.fn(),
@@ -382,6 +383,17 @@ describe("MobileEditModal", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
 		expect(screen.getByText(/form\.blisters\.title/i)).toBeInTheDocument();
+	});
+
+	it("keeps the no-regular-schedule control and removes the add action for an explicit empty schedule", () => {
+		const onNoRegularScheduleChange = vi.fn();
+		const form = { ...defaultForm, intakes: [] };
+		render(<MobileEditModal {...defaultProps} form={form} onNoRegularScheduleChange={onNoRegularScheduleChange} />);
+
+		fireEvent.click(screen.getByRole("checkbox", { name: "form.blisters.noRegularSchedule" }));
+		expect(onNoRegularScheduleChange).toHaveBeenCalledWith(false);
+		expect(screen.getByText("form.blisters.noRegularScheduleHint")).toBeInTheDocument();
+		expect(screen.queryByTestId("add-intake-button")).not.toBeInTheDocument();
 	});
 
 	it("renders save button", () => {

@@ -126,6 +126,7 @@ export interface MobileEditModalProps {
 	onSetIntakeValue: <K extends keyof FormIntake>(idx: number, field: K, value: FormIntake[K]) => void;
 	onAddIntake: (takenBy?: string) => void;
 	onRemoveIntake: (idx: number) => void;
+	onNoRegularScheduleChange: (checked: boolean) => void;
 	// Value change handler for numeric fields
 	onHandleValueChange: <K extends keyof FormState>(field: K, value: FormState[K]) => void;
 	// Image handling
@@ -182,6 +183,7 @@ export function MobileEditModal({
 	onSetIntakeValue,
 	onAddIntake,
 	onRemoveIntake,
+	onNoRegularScheduleChange,
 	onHandleValueChange,
 	meds,
 	onUploadMedImage,
@@ -448,7 +450,7 @@ export function MobileEditModal({
 			withCloseButton
 		>
 			<form
-				className={classes.form}
+				className={[classes.form, "form-grid"].join(" ")}
 				autoComplete="off"
 				spellCheck={false}
 				autoCorrect="off"
@@ -949,7 +951,7 @@ export function MobileEditModal({
 								<div className={["full", formClasses.category, formClasses.intakeSection, classes.category].join(" ")}>
 									<div className={formClasses.categoryHeader}>
 										<h4 className={formClasses.categoryTitle}>{t("form.blisters.title")}</h4>
-										{!readOnlyMode && (
+										{!readOnlyMode && form.intakes.length > 0 && (
 											<AppTooltip label={t("form.blisters.addIntake")}>
 												<ActionIcon
 													data-testid="add-intake-button"
@@ -964,6 +966,16 @@ export function MobileEditModal({
 											</AppTooltip>
 										)}
 									</div>
+									<AppCheckbox
+										data-testid="no-regular-schedule"
+										checked={form.intakes.length === 0}
+										disabled={readOnlyMode}
+										label={t("form.blisters.noRegularSchedule")}
+										onChange={onNoRegularScheduleChange}
+									/>
+									{form.intakes.length === 0 && (
+										<div className={formClasses.noScheduleEmpty}>{t("form.blisters.noRegularScheduleHint")}</div>
+									)}
 									{form.intakes.map((intake, idx) => {
 										const scheduleMode = getIntakeScheduleMode(intake);
 										const selectedWeekdays = intake.weekdays ?? [];
@@ -1097,7 +1109,7 @@ export function MobileEditModal({
 														tooltip={t("form.blisters.remindTooltip")}
 													/>
 												</div>
-												{!readOnlyMode && form.intakes.length > 1 && (
+												{!readOnlyMode && (
 													<AppButton
 														type="button"
 														tone="secondary"

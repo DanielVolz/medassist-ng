@@ -387,6 +387,11 @@
     },
     "blisters": {
       "title": "Intake schedule",
+      "noRegularSchedule": "No regular schedule",
+      "noRegularScheduleHint": "No automatic reminders or future doses will be created.",
+      "removeLastTitle": "Remove regular schedule?",
+      "removeLastMessage": "Automatic reminders and future due doses will stop. The medication, its stock, and its existing history will be kept.",
+      "removeLastConfirm": "Remove schedule",
       "remind": "Remind",
       "remindTooltip": "Receive a notification 15 minutes before each scheduled intake",
       "addIntake": "Intake",
@@ -720,6 +725,7 @@
     "saveFailed": "Failed to save",
     "networkError": "Network error",
     "saving": "Saving...",
+    "notAvailable": "Not available",
     "outOfStockTakeBlocked": "This medication is empty. Intake cannot be marked as taken.",
     "unsavedChanges": {
       "title": "Unsaved Changes",

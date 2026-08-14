@@ -98,6 +98,13 @@ function createProps(overrides: Partial<React.ComponentProps<typeof MedicationDi
 		unsavedTitle: "unsaved-title",
 		onConfirmClose: vi.fn(),
 		onCancelClose: vi.fn(),
+		showNoScheduleConfirm: false,
+		noScheduleTitle: "no-schedule-title",
+		noScheduleMessage: "no-schedule-message",
+		noScheduleConfirmLabel: "confirm-no-schedule",
+		noScheduleCancelLabel: "cancel-no-schedule",
+		onConfirmNoSchedule: vi.fn(),
+		onCancelNoSchedule: vi.fn(),
 		showObsoleteConfirm: false,
 		obsoleteCandidate: null,
 		obsoleteTitle: "obsolete-title",
@@ -155,6 +162,20 @@ describe("MedicationDialogs", () => {
 
 		expect(onConfirmClose).toHaveBeenCalledTimes(1);
 		expect(onCancelClose).toHaveBeenCalledTimes(1);
+	});
+
+	it("renders the no-schedule confirmation without changing its cancel semantics", () => {
+		const onConfirmNoSchedule = vi.fn();
+		const onCancelNoSchedule = vi.fn();
+		render(
+			<MedicationDialogs {...createProps({ showNoScheduleConfirm: true, onConfirmNoSchedule, onCancelNoSchedule })} />
+		);
+
+		fireEvent.click(screen.getByText("cancel-no-schedule"));
+		expect(onCancelNoSchedule).toHaveBeenCalledTimes(1);
+		expect(onConfirmNoSchedule).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByText("confirm-no-schedule"));
+		expect(onConfirmNoSchedule).toHaveBeenCalledTimes(1);
 	});
 
 	it("renders obsolete and delete confirms only when a candidate exists", () => {

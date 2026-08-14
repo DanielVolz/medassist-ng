@@ -146,6 +146,8 @@ export type Medication = {
 	totalPills?: number | null; // For bottle type: total capacity of the container
 	looseTablets: number; // For blister: extra loose pills; for bottle: current stock
 	stockAdjustment?: number;
+	scheduleStockRebaseMilli?: number;
+	hasRegularSchedule?: boolean;
 	lastStockCorrectionAt?: string | null;
 	pillWeightMg?: number | null;
 	doseUnit?: DoseUnit | null; // Unit for the dose (mg, g, mcg, ml, IU, etc.)
@@ -407,14 +409,16 @@ type MedLike = Pick<
 	"packCount" | "blistersPerPack" | "pillsPerBlister" | "looseTablets" | "packageAmountValue"
 > & {
 	stockAdjustment?: number;
+	scheduleStockRebaseMilli?: number;
 	packageType?: PackageType;
 	totalPills?: number | null;
 };
 
-/** Calculate total pills including stockAdjustment */
+/** Calculate total stock including persisted projection adjustments. */
 export function getMedTotal(med: MedLike): number {
+	const projectionAdjustment = (med.scheduleStockRebaseMilli ?? 0) / 1000;
 	if (isDiscreteCountPackageType(med.packageType)) {
-		return med.looseTablets + (med.stockAdjustment ?? 0);
+		return med.looseTablets + (med.stockAdjustment ?? 0) + projectionAdjustment;
 	}
 
 	// Amount-based package types use the same canonical base field as the backend:
@@ -422,10 +426,15 @@ export function getMedTotal(med: MedLike): number {
 	// for compatibility and UI helpers.
 	if (isPackageAmountPackageType(med.packageType)) {
 		const baseStock = med.looseTablets ?? med.totalPills ?? 0;
-		return baseStock + (med.stockAdjustment ?? 0);
+		return baseStock + (med.stockAdjustment ?? 0) + projectionAdjustment;
 	}
 	// For blister type, calculate from packs + loose
-	return med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
+	return (
+		med.packCount * med.blistersPerPack * med.pillsPerBlister +
+		med.looseTablets +
+		(med.stockAdjustment ?? 0) +
+		projectionAdjustment
+	);
 }
 
 /** Get the base package size (without stockAdjustment) */

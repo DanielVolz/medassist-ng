@@ -13,6 +13,13 @@ type MedicationDialogsProps = {
 	unsavedTitle: string;
 	onConfirmClose: () => void;
 	onCancelClose: () => void;
+	showNoScheduleConfirm: boolean;
+	noScheduleTitle: string;
+	noScheduleMessage: string;
+	noScheduleConfirmLabel: string;
+	noScheduleCancelLabel: string;
+	onConfirmNoSchedule: () => void;
+	onCancelNoSchedule: () => void;
 	showObsoleteConfirm: boolean;
 	obsoleteCandidate: Medication | null;
 	obsoleteTitle: string;
@@ -46,6 +53,13 @@ export function MedicationDialogs({
 	unsavedTitle,
 	onConfirmClose,
 	onCancelClose,
+	showNoScheduleConfirm,
+	noScheduleTitle,
+	noScheduleMessage,
+	noScheduleConfirmLabel,
+	noScheduleCancelLabel,
+	onConfirmNoSchedule,
+	onCancelNoSchedule,
 	showObsoleteConfirm,
 	obsoleteCandidate,
 	obsoleteTitle,
@@ -94,6 +108,19 @@ export function MedicationDialogs({
 					cancelLabel={obsoleteCancelLabel}
 					onConfirm={onConfirmMarkObsolete}
 					onCancel={onCancelMarkObsolete}
+					confirmVariant="warning"
+					overlayClassName={showEditModal ? "nested-confirm" : undefined}
+				/>
+			)}
+
+			{showNoScheduleConfirm && (
+				<ConfirmModal
+					title={noScheduleTitle}
+					message={noScheduleMessage}
+					confirmLabel={noScheduleConfirmLabel}
+					cancelLabel={noScheduleCancelLabel}
+					onConfirm={onConfirmNoSchedule}
+					onCancel={onCancelNoSchedule}
 					confirmVariant="warning"
 					overlayClassName={showEditModal ? "nested-confirm" : undefined}
 				/>

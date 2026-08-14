@@ -115,6 +115,19 @@ describe("MedDetailModal", () => {
 		expect(screen.getByText("Test Med")).toBeInTheDocument();
 	});
 
+	it("shows schedule and coverage as unavailable for an explicit no-schedule medication", () => {
+		const unscheduled = {
+			...mockMedication,
+			intakes: [],
+			blisters: [{ usage: 1, every: 1, start: "2024-01-01T09:00:00" }],
+		};
+		render(<MedDetailModal {...defaultProps} selectedMed={unscheduled} />);
+
+		expect(screen.getByText("form.blisters.noRegularSchedule")).toBeInTheDocument();
+		expect(getDetailValue("modal.daysLeft")).toHaveTextContent("common.notAvailable");
+		expect(getDetailValue("modal.runsOut")).toHaveTextContent("common.notAvailable");
+	});
+
 	it("opens the user filter from medication-level person names", () => {
 		const onOpenUserFilter = vi.fn();
 		render(<MedDetailModal {...defaultProps} onOpenUserFilter={onOpenUserFilter} />);

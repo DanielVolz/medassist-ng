@@ -213,7 +213,7 @@ export function useMedicationForm(): UseMedicationFormReturn {
 
 		// Parse intakes - prefer new format, fallback to legacy blisters
 		const intakesFromApi =
-			med.intakes && med.intakes.length > 0
+			med.intakes !== undefined
 				? med.intakes.map((i) => ({
 						usage: String(i.usage),
 						every: String(i.every),

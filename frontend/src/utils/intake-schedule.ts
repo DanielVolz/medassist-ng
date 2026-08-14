@@ -75,8 +75,8 @@ export function toggleWeekdaySelection(
 }
 
 export function getMedicationIntakes(med: MedicationScheduleSource): Intake[] {
-	if (med.intakes && med.intakes.length > 0) {
-		return med.intakes;
+	if (med.intakes !== undefined) {
+		return med.intakes ?? [];
 	}
 	return med.blisters.map((blister) => ({
 		usage: blister.usage,

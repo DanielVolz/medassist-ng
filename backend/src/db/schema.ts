@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { type AnySQLiteColumn, check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // =============================================================================
 // Users - Simple auth, no roles (every user is equal)
@@ -272,6 +272,72 @@ export const doseTracking = sqliteTable(
 		dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false), // legacy column: true = intake skipped without stock deduction
 	},
 	(table) => [uniqueIndex("dose_tracking_user_id_dose_id_unique").on(table.userId, table.doseId)]
+);
+
+// =============================================================================
+// As-needed Intake Events - Authoritative companion rows for reserved anchors
+// =============================================================================
+export const asNeededIntakeEvents = sqliteTable(
+	"as_needed_intake_events",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		eventId: text("event_id", { length: 36 }).notNull(),
+		userId: integer("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		medicationId: integer("medication_id")
+			.notNull()
+			.references(() => medications.id, { onDelete: "cascade" }),
+		doseTrackingId: integer("dose_tracking_id")
+			.notNull()
+			.references(() => doseTracking.id, { onDelete: "cascade" }),
+		idempotencyKeyHash: text("idempotency_key_hash", { length: 64 }).notNull(),
+		requestFingerprint: text("request_fingerprint", { length: 64 }).notNull(),
+		occurredAt: integer("occurred_at", { mode: "timestamp" }).notNull(),
+		recordedAt: integer("recorded_at", { mode: "timestamp" }).notNull(),
+		quantityMilli: integer("quantity_milli").notNull(),
+		quantityUnit: text("quantity_unit", { length: 20 }).notNull(),
+		personName: text("person_name", { length: 100 }).notNull().default(""),
+		source: text("source", { length: 30 }).notNull().default("owner_as_needed"),
+		status: text("status", { length: 20 }).notNull().default("active"),
+		stockEffectMilli: integer("stock_effect_milli").notNull().default(0),
+		stockEffectReason: text("stock_effect_reason", { length: 40 }).notNull().default("applied"),
+		stockCutoffAt: integer("stock_cutoff_at").notNull().default(0),
+		replacesEventId: integer("replaces_event_id").references((): AnySQLiteColumn => asNeededIntakeEvents.id),
+		reversedAt: integer("reversed_at", { mode: "timestamp" }),
+		reversalIdempotencyKeyHash: text("reversal_idempotency_key_hash", { length: 64 }),
+		revision: integer("revision").notNull().default(1),
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+		updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+	},
+	(table) => [
+		uniqueIndex("as_needed_intake_events_event_id_unique").on(table.eventId),
+		uniqueIndex("as_needed_intake_events_anchor_unique").on(table.doseTrackingId),
+		uniqueIndex("as_needed_intake_events_owner_key_unique").on(table.userId, table.idempotencyKeyHash),
+		uniqueIndex("as_needed_intake_events_owner_reversal_key_unique")
+			.on(table.userId, table.reversalIdempotencyKeyHash)
+			.where(sql`${table.reversalIdempotencyKeyHash} IS NOT NULL`),
+		uniqueIndex("as_needed_intake_events_replacement_unique")
+			.on(table.replacesEventId)
+			.where(sql`${table.replacesEventId} IS NOT NULL`),
+		index("as_needed_intake_events_medication_occurred_idx").on(table.userId, table.medicationId, table.occurredAt),
+		index("as_needed_intake_events_owner_status_occurred_idx").on(table.userId, table.status, table.occurredAt),
+		check("as_needed_intake_events_quantity_positive", sql`${table.quantityMilli} > 0`),
+		check("as_needed_intake_events_effect_nonnegative", sql`${table.stockEffectMilli} >= 0`),
+		check("as_needed_intake_events_status_valid", sql`${table.status} IN ('active', 'reversed')`),
+		check(
+			"as_needed_intake_events_unit_valid",
+			sql`${table.quantityUnit} IN ('pills', 'ml', 'puffs', 'injections', 'application')`
+		),
+		check(
+			"as_needed_intake_events_reason_valid",
+			sql`${table.stockEffectReason} IN ('applied', 'non_measurable', 'before_correction', 'superseded_by_correction')`
+		),
+		check(
+			"as_needed_intake_events_reversal_state_valid",
+			sql`(${table.status} = 'active' AND ${table.reversedAt} IS NULL) OR (${table.status} = 'reversed' AND ${table.reversedAt} IS NOT NULL)`
+		),
+	]
 );
 
 // =============================================================================

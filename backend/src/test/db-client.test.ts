@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 type ClientTestOptions = {
 	dirWritable?: boolean;
 	authEnabled?: boolean;
+	client?: Record<string, unknown>;
 };
 
 async function loadDbClientModule(options: ClientTestOptions = {}) {
@@ -25,7 +26,7 @@ async function loadDbClientModule(options: ClientTestOptions = {}) {
 	const dotenvConfig = vi.fn();
 	vi.doMock("dotenv", () => ({ default: { config: dotenvConfig } }));
 
-	const createClient = vi.fn().mockReturnValue({ execute: vi.fn() });
+	const createClient = vi.fn().mockReturnValue(options.client ?? { execute: vi.fn() });
 	vi.doMock("@libsql/client", () => ({ createClient }));
 
 	const drizzle = vi.fn().mockReturnValue({ __db: true });
@@ -103,6 +104,27 @@ afterEach(() => {
 });
 
 describe("db/client bootstrap", () => {
+	it("releases the FIFO writer turn after a callback failure", async () => {
+		const firstTransaction = { commit: vi.fn(), rollback: vi.fn(), close: vi.fn(), closed: false };
+		const secondTransaction = { commit: vi.fn(), rollback: vi.fn(), close: vi.fn(), closed: false };
+		const client = {
+			execute: vi.fn(),
+			transaction: vi.fn().mockResolvedValueOnce(firstTransaction).mockResolvedValueOnce(secondTransaction),
+		};
+		const { modulePromise } = await loadDbClientModule({ client });
+		const mod = await modulePromise;
+		const first = mod.withImmediateWriteTransaction(async () => {
+			throw new Error("callback failed");
+		});
+		const second = mod.withImmediateWriteTransaction(async () => "next writer");
+
+		await expect(first).rejects.toThrow("callback failed");
+		await expect(second).resolves.toBe("next writer");
+		expect(client.transaction).toHaveBeenCalledTimes(2);
+		expect(firstTransaction.rollback).toHaveBeenCalledTimes(1);
+		expect(secondTransaction.commit).toHaveBeenCalledTimes(1);
+	});
+
 	it("initializes db and runs migrations when directory is writable", async () => {
 		const { modulePromise, mocks } = await loadDbClientModule({ dirWritable: true, authEnabled: false });
 		const mod = await modulePromise;

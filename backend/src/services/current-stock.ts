@@ -10,8 +10,17 @@ import {
 	parseLocalDateTime,
 } from "../utils/scheduler-utils.js";
 
-type MedicationRow = typeof medications.$inferSelect;
+type MedicationRow = Omit<typeof medications.$inferSelect, "scheduleStockRebaseMilli"> & {
+	scheduleStockRebaseMilli?: number | null;
+};
 type DoseRow = typeof doseTracking.$inferSelect;
+
+type CurrentStockOptions = {
+	medication: MedicationRow;
+	doses: DoseRow[];
+	stockCalculationMode: "automatic" | "manual";
+	nowMs?: number;
+};
 
 function getDoseTakenAtMs(dose: DoseRow): number {
 	const rawTakenAt = Number(dose.takenAt);
@@ -22,12 +31,7 @@ function getDoseTakenAtMs(dose: DoseRow): number {
 	return new Date(dose.takenAt).getTime();
 }
 
-export function computeMedicationCurrentStock(options: {
-	medication: MedicationRow;
-	doses: DoseRow[];
-	stockCalculationMode: "automatic" | "manual";
-	nowMs?: number;
-}): number {
+export function computeMedicationCurrentStockRaw(options: CurrentStockOptions): number {
 	const { medication, doses, stockCalculationMode, nowMs = Date.now() } = options;
 
 	const schedule = normalizeMedicationSchedule(medication);
@@ -123,5 +127,9 @@ export function computeMedicationCurrentStock(options: {
 		});
 	}
 
-	return Math.max(0, Math.floor(baseStock - consumed));
+	return Math.max(0, baseStock + (medication.scheduleStockRebaseMilli ?? 0) / 1000 - consumed);
+}
+
+export function computeMedicationCurrentStock(options: CurrentStockOptions): number {
+	return Math.floor(computeMedicationCurrentStockRaw(options));
 }

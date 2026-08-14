@@ -26,6 +26,8 @@ const { testClient, testDb, testDbPath } = vi.hoisted(() => {
 vi.mock("../db/client.js", () => ({
 	db: testDb,
 	migrationsReady: Promise.resolve(),
+	withImmediateWriteTransaction: async <T>(operation: (transactionDb: typeof testDb) => Promise<T>): Promise<T> =>
+		operation(testDb),
 }));
 
 vi.mock("../plugins/env.js", () => ({
@@ -2705,6 +2707,74 @@ describe("E2E Tests with Real Routes", () => {
 			const med = getMeds.json().find((m: Record<string, unknown>) => m.id === medId);
 			expect(med.name).toBe("Renamed Preserve Med");
 			expect(med.stockAdjustment).toBe(-5);
+		});
+
+		it("keeps raw stock and historical dose identities stable across schedule-to-zero-to-schedule edits", async () => {
+			await testClient.execute({
+				sql: "INSERT INTO user_settings (user_id, stock_calculation_mode) VALUES (?, ?)",
+				args: [userId, "manual"],
+			});
+			const schedule = [{ usage: 1, every: 1, start: "2026-01-01T08:00:00" }];
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Schedule boundary med",
+					packCount: 0,
+					blistersPerPack: 1,
+					pillsPerBlister: 1,
+					looseTablets: 10,
+					intakes: schedule,
+				},
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id as number;
+			const historicalDoseId = `${medId}-0-${new Date("2026-01-02T00:00:00.000Z").getTime()}`;
+			await testClient.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed, taken_source) VALUES (?, ?, ?, 0, 'manual')",
+				args: [userId, historicalDoseId, Math.floor(new Date("2026-01-02T08:05:00.000Z").getTime() / 1000)],
+			});
+
+			const update = async (intakes: typeof schedule) =>
+				app.inject({
+					method: "PUT",
+					url: `/medications/${medId}`,
+					payload: {
+						name: "Schedule boundary med",
+						packCount: 0,
+						blistersPerPack: 1,
+						pillsPerBlister: 1,
+						looseTablets: 10,
+						intakes,
+					},
+				});
+
+			const removed = await update([]);
+			expect(removed.statusCode).toBe(200);
+			let stored = await testClient.execute({
+				sql: "SELECT intakes_json, usage_json, every_json, start_json, schedule_stock_rebase_milli FROM medications WHERE id = ?",
+				args: [medId],
+			});
+			expect(stored.rows[0]).toMatchObject({
+				intakes_json: "[]",
+				usage_json: "[]",
+				every_json: "[]",
+				start_json: "[]",
+				schedule_stock_rebase_milli: -1000,
+			});
+
+			const restored = await update([{ usage: 2, every: 1, start: "2026-01-01T20:00:00" }]);
+			expect(restored.statusCode).toBe(200);
+			stored = await testClient.execute({
+				sql: "SELECT schedule_stock_rebase_milli FROM medications WHERE id = ?",
+				args: [medId],
+			});
+			expect(stored.rows[0].schedule_stock_rebase_milli).toBe(1000);
+			const doses = await testClient.execute({
+				sql: "SELECT dose_id FROM dose_tracking WHERE user_id = ?",
+				args: [userId],
+			});
+			expect(doses.rows).toEqual([expect.objectContaining({ dose_id: historicalDoseId })]);
 		});
 
 		it("should not count phantom consumption in planner after stock correction", async () => {

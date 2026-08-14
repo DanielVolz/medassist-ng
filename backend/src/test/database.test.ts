@@ -316,6 +316,15 @@ describe("Database Client Utilities", () => {
 			expect(result.errors).toHaveLength(0);
 		});
 
+		it("keeps the schedule stock rebase column backward-compatible", async () => {
+			const result = await runAlterMigrations(client);
+			expect(result.success).toBe(true);
+
+			const columns = await client.execute("PRAGMA table_info(medications)");
+			const rebaseColumn = columns.rows.find((column) => column.name === "schedule_stock_rebase_milli");
+			expect(rebaseColumn).toMatchObject({ notnull: 1, dflt_value: "0" });
+		});
+
 		it("should be idempotent", async () => {
 			await runAlterMigrations(client);
 			const result = await runAlterMigrations(client);

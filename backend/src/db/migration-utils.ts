@@ -83,6 +83,7 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE dose_tracking ADD COLUMN taken_source text NOT NULL DEFAULT 'manual'`,
 		`ALTER TABLE user_settings ADD COLUMN stock_calculation_mode text NOT NULL DEFAULT 'automatic'`,
 		`ALTER TABLE medications ADD COLUMN stock_adjustment integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE medications ADD COLUMN schedule_stock_rebase_milli integer NOT NULL DEFAULT 0`,
 		`ALTER TABLE medications ADD COLUMN last_stock_correction_at integer`,
 		`ALTER TABLE medications ADD COLUMN dismissed_until text`,
 		`ALTER TABLE medications ADD COLUMN is_obsolete integer NOT NULL DEFAULT 0`,

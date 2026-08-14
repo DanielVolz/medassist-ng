@@ -1,0 +1,1 @@
+ALTER TABLE `medications` ADD `schedule_stock_rebase_milli` integer DEFAULT 0 NOT NULL;

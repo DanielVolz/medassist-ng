@@ -21,6 +21,8 @@ const { testClient, testDb } = vi.hoisted(() => {
 vi.mock("../db/client.js", () => ({
 	db: testDb,
 	migrationsReady: Promise.resolve(),
+	withImmediateWriteTransaction: async <T>(operation: (transactionDb: typeof testDb) => Promise<T>): Promise<T> =>
+		operation(testDb),
 }));
 
 vi.mock("../plugins/env.js", () => ({

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { doseTracking, medications } from "../db/schema.js";
-import { computeMedicationCurrentStock } from "../services/current-stock.js";
+import { computeMedicationCurrentStock, computeMedicationCurrentStockRaw } from "../services/current-stock.js";
 import { buildDoseId } from "../utils/dose-id.js";
 
 type MedicationRow = typeof medications.$inferSelect;
@@ -25,6 +25,7 @@ function medication(overrides: Partial<MedicationRow> = {}): MedicationRow {
 		totalPills: null,
 		looseTablets: 0,
 		stockAdjustment: 0,
+		scheduleStockRebaseMilli: 0,
 		lastStockCorrectionAt: null,
 		pillWeightMg: null,
 		doseUnit: "mg",
@@ -182,5 +183,24 @@ describe("computeMedicationCurrentStock", () => {
 
 		expect(legacyStock).toBe(3);
 		expect(malformedScheduleStock).toBe(5);
+	});
+
+	it.each([
+		"automatic",
+		"manual",
+	] as const)("applies exact schedule rebases before rounding in %s mode", (stockCalculationMode) => {
+		const rebasedMedication = medication({
+			packCount: 0,
+			looseTablets: 10,
+			scheduleStockRebaseMilli: -1500,
+			intakesJson: "[]",
+			usageJson: "[]",
+			everyJson: "[]",
+			startJson: "[]",
+		});
+		const options = { medication: rebasedMedication, doses: [], stockCalculationMode };
+
+		expect(computeMedicationCurrentStockRaw(options)).toBe(8.5);
+		expect(computeMedicationCurrentStock(options)).toBe(8);
 	});
 });

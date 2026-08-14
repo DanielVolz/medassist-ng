@@ -1,5 +1,5 @@
 import { existsSync, statSync } from "node:fs";
-import { type Client, createClient } from "@libsql/client";
+import { type Client, createClient, type Transaction } from "@libsql/client";
 import dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/libsql";
 import { parseBoolEnv } from "../utils/env-parsing.js";
@@ -65,6 +65,58 @@ try {
 }
 
 export const db = drizzle(client);
+
+let immediateWriteTail = Promise.resolve();
+
+function reserveImmediateWriteTurn(): Promise<() => void> {
+	const previousTurn = immediateWriteTail;
+	let releaseTurn: () => void = () => undefined;
+	immediateWriteTail = new Promise<void>((resolve) => {
+		releaseTurn = resolve;
+	});
+
+	return previousTurn.then(() => releaseTurn);
+}
+
+/**
+ * Run a callback in a process-local FIFO BEGIN IMMEDIATE transaction.
+ *
+ * libSQL opens another file connection for each overlapping transaction call, so the queue must cover
+ * acquisition through commit/rollback. External-process contention is attempted once and propagates
+ * SQLITE_BUSY; retrying BEGIN while another writer commits can itself destabilize that commit.
+ */
+export async function withImmediateWriteTransaction<T>(
+	operation: (transactionDb: typeof db) => Promise<T>
+): Promise<T> {
+	const releaseTurn = await reserveImmediateWriteTurn();
+	let transaction: Transaction | undefined;
+
+	try {
+		transaction = await client.transaction("write");
+		const transactionDb = drizzle(transaction as unknown as Client);
+		const result = await operation(transactionDb);
+		await transaction.commit();
+		return result;
+	} catch (error) {
+		if (transaction && !transaction.closed) {
+			await transaction.rollback();
+		}
+		// The SQLite client can leave a failed BEGIN IMMEDIATE statement active on its
+		// reusable connection. Reconnect only when acquisition itself failed so the
+		// next FIFO writer is not poisoned, while preserving the original error.
+		if (!transaction) {
+			try {
+				await client.reconnect();
+			} catch {
+				// The original transaction-acquisition error is the actionable result.
+			}
+		}
+		throw error;
+	} finally {
+		transaction?.close();
+		releaseTurn();
+	}
+}
 
 // Auto-run migrations (self-healing database)
 async function runMigrations() {

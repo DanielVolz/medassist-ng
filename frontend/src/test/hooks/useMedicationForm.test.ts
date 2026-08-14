@@ -460,6 +460,32 @@ describe("useMedicationForm", () => {
 		expect(openEditModal).not.toHaveBeenCalled();
 	});
 
+	it("keeps an explicit empty intakes array instead of reviving legacy blisters", () => {
+		const { result } = renderHook(() => useMedicationForm());
+		const openEditModal = vi.fn();
+		Object.defineProperty(window, "innerWidth", { value: 1024, writable: true });
+
+		const med: Medication = {
+			id: 12,
+			name: "As needed",
+			takenBy: [],
+			packageType: "blister",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 8,
+			looseTablets: 0,
+			intakes: [],
+			blisters: [{ usage: 1, every: 1, start: "2026-01-03T10:00:00.000Z" }],
+			updatedAt: null,
+		};
+
+		act(() => {
+			result.current.startEdit(med, openEditModal);
+		});
+
+		expect(result.current.form.intakes).toEqual([]);
+	});
+
 	it("resets complete form state", () => {
 		const { result } = renderHook(() => useMedicationForm());
 

@@ -258,6 +258,16 @@
 	gap: 0.45rem 0;
 }
 
+.no-regular-schedule {
+	padding: 0.65rem 0.75rem;
+	border: 1px dashed var(--border-secondary);
+	border-radius: 8px;
+	background: var(--bg-input);
+	color: var(--text-muted);
+	font-size: 0.88rem;
+	font-weight: 600;
+}
+
 .blister-row-simple {
 	position: relative;
 	display: flex;

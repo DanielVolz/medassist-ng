@@ -252,6 +252,7 @@ export function MedicationsPage() {
 	const {
 		form,
 		setForm,
+		originalForm,
 		setOriginalForm,
 		editingId,
 		setEditingId,
@@ -358,6 +359,8 @@ export function MedicationsPage() {
 	const [deleteCandidate, setDeleteCandidate] = useState<Medication | null>(null);
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<Medication | null>(null);
+	const [showNoScheduleConfirm, setShowNoScheduleConfirm] = useState(false);
+	const noScheduleTriggerRef = useRef<HTMLElement | null>(null);
 	const [allMeds, setAllMeds] = useState<Medication[]>(meds);
 	const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 	const {
@@ -954,6 +957,68 @@ export function MedicationsPage() {
 		setUnsavedConfirmSource(null);
 	}
 
+	function clearRegularSchedule() {
+		setForm((previous) => ({ ...previous, intakes: [] }));
+	}
+
+	function restoreNoScheduleFocus() {
+		requestAnimationFrame(() => {
+			const checkboxes = Array.from(
+				document.querySelectorAll<HTMLElement>('[data-testid="no-regular-schedule"] input')
+			);
+			const checkbox = checkboxes.find((candidate) => candidate.getClientRects().length > 0) ?? checkboxes[0];
+			checkbox?.focus();
+		});
+	}
+
+	function requestClearRegularSchedule() {
+		if (form.intakes.length === 0) return;
+		noScheduleTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		if (editingId !== null && originalForm.intakes.length > 0) {
+			setShowNoScheduleConfirm(true);
+			return;
+		}
+		clearRegularSchedule();
+		restoreNoScheduleFocus();
+	}
+
+	function handleNoRegularScheduleChange(checked: boolean) {
+		if (checked) {
+			requestClearRegularSchedule();
+			return;
+		}
+		if (form.intakes.length === 0) {
+			addIntake(form.takenBy.length === 1 ? form.takenBy[0] : undefined);
+		}
+	}
+
+	function handleRemoveIntake(idx: number) {
+		if (form.intakes.length > 1) {
+			removeIntake(idx);
+			return;
+		}
+		requestClearRegularSchedule();
+	}
+
+	function handleConfirmNoSchedule() {
+		clearRegularSchedule();
+		setShowNoScheduleConfirm(false);
+		restoreNoScheduleFocus();
+	}
+
+	function cancelNoScheduleConfirmation() {
+		setShowNoScheduleConfirm(false);
+		requestAnimationFrame(() => {
+			if (noScheduleTriggerRef.current?.isConnected) {
+				noScheduleTriggerRef.current.focus();
+			}
+		});
+	}
+
+	function handleCancelNoSchedule() {
+		cancelNoScheduleConfirmation();
+	}
+
 	// Helper to reset form and clear history state
 	function handleResetForm() {
 		hasDesktopFormHistoryState.current = false;
@@ -1149,7 +1214,7 @@ export function MedicationsPage() {
 			prescriptionRemainingRefills: form.prescriptionEnabled ? remainingRefills : null,
 			prescriptionLowRefillThreshold: form.prescriptionEnabled ? lowRefillThreshold : 1,
 			prescriptionExpiryDate: form.prescriptionExpiryDate || null,
-			blisters, // Legacy format for backward compatibility
+			blisters: intakes.length > 0 ? blisters : undefined, // Omit the legacy field for an explicit empty schedule.
 			intakes, // New format with per-intake takenBy
 		};
 
@@ -2133,7 +2198,7 @@ export function MedicationsPage() {
 						<div className={["full", formClasses.category, formClasses.intakeSection].join(" ")}>
 							<div className={formClasses.categoryHeader}>
 								<h4 className={formClasses.categoryTitle}>{t("form.blisters.title")}</h4>
-								{!readOnlyView && (
+								{!readOnlyView && form.intakes.length > 0 && (
 									<AppTooltip label={t("form.blisters.addIntake")}>
 										<ActionIcon
 											data-testid="add-intake-button"
@@ -2148,6 +2213,16 @@ export function MedicationsPage() {
 									</AppTooltip>
 								)}
 							</div>
+							<AppCheckbox
+								data-testid="no-regular-schedule"
+								checked={form.intakes.length === 0}
+								disabled={readOnlyView}
+								label={t("form.blisters.noRegularSchedule")}
+								onChange={handleNoRegularScheduleChange}
+							/>
+							{form.intakes.length === 0 && (
+								<div className={formClasses.noScheduleEmpty}>{t("form.blisters.noRegularScheduleHint")}</div>
+							)}
 							{form.intakes.map((intake, idx) => {
 								const scheduleMode = getIntakeScheduleMode(intake);
 								const selectedWeekdays = intake.weekdays ?? [];
@@ -2281,14 +2356,14 @@ export function MedicationsPage() {
 														tooltip={t("form.blisters.remindTooltip")}
 													/>
 												</div>
-												{!readOnlyView && form.intakes.length > 1 && (
+												{!readOnlyView && (
 													<AppButton
 														type="button"
 														tone="secondary"
 														size="compact-sm"
 														className={formClasses.intakeRemoveAction}
 														leftSection={<Minus size={16} aria-hidden="true" />}
-														onClick={() => removeIntake(idx)}
+														onClick={() => handleRemoveIntake(idx)}
 													>
 														{t("common.remove")}
 													</AppButton>
@@ -2336,7 +2411,8 @@ export function MedicationsPage() {
 						onRemoveBlister={removeBlister}
 						onSetIntakeValue={setIntakeValue}
 						onAddIntake={addIntake}
-						onRemoveIntake={removeIntake}
+						onRemoveIntake={handleRemoveIntake}
+						onNoRegularScheduleChange={handleNoRegularScheduleChange}
 						onHandleValueChange={handleValueChange}
 						meds={allMeds}
 						onUploadMedImage={handleUploadMedImage}
@@ -2356,6 +2432,13 @@ export function MedicationsPage() {
 				}
 				onConfirmClose={handleConfirmClose}
 				onCancelClose={handleCancelClose}
+				showNoScheduleConfirm={showNoScheduleConfirm}
+				noScheduleTitle={t("form.blisters.removeLastTitle")}
+				noScheduleMessage={t("form.blisters.removeLastMessage")}
+				noScheduleConfirmLabel={t("form.blisters.removeLastConfirm")}
+				noScheduleCancelLabel={t("common.cancel")}
+				onConfirmNoSchedule={handleConfirmNoSchedule}
+				onCancelNoSchedule={handleCancelNoSchedule}
 				showObsoleteConfirm={showObsoleteConfirm}
 				obsoleteCandidate={obsoleteCandidate}
 				obsoleteTitle={t("medications.obsoleteModal.title")}

@@ -96,7 +96,16 @@ async function saveEditAndVerify(page: Page, medName: string): Promise<void> {
 			.isVisible()
 			.catch(() => false))
 	) {
+		const saveResponse = page.waitForResponse(
+			(response) =>
+				response.request().method() === "PUT" && /\/api\/medications\/\d+$/.test(new URL(response.url()).pathname)
+		);
+		const medicationsReload = page.waitForResponse(
+			(response) => response.request().method() === "GET" && new URL(response.url()).pathname === "/api/medications"
+		);
 		await submitBtn.first().click();
+		expect((await saveResponse).status()).toBe(200);
+		expect((await medicationsReload).status()).toBe(200);
 	} else {
 		const closeBtn = form.getByRole("button", { name: /Close|Cancel/i }).first();
 		if (await closeBtn.isVisible().catch(() => false)) {
@@ -424,6 +433,44 @@ test.describe("Medication Editing", () => {
 		// Verify 2 intakes persisted
 		await clickEditMed(page, "Add Intake Med");
 		await expect(page.getByLabel(/(Usage|form\.blisters\.usage)/i)).toHaveCount(2, { timeout: 10000 });
+	});
+
+	test("should persist a no-schedule transition and restore a default intake on desktop and mobile", async ({
+		page,
+	}) => {
+		for (const viewport of [
+			{ name: "desktop", size: { width: 1280, height: 900 } },
+			{ name: "mobile", size: { width: 390, height: 844 } },
+		]) {
+			await page.setViewportSize(viewport.size);
+			const name = `No Schedule ${viewport.name}`;
+			createdMeds.push(
+				await createMedicationViaAPI({
+					name,
+					intakes: [
+						{ usage: 1, every: 1, start: new Date().toISOString().slice(0, 16), intakeRemindersEnabled: false },
+					],
+				})
+			);
+			await navigateTo(page, "/medications");
+			await clickEditMed(page, name);
+			await page.getByRole("tab", { name: /Schedule/i }).click();
+
+			const noSchedule = page.getByTestId("no-regular-schedule").getByRole("checkbox");
+			await expect(noSchedule).not.toBeChecked();
+			await noSchedule.click();
+			await page.getByRole("button", { name: /Remove schedule/i }).click();
+			await expect(noSchedule).toBeChecked();
+			await saveEditAndVerify(page, name);
+
+			await clickEditMed(page, name);
+			await page.getByRole("tab", { name: /Schedule/i }).click();
+			await expect(noSchedule).toBeChecked();
+			await noSchedule.click();
+			await expect(noSchedule).not.toBeChecked();
+			await expect(getMedicationEditForm(page).getByLabel(/(Usage|form\.blisters\.usage)/i)).toHaveCount(1);
+			await saveEditAndVerify(page, name);
+		}
 	});
 
 	test("should toggle intake reminder on a medication", async ({ page }) => {

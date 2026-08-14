@@ -285,6 +285,9 @@ export function MedDetailModal({
 			? t("form.packageAmountUnitMl")
 			: t("form.packageAmountUnitG");
 	const stockUnitLabel = isAmountPackage ? amountUnitLabel : null;
+	const scheduleIntakes = getMedicationIntakes(selectedMed);
+	const hasRegularSchedule = scheduleIntakes.length > 0;
+	const hasAnyIntakeReminder = scheduleIntakes.some((intake) => intake.intakeRemindersEnabled === true);
 
 	const medCoverage = coverage.all.find((c) => c.name === getMedDisplayName(selectedMed));
 	const runsOutLabel = medCoverage
@@ -300,7 +303,8 @@ export function MedDetailModal({
 		? stockDisplayCapacity
 		: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
 	const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
-	const status = medCoverage ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
+	const status =
+		medCoverage && hasRegularSchedule ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 	const textClass = getValueToneClass(status?.className);
 	const stock = splitCurrentBlisterStock(currentStock, selectedMed.pillsPerBlister, selectedMed.looseTablets);
 	const currentFullBlisters = Math.max(0, stock.fullBlisters);
@@ -347,8 +351,6 @@ export function MedDetailModal({
 		}
 		return `${usage} ${getDiscreteUnitLabel(usage)}`;
 	};
-	const scheduleIntakes = getMedicationIntakes(selectedMed);
-	const hasAnyIntakeReminder = scheduleIntakes.some((intake) => intake.intakeRemindersEnabled === true);
 	const normalizeBlisterStock = (nextFull: number, nextPartial: number, nextLoose: number) => {
 		let normalizedFull = Math.max(0, nextFull);
 		let normalizedPartial = Math.max(0, nextPartial);
@@ -1032,22 +1034,18 @@ export function MedDetailModal({
 					</div>
 
 					{/* Intake Schedule Section */}
-					{scheduleIntakes.length > 0 && (
-						<div className={classes["med-detail-section"]}>
-							<h3>
-								{t("modal.intakeSchedule")}{" "}
-								{hasAnyIntakeReminder && (
-									<AppTooltip label={t("tooltips.intakeReminders")}>
-										<button
-											type="button"
-											aria-label={t("tooltips.intakeReminders")}
-											className={classes["reminder-icon"]}
-										>
-											<Bell size={14} aria-hidden="true" />
-										</button>
-									</AppTooltip>
-								)}
-							</h3>
+					<div className={classes["med-detail-section"]}>
+						<h3>
+							{t("modal.intakeSchedule")}{" "}
+							{hasAnyIntakeReminder && (
+								<AppTooltip label={t("tooltips.intakeReminders")}>
+									<button type="button" aria-label={t("tooltips.intakeReminders")} className={classes["reminder-icon"]}>
+										<Bell size={14} aria-hidden="true" />
+									</button>
+								</AppTooltip>
+							)}
+						</h3>
+						{hasRegularSchedule ? (
 							<div className={classes["med-detail-schedules"]}>
 								{scheduleIntakes.map((intake) => {
 									const intakePerson = intake.takenBy?.trim();
@@ -1084,8 +1082,10 @@ export function MedDetailModal({
 									);
 								})}
 							</div>
-						</div>
-					)}
+						) : (
+							<div className={classes["no-regular-schedule"]}>{t("form.blisters.noRegularSchedule")}</div>
+						)}
+					</div>
 
 					{/* Prescription Details Section */}
 					{selectedMed.prescriptionEnabled && (
@@ -1121,24 +1121,30 @@ export function MedDetailModal({
 					)}
 
 					{/* Coverage Status Section */}
-					{medCoverage && status && (
+					{medCoverage && (status || !hasRegularSchedule) && (
 						<div className={classes["med-detail-section"]}>
 							<h3 className={classes["section-header-with-badge"]}>
 								{t("modal.coverageStatus")}
-								<StatusBadge size="xs" tone={getStatusTone(status.className)}>
-									{t(status.label)}
-								</StatusBadge>
+								{status && (
+									<StatusBadge size="xs" tone={getStatusTone(status.className)}>
+										{t(status.label)}
+									</StatusBadge>
+								)}
 							</h3>
 							<div className={classes["med-detail-grid"]}>
 								<div className={classes["med-detail-item"]}>
 									<span className={classes["med-detail-label"]}>{t("modal.daysLeft")}</span>
 									<span className={classes["med-detail-value"]}>
-										{medCoverage.daysLeft !== null ? formatNumber(medCoverage.daysLeft) : "—"}
+										{hasRegularSchedule && medCoverage.daysLeft !== null
+											? formatNumber(medCoverage.daysLeft)
+											: t("common.notAvailable")}
 									</span>
 								</div>
 								<div className={classes["med-detail-item"]}>
 									<span className={classes["med-detail-label"]}>{t("modal.runsOut")}</span>
-									<span className={classes["med-detail-value"]}>{runsOutLabel}</span>
+									<span className={classes["med-detail-value"]}>
+										{hasRegularSchedule ? runsOutLabel : t("common.notAvailable")}
+									</span>
 								</div>
 							</div>
 						</div>

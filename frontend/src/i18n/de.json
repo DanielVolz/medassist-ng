@@ -387,6 +387,11 @@
     },
     "blisters": {
       "title": "Einnahmeplan",
+      "noRegularSchedule": "Kein regelmäßiger Einnahmeplan",
+      "noRegularScheduleHint": "Es werden keine automatischen Erinnerungen oder zukünftigen Einnahmen erstellt.",
+      "removeLastTitle": "Regelmäßigen Einnahmeplan entfernen?",
+      "removeLastMessage": "Automatische Erinnerungen und zukünftige fällige Einnahmen werden beendet. Das Medikament, sein Bestand und der bisherige Verlauf bleiben erhalten.",
+      "removeLastConfirm": "Einnahmeplan entfernen",
       "remind": "Erinnern",
       "remindTooltip": "Erhalte eine Benachrichtigung 15 Minuten vor jeder geplanten Einnahme",
       "addIntake": "Einnahme",
@@ -720,6 +725,7 @@
     "saveFailed": "Speichern fehlgeschlagen",
     "networkError": "Netzwerkfehler",
     "saving": "Wird gespeichert...",
+    "notAvailable": "Nicht verfügbar",
     "outOfStockTakeBlocked": "Dieses Medikament ist leer. Die Einnahme kann nicht als eingenommen markiert werden.",
     "unsavedChanges": {
       "title": "Ungespeicherte Änderungen",

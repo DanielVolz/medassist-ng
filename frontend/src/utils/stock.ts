@@ -1,5 +1,5 @@
 import type { Medication } from "../types";
-import { isAmountBasedPackageType } from "../types";
+import { getMedTotal } from "../types";
 
 export type BlisterStockSplit = {
 	fullBlisters: number;
@@ -35,9 +35,5 @@ export function splitCurrentBlisterStock(
  * Convenience helper when medication object already contains stock fields.
  */
 export function getBlisterStockFromMedication(med: Medication): BlisterStockSplit {
-	const total = isAmountBasedPackageType(med.packageType)
-		? med.looseTablets + (med.stockAdjustment ?? 0)
-		: med.packCount * med.blistersPerPack * med.pillsPerBlister + med.looseTablets + (med.stockAdjustment ?? 0);
-
-	return splitCurrentBlisterStock(total, med.pillsPerBlister, med.looseTablets);
+	return splitCurrentBlisterStock(getMedTotal(med), med.pillsPerBlister, med.looseTablets);
 }

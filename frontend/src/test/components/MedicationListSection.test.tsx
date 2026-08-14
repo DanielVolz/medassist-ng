@@ -51,6 +51,16 @@ function renderSection(props: { orderedMeds: Medication[]; onImagePreview?: (med
 }
 
 describe("MedicationListSection", () => {
+	it("shows no regular schedule when intakes are explicitly empty", () => {
+		renderSection({
+			orderedMeds: [
+				createMedication({ intakes: [], blisters: [{ usage: 1, every: 1, start: "2026-01-01T08:00:00" }] }),
+			],
+		});
+
+		expect(screen.getByText("form.blisters.noRegularSchedule")).toBeInTheDocument();
+	});
+
 	it("opens the medication image preview from a clickable avatar", () => {
 		const onImagePreview = vi.fn();
 		const medication = createMedication({ id: 1, name: "Photo Med", imageUrl: "photo.webp" });

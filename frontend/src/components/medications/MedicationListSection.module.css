@@ -274,6 +274,11 @@
 	background: color-mix(in srgb, var(--accent-bg) 60%, var(--bg-input));
 }
 
+.noRegularSchedule {
+	border-style: dashed;
+	font-weight: 600;
+}
+
 .blisterSummary {
 	min-width: 0;
 	overflow-wrap: anywhere;

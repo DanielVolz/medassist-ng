@@ -3420,59 +3420,56 @@ describe("E2E Tests with Real Routes", () => {
 				expectedLooseTablets: 3,
 				expectedPersistedCapacity: 12,
 			},
-		])(
-			"should refill $name correctly after stock correction to zero",
-			async ({
+		])("should refill $name correctly after stock correction to zero", async ({
+			payload,
+			zeroPayload,
+			refillPayload,
+			expectedTotalPills,
+			expectedPackCount,
+			expectedLooseTablets,
+			expectedPersistedCapacity,
+		}) => {
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
 				payload,
-				zeroPayload,
-				refillPayload,
-				expectedTotalPills,
-				expectedPackCount,
-				expectedLooseTablets,
-				expectedPersistedCapacity,
-			}) => {
-				const createResponse = await app.inject({
-					method: "POST",
-					url: "/medications",
-					payload,
-				});
-				expect(createResponse.statusCode).toBe(200);
-				const medId = createResponse.json().id;
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
 
-				const zeroResponse = await app.inject({
-					method: "PATCH",
-					url: `/medications/${medId}/stock-adjustment`,
-					payload: zeroPayload,
-				});
-				expect(zeroResponse.statusCode).toBe(200);
+			const zeroResponse = await app.inject({
+				method: "PATCH",
+				url: `/medications/${medId}/stock-adjustment`,
+				payload: zeroPayload,
+			});
+			expect(zeroResponse.statusCode).toBe(200);
 
-				const refillResponse = await app.inject({
-					method: "POST",
-					url: `/medications/${medId}/refill`,
-					payload: refillPayload,
-				});
-				expect(refillResponse.statusCode).toBe(200);
-				const refillData = refillResponse.json();
-				expect(refillData.newStock.totalPills).toBe(expectedTotalPills);
-				expect(refillData.newStock.packCount).toBe(expectedPackCount);
-				expect(refillData.newStock.looseTablets).toBe(expectedLooseTablets);
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: refillPayload,
+			});
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			expect(refillData.newStock.totalPills).toBe(expectedTotalPills);
+			expect(refillData.newStock.packCount).toBe(expectedPackCount);
+			expect(refillData.newStock.looseTablets).toBe(expectedLooseTablets);
 
-				const medsResponse = await app.inject({ method: "GET", url: "/medications" });
-				expect(medsResponse.statusCode).toBe(200);
-				const med = medsResponse.json().find((item: Record<string, unknown>) => item.id === medId);
-				expect(med).toBeTruthy();
-				expect(med.packCount).toBe(expectedPackCount);
-				expect(med.looseTablets).toBe(expectedLooseTablets);
-				expect(med.stockAdjustment).toBe(0);
-				if (typeof expectedPersistedCapacity === "number") {
-					if (med.packageType === "tube" || med.packageType === "liquid_container") {
-						expect(med.packageAmountValue).toBe(expectedPersistedCapacity);
-					} else {
-						expect(med.totalPills).toBe(expectedPersistedCapacity);
-					}
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(expectedPackCount);
+			expect(med.looseTablets).toBe(expectedLooseTablets);
+			expect(med.stockAdjustment).toBe(0);
+			if (typeof expectedPersistedCapacity === "number") {
+				if (med.packageType === "tube" || med.packageType === "liquid_container") {
+					expect(med.packageAmountValue).toBe(expectedPersistedCapacity);
+				} else {
+					expect(med.totalPills).toBe(expectedPersistedCapacity);
 				}
 			}
-		);
+		});
 
 		it("should create and return bottle type medication", async () => {
 			const response = await app.inject({
@@ -3533,22 +3530,22 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.looseTablets).toBe(180);
 		});
 
-		it.each(discreteContainerMedications)(
-			"should create and return $label type medication",
-			async ({ payload, expectedDoseUnit }) => {
-				const response = await app.inject({
-					method: "POST",
-					url: "/medications",
-					payload,
-				});
+		it.each(discreteContainerMedications)("should create and return $label type medication", async ({
+			payload,
+			expectedDoseUnit,
+		}) => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload,
+			});
 
-				expect(response.statusCode).toBe(200);
-				const data = response.json();
-				expect(data.packageType).toBe(payload.packageType);
-				expect(data.doseUnit).toBe(expectedDoseUnit);
-				expect(data.looseTablets).toBe(payload.looseTablets);
-			}
-		);
+			expect(response.statusCode).toBe(200);
+			const data = response.json();
+			expect(data.packageType).toBe(payload.packageType);
+			expect(data.doseUnit).toBe(expectedDoseUnit);
+			expect(data.looseTablets).toBe(payload.looseTablets);
+		});
 
 		it("should return packageType and ml-based stock semantics in shared schedule for liquid_container", async () => {
 			await app.inject({
@@ -3743,74 +3740,71 @@ describe("E2E Tests with Real Routes", () => {
 				expectedPersistedTotalPills: 110,
 				expectedStockAdjustment: 0,
 			},
-		])(
-			"should refill from the persisted stock baseline after prior consumption for $name",
-			async ({
+		])("should refill from the persisted stock baseline after prior consumption for $name", async ({
+			payload,
+			refillPayload,
+			expectedVisibleStockBeforeRefill,
+			expectedQuantityAdded,
+			expectedResponsePacksAdded,
+			expectedAmountPerPackage,
+			expectedPackCount,
+			expectedLooseTablets,
+			expectedTotalPills,
+			expectedPersistedTotalPills,
+			expectedStockAdjustment,
+		}) => {
+			await testClient.execute({
+				sql: `INSERT OR REPLACE INTO user_settings (user_id, stock_calculation_mode) VALUES (?, 'manual')`,
+				args: [userId],
+			});
+
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
 				payload,
-				refillPayload,
-				expectedVisibleStockBeforeRefill,
-				expectedQuantityAdded,
-				expectedResponsePacksAdded,
-				expectedAmountPerPackage,
-				expectedPackCount,
-				expectedLooseTablets,
-				expectedTotalPills,
-				expectedPersistedTotalPills,
-				expectedStockAdjustment,
-			}) => {
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			for (let day = 1; day <= 6; day += 1) {
+				const doseDateOnlyMs = new Date(`2025-01-0${day}T00:00:00.000Z`).getTime();
+				const takenAtMs = new Date(`2025-01-0${day}T10:00:00.000Z`).getTime();
 				await testClient.execute({
-					sql: `INSERT OR REPLACE INTO user_settings (user_id, stock_calculation_mode) VALUES (?, 'manual')`,
-					args: [userId],
-				});
-
-				const createResponse = await app.inject({
-					method: "POST",
-					url: "/medications",
-					payload,
-				});
-				expect(createResponse.statusCode).toBe(200);
-				const medId = createResponse.json().id;
-
-				for (let day = 1; day <= 6; day += 1) {
-					const doseDateOnlyMs = new Date(`2025-01-0${day}T00:00:00.000Z`).getTime();
-					const takenAtMs = new Date(`2025-01-0${day}T10:00:00.000Z`).getTime();
-					await testClient.execute({
-						sql: `INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed)
+					sql: `INSERT INTO dose_tracking (user_id, dose_id, taken_at, dismissed)
 					      VALUES (?, ?, ?, 0)`,
-						args: [userId, `${medId}-0-${doseDateOnlyMs}`, takenAtMs],
-					});
-				}
-
-				const refillResponse = await app.inject({
-					method: "POST",
-					url: `/medications/${medId}/refill`,
-					payload: refillPayload,
+					args: [userId, `${medId}-0-${doseDateOnlyMs}`, takenAtMs],
 				});
-
-				expect(refillResponse.statusCode).toBe(200);
-				const refillData = refillResponse.json();
-				await expectRefillInvariants({
-					medId,
-					refillData,
-					visibleStockBeforeRefill: expectedVisibleStockBeforeRefill,
-					expectedQuantityAdded,
-					expectedPacksAdded: expectedResponsePacksAdded,
-					expectedAmountPerPackage,
-				});
-				expect(refillData.newStock.packCount).toBe(expectedPackCount);
-				expect(refillData.newStock.looseTablets).toBe(expectedLooseTablets);
-				expect(refillData.newStock.totalPills).toBe(expectedTotalPills);
-
-				const medsResponse = await app.inject({ method: "GET", url: "/medications" });
-				expect(medsResponse.statusCode).toBe(200);
-				const med = medsResponse.json().find((item: Record<string, unknown>) => item.id === medId);
-				expect(med).toBeTruthy();
-				expect(med.packCount).toBe(expectedPackCount);
-				expect(med.looseTablets).toBe(expectedLooseTablets);
-				expect(med.totalPills).toBe(expectedPersistedTotalPills);
-				expect(med.stockAdjustment).toBe(expectedStockAdjustment);
 			}
-		);
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: refillPayload,
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			await expectRefillInvariants({
+				medId,
+				refillData,
+				visibleStockBeforeRefill: expectedVisibleStockBeforeRefill,
+				expectedQuantityAdded,
+				expectedPacksAdded: expectedResponsePacksAdded,
+				expectedAmountPerPackage,
+			});
+			expect(refillData.newStock.packCount).toBe(expectedPackCount);
+			expect(refillData.newStock.looseTablets).toBe(expectedLooseTablets);
+			expect(refillData.newStock.totalPills).toBe(expectedTotalPills);
+
+			const medsResponse = await app.inject({ method: "GET", url: "/medications" });
+			expect(medsResponse.statusCode).toBe(200);
+			const med = medsResponse.json().find((item: Record<string, unknown>) => item.id === medId);
+			expect(med).toBeTruthy();
+			expect(med.packCount).toBe(expectedPackCount);
+			expect(med.looseTablets).toBe(expectedLooseTablets);
+			expect(med.totalPills).toBe(expectedPersistedTotalPills);
+			expect(med.stockAdjustment).toBe(expectedStockAdjustment);
+		});
 
 		it("should refill tube stock from the corrected visible baseline", async () => {
 			await testClient.execute({
@@ -4042,68 +4036,65 @@ describe("E2E Tests with Real Routes", () => {
 				expectedTotalPills: 160,
 				expectedAmountPerPackage: 40,
 			},
-		])(
-			"should derive amount-based refill counts and decrement prescription remaining refills for $name",
-			async ({
+		])("should derive amount-based refill counts and decrement prescription remaining refills for $name", async ({
+			payload,
+			refillPayload,
+			expectedVisibleStockBeforeRefill,
+			expectedPacksAdded,
+			expectedLooseAdded,
+			expectedRemainingRefills,
+			expectedTotalPills,
+			expectedAmountPerPackage,
+		}) => {
+			await testClient.execute({
+				sql: `INSERT OR REPLACE INTO user_settings (user_id, stock_calculation_mode) VALUES (?, 'manual')`,
+				args: [userId],
+			});
+
+			const createResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
 				payload,
-				refillPayload,
-				expectedVisibleStockBeforeRefill,
+			});
+			expect(createResponse.statusCode).toBe(200);
+			const medId = createResponse.json().id;
+
+			const refillResponse = await app.inject({
+				method: "POST",
+				url: `/medications/${medId}/refill`,
+				payload: refillPayload,
+			});
+
+			expect(refillResponse.statusCode).toBe(200);
+			const refillData = refillResponse.json();
+			await expectRefillInvariants({
+				medId,
+				refillData,
+				visibleStockBeforeRefill: expectedVisibleStockBeforeRefill,
+				expectedQuantityAdded: expectedLooseAdded,
 				expectedPacksAdded,
-				expectedLooseAdded,
-				expectedRemainingRefills,
-				expectedTotalPills,
 				expectedAmountPerPackage,
-			}) => {
-				await testClient.execute({
-					sql: `INSERT OR REPLACE INTO user_settings (user_id, stock_calculation_mode) VALUES (?, 'manual')`,
-					args: [userId],
-				});
+			});
+			expect(refillData.refill.packsAdded).toBe(expectedPacksAdded);
+			expect(refillData.refill.loosePillsAdded).toBe(expectedLooseAdded);
+			expect(refillData.refill.quantityAdded).toBe(expectedLooseAdded);
+			expect(refillData.refill.totalPillsAdded).toBe(expectedLooseAdded);
+			expect(refillData.prescription.used).toBe(true);
+			expect(refillData.prescription.remainingRefills).toBe(expectedRemainingRefills);
+			expect(refillData.newStock.totalPills).toBe(expectedTotalPills);
 
-				const createResponse = await app.inject({
-					method: "POST",
-					url: "/medications",
-					payload,
-				});
-				expect(createResponse.statusCode).toBe(200);
-				const medId = createResponse.json().id;
-
-				const refillResponse = await app.inject({
-					method: "POST",
-					url: `/medications/${medId}/refill`,
-					payload: refillPayload,
-				});
-
-				expect(refillResponse.statusCode).toBe(200);
-				const refillData = refillResponse.json();
-				await expectRefillInvariants({
-					medId,
-					refillData,
-					visibleStockBeforeRefill: expectedVisibleStockBeforeRefill,
-					expectedQuantityAdded: expectedLooseAdded,
-					expectedPacksAdded,
-					expectedAmountPerPackage,
-				});
-				expect(refillData.refill.packsAdded).toBe(expectedPacksAdded);
-				expect(refillData.refill.loosePillsAdded).toBe(expectedLooseAdded);
-				expect(refillData.refill.quantityAdded).toBe(expectedLooseAdded);
-				expect(refillData.refill.totalPillsAdded).toBe(expectedLooseAdded);
-				expect(refillData.prescription.used).toBe(true);
-				expect(refillData.prescription.remainingRefills).toBe(expectedRemainingRefills);
-				expect(refillData.newStock.totalPills).toBe(expectedTotalPills);
-
-				const historyResponse = await app.inject({
-					method: "GET",
-					url: `/medications/${medId}/refills`,
-				});
-				expect(historyResponse.statusCode).toBe(200);
-				expect(historyResponse.json()[0]).toMatchObject({
-					packsAdded: expectedPacksAdded,
-					loosePillsAdded: expectedLooseAdded,
-					quantityAdded: expectedLooseAdded,
-					usedPrescription: true,
-				});
-			}
-		);
+			const historyResponse = await app.inject({
+				method: "GET",
+				url: `/medications/${medId}/refills`,
+			});
+			expect(historyResponse.statusCode).toBe(200);
+			expect(historyResponse.json()[0]).toMatchObject({
+				packsAdded: expectedPacksAdded,
+				loosePillsAdded: expectedLooseAdded,
+				quantityAdded: expectedLooseAdded,
+				usedPrescription: true,
+			});
+		});
 
 		it("should keep tube refill additive and preserve amount baseline", async () => {
 			const createResponse = await app.inject({

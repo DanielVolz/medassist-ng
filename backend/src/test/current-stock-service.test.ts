@@ -185,22 +185,22 @@ describe("computeMedicationCurrentStock", () => {
 		expect(malformedScheduleStock).toBe(5);
 	});
 
-	it.each(["automatic", "manual"] as const)(
-		"applies exact schedule rebases before rounding in %s mode",
-		(stockCalculationMode) => {
-			const rebasedMedication = medication({
-				packCount: 0,
-				looseTablets: 10,
-				scheduleStockRebaseMilli: -1500,
-				intakesJson: "[]",
-				usageJson: "[]",
-				everyJson: "[]",
-				startJson: "[]",
-			});
-			const options = { medication: rebasedMedication, doses: [], stockCalculationMode };
+	it.each([
+		"automatic",
+		"manual",
+	] as const)("applies exact schedule rebases before rounding in %s mode", (stockCalculationMode) => {
+		const rebasedMedication = medication({
+			packCount: 0,
+			looseTablets: 10,
+			scheduleStockRebaseMilli: -1500,
+			intakesJson: "[]",
+			usageJson: "[]",
+			everyJson: "[]",
+			startJson: "[]",
+		});
+		const options = { medication: rebasedMedication, doses: [], stockCalculationMode };
 
-			expect(computeMedicationCurrentStockRaw(options)).toBe(8.5);
-			expect(computeMedicationCurrentStock(options)).toBe(8);
-		}
-	);
+		expect(computeMedicationCurrentStockRaw(options)).toBe(8.5);
+		expect(computeMedicationCurrentStock(options)).toBe(8);
+	});
 });

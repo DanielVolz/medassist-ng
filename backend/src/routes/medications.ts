@@ -2,11 +2,12 @@ import { resolve } from "node:path";
 import { and, eq, like } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { db } from "../db/client.js";
+import { db, withImmediateWriteTransaction } from "../db/client.js";
 import { getDataDir } from "../db/path-utils.js";
-import { doseTracking, medications } from "../db/schema.js";
+import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, isReadOnlyApiKeyRequest, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { computeMedicationCurrentStockRaw } from "../services/current-stock.js";
 import { normalizeDateTime, parseIntakesWithUnits } from "../services/medications-service.js";
 import { calculatePlannerDemandRows } from "../services/planner-demand.js";
 import type { AuthUser } from "../types/fastify.js";
@@ -101,14 +102,16 @@ const medicationSchema = z
 		prescriptionExpiryDate: z.string().nullable().optional(),
 		intakeRemindersEnabled: z.boolean().default(false), // Medication-level (deprecated, kept for backward compat)
 		// Accept either new intakes format or legacy blisters format
-		intakes: z.array(intakeSchema).min(1).max(12).optional(),
+		intakes: z.array(intakeSchema).max(12).optional(),
 		blisters: z.array(blisterSchema).min(1).max(12).optional(), // Legacy format
 	})
 	.refine((data) => (data.name && data.name.length > 0) || (data.genericName && data.genericName.length > 0), {
 		message: "Either 'name' or 'genericName' must be provided",
 		path: ["name"],
 	})
-	.refine((data) => data.intakes || data.blisters, { message: "Either 'intakes' or 'blisters' must be provided" })
+	.refine((data) => data.intakes !== undefined || data.blisters !== undefined, {
+		message: "Either 'intakes' or 'blisters' must be provided",
+	})
 	.refine(
 		(data) => {
 			const startDate = data.medicationStartDate ?? "";
@@ -278,8 +281,8 @@ const medicationBodyOpenApiSchema = {
 		prescriptionLowRefillThreshold: { type: "integer", minimum: 0 },
 		prescriptionExpiryDate: { type: ["string", "null"] },
 		intakeRemindersEnabled: { type: "boolean" },
-		intakes: { type: "array", items: intakeOpenApiSchema },
-		blisters: { type: "array", items: blisterOpenApiSchema },
+		intakes: { type: "array", maxItems: 12, items: intakeOpenApiSchema },
+		blisters: { type: "array", minItems: 1, maxItems: 12, items: blisterOpenApiSchema },
 	},
 	description:
 		"Medication payload. Runtime validation allows defaults and legacy shapes; provide either intakes or legacy blisters.",
@@ -341,6 +344,7 @@ const medicationResponseSchema = {
 		totalPills: { type: ["number", "null"] },
 		looseTablets: { type: "number" },
 		stockAdjustment: { type: "number" },
+		scheduleStockRebaseMilli: { type: "integer" },
 		lastStockCorrectionAt: { type: ["string", "null"] },
 		pillWeightMg: { type: ["number", "null"] },
 		doseUnit: { type: "string" },
@@ -349,6 +353,8 @@ const medicationResponseSchema = {
 		autoMarkObsoleteAfterEndDate: { type: "boolean" },
 		intakes: { type: "array", items: intakeOpenApiSchema },
 		blisters: { type: "array", items: blisterOpenApiSchema },
+		hasRegularSchedule: { type: "boolean" },
+		asNeededStockEffect: { type: "number" },
 		imageUrl: { type: ["string", "null"] },
 		expiryDate: { type: ["string", "null"] },
 		notes: { type: ["string", "null"] },
@@ -420,6 +426,7 @@ const stockAdjustmentResponseSchema = {
 	properties: {
 		id: { type: "number" },
 		stockAdjustment: { type: "number" },
+		scheduleStockRebaseMilli: { type: "integer" },
 		lastStockCorrectionAt: { type: "string" },
 		updatedAt: { type: "string", format: "date-time" },
 	},
@@ -535,6 +542,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 					totalPills: row.totalPills ?? null,
 					looseTablets: row.looseTablets ?? 0,
 					stockAdjustment: row.stockAdjustment ?? 0,
+					scheduleStockRebaseMilli: row.scheduleStockRebaseMilli ?? 0,
 					lastStockCorrectionAt: row.lastStockCorrectionAt?.toISOString() ?? null,
 					pillWeightMg: row.pillWeightMg,
 					doseUnit: row.doseUnit ?? "mg",
@@ -544,6 +552,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 					intakes, // New unified format with per-intake takenBy
 					// Legacy blisters format (for backward compat with frontend during transition)
 					blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
+					hasRegularSchedule: intakes.length > 0,
+					asNeededStockEffect: 0,
 					imageUrl: row.imageUrl,
 					expiryDate: row.expiryDate,
 					notes: row.notes,
@@ -616,9 +626,9 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 			// Convert to unified intakes format
 			let intakes: Intake[];
-			if (inputIntakes) {
+			if (inputIntakes !== undefined) {
 				intakes = inputIntakes.map((intake) => normalizeIntake(intake));
-			} else if (inputBlisters) {
+			} else if (inputBlisters !== undefined) {
 				intakes = inputBlisters.map((blister) =>
 					normalizeIntake(
 						{
@@ -697,6 +707,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				totalPills: inserted.totalPills ?? null,
 				looseTablets: inserted.looseTablets,
 				stockAdjustment: inserted.stockAdjustment ?? 0,
+				scheduleStockRebaseMilli: inserted.scheduleStockRebaseMilli ?? 0,
 				lastStockCorrectionAt: inserted.lastStockCorrectionAt?.toISOString() ?? null,
 				pillWeightMg: inserted.pillWeightMg,
 				doseUnit: inserted.doseUnit ?? "mg",
@@ -705,6 +716,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 				autoMarkObsoleteAfterEndDate: inserted.autoMarkObsoleteAfterEndDate ?? true,
 				intakes,
 				blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
+				hasRegularSchedule: intakes.length > 0,
+				asNeededStockEffect: 0,
 				imageUrl: inserted.imageUrl,
 				expiryDate: inserted.expiryDate,
 				notes: inserted.notes,
@@ -787,9 +800,9 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 			// Convert to unified intakes format
 			let intakes: Intake[];
-			if (inputIntakes) {
+			if (inputIntakes !== undefined) {
 				intakes = inputIntakes.map((intake) => normalizeIntake(intake));
-			} else if (inputBlisters) {
+			} else if (inputBlisters !== undefined) {
 				intakes = inputBlisters.map((blister) =>
 					normalizeIntake(
 						{
@@ -813,71 +826,135 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const startJson = JSON.stringify(intakes.map((s) => s.start));
 			const takenByJson = JSON.stringify(takenBy || []);
 
-			// If stock-defining fields changed, reset stockAdjustment so the new
-			// base stock reflects actual inventory.  This prevents the old
-			// correction offset from skewing the total after an edit.
-			const stockFieldsChanged =
-				existing.packCount !== packCount ||
-				existing.blistersPerPack !== blistersPerPack ||
-				existing.pillsPerBlister !== pillsPerBlister ||
-				(existing.looseTablets ?? 0) !== (looseTablets ?? 0);
+			const transition = await withImmediateWriteTransaction(async (transactionDb) => {
+				const [current] = await transactionDb
+					.select()
+					.from(medications)
+					.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+				if (!current) return null;
 
-			const stockResetFields = stockFieldsChanged ? { stockAdjustment: 0, lastStockCorrectionAt: new Date() } : {};
+				const oldIntakes = parseIntakesWithUnits(current);
+				const crossesZeroScheduleBoundary = (oldIntakes.length === 0) !== (intakes.length === 0);
+				const hasScheduleOnBothSides = oldIntakes.length > 0 && intakes.length > 0;
+				const normalizedPackageType = normalizePackageType(packageType);
+				const normalizedTotalPills = totalPills || null;
+				const stockFieldsChanged =
+					current.packCount !== packCount ||
+					current.blistersPerPack !== blistersPerPack ||
+					current.pillsPerBlister !== pillsPerBlister ||
+					(current.looseTablets ?? 0) !== (looseTablets ?? 0) ||
+					normalizePackageType(current.packageType) !== normalizedPackageType ||
+					(current.totalPills ?? null) !== normalizedTotalPills ||
+					(current.packageAmountValue ?? 0) !== packageAmountValue ||
+					(current.packageAmountUnit ?? "ml") !== packageAmountUnit;
+				const changedAt = new Date();
+				const stockResetFields = stockFieldsChanged
+					? { stockAdjustment: 0, scheduleStockRebaseMilli: 0, lastStockCorrectionAt: changedAt }
+					: {};
 
-			const result = await db
-				.update(medications)
-				.set({
-					name,
-					genericName: genericName || null,
-					takenByJson,
-					medicationForm: medicationForm ?? "tablet",
-					pillForm: normalizedPillForm,
-					lifecycleCategory: lifecycleCategory ?? "refill_when_empty",
-					packageType: normalizePackageType(packageType),
-					packCount,
-					blistersPerPack,
-					pillsPerBlister,
-					totalPills: totalPills || null,
-					packageAmountValue,
-					packageAmountUnit,
-					looseTablets,
-					pillWeightMg: pillWeightMg || null,
-					doseUnit: doseUnit ?? "mg",
-					medicationStartDate: medicationStartDate ?? "",
-					medicationEndDate: medicationEndDate || null,
-					autoMarkObsoleteAfterEndDate: autoMarkObsoleteAfterEndDate ?? true,
-					expiryDate: expiryDate || null,
-					notes: notes || null,
-					prescriptionEnabled: prescriptionEnabled ?? false,
-					prescriptionAuthorizedRefills: prescriptionEnabled ? (prescriptionAuthorizedRefills ?? null) : null,
-					prescriptionRemainingRefills: prescriptionEnabled ? (prescriptionRemainingRefills ?? null) : null,
-					prescriptionLowRefillThreshold: prescriptionLowRefillThreshold ?? 1,
-					prescriptionExpiryDate: prescriptionExpiryDate || null,
-					intakeRemindersEnabled: intakeRemindersEnabled ?? false,
-					intakesJson,
-					usageJson,
-					everyJson,
-					startJson,
-					updatedAt: new Date(),
-					...stockResetFields,
-				})
-				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
-				.returning();
+				let dosesForProjection: Array<typeof doseTracking.$inferSelect> = [];
+				let stockCalculationMode: "automatic" | "manual" = "automatic";
+				let stockBeforeTransition = 0;
+				if (crossesZeroScheduleBoundary && !stockFieldsChanged) {
+					dosesForProjection = await transactionDb
+						.select()
+						.from(doseTracking)
+						.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)));
+					const [settings] = await transactionDb
+						.select({ stockCalculationMode: userSettings.stockCalculationMode })
+						.from(userSettings)
+						.where(eq(userSettings.userId, userId));
+					stockCalculationMode = settings?.stockCalculationMode === "manual" ? "manual" : "automatic";
+					stockBeforeTransition = computeMedicationCurrentStockRaw({
+						medication: current,
+						doses: dosesForProjection,
+						stockCalculationMode,
+						nowMs: changedAt.getTime(),
+					});
+				}
 
-			if (!result.length) return reply.notFound();
+				const [updated] = await transactionDb
+					.update(medications)
+					.set({
+						name,
+						genericName: genericName || null,
+						takenByJson,
+						medicationForm: medicationForm ?? "tablet",
+						pillForm: normalizedPillForm,
+						lifecycleCategory: lifecycleCategory ?? "refill_when_empty",
+						packageType: normalizedPackageType,
+						packCount,
+						blistersPerPack,
+						pillsPerBlister,
+						totalPills: normalizedTotalPills,
+						packageAmountValue,
+						packageAmountUnit,
+						looseTablets,
+						pillWeightMg: pillWeightMg || null,
+						doseUnit: doseUnit ?? "mg",
+						medicationStartDate: medicationStartDate ?? "",
+						medicationEndDate: medicationEndDate || null,
+						autoMarkObsoleteAfterEndDate: autoMarkObsoleteAfterEndDate ?? true,
+						expiryDate: expiryDate || null,
+						notes: notes || null,
+						prescriptionEnabled: prescriptionEnabled ?? false,
+						prescriptionAuthorizedRefills: prescriptionEnabled ? (prescriptionAuthorizedRefills ?? null) : null,
+						prescriptionRemainingRefills: prescriptionEnabled ? (prescriptionRemainingRefills ?? null) : null,
+						prescriptionLowRefillThreshold: prescriptionLowRefillThreshold ?? 1,
+						prescriptionExpiryDate: prescriptionExpiryDate || null,
+						intakeRemindersEnabled: intakeRemindersEnabled ?? false,
+						intakesJson,
+						usageJson,
+						everyJson,
+						startJson,
+						updatedAt: changedAt,
+						...stockResetFields,
+					})
+					.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
+					.returning();
+
+				if (!updated) return null;
+				if (!crossesZeroScheduleBoundary || stockFieldsChanged) {
+					return { medication: updated, oldIntakes, hasScheduleOnBothSides };
+				}
+
+				const stockAfterTransition = computeMedicationCurrentStockRaw({
+					medication: updated,
+					doses: dosesForProjection,
+					stockCalculationMode,
+					nowMs: changedAt.getTime(),
+				});
+				const scheduleStockRebaseMilli =
+					(current.scheduleStockRebaseMilli ?? 0) + Math.round((stockBeforeTransition - stockAfterTransition) * 1000);
+				const [rebased] = await transactionDb
+					.update(medications)
+					.set({ scheduleStockRebaseMilli })
+					.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
+					.returning();
+				if (!rebased) throw new Error("Medication disappeared during schedule stock rebase");
+
+				return { medication: rebased, oldIntakes, hasScheduleOnBothSides };
+			});
+
+			if (!transition) return reply.notFound();
+			const result = [transition.medication];
 
 			// ---------------------------------------------------------------
 			// Migrate dose tracking IDs when intake schedule changes
 			// ---------------------------------------------------------------
-			const oldIntakes = parseIntakesWithUnits(existing);
+			const oldIntakes = transition.oldIntakes;
 
 			// Get all dose tracking entries for this medication
-			const allDoses = await db
-				.select()
-				.from(doseTracking)
-				.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)));
+			const allDoses = transition.hasScheduleOnBothSides
+				? await db
+						.select()
+						.from(doseTracking)
+						.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)))
+				: [];
 
-			if (allDoses.length > 0) {
+			// A zero schedule is a snapshot boundary: keep historical dose IDs untouched instead of
+			// reinterpreting or deleting them against a schedule that did not exist when they were recorded.
+			if (transition.hasScheduleOnBothSides && allDoses.length > 0) {
 				// Build migration map: for each intake index, map old dateOnlyMs → new dateOnlyMs
 				const now = new Date();
 				const migrationEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -997,6 +1074,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				totalPills: result[0].totalPills ?? null,
 				looseTablets: result[0].looseTablets,
 				stockAdjustment: result[0].stockAdjustment ?? 0,
+				scheduleStockRebaseMilli: result[0].scheduleStockRebaseMilli ?? 0,
 				lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
 				pillWeightMg: result[0].pillWeightMg,
 				doseUnit: result[0].doseUnit ?? "mg",
@@ -1005,6 +1083,8 @@ export async function medicationRoutes(app: FastifyInstance) {
 				autoMarkObsoleteAfterEndDate: result[0].autoMarkObsoleteAfterEndDate ?? true,
 				intakes,
 				blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
+				hasRegularSchedule: intakes.length > 0,
+				asNeededStockEffect: 0,
 				imageUrl: result[0].imageUrl,
 				expiryDate: result[0].expiryDate,
 				notes: result[0].notes,
@@ -1177,6 +1257,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 			const updateFields: {
 				stockAdjustment: number;
+				scheduleStockRebaseMilli: number;
 				lastStockCorrectionAt: Date;
 				updatedAt: Date;
 				looseTablets?: number;
@@ -1185,6 +1266,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				packCount?: number;
 			} = {
 				stockAdjustment,
+				scheduleStockRebaseMilli: 0,
 				lastStockCorrectionAt: new Date(),
 				updatedAt: new Date(),
 			};
@@ -1221,6 +1303,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 			return {
 				id: result[0].id,
 				stockAdjustment: result[0].stockAdjustment ?? 0,
+				scheduleStockRebaseMilli: result[0].scheduleStockRebaseMilli ?? 0,
 				lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
 				updatedAt: normalizeDateTime(result[0].updatedAt),
 			};

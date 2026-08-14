@@ -84,6 +84,7 @@ const inventorySchema = z.object({
 	totalPills: z.number().int().nullable().optional(), // For bottle type: total capacity
 	looseTablets: z.number().int().min(0).default(0),
 	stockAdjustment: z.number().int().default(0), // Manual stock correction
+	scheduleStockRebaseMilli: z.number().int().default(0),
 	packageType: z.enum(PACKAGE_TYPES).default("blister"),
 	packageAmountValue: z.number().int().min(0).default(0),
 	packageAmountUnit: z.enum(["ml", "g"]).default("ml"),
@@ -637,6 +638,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						totalPills: med.totalPills ?? null,
 						looseTablets: med.looseTablets ?? 0,
 						stockAdjustment: med.stockAdjustment ?? 0,
+						scheduleStockRebaseMilli: med.scheduleStockRebaseMilli ?? 0,
 						packageType: normalizePackageType(med.packageType),
 						packageAmountValue: med.packageAmountValue ?? 0,
 						packageAmountUnit: (med.packageAmountUnit ?? "ml") as "ml" | "g",
@@ -1034,6 +1036,7 @@ export async function exportRoutes(app: FastifyInstance) {
 								looseTablets: med.inventory.looseTablets,
 								totalPills: med.inventory.totalPills ?? null,
 								stockAdjustment: med.inventory.stockAdjustment ?? 0,
+								scheduleStockRebaseMilli: med.inventory.scheduleStockRebaseMilli ?? 0,
 								lastStockCorrectionAt: med.lastStockCorrectionAt ? new Date(med.lastStockCorrectionAt) : null,
 								pillWeightMg: med.pillWeightMg || null,
 								doseUnit: med.doseUnit ?? "mg",

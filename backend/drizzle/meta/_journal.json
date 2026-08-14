@@ -148,6 +148,13 @@
       "when": 1784389672478,
       "tag": "0020_add_password_reset_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1786733801274,
+      "tag": "0021_add_schedule_stock_rebase",
+      "breakpoints": true
     }
   ]
 }

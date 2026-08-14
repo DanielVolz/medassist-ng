@@ -26,6 +26,7 @@ function medication(overrides: Partial<MedicationRow> = {}): MedicationRow {
 		totalPills: null,
 		looseTablets: 0,
 		stockAdjustment: 0,
+		scheduleStockRebaseMilli: 0,
 		lastStockCorrectionAt: null,
 		pillWeightMg: null,
 		doseUnit: "mg",

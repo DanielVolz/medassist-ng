@@ -48,6 +48,7 @@ export const medications = sqliteTable("medications", {
 	totalPills: integer("total_pills"), // For bottle type: total capacity of the container
 	looseTablets: integer("loose_tablets").notNull().default(0), // For blister: extra loose pills; for bottle: current stock
 	stockAdjustment: integer("stock_adjustment").notNull().default(0), // Hidden offset from stock corrections
+	scheduleStockRebaseMilli: integer("schedule_stock_rebase_milli").notNull().default(0), // Exact thousandth-unit offset across zero-schedule transitions
 	lastStockCorrectionAt: integer("last_stock_correction_at", { mode: "timestamp" }), // When stock was last corrected - consumed doses before this don't count
 	pillWeightMg: integer("pill_weight_mg"),
 	doseUnit: text("dose_unit", { length: 20 }).default("mg"), // Unit for the dose (mg, g, mcg, ml, IU, etc.)

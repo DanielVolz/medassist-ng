@@ -68,7 +68,7 @@ describe("MedicationListSection", () => {
 		expect(screen.getByText("form.blisters.noRegularSchedule")).toBeInTheDocument();
 	});
 
-	it("offers Record now only when the page has confirmed an active zero-schedule medication", () => {
+	it("offers Take only when the page has confirmed an active zero-schedule medication", () => {
 		const onRecordNow = vi.fn();
 		const eligible = createMedication({ intakes: [] });
 		const scheduled = createMedication({
@@ -81,7 +81,7 @@ describe("MedicationListSection", () => {
 			onRecordNow,
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: "asNeeded.record.action" }));
+		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
 		expect(onRecordNow).toHaveBeenCalledWith(eligible);
 		expect(screen.getAllByText("form.blisters.noRegularSchedule")).toHaveLength(1);
 	});

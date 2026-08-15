@@ -239,7 +239,6 @@
   },
   "asNeeded": {
     "record": {
-      "action": "Take",
       "title": "Take as-needed medication",
       "trustedTime": "The current time is saved when you take it.",
       "quantity": "Quantity ({{unit}})",
@@ -248,35 +247,23 @@
       "decreaseQuantity": "Decrease quantity",
       "increaseQuantity": "Increase quantity",
       "stockEffect": "This will reduce stock by {{quantity}} {{unit}}.",
-      "noStockEffect": "This records one application without changing the measured stock.",
-      "confirm": "Take",
+      "noStockEffect": "One application will be saved without changing the measured stock.",
       "saving": "Saving intake...",
       "failedTitle": "Medication was not taken",
       "successTitle": "Medication taken",
       "successMessage": "Took {{quantity}} {{unit}} at {{time}}. Current stock: {{stock}}.",
       "reconciliationRequired": "The package configuration and current stock should be checked."
     },
-    "lifecycle": {
-      "active_no_schedule": "Active without schedule",
-      "active_scheduled": "Active with schedule",
-      "ended": "Ended",
-      "obsolete": "Obsolete"
-    },
     "history": {
-      "title": "As-needed history",
-      "description": "Recorded as-needed intakes, including corrections and journal context.",
+      "title": "As-needed intake history",
       "loading": "Loading as-needed history...",
       "loadingMore": "Loading more...",
-      "empty": "No as-needed intakes recorded yet.",
+      "empty": "No as-needed medication taken yet.",
       "loadMore": "Load more",
       "retry": "Retry",
       "errorTitle": "History unavailable",
       "errorMessage": "The as-needed history could not be loaded. Try again.",
       "person": "Person",
-      "stockEffect": "Stock effect",
-      "reversedAt": "Reversed {{time}}",
-      "replacementFor": "Correction of event {{eventId}}",
-      "journal": "Journal",
       "noJournal": "No journal entry.",
       "status": {
         "active": "Active",
@@ -305,52 +292,17 @@
     "errors": {
       "network": "The result is uncertain because the connection was interrupted. Retry to safely check the same intake.",
       "insufficientStock": "There is not enough stock for this quantity. Check the real stock before trying again.",
-      "stockUnresolvable": "The current stock cannot be determined safely. Correct the stock before recording an intake.",
-      "notEligible": "This medication can no longer be recorded without a schedule. Refresh the medication list.",
-      "invalidPerson": "The selected person is no longer assigned to this medication.",
+      "stockUnresolvable": "The current stock cannot be determined safely. Correct the stock before taking the medication.",
+      "notEligible": "This medication can no longer be taken here without a schedule. Refresh the medication list.",
+      "invalidPerson": "The selected person is no longer available for this account.",
       "invalidQuantity": "Enter a valid quantity for this package type.",
       "rateLimited": "Too many new intakes were requested. Retry the same intake after {{seconds}} seconds.",
       "intentConflict": "This intake request conflicts with an earlier request. Close the dialog and start again.",
-      "replacementUnavailable": "This correction can no longer be linked to the selected intake. Refresh the history and try again.",
-      "readOnly": "This account access is read-only and cannot record an intake.",
-      "generic": "The intake could not be recorded. Retry the same intake or cancel."
+      "readOnly": "This account access is read-only and cannot take medication.",
+      "generic": "The medication could not be saved as taken. Retry the same intake or cancel."
     },
-    "replacement": {
-      "action": "Record correction",
-      "correctAction": "Correct",
-      "title": "Record corrected intake",
-      "description": "This creates a separate intake linked to the reversed event from {{time}}.",
-      "confirm": "Record correction",
-      "successTitle": "Correction recorded",
-      "reverseTitle": "Correct intake",
-      "reverseMessage": "The original {{quantity}} {{unit}} intake must first be reversed. Its audit record remains even if you cancel or the replacement fails."
-    },
-    "reversal": {
-      "action": "Reverse",
-      "confirmTitle": "Reverse intake",
-      "confirmMessage": "Reverse the recorded {{quantity}} {{unit}} intake? This restores only its stored stock effect and keeps the audit record.",
-      "confirm": "Reverse intake",
-      "saving": "Reversing...",
-      "errors": {
-        "network": "The result is uncertain because the connection was interrupted. Retry safely uses the same reversal request.",
-        "revision": "This intake changed. The history has been refreshed; review it before trying again.",
-        "intentConflict": "This reversal request conflicts with another intake. Close the confirmation and start again.",
-        "generic": "The intake could not be reversed. Retry the same reversal or cancel."
-      },
-      "notice": {
-        "reversedTitle": "Intake reversed",
-        "reversedMessage": "The stored stock effect was restored and the original remains in history.",
-        "reconciliationTitle": "Intake reversed — check stock",
-        "reconciliationMessage": "The stored stock effect was restored, but current stock now exceeds the configured package capacity.",
-        "correctionReadyTitle": "Original intake reversed",
-        "correctionReadyMessage": "Record the correction as a separate intake now, or return to this reversed event later.",
-        "correctionReadyReconciliationTitle": "Original reversed — check stock",
-        "correctionReadyReconciliationMessage": "Stock now exceeds configured capacity. Review it, then record the correction separately if appropriate.",
-        "revisionChangedTitle": "History updated",
-        "revisionChangedMessage": "The intake changed before the reversal completed. Review the refreshed entry.",
-        "journalReconciledTitle": "Journal refreshed",
-        "journalReconciledMessage": "The intake was reversed while its journal was open. The latest read-only entry is now shown."
-      }
+    "undo": {
+      "error": "The intake could not be undone. Try again."
     }
   },
   "form": {

@@ -5,8 +5,7 @@ import type { AsNeededIntakeListResponse, AsNeededIntakeMutationResponse } from 
 export class AsNeededIntakeRequestError extends Error {
 	constructor(
 		public readonly code: string,
-		public readonly retryAfterSeconds: number | null = null,
-		public readonly currentRevision: number | null = null
+		public readonly retryAfterSeconds: number | null = null
 	) {
 		super(code);
 		this.name = "AsNeededIntakeRequestError";
@@ -16,24 +15,20 @@ export class AsNeededIntakeRequestError extends Error {
 async function getMutationError(response: Response): Promise<AsNeededIntakeRequestError> {
 	const retryAfter = Number.parseInt(response.headers.get("Retry-After") ?? "", 10);
 	let code = "UNKNOWN_ERROR";
-	let currentRevision: number | null = null;
 	try {
-		const body = (await response.json()) as { code?: unknown; currentRevision?: unknown };
+		const body = (await response.json()) as { code?: unknown };
 		if (typeof body.code === "string") code = body.code;
-		if (typeof body.currentRevision === "number" && Number.isSafeInteger(body.currentRevision)) {
-			currentRevision = body.currentRevision;
-		}
 	} catch {
 		// The translated UI uses stable fallbacks for malformed error responses.
 	}
-	return new AsNeededIntakeRequestError(code, Number.isFinite(retryAfter) ? retryAfter : null, currentRevision);
+	return new AsNeededIntakeRequestError(code, Number.isFinite(retryAfter) ? retryAfter : null);
 }
 
 export function useAsNeededIntakes() {
 	const { authFetch } = useAuth();
 	const listAsNeededIntakes = useCallback(
 		async (medicationId: number, cursor?: string, signal?: AbortSignal): Promise<AsNeededIntakeListResponse> => {
-			const query = new URLSearchParams({ includeReversed: "true", limit: "10" });
+			const query = new URLSearchParams({ includeReversed: "false", limit: "10" });
 			if (cursor) query.set("cursor", cursor);
 
 			let response: Response;
@@ -54,7 +49,6 @@ export function useAsNeededIntakes() {
 			quantity: number;
 			person: string | null;
 			idempotencyKey: string;
-			replacementForEventId?: string | null;
 		}): Promise<AsNeededIntakeMutationResponse> => {
 			let response: Response;
 			try {
@@ -64,7 +58,6 @@ export function useAsNeededIntakes() {
 					body: JSON.stringify({
 						quantity: input.quantity,
 						person: input.person,
-						...(input.replacementForEventId ? { replacementForEventId: input.replacementForEventId } : {}),
 					}),
 				});
 			} catch {
@@ -78,27 +71,20 @@ export function useAsNeededIntakes() {
 		[authFetch]
 	);
 
-	const reverseAsNeededIntake = useCallback(
-		async (input: {
-			eventId: string;
-			expectedRevision: number;
-			idempotencyKey: string;
-		}): Promise<AsNeededIntakeMutationResponse> => {
+	const undoAsNeededIntake = useCallback(
+		async (eventId: string): Promise<void> => {
 			let response: Response;
 			try {
-				response = await authFetch(`/api/as-needed-intakes/${input.eventId}/reversal`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json", "Idempotency-Key": input.idempotencyKey },
-					body: JSON.stringify({ expectedRevision: input.expectedRevision }),
+				response = await authFetch(`/api/as-needed-intakes/${eventId}`, {
+					method: "DELETE",
 				});
 			} catch {
 				throw new AsNeededIntakeRequestError("NETWORK_ERROR");
 			}
 			if (!response.ok) throw await getMutationError(response);
-			return (await response.json()) as AsNeededIntakeMutationResponse;
 		},
 		[authFetch]
 	);
 
-	return { listAsNeededIntakes, recordAsNeededIntake, reverseAsNeededIntake };
+	return { listAsNeededIntakes, recordAsNeededIntake, undoAsNeededIntake };
 }

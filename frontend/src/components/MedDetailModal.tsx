@@ -25,14 +25,7 @@ import {
 import { Fragment, type MouseEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import type {
-	AsNeededIntakeEvent,
-	AsNeededIntakeMutationResponse,
-	Coverage,
-	Medication,
-	RefillEntry,
-	StockThresholds,
-} from "../types";
+import type { Coverage, Medication, RefillEntry, StockThresholds } from "../types";
 import {
 	allowsPillFormSelection,
 	getMedDisplayName,
@@ -141,12 +134,7 @@ export interface MedDetailModalProps {
 	onOpenMedicationEdit?: () => void;
 	onOpenEditStockModal?: () => void;
 	onOpenRecordNow?: () => void;
-	onReplaceAsNeeded?: (event: AsNeededIntakeEvent) => void;
-	onReverseAsNeeded?: (input: {
-		eventId: string;
-		expectedRevision: number;
-		idempotencyKey: string;
-	}) => Promise<AsNeededIntakeMutationResponse>;
+	onUndoAsNeeded?: (eventId: string) => Promise<void>;
 	onCloseEditStockModal: () => void;
 	onOpenUserFilter?: (person: string) => void;
 	showAsNeededHistory?: boolean;
@@ -191,8 +179,7 @@ export function MedDetailModal({
 	onOpenMedicationEdit,
 	onOpenEditStockModal,
 	onOpenRecordNow,
-	onReplaceAsNeeded,
-	onReverseAsNeeded,
+	onUndoAsNeeded,
 	onCloseEditStockModal,
 	onOpenUserFilter,
 	showAsNeededHistory = false,
@@ -943,9 +930,8 @@ export function MedDetailModal({
 							key={`${selectedMed.id}:${asNeededHistoryRefreshVersion}`}
 							medicationId={selectedMed.id}
 							canRecordNow={canRecordAsNeeded}
-							onRecordNow={() => onOpenRecordNow?.()}
-							onReplace={onReplaceAsNeeded}
-							onReverse={onReverseAsNeeded}
+							onTake={() => onOpenRecordNow?.()}
+							onUndo={onUndoAsNeeded}
 						/>
 					) : null}
 

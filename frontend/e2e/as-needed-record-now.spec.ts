@@ -124,8 +124,8 @@ test.describe("As-needed Record now", () => {
 				.filter({ has: page.getByRole("heading", { name: MEDICATION_NAME }) })
 				.last();
 			await expect(detail).toBeVisible();
-			await expect(detail.getByText(/As-needed history|Bei-Bedarf-Verlauf/i)).toBeVisible();
-			await detail.getByRole("button", { name: /Take|Einnehmen/i }).click();
+			await expect(detail.getByRole("region", { name: /As-needed history|Bei-Bedarf-Verlauf/i })).toBeVisible();
+			await detail.getByRole("button", { name: /^(Take|Nehmen)$/ }).click();
 
 			const create = page.waitForResponse(
 				(response) => response.url().includes("/as-needed-intakes") && response.request().method() === "POST"
@@ -133,13 +133,13 @@ test.describe("As-needed Record now", () => {
 			await page
 				.getByRole("dialog")
 				.last()
-				.getByRole("button", { name: /Take|Einnehmen/i })
+				.getByRole("button", { name: /^(Take|Nehmen)$/ })
 				.click();
 			expect((await create).status()).toBe(201);
 			await expect(page.getByText(/Medication taken|Medikament eingenommen/i)).toBeVisible();
 			await page.goBack();
 			await expect(detail).toBeVisible();
-			await expect(detail.locator("article").first()).toContainText(/0\.5/);
+			await expect(detail.locator("article").first()).toContainText(/^1 pill|^1 Tablette/);
 			await detail
 				.getByLabel(/Close|Schließen/i)
 				.first()

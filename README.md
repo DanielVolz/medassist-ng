@@ -129,6 +129,7 @@ Share your medication schedule with others via a public link.
 - Track exact stock with package profiles (blister, bottle, tube, liquid container, inhaler, injection)
 - Display remaining days of supply
 - Automatic calculation based on intake schedule
+- Record package-aware as-needed consumption for active medications without a regular schedule
 - Manual stock corrections
 
 ### Medication Refill
@@ -139,7 +140,17 @@ Share your medication schedule with others via a public link.
 ### Flexible Schedules
 - Daily, weekly, or custom intervals per medication
 - Independent schedules for each medication
+- Create or edit a medication without a regular schedule on desktop and mobile, then add or remove schedules later
 - Optional timeline filters for dashboard and shared schedule views
+
+### Unscheduled Medications & As-Needed Intakes
+- **Record now** is available for active medications with no regular schedule; scheduled, ended, and obsolete medications keep their existing behavior
+- Quantity, unit, and stock effect follow the medication's package profile. Topical use records one application without guessing a measurable stock reduction
+- Attribute an intake to one of the medication's current people or choose **None / self**
+- Keep an auditable active and reversed history, with corrections recorded as a reversal followed by a separate replacement
+- Include as-needed history and journals in reports and export/import backups without exposing event details or mutation actions on public shares
+
+See [Unscheduled medications and Record now](docs/CONFIGURATION.md#unscheduled-medications-and-record-now) for the inventory, retry, correction, sharing, and backup rules.
 
 ### Stock Alerts & Reminders
 - Notifications before stock runs out
@@ -152,7 +163,7 @@ Share your medication schedule with others via a public link.
 
 ### Reports
 - Generate medication reports as PDF, Markdown, or plain text
-- Include intake history with mood summaries, refill history, and prescription details
+- Include scheduled history plus separate active as-needed totals and active/reversed audit entries with journal context
 
 ### Multi-Person Support
 - Manage medications for multiple people
@@ -161,7 +172,7 @@ Share your medication schedule with others via a public link.
 - Optionally embed the medication overview directly on shared links via a settings toggle
 
 ### Data Export & Import
-- Export all your data (medications, dose history, intake journal notes and moods, settings) as JSON
+- Export all your data (medications, scheduled dose history, as-needed intake events, intake journal notes and moods, settings) as JSON
 - Review validated import contents before replacing current data
 - Optionally download a fresh backup before confirming import
 - Import previously exported data with automatic ID remapping

@@ -9,6 +9,7 @@ import { getAnonymousUserId, isReadOnlyApiKeyRequest, requireAuth } from "../plu
 import { env } from "../plugins/env.js";
 import {
 	deleteAsNeededAnchorsForMedication,
+	filterScheduledDoseRows,
 	getActiveAsNeededStockEffectMilli,
 	getActiveAsNeededStockEffectsMilli,
 	neutralizeAsNeededStockEffects,
@@ -872,6 +873,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 						.select()
 						.from(doseTracking)
 						.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)));
+					dosesForProjection = await filterScheduledDoseRows(transactionDb, userId, dosesForProjection);
 					const [settings] = await transactionDb
 						.select({ stockCalculationMode: userSettings.stockCalculationMode })
 						.from(userSettings)
@@ -964,12 +966,13 @@ export async function medicationRoutes(app: FastifyInstance) {
 			const oldIntakes = transition.oldIntakes;
 
 			// Get all dose tracking entries for this medication
-			const allDoses = transition.hasScheduleOnBothSides
+			const doseRows = transition.hasScheduleOnBothSides
 				? await db
 						.select()
 						.from(doseTracking)
 						.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)))
 				: [];
+			const allDoses = await filterScheduledDoseRows(db, userId, doseRows);
 
 			// A zero schedule is a snapshot boundary: keep historical dose IDs untouched instead of
 			// reinterpreting or deleting them against a schedule that did not exist when they were recorded.
@@ -1056,10 +1059,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 				}, Infinity);
 				if (!Number.isNaN(earliestStartDate)) {
 					// Re-fetch after possible migrations
-					const updatedDoses = await db
+					const updatedDoseRows = await db
 						.select()
 						.from(doseTracking)
 						.where(and(eq(doseTracking.userId, userId), like(doseTracking.doseId, `${idNum}-%`)));
+					const updatedDoses = await filterScheduledDoseRows(db, userId, updatedDoseRows);
 
 					const dosesToDelete = updatedDoses.filter((dose) => {
 						const parts = dose.doseId.split("-");

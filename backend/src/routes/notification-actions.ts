@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "../db/client.js";
 import { notificationActionGroups, notificationActionTokens, userSettings } from "../db/schema.js";
 import { getTranslations, type Language } from "../i18n/translations.js";
+import { getAsNeededAnchorDoseIds } from "../services/as-needed-intakes-service.js";
 import { markDoseTakenForUser, skipDosesForUser } from "../services/dose-tracking-service.js";
 import {
 	getNotificationActionTokenRecord,
@@ -543,6 +544,14 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 				});
 			}
 
+			if ((await getAsNeededAnchorDoseIds(db, record.group.userId, record.doseIds)).size > 0) {
+				request.log.warn(
+					buildNotificationActionLogContext(record, { requestedAction: action, code: "INVALID_DOSE" }),
+					"[NotificationActions] Rejected invalid scheduled dose action"
+				);
+				return reply.status(400).send({ error: "Invalid dose ID", code: "INVALID_DOSE" });
+			}
+
 			if (action === "taken") {
 				for (const [doseIndex, doseId] of record.doseIds.entries()) {
 					const result = await markDoseTakenForUser({
@@ -566,7 +575,10 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 					}
 				}
 			} else {
-				await skipDosesForUser({ userId: record.group.userId, doseIds: record.doseIds });
+				const result = await skipDosesForUser({ userId: record.group.userId, doseIds: record.doseIds });
+				if (!result.success) {
+					return reply.status(400).send({ error: result.message, code: result.code });
+				}
 			}
 
 			await db

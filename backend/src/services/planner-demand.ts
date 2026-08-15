@@ -3,7 +3,7 @@ import { db } from "../db/client.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { isAmountBasedPackageType, isTubePackageType, normalizePackageType } from "../utils/package-profiles.js";
 import { normalizeIntakeUsageForStock, normalizeMedicationSchedule } from "../utils/scheduler-utils.js";
-import { getActiveAsNeededStockEffectsMilli } from "./as-needed-intakes-service.js";
+import { filterScheduledDoseRows, getActiveAsNeededStockEffectsMilli } from "./as-needed-intakes-service.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
 import { calculateUsageInRange, parseIntakesWithUnits } from "./medications-service.js";
 
@@ -60,10 +60,11 @@ export async function calculatePlannerDemandRows(options: PlannerDemandOptions):
 		.where(eq(userSettings.userId, userId));
 	const stockCalculationMode = settingsRow?.stockCalculationMode === "manual" ? "manual" : "automatic";
 
-	const takenDoses = await db
+	const takenDoseRows = await db
 		.select()
 		.from(doseTracking)
 		.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, false)));
+	const takenDoses = await filterScheduledDoseRows(db, userId, takenDoseRows);
 	const asNeededEffects = await getActiveAsNeededStockEffectsMilli(
 		db,
 		userId,

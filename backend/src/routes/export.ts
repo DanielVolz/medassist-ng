@@ -9,6 +9,7 @@ import { getDataDir } from "../db/path-utils.js";
 import { doseTracking, intakeJournal, medications, refillHistory, shareTokens, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { filterScheduledDoseRows } from "../services/as-needed-intakes-service.js";
 import {
 	listIntakeJournalExportPayloadsForUser,
 	restoreIntakeJournalForImportedDose,
@@ -666,7 +667,8 @@ export async function exportRoutes(app: FastifyInstance) {
 			});
 
 			// 2. Load all dose tracking entries
-			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
+			const doseRows = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
+			const doses = await filterScheduledDoseRows(db, userId, doseRows);
 			const journalPayloadsByDoseTrackingId = await listIntakeJournalExportPayloadsForUser(userId);
 
 			const exportDoseHistory = doses
@@ -899,12 +901,13 @@ export async function exportRoutes(app: FastifyInstance) {
 					db.select({ id: shareTokens.id }).from(shareTokens).where(eq(shareTokens.userId, userId)),
 					db.select({ id: userSettings.id }).from(userSettings).where(eq(userSettings.userId, userId)),
 				]);
+			const scheduledDoseHistory = await filterScheduledDoseRows(db, userId, existingDoseHistory);
 
 			return {
 				success: true,
 				preview: buildImportPreview(parsed.data, {
 					medications: existingMeds.length,
-					doseHistory: existingDoseHistory.length,
+					doseHistory: scheduledDoseHistory.length,
 					refillHistory: existingRefillHistory.length,
 					shareLinks: existingShareLinks.length,
 					hasSettings: existingSettings.length > 0,

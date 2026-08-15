@@ -33,6 +33,7 @@ import {
 	normalizeMedicationSchedule,
 	parseLocalDateTime,
 } from "../utils/scheduler-utils.js";
+import { filterScheduledDoseRows } from "./as-needed-intakes-service.js";
 import {
 	buildPrescriptionReminderPushNotification,
 	buildStockReminderPushNotification,
@@ -141,10 +142,11 @@ async function getMedicationsNeedingReminder(
 		.where(and(eq(medications.userId, userId), eq(medications.isObsolete, false)))
 		.orderBy(medications.id);
 
-	const takenDoseRows = await db
+	const allTakenDoseRows = await db
 		.select()
 		.from(doseTracking)
 		.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, false)));
+	const takenDoseRows = await filterScheduledDoseRows(db, userId, allTakenDoseRows);
 
 	const takenDoseIdsByMed = new Map<number, Set<string>>();
 	const takenDoseTimestamps = new Map<string, number>();

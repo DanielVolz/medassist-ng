@@ -6,7 +6,12 @@ import { db } from "../db/client.js";
 import { doseTracking, intakeJournal, medications, type shareTokens, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
-import { getActiveAsNeededStockEffectMilli } from "../services/as-needed-intakes-service.js";
+import {
+	filterScheduledDoseRows,
+	getActiveAsNeededStockEffectMilli,
+	getAsNeededAnchorDoseIds,
+	isAsNeededAnchorDoseId,
+} from "../services/as-needed-intakes-service.js";
 import { computeMedicationCurrentStock } from "../services/current-stock.js";
 import { markDoseTakenForUser } from "../services/dose-tracking-service.js";
 import {
@@ -231,6 +236,7 @@ function validateShareDoseIdWithMedicationMap(
 }
 
 async function validateShareDoseId(share: typeof shareTokens.$inferSelect, doseId: string): Promise<boolean> {
+	if (await isAsNeededAnchorDoseId(db, share.userId, doseId)) return false;
 	const medicationById = await loadShareVisibleMedicationMap(share);
 	return validateShareDoseIdWithMedicationMap(share, doseId, medicationById);
 }
@@ -327,7 +333,8 @@ async function isDoseOutOfStock(options: {
 			})()
 		: parsedDose.timestampMs;
 
-	const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
+	const allDoses = await db.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
+	const doses = await filterScheduledDoseRows(db, options.userId, allDoses);
 	const asNeededStockEffectMilli = await getActiveAsNeededStockEffectMilli(db, options.userId, medication.id);
 	const stockBeforeDoseMs = Math.max(0, scheduledOccurrenceMs - 1);
 	return (
@@ -344,7 +351,8 @@ async function isDoseOutOfStock(options: {
 async function markDoseSkippedForUser(input: {
 	userId: number;
 	doseId: string;
-}): Promise<"created" | "updated" | "already_skipped"> {
+}): Promise<"created" | "updated" | "already_skipped" | "invalid"> {
+	if (await isAsNeededAnchorDoseId(db, input.userId, input.doseId)) return "invalid";
 	const [existing] = await db
 		.select()
 		.from(doseTracking)
@@ -373,7 +381,8 @@ async function markDoseSkippedForUser(input: {
 	return "created";
 }
 
-async function undoDoseSkippedForUser(input: { userId: number; doseId: string }): Promise<boolean> {
+async function undoDoseSkippedForUser(input: { userId: number; doseId: string }): Promise<boolean | "invalid"> {
+	if (await isAsNeededAnchorDoseId(db, input.userId, input.doseId)) return "invalid";
 	const [existing] = await db
 		.select()
 		.from(doseTracking)
@@ -455,7 +464,8 @@ export async function doseRoutes(app: FastifyInstance) {
 			const userId = await getUserId(request, reply);
 
 			// Get all taken doses for this user (no time limit)
-			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
+			const allDoses = await db.select().from(doseTracking).where(eq(doseTracking.userId, userId));
+			const doses = await filterScheduledDoseRows(db, userId, allDoses);
 
 			return {
 				doses: doses.map((d) => ({
@@ -553,6 +563,7 @@ export async function doseRoutes(app: FastifyInstance) {
 				},
 				response: {
 					200: { type: "object", properties: { success: { type: "boolean" } } },
+					400: genericErrorSchema,
 					401: genericErrorSchema,
 				},
 			},
@@ -561,6 +572,9 @@ export async function doseRoutes(app: FastifyInstance) {
 			const userId = await getUserId(request, reply);
 
 			const { doseId } = request.params;
+			if (await isAsNeededAnchorDoseId(db, userId, doseId)) {
+				return reply.status(400).send({ error: "Invalid dose ID", code: "INVALID_DOSE" });
+			}
 
 			// Check if this dose was dismissed
 			const [existing] = await db
@@ -628,6 +642,9 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			const status = await markDoseSkippedForUser({ userId, doseId });
+			if (status === "invalid") {
+				return reply.status(400).send({ error: "Invalid dose ID", code: "INVALID_DOSE" });
+			}
 			if (status === "already_skipped") {
 				return { success: true, message: "Already skipped" };
 			}
@@ -655,13 +672,17 @@ export async function doseRoutes(app: FastifyInstance) {
 				},
 				response: {
 					200: { type: "object", properties: { success: { type: "boolean" } } },
+					400: genericErrorSchema,
 					401: genericErrorSchema,
 				},
 			},
 		},
 		async (request, reply) => {
 			const userId = await getUserId(request, reply);
-			await undoDoseSkippedForUser({ userId, doseId: request.params.doseId });
+			const result = await undoDoseSkippedForUser({ userId, doseId: request.params.doseId });
+			if (result === "invalid") {
+				return reply.status(400).send({ error: "Invalid dose ID", code: "INVALID_DOSE" });
+			}
 
 			return { success: true };
 		}
@@ -711,6 +732,9 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			const { doseIds } = parsed.data;
+			if ((await getAsNeededAnchorDoseIds(db, userId, doseIds)).size > 0) {
+				return reply.status(400).send({ error: "Invalid dose ID", code: "INVALID_DOSE" });
+			}
 			const hasFutureDose = doseIds.some((doseId) => {
 				const parsedDose = parseDoseId(doseId);
 				return parsedDose ? isFutureDoseDay(parsedDose) : false;
@@ -727,6 +751,9 @@ export async function doseRoutes(app: FastifyInstance) {
 			let dismissedCount = 0;
 			for (const doseId of doseIds) {
 				const status = await markDoseSkippedForUser({ userId, doseId });
+				if (status === "invalid") {
+					return reply.status(400).send({ error: "Invalid dose ID", code: "INVALID_DOSE" });
+				}
 				if (status !== "already_skipped") {
 					dismissedCount++;
 				}
@@ -763,10 +790,11 @@ export async function doseRoutes(app: FastifyInstance) {
 
 			// Delete all dismissed-only records (not taken ones)
 			// For taken+dismissed, just remove the dismissed flag
-			const dismissed = await db
+			const allDismissed = await db
 				.select()
 				.from(doseTracking)
 				.where(and(eq(doseTracking.userId, userId), eq(doseTracking.dismissed, true)));
+			const dismissed = await filterScheduledDoseRows(db, userId, allDismissed);
 
 			for (const d of dismissed) {
 				const hasRealTakenTimestamp = d.takenAt instanceof Date ? d.takenAt.getTime() > 0 : Boolean(d.takenAt);
@@ -827,7 +855,8 @@ export async function doseRoutes(app: FastifyInstance) {
 					.from(doseTracking)
 					.where(and(eq(doseTracking.userId, share.userId), medicationDoseFilter));
 			}
-			const visibleDoses = doses.filter((dose) =>
+			const scheduledDoses = await filterScheduledDoseRows(db, share.userId, doses);
+			const visibleDoses = scheduledDoses.filter((dose) =>
 				validateShareDoseIdWithMedicationMap(share, dose.doseId, medicationById)
 			);
 
@@ -1146,6 +1175,9 @@ export async function doseRoutes(app: FastifyInstance) {
 			}
 
 			const status = await markDoseSkippedForUser({ userId: share.userId, doseId });
+			if (status === "invalid") {
+				return reply.status(400).send({ error: "Invalid or unauthorized doseId", code: "INVALID_DOSE" });
+			}
 			if (status === "already_skipped") {
 				return { success: true, message: "Already skipped" };
 			}
@@ -1231,7 +1263,10 @@ export async function doseRoutes(app: FastifyInstance) {
 				return reply.status(400).send({ error: "Invalid or unauthorized doseId" });
 			}
 
-			await undoDoseSkippedForUser({ userId: share.userId, doseId });
+			const result = await undoDoseSkippedForUser({ userId: share.userId, doseId });
+			if (result === "invalid") {
+				return reply.status(400).send({ error: "Invalid or unauthorized doseId", code: "INVALID_DOSE" });
+			}
 			return { success: true };
 		}
 	);

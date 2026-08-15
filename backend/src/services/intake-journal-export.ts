@@ -1,7 +1,7 @@
 import { type IntakeMood, normalizeIntakeMood } from "@medassist/shared";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { intakeJournal } from "../db/schema.js";
+import { asNeededIntakeEvents, doseTracking, intakeJournal } from "../db/schema.js";
 
 type IntakeJournalWriteDatabase = Pick<typeof db, "insert">;
 
@@ -45,16 +45,24 @@ function toDateOrFallback(value: string | null | undefined, fallback: Date): Dat
 export async function listIntakeJournalExportPayloadsForUser(
 	userId: number
 ): Promise<Map<number, IntakeJournalExportPayload>> {
-	const rows = await db.select().from(intakeJournal).where(eq(intakeJournal.userId, userId));
+	const rows = await db
+		.select({ journal: intakeJournal })
+		.from(intakeJournal)
+		.innerJoin(doseTracking, eq(doseTracking.id, intakeJournal.doseTrackingId))
+		.leftJoin(
+			asNeededIntakeEvents,
+			and(eq(asNeededIntakeEvents.doseTrackingId, doseTracking.id), eq(asNeededIntakeEvents.userId, userId))
+		)
+		.where(and(eq(intakeJournal.userId, userId), eq(doseTracking.userId, userId), isNull(asNeededIntakeEvents.id)));
 
 	return new Map(
-		rows.map((row) => [
-			row.doseTrackingId,
+		rows.map(({ journal }) => [
+			journal.doseTrackingId,
 			{
-				journalNote: row.note,
-				journalMood: normalizeIntakeMood(row.mood),
-				journalCreatedAt: toIsoStringOrNull(row.createdAt),
-				journalUpdatedAt: toIsoStringOrNull(row.updatedAt),
+				journalNote: journal.note,
+				journalMood: normalizeIntakeMood(journal.mood),
+				journalCreatedAt: toIsoStringOrNull(journal.createdAt),
+				journalUpdatedAt: toIsoStringOrNull(journal.updatedAt),
 			},
 		])
 	);

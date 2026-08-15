@@ -3,7 +3,12 @@ import { db } from "../db/client.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { parseDoseId } from "../utils/dose-id.js";
 import { normalizeMedicationIntakes, parseLocalDateTime } from "../utils/scheduler-utils.js";
-import { getActiveAsNeededStockEffectMilli } from "./as-needed-intakes-service.js";
+import {
+	filterScheduledDoseRows,
+	getActiveAsNeededStockEffectMilli,
+	getAsNeededAnchorDoseIds,
+	isAsNeededAnchorDoseId,
+} from "./as-needed-intakes-service.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
 
 export type DoseTrackingSource = "manual" | "automatic" | "notification";
@@ -19,18 +24,13 @@ export type MarkDoseTakenResult =
 			message: string;
 	  };
 
-export type DismissDosesResult = {
-	success: true;
-	dismissedCount: number;
-	alreadyTakenCount: number;
-};
+export type DismissDosesResult =
+	| { success: true; dismissedCount: number; alreadyTakenCount: number }
+	| { success: false; code: "INVALID_DOSE"; message: string };
 
-export type SkipDosesResult = {
-	success: true;
-	skippedCount: number;
-	alreadySkippedCount: number;
-	switchedFromTakenCount: number;
-};
+export type SkipDosesResult =
+	| { success: true; skippedCount: number; alreadySkippedCount: number; switchedFromTakenCount: number }
+	| { success: false; code: "INVALID_DOSE"; message: string };
 
 function hasRealTakenTimestamp(takenAt: Date | null): boolean {
 	return takenAt instanceof Date && takenAt.getTime() > 0;
@@ -105,7 +105,8 @@ async function isDoseOutOfStock(options: { userId: number; doseId: string }): Pr
 			})()
 		: parsedDose.timestampMs;
 
-	const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
+	const allDoses = await db.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
+	const doses = await filterScheduledDoseRows(db, options.userId, allDoses);
 	const asNeededStockEffectMilli = await getActiveAsNeededStockEffectMilli(db, options.userId, medication.id);
 	const stockBeforeDoseMs = Math.max(0, scheduledOccurrenceMs - 1);
 
@@ -126,6 +127,9 @@ export async function markDoseTakenForUser(input: {
 	source: DoseTrackingSource;
 	markedBy?: string | null;
 }): Promise<MarkDoseTakenResult> {
+	if (await isAsNeededAnchorDoseId(db, input.userId, input.doseId)) {
+		return { success: false, code: "INVALID_DOSE", message: "Invalid dose ID" };
+	}
 	const parsedDose = parseDoseId(input.doseId);
 	if (!parsedDose) {
 		return {
@@ -202,6 +206,9 @@ export async function markDoseTakenForUser(input: {
 }
 
 export async function skipDosesForUser(input: { userId: number; doseIds: string[] }): Promise<SkipDosesResult> {
+	if ((await getAsNeededAnchorDoseIds(db, input.userId, input.doseIds)).size > 0) {
+		return { success: false, code: "INVALID_DOSE", message: "Invalid dose ID" };
+	}
 	let skippedCount = 0;
 	let alreadySkippedCount = 0;
 	let switchedFromTakenCount = 0;
@@ -261,6 +268,9 @@ export async function skipDosesForUser(input: { userId: number; doseIds: string[
 }
 
 export async function dismissDosesForUser(input: { userId: number; doseIds: string[] }): Promise<DismissDosesResult> {
+	if ((await getAsNeededAnchorDoseIds(db, input.userId, input.doseIds)).size > 0) {
+		return { success: false, code: "INVALID_DOSE", message: "Invalid dose ID" };
+	}
 	let dismissedCount = 0;
 	let alreadyTakenCount = 0;
 

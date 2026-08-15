@@ -5,7 +5,7 @@ import { db } from "../db/client.js";
 import { doseTracking, medications, shareTokens, userSettings, users } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
-import { getActiveAsNeededStockEffectsMilli } from "../services/as-needed-intakes-service.js";
+import { filterScheduledDoseRows, getActiveAsNeededStockEffectsMilli } from "../services/as-needed-intakes-service.js";
 import { buildSharedMedicationOverview } from "../services/coverage.js";
 import {
 	getPublicShareContext,
@@ -362,10 +362,14 @@ export async function shareRoutes(app: FastifyInstance) {
 						meds.map((medication) => medication.id)
 					)
 				: new Map<number, number>();
+			const doseRows = shareMedicationOverview
+				? await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId))
+				: [];
+			const scheduledDoses = await filterScheduledDoseRows(db, share.userId, doseRows);
 			const medicationOverview = shareMedicationOverview
 				? buildSharedMedicationOverview({
 						medications: meds,
-						doses: await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId)),
+						doses: scheduledDoses,
 						thresholdDays: settings?.lowStockDays ?? 30,
 						shareTakenBy: share.takenBy,
 						asNeededStockEffectsMilli,
@@ -459,7 +463,8 @@ export async function shareRoutes(app: FastifyInstance) {
 				meds.map((medication) => medication.id)
 			);
 
-			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
+			const doseRows = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
+			const doses = await filterScheduledDoseRows(db, share.userId, doseRows);
 
 			const overview = buildSharedMedicationOverview({
 				medications: meds,

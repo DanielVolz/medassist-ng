@@ -55,6 +55,7 @@ import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-sc
 import { getLiquidCountUnitLabel } from "../utils/intake-units";
 import { getStockStatus } from "../utils/schedule";
 import { splitCurrentBlisterStock } from "../utils/stock";
+import { AsNeededIntakeHistory } from "./AsNeededIntakeHistory";
 import stepperClasses from "./FormNumberStepper.module.css";
 import { Lightbox } from "./Lightbox";
 import classes from "./MedDetailModal.module.css";
@@ -132,8 +133,12 @@ export interface MedDetailModalProps {
 	onCloseRefillModal: () => void;
 	onOpenMedicationEdit?: () => void;
 	onOpenEditStockModal?: () => void;
+	onOpenRecordNow?: () => void;
 	onCloseEditStockModal: () => void;
 	onOpenUserFilter?: (person: string) => void;
+	showAsNeededHistory?: boolean;
+	canRecordAsNeeded?: boolean;
+	asNeededHistoryRefreshVersion?: number;
 	// Refill state
 	refillPacks: number;
 	onRefillPacksChange: (value: number) => void;
@@ -172,8 +177,12 @@ export function MedDetailModal({
 	onCloseRefillModal,
 	onOpenMedicationEdit,
 	onOpenEditStockModal,
+	onOpenRecordNow,
 	onCloseEditStockModal,
 	onOpenUserFilter,
+	showAsNeededHistory = false,
+	canRecordAsNeeded = false,
+	asNeededHistoryRefreshVersion = 0,
 	refillPacks,
 	onRefillPacksChange,
 	refillLoose,
@@ -302,7 +311,7 @@ export function MedDetailModal({
 	const structuralMax = isAmountBasedPackageType(selectedMed.packageType)
 		? stockDisplayCapacity
 		: selectedMed.packCount * selectedMed.blistersPerPack * selectedMed.pillsPerBlister;
-	const currentStock = medCoverage ? Math.round(medCoverage.medsLeft) : getMedTotal(selectedMed);
+	const currentStock = medCoverage ? medCoverage.medsLeft : getMedTotal(selectedMed);
 	const status =
 		medCoverage && hasRegularSchedule ? getStockStatus(medCoverage.daysLeft, medCoverage.medsLeft, settings) : null;
 	const textClass = getValueToneClass(status?.className);
@@ -913,6 +922,15 @@ export function MedDetailModal({
 							</div>
 						</div>
 					</div>
+
+					{showAsNeededHistory ? (
+						<AsNeededIntakeHistory
+							key={`${selectedMed.id}:${asNeededHistoryRefreshVersion}`}
+							medicationId={selectedMed.id}
+							canRecordNow={canRecordAsNeeded}
+							onRecordNow={() => onOpenRecordNow?.()}
+						/>
+					) : null}
 
 					{/* Package Details Section */}
 					<div className={classes["med-detail-section"]}>

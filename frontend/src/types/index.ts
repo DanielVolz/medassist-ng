@@ -221,6 +221,11 @@ export type AsNeededIntakeMutationResponse = {
 	};
 };
 
+export type AsNeededIntakeListResponse = {
+	events: AsNeededIntakeEvent[];
+	nextCursor: string | null;
+};
+
 export type PlannerRow = {
 	medicationId: number;
 	medicationName: string;

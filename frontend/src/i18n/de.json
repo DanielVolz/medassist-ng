@@ -246,6 +246,39 @@
       "successMessage": "{{quantity}} {{unit}} um {{time}} erfasst. Aktueller Bestand: {{stock}}.",
       "reconciliationRequired": "Packungskonfiguration und aktueller Bestand sollten geprüft werden."
     },
+    "lifecycle": {
+      "active_no_schedule": "Aktiv ohne Einnahmeplan",
+      "active_scheduled": "Aktiv mit Einnahmeplan",
+      "ended": "Beendet",
+      "obsolete": "Obsolet"
+    },
+    "history": {
+      "title": "Bedarfseinnahmen",
+      "description": "Erfasste Bedarfseinnahmen einschließlich Korrekturen und Tagebuchkontext.",
+      "loading": "Bedarfseinnahmen werden geladen...",
+      "loadingMore": "Weitere Einträge werden geladen...",
+      "empty": "Noch keine Bedarfseinnahmen erfasst.",
+      "loadMore": "Mehr laden",
+      "retry": "Erneut versuchen",
+      "errorTitle": "Verlauf nicht verfügbar",
+      "errorMessage": "Der Verlauf der Bedarfseinnahmen konnte nicht geladen werden. Versuche es erneut.",
+      "person": "Person",
+      "stockEffect": "Bestandswirkung",
+      "reversedAt": "Storniert am {{time}}",
+      "replacementFor": "Korrektur des Ereignisses {{eventId}}",
+      "journal": "Tagebuch",
+      "noJournal": "Kein Tagebucheintrag.",
+      "status": {
+        "active": "Aktiv",
+        "reversed": "Storniert"
+      },
+      "stockReason": {
+        "applied": "Auf den aktuellen Bestand angewendet",
+        "non_measurable": "Keine messbare Bestandswirkung",
+        "before_correction": "Vor der Bestandskorrektur",
+        "superseded_by_correction": "In einer späteren Bestandskorrektur enthalten"
+      }
+    },
     "units": {
       "pills": "Tabletten",
       "pills_one": "Tablette",

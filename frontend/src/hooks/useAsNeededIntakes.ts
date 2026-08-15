@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useAuth } from "../components/Auth";
-import type { AsNeededIntakeMutationResponse } from "../types";
+import type { AsNeededIntakeListResponse, AsNeededIntakeMutationResponse } from "../types";
 
 export class AsNeededIntakeRequestError extends Error {
 	constructor(
@@ -14,6 +14,22 @@ export class AsNeededIntakeRequestError extends Error {
 
 export function useAsNeededIntakes() {
 	const { authFetch } = useAuth();
+	const listAsNeededIntakes = useCallback(
+		async (medicationId: number, cursor?: string, signal?: AbortSignal): Promise<AsNeededIntakeListResponse> => {
+			const query = new URLSearchParams({ includeReversed: "true", limit: "10" });
+			if (cursor) query.set("cursor", cursor);
+
+			let response: Response;
+			try {
+				response = await authFetch(`/api/medications/${medicationId}/as-needed-intakes?${query}`, { signal });
+			} catch {
+				throw new AsNeededIntakeRequestError("NETWORK_ERROR");
+			}
+			if (!response.ok) throw new AsNeededIntakeRequestError("HISTORY_UNAVAILABLE");
+			return (await response.json()) as AsNeededIntakeListResponse;
+		},
+		[authFetch]
+	);
 
 	const recordAsNeededIntake = useCallback(
 		async (input: {
@@ -50,5 +66,5 @@ export function useAsNeededIntakes() {
 		[authFetch]
 	);
 
-	return { recordAsNeededIntake };
+	return { listAsNeededIntakes, recordAsNeededIntake };
 }

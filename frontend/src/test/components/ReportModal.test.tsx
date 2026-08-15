@@ -367,6 +367,150 @@ describe("ReportModal", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
+	it("keeps scheduled doses separate from active and reversed as-needed audit events in text and Markdown reports", async () => {
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				1: {
+					dosesTaken: 3,
+					automaticDosesTaken: 1,
+					dosesSkipped: 1,
+					firstDoseAt: "2026-03-01T08:00:00.000Z",
+					lastDoseAt: "2026-03-02T08:00:00.000Z",
+					asNeededIntakesTaken: 2,
+					asNeededQuantityByUnit: { pills: 1.5, ml: 2, puffs: 3 },
+					asNeededIntakes: [
+						{
+							eventId: "active-event",
+							status: "active",
+							occurredAt: "2026-03-03T08:00:00.000Z",
+							recordedAt: "2026-03-03T08:05:00.000Z",
+							quantity: 1.5,
+							quantityUnit: "pills",
+							person: "Alice",
+							source: "owner_as_needed",
+							stockEffect: 1.5,
+							stockEffectReason: "applied",
+							replacementForEventId: null,
+							reversedAt: null,
+							revision: 1,
+							mood: "good",
+							note: "Relief",
+						},
+						{
+							eventId: "reversed-event",
+							status: "reversed",
+							occurredAt: "2026-03-02T22:00:00.000Z",
+							recordedAt: "2026-03-02T22:01:00.000Z",
+							quantity: 2,
+							quantityUnit: "ml",
+							person: null,
+							source: "owner_as_needed",
+							stockEffect: 0,
+							stockEffectReason: "superseded_by_correction",
+							replacementForEventId: "active-event",
+							reversedAt: "2026-03-03T09:00:00.000Z",
+							revision: 2,
+							mood: "poor",
+							note: "Corrected entry",
+						},
+					],
+					journalEntries: [
+						{
+							scheduledFor: "2026-03-01T08:00:00.000Z",
+							takenAt: "2026-03-01T08:10:00.000Z",
+							dismissed: false,
+							takenSource: "manual",
+							takenByPerson: "Alice",
+							mood: "very_good",
+							note: "Scheduled journal note",
+						},
+					],
+					refills: [],
+				},
+			}),
+		});
+
+		for (const format of ["txt", "md"] as const) {
+			const view = renderReportModal();
+			fireEvent.click(
+				screen.getByRole("radio", { name: new RegExp(`report\\.format${format === "txt" ? "Txt" : "Md"}`, "i") })
+			);
+			fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
+
+			await waitFor(expectPreviewToBeVisible);
+			const content = getPreviewContent();
+			expect(content).toMatch(/report\.docDosesTaken.*3/);
+			expect(content).toContain("report.docAsNeededIntakes");
+			expect(content).toMatch(/report\.docActiveAsNeededCount.*2/);
+			expect(content).toMatch(/1[,.]5 asNeeded\.units\.pills_1[,.]5/);
+			expect(content).toContain("2 asNeeded.units.ml_2");
+			expect(content).toContain("3 asNeeded.units.puffs_3");
+			expect(content).toContain("active-event");
+			expect(content).toContain("reversed-event");
+			expect(content).toContain("asNeeded.history.status.active");
+			expect(content).toContain("asNeeded.history.status.reversed");
+			expect(content).toContain("asNeeded.history.stockReason.superseded_by_correction");
+			expect(content).toContain("journal.mood.values.good");
+			expect(content).toContain("journal.mood.values.poor");
+			expect(content).toContain("Scheduled journal note");
+			view.unmount();
+		}
+	});
+
+	it("includes the separate as-needed audit payload in printable reports", async () => {
+		const mockWrite = vi.fn();
+		const openSpy = vi.spyOn(window, "open").mockReturnValue({
+			document: { write: mockWrite, close: vi.fn() },
+			onload: null,
+			print: vi.fn(),
+		} as unknown as Window);
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				1: {
+					dosesTaken: 0,
+					automaticDosesTaken: 0,
+					dosesSkipped: 0,
+					firstDoseAt: null,
+					lastDoseAt: null,
+					asNeededIntakesTaken: 1,
+					asNeededQuantityByUnit: { injections: 1 },
+					asNeededIntakes: [
+						{
+							eventId: "print-event",
+							status: "reversed",
+							occurredAt: "2026-03-03T08:00:00.000Z",
+							recordedAt: "2026-03-03T08:01:00.000Z",
+							quantity: 1,
+							quantityUnit: "injections",
+							person: "Bob",
+							source: "owner_as_needed",
+							stockEffect: 0,
+							stockEffectReason: "non_measurable",
+							replacementForEventId: null,
+							reversedAt: "2026-03-03T09:00:00.000Z",
+							revision: 4,
+							mood: null,
+							note: null,
+						},
+					],
+					refills: [],
+				},
+			}),
+		});
+
+		renderReportModal();
+		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
+		await waitFor(() => expect(openSpy).toHaveBeenCalled());
+		const [html] = mockWrite.mock.calls.at(-1) ?? [];
+		expect(html).toContain("report.docAsNeededIntakes");
+		expect(html).toContain("report.docActiveAsNeededCount");
+		expect(html).toContain("print-event");
+		expect(html).toContain("asNeeded.history.status.reversed");
+		expect(html).toContain("asNeeded.history.stockReason.non_measurable");
+	});
+
 	it("shows person filter and supports deselect/select all", () => {
 		renderReportModal({ medications: createPersonFilterMedications() });
 

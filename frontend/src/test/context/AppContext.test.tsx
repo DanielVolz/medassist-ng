@@ -532,7 +532,13 @@ describe("useAppContext", () => {
 		expect(mockUseMedications().loadMeds).toHaveBeenCalled();
 		expect(mockUseSettings().loadSettings).toHaveBeenCalled();
 		expect(mockUseDoses().loadTakenDoses).toHaveBeenCalled();
-		expect(result.current.importResult).toEqual({ medications: 1, doses: 2, refills: 4, shares: 3 });
+		expect(result.current.importResult).toEqual({
+			medications: 1,
+			doses: 2,
+			asNeededIntakes: 0,
+			refills: 4,
+			shares: 3,
+		});
 	});
 
 	it("exports data and triggers JSON download", async () => {

@@ -1107,6 +1107,7 @@ export function SettingsPage() {
 										{t("exportImport.importSuccessDetails", {
 											medications: importResult.medications,
 											doses: importResult.doses,
+											asNeededIntakes: importResult.asNeededIntakes ?? 0,
 											refills: importResult.refills,
 											shares: importResult.shares,
 										})}

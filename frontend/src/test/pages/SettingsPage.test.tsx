@@ -451,6 +451,21 @@ describe("SettingsPage", () => {
 		expect(setImportResult).toHaveBeenCalledWith(null);
 	});
 
+	it("includes the v1.9 as-needed result count in the import success summary", () => {
+		mockContextValue = createMockContext({
+			importResult: {
+				medications: 1,
+				doses: 2,
+				asNeededIntakes: 3,
+				refills: 4,
+				shares: 5,
+			},
+		});
+
+		renderPage();
+		expect(screen.getByText("exportImport.importSuccessDetails")).toBeInTheDocument();
+	});
+
 	it("opens hidden import file input when import action is clicked", () => {
 		renderPage();
 

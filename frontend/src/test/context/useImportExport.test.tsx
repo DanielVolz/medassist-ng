@@ -140,6 +140,52 @@ describe("useImportExport", () => {
 		});
 	});
 
+	it("preserves v1.9 as-needed preview counts while allowing legacy previews to omit them", async () => {
+		const payload = { version: "1.9", exportedAt: "2026-01-01T00:00:00.000Z", medications: [] };
+		const preview = {
+			version: "1.9",
+			exportedAt: payload.exportedAt,
+			includeSensitiveData: false,
+			incoming: {
+				medications: 1,
+				doseHistory: 2,
+				asNeededIntakes: 3,
+				refillHistory: 4,
+				shareLinks: 5,
+				journalEntries: 6,
+				imageCount: 0,
+				hasSettings: false,
+			},
+			current: {
+				medications: 7,
+				doseHistory: 8,
+				asNeededIntakes: 9,
+				refillHistory: 10,
+				shareLinks: 11,
+				hasSettings: true,
+			},
+			warnings: {
+				replacesExistingData: true,
+				regeneratesShareLinks: false,
+				containsImages: false,
+				containsSensitiveData: false,
+			},
+		};
+		authFetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(JSON.stringify({ preview })) });
+		installFileReader(JSON.stringify(payload));
+
+		const { result } = createHook();
+		act(() => {
+			result.current.handleImportFileSelect({
+				target: { files: [new File(["ok"], "backup.json")], value: "backup.json" },
+			} as unknown as React.ChangeEvent<HTMLInputElement>);
+		});
+
+		await waitFor(() => expect(result.current.importPreview).toEqual(preview));
+		expect(result.current.importPreview?.incoming.asNeededIntakes).toBe(3);
+		expect(result.current.importPreview?.current.asNeededIntakes).toBe(9);
+	});
+
 	it("confirms import, stores result counts, and reloads app data through callback", async () => {
 		const onImportComplete = vi.fn();
 		const { result } = createHook(onImportComplete);
@@ -159,9 +205,43 @@ describe("useImportExport", () => {
 			})
 		);
 		expect(onImportComplete).toHaveBeenCalled();
-		expect(result.current.importResult).toEqual({ medications: 1, doses: 2, refills: 3, shares: 4 });
+		expect(result.current.importResult).toEqual({
+			medications: 1,
+			doses: 2,
+			asNeededIntakes: 0,
+			refills: 3,
+			shares: 4,
+		});
 		expect(result.current.pendingImportData).toBeNull();
 		expect(result.current.importPreview).toBeNull();
+	});
+
+	it("stores v1.9 imported as-needed counts in the result", async () => {
+		authFetchMock.mockResolvedValueOnce({
+			ok: true,
+			text: () =>
+				Promise.resolve(
+					JSON.stringify({
+						imported: { medications: 1, doseHistory: 2, asNeededIntakes: 3, refillHistory: 4, shareLinks: 5 },
+					})
+				),
+		});
+		const { result } = createHook();
+		act(() => {
+			result.current.setPendingImportData({ version: "1.9", exportedAt: "2026-01-01T00:00:00.000Z" });
+		});
+
+		await act(async () => {
+			await result.current.handleImportConfirm();
+		});
+
+		expect(result.current.importResult).toEqual({
+			medications: 1,
+			doses: 2,
+			asNeededIntakes: 3,
+			refills: 4,
+			shares: 5,
+		});
 	});
 
 	it("rejects invalid import files without calling preview endpoint", () => {

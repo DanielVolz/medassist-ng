@@ -12,6 +12,7 @@ export type ImportPreview = {
 	incoming: {
 		medications: number;
 		doseHistory: number;
+		asNeededIntakes?: number;
 		refillHistory: number;
 		shareLinks: number;
 		journalEntries: number;
@@ -21,6 +22,7 @@ export type ImportPreview = {
 	current: {
 		medications: number;
 		doseHistory: number;
+		asNeededIntakes?: number;
 		refillHistory: number;
 		shareLinks: number;
 		hasSettings: boolean;
@@ -36,6 +38,7 @@ export type ImportPreview = {
 export type ImportResult = {
 	medications: number;
 	doses: number;
+	asNeededIntakes?: number;
 	refills: number;
 	shares: number;
 };
@@ -180,6 +183,7 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 					| {
 							medications?: number;
 							doseHistory?: number;
+							asNeededIntakes?: number;
 							refillHistory?: number;
 							shareLinks?: number;
 					  }
@@ -208,6 +212,7 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 			setImportResult({
 				medications: importedCounts?.medications || 0,
 				doses: importedCounts?.doseHistory || 0,
+				asNeededIntakes: importedCounts?.asNeededIntakes || 0,
 				refills: importedCounts?.refillHistory || 0,
 				shares: importedCounts?.shareLinks || 0,
 			});

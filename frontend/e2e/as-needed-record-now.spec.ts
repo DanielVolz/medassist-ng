@@ -28,6 +28,34 @@ test.describe("As-needed Record now", () => {
 		{ name: "desktop", size: { width: 1280, height: 720 } },
 		{ name: "mobile", size: { width: 390, height: 844 } },
 	]) {
+		test(`${viewport.name} includes a recorded as-needed intake in its owner report`, async ({ page }) => {
+			await page.setViewportSize(viewport.size);
+			await navigateTo(page, "/medications");
+			const medication = page.getByTestId("medication-row").filter({ hasText: MEDICATION_NAME });
+			await medication.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
+			await page.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
+			await expect(page.getByText(/Intake recorded|Einnahme erfasst/i)).toBeVisible();
+			const recordModal = page.getByRole("dialog").last();
+			await recordModal.getByLabel(/Close|Schließen/i).click();
+			await expect(recordModal).toBeHidden();
+
+			await page
+				.getByRole("button", { name: /Report|Bericht/i })
+				.first()
+				.click();
+			const reportModal = page.getByRole("dialog").filter({ hasText: /Medication Report|Medikamentenbericht/i });
+			await expect(reportModal).toBeVisible();
+			const future = new Date(Date.now() + 60_000);
+			const localFuture = new Date(future.getTime() - future.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+			await reportModal.locator('input[type="datetime-local"]').last().fill(localFuture);
+			await reportModal.locator('label:has(input[name="format"][value="txt"])').click();
+			await reportModal.getByRole("button", { name: /Generate|Erstellen/i }).click();
+			const preview = reportModal.getByTestId("report-preview");
+			await expect(preview).toBeVisible();
+			await expect(preview).toContainText(/As-needed intakes|Einnahmen bei Bedarf/i);
+			await expect(preview).toContainText(/Active intake count|Aktive Einnahmen/i);
+		});
+
 		test(`${viewport.name} safely replays a lost response and reloads stock`, async ({ page }) => {
 			await page.setViewportSize(viewport.size);
 			await navigateTo(page, "/medications");

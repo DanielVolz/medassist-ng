@@ -124,61 +124,61 @@ describe.sequential("zero-schedule production write serialization", () => {
 		rmSync(dataDir, { force: true, recursive: true });
 	});
 
-	it.each<StockMode>(["automatic", "manual"])(
-		"serializes simultaneous schedule boundary writes and preserves raw %s stock",
-		async (stockCalculationMode) => {
-			await db.delete(doseTracking);
-			await db.delete(medications);
-			await db.delete(userSettings);
-			await db.insert(userSettings).values({ userId, stockCalculationMode });
+	it.each<StockMode>([
+		"automatic",
+		"manual",
+	])("serializes simultaneous schedule boundary writes and preserves raw %s stock", async (stockCalculationMode) => {
+		await db.delete(doseTracking);
+		await db.delete(medications);
+		await db.delete(userSettings);
+		await db.insert(userSettings).values({ userId, stockCalculationMode });
 
-			const start = scheduleStart();
-			const created = await app.inject({
-				method: "POST",
-				url: "/medications",
-				payload: medicationPayload([{ usage: 1, every: 1, start }]),
-			});
-			expect(created.statusCode).toBe(200);
-			const medicationId = created.json().id as number;
-			const historicalDoseId = `${medicationId}-0-${new Date(2099, 0, 2).getTime()}`;
-			await db.insert(doseTracking).values({
-				userId,
-				doseId: historicalDoseId,
-				takenAt: new Date(),
-				markedBy: "history",
-				takenSource: "manual",
-			});
+		const start = scheduleStart();
+		const created = await app.inject({
+			method: "POST",
+			url: "/medications",
+			payload: medicationPayload([{ usage: 1, every: 1, start }]),
+		});
+		expect(created.statusCode).toBe(200);
+		const medicationId = created.json().id as number;
+		const historicalDoseId = `${medicationId}-0-${new Date(2099, 0, 2).getTime()}`;
+		await db.insert(doseTracking).values({
+			userId,
+			doseId: historicalDoseId,
+			takenAt: new Date(),
+			markedBy: "history",
+			takenSource: "manual",
+		});
 
-			const [beforeMedication] = await db.select().from(medications);
-			const beforeDoses = await db.select().from(doseTracking);
-			const expectedRawStock = computeMedicationCurrentStockRaw({
-				medication: beforeMedication,
-				doses: beforeDoses,
-				stockCalculationMode,
-			});
+		const [beforeMedication] = await db.select().from(medications);
+		const beforeDoses = await db.select().from(doseTracking);
+		const expectedRawStock = computeMedicationCurrentStockRaw({
+			medication: beforeMedication,
+			doses: beforeDoses,
+			stockCalculationMode,
+		});
 
-			const [toUnscheduled, toScheduled] = await Promise.all([
-				app.inject({ method: "PUT", url: `/medications/${medicationId}`, payload: medicationPayload([]) }),
-				app.inject({
-					method: "PUT",
-					url: `/medications/${medicationId}`,
-					payload: medicationPayload([{ usage: 2, every: 1, start }]),
-				}),
-			]);
+		const [toUnscheduled, toScheduled] = await Promise.all([
+			app.inject({ method: "PUT", url: `/medications/${medicationId}`, payload: medicationPayload([]) }),
+			app.inject({
+				method: "PUT",
+				url: `/medications/${medicationId}`,
+				payload: medicationPayload([{ usage: 2, every: 1, start }]),
+			}),
+		]);
 
-			expect(toUnscheduled.statusCode).toBe(200);
-			expect(toScheduled.statusCode).toBe(200);
-			const [persisted] = await db.select().from(medications);
-			const persistedDoses = await db.select().from(doseTracking);
-			expect(JSON.parse(persisted.intakesJson)).toHaveLength(1);
-			expect(persistedDoses.map((dose) => dose.doseId)).toContain(historicalDoseId);
-			expect(
-				computeMedicationCurrentStockRaw({ medication: persisted, doses: persistedDoses, stockCalculationMode })
-			).toBe(expectedRawStock);
-			expect(Number.isInteger(persisted.scheduleStockRebaseMilli)).toBe(true);
-			expect(persisted.scheduleStockRebaseMilli).not.toBe(0);
-		}
-	);
+		expect(toUnscheduled.statusCode).toBe(200);
+		expect(toScheduled.statusCode).toBe(200);
+		const [persisted] = await db.select().from(medications);
+		const persistedDoses = await db.select().from(doseTracking);
+		expect(JSON.parse(persisted.intakesJson)).toHaveLength(1);
+		expect(persistedDoses.map((dose) => dose.doseId)).toContain(historicalDoseId);
+		expect(
+			computeMedicationCurrentStockRaw({ medication: persisted, doses: persistedDoses, stockCalculationMode })
+		).toBe(expectedRawStock);
+		expect(Number.isInteger(persisted.scheduleStockRebaseMilli)).toBe(true);
+		expect(persisted.scheduleStockRebaseMilli).not.toBe(0);
+	});
 
 	it("returns the original bounded SQLITE_BUSY from an independent writer and releases the FIFO queue", async () => {
 		const databaseUrl = `file:${resolve(dataDir, "medassist-ng.db")}`;

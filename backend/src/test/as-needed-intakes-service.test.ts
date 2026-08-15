@@ -7,7 +7,7 @@ import { createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAlterMigrations } from "../db/migration-utils.js";
 
 // Use the production client against one dedicated file so these tests exercise the real
@@ -25,13 +25,15 @@ const [{ db, migrationsReady }, schema, service] = await Promise.all([
 	import("../db/schema.js"),
 	import("../services/as-needed-intakes-service.js"),
 ]);
-const { asNeededIntakeEvents, doseTracking, medications, userSettings, users } = schema;
+const { asNeededIntakeEvents, doseTracking, intakeJournal, medications, userSettings, users } = schema;
 const {
 	createAsNeededIntake,
 	filterScheduledDoseRows,
 	getActiveAsNeededStockEffectMilli,
 	getAsNeededAnchorDoseIds,
 	getActiveAsNeededStockEffectsMilli,
+	getAsNeededMutationResponse,
+	listAsNeededIntakes,
 	reverseAsNeededIntake,
 } = service;
 
@@ -102,6 +104,8 @@ describe.sequential("as-needed intake service", () => {
 	});
 
 	afterAll(() => rmSync(dataDir, { force: true, recursive: true }));
+
+	afterEach(() => vi.useRealTimers());
 
 	it("creates the runtime table safely for a pre-0022 database and keeps its defaults, checks, and indexes", async () => {
 		const client = createClient({ url: ":memory:" });
@@ -265,15 +269,18 @@ describe.sequential("as-needed intake service", () => {
 		["ended", { endDate: "2000-01-01" }, undefined, "NOT_ELIGIBLE"],
 		["obsolete", { isObsolete: true }, undefined, "NOT_ELIGIBLE"],
 		["unassigned person", { people: ["Ava"] }, "Ben", "INVALID_PERSON"],
-	] as const)("rejects %s medication eligibility without an anchor or event", async (_case, options, personName, code) => {
-		const medicationId = await seedMedication(options);
-		await expectCode(
-			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, personName, idempotencyKey: intentKey() }),
-			code
-		);
-		expect(await eventCount()).toBe(0);
-		expect((await db.select().from(doseTracking)).length).toBe(0);
-	});
+	] as const)(
+		"rejects %s medication eligibility without an anchor or event",
+		async (_case, options, personName, code) => {
+			const medicationId = await seedMedication(options);
+			await expectCode(
+				createAsNeededIntake({ userId: 1, medicationId, quantity: 1, personName, idempotencyKey: intentKey() }),
+				code
+			);
+			expect(await eventCount()).toBe(0);
+			expect((await db.select().from(doseTracking)).length).toBe(0);
+		}
+	);
 
 	it.each([
 		["insufficient stock", { stock: 1 }, 2, "INSUFFICIENT_STOCK"],
@@ -329,5 +336,192 @@ describe.sequential("as-needed intake service", () => {
 			idempotencyKey: intentKey(),
 		});
 		expect(replacement.replacesEventId).toBe(original.id);
+	});
+
+	it("paginates by occurredAt and eventId without owner leakage, and returns nullable journal DTOs", async () => {
+		const medicationId = await seedMedication({ stock: 10 });
+		const otherMedicationId = await seedMedication({ userId: 2, stock: 10 });
+		const emptyOtherMedicationId = await seedMedication({ userId: 2, stock: 10 });
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-15T10:00:00.000Z"));
+		const first = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
+		const second = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
+		vi.setSystemTime(new Date("2026-08-15T10:01:00.000Z"));
+		const third = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
+		await createAsNeededIntake({
+			userId: 2,
+			medicationId: otherMedicationId,
+			quantity: 1,
+			idempotencyKey: intentKey(),
+		});
+		await db.insert(intakeJournal).values({
+			userId: 1,
+			doseTrackingId: third.doseTrackingId,
+			medicationId,
+			scheduledFor: third.occurredAt,
+			note: "Recorded against the real anchor",
+			mood: "good",
+			createdAt: third.occurredAt,
+			updatedAt: third.occurredAt,
+		});
+
+		const firstPage = await listAsNeededIntakes({ userId: 1, medicationId, includeReversed: true, limit: 2 });
+		expect(firstPage.events[0].eventId).toBe(third.eventId);
+		expect(firstPage.events.map((event) => event.eventId)).toContain(third.eventId);
+		expect(firstPage.events.find((event) => event.eventId === third.eventId)?.journal).toMatchObject({
+			doseId: `as-needed:${third.eventId}`,
+			mood: "good",
+		});
+		expect(firstPage.events.find((event) => event.eventId !== third.eventId)?.journal).toBeNull();
+		expect(firstPage.nextCursor).not.toBeNull();
+		const secondPage = await listAsNeededIntakes({
+			userId: 1,
+			medicationId,
+			includeReversed: true,
+			limit: 2,
+			cursor: firstPage.nextCursor ?? undefined,
+		});
+		expect(secondPage.events).toHaveLength(1);
+		expect(new Set([...firstPage.events, ...secondPage.events].map((event) => event.eventId))).toEqual(
+			new Set([first.eventId, second.eventId, third.eventId])
+		);
+		expect(
+			(await listAsNeededIntakes({ userId: 2, medicationId: emptyOtherMedicationId, includeReversed: true, limit: 10 }))
+				.events
+		).toEqual([]);
+	});
+
+	it("uses trusted server time, returns the current lifecycle and exact inventory, and keeps the owner API dormant", async () => {
+		const medicationId = await seedMedication({ stock: 5 });
+		await db.update(userSettings).set({ timezone: "Pacific/Auckland" }).where(eq(userSettings.userId, 1));
+		const now = new Date("2026-08-15T23:30:00.000Z");
+		vi.useFakeTimers();
+		vi.setSystemTime(now);
+		const created = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1.5, idempotencyKey: intentKey() });
+		const response = await getAsNeededMutationResponse(1, created.eventId);
+		expect(created.occurredAt).toEqual(now);
+		expect(response).toMatchObject({
+			event: {
+				eventId: created.eventId,
+				occurredAt: now.toISOString(),
+				revision: 1,
+				medication: { lifecycle: "active_no_schedule", recordEligibility: { eligible: true, reason: "eligible" } },
+			},
+			inventory: { currentStock: 3.5, unit: "pills", capacity: 0, reconciliationRequired: true },
+		});
+		await db
+			.update(medications)
+			.set({ intakesJson: JSON.stringify([{ usage: 1, every: 1, start: "2026-08-16T08:00:00" }]) })
+			.where(eq(medications.id, medicationId));
+		expect((await getAsNeededMutationResponse(1, created.eventId)).event.medication).toMatchObject({
+			lifecycle: "active_scheduled",
+			recordEligibility: { eligible: false, reason: "has_regular_schedule" },
+		});
+		expect((await import("../app/createApp.js")).createApp.toString()).not.toContain("as-needed-intakes");
+	});
+
+	it("applies owner rate limiting only to new intents and reports a retry time without charging a lost-response replay", async () => {
+		const medicationId = await seedMedication({ stock: 30 });
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
+		const firstKey = intentKey();
+		const first = await createAsNeededIntake({
+			userId: 1,
+			medicationId,
+			quantity: 1,
+			idempotencyKey: firstKey,
+			enforceOwnerRateLimit: true,
+		});
+		for (let index = 1; index < 20; index += 1) {
+			await createAsNeededIntake({
+				userId: 1,
+				medicationId,
+				quantity: 1,
+				idempotencyKey: intentKey(),
+				enforceOwnerRateLimit: true,
+			});
+		}
+		expect(
+			(
+				await createAsNeededIntake({
+					userId: 1,
+					medicationId,
+					quantity: 1,
+					idempotencyKey: firstKey,
+					enforceOwnerRateLimit: true,
+				})
+			).id
+		).toBe(first.id);
+		await expect(
+			createAsNeededIntake({
+				userId: 1,
+				medicationId,
+				quantity: 1,
+				idempotencyKey: intentKey(),
+				enforceOwnerRateLimit: true,
+			})
+		).rejects.toMatchObject({ code: "TOO_MANY_NEW_INTAKES", details: { retryAfterSeconds: 60 } });
+		expect(await eventCount()).toBe(20);
+	});
+
+	it("keeps create, replacement, revision, reversal, and stock outcomes atomic under competing intents", async () => {
+		const medicationId = await seedMedication({ stock: 2 });
+		const sameKey = intentKey();
+		const [first, replay] = await Promise.all([
+			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: sameKey }),
+			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: sameKey }),
+		]);
+		expect(replay.id).toBe(first.id);
+		const competing = await Promise.allSettled([
+			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() }),
+			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() }),
+		]);
+		expect(competing.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+		expect(competing.filter((result) => result.status === "rejected")[0]).toMatchObject({
+			reason: { code: "INSUFFICIENT_STOCK" },
+		});
+		await expectCode(
+			reverseAsNeededIntake({ userId: 1, eventId: first.eventId, expectedRevision: 0, idempotencyKey: intentKey() }),
+			"REVISION_CONFLICT"
+		);
+		const reversed = await reverseAsNeededIntake({
+			userId: 1,
+			eventId: first.eventId,
+			expectedRevision: 1,
+			idempotencyKey: intentKey(),
+		});
+		expect(reversed).toMatchObject({ status: "reversed", revision: 2 });
+		expect(
+			(
+				await reverseAsNeededIntake({
+					userId: 1,
+					eventId: first.eventId,
+					expectedRevision: 1,
+					idempotencyKey: intentKey(),
+				})
+			).id
+		).toBe(first.id);
+		const replacementKey = intentKey();
+		const replacements = await Promise.allSettled([
+			createAsNeededIntake({
+				userId: 1,
+				medicationId,
+				quantity: 1,
+				replacesEventId: first.eventId,
+				idempotencyKey: replacementKey,
+			}),
+			createAsNeededIntake({
+				userId: 1,
+				medicationId,
+				quantity: 1,
+				replacesEventId: first.eventId,
+				idempotencyKey: intentKey(),
+			}),
+		]);
+		expect(replacements.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+		expect(replacements.filter((result) => result.status === "rejected")[0]).toMatchObject({
+			reason: { code: "REPLACEMENT_INVALID" },
+		});
+		expect((await getAsNeededMutationResponse(1, first.eventId)).inventory.currentStock).toBe(0);
 	});
 });

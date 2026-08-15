@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { getAsNeededQuantityProfile, normalizeAsNeededQuantityMilli } from "@medassist/shared";
-import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
-import { type db, withImmediateWriteTransaction } from "../db/client.js";
-import { asNeededIntakeEvents, doseTracking, medications, userSettings } from "../db/schema.js";
-import { normalizeMedicationSchedule } from "../utils/scheduler-utils.js";
+import { getAsNeededQuantityProfile, normalizeAsNeededQuantityMilli, normalizeIntakeMood } from "@medassist/shared";
+import { and, desc, eq, gt, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { db, withImmediateWriteTransaction } from "../db/client.js";
+import { asNeededIntakeEvents, doseTracking, intakeJournal, medications, userSettings } from "../db/schema.js";
+import { isAmountBasedPackageType } from "../utils/package-profiles.js";
+import { getEffectiveTimezone, normalizeMedicationSchedule } from "../utils/scheduler-utils.js";
 import { computeMedicationCurrentStockRaw } from "./current-stock.js";
 
 export type AsNeededLifecycle = "active_no_schedule" | "active_scheduled" | "ended" | "obsolete";
@@ -11,6 +12,11 @@ export type AsNeededEligibilityReason = "eligible" | "has_regular_schedule" | "e
 
 type MedicationRow = typeof medications.$inferSelect;
 type Database = typeof db;
+type EventRow = typeof asNeededIntakeEvents.$inferSelect;
+
+const OWNER_CREATE_LIMIT = 20;
+const OWNER_CREATE_WINDOW_MS = 60_000;
+const ownerCreateAttempts = new Map<number, number[]>();
 
 export class AsNeededIntakeError extends Error {
 	constructor(
@@ -27,12 +33,31 @@ export class AsNeededIntakeError extends Error {
 			| "REPLACEMENT_INVALID"
 			| "EVENT_NOT_FOUND"
 			| "REVISION_CONFLICT"
-			| "REVERSAL_KEY_REUSED",
-		message: string
+			| "REVERSAL_KEY_REUSED"
+			| "TOO_MANY_NEW_INTAKES"
+			| "INVALID_CURSOR"
+			| "INVALID_DATE_RANGE",
+		message: string,
+		public readonly details?: { currentRevision?: number; currentStock?: number; retryAfterSeconds?: number }
 	) {
 		super(message);
 		this.name = "AsNeededIntakeError";
 	}
+}
+
+function enforceOwnerCreateLimit(userId: number, nowMs: number): void {
+	const recent = (ownerCreateAttempts.get(userId) ?? []).filter(
+		(timestamp) => timestamp > nowMs - OWNER_CREATE_WINDOW_MS
+	);
+	if (recent.length >= OWNER_CREATE_LIMIT) {
+		const retryAfterSeconds = Math.max(1, Math.ceil((recent[0] + OWNER_CREATE_WINDOW_MS - nowMs) / 1000));
+		ownerCreateAttempts.set(userId, recent);
+		throw new AsNeededIntakeError("TOO_MANY_NEW_INTAKES", "Too many new as-needed intake intents", {
+			retryAfterSeconds,
+		});
+	}
+	recent.push(nowMs);
+	ownerCreateAttempts.set(userId, recent);
 }
 
 function sha256(value: string): string {
@@ -60,7 +85,8 @@ function parseMedicationPeople(value: string): string[] {
 
 export function getAsNeededLifecycle(
 	medication: MedicationRow,
-	now = new Date()
+	now = new Date(),
+	timezone?: string | null
 ): {
 	lifecycle: AsNeededLifecycle;
 	eligible: boolean;
@@ -68,13 +94,121 @@ export function getAsNeededLifecycle(
 } {
 	if (medication.isObsolete) return { lifecycle: "obsolete", eligible: false, reason: "obsolete" };
 	const endDate = medication.medicationEndDate?.trim();
-	if (endDate && endDate.slice(0, 10) < now.toISOString().slice(0, 10)) {
+	const today = now.toLocaleDateString("en-CA", { timeZone: getEffectiveTimezone(timezone) });
+	if (endDate && endDate.slice(0, 10) < today) {
 		return { lifecycle: "ended", eligible: false, reason: "ended" };
 	}
 	if (normalizeMedicationSchedule(medication).intakes.length > 0) {
 		return { lifecycle: "active_scheduled", eligible: false, reason: "has_regular_schedule" };
 	}
 	return { lifecycle: "active_no_schedule", eligible: true, reason: "eligible" };
+}
+
+export type AsNeededEventDto = {
+	eventType: "as_needed";
+	eventId: string;
+	medicationId: number;
+	medication: {
+		name: string;
+		genericName: string | null;
+		medicationForm: string;
+		packageType: string;
+		isObsolete: boolean;
+		hasRegularSchedule: boolean;
+		lifecycle: AsNeededLifecycle;
+		recordEligibility: { eligible: boolean; reason: AsNeededEligibilityReason };
+	};
+	occurredAt: string;
+	recordedAt: string;
+	quantity: number;
+	quantityUnit: string;
+	person: string | null;
+	source: string;
+	status: string;
+	revision: number;
+	stockEffect: number;
+	stockEffectReason: string;
+	stockCutoffAt: string | null;
+	replacementForEventId: string | null;
+	reversedAt: string | null;
+	journal: null | { doseId: string; mood: string | null; note: string; createdAt: string; updatedAt: string };
+};
+
+export type AsNeededInventoryResult = {
+	currentStock: number;
+	unit: string;
+	capacity: number | null;
+	reconciliationRequired: boolean;
+};
+
+function encodeCursor(event: EventRow): string {
+	return Buffer.from(JSON.stringify([event.occurredAt.toISOString(), event.eventId])).toString("base64url");
+}
+
+function decodeCursor(cursor: string): { occurredAt: Date; eventId: string } {
+	try {
+		const value: unknown = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+		if (!Array.isArray(value) || value.length !== 2 || typeof value[0] !== "string" || typeof value[1] !== "string") {
+			throw new Error("invalid");
+		}
+		const occurredAt = new Date(value[0]);
+		if (
+			Number.isNaN(occurredAt.getTime()) ||
+			!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value[1])
+		) {
+			throw new Error("invalid");
+		}
+		return { occurredAt, eventId: value[1] };
+	} catch {
+		throw new AsNeededIntakeError("INVALID_CURSOR", "Invalid as-needed intake cursor");
+	}
+}
+
+function serializeEvent(
+	event: EventRow,
+	medication: MedicationRow,
+	lifecycle: ReturnType<typeof getAsNeededLifecycle>,
+	doseId: string,
+	journal: typeof intakeJournal.$inferSelect | null,
+	replacementForEventId: string | null
+): AsNeededEventDto {
+	return {
+		eventType: "as_needed",
+		eventId: event.eventId,
+		medicationId: medication.id,
+		medication: {
+			name: medication.name,
+			genericName: medication.genericName,
+			medicationForm: medication.medicationForm ?? "tablet",
+			packageType: medication.packageType,
+			isObsolete: medication.isObsolete ?? false,
+			hasRegularSchedule: normalizeMedicationSchedule(medication).intakes.length > 0,
+			lifecycle: lifecycle.lifecycle,
+			recordEligibility: { eligible: lifecycle.eligible, reason: lifecycle.reason },
+		},
+		occurredAt: event.occurredAt.toISOString(),
+		recordedAt: event.recordedAt.toISOString(),
+		quantity: event.quantityMilli / 1000,
+		quantityUnit: event.quantityUnit,
+		person: event.personName || null,
+		source: event.source,
+		status: event.status,
+		revision: event.revision,
+		stockEffect: event.stockEffectMilli / 1000,
+		stockEffectReason: event.stockEffectReason,
+		stockCutoffAt: event.stockCutoffAt > 0 ? new Date(event.stockCutoffAt * 1000).toISOString() : null,
+		replacementForEventId,
+		reversedAt: event.reversedAt?.toISOString() ?? null,
+		journal: journal
+			? {
+					doseId,
+					mood: normalizeIntakeMood(journal.mood),
+					note: journal.note,
+					createdAt: journal.createdAt.toISOString(),
+					updatedAt: journal.updatedAt.toISOString(),
+				}
+			: null,
+	};
 }
 
 export async function getActiveAsNeededStockEffectMilli(
@@ -150,6 +284,179 @@ export async function filterScheduledDoseRows<T extends { id: number }>(
 		rows.map((row) => row.id)
 	);
 	return rows.filter((row) => !anchorIds.has(row.id));
+}
+
+async function getReplacementEventIds(
+	database: Database,
+	userId: number,
+	events: EventRow[]
+): Promise<Map<number, string>> {
+	const ids = [...new Set(events.map((event) => event.replacesEventId).filter((id): id is number => id !== null))];
+	if (ids.length === 0) return new Map();
+	const rows = await database
+		.select({ id: asNeededIntakeEvents.id, eventId: asNeededIntakeEvents.eventId })
+		.from(asNeededIntakeEvents)
+		.where(and(eq(asNeededIntakeEvents.userId, userId), inArray(asNeededIntakeEvents.id, ids)));
+	return new Map(rows.map((row) => [row.id, row.eventId]));
+}
+
+export async function listAsNeededIntakes(input: {
+	userId: number;
+	medicationId: number;
+	includeReversed: boolean;
+	from?: Date;
+	to?: Date;
+	limit: number;
+	cursor?: string;
+}): Promise<{ events: AsNeededEventDto[]; nextCursor: string | null }> {
+	const [[medication], [settings]] = await Promise.all([
+		db
+			.select()
+			.from(medications)
+			.where(and(eq(medications.userId, input.userId), eq(medications.id, input.medicationId))),
+		db.select({ timezone: userSettings.timezone }).from(userSettings).where(eq(userSettings.userId, input.userId)),
+	]);
+	if (!medication) throw new AsNeededIntakeError("MEDICATION_NOT_FOUND", "Medication not found");
+	if (input.from && input.to && input.from > input.to) {
+		throw new AsNeededIntakeError("INVALID_DATE_RANGE", "Invalid as-needed intake date range");
+	}
+	const cursor = input.cursor ? decodeCursor(input.cursor) : null;
+	const rows = await db
+		.select({ event: asNeededIntakeEvents, doseId: doseTracking.doseId, journal: intakeJournal })
+		.from(asNeededIntakeEvents)
+		.innerJoin(
+			doseTracking,
+			and(
+				eq(doseTracking.id, asNeededIntakeEvents.doseTrackingId),
+				eq(doseTracking.userId, asNeededIntakeEvents.userId)
+			)
+		)
+		.leftJoin(
+			intakeJournal,
+			and(
+				eq(intakeJournal.doseTrackingId, asNeededIntakeEvents.doseTrackingId),
+				eq(intakeJournal.userId, asNeededIntakeEvents.userId)
+			)
+		)
+		.where(
+			and(
+				eq(asNeededIntakeEvents.userId, input.userId),
+				eq(asNeededIntakeEvents.medicationId, input.medicationId),
+				input.includeReversed ? undefined : eq(asNeededIntakeEvents.status, "active"),
+				input.from ? gte(asNeededIntakeEvents.occurredAt, input.from) : undefined,
+				input.to ? lte(asNeededIntakeEvents.occurredAt, input.to) : undefined,
+				cursor
+					? or(
+							lt(asNeededIntakeEvents.occurredAt, cursor.occurredAt),
+							and(
+								eq(asNeededIntakeEvents.occurredAt, cursor.occurredAt),
+								lt(asNeededIntakeEvents.eventId, cursor.eventId)
+							)
+						)
+					: undefined
+			)
+		)
+		.orderBy(desc(asNeededIntakeEvents.occurredAt), desc(asNeededIntakeEvents.eventId))
+		.limit(input.limit + 1);
+	const page = rows.slice(0, input.limit);
+	const replacementIds = await getReplacementEventIds(
+		db,
+		input.userId,
+		page.map((row) => row.event)
+	);
+	const lifecycle = getAsNeededLifecycle(medication, new Date(), settings?.timezone);
+	return {
+		events: page.map((row) =>
+			serializeEvent(
+				row.event,
+				medication,
+				lifecycle,
+				row.doseId,
+				row.journal,
+				row.event.replacesEventId ? (replacementIds.get(row.event.replacesEventId) ?? null) : null
+			)
+		),
+		nextCursor: rows.length > input.limit && page.length > 0 ? encodeCursor(page[page.length - 1].event) : null,
+	};
+}
+
+function getConfiguredCapacity(medication: MedicationRow): number | null {
+	const profile = getAsNeededQuantityProfile(medication);
+	if (!profile.measurable) return null;
+	if (!isAmountBasedPackageType(medication.packageType)) {
+		return medication.packCount * medication.blistersPerPack * medication.pillsPerBlister;
+	}
+	return medication.totalPills ?? medication.looseTablets;
+}
+
+export async function getAsNeededMutationResponse(
+	userId: number,
+	eventId: string
+): Promise<{ event: AsNeededEventDto; inventory: AsNeededInventoryResult }> {
+	const [row] = await db
+		.select({
+			event: asNeededIntakeEvents,
+			medication: medications,
+			doseId: doseTracking.doseId,
+			journal: intakeJournal,
+		})
+		.from(asNeededIntakeEvents)
+		.innerJoin(
+			medications,
+			and(eq(medications.id, asNeededIntakeEvents.medicationId), eq(medications.userId, asNeededIntakeEvents.userId))
+		)
+		.innerJoin(
+			doseTracking,
+			and(
+				eq(doseTracking.id, asNeededIntakeEvents.doseTrackingId),
+				eq(doseTracking.userId, asNeededIntakeEvents.userId)
+			)
+		)
+		.leftJoin(
+			intakeJournal,
+			and(
+				eq(intakeJournal.doseTrackingId, asNeededIntakeEvents.doseTrackingId),
+				eq(intakeJournal.userId, asNeededIntakeEvents.userId)
+			)
+		)
+		.where(and(eq(asNeededIntakeEvents.userId, userId), eq(asNeededIntakeEvents.eventId, eventId)));
+	if (!row) throw new AsNeededIntakeError("EVENT_NOT_FOUND", "Event not found");
+	const [[settings], doseRows, activeEffectMilli, replacementIds] = await Promise.all([
+		db
+			.select({ stockCalculationMode: userSettings.stockCalculationMode, timezone: userSettings.timezone })
+			.from(userSettings)
+			.where(eq(userSettings.userId, userId)),
+		db.select().from(doseTracking).where(eq(doseTracking.userId, userId)),
+		getActiveAsNeededStockEffectMilli(db, userId, row.medication.id),
+		getReplacementEventIds(db, userId, [row.event]),
+	]);
+	const doses = await filterScheduledDoseRows(db, userId, doseRows);
+	const currentStock =
+		Math.round(
+			computeMedicationCurrentStockRaw({
+				medication: row.medication,
+				doses,
+				stockCalculationMode: settings?.stockCalculationMode === "manual" ? "manual" : "automatic",
+				asNeededStockEffectMilli: activeEffectMilli,
+			}) * 1000
+		) / 1000;
+	const capacity = getConfiguredCapacity(row.medication);
+	return {
+		event: serializeEvent(
+			row.event,
+			row.medication,
+			getAsNeededLifecycle(row.medication, new Date(), settings?.timezone),
+			row.doseId,
+			row.journal,
+			row.event.replacesEventId ? (replacementIds.get(row.event.replacesEventId) ?? null) : null
+		),
+		inventory: {
+			currentStock,
+			unit: getAsNeededQuantityProfile(row.medication).unit,
+			capacity,
+			reconciliationRequired: capacity !== null && currentStock > capacity,
+		},
+	};
 }
 
 export async function getAsNeededAnchorDoseIds(
@@ -231,6 +538,7 @@ export async function createAsNeededIntake(input: {
 	personName?: string | null;
 	idempotencyKey: string;
 	replacesEventId?: string | null;
+	enforceOwnerRateLimit?: boolean;
 }) {
 	const keyHash = sha256(normalizeIntentKey(input.idempotencyKey));
 	return withImmediateWriteTransaction(async (transactionDb) => {
@@ -264,8 +572,9 @@ export async function createAsNeededIntake(input: {
 					throw new AsNeededIntakeError("IDEMPOTENCY_KEY_REUSED", "Idempotency key is bound to another request");
 				}
 			}
-			return replay;
+			return { ...replay, isReplay: true as const };
 		}
+		if (input.enforceOwnerRateLimit) enforceOwnerCreateLimit(input.userId, Date.now());
 
 		const [medication] = await transactionDb
 			.select()
@@ -279,7 +588,12 @@ export async function createAsNeededIntake(input: {
 		if (personName && !parseMedicationPeople(medication.takenByJson).includes(personName)) {
 			throw new AsNeededIntakeError("INVALID_PERSON", "Person is not assigned to this medication");
 		}
-		if (!getAsNeededLifecycle(medication).eligible) {
+		const [settings] = await transactionDb
+			.select({ stockCalculationMode: userSettings.stockCalculationMode, timezone: userSettings.timezone })
+			.from(userSettings)
+			.where(eq(userSettings.userId, input.userId));
+		const now = new Date();
+		if (!getAsNeededLifecycle(medication, now, settings?.timezone).eligible) {
 			throw new AsNeededIntakeError("NOT_ELIGIBLE", "Medication is not eligible for an as-needed intake");
 		}
 
@@ -293,13 +607,18 @@ export async function createAsNeededIntake(input: {
 			if (replaced.medicationId !== input.medicationId || replaced.status !== "reversed") {
 				throw new AsNeededIntakeError("REPLACEMENT_INVALID", "Replacement target is not a reversed medication event");
 			}
+			const [existingReplacement] = await transactionDb
+				.select({ id: asNeededIntakeEvents.id })
+				.from(asNeededIntakeEvents)
+				.where(
+					and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.replacesEventId, replaced.id))
+				);
+			if (existingReplacement) {
+				throw new AsNeededIntakeError("REPLACEMENT_INVALID", "Replacement target already has a replacement");
+			}
 			replacesEventInternalId = replaced.id;
 		}
 
-		const [settings] = await transactionDb
-			.select({ stockCalculationMode: userSettings.stockCalculationMode })
-			.from(userSettings)
-			.where(eq(userSettings.userId, input.userId));
 		const doseRows = await transactionDb.select().from(doseTracking).where(eq(doseTracking.userId, input.userId));
 		const doses = await filterScheduledDoseRows(transactionDb, input.userId, doseRows);
 		const activeEffectMilli = await getActiveAsNeededStockEffectMilli(transactionDb, input.userId, input.medicationId);
@@ -315,10 +634,11 @@ export async function createAsNeededIntake(input: {
 			throw new AsNeededIntakeError("STOCK_UNRESOLVABLE", "Current stock cannot be resolved safely");
 		}
 		if (profile.measurable && quantityMilli > currentStockMilli) {
-			throw new AsNeededIntakeError("INSUFFICIENT_STOCK", "Insufficient current stock");
+			throw new AsNeededIntakeError("INSUFFICIENT_STOCK", "Insufficient current stock", {
+				currentStock: currentStockMilli / 1000,
+			});
 		}
 
-		const now = new Date();
 		const eventId = randomUUID().toLowerCase();
 		const [anchor] = await transactionDb
 			.insert(doseTracking)
@@ -351,7 +671,7 @@ export async function createAsNeededIntake(input: {
 				updatedAt: now,
 			})
 			.returning();
-		return event;
+		return { ...event, isReplay: false as const };
 	});
 }
 
@@ -362,11 +682,12 @@ export async function reverseAsNeededIntake(input: {
 	idempotencyKey: string;
 }) {
 	const keyHash = sha256(normalizeIntentKey(input.idempotencyKey));
+	const eventId = input.eventId.trim().toLowerCase();
 	return withImmediateWriteTransaction(async (transactionDb) => {
 		const [event] = await transactionDb
 			.select()
 			.from(asNeededIntakeEvents)
-			.where(and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.eventId, input.eventId)));
+			.where(and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.eventId, eventId)));
 		if (!event) throw new AsNeededIntakeError("EVENT_NOT_FOUND", "Event not found");
 		const [keyOwner] = await transactionDb
 			.select({ id: asNeededIntakeEvents.id })
@@ -379,7 +700,9 @@ export async function reverseAsNeededIntake(input: {
 		}
 		if (event.status === "reversed") return event;
 		if (event.revision !== input.expectedRevision) {
-			throw new AsNeededIntakeError("REVISION_CONFLICT", "Event revision changed");
+			throw new AsNeededIntakeError("REVISION_CONFLICT", "Event revision changed", {
+				currentRevision: event.revision,
+			});
 		}
 		const now = new Date();
 		const [reversed] = await transactionDb
@@ -400,7 +723,11 @@ export async function reverseAsNeededIntake(input: {
 				)
 			)
 			.returning();
-		if (!reversed) throw new AsNeededIntakeError("REVISION_CONFLICT", "Event revision changed");
+		if (!reversed) {
+			throw new AsNeededIntakeError("REVISION_CONFLICT", "Event revision changed", {
+				currentRevision: event.revision,
+			});
+		}
 		return reversed;
 	});
 }

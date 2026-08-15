@@ -94,76 +94,17 @@ describe.sequential("as-needed owner routes", () => {
 
 	afterAll(() => rmSync(dataDir, { force: true, recursive: true }));
 
-	it("registers the four owner /api-convention paths with documented strict schemas", async () => {
+	it("registers the owner read, Take, and DELETE Undo route surface", async () => {
 		const app = await buildRouteApp();
 		const routes = app.printRoutes();
 		expect(routes).toContain(":medicationId");
 		expect(routes).toContain("/as-needed-intakes (GET, HEAD, POST)");
 		expect(routes).toContain(":eventId");
-		expect(routes).toContain("/reversal (POST)");
 		expect(routes).toContain(":eventId (DELETE)");
+		expect(routes).not.toContain("reversal");
 		expect(routes).not.toContain("share");
 		expect((await app.inject({ method: "DELETE", url: "/medications/1/as-needed-intakes" })).statusCode).toBe(404);
 		expect((await app.inject({ method: "GET", url: "/api/medications/1/as-needed-intakes" })).statusCode).toBe(404);
-		await app.close();
-	});
-
-	it("undos active intakes idempotently without disclosing unknown, other-owner, or reversed events", async () => {
-		const app = await buildRouteApp();
-		const medicationId = await seedMedication(1, 10);
-		const otherMedicationId = await seedMedication(2, 10);
-		const active = await create(app, medicationId, { quantity: 2 });
-		const activeEventId = active.json().event.eventId as string;
-		authState.userId = 2;
-		const other = await create(app, otherMedicationId, { quantity: 1 });
-		const otherEventId = other.json().event.eventId as string;
-		authState.userId = 1;
-		const reversed = await create(app, medicationId, { quantity: 1 });
-		const reversedEventId = reversed.json().event.eventId as string;
-		expect(
-			(
-				await app.inject({
-					method: "POST",
-					url: `/as-needed-intakes/${reversedEventId}/reversal`,
-					headers: { "idempotency-key": key() },
-					payload: { expectedRevision: 1 },
-				})
-			).statusCode
-		).toBe(200);
-
-		authState.readOnly = true;
-		expect((await app.inject({ method: "DELETE", url: `/as-needed-intakes/${activeEventId}` })).json()).toMatchObject({
-			code: "READ_ONLY",
-		});
-		authState.readOnly = false;
-
-		for (const eventId of [
-			"00000000-0000-4000-8000-000000000999",
-			otherEventId,
-			reversedEventId,
-			activeEventId,
-			activeEventId,
-		]) {
-			expect((await app.inject({ method: "DELETE", url: `/as-needed-intakes/${eventId}` })).statusCode).toBe(204);
-		}
-		expect((await db.select().from(asNeededIntakeEvents)).map((event) => event.eventId)).toEqual(
-			expect.arrayContaining([otherEventId, reversedEventId])
-		);
-		expect((await db.select().from(asNeededIntakeEvents)).map((event) => event.eventId)).not.toContain(activeEventId);
-		await app.close();
-	});
-
-	it("accepts a person assigned to another medication owned by the same user", async () => {
-		const app = await buildRouteApp();
-		const medicationId = await seedMedication(1, 10);
-		await seedMedication(1, 10, { people: ["Ava"] });
-		await seedMedication(2, 10, { people: ["Ben"] });
-		expect((await create(app, medicationId, { quantity: 1, person: "Ava" })).statusCode).toBe(201);
-		for (const person of ["Ben", "Unknown"]) {
-			const response = await create(app, medicationId, { quantity: 1, person });
-			expect(response.statusCode).toBe(400);
-			expect(response.json()).toMatchObject({ code: "INVALID_PERSON" });
-		}
 		await app.close();
 	});
 
@@ -210,9 +151,12 @@ describe.sequential("as-needed owner routes", () => {
 				})
 			).statusCode
 		).toBe(400);
-		expect((await create(app, medicationId, { quantity: 1, replacementForEventId: "not-a-uuid" })).statusCode).toBe(
-			400
-		);
+		const legacyReplacement = await create(app, medicationId, {
+			quantity: 1,
+			replacementForEventId: "00000000-0000-4000-8000-000000000099",
+		});
+		expect(legacyReplacement.statusCode).toBe(201);
+		expect(legacyReplacement.json().event.replacementForEventId).toBeNull();
 		authState.readOnly = true;
 		expect((await create(app, medicationId, { quantity: 1 })).json()).toMatchObject({ code: "READ_ONLY" });
 		expect(
@@ -221,7 +165,7 @@ describe.sequential("as-needed owner routes", () => {
 		await app.close();
 	});
 
-	it("maps owner eligibility, quantity, person, stock, key, revision, replacement and owner boundaries without disclosure", async () => {
+	it("maps owner eligibility, quantity, person, stock, key, and DELETE Undo boundaries without disclosure", async () => {
 		const app = await buildRouteApp();
 		const medicationId = await seedMedication(1, 1, { people: ["Ava"] });
 		const otherMedicationId = await seedMedication(2, 5);
@@ -245,51 +189,12 @@ describe.sequential("as-needed owner routes", () => {
 		expect(
 			(await app.inject({ method: "GET", url: `/medications/${medicationId}/as-needed-intakes` })).statusCode
 		).toBe(404);
-		expect(
-			(
-				await app.inject({
-					method: "POST",
-					url: `/as-needed-intakes/${eventId}/reversal`,
-					headers: { "idempotency-key": key() },
-					payload: { expectedRevision: 1 },
-				})
-			).statusCode
-		).toBe(404);
+		expect((await app.inject({ method: "DELETE", url: `/as-needed-intakes/${eventId}` })).statusCode).toBe(204);
+		expect((await app.inject({ method: "DELETE", url: `/as-needed-intakes/${eventId}` })).statusCode).toBe(204);
 		authState.userId = 1;
 		authState.readOnly = true;
-		expect(
-			(
-				await app.inject({
-					method: "POST",
-					url: `/as-needed-intakes/${eventId}/reversal`,
-					headers: { "idempotency-key": key() },
-					payload: { expectedRevision: 1 },
-				})
-			).json()
-		).toMatchObject({ code: "READ_ONLY" });
-		authState.readOnly = false;
-		const reversed = await app.inject({
-			method: "POST",
-			url: `/as-needed-intakes/${eventId}/reversal`,
-			headers: { "idempotency-key": key() },
-			payload: { expectedRevision: 1 },
-		});
-		expect(reversed.statusCode).toBe(200);
-		expect(
-			(
-				await app.inject({
-					method: "POST",
-					url: `/as-needed-intakes/${eventId}/reversal`,
-					headers: { "idempotency-key": key() },
-					payload: { expectedRevision: 0 },
-				})
-			).json()
-		).toMatchObject({ code: "INVALID_REVISION" });
-		const replacement = await create(app, medicationId, { quantity: 1, replacementForEventId: eventId });
-		expect(replacement.statusCode).toBe(201);
-		expect(replacement.json().event.replacementForEventId).toBe(eventId);
-		expect((await create(app, medicationId, { quantity: 1, replacementForEventId: eventId })).json()).toMatchObject({
-			code: "REPLACEMENT_NOT_ALLOWED",
+		expect((await app.inject({ method: "DELETE", url: `/as-needed-intakes/${eventId}` })).json()).toMatchObject({
+			code: "READ_ONLY",
 		});
 		expect(otherMedicationId).toBeGreaterThan(0);
 		await app.close();

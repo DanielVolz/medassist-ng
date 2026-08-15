@@ -48,7 +48,7 @@ const { getAnonymousUserId } = auth;
 const { medicationRoutes } = medicationRoutesModule;
 const { refillRoutes } = refillRoutesModule;
 const { computeMedicationCurrentStockRaw } = stock;
-const { createAsNeededIntake, reverseAsNeededIntake } = asNeededService;
+const { createAsNeededIntake } = asNeededService;
 
 type StockMode = "automatic" | "manual";
 
@@ -301,92 +301,6 @@ process.stdin.once("data", async () => {
 				revision: beforeEvent.revision,
 			});
 		}
-	});
-
-	it("neutralizes only eligible active effects when a correction races with a physical edit", async () => {
-		idempotencySequence = 0;
-		await db.delete(asNeededIntakeEvents);
-		await db.delete(doseTracking);
-		await db.delete(medications);
-		const created = await app.inject({ method: "POST", url: "/medications", payload: medicationPayload([]) });
-		expect(created.statusCode).toBe(200);
-		const medicationId = created.json().id as number;
-		const applied = await createAsNeededIntake({
-			userId,
-			medicationId,
-			quantity: 1,
-			idempotencyKey: idempotencyKey(),
-		});
-		const reversed = await createAsNeededIntake({
-			userId,
-			medicationId,
-			quantity: 1,
-			idempotencyKey: idempotencyKey(),
-		});
-		await reverseAsNeededIntake({
-			userId,
-			eventId: reversed.eventId,
-			expectedRevision: 1,
-			idempotencyKey: idempotencyKey(),
-		});
-		const future = await createAsNeededIntake({
-			userId,
-			medicationId,
-			quantity: 1,
-			idempotencyKey: idempotencyKey(),
-		});
-		await db
-			.update(asNeededIntakeEvents)
-			.set({ occurredAt: new Date("2099-01-01T00:00:00.000Z") })
-			.where(sql`${asNeededIntakeEvents.eventId} = ${future.eventId}`);
-		const [zeroAnchor] = await db
-			.insert(doseTracking)
-			.values({ userId, doseId: "as-needed:zero-effect" })
-			.returning({ id: doseTracking.id });
-		await db.insert(asNeededIntakeEvents).values({
-			eventId: "zero-effect",
-			userId,
-			medicationId,
-			doseTrackingId: zeroAnchor.id,
-			idempotencyKeyHash: "zero-effect-key",
-			requestFingerprint: "zero-effect-fingerprint",
-			occurredAt: new Date("2020-01-01T00:00:00.000Z"),
-			recordedAt: new Date(),
-			quantityMilli: 1000,
-			quantityUnit: "pills",
-			stockEffectMilli: 0,
-			stockEffectReason: "non_measurable",
-		});
-
-		const [correction, physicalEdit] = await Promise.all([
-			app.inject({
-				method: "PATCH",
-				url: `/medications/${medicationId}/stock-adjustment`,
-				payload: { stockAdjustment: 7 },
-			}),
-			app.inject({
-				method: "PUT",
-				url: `/medications/${medicationId}`,
-				payload: { ...medicationPayload([]), looseTablets: 3 },
-			}),
-		]);
-		expect(correction.statusCode).toBe(200);
-		expect(physicalEdit.statusCode).toBe(200);
-		const events = await db.select().from(asNeededIntakeEvents);
-		const byEventId = new Map(events.map((event) => [event.eventId, event]));
-		expect(byEventId.get(applied.eventId)).toMatchObject({
-			stockEffectMilli: 0,
-			stockEffectReason: "superseded_by_correction",
-			stockCutoffAt: expect.any(Number),
-			revision: 2,
-		});
-		expect(byEventId.get(reversed.eventId)).toMatchObject({ status: "reversed", stockEffectMilli: 1000, revision: 2 });
-		expect(byEventId.get(future.eventId)).toMatchObject({ stockEffectMilli: 1000, stockCutoffAt: 0, revision: 1 });
-		expect(byEventId.get("zero-effect")).toMatchObject({
-			stockEffectMilli: 0,
-			stockEffectReason: "non_measurable",
-			revision: 1,
-		});
 	});
 
 	it.each<StockMode>([

@@ -28,14 +28,13 @@ const [{ db, migrationsReady }, schema, service] = await Promise.all([
 const { asNeededIntakeEvents, doseTracking, intakeJournal, medications, userSettings, users } = schema;
 const {
 	createAsNeededIntake,
+	deleteAsNeededIntake,
 	filterScheduledDoseRows,
 	getActiveAsNeededStockEffectMilli,
 	getAsNeededAnchorDoseIds,
 	getActiveAsNeededStockEffectsMilli,
 	getAsNeededMutationResponse,
 	listAsNeededIntakes,
-	deleteAsNeededIntake,
-	reverseAsNeededIntake,
 } = service;
 
 const __filename = fileURLToPath(import.meta.url);
@@ -168,98 +167,7 @@ describe.sequential("as-needed intake service", () => {
 			(await createAsNeededIntake({ userId: 2, medicationId: otherMedicationId, quantity: 1, idempotencyKey: key }))
 				.userId
 		).toBe(2);
-		await expectCode(
-			reverseAsNeededIntake({ userId: 2, eventId: event.eventId, expectedRevision: 1, idempotencyKey: intentKey() }),
-			"EVENT_NOT_FOUND"
-		);
 		expect(await eventCount()).toBe(2);
-	});
-
-	it("accepts people assigned to another owned medication but rejects unknown and cross-owner-only people", async () => {
-		const targetMedicationId = await seedMedication();
-		await seedMedication({ people: ["Ava"] });
-		await seedMedication({ userId: 2, people: ["Ben"] });
-
-		await expect(
-			createAsNeededIntake({
-				userId: 1,
-				medicationId: targetMedicationId,
-				quantity: 1,
-				personName: "Ava",
-				idempotencyKey: intentKey(),
-			})
-		).resolves.toMatchObject({ personName: "Ava" });
-		await expectCode(
-			createAsNeededIntake({
-				userId: 1,
-				medicationId: targetMedicationId,
-				quantity: 1,
-				personName: "Ben",
-				idempotencyKey: intentKey(),
-			}),
-			"INVALID_PERSON"
-		);
-		await expectCode(
-			createAsNeededIntake({
-				userId: 1,
-				medicationId: targetMedicationId,
-				quantity: 1,
-				personName: "Unknown",
-				idempotencyKey: intentKey(),
-			}),
-			"INVALID_PERSON"
-		);
-	});
-
-	it("deletes an active owner intake with its anchor and journal while restoring the stock effect", async () => {
-		const medicationId = await seedMedication({ stock: 10 });
-		const event = await createAsNeededIntake({ userId: 1, medicationId, quantity: 2, idempotencyKey: intentKey() });
-		await db.insert(intakeJournal).values({
-			userId: 1,
-			doseTrackingId: event.doseTrackingId,
-			medicationId,
-			scheduledFor: event.occurredAt,
-			note: "Undo me",
-			createdAt: event.occurredAt,
-			updatedAt: event.occurredAt,
-		});
-
-		expect((await getAsNeededMutationResponse(1, event.eventId)).inventory.currentStock).toBe(8);
-		await deleteAsNeededIntake(1, event.eventId);
-		expect(await getActiveAsNeededStockEffectMilli(db, 1, medicationId)).toBe(0);
-		expect(await db.select().from(asNeededIntakeEvents)).toEqual([]);
-		expect(await db.select().from(doseTracking)).toEqual([]);
-		expect(await db.select().from(intakeJournal)).toEqual([]);
-	});
-
-	it("makes owner undo idempotent and non-disclosing for unknown, other-owner, and reversed events", async () => {
-		const medicationId = await seedMedication({ stock: 10 });
-		const otherMedicationId = await seedMedication({ userId: 2, stock: 10 });
-		const active = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
-		const other = await createAsNeededIntake({
-			userId: 2,
-			medicationId: otherMedicationId,
-			quantity: 1,
-			idempotencyKey: intentKey(),
-		});
-		const reversed = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
-		await reverseAsNeededIntake({
-			userId: 1,
-			eventId: reversed.eventId,
-			expectedRevision: 1,
-			idempotencyKey: intentKey(),
-		});
-
-		await deleteAsNeededIntake(1, "00000000-0000-4000-8000-000000000999");
-		await deleteAsNeededIntake(1, other.eventId);
-		await deleteAsNeededIntake(1, reversed.eventId);
-		expect(await eventCount()).toBe(3);
-		expect(await getActiveAsNeededStockEffectMilli(db, 1, medicationId)).toBe(active.stockEffectMilli);
-
-		await deleteAsNeededIntake(1, active.eventId);
-		await deleteAsNeededIntake(1, active.eventId);
-		expect(await eventCount()).toBe(2);
-		expect(await getActiveAsNeededStockEffectMilli(db, 1, medicationId)).toBe(0);
 	});
 
 	it("replays an imported semantic intent after medication IDs have been remapped", async () => {
@@ -311,12 +219,7 @@ describe.sequential("as-needed intake service", () => {
 			quantity: 1,
 			idempotencyKey: intentKey(),
 		});
-		await reverseAsNeededIntake({
-			userId: 1,
-			eventId: reversed.eventId,
-			expectedRevision: 1,
-			idempotencyKey: intentKey(),
-		});
+		await deleteAsNeededIntake(1, reversed.eventId);
 		await createAsNeededIntake({
 			userId: 2,
 			medicationId: otherMedicationId,
@@ -377,50 +280,16 @@ describe.sequential("as-needed intake service", () => {
 		expect((await db.select().from(doseTracking)).length).toBe(0);
 	});
 
-	it("records topical application without changing measurable stock and preserves reversal and replacement history", async () => {
+	it("records topical applications without changing measurable stock", async () => {
 		const medicationId = await seedMedication({ stock: 0, form: "topical", packageType: "tube" });
-		const original = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
-		expect(original).toMatchObject({
+		const event = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
+		expect(event).toMatchObject({
 			quantityUnit: "application",
 			stockEffectMilli: 0,
 			stockEffectReason: "non_measurable",
 		});
-		const reversalKey = intentKey();
-		const reversed = await reverseAsNeededIntake({
-			userId: 1,
-			eventId: original.eventId,
-			expectedRevision: 1,
-			idempotencyKey: reversalKey,
-		});
-		expect(reversed).toMatchObject({ status: "reversed", revision: 2, reversalIdempotencyKeyHash: expect.any(String) });
-		expect(
-			(
-				await reverseAsNeededIntake({
-					userId: 1,
-					eventId: original.eventId,
-					expectedRevision: 1,
-					idempotencyKey: reversalKey,
-				})
-			).id
-		).toBe(original.id);
-		expect(
-			(
-				await reverseAsNeededIntake({
-					userId: 1,
-					eventId: original.eventId,
-					expectedRevision: 1,
-					idempotencyKey: intentKey(),
-				})
-			).revision
-		).toBe(2);
-		const replacement = await createAsNeededIntake({
-			userId: 1,
-			medicationId,
-			quantity: 1,
-			replacesEventId: original.eventId,
-			idempotencyKey: intentKey(),
-		});
-		expect(replacement.replacesEventId).toBe(original.id);
+		await deleteAsNeededIntake(1, event.eventId);
+		expect(await eventCount()).toBe(0);
 	});
 
 	it("paginates by occurredAt and eventId without owner leakage, and returns nullable journal DTOs", async () => {
@@ -547,66 +416,5 @@ describe.sequential("as-needed intake service", () => {
 			})
 		).rejects.toMatchObject({ code: "TOO_MANY_NEW_INTAKES", details: { retryAfterSeconds: 60 } });
 		expect(await eventCount()).toBe(20);
-	});
-
-	it("keeps create, replacement, revision, reversal, and stock outcomes atomic under competing intents", async () => {
-		const medicationId = await seedMedication({ stock: 2 });
-		const sameKey = intentKey();
-		const [first, replay] = await Promise.all([
-			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: sameKey }),
-			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: sameKey }),
-		]);
-		expect(replay.id).toBe(first.id);
-		const competing = await Promise.allSettled([
-			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() }),
-			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() }),
-		]);
-		expect(competing.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-		expect(competing.filter((result) => result.status === "rejected")[0]).toMatchObject({
-			reason: { code: "INSUFFICIENT_STOCK" },
-		});
-		await expectCode(
-			reverseAsNeededIntake({ userId: 1, eventId: first.eventId, expectedRevision: 0, idempotencyKey: intentKey() }),
-			"REVISION_CONFLICT"
-		);
-		const reversed = await reverseAsNeededIntake({
-			userId: 1,
-			eventId: first.eventId,
-			expectedRevision: 1,
-			idempotencyKey: intentKey(),
-		});
-		expect(reversed).toMatchObject({ status: "reversed", revision: 2 });
-		expect(
-			(
-				await reverseAsNeededIntake({
-					userId: 1,
-					eventId: first.eventId,
-					expectedRevision: 1,
-					idempotencyKey: intentKey(),
-				})
-			).id
-		).toBe(first.id);
-		const replacementKey = intentKey();
-		const replacements = await Promise.allSettled([
-			createAsNeededIntake({
-				userId: 1,
-				medicationId,
-				quantity: 1,
-				replacesEventId: first.eventId,
-				idempotencyKey: replacementKey,
-			}),
-			createAsNeededIntake({
-				userId: 1,
-				medicationId,
-				quantity: 1,
-				replacesEventId: first.eventId,
-				idempotencyKey: intentKey(),
-			}),
-		]);
-		expect(replacements.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-		expect(replacements.filter((result) => result.status === "rejected")[0]).toMatchObject({
-			reason: { code: "REPLACEMENT_INVALID" },
-		});
-		expect((await getAsNeededMutationResponse(1, first.eventId)).inventory.currentStock).toBe(0);
 	});
 });

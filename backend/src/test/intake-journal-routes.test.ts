@@ -470,13 +470,12 @@ describe("Intake journal routes", () => {
 		expect(readOnlyMutation.statusCode).toBe(403);
 		expect(readOnlyMutation.json()).toMatchObject({ code: "API_KEY_SCOPE_FORBIDDEN" });
 
-		const reversed = await app.inject({
-			method: "POST",
-			url: `/as-needed-intakes/${EVENT_A}/reversal`,
-			headers: { cookie: ownerCookie, "idempotency-key": "00000000-0000-4000-8000-000000000010" },
-			payload: { expectedRevision: 1 },
+		await testClient.execute({
+			sql: `UPDATE as_needed_intake_events
+			      SET status = 'reversed', reversed_at = ?, reversal_idempotency_key_hash = ?, revision = 2
+			      WHERE user_id = ? AND event_id = ?`,
+			args: [1770283500, HASH_C, ownerId, EVENT_A],
 		});
-		expect(reversed.statusCode).toBe(200);
 
 		const reversedRead = await app.inject({
 			method: "GET",
@@ -533,56 +532,6 @@ describe("Intake journal routes", () => {
 		const all = await app.inject({ method: "GET", url: "/intake-journal", headers: { cookie } });
 		expect(all.statusCode).toBe(200);
 		expect(all.json().entries.map((entry: { doseId: string }) => entry.doseId)).toEqual([second.doseId, first.doseId]);
-	});
-
-	it("serializes a journal update racing an as-needed reversal and preserves the reversed read-only boundary", async () => {
-		const userId = await createTestUser(testClient, { username: "journal-reversal-race" });
-		const cookie = await buildTestSessionCookie(app, userId, "journal-reversal-race");
-		const medicationId = await seedMedication({ userId, name: "Reversal race medication" });
-		const { doseId } = await seedAsNeededEvent({
-			userId,
-			medicationId,
-			eventId: EVENT_C,
-			occurredAt: "2026-02-12T09:00:00.000Z",
-		});
-
-		const [journalUpdate, reversal] = await Promise.all([
-			app.inject({
-				method: "PUT",
-				url: `/intake-journal/event/${encodeURIComponent(doseId)}`,
-				headers: { cookie },
-				payload: { note: "Race-safe note" },
-			}),
-			app.inject({
-				method: "POST",
-				url: `/as-needed-intakes/${EVENT_C}/reversal`,
-				headers: { cookie, "idempotency-key": "00000000-0000-4000-8000-000000000011" },
-				payload: { expectedRevision: 1 },
-			}),
-		]);
-
-		expect(reversal.statusCode).toBe(200);
-		expect([200, 409]).toContain(journalUpdate.statusCode);
-		if (journalUpdate.statusCode === 409) {
-			expect(journalUpdate.json()).toMatchObject({ code: "EVENT_REVERSED" });
-		}
-
-		const afterRace = await app.inject({
-			method: "GET",
-			url: `/intake-journal/event/${encodeURIComponent(doseId)}`,
-			headers: { cookie },
-		});
-		expect(afterRace.statusCode).toBe(200);
-		expect(afterRace.json().entry).toMatchObject({ eventType: "as_needed", status: "reversed" });
-
-		const laterUpdate = await app.inject({
-			method: "PUT",
-			url: `/intake-journal/event/${encodeURIComponent(doseId)}`,
-			headers: { cookie },
-			payload: { note: "Cannot cross reversal boundary" },
-		});
-		expect(laterUpdate.statusCode).toBe(409);
-		expect(laterUpdate.json()).toMatchObject({ code: "EVENT_REVERSED" });
 	});
 
 	it("exports owner as-needed events in v1.9 without leaking anchors into scheduled history", async () => {

@@ -12,6 +12,15 @@ export type IntakeJournalExportPayload = {
 	journalUpdatedAt?: string | null;
 };
 
+function toExportPayload(journal: typeof intakeJournal.$inferSelect): IntakeJournalExportPayload {
+	return {
+		journalNote: journal.note,
+		journalMood: normalizeIntakeMood(journal.mood),
+		journalCreatedAt: toIsoStringOrNull(journal.createdAt),
+		journalUpdatedAt: toIsoStringOrNull(journal.updatedAt),
+	};
+}
+
 function toIsoStringOrNull(value: Date | string | number | null | undefined): string | null {
 	if (!value) {
 		return null;
@@ -55,17 +64,23 @@ export async function listIntakeJournalExportPayloadsForUser(
 		)
 		.where(and(eq(intakeJournal.userId, userId), eq(doseTracking.userId, userId), isNull(asNeededIntakeEvents.id)));
 
-	return new Map(
-		rows.map(({ journal }) => [
-			journal.doseTrackingId,
-			{
-				journalNote: journal.note,
-				journalMood: normalizeIntakeMood(journal.mood),
-				journalCreatedAt: toIsoStringOrNull(journal.createdAt),
-				journalUpdatedAt: toIsoStringOrNull(journal.updatedAt),
-			},
-		])
-	);
+	return new Map(rows.map(({ journal }) => [journal.doseTrackingId, toExportPayload(journal)]));
+}
+
+export async function listAsNeededIntakeJournalExportPayloadsForUser(
+	userId: number
+): Promise<Map<number, IntakeJournalExportPayload>> {
+	const rows = await db
+		.select({ journal: intakeJournal })
+		.from(intakeJournal)
+		.innerJoin(doseTracking, eq(doseTracking.id, intakeJournal.doseTrackingId))
+		.innerJoin(
+			asNeededIntakeEvents,
+			and(eq(asNeededIntakeEvents.doseTrackingId, doseTracking.id), eq(asNeededIntakeEvents.userId, userId))
+		)
+		.where(and(eq(intakeJournal.userId, userId), eq(doseTracking.userId, userId)));
+
+	return new Map(rows.map(({ journal }) => [journal.doseTrackingId, toExportPayload(journal)]));
 }
 
 export async function restoreIntakeJournalForImportedDose(input: {

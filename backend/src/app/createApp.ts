@@ -12,6 +12,7 @@ import { getDataDir } from "../db/db-utils.js";
 import { registerApiDocs } from "../plugins/api-docs.js";
 import { jwtPlugin } from "../plugins/jwt.js";
 import { apiKeyRoutes } from "../routes/api-keys.js";
+import { asNeededIntakeRoutes } from "../routes/as-needed-intakes.js";
 import { authRoutes } from "../routes/auth.js";
 import { doseRoutes } from "../routes/doses.js";
 import { exportRoutes } from "../routes/export.js";
@@ -108,6 +109,7 @@ async function registerAppRoutes(app: FastifyInstance, imagesDir: string): Promi
 	await app.register(healthRoutes);
 	await app.register(authRoutes);
 	await app.register(apiKeyRoutes);
+	await app.register(asNeededIntakeRoutes);
 	await app.register(oidcRoutes);
 	await app.register(medicationRoutes);
 	await app.register(medicationEnrichmentRoutes);

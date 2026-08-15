@@ -6,6 +6,7 @@ import { env } from "../plugins/env.js";
 import {
 	deleteIntakeJournalForDoseEvent,
 	getIntakeJournalForDoseEvent,
+	IntakeJournalMutationError,
 	isTrackedDoseIdFormat,
 	listIntakeJournalEntriesForUser,
 	resolveTrackedDoseEventForUser,
@@ -35,26 +36,37 @@ const doseIdParamsSchema = {
 const intakeJournalEntrySchema = {
 	type: "object",
 	required: [
+		"eventType",
+		"eventId",
 		"doseTrackingId",
 		"doseId",
 		"medicationId",
 		"medicationName",
 		"scheduledFor",
+		"occurredAt",
+		"status",
+		"takenAt",
 		"dismissed",
 		"takenSource",
+		"markedBy",
 		"mood",
 		"note",
+		"createdAt",
 		"updatedAt",
 	],
 	properties: {
+		eventType: { type: "string", enum: ["scheduled", "as_needed"] },
+		eventId: { type: ["string", "null"], format: "uuid" },
 		doseTrackingId: { type: "integer" },
 		doseId: { type: "string" },
 		medicationId: { type: "integer" },
 		medicationName: { type: "string" },
-		scheduledFor: { type: "string", format: "date-time" },
+		scheduledFor: { type: ["string", "null"], format: "date-time" },
+		occurredAt: { type: ["string", "null"], format: "date-time" },
+		status: { type: "string", enum: ["taken", "skipped", "active", "reversed"] },
 		takenAt: { type: ["string", "null"], format: "date-time" },
 		dismissed: { type: "boolean" },
-		takenSource: { type: "string", enum: ["manual", "automatic", "notification"] },
+		takenSource: { type: "string", enum: ["manual", "automatic", "notification", "owner_as_needed"] },
 		markedBy: { type: ["string", "null"] },
 		mood: { type: ["string", "null"], enum: [...INTAKE_MOODS, null] },
 		note: { type: ["string", "null"] },
@@ -136,13 +148,21 @@ function buildJournalEntryDto(input: {
 	journalEntry: Awaited<ReturnType<typeof getIntakeJournalForDoseEvent>>;
 }) {
 	const { event, journalEntry } = input;
+	const scheduledFor =
+		event.eventType === "scheduled" && event.scheduledFor
+			? toLocalDateTimeOffsetString(journalEntry?.scheduledFor ?? event.scheduledFor)
+			: null;
 
 	return {
+		eventType: event.eventType,
+		eventId: event.eventId,
 		doseTrackingId: event.doseTrackingId,
 		doseId: event.doseId,
 		medicationId: event.medicationId,
 		medicationName: event.medicationName,
-		scheduledFor: toLocalDateTimeOffsetString(journalEntry?.scheduledFor ?? event.scheduledFor),
+		scheduledFor,
+		occurredAt: event.occurredAt?.toISOString() ?? null,
+		status: event.status,
 		takenAt: serializeTakenAt(event.takenAt, event.dismissed),
 		dismissed: event.dismissed,
 		takenSource: event.takenSource,
@@ -152,6 +172,19 @@ function buildJournalEntryDto(input: {
 		updatedAt: journalEntry?.updatedAt?.toISOString() ?? null,
 		createdAt: journalEntry?.createdAt?.toISOString() ?? null,
 	};
+}
+
+function sendJournalMutationError(
+	request: FastifyRequest,
+	reply: FastifyReply,
+	operation: "upsert" | "delete",
+	error: unknown
+): FastifyReply {
+	if (error instanceof IntakeJournalMutationError) {
+		return reply.status(409).send({ error: error.message, code: error.code });
+	}
+	request.log.error({ err: error, operation }, "[IntakeJournal] Owner mutation failed");
+	return reply.status(500).send({ error: "Internal server error", code: "INTERNAL_ERROR" });
 }
 
 async function getUserId(request: FastifyRequest, reply: FastifyReply): Promise<number> {
@@ -227,11 +260,18 @@ export async function intakeJournalRoutes(app: FastifyInstance) {
 
 			return {
 				entries: entries.map((entry) => ({
+					eventType: entry.eventType,
+					eventId: entry.eventId,
 					doseTrackingId: entry.doseTrackingId,
 					doseId: entry.doseId,
 					medicationId: entry.medicationId,
 					medicationName: entry.medicationName,
-					scheduledFor: toLocalDateTimeOffsetString(entry.scheduledFor),
+					scheduledFor:
+						entry.eventType === "scheduled" && entry.scheduledFor
+							? toLocalDateTimeOffsetString(entry.scheduledFor)
+							: null,
+					occurredAt: entry.occurredAt?.toISOString() ?? null,
+					status: entry.status,
 					takenAt: serializeTakenAt(entry.takenAt, entry.dismissed),
 					dismissed: entry.dismissed,
 					takenSource: entry.takenSource,
@@ -303,6 +343,8 @@ export async function intakeJournalRoutes(app: FastifyInstance) {
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
 					401: genericErrorSchema,
 					404: genericErrorSchema,
+					409: genericErrorSchema,
+					500: genericErrorSchema,
 				},
 			},
 		},
@@ -326,12 +368,17 @@ export async function intakeJournalRoutes(app: FastifyInstance) {
 					.send({ error: "Tracked dose event not found for the current owner", code: "DOSE_NOT_FOUND" });
 			}
 
-			const journalEntry = await upsertIntakeJournalForDoseEvent({
-				userId,
-				doseId,
-				note: parsed.data.note,
-				mood: parsed.data.mood ?? null,
-			});
+			let journalEntry: Awaited<ReturnType<typeof upsertIntakeJournalForDoseEvent>>;
+			try {
+				journalEntry = await upsertIntakeJournalForDoseEvent({
+					userId,
+					doseId,
+					note: parsed.data.note,
+					mood: parsed.data.mood ?? null,
+				});
+			} catch (error) {
+				return sendJournalMutationError(request, reply, "upsert", error);
+			}
 
 			return { entry: buildJournalEntryDto({ event, journalEntry }) };
 		}
@@ -357,6 +404,8 @@ export async function intakeJournalRoutes(app: FastifyInstance) {
 					400: { anyOf: [genericErrorSchema, validationErrorSchema] },
 					401: genericErrorSchema,
 					404: genericErrorSchema,
+					409: genericErrorSchema,
+					500: genericErrorSchema,
 				},
 			},
 		},
@@ -368,7 +417,12 @@ export async function intakeJournalRoutes(app: FastifyInstance) {
 				return reply.status(400).send({ error: "Invalid doseId format", code: "INVALID_DOSE" });
 			}
 
-			const deleted = await deleteIntakeJournalForDoseEvent({ userId, doseId });
+			let deleted: boolean;
+			try {
+				deleted = await deleteIntakeJournalForDoseEvent({ userId, doseId });
+			} catch (error) {
+				return sendJournalMutationError(request, reply, "delete", error);
+			}
 			if (!deleted) {
 				return reply
 					.status(404)

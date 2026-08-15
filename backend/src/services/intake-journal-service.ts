@@ -1,6 +1,6 @@
 import { type IntakeMood, normalizeIntakeMood } from "@medassist/shared";
-import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
-import { db } from "../db/client.js";
+import { and, desc, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { db, withImmediateWriteTransaction } from "../db/client.js";
 import { asNeededIntakeEvents, doseTracking, intakeJournal, medications } from "../db/schema.js";
 import { type ParsedDoseId, parseDoseId } from "../utils/dose-id.js";
 import { normalizeMedicationIntakes, parseLocalDateTime } from "../utils/scheduler-utils.js";
@@ -23,13 +23,26 @@ export type ResolvedTrackedDoseEvent = {
 	doseId: string;
 	medicationId: number;
 	medicationName: string;
-	scheduledFor: Date;
+	eventType: "scheduled" | "as_needed";
+	eventId: string | null;
+	scheduledFor: Date | null;
+	occurredAt: Date | null;
+	status: "taken" | "skipped" | "active" | "reversed";
 	takenAt: Date;
 	markedBy: string | null;
-	takenSource: DoseTrackingSource;
+	takenSource: DoseTrackingSource | "owner_as_needed";
 	dismissed: boolean;
 	personSuffix: string | null;
 };
+
+export class IntakeJournalMutationError extends Error {
+	readonly code = "EVENT_REVERSED";
+
+	constructor() {
+		super("Reversed as-needed intake journals are read-only");
+		this.name = "IntakeJournalMutationError";
+	}
+}
 
 export type IntakeJournalEntry = typeof intakeJournal.$inferSelect;
 
@@ -39,10 +52,14 @@ export type IntakeJournalHistoryEntry = {
 	doseId: string;
 	medicationId: number;
 	medicationName: string;
-	scheduledFor: Date;
+	eventType: "scheduled" | "as_needed";
+	eventId: string | null;
+	scheduledFor: Date | null;
+	occurredAt: Date | null;
+	status: "taken" | "skipped" | "active" | "reversed";
 	takenAt: Date;
 	markedBy: string | null;
-	takenSource: DoseTrackingSource;
+	takenSource: DoseTrackingSource | "owner_as_needed";
 	dismissed: boolean;
 	mood: IntakeMood | null;
 	note: string;
@@ -51,7 +68,10 @@ export type IntakeJournalHistoryEntry = {
 };
 
 export function isTrackedDoseIdFormat(doseId: string): boolean {
-	return parseDoseId(doseId) !== null;
+	return (
+		parseDoseId(doseId) !== null ||
+		/^as-needed:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(doseId)
+	);
 }
 
 function getMedicationDisplayName(medication: Pick<MedicationTimingRow, "id" | "name" | "genericName">): string {
@@ -89,16 +109,76 @@ function resolveScheduledFor(parsedDose: ParsedDoseId, medication: MedicationTim
 	);
 }
 
-export async function resolveTrackedDoseEventForUser(input: {
-	userId: number;
-	doseId: string;
-}): Promise<ResolvedTrackedDoseEvent | null> {
+export async function resolveTrackedDoseEventForUser(
+	input: {
+		userId: number;
+		doseId: string;
+	},
+	database = db
+): Promise<ResolvedTrackedDoseEvent | null> {
+	const [asNeededEvent] = await database
+		.select({
+			doseTrackingId: doseTracking.id,
+			userId: doseTracking.userId,
+			doseId: doseTracking.doseId,
+			eventId: asNeededIntakeEvents.eventId,
+			occurredAt: asNeededIntakeEvents.occurredAt,
+			status: asNeededIntakeEvents.status,
+			medicationId: medications.id,
+			medicationName: medications.name,
+			medicationGenericName: medications.genericName,
+		})
+		.from(asNeededIntakeEvents)
+		.innerJoin(
+			doseTracking,
+			and(
+				eq(doseTracking.id, asNeededIntakeEvents.doseTrackingId),
+				eq(doseTracking.userId, asNeededIntakeEvents.userId)
+			)
+		)
+		.innerJoin(
+			medications,
+			and(eq(medications.id, asNeededIntakeEvents.medicationId), eq(medications.userId, asNeededIntakeEvents.userId))
+		)
+		.where(
+			and(
+				eq(asNeededIntakeEvents.userId, input.userId),
+				eq(doseTracking.userId, input.userId),
+				eq(doseTracking.doseId, input.doseId)
+			)
+		)
+		.limit(1);
+
+	if (asNeededEvent) {
+		return {
+			doseTrackingId: asNeededEvent.doseTrackingId,
+			userId: asNeededEvent.userId,
+			doseId: asNeededEvent.doseId,
+			medicationId: asNeededEvent.medicationId,
+			medicationName: getMedicationDisplayName({
+				id: asNeededEvent.medicationId,
+				name: asNeededEvent.medicationName,
+				genericName: asNeededEvent.medicationGenericName,
+			}),
+			eventType: "as_needed",
+			eventId: asNeededEvent.eventId,
+			scheduledFor: null,
+			occurredAt: asNeededEvent.occurredAt,
+			status: asNeededEvent.status === "reversed" ? "reversed" : "active",
+			takenAt: asNeededEvent.occurredAt,
+			markedBy: null,
+			takenSource: "owner_as_needed",
+			dismissed: false,
+			personSuffix: null,
+		};
+	}
+
 	const parsedDose = parseDoseId(input.doseId);
 	if (!parsedDose) {
 		return null;
 	}
 
-	const [event] = await db
+	const [event] = await database
 		.select({
 			doseTrackingId: doseTracking.id,
 			userId: doseTracking.userId,
@@ -152,7 +232,11 @@ export async function resolveTrackedDoseEventForUser(input: {
 			name: event.medicationName,
 			genericName: event.medicationGenericName,
 		}),
+		eventType: "scheduled",
+		eventId: null,
 		scheduledFor,
+		occurredAt: null,
+		status: event.dismissed ? "skipped" : "taken",
 		takenAt: event.takenAt,
 		markedBy: event.markedBy,
 		takenSource: event.takenSource as DoseTrackingSource,
@@ -187,55 +271,68 @@ export async function upsertIntakeJournalForDoseEvent(input: {
 }): Promise<IntakeJournalEntry | null> {
 	const normalizedNote = input.note.trim();
 	const normalizedMood = input.mood ?? null;
-	if (normalizedNote.length === 0 && normalizedMood === null) {
-		await deleteIntakeJournalForDoseEvent({ userId: input.userId, doseId: input.doseId });
-		return null;
-	}
+	return withImmediateWriteTransaction(async (transactionDb) => {
+		const event = await resolveTrackedDoseEventForUser({ userId: input.userId, doseId: input.doseId }, transactionDb);
+		if (!event) return null;
+		if (event.eventType === "as_needed" && event.status === "reversed") {
+			throw new IntakeJournalMutationError();
+		}
 
-	const event = await resolveTrackedDoseEventForUser({ userId: input.userId, doseId: input.doseId });
-	if (!event) {
-		return null;
-	}
+		if (normalizedNote.length === 0 && normalizedMood === null) {
+			await transactionDb
+				.delete(intakeJournal)
+				.where(and(eq(intakeJournal.userId, input.userId), eq(intakeJournal.doseTrackingId, event.doseTrackingId)));
+			return null;
+		}
 
-	const now = new Date();
-
-	await db
-		.insert(intakeJournal)
-		.values({
-			userId: input.userId,
-			doseTrackingId: event.doseTrackingId,
-			medicationId: event.medicationId,
-			scheduledFor: event.scheduledFor,
-			mood: normalizedMood ?? "",
-			note: normalizedNote,
-			createdAt: now,
-			updatedAt: now,
-		})
-		.onConflictDoUpdate({
-			target: intakeJournal.doseTrackingId,
-			set: {
+		const journalTimestamp = event.occurredAt ?? event.scheduledFor;
+		if (!journalTimestamp) throw new Error("Resolved journal event has no authoritative timestamp");
+		const now = new Date();
+		await transactionDb
+			.insert(intakeJournal)
+			.values({
 				userId: input.userId,
+				doseTrackingId: event.doseTrackingId,
 				medicationId: event.medicationId,
+				scheduledFor: journalTimestamp,
 				mood: normalizedMood ?? "",
 				note: normalizedNote,
+				createdAt: now,
 				updatedAt: now,
-			},
-		});
+			})
+			.onConflictDoUpdate({
+				target: intakeJournal.doseTrackingId,
+				set: {
+					userId: input.userId,
+					medicationId: event.medicationId,
+					mood: normalizedMood ?? "",
+					note: normalizedNote,
+					updatedAt: now,
+				},
+			});
 
-	return getIntakeJournalForDoseEvent({ userId: input.userId, doseId: input.doseId });
+		const [journalEntry] = await transactionDb
+			.select()
+			.from(intakeJournal)
+			.where(and(eq(intakeJournal.userId, input.userId), eq(intakeJournal.doseTrackingId, event.doseTrackingId)))
+			.limit(1);
+		return journalEntry ?? null;
+	});
 }
 
 export async function deleteIntakeJournalForDoseEvent(input: { userId: number; doseId: string }): Promise<boolean> {
-	const event = await resolveTrackedDoseEventForUser(input);
-	if (!event) {
-		return false;
-	}
+	return withImmediateWriteTransaction(async (transactionDb) => {
+		const event = await resolveTrackedDoseEventForUser(input, transactionDb);
+		if (!event) return false;
+		if (event.eventType === "as_needed" && event.status === "reversed") {
+			throw new IntakeJournalMutationError();
+		}
 
-	await db
-		.delete(intakeJournal)
-		.where(and(eq(intakeJournal.userId, input.userId), eq(intakeJournal.doseTrackingId, event.doseTrackingId)));
-
-	return true;
+		await transactionDb
+			.delete(intakeJournal)
+			.where(and(eq(intakeJournal.userId, input.userId), eq(intakeJournal.doseTrackingId, event.doseTrackingId)));
+		return true;
+	});
 }
 
 export async function listIntakeJournalEntriesForUser(input: {
@@ -252,11 +349,21 @@ export async function listIntakeJournalEntriesForUser(input: {
 	}
 
 	if (input.from) {
-		filters.push(gte(intakeJournal.scheduledFor, input.from));
+		filters.push(
+			or(
+				and(isNotNull(asNeededIntakeEvents.id), gte(asNeededIntakeEvents.occurredAt, input.from)),
+				and(isNull(asNeededIntakeEvents.id), gte(intakeJournal.scheduledFor, input.from))
+			)!
+		);
 	}
 
 	if (input.to) {
-		filters.push(lte(intakeJournal.scheduledFor, input.to));
+		filters.push(
+			or(
+				and(isNotNull(asNeededIntakeEvents.id), lte(asNeededIntakeEvents.occurredAt, input.to)),
+				and(isNull(asNeededIntakeEvents.id), lte(intakeJournal.scheduledFor, input.to))
+			)!
+		);
 	}
 
 	const rows = await db
@@ -276,43 +383,65 @@ export async function listIntakeJournalEntriesForUser(input: {
 			note: intakeJournal.note,
 			createdAt: intakeJournal.createdAt,
 			updatedAt: intakeJournal.updatedAt,
+			eventId: asNeededIntakeEvents.eventId,
+			eventOccurredAt: asNeededIntakeEvents.occurredAt,
+			eventStatus: asNeededIntakeEvents.status,
 		})
 		.from(intakeJournal)
 		.innerJoin(doseTracking, eq(doseTracking.id, intakeJournal.doseTrackingId))
 		.leftJoin(
 			asNeededIntakeEvents,
-			and(eq(asNeededIntakeEvents.doseTrackingId, doseTracking.id), eq(asNeededIntakeEvents.userId, input.userId))
-		)
-		.innerJoin(medications, eq(medications.id, intakeJournal.medicationId))
-		.where(
 			and(
-				...filters,
-				eq(doseTracking.userId, input.userId),
-				eq(medications.userId, input.userId),
-				isNull(asNeededIntakeEvents.id)
+				eq(asNeededIntakeEvents.doseTrackingId, doseTracking.id),
+				eq(asNeededIntakeEvents.userId, input.userId),
+				eq(asNeededIntakeEvents.medicationId, intakeJournal.medicationId)
 			)
 		)
-		.orderBy(desc(intakeJournal.scheduledFor), desc(intakeJournal.updatedAt))
+		.innerJoin(medications, eq(medications.id, intakeJournal.medicationId))
+		.where(and(...filters, eq(doseTracking.userId, input.userId), eq(medications.userId, input.userId)))
+		.orderBy(
+			desc(sql`coalesce(${asNeededIntakeEvents.occurredAt}, ${intakeJournal.scheduledFor})`),
+			desc(intakeJournal.updatedAt)
+		)
 		.limit(input.limit ?? 100);
 
-	return rows.map((row) => ({
-		id: row.id,
-		doseTrackingId: row.doseTrackingId,
-		doseId: row.doseId,
-		medicationId: row.medicationId,
-		medicationName: getMedicationDisplayName({
-			id: row.medicationId,
-			name: row.medicationName,
-			genericName: row.medicationGenericName,
-		}),
-		scheduledFor: row.scheduledFor,
-		takenAt: row.takenAt,
-		markedBy: row.markedBy,
-		takenSource: row.takenSource as DoseTrackingSource,
-		dismissed: row.dismissed ?? false,
-		mood: normalizeIntakeMood(row.mood),
-		note: row.note,
-		createdAt: row.createdAt,
-		updatedAt: row.updatedAt,
-	}));
+	return rows.map((row) => {
+		const isAsNeeded = row.eventId !== null && row.eventOccurredAt !== null;
+		let status: IntakeJournalHistoryEntry["status"];
+		let takenAt: Date;
+		let takenSource: IntakeJournalHistoryEntry["takenSource"];
+		if (isAsNeeded) {
+			status = row.eventStatus === "reversed" ? "reversed" : "active";
+			takenAt = row.eventOccurredAt ?? row.takenAt;
+			takenSource = "owner_as_needed";
+		} else {
+			status = row.dismissed ? "skipped" : "taken";
+			takenAt = row.takenAt;
+			takenSource = row.takenSource as DoseTrackingSource;
+		}
+		return {
+			id: row.id,
+			doseTrackingId: row.doseTrackingId,
+			doseId: row.doseId,
+			medicationId: row.medicationId,
+			medicationName: getMedicationDisplayName({
+				id: row.medicationId,
+				name: row.medicationName,
+				genericName: row.medicationGenericName,
+			}),
+			eventType: isAsNeeded ? "as_needed" : "scheduled",
+			eventId: isAsNeeded ? row.eventId : null,
+			scheduledFor: isAsNeeded ? null : row.scheduledFor,
+			occurredAt: isAsNeeded ? row.eventOccurredAt : null,
+			status,
+			takenAt,
+			markedBy: isAsNeeded ? null : row.markedBy,
+			takenSource,
+			dismissed: isAsNeeded ? false : (row.dismissed ?? false),
+			mood: normalizeIntakeMood(row.mood),
+			note: row.note,
+			createdAt: row.createdAt,
+			updatedAt: row.updatedAt,
+		};
+	});
 }

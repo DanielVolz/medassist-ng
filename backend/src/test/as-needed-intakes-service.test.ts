@@ -34,6 +34,7 @@ const {
 	getActiveAsNeededStockEffectsMilli,
 	getAsNeededMutationResponse,
 	listAsNeededIntakes,
+	deleteAsNeededIntake,
 	reverseAsNeededIntake,
 } = service;
 
@@ -172,6 +173,93 @@ describe.sequential("as-needed intake service", () => {
 			"EVENT_NOT_FOUND"
 		);
 		expect(await eventCount()).toBe(2);
+	});
+
+	it("accepts people assigned to another owned medication but rejects unknown and cross-owner-only people", async () => {
+		const targetMedicationId = await seedMedication();
+		await seedMedication({ people: ["Ava"] });
+		await seedMedication({ userId: 2, people: ["Ben"] });
+
+		await expect(
+			createAsNeededIntake({
+				userId: 1,
+				medicationId: targetMedicationId,
+				quantity: 1,
+				personName: "Ava",
+				idempotencyKey: intentKey(),
+			})
+		).resolves.toMatchObject({ personName: "Ava" });
+		await expectCode(
+			createAsNeededIntake({
+				userId: 1,
+				medicationId: targetMedicationId,
+				quantity: 1,
+				personName: "Ben",
+				idempotencyKey: intentKey(),
+			}),
+			"INVALID_PERSON"
+		);
+		await expectCode(
+			createAsNeededIntake({
+				userId: 1,
+				medicationId: targetMedicationId,
+				quantity: 1,
+				personName: "Unknown",
+				idempotencyKey: intentKey(),
+			}),
+			"INVALID_PERSON"
+		);
+	});
+
+	it("deletes an active owner intake with its anchor and journal while restoring the stock effect", async () => {
+		const medicationId = await seedMedication({ stock: 10 });
+		const event = await createAsNeededIntake({ userId: 1, medicationId, quantity: 2, idempotencyKey: intentKey() });
+		await db.insert(intakeJournal).values({
+			userId: 1,
+			doseTrackingId: event.doseTrackingId,
+			medicationId,
+			scheduledFor: event.occurredAt,
+			note: "Undo me",
+			createdAt: event.occurredAt,
+			updatedAt: event.occurredAt,
+		});
+
+		expect((await getAsNeededMutationResponse(1, event.eventId)).inventory.currentStock).toBe(8);
+		await deleteAsNeededIntake(1, event.eventId);
+		expect(await getActiveAsNeededStockEffectMilli(db, 1, medicationId)).toBe(0);
+		expect(await db.select().from(asNeededIntakeEvents)).toEqual([]);
+		expect(await db.select().from(doseTracking)).toEqual([]);
+		expect(await db.select().from(intakeJournal)).toEqual([]);
+	});
+
+	it("makes owner undo idempotent and non-disclosing for unknown, other-owner, and reversed events", async () => {
+		const medicationId = await seedMedication({ stock: 10 });
+		const otherMedicationId = await seedMedication({ userId: 2, stock: 10 });
+		const active = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
+		const other = await createAsNeededIntake({
+			userId: 2,
+			medicationId: otherMedicationId,
+			quantity: 1,
+			idempotencyKey: intentKey(),
+		});
+		const reversed = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
+		await reverseAsNeededIntake({
+			userId: 1,
+			eventId: reversed.eventId,
+			expectedRevision: 1,
+			idempotencyKey: intentKey(),
+		});
+
+		await deleteAsNeededIntake(1, "00000000-0000-4000-8000-000000000999");
+		await deleteAsNeededIntake(1, other.eventId);
+		await deleteAsNeededIntake(1, reversed.eventId);
+		expect(await eventCount()).toBe(3);
+		expect(await getActiveAsNeededStockEffectMilli(db, 1, medicationId)).toBe(active.stockEffectMilli);
+
+		await deleteAsNeededIntake(1, active.eventId);
+		await deleteAsNeededIntake(1, active.eventId);
+		expect(await eventCount()).toBe(2);
+		expect(await getActiveAsNeededStockEffectMilli(db, 1, medicationId)).toBe(0);
 	});
 
 	it("replays an imported semantic intent after medication IDs have been remapped", async () => {

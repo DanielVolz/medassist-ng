@@ -5,6 +5,7 @@ import { env } from "../plugins/env.js";
 import {
 	AsNeededIntakeError,
 	createAsNeededIntake,
+	deleteAsNeededIntake,
 	getAsNeededMutationResponse,
 	listAsNeededIntakes,
 	reverseAsNeededIntake,
@@ -233,7 +234,7 @@ function validationError(reply: FastifyReply, code: string, message: string): Fa
 function sendServiceError(
 	request: FastifyRequest,
 	reply: FastifyReply,
-	operation: "list" | "create" | "reverse",
+	operation: "list" | "create" | "reverse" | "undo",
 	userId: number,
 	error: unknown
 ): FastifyReply {
@@ -441,6 +442,37 @@ export async function asNeededIntakeRoutes(app: FastifyInstance) {
 				return reply.status(200).send(await getAsNeededMutationResponse(userId, event.eventId));
 			} catch (error) {
 				return sendServiceError(request, reply, "reverse", userId, error);
+			}
+		}
+	);
+
+	app.delete<{ Params: Record<string, unknown> }>(
+		"/as-needed-intakes/:eventId",
+		{
+			attachValidation: true,
+			schema: {
+				params: eventParamsOpenApiSchema,
+				response: {
+					204: { type: "null" },
+					400: errorResponseSchema,
+					403: errorResponseSchema,
+					500: genericErrorSchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			const params = eventParamsSchema.safeParse(request.params);
+			if (!params.success) return validationError(reply, "INVALID_REQUEST", "Invalid event id");
+			const userId = await getUserId(request, reply);
+			if (userId === null) return;
+			if (isReadOnlyApiKeyRequest(request)) {
+				return reply.status(403).send({ error: "API key is read-only", code: "READ_ONLY" });
+			}
+			try {
+				await deleteAsNeededIntake(userId, params.data.eventId);
+				return reply.status(204).send();
+			} catch (error) {
+				return sendServiceError(request, reply, "undo", userId, error);
 			}
 		}
 	);

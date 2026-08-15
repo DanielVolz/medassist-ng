@@ -32,13 +32,11 @@ export class AsNeededIntakeError extends Error {
 			| "REPLACEMENT_NOT_FOUND"
 			| "REPLACEMENT_INVALID"
 			| "EVENT_NOT_FOUND"
-			| "REVISION_CONFLICT"
-			| "REVERSAL_KEY_REUSED"
 			| "TOO_MANY_NEW_INTAKES"
 			| "INVALID_CURSOR"
 			| "INVALID_DATE_RANGE",
 		message: string,
-		public readonly details?: { currentRevision?: number; currentStock?: number; retryAfterSeconds?: number }
+		public readonly details?: { currentStock?: number; retryAfterSeconds?: number }
 	) {
 		super(message);
 		this.name = "AsNeededIntakeError";
@@ -681,63 +679,6 @@ export async function createAsNeededIntake(input: {
 			})
 			.returning();
 		return { ...event, isReplay: false as const };
-	});
-}
-
-export async function reverseAsNeededIntake(input: {
-	userId: number;
-	eventId: string;
-	expectedRevision: number;
-	idempotencyKey: string;
-}) {
-	const keyHash = sha256(normalizeIntentKey(input.idempotencyKey));
-	const eventId = input.eventId.trim().toLowerCase();
-	return withImmediateWriteTransaction(async (transactionDb) => {
-		const [event] = await transactionDb
-			.select()
-			.from(asNeededIntakeEvents)
-			.where(and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.eventId, eventId)));
-		if (!event) throw new AsNeededIntakeError("EVENT_NOT_FOUND", "Event not found");
-		const [keyOwner] = await transactionDb
-			.select({ id: asNeededIntakeEvents.id })
-			.from(asNeededIntakeEvents)
-			.where(
-				and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.reversalIdempotencyKeyHash, keyHash))
-			);
-		if (keyOwner && keyOwner.id !== event.id) {
-			throw new AsNeededIntakeError("REVERSAL_KEY_REUSED", "Reversal key is bound to another event");
-		}
-		if (event.status === "reversed") return event;
-		if (event.revision !== input.expectedRevision) {
-			throw new AsNeededIntakeError("REVISION_CONFLICT", "Event revision changed", {
-				currentRevision: event.revision,
-			});
-		}
-		const now = new Date();
-		const [reversed] = await transactionDb
-			.update(asNeededIntakeEvents)
-			.set({
-				status: "reversed",
-				reversedAt: now,
-				reversalIdempotencyKeyHash: keyHash,
-				revision: event.revision + 1,
-				updatedAt: now,
-			})
-			.where(
-				and(
-					eq(asNeededIntakeEvents.id, event.id),
-					eq(asNeededIntakeEvents.userId, input.userId),
-					eq(asNeededIntakeEvents.status, "active"),
-					eq(asNeededIntakeEvents.revision, input.expectedRevision)
-				)
-			)
-			.returning();
-		if (!reversed) {
-			throw new AsNeededIntakeError("REVISION_CONFLICT", "Event revision changed", {
-				currentRevision: event.revision,
-			});
-		}
-		return reversed;
 	});
 }
 

@@ -8,7 +8,6 @@ import {
 	deleteAsNeededIntake,
 	getAsNeededMutationResponse,
 	listAsNeededIntakes,
-	reverseAsNeededIntake,
 } from "../services/as-needed-intakes-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import { applyOpenApiRouteStandards, genericErrorSchema } from "../utils/openapi-route-standards.js";
@@ -37,7 +36,6 @@ const createBodySchema = z
 		replacementForEventId: z.string().trim().uuid().nullable().optional(),
 	})
 	.strict();
-const reversalBodySchema = z.object({ expectedRevision: z.number().int().positive() }).strict();
 
 const medicationParamsOpenApiSchema = {
 	type: "object",
@@ -77,13 +75,6 @@ const createBodyOpenApiSchema = {
 	},
 	additionalProperties: false,
 } as const;
-const reversalBodyOpenApiSchema = {
-	type: "object",
-	required: ["expectedRevision"],
-	properties: { expectedRevision: { type: "integer", minimum: 1 } },
-	additionalProperties: false,
-} as const;
-
 const errorResponseSchema = {
 	type: "object",
 	required: ["error", "code"],
@@ -96,7 +87,6 @@ const conflictResponseSchema = {
 	properties: {
 		error: { type: "string" },
 		code: { type: "string" },
-		currentRevision: { type: "integer", minimum: 1 },
 		currentStock: { type: "number", minimum: 0 },
 	},
 	additionalProperties: false,
@@ -234,7 +224,7 @@ function validationError(reply: FastifyReply, code: string, message: string): Fa
 function sendServiceError(
 	request: FastifyRequest,
 	reply: FastifyReply,
-	operation: "list" | "create" | "reverse" | "undo",
+	operation: "list" | "create" | "undo",
 	userId: number,
 	error: unknown
 ): FastifyReply {
@@ -269,15 +259,12 @@ function sendServiceError(
 		STOCK_UNRESOLVABLE: "STOCK_UNRESOLVABLE",
 		INSUFFICIENT_STOCK: "INSUFFICIENT_STOCK",
 		IDEMPOTENCY_KEY_REUSED: "IDEMPOTENCY_KEY_REUSED",
-		REVERSAL_KEY_REUSED: "IDEMPOTENCY_KEY_REUSED",
-		REVISION_CONFLICT: "EVENT_VERSION_CONFLICT",
 		REPLACEMENT_INVALID: "REPLACEMENT_NOT_ALLOWED",
 	} as const;
 	const code = codeByConflict[error.code];
 	return reply.status(409).send({
 		error: error.message,
 		code,
-		...(error.details?.currentRevision === undefined ? {} : { currentRevision: error.details.currentRevision }),
 		...(error.details?.currentStock === undefined ? {} : { currentStock: error.details.currentStock }),
 	});
 }
@@ -395,21 +382,16 @@ export async function asNeededIntakeRoutes(app: FastifyInstance) {
 		}
 	);
 
-	app.post<{ Params: Record<string, unknown>; Body: Record<string, unknown> }>(
-		"/as-needed-intakes/:eventId/reversal",
+	app.delete<{ Params: Record<string, unknown> }>(
+		"/as-needed-intakes/:eventId",
 		{
 			attachValidation: true,
 			schema: {
 				params: eventParamsOpenApiSchema,
-				headers: idempotencyHeadersOpenApiSchema,
-				body: reversalBodyOpenApiSchema,
 				response: {
-					200: mutationResponseSchema,
+					204: { type: "null" },
 					400: errorResponseSchema,
 					403: errorResponseSchema,
-					404: errorResponseSchema,
-					409: conflictResponseSchema,
-					429: genericErrorSchema,
 					500: genericErrorSchema,
 				},
 			},
@@ -417,31 +399,16 @@ export async function asNeededIntakeRoutes(app: FastifyInstance) {
 		async (request, reply) => {
 			const params = eventParamsSchema.safeParse(request.params);
 			if (!params.success) return validationError(reply, "INVALID_REQUEST", "Invalid event id");
-			const headers = idempotencyHeadersSchema.safeParse({
-				"idempotency-key": request.headers["idempotency-key"],
-			});
-			if (!headers.success) {
-				return validationError(reply, "INVALID_IDEMPOTENCY_KEY", "Idempotency-Key must be a UUID");
-			}
-			const body = reversalBodySchema.safeParse(request.body);
-			if (!body.success || request.validationError) {
-				return validationError(reply, "INVALID_REVISION", "Invalid expected revision");
-			}
 			const userId = await getUserId(request, reply);
 			if (userId === null) return;
 			if (isReadOnlyApiKeyRequest(request)) {
 				return reply.status(403).send({ error: "API key is read-only", code: "READ_ONLY" });
 			}
 			try {
-				const event = await reverseAsNeededIntake({
-					userId,
-					eventId: params.data.eventId,
-					expectedRevision: body.data.expectedRevision,
-					idempotencyKey: headers.data["idempotency-key"],
-				});
-				return reply.status(200).send(await getAsNeededMutationResponse(userId, event.eventId));
+				await deleteAsNeededIntake(userId, params.data.eventId);
+				return reply.status(204).send();
 			} catch (error) {
-				return sendServiceError(request, reply, "reverse", userId, error);
+				return sendServiceError(request, reply, "undo", userId, error);
 			}
 		}
 	);

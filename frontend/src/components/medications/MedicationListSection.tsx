@@ -243,7 +243,7 @@ export function MedicationListSection({
 														leftSection={<Plus size={14} aria-hidden="true" />}
 														onClick={() => onRecordNow?.(med)}
 													>
-														{t("asNeeded.record.action")}
+														{t("dose.take")}
 													</AppButton>
 												) : null}
 											</div>

@@ -239,44 +239,31 @@
   },
   "asNeeded": {
     "record": {
-      "action": "Nehmen",
-      "title": "Medikament bei Bedarf nehmen",
-      "trustedTime": "Die aktuelle Uhrzeit wird beim Einnehmen gespeichert.",
+      "title": "Bedarfsmedikament nehmen",
+      "trustedTime": "Beim Nehmen wird die aktuelle Uhrzeit gespeichert.",
       "quantity": "Menge ({{unit}})",
       "person": "Person",
       "noPerson": "Keine Person / selbst",
       "decreaseQuantity": "Menge verringern",
       "increaseQuantity": "Menge erhöhen",
       "stockEffect": "Der Bestand wird um {{quantity}} {{unit}} verringert.",
-      "noStockEffect": "Eine Anwendung wird erfasst, ohne den messbaren Bestand zu verändern.",
-      "confirm": "Nehmen",
+      "noStockEffect": "Eine Anwendung wird gespeichert, ohne den messbaren Bestand zu verändern.",
       "saving": "Einnahme wird gespeichert...",
-      "failedTitle": "Medikament wurde nicht eingenommen",
-      "successTitle": "Medikament eingenommen",
-      "successMessage": "{{quantity}} {{unit}} um {{time}} eingenommen. Aktueller Bestand: {{stock}}.",
+      "failedTitle": "Medikament wurde nicht genommen",
+      "successTitle": "Medikament genommen",
+      "successMessage": "{{quantity}} {{unit}} um {{time}} genommen. Aktueller Bestand: {{stock}}.",
       "reconciliationRequired": "Packungskonfiguration und aktueller Bestand sollten geprüft werden."
-    },
-    "lifecycle": {
-      "active_no_schedule": "Aktiv ohne Einnahmeplan",
-      "active_scheduled": "Aktiv mit Einnahmeplan",
-      "ended": "Beendet",
-      "obsolete": "Obsolet"
     },
     "history": {
       "title": "Bedarfseinnahmen",
-      "description": "Erfasste Bedarfseinnahmen einschließlich Korrekturen und Tagebuchkontext.",
       "loading": "Bedarfseinnahmen werden geladen...",
       "loadingMore": "Weitere Einträge werden geladen...",
-      "empty": "Noch keine Bedarfseinnahmen erfasst.",
+      "empty": "Noch kein Bedarfsmedikament genommen.",
       "loadMore": "Mehr laden",
       "retry": "Erneut versuchen",
       "errorTitle": "Verlauf nicht verfügbar",
       "errorMessage": "Der Verlauf der Bedarfseinnahmen konnte nicht geladen werden. Versuche es erneut.",
       "person": "Person",
-      "stockEffect": "Bestandswirkung",
-      "reversedAt": "Storniert am {{time}}",
-      "replacementFor": "Korrektur des Ereignisses {{eventId}}",
-      "journal": "Tagebuch",
       "noJournal": "Kein Tagebucheintrag.",
       "status": {
         "active": "Aktiv",
@@ -305,52 +292,17 @@
     "errors": {
       "network": "Das Ergebnis ist wegen einer unterbrochenen Verbindung unklar. Erneut versuchen prüft sicher dieselbe Einnahme.",
       "insufficientStock": "Für diese Menge ist nicht genug Bestand vorhanden. Prüfe den echten Bestand vor dem nächsten Versuch.",
-      "stockUnresolvable": "Der aktuelle Bestand kann nicht sicher bestimmt werden. Korrigiere ihn, bevor du eine Einnahme erfasst.",
-      "notEligible": "Dieses Medikament kann nicht mehr ohne Einnahmeplan erfasst werden. Aktualisiere die Medikamentenliste.",
-      "invalidPerson": "Die ausgewählte Person ist diesem Medikament nicht mehr zugeordnet.",
+      "stockUnresolvable": "Der aktuelle Bestand kann nicht sicher bestimmt werden. Korrigiere ihn, bevor du das Medikament nimmst.",
+      "notEligible": "Dieses Medikament kann hier nicht mehr ohne Einnahmeplan genommen werden. Aktualisiere die Medikamentenliste.",
+      "invalidPerson": "Die ausgewählte Person ist für dieses Konto nicht mehr verfügbar.",
       "invalidQuantity": "Gib eine für diesen Packungstyp gültige Menge ein.",
       "rateLimited": "Es wurden zu viele neue Einnahmen angefordert. Versuche dieselbe Einnahme nach {{seconds}} Sekunden erneut.",
       "intentConflict": "Diese Anfrage kollidiert mit einer früheren Anfrage. Schließe den Dialog und beginne erneut.",
-      "replacementUnavailable": "Diese Korrektur kann nicht mehr mit der ausgewählten Einnahme verknüpft werden. Aktualisiere den Verlauf und versuche es erneut.",
-      "readOnly": "Mit diesem schreibgeschützten Zugriff kann keine Einnahme erfasst werden.",
-      "generic": "Die Einnahme konnte nicht erfasst werden. Versuche dieselbe Einnahme erneut oder brich ab."
+      "readOnly": "Mit diesem schreibgeschützten Zugriff kann kein Medikament genommen werden.",
+      "generic": "Das Medikament konnte nicht als genommen gespeichert werden. Versuche dieselbe Einnahme erneut oder brich ab."
     },
-    "replacement": {
-      "action": "Korrektur erfassen",
-      "correctAction": "Korrigieren",
-      "title": "Korrigierte Einnahme erfassen",
-      "description": "Dies erstellt eine separate Einnahme, die mit dem stornierten Ereignis vom {{time}} verknüpft ist.",
-      "confirm": "Korrektur erfassen",
-      "successTitle": "Korrektur erfasst",
-      "reverseTitle": "Einnahme korrigieren",
-      "reverseMessage": "Die ursprüngliche Einnahme von {{quantity}} {{unit}} muss zuerst storniert werden. Ihr Prüfverlauf bleibt erhalten, auch wenn du abbrichst oder die Ersetzung fehlschlägt."
-    },
-    "reversal": {
-      "action": "Stornieren",
-      "confirmTitle": "Einnahme stornieren",
-      "confirmMessage": "Die erfasste Einnahme von {{quantity}} {{unit}} stornieren? Nur ihre gespeicherte Bestandswirkung wird wiederhergestellt und der Prüfverlauf bleibt erhalten.",
-      "confirm": "Einnahme stornieren",
-      "saving": "Wird storniert...",
-      "errors": {
-        "network": "Das Ergebnis ist wegen einer unterbrochenen Verbindung unklar. Erneut versuchen verwendet sicher dieselbe Stornierung.",
-        "revision": "Diese Einnahme wurde geändert. Der Verlauf wurde aktualisiert; prüfe ihn vor einem neuen Versuch.",
-        "intentConflict": "Diese Stornierung kollidiert mit einer anderen Einnahme. Schließe die Bestätigung und beginne erneut.",
-        "generic": "Die Einnahme konnte nicht storniert werden. Versuche dieselbe Stornierung erneut oder brich ab."
-      },
-      "notice": {
-        "reversedTitle": "Einnahme storniert",
-        "reversedMessage": "Die gespeicherte Bestandswirkung wurde wiederhergestellt und das Original bleibt im Verlauf.",
-        "reconciliationTitle": "Einnahme storniert – Bestand prüfen",
-        "reconciliationMessage": "Die gespeicherte Bestandswirkung wurde wiederhergestellt, aber der aktuelle Bestand übersteigt nun die konfigurierte Packungskapazität.",
-        "correctionReadyTitle": "Ursprüngliche Einnahme storniert",
-        "correctionReadyMessage": "Erfasse die Korrektur jetzt als separate Einnahme oder kehre später zu diesem stornierten Ereignis zurück.",
-        "correctionReadyReconciliationTitle": "Original storniert – Bestand prüfen",
-        "correctionReadyReconciliationMessage": "Der Bestand übersteigt nun die konfigurierte Kapazität. Prüfe ihn und erfasse die Korrektur anschließend bei Bedarf separat.",
-        "revisionChangedTitle": "Verlauf aktualisiert",
-        "revisionChangedMessage": "Die Einnahme wurde geändert, bevor die Stornierung abgeschlossen war. Prüfe den aktualisierten Eintrag.",
-        "journalReconciledTitle": "Journal aktualisiert",
-        "journalReconciledMessage": "Die Einnahme wurde storniert, während ihr Journal geöffnet war. Der aktuelle schreibgeschützte Eintrag wird jetzt angezeigt."
-      }
+    "undo": {
+      "error": "Die Einnahme konnte nicht rückgängig gemacht werden. Versuche es erneut."
     }
   },
   "form": {

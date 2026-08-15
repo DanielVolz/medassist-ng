@@ -64,12 +64,12 @@ export interface AppContextValue {
 	saving: boolean;
 	setSaving: React.Dispatch<React.SetStateAction<boolean>>;
 	uploadingImage: boolean;
-	loadMeds: () => void;
+	loadMeds: (options?: { silent?: boolean }) => Promise<void>;
 	deleteMed: (id: number, editingId: number | null, resetForm: () => void) => Promise<void>;
 	uploadMedImage: (medId: number, file: File) => Promise<void>;
 	deleteMedImage: (medId: number) => Promise<void>;
 	recordAsNeededIntake: ReturnType<typeof useAsNeededIntakes>["recordAsNeededIntake"];
-	reverseAsNeededIntake: ReturnType<typeof useAsNeededIntakes>["reverseAsNeededIntake"];
+	undoAsNeededIntake: ReturnType<typeof useAsNeededIntakes>["undoAsNeededIntake"];
 
 	// From useSettings (selected fields)
 	settings: ReturnType<typeof useSettings>["settings"];
@@ -308,13 +308,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		},
 		[asNeededIntakes.recordAsNeededIntake, medications.loadMeds]
 	);
-	const reverseAsNeededIntake = useCallback(
-		async (input: Parameters<typeof asNeededIntakes.reverseAsNeededIntake>[0]) => {
-			const result = await asNeededIntakes.reverseAsNeededIntake(input);
+	const undoAsNeededIntake = useCallback(
+		async (eventId: string) => {
+			await asNeededIntakes.undoAsNeededIntake(eventId);
 			void medications.loadMeds({ silent: true });
-			return result;
 		},
-		[asNeededIntakes.reverseAsNeededIntake, medications.loadMeds]
+		[asNeededIntakes.undoAsNeededIntake, medications.loadMeds]
 	);
 
 	// Schedule UI state
@@ -668,7 +667,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			// From useMedications
 			...medications,
 			recordAsNeededIntake,
-			reverseAsNeededIntake,
+			undoAsNeededIntake,
 
 			// From useSettings
 			settings: settingsHook.settings,
@@ -851,7 +850,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		[
 			medications,
 			recordAsNeededIntake,
-			reverseAsNeededIntake,
+			undoAsNeededIntake,
 			settingsHook,
 			doses,
 			intakeJournal,

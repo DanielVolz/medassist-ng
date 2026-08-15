@@ -158,7 +158,7 @@ describe("useAppContext", () => {
 		mockUseAuth.mockReturnValue({ user: { id: 7, username: "owner" }, authFetch: authFetchMock });
 		mockUseAsNeededIntakes.mockReturnValue({
 			recordAsNeededIntake: vi.fn(async () => ({ event: {}, inventory: {} })),
-			reverseAsNeededIntake: vi.fn(async () => ({ event: {}, inventory: {} })),
+			undoAsNeededIntake: vi.fn(async () => undefined),
 		});
 
 		mockUseMedications.mockReturnValue({
@@ -339,10 +339,10 @@ describe("useAppContext", () => {
 		expect(result.current.settingsChanged).toBe(false);
 	});
 
-	it("silently refreshes medications after recording or reversing an as-needed intake", async () => {
+	it("silently refreshes medications after taking or undoing an as-needed intake", async () => {
 		const recordAsNeededIntake = vi.fn(async () => ({ event: {}, inventory: {} }));
-		const reverseAsNeededIntake = vi.fn(async () => ({ event: {}, inventory: {} }));
-		mockUseAsNeededIntakes.mockReturnValue({ recordAsNeededIntake, reverseAsNeededIntake });
+		const undoAsNeededIntake = vi.fn(async () => undefined);
+		mockUseAsNeededIntakes.mockReturnValue({ recordAsNeededIntake, undoAsNeededIntake });
 		const { result } = renderHook(() => useAppContext(), { wrapper });
 
 		await act(async () => {
@@ -352,11 +352,7 @@ describe("useAppContext", () => {
 				person: null,
 				idempotencyKey: "intent-key",
 			});
-			await result.current.reverseAsNeededIntake({
-				eventId: "event-11",
-				expectedRevision: 1,
-				idempotencyKey: "undo-key",
-			});
+			await result.current.undoAsNeededIntake("event-11");
 		});
 
 		expect(mockUseMedications().loadMeds).toHaveBeenCalledWith({ silent: true });

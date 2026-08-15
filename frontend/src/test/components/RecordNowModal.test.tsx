@@ -79,7 +79,9 @@ describe("RecordNowModal", () => {
 			.fn()
 			.mockRejectedValueOnce(new AsNeededIntakeRequestError("NETWORK_ERROR"))
 			.mockResolvedValueOnce(response());
-		render(<RecordNowModal medication={medication()} onClose={vi.fn()} onRecord={onRecord} />);
+		render(
+			<RecordNowModal existingPeople={["Alex"]} medication={medication()} onClose={vi.fn()} onRecord={onRecord} />
+		);
 
 		expect(screen.getByRole("textbox")).toHaveValue("1");
 		expect(screen.getByText("asNeeded.record.stockEffect")).toBeInTheDocument();
@@ -105,6 +107,7 @@ describe("RecordNowModal", () => {
 	it("enforces topical one-application semantics and leaves no measured stock effect", () => {
 		render(
 			<RecordNowModal
+				existingPeople={["Alex"]}
 				medication={medication({ packageType: "tube", medicationForm: "topical" })}
 				onClose={vi.fn()}
 				onRecord={vi.fn()}
@@ -127,7 +130,9 @@ describe("RecordNowModal", () => {
 					resolveRequest = resolve;
 				})
 		);
-		render(<RecordNowModal medication={medication()} onClose={vi.fn()} onRecord={onRecord} />);
+		render(
+			<RecordNowModal existingPeople={["Alex"]} medication={medication()} onClose={vi.fn()} onRecord={onRecord} />
+		);
 
 		const confirm = screen.getByRole("button", { name: "dose.take" });
 		fireEvent.click(confirm);
@@ -140,51 +145,14 @@ describe("RecordNowModal", () => {
 		await screen.findByText("asNeeded.record.successTitle");
 	});
 
-	it("offers all existing people while retaining legacy replacement preselection", () => {
-		const replacementEvent = { ...response().event, person: "Alex", status: "reversed" as const, revision: 2 };
+	it("offers all existing people for an ordinary Take without a replacement mode", () => {
 		render(
-			<RecordNowModal
-				existingPeople={["Sam", "Alex"]}
-				medication={medication()}
-				replacementEvent={replacementEvent}
-				onClose={vi.fn()}
-				onRecord={vi.fn()}
-			/>
+			<RecordNowModal existingPeople={["Sam", "Alex"]} medication={medication()} onClose={vi.fn()} onRecord={vi.fn()} />
 		);
 
 		const person = screen.getByLabelText("asNeeded.record.person");
-		expect(person).toHaveValue("Alex");
+		expect(person).toHaveValue("");
 		expect(screen.getByRole("option", { name: "Sam" })).toBeInTheDocument();
-	});
-
-	it("creates a replacement only with the durable reversed event and replays the exact request", async () => {
-		const replacementEvent = response().event;
-		const onRecord = vi
-			.fn()
-			.mockRejectedValueOnce(new AsNeededIntakeRequestError("NETWORK_ERROR"))
-			.mockResolvedValueOnce({
-				...response(),
-				event: { ...response().event, replacementForEventId: replacementEvent.eventId },
-			});
-		render(
-			<RecordNowModal
-				medication={medication()}
-				replacementEvent={{ ...replacementEvent, status: "reversed", revision: 2, stockEffect: 0 }}
-				onClose={vi.fn()}
-				onRecord={onRecord}
-			/>
-		);
-
-		expect(screen.getByText("asNeeded.replacement.description")).toBeInTheDocument();
-		fireEvent.click(screen.getByRole("button", { name: "asNeeded.replacement.confirm" }));
-		await screen.findByText("asNeeded.errors.network");
-		fireEvent.click(screen.getByRole("button", { name: "common.retry" }));
-		await screen.findByText("asNeeded.replacement.successTitle");
-		expect(onRecord).toHaveBeenCalledTimes(2);
-		expect(onRecord.mock.calls[0][0]).toEqual(onRecord.mock.calls[1][0]);
-		expect(onRecord.mock.calls[0][0]).toMatchObject({
-			replacementForEventId: "event-8",
-			idempotencyKey: "modal-intent-key",
-		});
+		expect(screen.queryByText(/replacement|correction/i)).not.toBeInTheDocument();
 	});
 });

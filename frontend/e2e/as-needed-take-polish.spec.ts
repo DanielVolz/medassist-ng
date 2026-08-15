@@ -55,7 +55,7 @@ test.describe("As-needed Take polish", () => {
 				.filter({ has: page.getByRole("heading", { name: MEDICATION_NAME }) })
 				.last();
 			await expect(detail).toBeVisible();
-			await detail.getByRole("button", { name: "Take" }).click();
+			await detail.getByRole("button", { name: "Take", exact: true }).click();
 			const modal = page.getByRole("dialog", { name: "Take as-needed medication" });
 			await expect(modal).toBeVisible();
 			await expect(modal.locator("#record-now-quantity")).toHaveValue("1");

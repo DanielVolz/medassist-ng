@@ -246,7 +246,23 @@ export async function createAsNeededIntake(input: {
 			.where(and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.idempotencyKeyHash, keyHash)));
 		if (replay) {
 			if (!fingerprint || replay.requestFingerprint !== fingerprint) {
-				throw new AsNeededIntakeError("IDEMPOTENCY_KEY_REUSED", "Idempotency key is bound to another request");
+				const [replacedEvent] = replay.replacesEventId
+					? await transactionDb
+							.select({ eventId: asNeededIntakeEvents.eventId })
+							.from(asNeededIntakeEvents)
+							.where(
+								and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.id, replay.replacesEventId))
+							)
+					: [];
+				const matchesImportedIntent =
+					Number.isSafeInteger(rawQuantityMilli) &&
+					replay.medicationId === input.medicationId &&
+					replay.quantityMilli === rawQuantityMilli &&
+					replay.personName === personName &&
+					(replacedEvent?.eventId ?? "") === replacementId;
+				if (!matchesImportedIntent) {
+					throw new AsNeededIntakeError("IDEMPOTENCY_KEY_REUSED", "Idempotency key is bound to another request");
+				}
 			}
 			return replay;
 		}

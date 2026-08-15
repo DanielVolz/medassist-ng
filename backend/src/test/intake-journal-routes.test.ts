@@ -40,6 +40,8 @@ const { testClient, testDb, testDbPath, mockedEnv } = vi.hoisted(() => {
 vi.mock("../db/client.js", () => ({
 	db: testDb,
 	migrationsReady: Promise.resolve(),
+	withImmediateWriteTransaction: async <T>(operation: (transactionDb: typeof testDb) => Promise<T>) =>
+		testDb.transaction(operation),
 }));
 
 vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
@@ -312,6 +314,10 @@ describe("Intake journal routes", () => {
 		const otherUserId = await createTestUser(testClient, { username: "as-needed-export-other" });
 		const sessionCookie = await buildTestSessionCookie(app, userId, "as-needed-export-owner");
 		const medicationId = await seedMedication({ userId, name: "As-needed export medication" });
+		await testClient.execute({
+			sql: "UPDATE medications SET last_stock_correction_at = ? WHERE id = ?",
+			args: [1770282300, medicationId],
+		});
 		const otherMedicationId = await seedMedication({ userId: otherUserId, name: "Other owner medication" });
 		const scheduledFor = "2026-02-05T07:00:00.000Z";
 		await seedTrackedDose({
@@ -357,8 +363,8 @@ describe("Intake journal routes", () => {
 				"Daniel",
 				"reversed",
 				1500,
-				"superseded_by_correction",
-				1770278700,
+				"applied",
+				0,
 				1770279000,
 				HASH_C,
 				2,
@@ -369,8 +375,8 @@ describe("Intake journal routes", () => {
 			sql: `INSERT INTO as_needed_intake_events (
 			  event_id, user_id, medication_id, dose_tracking_id, idempotency_key_hash, request_fingerprint,
 			  occurred_at, recorded_at, quantity_milli, quantity_unit, person_name, stock_effect_milli,
-			  stock_effect_reason, replaces_event_id, revision
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			  stock_effect_reason, stock_cutoff_at, replaces_event_id, revision
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			args: [
 				EVENT_B,
 				userId,
@@ -385,6 +391,7 @@ describe("Intake journal routes", () => {
 				"",
 				0,
 				"before_correction",
+				1770282300,
 				firstEventId,
 				3,
 			],
@@ -444,8 +451,8 @@ describe("Intake journal routes", () => {
 				source: "owner_as_needed",
 				status: "reversed",
 				stockEffectMilli: 1500,
-				stockEffectReason: "superseded_by_correction",
-				stockCutoffAt: "2026-02-05T08:05:00.000Z",
+				stockEffectReason: "applied",
+				stockCutoffAt: null,
 				replacementForEventId: null,
 				reversedAt: "2026-02-05T08:10:00.000Z",
 				reversalIdempotencyKeyHash: HASH_C,
@@ -469,7 +476,7 @@ describe("Intake journal routes", () => {
 				status: "active",
 				stockEffectMilli: 0,
 				stockEffectReason: "before_correction",
-				stockCutoffAt: null,
+				stockCutoffAt: "2026-02-05T09:05:00.000Z",
 				replacementForEventId: EVENT_A,
 				reversedAt: null,
 				reversalIdempotencyKeyHash: null,
@@ -480,6 +487,46 @@ describe("Intake journal routes", () => {
 				journalUpdatedAt: "2026-02-05T09:03:20.000Z",
 			},
 		]);
+
+		const restored = await app.inject({
+			method: "POST",
+			url: "/import",
+			headers: { cookie: sessionCookie },
+			payload: body,
+		});
+		expect(restored.statusCode).toBe(200);
+		expect(restored.json().imported).toEqual(
+			expect.objectContaining({ medications: 1, doseHistory: 1, asNeededIntakes: 2 })
+		);
+
+		const reExport = await app.inject({ method: "GET", url: "/export", headers: { cookie: sessionCookie } });
+		expect(reExport.statusCode).toBe(200);
+		expect(reExport.json().doseHistory).toEqual(body.doseHistory);
+		expect(reExport.json().asNeededIntakes).toEqual(body.asNeededIntakes);
+
+		const repeatedRestore = await app.inject({
+			method: "POST",
+			url: "/import",
+			headers: { cookie: sessionCookie },
+			payload: body,
+		});
+		expect(repeatedRestore.statusCode).toBe(200);
+		const [events, anchors, stockEffect] = await Promise.all([
+			testClient.execute("SELECT event_id FROM as_needed_intake_events WHERE user_id = ? ORDER BY event_id", [userId]),
+			testClient.execute("SELECT dose_id FROM dose_tracking WHERE user_id = ? AND dose_id LIKE 'as-needed:%'", [
+				userId,
+			]),
+			testClient.execute(
+				"SELECT coalesce(sum(stock_effect_milli), 0) AS total FROM as_needed_intake_events WHERE user_id = ?",
+				[userId]
+			),
+		]);
+		expect(events.rows).toEqual([
+			expect.objectContaining({ event_id: EVENT_A }),
+			expect.objectContaining({ event_id: EVENT_B }),
+		]);
+		expect(anchors.rows).toHaveLength(2);
+		expect(stockEffect.rows[0].total).toBe(1500);
 	});
 
 	it("requires asNeededIntakes for v1.9 while keeping empty v1.9 and older imports compatible", async () => {
@@ -514,7 +561,7 @@ describe("Intake journal routes", () => {
 		expect(olderImport.json().imported).toEqual(expect.objectContaining({ asNeededIntakes: 0 }));
 	});
 
-	it("previews v1.9 intake counts and rejects nonempty restores before changing data", async () => {
+	it("rejects invalid nonempty v1.9 restores before changing data", async () => {
 		const userId = await createTestUser(testClient, { username: "as-needed-import-rejection" });
 		const sessionCookie = await buildTestSessionCookie(app, userId, "as-needed-import-rejection");
 		const medicationId = await seedMedication({ userId, name: "Existing import medication" });
@@ -544,14 +591,8 @@ describe("Intake journal routes", () => {
 			headers: { cookie: sessionCookie },
 			payload,
 		});
-		expect(preview.statusCode).toBe(200);
-		expect(preview.json().preview).toEqual(
-			expect.objectContaining({
-				incoming: expect.objectContaining({ asNeededIntakes: 1, journalEntries: 1 }),
-				current: expect.objectContaining({ medications: 1, doseHistory: 0, asNeededIntakes: 1 }),
-				warnings: expect.objectContaining({ replacesExistingData: true }),
-			})
-		);
+		expect(preview.statusCode).toBe(400);
+		expect(preview.json()).toEqual(expect.objectContaining({ code: "INVALID_IMPORT_DATA" }));
 
 		const rejectedImport = await app.inject({
 			method: "POST",
@@ -560,12 +601,7 @@ describe("Intake journal routes", () => {
 			payload,
 		});
 		expect(rejectedImport.statusCode).toBe(400);
-		expect(rejectedImport.json()).toEqual(
-			expect.objectContaining({
-				code: "INVALID_IMPORT_DATA",
-				details: { _errors: ["This v1.9 export contains as-needed intakes and cannot be imported without loss"] },
-			})
-		);
+		expect(rejectedImport.json()).toEqual(expect.objectContaining({ code: "INVALID_IMPORT_DATA" }));
 
 		const [medicationRows, eventRows, doseRows] = await Promise.all([
 			testClient.execute("SELECT name FROM medications WHERE user_id = ?", [userId]),
@@ -575,6 +611,88 @@ describe("Intake journal routes", () => {
 		expect(medicationRows.rows).toEqual([expect.objectContaining({ name: "Existing import medication" })]);
 		expect(eventRows.rows).toEqual([expect.objectContaining({ event_id: EVENT_A })]);
 		expect(doseRows.rows).toEqual([expect.objectContaining({ dose_id: `as-needed:${EVENT_A}` })]);
+	});
+
+	it("bounds invalid as-needed import graphs and leaves existing rows untouched", async () => {
+		const userId = await createTestUser(testClient, { username: "as-needed-import-matrix" });
+		const sessionCookie = await buildTestSessionCookie(app, userId, "as-needed-import-matrix");
+		const medicationId = await seedMedication({ userId, name: "Unchanged import medication" });
+		const baseMedication = {
+			_exportId: "med-1",
+			name: "Imported tablet",
+			medicationForm: "tablet",
+			inventory: { packCount: 0, blistersPerPack: 1, pillsPerBlister: 1, looseTablets: 5, packageType: "blister" },
+			schedules: [],
+		};
+		const payloadFor = (asNeededIntakes: Record<string, unknown>[], medication = baseMedication) => ({
+			version: "1.9",
+			exportedAt: "2026-02-05T08:00:00.000Z",
+			medications: [medication],
+			doseHistory: [],
+			asNeededIntakes,
+		});
+		const reversedEvent = asNeededImportEvent({
+			status: "reversed",
+			reversedAt: "2026-02-05T08:02:00.000Z",
+			reversalIdempotencyKeyHash: HASH_C,
+			revision: 2,
+		});
+		const matrix = [
+			payloadFor([asNeededImportEvent(), asNeededImportEvent()]),
+			payloadFor([asNeededImportEvent(), asNeededImportEvent({ eventId: EVENT_B, requestFingerprint: HASH_A })]),
+			payloadFor([asNeededImportEvent({ replacementForEventId: EVENT_B })]),
+			payloadFor([asNeededImportEvent({ replacementForEventId: EVENT_A })]),
+			payloadFor([asNeededImportEvent({ reversalIdempotencyKeyHash: HASH_C })]),
+			payloadFor([asNeededImportEvent({ person: " Daniel " })]),
+			payloadFor([asNeededImportEvent({ stockEffectMilli: 0 })]),
+			payloadFor([asNeededImportEvent({ journalMood: "good" })]),
+			payloadFor([asNeededImportEvent({ idempotencyKeyHash: "not-a-hash" })]),
+			payloadFor([asNeededImportEvent({ occurredAt: "2026-02-05T08:00:00.500Z" })]),
+			payloadFor([asNeededImportEvent({ stockEffectReason: "before_correction", stockEffectMilli: 0 })]),
+			payloadFor([asNeededImportEvent()], {
+				...baseMedication,
+				medicationForm: "liquid",
+				inventory: { ...baseMedication.inventory, packageType: "liquid_container" },
+			}),
+			{
+				version: "1.9",
+				exportedAt: "2026-02-05T08:00:00.000Z",
+				medications: [baseMedication, { ...baseMedication, _exportId: "med-2", name: "Imported tablet two" }],
+				doseHistory: [],
+				asNeededIntakes: [
+					reversedEvent,
+					asNeededImportEvent({
+						eventId: EVENT_B,
+						medicationRef: "med-2",
+						idempotencyKeyHash: HASH_B,
+						requestFingerprint: HASH_C,
+						occurredAt: "2026-02-05T08:03:00.000Z",
+						recordedAt: "2026-02-05T08:04:00.000Z",
+						replacementForEventId: EVENT_A,
+					}),
+				],
+			},
+		];
+
+		for (const payload of matrix) {
+			const response = await app.inject({
+				method: "POST",
+				url: "/import",
+				headers: { cookie: sessionCookie },
+				payload,
+			});
+			expect(response.statusCode).toBe(400);
+			expect(response.json()).toEqual(
+				expect.objectContaining({
+					code: "INVALID_IMPORT_DATA",
+					details: expect.objectContaining({ _errors: expect.any(Array) }),
+				})
+			);
+			expect(response.json().details._errors.length).toBeLessThanOrEqual(10);
+		}
+
+		const rows = await testClient.execute("SELECT id, name FROM medications WHERE user_id = ?", [userId]);
+		expect(rows.rows).toEqual([expect.objectContaining({ id: medicationId, name: "Unchanged import medication" })]);
 	});
 
 	it("preserves journal metadata through authenticated export and import", async () => {

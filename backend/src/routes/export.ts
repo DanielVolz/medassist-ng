@@ -1,10 +1,15 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { extname, isAbsolute, relative, resolve } from "node:path";
-import { INTAKE_MOODS, normalizeIntakeMood } from "@medassist/shared";
-import { eq } from "drizzle-orm";
+import {
+	getAsNeededQuantityProfile,
+	INTAKE_MOODS,
+	normalizeAsNeededQuantityMilli,
+	normalizeIntakeMood,
+} from "@medassist/shared";
+import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { db } from "../db/client.js";
+import { db, withImmediateWriteTransaction } from "../db/client.js";
 import { getDataDir } from "../db/path-utils.js";
 import {
 	asNeededIntakeEvents,
@@ -618,32 +623,44 @@ function buildImportPreview(
 	};
 }
 
-function collectImportValidationIssues(importData: z.infer<typeof importDataSchema>): string[] {
+const MAX_IMPORT_VALIDATION_ISSUES = 10;
+type ImportData = z.infer<typeof importDataSchema>;
+type ImportedAsNeededIntake = ImportData["asNeededIntakes"][number];
+
+function formatImportSchemaIssues(error: z.ZodError): string[] {
+	return error.issues
+		.slice(0, MAX_IMPORT_VALIDATION_ISSUES)
+		.map((issue) => `${issue.path.length > 0 ? issue.path.join(".") : "root"}: ${issue.message}`);
+}
+
+function hasImportedAsNeededJournal(event: ImportedAsNeededIntake): boolean {
+	return event.journalNote !== null;
+}
+
+function collectImportValidationIssues(importData: ImportData): string[] {
 	const issues: string[] = [];
+	const addIssue = (message: string) => {
+		if (issues.length < MAX_IMPORT_VALIDATION_ISSUES) issues.push(message);
+	};
 	const medicationsByRef = new Map<string, z.infer<typeof medicationExportSchema>>();
-	const duplicateMedicationRefs = new Set<string>();
 
 	for (const med of importData.medications) {
 		if (medicationsByRef.has(med._exportId)) {
-			duplicateMedicationRefs.add(med._exportId);
+			addIssue(`Duplicate medication reference: ${med._exportId}`);
 			continue;
 		}
 		medicationsByRef.set(med._exportId, med);
-	}
-
-	for (const exportId of duplicateMedicationRefs) {
-		issues.push(`Duplicate medication reference: ${exportId}`);
 	}
 
 	const doseKeys = new Set<string>();
 	for (const dose of importData.doseHistory) {
 		const medication = medicationsByRef.get(dose.medicationRef);
 		if (!medication) {
-			issues.push(`Dose history references unknown medication: ${dose.medicationRef}`);
+			addIssue(`Dose history references unknown medication: ${dose.medicationRef}`);
 			continue;
 		}
 		if (dose.scheduleIndex >= medication.schedules.length) {
-			issues.push(`Dose history references unknown schedule index ${dose.scheduleIndex} for ${dose.medicationRef}`);
+			addIssue(`Dose history references unknown schedule index ${dose.scheduleIndex} for ${dose.medicationRef}`);
 		}
 
 		const doseKey = [
@@ -652,16 +669,176 @@ function collectImportValidationIssues(importData: z.infer<typeof importDataSche
 			new Date(dose.scheduledTime).getTime(),
 			dose.takenByPerson ?? "",
 		].join(":");
-		if (doseKeys.has(doseKey)) {
-			issues.push(`Duplicate dose history entry for ${dose.medicationRef}`);
-		}
+		if (doseKeys.has(doseKey)) addIssue(`Duplicate dose history entry for ${dose.medicationRef}`);
 		doseKeys.add(doseKey);
 	}
 
 	for (const refill of importData.refillHistory) {
 		if (!medicationsByRef.has(refill.medicationRef)) {
-			issues.push(`Refill history references unknown medication: ${refill.medicationRef}`);
+			addIssue(`Refill history references unknown medication: ${refill.medicationRef}`);
 		}
+	}
+
+	const eventsById = new Map<string, ImportedAsNeededIntake>();
+	const createKeyHashes = new Set<string>();
+	const reversalKeyHashes = new Set<string>();
+	const replacementTargets = new Set<string>();
+
+	for (const event of importData.asNeededIntakes) {
+		if (eventsById.has(event.eventId)) addIssue("Duplicate as-needed event ID");
+		else eventsById.set(event.eventId, event);
+		if (
+			event.eventId !== event.eventId.toLowerCase() ||
+			(event.replacementForEventId !== null &&
+				event.replacementForEventId !== event.replacementForEventId.toLowerCase())
+		) {
+			addIssue("As-needed event IDs must use canonical lowercase UUIDs");
+		}
+
+		if (createKeyHashes.has(event.idempotencyKeyHash)) addIssue("Duplicate as-needed idempotency key hash");
+		createKeyHashes.add(event.idempotencyKeyHash);
+		if (event.reversalIdempotencyKeyHash) {
+			if (reversalKeyHashes.has(event.reversalIdempotencyKeyHash)) {
+				addIssue("Duplicate as-needed reversal key hash");
+			}
+			reversalKeyHashes.add(event.reversalIdempotencyKeyHash);
+		}
+
+		const medication = medicationsByRef.get(event.medicationRef);
+		if (!medication) {
+			addIssue("As-needed intake references unknown medication");
+			continue;
+		}
+
+		const profile = getAsNeededQuantityProfile({
+			packageType: medication.inventory.packageType,
+			medicationForm: medication.medicationForm,
+			pillForm: medication.pillForm,
+		});
+		if (
+			event.quantityUnit !== profile.unit ||
+			normalizeAsNeededQuantityMilli(event.quantityMilli / 1000, profile) !== event.quantityMilli
+		) {
+			addIssue("As-needed intake quantity does not match the medication package profile");
+		}
+		if (event.person !== null && (event.person.length === 0 || event.person.trim() !== event.person)) {
+			addIssue("As-needed intake person must be canonical or null");
+		}
+
+		const occurredAt = new Date(event.occurredAt).getTime();
+		const recordedAt = new Date(event.recordedAt).getTime();
+		if (recordedAt < occurredAt) addIssue("As-needed intake recordedAt precedes occurredAt");
+		if (
+			[occurredAt, recordedAt, event.reversedAt ? new Date(event.reversedAt).getTime() : 0].some(
+				(timestamp) => timestamp % 1000 !== 0
+			)
+		) {
+			addIssue("As-needed intake timestamps exceed persisted whole-second precision");
+		}
+		if (event.status === "active" && event.reversalIdempotencyKeyHash !== null) {
+			addIssue("Active as-needed intake cannot have reversal metadata");
+		}
+		if (event.status === "reversed" && (event.reversalIdempotencyKeyHash === null || event.revision < 2)) {
+			addIssue("Reversed as-needed intake has incomplete reversal metadata");
+		}
+		if (event.reversedAt && new Date(event.reversedAt).getTime() < occurredAt) {
+			addIssue("As-needed intake reversedAt precedes occurredAt");
+		}
+
+		const hasJournal = hasImportedAsNeededJournal(event);
+		const hasJournalCreatedAt = event.journalCreatedAt !== null;
+		const hasJournalUpdatedAt = event.journalUpdatedAt !== null;
+		if (
+			(event.journalMood !== null && !hasJournal) ||
+			hasJournalCreatedAt !== hasJournalUpdatedAt ||
+			hasJournal !== hasJournalCreatedAt
+		) {
+			addIssue("As-needed intake journal fields are inconsistent");
+		} else if (
+			hasJournalCreatedAt &&
+			new Date(event.journalUpdatedAt as string).getTime() < new Date(event.journalCreatedAt as string).getTime()
+		) {
+			addIssue("As-needed intake journal updatedAt precedes createdAt");
+		} else if (
+			hasJournalCreatedAt &&
+			[new Date(event.journalCreatedAt as string).getTime(), new Date(event.journalUpdatedAt as string).getTime()].some(
+				(timestamp) => timestamp % 1000 !== 0
+			)
+		) {
+			addIssue("As-needed intake journal timestamps exceed persisted whole-second precision");
+		}
+
+		const cutoffAt = event.stockCutoffAt ? new Date(event.stockCutoffAt).getTime() : null;
+		if (cutoffAt !== null && cutoffAt % 1000 !== 0) {
+			addIssue("As-needed intake stock cutoff exceeds persisted whole-second precision");
+		}
+		const correctionAt = medication.lastStockCorrectionAt ? new Date(medication.lastStockCorrectionAt).getTime() : null;
+		if (!profile.measurable) {
+			if (event.stockEffectMilli !== 0 || event.stockEffectReason !== "non_measurable" || cutoffAt !== null) {
+				addIssue("Non-measurable as-needed intake has an invalid stock effect");
+			}
+		} else if (event.stockEffectReason === "applied") {
+			if (event.stockEffectMilli !== event.quantityMilli || cutoffAt !== null) {
+				addIssue("Applied as-needed intake has an invalid stock effect");
+			}
+			if (event.status === "active" && correctionAt !== null && occurredAt <= correctionAt) {
+				addIssue("Active as-needed intake predating the stock correction must have a neutralized effect");
+			}
+		} else if (
+			event.stockEffectReason === "before_correction" ||
+			event.stockEffectReason === "superseded_by_correction"
+		) {
+			if (
+				event.stockEffectMilli !== 0 ||
+				cutoffAt === null ||
+				correctionAt === null ||
+				cutoffAt < occurredAt ||
+				cutoffAt > correctionAt
+			) {
+				addIssue("Correction-neutralized as-needed intake has an invalid stock effect or cutoff");
+			}
+		} else {
+			addIssue("Measurable as-needed intake has an invalid stock effect reason");
+		}
+
+		if (event.replacementForEventId) {
+			if (replacementTargets.has(event.replacementForEventId)) {
+				addIssue("Multiple as-needed intakes replace the same event");
+			}
+			replacementTargets.add(event.replacementForEventId);
+		}
+	}
+
+	for (const event of importData.asNeededIntakes) {
+		if (!event.replacementForEventId) continue;
+		const target = eventsById.get(event.replacementForEventId);
+		if (!target) addIssue("As-needed replacement references unknown event");
+		else if (
+			target.eventId === event.eventId ||
+			target.medicationRef !== event.medicationRef ||
+			target.status !== "reversed"
+		) {
+			addIssue("As-needed replacement target must be a different reversed event for the same medication");
+		} else if (target.reversedAt && new Date(event.occurredAt).getTime() < new Date(target.reversedAt).getTime()) {
+			addIssue("As-needed replacement predates the target reversal");
+		}
+	}
+
+	const graphState = new Map<string, "visiting" | "done">();
+	for (const startId of eventsById.keys()) {
+		if (graphState.get(startId) === "done") continue;
+		const path: string[] = [];
+		let currentId: string | null = startId;
+		while (currentId && eventsById.has(currentId) && graphState.get(currentId) !== "done") {
+			if (graphState.get(currentId) === "visiting") {
+				addIssue("As-needed replacement graph contains a cycle");
+				break;
+			}
+			graphState.set(currentId, "visiting");
+			path.push(currentId);
+			currentId = eventsById.get(currentId)?.replacementForEventId ?? null;
+		}
+		for (const eventId of path) graphState.set(eventId, "done");
 	}
 
 	return issues;
@@ -1022,7 +1199,8 @@ export async function exportRoutes(app: FastifyInstance) {
 			if (!parsed.success) {
 				return reply.status(400).send({
 					error: "Invalid import data format",
-					details: parsed.error.format(),
+					code: "INVALID_IMPORT_DATA",
+					details: { _errors: formatImportSchemaIssues(parsed.error) },
 				});
 			}
 
@@ -1030,7 +1208,8 @@ export async function exportRoutes(app: FastifyInstance) {
 			if (validationIssues.length > 0) {
 				return reply.status(400).send({
 					error: "Invalid import data format",
-					details: { _errors: validationIssues.slice(0, 10) },
+					code: "INVALID_IMPORT_DATA",
+					details: { _errors: validationIssues },
 				});
 			}
 
@@ -1113,7 +1292,8 @@ export async function exportRoutes(app: FastifyInstance) {
 			if (!parsed.success) {
 				return reply.status(400).send({
 					error: "Invalid import data format",
-					details: parsed.error.format(),
+					code: "INVALID_IMPORT_DATA",
+					details: { _errors: formatImportSchemaIssues(parsed.error) },
 				});
 			}
 
@@ -1122,24 +1302,12 @@ export async function exportRoutes(app: FastifyInstance) {
 			if (validationIssues.length > 0) {
 				return reply.status(400).send({
 					error: "Invalid import data format",
-					details: { _errors: validationIssues.slice(0, 10) },
-				});
-			}
-			if (importData.asNeededIntakes.length > 0) {
-				return reply.status(400).send({
-					error: "As-needed intake restore is not available in this release",
 					code: "INVALID_IMPORT_DATA",
-					details: {
-						_errors: ["This v1.9 export contains as-needed intakes and cannot be imported without loss"],
-					},
+					details: { _errors: validationIssues },
 				});
 			}
-
-			// Existing image files are removed only after the DB import commits.
-			const existingMeds = await db.select().from(medications).where(eq(medications.userId, userId));
-			const oldImageFilenames = existingMeds
-				.map((med) => med.imageUrl)
-				.filter((filename): filename is string => typeof filename === "string" && filename.length > 0);
+			// Existing image files are captured transaction-visibly and removed only after the import commits.
+			let oldImageFilenames: string[] = [];
 			const newImageFilenames: string[] = [];
 			const imported = {
 				medications: 0,
@@ -1151,8 +1319,31 @@ export async function exportRoutes(app: FastifyInstance) {
 			};
 
 			try {
-				await db.transaction(async (tx) => {
-					// Delete in order: journal entries, refill history, doses, share tokens, medications, settings.
+				await withImmediateWriteTransaction(async (tx) => {
+					const existingMeds = await tx.select().from(medications).where(eq(medications.userId, userId));
+					oldImageFilenames = existingMeds
+						.map((med) => med.imageUrl)
+						.filter((filename): filename is string => typeof filename === "string" && filename.length > 0);
+
+					// Reserved anchors own companion events, so remove them before the remaining account graph.
+					const existingAsNeededAnchors = await tx
+						.select({ id: asNeededIntakeEvents.doseTrackingId })
+						.from(asNeededIntakeEvents)
+						.where(eq(asNeededIntakeEvents.userId, userId));
+					for (let index = 0; index < existingAsNeededAnchors.length; index += 500) {
+						await tx.delete(doseTracking).where(
+							and(
+								eq(doseTracking.userId, userId),
+								inArray(
+									doseTracking.id,
+									existingAsNeededAnchors.slice(index, index + 500).map((anchor) => anchor.id)
+								)
+							)
+						);
+					}
+					await tx.delete(asNeededIntakeEvents).where(eq(asNeededIntakeEvents.userId, userId));
+
+					// Delete in order: remaining journals, refill history, scheduled doses, shares, medications, settings.
 					await tx.delete(intakeJournal).where(eq(intakeJournal.userId, userId));
 					await tx.delete(refillHistory).where(eq(refillHistory.userId, userId));
 					await tx.delete(doseTracking).where(eq(doseTracking.userId, userId));
@@ -1276,6 +1467,118 @@ export async function exportRoutes(app: FastifyInstance) {
 							journalUpdatedAt: dose.journalUpdatedAt,
 							database: tx,
 						});
+					}
+
+					const restoredEventIds = new Map<string, number>();
+					const restoredAnchorIds = new Set<number>();
+					for (const event of importData.asNeededIntakes) {
+						const newMedId = exportIdToNewId.get(event.medicationRef);
+						if (!newMedId) throw new Error("Validated as-needed medication mapping is missing");
+
+						const occurredAt = new Date(event.occurredAt);
+						const recordedAt = new Date(event.recordedAt);
+						const reversedAt = event.reversedAt ? new Date(event.reversedAt) : null;
+						const stockCutoffAt = event.stockCutoffAt ? new Date(event.stockCutoffAt) : null;
+						const updatedAt = new Date(
+							Math.max(recordedAt.getTime(), reversedAt?.getTime() ?? 0, stockCutoffAt?.getTime() ?? 0)
+						);
+						const [anchor] = await tx
+							.insert(doseTracking)
+							.values({
+								userId,
+								doseId: `as-needed:${event.eventId}`,
+								takenAt: occurredAt,
+								markedBy: event.person,
+								takenSource: "manual",
+								dismissed: false,
+							})
+							.returning({ id: doseTracking.id });
+						const [restored] = await tx
+							.insert(asNeededIntakeEvents)
+							.values({
+								eventId: event.eventId,
+								userId,
+								medicationId: newMedId,
+								doseTrackingId: anchor.id,
+								idempotencyKeyHash: event.idempotencyKeyHash,
+								requestFingerprint: event.requestFingerprint,
+								occurredAt,
+								recordedAt,
+								quantityMilli: event.quantityMilli,
+								quantityUnit: event.quantityUnit,
+								personName: event.person ?? "",
+								source: event.source,
+								status: event.status,
+								stockEffectMilli: event.stockEffectMilli,
+								stockEffectReason: event.stockEffectReason,
+								stockCutoffAt: stockCutoffAt ? Math.floor(stockCutoffAt.getTime() / 1000) : 0,
+								reversedAt,
+								reversalIdempotencyKeyHash: event.reversalIdempotencyKeyHash,
+								revision: event.revision,
+								createdAt: recordedAt,
+								updatedAt,
+							})
+							.returning({ id: asNeededIntakeEvents.id });
+						restoredEventIds.set(event.eventId, restored.id);
+						restoredAnchorIds.add(anchor.id);
+						imported.asNeededIntakes += 1;
+
+						if (hasImportedAsNeededJournal(event)) {
+							if (!event.journalCreatedAt || !event.journalUpdatedAt) {
+								throw new Error("Validated as-needed journal timestamps are missing");
+							}
+							await tx.insert(intakeJournal).values({
+								userId,
+								doseTrackingId: anchor.id,
+								medicationId: newMedId,
+								scheduledFor: occurredAt,
+								note: event.journalNote ?? "",
+								mood: event.journalMood ?? "",
+								createdAt: new Date(event.journalCreatedAt),
+								updatedAt: new Date(event.journalUpdatedAt),
+							});
+						}
+					}
+
+					for (const event of importData.asNeededIntakes) {
+						if (!event.replacementForEventId) continue;
+						const eventId = restoredEventIds.get(event.eventId);
+						const targetId = restoredEventIds.get(event.replacementForEventId);
+						if (!eventId || !targetId) throw new Error("Validated as-needed replacement mapping is missing");
+						await tx
+							.update(asNeededIntakeEvents)
+							.set({ replacesEventId: targetId })
+							.where(and(eq(asNeededIntakeEvents.id, eventId), eq(asNeededIntakeEvents.userId, userId)));
+					}
+
+					const restoredGraph = await tx
+						.select({
+							eventId: asNeededIntakeEvents.eventId,
+							doseTrackingId: asNeededIntakeEvents.doseTrackingId,
+						})
+						.from(asNeededIntakeEvents)
+						.innerJoin(
+							doseTracking,
+							and(
+								eq(doseTracking.id, asNeededIntakeEvents.doseTrackingId),
+								eq(doseTracking.userId, asNeededIntakeEvents.userId)
+							)
+						)
+						.innerJoin(
+							medications,
+							and(
+								eq(medications.id, asNeededIntakeEvents.medicationId),
+								eq(medications.userId, asNeededIntakeEvents.userId)
+							)
+						)
+						.where(eq(asNeededIntakeEvents.userId, userId));
+					if (
+						restoredGraph.length !== importData.asNeededIntakes.length ||
+						restoredGraph.some(
+							(event) => !restoredEventIds.has(event.eventId) || !restoredAnchorIds.has(event.doseTrackingId)
+						)
+					) {
+						throw new Error("Restored as-needed intake graph contains orphan rows");
 					}
 
 					if (importData.settings) {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -169,6 +170,40 @@ describe.sequential("as-needed intake service", () => {
 		expect(await eventCount()).toBe(2);
 	});
 
+	it("replays an imported semantic intent after medication IDs have been remapped", async () => {
+		const medicationId = await seedMedication({ stock: 5 });
+		const key = intentKey();
+		const [anchor] = await db
+			.insert(doseTracking)
+			.values({ userId: 1, doseId: `as-needed:${intentKey()}`, takenAt: new Date("2026-02-05T08:00:00.000Z") })
+			.returning({ id: doseTracking.id });
+		const [imported] = await db
+			.insert(asNeededIntakeEvents)
+			.values({
+				eventId: "00000000-0000-4000-8000-000000000099",
+				userId: 1,
+				medicationId,
+				doseTrackingId: anchor.id,
+				idempotencyKeyHash: createHash("sha256").update(key).digest("hex"),
+				requestFingerprint: "f".repeat(64),
+				occurredAt: new Date("2026-02-05T08:00:00.000Z"),
+				recordedAt: new Date("2026-02-05T08:01:00.000Z"),
+				quantityMilli: 1000,
+				quantityUnit: "pills",
+				stockEffectMilli: 1000,
+				stockEffectReason: "applied",
+			})
+			.returning({ id: asNeededIntakeEvents.id });
+
+		expect((await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: key })).id).toBe(
+			imported.id
+		);
+		await expectCode(
+			createAsNeededIntake({ userId: 1, medicationId, quantity: 2, idempotencyKey: key }),
+			"IDEMPOTENCY_KEY_REUSED"
+		);
+	});
+
 	it("aggregates active effects per owner and medication while retaining reversed and zero-effect rows as zero", async () => {
 		const ownerMedicationId = await seedMedication({ stock: 5 });
 		const otherMedicationId = await seedMedication({ userId: 2, stock: 5 });
@@ -230,15 +265,18 @@ describe.sequential("as-needed intake service", () => {
 		["ended", { endDate: "2000-01-01" }, undefined, "NOT_ELIGIBLE"],
 		["obsolete", { isObsolete: true }, undefined, "NOT_ELIGIBLE"],
 		["unassigned person", { people: ["Ava"] }, "Ben", "INVALID_PERSON"],
-	] as const)("rejects %s medication eligibility without an anchor or event", async (_case, options, personName, code) => {
-		const medicationId = await seedMedication(options);
-		await expectCode(
-			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, personName, idempotencyKey: intentKey() }),
-			code
-		);
-		expect(await eventCount()).toBe(0);
-		expect((await db.select().from(doseTracking)).length).toBe(0);
-	});
+	] as const)(
+		"rejects %s medication eligibility without an anchor or event",
+		async (_case, options, personName, code) => {
+			const medicationId = await seedMedication(options);
+			await expectCode(
+				createAsNeededIntake({ userId: 1, medicationId, quantity: 1, personName, idempotencyKey: intentKey() }),
+				code
+			);
+			expect(await eventCount()).toBe(0);
+			expect((await db.select().from(doseTracking)).length).toBe(0);
+		}
+	);
 
 	it.each([
 		["insufficient stock", { stock: 1 }, 2, "INSUFFICIENT_STOCK"],

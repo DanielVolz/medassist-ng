@@ -1,9 +1,15 @@
-import { INTAKE_MOODS, type IntakeMood, normalizeIntakeMood } from "@medassist/shared";
+import {
+	AS_NEEDED_QUANTITY_UNITS,
+	type AsNeededQuantityUnit,
+	INTAKE_MOODS,
+	type IntakeMood,
+	normalizeIntakeMood,
+} from "@medassist/shared";
 import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { doseTracking, intakeJournal, medications, refillHistory } from "../db/schema.js";
+import { asNeededIntakeEvents, doseTracking, intakeJournal, medications, refillHistory } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { filterScheduledDoseRows } from "../services/as-needed-intakes-service.js";
@@ -125,6 +131,27 @@ function isWithinDateRange(timestampMs: number | null, range: { startMs: number;
 	return timestampMs >= range.startMs && timestampMs < range.endMs;
 }
 
+type AsNeededStatus = "active" | "reversed";
+type AsNeededStockEffectReason = "applied" | "non_measurable" | "before_correction" | "superseded_by_correction";
+
+type AsNeededReportEntry = {
+	eventId: string;
+	status: AsNeededStatus;
+	occurredAt: string;
+	recordedAt: string;
+	quantity: number;
+	quantityUnit: AsNeededQuantityUnit;
+	person: string | null;
+	source: "owner_as_needed";
+	stockEffect: number;
+	stockEffectReason: AsNeededStockEffectReason;
+	replacementForEventId: string | null;
+	reversedAt: string | null;
+	revision: number;
+	mood: IntakeMood | null;
+	note: string | null;
+};
+
 const reportDataResponseSchema = {
 	type: "object",
 	additionalProperties: {
@@ -133,6 +160,38 @@ const reportDataResponseSchema = {
 			dosesTaken: { type: "integer" },
 			automaticDosesTaken: { type: "integer" },
 			dosesSkipped: { type: "integer" },
+			asNeededIntakesTaken: { type: "integer" },
+			asNeededQuantityByUnit: {
+				type: "object",
+				properties: Object.fromEntries(AS_NEEDED_QUANTITY_UNITS.map((unit) => [unit, { type: "number" }])),
+				additionalProperties: false,
+			},
+			asNeededIntakes: {
+				type: "array",
+				items: {
+					type: "object",
+					properties: {
+						eventId: { type: "string", format: "uuid" },
+						status: { type: "string", enum: ["active", "reversed"] },
+						occurredAt: { type: "string", format: "date-time" },
+						recordedAt: { type: "string", format: "date-time" },
+						quantity: { type: "number" },
+						quantityUnit: { type: "string", enum: AS_NEEDED_QUANTITY_UNITS },
+						person: { type: ["string", "null"] },
+						source: { type: "string", const: "owner_as_needed" },
+						stockEffect: { type: "number" },
+						stockEffectReason: {
+							type: "string",
+							enum: ["applied", "non_measurable", "before_correction", "superseded_by_correction"],
+						},
+						replacementForEventId: { type: ["string", "null"], format: "uuid" },
+						reversedAt: { type: ["string", "null"], format: "date-time" },
+						revision: { type: "integer", minimum: 1 },
+						mood: { type: ["string", "null"], enum: [...INTAKE_MOODS, null] },
+						note: { type: ["string", "null"] },
+					},
+				},
+			},
 			firstDoseAt: { type: "string" },
 			lastDoseAt: { type: "string" },
 			moodSummary: {
@@ -306,6 +365,60 @@ export async function reportRoutes(app: FastifyInstance) {
 				}
 			}
 
+			const asNeededFilters = [
+				eq(asNeededIntakeEvents.userId, userId),
+				inArray(asNeededIntakeEvents.medicationId, medicationIds),
+			];
+			if (dateRange) {
+				asNeededFilters.push(gte(asNeededIntakeEvents.occurredAt, new Date(dateRange.startMs)));
+				asNeededFilters.push(lt(asNeededIntakeEvents.occurredAt, new Date(dateRange.endMs)));
+			}
+			const asNeededRows = await db
+				.select({
+					event: asNeededIntakeEvents,
+					journalMood: intakeJournal.mood,
+					journalNote: intakeJournal.note,
+				})
+				.from(asNeededIntakeEvents)
+				.leftJoin(
+					intakeJournal,
+					and(
+						eq(intakeJournal.doseTrackingId, asNeededIntakeEvents.doseTrackingId),
+						eq(intakeJournal.userId, asNeededIntakeEvents.userId),
+						eq(intakeJournal.medicationId, asNeededIntakeEvents.medicationId)
+					)
+				)
+				.where(and(...asNeededFilters));
+
+			const replacementTargetIds = [
+				...new Set(
+					asNeededRows
+						.map(({ event }) => event.replacesEventId)
+						.filter((eventId): eventId is number => eventId !== null)
+				),
+			];
+			const replacementEventIdById = new Map<number, string>();
+			if (replacementTargetIds.length > 0) {
+				const replacementTargets = await db
+					.select({ id: asNeededIntakeEvents.id, eventId: asNeededIntakeEvents.eventId })
+					.from(asNeededIntakeEvents)
+					.where(and(eq(asNeededIntakeEvents.userId, userId), inArray(asNeededIntakeEvents.id, replacementTargetIds)));
+				for (const target of replacementTargets) {
+					replacementEventIdById.set(target.id, target.eventId);
+				}
+			}
+
+			const asNeededRowsByMed = new Map<number, (typeof asNeededRows)[number][]>();
+			for (const row of asNeededRows) {
+				const person = row.event.personName.trim();
+				if (normalizedTakenByFilter && !normalizedTakenByFilter.has(getPersonTagKey(person))) {
+					continue;
+				}
+				const medicationRows = asNeededRowsByMed.get(row.event.medicationId) ?? [];
+				medicationRows.push(row);
+				asNeededRowsByMed.set(row.event.medicationId, medicationRows);
+			}
+
 			// Fetch refill history for requested medications
 			const result: Record<
 				number,
@@ -316,6 +429,9 @@ export async function reportRoutes(app: FastifyInstance) {
 					firstDoseAt: string | null;
 					lastDoseAt: string | null;
 					moodSummary: Record<IntakeMood, number>;
+					asNeededIntakesTaken: number;
+					asNeededQuantityByUnit: Partial<Record<AsNeededQuantityUnit, number>>;
+					asNeededIntakes: AsNeededReportEntry[];
 					journalEntries: {
 						scheduledFor: string;
 						takenAt: string | null;
@@ -340,6 +456,7 @@ export async function reportRoutes(app: FastifyInstance) {
 				const takenDoses = doses.filter((d) => !d.dismissed);
 				const automaticTakenDoses = takenDoses.filter((d) => d.takenSource === "automatic");
 				const skippedDoses = doses.filter((d) => d.dismissed);
+				const asNeededRowsForMedication = asNeededRowsByMed.get(medId) ?? [];
 
 				const sortedTaken = takenDoses.map((d) => d.takenAt.getTime()).sort((a, b) => a - b);
 				const moodSummary = Object.fromEntries(INTAKE_MOODS.map((mood) => [mood, 0])) as Record<IntakeMood, number>;
@@ -374,6 +491,44 @@ export async function reportRoutes(app: FastifyInstance) {
 					})
 					.filter((entry): entry is NonNullable<typeof entry> => entry !== null)
 					.sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime());
+				const asNeededQuantityMilliByUnit: Partial<Record<AsNeededQuantityUnit, number>> = {};
+				const asNeededIntakes = asNeededRowsForMedication
+					.map(({ event, journalMood, journalNote }): AsNeededReportEntry => {
+						const mood = normalizeIntakeMood(journalMood);
+						if (event.status === "active") {
+							const unit = event.quantityUnit as AsNeededQuantityUnit;
+							asNeededQuantityMilliByUnit[unit] = (asNeededQuantityMilliByUnit[unit] ?? 0) + event.quantityMilli;
+							if (mood) {
+								moodSummary[mood] += 1;
+							}
+						}
+						return {
+							eventId: event.eventId,
+							status: event.status as AsNeededStatus,
+							occurredAt: event.occurredAt.toISOString(),
+							recordedAt: event.recordedAt.toISOString(),
+							quantity: event.quantityMilli / 1000,
+							quantityUnit: event.quantityUnit as AsNeededQuantityUnit,
+							person: event.personName.trim().length > 0 ? event.personName : null,
+							source: "owner_as_needed",
+							stockEffect: event.stockEffectMilli / 1000,
+							stockEffectReason: event.stockEffectReason as AsNeededStockEffectReason,
+							replacementForEventId: event.replacesEventId
+								? (replacementEventIdById.get(event.replacesEventId) ?? null)
+								: null,
+							reversedAt: event.reversedAt?.toISOString() ?? null,
+							revision: event.revision,
+							mood,
+							note: journalNote && journalNote.trim().length > 0 ? journalNote : null,
+						};
+					})
+					.sort((a, b) => {
+						const occurredDifference = new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime();
+						return occurredDifference !== 0 ? occurredDifference : b.eventId.localeCompare(a.eventId);
+					});
+				const asNeededQuantityByUnit = Object.fromEntries(
+					Object.entries(asNeededQuantityMilliByUnit).map(([unit, quantityMilli]) => [unit, quantityMilli / 1000])
+				) as Partial<Record<AsNeededQuantityUnit, number>>;
 				const medication = medMap.get(medId);
 				const pillsPerPack = Math.max(1, (medication?.blistersPerPack ?? 1) * (medication?.pillsPerBlister ?? 1));
 				const isAmountBased = medication?.packageType === "liquid_container" || medication?.packageType === "tube";
@@ -393,6 +548,9 @@ export async function reportRoutes(app: FastifyInstance) {
 					dosesTaken: takenDoses.length,
 					automaticDosesTaken: automaticTakenDoses.length,
 					dosesSkipped: skippedDoses.length,
+					asNeededIntakesTaken: asNeededRowsForMedication.filter(({ event }) => event.status === "active").length,
+					asNeededQuantityByUnit,
+					asNeededIntakes,
 					firstDoseAt: sortedTaken.length > 0 ? new Date(sortedTaken[0]).toISOString() : null,
 					lastDoseAt: sortedTaken.length > 0 ? new Date(sortedTaken[sortedTaken.length - 1]).toISOString() : null,
 					moodSummary,

@@ -4,6 +4,7 @@
 
 import { Stack, Text } from "@mantine/core";
 import type { ReactNode } from "react";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
 import { AppButton } from "../ui/primitives/AppButton";
 
@@ -17,6 +18,7 @@ export interface ConfirmModalProps {
 	isLoading?: boolean;
 	confirmVariant?: "primary" | "danger" | "success" | "warning";
 	overlayClassName?: string;
+	captureEscape?: boolean;
 }
 
 export function ConfirmModal({
@@ -29,10 +31,14 @@ export function ConfirmModal({
 	isLoading = false,
 	confirmVariant = "primary",
 	overlayClassName,
+	captureEscape = false,
 }: ConfirmModalProps) {
+	useEscapeKey(captureEscape, onCancel, { capture: true });
 	return (
 		<AppModal
-			closeButtonProps={{ "aria-label": "Close" }}
+			closeButtonProps={{ "aria-label": "Close", disabled: captureEscape && isLoading }}
+			closeOnEscape={false}
+			manageEscape={!captureEscape}
 			onClose={onCancel}
 			opened
 			rootClassName={overlayClassName}

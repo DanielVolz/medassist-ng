@@ -5,11 +5,28 @@ import type { AsNeededIntakeListResponse, AsNeededIntakeMutationResponse } from 
 export class AsNeededIntakeRequestError extends Error {
 	constructor(
 		public readonly code: string,
-		public readonly retryAfterSeconds: number | null = null
+		public readonly retryAfterSeconds: number | null = null,
+		public readonly currentRevision: number | null = null
 	) {
 		super(code);
 		this.name = "AsNeededIntakeRequestError";
 	}
+}
+
+async function getMutationError(response: Response): Promise<AsNeededIntakeRequestError> {
+	const retryAfter = Number.parseInt(response.headers.get("Retry-After") ?? "", 10);
+	let code = "UNKNOWN_ERROR";
+	let currentRevision: number | null = null;
+	try {
+		const body = (await response.json()) as { code?: unknown; currentRevision?: unknown };
+		if (typeof body.code === "string") code = body.code;
+		if (typeof body.currentRevision === "number" && Number.isSafeInteger(body.currentRevision)) {
+			currentRevision = body.currentRevision;
+		}
+	} catch {
+		// The translated UI uses stable fallbacks for malformed error responses.
+	}
+	return new AsNeededIntakeRequestError(code, Number.isFinite(retryAfter) ? retryAfter : null, currentRevision);
 }
 
 export function useAsNeededIntakes() {
@@ -37,34 +54,51 @@ export function useAsNeededIntakes() {
 			quantity: number;
 			person: string | null;
 			idempotencyKey: string;
+			replacementForEventId?: string | null;
 		}): Promise<AsNeededIntakeMutationResponse> => {
 			let response: Response;
 			try {
 				response = await authFetch(`/api/medications/${input.medicationId}/as-needed-intakes`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", "Idempotency-Key": input.idempotencyKey },
-					body: JSON.stringify({ quantity: input.quantity, person: input.person }),
+					body: JSON.stringify({
+						quantity: input.quantity,
+						person: input.person,
+						...(input.replacementForEventId ? { replacementForEventId: input.replacementForEventId } : {}),
+					}),
 				});
 			} catch {
 				throw new AsNeededIntakeRequestError("NETWORK_ERROR");
 			}
 
-			if (!response.ok) {
-				const retryAfter = Number.parseInt(response.headers.get("Retry-After") ?? "", 10);
-				let code = "UNKNOWN_ERROR";
-				try {
-					const body = (await response.json()) as { code?: unknown };
-					if (typeof body.code === "string") code = body.code;
-				} catch {
-					// The translated UI uses the stable fallback code for malformed error responses.
-				}
-				throw new AsNeededIntakeRequestError(code, Number.isFinite(retryAfter) ? retryAfter : null);
-			}
+			if (!response.ok) throw await getMutationError(response);
 
 			return (await response.json()) as AsNeededIntakeMutationResponse;
 		},
 		[authFetch]
 	);
 
-	return { listAsNeededIntakes, recordAsNeededIntake };
+	const reverseAsNeededIntake = useCallback(
+		async (input: {
+			eventId: string;
+			expectedRevision: number;
+			idempotencyKey: string;
+		}): Promise<AsNeededIntakeMutationResponse> => {
+			let response: Response;
+			try {
+				response = await authFetch(`/api/as-needed-intakes/${input.eventId}/reversal`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", "Idempotency-Key": input.idempotencyKey },
+					body: JSON.stringify({ expectedRevision: input.expectedRevision }),
+				});
+			} catch {
+				throw new AsNeededIntakeRequestError("NETWORK_ERROR");
+			}
+			if (!response.ok) throw await getMutationError(response);
+			return (await response.json()) as AsNeededIntakeMutationResponse;
+		},
+		[authFetch]
+	);
+
+	return { listAsNeededIntakes, recordAsNeededIntake, reverseAsNeededIntake };
 }

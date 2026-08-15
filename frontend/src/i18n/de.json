@@ -301,8 +301,44 @@
       "invalidQuantity": "Gib eine für diesen Packungstyp gültige Menge ein.",
       "rateLimited": "Es wurden zu viele neue Einnahmen angefordert. Versuche dieselbe Einnahme nach {{seconds}} Sekunden erneut.",
       "intentConflict": "Diese Anfrage kollidiert mit einer früheren Anfrage. Schließe den Dialog und beginne erneut.",
+      "replacementUnavailable": "Diese Korrektur kann nicht mehr mit der ausgewählten Einnahme verknüpft werden. Aktualisiere den Verlauf und versuche es erneut.",
       "readOnly": "Mit diesem schreibgeschützten Zugriff kann keine Einnahme erfasst werden.",
       "generic": "Die Einnahme konnte nicht erfasst werden. Versuche dieselbe Einnahme erneut oder brich ab."
+    },
+    "replacement": {
+      "action": "Korrektur erfassen",
+      "correctAction": "Korrigieren",
+      "title": "Korrigierte Einnahme erfassen",
+      "description": "Dies erstellt eine separate Einnahme, die mit dem stornierten Ereignis vom {{time}} verknüpft ist.",
+      "confirm": "Korrektur erfassen",
+      "successTitle": "Korrektur erfasst",
+      "reverseTitle": "Einnahme korrigieren",
+      "reverseMessage": "Die ursprüngliche Einnahme von {{quantity}} {{unit}} muss zuerst storniert werden. Ihr Prüfverlauf bleibt erhalten, auch wenn du abbrichst oder die Ersetzung fehlschlägt."
+    },
+    "reversal": {
+      "action": "Stornieren",
+      "confirmTitle": "Einnahme stornieren",
+      "confirmMessage": "Die erfasste Einnahme von {{quantity}} {{unit}} stornieren? Nur ihre gespeicherte Bestandswirkung wird wiederhergestellt und der Prüfverlauf bleibt erhalten.",
+      "confirm": "Einnahme stornieren",
+      "saving": "Wird storniert...",
+      "errors": {
+        "network": "Das Ergebnis ist wegen einer unterbrochenen Verbindung unklar. Erneut versuchen verwendet sicher dieselbe Stornierung.",
+        "revision": "Diese Einnahme wurde geändert. Der Verlauf wurde aktualisiert; prüfe ihn vor einem neuen Versuch.",
+        "intentConflict": "Diese Stornierung kollidiert mit einer anderen Einnahme. Schließe die Bestätigung und beginne erneut.",
+        "generic": "Die Einnahme konnte nicht storniert werden. Versuche dieselbe Stornierung erneut oder brich ab."
+      },
+      "notice": {
+        "reversedTitle": "Einnahme storniert",
+        "reversedMessage": "Die gespeicherte Bestandswirkung wurde wiederhergestellt und das Original bleibt im Verlauf.",
+        "reconciliationTitle": "Einnahme storniert – Bestand prüfen",
+        "reconciliationMessage": "Die gespeicherte Bestandswirkung wurde wiederhergestellt, aber der aktuelle Bestand übersteigt nun die konfigurierte Packungskapazität.",
+        "correctionReadyTitle": "Ursprüngliche Einnahme storniert",
+        "correctionReadyMessage": "Erfasse die Korrektur jetzt als separate Einnahme oder kehre später zu diesem stornierten Ereignis zurück.",
+        "correctionReadyReconciliationTitle": "Original storniert – Bestand prüfen",
+        "correctionReadyReconciliationMessage": "Der Bestand übersteigt nun die konfigurierte Kapazität. Prüfe ihn und erfasse die Korrektur anschließend bei Bedarf separat.",
+        "revisionChangedTitle": "Verlauf aktualisiert",
+        "revisionChangedMessage": "Die Einnahme wurde geändert, bevor die Stornierung abgeschlossen war. Prüfe den aktualisierten Eintrag."
+      }
     }
   },
   "form": {

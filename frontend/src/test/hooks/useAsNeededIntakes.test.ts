@@ -52,6 +52,47 @@ describe("useAsNeededIntakes", () => {
 		).rejects.toEqual(expect.objectContaining({ code: "TOO_MANY_NEW_INTAKES", retryAfterSeconds: 17 }));
 	});
 
+	it("posts a reversal with its stable intent key and exposes the current revision from a conflict", async () => {
+		authFetchMock.mockResolvedValue({
+			ok: false,
+			headers: new Headers(),
+			json: async () => ({ code: "EVENT_VERSION_CONFLICT", currentRevision: 3 }),
+		});
+		const { result } = renderHook(() => useAsNeededIntakes());
+
+		await expect(
+			result.current.reverseAsNeededIntake({ eventId: "event-42", expectedRevision: 2, idempotencyKey: "reverse-key" })
+		).rejects.toEqual(expect.objectContaining({ code: "EVENT_VERSION_CONFLICT", currentRevision: 3 }));
+		expect(authFetchMock).toHaveBeenCalledWith(
+			"/api/as-needed-intakes/event-42/reversal",
+			expect.objectContaining({
+				method: "POST",
+				headers: { "Content-Type": "application/json", "Idempotency-Key": "reverse-key" },
+				body: JSON.stringify({ expectedRevision: 2 }),
+			})
+		);
+	});
+
+	it("includes a replacement link only when the caller supplies one", async () => {
+		authFetchMock.mockResolvedValue({ ok: true, json: async () => ({ event: {}, inventory: {} }) });
+		const { result } = renderHook(() => useAsNeededIntakes());
+
+		await result.current.recordAsNeededIntake({
+			medicationId: 42,
+			quantity: 1,
+			person: null,
+			idempotencyKey: "replacement-key",
+			replacementForEventId: "reversed-event",
+		});
+
+		expect(authFetchMock).toHaveBeenCalledWith(
+			"/api/medications/42/as-needed-intakes",
+			expect.objectContaining({
+				body: JSON.stringify({ quantity: 1, person: null, replacementForEventId: "reversed-event" }),
+			})
+		);
+	});
+
 	it("maps a transport failure to the translated uncertain-result state", async () => {
 		authFetchMock.mockRejectedValue(new Error("connection dropped"));
 		const { result } = renderHook(() => useAsNeededIntakes());

@@ -1,19 +1,33 @@
-import { Alert } from "@mantine/core";
+import { Alert, Stack, Text } from "@mantine/core";
 import { normalizeIntakeMood } from "@medassist/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useAsNeededIntakes } from "../hooks/useAsNeededIntakes";
-import type { AsNeededIntakeEvent } from "../types";
+import { AsNeededIntakeRequestError, useAsNeededIntakes } from "../hooks/useAsNeededIntakes";
+import { useModalHistory } from "../hooks/useModalHistory";
+import type { AsNeededIntakeEvent, AsNeededIntakeMutationResponse } from "../types";
 import { AppButton } from "../ui/primitives/AppButton";
 import { StatusBadge } from "../ui/primitives/StatusBadge";
 import { getNumericLocale, withFormattingTimezone } from "../utils/formatters";
 import { getIntakeMoodLabel } from "../utils/intake-mood";
 import classes from "./AsNeededIntakeHistory.module.css";
+import { ConfirmModal } from "./ConfirmModal";
 
 type AsNeededIntakeHistoryProps = {
 	medicationId: number;
 	canRecordNow: boolean;
 	onRecordNow: () => void;
+	onReplace?: (event: AsNeededIntakeEvent) => void;
+	onReverse?: (input: {
+		eventId: string;
+		expectedRevision: number;
+		idempotencyKey: string;
+	}) => Promise<AsNeededIntakeMutationResponse>;
+};
+
+type ReversalIntent = {
+	event: AsNeededIntakeEvent;
+	idempotencyKey: string;
+	replaceAfter: boolean;
 };
 
 function formatQuantity(value: number): string {
@@ -27,7 +41,21 @@ function formatTrustedDateTime(value: string): string {
 	);
 }
 
-export function AsNeededIntakeHistory({ medicationId, canRecordNow, onRecordNow }: AsNeededIntakeHistoryProps) {
+function getReversalErrorKey(code: string): string {
+	if (code === "NETWORK_ERROR") return "asNeeded.reversal.errors.network";
+	if (code === "EVENT_VERSION_CONFLICT") return "asNeeded.reversal.errors.revision";
+	if (code === "IDEMPOTENCY_KEY_REUSED") return "asNeeded.reversal.errors.intentConflict";
+	if (code === "READ_ONLY" || code === "API_KEY_SCOPE_FORBIDDEN") return "asNeeded.errors.readOnly";
+	return "asNeeded.reversal.errors.generic";
+}
+
+export function AsNeededIntakeHistory({
+	medicationId,
+	canRecordNow,
+	onRecordNow,
+	onReplace,
+	onReverse,
+}: AsNeededIntakeHistoryProps) {
 	const { t } = useTranslation();
 	const { listAsNeededIntakes } = useAsNeededIntakes();
 	const [events, setEvents] = useState<AsNeededIntakeEvent[]>([]);
@@ -35,8 +63,24 @@ export function AsNeededIntakeHistory({ medicationId, canRecordNow, onRecordNow 
 	const [loading, setLoading] = useState(true);
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [error, setError] = useState(false);
+	const [reversalIntent, setReversalIntent] = useState<ReversalIntent | null>(null);
+	const [reversalPending, setReversalPending] = useState(false);
+	const [reversalError, setReversalError] = useState<string | null>(null);
+	const [actionNotice, setActionNotice] = useState<{ tone: "green" | "yellow" | "red"; key: string } | null>(null);
+	const [replacementReady, setReplacementReady] = useState<AsNeededIntakeEvent | null>(null);
 	const requestVersionRef = useRef(0);
 	const firstPageAbortRef = useRef<AbortController | null>(null);
+	const actionFeedbackRef = useRef<HTMLDivElement>(null);
+	const dismissReversal = useCallback(() => {
+		setReversalIntent(null);
+		setReversalError(null);
+	}, []);
+	const { closeModal: closeReversal } = useModalHistory(
+		Boolean(reversalIntent),
+		"as-needed-reversal-confirm",
+		dismissReversal,
+		{ state: reversalIntent ? { eventId: reversalIntent.event.eventId } : undefined }
+	);
 
 	const loadFirstPage = useCallback(async () => {
 		firstPageAbortRef.current?.abort();
@@ -66,6 +110,10 @@ export function AsNeededIntakeHistory({ medicationId, canRecordNow, onRecordNow 
 		};
 	}, [loadFirstPage]);
 
+	useEffect(() => {
+		if (actionNotice || reversalError) actionFeedbackRef.current?.focus();
+	}, [actionNotice, reversalError]);
+
 	const loadMore = async () => {
 		if (!nextCursor || loadingMore) return;
 		const requestVersion = requestVersionRef.current;
@@ -86,8 +134,62 @@ export function AsNeededIntakeHistory({ medicationId, canRecordNow, onRecordNow 
 		}
 	};
 
+	const beginReversal = (event: AsNeededIntakeEvent, replaceAfter: boolean) => {
+		setReversalIntent({ event, idempotencyKey: crypto.randomUUID(), replaceAfter });
+		setReversalError(null);
+		setActionNotice(null);
+		setReplacementReady(null);
+	};
+
+	const submitReversal = async () => {
+		if (!reversalIntent || !onReverse || reversalPending) return;
+		setReversalPending(true);
+		setReversalError(null);
+		try {
+			const result = await onReverse({
+				eventId: reversalIntent.event.eventId,
+				expectedRevision: reversalIntent.event.revision,
+				idempotencyKey: reversalIntent.idempotencyKey,
+			});
+			setEvents((current) => current.map((event) => (event.eventId === result.event.eventId ? result.event : event)));
+			if (reversalIntent.replaceAfter) {
+				setReplacementReady(result.event);
+				setActionNotice({
+					tone: result.inventory.reconciliationRequired ? "yellow" : "green",
+					key: result.inventory.reconciliationRequired ? "correctionReadyReconciliation" : "correctionReady",
+				});
+			} else {
+				setActionNotice({
+					tone: result.inventory.reconciliationRequired ? "yellow" : "green",
+					key: result.inventory.reconciliationRequired ? "reconciliation" : "reversed",
+				});
+			}
+			closeReversal();
+		} catch (requestError) {
+			if (requestError instanceof AsNeededIntakeRequestError) {
+				if (requestError.code === "EVENT_VERSION_CONFLICT") {
+					closeReversal();
+					setActionNotice({ tone: "red", key: "revisionChanged" });
+					await loadFirstPage();
+				} else {
+					setReversalError(getReversalErrorKey(requestError.code));
+				}
+			} else {
+				setReversalError("asNeeded.reversal.errors.generic");
+			}
+		} finally {
+			setReversalPending(false);
+		}
+	};
+
 	if (!canRecordNow && !loading && !error && events.length === 0) return null;
 	const lifecycle = events[0]?.medication.lifecycle ?? (canRecordNow ? "active_no_schedule" : null);
+	let reversalConfirmLabel = t("asNeeded.reversal.confirm");
+	if (reversalPending) reversalConfirmLabel = t("asNeeded.reversal.saving");
+	else if (reversalError) reversalConfirmLabel = t("common.retry");
+	const replacedEventIds = new Set(
+		events.map((event) => event.replacementForEventId).filter((eventId): eventId is string => eventId !== null)
+	);
 
 	return (
 		<section className={classes.section} aria-labelledby="as-needed-history-title">
@@ -111,6 +213,30 @@ export function AsNeededIntakeHistory({ medicationId, canRecordNow, onRecordNow 
 					<AppButton type="button" tone="secondary" size="xs" onClick={() => void loadFirstPage()}>
 						{t("asNeeded.history.retry")}
 					</AppButton>
+				</Alert>
+			) : null}
+			{actionNotice ? (
+				<Alert
+					ref={actionFeedbackRef}
+					tabIndex={-1}
+					color={actionNotice.tone}
+					title={t(`asNeeded.reversal.notice.${actionNotice.key}Title`)}
+				>
+					{t(`asNeeded.reversal.notice.${actionNotice.key}Message`)}
+					{replacementReady && onReplace ? (
+						<AppButton
+							type="button"
+							tone="primary"
+							size="xs"
+							onClick={() => {
+								onReplace(replacementReady);
+								setReplacementReady(null);
+								setActionNotice(null);
+							}}
+						>
+							{t("asNeeded.replacement.action")}
+						</AppButton>
+					) : null}
 				</Alert>
 			) : null}
 			{!loading && events.length === 0 ? <p className={classes.state}>{t("asNeeded.history.empty")}</p> : null}
@@ -162,6 +288,29 @@ export function AsNeededIntakeHistory({ medicationId, canRecordNow, onRecordNow 
 									<p>{t("asNeeded.history.noJournal")}</p>
 								)}
 							</div>
+							{event.status === "active" && onReverse ? (
+								<div className={classes.entryActions}>
+									<AppButton type="button" tone="danger" size="xs" onClick={() => beginReversal(event, false)}>
+										{t("asNeeded.reversal.action")}
+									</AppButton>
+									{event.medication.recordEligibility.eligible && onReplace ? (
+										<AppButton type="button" tone="secondary" size="xs" onClick={() => beginReversal(event, true)}>
+											{t("asNeeded.replacement.correctAction")}
+										</AppButton>
+									) : null}
+								</div>
+							) : null}
+							{event.status === "reversed" &&
+							!replacedEventIds.has(event.eventId) &&
+							replacementReady?.eventId !== event.eventId &&
+							event.medication.recordEligibility.eligible &&
+							onReplace ? (
+								<div className={classes.entryActions}>
+									<AppButton type="button" tone="secondary" size="xs" onClick={() => onReplace(event)}>
+										{t("asNeeded.replacement.action")}
+									</AppButton>
+								</div>
+							) : null}
 						</article>
 					);
 				})}
@@ -170,6 +319,45 @@ export function AsNeededIntakeHistory({ medicationId, canRecordNow, onRecordNow 
 				<AppButton type="button" tone="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
 					{loadingMore ? t("asNeeded.history.loadingMore") : t("asNeeded.history.loadMore")}
 				</AppButton>
+			) : null}
+			{reversalIntent ? (
+				<ConfirmModal
+					title={t(
+						reversalIntent.replaceAfter ? "asNeeded.replacement.reverseTitle" : "asNeeded.reversal.confirmTitle"
+					)}
+					message={
+						<Stack gap="sm">
+							<Text>
+								{t(
+									reversalIntent.replaceAfter
+										? "asNeeded.replacement.reverseMessage"
+										: "asNeeded.reversal.confirmMessage",
+									{
+										quantity: formatQuantity(reversalIntent.event.quantity),
+										unit: t(`asNeeded.units.${reversalIntent.event.quantityUnit}`, {
+											count: reversalIntent.event.quantity,
+										}),
+									}
+								)}
+							</Text>
+							{reversalError ? (
+								<Alert ref={actionFeedbackRef} tabIndex={-1} color="red">
+									{t(reversalError)}
+								</Alert>
+							) : null}
+						</Stack>
+					}
+					confirmLabel={reversalConfirmLabel}
+					cancelLabel={t("common.cancel")}
+					onConfirm={() => void submitReversal()}
+					onCancel={() => {
+						if (!reversalPending) closeReversal();
+					}}
+					isLoading={reversalPending}
+					confirmVariant="danger"
+					overlayClassName="nested-confirm"
+					captureEscape
+				/>
 			) : null}
 		</section>
 	);

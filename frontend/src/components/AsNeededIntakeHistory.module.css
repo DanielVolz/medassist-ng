@@ -107,6 +107,13 @@
 	overflow-wrap: anywhere;
 }
 
+.entryActions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0.5rem;
+}
+
 @media (max-width: 600px) {
 	.headingRow {
 		align-items: flex-start;

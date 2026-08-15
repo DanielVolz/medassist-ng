@@ -275,6 +275,8 @@
 }
 
 .noRegularSchedule {
+	align-items: center;
+	justify-content: space-between;
 	border-style: dashed;
 	font-weight: 600;
 }

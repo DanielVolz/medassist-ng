@@ -2,6 +2,7 @@ import type React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
+import { useAsNeededIntakes } from "../hooks/useAsNeededIntakes";
 import { useCollapsedDays } from "../hooks/useCollapsedDays";
 import { useDoses } from "../hooks/useDoses";
 import { useIntakeJournal } from "../hooks/useIntakeJournal";
@@ -67,6 +68,7 @@ export interface AppContextValue {
 	deleteMed: (id: number, editingId: number | null, resetForm: () => void) => Promise<void>;
 	uploadMedImage: (medId: number, file: File) => Promise<void>;
 	deleteMedImage: (medId: number) => Promise<void>;
+	recordAsNeededIntake: ReturnType<typeof useAsNeededIntakes>["recordAsNeededIntake"];
 
 	// From useSettings (selected fields)
 	settings: ReturnType<typeof useSettings>["settings"];
@@ -296,6 +298,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	// Compose hooks
 	const medications = useMedications();
+	const asNeededIntakes = useAsNeededIntakes();
 	const settingsHook = useSettings({ autoLoad: false });
 	const doses = useDoses({ loadOnMount: false });
 	const intakeJournal = useIntakeJournal();
@@ -308,6 +311,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		doses.loadTakenDoses();
 	}, [medications.loadMeds, settingsHook.loadSettings, doses.loadTakenDoses]);
 	const importExport = useImportExport({ onImportComplete: handleImportComplete });
+	const recordAsNeededIntake = useCallback(
+		async (input: Parameters<typeof asNeededIntakes.recordAsNeededIntake>[0]) => {
+			const result = await asNeededIntakes.recordAsNeededIntake(input);
+			medications.loadMeds();
+			return result;
+		},
+		[asNeededIntakes.recordAsNeededIntake, medications.loadMeds]
+	);
 
 	// Schedule UI state
 	const [scheduleDays, setScheduleDays] = useState<number>(30);
@@ -659,6 +670,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		() => ({
 			// From useMedications
 			...medications,
+			recordAsNeededIntake,
 
 			// From useSettings
 			settings: settingsHook.settings,
@@ -840,6 +852,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		}),
 		[
 			medications,
+			recordAsNeededIntake,
 			settingsHook,
 			doses,
 			intakeJournal,

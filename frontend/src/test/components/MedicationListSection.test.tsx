@@ -26,7 +26,12 @@ function createMedication(overrides: Partial<Medication>): Medication {
 	};
 }
 
-function renderSection(props: { orderedMeds: Medication[]; onImagePreview?: (med: Medication) => void }) {
+function renderSection(props: {
+	orderedMeds: Medication[];
+	onImagePreview?: (med: Medication) => void;
+	canRecordNow?: (med: Medication) => boolean;
+	onRecordNow?: (med: Medication) => void;
+}) {
 	return render(
 		<MedicationListSection
 			orderedMeds={props.orderedMeds}
@@ -37,6 +42,8 @@ function renderSection(props: { orderedMeds: Medication[]; onImagePreview?: (med
 			onNewEntry={vi.fn()}
 			onOpenReport={vi.fn()}
 			onEdit={vi.fn()}
+			canRecordNow={props.canRecordNow}
+			onRecordNow={props.onRecordNow}
 			onView={vi.fn()}
 			onMarkObsolete={vi.fn()}
 			onDelete={vi.fn()}
@@ -59,6 +66,24 @@ describe("MedicationListSection", () => {
 		});
 
 		expect(screen.getByText("form.blisters.noRegularSchedule")).toBeInTheDocument();
+	});
+
+	it("offers Record now only when the page has confirmed an active zero-schedule medication", () => {
+		const onRecordNow = vi.fn();
+		const eligible = createMedication({ intakes: [] });
+		const scheduled = createMedication({
+			id: 2,
+			intakes: [{ usage: 1, every: 1, start: "2026-01-01T08:00:00", takenBy: "", intakeRemindersEnabled: false }],
+		});
+		renderSection({
+			orderedMeds: [eligible, scheduled],
+			canRecordNow: (med) => med.id === eligible.id,
+			onRecordNow,
+		});
+
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.record.action" }));
+		expect(onRecordNow).toHaveBeenCalledWith(eligible);
+		expect(screen.getAllByText("form.blisters.noRegularSchedule")).toHaveLength(1);
 	});
 
 	it("opens the medication image preview from a clickable avatar", () => {

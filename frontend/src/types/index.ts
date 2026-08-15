@@ -147,6 +147,7 @@ export type Medication = {
 	looseTablets: number; // For blister: extra loose pills; for bottle: current stock
 	stockAdjustment?: number;
 	scheduleStockRebaseMilli?: number;
+	asNeededStockEffect?: number;
 	hasRegularSchedule?: boolean;
 	lastStockCorrectionAt?: string | null;
 	pillWeightMg?: number | null;
@@ -174,6 +175,50 @@ export type Medication = {
 	obsoleteAt?: string | null;
 	dismissedUntil?: string | null; // ISO date string (YYYY-MM-DD) - all past doses until this date are dismissed
 	updatedAt: string | number | null;
+};
+
+export type AsNeededQuantityUnit = "pills" | "ml" | "puffs" | "injections" | "application";
+export type AsNeededLifecycle = "active_no_schedule" | "active_scheduled" | "ended" | "obsolete";
+export type AsNeededEligibilityReason = "eligible" | "has_regular_schedule" | "ended" | "obsolete";
+
+export type AsNeededIntakeEvent = {
+	eventType: "as_needed";
+	eventId: string;
+	medicationId: number;
+	medication: {
+		name: string;
+		genericName: string | null;
+		medicationForm: string;
+		packageType: string;
+		isObsolete: boolean;
+		hasRegularSchedule: boolean;
+		lifecycle: AsNeededLifecycle;
+		recordEligibility: { eligible: boolean; reason: AsNeededEligibilityReason };
+	};
+	occurredAt: string;
+	recordedAt: string;
+	quantity: number;
+	quantityUnit: AsNeededQuantityUnit;
+	person: string | null;
+	source: "owner_as_needed";
+	status: "active" | "reversed";
+	revision: number;
+	stockEffect: number;
+	stockEffectReason: "applied" | "non_measurable" | "before_correction" | "superseded_by_correction";
+	stockCutoffAt: string | null;
+	replacementForEventId: string | null;
+	reversedAt: string | null;
+	journal: null | { doseId: string; mood: string | null; note: string | null; createdAt: string; updatedAt: string };
+};
+
+export type AsNeededIntakeMutationResponse = {
+	event: AsNeededIntakeEvent;
+	inventory: {
+		currentStock: number;
+		unit: AsNeededQuantityUnit;
+		capacity: number | null;
+		reconciliationRequired: boolean;
+	};
 };
 
 export type PlannerRow = {
@@ -410,6 +455,7 @@ type MedLike = Pick<
 > & {
 	stockAdjustment?: number;
 	scheduleStockRebaseMilli?: number;
+	asNeededStockEffect?: number;
 	packageType?: PackageType;
 	totalPills?: number | null;
 };
@@ -417,8 +463,9 @@ type MedLike = Pick<
 /** Calculate total stock including persisted projection adjustments. */
 export function getMedTotal(med: MedLike): number {
 	const projectionAdjustment = (med.scheduleStockRebaseMilli ?? 0) / 1000;
+	const asNeededStockEffect = med.asNeededStockEffect ?? 0;
 	if (isDiscreteCountPackageType(med.packageType)) {
-		return med.looseTablets + (med.stockAdjustment ?? 0) + projectionAdjustment;
+		return med.looseTablets + (med.stockAdjustment ?? 0) + projectionAdjustment - asNeededStockEffect;
 	}
 
 	// Amount-based package types use the same canonical base field as the backend:
@@ -426,14 +473,15 @@ export function getMedTotal(med: MedLike): number {
 	// for compatibility and UI helpers.
 	if (isPackageAmountPackageType(med.packageType)) {
 		const baseStock = med.looseTablets ?? med.totalPills ?? 0;
-		return baseStock + (med.stockAdjustment ?? 0) + projectionAdjustment;
+		return baseStock + (med.stockAdjustment ?? 0) + projectionAdjustment - asNeededStockEffect;
 	}
 	// For blister type, calculate from packs + loose
 	return (
 		med.packCount * med.blistersPerPack * med.pillsPerBlister +
 		med.looseTablets +
 		(med.stockAdjustment ?? 0) +
-		projectionAdjustment
+		projectionAdjustment -
+		asNeededStockEffect
 	);
 }
 

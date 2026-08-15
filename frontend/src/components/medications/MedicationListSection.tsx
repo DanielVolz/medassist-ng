@@ -32,6 +32,8 @@ type MedicationListSectionProps = {
 	onNewEntry: () => void;
 	onOpenReport: () => void;
 	onEdit: (med: Medication) => void;
+	onRecordNow?: (med: Medication) => void;
+	canRecordNow?: (med: Medication) => boolean;
 	onView: (med: Medication) => void;
 	onMarkObsolete: (med: Medication) => void;
 	onDelete: (med: Medication) => void;
@@ -53,6 +55,8 @@ export function MedicationListSection({
 	onNewEntry,
 	onOpenReport,
 	onEdit,
+	onRecordNow,
+	canRecordNow,
 	onView,
 	onMarkObsolete,
 	onDelete,
@@ -118,9 +122,7 @@ export function MedicationListSection({
 							const displayName = getMedDisplayName(med);
 							const medicationIntakes = getMedicationIntakes(med);
 							const stockDisplayCapacity = getStockDisplayCapacity(med);
-							const currentStock = coverageByMed[displayName]
-								? Math.round(coverageByMed[displayName].medsLeft)
-								: getMedTotal(med);
+							const currentStock = coverageByMed[displayName] ? coverageByMed[displayName].medsLeft : getMedTotal(med);
 							const fillPct =
 								stockDisplayCapacity > 0
 									? Math.max(0, Math.min(100, Math.round((currentStock / stockDisplayCapacity) * 100)))
@@ -232,7 +234,18 @@ export function MedicationListSection({
 									<div className={classes.blisterList}>
 										{medicationIntakes.length === 0 && (
 											<div className={cx(classes.blisterRowSimple, classes.noRegularSchedule)}>
-												{t("form.blisters.noRegularSchedule")}
+												<span>{t("form.blisters.noRegularSchedule")}</span>
+												{canRecordNow?.(med) ? (
+													<AppButton
+														type="button"
+														tone="primary"
+														size="xs"
+														leftSection={<Plus size={14} aria-hidden="true" />}
+														onClick={() => onRecordNow?.(med)}
+													>
+														{t("asNeeded.record.action")}
+													</AppButton>
+												) : null}
 											</div>
 										)}
 										{medicationIntakes.map((intake) => (

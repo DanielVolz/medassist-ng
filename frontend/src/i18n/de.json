@@ -227,6 +227,51 @@
       "message": "Möchtest du \"{{name}}\" wirklich als obsolet markieren?"
     }
   },
+  "asNeeded": {
+    "record": {
+      "action": "Jetzt erfassen",
+      "title": "Bedarfseinnahme erfassen",
+      "trustedTime": "Der Dienst erfasst beim Bestätigen die aktuelle Uhrzeit.",
+      "quantity": "Menge ({{unit}})",
+      "person": "Person",
+      "noPerson": "Keine Person / selbst",
+      "decreaseQuantity": "Menge verringern",
+      "increaseQuantity": "Menge erhöhen",
+      "stockEffect": "Der Bestand wird um {{quantity}} {{unit}} verringert.",
+      "noStockEffect": "Eine Anwendung wird erfasst, ohne den messbaren Bestand zu verändern.",
+      "confirm": "Einnahme erfassen",
+      "saving": "Einnahme wird erfasst...",
+      "failedTitle": "Einnahme wurde nicht erfasst",
+      "successTitle": "Einnahme erfasst",
+      "successMessage": "{{quantity}} {{unit}} um {{time}} erfasst. Aktueller Bestand: {{stock}}.",
+      "reconciliationRequired": "Packungskonfiguration und aktueller Bestand sollten geprüft werden."
+    },
+    "units": {
+      "pills": "Tabletten",
+      "pills_one": "Tablette",
+      "pills_other": "Tabletten",
+      "ml": "ml",
+      "puffs": "Hübe",
+      "puffs_one": "Hub",
+      "puffs_other": "Hübe",
+      "injections": "Injektionen",
+      "injections_one": "Injektion",
+      "injections_other": "Injektionen",
+      "application": "Anwendung"
+    },
+    "errors": {
+      "network": "Das Ergebnis ist wegen einer unterbrochenen Verbindung unklar. Erneut versuchen prüft sicher dieselbe Einnahme.",
+      "insufficientStock": "Für diese Menge ist nicht genug Bestand vorhanden. Prüfe den echten Bestand vor dem nächsten Versuch.",
+      "stockUnresolvable": "Der aktuelle Bestand kann nicht sicher bestimmt werden. Korrigiere ihn, bevor du eine Einnahme erfasst.",
+      "notEligible": "Dieses Medikament kann nicht mehr ohne Einnahmeplan erfasst werden. Aktualisiere die Medikamentenliste.",
+      "invalidPerson": "Die ausgewählte Person ist diesem Medikament nicht mehr zugeordnet.",
+      "invalidQuantity": "Gib eine für diesen Packungstyp gültige Menge ein.",
+      "rateLimited": "Es wurden zu viele neue Einnahmen angefordert. Versuche dieselbe Einnahme nach {{seconds}} Sekunden erneut.",
+      "intentConflict": "Diese Anfrage kollidiert mit einer früheren Anfrage. Schließe den Dialog und beginne erneut.",
+      "readOnly": "Mit diesem schreibgeschützten Zugriff kann keine Einnahme erfasst werden.",
+      "generic": "Die Einnahme konnte nicht erfasst werden. Versuche dieselbe Einnahme erneut oder brich ab."
+    }
+  },
   "form": {
     "editEntry": "Bearbeiten",
     "editEntryWithName": "Bearbeiten: {{name}}",

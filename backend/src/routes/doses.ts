@@ -408,13 +408,17 @@ function buildSharedJournalEntryDto(input: {
 	journalEntry: Awaited<ReturnType<typeof getIntakeJournalForDoseEvent>>;
 }) {
 	const { event, journalEntry } = input;
+	const scheduledFor = journalEntry?.scheduledFor ?? event.scheduledFor;
+	if (event.eventType !== "scheduled" || !scheduledFor) {
+		throw new Error("Shared journal resolver returned a non-scheduled event");
+	}
 
 	return {
 		doseTrackingId: event.doseTrackingId,
 		doseId: event.doseId,
 		medicationId: event.medicationId,
 		medicationName: event.medicationName,
-		scheduledFor: toLocalDateTimeOffsetString(journalEntry?.scheduledFor ?? event.scheduledFor),
+		scheduledFor: toLocalDateTimeOffsetString(scheduledFor),
 		takenAt: serializeJournalTakenAt(event.takenAt, event.dismissed),
 		dismissed: event.dismissed,
 		takenSource: event.takenSource,

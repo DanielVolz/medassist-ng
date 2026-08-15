@@ -193,4 +193,33 @@ test.describe("Export/import E2E", () => {
 		expect(restoredSettings.shareScheduleTodayOnly).toBe(true);
 		expect(restoredSettings.swapDashboardMainSections).toBe(true);
 	});
+
+	test("shows v1.9 as-needed preview counts and keeps legacy backups free of that row", async ({ page }) => {
+		await deleteAllMedicationsViaAPI();
+		await createMedicationViaAPI({ name: `E2E v1.9 preview ${Date.now().toString(36)}`, intakes: [] });
+		await navigateTo(page, "/settings");
+		const exported = await exportDataViaAPI(page);
+
+		const importInput = page.locator("#import-file-input");
+		await importInput.setInputFiles({
+			name: "v1.9.json",
+			mimeType: "application/json",
+			buffer: Buffer.from(JSON.stringify(exported), "utf-8"),
+		});
+		const reviewModal = page.locator(".import-review-modal");
+		await expect(reviewModal).toBeVisible();
+		await expect(reviewModal.getByText(/0 as-needed intake events|0 Ereignisse bei Bedarf/i)).toBeVisible();
+		await reviewModal.getByRole("button", { name: /Cancel|Abbrechen/i }).click();
+		await expect(reviewModal).toBeHidden();
+
+		const legacy = { ...exported, version: "1.8" } as ExportPayload & { asNeededIntakes?: unknown[] };
+		delete legacy.asNeededIntakes;
+		await importInput.setInputFiles({
+			name: "v1.8.json",
+			mimeType: "application/json",
+			buffer: Buffer.from(JSON.stringify(legacy), "utf-8"),
+		});
+		await expect(reviewModal).toBeVisible();
+		await expect(reviewModal.getByText(/0 as-needed intake events|0 Ereignisse bei Bedarf/i)).toHaveCount(0);
+	});
 });

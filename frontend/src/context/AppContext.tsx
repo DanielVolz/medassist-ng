@@ -24,7 +24,7 @@ import { mergePersonTags } from "../utils/person-tags";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds } from "../utils/schedule";
 import { settingsChanged as hasSettingsChanged } from "../utils/settings";
 import { ShareContextProvider } from "./ShareContext";
-import { type ImportPreview, useImportExport } from "./useImportExport";
+import { type ImportPreview, type ImportResult, useImportExport } from "./useImportExport";
 
 export type { ImportPreview } from "./useImportExport";
 
@@ -238,20 +238,8 @@ export interface AppContextValue {
 	setPendingImportData: React.Dispatch<React.SetStateAction<unknown>>;
 	importPreview: ImportPreview | null;
 	setImportPreview: React.Dispatch<React.SetStateAction<ImportPreview | null>>;
-	importResult: {
-		medications: number;
-		doses: number;
-		refills: number;
-		shares: number;
-	} | null;
-	setImportResult: React.Dispatch<
-		React.SetStateAction<{
-			medications: number;
-			doses: number;
-			refills: number;
-			shares: number;
-		} | null>
-	>;
+	importResult: ImportResult | null;
+	setImportResult: React.Dispatch<React.SetStateAction<ImportResult | null>>;
 	handleExport: (includeImages?: boolean, includeSensitive?: boolean) => Promise<void>;
 	handleImportFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	handleImportConfirm: () => Promise<void>;

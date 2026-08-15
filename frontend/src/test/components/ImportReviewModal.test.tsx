@@ -7,7 +7,8 @@ vi.mock("react-i18next", async () => {
 	return {
 		...actual,
 		useTranslation: () => ({
-			t: (key: string) => key,
+			t: (key: string, options?: { count?: number }) =>
+				options?.count === undefined ? key : `${key}_${options.count}`,
 		}),
 	};
 });
@@ -94,5 +95,45 @@ describe("ImportReviewModal", () => {
 		expect(overlay).toBeInTheDocument();
 		fireEvent.click(overlay as Element);
 		expect(onClose).toHaveBeenCalledTimes(2);
+	});
+
+	it("shows v1.9 incoming and current as-needed counts, including an incoming zero", () => {
+		render(
+			<ImportReviewModal
+				isOpen={true}
+				importPreview={{
+					...importPreview,
+					version: "1.9",
+					incoming: { ...importPreview.incoming, asNeededIntakes: 0 },
+					current: { ...importPreview.current, asNeededIntakes: 3 },
+				}}
+				formattedExportedAt="May 21, 2026"
+				importing={false}
+				exporting={false}
+				onClose={vi.fn()}
+				onBackup={vi.fn()}
+				onConfirm={vi.fn()}
+			/>
+		);
+
+		expect(screen.getByText("exportImport.asNeededIntakes_0")).toBeInTheDocument();
+		expect(screen.getByText("exportImport.asNeededIntakes_3")).toBeInTheDocument();
+	});
+
+	it("keeps legacy previews free of an absent as-needed count", () => {
+		render(
+			<ImportReviewModal
+				isOpen={true}
+				importPreview={importPreview}
+				formattedExportedAt="May 21, 2026"
+				importing={false}
+				exporting={false}
+				onClose={vi.fn()}
+				onBackup={vi.fn()}
+				onConfirm={vi.fn()}
+			/>
+		);
+
+		expect(screen.queryByText(/exportImport\.asNeededIntakes/)).not.toBeInTheDocument();
 	});
 });

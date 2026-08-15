@@ -28,6 +28,9 @@ export function ImportReviewModal({
 }: ImportReviewModalProps) {
 	const { t } = useTranslation();
 	const hasExistingData = importPreview?.warnings.replacesExistingData ?? false;
+	const incomingAsNeeded = importPreview?.incoming.asNeededIntakes ?? 0;
+	const currentAsNeeded = importPreview?.current.asNeededIntakes ?? 0;
+	const showIncomingAsNeeded = importPreview?.version === "1.9" || incomingAsNeeded > 0;
 	const hasWarnings = Boolean(
 		importPreview?.warnings.replacesExistingData ||
 			importPreview?.warnings.regeneratesShareLinks ||
@@ -76,6 +79,9 @@ export function ImportReviewModal({
 										{t("exportImport.journalEntries", { count: importPreview.incoming.journalEntries })}
 									</Text>
 								)}
+								{showIncomingAsNeeded ? (
+									<Text size="sm">{t("exportImport.asNeededIntakes", { count: incomingAsNeeded })}</Text>
+								) : null}
 								{importPreview.incoming.imageCount > 0 && (
 									<Text size="sm">{t("exportImport.imageCount", { count: importPreview.incoming.imageCount })}</Text>
 								)}
@@ -98,6 +104,11 @@ export function ImportReviewModal({
 							{importPreview.current.hasSettings ? (
 								<Text c="dimmed" size="sm">
 									{t("exportImport.settingsConfigured")}
+								</Text>
+							) : null}
+							{currentAsNeeded > 0 ? (
+								<Text c="dimmed" size="sm">
+									{t("exportImport.asNeededIntakes", { count: currentAsNeeded })}
 								</Text>
 							) : null}
 						</Stack>

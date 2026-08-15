@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useModalHistory } from "../hooks/useModalHistory";
-import type { Medication } from "../types";
+import type { AsNeededQuantityUnit, Medication } from "../types";
 import {
 	getMedDisplayName,
 	getMedTotal,
@@ -12,12 +12,13 @@ import {
 } from "../types";
 import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
 import { AppButton } from "../ui/primitives/AppButton";
-import { formatDate, formatDateTime, toInputValue } from "../utils/formatters";
+import { formatDate, formatDateTime, getNumericLocale, toInputValue } from "../utils/formatters";
 import { getIntakeMoodDisplay, INTAKE_MOODS, type IntakeMood } from "../utils/intake-mood";
 import { getIntakeFrequencyText, getMedicationIntakes } from "../utils/intake-schedule";
 import { mergePersonTags, personTagsMatch } from "../utils/person-tags";
 import { useAuth } from "./Auth";
 import { DateTimeInput } from "./DateTimeInput";
+import { formatJournalDisplayDateTime } from "./intake-journal/journal-display";
 import { MedicationAvatar } from "./MedicationAvatar";
 import classes from "./ReportModal.module.css";
 
@@ -39,6 +40,9 @@ type ReportData = Record<
 		lastDoseAt: string | null;
 		moodSummary?: Partial<Record<IntakeMood, number>>;
 		journalEntries?: ReportJournalEntry[];
+		asNeededIntakesTaken?: number;
+		asNeededQuantityByUnit?: Partial<Record<AsNeededQuantityUnit, number>>;
+		asNeededIntakes?: ReportAsNeededIntake[];
 		refills: {
 			packsAdded: number;
 			loosePillsAdded?: number;
@@ -55,6 +59,24 @@ type ReportJournalEntry = {
 	dismissed: boolean;
 	takenSource: string;
 	takenByPerson: string | null;
+	mood: IntakeMood | null;
+	note: string | null;
+};
+
+type ReportAsNeededIntake = {
+	eventId: string;
+	status: "active" | "reversed";
+	occurredAt: string;
+	recordedAt: string;
+	quantity: number;
+	quantityUnit: AsNeededQuantityUnit;
+	person: string | null;
+	source: "owner_as_needed";
+	stockEffect: number;
+	stockEffectReason: "applied" | "non_measurable" | "before_correction" | "superseded_by_correction";
+	replacementForEventId: string | null;
+	reversedAt: string | null;
+	revision: number;
 	mood: IntakeMood | null;
 	note: string | null;
 };
@@ -496,6 +518,50 @@ function formatJournalReportEntry(entry: ReportJournalEntry, t: TFn): string {
 	return parts.join("; ");
 }
 
+const AS_NEEDED_REPORT_UNITS: AsNeededQuantityUnit[] = ["pills", "ml", "puffs", "injections", "application"];
+
+function formatAsNeededQuantity(value: number, unit: AsNeededQuantityUnit, t: TFn): string {
+	return `${value.toLocaleString(getNumericLocale(), { maximumFractionDigits: 3 })} ${t(`asNeeded.units.${unit}`, { count: value })}`;
+}
+
+function getAsNeededQuantitySummary(
+	quantities: Partial<Record<AsNeededQuantityUnit, number>> | undefined,
+	t: TFn
+): string[] {
+	return AS_NEEDED_REPORT_UNITS.flatMap((unit) => {
+		const quantity = quantities?.[unit] ?? 0;
+		return quantity > 0 ? [formatAsNeededQuantity(quantity, unit, t)] : [];
+	});
+}
+
+function formatAsNeededReportEntry(entry: ReportAsNeededIntake, t: TFn): string {
+	const parts = [
+		`${t("report.docOccurredAt")}: ${formatJournalDisplayDateTime(entry.occurredAt) ?? "-"}`,
+		`${t("report.docRecordedAt")}: ${formatJournalDisplayDateTime(entry.recordedAt) ?? "-"}`,
+		`${t("report.docStatus")}: ${t(`asNeeded.history.status.${entry.status}`)}`,
+		`${t("report.docQuantity")}: ${formatAsNeededQuantity(entry.quantity, entry.quantityUnit, t)}`,
+		`${t("report.docPerson")}: ${entry.person ?? t("asNeeded.record.noPerson")}`,
+		`${t("report.docSource")}: ${t("report.docSourceOwnerAsNeeded")}`,
+		`${t("report.docStockEffect")}: ${formatAsNeededQuantity(entry.stockEffect, entry.quantityUnit, t)}`,
+		`${t("report.docStockReason")}: ${t(`asNeeded.history.stockReason.${entry.stockEffectReason}`)}`,
+		`${t("report.docRevision")}: ${entry.revision}`,
+		`${t("report.docEventId")}: ${entry.eventId}`,
+	];
+	if (entry.reversedAt) {
+		parts.push(`${t("report.docReversedAt")}: ${formatJournalDisplayDateTime(entry.reversedAt) ?? "-"}`);
+	}
+	if (entry.replacementForEventId) {
+		parts.push(`${t("report.docReplacementFor")}: ${entry.replacementForEventId}`);
+	}
+	if (entry.mood) {
+		parts.push(`${t("report.docJournalMood")}: ${getIntakeMoodDisplay(entry.mood, t)}`);
+	}
+	if (entry.note) {
+		parts.push(`${t("report.docJournalNote")}: ${entry.note}`);
+	}
+	return parts.join("; ");
+}
+
 function generateTextReport(
 	meds: Medication[],
 	reportData: ReportData,
@@ -600,6 +666,26 @@ function generateTextReport(
 				lines.push(fmt === "md" ? `- ${t("report.docNoDoses")}` : `  ${t("report.docNoDoses")}`);
 			}
 			lines.push("");
+
+			const asNeededEntries = data.asNeededIntakes ?? [];
+			if (asNeededEntries.length > 0) {
+				lines.push(h3(t("report.docAsNeededIntakes")));
+				lines.push(item(t("report.docActiveAsNeededCount"), String(data.asNeededIntakesTaken ?? 0)));
+				const quantitySummary = getAsNeededQuantitySummary(data.asNeededQuantityByUnit, t);
+				lines.push(
+					item(
+						t("report.docActiveAsNeededQuantities"),
+						quantitySummary.length > 0 ? quantitySummary.join(", ") : t("report.docNone")
+					)
+				);
+				lines.push(fmt === "md" ? `- ${bold(t("report.docAsNeededAudit"))}:` : `  ${t("report.docAsNeededAudit")}:`);
+				for (const entry of asNeededEntries) {
+					lines.push(
+						fmt === "md" ? `  - ${formatAsNeededReportEntry(entry, t)}` : `    • ${formatAsNeededReportEntry(entry, t)}`
+					);
+				}
+				lines.push("");
+			}
 
 			const moodSummaryItems = getMoodSummaryItems(data.moodSummary, t);
 			const journalEntries = data.journalEntries ?? [];
@@ -832,6 +918,21 @@ function buildPrintHtml(
 				s += `</tbody></table>`;
 			} else {
 				s += `<p class="no-data">${escHtml(t("report.docNoDoses"))}</p>`;
+			}
+
+			const asNeededEntries = data.asNeededIntakes ?? [];
+			if (asNeededEntries.length > 0) {
+				const quantitySummary = getAsNeededQuantitySummary(data.asNeededQuantityByUnit, t);
+				s += `<h3>${escHtml(t("report.docAsNeededIntakes"))}</h3>`;
+				s += `<table><tbody>`;
+				s += `<tr><td class="label">${escHtml(t("report.docActiveAsNeededCount"))}</td><td>${data.asNeededIntakesTaken ?? 0}</td></tr>`;
+				s += `<tr><td class="label">${escHtml(t("report.docActiveAsNeededQuantities"))}</td><td>${escHtml(quantitySummary.length > 0 ? quantitySummary.join(", ") : t("report.docNone"))}</td></tr>`;
+				s += `</tbody></table>`;
+				s += `<p><strong>${escHtml(t("report.docAsNeededAudit"))}</strong></p><ul>`;
+				for (const entry of asNeededEntries) {
+					s += `<li>${escHtml(formatAsNeededReportEntry(entry, t))}</li>`;
+				}
+				s += `</ul>`;
 			}
 
 			const moodSummaryItems = getMoodSummaryItems(data.moodSummary, t);

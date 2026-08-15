@@ -135,4 +135,127 @@ test.describe("As-needed Record now", () => {
 			await expect(detail).toBeHidden();
 		});
 	}
+
+	test("records a named fractional tablet from the list, audits its correction, and locks the reversed journal", async ({
+		page,
+	}) => {
+		const name = "As-needed correction tablet";
+		await deleteAllMedicationsViaAPI();
+		await createMedicationViaAPI({
+			name,
+			takenBy: ["Alice"],
+			packageType: "blister",
+			medicationForm: "tablet",
+			packCount: 1,
+			blistersPerPack: 1,
+			pillsPerBlister: 10,
+			looseTablets: 0,
+			intakes: [],
+		});
+
+		await page.setViewportSize({ width: 1280, height: 720 });
+		await navigateTo(page, "/medications");
+		const medication = page.getByTestId("medication-row").filter({ hasText: name });
+		await medication.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
+		const recordModal = page.getByRole("dialog").last();
+		await recordModal.getByLabel(/Person|Person/i).selectOption("Alice");
+		await recordModal.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
+		await expect(recordModal.getByText(/Current stock:\s*9\.5|Aktueller Bestand:\s*9,5/i)).toBeVisible();
+		await recordModal.getByLabel(/Close|Schließen/i).click();
+
+		await navigateTo(page, "/dashboard");
+		const overview = page.getByTestId("dashboard-overview-table");
+		await overview
+			.getByTestId("dashboard-overview-row")
+			.filter({ hasText: name })
+			.getByRole("button", { name })
+			.click();
+		const detail = page
+			.getByRole("dialog")
+			.filter({ has: page.getByRole("heading", { name }) })
+			.last();
+		const history = detail.getByRole("region", { name: /As-needed history|Bei-Bedarf-Verlauf/i });
+		await expect(history.getByText("Alice", { exact: true })).toBeVisible();
+
+		await history.getByRole("button", { name: /Add journal|Journal hinzufügen/i }).click();
+		let journal = page.locator(".journal-modal");
+		await journal.getByRole("textbox").fill("Initial correction journal");
+		await journal.getByRole("button", { name: /Save|Speichern/i }).click();
+		await expect(journal).toBeHidden();
+
+		await history.getByRole("button", { name: /Edit journal|Journal bearbeiten/i }).click();
+		journal = page.locator(".journal-modal");
+		await journal.getByRole("textbox").fill("Updated correction journal");
+		await journal.getByRole("button", { name: /Save|Speichern/i }).click();
+		await expect(journal).toBeHidden();
+		await expect(history.getByText("Updated correction journal")).toBeVisible();
+
+		await history.getByRole("button", { name: /Edit journal|Journal bearbeiten/i }).click();
+		journal = page.locator(".journal-modal");
+		await journal.getByRole("button", { name: /Delete|Löschen/i }).click();
+		await expect(journal).toBeHidden();
+
+		await history.getByRole("button", { name: /Add journal|Journal hinzufügen/i }).click();
+		journal = page.locator(".journal-modal");
+		await journal.getByRole("textbox").fill("Retained reversed journal");
+		await journal.getByRole("button", { name: /Save|Speichern/i }).click();
+		await expect(journal).toBeHidden();
+
+		await history.getByRole("button", { name: /Reverse|Stornieren/i }).click();
+		const reversal = page.getByRole("dialog").last();
+		await reversal.getByRole("button", { name: /Reverse intake|Einnahme stornieren/i }).click();
+		await expect(history.getByText(/Reversed|Storniert/i)).toBeVisible();
+
+		await history.getByRole("button", { name: /View journal|Journal ansehen/i }).click();
+		journal = page.locator(".journal-modal");
+		await expect(journal.getByRole("textbox")).toHaveValue("Retained reversed journal");
+		await expect(journal.getByRole("textbox")).toHaveAttribute("readonly", "");
+		await expect(journal.getByRole("button", { name: /Save|Speichern/i })).toHaveCount(0);
+		await expect(journal.getByRole("button", { name: /Delete|Löschen/i })).toHaveCount(0);
+		await journal.getByLabel(/Close|Schließen/i).click();
+
+		await history.getByRole("button", { name: /Record correction|Korrektur erfassen/i }).click();
+		const replacement = page.getByRole("dialog", { name: /Record corrected intake|Korrigierte Einnahme erfassen/i });
+		await replacement.getByRole("button", { name: /Record correction|Korrektur erfassen/i }).click();
+		await expect(replacement.getByText(/Correction recorded|Korrektur erfasst/i)).toBeVisible({ timeout: 15_000 });
+		await replacement.getByLabel(/Close|Schließen/i).click();
+		await expect(history.getByText(/Correction of event|Korrektur von Ereignis/i)).toBeVisible();
+		await expect(history.getByText(/^(Active|Aktiv)$/i)).toBeVisible();
+	});
+
+	test("records a topical None/self application from mobile detail without reducing measured stock", async ({
+		page,
+	}) => {
+		const name = "As-needed topical self";
+		await deleteAllMedicationsViaAPI();
+		await createMedicationViaAPI({
+			name,
+			packageType: "tube",
+			medicationForm: "topical",
+			packageAmountValue: 30,
+			looseTablets: 30,
+			intakes: [],
+		});
+
+		await page.setViewportSize({ width: 390, height: 844 });
+		await navigateTo(page, "/dashboard");
+		const overview = page.getByTestId("dashboard-overview-table");
+		await overview
+			.getByTestId("dashboard-overview-row")
+			.filter({ hasText: name })
+			.getByRole("button", { name })
+			.click();
+		const detail = page
+			.getByRole("dialog")
+			.filter({ has: page.getByRole("heading", { name }) })
+			.last();
+		await detail.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
+		const recordModal = page.getByRole("dialog").last();
+		await recordModal.getByLabel(/Person|Person/i).selectOption("");
+		await expect(recordModal.getByText(/without changing the measured stock|ohne.*Bestand/i)).toBeVisible();
+		await recordModal.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
+		await expect(recordModal.getByText(/Current stock:\s*30|Aktueller Bestand:\s*30/i)).toBeVisible();
+		await recordModal.getByLabel(/Close|Schließen/i).click();
+		await expect(detail.getByText(/No measurable stock effect|Kein messbarer Bestandseffekt/i)).toBeVisible();
+	});
 });

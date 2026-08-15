@@ -80,6 +80,49 @@ Medication rows still retain legacy schedule columns (`usage_json`, `every_json`
 
 Backend code should consume medication schedules through the canonical normalization helpers in `backend/src/utils/scheduler-utils.ts` (`normalizeMedicationSchedule()` or `normalizeMedicationIntakes()`). Direct legacy parsing should stay inside that utility boundary until a reviewed migration policy can remove the old columns safely.
 
+## Unscheduled Medications and Record Now
+
+### Schedule state and eligibility
+
+The desktop and mobile medication editors both support **No regular schedule**. This stores an explicit empty schedule rather than a placeholder or zero-dose entry. Removing the last schedule requires confirmation. A schedule-only transition to or from this state preserves the medication, its existing history, and the full current stock; it does not create past or future doses.
+
+**Record now** is available only to the authenticated owner for a medication that is active and currently has no regular schedule. It is unavailable when the medication has a schedule, has ended, or is obsolete. A no-schedule medication creates no scheduled dose rows or intake reminders.
+
+The dialog accepts one of the medication's current people or **None / self**. The selected value is stored with the event. The service, not the browser, supplies the acceptance time for both the occurrence and recording time; the UI displays that absolute instant in the user's saved app timezone.
+
+### Quantity and stock behavior
+
+The app derives the quantity unit and valid step from the current medication package profile:
+
+| Medication/package profile | Record now quantity | Current-stock effect |
+|---|---|---|
+| Tablet in a blister or bottle | Pills in half-pill steps | Subtract the accepted quantity |
+| Capsule in a blister or bottle | Whole pills | Subtract the accepted quantity |
+| Liquid container | Millilitres, with a 0.1 ml UI step | Subtract the accepted quantity |
+| Inhaler | Whole puffs | Subtract the accepted quantity |
+| Injection | Whole injections | Subtract the accepted quantity |
+| Tube or topical medication | Exactly one application | No measurable reduction; package stock remains unchanged |
+
+Measurable events are rejected atomically when current stock is zero, insufficient, or cannot be resolved safely. No event or partial stock change is retained. Check the real supply, use a stock correction to set the physical count, or add a refill before starting a new intent.
+
+A stock correction treats the submitted stock as the new physical baseline. A refill first adds its quantity to the complete transaction-visible current stock and then establishes that result as the baseline. Active as-needed effects already included in either physical count remain factual history but receive a durable zero stock effect, so they are not subtracted twice. A topical application remains zero-effect throughout these operations.
+
+### Retries, reversal, and journals
+
+Each opened Record now intent uses one idempotency key. A double tap, a same-intent concurrent submission, or a retry after an interrupted response resolves to the same event and stock effect. Retry the still-open intent when the result is uncertain; closing it and deliberately starting another Record now action creates a new intent. There is no persistent offline submission queue.
+
+Reversing an event restores only its stored stock effect and leaves a durable reversed audit entry. Retrying the same reversal cannot restore stock again. A correction is deliberately two operations: reverse the original event, then confirm a separate replacement. If the replacement is cancelled or fails, the original remains reversed and no replacement is invented.
+
+An active event's journal supports add, edit, and delete actions. After reversal, an existing journal remains visible in history, reports, and backups but becomes read-only.
+
+### Reports, sharing, and backups
+
+Reports keep scheduled intake results separate from as-needed data. Active as-needed events contribute to active counts and quantity totals grouped by unit. Both active and reversed events remain in the audit section with their stored quantity, person, source, stock effect, correction relationship, and journal context; reversed events do not contribute to active consumption or mood totals.
+
+Public share links do not expose as-needed event history, journals, Record now, reversal, or correction actions. When the medication overview is enabled for a share, its aggregate current-stock value includes active as-needed stock effects for medications already visible under the existing share rules. Existing shared scheduled-dose permissions do not grant as-needed mutation access.
+
+JSON exports use format version `1.9` and store as-needed events, active/reversed state, replacement links, exact stock effects, and linked journals separately from scheduled dose history. Import preview validates and counts these events before the existing all-or-nothing replacement. Backups from versions `1.0` through `1.8` remain importable and are treated as containing no as-needed events; restoring one therefore replaces any current as-needed history along with the other current account data.
+
 ## Docker Image Pinning
 
 The default `docker-compose.yml` uses readable versioned image tags. Each GitHub release also attaches `docker-compose.pinned.yml` with the same release tags plus immutable image digests for deployments that need stricter reproducibility.

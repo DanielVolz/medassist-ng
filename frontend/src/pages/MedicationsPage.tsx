@@ -2397,6 +2397,7 @@ export function MedicationsPage() {
 			</MedicationEditCoordinator>
 
 			<RecordNowModal
+				existingPeople={existingPeople}
 				medication={recordNowMedication}
 				onClose={() => setRecordNowMedication(null)}
 				onRecord={recordAsNeededIntake}

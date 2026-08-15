@@ -22,7 +22,7 @@ const WHOLE_PILL_PROFILE: AsNeededQuantityProfile = {
 
 const TABLET_PROFILE: AsNeededQuantityProfile = {
 	unit: "pills",
-	defaultQuantity: 0.5,
+	defaultQuantity: 1,
 	uiStep: 0.5,
 	wholeUnitsOnly: false,
 	measurable: true,

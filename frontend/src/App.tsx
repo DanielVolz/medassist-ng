@@ -804,6 +804,7 @@ function AppContent() {
 			{detailRecordNowMedication && (
 				<Suspense fallback={null}>
 					<RecordNowModal
+						existingPeople={ctx.existingPeople}
 						medication={detailRecordNowMedication}
 						replacementEvent={detailReplacementEvent}
 						onClose={closeDetailRecordNow}

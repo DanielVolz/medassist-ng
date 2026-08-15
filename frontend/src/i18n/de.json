@@ -239,9 +239,9 @@
   },
   "asNeeded": {
     "record": {
-      "action": "Jetzt erfassen",
-      "title": "Bedarfseinnahme erfassen",
-      "trustedTime": "Der Dienst erfasst beim Bestätigen die aktuelle Uhrzeit.",
+      "action": "Nehmen",
+      "title": "Medikament bei Bedarf nehmen",
+      "trustedTime": "Die aktuelle Uhrzeit wird beim Einnehmen gespeichert.",
       "quantity": "Menge ({{unit}})",
       "person": "Person",
       "noPerson": "Keine Person / selbst",
@@ -249,11 +249,11 @@
       "increaseQuantity": "Menge erhöhen",
       "stockEffect": "Der Bestand wird um {{quantity}} {{unit}} verringert.",
       "noStockEffect": "Eine Anwendung wird erfasst, ohne den messbaren Bestand zu verändern.",
-      "confirm": "Einnahme erfassen",
-      "saving": "Einnahme wird erfasst...",
-      "failedTitle": "Einnahme wurde nicht erfasst",
-      "successTitle": "Einnahme erfasst",
-      "successMessage": "{{quantity}} {{unit}} um {{time}} erfasst. Aktueller Bestand: {{stock}}.",
+      "confirm": "Nehmen",
+      "saving": "Einnahme wird gespeichert...",
+      "failedTitle": "Medikament wurde nicht eingenommen",
+      "successTitle": "Medikament eingenommen",
+      "successMessage": "{{quantity}} {{unit}} um {{time}} eingenommen. Aktueller Bestand: {{stock}}.",
       "reconciliationRequired": "Packungskonfiguration und aktueller Bestand sollten geprüft werden."
     },
     "lifecycle": {

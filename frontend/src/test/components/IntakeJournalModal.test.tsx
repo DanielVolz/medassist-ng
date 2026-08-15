@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IntakeJournalHistoryModal } from "../../components/intake-journal/IntakeJournalHistoryModal";
 import { IntakeJournalModal } from "../../components/intake-journal/IntakeJournalModal";
@@ -236,5 +236,44 @@ describe("IntakeJournalModal", () => {
 			expect(onSave).toHaveBeenCalledWith("Shared note", null);
 		});
 		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	it("shows reversed as-needed entries as audit-only details without mutation actions", () => {
+		const entry = buildEntry({
+			eventType: "as_needed",
+			eventId: "event-1",
+			doseId: "as-needed:event-1",
+			scheduledFor: null,
+			occurredAt: "2026-08-15T08:00:00.000Z",
+			status: "reversed",
+			takenAt: null,
+			takenSource: "owner_as_needed",
+			note: "Retained audit note",
+		});
+		render(
+			<IntakeJournalModal
+				isOpen
+				entry={entry}
+				isLoading={false}
+				isSaving={false}
+				isDeleting={false}
+				error="journal.errors.eventReversed"
+				onClose={vi.fn()}
+				onSave={vi.fn()}
+				onDelete={vi.fn()}
+				readOnly
+			/>
+		);
+
+		expect(screen.getByText("journal.editor.readOnlyTitle")).toBeInTheDocument();
+		expect(screen.getByText("journal.context.occurredAt")).toBeInTheDocument();
+		expect(screen.queryByText("journal.context.scheduledFor")).not.toBeInTheDocument();
+		expect(screen.getByLabelText("journal.editor.noteLabel")).toHaveAttribute("readonly");
+		expect(
+			within(screen.getByTestId("app-modal-footer")).getByRole("button", { name: "common.close" })
+		).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "common.save" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "common.delete" })).not.toBeInTheDocument();
+		expect(document.activeElement).toHaveTextContent("journal.errors.eventReversed");
 	});
 });

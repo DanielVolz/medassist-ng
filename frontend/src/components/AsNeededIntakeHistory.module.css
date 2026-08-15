@@ -107,6 +107,13 @@
 	overflow-wrap: anywhere;
 }
 
+.journalHeading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
 .entryActions {
 	display: flex;
 	flex-wrap: wrap;

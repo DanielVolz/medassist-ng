@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
 import type { IntakeMood } from "../utils/intake-mood";
 import { useModalHistory } from "./useModalHistory";
 
 export type IntakeJournalEntry = {
+	eventType?: "scheduled" | "as_needed";
+	eventId?: string | null;
 	doseTrackingId: number;
 	doseId: string;
 	medicationId: number;
 	medicationName: string;
-	scheduledFor: string;
+	scheduledFor: string | null;
+	occurredAt?: string | null;
+	status?: "taken" | "skipped" | "active" | "reversed";
 	takenAt: string | null;
 	dismissed: boolean;
-	takenSource: "manual" | "automatic" | "notification";
+	takenSource: "manual" | "automatic" | "notification" | "owner_as_needed";
 	markedBy: string | null;
 	mood: IntakeMood | null;
 	note: string | null;
@@ -52,6 +56,11 @@ export interface UseIntakeJournalReturn {
 	reopenJournalHistoryEntry: (doseId: string) => Promise<void>;
 }
 
+type UseIntakeJournalOptions = {
+	manageProgrammaticClose?: boolean;
+	onEventReversed?: () => void;
+};
+
 const DEFAULT_HISTORY_FILTERS: IntakeJournalHistoryFilters = {
 	medicationId: null,
 	from: "",
@@ -59,20 +68,28 @@ const DEFAULT_HISTORY_FILTERS: IntakeJournalHistoryFilters = {
 	limit: 100,
 };
 
-async function readErrorMessage(response: Response, fallbackMessage: string): Promise<string> {
+async function readErrorCode(response: Response): Promise<string | null> {
 	try {
-		const data = (await response.json()) as { error?: string; code?: string };
-		if (typeof data.error === "string" && data.error.trim().length > 0) {
-			return data.error;
-		}
+		const data = (await response.json()) as { code?: string };
 		if (typeof data.code === "string" && data.code.trim().length > 0) {
 			return data.code;
 		}
 	} catch {
-		// Fall back to the supplied message when the response body is not JSON.
+		// The caller maps missing or malformed error bodies to a translated fallback.
 	}
 
-	return fallbackMessage;
+	return null;
+}
+
+function getJournalErrorMessage(
+	code: string | null,
+	fallbackKey: "loadFailed" | "historyFailed" | "saveFailed" | "deleteFailed",
+	t: (key: string) => string
+): string {
+	if (code === "EVENT_REVERSED") return t("journal.errors.eventReversed");
+	if (code === "API_KEY_SCOPE_FORBIDDEN" || code === "READ_ONLY") return t("journal.errors.readOnly");
+	if (code === "DOSE_NOT_FOUND") return t("journal.errors.notFound");
+	return t(`journal.errors.${fallbackKey}`);
 }
 
 function buildHistoryQuery(filters: IntakeJournalHistoryFilters): string {
@@ -92,7 +109,7 @@ function buildHistoryQuery(filters: IntakeJournalHistoryFilters): string {
 	return query.length > 0 ? `?${query}` : "";
 }
 
-export function useIntakeJournal(): UseIntakeJournalReturn {
+export function useIntakeJournal(options: UseIntakeJournalOptions = {}): UseIntakeJournalReturn {
 	const { authFetch } = useAuth();
 	const { t } = useTranslation();
 	const [journalEditorOpen, setJournalEditorOpen] = useState(false);
@@ -108,8 +125,16 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 		useState<IntakeJournalHistoryFilters>(DEFAULT_HISTORY_FILTERS);
 	const [journalHistoryLoading, setJournalHistoryLoading] = useState(false);
 	const [journalHistoryError, setJournalHistoryError] = useState<string | null>(null);
+	const editorRequestVersionRef = useRef(0);
+	const editorAbortRef = useRef<AbortController | null>(null);
+
+	useEffect(() => {
+		return () => editorAbortRef.current?.abort();
+	}, []);
 
 	const resetJournalState = useCallback(() => {
+		editorAbortRef.current?.abort();
+		editorRequestVersionRef.current += 1;
 		setJournalEditorOpen(false);
 		setJournalHistoryOpen(false);
 		setJournalTargetDoseId(null);
@@ -126,26 +151,35 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 
 	const loadJournalEvent = useCallback(
 		async (doseId: string) => {
+			editorAbortRef.current?.abort();
+			const controller = new AbortController();
+			editorAbortRef.current = controller;
+			const requestVersion = ++editorRequestVersionRef.current;
 			setJournalEventLoading(true);
 			setJournalEventError(null);
 
 			try {
-				const response = await authFetch(`/api/intake-journal/event/${encodeURIComponent(doseId)}`);
+				const response = await authFetch(`/api/intake-journal/event/${encodeURIComponent(doseId)}`, {
+					signal: controller.signal,
+				});
 
 				if (!response.ok) {
-					const message = await readErrorMessage(response, t("journal.errors.loadFailed"));
+					const code = await readErrorCode(response);
+					if (requestVersion !== editorRequestVersionRef.current) return;
 					setJournalEvent(null);
-					setJournalEventError(message);
+					setJournalEventError(getJournalErrorMessage(code, "loadFailed", t));
 					return;
 				}
 
 				const data = (await response.json()) as { entry: IntakeJournalEntry };
+				if (requestVersion !== editorRequestVersionRef.current) return;
 				setJournalEvent(data.entry);
 			} catch {
+				if (requestVersion !== editorRequestVersionRef.current) return;
 				setJournalEvent(null);
 				setJournalEventError(t("journal.errors.loadFailed"));
 			} finally {
-				setJournalEventLoading(false);
+				if (requestVersion === editorRequestVersionRef.current) setJournalEventLoading(false);
 			}
 		},
 		[authFetch, t]
@@ -160,9 +194,9 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 				const response = await authFetch(`/api/intake-journal${buildHistoryQuery(filters)}`);
 
 				if (!response.ok) {
-					const message = await readErrorMessage(response, t("journal.errors.historyFailed"));
+					const code = await readErrorCode(response);
 					setJournalHistoryEntries([]);
-					setJournalHistoryError(message);
+					setJournalHistoryError(getJournalErrorMessage(code, "historyFailed", t));
 					return;
 				}
 
@@ -197,7 +231,9 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 		[loadJournalEvent]
 	);
 
-	const closeJournalEditor = useCallback(() => {
+	const dismissJournalEditor = useCallback(() => {
+		editorAbortRef.current?.abort();
+		editorRequestVersionRef.current += 1;
 		setJournalEditorOpen(false);
 		setJournalTargetDoseId(null);
 		setJournalEvent(null);
@@ -206,6 +242,12 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 		setJournalEventSaving(false);
 		setJournalEventDeleting(false);
 	}, []);
+	const { closeModal: closeJournalEditorWithHistory } = useModalHistory(
+		journalEditorOpen,
+		"intake-journal-editor",
+		dismissJournalEditor
+	);
+	const closeJournalEditor = options.manageProgrammaticClose ? closeJournalEditorWithHistory : dismissJournalEditor;
 
 	const saveJournalNote = useCallback(
 		async (note: string, mood: IntakeMood | null = null) => {
@@ -225,8 +267,13 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 				});
 
 				if (!response.ok) {
-					const message = await readErrorMessage(response, t("journal.errors.saveFailed"));
-					setJournalEventError(message);
+					const code = await readErrorCode(response);
+					setJournalEventError(getJournalErrorMessage(code, "saveFailed", t));
+					if (code === "EVENT_REVERSED") {
+						await loadJournalEvent(journalTargetDoseId);
+						setJournalEventError(t("journal.errors.eventReversed"));
+						options.onEventReversed?.();
+					}
 					return false;
 				}
 
@@ -243,7 +290,16 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 				setJournalEventSaving(false);
 			}
 		},
-		[authFetch, journalHistoryFilters, journalHistoryOpen, journalTargetDoseId, loadJournalHistory, t]
+		[
+			authFetch,
+			journalHistoryFilters,
+			journalHistoryOpen,
+			journalTargetDoseId,
+			loadJournalEvent,
+			loadJournalHistory,
+			options.onEventReversed,
+			t,
+		]
 	);
 
 	const deleteJournalNote = useCallback(async () => {
@@ -261,8 +317,13 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 			});
 
 			if (!response.ok) {
-				const message = await readErrorMessage(response, t("journal.errors.deleteFailed"));
-				setJournalEventError(message);
+				const code = await readErrorCode(response);
+				setJournalEventError(getJournalErrorMessage(code, "deleteFailed", t));
+				if (code === "EVENT_REVERSED") {
+					await loadJournalEvent(journalTargetDoseId);
+					setJournalEventError(t("journal.errors.eventReversed"));
+					options.onEventReversed?.();
+				}
 				return false;
 			}
 
@@ -279,7 +340,16 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 		} finally {
 			setJournalEventDeleting(false);
 		}
-	}, [authFetch, journalHistoryFilters, journalHistoryOpen, journalTargetDoseId, loadJournalHistory, t]);
+	}, [
+		authFetch,
+		journalHistoryFilters,
+		journalHistoryOpen,
+		journalTargetDoseId,
+		loadJournalEvent,
+		loadJournalHistory,
+		options.onEventReversed,
+		t,
+	]);
 
 	const openJournalHistory = useCallback(() => {
 		setJournalEditorOpen(false);
@@ -287,13 +357,12 @@ export function useIntakeJournal(): UseIntakeJournalReturn {
 		setJournalHistoryError(null);
 	}, []);
 
-	const closeJournalHistory = useCallback(() => {
+	const dismissJournalHistory = useCallback(() => {
 		setJournalHistoryOpen(false);
 		setJournalHistoryError(null);
 	}, []);
-
-	useModalHistory(journalEditorOpen, "intake-journal-editor", closeJournalEditor);
-	useModalHistory(journalHistoryOpen, "intake-journal-history", closeJournalHistory);
+	useModalHistory(journalHistoryOpen, "intake-journal-history", dismissJournalHistory);
+	const closeJournalHistory = dismissJournalHistory;
 
 	const updateJournalHistoryFilters = useCallback((patch: Partial<IntakeJournalHistoryFilters>) => {
 		setJournalHistoryFiltersState((previous) => ({

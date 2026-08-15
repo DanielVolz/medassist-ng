@@ -3,6 +3,7 @@ import { normalizeIntakeMood } from "@medassist/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AsNeededIntakeRequestError, useAsNeededIntakes } from "../hooks/useAsNeededIntakes";
+import { useIntakeJournal } from "../hooks/useIntakeJournal";
 import { useModalHistory } from "../hooks/useModalHistory";
 import type { AsNeededIntakeEvent, AsNeededIntakeMutationResponse } from "../types";
 import { AppButton } from "../ui/primitives/AppButton";
@@ -11,6 +12,7 @@ import { getNumericLocale, withFormattingTimezone } from "../utils/formatters";
 import { getIntakeMoodLabel } from "../utils/intake-mood";
 import classes from "./AsNeededIntakeHistory.module.css";
 import { ConfirmModal } from "./ConfirmModal";
+import { IntakeJournalModal } from "./intake-journal/IntakeJournalModal";
 
 type AsNeededIntakeHistoryProps = {
 	medicationId: number;
@@ -49,6 +51,12 @@ function getReversalErrorKey(code: string): string {
 	return "asNeeded.reversal.errors.generic";
 }
 
+function getJournalActionKey(event: AsNeededIntakeEvent): string {
+	if (event.status === "reversed") return "journal.actions.view";
+	if (event.journal) return "journal.actions.edit";
+	return "journal.actions.add";
+}
+
 export function AsNeededIntakeHistory({
 	medicationId,
 	canRecordNow,
@@ -68,9 +76,19 @@ export function AsNeededIntakeHistory({
 	const [reversalError, setReversalError] = useState<string | null>(null);
 	const [actionNotice, setActionNotice] = useState<{ tone: "green" | "yellow" | "red"; key: string } | null>(null);
 	const [replacementReady, setReplacementReady] = useState<AsNeededIntakeEvent | null>(null);
+	const [journalTargetStatus, setJournalTargetStatus] = useState<AsNeededIntakeEvent["status"] | null>(null);
 	const requestVersionRef = useRef(0);
 	const firstPageAbortRef = useRef<AbortController | null>(null);
 	const actionFeedbackRef = useRef<HTMLDivElement>(null);
+	const refreshHistoryRef = useRef<() => Promise<void>>(async () => undefined);
+	const handleJournalEventReversed = useCallback(() => {
+		setActionNotice({ tone: "yellow", key: "journalReconciled" });
+		void refreshHistoryRef.current();
+	}, []);
+	const intakeJournal = useIntakeJournal({
+		manageProgrammaticClose: true,
+		onEventReversed: handleJournalEventReversed,
+	});
 	const dismissReversal = useCallback(() => {
 		setReversalIntent(null);
 		setReversalError(null);
@@ -101,6 +119,7 @@ export function AsNeededIntakeHistory({
 			if (requestVersion === requestVersionRef.current) setLoading(false);
 		}
 	}, [listAsNeededIntakes, medicationId]);
+	refreshHistoryRef.current = loadFirstPage;
 
 	useEffect(() => {
 		void loadFirstPage();
@@ -182,6 +201,32 @@ export function AsNeededIntakeHistory({
 		}
 	};
 
+	const openJournal = (event: AsNeededIntakeEvent) => {
+		setJournalTargetStatus(event.status);
+		void intakeJournal.openJournalEditor(event.journal?.doseId ?? `as-needed:${event.eventId}`);
+	};
+
+	const closeJournal = () => {
+		setJournalTargetStatus(null);
+		intakeJournal.closeJournalEditor();
+	};
+
+	const saveJournal = async (
+		note: string,
+		mood: Parameters<typeof intakeJournal.saveJournalNote>[1]
+	): Promise<boolean> => {
+		const saved = await intakeJournal.saveJournalNote(note, mood);
+		if (saved) await loadFirstPage();
+		return saved;
+	};
+
+	const deleteJournal = async () => {
+		const deleted = await intakeJournal.deleteJournalNote();
+		if (!deleted) return;
+		await loadFirstPage();
+		closeJournal();
+	};
+
 	if (!canRecordNow && !loading && !error && events.length === 0) return null;
 	const lifecycle = events[0]?.medication.lifecycle ?? (canRecordNow ? "active_no_schedule" : null);
 	let reversalConfirmLabel = t("asNeeded.reversal.confirm");
@@ -244,6 +289,7 @@ export function AsNeededIntakeHistory({
 			<div className={classes.list}>
 				{events.map((event) => {
 					const mood = normalizeIntakeMood(event.journal?.mood);
+					const canOpenJournal = event.status === "active" || event.journal !== null;
 					return (
 						<article className={classes.entry} key={event.eventId}>
 							<div className={classes.entryHeading}>
@@ -278,7 +324,14 @@ export function AsNeededIntakeHistory({
 								<p>{t("asNeeded.history.replacementFor", { eventId: event.replacementForEventId })}</p>
 							) : null}
 							<div className={classes.journal}>
-								<strong>{t("asNeeded.history.journal")}</strong>
+								<div className={classes.journalHeading}>
+									<strong>{t("asNeeded.history.journal")}</strong>
+									{canOpenJournal ? (
+										<AppButton type="button" tone="ghost" size="xs" onClick={() => openJournal(event)}>
+											{t(getJournalActionKey(event))}
+										</AppButton>
+									) : null}
+								</div>
 								{event.journal ? (
 									<p>
 										{[mood ? getIntakeMoodLabel(mood, t) : null, event.journal.note].filter(Boolean).join(" · ") ||
@@ -359,6 +412,21 @@ export function AsNeededIntakeHistory({
 					captureEscape
 				/>
 			) : null}
+			<IntakeJournalModal
+				isOpen={intakeJournal.journalEditorOpen}
+				entry={intakeJournal.journalEvent}
+				isLoading={intakeJournal.journalEventLoading}
+				isSaving={intakeJournal.journalEventSaving}
+				isDeleting={intakeJournal.journalEventDeleting}
+				error={intakeJournal.journalEventError}
+				onClose={closeJournal}
+				onSave={saveJournal}
+				onDelete={deleteJournal}
+				readOnly={
+					journalTargetStatus === "reversed" ||
+					(intakeJournal.journalEvent?.eventType === "as_needed" && intakeJournal.journalEvent.status === "reversed")
+				}
+			/>
 		</section>
 	);
 }

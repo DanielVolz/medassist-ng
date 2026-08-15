@@ -106,15 +106,21 @@
   },
   "journal": {
     "actions": {
+      "add": "Add journal",
+      "edit": "Edit journal",
       "note": "Note",
       "noteTakenOnly": "Notes are only available for taken or skipped doses.",
       "history": "Journal history",
-      "historyShort": "Journal"
+      "historyShort": "Journal",
+      "view": "View journal"
     },
     "editor": {
       "addTitle": "Add journal note",
       "editTitle": "Edit journal note",
       "description": "Capture what happened for this intake without changing the existing take or skip status.",
+      "readOnlyTitle": "Journal details",
+      "readOnlyIntro": "Review the journal saved with this intake.",
+      "readOnlyDescription": "This intake was reversed. Its journal remains visible for the audit history but can no longer be changed.",
       "loading": "Loading journal entry...",
       "noteLabel": "Note",
       "notePlaceholder": "Want to add a note?",
@@ -153,6 +159,7 @@
       }
     },
     "context": {
+      "occurredAt": "Recorded at",
       "scheduledFor": "Scheduled for",
       "takenAt": "Taken at",
       "markedBy": "Marked by",
@@ -170,6 +177,9 @@
       "historyFailed": "Journal history could not be loaded.",
       "saveFailed": "Journal note could not be saved.",
       "deleteFailed": "Journal note could not be deleted.",
+      "eventReversed": "This intake was reversed while the journal was open. The latest read-only entry is shown.",
+      "readOnly": "This account access is read-only and cannot change journal entries.",
+      "notFound": "This intake is no longer available. Refresh the history and try again.",
       "emptySharedNote": "Shared links cannot clear journal notes. Enter a note or close the dialog.",
       "noEventSelected": "No journal entry is selected."
     }
@@ -337,7 +347,9 @@
         "correctionReadyReconciliationTitle": "Original reversed — check stock",
         "correctionReadyReconciliationMessage": "Stock now exceeds configured capacity. Review it, then record the correction separately if appropriate.",
         "revisionChangedTitle": "History updated",
-        "revisionChangedMessage": "The intake changed before the reversal completed. Review the refreshed entry."
+        "revisionChangedMessage": "The intake changed before the reversal completed. Review the refreshed entry.",
+        "journalReconciledTitle": "Journal refreshed",
+        "journalReconciledMessage": "The intake was reversed while its journal was open. The latest read-only entry is now shown."
       }
     }
   },

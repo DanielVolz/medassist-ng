@@ -22,6 +22,7 @@ interface IntakeJournalModalProps {
 	onSave: (note: string, mood: IntakeMood | null) => Promise<boolean> | boolean;
 	onDelete: () => Promise<void> | void;
 	allowDelete?: boolean;
+	readOnly?: boolean;
 }
 
 export function IntakeJournalModal({
@@ -35,6 +36,7 @@ export function IntakeJournalModal({
 	onSave,
 	onDelete,
 	allowDelete = true,
+	readOnly = false,
 }: IntakeJournalModalProps) {
 	const { t } = useTranslation();
 	const [note, setNote] = useState("");
@@ -42,6 +44,7 @@ export function IntakeJournalModal({
 	const [showSavedState, setShowSavedState] = useState(false);
 	const activeDoseTrackingIdRef = useRef<number | null>(null);
 	const wasSavingRef = useRef(false);
+	const errorRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		if (!isOpen) {
@@ -85,6 +88,10 @@ export function IntakeJournalModal({
 		}
 	}, [entry, error, isOpen, isSaving, mood, note]);
 
+	useEffect(() => {
+		if (error) errorRef.current?.focus();
+	}, [error]);
+
 	if (!isOpen) {
 		return null;
 	}
@@ -97,14 +104,21 @@ export function IntakeJournalModal({
 	};
 
 	const scheduledForLabel = formatJournalDisplayDateTime(entry?.scheduledFor ?? null);
+	const occurredAtLabel = formatJournalDisplayDateTime(entry?.occurredAt ?? null);
 	const takenAtLabel = formatJournalDisplayDateTime(entry?.takenAt ?? null);
-	const title = entry?.note || entry?.mood ? t("journal.editor.editTitle") : t("journal.editor.addTitle");
+	let title = t("journal.editor.addTitle");
+	if (entry?.note || entry?.mood) title = t("journal.editor.editTitle");
+	if (readOnly) title = t("journal.editor.readOnlyTitle");
 	const saveLabel = showSavedState ? t("common.saved") : t("common.save");
 	let bodyContent: React.ReactNode;
 
 	if (isLoading) {
 		bodyContent = <div className={classes.state}>{t("journal.editor.loading")}</div>;
 	} else if (entry) {
+		const isAsNeeded = entry.eventType === "as_needed";
+		const statusLabel = isAsNeeded
+			? t(`asNeeded.history.status.${entry.status}`)
+			: t(entry.dismissed ? "journal.context.statusSkipped" : "journal.context.statusTaken");
 		bodyContent = (
 			<>
 				<div className={classes.eventCard}>
@@ -112,18 +126,27 @@ export function IntakeJournalModal({
 						<MedicationAvatar name={entry.medicationName} size="sm" />
 						<div>
 							<strong>{entry.medicationName}</strong>
-							<p>{entry.dismissed ? t("journal.context.statusSkipped") : t("journal.context.statusTaken")}</p>
+							<p>{statusLabel}</p>
 						</div>
 					</div>
 					<div className={classes.eventGrid}>
-						<div>
-							<span>{t("journal.context.scheduledFor")}</span>
-							<strong>{scheduledForLabel ?? t("common.notAvailable")}</strong>
-						</div>
-						<div>
-							<span>{t("journal.context.takenAt")}</span>
-							<strong>{takenAtLabel ?? t("journal.context.notRecorded")}</strong>
-						</div>
+						{isAsNeeded ? (
+							<div>
+								<span>{t("journal.context.occurredAt")}</span>
+								<strong>{occurredAtLabel ?? t("common.notAvailable")}</strong>
+							</div>
+						) : (
+							<>
+								<div>
+									<span>{t("journal.context.scheduledFor")}</span>
+									<strong>{scheduledForLabel ?? t("common.notAvailable")}</strong>
+								</div>
+								<div>
+									<span>{t("journal.context.takenAt")}</span>
+									<strong>{takenAtLabel ?? t("journal.context.notRecorded")}</strong>
+								</div>
+							</>
+						)}
 						<div>
 							<span>{t("journal.context.markedBy")}</span>
 							<strong>{entry.markedBy ?? t("journal.context.self")}</strong>
@@ -134,8 +157,9 @@ export function IntakeJournalModal({
 						</div>
 					</div>
 				</div>
+				{readOnly ? <div className={classes.readOnlyNotice}>{t("journal.editor.readOnlyDescription")}</div> : null}
 
-				<fieldset className={classes.moodField}>
+				<fieldset className={classes.moodField} disabled={readOnly}>
 					<legend className={classes.fieldLabel}>{t("journal.mood.label")}</legend>
 					{mood ? (
 						<div className={classes.moodHeader}>
@@ -190,10 +214,15 @@ export function IntakeJournalModal({
 						setShowSavedState(false);
 					}}
 					placeholder={t("journal.editor.notePlaceholder")}
+					readOnly={readOnly}
 					value={note}
 				/>
 
-				{error && <div className={classes.inlineError}>{error}</div>}
+				{error && (
+					<div ref={errorRef} className={classes.inlineError} role="alert" tabIndex={-1}>
+						{error}
+					</div>
+				)}
 			</>
 		);
 	} else {
@@ -208,13 +237,15 @@ export function IntakeJournalModal({
 			}}
 			closeButtonProps={{ "aria-label": t("common.close") }}
 			contentClassName={`${classes.modal} journal-modal`}
-			onClose={onClose}
+			onClose={() => {
+				if (!isSaving && !isDeleting) onClose();
+			}}
 			opened={isOpen}
 			size={720}
 			title={
 				<div className={classes.titleBlock}>
 					<h2>{title}</h2>
-					<p>{t("journal.editor.description")}</p>
+					<p>{t(readOnly ? "journal.editor.readOnlyIntro" : "journal.editor.description")}</p>
 				</div>
 			}
 			withCloseButton
@@ -223,7 +254,7 @@ export function IntakeJournalModal({
 
 			<AppModalFooter
 				left={
-					allowDelete ? (
+					allowDelete && !readOnly ? (
 						<AppButton
 							type="button"
 							tone="ghost"
@@ -236,16 +267,18 @@ export function IntakeJournalModal({
 				}
 			>
 				<AppButton type="button" tone="secondary" onClick={onClose} disabled={isSaving || isDeleting}>
-					{t("common.cancel")}
+					{t(readOnly ? "common.close" : "common.cancel")}
 				</AppButton>
-				<AppButton
-					type="button"
-					tone="primary"
-					onClick={() => void handleSave()}
-					disabled={isLoading || isSaving || isDeleting || !entry}
-				>
-					{saveLabel}
-				</AppButton>
+				{readOnly ? null : (
+					<AppButton
+						type="button"
+						tone="primary"
+						onClick={() => void handleSave()}
+						disabled={isLoading || isSaving || isDeleting || !entry}
+					>
+						{saveLabel}
+					</AppButton>
+				)}
 			</AppModalFooter>
 		</AppModal>
 	);

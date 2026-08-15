@@ -106,15 +106,21 @@
   },
   "journal": {
     "actions": {
+      "add": "Journal hinzufügen",
+      "edit": "Journal bearbeiten",
       "note": "Notiz",
       "noteTakenOnly": "Notizen funktionieren nur für genommene oder uebersprungene Dosen.",
       "history": "Journal-Verlauf",
-      "historyShort": "Journal"
+      "historyShort": "Journal",
+      "view": "Journal ansehen"
     },
     "editor": {
       "addTitle": "Journal-Notiz hinzufügen",
       "editTitle": "Journal-Notiz bearbeiten",
       "description": "Halte fest, was bei dieser Einnahme passiert ist, ohne den bestehenden Einnahme- oder Auslassen-Status zu ändern.",
+      "readOnlyTitle": "Journal-Details",
+      "readOnlyIntro": "Prüfe das mit dieser Einnahme gespeicherte Journal.",
+      "readOnlyDescription": "Diese Einnahme wurde storniert. Ihr Journal bleibt für den Prüfverlauf sichtbar, kann aber nicht mehr geändert werden.",
       "loading": "Journal-Eintrag wird geladen...",
       "noteLabel": "Notiz",
       "notePlaceholder": "Möchtest du mehr dazu notieren?",
@@ -153,6 +159,7 @@
       }
     },
     "context": {
+      "occurredAt": "Erfasst um",
       "scheduledFor": "Geplant für",
       "takenAt": "Eingenommen um",
       "markedBy": "Markiert von",
@@ -170,6 +177,9 @@
       "historyFailed": "Der Journal-Verlauf konnte nicht geladen werden.",
       "saveFailed": "Die Journal-Notiz konnte nicht gespeichert werden.",
       "deleteFailed": "Die Journal-Notiz konnte nicht gelöscht werden.",
+      "eventReversed": "Diese Einnahme wurde storniert, während das Journal geöffnet war. Der aktuelle schreibgeschützte Eintrag wird angezeigt.",
+      "readOnly": "Dieser Kontozugriff ist schreibgeschützt und kann Journal-Einträge nicht ändern.",
+      "notFound": "Diese Einnahme ist nicht mehr verfügbar. Aktualisiere den Verlauf und versuche es erneut.",
       "emptySharedNote": "Geteilte Links koennen Journal-Notizen nicht leeren. Gib eine Notiz ein oder schliesse den Dialog.",
       "noEventSelected": "Es ist kein Journal-Eintrag ausgewählt."
     }
@@ -337,7 +347,9 @@
         "correctionReadyReconciliationTitle": "Original storniert – Bestand prüfen",
         "correctionReadyReconciliationMessage": "Der Bestand übersteigt nun die konfigurierte Kapazität. Prüfe ihn und erfasse die Korrektur anschließend bei Bedarf separat.",
         "revisionChangedTitle": "Verlauf aktualisiert",
-        "revisionChangedMessage": "Die Einnahme wurde geändert, bevor die Stornierung abgeschlossen war. Prüfe den aktualisierten Eintrag."
+        "revisionChangedMessage": "Die Einnahme wurde geändert, bevor die Stornierung abgeschlossen war. Prüfe den aktualisierten Eintrag.",
+        "journalReconciledTitle": "Journal aktualisiert",
+        "journalReconciledMessage": "Die Einnahme wurde storniert, während ihr Journal geöffnet war. Der aktuelle schreibgeschützte Eintrag wird jetzt angezeigt."
       }
     }
   },

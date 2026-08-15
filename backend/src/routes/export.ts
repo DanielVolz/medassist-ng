@@ -6,11 +6,20 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { getDataDir } from "../db/path-utils.js";
-import { doseTracking, intakeJournal, medications, refillHistory, shareTokens, userSettings } from "../db/schema.js";
+import {
+	asNeededIntakeEvents,
+	doseTracking,
+	intakeJournal,
+	medications,
+	refillHistory,
+	shareTokens,
+	userSettings,
+} from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { filterScheduledDoseRows } from "../services/as-needed-intakes-service.js";
 import {
+	listAsNeededIntakeJournalExportPayloadsForUser,
 	listIntakeJournalExportPayloadsForUser,
 	restoreIntakeJournalForImportedDose,
 } from "../services/intake-journal-export.js";
@@ -36,7 +45,7 @@ const IMAGES_DIR = resolve(getDataDir(), "images");
 // =============================================================================
 // Export Format Version (bump this when format changes)
 // =============================================================================
-const EXPORT_VERSION = "1.8";
+const EXPORT_VERSION = "1.9";
 
 const currentExportVersion = parseExportVersion(EXPORT_VERSION);
 
@@ -60,8 +69,23 @@ function isValidDateLikeString(value: string): boolean {
 	return !Number.isNaN(new Date(value).getTime());
 }
 
+function toRequiredIsoString(value: Date | string | number, field: string): string {
+	const parsed = value instanceof Date ? value : new Date(value);
+	if (Number.isNaN(parsed.getTime())) {
+		throw new Error(`Cannot export invalid as-needed intake ${field}`);
+	}
+	return parsed.toISOString();
+}
+
+function stockCutoffToIsoString(value: number): string | null {
+	if (value === 0) return null;
+	return toRequiredIsoString(value * 1000, "stock cutoff timestamp");
+}
+
 const dateLikeStringSchema = z.string().refine(isValidDateLikeString, { message: "Invalid date" });
 const nullableDateLikeStringSchema = dateLikeStringSchema.nullable().optional();
+const requiredNullableDateLikeStringSchema = dateLikeStringSchema.nullable();
+const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 
 // =============================================================================
 // Zod Schemas for Import Validation
@@ -154,6 +178,50 @@ const shareLinkSchema = z.object({
 	regenerateToken: z.boolean().default(true),
 });
 
+const asNeededIntakeExportSchema = z
+	.object({
+		eventId: z.string().uuid(),
+		medicationRef: z.string().min(1),
+		idempotencyKeyHash: sha256Schema,
+		requestFingerprint: sha256Schema,
+		occurredAt: dateLikeStringSchema,
+		recordedAt: dateLikeStringSchema,
+		quantityMilli: z.number().int().positive(),
+		quantityUnit: z.enum(["pills", "ml", "puffs", "injections", "application"]),
+		person: z.string().max(100).nullable(),
+		source: z.literal("owner_as_needed"),
+		status: z.enum(["active", "reversed"]),
+		stockEffectMilli: z.number().int().nonnegative(),
+		stockEffectReason: z.enum(["applied", "non_measurable", "before_correction", "superseded_by_correction"]),
+		stockCutoffAt: requiredNullableDateLikeStringSchema,
+		replacementForEventId: z.string().uuid().nullable(),
+		reversedAt: requiredNullableDateLikeStringSchema,
+		reversalIdempotencyKeyHash: sha256Schema.nullable(),
+		revision: z.number().int().min(1),
+		journalNote: z.string().max(4000).nullable(),
+		journalMood: z.enum(INTAKE_MOODS).nullable(),
+		journalCreatedAt: requiredNullableDateLikeStringSchema,
+		journalUpdatedAt: requiredNullableDateLikeStringSchema,
+	})
+	.superRefine((event, context) => {
+		if (event.status === "active" && event.reversedAt !== null) {
+			context.addIssue({ code: "custom", path: ["reversedAt"], message: "Active event cannot have reversedAt" });
+		}
+		if (event.status === "reversed" && event.reversedAt === null) {
+			context.addIssue({ code: "custom", path: ["reversedAt"], message: "Reversed event requires reversedAt" });
+		}
+		if (
+			event.quantityUnit === "application" &&
+			(event.quantityMilli !== 1000 || event.stockEffectMilli !== 0 || event.stockEffectReason !== "non_measurable")
+		) {
+			context.addIssue({
+				code: "custom",
+				path: ["quantityUnit"],
+				message: "Application events require quantity 1 and zero non-measurable stock effect",
+			});
+		}
+	});
+
 const settingsSchemaBase = z.object({
 	timezone: z.string().default(""),
 	// Email notifications
@@ -197,18 +265,30 @@ const importSettingsSchema = settingsSchemaBase
 	})
 	.optional();
 
-const importDataSchema = z.object({
-	version: z.string().refine(isSupportedExportVersion, {
-		message: `Unsupported export format version. Supported up to ${EXPORT_VERSION}.`,
-	}),
-	exportedAt: dateLikeStringSchema,
-	includeSensitiveData: z.boolean().default(false),
-	medications: z.array(medicationExportSchema).default([]),
-	doseHistory: z.array(doseHistorySchema).default([]),
-	refillHistory: z.array(refillHistoryExportSchema).default([]),
-	settings: importSettingsSchema,
-	shareLinks: z.array(shareLinkSchema).default([]),
-});
+const importDataSchema = z
+	.object({
+		version: z.string().refine(isSupportedExportVersion, {
+			message: `Unsupported export format version. Supported up to ${EXPORT_VERSION}.`,
+		}),
+		exportedAt: dateLikeStringSchema,
+		includeSensitiveData: z.boolean().default(false),
+		medications: z.array(medicationExportSchema).default([]),
+		doseHistory: z.array(doseHistorySchema).default([]),
+		asNeededIntakes: z.array(asNeededIntakeExportSchema).optional(),
+		refillHistory: z.array(refillHistoryExportSchema).default([]),
+		settings: importSettingsSchema,
+		shareLinks: z.array(shareLinkSchema).default([]),
+	})
+	.superRefine((data, context) => {
+		if (parseExportVersion(data.version)?.minor === 9 && data.asNeededIntakes === undefined) {
+			context.addIssue({
+				code: "custom",
+				path: ["asNeededIntakes"],
+				message: "Export format 1.9 requires asNeededIntakes",
+			});
+		}
+	})
+	.transform((data) => ({ ...data, asNeededIntakes: data.asNeededIntakes ?? [] }));
 
 const exportQuerystringSchema = {
 	type: "object",
@@ -226,6 +306,7 @@ const exportResponseSchema = {
 		includeSensitiveData: { type: "boolean" },
 		medications: { type: "array", items: { type: "object", additionalProperties: true } },
 		doseHistory: { type: "array", items: { type: "object", additionalProperties: true } },
+		asNeededIntakes: { type: "array", items: { type: "object", additionalProperties: true } },
 		refillHistory: { type: "array", items: { type: "object", additionalProperties: true } },
 		settings: { type: "object", additionalProperties: true },
 		shareLinks: { type: "array", items: { type: "object", additionalProperties: true } },
@@ -241,12 +322,13 @@ const importBodyOpenApiSchema = {
 		includeSensitiveData: { type: "boolean" },
 		medications: { type: "array", items: { type: "object", additionalProperties: true } },
 		doseHistory: { type: "array", items: { type: "object", additionalProperties: true } },
+		asNeededIntakes: { type: "array", items: { type: "object", additionalProperties: true } },
 		refillHistory: { type: "array", items: { type: "object", additionalProperties: true } },
 		settings: { type: "object", additionalProperties: true },
 		shareLinks: { type: "array", items: { type: "object", additionalProperties: true } },
 	},
 	example: {
-		version: "1.7",
+		version: "1.9",
 		exportedAt: "2026-03-11T10:15:00.000Z",
 		includeSensitiveData: true,
 		medications: [
@@ -281,6 +363,7 @@ const importBodyOpenApiSchema = {
 				journalUpdatedAt: "2026-03-11T08:05:00.000Z",
 			},
 		],
+		asNeededIntakes: [],
 		refillHistory: [{ packsAdded: 1, loosePillsAdded: 4, quantityAdded: 34, refillDate: "2026-03-10T12:00:00.000Z" }],
 		settings: { language: "en", stockCalculationMode: "automatic" },
 		shareLinks: [{ takenBy: "Daniel", scheduleDays: 14 }],
@@ -302,6 +385,7 @@ const importPreviewResponseSchema = {
 					properties: {
 						medications: { type: "integer" },
 						doseHistory: { type: "integer" },
+						asNeededIntakes: { type: "integer" },
 						refillHistory: { type: "integer" },
 						shareLinks: { type: "integer" },
 						journalEntries: { type: "integer" },
@@ -314,6 +398,7 @@ const importPreviewResponseSchema = {
 					properties: {
 						medications: { type: "integer" },
 						doseHistory: { type: "integer" },
+						asNeededIntakes: { type: "integer" },
 						refillHistory: { type: "integer" },
 						shareLinks: { type: "integer" },
 						hasSettings: { type: "boolean" },
@@ -481,15 +566,23 @@ function buildImportPreview(
 	currentData: {
 		medications: number;
 		doseHistory: number;
+		asNeededIntakes: number;
 		refillHistory: number;
 		shareLinks: number;
 		hasSettings: boolean;
 	}
 ) {
-	const journalEntries = importData.doseHistory.filter(
+	const scheduledJournalEntries = importData.doseHistory.filter(
 		(dose) =>
 			(typeof dose.journalNote === "string" && dose.journalNote.trim()) ||
 			normalizeIntakeMood(dose.journalMood) !== null
+	).length;
+	const asNeededJournalEntries = importData.asNeededIntakes.filter(
+		(event) =>
+			event.journalNote !== null ||
+			event.journalMood !== null ||
+			event.journalCreatedAt !== null ||
+			event.journalUpdatedAt !== null
 	).length;
 	const imageCount = importData.medications.filter(
 		(med) => typeof med.image === "string" && med.image.startsWith("data:")
@@ -502,9 +595,10 @@ function buildImportPreview(
 		incoming: {
 			medications: importData.medications.length,
 			doseHistory: importData.doseHistory.length,
+			asNeededIntakes: importData.asNeededIntakes.length,
 			refillHistory: importData.refillHistory.length,
 			shareLinks: importData.shareLinks.length,
-			journalEntries,
+			journalEntries: scheduledJournalEntries + asNeededJournalEntries,
 			imageCount,
 			hasSettings: Boolean(importData.settings),
 		},
@@ -513,6 +607,7 @@ function buildImportPreview(
 			replacesExistingData:
 				currentData.medications > 0 ||
 				currentData.doseHistory > 0 ||
+				currentData.asNeededIntakes > 0 ||
 				currentData.refillHistory > 0 ||
 				currentData.shareLinks > 0 ||
 				currentData.hasSettings,
@@ -718,6 +813,51 @@ export async function exportRoutes(app: FastifyInstance) {
 				})
 				.filter((d): d is NonNullable<typeof d> => d !== null);
 
+			const asNeededEvents = await db
+				.select()
+				.from(asNeededIntakeEvents)
+				.where(eq(asNeededIntakeEvents.userId, userId))
+				.orderBy(asNeededIntakeEvents.id);
+			const eventIdByInternalId = new Map(asNeededEvents.map((event) => [event.id, event.eventId]));
+			const asNeededJournalPayloads = await listAsNeededIntakeJournalExportPayloadsForUser(userId);
+			const exportAsNeededIntakes = asNeededEvents.map((event) => {
+				const medicationRef = medIdToExportId.get(event.medicationId);
+				if (!medicationRef) {
+					throw new Error("Cannot export as-needed intake with missing medication");
+				}
+
+				const replacementForEventId = event.replacesEventId ? eventIdByInternalId.get(event.replacesEventId) : null;
+				if (event.replacesEventId && !replacementForEventId) {
+					throw new Error("Cannot export as-needed intake with missing replacement target");
+				}
+
+				const journal = asNeededJournalPayloads.get(event.doseTrackingId);
+				return asNeededIntakeExportSchema.parse({
+					eventId: event.eventId,
+					medicationRef,
+					idempotencyKeyHash: event.idempotencyKeyHash,
+					requestFingerprint: event.requestFingerprint,
+					occurredAt: toRequiredIsoString(event.occurredAt, "occurred timestamp"),
+					recordedAt: toRequiredIsoString(event.recordedAt, "recorded timestamp"),
+					quantityMilli: event.quantityMilli,
+					quantityUnit: event.quantityUnit,
+					person: event.personName || null,
+					source: event.source,
+					status: event.status,
+					stockEffectMilli: event.stockEffectMilli,
+					stockEffectReason: event.stockEffectReason,
+					stockCutoffAt: stockCutoffToIsoString(event.stockCutoffAt),
+					replacementForEventId,
+					reversedAt: event.reversedAt ? toRequiredIsoString(event.reversedAt, "reversed timestamp") : null,
+					reversalIdempotencyKeyHash: event.reversalIdempotencyKeyHash,
+					revision: event.revision,
+					journalNote: journal?.journalNote ?? null,
+					journalMood: journal?.journalMood ?? null,
+					journalCreatedAt: journal?.journalCreatedAt ?? null,
+					journalUpdatedAt: journal?.journalUpdatedAt ?? null,
+				});
+			});
+
 			// 3. Load user settings
 			const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
 
@@ -837,6 +977,7 @@ export async function exportRoutes(app: FastifyInstance) {
 				includeSensitiveData: includeSensitive,
 				medications: exportMedications,
 				doseHistory: exportDoseHistory,
+				asNeededIntakes: exportAsNeededIntakes,
 				refillHistory: exportRefillHistory,
 				settings: exportSettings,
 				shareLinks: exportShareLinks,
@@ -893,14 +1034,24 @@ export async function exportRoutes(app: FastifyInstance) {
 				});
 			}
 
-			const [existingMeds, existingDoseHistory, existingRefillHistory, existingShareLinks, existingSettings] =
-				await Promise.all([
-					db.select({ id: medications.id }).from(medications).where(eq(medications.userId, userId)),
-					db.select({ id: doseTracking.id }).from(doseTracking).where(eq(doseTracking.userId, userId)),
-					db.select({ id: refillHistory.id }).from(refillHistory).where(eq(refillHistory.userId, userId)),
-					db.select({ id: shareTokens.id }).from(shareTokens).where(eq(shareTokens.userId, userId)),
-					db.select({ id: userSettings.id }).from(userSettings).where(eq(userSettings.userId, userId)),
-				]);
+			const [
+				existingMeds,
+				existingDoseHistory,
+				existingAsNeededIntakes,
+				existingRefillHistory,
+				existingShareLinks,
+				existingSettings,
+			] = await Promise.all([
+				db.select({ id: medications.id }).from(medications).where(eq(medications.userId, userId)),
+				db.select({ id: doseTracking.id }).from(doseTracking).where(eq(doseTracking.userId, userId)),
+				db
+					.select({ id: asNeededIntakeEvents.id })
+					.from(asNeededIntakeEvents)
+					.where(eq(asNeededIntakeEvents.userId, userId)),
+				db.select({ id: refillHistory.id }).from(refillHistory).where(eq(refillHistory.userId, userId)),
+				db.select({ id: shareTokens.id }).from(shareTokens).where(eq(shareTokens.userId, userId)),
+				db.select({ id: userSettings.id }).from(userSettings).where(eq(userSettings.userId, userId)),
+			]);
 			const scheduledDoseHistory = await filterScheduledDoseRows(db, userId, existingDoseHistory);
 
 			return {
@@ -908,6 +1059,7 @@ export async function exportRoutes(app: FastifyInstance) {
 				preview: buildImportPreview(parsed.data, {
 					medications: existingMeds.length,
 					doseHistory: scheduledDoseHistory.length,
+					asNeededIntakes: existingAsNeededIntakes.length,
 					refillHistory: existingRefillHistory.length,
 					shareLinks: existingShareLinks.length,
 					hasSettings: existingSettings.length > 0,
@@ -939,6 +1091,7 @@ export async function exportRoutes(app: FastifyInstance) {
 								properties: {
 									medications: { type: "integer" },
 									doseHistory: { type: "integer" },
+									asNeededIntakes: { type: "integer" },
 									refillHistory: { type: "integer" },
 									settings: { type: "integer" },
 									shareLinks: { type: "integer" },
@@ -972,6 +1125,15 @@ export async function exportRoutes(app: FastifyInstance) {
 					details: { _errors: validationIssues.slice(0, 10) },
 				});
 			}
+			if (importData.asNeededIntakes.length > 0) {
+				return reply.status(400).send({
+					error: "As-needed intake restore is not available in this release",
+					code: "INVALID_IMPORT_DATA",
+					details: {
+						_errors: ["This v1.9 export contains as-needed intakes and cannot be imported without loss"],
+					},
+				});
+			}
 
 			// Existing image files are removed only after the DB import commits.
 			const existingMeds = await db.select().from(medications).where(eq(medications.userId, userId));
@@ -982,6 +1144,7 @@ export async function exportRoutes(app: FastifyInstance) {
 			const imported = {
 				medications: 0,
 				doseHistory: 0,
+				asNeededIntakes: 0,
 				refillHistory: 0,
 				settings: 0,
 				shareLinks: 0,

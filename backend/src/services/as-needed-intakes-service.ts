@@ -29,8 +29,6 @@ export class AsNeededIntakeError extends Error {
 			| "INVALID_PERSON"
 			| "STOCK_UNRESOLVABLE"
 			| "INSUFFICIENT_STOCK"
-			| "REPLACEMENT_NOT_FOUND"
-			| "REPLACEMENT_INVALID"
 			| "EVENT_NOT_FOUND"
 			| "TOO_MANY_NEW_INTAKES"
 			| "INVALID_CURSOR"
@@ -535,16 +533,14 @@ export async function createAsNeededIntake(input: {
 	quantity: number;
 	personName?: string | null;
 	idempotencyKey: string;
-	replacesEventId?: string | null;
 	enforceOwnerRateLimit?: boolean;
 }) {
 	const keyHash = sha256(normalizeIntentKey(input.idempotencyKey));
 	return withImmediateWriteTransaction(async (transactionDb) => {
 		const personName = input.personName?.trim() ?? "";
-		const replacementId = input.replacesEventId?.trim().toLowerCase() ?? "";
 		const rawQuantityMilli = input.quantity * 1000;
 		const fingerprint = Number.isSafeInteger(rawQuantityMilli)
-			? sha256(`${input.medicationId}:${rawQuantityMilli}:${personName}:${replacementId}`)
+			? sha256(`${input.medicationId}:${rawQuantityMilli}:${personName}:`)
 			: "";
 		const [replay] = await transactionDb
 			.select()
@@ -552,20 +548,12 @@ export async function createAsNeededIntake(input: {
 			.where(and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.idempotencyKeyHash, keyHash)));
 		if (replay) {
 			if (!fingerprint || replay.requestFingerprint !== fingerprint) {
-				const [replacedEvent] = replay.replacesEventId
-					? await transactionDb
-							.select({ eventId: asNeededIntakeEvents.eventId })
-							.from(asNeededIntakeEvents)
-							.where(
-								and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.id, replay.replacesEventId))
-							)
-					: [];
 				const matchesImportedIntent =
 					Number.isSafeInteger(rawQuantityMilli) &&
 					replay.medicationId === input.medicationId &&
 					replay.quantityMilli === rawQuantityMilli &&
 					replay.personName === personName &&
-					(replacedEvent?.eventId ?? "") === replacementId;
+					replay.replacesEventId === null;
 				if (!matchesImportedIntent) {
 					throw new AsNeededIntakeError("IDEMPOTENCY_KEY_REUSED", "Idempotency key is bound to another request");
 				}
@@ -602,28 +590,6 @@ export async function createAsNeededIntake(input: {
 		const now = new Date();
 		if (!getAsNeededLifecycle(medication, now, settings?.timezone).eligible) {
 			throw new AsNeededIntakeError("NOT_ELIGIBLE", "Medication is not eligible for an as-needed intake");
-		}
-
-		let replacesEventInternalId: number | null = null;
-		if (replacementId) {
-			const [replaced] = await transactionDb
-				.select()
-				.from(asNeededIntakeEvents)
-				.where(and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.eventId, replacementId)));
-			if (!replaced) throw new AsNeededIntakeError("REPLACEMENT_NOT_FOUND", "Replacement event not found");
-			if (replaced.medicationId !== input.medicationId || replaced.status !== "reversed") {
-				throw new AsNeededIntakeError("REPLACEMENT_INVALID", "Replacement target is not a reversed medication event");
-			}
-			const [existingReplacement] = await transactionDb
-				.select({ id: asNeededIntakeEvents.id })
-				.from(asNeededIntakeEvents)
-				.where(
-					and(eq(asNeededIntakeEvents.userId, input.userId), eq(asNeededIntakeEvents.replacesEventId, replaced.id))
-				);
-			if (existingReplacement) {
-				throw new AsNeededIntakeError("REPLACEMENT_INVALID", "Replacement target already has a replacement");
-			}
-			replacesEventInternalId = replaced.id;
 		}
 
 		const doseRows = await transactionDb.select().from(doseTracking).where(eq(doseTracking.userId, input.userId));
@@ -674,7 +640,6 @@ export async function createAsNeededIntake(input: {
 				personName,
 				stockEffectMilli: profile.measurable ? quantityMilli : 0,
 				stockEffectReason: profile.measurable ? "applied" : "non_measurable",
-				replacesEventId: replacesEventInternalId,
 				updatedAt: now,
 			})
 			.returning();

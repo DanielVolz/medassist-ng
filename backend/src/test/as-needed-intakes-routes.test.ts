@@ -151,9 +151,12 @@ describe.sequential("as-needed owner routes", () => {
 				})
 			).statusCode
 		).toBe(400);
-		expect((await create(app, medicationId, { quantity: 1, replacementForEventId: "not-a-uuid" })).statusCode).toBe(
-			400
-		);
+		const legacyReplacement = await create(app, medicationId, {
+			quantity: 1,
+			replacementForEventId: "00000000-0000-4000-8000-000000000099",
+		});
+		expect(legacyReplacement.statusCode).toBe(201);
+		expect(legacyReplacement.json().event.replacementForEventId).toBeNull();
 		authState.readOnly = true;
 		expect((await create(app, medicationId, { quantity: 1 })).json()).toMatchObject({ code: "READ_ONLY" });
 		expect(

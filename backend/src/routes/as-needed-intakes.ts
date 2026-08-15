@@ -33,7 +33,6 @@ const createBodySchema = z
 	.object({
 		quantity: z.number().positive().multipleOf(0.001),
 		person: z.string().trim().min(1).max(100).nullable().optional(),
-		replacementForEventId: z.string().trim().uuid().nullable().optional(),
 	})
 	.strict();
 
@@ -71,7 +70,6 @@ const createBodyOpenApiSchema = {
 	properties: {
 		quantity: { type: "number", exclusiveMinimum: 0, multipleOf: 0.001 },
 		person: { type: ["string", "null"], minLength: 1, maxLength: 100 },
-		replacementForEventId: { type: ["string", "null"], format: "uuid" },
 	},
 	additionalProperties: false,
 } as const;
@@ -241,7 +239,7 @@ function sendServiceError(
 	if (error.code === "MEDICATION_NOT_FOUND") {
 		return reply.status(404).send({ error: "Medication not found", code: error.code });
 	}
-	if (error.code === "EVENT_NOT_FOUND" || error.code === "REPLACEMENT_NOT_FOUND") {
+	if (error.code === "EVENT_NOT_FOUND") {
 		return reply.status(404).send({ error: "Event not found", code: "EVENT_NOT_FOUND" });
 	}
 	if (
@@ -259,7 +257,6 @@ function sendServiceError(
 		STOCK_UNRESOLVABLE: "STOCK_UNRESOLVABLE",
 		INSUFFICIENT_STOCK: "INSUFFICIENT_STOCK",
 		IDEMPOTENCY_KEY_REUSED: "IDEMPOTENCY_KEY_REUSED",
-		REPLACEMENT_INVALID: "REPLACEMENT_NOT_ALLOWED",
 	} as const;
 	const code = codeByConflict[error.code];
 	return reply.status(409).send({
@@ -367,7 +364,6 @@ export async function asNeededIntakeRoutes(app: FastifyInstance) {
 					quantity: body.data.quantity,
 					personName: body.data.person,
 					idempotencyKey: headers.data["idempotency-key"],
-					replacesEventId: body.data.replacementForEventId,
 					enforceOwnerRateLimit: true,
 				});
 				const response = await getAsNeededMutationResponse(userId, event.eventId);

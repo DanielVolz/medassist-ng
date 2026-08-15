@@ -17,6 +17,7 @@ import {
 } from "./context";
 import { useModalHistory } from "./hooks/useModalHistory";
 import { useScrollLock } from "./hooks/useScrollLock";
+import type { AsNeededIntakeEvent } from "./types";
 import { AppButton } from "./ui/primitives/AppButton";
 import { getMedicationIntakes } from "./utils/intake-schedule";
 
@@ -244,6 +245,7 @@ function AppContent() {
 		meds,
 		loadMeds,
 		recordAsNeededIntake,
+		reverseAsNeededIntake,
 		// Refill
 		showRefillModal,
 		setShowRefillModal,
@@ -324,6 +326,7 @@ function AppContent() {
 	const [showProfile, setShowProfile] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
 	const [detailRecordNowMedication, setDetailRecordNowMedication] = useState<(typeof meds)[number] | null>(null);
+	const [detailReplacementEvent, setDetailReplacementEvent] = useState<AsNeededIntakeEvent | null>(null);
 	const [asNeededHistoryRefreshVersion, setAsNeededHistoryRefreshVersion] = useState(0);
 	const [routeTransitionMaskActive, setRouteTransitionMaskActive] = useState(false);
 	const [showMainSwipeHint, setShowMainSwipeHint] = useState(shouldShowInitialMainSwipeHint);
@@ -345,6 +348,7 @@ function AppContent() {
 	}, []);
 	const dismissDetailRecordNow = useCallback(() => {
 		setDetailRecordNowMedication(null);
+		setDetailReplacementEvent(null);
 	}, []);
 	// History integration via the shared modal stack: pushes one entry on open,
 	// browser back (or closeModal) dismisses only the topmost modal.
@@ -354,7 +358,11 @@ function AppContent() {
 		Boolean(detailRecordNowMedication),
 		"detail-record-now",
 		dismissDetailRecordNow,
-		{ state: detailRecordNowMedication ? { medicationId: detailRecordNowMedication.id } : undefined }
+		{
+			state: detailRecordNowMedication
+				? { medicationId: detailRecordNowMedication.id, replacementEventId: detailReplacementEvent?.eventId }
+				: undefined,
+		}
 	);
 
 	// Get centralized stockThresholds from context
@@ -757,7 +765,17 @@ function AppContent() {
 						onCloseRefillModal={closeRefillModal}
 						onOpenMedicationEdit={handleOpenMedicationEdit}
 						onOpenEditStockModal={handleOpenEditStockFromDetail}
-						onOpenRecordNow={() => selectedMed && setDetailRecordNowMedication(selectedMed)}
+						onOpenRecordNow={() => {
+							if (!selectedMed) return;
+							setDetailReplacementEvent(null);
+							setDetailRecordNowMedication(selectedMed);
+						}}
+						onReplaceAsNeeded={(event) => {
+							if (!selectedMed) return;
+							setDetailReplacementEvent(event);
+							setDetailRecordNowMedication(selectedMed);
+						}}
+						onReverseAsNeeded={reverseAsNeededIntake}
 						onCloseEditStockModal={closeEditStockModal}
 						onOpenUserFilter={openUserFilter}
 						refillPacks={refillPacks}
@@ -787,6 +805,7 @@ function AppContent() {
 				<Suspense fallback={null}>
 					<RecordNowModal
 						medication={detailRecordNowMedication}
+						replacementEvent={detailReplacementEvent}
 						onClose={closeDetailRecordNow}
 						onRecord={async (input) => {
 							const result = await recordAsNeededIntake(input);

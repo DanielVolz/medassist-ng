@@ -137,4 +137,35 @@ describe("RecordNowModal", () => {
 		resolveRequest?.(response());
 		await screen.findByText("asNeeded.record.successTitle");
 	});
+
+	it("creates a replacement only with the durable reversed event and replays the exact request", async () => {
+		const replacementEvent = response().event;
+		const onRecord = vi
+			.fn()
+			.mockRejectedValueOnce(new AsNeededIntakeRequestError("NETWORK_ERROR"))
+			.mockResolvedValueOnce({
+				...response(),
+				event: { ...response().event, replacementForEventId: replacementEvent.eventId },
+			});
+		render(
+			<RecordNowModal
+				medication={medication()}
+				replacementEvent={{ ...replacementEvent, status: "reversed", revision: 2, stockEffect: 0 }}
+				onClose={vi.fn()}
+				onRecord={onRecord}
+			/>
+		);
+
+		expect(screen.getByText("asNeeded.replacement.description")).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.replacement.confirm" }));
+		await screen.findByText("asNeeded.errors.network");
+		fireEvent.click(screen.getByRole("button", { name: "common.retry" }));
+		await screen.findByText("asNeeded.replacement.successTitle");
+		expect(onRecord).toHaveBeenCalledTimes(2);
+		expect(onRecord.mock.calls[0][0]).toEqual(onRecord.mock.calls[1][0]);
+		expect(onRecord.mock.calls[0][0]).toMatchObject({
+			replacementForEventId: "event-8",
+			idempotencyKey: "modal-intent-key",
+		});
+	});
 });

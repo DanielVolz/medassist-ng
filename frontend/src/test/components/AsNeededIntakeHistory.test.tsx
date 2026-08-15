@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AsNeededIntakeHistory } from "../../components/AsNeededIntakeHistory";
+import { AsNeededIntakeRequestError } from "../../hooks/useAsNeededIntakes";
 import type { AsNeededIntakeEvent } from "../../types";
 
 const listAsNeededIntakes = vi.fn();
 
-vi.mock("../../hooks/useAsNeededIntakes", () => ({
+vi.mock("../../hooks/useAsNeededIntakes", async (importActual) => ({
+	...(await importActual<typeof import("../../hooks/useAsNeededIntakes")>()),
 	useAsNeededIntakes: () => ({ listAsNeededIntakes }),
 }));
 
@@ -48,6 +50,22 @@ function deferred<T>() {
 		resolve = resolvePromise;
 	});
 	return { promise, resolve };
+}
+
+function reversalResponse(source: AsNeededIntakeEvent): {
+	event: AsNeededIntakeEvent;
+	inventory: { reconciliationRequired: boolean };
+} {
+	return {
+		event: {
+			...source,
+			status: "reversed",
+			revision: source.revision + 1,
+			stockEffect: 0,
+			reversedAt: "2026-08-15T13:00:00.000Z",
+		},
+		inventory: { reconciliationRequired: false },
+	};
 }
 
 describe("AsNeededIntakeHistory", () => {
@@ -142,5 +160,75 @@ describe("AsNeededIntakeHistory", () => {
 		first.resolve({ events: [event({ person: "Stale" })], nextCursor: null });
 		await waitFor(() => expect(screen.queryByText("Stale")).not.toBeInTheDocument());
 		expect(listAsNeededIntakes.mock.calls[0][2].aborted).toBe(true);
+	});
+
+	it("reverses only active events, retries with the same key, and retains the reversed audit entry", async () => {
+		const active = event();
+		const reversed = event({
+			eventId: "event-old",
+			status: "reversed",
+			stockEffect: 0,
+			reversedAt: "2026-08-15T13:00:00.000Z",
+		});
+		const onReverse = vi
+			.fn()
+			.mockRejectedValueOnce(new AsNeededIntakeRequestError("NETWORK_ERROR"))
+			.mockResolvedValueOnce(reversalResponse(active));
+		listAsNeededIntakes.mockResolvedValueOnce({ events: [active, reversed], nextCursor: null });
+		render(<AsNeededIntakeHistory medicationId={9} canRecordNow onRecordNow={vi.fn()} onReverse={onReverse} />);
+
+		await screen.findByText("asNeeded.reversal.action");
+		expect(screen.getAllByText("asNeeded.reversal.action")).toHaveLength(1);
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.reversal.action" }));
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.reversal.confirm" }));
+		await screen.findByText("asNeeded.reversal.errors.network");
+		fireEvent.click(screen.getByRole("button", { name: "common.retry" }));
+		await screen.findByText("asNeeded.reversal.notice.reversedTitle");
+		expect(onReverse).toHaveBeenCalledTimes(2);
+		expect(onReverse.mock.calls[0][0]).toEqual(onReverse.mock.calls[1][0]);
+		expect(onReverse.mock.calls[0][0]).toMatchObject({ eventId: "event-1", expectedRevision: 1 });
+		expect(screen.getAllByText("asNeeded.history.status.reversed")).toHaveLength(2);
+	});
+
+	it("closes the stale confirmation, refreshes, and never applies a 409 reversal locally", async () => {
+		const active = event();
+		const onReverse = vi.fn().mockRejectedValue(new AsNeededIntakeRequestError("EVENT_VERSION_CONFLICT", null, 2));
+		listAsNeededIntakes.mockResolvedValueOnce({ events: [active], nextCursor: null }).mockResolvedValueOnce({
+			events: [event({ eventId: "event-new", revision: 2, person: "Refreshed" })],
+			nextCursor: null,
+		});
+		render(<AsNeededIntakeHistory medicationId={9} canRecordNow onRecordNow={vi.fn()} onReverse={onReverse} />);
+
+		await screen.findByText("asNeeded.reversal.action");
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.reversal.action" }));
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.reversal.confirm" }));
+		await screen.findByText("asNeeded.reversal.notice.revisionChangedTitle");
+		await screen.findByText("Refreshed");
+		expect(screen.queryByText("asNeeded.reversal.confirmTitle")).not.toBeInTheDocument();
+		expect(listAsNeededIntakes).toHaveBeenCalledTimes(2);
+	});
+
+	it("offers correction only after a successful reversal and passes the reversed event to Record now", async () => {
+		const active = event();
+		const onReverse = vi.fn().mockResolvedValue(reversalResponse(active));
+		const onReplace = vi.fn();
+		listAsNeededIntakes.mockResolvedValueOnce({ events: [active], nextCursor: null });
+		render(
+			<AsNeededIntakeHistory
+				medicationId={9}
+				canRecordNow
+				onRecordNow={vi.fn()}
+				onReverse={onReverse}
+				onReplace={onReplace}
+			/>
+		);
+
+		await screen.findByText("asNeeded.replacement.correctAction");
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.replacement.correctAction" }));
+		expect(onReplace).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.reversal.confirm" }));
+		await screen.findByText("asNeeded.reversal.notice.correctionReadyTitle");
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.replacement.action" }));
+		expect(onReplace).toHaveBeenCalledWith(expect.objectContaining({ eventId: "event-1", status: "reversed" }));
 	});
 });

@@ -106,4 +106,14 @@ describe("ConfirmModal", () => {
 		fireEvent.keyDown(document, { key: "Escape" });
 		expect(defaultProps.onCancel).toHaveBeenCalledTimes(1);
 	});
+
+	it("captures Escape for a nested confirmation before a parent modal can close", () => {
+		const parentEscape = vi.fn();
+		document.addEventListener("keydown", parentEscape);
+		render(<ConfirmModal {...defaultProps} captureEscape />);
+		fireEvent.keyDown(document, { key: "Escape" });
+		document.removeEventListener("keydown", parentEscape);
+		expect(defaultProps.onCancel).toHaveBeenCalledTimes(1);
+		expect(parentEscape).not.toHaveBeenCalled();
+	});
 });

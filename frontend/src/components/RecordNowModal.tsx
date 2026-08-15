@@ -3,7 +3,7 @@ import { getAsNeededQuantityProfile, normalizeAsNeededQuantityMilli } from "@med
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AsNeededIntakeRequestError } from "../hooks/useAsNeededIntakes";
-import type { AsNeededIntakeMutationResponse, Medication } from "../types";
+import type { AsNeededIntakeEvent, AsNeededIntakeMutationResponse, Medication } from "../types";
 import { getMedDisplayName } from "../types";
 import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
 import { AppButton } from "../ui/primitives/AppButton";
@@ -14,12 +14,14 @@ import { MedicationAvatar } from "./MedicationAvatar";
 
 type RecordNowModalProps = {
 	medication: Medication | null;
+	replacementEvent?: AsNeededIntakeEvent | null;
 	onClose: () => void;
 	onRecord: (input: {
 		medicationId: number;
 		quantity: number;
 		person: string | null;
 		idempotencyKey: string;
+		replacementForEventId?: string | null;
 	}) => Promise<AsNeededIntakeMutationResponse>;
 };
 
@@ -32,6 +34,7 @@ function getErrorKey(code: string): string {
 	if (code === "INVALID_QUANTITY") return "asNeeded.errors.invalidQuantity";
 	if (code === "TOO_MANY_NEW_INTAKES") return "asNeeded.errors.rateLimited";
 	if (code === "IDEMPOTENCY_KEY_REUSED") return "asNeeded.errors.intentConflict";
+	if (code === "REPLACEMENT_NOT_ALLOWED" || code === "EVENT_NOT_FOUND") return "asNeeded.errors.replacementUnavailable";
 	if (code === "READ_ONLY" || code === "API_KEY_SCOPE_FORBIDDEN") return "asNeeded.errors.readOnly";
 	return "asNeeded.errors.generic";
 }
@@ -47,7 +50,7 @@ function formatTrustedDateTime(value: string): string {
 	);
 }
 
-export function RecordNowModal({ medication, onClose, onRecord }: RecordNowModalProps) {
+export function RecordNowModal({ medication, replacementEvent = null, onClose, onRecord }: RecordNowModalProps) {
 	const { t } = useTranslation();
 	const profile = useMemo(() => getAsNeededQuantityProfile(medication ?? {}), [medication]);
 	const [quantity, setQuantity] = useState(String(profile.defaultQuantity));
@@ -62,14 +65,16 @@ export function RecordNowModal({ medication, onClose, onRecord }: RecordNowModal
 	useEffect(() => {
 		if (!medication) return;
 		const nextProfile = getAsNeededQuantityProfile(medication);
-		setQuantity(String(nextProfile.defaultQuantity));
-		setPerson("");
+		setQuantity(String(replacementEvent?.quantity ?? nextProfile.defaultQuantity));
+		setPerson(
+			replacementEvent?.person && medication.takenBy.includes(replacementEvent.person) ? replacementEvent.person : ""
+		);
 		setIdempotencyKey(crypto.randomUUID());
 		setPending(false);
 		setAttempted(false);
 		setError(null);
 		setResult(null);
-	}, [medication]);
+	}, [medication, replacementEvent]);
 
 	useEffect(() => {
 		if (error || result) feedbackRef.current?.focus();
@@ -81,7 +86,7 @@ export function RecordNowModal({ medication, onClose, onRecord }: RecordNowModal
 	const quantityIsValid = normalizeAsNeededQuantityMilli(numericQuantity, profile) !== null;
 	const unitLabel = t(`asNeeded.units.${profile.unit}`, { count: numericQuantity });
 	const locked = pending || attempted;
-	let submitLabel = t("asNeeded.record.confirm");
+	let submitLabel = t(replacementEvent ? "asNeeded.replacement.confirm" : "asNeeded.record.confirm");
 	if (pending) {
 		submitLabel = t("asNeeded.record.saving");
 	} else if (error) {
@@ -104,6 +109,7 @@ export function RecordNowModal({ medication, onClose, onRecord }: RecordNowModal
 					quantity: numericQuantity,
 					person: person || null,
 					idempotencyKey,
+					...(replacementEvent ? { replacementForEventId: replacementEvent.eventId } : {}),
 				})
 			);
 		} catch (requestError) {
@@ -123,7 +129,7 @@ export function RecordNowModal({ medication, onClose, onRecord }: RecordNowModal
 			onClose={close}
 			opened
 			size={480}
-			title={t("asNeeded.record.title")}
+			title={t(replacementEvent ? "asNeeded.replacement.title" : "asNeeded.record.title")}
 			withCloseButton
 		>
 			<Stack gap="md">
@@ -138,7 +144,12 @@ export function RecordNowModal({ medication, onClose, onRecord }: RecordNowModal
 				</Group>
 
 				{result ? (
-					<Alert ref={feedbackRef} tabIndex={-1} color="green" title={t("asNeeded.record.successTitle")}>
+					<Alert
+						ref={feedbackRef}
+						tabIndex={-1}
+						color="green"
+						title={t(replacementEvent ? "asNeeded.replacement.successTitle" : "asNeeded.record.successTitle")}
+					>
 						{t("asNeeded.record.successMessage", {
 							quantity: formatQuantity(result.event.quantity),
 							unit: t(`asNeeded.units.${result.event.quantityUnit}`, { count: result.event.quantity }),
@@ -149,6 +160,11 @@ export function RecordNowModal({ medication, onClose, onRecord }: RecordNowModal
 					</Alert>
 				) : (
 					<>
+						{replacementEvent ? (
+							<Text size="sm">
+								{t("asNeeded.replacement.description", { time: formatTrustedDateTime(replacementEvent.occurredAt) })}
+							</Text>
+						) : null}
 						<Text size="sm">{t("asNeeded.record.trustedTime")}</Text>
 						<fieldset disabled={locked} style={{ border: 0, margin: 0, padding: 0 }}>
 							<Stack gap="md">

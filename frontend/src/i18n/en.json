@@ -301,8 +301,44 @@
       "invalidQuantity": "Enter a valid quantity for this package type.",
       "rateLimited": "Too many new intakes were requested. Retry the same intake after {{seconds}} seconds.",
       "intentConflict": "This intake request conflicts with an earlier request. Close the dialog and start again.",
+      "replacementUnavailable": "This correction can no longer be linked to the selected intake. Refresh the history and try again.",
       "readOnly": "This account access is read-only and cannot record an intake.",
       "generic": "The intake could not be recorded. Retry the same intake or cancel."
+    },
+    "replacement": {
+      "action": "Record correction",
+      "correctAction": "Correct",
+      "title": "Record corrected intake",
+      "description": "This creates a separate intake linked to the reversed event from {{time}}.",
+      "confirm": "Record correction",
+      "successTitle": "Correction recorded",
+      "reverseTitle": "Correct intake",
+      "reverseMessage": "The original {{quantity}} {{unit}} intake must first be reversed. Its audit record remains even if you cancel or the replacement fails."
+    },
+    "reversal": {
+      "action": "Reverse",
+      "confirmTitle": "Reverse intake",
+      "confirmMessage": "Reverse the recorded {{quantity}} {{unit}} intake? This restores only its stored stock effect and keeps the audit record.",
+      "confirm": "Reverse intake",
+      "saving": "Reversing...",
+      "errors": {
+        "network": "The result is uncertain because the connection was interrupted. Retry safely uses the same reversal request.",
+        "revision": "This intake changed. The history has been refreshed; review it before trying again.",
+        "intentConflict": "This reversal request conflicts with another intake. Close the confirmation and start again.",
+        "generic": "The intake could not be reversed. Retry the same reversal or cancel."
+      },
+      "notice": {
+        "reversedTitle": "Intake reversed",
+        "reversedMessage": "The stored stock effect was restored and the original remains in history.",
+        "reconciliationTitle": "Intake reversed — check stock",
+        "reconciliationMessage": "The stored stock effect was restored, but current stock now exceeds the configured package capacity.",
+        "correctionReadyTitle": "Original intake reversed",
+        "correctionReadyMessage": "Record the correction as a separate intake now, or return to this reversed event later.",
+        "correctionReadyReconciliationTitle": "Original reversed — check stock",
+        "correctionReadyReconciliationMessage": "Stock now exceeds configured capacity. Review it, then record the correction separately if appropriate.",
+        "revisionChangedTitle": "History updated",
+        "revisionChangedMessage": "The intake changed before the reversal completed. Review the refreshed entry."
+      }
     }
   },
   "form": {

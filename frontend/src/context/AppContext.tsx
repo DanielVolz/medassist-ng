@@ -69,6 +69,7 @@ export interface AppContextValue {
 	uploadMedImage: (medId: number, file: File) => Promise<void>;
 	deleteMedImage: (medId: number) => Promise<void>;
 	recordAsNeededIntake: ReturnType<typeof useAsNeededIntakes>["recordAsNeededIntake"];
+	reverseAsNeededIntake: ReturnType<typeof useAsNeededIntakes>["reverseAsNeededIntake"];
 
 	// From useSettings (selected fields)
 	settings: ReturnType<typeof useSettings>["settings"];
@@ -318,6 +319,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			return result;
 		},
 		[asNeededIntakes.recordAsNeededIntake, medications.loadMeds]
+	);
+	const reverseAsNeededIntake = useCallback(
+		async (input: Parameters<typeof asNeededIntakes.reverseAsNeededIntake>[0]) => {
+			const result = await asNeededIntakes.reverseAsNeededIntake(input);
+			medications.loadMeds();
+			return result;
+		},
+		[asNeededIntakes.reverseAsNeededIntake, medications.loadMeds]
 	);
 
 	// Schedule UI state
@@ -671,6 +680,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 			// From useMedications
 			...medications,
 			recordAsNeededIntake,
+			reverseAsNeededIntake,
 
 			// From useSettings
 			settings: settingsHook.settings,
@@ -853,6 +863,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 		[
 			medications,
 			recordAsNeededIntake,
+			reverseAsNeededIntake,
 			settingsHook,
 			doses,
 			intakeJournal,

@@ -67,4 +67,44 @@ test.describe("As-needed Record now", () => {
 			await expect(medication).toContainText(/9\.5\s*\/\s*10/);
 		});
 	}
+
+	for (const viewport of [
+		{ name: "desktop detail", size: { width: 1280, height: 720 } },
+		{ name: "mobile detail", size: { width: 390, height: 844 } },
+	]) {
+		test(`${viewport.name} records from medication detail and refreshes its history`, async ({ page }) => {
+			await page.setViewportSize(viewport.size);
+			await navigateTo(page, "/dashboard");
+			const overview = page.getByTestId("dashboard-overview-table");
+			await expect(overview).toBeVisible();
+			await overview
+				.getByTestId("dashboard-overview-row")
+				.filter({ hasText: MEDICATION_NAME })
+				.getByRole("button", { name: MEDICATION_NAME })
+				.click();
+
+			const detail = page
+				.getByRole("dialog")
+				.filter({ has: page.getByRole("heading", { name: MEDICATION_NAME }) })
+				.last();
+			await expect(detail).toBeVisible();
+			await expect(detail.getByText(/As-needed history|Bei-Bedarf-Verlauf/i)).toBeVisible();
+			await detail.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
+
+			const create = page.waitForResponse(
+				(response) => response.url().includes("/as-needed-intakes") && response.request().method() === "POST"
+			);
+			await page.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
+			expect((await create).status()).toBe(201);
+			await expect(page.getByText(/Intake recorded|Einnahme erfasst/i)).toBeVisible();
+			await page.goBack();
+			await expect(detail).toBeVisible();
+			await expect(detail.locator("article").first()).toContainText(/0\.5/);
+			await detail
+				.getByLabel(/Close|Schließen/i)
+				.first()
+				.click();
+			await expect(detail).toBeHidden();
+		});
+	}
 });

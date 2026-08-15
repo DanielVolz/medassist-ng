@@ -18,6 +18,7 @@ import {
 import { useModalHistory } from "./hooks/useModalHistory";
 import { useScrollLock } from "./hooks/useScrollLock";
 import { AppButton } from "./ui/primitives/AppButton";
+import { getMedicationIntakes } from "./utils/intake-schedule";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const MedicationsPage = lazy(() =>
@@ -36,6 +37,9 @@ const AboutModal = lazy(() => import("./components/AboutModal"));
 const ProfileModal = lazy(() => import("./components/ProfileModal"));
 const MedDetailModal = lazy(() =>
 	import("./components/MedDetailModal").then((module) => ({ default: module.MedDetailModal }))
+);
+const RecordNowModal = lazy(() =>
+	import("./components/RecordNowModal").then((module) => ({ default: module.RecordNowModal }))
 );
 const ShareDialog = lazy(() => import("./components/ShareDialog").then((module) => ({ default: module.ShareDialog })));
 const UserFilterModal = lazy(() =>
@@ -239,6 +243,7 @@ function AppContent() {
 		// Medications
 		meds,
 		loadMeds,
+		recordAsNeededIntake,
 		// Refill
 		showRefillModal,
 		setShowRefillModal,
@@ -318,6 +323,8 @@ function AppContent() {
 	// Local-only state (not shared across components)
 	const [showProfile, setShowProfile] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
+	const [detailRecordNowMedication, setDetailRecordNowMedication] = useState<(typeof meds)[number] | null>(null);
+	const [asNeededHistoryRefreshVersion, setAsNeededHistoryRefreshVersion] = useState(0);
 	const [routeTransitionMaskActive, setRouteTransitionMaskActive] = useState(false);
 	const [showMainSwipeHint, setShowMainSwipeHint] = useState(shouldShowInitialMainSwipeHint);
 	const [mainSwipeHintViewport, setMainSwipeHintViewport] = useState(isMobileRouteSwipeEnabled);
@@ -336,10 +343,19 @@ function AppContent() {
 	const dismissAbout = useCallback(() => {
 		setShowAbout(false);
 	}, []);
+	const dismissDetailRecordNow = useCallback(() => {
+		setDetailRecordNowMedication(null);
+	}, []);
 	// History integration via the shared modal stack: pushes one entry on open,
 	// browser back (or closeModal) dismisses only the topmost modal.
 	const { closeModal: closeProfile } = useModalHistory(showProfile, "profile", dismissProfile);
 	const { closeModal: closeAbout } = useModalHistory(showAbout, "about", dismissAbout);
+	const { closeModal: closeDetailRecordNow } = useModalHistory(
+		Boolean(detailRecordNowMedication),
+		"detail-record-now",
+		dismissDetailRecordNow,
+		{ state: detailRecordNowMedication ? { medicationId: detailRecordNowMedication.id } : undefined }
+	);
 
 	// Get centralized stockThresholds from context
 	const { stockThresholds } = ctx;
@@ -358,6 +374,10 @@ function AppContent() {
 			if (e.key !== "Escape") return;
 			if (e.defaultPrevented) return;
 
+			if (detailRecordNowMedication) {
+				closeDetailRecordNow();
+				return;
+			}
 			if (scheduleLightboxImage) {
 				closeScheduleLightbox();
 				return;
@@ -398,6 +418,7 @@ function AppContent() {
 		document.addEventListener("keydown", handleEscape);
 		return () => document.removeEventListener("keydown", handleEscape);
 	}, [
+		detailRecordNowMedication,
 		showImageLightbox,
 		scheduleLightboxImage,
 		showEditStockModal,
@@ -416,12 +437,14 @@ function AppContent() {
 		closeProfile,
 		closeUserFilter,
 		closeMedDetail,
+		closeDetailRecordNow,
 	]);
 
 	// Prevent background scroll when any modal is open
 	useScrollLock(
 		!!(
 			selectedMed ||
+			detailRecordNowMedication ||
 			selectedUser ||
 			showProfile ||
 			showAbout ||
@@ -435,6 +458,7 @@ function AppContent() {
 
 	const hasBlockingOverlay = !!(
 		selectedMed ||
+		detailRecordNowMedication ||
 		selectedUser ||
 		showProfile ||
 		showAbout ||
@@ -568,6 +592,13 @@ function AppContent() {
 	}, [meds, selectedMed, setSelectedMed]);
 
 	const stockCorrectionMed = selectedMed ?? (showEditStockModal ? editStockMedication : null);
+	const canRecordAsNeeded = (() => {
+		if (!selectedMed || selectedMed.isObsolete || getMedicationIntakes(selectedMed).length > 0) return false;
+		if (!selectedMed.medicationEndDate) return true;
+		const timezone = ctx.settings.timezone || ctx.settings.serverTimezone || undefined;
+		const today = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
+		return selectedMed.medicationEndDate.slice(0, 10) >= today;
+	})();
 
 	const handleSubmitStockCorrection = async (medId: number) => {
 		if (!stockCorrectionMed) return;
@@ -716,6 +747,9 @@ function AppContent() {
 						showRefillModal={showRefillModal}
 						showEditStockModal={showEditStockModal}
 						editStockOnly={showEditStockModal && !selectedMed}
+						showAsNeededHistory={Boolean(selectedMed)}
+						canRecordAsNeeded={canRecordAsNeeded}
+						asNeededHistoryRefreshVersion={asNeededHistoryRefreshVersion}
 						onClose={closeMedDetail}
 						onOpenImageLightbox={openImageLightbox}
 						onCloseImageLightbox={closeImageLightbox}
@@ -723,6 +757,7 @@ function AppContent() {
 						onCloseRefillModal={closeRefillModal}
 						onOpenMedicationEdit={handleOpenMedicationEdit}
 						onOpenEditStockModal={handleOpenEditStockFromDetail}
+						onOpenRecordNow={() => selectedMed && setDetailRecordNowMedication(selectedMed)}
 						onCloseEditStockModal={closeEditStockModal}
 						onOpenUserFilter={openUserFilter}
 						refillPacks={refillPacks}
@@ -744,6 +779,20 @@ function AppContent() {
 						onEditStockLoosePillsChange={setEditStockLoosePills}
 						editStockSaving={editStockSaving}
 						onSubmitStockCorrection={handleSubmitStockCorrection}
+					/>
+				</Suspense>
+			)}
+
+			{detailRecordNowMedication && (
+				<Suspense fallback={null}>
+					<RecordNowModal
+						medication={detailRecordNowMedication}
+						onClose={closeDetailRecordNow}
+						onRecord={async (input) => {
+							const result = await recordAsNeededIntake(input);
+							setAsNeededHistoryRefreshVersion((version) => version + 1);
+							return result;
+						}}
 					/>
 				</Suspense>
 			)}

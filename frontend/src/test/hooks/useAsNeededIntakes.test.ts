@@ -63,4 +63,30 @@ describe("useAsNeededIntakes", () => {
 			result.current.recordAsNeededIntake({ medicationId: 1, quantity: 1, person: null, idempotencyKey: "network-key" })
 		).rejects.toEqual(expect.objectContaining({ code: "NETWORK_ERROR" }));
 	});
+
+	it("lists corrected history with a bounded cursor request and forwards cancellation", async () => {
+		const response = { events: [], nextCursor: "next-page" };
+		const controller = new AbortController();
+		authFetchMock.mockResolvedValue({ ok: true, json: async () => response });
+		const { result } = renderHook(() => useAsNeededIntakes());
+
+		await expect(result.current.listAsNeededIntakes(42, "cursor-1", controller.signal)).resolves.toBe(response);
+		expect(authFetchMock).toHaveBeenCalledWith(
+			"/api/medications/42/as-needed-intakes?includeReversed=true&limit=10&cursor=cursor-1",
+			{ signal: controller.signal }
+		);
+	});
+
+	it("maps unavailable history responses and transport failures to safe errors", async () => {
+		const { result } = renderHook(() => useAsNeededIntakes());
+		authFetchMock.mockResolvedValueOnce({ ok: false });
+		await expect(result.current.listAsNeededIntakes(1)).rejects.toEqual(
+			expect.objectContaining({ code: "HISTORY_UNAVAILABLE" })
+		);
+
+		authFetchMock.mockRejectedValueOnce(new Error("offline"));
+		await expect(result.current.listAsNeededIntakes(1)).rejects.toEqual(
+			expect.objectContaining({ code: "NETWORK_ERROR" })
+		);
+	});
 });

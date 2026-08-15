@@ -246,6 +246,39 @@
       "successMessage": "Recorded {{quantity}} {{unit}} at {{time}}. Current stock: {{stock}}.",
       "reconciliationRequired": "The package configuration and current stock should be checked."
     },
+    "lifecycle": {
+      "active_no_schedule": "Active without schedule",
+      "active_scheduled": "Active with schedule",
+      "ended": "Ended",
+      "obsolete": "Obsolete"
+    },
+    "history": {
+      "title": "As-needed history",
+      "description": "Recorded as-needed intakes, including corrections and journal context.",
+      "loading": "Loading as-needed history...",
+      "loadingMore": "Loading more...",
+      "empty": "No as-needed intakes recorded yet.",
+      "loadMore": "Load more",
+      "retry": "Retry",
+      "errorTitle": "History unavailable",
+      "errorMessage": "The as-needed history could not be loaded. Try again.",
+      "person": "Person",
+      "stockEffect": "Stock effect",
+      "reversedAt": "Reversed {{time}}",
+      "replacementFor": "Correction of event {{eventId}}",
+      "journal": "Journal",
+      "noJournal": "No journal entry.",
+      "status": {
+        "active": "Active",
+        "reversed": "Reversed"
+      },
+      "stockReason": {
+        "applied": "Applied to current stock",
+        "non_measurable": "No measurable stock effect",
+        "before_correction": "Before the stock correction",
+        "superseded_by_correction": "Included in a later stock correction"
+      }
+    },
     "units": {
       "pills": "pills",
       "pills_one": "pill",

@@ -131,8 +131,7 @@ test.describe("As-needed Record now", () => {
 				(response) => response.url().includes("/as-needed-intakes") && response.request().method() === "POST"
 			);
 			await page
-				.getByRole("dialog")
-				.last()
+				.getByRole("dialog", { name: /Take as-needed medication|Medikament bei Bedarf nehmen/i })
 				.getByRole("button", { name: /^(Take|Nehmen)$/ })
 				.click();
 			expect((await create).status()).toBe(201);

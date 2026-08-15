@@ -2,11 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/client.js";
 import { checkAndSendIntakeRemindersForUser } from "../services/intake-reminder-scheduler.js";
 
+const { getActiveAsNeededStockEffectsMilliMock } = vi.hoisted(() => ({
+	getActiveAsNeededStockEffectsMilliMock: vi.fn(async () => new Map<number, number>()),
+}));
+
 vi.mock("../db/client.js", () => ({
 	db: {
 		select: vi.fn(),
 		insert: vi.fn(),
 	},
+}));
+
+vi.mock("../services/as-needed-intakes-service.js", () => ({
+	getActiveAsNeededStockEffectsMilli: getActiveAsNeededStockEffectsMilliMock,
 }));
 
 function createLogger() {
@@ -109,6 +117,8 @@ describe("checkAndSendIntakeRemindersForUser", () => {
 	let originalTz: string | undefined;
 
 	beforeEach(() => {
+		getActiveAsNeededStockEffectsMilliMock.mockReset();
+		getActiveAsNeededStockEffectsMilliMock.mockResolvedValue(new Map());
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date(2026, 0, 5, 10, 30, 0));
 		originalTz = process.env.TZ;
@@ -141,6 +151,16 @@ describe("checkAndSendIntakeRemindersForUser", () => {
 			dismissed: false,
 		});
 		expect(logger.info).toHaveBeenCalledWith("[IntakeReminder] Auto-mark completed for userId=11: inserted=1");
+		expect(getActiveAsNeededStockEffectsMilliMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("uses the active aggregate at the automatic reminder stock gate", async () => {
+		getActiveAsNeededStockEffectsMilliMock.mockResolvedValue(new Map([[7, 10_000]]));
+		const insertedRows = captureInsertedRows();
+		mockReminderQueries([createMedicationRow()]);
+		await runReminderCheck({}, createLogger());
+		expect(insertedRows).toHaveLength(0);
+		expect(getActiveAsNeededStockEffectsMilliMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not auto-mark due intakes when current stock is empty", async () => {

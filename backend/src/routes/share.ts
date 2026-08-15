@@ -5,6 +5,7 @@ import { db } from "../db/client.js";
 import { doseTracking, medications, shareTokens, userSettings, users } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { getActiveAsNeededStockEffectsMilli } from "../services/as-needed-intakes-service.js";
 import { buildSharedMedicationOverview } from "../services/coverage.js";
 import {
 	getPublicShareContext,
@@ -353,14 +354,21 @@ export async function shareRoutes(app: FastifyInstance) {
 
 			const meds = await getActiveMedicationsForPerson(share.userId, share.takenBy);
 			const medicationsWithBlisters = meds.map((medication) => toSharedScheduleMedication(medication, share.takenBy));
-
 			const shareMedicationOverview = settings?.shareMedicationOverview ?? false;
+			const asNeededStockEffectsMilli = shareMedicationOverview
+				? await getActiveAsNeededStockEffectsMilli(
+						db,
+						share.userId,
+						meds.map((medication) => medication.id)
+					)
+				: new Map<number, number>();
 			const medicationOverview = shareMedicationOverview
 				? buildSharedMedicationOverview({
 						medications: meds,
 						doses: await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId)),
 						thresholdDays: settings?.lowStockDays ?? 30,
 						shareTakenBy: share.takenBy,
+						asNeededStockEffectsMilli,
 					})
 				: null;
 
@@ -445,6 +453,11 @@ export async function shareRoutes(app: FastifyInstance) {
 			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
 
 			const meds = await getActiveMedicationsForPerson(share.userId, share.takenBy);
+			const asNeededStockEffectsMilli = await getActiveAsNeededStockEffectsMilli(
+				db,
+				share.userId,
+				meds.map((medication) => medication.id)
+			);
 
 			const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
 
@@ -453,6 +466,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				doses,
 				thresholdDays: settings?.lowStockDays ?? 30,
 				shareTakenBy: share.takenBy,
+				asNeededStockEffectsMilli,
 			});
 
 			return {

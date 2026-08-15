@@ -19,6 +19,7 @@ type CurrentStockOptions = {
 	medication: MedicationRow;
 	doses: DoseRow[];
 	stockCalculationMode: "automatic" | "manual";
+	asNeededStockEffectMilli?: number;
 	nowMs?: number;
 };
 
@@ -32,7 +33,7 @@ function getDoseTakenAtMs(dose: DoseRow): number {
 }
 
 export function computeMedicationCurrentStockRaw(options: CurrentStockOptions): number {
-	const { medication, doses, stockCalculationMode, nowMs = Date.now() } = options;
+	const { medication, doses, stockCalculationMode, asNeededStockEffectMilli = 0, nowMs = Date.now() } = options;
 
 	const schedule = normalizeMedicationSchedule(medication);
 	const intakes = schedule.intakes;
@@ -127,7 +128,10 @@ export function computeMedicationCurrentStockRaw(options: CurrentStockOptions): 
 		});
 	}
 
-	return Math.max(0, baseStock + (medication.scheduleStockRebaseMilli ?? 0) / 1000 - consumed);
+	return Math.max(
+		0,
+		baseStock + (medication.scheduleStockRebaseMilli ?? 0) / 1000 - consumed - asNeededStockEffectMilli / 1000
+	);
 }
 
 export function computeMedicationCurrentStock(options: CurrentStockOptions): number {

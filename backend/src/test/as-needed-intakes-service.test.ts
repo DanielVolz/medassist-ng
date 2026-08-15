@@ -24,7 +24,12 @@ const [{ db, migrationsReady }, schema, service] = await Promise.all([
 	import("../services/as-needed-intakes-service.js"),
 ]);
 const { asNeededIntakeEvents, doseTracking, medications, userSettings, users } = schema;
-const { createAsNeededIntake, reverseAsNeededIntake } = service;
+const {
+	createAsNeededIntake,
+	getActiveAsNeededStockEffectMilli,
+	getActiveAsNeededStockEffectsMilli,
+	reverseAsNeededIntake,
+} = service;
 
 const __filename = fileURLToPath(import.meta.url);
 const migrationsFolder = resolve(dirname(__filename), "../../drizzle");
@@ -161,20 +166,59 @@ describe.sequential("as-needed intake service", () => {
 		expect(await eventCount()).toBe(2);
 	});
 
+	it("aggregates active effects per owner and medication while retaining reversed and zero-effect rows as zero", async () => {
+		const ownerMedicationId = await seedMedication({ stock: 5 });
+		const otherMedicationId = await seedMedication({ userId: 2, stock: 5 });
+		const active = await createAsNeededIntake({
+			userId: 1,
+			medicationId: ownerMedicationId,
+			quantity: 1,
+			idempotencyKey: intentKey(),
+		});
+		const reversed = await createAsNeededIntake({
+			userId: 1,
+			medicationId: ownerMedicationId,
+			quantity: 1,
+			idempotencyKey: intentKey(),
+		});
+		await reverseAsNeededIntake({
+			userId: 1,
+			eventId: reversed.eventId,
+			expectedRevision: 1,
+			idempotencyKey: intentKey(),
+		});
+		await createAsNeededIntake({
+			userId: 2,
+			medicationId: otherMedicationId,
+			quantity: 1,
+			idempotencyKey: intentKey(),
+		});
+		expect(await getActiveAsNeededStockEffectMilli(db, 1, ownerMedicationId)).toBe(active.stockEffectMilli);
+		expect(await getActiveAsNeededStockEffectsMilli(db, 1, [ownerMedicationId, otherMedicationId])).toEqual(
+			new Map([[ownerMedicationId, active.stockEffectMilli]])
+		);
+		const topicalId = await seedMedication({ form: "topical", packageType: "tube", stock: 0 });
+		await createAsNeededIntake({ userId: 1, medicationId: topicalId, quantity: 1, idempotencyKey: intentKey() });
+		expect(await getActiveAsNeededStockEffectMilli(db, 1, topicalId)).toBe(0);
+	});
+
 	it.each([
 		["scheduled", { intakes: [{ usage: 1, every: 1, start: "2099-01-01T08:00:00" }] }, undefined, "NOT_ELIGIBLE"],
 		["ended", { endDate: "2000-01-01" }, undefined, "NOT_ELIGIBLE"],
 		["obsolete", { isObsolete: true }, undefined, "NOT_ELIGIBLE"],
 		["unassigned person", { people: ["Ava"] }, "Ben", "INVALID_PERSON"],
-	] as const)("rejects %s medication eligibility without an anchor or event", async (_case, options, personName, code) => {
-		const medicationId = await seedMedication(options);
-		await expectCode(
-			createAsNeededIntake({ userId: 1, medicationId, quantity: 1, personName, idempotencyKey: intentKey() }),
-			code
-		);
-		expect(await eventCount()).toBe(0);
-		expect((await db.select().from(doseTracking)).length).toBe(0);
-	});
+	] as const)(
+		"rejects %s medication eligibility without an anchor or event",
+		async (_case, options, personName, code) => {
+			const medicationId = await seedMedication(options);
+			await expectCode(
+				createAsNeededIntake({ userId: 1, medicationId, quantity: 1, personName, idempotencyKey: intentKey() }),
+				code
+			);
+			expect(await eventCount()).toBe(0);
+			expect((await db.select().from(doseTracking)).length).toBe(0);
+		}
+	);
 
 	it.each([
 		["insufficient stock", { stock: 1 }, 2, "INSUFFICIENT_STOCK"],

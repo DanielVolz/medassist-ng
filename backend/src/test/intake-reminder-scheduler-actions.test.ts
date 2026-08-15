@@ -8,6 +8,7 @@ const {
 	existsSyncMock,
 	readFileSyncMock,
 	writeFileSyncMock,
+	getActiveAsNeededStockEffectsMilliMock,
 } = vi.hoisted(() => ({
 	mockedEnv: {
 		PUBLIC_APP_URL: undefined as string | undefined,
@@ -19,6 +20,7 @@ const {
 	existsSyncMock: vi.fn(() => false),
 	readFileSyncMock: vi.fn(),
 	writeFileSyncMock: vi.fn(),
+	getActiveAsNeededStockEffectsMilliMock: vi.fn(async () => new Map<number, number>()),
 }));
 
 vi.mock("node:fs", () => ({
@@ -44,6 +46,10 @@ vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
 vi.mock("../services/notification-actions-service.js", () => ({
 	createNotificationActionContext: createNotificationActionContextMock,
 	storeNotificationActionGroupNtfyMessageId: storeNotificationActionGroupNtfyMessageIdMock,
+}));
+
+vi.mock("../services/as-needed-intakes-service.js", () => ({
+	getActiveAsNeededStockEffectsMilli: getActiveAsNeededStockEffectsMilliMock,
 }));
 
 vi.mock("../services/notifications/delivery.js", () => ({

@@ -185,22 +185,40 @@ describe("computeMedicationCurrentStock", () => {
 		expect(malformedScheduleStock).toBe(5);
 	});
 
-	it.each([
-		"automatic",
-		"manual",
-	] as const)("applies exact schedule rebases before rounding in %s mode", (stockCalculationMode) => {
-		const rebasedMedication = medication({
-			packCount: 0,
-			looseTablets: 10,
-			scheduleStockRebaseMilli: -1500,
-			intakesJson: "[]",
-			usageJson: "[]",
-			everyJson: "[]",
-			startJson: "[]",
-		});
-		const options = { medication: rebasedMedication, doses: [], stockCalculationMode };
+	it.each(["automatic", "manual"] as const)(
+		"applies exact schedule rebases before rounding in %s mode",
+		(stockCalculationMode) => {
+			const rebasedMedication = medication({
+				packCount: 0,
+				looseTablets: 10,
+				scheduleStockRebaseMilli: -1500,
+				intakesJson: "[]",
+				usageJson: "[]",
+				everyJson: "[]",
+				startJson: "[]",
+			});
+			const options = { medication: rebasedMedication, doses: [], stockCalculationMode };
 
-		expect(computeMedicationCurrentStockRaw(options)).toBe(8.5);
-		expect(computeMedicationCurrentStock(options)).toBe(8);
-	});
+			expect(computeMedicationCurrentStockRaw(options)).toBe(8.5);
+			expect(computeMedicationCurrentStock(options)).toBe(8);
+		}
+	);
+
+	it.each(["automatic", "manual"] as const)(
+		"subtracts exact active as-needed milli effects and retains scheduled-dose identity in %s mode",
+		(stockCalculationMode) => {
+			const scheduledDose = dose({ doseId: buildDoseId(7, 0, new Date("2026-03-10T00:00:00.000Z").getTime()) });
+			const anchor = dose({ id: 2, doseId: "as-needed:2dfe2cca-1b2e-4a2c-9c31-d5aa9f5b0dce" });
+			const options = {
+				medication: medication({ packCount: 0, looseTablets: 3 }),
+				doses: [scheduledDose, anchor],
+				stockCalculationMode,
+				asNeededStockEffectMilli: 1500,
+				nowMs: new Date("2026-03-10T12:00:00.000Z").getTime(),
+			};
+			expect(computeMedicationCurrentStockRaw(options)).toBe(0.5);
+			expect(computeMedicationCurrentStock(options)).toBe(0);
+			expect(computeMedicationCurrentStockRaw({ ...options, asNeededStockEffectMilli: 9_000 })).toBe(0);
+		}
+	);
 });

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getAsNeededQuantityProfile, normalizeAsNeededQuantityMilli } from "@medassist/shared";
-import { and, eq, sql } from "drizzle-orm";
-import { withImmediateWriteTransaction } from "../db/client.js";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { type db, withImmediateWriteTransaction } from "../db/client.js";
 import { asNeededIntakeEvents, doseTracking, medications, userSettings } from "../db/schema.js";
 import { normalizeMedicationSchedule } from "../utils/scheduler-utils.js";
 import { computeMedicationCurrentStockRaw } from "./current-stock.js";
@@ -10,6 +10,7 @@ export type AsNeededLifecycle = "active_no_schedule" | "active_scheduled" | "end
 export type AsNeededEligibilityReason = "eligible" | "has_regular_schedule" | "ended" | "obsolete";
 
 type MedicationRow = typeof medications.$inferSelect;
+type Database = typeof db;
 
 export class AsNeededIntakeError extends Error {
 	constructor(
@@ -76,6 +77,47 @@ export function getAsNeededLifecycle(
 	return { lifecycle: "active_no_schedule", eligible: true, reason: "eligible" };
 }
 
+export async function getActiveAsNeededStockEffectMilli(
+	database: Database,
+	userId: number,
+	medicationId: number
+): Promise<number> {
+	const [row] = await database
+		.select({ total: sql<number>`coalesce(sum(${asNeededIntakeEvents.stockEffectMilli}), 0)` })
+		.from(asNeededIntakeEvents)
+		.where(
+			and(
+				eq(asNeededIntakeEvents.userId, userId),
+				eq(asNeededIntakeEvents.medicationId, medicationId),
+				eq(asNeededIntakeEvents.status, "active")
+			)
+		);
+	return Number(row?.total ?? 0);
+}
+
+export async function getActiveAsNeededStockEffectsMilli(
+	database: Database,
+	userId: number,
+	medicationIds: number[]
+): Promise<Map<number, number>> {
+	if (medicationIds.length === 0) return new Map();
+	const rows = await database
+		.select({
+			medicationId: asNeededIntakeEvents.medicationId,
+			total: sql<number>`coalesce(sum(${asNeededIntakeEvents.stockEffectMilli}), 0)`,
+		})
+		.from(asNeededIntakeEvents)
+		.where(
+			and(
+				eq(asNeededIntakeEvents.userId, userId),
+				eq(asNeededIntakeEvents.status, "active"),
+				inArray(asNeededIntakeEvents.medicationId, medicationIds)
+			)
+		)
+		.groupBy(asNeededIntakeEvents.medicationId);
+	return new Map(rows.map((row) => [row.medicationId, Number(row.total ?? 0)]));
+}
+
 export async function createAsNeededIntake(input: {
 	userId: number;
 	medicationId: number;
@@ -137,24 +179,15 @@ export async function createAsNeededIntake(input: {
 			.from(userSettings)
 			.where(eq(userSettings.userId, input.userId));
 		const doses = await transactionDb.select().from(doseTracking).where(eq(doseTracking.userId, input.userId));
-		const [effectRow] = await transactionDb
-			.select({ total: sql<number>`coalesce(sum(${asNeededIntakeEvents.stockEffectMilli}), 0)` })
-			.from(asNeededIntakeEvents)
-			.where(
-				and(
-					eq(asNeededIntakeEvents.userId, input.userId),
-					eq(asNeededIntakeEvents.medicationId, input.medicationId),
-					eq(asNeededIntakeEvents.status, "active")
-				)
-			);
-		const scheduledStockMilli = Math.round(
+		const activeEffectMilli = await getActiveAsNeededStockEffectMilli(transactionDb, input.userId, input.medicationId);
+		const currentStockMilli = Math.round(
 			computeMedicationCurrentStockRaw({
 				medication,
 				doses,
 				stockCalculationMode: settings?.stockCalculationMode === "manual" ? "manual" : "automatic",
+				asNeededStockEffectMilli: activeEffectMilli,
 			}) * 1000
 		);
-		const currentStockMilli = Math.max(0, scheduledStockMilli - Number(effectRow?.total ?? 0));
 		if (profile.measurable && (!Number.isSafeInteger(currentStockMilli) || currentStockMilli < 0)) {
 			throw new AsNeededIntakeError("STOCK_UNRESOLVABLE", "Current stock cannot be resolved safely");
 		}

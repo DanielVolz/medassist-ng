@@ -157,4 +157,34 @@ describe("calculatePlannerDemandRows", () => {
 			loosePills: 118,
 		});
 	});
+
+	it.each(["automatic", "manual"] as const)(
+		"subtracts active owner effects from planner stock in %s mode",
+		async (stockCalculationMode) => {
+			await testClient.execute("INSERT INTO users (id, username) VALUES (1, 'planner-owner')");
+			await testClient.execute("INSERT INTO user_settings (user_id, stock_calculation_mode) VALUES (1, ?)", [
+				stockCalculationMode,
+			]);
+			await insertMedication({
+				id: 1,
+				userId: 1,
+				packCount: 0,
+				looseTablets: 3,
+				intakes: [{ usage: 1, every: 1, start: "2099-01-01T08:00:00.000Z" }],
+			});
+			await testClient.execute(
+				"INSERT INTO dose_tracking (id, user_id, dose_id) VALUES (1, 1, 'as-needed:planner-anchor')"
+			);
+			await testClient.execute(
+				"INSERT INTO as_needed_intake_events (event_id, user_id, medication_id, dose_tracking_id, idempotency_key_hash, request_fingerprint, occurred_at, recorded_at, quantity_milli, quantity_unit, stock_effect_milli) VALUES ('planner-event', 1, 1, 1, 'key', 'fingerprint', 1, 1, 1500, 'pills', 1500)"
+			);
+			const [row] = await calculatePlannerDemandRows({
+				userId: 1,
+				startDate: fixedNow,
+				endDate: fixedNow,
+				now: fixedNow,
+			});
+			expect(row.currentPills).toBe(1);
+		}
+	);
 });

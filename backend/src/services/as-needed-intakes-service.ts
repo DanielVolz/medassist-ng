@@ -585,8 +585,17 @@ export async function createAsNeededIntake(input: {
 		const profile = getAsNeededQuantityProfile(medication);
 		const quantityMilli = normalizeAsNeededQuantityMilli(input.quantity, profile);
 		if (quantityMilli === null) throw new AsNeededIntakeError("INVALID_QUANTITY", "Invalid quantity");
-		if (personName && !parseMedicationPeople(medication.takenByJson).includes(personName)) {
-			throw new AsNeededIntakeError("INVALID_PERSON", "Person is not assigned to this medication");
+		if (personName) {
+			const ownerMedications = await transactionDb
+				.select({ takenByJson: medications.takenByJson })
+				.from(medications)
+				.where(eq(medications.userId, input.userId));
+			const personIsKnown = ownerMedications.some(({ takenByJson }) =>
+				parseMedicationPeople(takenByJson).includes(personName)
+			);
+			if (!personIsKnown) {
+				throw new AsNeededIntakeError("INVALID_PERSON", "Person is not assigned to an owned medication");
+			}
 		}
 		const [settings] = await transactionDb
 			.select({ stockCalculationMode: userSettings.stockCalculationMode, timezone: userSettings.timezone })
@@ -729,5 +738,25 @@ export async function reverseAsNeededIntake(input: {
 			});
 		}
 		return reversed;
+	});
+}
+
+export async function deleteAsNeededIntake(userId: number, eventId: string): Promise<void> {
+	await withImmediateWriteTransaction(async (transactionDb) => {
+		const [event] = await transactionDb
+			.select({ doseTrackingId: asNeededIntakeEvents.doseTrackingId })
+			.from(asNeededIntakeEvents)
+			.where(
+				and(
+					eq(asNeededIntakeEvents.userId, userId),
+					eq(asNeededIntakeEvents.eventId, eventId.trim().toLowerCase()),
+					eq(asNeededIntakeEvents.status, "active")
+				)
+			);
+		if (!event) return;
+
+		await transactionDb
+			.delete(doseTracking)
+			.where(and(eq(doseTracking.id, event.doseTrackingId), eq(doseTracking.userId, userId)));
 	});
 }

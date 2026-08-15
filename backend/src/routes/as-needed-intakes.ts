@@ -412,35 +412,4 @@ export async function asNeededIntakeRoutes(app: FastifyInstance) {
 			}
 		}
 	);
-
-	app.delete<{ Params: Record<string, unknown> }>(
-		"/as-needed-intakes/:eventId",
-		{
-			attachValidation: true,
-			schema: {
-				params: eventParamsOpenApiSchema,
-				response: {
-					204: { type: "null" },
-					400: errorResponseSchema,
-					403: errorResponseSchema,
-					500: genericErrorSchema,
-				},
-			},
-		},
-		async (request, reply) => {
-			const params = eventParamsSchema.safeParse(request.params);
-			if (!params.success) return validationError(reply, "INVALID_REQUEST", "Invalid event id");
-			const userId = await getUserId(request, reply);
-			if (userId === null) return;
-			if (isReadOnlyApiKeyRequest(request)) {
-				return reply.status(403).send({ error: "API key is read-only", code: "READ_ONLY" });
-			}
-			try {
-				await deleteAsNeededIntake(userId, params.data.eventId);
-				return reply.status(204).send();
-			} catch (error) {
-				return sendServiceError(request, reply, "undo", userId, error);
-			}
-		}
-	);
 }

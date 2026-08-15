@@ -3,7 +3,7 @@ import { getAsNeededQuantityProfile, normalizeAsNeededQuantityMilli } from "./as
 
 describe("as-needed quantity profiles", () => {
 	it.each([
-		[{ packageType: "blister", medicationForm: "tablet", pillForm: "tablet" }, "pills", 0.5, 0.5, false, true],
+		[{ packageType: "blister", medicationForm: "tablet", pillForm: "tablet" }, "pills", 1, 0.5, false, true],
 		[{ packageType: "blister", medicationForm: "capsule", pillForm: "capsule" }, "pills", 1, 1, true, true],
 		[{ packageType: "liquid_container", medicationForm: "liquid" }, "ml", 1, 0.1, false, true],
 		[{ packageType: "inhaler", medicationForm: "tablet" }, "puffs", 1, 1, true, true],

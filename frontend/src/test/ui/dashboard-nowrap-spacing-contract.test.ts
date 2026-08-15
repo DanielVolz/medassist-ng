@@ -95,10 +95,7 @@ describe("dashboard table and spacing contract", () => {
 		const scheduleName = blockFor(surfacesCss, ".time-main .med-name");
 		const scheduleAvatar = blockFor(surfacesCss, ".time-main .med-name:has(.med-generic-inline) .med-avatar-sm");
 		const overviewNameLine = blockFor(dashboardCss, ".overviewNameLine");
-		const overviewAvatar = blockFor(
-			dashboardCss,
-			".overviewNameLine:has(.overviewTakenByLine) :global(.med-avatar-sm)"
-		);
+		const overviewAvatar = blockFor(dashboardCss, ".overviewNameLine :global(.med-avatar-sm)");
 
 		expect(scheduleName).toMatch(
 			/--schedule-med-name-stack-height\s*:\s*calc\(1rem \* 1\.55 \+ 0\.1rem \+ 0\.875rem \* 1\.2\)/

@@ -21,10 +21,29 @@ vi.mock("../db/client.js", () => ({
 const { dismissDosesForUser, markDoseTakenForUser } = await import("../services/dose-tracking-service.js");
 
 async function clearTables() {
+	await testClient.execute("DELETE FROM as_needed_intake_events");
 	await testClient.execute("DELETE FROM dose_tracking");
 	await testClient.execute("DELETE FROM medications");
 	await testClient.execute("DELETE FROM user_settings");
 	await testClient.execute("DELETE FROM users");
+}
+
+async function insertActiveAsNeededEffect(userId: number, medicationId: number, effectMilli: number) {
+	const anchor = await testClient.execute({
+		sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (?, ?) RETURNING id",
+		args: [userId, `as-needed:service-guard-${medicationId}`],
+	});
+	await testClient.execute({
+		sql: "INSERT INTO as_needed_intake_events (event_id, user_id, medication_id, dose_tracking_id, idempotency_key_hash, request_fingerprint, occurred_at, recorded_at, quantity_milli, quantity_unit, stock_effect_milli) VALUES (?, ?, ?, ?, 'key', 'fingerprint', 1, 1, ?, 'pills', ?)",
+		args: [
+			`service-guard-event-${medicationId}`,
+			userId,
+			medicationId,
+			Number(anchor.rows[0].id),
+			effectMilli,
+			effectMilli,
+		],
+	});
 }
 
 async function createUser(username: string) {
@@ -101,6 +120,16 @@ describe("dose-tracking-service", () => {
 		expect(rows.rows).toEqual([
 			expect.objectContaining({ dismissed: 0, taken_source: "notification", marked_by: null }),
 		]);
+	});
+
+	it("uses active owner as-needed effects in its stock guard", async () => {
+		const userId = await createUser("dose-service-as-needed");
+		await insertScheduledTestMedication(testClient, { id: 5, userId, packCount: 0, looseTablets: 1 });
+		await insertUserSettings(userId, "manual");
+		await insertActiveAsNeededEffect(userId, 5, 1000);
+		expect(
+			await markDoseTakenForUser({ userId, doseId: "5-0-1736064000000", source: "notification", markedBy: null })
+		).toEqual({ success: false, code: "OUT_OF_STOCK", message: "Medication is out of stock" });
 	});
 
 	it("is idempotent when the dose is already taken", async () => {

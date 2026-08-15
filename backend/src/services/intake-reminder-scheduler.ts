@@ -31,6 +31,7 @@ import {
 	parseIntakeReminderState,
 	type UpcomingIntake,
 } from "../utils/scheduler-utils.js";
+import { getActiveAsNeededStockEffectsMilli } from "./as-needed-intakes-service.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
 import {
 	createNotificationActionContext,
@@ -162,6 +163,11 @@ async function autoMarkDueIntakesAsTaken(
 		.select()
 		.from(doseTracking)
 		.where(and(eq(doseTracking.userId, settings.userId), eq(doseTracking.dismissed, false)));
+	const asNeededEffects = await getActiveAsNeededStockEffectsMilli(
+		db,
+		settings.userId,
+		rows.map((medication) => medication.id)
+	);
 
 	let inserted = 0;
 
@@ -182,6 +188,7 @@ async function autoMarkDueIntakesAsTaken(
 			medication: med,
 			doses: trackedDoses,
 			stockCalculationMode: settings.stockCalculationMode,
+			asNeededStockEffectMilli: asNeededEffects.get(med.id) ?? 0,
 			nowMs: now.getTime(),
 		});
 		if (remainingStock <= 0) {
@@ -516,6 +523,11 @@ export async function checkAndSendIntakeRemindersForUser(
 		.select()
 		.from(doseTracking)
 		.where(and(eq(doseTracking.userId, settings.userId), eq(doseTracking.dismissed, false)));
+	const asNeededEffects = await getActiveAsNeededStockEffectsMilli(
+		db,
+		settings.userId,
+		reminderEntries.map((entry) => entry.med.id)
+	);
 
 	const reminderEntriesWithStock = reminderEntries.map((entry) => ({
 		...entry,
@@ -523,6 +535,7 @@ export async function checkAndSendIntakeRemindersForUser(
 			medication: entry.med,
 			doses: trackedDoses,
 			stockCalculationMode: settings.stockCalculationMode,
+			asNeededStockEffectMilli: asNeededEffects.get(entry.med.id) ?? 0,
 			nowMs: now.getTime(),
 		}),
 	}));

@@ -141,8 +141,9 @@ export function buildSharedMedicationOverview(options: {
 	doses: DoseRow[];
 	thresholdDays: number;
 	shareTakenBy?: string;
+	asNeededStockEffectsMilli?: Map<number, number>;
 }): SharedMedicationOverviewItem[] {
-	const { medications: medicationRows, doses, thresholdDays, shareTakenBy } = options;
+	const { medications: medicationRows, doses, thresholdDays, shareTakenBy, asNeededStockEffectsMilli } = options;
 
 	const dosesByMedication = new Map<number, DoseRow[]>();
 	for (const dose of doses) {
@@ -165,7 +166,11 @@ export function buildSharedMedicationOverview(options: {
 		const capacity = computeCapacity(medication);
 		const dailyDoseRate = computeDailyDoseRate(intakes, medication);
 		const takenAmount = computeTakenAmount(medication, schedule.intakes, intakes, dosesByMedication);
-		const rawCurrentStock = capacity + (medication.stockAdjustment ?? 0) - takenAmount;
+		const rawCurrentStock =
+			capacity +
+			(medication.stockAdjustment ?? 0) -
+			takenAmount -
+			(asNeededStockEffectsMilli?.get(medication.id) ?? 0) / 1000;
 		const currentStock = Math.max(0, Math.floor(rawCurrentStock));
 		const daysLeft = dailyDoseRate > 0 ? Math.floor(currentStock / dailyDoseRate) : null;
 		const depletionDate =

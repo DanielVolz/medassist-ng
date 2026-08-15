@@ -39,7 +39,7 @@ const [
 ]);
 
 const { db, migrationsReady, withImmediateWriteTransaction } = dbClient;
-const { doseTracking, medications, userSettings } = schema;
+const { asNeededIntakeEvents, doseTracking, medications, userSettings } = schema;
 const { getAnonymousUserId } = auth;
 const { medicationRoutes } = medicationRoutesModule;
 const { computeMedicationCurrentStockRaw } = stock;
@@ -227,5 +227,58 @@ process.stdin.once("data", async () => {
 				return "queued writer completed";
 			})
 		).resolves.toBe("queued writer completed");
+	});
+
+	it("preserves the aggregate-reduced raw stock across both zero-schedule boundaries", async () => {
+		await db.delete(asNeededIntakeEvents);
+		await db.delete(doseTracking);
+		await db.delete(medications);
+		const created = await app.inject({
+			method: "POST",
+			url: "/medications",
+			payload: medicationPayload([{ usage: 1, every: 1, start: scheduleStart() }]),
+		});
+		const medicationId = created.json().id as number;
+		const [anchor] = await db
+			.insert(doseTracking)
+			.values({ userId, doseId: "as-needed:rebase-effect" })
+			.returning({ id: doseTracking.id });
+		await db.insert(asNeededIntakeEvents).values({
+			eventId: "rebase-effect",
+			userId,
+			medicationId,
+			doseTrackingId: anchor.id,
+			idempotencyKeyHash: "key",
+			requestFingerprint: "fingerprint",
+			occurredAt: new Date(),
+			recordedAt: new Date(),
+			quantityMilli: 1500,
+			quantityUnit: "pills",
+			stockEffectMilli: 1500,
+		});
+		const before = await db.select().from(medications).where(sql`${medications.id} = ${medicationId}`);
+		const raw = computeMedicationCurrentStockRaw({
+			medication: before[0],
+			doses: await db.select().from(doseTracking),
+			stockCalculationMode: "manual",
+			asNeededStockEffectMilli: 1500,
+		});
+		for (const intakes of [[], [{ usage: 2, every: 1, start: scheduleStart() }]]) {
+			const response = await app.inject({
+				method: "PUT",
+				url: `/medications/${medicationId}`,
+				payload: medicationPayload(intakes),
+			});
+			expect(response.statusCode).toBe(200);
+			const [persisted] = await db.select().from(medications).where(sql`${medications.id} = ${medicationId}`);
+			expect(
+				computeMedicationCurrentStockRaw({
+					medication: persisted,
+					doses: await db.select().from(doseTracking),
+					stockCalculationMode: "manual",
+					asNeededStockEffectMilli: 1500,
+				})
+			).toBe(raw);
+		}
 	});
 });

@@ -3,6 +3,7 @@ import { db } from "../db/client.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { parseDoseId } from "../utils/dose-id.js";
 import { normalizeMedicationIntakes, parseLocalDateTime } from "../utils/scheduler-utils.js";
+import { getActiveAsNeededStockEffectMilli } from "./as-needed-intakes-service.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
 
 export type DoseTrackingSource = "manual" | "automatic" | "notification";
@@ -105,6 +106,7 @@ async function isDoseOutOfStock(options: { userId: number; doseId: string }): Pr
 		: parsedDose.timestampMs;
 
 	const doses = await db.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
+	const asNeededStockEffectMilli = await getActiveAsNeededStockEffectMilli(db, options.userId, medication.id);
 	const stockBeforeDoseMs = Math.max(0, scheduledOccurrenceMs - 1);
 
 	return (
@@ -112,6 +114,7 @@ async function isDoseOutOfStock(options: { userId: number; doseId: string }): Pr
 			medication,
 			doses,
 			stockCalculationMode,
+			asNeededStockEffectMilli,
 			nowMs: stockBeforeDoseMs,
 		}) <= 0
 	);

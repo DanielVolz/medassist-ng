@@ -7,6 +7,10 @@ import { getDataDir } from "../db/path-utils.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, isReadOnlyApiKeyRequest, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import {
+	getActiveAsNeededStockEffectMilli,
+	getActiveAsNeededStockEffectsMilli,
+} from "../services/as-needed-intakes-service.js";
 import { computeMedicationCurrentStockRaw } from "../services/current-stock.js";
 import { normalizeDateTime, parseIntakesWithUnits } from "../services/medications-service.js";
 import { calculatePlannerDemandRows } from "../services/planner-demand.js";
@@ -522,6 +526,11 @@ export async function medicationRoutes(app: FastifyInstance) {
 				? eq(medications.userId, userId)
 				: and(eq(medications.userId, userId), eq(medications.isObsolete, false));
 			const rows = await db.select().from(medications).where(whereClause).orderBy(medications.id);
+			const asNeededEffects = await getActiveAsNeededStockEffectsMilli(
+				db,
+				userId,
+				rows.map((row) => row.id)
+			);
 			return rows.map((row) => {
 				const intakes = parseIntakesWithUnits(row);
 
@@ -553,7 +562,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 					// Legacy blisters format (for backward compat with frontend during transition)
 					blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
 					hasRegularSchedule: intakes.length > 0,
-					asNeededStockEffect: 0,
+					asNeededStockEffect: (asNeededEffects.get(row.id) ?? 0) / 1000,
 					imageUrl: row.imageUrl,
 					expiryDate: row.expiryDate,
 					notes: row.notes,
@@ -853,6 +862,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 					: {};
 
 				let dosesForProjection: Array<typeof doseTracking.$inferSelect> = [];
+				let asNeededStockEffectMilli = 0;
 				let stockCalculationMode: "automatic" | "manual" = "automatic";
 				let stockBeforeTransition = 0;
 				if (crossesZeroScheduleBoundary && !stockFieldsChanged) {
@@ -865,10 +875,12 @@ export async function medicationRoutes(app: FastifyInstance) {
 						.from(userSettings)
 						.where(eq(userSettings.userId, userId));
 					stockCalculationMode = settings?.stockCalculationMode === "manual" ? "manual" : "automatic";
+					asNeededStockEffectMilli = await getActiveAsNeededStockEffectMilli(transactionDb, userId, idNum);
 					stockBeforeTransition = computeMedicationCurrentStockRaw({
 						medication: current,
 						doses: dosesForProjection,
 						stockCalculationMode,
+						asNeededStockEffectMilli,
 						nowMs: changedAt.getTime(),
 					});
 				}
@@ -922,6 +934,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 					medication: updated,
 					doses: dosesForProjection,
 					stockCalculationMode,
+					asNeededStockEffectMilli,
 					nowMs: changedAt.getTime(),
 				});
 				const scheduleStockRebaseMilli =
@@ -938,6 +951,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 			if (!transition) return reply.notFound();
 			const result = [transition.medication];
+			const asNeededStockEffect = (await getActiveAsNeededStockEffectMilli(db, userId, result[0].id)) / 1000;
 
 			// ---------------------------------------------------------------
 			// Migrate dose tracking IDs when intake schedule changes
@@ -1084,7 +1098,7 @@ export async function medicationRoutes(app: FastifyInstance) {
 				intakes,
 				blisters: intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start })),
 				hasRegularSchedule: intakes.length > 0,
-				asNeededStockEffect: 0,
+				asNeededStockEffect,
 				imageUrl: result[0].imageUrl,
 				expiryDate: result[0].expiryDate,
 				notes: result[0].notes,

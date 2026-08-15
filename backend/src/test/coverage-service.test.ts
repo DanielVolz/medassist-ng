@@ -127,6 +127,17 @@ describe("buildSharedMedicationOverview", () => {
 		]);
 	});
 
+	it("uses only the supplied aggregate effect for shared stock without exposing an event or anchor", () => {
+		const overview = buildSharedMedicationOverview({
+			medications: [medication({ packCount: 0, looseTablets: 2 })],
+			doses: [dose({ doseId: "as-needed:opaque-event-anchor" })],
+			thresholdDays: 3,
+			asNeededStockEffectsMilli: new Map([[1, 1500]]),
+		});
+		expect(overview).toEqual([expect.objectContaining({ currentStock: 0, daysLeft: 0 })]);
+		expect(overview[0]).not.toHaveProperty("eventId");
+	});
+
 	it("scopes dose deductions to the shared recipient without compacting dose indexes", () => {
 		const overview = buildSharedMedicationOverview({
 			medications: [

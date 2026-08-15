@@ -61,11 +61,30 @@ const { reportRoutes } = await import("../routes/report.js");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM refill_history");
+	await testClient.execute("DELETE FROM as_needed_intake_events");
 	await testClient.execute("DELETE FROM dose_tracking");
 	await testClient.execute("DELETE FROM share_tokens");
 	await testClient.execute("DELETE FROM user_settings");
 	await testClient.execute("DELETE FROM medications");
 	await testClient.execute("DELETE FROM users");
+}
+
+async function insertActiveEffect(medicationId: number, effectMilli: number, userId = 1) {
+	const anchor = await testClient.execute({
+		sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (?, ?) RETURNING id",
+		args: [userId, `as-needed:route-${medicationId}-${effectMilli}`],
+	});
+	await testClient.execute({
+		sql: "INSERT INTO as_needed_intake_events (event_id, user_id, medication_id, dose_tracking_id, idempotency_key_hash, request_fingerprint, occurred_at, recorded_at, quantity_milli, quantity_unit, stock_effect_milli) VALUES (?, ?, ?, ?, 'key', 'fingerprint', 1, 1, ?, 'pills', ?)",
+		args: [
+			`route-event-${medicationId}-${effectMilli}`,
+			userId,
+			medicationId,
+			Number(anchor.rows[0].id),
+			effectMilli,
+			effectMilli,
+		],
+	});
 }
 
 async function seedAnonymousUser() {
@@ -263,6 +282,21 @@ describe("Real route coverage: settings/export/report", () => {
 				intakeRemindersEnabled: true,
 			})
 		);
+	});
+
+	it("GET /medications exposes only the owner's active aggregate effect", async () => {
+		const medicationId = await seedMedication("Aggregate med");
+		await insertActiveEffect(medicationId, 1500);
+		const otherOwner = await testClient.execute("INSERT INTO users (username) VALUES ('other') RETURNING id");
+		const otherId = Number(otherOwner.rows[0].id);
+		const otherMedication = await testClient.execute({
+			sql: "INSERT INTO medications (user_id, name) VALUES (?, 'other medication') RETURNING id",
+			args: [otherId],
+		});
+		await insertActiveEffect(Number(otherMedication.rows[0].id), 9000, otherId);
+		const response = await app.inject({ method: "GET", url: "/medications" });
+		expect(response.json()).toEqual([expect.objectContaining({ id: medicationId, asNeededStockEffect: 1.5 })]);
+		expect(JSON.stringify(response.json())).not.toContain("route-event");
 	});
 
 	it("PUT /settings disables repeatDailyReminders when no stock reminder channel exists", async () => {

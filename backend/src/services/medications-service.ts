@@ -6,6 +6,7 @@ import {
 } from "../utils/scheduler-utils.js";
 
 export { normalizeDateTime } from "../utils/date-time.js";
+export { getActiveAsNeededStockEffectMilli, getActiveAsNeededStockEffectsMilli } from "./as-needed-intakes-service.js";
 
 function isIntakeUnit(value: unknown): value is "ml" | "tsp" | "tbsp" {
 	return value === "ml" || value === "tsp" || value === "tbsp";

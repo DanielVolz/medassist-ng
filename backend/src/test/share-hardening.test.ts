@@ -53,11 +53,23 @@ const { shareRoutes } = await import("../routes/share.js");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM intake_journal");
+	await testClient.execute("DELETE FROM as_needed_intake_events");
 	await testClient.execute("DELETE FROM dose_tracking");
 	await testClient.execute("DELETE FROM share_tokens");
 	await testClient.execute("DELETE FROM medications");
 	await testClient.execute("DELETE FROM user_settings");
 	await testClient.execute("DELETE FROM users");
+}
+
+async function insertActiveEffect(medicationId: number, effectMilli: number) {
+	const anchor = await testClient.execute({
+		sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (1, ?) RETURNING id",
+		args: [`as-needed:share-${medicationId}`],
+	});
+	await testClient.execute({
+		sql: "INSERT INTO as_needed_intake_events (event_id, user_id, medication_id, dose_tracking_id, idempotency_key_hash, request_fingerprint, occurred_at, recorded_at, quantity_milli, quantity_unit, stock_effect_milli) VALUES ('share-event', 1, ?, ?, 'key', 'fingerprint', 1, 1, ?, 'pills', ?)",
+		args: [medicationId, Number(anchor.rows[0].id), effectMilli, effectMilli],
+	});
 }
 
 async function createOwner() {
@@ -252,6 +264,18 @@ describe("share link hardening", () => {
 		expect(overview.language).toBe("en");
 		expect(JSON.stringify(overview)).not.toContain("Bob");
 		expect(overview.medications[0].daysLeft).toBe(2);
+	});
+
+	it("reduces shared overview stock by the aggregate without disclosing the event or anchor", async () => {
+		await testClient.execute("INSERT INTO user_settings (user_id, share_medication_overview) VALUES (1, 1)");
+		const medicationId = await insertMedication();
+		await insertActiveEffect(medicationId, 1500);
+		await insertShareToken({ token: "abcdef0123456789" });
+		const response = await app.inject({ method: "GET", url: "/share/abcdef0123456789/overview" });
+		expect(response.statusCode, response.body).toBe(200);
+		expect(response.json().medications[0].currentStock).toBe(8);
+		expect(JSON.stringify(response.json())).not.toContain("share-event");
+		expect(JSON.stringify(response.json())).not.toContain("as-needed:share");
 	});
 
 	it("does not write plaintext share tokens to logs", async () => {

@@ -24,7 +24,12 @@ const [{ db, migrationsReady }, schema, service] = await Promise.all([
 	import("../services/as-needed-intakes-service.js"),
 ]);
 const { asNeededIntakeEvents, doseTracking, medications, userSettings, users } = schema;
-const { createAsNeededIntake, reverseAsNeededIntake } = service;
+const {
+	createAsNeededIntake,
+	getActiveAsNeededStockEffectMilli,
+	getActiveAsNeededStockEffectsMilli,
+	reverseAsNeededIntake,
+} = service;
 
 const __filename = fileURLToPath(import.meta.url);
 const migrationsFolder = resolve(dirname(__filename), "../../drizzle");
@@ -159,6 +164,42 @@ describe.sequential("as-needed intake service", () => {
 			"EVENT_NOT_FOUND"
 		);
 		expect(await eventCount()).toBe(2);
+	});
+
+	it("aggregates active effects per owner and medication while retaining reversed and zero-effect rows as zero", async () => {
+		const ownerMedicationId = await seedMedication({ stock: 5 });
+		const otherMedicationId = await seedMedication({ userId: 2, stock: 5 });
+		const active = await createAsNeededIntake({
+			userId: 1,
+			medicationId: ownerMedicationId,
+			quantity: 1,
+			idempotencyKey: intentKey(),
+		});
+		const reversed = await createAsNeededIntake({
+			userId: 1,
+			medicationId: ownerMedicationId,
+			quantity: 1,
+			idempotencyKey: intentKey(),
+		});
+		await reverseAsNeededIntake({
+			userId: 1,
+			eventId: reversed.eventId,
+			expectedRevision: 1,
+			idempotencyKey: intentKey(),
+		});
+		await createAsNeededIntake({
+			userId: 2,
+			medicationId: otherMedicationId,
+			quantity: 1,
+			idempotencyKey: intentKey(),
+		});
+		expect(await getActiveAsNeededStockEffectMilli(db, 1, ownerMedicationId)).toBe(active.stockEffectMilli);
+		expect(await getActiveAsNeededStockEffectsMilli(db, 1, [ownerMedicationId, otherMedicationId])).toEqual(
+			new Map([[ownerMedicationId, active.stockEffectMilli]])
+		);
+		const topicalId = await seedMedication({ form: "topical", packageType: "tube", stock: 0 });
+		await createAsNeededIntake({ userId: 1, medicationId: topicalId, quantity: 1, idempotencyKey: intentKey() });
+		expect(await getActiveAsNeededStockEffectMilli(db, 1, topicalId)).toBe(0);
 	});
 
 	it.each([

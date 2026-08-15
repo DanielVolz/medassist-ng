@@ -41,6 +41,7 @@ const { doseRoutes } = await import("../routes/doses.js");
 
 async function clearTables() {
 	await testClient.execute("DELETE FROM intake_journal");
+	await testClient.execute("DELETE FROM as_needed_intake_events");
 	await testClient.execute("DELETE FROM dose_tracking");
 	await testClient.execute("DELETE FROM share_tokens");
 	await testClient.execute("DELETE FROM api_keys");
@@ -48,6 +49,24 @@ async function clearTables() {
 	await testClient.execute("DELETE FROM medications");
 	await testClient.execute("DELETE FROM user_settings");
 	await testClient.execute("DELETE FROM users");
+}
+
+async function insertActiveAsNeededEffect(userId: number, medicationId: number, effectMilli: number) {
+	const anchor = await testClient.execute({
+		sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (?, ?) RETURNING id",
+		args: [userId, `as-needed:dose-guard-${medicationId}`],
+	});
+	await testClient.execute({
+		sql: "INSERT INTO as_needed_intake_events (event_id, user_id, medication_id, dose_tracking_id, idempotency_key_hash, request_fingerprint, occurred_at, recorded_at, quantity_milli, quantity_unit, stock_effect_milli) VALUES (?, ?, ?, ?, 'key', 'fingerprint', 1, 1, ?, 'pills', ?)",
+		args: [
+			`dose-guard-event-${medicationId}`,
+			userId,
+			medicationId,
+			Number(anchor.rows[0].id),
+			effectMilli,
+			effectMilli,
+		],
+	});
 }
 
 async function createUser(username: string) {
@@ -324,6 +343,19 @@ describe("Dose Tracking API", () => {
 			});
 
 			expect(response.statusCode).toBe(409);
+			expect(response.json()).toEqual({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
+		});
+
+		it("rejects taking a scheduled dose when an active owner as-needed effect consumes the remaining stock", async () => {
+			await insertMedication({ id: 7, userId, packCount: 0, looseTablets: 1 });
+			await insertUserSettings(userId, "manual");
+			await insertActiveAsNeededEffect(userId, 7, 1000);
+			const response = await app.inject({
+				method: "POST",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+				payload: { doseId: "7-0-1735344000000" },
+			});
 			expect(response.json()).toEqual({ error: "Medication is out of stock", code: "OUT_OF_STOCK" });
 		});
 

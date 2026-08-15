@@ -1,7 +1,7 @@
 import { type IntakeMood, normalizeIntakeMood } from "@medassist/shared";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { doseTracking, intakeJournal, medications } from "../db/schema.js";
+import { asNeededIntakeEvents, doseTracking, intakeJournal, medications } from "../db/schema.js";
 import { type ParsedDoseId, parseDoseId } from "../utils/dose-id.js";
 import { normalizeMedicationIntakes, parseLocalDateTime } from "../utils/scheduler-utils.js";
 import type { DoseTrackingSource } from "./dose-tracking-service.js";
@@ -117,8 +117,14 @@ export async function resolveTrackedDoseEventForUser(input: {
 			intakeRemindersEnabled: medications.intakeRemindersEnabled,
 		})
 		.from(doseTracking)
+		.leftJoin(
+			asNeededIntakeEvents,
+			and(eq(asNeededIntakeEvents.doseTrackingId, doseTracking.id), eq(asNeededIntakeEvents.userId, input.userId))
+		)
 		.innerJoin(medications, and(eq(medications.id, parsedDose.medicationId), eq(medications.userId, input.userId)))
-		.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, input.doseId)))
+		.where(
+			and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, input.doseId), isNull(asNeededIntakeEvents.id))
+		)
 		.limit(1);
 
 	if (!event) {
@@ -273,8 +279,19 @@ export async function listIntakeJournalEntriesForUser(input: {
 		})
 		.from(intakeJournal)
 		.innerJoin(doseTracking, eq(doseTracking.id, intakeJournal.doseTrackingId))
+		.leftJoin(
+			asNeededIntakeEvents,
+			and(eq(asNeededIntakeEvents.doseTrackingId, doseTracking.id), eq(asNeededIntakeEvents.userId, input.userId))
+		)
 		.innerJoin(medications, eq(medications.id, intakeJournal.medicationId))
-		.where(and(...filters))
+		.where(
+			and(
+				...filters,
+				eq(doseTracking.userId, input.userId),
+				eq(medications.userId, input.userId),
+				isNull(asNeededIntakeEvents.id)
+			)
+		)
 		.orderBy(desc(intakeJournal.scheduledFor), desc(intakeJournal.updatedAt))
 		.limit(input.limit ?? 100);
 

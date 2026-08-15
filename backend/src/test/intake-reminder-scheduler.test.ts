@@ -14,7 +14,9 @@ vi.mock("../db/client.js", () => ({
 }));
 
 vi.mock("../services/as-needed-intakes-service.js", () => ({
+	filterScheduledDoseRows: async <T>(_: unknown, __: number, rows: T[]) => rows,
 	getActiveAsNeededStockEffectsMilli: getActiveAsNeededStockEffectsMilliMock,
+	getAsNeededAnchorDoseIds: async () => new Set<string>(),
 }));
 
 function createLogger() {

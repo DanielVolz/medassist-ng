@@ -31,7 +31,11 @@ import {
 	parseIntakeReminderState,
 	type UpcomingIntake,
 } from "../utils/scheduler-utils.js";
-import { getActiveAsNeededStockEffectsMilli } from "./as-needed-intakes-service.js";
+import {
+	filterScheduledDoseRows,
+	getActiveAsNeededStockEffectsMilli,
+	getAsNeededAnchorDoseIds,
+} from "./as-needed-intakes-service.js";
 import { computeMedicationCurrentStock } from "./current-stock.js";
 import {
 	createNotificationActionContext,
@@ -149,7 +153,7 @@ async function autoMarkDueIntakesAsTaken(
 	todayEnd.setHours(23, 59, 59, 999);
 
 	const existingToday = await db
-		.select({ doseId: doseTracking.doseId })
+		.select({ id: doseTracking.id, doseId: doseTracking.doseId })
 		.from(doseTracking)
 		.where(
 			and(
@@ -158,11 +162,14 @@ async function autoMarkDueIntakesAsTaken(
 				lte(doseTracking.takenAt, todayEnd)
 			)
 		);
-	const existingDoseIds = new Set(existingToday.map((d) => d.doseId));
-	const trackedDoses = await db
+	const scheduledToday = await filterScheduledDoseRows(db, settings.userId, existingToday);
+	const existingDoseIds = new Set(scheduledToday.map((d) => d.doseId));
+	const reservedAnchorDoseIds = await getAsNeededAnchorDoseIds(db, settings.userId);
+	const trackedDoseRows = await db
 		.select()
 		.from(doseTracking)
 		.where(and(eq(doseTracking.userId, settings.userId), eq(doseTracking.dismissed, false)));
+	const trackedDoses = await filterScheduledDoseRows(db, settings.userId, trackedDoseRows);
 	const asNeededEffects = await getActiveAsNeededStockEffectsMilli(
 		db,
 		settings.userId,
@@ -221,6 +228,12 @@ async function autoMarkDueIntakesAsTaken(
 			});
 
 			if (existingDoseIds.has(doseId)) {
+				continue;
+			}
+			if (reservedAnchorDoseIds.has(doseId)) {
+				logger.warn(
+					`[IntakeReminder] Skipped auto-mark because a reserved anchor occupies the scheduled identity: userId=${settings.userId}, medicationId=${intake.medicationId}, intakeIndex=${intake.blisterIndex}`
+				);
 				continue;
 			}
 
@@ -519,10 +532,11 @@ export async function checkAndSendIntakeRemindersForUser(
 
 	const now = new Date();
 	const state = loadIntakeReminderState(logger);
-	const trackedDoses = await db
+	const trackedDoseRows = await db
 		.select()
 		.from(doseTracking)
 		.where(and(eq(doseTracking.userId, settings.userId), eq(doseTracking.dismissed, false)));
+	const trackedDoses = await filterScheduledDoseRows(db, settings.userId, trackedDoseRows);
 	const asNeededEffects = await getActiveAsNeededStockEffectsMilli(
 		db,
 		settings.userId,
@@ -726,7 +740,7 @@ export async function checkAndSendIntakeRemindersForUser(
 	if (settings.skipRemindersForTakenDoses) {
 		const beforeFilterCount = remindersToSend.length;
 		// Query doses marked as taken today (takenAt is timestamp, stored as seconds since epoch)
-		const takenToday = await db
+		const takenTodayRows = await db
 			.select()
 			.from(doseTracking)
 			.where(
@@ -736,6 +750,7 @@ export async function checkAndSendIntakeRemindersForUser(
 					lte(doseTracking.takenAt, todayEnd)
 				)
 			);
+		const takenToday = await filterScheduledDoseRows(db, settings.userId, takenTodayRows);
 
 		const takenDoseIds = new Set(takenToday.map((d) => d.doseId));
 

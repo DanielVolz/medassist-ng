@@ -118,6 +118,65 @@ export async function getActiveAsNeededStockEffectsMilli(
 	return new Map(rows.map((row) => [row.medicationId, Number(row.total ?? 0)]));
 }
 
+export async function getAsNeededAnchorIds(
+	database: Database,
+	userId: number,
+	doseTrackingIds: number[]
+): Promise<Set<number>> {
+	if (doseTrackingIds.length === 0) return new Set();
+	const requestedIds = new Set(doseTrackingIds);
+	const rows = await database
+		.select({ id: doseTracking.id })
+		.from(asNeededIntakeEvents)
+		.innerJoin(
+			doseTracking,
+			and(
+				eq(doseTracking.id, asNeededIntakeEvents.doseTrackingId),
+				eq(doseTracking.userId, asNeededIntakeEvents.userId)
+			)
+		)
+		.where(and(eq(asNeededIntakeEvents.userId, userId), eq(doseTracking.userId, userId)));
+	return new Set(rows.map((row) => row.id).filter((id) => requestedIds.has(id)));
+}
+
+export async function filterScheduledDoseRows<T extends { id: number }>(
+	database: Database,
+	userId: number,
+	rows: T[]
+): Promise<T[]> {
+	const anchorIds = await getAsNeededAnchorIds(
+		database,
+		userId,
+		rows.map((row) => row.id)
+	);
+	return rows.filter((row) => !anchorIds.has(row.id));
+}
+
+export async function getAsNeededAnchorDoseIds(
+	database: Database,
+	userId: number,
+	doseIds?: string[]
+): Promise<Set<string>> {
+	if (doseIds?.length === 0) return new Set();
+	const requestedDoseIds = doseIds ? new Set(doseIds) : null;
+	const rows = await database
+		.select({ doseId: doseTracking.doseId })
+		.from(asNeededIntakeEvents)
+		.innerJoin(
+			doseTracking,
+			and(
+				eq(doseTracking.id, asNeededIntakeEvents.doseTrackingId),
+				eq(doseTracking.userId, asNeededIntakeEvents.userId)
+			)
+		)
+		.where(and(eq(asNeededIntakeEvents.userId, userId), eq(doseTracking.userId, userId)));
+	return new Set(rows.map((row) => row.doseId).filter((doseId) => !requestedDoseIds || requestedDoseIds.has(doseId)));
+}
+
+export async function isAsNeededAnchorDoseId(database: Database, userId: number, doseId: string): Promise<boolean> {
+	return (await getAsNeededAnchorDoseIds(database, userId, [doseId])).has(doseId);
+}
+
 export async function neutralizeAsNeededStockEffects(
 	database: Database,
 	userId: number,
@@ -225,7 +284,8 @@ export async function createAsNeededIntake(input: {
 			.select({ stockCalculationMode: userSettings.stockCalculationMode })
 			.from(userSettings)
 			.where(eq(userSettings.userId, input.userId));
-		const doses = await transactionDb.select().from(doseTracking).where(eq(doseTracking.userId, input.userId));
+		const doseRows = await transactionDb.select().from(doseTracking).where(eq(doseTracking.userId, input.userId));
+		const doses = await filterScheduledDoseRows(transactionDb, input.userId, doseRows);
 		const activeEffectMilli = await getActiveAsNeededStockEffectMilli(transactionDb, input.userId, input.medicationId);
 		const currentStockMilli = Math.round(
 			computeMedicationCurrentStockRaw({

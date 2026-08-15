@@ -51,10 +51,15 @@ async function clearTables() {
 	await testClient.execute("DELETE FROM users");
 }
 
-async function insertActiveAsNeededEffect(userId: number, medicationId: number, effectMilli: number) {
+async function insertActiveAsNeededEffect(
+	userId: number,
+	medicationId: number,
+	effectMilli: number,
+	doseId = `as-needed:dose-guard-${medicationId}`
+) {
 	const anchor = await testClient.execute({
 		sql: "INSERT INTO dose_tracking (user_id, dose_id) VALUES (?, ?) RETURNING id",
-		args: [userId, `as-needed:dose-guard-${medicationId}`],
+		args: [userId, doseId],
 	});
 	await testClient.execute({
 		sql: "INSERT INTO as_needed_intake_events (event_id, user_id, medication_id, dose_tracking_id, idempotency_key_hash, request_fingerprint, occurred_at, recorded_at, quantity_milli, quantity_unit, stock_effect_milli) VALUES (?, ?, ?, ?, 'key', 'fingerprint', 1, 1, ?, 'pills', ?)",
@@ -425,6 +430,23 @@ describe("Dose Tracking API", () => {
 				])
 			);
 		});
+
+		it("filters a companion anchor even when its ID looks scheduled, while preserving ordinary rows", async () => {
+			const scheduledLookingAnchor = "1-0-1735344000000";
+			const ordinaryScheduledDose = "1-0-1735430400000";
+			await insertMedication({ id: 1, userId });
+			await insertActiveAsNeededEffect(userId, 1, 1000, scheduledLookingAnchor);
+			await insertDose({ userId, doseId: ordinaryScheduledDose });
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/doses/taken",
+				headers: { cookie: cookieHeader },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ doses: [expect.objectContaining({ doseId: ordinaryScheduledDose })] });
+		});
 	});
 
 	describe("DELETE /doses/taken/:doseId", () => {
@@ -476,6 +498,30 @@ describe("Dose Tracking API", () => {
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json()).toEqual({ success: true });
+		});
+
+		it("rejects a companion anchor without mutating its journal row", async () => {
+			const anchorDoseId = "1-0-1735344000000";
+			await insertMedication({ id: 1, userId });
+			await insertActiveAsNeededEffect(userId, 1, 1000, anchorDoseId);
+
+			for (const request of [
+				{ method: "POST", url: "/doses/taken", payload: { doseId: anchorDoseId } },
+				{ method: "POST", url: "/doses/skip", payload: { doseId: anchorDoseId } },
+				{ method: "POST", url: "/doses/dismiss", payload: { doseIds: [anchorDoseId] } },
+				{ method: "DELETE", url: `/doses/taken/${encodeURIComponent(anchorDoseId)}` },
+				{ method: "DELETE", url: `/doses/skip/${encodeURIComponent(anchorDoseId)}` },
+			] as const) {
+				const response = await app.inject({ ...request, headers: { cookie: cookieHeader } });
+				expect(response.statusCode).toBe(400);
+				expect(response.json()).toMatchObject({ code: "INVALID_DOSE" });
+			}
+
+			const rows = await testClient.execute({
+				sql: "SELECT dismissed FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+				args: [userId, anchorDoseId],
+			});
+			expect(rows.rows).toEqual([expect.objectContaining({ dismissed: 0 })]);
 		});
 	});
 

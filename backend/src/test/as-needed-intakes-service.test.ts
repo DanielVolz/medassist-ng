@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@libsql/client";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -26,7 +27,9 @@ const [{ db, migrationsReady }, schema, service] = await Promise.all([
 const { asNeededIntakeEvents, doseTracking, medications, userSettings, users } = schema;
 const {
 	createAsNeededIntake,
+	filterScheduledDoseRows,
 	getActiveAsNeededStockEffectMilli,
+	getAsNeededAnchorDoseIds,
 	getActiveAsNeededStockEffectsMilli,
 	reverseAsNeededIntake,
 } = service;
@@ -200,6 +203,26 @@ describe.sequential("as-needed intake service", () => {
 		const topicalId = await seedMedication({ form: "topical", packageType: "tube", stock: 0 });
 		await createAsNeededIntake({ userId: 1, medicationId: topicalId, quantity: 1, idempotencyKey: intentKey() });
 		expect(await getActiveAsNeededStockEffectMilli(db, 1, topicalId)).toBe(0);
+	});
+
+	it("identifies anchors only through the companion relation and owner boundary", async () => {
+		const medicationId = await seedMedication();
+		const event = await createAsNeededIntake({ userId: 1, medicationId, quantity: 1, idempotencyKey: intentKey() });
+		const scheduledLookingAnchor = `1-0-1735344000000`;
+		const [ordinary] = await db.insert(doseTracking).values({ userId: 1, doseId: scheduledLookingAnchor }).returning();
+		const [fakePrefix] = await db
+			.insert(doseTracking)
+			.values({ userId: 1, doseId: "as-needed:untrusted-prefix" })
+			.returning();
+		const rows = await db.select().from(doseTracking).where(eq(doseTracking.userId, 1));
+		expect((await getAsNeededAnchorDoseIds(db, 1)).has(`as-needed:${event.eventId}`)).toBe(true);
+		expect(await filterScheduledDoseRows(db, 1, rows)).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ id: ordinary.id }),
+				expect.objectContaining({ id: fakePrefix.id }),
+			])
+		);
+		expect(await getAsNeededAnchorDoseIds(db, 2, [`as-needed:${event.eventId}`])).toEqual(new Set());
 	});
 
 	it.each([

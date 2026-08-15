@@ -6,6 +6,7 @@ import { db } from "../db/client.js";
 import { doseTracking, intakeJournal, medications, refillHistory } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import { filterScheduledDoseRows } from "../services/as-needed-intakes-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	applyOpenApiRouteStandards,
@@ -239,7 +240,7 @@ export async function reportRoutes(app: FastifyInstance) {
 
 			// Fetch dose tracking for all requested medications
 			// doseId format: "{medicationId}-{blisterIndex}-{dateMs}" or "{medicationId}-{blisterIndex}-{dateMs}-{takenBy}"
-			const allDoses = await db
+			const doseRows = await db
 				.select({
 					id: doseTracking.id,
 					doseId: doseTracking.doseId,
@@ -249,6 +250,7 @@ export async function reportRoutes(app: FastifyInstance) {
 				})
 				.from(doseTracking)
 				.where(eq(doseTracking.userId, userId));
+			const allDoses = await filterScheduledDoseRows(db, userId, doseRows);
 
 			// Group doses by medication ID
 			const dosesByMed = new Map<

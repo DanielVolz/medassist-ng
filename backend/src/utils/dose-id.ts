@@ -7,6 +7,8 @@ export type ParsedDoseId = {
 	personSuffix: string | null;
 };
 
+// This parser validates scheduled-dose syntax only. Persisted anchor classification must use the
+// as_needed_intake_events companion relation because an anchor may intentionally match this syntax.
 export function parseDoseId(doseId: string): ParsedDoseId | null {
 	const match = doseIdPattern.exec(doseId);
 	if (!match) {

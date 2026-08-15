@@ -49,7 +49,9 @@ vi.mock("../services/notification-actions-service.js", () => ({
 }));
 
 vi.mock("../services/as-needed-intakes-service.js", () => ({
+	filterScheduledDoseRows: async <T>(_: unknown, __: number, rows: T[]) => rows,
 	getActiveAsNeededStockEffectsMilli: getActiveAsNeededStockEffectsMilliMock,
+	getAsNeededAnchorDoseIds: async () => new Set<string>(),
 }));
 
 vi.mock("../services/notifications/delivery.js", () => ({

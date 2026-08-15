@@ -16,6 +16,7 @@ import { MedicationDialogs } from "../components/medications/MedicationDialogs";
 import { MedicationEditCoordinator } from "../components/medications/MedicationEditCoordinator";
 import formClasses from "../components/medications/MedicationForm.module.css";
 import { MedicationListSection } from "../components/medications/MedicationListSection";
+import { RecordNowModal } from "../components/RecordNowModal";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useFeedback } from "../context/FeedbackContext";
 import { MEDICATION_FORM_FIELD_LIMITS } from "../hooks/medicationFormModel";
@@ -60,6 +61,7 @@ import { combineDateAndTime, formatNumber, toMonthEndDateValue } from "../utils/
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import {
 	getIntakeScheduleMode,
+	getMedicationIntakes,
 	getWeekdayLabel,
 	hasSelectedWeekdays,
 	toggleWeekdaySelection,
@@ -246,6 +248,8 @@ export function MedicationsPage() {
 		uploadingImage,
 		existingPeople,
 		coverageByMed,
+		settings,
+		recordAsNeededIntake,
 	} = useAppContext();
 
 	// Use the medication form hook
@@ -289,6 +293,17 @@ export function MedicationsPage() {
 	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
 	const closeLightbox = useCallback(() => setLightboxImage(null), []);
 	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
+	const [recordNowMedication, setRecordNowMedication] = useState<Medication | null>(null);
+	const canRecordNow = useCallback(
+		(medication: Medication) => {
+			if (viewMode !== "grid" || medication.isObsolete || getMedicationIntakes(medication).length > 0) return false;
+			if (!medication.medicationEndDate) return true;
+			const timezone = settings.timezone || settings.serverTimezone || undefined;
+			const today = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
+			return medication.medicationEndDate.slice(0, 10) >= today;
+		},
+		[settings.serverTimezone, settings.timezone, viewMode]
+	);
 
 	// Mobile modal state (declared early because it's used in useEffect below)
 	const [showEditModal, setShowEditModal] = useState(pendingEditTransition && window.innerWidth <= 768);
@@ -1581,9 +1596,11 @@ export function MedicationsPage() {
 				isCompact={viewMode === "form"}
 				showObsolete={showObsolete}
 				coverageByMed={coverageByMed}
+				canRecordNow={canRecordNow}
 				onNewEntry={handleNewEntryClick}
 				onOpenReport={() => setShowReportModal(true)}
 				onEdit={handleEditClick}
+				onRecordNow={setRecordNowMedication}
 				onView={handleViewClick}
 				onMarkObsolete={requestMarkObsolete}
 				onDelete={requestDeleteMed}
@@ -2378,6 +2395,12 @@ export function MedicationsPage() {
 					{/* end schedule tab */}
 				</fieldset>
 			</MedicationEditCoordinator>
+
+			<RecordNowModal
+				medication={recordNowMedication}
+				onClose={() => setRecordNowMedication(null)}
+				onRecord={recordAsNeededIntake}
+			/>
 
 			<MedicationDialogs
 				mobileEditModal={

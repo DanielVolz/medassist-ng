@@ -2,6 +2,7 @@ import { Minus, Plus } from "lucide-react";
 import classes from "./FormNumberStepper.module.css";
 
 interface FormNumberStepperProps {
+	inputId?: string;
 	value: string;
 	onChange: (nextValue: string) => void;
 	min?: number;
@@ -50,6 +51,7 @@ function parseInputValue(raw: string, allowDecimal: boolean): number | null {
 }
 
 export function FormNumberStepper({
+	inputId,
 	value,
 	onChange,
 	min = 0,
@@ -88,6 +90,7 @@ export function FormNumberStepper({
 			{/* Input first in DOM so <label> associates with it, not the decrement button.
 			    CSS order restores the visual layout: [−] [input] [+]. */}
 			<input
+				id={inputId}
 				type="text"
 				inputMode={allowDecimal ? "decimal" : "numeric"}
 				pattern={allowDecimal ? "[0-9]*\\.?[0-9]*" : "[0-9]*"}

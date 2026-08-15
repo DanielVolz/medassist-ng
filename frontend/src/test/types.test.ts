@@ -49,6 +49,20 @@ describe("getMedTotal", () => {
 		expect(getMedTotal(med)).toBe(8.5);
 	});
 
+	it("subtracts only the active as-needed stock effect with millistock-safe schedule projection", () => {
+		const med = {
+			packageType: "bottle" as const,
+			packCount: 0,
+			blistersPerPack: 1,
+			pillsPerBlister: 1,
+			looseTablets: 10,
+			scheduleStockRebaseMilli: 500,
+			asNeededStockEffect: 1.5,
+		};
+
+		expect(getMedTotal(med)).toBe(9);
+	});
+
 	it("handles undefined stock adjustment", () => {
 		const med = {
 			packCount: 1,

@@ -53,6 +53,7 @@ const createMockContext = (overrides = {}) => ({
 	refillSaving: false,
 	submitRefill: vi.fn(),
 	coverageByMed: {},
+	settings: { timezone: "Europe/Berlin", serverTimezone: "Europe/Berlin" },
 	...overrides,
 });
 

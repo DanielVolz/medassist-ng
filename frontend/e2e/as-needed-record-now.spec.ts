@@ -32,9 +32,13 @@ test.describe("As-needed Record now", () => {
 			await page.setViewportSize(viewport.size);
 			await navigateTo(page, "/medications");
 			const medication = page.getByTestId("medication-row").filter({ hasText: MEDICATION_NAME });
-			await medication.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
-			await page.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
-			await expect(page.getByText(/Intake recorded|Einnahme erfasst/i)).toBeVisible();
+			await medication.getByRole("button", { name: /Take|Einnehmen/i }).click();
+			await page
+				.getByRole("dialog")
+				.last()
+				.getByRole("button", { name: /Take|Einnehmen/i })
+				.click();
+			await expect(page.getByText(/Medication taken|Medikament eingenommen/i)).toBeVisible();
 			const recordModal = page.getByRole("dialog").last();
 			await recordModal.getByLabel(/Close|Schließen/i).click();
 			await expect(recordModal).toBeHidden();
@@ -61,7 +65,7 @@ test.describe("As-needed Record now", () => {
 			await navigateTo(page, "/medications");
 			const medication = page.getByTestId("medication-row").filter({ hasText: MEDICATION_NAME });
 			await expect(medication).toBeVisible();
-			await medication.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
+			await medication.getByRole("button", { name: /Take|Einnehmen/i }).click();
 
 			let firstServerStatus: number | null = null;
 			let firstKey: string | null = null;
@@ -75,7 +79,11 @@ test.describe("As-needed Record now", () => {
 				await route.abort("connectionreset");
 			});
 
-			await page.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
+			await page
+				.getByRole("dialog")
+				.last()
+				.getByRole("button", { name: /Take|Einnehmen/i })
+				.click();
 			await expect(page.getByText(/result is uncertain|Ergebnis.*unklar/i)).toBeVisible();
 
 			const replay = page.waitForResponse((response) => response.url().includes("/as-needed-intakes"));
@@ -89,10 +97,10 @@ test.describe("As-needed Record now", () => {
 			expect(replayResponse.status()).toBe(200);
 			expect(await replayResponse.request().headerValue("idempotency-key")).toBe(firstKey);
 			expect((await reloadResponse.json()) as Array<{ asNeededStockEffect?: number }>).toEqual(
-				expect.arrayContaining([expect.objectContaining({ asNeededStockEffect: 0.5 })])
+				expect.arrayContaining([expect.objectContaining({ asNeededStockEffect: 1 })])
 			);
-			await expect(page.getByText(/Intake recorded|Einnahme erfasst/i)).toBeVisible();
-			await expect(medication).toContainText(/9\.5\s*\/\s*10/);
+			await expect(page.getByText(/Medication taken|Medikament eingenommen/i)).toBeVisible();
+			await expect(medication).toContainText(/9\s*\/\s*10/);
 		});
 	}
 
@@ -116,18 +124,21 @@ test.describe("As-needed Record now", () => {
 				.filter({ has: page.getByRole("heading", { name: MEDICATION_NAME }) })
 				.last();
 			await expect(detail).toBeVisible();
-			await expect(detail.getByText(/As-needed history|Bei-Bedarf-Verlauf/i)).toBeVisible();
-			await detail.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
+			await expect(detail.getByRole("region", { name: /As-needed history|Bei-Bedarf-Verlauf/i })).toBeVisible();
+			await detail.getByRole("button", { name: /^(Take|Nehmen)$/ }).click();
 
 			const create = page.waitForResponse(
 				(response) => response.url().includes("/as-needed-intakes") && response.request().method() === "POST"
 			);
-			await page.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
+			await page
+				.getByRole("dialog", { name: /Take as-needed medication|Medikament bei Bedarf nehmen/i })
+				.getByRole("button", { name: /^(Take|Nehmen)$/ })
+				.click();
 			expect((await create).status()).toBe(201);
-			await expect(page.getByText(/Intake recorded|Einnahme erfasst/i)).toBeVisible();
+			await expect(page.getByText(/Medication taken|Medikament eingenommen/i)).toBeVisible();
 			await page.goBack();
 			await expect(detail).toBeVisible();
-			await expect(detail.locator("article").first()).toContainText(/0\.5/);
+			await expect(detail.locator("article").first()).toContainText(/^1 pill|^1 Tablette/);
 			await detail
 				.getByLabel(/Close|Schließen/i)
 				.first()
@@ -156,11 +167,11 @@ test.describe("As-needed Record now", () => {
 		await page.setViewportSize({ width: 1280, height: 720 });
 		await navigateTo(page, "/medications");
 		const medication = page.getByTestId("medication-row").filter({ hasText: name });
-		await medication.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
+		await medication.getByRole("button", { name: /Take|Einnehmen/i }).click();
 		const recordModal = page.getByRole("dialog").last();
 		await recordModal.getByLabel(/Person|Person/i).selectOption("Alice");
-		await recordModal.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
-		await expect(recordModal.getByText(/Current stock:\s*9\.5|Aktueller Bestand:\s*9,5/i)).toBeVisible();
+		await recordModal.getByRole("button", { name: /Take|Einnehmen/i }).click();
+		await expect(recordModal.getByText(/Current stock:\s*9|Aktueller Bestand:\s*9/i)).toBeVisible();
 		await recordModal.getByLabel(/Close|Schließen/i).click();
 
 		await navigateTo(page, "/dashboard");
@@ -249,11 +260,11 @@ test.describe("As-needed Record now", () => {
 			.getByRole("dialog")
 			.filter({ has: page.getByRole("heading", { name }) })
 			.last();
-		await detail.getByRole("button", { name: /Record now|Jetzt erfassen/i }).click();
+		await detail.getByRole("button", { name: /Take|Einnehmen/i }).click();
 		const recordModal = page.getByRole("dialog").last();
 		await recordModal.getByLabel(/Person|Person/i).selectOption("");
 		await expect(recordModal.getByText(/without changing the measured stock|ohne.*Bestand/i)).toBeVisible();
-		await recordModal.getByRole("button", { name: /Record intake|Einnahme erfassen/i }).click();
+		await recordModal.getByRole("button", { name: /Take|Einnehmen/i }).click();
 		await expect(recordModal.getByText(/Current stock:\s*30|Aktueller Bestand:\s*30/i)).toBeVisible();
 		await recordModal.getByLabel(/Close|Schließen/i).click();
 		await expect(detail.getByText(/No measurable stock effect|Kein messbarer Bestandseffekt/i)).toBeVisible();

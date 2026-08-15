@@ -303,7 +303,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const recordAsNeededIntake = useCallback(
 		async (input: Parameters<typeof asNeededIntakes.recordAsNeededIntake>[0]) => {
 			const result = await asNeededIntakes.recordAsNeededIntake(input);
-			medications.loadMeds();
+			void medications.loadMeds({ silent: true });
 			return result;
 		},
 		[asNeededIntakes.recordAsNeededIntake, medications.loadMeds]
@@ -311,7 +311,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 	const reverseAsNeededIntake = useCallback(
 		async (input: Parameters<typeof asNeededIntakes.reverseAsNeededIntake>[0]) => {
 			const result = await asNeededIntakes.reverseAsNeededIntake(input);
-			medications.loadMeds();
+			void medications.loadMeds({ silent: true });
 			return result;
 		},
 		[asNeededIntakes.reverseAsNeededIntake, medications.loadMeds]

@@ -239,9 +239,9 @@
   },
   "asNeeded": {
     "record": {
-      "action": "Record now",
-      "title": "Record as-needed intake",
-      "trustedTime": "The service records the current time when you confirm.",
+      "action": "Take",
+      "title": "Take as-needed medication",
+      "trustedTime": "The current time is saved when you take it.",
       "quantity": "Quantity ({{unit}})",
       "person": "Person",
       "noPerson": "None / self",
@@ -249,11 +249,11 @@
       "increaseQuantity": "Increase quantity",
       "stockEffect": "This will reduce stock by {{quantity}} {{unit}}.",
       "noStockEffect": "This records one application without changing the measured stock.",
-      "confirm": "Record intake",
-      "saving": "Recording intake...",
-      "failedTitle": "Intake was not recorded",
-      "successTitle": "Intake recorded",
-      "successMessage": "Recorded {{quantity}} {{unit}} at {{time}}. Current stock: {{stock}}.",
+      "confirm": "Take",
+      "saving": "Saving intake...",
+      "failedTitle": "Medication was not taken",
+      "successTitle": "Medication taken",
+      "successMessage": "Took {{quantity}} {{unit}} at {{time}}. Current stock: {{stock}}.",
       "reconciliationRequired": "The package configuration and current stock should be checked."
     },
     "lifecycle": {

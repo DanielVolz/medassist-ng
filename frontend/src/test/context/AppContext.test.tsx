@@ -7,6 +7,7 @@ import type { Medication } from "../../types";
 const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
 const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 const mockUseAuth = vi.fn();
+const mockUseAsNeededIntakes = vi.fn();
 const mockUseMedications = vi.fn();
 const mockUseSettings = vi.fn();
 const mockUseDoses = vi.fn();
@@ -27,6 +28,10 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("../../components/Auth", () => ({
 	useAuth: () => mockUseAuth(),
+}));
+
+vi.mock("../../hooks/useAsNeededIntakes", () => ({
+	useAsNeededIntakes: () => mockUseAsNeededIntakes(),
 }));
 
 vi.mock("../../context/FeedbackContext", () => ({
@@ -151,6 +156,10 @@ describe("useAppContext", () => {
 
 		authFetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 		mockUseAuth.mockReturnValue({ user: { id: 7, username: "owner" }, authFetch: authFetchMock });
+		mockUseAsNeededIntakes.mockReturnValue({
+			recordAsNeededIntake: vi.fn(async () => ({ event: {}, inventory: {} })),
+			reverseAsNeededIntake: vi.fn(async () => ({ event: {}, inventory: {} })),
+		});
 
 		mockUseMedications.mockReturnValue({
 			meds,
@@ -328,6 +337,30 @@ describe("useAppContext", () => {
 		expect(result.current.existingPeople).toEqual(["Anna", "Max"]);
 		expect(result.current.stockThresholds.lowStockDays).toBe(10);
 		expect(result.current.settingsChanged).toBe(false);
+	});
+
+	it("silently refreshes medications after recording or reversing an as-needed intake", async () => {
+		const recordAsNeededIntake = vi.fn(async () => ({ event: {}, inventory: {} }));
+		const reverseAsNeededIntake = vi.fn(async () => ({ event: {}, inventory: {} }));
+		mockUseAsNeededIntakes.mockReturnValue({ recordAsNeededIntake, reverseAsNeededIntake });
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+
+		await act(async () => {
+			await result.current.recordAsNeededIntake({
+				medicationId: 11,
+				quantity: 1,
+				person: null,
+				idempotencyKey: "intent-key",
+			});
+			await result.current.reverseAsNeededIntake({
+				eventId: "event-11",
+				expectedRevision: 1,
+				idempotencyKey: "undo-key",
+			});
+		});
+
+		expect(mockUseMedications().loadMeds).toHaveBeenCalledWith({ silent: true });
+		expect(mockUseMedications().loadMeds).toHaveBeenCalledTimes(3);
 	});
 
 	it("marks settings as changed when shareMedicationOverview differs", async () => {

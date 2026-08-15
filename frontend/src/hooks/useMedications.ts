@@ -11,7 +11,7 @@ export interface UseMedicationsReturn {
 	setSaving: React.Dispatch<React.SetStateAction<boolean>>;
 	uploadingImage: boolean;
 	clearMedicationsState: () => void;
-	loadMeds: () => void;
+	loadMeds: (options?: { silent?: boolean }) => Promise<void>;
 	deleteMed: (id: number, editingId: number | null, resetForm: () => void) => Promise<void>;
 	uploadMedImage: (medId: number, file: File) => Promise<void>;
 	deleteMedImage: (medId: number) => Promise<void>;
@@ -35,22 +35,27 @@ export function useMedications(): UseMedicationsReturn {
 		setUploadingImage(false);
 	}, []);
 
-	const loadMeds = useCallback(() => {
-		setLoading(true);
-		authFetch("/api/medications?includeObsolete=true")
-			.then((res) => {
+	const loadMeds = useCallback(
+		async ({ silent = false }: { silent?: boolean } = {}) => {
+			if (!silent) setLoading(true);
+
+			try {
+				const res = await authFetch("/api/medications?includeObsolete=true");
 				if (!res.ok) {
 					throw new Error(`HTTP ${res.status}`);
 				}
-				return res.json();
-			})
-			.then((data) => setMeds(Array.isArray(data) ? data : []))
-			.catch((error: unknown) => {
+
+				const data = await res.json();
+				setMeds(Array.isArray(data) ? data : []);
+			} catch (error: unknown) {
 				log.warn("[useMedications] load medications failed", { error: getErrorMessage(error) });
-				setMeds([]);
-			})
-			.finally(() => setLoading(false));
-	}, [authFetch]);
+				if (!silent) setMeds([]);
+			} finally {
+				if (!silent) setLoading(false);
+			}
+		},
+		[authFetch]
+	);
 
 	const deleteMed = useCallback(
 		async (id: number, editingId: number | null, resetForm: () => void) => {

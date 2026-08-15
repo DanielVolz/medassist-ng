@@ -9,12 +9,14 @@ import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
 import { AppButton } from "../ui/primitives/AppButton";
 import { AppSelect } from "../ui/primitives/AppSelect";
 import { getNumericLocale, withFormattingTimezone } from "../utils/formatters";
+import { mergePersonTags } from "../utils/person-tags";
 import { FormNumberStepper } from "./FormNumberStepper";
 import { MedicationAvatar } from "./MedicationAvatar";
 
 type RecordNowModalProps = {
 	medication: Medication | null;
 	replacementEvent?: AsNeededIntakeEvent | null;
+	existingPeople?: string[];
 	onClose: () => void;
 	onRecord: (input: {
 		medicationId: number;
@@ -50,9 +52,19 @@ function formatTrustedDateTime(value: string): string {
 	);
 }
 
-export function RecordNowModal({ medication, replacementEvent = null, onClose, onRecord }: RecordNowModalProps) {
+export function RecordNowModal({
+	medication,
+	replacementEvent = null,
+	existingPeople = [],
+	onClose,
+	onRecord,
+}: RecordNowModalProps) {
 	const { t } = useTranslation();
 	const profile = useMemo(() => getAsNeededQuantityProfile(medication ?? {}), [medication]);
+	const personOptions = useMemo(
+		() => mergePersonTags([...existingPeople, ...(medication?.takenBy ?? []), replacementEvent?.person]),
+		[existingPeople, medication?.takenBy, replacementEvent?.person]
+	);
 	const [quantity, setQuantity] = useState(String(profile.defaultQuantity));
 	const [person, setPerson] = useState("");
 	const [idempotencyKey, setIdempotencyKey] = useState("");
@@ -86,7 +98,7 @@ export function RecordNowModal({ medication, replacementEvent = null, onClose, o
 	const quantityIsValid = normalizeAsNeededQuantityMilli(numericQuantity, profile) !== null;
 	const unitLabel = t(`asNeeded.units.${profile.unit}`, { count: numericQuantity });
 	const locked = pending || attempted;
-	let submitLabel = t(replacementEvent ? "asNeeded.replacement.confirm" : "asNeeded.record.confirm");
+	let submitLabel = t(replacementEvent ? "asNeeded.replacement.confirm" : "dose.take");
 	if (pending) {
 		submitLabel = t("asNeeded.record.saving");
 	} else if (error) {
@@ -145,6 +157,7 @@ export function RecordNowModal({ medication, replacementEvent = null, onClose, o
 
 				{result ? (
 					<Alert
+						mb="md"
 						ref={feedbackRef}
 						tabIndex={-1}
 						color="green"
@@ -187,7 +200,7 @@ export function RecordNowModal({ medication, replacementEvent = null, onClose, o
 								<AppSelect
 									data={[
 										{ value: "", label: t("asNeeded.record.noPerson") },
-										...medication.takenBy.map((name) => ({ value: name, label: name })),
+										...personOptions.map((name) => ({ value: name, label: name })),
 									]}
 									label={t("asNeeded.record.person")}
 									onChange={(event) => setPerson(event.currentTarget.value)}

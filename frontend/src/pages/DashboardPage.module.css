@@ -31,7 +31,7 @@
 	--overview-name-stack-height: calc(1rem * 1.55 + 0.4rem + 0.78rem * 1.2);
 }
 
-.overviewNameLine:has(.overviewTakenByLine) :global(.med-avatar-sm) {
+.overviewNameLine :global(.med-avatar-sm) {
 	width: var(--overview-name-stack-height);
 	height: var(--overview-name-stack-height);
 }

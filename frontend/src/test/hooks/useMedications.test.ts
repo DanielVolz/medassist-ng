@@ -78,6 +78,47 @@ describe("useMedications", () => {
 		expect(authFetchMock).toHaveBeenCalledWith("/api/medications?includeObsolete=true");
 	});
 
+	it("silently refreshes medication data without toggling global loading", async () => {
+		let resolveRefresh: ((response: { ok: boolean; json: () => Promise<unknown> }) => void) | undefined;
+		const refreshedMeds = [{ id: 2, name: "Refreshed" }];
+		(global.fetch as ReturnType<typeof vi.fn>).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveRefresh = resolve;
+				})
+		);
+
+		const { result } = renderHook(() => useMedications());
+		let refresh: Promise<void> | undefined;
+		act(() => {
+			refresh = result.current.loadMeds({ silent: true });
+		});
+
+		expect(result.current.loading).toBe(false);
+		resolveRefresh?.({ ok: true, json: () => Promise.resolve(refreshedMeds) });
+		await act(async () => {
+			await refresh;
+		});
+		expect(result.current.loading).toBe(false);
+		expect(result.current.meds).toEqual(refreshedMeds);
+	});
+
+	it("keeps visible medication data when a silent refresh fails", async () => {
+		const initialMeds = [{ id: 1, name: "Visible" }];
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(initialMeds) })
+			.mockRejectedValueOnce(new Error("Refresh failed"));
+		const { result } = renderHook(() => useMedications());
+
+		await act(async () => {
+			await result.current.loadMeds();
+			await result.current.loadMeds({ silent: true });
+		});
+
+		expect(result.current.loading).toBe(false);
+		expect(result.current.meds).toEqual(initialMeds);
+	});
+
 	it("handles API error gracefully", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Network error"));
 

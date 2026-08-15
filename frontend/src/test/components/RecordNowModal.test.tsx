@@ -74,16 +74,18 @@ describe("RecordNowModal", () => {
 		setDefaultFormattingTimezone(null);
 	});
 
-	it("uses package defaults, supports None/self, and sends the stable key on retry", async () => {
+	it("uses the tablet default of 1, supports 0.5 steps and None/self, and sends the stable key on retry", async () => {
 		const onRecord = vi
 			.fn()
 			.mockRejectedValueOnce(new AsNeededIntakeRequestError("NETWORK_ERROR"))
 			.mockResolvedValueOnce(response());
 		render(<RecordNowModal medication={medication()} onClose={vi.fn()} onRecord={onRecord} />);
 
-		expect(screen.getByRole("textbox")).toHaveValue("0.5");
+		expect(screen.getByRole("textbox")).toHaveValue("1");
 		expect(screen.getByText("asNeeded.record.stockEffect")).toBeInTheDocument();
-		fireEvent.click(screen.getByRole("button", { name: "asNeeded.record.confirm" }));
+		fireEvent.click(screen.getByRole("button", { name: "asNeeded.record.decreaseQuantity" }));
+		expect(screen.getByRole("textbox")).toHaveValue("0.5");
+		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
 		await screen.findByText("asNeeded.errors.network");
 		fireEvent.click(screen.getByRole("button", { name: "common.retry" }));
 
@@ -114,7 +116,7 @@ describe("RecordNowModal", () => {
 		expect(screen.getByRole("button", { name: "asNeeded.record.increaseQuantity" })).toBeDisabled();
 		fireEvent.change(screen.getByRole("textbox"), { target: { value: "2" } });
 		expect(screen.getByText("asNeeded.errors.invalidQuantity")).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "asNeeded.record.confirm" })).toBeDisabled();
+		expect(screen.getByRole("button", { name: "dose.take" })).toBeDisabled();
 	});
 
 	it("keeps the dialog pending and blocks duplicate submits until the latest response arrives", async () => {
@@ -127,7 +129,7 @@ describe("RecordNowModal", () => {
 		);
 		render(<RecordNowModal medication={medication()} onClose={vi.fn()} onRecord={onRecord} />);
 
-		const confirm = screen.getByRole("button", { name: "asNeeded.record.confirm" });
+		const confirm = screen.getByRole("button", { name: "dose.take" });
 		fireEvent.click(confirm);
 		fireEvent.click(confirm);
 		expect(onRecord).toHaveBeenCalledTimes(1);
@@ -136,6 +138,23 @@ describe("RecordNowModal", () => {
 
 		resolveRequest?.(response());
 		await screen.findByText("asNeeded.record.successTitle");
+	});
+
+	it("offers all existing people while retaining legacy replacement preselection", () => {
+		const replacementEvent = { ...response().event, person: "Alex", status: "reversed" as const, revision: 2 };
+		render(
+			<RecordNowModal
+				existingPeople={["Sam", "Alex"]}
+				medication={medication()}
+				replacementEvent={replacementEvent}
+				onClose={vi.fn()}
+				onRecord={vi.fn()}
+			/>
+		);
+
+		const person = screen.getByLabelText("asNeeded.record.person");
+		expect(person).toHaveValue("Alex");
+		expect(screen.getByRole("option", { name: "Sam" })).toBeInTheDocument();
 	});
 
 	it("creates a replacement only with the durable reversed event and replays the exact request", async () => {

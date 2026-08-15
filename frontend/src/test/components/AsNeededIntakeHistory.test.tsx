@@ -5,10 +5,28 @@ import { AsNeededIntakeRequestError } from "../../hooks/useAsNeededIntakes";
 import type { AsNeededIntakeEvent } from "../../types";
 
 const listAsNeededIntakes = vi.fn();
+const openJournalEditor = vi.fn();
+
+const intakeJournal = {
+	journalEditorOpen: false,
+	journalEvent: null,
+	journalEventLoading: false,
+	journalEventSaving: false,
+	journalEventDeleting: false,
+	journalEventError: null,
+	openJournalEditor,
+	closeJournalEditor: vi.fn(),
+	saveJournalNote: vi.fn(),
+	deleteJournalNote: vi.fn(),
+};
 
 vi.mock("../../hooks/useAsNeededIntakes", async (importActual) => ({
 	...(await importActual<typeof import("../../hooks/useAsNeededIntakes")>()),
 	useAsNeededIntakes: () => ({ listAsNeededIntakes }),
+}));
+
+vi.mock("../../hooks/useIntakeJournal", () => ({
+	useIntakeJournal: () => intakeJournal,
 }));
 
 function event(overrides: Partial<AsNeededIntakeEvent> = {}): AsNeededIntakeEvent {
@@ -230,5 +248,19 @@ describe("AsNeededIntakeHistory", () => {
 		await screen.findByText("asNeeded.reversal.notice.correctionReadyTitle");
 		fireEvent.click(screen.getByRole("button", { name: "asNeeded.replacement.action" }));
 		expect(onReplace).toHaveBeenCalledWith(expect.objectContaining({ eventId: "event-1", status: "reversed" }));
+	});
+
+	it("opens the active journal with its opaque as-needed anchor and keeps reversed entries view-only", async () => {
+		listAsNeededIntakes.mockResolvedValueOnce({
+			events: [event(), event({ eventId: "event-old", status: "reversed", journal: null })],
+			nextCursor: null,
+		});
+		render(<AsNeededIntakeHistory medicationId={9} canRecordNow onRecordNow={vi.fn()} />);
+
+		await screen.findByText("asNeeded.history.title");
+		const addButtons = screen.getAllByRole("button", { name: "journal.actions.add" });
+		expect(addButtons).toHaveLength(1);
+		fireEvent.click(addButtons[0]);
+		expect(openJournalEditor).toHaveBeenCalledWith("as-needed:event-1");
 	});
 });

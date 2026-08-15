@@ -29,6 +29,14 @@ function buildEntry(overrides: Partial<IntakeJournalEntry> = {}): IntakeJournalE
 	};
 }
 
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
+}
+
 describe("useIntakeJournal", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -68,7 +76,8 @@ describe("useIntakeJournal", () => {
 
 		expect(authFetchMock).toHaveBeenNthCalledWith(
 			1,
-			`/api/intake-journal/event/${encodeURIComponent(initialEntry.doseId)}`
+			`/api/intake-journal/event/${encodeURIComponent(initialEntry.doseId)}`,
+			expect.objectContaining({ signal: expect.any(AbortSignal) })
 		);
 		expect(result.current.journalEditorOpen).toBe(true);
 		expect(result.current.journalTargetDoseId).toBe(initialEntry.doseId);
@@ -161,7 +170,8 @@ describe("useIntakeJournal", () => {
 
 		expect(authFetchMock).toHaveBeenNthCalledWith(
 			2,
-			`/api/intake-journal/event/${encodeURIComponent(historyEntry.doseId)}`
+			`/api/intake-journal/event/${encodeURIComponent(historyEntry.doseId)}`,
+			expect.objectContaining({ signal: expect.any(AbortSignal) })
 		);
 		expect(result.current.journalHistoryOpen).toBe(false);
 		expect(result.current.journalEditorOpen).toBe(true);
@@ -169,11 +179,11 @@ describe("useIntakeJournal", () => {
 		expect(result.current.journalEvent).toEqual(historyEntry);
 	});
 
-	it("surfaces owner access errors instead of swallowing them", async () => {
+	it("maps owner access errors to safe translated messages", async () => {
 		const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
 		fetchMock.mockResolvedValueOnce({
 			ok: false,
-			json: () => Promise.resolve({ error: "Tracked dose event not found for the current owner" }),
+			json: () => Promise.resolve({ code: "API_KEY_SCOPE_FORBIDDEN" }),
 		});
 
 		const { result } = renderHook(() => useIntakeJournal());
@@ -183,6 +193,95 @@ describe("useIntakeJournal", () => {
 		});
 
 		expect(result.current.journalEvent).toBeNull();
-		expect(result.current.journalEventError).toBe("Tracked dose event not found for the current owner");
+		expect(result.current.journalEventError).toBe("journal.errors.readOnly");
+	});
+
+	it("uses the as-needed anchor and keeps nullable note and mood fields end-to-end", async () => {
+		const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+		const asNeeded = buildEntry({
+			eventType: "as_needed",
+			eventId: "event-1",
+			doseId: "as-needed:event-1",
+			scheduledFor: null,
+			occurredAt: "2026-08-15T08:00:00.000Z",
+			status: "active",
+			takenAt: null,
+			takenSource: "owner_as_needed",
+			mood: null,
+			note: null,
+		});
+		fetchMock
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ entry: asNeeded }) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ entry: { ...asNeeded, note: "Relief", mood: "good" } }),
+			})
+			.mockResolvedValueOnce({ ok: true });
+		const { result } = renderHook(() => useIntakeJournal());
+
+		await act(async () => {
+			await result.current.openJournalEditor(asNeeded.doseId);
+		});
+		await act(async () => {
+			await result.current.saveJournalNote("Relief", "good");
+		});
+		await act(async () => {
+			await result.current.deleteJournalNote();
+		});
+
+		expect(authFetchMock).toHaveBeenNthCalledWith(
+			1,
+			"/api/intake-journal/event/as-needed%3Aevent-1",
+			expect.objectContaining({ signal: expect.any(AbortSignal) })
+		);
+		expect(authFetchMock).toHaveBeenNthCalledWith(
+			2,
+			"/api/intake-journal/event/as-needed%3Aevent-1",
+			expect.objectContaining({ body: JSON.stringify({ note: "Relief", mood: "good" }) })
+		);
+		expect(authFetchMock).toHaveBeenNthCalledWith(
+			3,
+			"/api/intake-journal/event/as-needed%3Aevent-1",
+			expect.objectContaining({ method: "DELETE" })
+		);
+		expect(result.current.journalEvent).toEqual(expect.objectContaining({ note: null, mood: null }));
+	});
+
+	it("aborts and ignores stale event reads, then reconciles an EVENT_REVERSED save to the newest read-only event", async () => {
+		const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+		const first = deferred<{ ok: boolean; json: () => Promise<{ entry: IntakeJournalEntry }> }>();
+		const oldEntry = buildEntry({ doseId: "as-needed:old", eventType: "as_needed", status: "active" });
+		const newEntry = buildEntry({ doseId: "as-needed:new", eventType: "as_needed", status: "active" });
+		const reversedEntry = { ...newEntry, status: "reversed" as const, note: "Locked", mood: "neutral" as const };
+		fetchMock
+			.mockImplementationOnce(() => first.promise)
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ entry: newEntry }) })
+			.mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({ code: "EVENT_REVERSED" }) })
+			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ entry: reversedEntry }) });
+		const onEventReversed = vi.fn();
+		const { result } = renderHook(() => useIntakeJournal({ onEventReversed }));
+
+		act(() => {
+			void result.current.openJournalEditor(oldEntry.doseId);
+		});
+		await waitFor(() => expect(result.current.journalEventLoading).toBe(true));
+		const firstSignal = (authFetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.signal;
+		if (!firstSignal) throw new Error("Expected the journal load request to have an AbortSignal");
+		act(() => {
+			void result.current.openJournalEditor(newEntry.doseId);
+		});
+		expect(firstSignal.aborted).toBe(true);
+		await waitFor(() => expect(result.current.journalEvent?.doseId).toBe(newEntry.doseId));
+		first.resolve({ ok: true, json: () => Promise.resolve({ entry: oldEntry }) });
+		await waitFor(() => expect(result.current.journalEvent?.doseId).toBe(newEntry.doseId));
+
+		let saved = true;
+		await act(async () => {
+			saved = await result.current.saveJournalNote("Race", "good");
+		});
+		expect(saved).toBe(false);
+		expect(result.current.journalEvent).toEqual(expect.objectContaining({ status: "reversed", note: "Locked" }));
+		expect(result.current.journalEventError).toBe("journal.errors.eventReversed");
+		expect(onEventReversed).toHaveBeenCalledOnce();
 	});
 });

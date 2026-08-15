@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getAsNeededQuantityProfile, normalizeAsNeededQuantityMilli } from "@medassist/shared";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { type db, withImmediateWriteTransaction } from "../db/client.js";
 import { asNeededIntakeEvents, doseTracking, medications, userSettings } from "../db/schema.js";
 import { normalizeMedicationSchedule } from "../utils/scheduler-utils.js";
@@ -116,6 +116,53 @@ export async function getActiveAsNeededStockEffectsMilli(
 		)
 		.groupBy(asNeededIntakeEvents.medicationId);
 	return new Map(rows.map((row) => [row.medicationId, Number(row.total ?? 0)]));
+}
+
+export async function neutralizeAsNeededStockEffects(
+	database: Database,
+	userId: number,
+	medicationId: number,
+	cutoff: Date
+): Promise<void> {
+	await database
+		.update(asNeededIntakeEvents)
+		.set({
+			stockEffectMilli: 0,
+			stockEffectReason: "superseded_by_correction",
+			stockCutoffAt: Math.floor(cutoff.getTime() / 1000),
+			revision: sql`${asNeededIntakeEvents.revision} + 1`,
+			updatedAt: cutoff,
+		})
+		.where(
+			and(
+				eq(asNeededIntakeEvents.userId, userId),
+				eq(asNeededIntakeEvents.medicationId, medicationId),
+				eq(asNeededIntakeEvents.status, "active"),
+				gt(asNeededIntakeEvents.stockEffectMilli, 0),
+				lte(asNeededIntakeEvents.occurredAt, cutoff)
+			)
+		);
+}
+
+export async function deleteAsNeededAnchorsForMedication(
+	database: Database,
+	userId: number,
+	medicationId: number
+): Promise<void> {
+	const anchors = await database
+		.select({ doseTrackingId: asNeededIntakeEvents.doseTrackingId })
+		.from(asNeededIntakeEvents)
+		.where(and(eq(asNeededIntakeEvents.userId, userId), eq(asNeededIntakeEvents.medicationId, medicationId)));
+	if (anchors.length === 0) return;
+	await database.delete(doseTracking).where(
+		and(
+			eq(doseTracking.userId, userId),
+			inArray(
+				doseTracking.id,
+				anchors.map((anchor) => anchor.doseTrackingId)
+			)
+		)
+	);
 }
 
 export async function createAsNeededIntake(input: {

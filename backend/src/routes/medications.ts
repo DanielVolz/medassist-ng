@@ -8,8 +8,10 @@ import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { getAnonymousUserId, isReadOnlyApiKeyRequest, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import {
+	deleteAsNeededAnchorsForMedication,
 	getActiveAsNeededStockEffectMilli,
 	getActiveAsNeededStockEffectsMilli,
+	neutralizeAsNeededStockEffects,
 } from "../services/as-needed-intakes-service.js";
 import { computeMedicationCurrentStockRaw } from "../services/current-stock.js";
 import { normalizeDateTime, parseIntakesWithUnits } from "../services/medications-service.js";
@@ -926,6 +928,9 @@ export async function medicationRoutes(app: FastifyInstance) {
 					.returning();
 
 				if (!updated) return null;
+				if (stockFieldsChanged) {
+					await neutralizeAsNeededStockEffects(transactionDb, userId, idNum, changedAt);
+				}
 				if (!crossesZeroScheduleBoundary || stockFieldsChanged) {
 					return { medication: updated, oldIntakes, hasScheduleOnBothSides };
 				}
@@ -1232,13 +1237,6 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 			const userId = await getUserId(req, reply);
 
-			// Verify ownership
-			const [existing] = await db
-				.select()
-				.from(medications)
-				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
-			if (!existing) return reply.notFound();
-
 			const { stockAdjustment, looseTablets, totalPills, packageAmountValue, packCount } = req.body as {
 				stockAdjustment: number;
 				looseTablets?: number;
@@ -1269,57 +1267,69 @@ export async function medicationRoutes(app: FastifyInstance) {
 				return reply.badRequest("packCount must be a non-negative integer");
 			}
 
-			const updateFields: {
-				stockAdjustment: number;
-				scheduleStockRebaseMilli: number;
-				lastStockCorrectionAt: Date;
-				updatedAt: Date;
-				looseTablets?: number;
-				totalPills?: number | null;
-				packageAmountValue?: number;
-				packCount?: number;
-			} = {
-				stockAdjustment,
-				scheduleStockRebaseMilli: 0,
-				lastStockCorrectionAt: new Date(),
-				updatedAt: new Date(),
-			};
+			const corrected = await withImmediateWriteTransaction(async (transactionDb) => {
+				const correctionAt = new Date();
+				const [existing] = await transactionDb
+					.select()
+					.from(medications)
+					.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+				if (!existing) return null;
 
-			const packageType = normalizePackageType(existing.packageType);
-			const allowsAmountBaseUpdate = isTubePackageType(packageType) || isLiquidContainerPackageType(packageType);
-			const allowsDiscreteCapacityUpdate = isDiscreteCountPackageType(packageType);
-			if (allowsAmountBaseUpdate) {
-				const normalizedAmountBase = looseTablets ?? totalPills;
-				if (normalizedAmountBase !== undefined) {
-					updateFields.totalPills = normalizedAmountBase;
-					updateFields.looseTablets = normalizedAmountBase;
+				const updateFields: {
+					stockAdjustment: number;
+					scheduleStockRebaseMilli: number;
+					lastStockCorrectionAt: Date;
+					updatedAt: Date;
+					looseTablets?: number;
+					totalPills?: number | null;
+					packageAmountValue?: number;
+					packCount?: number;
+				} = {
+					stockAdjustment,
+					scheduleStockRebaseMilli: 0,
+					lastStockCorrectionAt: correctionAt,
+					updatedAt: correctionAt,
+				};
+
+				const packageType = normalizePackageType(existing.packageType);
+				const allowsAmountBaseUpdate = isTubePackageType(packageType) || isLiquidContainerPackageType(packageType);
+				const allowsDiscreteCapacityUpdate = isDiscreteCountPackageType(packageType);
+				if (allowsAmountBaseUpdate) {
+					const normalizedAmountBase = looseTablets ?? totalPills;
+					if (normalizedAmountBase !== undefined) {
+						updateFields.totalPills = normalizedAmountBase;
+						updateFields.looseTablets = normalizedAmountBase;
+					}
+					if (packageAmountValue !== undefined && packageAmountValue > 0) {
+						updateFields.packageAmountValue = packageAmountValue;
+					}
 				}
-				if (packageAmountValue !== undefined && packageAmountValue > 0) {
-					updateFields.packageAmountValue = packageAmountValue;
+				if (allowsDiscreteCapacityUpdate && totalPills !== undefined && totalPills > 0) {
+					updateFields.totalPills = totalPills;
 				}
-			}
-			if (allowsDiscreteCapacityUpdate && totalPills !== undefined && totalPills > 0) {
-				updateFields.totalPills = totalPills;
-			}
-			if (packCount !== undefined) updateFields.packCount = packCount;
-			if (!allowsAmountBaseUpdate && looseTablets !== undefined) {
-				updateFields.looseTablets = looseTablets;
-			}
+				if (packCount !== undefined) updateFields.packCount = packCount;
+				if (!allowsAmountBaseUpdate && looseTablets !== undefined) {
+					updateFields.looseTablets = looseTablets;
+				}
 
-			const result = await db
-				.update(medications)
-				.set(updateFields)
-				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
-				.returning();
+				const [result] = await transactionDb
+					.update(medications)
+					.set(updateFields)
+					.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
+					.returning();
+				if (!result) return null;
+				await neutralizeAsNeededStockEffects(transactionDb, userId, idNum, correctionAt);
+				return result;
+			});
 
-			if (!result.length) return reply.notFound();
+			if (!corrected) return reply.notFound();
 
 			return {
-				id: result[0].id,
-				stockAdjustment: result[0].stockAdjustment ?? 0,
-				scheduleStockRebaseMilli: result[0].scheduleStockRebaseMilli ?? 0,
-				lastStockCorrectionAt: result[0].lastStockCorrectionAt?.toISOString() ?? null,
-				updatedAt: normalizeDateTime(result[0].updatedAt),
+				id: corrected.id,
+				stockAdjustment: corrected.stockAdjustment ?? 0,
+				scheduleStockRebaseMilli: corrected.scheduleStockRebaseMilli ?? 0,
+				lastStockCorrectionAt: corrected.lastStockCorrectionAt?.toISOString() ?? null,
+				updatedAt: normalizeDateTime(corrected.updatedAt),
 			};
 		}
 	);
@@ -1343,20 +1353,21 @@ export async function medicationRoutes(app: FastifyInstance) {
 
 			const userId = await getUserId(req, reply);
 
-			// Delete associated image if exists (with ownership check)
-			const [existing] = await db
-				.select()
-				.from(medications)
-				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
-			if (!existing) return reply.notFound();
-
-			if (existing.imageUrl) removeImageFiles(IMAGES_DIR, existing.imageUrl);
-
-			const deleted = await db
-				.delete(medications)
-				.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
-				.returning();
-			if (!deleted.length) return reply.notFound();
+			const deleted = await withImmediateWriteTransaction(async (transactionDb) => {
+				const [current] = await transactionDb
+					.select()
+					.from(medications)
+					.where(and(eq(medications.id, idNum), eq(medications.userId, userId)));
+				if (!current) return null;
+				await deleteAsNeededAnchorsForMedication(transactionDb, userId, idNum);
+				const [removed] = await transactionDb
+					.delete(medications)
+					.where(and(eq(medications.id, idNum), eq(medications.userId, userId)))
+					.returning();
+				return removed ? current : null;
+			});
+			if (!deleted) return reply.notFound();
+			if (deleted.imageUrl) removeImageFiles(IMAGES_DIR, deleted.imageUrl);
 			return reply.status(204).send();
 		}
 	);

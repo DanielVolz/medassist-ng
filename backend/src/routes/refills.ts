@@ -1,10 +1,14 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { db } from "../db/client.js";
+import { db, withImmediateWriteTransaction } from "../db/client.js";
 import { medications, refillHistory } from "../db/schema.js";
 import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
+import {
+	getActiveAsNeededStockEffectMilli,
+	neutralizeAsNeededStockEffects,
+} from "../services/as-needed-intakes-service.js";
 import type { AuthUser } from "../types/fastify.js";
 import {
 	applyOpenApiRouteStandards,
@@ -153,16 +157,6 @@ export async function refillRoutes(app: FastifyInstance) {
 			const isPackageAmountPackage = isPackageAmountPackageType(packageType);
 			const pillsPerPack = isDiscreteCountPackage ? 0 : med.blistersPerPack * med.pillsPerBlister;
 
-			const configuredAmountPerPackage = Number(med.packageAmountValue ?? 0);
-			const fallbackAmountPerPackage = Math.max(
-				1,
-				Math.round((med.totalPills ?? med.looseTablets ?? 0) / Math.max(1, med.packCount || 1))
-			);
-			const amountPerPackage =
-				Number.isFinite(configuredAmountPerPackage) && configuredAmountPerPackage > 0
-					? configuredAmountPerPackage
-					: fallbackAmountPerPackage;
-
 			const requestedPackAdds = Math.max(0, packsAdded);
 			const requestedLooseAdds = Math.max(0, loosePillsAdded);
 			const requestedQuantityAdds = Math.max(0, quantityAdded > 0 ? quantityAdded : requestedLooseAdds);
@@ -192,33 +186,6 @@ export async function refillRoutes(app: FastifyInstance) {
 				}
 			}
 
-			const refillBaselineAt = new Date();
-			const baselineStockBeforeRefill = isAmountBased
-				? med.looseTablets + (med.stockAdjustment ?? 0)
-				: med.packCount * pillsPerPack + med.looseTablets + (med.stockAdjustment ?? 0);
-			const targetCurrentStock = baselineStockBeforeRefill + totalPillsAdded;
-
-			// Update medication stock. Refill establishes a new persisted stock baseline and resets
-			// `lastStockCorrectionAt` so pre-refill dose history is ignored for future stock math.
-			let newPackCount = med.packCount + effectivePacksAdded;
-			let newLooseTablets = med.looseTablets + effectiveLoosePillsAdded;
-			let newStockAdjustment = med.stockAdjustment ?? 0;
-			let newTotalAmount = med.totalPills ?? med.looseTablets;
-
-			if (isDiscreteCountPackage) {
-				newLooseTablets = targetCurrentStock;
-				newTotalAmount = Math.max(newTotalAmount, targetCurrentStock);
-				newStockAdjustment = 0;
-			} else if (isPackageAmountPackage) {
-				newPackCount = Math.max(1, Math.ceil(targetCurrentStock / amountPerPackage));
-				newLooseTablets = targetCurrentStock;
-				newTotalAmount = targetCurrentStock;
-				newStockAdjustment = 0;
-			} else {
-				const structuralBaseAfterRefill = newPackCount * pillsPerPack + newLooseTablets;
-				newStockAdjustment = targetCurrentStock - structuralBaseAfterRefill;
-			}
-
 			let consumedRefills = 0;
 			if (usePrescription) {
 				consumedRefills = isDiscreteCountPackage ? 1 : effectivePacksAdded;
@@ -227,45 +194,91 @@ export async function refillRoutes(app: FastifyInstance) {
 				? Math.max(0, remainingPrescriptionRefills - consumedRefills)
 				: (med.prescriptionRemainingRefills ?? null);
 
-			const updatePayload: {
-				packCount: number;
-				looseTablets: number;
-				stockAdjustment: number;
-				totalPills?: number;
-				packageAmountValue?: number;
-				prescriptionRemainingRefills: number | null;
-				lastStockCorrectionAt: Date;
-				updatedAt: Date;
-			} = {
-				packCount: newPackCount,
-				looseTablets: newLooseTablets,
-				stockAdjustment: newStockAdjustment,
-				prescriptionRemainingRefills: newRemainingRefills,
-				lastStockCorrectionAt: refillBaselineAt,
-				updatedAt: refillBaselineAt,
-			};
+			const mutation = await withImmediateWriteTransaction(async (transactionDb) => {
+				const [current] = await transactionDb
+					.select()
+					.from(medications)
+					.where(and(eq(medications.id, medId), eq(medications.userId, userId)));
+				if (!current) return null;
+				const refillInputsChanged =
+					normalizePackageType(current.packageType) !== packageType ||
+					current.blistersPerPack !== med.blistersPerPack ||
+					current.pillsPerBlister !== med.pillsPerBlister ||
+					current.prescriptionEnabled !== med.prescriptionEnabled ||
+					current.prescriptionRemainingRefills !== med.prescriptionRemainingRefills;
+				if (refillInputsChanged) return "conflict" as const;
 
-			if (isPackageAmountPackage) {
-				updatePayload.totalPills = newTotalAmount;
-				updatePayload.packageAmountValue = amountPerPackage;
+				const refillBaselineAt = new Date();
+				const activeEffectMilli = await getActiveAsNeededStockEffectMilli(transactionDb, userId, medId);
+				const structuralStock = isAmountBased
+					? current.looseTablets + (current.stockAdjustment ?? 0)
+					: current.packCount * pillsPerPack + current.looseTablets + (current.stockAdjustment ?? 0);
+				const targetCurrentStock =
+					structuralStock + (current.scheduleStockRebaseMilli ?? 0) / 1000 - activeEffectMilli / 1000 + totalPillsAdded;
+				const targetMilli = Math.round(targetCurrentStock * 1000);
+				if (!Number.isSafeInteger(targetMilli)) return "unresolvable" as const;
+				const targetWhole = Math.trunc(targetMilli / 1000);
+				const rebaseMilli = targetMilli - targetWhole * 1000;
+				const configuredAmountPerPackage = Number(current.packageAmountValue ?? 0);
+				const fallbackAmountPerPackage = Math.max(
+					1,
+					Math.round((current.totalPills ?? current.looseTablets ?? 0) / Math.max(1, current.packCount || 1))
+				);
+				const amountPerPackage =
+					Number.isFinite(configuredAmountPerPackage) && configuredAmountPerPackage > 0
+						? configuredAmountPerPackage
+						: fallbackAmountPerPackage;
+
+				let newPackCount = current.packCount + effectivePacksAdded;
+				let newLooseTablets = current.looseTablets + effectiveLoosePillsAdded;
+				let newStockAdjustment = current.stockAdjustment ?? 0;
+				let newTotalAmount = current.totalPills ?? current.looseTablets;
+				if (isDiscreteCountPackage) {
+					newLooseTablets = targetWhole;
+					newTotalAmount = Math.max(newTotalAmount, targetWhole);
+					newStockAdjustment = 0;
+				} else if (isPackageAmountPackage) {
+					newPackCount = Math.max(1, Math.ceil(targetWhole / amountPerPackage));
+					newLooseTablets = targetWhole;
+					newTotalAmount = targetWhole;
+					newStockAdjustment = 0;
+				} else {
+					newStockAdjustment = targetWhole - (newPackCount * pillsPerPack + newLooseTablets);
+				}
+
+				await transactionDb
+					.update(medications)
+					.set({
+						packCount: newPackCount,
+						looseTablets: newLooseTablets,
+						stockAdjustment: newStockAdjustment,
+						scheduleStockRebaseMilli: rebaseMilli,
+						totalPills: isPackageAmountPackage ? newTotalAmount : current.totalPills,
+						packageAmountValue: isPackageAmountPackage ? amountPerPackage : current.packageAmountValue,
+						prescriptionRemainingRefills: newRemainingRefills,
+						lastStockCorrectionAt: refillBaselineAt,
+						updatedAt: refillBaselineAt,
+					})
+					.where(and(eq(medications.id, medId), eq(medications.userId, userId)));
+				await neutralizeAsNeededStockEffects(transactionDb, userId, medId, refillBaselineAt);
+				const [refill] = await transactionDb
+					.insert(refillHistory)
+					.values({
+						medicationId: medId,
+						userId,
+						packsAdded: effectivePacksAdded,
+						loosePillsAdded: effectiveLoosePillsAdded,
+						usedPrescription: usePrescription,
+					})
+					.returning();
+				return { refill, targetCurrentStock, newPackCount, newLooseTablets };
+			});
+			if (!mutation) return reply.notFound("Medication not found");
+			if (mutation === "conflict") return reply.status(409).send({ error: "Medication changed; retry refill" });
+			if (mutation === "unresolvable") {
+				return reply.status(409).send({ error: "Current stock cannot be resolved safely" });
 			}
-
-			await db
-				.update(medications)
-				.set(updatePayload)
-				.where(and(eq(medications.id, medId), eq(medications.userId, userId)));
-
-			// Create refill history entry
-			const [refill] = await db
-				.insert(refillHistory)
-				.values({
-					medicationId: medId,
-					userId,
-					packsAdded: effectivePacksAdded,
-					loosePillsAdded: effectiveLoosePillsAdded,
-					usedPrescription: usePrescription,
-				})
-				.returning();
+			const { refill, targetCurrentStock, newPackCount, newLooseTablets } = mutation;
 
 			return {
 				success: true,

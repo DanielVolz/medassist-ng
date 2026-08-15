@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -25,7 +25,9 @@ const [
 	schema,
 	auth,
 	medicationRoutesModule,
+	refillRoutesModule,
 	stock,
+	asNeededService,
 ] = await Promise.all([
 	import("fastify"),
 	import("@fastify/sensible"),
@@ -35,14 +37,18 @@ const [
 	import("../db/schema.js"),
 	import("../plugins/auth.js"),
 	import("../routes/medications.js"),
+	import("../routes/refills.js"),
 	import("../services/current-stock.js"),
+	import("../services/as-needed-intakes-service.js"),
 ]);
 
 const { db, migrationsReady, withImmediateWriteTransaction } = dbClient;
-const { asNeededIntakeEvents, doseTracking, medications, userSettings } = schema;
+const { asNeededIntakeEvents, doseTracking, medications, userSettings, users } = schema;
 const { getAnonymousUserId } = auth;
 const { medicationRoutes } = medicationRoutesModule;
+const { refillRoutes } = refillRoutesModule;
 const { computeMedicationCurrentStockRaw } = stock;
+const { createAsNeededIntake, reverseAsNeededIntake } = asNeededService;
 
 type StockMode = "automatic" | "manual";
 
@@ -83,6 +89,13 @@ function medicationPayload(intakes: Array<{ usage: number; every: number; start:
 	};
 }
 
+let idempotencySequence = 0;
+
+function idempotencyKey(): string {
+	idempotencySequence += 1;
+	return `00000000-0000-4000-8000-${idempotencySequence.toString().padStart(12, "0")}`;
+}
+
 async function waitForChildLine(child: ReturnType<typeof spawn>, expected: string): Promise<void> {
 	let received = "";
 	await Promise.race([
@@ -115,6 +128,7 @@ describe.sequential("zero-schedule production write serialization", () => {
 		app = Fastify({ logger: false, ajv: documentationSchemaAjv });
 		await app.register(sensible);
 		await app.register(medicationRoutes);
+		await app.register(refillRoutes);
 		await app.ready();
 		userId = await getAnonymousUserId();
 	});
@@ -256,6 +270,7 @@ process.stdin.once("data", async () => {
 			quantityUnit: "pills",
 			stockEffectMilli: 1500,
 		});
+		const [beforeEvent] = await db.select().from(asNeededIntakeEvents);
 		const before = await db.select().from(medications).where(sql`${medications.id} = ${medicationId}`);
 		const raw = computeMedicationCurrentStockRaw({
 			medication: before[0],
@@ -271,6 +286,7 @@ process.stdin.once("data", async () => {
 			});
 			expect(response.statusCode).toBe(200);
 			const [persisted] = await db.select().from(medications).where(sql`${medications.id} = ${medicationId}`);
+			const [persistedEvent] = await db.select().from(asNeededIntakeEvents);
 			expect(
 				computeMedicationCurrentStockRaw({
 					medication: persisted,
@@ -279,6 +295,228 @@ process.stdin.once("data", async () => {
 					asNeededStockEffectMilli: 1500,
 				})
 			).toBe(raw);
+			expect(persistedEvent).toMatchObject({
+				stockEffectMilli: 1500,
+				stockCutoffAt: 0,
+				revision: beforeEvent.revision,
+			});
 		}
+	});
+
+	it("neutralizes only eligible active effects when a correction races with a physical edit", async () => {
+		idempotencySequence = 0;
+		await db.delete(asNeededIntakeEvents);
+		await db.delete(doseTracking);
+		await db.delete(medications);
+		const created = await app.inject({ method: "POST", url: "/medications", payload: medicationPayload([]) });
+		expect(created.statusCode).toBe(200);
+		const medicationId = created.json().id as number;
+		const applied = await createAsNeededIntake({
+			userId,
+			medicationId,
+			quantity: 1,
+			idempotencyKey: idempotencyKey(),
+		});
+		const reversed = await createAsNeededIntake({
+			userId,
+			medicationId,
+			quantity: 1,
+			idempotencyKey: idempotencyKey(),
+		});
+		await reverseAsNeededIntake({
+			userId,
+			eventId: reversed.eventId,
+			expectedRevision: 1,
+			idempotencyKey: idempotencyKey(),
+		});
+		const future = await createAsNeededIntake({
+			userId,
+			medicationId,
+			quantity: 1,
+			idempotencyKey: idempotencyKey(),
+		});
+		await db
+			.update(asNeededIntakeEvents)
+			.set({ occurredAt: new Date("2099-01-01T00:00:00.000Z") })
+			.where(sql`${asNeededIntakeEvents.eventId} = ${future.eventId}`);
+		const [zeroAnchor] = await db
+			.insert(doseTracking)
+			.values({ userId, doseId: "as-needed:zero-effect" })
+			.returning({ id: doseTracking.id });
+		await db.insert(asNeededIntakeEvents).values({
+			eventId: "zero-effect",
+			userId,
+			medicationId,
+			doseTrackingId: zeroAnchor.id,
+			idempotencyKeyHash: "zero-effect-key",
+			requestFingerprint: "zero-effect-fingerprint",
+			occurredAt: new Date("2020-01-01T00:00:00.000Z"),
+			recordedAt: new Date(),
+			quantityMilli: 1000,
+			quantityUnit: "pills",
+			stockEffectMilli: 0,
+			stockEffectReason: "non_measurable",
+		});
+
+		const [correction, physicalEdit] = await Promise.all([
+			app.inject({
+				method: "PATCH",
+				url: `/medications/${medicationId}/stock-adjustment`,
+				payload: { stockAdjustment: 7 },
+			}),
+			app.inject({
+				method: "PUT",
+				url: `/medications/${medicationId}`,
+				payload: { ...medicationPayload([]), looseTablets: 3 },
+			}),
+		]);
+		expect(correction.statusCode).toBe(200);
+		expect(physicalEdit.statusCode).toBe(200);
+		const events = await db.select().from(asNeededIntakeEvents);
+		const byEventId = new Map(events.map((event) => [event.eventId, event]));
+		expect(byEventId.get(applied.eventId)).toMatchObject({
+			stockEffectMilli: 0,
+			stockEffectReason: "superseded_by_correction",
+			stockCutoffAt: expect.any(Number),
+			revision: 2,
+		});
+		expect(byEventId.get(reversed.eventId)).toMatchObject({ status: "reversed", stockEffectMilli: 1000, revision: 2 });
+		expect(byEventId.get(future.eventId)).toMatchObject({ stockEffectMilli: 1000, stockCutoffAt: 0, revision: 1 });
+		expect(byEventId.get("zero-effect")).toMatchObject({
+			stockEffectMilli: 0,
+			stockEffectReason: "non_measurable",
+			revision: 1,
+		});
+	});
+
+	it.each<StockMode>([
+		"automatic",
+		"manual",
+	])("rebases %s refills from transaction-visible raw stock and consumes prior event effects exactly", async (stockCalculationMode) => {
+		idempotencySequence = 0;
+		await db.delete(asNeededIntakeEvents);
+		await db.delete(doseTracking);
+		await db.delete(medications);
+		await db.delete(userSettings);
+		await db.insert(userSettings).values({ userId, stockCalculationMode });
+		const created = await app.inject({ method: "POST", url: "/medications", payload: medicationPayload([]) });
+		const medicationId = created.json().id as number;
+		const event = await createAsNeededIntake({
+			userId,
+			medicationId,
+			quantity: 1.5,
+			idempotencyKey: idempotencyKey(),
+		});
+		const refills = await Promise.all([
+			app.inject({
+				method: "POST",
+				url: `/medications/${medicationId}/refill`,
+				payload: { loosePillsAdded: 2 },
+			}),
+			app.inject({
+				method: "POST",
+				url: `/medications/${medicationId}/refill`,
+				payload: { loosePillsAdded: 2 },
+			}),
+		]);
+		expect(refills.map((refill) => refill.statusCode)).toEqual([200, 200]);
+		expect(refills.map((refill) => refill.json().newStock.totalPills).sort()).toEqual([10.5, 12.5]);
+		const [persisted] = await db.select().from(medications).where(sql`${medications.id} = ${medicationId}`);
+		const [persistedEvent] = await db
+			.select()
+			.from(asNeededIntakeEvents)
+			.where(sql`${asNeededIntakeEvents.eventId} = ${event.eventId}`);
+		expect(persisted.scheduleStockRebaseMilli).toBe(500);
+		expect(persistedEvent).toMatchObject({
+			stockEffectMilli: 0,
+			stockEffectReason: "superseded_by_correction",
+			revision: 2,
+		});
+		expect(
+			computeMedicationCurrentStockRaw({
+				medication: persisted,
+				doses: await db.select().from(doseTracking),
+				stockCalculationMode,
+			})
+		).toBe(12.5);
+	});
+
+	it("deletes only owned event anchors after the medication delete commits", async () => {
+		idempotencySequence = 0;
+		await db.delete(asNeededIntakeEvents);
+		await db.delete(doseTracking);
+		await db.delete(medications);
+		await db.delete(users).where(sql`${users.id} = 2`);
+		await db.insert(users).values({ id: 2, username: "other-anchor-owner" });
+		const target = await app.inject({ method: "POST", url: "/medications", payload: medicationPayload([]) });
+		const targetId = target.json().id as number;
+		const [otherMedication] = await db
+			.insert(medications)
+			.values({
+				userId,
+				name: "Other medication",
+				takenByJson: "[]",
+				intakesJson: "[]",
+				looseTablets: 10,
+			})
+			.returning({ id: medications.id });
+		const [otherOwnerMedication] = await db
+			.insert(medications)
+			.values({
+				userId: 2,
+				name: "Other owner medication",
+				takenByJson: "[]",
+				intakesJson: "[]",
+				looseTablets: 10,
+			})
+			.returning({ id: medications.id });
+		const targetEvent = await createAsNeededIntake({
+			userId,
+			medicationId: targetId,
+			quantity: 1,
+			idempotencyKey: idempotencyKey(),
+		});
+		const otherMedicationEvent = await createAsNeededIntake({
+			userId,
+			medicationId: otherMedication.id,
+			quantity: 1,
+			idempotencyKey: idempotencyKey(),
+		});
+		const otherOwnerEvent = await createAsNeededIntake({
+			userId: 2,
+			medicationId: otherOwnerMedication.id,
+			quantity: 1,
+			idempotencyKey: idempotencyKey(),
+		});
+		await db.insert(doseTracking).values({ userId, doseId: "as-needed:untrusted-prefix" });
+		const imageDir = join(dataDir, "images");
+		mkdirSync(imageDir, { recursive: true });
+		writeFileSync(join(imageDir, "target-image.webp"), "target");
+		writeFileSync(join(imageDir, "other-owner-image.webp"), "other owner");
+		await db.update(medications).set({ imageUrl: "target-image.webp" }).where(sql`${medications.id} = ${targetId}`);
+		await db
+			.update(medications)
+			.set({ imageUrl: "other-owner-image.webp" })
+			.where(sql`${medications.id} = ${otherOwnerMedication.id}`);
+
+		const deletion = await app.inject({ method: "DELETE", url: `/medications/${targetId}` });
+		expect(deletion.statusCode).toBe(204);
+		expect(existsSync(join(imageDir, "target-image.webp"))).toBe(false);
+		const failedDeletion = await app.inject({ method: "DELETE", url: `/medications/${otherOwnerMedication.id}` });
+		expect(failedDeletion.statusCode).toBe(404);
+		expect(existsSync(join(imageDir, "other-owner-image.webp"))).toBe(true);
+		const remainingEvents = await db.select().from(asNeededIntakeEvents);
+		expect(remainingEvents.map((event) => event.eventId)).toEqual(
+			expect.arrayContaining([otherMedicationEvent.eventId, otherOwnerEvent.eventId])
+		);
+		expect(remainingEvents.map((event) => event.eventId)).not.toContain(targetEvent.eventId);
+		const remainingDoses = await db.select().from(doseTracking);
+		expect(remainingDoses.map((dose) => dose.doseId)).toEqual(
+			expect.arrayContaining([
+				`as-needed:${otherMedicationEvent.eventId}`,
+				`as-needed:${otherOwnerEvent.eventId}`,
+				"as-needed:untrusted-prefix",
+			])
+		);
 	});
 });

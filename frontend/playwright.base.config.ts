@@ -70,7 +70,8 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			},
 			testIgnore,
 			dependencies: ["setup"],
-			retries: 1,
+			// Core shard failures must surface before the 15-minute CI job limit.
+			retries: 0,
 		},
 		{
 			name: "chromium-data",

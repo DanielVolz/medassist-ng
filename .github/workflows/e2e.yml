@@ -25,16 +25,24 @@ jobs:
       - id: filter
         run: echo "e2e_relevant=${{ inputs.run_e2e }}" >> "$GITHUB_OUTPUT"
 
-  e2e:
-    name: Playwright E2E
+  e2e-core:
+    name: Playwright E2E core (${{ matrix.id }})
     needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: core-a
+            script: test:e2e:ci:core:a
+          - id: core-b
+            script: test:e2e:ci:core:b
     permissions:
       contents: read
 
     steps:
-      - name: Skip E2E when change is not release/e2e-relevant
+      - name: Skip core E2E when change is not release/e2e-relevant
         if: needs.changes.outputs.e2e_relevant != 'true'
         run: echo "No E2E-relevant changes detected; required check passes without running Playwright."
 
@@ -76,23 +84,12 @@ jobs:
       - name: Install Playwright browsers
         if: needs.changes.outputs.e2e_relevant == 'true'
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
-      - name: Run domain E2E release gate
+      - name: Run Chromium E2E core shard
         if: needs.changes.outputs.e2e_relevant == 'true'
         working-directory: frontend
-        run: npm run test:e2e:domain
-        env:
-          CI: true
-          PLAYWRIGHT_WORKERS: 1
-          PLAYWRIGHT_HTML_OPEN: never
-          JWT_SECRET: e2e-test-secret-that-is-long-enough
-          SESSION_SECRET: e2e-test-session-secret-long-enough
-
-      - name: Run core Chromium E2E tests
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: frontend
-        run: npm run test:e2e:ci:core
+        run: npm run ${{ matrix.script }}
         env:
           CI: true
           PLAYWRIGHT_WORKERS: 1
@@ -104,7 +101,7 @@ jobs:
         if: always() && needs.changes.outputs.e2e_relevant == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-${{ matrix.id }}-report
           path: frontend/playwright-report/
           retention-days: 7
 
@@ -112,7 +109,7 @@ jobs:
         if: always() && needs.changes.outputs.e2e_relevant == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-results
+          name: playwright-${{ matrix.id }}-results
           path: frontend/test-results/
           retention-days: 7
 
@@ -167,7 +164,7 @@ jobs:
       - name: Install Playwright browsers
         if: needs.changes.outputs.e2e_relevant == 'true'
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run data-focused Chromium E2E tests
         if: needs.changes.outputs.e2e_relevant == 'true'

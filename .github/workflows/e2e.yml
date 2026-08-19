@@ -84,7 +84,7 @@ jobs:
       - name: Install Playwright browsers
         if: needs.changes.outputs.e2e_relevant == 'true'
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run Chromium E2E core shard
         if: needs.changes.outputs.e2e_relevant == 'true'
@@ -164,7 +164,7 @@ jobs:
       - name: Install Playwright browsers
         if: needs.changes.outputs.e2e_relevant == 'true'
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run data-focused Chromium E2E tests
         if: needs.changes.outputs.e2e_relevant == 'true'

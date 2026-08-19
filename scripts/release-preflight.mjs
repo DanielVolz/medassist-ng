@@ -173,6 +173,18 @@ function validateContainerSmokeWorkflow(workflowPath) {
     fail(`${workflowPath} must recognize exact and reusable-workflow-suffixed required check names.`);
   }
 
+  if (!workflow.includes("const e2eLaneChecks = ['Playwright E2E core (core-a)', 'Playwright E2E core (core-b)', 'Playwright E2E data'];")) {
+    fail(`${workflowPath} must require successful core-a, core-b, and data Playwright E2E lanes.`);
+  }
+
+  if (!workflow.includes('github.rest.repos.getCombinedStatusForRef')) {
+    fail(`${workflowPath} must recognize the legacy Playwright E2E commit status.`);
+  }
+
+  if (!workflow.includes("legacyE2EStatus?.state === 'success'")) {
+    fail(`${workflowPath} must accept a successful legacy Playwright E2E commit status.`);
+  }
+
   for (const imageName of ["backend", "frontend"]) {
     const cacheFrom = `cache-from: type=gha,scope=container-smoke-${imageName}`;
     const cacheTo = `cache-to: type=gha,mode=max,scope=container-smoke-${imageName},ignore-error=true`;
@@ -372,23 +384,11 @@ function validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage) 
     /vitest run --coverage[\s\S]*--exclude[\s\S]*src\/test\/domain-safety\.test\.ts/,
     "exclude the already-run domain safety release gate from CI coverage"
   );
-  requireScriptPattern(
-    "frontend/package.json",
-    frontendPackage,
-    "test:e2e:domain",
-    /e2e\/domain-safety\.spec\.ts/,
-    "run frontend/e2e/domain-safety.spec.ts"
-  );
   requireTextPattern(".github/workflows/test.yml", /run:\s*npm run test:domain/, "run the domain safety release gate");
   requireTextPattern(
     ".github/workflows/test.yml",
     /run:\s*npm run test:domain[\s\S]*run:\s*npm run test:coverage:ci/,
     "run CI coverage after the domain safety release gate without re-executing it"
-  );
-  requireTextPattern(
-    ".github/workflows/e2e.yml",
-    /run:\s*npm run test:e2e:domain/,
-    "run the domain E2E release gate"
   );
   requireTextPattern(
     ".github/workflows/test.yml",
@@ -397,15 +397,22 @@ function validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage) 
   );
   requireTextPattern(
     ".github/workflows/e2e.yml",
-    /run:\s*npm run test:e2e:ci:core[\s\S]*run:\s*npm run test:e2e:ci:data/,
-    "run the core and data Chromium E2E CI commands"
+    /matrix:\s*\n\s*include:\s*\n\s*-\s*id:\s*core-a\s*\n\s*script:\s*test:e2e:ci:core:a\s*\n\s*-\s*id:\s*core-b\s*\n\s*script:\s*test:e2e:ci:core:b[\s\S]*run:\s*npm run \$\{\{ matrix\.script \}\}/,
+    "run the approved core-a and core-b Chromium E2E matrix"
   );
   requireScriptPattern(
     "frontend/package.json",
     frontendPackage,
-    "test:e2e:ci:core",
-    /PLAYWRIGHT_EXCLUDE_DOMAIN_SAFETY=true[\s\S]*PLAYWRIGHT_HTML_OPEN=never[\s\S]*PLAYWRIGHT_WORKERS=1[\s\S]*--project=chromium/,
-    "run the core Chromium project non-interactively while excluding the domain safety gate"
+    "test:e2e:ci:core:a",
+    /PLAYWRIGHT_HTML_OPEN=never[\s\S]*PLAYWRIGHT_WORKERS=1[\s\S]*--project=chromium/,
+    "run the core-a Chromium shard non-interactively"
+  );
+  requireScriptPattern(
+    "frontend/package.json",
+    frontendPackage,
+    "test:e2e:ci:core:b",
+    /PLAYWRIGHT_HTML_OPEN=never[\s\S]*PLAYWRIGHT_WORKERS=1[\s\S]*--project=chromium[\s\S]*e2e\/domain-safety\.spec\.ts/,
+    "run the core-b Chromium shard non-interactively with frontend/e2e/domain-safety.spec.ts"
   );
   requireScriptPattern(
     "frontend/package.json",

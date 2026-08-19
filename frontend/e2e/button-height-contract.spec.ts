@@ -11,6 +11,12 @@ import {
 
 const MED_NAME = "Button Height Guard Med";
 
+function dueIntakeStart(): string {
+	const startDate = new Date();
+	startDate.setDate(startDate.getDate() - 1);
+	return startDate.toISOString().slice(0, 16);
+}
+
 function actionGroupSelector() {
 	return [
 		'[data-testid="app-modal-footer"]',
@@ -509,7 +515,7 @@ test.describe("Button height contract", () => {
 				{
 					usage: 1,
 					every: 1,
-					start: new Date().toISOString().slice(0, 16),
+					start: dueIntakeStart(),
 					intakeRemindersEnabled: true,
 					takenBy: "Button Person",
 				},
@@ -552,7 +558,7 @@ test.describe("Button height contract", () => {
 							{
 								usage: 1,
 								every: 1,
-								start: new Date().toISOString().slice(0, 16),
+								start: dueIntakeStart(),
 								intakeRemindersEnabled: true,
 								takenBy: personName,
 							},
@@ -613,7 +619,7 @@ test.describe("Button height contract", () => {
 							{
 								usage: 1,
 								every: 1,
-								start: new Date().toISOString().slice(0, 16),
+								start: dueIntakeStart(),
 								intakeRemindersEnabled: true,
 								takenBy: "Button Person",
 							},
@@ -662,7 +668,7 @@ test.describe("Button height contract", () => {
 							{
 								usage: 1,
 								every: 1,
-								start: new Date().toISOString().slice(0, 16),
+								start: dueIntakeStart(),
 								intakeRemindersEnabled: true,
 								takenBy: "Button Person",
 							},
@@ -714,7 +720,7 @@ test.describe("Button height contract", () => {
 								{
 									usage: 1,
 									every: 1,
-									start: new Date().toISOString().slice(0, 16),
+									start: dueIntakeStart(),
 									intakeRemindersEnabled: true,
 									takenBy: personName,
 								},
@@ -733,7 +739,7 @@ test.describe("Button height contract", () => {
 								{
 									usage: 1,
 									every: 1,
-									start: new Date().toISOString().slice(0, 16),
+									start: dueIntakeStart(),
 									intakeRemindersEnabled: true,
 									takenBy: personName,
 								},

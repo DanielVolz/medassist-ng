@@ -274,6 +274,44 @@ test("release preflight rejects a legacy Playwright status publisher without the
   }
 });
 
+test("release preflight rejects a smoke gate without the legacy Playwright status fallback", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "legacyE2EStatus?.state === 'success'",
+      "legacyE2EStatus?.state === 'passed'"
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/container-smoke\.yml must accept a successful legacy Playwright E2E commit status/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects a smoke gate without the data E2E lane", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      ", 'Playwright E2E data'",
+      ""
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/container-smoke\.yml must require successful core-a, core-b, and data Playwright E2E lanes/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test("release preflight rejects E2E CI without the data-focused Chromium project", () => {
   const fixtureRoot = copyFixture();
   try {

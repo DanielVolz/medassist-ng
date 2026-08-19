@@ -173,6 +173,18 @@ function validateContainerSmokeWorkflow(workflowPath) {
     fail(`${workflowPath} must recognize exact and reusable-workflow-suffixed required check names.`);
   }
 
+  if (!workflow.includes("const e2eLaneChecks = ['Playwright E2E core (core-a)', 'Playwright E2E core (core-b)', 'Playwright E2E data'];")) {
+    fail(`${workflowPath} must require successful core-a, core-b, and data Playwright E2E lanes.`);
+  }
+
+  if (!workflow.includes('github.rest.repos.getCombinedStatusForRef')) {
+    fail(`${workflowPath} must recognize the legacy Playwright E2E commit status.`);
+  }
+
+  if (!workflow.includes("legacyE2EStatus?.state === 'success'")) {
+    fail(`${workflowPath} must accept a successful legacy Playwright E2E commit status.`);
+  }
+
   for (const imageName of ["backend", "frontend"]) {
     const cacheFrom = `cache-from: type=gha,scope=container-smoke-${imageName}`;
     const cacheTo = `cache-to: type=gha,mode=max,scope=container-smoke-${imageName},ignore-error=true`;

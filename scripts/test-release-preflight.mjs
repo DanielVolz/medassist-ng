@@ -188,16 +188,19 @@ test("release preflight rejects local backend coverage that excludes the domain 
   }
 });
 
-test("release preflight rejects missing frontend domain E2E gate script", () => {
+test("release preflight rejects a core shard without frontend domain safety coverage", () => {
   const fixtureRoot = copyFixture();
   try {
     const frontendPackage = readJson(fixtureRoot, "frontend/package.json");
-    frontendPackage.scripts["test:e2e:domain"] = "playwright test --config=playwright.stable.config.ts e2e/planner.spec.ts";
+    frontendPackage.scripts["test:e2e:ci:core:b"] = frontendPackage.scripts["test:e2e:ci:core:b"].replace(
+      " e2e/domain-safety.spec.ts",
+      ""
+    );
     writeJson(fixtureRoot, "frontend/package.json", frontendPackage);
 
     expectPreflightFailure(
       fixtureRoot,
-      /frontend\/package\.json test:e2e:domain must run frontend\/e2e\/domain-safety\.spec\.ts/
+      /frontend\/package\.json test:e2e:ci:core:b must run the core-b Chromium shard non-interactively with frontend\/e2e\/domain-safety\.spec\.ts/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -217,17 +220,20 @@ test("release preflight rejects CI workflow without the domain safety release ga
   }
 });
 
-test("release preflight rejects CI workflow without the domain E2E release gate", () => {
+test("release preflight rejects E2E CI without the core-b shard", () => {
   const fixtureRoot = copyFixture();
   try {
     const workflowPath = path.join(fixtureRoot, ".github/workflows/e2e.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      "run: npm run test:e2e:domain",
-      "run: npx playwright test --project=chromium"
+      "          - id: core-b\n            script: test:e2e:ci:core:b\n",
+      ""
     );
     writeFileSync(workflowPath, workflow);
 
-    expectPreflightFailure(fixtureRoot, /\.github\/workflows\/e2e\.yml must run the domain E2E release gate/);
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/e2e\.yml must run the approved core-a and core-b Chromium E2E matrix/
+    );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

@@ -123,7 +123,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			baseURL,
 			trace: "on-first-retry",
 			screenshot: "only-on-failure",
-			video: "on",
+			video: "retain-on-failure",
 			viewport: { width: 1280, height: 720 },
 			navigationTimeout: 30000,
 			actionTimeout: 5000,

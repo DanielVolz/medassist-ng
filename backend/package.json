@@ -60,6 +60,7 @@
     "@esbuild-kit/esm-loader": "2.6.5",
     "@esbuild-kit/core-utils": "3.3.2",
     "@fastify/static": "10.1.2",
+    "fast-uri": "3.1.5",
     "esbuild": "0.28.1"
   }
 }

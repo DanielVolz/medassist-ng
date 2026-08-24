@@ -50,13 +50,13 @@
     "@mantine/modals": "^9.5.1",
     "@mantine/notifications": "^9.5.1",
     "@medassist/shared": "file:../shared",
-    "dayjs": "^1.11.21",
-    "i18next": "^26.3.6",
+    "dayjs": "^1.11.23",
+    "i18next": "^26.4.0",
     "i18next-browser-languagedetector": "^8.2.1",
-    "lucide-react": "^1.31.0",
+    "lucide-react": "^1.33.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-i18next": "^17.0.11",
+    "react-i18next": "^17.0.12",
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
@@ -67,11 +67,11 @@
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.5",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^30.0.1",
     "typescript": "^6.0.3",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vitest": "^4.1.0"
   }
 }

@@ -746,6 +746,8 @@ test.describe("Button height contract", () => {
 							],
 						});
 						await navigateTo(page, "/dashboard");
+						await page.reload();
+						await page.waitForLoadState("networkidle");
 						const todayBlock = page.locator(".day-block.today");
 						await expect(todayBlock).toContainText(takeMedName, { timeout: 10000 });
 						await expect(todayBlock).toContainText(skipMedName, { timeout: 10000 });

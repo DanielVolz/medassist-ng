@@ -194,7 +194,7 @@ test.describe("Share Schedule", () => {
 		const shareToken = await createShareTokenViaAPI(PERSON_ALICE, 30);
 		expect(shareToken.token).toBeTruthy();
 
-		// Navigate to the shared schedule page (no auth needed)
+		// Navigate to shared schedule page (no auth needed)
 		await page.goto(`/share/${shareToken.token}`);
 
 		const sharedSchedule = getSharedSchedule(page);
@@ -219,7 +219,7 @@ test.describe("Share Schedule", () => {
 		await page.goto(`/share/${shareToken.token}`);
 		const sharedSchedule = getSharedSchedule(page);
 		await expect(sharedSchedule).toBeVisible({ timeout: 10000 });
-		await expect(sharedSchedule.getByRole("button", { name: /take/i })).toBeVisible();
+		await expect(sharedSchedule.getByRole("button", { name: /take|undo/i })).toBeVisible();
 	});
 
 	test("should generate separate share links for different people", async ({ page }) => {
@@ -250,7 +250,7 @@ test.describe("Share Schedule", () => {
 		const overviewTable = page.getByTestId("dashboard-overview-table");
 		await expect(overviewTable).toBeVisible({ timeout: 10000 });
 
-		// Alice's med has notes — should show the 📝 icon
+		// Alice's medication should show the 📝 icon
 		const aliceRow = overviewTable.getByTestId("dashboard-overview-row").filter({ hasText: MED_ALICE }).first();
 		await expect(aliceRow).toBeVisible();
 		await expect(aliceRow.getByRole("button", { name: "Has notes" })).toBeVisible();

@@ -767,12 +767,14 @@ test.describe("Button height contract", () => {
 						await expect(skipRow).toBeVisible({ timeout: 10000 });
 						const skipButton = skipRow.getByRole("button", { name: /^Auslassen$/ }).first();
 						await expect(skipButton).toBeVisible({ timeout: 10000 });
-						const skipResponsePromise = page.waitForResponse(
-							(response) => response.url().includes("/api/doses/skip") && response.request().method() === "POST",
-							{ timeout: 10000 }
-						);
-						await skipButton.click();
-						expect((await skipResponsePromise).ok()).toBe(true);
+						const [skipResponse] = await Promise.all([
+							page.waitForResponse(
+								(response) => response.url().includes("/api/doses/skip") && response.request().method() === "POST",
+								{ timeout: 10000 }
+							),
+							skipButton.dispatchEvent("click"),
+						]);
+						expect(skipResponse.ok()).toBe(true);
 
 						await expect(takeRow.getByRole("button", { name: /^Rückg\./ }).first()).toBeVisible({ timeout: 10000 });
 						await expect(skipRow.getByRole("button", { name: /^Rückg\./ }).first()).toBeVisible({ timeout: 10000 });

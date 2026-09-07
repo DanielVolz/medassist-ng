@@ -119,7 +119,7 @@ async function releaseChild(child: ReturnType<typeof spawn>): Promise<void> {
 	expect(code).toBe(0);
 }
 
-describe.sequential("zero-schedule production write serialization", () => {
+describe("zero-schedule production write serialization", () => {
 	let app: Awaited<ReturnType<typeof Fastify>>;
 	let userId: number;
 

@@ -71,7 +71,7 @@ async function create(
 	});
 }
 
-describe.sequential("as-needed owner routes", () => {
+describe("as-needed owner routes", () => {
 	beforeAll(() => migrationsReady);
 
 	beforeEach(async () => {

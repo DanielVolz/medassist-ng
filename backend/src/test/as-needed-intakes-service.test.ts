@@ -86,7 +86,7 @@ async function eventCount(): Promise<number> {
 	return (await db.select().from(asNeededIntakeEvents)).length;
 }
 
-describe.sequential("as-needed intake service", () => {
+describe("as-needed intake service", () => {
 	beforeAll(() => migrationsReady);
 
 	beforeEach(async () => {

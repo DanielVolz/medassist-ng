@@ -108,14 +108,13 @@ test.describe("Mobile modal browser back", () => {
 			timeout: 15000,
 		});
 
-		const doseItem = page.locator(".dose-item").first();
-		await expect(doseItem).toBeVisible({ timeout: 15000 });
-		await doseItem.getByRole("button", { name: /Take|Nehmen/i }).click();
-
 		const collapsedTodayDivider = page.locator(".day-block.today.collapsed .day-divider.clickable").first();
 		if (await collapsedTodayDivider.isVisible().catch(() => false)) {
 			await collapsedTodayDivider.click();
 		}
+		const doseItem = page.locator(".dose-item").first();
+		await expect(doseItem).toBeVisible({ timeout: 15000 });
+		await doseItem.getByRole("button", { name: /Take|Nehmen/i }).click();
 
 		const noteButton = page
 			.locator(".dose-item")

@@ -1,5 +1,12 @@
 import { expect } from "@playwright/test";
-import { authFile, createMedicationViaAPI, deleteAllMedicationsViaAPI, navigateTo, test } from "./fixtures";
+import {
+	authFile,
+	createMedicationViaAPI,
+	deleteAllMedicationsViaAPI,
+	navigateTo,
+	relativeLocalDateTime,
+	test,
+} from "./fixtures";
 
 /**
  * Schedule / Timeline E2E Tests
@@ -12,13 +19,7 @@ test.describe("Schedule Timeline", () => {
 	test.describe.configure({ timeout: 60000 });
 
 	const seededName = "Schedule Smoke Seed";
-	const startThreeDaysAgo = (() => {
-		const d = new Date();
-		d.setDate(d.getDate() - 3);
-		d.setHours(8, 0, 0, 0);
-		const pad = (n: number) => n.toString().padStart(2, "0");
-		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-	})();
+	const startThreeDaysAgo = relativeLocalDateTime(-3, 8);
 
 	async function waitForSeededScheduleData(page: Parameters<Parameters<typeof test>[0]>[0]["page"]) {
 		await expect

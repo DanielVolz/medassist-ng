@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 
 /** Storage state path for authenticated sessions */
 export const authFile = path.join(import.meta.dirname, "..", ".auth", "user.json");
@@ -158,6 +158,26 @@ export async function navigateTo(page: Page, path: string): Promise<void> {
 	}
 	await waitForAppReady(page);
 	await page.waitForLoadState("networkidle");
+}
+
+export function relativeLocalDateTime(daysFromToday: number, hour?: number, minute = 0): string {
+	const date = new Date();
+	date.setDate(date.getDate() + daysFromToday);
+	if (hour !== undefined) {
+		date.setHours(hour, minute, 0, 0);
+	}
+	const pad = (value: number) => value.toString().padStart(2, "0");
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export async function expandDayBlock(dayBlock: Locator): Promise<void> {
+	await expect(dayBlock).toBeVisible({ timeout: 10000 });
+	if (await dayBlock.evaluate((element) => element.classList.contains("collapsed"))) {
+		const divider = dayBlock.locator(".day-divider.clickable");
+		await expect(divider).toBeVisible({ timeout: 10000 });
+		await divider.click();
+		await expect(dayBlock).not.toHaveClass(/collapsed/, { timeout: 10000 });
+	}
 }
 
 /**
@@ -373,7 +393,7 @@ export async function createMedicationViaAPI(data: {
 			{
 				usage: 1,
 				every: 1,
-				start: new Date().toISOString().slice(0, 16),
+				start: relativeLocalDateTime(0),
 				intakeRemindersEnabled: false,
 			},
 		],

@@ -6,6 +6,7 @@ import {
 	deleteAllMedicationsViaAPI,
 	expect,
 	navigateTo,
+	relativeLocalDateTime,
 	type TestMedication,
 	test,
 } from "./fixtures";
@@ -26,12 +27,7 @@ test.describe("Share Schedule", () => {
 	const PERSON_ALICE = "Alice";
 	const PERSON_BOB = "Bob";
 
-	const todayMorning = (() => {
-		const d = new Date();
-		d.setHours(8, 0, 0, 0);
-		const pad = (n: number) => n.toString().padStart(2, "0");
-		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-	})();
+	const todayMorning = relativeLocalDateTime(0, 8);
 
 	const createdMeds: TestMedication[] = [];
 

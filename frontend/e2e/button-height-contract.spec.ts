@@ -3,8 +3,10 @@ import {
 	authFile,
 	createMedicationViaAPI,
 	deleteAllMedicationsViaAPI,
+	expandDayBlock,
 	expect,
 	navigateTo,
+	relativeLocalDateTime,
 	test,
 	updateSettingsViaAPI,
 } from "./fixtures";
@@ -12,9 +14,7 @@ import {
 const MED_NAME = "Button Height Guard Med";
 
 function dueIntakeStart(): string {
-	const startDate = new Date();
-	startDate.setDate(startDate.getDate() - 1);
-	return startDate.toISOString().slice(0, 16);
+	return relativeLocalDateTime(-1, 8);
 }
 
 function actionGroupSelector() {
@@ -503,6 +503,7 @@ test.describe("Button height contract", () => {
 	test.describe.configure({ mode: "serial", timeout: 90000 });
 
 	test.beforeAll(async () => {
+		await updateSettingsViaAPI({ stockCalculationMode: "manual" });
 		await deleteAllMedicationsViaAPI();
 		await createMedicationViaAPI({
 			name: MED_NAME,
@@ -525,6 +526,7 @@ test.describe("Button height contract", () => {
 
 	test.afterAll(async () => {
 		await deleteAllMedicationsViaAPI();
+		await updateSettingsViaAPI({ stockCalculationMode: "automatic" });
 	});
 
 	for (const viewport of [
@@ -677,11 +679,7 @@ test.describe("Button height contract", () => {
 					await navigateTo(page, "/dashboard");
 
 					const todayBlock = page.locator(".day-block.today");
-					await expect(todayBlock).toBeVisible({ timeout: 10000 });
-					if (await todayBlock.evaluate((element) => element.classList.contains("collapsed"))) {
-						await todayBlock.locator(".day-divider.clickable").click();
-						await expect(todayBlock).not.toHaveClass(/collapsed/, { timeout: 10000 });
-					}
+					await expandDayBlock(todayBlock);
 					await expect(todayBlock).toContainText(medName, { timeout: 10000 });
 					const skipButton = todayBlock.getByRole("button", { name: /^Skip$/ }).first();
 					await expect(skipButton).toBeVisible({ timeout: 10000 });
@@ -753,10 +751,7 @@ test.describe("Button height contract", () => {
 						await page.reload();
 						await page.waitForLoadState("networkidle");
 						const todayBlock = page.locator(".day-block.today");
-						if (await todayBlock.evaluate((element) => element.classList.contains("collapsed"))) {
-							await todayBlock.locator(".day-divider.clickable").click();
-							await expect(todayBlock).not.toHaveClass(/collapsed/, { timeout: 10000 });
-						}
+						await expandDayBlock(todayBlock);
 						await expect(todayBlock).toContainText(takeMedName, { timeout: 10000 });
 						await expect(todayBlock).toContainText(skipMedName, { timeout: 10000 });
 

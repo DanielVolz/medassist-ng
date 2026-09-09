@@ -3,8 +3,10 @@ import {
 	createMedicationViaAPI,
 	createShareTokenViaAPI,
 	deleteAllMedicationsViaAPI,
+	expandDayBlock,
 	expect,
 	navigateTo,
+	relativeLocalDateTime,
 	test,
 } from "./fixtures";
 
@@ -80,10 +82,7 @@ test.describe("Mobile modal browser back", () => {
 		const uniqueSuffix = Date.now().toString(36);
 		const person = `Mobile Journal ${uniqueSuffix}`;
 		const medicationName = `Mobile Shared Journal ${uniqueSuffix}`;
-		const start = new Date();
-		start.setHours(8, 0, 0, 0);
-		const pad = (value: number) => value.toString().padStart(2, "0");
-		const startTime = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}T${pad(start.getHours())}:${pad(start.getMinutes())}`;
+		const startTime = relativeLocalDateTime(0, 8);
 
 		await deleteAllMedicationsViaAPI();
 		await createMedicationViaAPI({
@@ -108,11 +107,7 @@ test.describe("Mobile modal browser back", () => {
 			timeout: 15000,
 		});
 
-		const collapsedTodayDivider = page.locator(".day-block.today.collapsed .day-divider.clickable").first();
-		if (await collapsedTodayDivider.isVisible().catch(() => false)) {
-			await collapsedTodayDivider.click();
-			await expect(page.locator(".day-block.today")).not.toHaveClass(/collapsed/, { timeout: 10000 });
-		}
+		await expandDayBlock(page.locator(".day-block.today"));
 		const doseItem = page.locator(".dose-item").first();
 		await expect(doseItem).toBeVisible({ timeout: 15000 });
 		await doseItem.getByRole("button", { name: /Take|Nehmen/i }).click();

@@ -5,6 +5,7 @@ import {
 	deleteAllMedicationsViaAPI,
 	expect,
 	navigateTo,
+	relativeLocalDateTime,
 	test,
 } from "./fixtures";
 
@@ -111,7 +112,7 @@ test.describe("Public Share Routes", () => {
 				{
 					usage: 1,
 					every: 1,
-					start: new Date().toISOString().slice(0, 16),
+					start: relativeLocalDateTime(0, 8),
 					intakeRemindersEnabled: false,
 					takenBy: "Alice",
 				},

@@ -4,6 +4,7 @@ import {
 	createMedicationViaAPI,
 	createShareTokenViaAPI,
 	deleteAllMedicationsViaAPI,
+	expandDayBlock,
 	expect,
 	navigateTo,
 	test,
@@ -221,9 +222,7 @@ test.describe("Domain safety flows", () => {
 		const markedDoseId = markedDoses[0].doseId;
 
 		const undoButton = todayBlock.getByRole("button", { name: /undo/i }).first();
-		if (!(await undoButton.isVisible().catch(() => false))) {
-			await todayBlock.locator(".day-divider.clickable").click();
-		}
+		await expandDayBlock(todayBlock);
 		await expect(undoButton).toBeVisible({ timeout: 10000 });
 		await undoButton.click();
 		await expect(todayBlock.getByRole("button", { name: /take/i }).first()).toBeVisible({ timeout: 10000 });

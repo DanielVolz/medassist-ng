@@ -1922,7 +1922,11 @@ describe("E2E Tests with Real Routes", () => {
 			expect(med.totalPills).toBe(10);
 			expect(med.looseTablets).toBe(10);
 
-			const firstPostRefillDoseId = `${medId}-0-${new Date("2026-01-06T00:00:00.000Z").getTime()}`;
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			const yesterday = new Date(today);
+			yesterday.setDate(yesterday.getDate() - 1);
+			const firstPostRefillDoseId = `${medId}-0-${yesterday.getTime()}`;
 			const firstDoseResponse = await app.inject({
 				method: "POST",
 				url: "/doses/taken",
@@ -1931,7 +1935,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(firstDoseResponse.statusCode).toBe(200);
 			expect(firstDoseResponse.json()).toEqual({ success: true });
 
-			const secondPostRefillDoseId = `${medId}-0-${new Date("2026-01-07T00:00:00.000Z").getTime()}`;
+			const secondPostRefillDoseId = `${medId}-0-${today.getTime()}`;
 			const secondDoseResponse = await app.inject({
 				method: "POST",
 				url: "/doses/taken",

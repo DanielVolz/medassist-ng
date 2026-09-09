@@ -111,6 +111,7 @@ test.describe("Mobile modal browser back", () => {
 		const collapsedTodayDivider = page.locator(".day-block.today.collapsed .day-divider.clickable").first();
 		if (await collapsedTodayDivider.isVisible().catch(() => false)) {
 			await collapsedTodayDivider.click();
+			await expect(page.locator(".day-block.today")).not.toHaveClass(/collapsed/, { timeout: 10000 });
 		}
 		const doseItem = page.locator(".dose-item").first();
 		await expect(doseItem).toBeVisible({ timeout: 15000 });

@@ -1,6 +1,6 @@
 import { MantineProvider } from "@mantine/core";
 import { createElement, type ReactElement } from "react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { beforeEach, vi } from "vitest";
 
 // Wrap every rendered component tree in MantineProvider so components using

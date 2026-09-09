@@ -701,7 +701,7 @@ test.describe("Button height contract", () => {
 					const takeMedName = `${MED_NAME} German Take`;
 					const skipMedName = `${MED_NAME} German Skip`;
 					const personName = "pillepallemann";
-					await updateSettingsViaAPI({ language: "de" });
+					await updateSettingsViaAPI({ language: "de", stockCalculationMode: "manual" });
 					await page.addInitScript(() => {
 						window.localStorage.setItem("medassist-ng-language", "de");
 					});
@@ -785,7 +785,7 @@ test.describe("Button height contract", () => {
 						await expectGermanMobileDoseActionButtonsToFit(page);
 						await expectMobileDoseSummariesKeepRecipientNamesReadable(page, personName, "1 Tbl.", "150 mg");
 					} finally {
-						await updateSettingsViaAPI({ language: "en" });
+						await updateSettingsViaAPI({ language: "en", stockCalculationMode: "automatic" });
 						await page
 							.evaluate(() => {
 								window.localStorage.setItem("medassist-ng-language", "en");

@@ -678,6 +678,10 @@ test.describe("Button height contract", () => {
 
 					const todayBlock = page.locator(".day-block.today");
 					await expect(todayBlock).toBeVisible({ timeout: 10000 });
+					if (await todayBlock.evaluate((element) => element.classList.contains("collapsed"))) {
+						await todayBlock.locator(".day-divider.clickable").click();
+						await expect(todayBlock).not.toHaveClass(/collapsed/, { timeout: 10000 });
+					}
 					await expect(todayBlock).toContainText(medName, { timeout: 10000 });
 					const skipButton = todayBlock.getByRole("button", { name: /^Skip$/ }).first();
 					await expect(skipButton).toBeVisible({ timeout: 10000 });

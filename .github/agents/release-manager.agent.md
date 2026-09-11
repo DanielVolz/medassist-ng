@@ -2,7 +2,9 @@
 
 name: release-manager
 description: Manages the full release lifecycle - from branching and PRs through versioning and GitHub release notes. Use when code changes are complete and ready to ship.
+user-invocable: false
 argument-hint: Describe what was changed, e.g., "fix stock correction bug" or "new refill tracking feature"
+agents: []
 
 ---
 

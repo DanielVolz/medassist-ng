@@ -37,6 +37,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      agent-harness: ${{ steps.filter.outputs.agent-harness }}
     steps:
       - uses: dorny/paths-filter@v4
         id: filter
@@ -59,6 +60,40 @@ jobs:
               - 'biome.json'
               - '.github/workflows/test.yml'
               - '.github/workflows/e2e.yml'
+            agent-harness:
+              - 'package.json'
+              - 'scripts/validate-agent-harness.mjs'
+              - 'scripts/validate-agent-harness.test.mjs'
+              - 'AGENTS.md'
+              - '.github/copilot-instructions.md'
+              - '.github/agents/**'
+              - '.github/skills/**'
+              - '.github/workflows/test.yml'
+
+  agent-harness:
+    name: Agent Harness
+    needs: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Skip agent harness when unchanged
+        if: needs.changes.outputs.agent-harness != 'true'
+        run: echo "No agent-harness changes detected; required check passes without validation."
+
+      - name: Checkout repository
+        if: needs.changes.outputs.agent-harness == 'true'
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        if: needs.changes.outputs.agent-harness == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Validate agent harness
+        if: needs.changes.outputs.agent-harness == 'true'
+        run: npm run test:agent-harness && npm run validate:agent-harness
 
   # =============================================================================
   # Backend Tests (always emits the required check context)

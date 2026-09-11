@@ -21,7 +21,7 @@ Keep docs consistent with actual product behavior and avoid stale setup/run guid
 ## Candidate Documentation Files
 
 - `README.md`
-- `docs/PROJECT_SETUP.md`
+- `docs/DEVELOPMENT.md`
 - `docs/TECH_STACK.md`
 
 ## Anti-Patterns

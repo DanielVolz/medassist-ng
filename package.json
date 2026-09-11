@@ -5,9 +5,11 @@
     "prepare": "husky",
     "lint": "cd shared && npm run check && cd ../backend && npm run lint && cd ../frontend && npm run lint",
     "lint:fix": "cd shared && npx biome check --write . && cd ../backend && npm run lint:fix && cd ../frontend && npm run lint:fix",
-    "check": "cd shared && npm run check && cd ../backend && npm run check && cd ../frontend && npm run check",
+    "check": "npm run validate:agent-harness && cd shared && npm run check && cd ../backend && npm run check && cd ../frontend && npm run check",
     "build": "cd shared && npm run build && cd ../backend && npm run build && cd ../frontend && npm run build",
     "test:domain": "cd backend && npm run test:domain && cd ../frontend && npm run test:e2e:domain",
+    "test:agent-harness": "node --test scripts/validate-agent-harness.test.mjs",
+    "validate:agent-harness": "node scripts/validate-agent-harness.mjs",
     "test:release-preflight": "node scripts/test-release-preflight.mjs",
     "release:preflight": "node scripts/release-preflight.mjs"
   },

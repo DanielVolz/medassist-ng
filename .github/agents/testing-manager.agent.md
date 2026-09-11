@@ -1,7 +1,9 @@
 ---
 name: testing-manager
 description: Owns testing strategy, test implementation, local validation, and CI test triage for backend, frontend, and Playwright E2E.
+user-invocable: false
 argument-hint: Describe what to test, e.g., "add tests for stock warning fix" or "analyze failing Playwright checks"
+agents: []
 ---
 
 # Testing Manager Agent

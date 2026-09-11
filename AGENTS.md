@@ -90,6 +90,12 @@ For explicit push, PR, merge, tag, or release requests, the normal agent's requi
 - Always clean up dead code from older or failed approaches before handoff. Do not leave unused fallback paths, duplicate logic, stale listeners, unreachable branches, commented-out implementations, or tests for behavior that is no longer part of the final fix.
 - Reuse existing UI patterns and components such as `ConfirmModal`, `MedicationAvatar`, and the existing style system.
 
+## CI Triage
+
+- Do not open a local browser, Chrome, or a browser automation session to inspect GitHub Actions, pull-request checks, workflow failures, logs, or artifacts.
+- Use `gh` or the GitHub API/MCP for CI triage, including check status, failed-job logs, artifacts, reruns, and PR metadata.
+- Open a browser only when validating a rendered product UI state that cannot be established from code, tests, or CI logs. A GitHub Actions URL is not a product UI validation target.
+
 ## Authenticated UI Verification
 
 When fixing or reviewing UI that lives behind login or depends on authenticated app state:
@@ -179,29 +185,42 @@ Skill files:
 
 ## Delegation
 
+- `@engineering-orchestrator` is the single default user entry point for every task. It classifies implementation complexity, routes specialist ownership directly, and coordinates without routinely implementing.
 - Testing ownership is `@testing-manager`: test planning, writing, execution, and CI test triage (`test.yml`, `e2e.yml`).
 - Release ownership is `@release-manager`: PR/release orchestration, merge flow, and workflow monitoring.
+- Independent review ownership is `@engineering-reviewer`: correctness, security, architecture, compatibility, and missing-test review without file edits.
 - Normal agents must not delegate release work to arbitrary subagents. Route push, PR, merge, tag, and release requests specifically to `@release-manager`.
 - If a required specialist is unavailable, hangs, or returns no useful status, continue locally only as far as needed to unblock the explicit request.
 - Fallback protocol: keep scope focused, document why fallback was used in `MEMORY.md`, report exact commands/results, and do not perform prohibited release actions.
 - CI failure triage and final release orchestration still return to the owner when available.
 
+## Agent Operating Model
+
+- Enter through `@engineering-orchestrator`; it routes trivial work to `fast-task` with minimal ceremony and adds coordination only when specialization, isolation, parallel read-only analysis, or an independent gate is justified.
+- Route once at task start. Do not route a specialist through a generic worker: testing goes directly to `@testing-manager`, release directly to `@release-manager`, and project metadata directly to `@project-bot`.
+- Keep one implementation owner and one writer per file set. Parallelize only independent read-only work or writes in explicitly isolated worktrees.
+- Limit normal fan-out to three workers. Nested delegation is off by default; enable it only for bounded divide-and-conquer work with an explicit depth and stopping condition.
+- Every handoff must include: objective, owned scope, relevant evidence, constraints, expected output, validation, and escalation trigger. Return findings and evidence, not raw logs or broad transcripts.
+- Use a producer-reviewer loop only for material risk. Allow one focused repair pass after review; unresolved or newly expanded risk returns to the coordinator or user instead of looping.
+- Stop when acceptance criteria and required gates pass. Do not spend tokens polishing unaffected code, repeating successful checks, or consulting extra agents without a decision they can change.
+- Treat instructions as guidance, not enforcement. Keep tool permissions least-privilege, use sandboxing where available, and retain CI, branch protection, and human review as final controls.
+
 ## Cost-Aware Model Orchestration
 
 This routing policy applies to Codex and GitHub Copilot. Classify the task before choosing a model, agent, or delegation path. Start with the lowest capable tier and escalate only when concrete evidence requires it.
 
-For implementation, test execution, CI coordination, or repository operations, classify the work through `model-router` before delegating to `fast-task`, `standard-task`, or `complex-task`. Read-only discovery and small governance edits may use the fast tier directly when no specialist action is required.
+For implementation work, classify the change through `model-router` before delegating to `fast-task`, `standard-task`, or `complex-task`. Route testing, release, and project-metadata work directly to their specialists without a generic tier hop. Read-only discovery and small governance edits may use the fast tier directly when no specialist action is required.
 
 | Tier | Use for | Required agent role |
 |---|---|---|
-| Fast | Targeted questions, read-only lookups, one-file copy or documentation edits, formatting, simple metadata updates, and deterministic commands | `fast-task` |
-| Standard | Normal bug fixes, focused tests, small multi-file changes, routine refactors, and PR/CI coordination | `standard-task` |
+| Fast | Targeted questions, read-only lookups, one-file copy or documentation edits, formatting, and deterministic commands | `fast-task` |
+| Standard | Normal bug fixes, small multi-file changes, and routine refactors | `standard-task` |
 | Complex | Data migrations, auth/security, production incidents, multi-domain behavior changes, architecture decisions, difficult root-cause analysis, or a scoped failure after one standard-tier attempt | `complex-task` |
 
 - Do not choose the complex tier merely because a task is broad, unfamiliar, or inconvenient. Split independent work first and keep each slice at the lowest viable tier.
 - Escalate exactly one tier when the current tier cannot establish a safe path, a focused check fails, or new evidence expands the scope. Record the evidence in the handoff; do not silently retry on an expensive model.
 - Personal model selection and reasoning defaults belong in local Codex configuration or individual developer tooling. They never relax security, testing, approval, or release rules.
-- PR creation, upstream push, release coordination, and workflow monitoring are `standard-task` work and must run through `@release-manager`. They are not a reason to use `complex-task`; select it only when the underlying change itself has a complex trigger.
+- PR creation, upstream push, release coordination, and workflow monitoring bypass generic task tiers and run directly through `@release-manager`.
 
 ## GitHub Project And Traceability
 
@@ -213,11 +232,13 @@ For implementation, test execution, CI coordination, or repository operations, c
 
 ## Delivery Workflow
 
-1. Confirm scope, issue/project availability, and worktree safety.
-2. Implement local changes.
-3. Hand off tests to `@testing-manager`, or use the fallback protocol when necessary.
-4. Hand off PR/merge/release work to `@release-manager`.
-5. After merge and issue closure, ensure traceability comments are present.
+1. Confirm acceptance criteria, worktree safety, and the lowest capable route.
+2. Load only triggered skills and gather the minimum evidence needed to identify the controlling path and a falsifying check.
+3. Assign one implementation owner; use parallel read-only discovery only when it reduces uncertainty or elapsed time.
+4. For material-risk changes, obtain an independent `@engineering-reviewer` pass and repair only actionable findings.
+5. Hand off test planning/execution to `@testing-manager`, or use the documented fallback protocol.
+6. Hand off PR/merge/release work to `@release-manager`; use `@project-bot` for metadata-only coordination.
+7. Record concise evidence: changed scope, checks and results, residual risk, and the next owner. After merge, verify issue/PR traceability.
 
 ## Local Commands
 
@@ -233,5 +254,5 @@ npm run build
 - `AGENTS.md`: canonical local governance, skill routing, and ownership.
 - `.github/copilot-instructions.md`: committed entry point for Copilot/cloud agents; it should stay short and defer to `AGENTS.md` when present.
 - `.github/skills/*/SKILL.md`: detailed skill rules, read only when triggered.
-- `.github/agents/*.agent.md`: Copilot specialist definitions and routing roles; ignored Spec Kit definitions are local generated integrations.
+- `.github/agents/*.agent.md`: thin Copilot coordinators, workers, and specialists; ignored Spec Kit definitions are local generated integrations.
 - `.codex/agents/*.toml`: local Codex custom-agent definitions; these are intentionally local-only.

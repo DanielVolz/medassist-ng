@@ -13,11 +13,6 @@ If `AGENTS.md` exists in the checkout or is provided in the session context, tre
 5. Identify triggered skills and read only the matching `.github/skills/*/SKILL.md` files before changing code.
 6. Keep work scoped to the user's current objective and existing repository patterns.
 
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan.
-<!-- SPECKIT END -->
-
 ## Portable Safety Baseline
 
 - Use English for code, comments, docs, and commit messages.
@@ -48,10 +43,15 @@ shell commands, and other important information, read the current plan.
 
 ## Specialists
 
+- Use `engineering-orchestrator` as the single default entry point for every task; it classifies complexity and routes to the correct implementation tier or specialist.
+- Use `engineering-reviewer` for independent read-only correctness, security, compatibility, and architecture review.
 - Use `testing-manager` for test planning, test execution, and CI test triage.
 - Use `release-manager` for PR shipping, merge, release, and workflow monitoring.
 - Use `project-bot` for issue, PR metadata, and GitHub Project board coordination when no product code change is required.
-- Use `model-router` for implementation, testing, CI, and repository-operation routing when delegation is available.
+- Use `model-router` only to classify implementation work into the lowest capable `fast-task`, `standard-task`, or `complex-task` tier.
+- Route specialist work directly; do not send testing, release, or metadata-only work through a generic task worker.
+- Keep one implementation owner and one writer per file set. Limit normal parallel fan-out to three independent read-only workers and do not use nested delegation by default.
+- Allow at most one focused repair pass after independent review; unresolved or expanded risk returns to the coordinator or user.
 
 ## Validation
 

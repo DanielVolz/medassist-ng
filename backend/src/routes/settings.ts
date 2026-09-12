@@ -773,12 +773,16 @@ export async function sendShoutrrrNotification(
 			// validation run immediately before fetch, and redirects are disabled.
 			// lgtm [js/request-forgery]
 			// codeql[js/request-forgery]
-			const response = await fetch(sanitizedGenericTarget.url, {
-				method: "POST",
-				headers: genericRequest.headers,
-				body: genericRequest.body,
-				redirect: "error",
-			});
+			const response = await fetch(
+				// lgtm [js/request-forgery]
+				sanitizedGenericTarget.url,
+				{
+					method: "POST",
+					headers: genericRequest.headers,
+					body: genericRequest.body,
+					redirect: "error",
+				}
+			);
 			if (response.ok) return { success: true };
 			const errorText = await response.text();
 			return { success: false, error: `HTTP ${response.status}: ${errorText}` };

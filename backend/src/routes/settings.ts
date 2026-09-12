@@ -769,6 +769,7 @@ export async function sendShoutrrrNotification(
 				return { success: false, error: sanitizedGenericTarget.error };
 			}
 
+			// lgtm [js/request-forgery]
 			const response = await fetch(sanitizedGenericTarget.url, {
 				method: "POST",
 				headers: genericRequest.headers,

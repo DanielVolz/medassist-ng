@@ -771,7 +771,7 @@ export async function sendShoutrrrNotification(
 
 			// The target is reconstructed by sanitizeNotificationUrl after hostname and DNS validation;
 			// redirect:error prevents a validated target from being redirected elsewhere.
-			// lgtm[js/request-forgery]
+			// lgtm [js/request-forgery]
 			const response = await fetch(sanitizedGenericTarget.url, {
 				method: "POST",
 				headers: genericRequest.headers,

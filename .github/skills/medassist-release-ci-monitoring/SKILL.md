@@ -21,7 +21,7 @@ Maintain one compact record:
 { remote, branch, headSHA, prUrl, latestStateOrResult, nextAction }
 ```
 
-Keep the same session until merge or a concrete blocker. If the aggregate gate is pending or in progress, wait and query the same current-head aggregate again. If the head changes, restart the aggregate query for that head. Do not enumerate individual jobs while the aggregate gate is pending or successful.
+Use a bounded monitor: query the current head, wait and retry only while pending or in progress, and stop after three aggregate queries for that head. If the rollup is successful but mergeStateStatus is BLOCKED, inspect and report the blocker once; never poll an unchanged blocked PR. Do not enumerate individual jobs while the aggregate gate is pending or successful.
 
 ## Gate, Merge, And Cleanup
 

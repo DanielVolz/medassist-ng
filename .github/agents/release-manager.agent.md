@@ -30,12 +30,13 @@ For a simple feature PR without a release, use handoff then CI monitoring only; 
 
 ## Authoritative PR Gate
 
-After creating a PR, keep one continuous monitoring session until it merges or a concrete blocker requires user action:
+After creating a PR, use this bounded state machine:
 
 1. Query the current PR once with headRefOid, statusCheckRollup, mergeable, and mergeStateStatus.
-2. If the current head is unchanged and the result is pending, wait and query the same aggregate again; do not inspect individual jobs.
-3. When statusCheckRollup is SUCCESS, mergeable is MERGEABLE, and mergeStateStatus is CLEAN, squash-merge immediately.
-4. Inspect individual checks only after a failed rollup, changed head, or concrete blocker. Never bypass a blocked merge state.
+2. If statusCheckRollup is SUCCESS, mergeable is MERGEABLE, and mergeStateStatus is CLEAN, squash-merge immediately.
+3. If statusCheckRollup is SUCCESS but mergeStateStatus is BLOCKED, inspect the blocker once, report it, and stop. Do not poll an unchanged blocked PR.
+4. If statusCheckRollup is PENDING or IN_PROGRESS, wait for a meaningful interval and repeat the same aggregate query no more than three times for that head. If it remains pending, report the state and stop.
+5. Inspect individual checks only after a failed rollup, changed head, or concrete blocker. Never bypass a blocked merge state.
 
 ## Completion
 

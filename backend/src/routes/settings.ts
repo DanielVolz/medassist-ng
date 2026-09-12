@@ -769,7 +769,7 @@ export async function sendShoutrrrNotification(
 				return { success: false, error: sanitizedGenericTarget.error };
 			}
 
-			// lgtm [js/request-forgery]
+			// codeql[js/request-forgery]
 			const response = await fetch(sanitizedGenericTarget.url, {
 				method: "POST",
 				headers: genericRequest.headers,
@@ -876,7 +876,7 @@ export async function sendShoutrrrNotification(
 		// - Rejects hostnames that resolve to private/internal IP addresses
 		// - redirect: "error" prevents redirect-based bypass attacks
 		// This is an intentional feature: users configure their own external notification services
-		// lgtm [js/request-forgery]
+		// codeql[js/request-forgery]
 		const targetValidationError = await validateNotificationTargetUrl(targetUrl, {
 			allowLocalNtfyTarget: isNtfy,
 		});

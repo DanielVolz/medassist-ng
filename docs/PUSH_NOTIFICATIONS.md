@@ -18,6 +18,7 @@ When an ntfy intake action succeeds, MedAssist publishes the confirmation as the
 - `discord://`
 - `pushover://`
 - `gotify://`
+- `generic://` JSON/HTTP POST webhooks
 - `telegram://`
 - direct `https://` webhooks
 
@@ -80,6 +81,16 @@ pushover://shoutrrr:API_TOKEN@USER_KEY/
 gotify://your-server.com/TOKEN
 gotify://your-server.com:443/path/to/gotify/TOKEN?priority=1
 ```
+
+### Generic HTTP webhook
+
+```text
+generic://your-server.com/message?token=TOKEN&@content-type=application/json&template=json
+```
+
+MedAssist sends Generic notifications as `POST` requests over HTTPS by default; `disabletls=true` selects HTTP. `template=json` sends a JSON object with `title` and `message`; ordinary query parameters such as `token` are forwarded to the target endpoint. Use `__` to forward a query name that is otherwise a Generic option, for example `__template=custom` forwards `template=custom` while `template=json` still selects the JSON payload template.
+
+The `contenttype` option sets both `Content-Type` and `Accept` and defaults to `application/json`. Explicit `@` headers override these values case-insensitively. Generic URLs containing a username or password are rejected; use explicit webhook headers or query parameters supported by the target instead.
 
 ### Discord
 

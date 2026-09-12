@@ -589,6 +589,121 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(requestInit.headers).toMatchObject({ Tags: "pill" });
 	});
 
+	it("sendShoutrrrNotification resolves Generic properties case-insensitively", async () => {
+		fetchMock.mockResolvedValue({ ok: true });
+
+		const result = await sendShoutrrrNotification(
+			"generic://notify.example.com/message?token=gtfya123&Method=post&ContentType=application%2Fvnd.api%2Bjson&DisableTLS=y&Template=JSON&Title=Configured&TitleKey=subject&MessageKey=content",
+			"Title",
+			"Body"
+		);
+
+		expect(result).toEqual({ success: true });
+		const [targetUrl, requestInit] = fetchMock.mock.calls[0];
+		expect(targetUrl).toBe("http://notify.example.com/message?token=gtfya123");
+		expect(requestInit).toMatchObject({
+			method: "POST",
+			headers: { "Content-Type": "application/vnd.api+json", Accept: "application/vnd.api+json" },
+			body: JSON.stringify({ subject: "Configured", content: "Body" }),
+			redirect: "error",
+		});
+	});
+
+	it("sendShoutrrrNotification reconstructs the reported lowercase Generic JSON target", async () => {
+		fetchMock.mockResolvedValue({ ok: true });
+
+		const result = await sendShoutrrrNotification(
+			"generic://notify.example.com/message?token=gtfya123&contenttype=application%2Fjson&template=json",
+			"Title",
+			"Body"
+		);
+
+		expect(result).toEqual({ success: true });
+		expect(fetchMock).toHaveBeenCalledWith("https://notify.example.com/message?token=gtfya123", {
+			method: "POST",
+			headers: { "Content-Type": "application/json", Accept: "application/json" },
+			body: JSON.stringify({ title: "Title", message: "Body" }),
+			redirect: "error",
+		});
+	});
+
+	it("sendShoutrrrNotification normalizes Generic headers and preserves forwarded query data", async () => {
+		fetchMock.mockResolvedValue({ ok: true });
+
+		const result = await sendShoutrrrNotification(
+			"generic://notify.example.com/message?__template=forwarded&template=json&__signature=abc&item=one&item=two&$context=mobile&$context=desktop&@authorization=Bearer%20token&@userAgent=MedAssist&@ContentType=application%2Fproblem%2Bjson&@accept=text%2Fplain&@xAPIKey=first&@xAPIKey=second",
+			"Title",
+			"Body"
+		);
+
+		expect(result).toEqual({ success: true });
+		const [targetUrl, requestInit] = fetchMock.mock.calls[0];
+		expect(targetUrl).toBe("https://notify.example.com/message?template=forwarded&__signature=abc&item=one&item=two");
+		expect(requestInit.headers).toEqual({
+			Authorization: "Bearer token",
+			"User-Agent": "MedAssist",
+			"Content-Type": "application/problem+json",
+			Accept: "text/plain",
+			"X-A-P-I-Key": "first",
+		});
+		expect(JSON.parse(requestInit.body)).toEqual({ title: "Title", message: "Body", context: "mobile" });
+		expect(requestInit.redirect).toBe("error");
+	});
+
+	it("sendShoutrrrNotification rejects non-POST Generic methods before fetch", async () => {
+		const result = await sendShoutrrrNotification(
+			"generic://notify.example.com/message?Method=DELETE",
+			"Title",
+			"Body"
+		);
+
+		expect(result).toEqual({ success: false, error: "Generic notifications only support POST requests" });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("sendShoutrrrNotification forwards requestmethod as an ordinary Generic query parameter", async () => {
+		fetchMock.mockResolvedValue({ ok: true });
+
+		const result = await sendShoutrrrNotification(
+			"generic://notify.example.com/message?requestmethod=GET",
+			"Title",
+			"Body"
+		);
+
+		expect(result).toEqual({ success: true });
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://notify.example.com/message?requestmethod=GET",
+			expect.objectContaining({
+				method: "POST",
+				headers: { "Content-Type": "application/json", Accept: "application/json" },
+				body: "Body",
+				redirect: "error",
+			})
+		);
+	});
+
+	it("sendShoutrrrNotification rejects Generic userinfo without exposing credentials", async () => {
+		const result = await sendShoutrrrNotification(
+			"generic://admin:super-secret@notify.example.com/message",
+			"Title",
+			"Body"
+		);
+
+		expect(result.success).toBe(false);
+		expect(result.error).toBe("Generic URLs must not include username or password");
+		expect(result.error).not.toContain("admin");
+		expect(result.error).not.toContain("super-secret");
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("sendShoutrrrNotification blocks private Generic targets before fetch", async () => {
+		const result = await sendShoutrrrNotification("generic://127.0.0.1/message?template=json", "Title", "Body");
+
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("not allowed");
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	it("loadUserSettings creates defaults for users without settings", async () => {
 		const settings = await loadUserSettings(1);
 

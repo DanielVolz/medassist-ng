@@ -771,7 +771,8 @@ export async function sendShoutrrrNotification(
 
 			// genericRequest.url is reconstructed from the parsed hostname/path; hostname and DNS
 			// validation run immediately before fetch, and redirects are disabled.
-			// lgtm[js/request-forgery]
+			// lgtm [js/request-forgery]
+			// codeql[js/request-forgery]
 			const response = await fetch(sanitizedGenericTarget.url, {
 				method: "POST",
 				headers: genericRequest.headers,
@@ -878,7 +879,8 @@ export async function sendShoutrrrNotification(
 		// - Rejects hostnames that resolve to private/internal IP addresses
 		// - redirect: "error" prevents redirect-based bypass attacks
 		// This is an intentional feature: users configure their own external notification services
-		// lgtm[js/request-forgery]
+		// lgtm [js/request-forgery]
+		// codeql[js/request-forgery]
 		const targetValidationError = await validateNotificationTargetUrl(targetUrl, {
 			allowLocalNtfyTarget: isNtfy,
 		});

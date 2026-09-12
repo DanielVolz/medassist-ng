@@ -7,6 +7,12 @@ description: Use only after a PR exists to monitor required CI, merge readiness,
 
 Use only after a PR exists. Do not use for release versioning, note drafting, tags, or GitHub release publication.
 
+## Authoritative PR Gate
+
+When the user reports that a PR is green, perform one authenticated PR-level query for the current head containing headRefOid, statusCheckRollup, mergeable, and mergeStateStatus. Treat the PR as green only when statusCheckRollup is SUCCESS, mergeable is MERGEABLE, and mergeStateStatus is CLEAN. Do not enumerate individual checks when this aggregate gate is successful. Inspect individual check details only when the aggregate is not successful, the head changed, or GitHub reports a concrete blocker.
+
+Container Smoke is already included in the PR rollup when required by the workflow; do not query it a second time after a successful aggregate gate. A successful rollup alone is not merge authorization if mergeable or mergeStateStatus is blocked.
+
 ## Continuous State
 
 Maintain and continuously reuse one compact record:
@@ -19,7 +25,7 @@ Keep one monitoring session/process for that record until completion or a genuin
 
 ## Gate, Merge, And Cleanup
 
-- Determine exact required checks for the recorded head. For backend, frontend, shared, package, Docker, workflow, or runtime diffs, visible `Container Smoke` is also mandatory; missing, skipped, or failed smoke blocks progress.
-- Do not merge while a required current-head check is non-green, pending, missing, or obsolete. Hand only test/E2E failures to `@testing-manager`; retain the record and monitor the repaired head. Diagnose other release-operational failures without bypassing gates.
-- When authorized and all gates are green, squash merge and delete the branch. Verify the merged commit, closed issue, and project status; if project automation missed Done, resolve current project IDs and update it through GraphQL. Record unavailable tooling.
-- Re-sync the primary checkout to clean local `main` at `<remote>/main` when requested, then remove task worktrees and temporary stashes.
+- Use the authoritative PR gate above. Inspect individual checks only when that gate reports failure, the head changed, or GitHub reports a concrete blocker.
+- Hand only test/E2E failures to `-manager`; retain the current-head record for repairs and diagnose other release-operational failures without bypassing gates.
+- When authorized and the gate is green, squash merge and delete the branch. Verify the merged commit and requested traceability.
+- Re-sync local `main` only when requested, then remove task worktrees and temporary state.

@@ -28,16 +28,10 @@ You are the only specialist allowed to execute MedAssist remote release operatio
 
 For a simple feature PR without a release, use handoff then CI monitoring only; do not load release-notes or release-publish.
 
-## Continuous PR State
+## Authoritative PR Gate
 
-Create and reuse one compact state record for each PR or release:
-
-```text
-{ remote, branch, headSHA, prOrReleaseUrl, requiredChecks, latestStateOrResult, nextAction }
-```
-
-Keep one continuous monitoring session/process while CI is pending or in progress; do not return just to be reinvoked. Refresh current-head checks only. If the head changes, update the record and required checks, then restart only that head's monitoring cycle. Do not merge for pending, missing, non-green, or obsolete-head checks. `Container Smoke` is required for backend, frontend, shared, package, Docker, workflow, or runtime diffs.
+When the user says that a PR is green, run one authenticated PR-level query for the current head with headRefOid, statusCheckRollup, mergeable, and mergeStateStatus. Accept the green state only when the rollup is SUCCESS, mergeable is MERGEABLE, and mergeStateStatus is CLEAN. Do not re-check individual jobs or Container Smoke after that successful aggregate query. Inspect details only for a failed/pending rollup, a changed head, or a reported merge blocker.
 
 ## Completion
 
-The selected phase skill owns its procedure. Before concluding, record authorization, current-head gate result, PR/issue project traceability, and any confirmed tag/release/assets. Clean primary `main`, worktrees, and temporary state only when the authorized end state requires it. Return only on completion or a genuine blocker, with the compact state record.
+Use the selected phase skill as the procedure. Keep one compact PR state record, refresh only the current head, and stop when its acceptance gate passes or a concrete blocker is reported. Before concluding, report authorization, current-head gate, traceability, and residual risk.

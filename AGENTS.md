@@ -15,7 +15,7 @@ Canonical local governance for coding agents in this repository. If repo instruc
 - Use root `MEMORY.md` as the only local persistence file for agent continuity.
 - Create `MEMORY.md` at the repository root if missing before meaningful work.
 - Use it for durable project context only: architecture notes, real conventions, recurring pitfalls, decisions, validation state, and open risks that future agents need.
-- Keep it short, stable, and concrete; avoid transcripts, daily chatter, speculative notes, stale detail, and secrets.
+- Keep it under 80 lines and short, stable, and concrete; replace stale entries instead of appending history. Never store transcripts, daily chatter, completed release details, speculative notes, or detailed command logs.
 - Append or revise concise notes after meaningful work so the current state stays useful.
 - Do not create or maintain `doku/report.md` unless the user explicitly asks for a separate local report.
 - `MEMORY.md` is local-only state. It must stay ignored and must not be staged, committed, or sent upstream unless the user explicitly requests that exact action.
@@ -197,29 +197,15 @@ Skill files:
 | Skill Quality Review | `.github/skills/medassist-skill-quality-review/SKILL.md` |
 | Karpathy Core | `.github/skills/medassist-karpathy-core/SKILL.md` |
 
-## Delegation
+## Routing And Ownership
 
-- `@engineering-orchestrator` is the single default user entry point for every task. It classifies implementation complexity, routes specialist ownership directly, and coordinates without routinely implementing.
-- Testing ownership is `@testing-manager`: test planning, writing, execution, and CI test triage (`test.yml`, `e2e.yml`).
-- Release ownership is `@release-manager`: PR/release orchestration, merge flow, and workflow monitoring.
-- Independent review ownership is `@engineering-reviewer`: correctness, security, architecture, compatibility, and missing-test review without file edits.
-- Normal agents must not delegate release work to arbitrary subagents. Route push, PR, merge, tag, and release requests specifically to `@release-manager`.
-- If a required specialist is unavailable, hangs, or returns no useful status, continue locally only as far as needed to unblock the explicit request.
-- Fallback protocol: keep scope focused, document why fallback was used in `MEMORY.md`, report exact commands/results, and do not perform prohibited release actions.
-- CI failure triage and final release orchestration still return to the owner when available.
-
-## Agent Operating Model
-
-- Enter through `@engineering-orchestrator`; it routes trivial work to `fast-task` with minimal ceremony and adds coordination only when specialization, isolation, parallel read-only analysis, or an independent gate is justified.
-- Route once at task start. Do not route a specialist through a generic worker: testing goes directly to `@testing-manager`, release directly to `@release-manager`, and project metadata directly to `@project-bot`.
-- Keep one implementation owner and one writer per file set. Parallelize only independent read-only work or writes in explicitly isolated worktrees.
-- Limit normal fan-out to three workers. Nested delegation is off by default; enable it only for bounded divide-and-conquer work with an explicit depth and stopping condition.
-- Every handoff must include: objective, owned scope, relevant evidence, constraints, expected output, validation, and escalation trigger. Return findings and evidence, not raw logs or broad transcripts.
-- Before multi-step work, create and reuse one compact current context: objective, controlling files/symbols, validated facts, pending decision, and falsifying check. Refresh only facts changed by code, external state, or a specific unresolved dependency; do not reload stable instructions or broad context. This does not replace mandatory current `MEMORY.md` and status reads.
-- Use bounded phases for multi-domain infrastructure or operations work: Diagnose (read-only evidence and hypothesis), Repair (one owner and scoped implementation), Validate/Release (focused verification and authorized handoff). Start each phase with only its evidence, scope, acceptance check, and stop condition. Keep test ownership with `@testing-manager` and final release execution with `@release-manager`; its state machine owns continuous release monitoring.
-- Use a producer-reviewer loop only for material risk. Allow one focused repair pass after review; unresolved or newly expanded risk returns to the coordinator or user instead of looping.
-- Stop when acceptance criteria and required gates pass. Do not spend tokens polishing unaffected code, repeating successful checks, or consulting extra agents without a decision they can change.
-- Treat instructions as guidance, not enforcement. Keep tool permissions least-privilege, use sandboxing where available, and retain CI, branch protection, and human review as final controls.
+- `engineering-orchestrator` is the default entry point and routes once per task. It must name `model-router`, `engineering-reviewer`, `testing-manager`, `release-manager`, and `project-bot`.
+- Implementation work goes through `model-router` to exactly one of `fast-task`, `standard-task`, or `complex-task`; route specialist work directly: testing, release, and project metadata go directly to their specialists.
+- `engineering-reviewer` provides independent engineering review when material risk justifies it.
+- Keep one implementation owner and one writer per file set. Use parallel agents only for independent read-only work, limit normal fan-out to three independent read-only workers. Do not delegate recursively.
+- Allow at most one focused repair pass. Escalate only when a focused check fails or evidence expands the risk.
+- Keep one compact task context: objective, controlling files, evidence, falsifying check, and next action. Refresh only changed facts.
+- `release-manager` owns PRs, merges, releases, and workflow monitoring. `testing-manager` owns test design, execution, and test CI triage.
 
 ## Cost-Aware Model Orchestration
 
@@ -246,15 +232,12 @@ For implementation work, classify the change through `model-router` before deleg
 - When a PR closes an issue, keep `Closes #N` in the PR body and add an issue comment linking the PR and summarizing the fix.
 - Release notes use short commit hashes, not PR numbers.
 
-## Delivery Workflow
+## Delivery
 
-1. Confirm acceptance criteria, worktree safety, and the lowest capable route.
-2. Load only triggered skills and gather the minimum evidence needed to identify the controlling path and a falsifying check.
-3. Assign one implementation owner; use parallel read-only discovery only when it reduces uncertainty or elapsed time.
-4. For material-risk changes, obtain an independent `@engineering-reviewer` pass and repair only actionable findings.
-5. Hand off test planning/execution to `@testing-manager`, or use the documented fallback protocol.
-6. Hand off PR/merge/release work to `@release-manager`; use `@project-bot` for metadata-only coordination.
-7. Record concise evidence: changed scope, checks and results, residual risk, and the next owner. After merge, verify issue/PR traceability.
+1. Confirm scope, current worktree state, and the cheapest falsifying check.
+2. Load only skills triggered by the touched domain.
+3. Route once, make the smallest change, and run the focused check immediately after editing.
+4. Widen validation only for shared or cross-domain risk. Hand remote operations to `release-manager`.
 
 ## Local Commands
 

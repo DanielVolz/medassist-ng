@@ -764,6 +764,7 @@ export async function sendShoutrrrNotification(
 			if (targetValidationError) {
 				return { success: false, error: targetValidationError };
 			}
+			// lgtm[js/request-forgery]
 			const sanitizedGenericTarget = sanitizeNotificationUrl(genericRequest.url);
 			if ("error" in sanitizedGenericTarget) {
 				return { success: false, error: sanitizedGenericTarget.error };

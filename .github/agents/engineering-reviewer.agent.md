@@ -1,6 +1,7 @@
 ---
 name: engineering-reviewer
 description: Independently reviews MedAssist changes for correctness, regressions, security, compatibility, architecture, and missing tests without editing files.
+model: "GPT-5.6 Sol"
 user-invocable: false
 argument-hint: Describe the change or diff to review and its intended behavior.
 tools: ['read', 'search', 'execute']

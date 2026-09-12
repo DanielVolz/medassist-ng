@@ -1,6 +1,7 @@
 ---
 name: model-router
 description: Classifies implementation work into the lowest safe model tier before a coordinator assigns the matching task agent.
+model: "GPT-5.6 Luna"
 user-invocable: false
 disable-model-invocation: false
 tools: []

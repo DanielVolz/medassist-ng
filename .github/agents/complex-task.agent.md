@@ -1,6 +1,7 @@
 ---
 name: complex-task
 description: Handles high-risk or hard-to-diagnose work involving migrations, security, production, architecture, or multi-domain behavior.
+model: "GPT-5.6 Sol"
 user-invocable: false
 disable-model-invocation: false
 agents: []

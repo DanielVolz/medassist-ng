@@ -769,7 +769,7 @@ export async function sendShoutrrrNotification(
 				return { success: false, error: sanitizedGenericTarget.error };
 			}
 
-			// codeql[js/request-forgery]
+			// codeql[js/request-forgery]: target was validated and reconstructed by sanitizeNotificationUrl.
 			const response = await fetch(sanitizedGenericTarget.url, {
 				method: "POST",
 				headers: genericRequest.headers,
@@ -876,7 +876,7 @@ export async function sendShoutrrrNotification(
 		// - Rejects hostnames that resolve to private/internal IP addresses
 		// - redirect: "error" prevents redirect-based bypass attacks
 		// This is an intentional feature: users configure their own external notification services
-		// codeql[js/request-forgery]
+		// codeql[js/request-forgery]: target was validated and reconstructed by sanitizeNotificationUrl.
 		const targetValidationError = await validateNotificationTargetUrl(targetUrl, {
 			allowLocalNtfyTarget: isNtfy,
 		});

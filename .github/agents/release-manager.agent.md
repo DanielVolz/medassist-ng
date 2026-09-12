@@ -345,100 +345,68 @@ Read the actual commits and code changes (not just commit messages) since the pr
 
 ### Step 2: Write Release Notes
 
-**Release title:** Use just `vX.Y.Z` (e.g., `v1.4.1`), NOT "Release vX.Y.Z".
+**Release-note layout:** Follow the Dozzle v11.0.0 release layout deterministically for every release. The body, including its first line, must use this exact order:
 
-**Required structure, modeled on the clear, detailed structure of the Dozzle v11.0.0 release without copying its text:**
+1. First line: `# <Product> <version> brings <short user-facing theme>`. For this repository, use `# MedAssist-ng <version> brings <theme>`. Adapt the theme naturally to the actual release; do not use a generic `vX.Y.Z`-only heading.
+2. Two or three concise overview paragraphs explaining the release and its practical user impact.
+3. `### Key Takeaways`, followed by 2-6 concise, user-facing bullets.
+4. Optionally add `See [announcements](<real URL>) for more details.` only when a real documentation or announcement URL exists. Never invent this link.
+5. `# Change Log`.
+6. Add only relevant, non-empty categories in this exact visual style and order: `### &nbsp;&nbsp;&nbsp;🚀 Features`, `### &nbsp;&nbsp;&nbsp;🐞 Bug Fixes`, `### &nbsp;&nbsp;&nbsp;🏎 Performance`, `### &nbsp;&nbsp;&nbsp;🔒 Security`, `### &nbsp;&nbsp;&nbsp;🛠 Improvements`, `### &nbsp;&nbsp;&nbsp;📦 Dependencies`.
+7. Under each category, group bullets by domain. Use bold domain labels, concise user-facing descriptions, and a linked short commit hash at the end of every entry. Use nested bullets only when a domain has multiple related entries, matching the Dozzle style. Do not include PR references.
+8. Breaking or upgrade information belongs in the overview or key takeaways. Add `### Upgrade Notes` under `# Change Log` only when relevant; never force the old top-level upgrade section.
+9. Final line: `##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on GitHub](https://github.com/DanielVolz/medassist-ng/compare/vPREV...vNEW)`.
 
-1. **"What's New"**: A concise overview of the release and its practical user impact.
-2. **"New Features" / "Bug Fixes" / "Improvements" / "Security"**: Use only relevant grouped sections. Each bullet has a bold name and enough explanatory detail to tell users what changed and why it matters.
-3. **"Upgrade Notes"**: State relevant operational or upgrade actions, including dependency or configuration considerations. Explicitly state "No breaking changes" and "No migration steps are required" when accurate.
-4. **"Where to Find It"**: Tell users where they can access the feature or observe the fix.
-5. **"Full Changelog"**: Link from the previous tag to the new tag.
+Emoji are explicitly allowed in the category headings above because this layout follows the requested Dozzle reference. Do not use emojis in ordinary prose or bullets. Include only user-relevant changes grounded in actual code and commits: omit internal-only churn, developer tooling, AI/Copilot instructions, CI/CD changes that do not affect users, and refactors without user-visible impact.
 
-**Style guidelines:**
-
-- Use `### Heading` for sections
-- Use **bold** for feature names in bullet points
-- Keep descriptions on the same line as the feature name
-- **No emojis** — do not use emoji in headings or bullet points
-- **Include commit references where useful** — use short hashes linked to the corresponding commit URL; never use a PR number as a substitute for a commit reference.
-- **Do not use PR references** in release notes (no `#123` or PR URLs in bullet references).
-- Always include an "Upgrade Notes" section, even when it only says that no migration or configuration steps are needed.
-- Always include a "Where to Find It" section.
-- End with: `**Full Changelog**: https://github.com/DanielVolz/medassist-ng/compare/vPREV...vNEW`
-
-**ONLY include user-relevant changes.** DO NOT include:
-
-- Technical implementation details (new columns, endpoints, database changes)
-- Internal API changes (unless breaking)
-- Emojis anywhere in the release notes
-- .gitignore changes or other developer-only file changes
-- AI/Copilot instruction updates
-- CI/CD workflow changes (unless affecting users)
-- Code refactoring without user-visible changes
-
-### Example: Good Release Notes
+### Example: Required Release Notes Shape
 
 ```markdown
-## What's New
+# MedAssist-ng vX.Y.Z brings <short user-facing theme>
 
-This release introduces a medication refill tracking feature and improves the mobile user experience.
+This release <overview paragraph>.
 
-### New Features
+It also <practical impact paragraph>.
 
-- **Medication Refill**: Track when you refill your medications with a single click. Add full packs or individual pills and view complete refill history. (ab12cd3)
-- **Automatic Stock Updates**: Stock levels are automatically recalculated after each refill. (ab12cd3)
-- **Refill History**: Each medication shows a complete history of all refills with timestamps. (de34f56)
+### Key Takeaways
 
-### Improvements
+- <user-facing takeaway>
+- <user-facing takeaway>
 
-- **Centered Tooltips**: Info tooltips now display centered on screen for better readability. (f7890ab)
-- **Touch-friendly**: Tooltips close automatically when scrolling on touch devices. (f7890ab)
+# Change Log
 
-### Where to Find It
+### &nbsp;&nbsp;&nbsp;🚀 Features
 
-The refill button appears in the medication detail modal and in the edit form for each medication.
+- **<domain>**: <user-facing description> ([abc1234](https://github.com/DanielVolz/medassist-ng/commit/<full-hash>))
 
-**Full Changelog**: https://github.com/DanielVolz/medassist-ng/compare/v1.2.3...v1.3.0
+### &nbsp;&nbsp;&nbsp;🐞 Bug Fixes
+
+- **<domain>**:
+  - <related entry> ([def5678](https://github.com/DanielVolz/medassist-ng/commit/<full-hash>))
+  - <related entry> ([def5678](https://github.com/DanielVolz/medassist-ng/commit/<full-hash>))
+
+##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on GitHub](https://github.com/DanielVolz/medassist-ng/compare/vPREV...vNEW)
 ```
 
 ### Breaking Changes Warning
 
-If the update breaks existing configurations or stored data, it MUST be prominently warned:
-
-**Breaking Changes include:**
-
-- Database schema changes without automatic migration
-- Removed or renamed ENV variables
-- Changed API endpoints
-- Incompatible `.env` format changes
-- Loss of stored data after update
-
-**Format:**
-
-```markdown
-## Breaking Changes - Please read before updating
-
-**Database migration required**: This update changes the database schema.
-Existing installations need to:
-1. Create backup of `data/` folder
-2. Stop containers
-3. Perform update
-4. If issues occur: Rollback using backup
-
-**ENV variables changed**:
-- `OLD_VAR` was renamed to `NEW_VAR`
-- `REMOVED_VAR` is no longer supported
-```
-
-**What is NOT a Breaking Change:**
-
-- ✅ New optional columns with DEFAULT values
-- ✅ New ENV variables (with sensible defaults)
-- ✅ New features that don't affect existing data
-- ✅ Bug fixes that correct behavior
-
+If the update breaks existing configurations or stored data, it MUST be prominently warned. Put the warning in the overview or key takeaways, or add `### Upgrade Notes` under `# Change Log` when relevant. Include the concrete database, environment, API, or data-loss impact and required user action. Do not describe additive, backward-compatible changes as breaking.
 ### Step 3: Publish
+
+Before either `gh release create` or `gh release edit`, complete this non-skippable release-notes preflight:
+
+1. Manually compose and review the notes from the actual `vPREVIOUS..vNEW` commits and relevant code changes. Reject and replace autogenerated GitHub notes, a bare commit list, a one-line summary, or notes missing any required user-facing section.
+2. Apply this deterministic pass/fail checklist:
+   - Pass: the first line matches `# <Product> <version> brings <theme>` and the body has 2-3 overview paragraphs.
+   - Pass: `### Key Takeaways` appears before `# Change Log` and has 2-6 bullets.
+   - Pass: `# Change Log` appears before all categorized entries.
+   - Pass: every category heading exactly uses the required visual style, appears in the prescribed order, and has at least one entry.
+   - Pass: every entry ends with a real linked short commit hash; no PR references or fabricated announcement links appear.
+   - Pass: the final line exactly uses the linked `##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on GitHub](...)` form.
+   - Pass: actual user impact is explained and breaking/upgrade information is included only where relevant.
+   - Pass: no internal-only details are included.
+3. Reject the old layout: the body must not use `## What's New`, a top-level `### Where to Find It`, `**Full Changelog**:`, a generic `vX.Y.Z`-only body heading, or an emoji ban that conflicts with the required category headings.
+4. Verify the notes body contains the exact required ordering and markers above before publication. If this preflight fails, do not create, edit, or publish the release. Fix the notes first.
 
 Publish the release via `gh` CLI:
 
@@ -451,6 +419,7 @@ gh release edit vX.Y.Z --title "vX.Y.Z" --notes-file /tmp/release-notes-vX.Y.Z.m
 ```
 
 - The release notes may be created or updated manually with `gh`, but `docker-compose.pinned.yml` is attached by the `docker-build.yml` workflow after the tagged image build completes.
+- After publishing or editing, fetch the rendered release body and verify the exact Dozzle-style ordering, final linked `View changes on GitHub` line, and absence of the rejected old-layout markers. If any check fails, edit the release immediately and repeat the verification.
 - After publishing or editing a release, wait for the Docker workflow to finish and verify that the release contains `docker-compose.pinned.yml` with `X.Y.Z@sha256:...` image references.
 
 **Present the published release URL to the user for verification.**
@@ -557,7 +526,7 @@ Ready for release?
 9. If minor/major: check README.md for needed updates (Task 5)
 10. Run the manual release flow: branch → version bump → PR → CI → merge → tag
         ↓
-11. Write release notes (mandatory for minor/major)
+11. Write release notes (mandatory for every release)
 12. Publish GitHub release
         ↓
 Docker images built automatically via CI

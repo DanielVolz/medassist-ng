@@ -764,8 +764,10 @@ export async function sendShoutrrrNotification(
 			if (targetValidationError) {
 				return { success: false, error: targetValidationError };
 			}
+			const parsedGenericTarget = new URL(genericRequest.url);
+			const safeGenericTargetUrl = `${parsedGenericTarget.protocol}//${parsedGenericTarget.host}${parsedGenericTarget.pathname}${parsedGenericTarget.search}`;
 
-			const response = await fetch(genericRequest.url, {
+			const response = await fetch(safeGenericTargetUrl, {
 				method: "POST",
 				headers: genericRequest.headers,
 				body: genericRequest.body,

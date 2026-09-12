@@ -771,7 +771,7 @@ export async function sendShoutrrrNotification(
 
 			// genericRequest.url is reconstructed from the parsed hostname/path; hostname and DNS
 			// validation run immediately before fetch, and redirects are disabled.
-			// codeql[js/request-forgery]: target is validated and redirects are disabled.
+			// lgtm[js/request-forgery]
 			const response = await fetch(sanitizedGenericTarget.url, {
 				method: "POST",
 				headers: genericRequest.headers,

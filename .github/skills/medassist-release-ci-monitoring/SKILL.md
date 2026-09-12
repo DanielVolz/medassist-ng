@@ -15,17 +15,17 @@ Container Smoke is already included in the PR rollup when required by the workfl
 
 ## Continuous State
 
-Maintain and continuously reuse one compact record:
+Maintain one compact record:
 
 ```text
-{ remote, branch, headSHA, prUrl, requiredChecks, latestStateOrResult, nextAction }
+{ remote, branch, headSHA, prUrl, latestStateOrResult, nextAction }
 ```
 
-Keep one monitoring session/process for that record until completion or a genuine blocker. When checks are `pending` or `in_progress`, wait and refresh only current-head checks in the same session; do not return merely to be reinvoked. On resumption, refresh the remote head first. If it changed, update the record, replace required checks for that head, and restart only that monitoring cycle.
+Keep the same session until merge or a concrete blocker. If the aggregate gate is pending or in progress, wait and query the same current-head aggregate again. If the head changes, restart the aggregate query for that head. Do not enumerate individual jobs while the aggregate gate is pending or successful.
 
 ## Gate, Merge, And Cleanup
 
 - Use the authoritative PR gate above. Inspect individual checks only when that gate reports failure, the head changed, or GitHub reports a concrete blocker.
-- Hand only test/E2E failures to `-manager`; retain the current-head record for repairs and diagnose other release-operational failures without bypassing gates.
+- Hand only test/E2E failures to `@testing-manager`; retain the current-head record for repairs and diagnose other release-operational failures without bypassing gates.
 - When authorized and the gate is green, squash merge and delete the branch. Verify the merged commit and requested traceability.
 - Re-sync local `main` only when requested, then remove task worktrees and temporary state.

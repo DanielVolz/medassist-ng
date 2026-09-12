@@ -30,7 +30,12 @@ For a simple feature PR without a release, use handoff then CI monitoring only; 
 
 ## Authoritative PR Gate
 
-When the user says that a PR is green, run one authenticated PR-level query for the current head with headRefOid, statusCheckRollup, mergeable, and mergeStateStatus. Accept the green state only when the rollup is SUCCESS, mergeable is MERGEABLE, and mergeStateStatus is CLEAN. Do not re-check individual jobs or Container Smoke after that successful aggregate query. Inspect details only for a failed/pending rollup, a changed head, or a reported merge blocker.
+After creating a PR, keep one continuous monitoring session until it merges or a concrete blocker requires user action:
+
+1. Query the current PR once with headRefOid, statusCheckRollup, mergeable, and mergeStateStatus.
+2. If the current head is unchanged and the result is pending, wait and query the same aggregate again; do not inspect individual jobs.
+3. When statusCheckRollup is SUCCESS, mergeable is MERGEABLE, and mergeStateStatus is CLEAN, squash-merge immediately.
+4. Inspect individual checks only after a failed rollup, changed head, or concrete blocker. Never bypass a blocked merge state.
 
 ## Completion
 

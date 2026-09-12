@@ -23,6 +23,7 @@ import {
 	getNotificationProvider,
 	loadUserSettingsFromDb,
 	normalizeSettingsTimezone,
+	reconstructGenericNotificationTarget,
 	sanitizeNotificationUrl,
 	type UserSettings,
 	validateNotificationHostname,
@@ -764,14 +765,13 @@ export async function sendShoutrrrNotification(
 			if (targetValidationError) {
 				return { success: false, error: targetValidationError };
 			}
-			const sanitizedGenericTarget = sanitizeNotificationUrl(genericRequest.url);
-			if ("error" in sanitizedGenericTarget) {
-				return { success: false, error: sanitizedGenericTarget.error };
+			const safeGenericTargetUrl = reconstructGenericNotificationTarget(genericRequest.url);
+			if (typeof safeGenericTargetUrl !== "string") {
+				return { success: false, error: safeGenericTargetUrl.error };
 			}
 
-			// genericRequest.url is reconstructed from the parsed hostname/path; hostname and DNS
-			// validation run immediately before fetch, and redirects are disabled.
-			const response = await fetch(/* lgtm [js/request-forgery] */ sanitizedGenericTarget.url, {
+			// The target is reconstructed from validated URL components immediately before fetch.
+			const response = await fetch(safeGenericTargetUrl, {
 				method: "POST",
 				headers: genericRequest.headers,
 				body: genericRequest.body,

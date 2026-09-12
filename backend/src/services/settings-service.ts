@@ -373,6 +373,26 @@ export function sanitizeNotificationUrl(
 	}
 }
 
+export function reconstructGenericNotificationTarget(urlStr: string): string | { error: string } {
+	try {
+		const parsed = new URL(urlStr);
+		if (["http:", "https:"].indexOf(parsed.protocol) === -1 || parsed.username || parsed.password || parsed.hash) {
+			return { error: "Invalid Generic target URL" };
+		}
+
+		const hostnameError = validateNotificationHostname(parsed.hostname);
+		if (hostnameError) return { error: hostnameError };
+
+		const target = new URL(`${parsed.protocol}//${parsed.hostname}`);
+		target.port = parsed.port;
+		target.pathname = parsed.pathname;
+		target.search = parsed.search;
+		return target.toString();
+	} catch {
+		return { error: "Invalid Generic target URL" };
+	}
+}
+
 const genericReservedQueryKeys = new Set([
 	"contenttype",
 	"disabletls",

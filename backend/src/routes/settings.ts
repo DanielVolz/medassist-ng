@@ -764,13 +764,15 @@ export async function sendShoutrrrNotification(
 			if (targetValidationError) {
 				return { success: false, error: targetValidationError };
 			}
-			// lgtm[js/request-forgery]
 			const sanitizedGenericTarget = sanitizeNotificationUrl(genericRequest.url);
 			if ("error" in sanitizedGenericTarget) {
 				return { success: false, error: sanitizedGenericTarget.error };
 			}
 
-			const response = await fetch(/* lgtm[js/request-forgery] */ sanitizedGenericTarget.url, {
+			// The target is reconstructed by sanitizeNotificationUrl after hostname and DNS validation;
+			// redirect:error prevents a validated target from being redirected elsewhere.
+			// lgtm [js/request-forgery]
+			const response = await fetch(sanitizedGenericTarget.url, {
 				method: "POST",
 				headers: genericRequest.headers,
 				body: genericRequest.body,

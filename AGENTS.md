@@ -160,8 +160,15 @@ Before each task, infer applicable skills from intent and touched paths, then re
 | Notification behavior/scheduler/startup/error paths | `Observability Guard` plus `Security Sanity` if external input/auth involved |
 | Env/Docker/proxy/runtime config | `Config Change Guard` |
 | Behavior/setup/workflow docs | `Doc Sync Guard` |
-| Test planning, test writing, test execution, CI test failures | `Testing Handoff` |
+| Broad test planning, test writing, test execution, or CI test failure request | `Testing Handoff` |
+| Test planning, test writing, or changing tests | `Test Design` |
+| Local test, lint, type-check, or build execution | `Test Local Validation` |
+| Failures in `test.yml` or `e2e.yml` | `Test CI Triage` |
 | Push, PR, merge, tag, or release requests | `Release Handoff` |
+| SemVer decision or release branch/PR preparation | `Release Preflight` |
+| Existing PR CI monitoring or merge readiness | `Release CI Monitoring` |
+| GitHub release-note drafting, review, or editing | `Release Notes` |
+| Merged release tag, publishing, or post-release assets | `Release Publish` |
 | Changes under `.github/skills/**` | `Skill Quality Review` |
 | Ambiguous or scope-sensitive non-trivial implementation tasks | `Karpathy Core` |
 
@@ -179,7 +186,14 @@ Skill files:
 | Config Change Guard | `.github/skills/medassist-config-change-guard/SKILL.md` |
 | Doc Sync Guard | `.github/skills/medassist-doc-sync-guard/SKILL.md` |
 | Testing Handoff | `.github/skills/medassist-testing-handoff/SKILL.md` |
+| Test Design | `.github/skills/medassist-test-design/SKILL.md` |
+| Test Local Validation | `.github/skills/medassist-test-local-validation/SKILL.md` |
+| Test CI Triage | `.github/skills/medassist-test-ci-triage/SKILL.md` |
 | Release Handoff | `.github/skills/medassist-release-handoff/SKILL.md` |
+| Release Preflight | `.github/skills/medassist-release-preflight/SKILL.md` |
+| Release CI Monitoring | `.github/skills/medassist-release-ci-monitoring/SKILL.md` |
+| Release Notes | `.github/skills/medassist-release-notes/SKILL.md` |
+| Release Publish | `.github/skills/medassist-release-publish/SKILL.md` |
 | Skill Quality Review | `.github/skills/medassist-skill-quality-review/SKILL.md` |
 | Karpathy Core | `.github/skills/medassist-karpathy-core/SKILL.md` |
 
@@ -201,6 +215,8 @@ Skill files:
 - Keep one implementation owner and one writer per file set. Parallelize only independent read-only work or writes in explicitly isolated worktrees.
 - Limit normal fan-out to three workers. Nested delegation is off by default; enable it only for bounded divide-and-conquer work with an explicit depth and stopping condition.
 - Every handoff must include: objective, owned scope, relevant evidence, constraints, expected output, validation, and escalation trigger. Return findings and evidence, not raw logs or broad transcripts.
+- Before multi-step work, create and reuse one compact current context: objective, controlling files/symbols, validated facts, pending decision, and falsifying check. Refresh only facts changed by code, external state, or a specific unresolved dependency; do not reload stable instructions or broad context. This does not replace mandatory current `MEMORY.md` and status reads.
+- Use bounded phases for multi-domain infrastructure or operations work: Diagnose (read-only evidence and hypothesis), Repair (one owner and scoped implementation), Validate/Release (focused verification and authorized handoff). Start each phase with only its evidence, scope, acceptance check, and stop condition. Keep test ownership with `@testing-manager` and final release execution with `@release-manager`; its state machine owns continuous release monitoring.
 - Use a producer-reviewer loop only for material risk. Allow one focused repair pass after review; unresolved or newly expanded risk returns to the coordinator or user instead of looping.
 - Stop when acceptance criteria and required gates pass. Do not spend tokens polishing unaffected code, repeating successful checks, or consulting extra agents without a decision they can change.
 - Treat instructions as guidance, not enforcement. Keep tool permissions least-privilege, use sandboxing where available, and retain CI, branch protection, and human review as final controls.
@@ -211,15 +227,15 @@ This routing policy applies to Codex and GitHub Copilot. Classify the task befor
 
 For implementation work, classify the change through `model-router` before delegating to `fast-task`, `standard-task`, or `complex-task`. Route testing, release, and project-metadata work directly to their specialists without a generic tier hop. Read-only discovery and small governance edits may use the fast tier directly when no specialist action is required.
 
-| Tier | Use for | Required agent role |
-|---|---|---|
-| Fast | Targeted questions, read-only lookups, one-file copy or documentation edits, formatting, and deterministic commands | `fast-task` |
-| Standard | Normal bug fixes, small multi-file changes, and routine refactors | `standard-task` |
-| Complex | Data migrations, auth/security, production incidents, multi-domain behavior changes, architecture decisions, difficult root-cause analysis, or a scoped failure after one standard-tier attempt | `complex-task` |
+| Tier | Model | Use for | Required agent role |
+|---|---|---|---|
+| Fast | `GPT-5.6 Luna` (lowest cost/capability) | Targeted questions, read-only lookups, one-file copy or documentation edits, formatting, and deterministic commands | `fast-task` |
+| Standard | `GPT-5.6 Terra` (medium cost/capability) | Normal bug fixes, small multi-file changes, and routine refactors | `standard-task` |
+| Complex | `GPT-5.6 Sol` (highest cost/capability) | Data migrations, auth/security, production incidents, multi-domain behavior changes, architecture decisions, difficult root-cause analysis, or a scoped failure after one standard-tier attempt | `complex-task` |
 
 - Do not choose the complex tier merely because a task is broad, unfamiliar, or inconvenient. Split independent work first and keep each slice at the lowest viable tier.
 - Escalate exactly one tier when the current tier cannot establish a safe path, a focused check fails, or new evidence expands the scope. Record the evidence in the handoff; do not silently retry on an expensive model.
-- Personal model selection and reasoning defaults belong in local Codex configuration or individual developer tooling. They never relax security, testing, approval, or release rules.
+- Managed Copilot agent frontmatter must use the model mapped to its role above; change the mapping and `scripts/validate-agent-harness.mjs` together. Model selection never relaxes security, testing, approval, or release rules.
 - PR creation, upstream push, release coordination, and workflow monitoring bypass generic task tiers and run directly through `@release-manager`.
 
 ## GitHub Project And Traceability

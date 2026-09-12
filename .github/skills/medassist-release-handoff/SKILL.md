@@ -1,30 +1,18 @@
 ---
 name: medassist-release-handoff
-description: Enforce MedAssist release ownership by preventing remote git/release actions by normal agents and delegating to release-manager, including equivalent requests phrased in German.
+description: Route broad MedAssist push, PR, merge, tag, or release requests to release-manager; do not use for a specific release phase.
 ---
 
-# Skill Instructions
+# Release Handoff
 
-Use this skill when a request includes branch push, PR creation, merge, tagging, release notes publishing, or release orchestration.
+Use only for an initial broad remote-operation request. Do not use it for release preparation, PR CI monitoring, release-note work, or publishing; release-manager selects the matching phase skill.
 
-## Ownership Rules
+## Ownership
 
-- Remote git/release actions are owned by `@release-manager`.
-- Normal agent/Copilot must not perform:
-  - `git push`
-  - PR creation/merge
-  - tag/release creation
+- `@release-manager` solely owns remote release operations.
+- Normal agents prepare local work and hand shipping to `@release-manager`; they must not push, create or merge PRs, tag, or publish releases.
+- Follow `AGENTS.md` for authorization, testing, project traceability, and global policy.
 
-## Required Behavior
+## Compact Handoff
 
-1. Perform local code edits only.
-2. Summarize local changes clearly.
-3. Provide handoff instruction to `@release-manager` for shipping steps.
-
-## Response Format
-
-When this skill applies, return:
-
-- "Release handoff required"
-- Delegate target: `@release-manager`
-- Shipping checklist (branch, PR, CI, merge, release)
+Provide `@release-manager`: authorized actions, intended scope, authoritative remote/base evidence, `@testing-manager` local-gate result, known issue/PR/CI state, and any confirmed or proposed version.

@@ -15,6 +15,7 @@ import {
 } from "../services/notifications/action-renderer.js";
 import { getSmtpConfig, sendEmailNotification } from "../services/notifications/delivery.js";
 import {
+	buildGenericNotificationRequest,
 	classifyTestEmailFailure,
 	getAllUserSettingsFromDb,
 	getAvailableTimezones,
@@ -751,6 +752,28 @@ export async function sendShoutrrrNotification(
 
 			// Reuse validated https webhook path to keep a single outbound request sink.
 			return sendShoutrrrNotification(gotifyWebhookUrl, title, gotifyMessage);
+		}
+
+		if (urlStr.startsWith("generic://")) {
+			const genericRequest = buildGenericNotificationRequest(urlStr, title, message);
+			if ("error" in genericRequest) {
+				return { success: false, error: genericRequest.error };
+			}
+
+			const targetValidationError = await validateNotificationTargetUrl(genericRequest.url);
+			if (targetValidationError) {
+				return { success: false, error: targetValidationError };
+			}
+
+			const response = await fetch(genericRequest.url, {
+				method: "POST",
+				headers: genericRequest.headers,
+				body: genericRequest.body,
+				redirect: "error",
+			});
+			if (response.ok) return { success: true };
+			const errorText = await response.text();
+			return { success: false, error: `HTTP ${response.status}: ${errorText}` };
 		}
 
 		// Validate and sanitize URL to prevent SSRF - this reconstructs the URL

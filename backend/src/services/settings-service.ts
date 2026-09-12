@@ -373,6 +373,126 @@ export function sanitizeNotificationUrl(
 	}
 }
 
+const genericReservedQueryKeys = new Set([
+	"contenttype",
+	"disabletls",
+	"method",
+	"messagekey",
+	"template",
+	"title",
+	"titlekey",
+]);
+
+function getGenericConfigValue(searchParams: URLSearchParams, name: string): string | null {
+	for (const [key, value] of searchParams) {
+		if (key.toLowerCase() === name) return value;
+	}
+	return null;
+}
+
+function toGenericHeaderName(name: string): string {
+	let normalized = "";
+	for (let index = 0; index < name.length; index++) {
+		let character = name[index];
+		if (character >= "A" && character <= "Z") {
+			if (index > 0 && name[index - 1] !== "-") normalized += "-";
+		} else if (index === 0 || name[index - 1] === "-") {
+			character = String.fromCharCode(character.charCodeAt(0) - ("a".charCodeAt(0) - "A".charCodeAt(0)));
+		}
+		normalized += character;
+	}
+	return normalized;
+}
+
+function setGenericHeader(headers: Record<string, string>, name: string, value: string): void {
+	const existingName = Object.keys(headers).find((headerName) => headerName.toLowerCase() === name.toLowerCase());
+	if (existingName) delete headers[existingName];
+	headers[name] = value;
+}
+
+export function buildGenericNotificationRequest(
+	urlStr: string,
+	title: string,
+	message: string
+): { url: string; headers: Record<string, string>; body: string } | { error: string } {
+	try {
+		const parsed = new URL(urlStr);
+		if (parsed.protocol !== "generic:") {
+			return { error: "Invalid Generic URL format" };
+		}
+		if (parsed.username || parsed.password) {
+			return { error: "Generic URLs must not include username or password" };
+		}
+
+		const hostnameError = validateNotificationHostname(parsed.hostname);
+		if (hostnameError) return { error: hostnameError };
+
+		const requestMethod = getGenericConfigValue(parsed.searchParams, "method")?.toUpperCase() ?? "POST";
+		if (requestMethod !== "POST") {
+			return { error: "Generic notifications only support POST requests" };
+		}
+
+		const protocol = ["y", "yes", "true", "1"].includes(
+			getGenericConfigValue(parsed.searchParams, "disabletls")?.toLowerCase() ?? ""
+		)
+			? "http"
+			: "https";
+		const target = new URL(`${protocol}://${parsed.host}${parsed.pathname}`);
+		const contentType = getGenericConfigValue(parsed.searchParams, "contenttype") ?? "application/json";
+		const headers: Record<string, string> = {};
+		setGenericHeader(headers, "Content-Type", contentType);
+		setGenericHeader(headers, "Accept", contentType);
+
+		const customHeaderNames = new Set<string>();
+		for (const [key, value] of parsed.searchParams) {
+			if (!key.startsWith("@")) continue;
+			const headerName = toGenericHeaderName(key.slice(1));
+			if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(headerName)) {
+				return { error: "Invalid Generic header name" };
+			}
+			const normalizedHeaderName = headerName.toLowerCase();
+			if (customHeaderNames.has(normalizedHeaderName)) continue;
+			customHeaderNames.add(normalizedHeaderName);
+			setGenericHeader(headers, headerName, value);
+		}
+
+		for (const [key, value] of parsed.searchParams) {
+			if (key.startsWith("@") || key.startsWith("$")) continue;
+			if (key.startsWith("__")) {
+				const unescapedKey = key.slice(2);
+				if (genericReservedQueryKeys.has(unescapedKey.toLowerCase())) {
+					target.searchParams.append(unescapedKey, value);
+					continue;
+				}
+			}
+			if (genericReservedQueryKeys.has(key.toLowerCase())) continue;
+			target.searchParams.append(key, value);
+		}
+
+		const template = getGenericConfigValue(parsed.searchParams, "template")?.toLowerCase();
+		if (template !== "json") {
+			return { url: target.toString(), headers, body: message };
+		}
+
+		const titleKey = getGenericConfigValue(parsed.searchParams, "titlekey") ?? "title";
+		const messageKey = getGenericConfigValue(parsed.searchParams, "messagekey") ?? "message";
+		const payload: Record<string, string> = {
+			[titleKey]: getGenericConfigValue(parsed.searchParams, "title") ?? title,
+			[messageKey]: message,
+		};
+		const extraDataKeys = new Set<string>();
+		for (const [key, value] of parsed.searchParams) {
+			if (!key.startsWith("$") || extraDataKeys.has(key)) continue;
+			extraDataKeys.add(key);
+			payload[key.slice(1)] = value;
+		}
+
+		return { url: target.toString(), headers, body: JSON.stringify(payload) };
+	} catch {
+		return { error: "Invalid Generic URL format" };
+	}
+}
+
 async function getOrCreateUserSettings(userId: number) {
 	let [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
 

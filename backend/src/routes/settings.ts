@@ -771,6 +771,7 @@ export async function sendShoutrrrNotification(
 			}
 
 			// The target is reconstructed from validated URL components immediately before fetch.
+			// codeql[js/request-forgery]: hostname and resolved addresses were validated above.
 			const response = await fetch(safeGenericTargetUrl, {
 				method: "POST",
 				headers: genericRequest.headers,

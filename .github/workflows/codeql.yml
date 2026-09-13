@@ -21,22 +21,6 @@ on:
       - '.github/actions/**'
   pull_request:
     branches: [main]
-    paths:
-      - '**.js'
-      - '**.ts'
-      - '**.tsx'
-      - '**.jsx'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'backend/package.json'
-      - 'backend/package-lock.json'
-      - 'frontend/package.json'
-      - 'frontend/package-lock.json'
-      - 'shared/package.json'
-      - 'shared/package-lock.json'
-      - '.github/codeql/**'
-      - '.github/workflows/**'
-      - '.github/actions/**'
   schedule:
     - cron: "0 6 * * 1" # Weekly on Monday at 6am UTC
   workflow_dispatch: # Allow manual trigger

@@ -23,7 +23,6 @@
     "check": "npm --prefix ../shared run build && npx biome check . && tsc --noEmit"
   },
   "dependencies": {
-    "@medassist/shared": "file:../shared",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@fastify/formbody": "^9.0.0",
@@ -34,6 +33,7 @@
     "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^6.1.1",
     "@libsql/client": "^0.18.0",
+    "@medassist/shared": "file:../shared",
     "argon2": "^0.45.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
@@ -43,6 +43,7 @@
     "nodemailer": "^9.1.1",
     "openid-client": "^6.8.7",
     "sharp": "^0.35.4",
+    "undici": "^7.29.1",
     "zod": "^4.5.4"
   },
   "devDependencies": {

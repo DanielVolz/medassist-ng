@@ -1,6 +1,8 @@
+import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { isIP, type LookupFunction } from "node:net";
 import { eq } from "drizzle-orm";
+import { Agent } from "undici";
 import { db } from "../db/client.js";
 import { userSettings } from "../db/schema.js";
 import type { Language } from "../i18n/translations.js";
@@ -176,6 +178,7 @@ const localhostNotificationUrlError = "Localhost URLs are not allowed";
 const privateNotificationIpError = "Private IP addresses are not allowed";
 const internalNotificationHostnameError = "Internal hostnames are not allowed";
 const resolvedPrivateNotificationTargetError = "Notification target resolves to a private IP address";
+const unresolvedNotificationTargetError = "Notification target hostname could not be resolved";
 
 function normalizeNotificationHostname(hostnameRaw: string): string {
 	const trimmed = hostnameRaw.trim().toLowerCase().replace(/\.$/, "");
@@ -299,30 +302,77 @@ export async function validateNotificationTargetUrl(
 	urlStr: string,
 	options: { allowLocalNtfyTarget?: boolean } = {}
 ): Promise<string | null> {
+	const result = await resolveNotificationTargetUrl(urlStr, options);
+	return "error" in result ? result.error : null;
+}
+
+async function resolveNotificationTargetUrl(
+	urlStr: string,
+	options: { allowLocalNtfyTarget?: boolean } = {}
+): Promise<{ addresses: LookupAddress[] } | { error: string }> {
 	try {
 		const parsed = new URL(urlStr);
 		const hostnameError = validateNotificationHostname(parsed.hostname);
 		if (hostnameError && !options.allowLocalNtfyTarget) {
-			return hostnameError;
+			return { error: hostnameError };
 		}
 
 		const hostname = normalizeNotificationHostname(parsed.hostname);
-		if (isIP(hostname)) {
-			return null;
+		const addressFamily = isIP(hostname);
+		if (addressFamily) {
+			return { addresses: [{ address: hostname, family: addressFamily }] };
 		}
 
 		const addresses = await lookup(hostname, { all: true, verbatim: true });
+		if (addresses.length === 0) {
+			return { error: unresolvedNotificationTargetError };
+		}
 		for (const { address } of addresses) {
 			const addressError = validateNotificationHostname(address);
 			if (addressError && !options.allowLocalNtfyTarget) {
-				return resolvedPrivateNotificationTargetError;
+				return { error: resolvedPrivateNotificationTargetError };
 			}
 		}
 
-		return null;
+		return { addresses };
 	} catch {
-		return null;
+		return { error: unresolvedNotificationTargetError };
 	}
+}
+
+function createPinnedLookup(addresses: LookupAddress[]): LookupFunction {
+	return (_hostname, options, callback) => {
+		const matchingAddresses = options.family ? addresses.filter(({ family }) => family === options.family) : addresses;
+		const firstAddress = matchingAddresses[0];
+		if (!firstAddress) {
+			const error = Object.assign(new Error(unresolvedNotificationTargetError), { code: "ENOTFOUND" });
+			callback(error, "", 0);
+			return;
+		}
+
+		if (options.all) {
+			callback(null, matchingAddresses);
+			return;
+		}
+
+		callback(null, firstAddress.address, firstAddress.family);
+	};
+}
+
+export async function createNotificationTargetDispatcher(
+	urlStr: string,
+	options: { allowLocalNtfyTarget?: boolean } = {}
+): Promise<{ dispatcher: Agent } | { error: string }> {
+	const result = await resolveNotificationTargetUrl(urlStr, options);
+	if ("error" in result) {
+		return result;
+	}
+
+	return {
+		dispatcher: new Agent({
+			connect: { lookup: createPinnedLookup(result.addresses) },
+		}),
+	};
 }
 
 export function sanitizeNotificationUrl(

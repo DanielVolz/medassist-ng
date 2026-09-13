@@ -52,6 +52,10 @@ vi.mock("nodemailer", () => ({
 	},
 }));
 
+vi.mock("node:dns/promises", () => ({
+	lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
+
 const { settingsRoutes, sendShoutrrrNotification, loadUserSettings, getAllUserSettings } = await import(
 	"../routes/settings.js"
 );
@@ -619,12 +623,16 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		expect(fetchMock).toHaveBeenCalledWith("https://notify.example.com/message?token=gtfya123", {
-			method: "POST",
-			headers: { "Content-Type": "application/json", Accept: "application/json" },
-			body: JSON.stringify({ title: "Title", message: "Body" }),
-			redirect: "error",
-		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://notify.example.com/message?token=gtfya123",
+			expect.objectContaining({
+				method: "POST",
+				headers: { "Content-Type": "application/json", Accept: "application/json" },
+				body: JSON.stringify({ title: "Title", message: "Body" }),
+				redirect: "error",
+				dispatcher: expect.anything(),
+			})
+		);
 	});
 
 	it("sendShoutrrrNotification normalizes Generic headers and preserves forwarded query data", async () => {

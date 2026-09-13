@@ -1,6 +1,7 @@
 ---
 name: fast-task
 description: Handles deterministic, narrowly scoped tasks such as one-file documentation, copy, metadata, formatting, and read-only lookups.
+model: "GPT-5.6 Luna"
 user-invocable: false
 disable-model-invocation: false
 agents: []

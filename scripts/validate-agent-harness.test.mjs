@@ -21,6 +21,17 @@ const ORCHESTRATOR_AGENTS = [
   "project-bot",
 ];
 const ALL_AGENTS = ["engineering-orchestrator", ...ORCHESTRATOR_AGENTS];
+const EXPECTED_AGENT_MODELS = {
+  "engineering-orchestrator": "GPT-5.6 Terra",
+  "model-router": "GPT-5.6 Luna",
+  "fast-task": "GPT-5.6 Luna",
+  "standard-task": "GPT-5.6 Terra",
+  "complex-task": "GPT-5.6 Sol",
+  "engineering-reviewer": "GPT-5.6 Sol",
+  "testing-manager": "GPT-5.6 Terra",
+  "release-manager": "GPT-5.6 Sol",
+  "project-bot": "GPT-5.6 Luna",
+};
 
 function agentSource(name, attributes = {}, body = `# ${name}\n`) {
   const entries = {
@@ -53,7 +64,7 @@ Send metadata-only GitHub coordination to \`project-bot\`.
 `;
 
   for (const name of ALL_AGENTS) {
-    const attributes = {};
+    const attributes = { model: EXPECTED_AGENT_MODELS[name] };
     let body;
     if (name === "engineering-orchestrator") {
       attributes.agents = ORCHESTRATOR_AGENTS;
@@ -108,6 +119,18 @@ function assertHasError(errors, expectedText) {
 test("accepts a complete non-recursive harness with direct specialist routing", async (testContext) => {
   const rootDir = await createValidFixture(testContext);
   assert.deepEqual(await validateAgentHarness({ rootDir }), []);
+});
+
+test("rejects an agent assigned to the wrong model tier", async (testContext) => {
+  const rootDir = await createValidFixture(testContext);
+  await mutate(rootDir, ".github/agents/fast-task.agent.md", (source) =>
+    source.replace("model: GPT-5.6 Luna", "model: GPT-5.6 Sol"),
+  );
+
+  assertHasError(
+    await validateAgentHarness({ rootDir }),
+    ".github/agents/fast-task.agent.md: model must be GPT-5.6 Luna",
+  );
 });
 
 test("reports malformed frontmatter with the file and line", async (testContext) => {

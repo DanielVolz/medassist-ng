@@ -1,6 +1,7 @@
 ---
 name: project-bot
 description: Handles GitHub issue, pull request, and Project board mutations for MedAssist-ng without owning product code changes or release actions.
+model: "GPT-5.6 Luna"
 user-invocable: false
 argument-hint: Describe the project automation task, e.g. "move issue 714 to Ready", "sync project fields for PR 715", or "create a triage issue for the release smoke regression"
 agents: []

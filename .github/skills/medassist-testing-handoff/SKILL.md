@@ -1,31 +1,25 @@
 ---
 name: medassist-testing-handoff
-description: Enforce MedAssist testing ownership by delegating test planning, execution, and CI test failure triage to testing-manager, including equivalent requests phrased in German.
+description: Route broad MedAssist requests for test planning, test changes, local execution, or test CI failures to testing-manager, including equivalent German requests.
 ---
 
-# Skill Instructions
+# Testing Handoff
 
-Use this skill whenever a task includes writing tests, running tests, or diagnosing test-related CI failures.
+## Use When
 
-## Ownership Rules
+Use only for a broad initial request involving test planning, writing or changing
+tests, local test execution, or failures in `test.yml` or `e2e.yml`.
 
-- Test planning, implementation, and execution are owned by `@testing-manager`.
-- CI test-failure triage (`test.yml`, `e2e.yml`) is owned by `@testing-manager`.
-- Normal coding agent should hand off testing tasks instead of executing testing workflows directly.
+## Do Not Use When
 
-## Handoff Template
+Do not use for an already-specific test-design, local-validation, or CI-triage
+request; load that phase skill directly. Do not use for PR, release, or non-test
+workflow work.
 
-Use this structure for delegation:
+## Ownership And Handoff
 
-1. Scope: feature/fix and affected files
-2. Expected behavior
-3. Suggested test layers (unit/integration/e2e)
-4. CI failure context (if applicable)
-
-## Response Format
-
-When triggered, output:
-
-- "Testing handoff required"
-- Delegate target: `@testing-manager`
-- Minimal handoff brief (scope + expected behavior)
+- `@testing-manager` owns test planning, test changes, local execution, and test
+  CI triage; `@release-manager` owns PR/release and non-test workflow work.
+- Provide scope, expected behavior, affected files, available failure evidence, and
+  requested outcome.
+- The manager selects exactly one relevant phase skill before work begins.

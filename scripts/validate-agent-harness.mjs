@@ -33,6 +33,17 @@ const HIDDEN_INTERNAL_AGENTS = [
   "project-bot",
 ];
 const GENERATED_AGENT_NAMES = new Set(["medassist-feature-orchestrator"]);
+const EXPECTED_AGENT_MODELS = Object.freeze({
+  "engineering-orchestrator": "GPT-5.6 Terra",
+  "model-router": "GPT-5.6 Luna",
+  "fast-task": "GPT-5.6 Luna",
+  "standard-task": "GPT-5.6 Terra",
+  "complex-task": "GPT-5.6 Sol",
+  "engineering-reviewer": "GPT-5.6 Sol",
+  "testing-manager": "GPT-5.6 Terra",
+  "release-manager": "GPT-5.6 Sol",
+  "project-bot": "GPT-5.6 Luna",
+});
 const execFileAsync = promisify(execFile);
 
 function parseScalar(value, filePath, lineNumber) {
@@ -389,6 +400,13 @@ export async function validateAgentHarness({ rootDir = process.cwd() } = {}) {
     const agent = agents.get(agentName);
     if (agent && agent.attributes["user-invocable"] !== false) {
       errors.push(`${agent.relativePath}: user-invocable must be false`);
+    }
+  }
+
+  for (const [agentName, expectedModel] of Object.entries(EXPECTED_AGENT_MODELS)) {
+    const agent = agents.get(agentName);
+    if (agent && agent.attributes.model !== expectedModel) {
+      errors.push(agent.relativePath + ": model must be " + expectedModel);
     }
   }
 

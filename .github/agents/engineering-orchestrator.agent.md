@@ -1,6 +1,7 @@
 ---
 name: engineering-orchestrator
 description: Use as the default entry point for any MedAssist task; classifies complexity and routes work to the correct implementation tier or specialist.
+model: "GPT-5.6 Terra"
 user-invocable: true
 argument-hint: Describe the engineering outcome, constraints, and any known failing behavior.
 tools: ['agent', 'read', 'search', 'execute']

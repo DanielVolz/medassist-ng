@@ -23,8 +23,8 @@ import {
 	getNotificationProvider,
 	loadUserSettingsFromDb,
 	normalizeSettingsTimezone,
-	reconstructGenericNotificationTarget,
 	sanitizeNotificationUrl,
+	sendGenericNotificationRequest,
 	type UserSettings,
 	validateNotificationHostname,
 	validateNotificationTargetUrl,
@@ -761,26 +761,7 @@ export async function sendShoutrrrNotification(
 				return { success: false, error: genericRequest.error };
 			}
 
-			const targetValidationError = await validateNotificationTargetUrl(genericRequest.url);
-			if (targetValidationError) {
-				return { success: false, error: targetValidationError };
-			}
-			const safeGenericTargetUrl = reconstructGenericNotificationTarget(genericRequest.url);
-			if (typeof safeGenericTargetUrl !== "string") {
-				return { success: false, error: safeGenericTargetUrl.error };
-			}
-
-			// The target is reconstructed from validated URL components immediately before fetch.
-			// codeql[js/request-forgery]: hostname and resolved addresses were validated above.
-			const response = await fetch(safeGenericTargetUrl, {
-				method: "POST",
-				headers: genericRequest.headers,
-				body: genericRequest.body,
-				redirect: "error",
-			});
-			if (response.ok) return { success: true };
-			const errorText = await response.text();
-			return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+			return sendGenericNotificationRequest(genericRequest.url, genericRequest.headers, genericRequest.body);
 		}
 
 		// Validate and sanitize URL to prevent SSRF - this reconstructs the URL

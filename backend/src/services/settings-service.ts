@@ -371,8 +371,49 @@ export async function createNotificationTargetDispatcher(
 	return {
 		dispatcher: new Agent({
 			connect: { lookup: createPinnedLookup(result.addresses) },
+			maxResponseSize: 64 * 1024,
 		}),
 	};
+}
+
+export async function sendGenericNotificationRequest(
+	urlStr: string,
+	headers: Record<string, string>,
+	body: string
+): Promise<{ success: true } | { success: false; error: string }> {
+	const safeTargetUrl = reconstructGenericNotificationTarget(urlStr);
+	if (typeof safeTargetUrl !== "string") {
+		return { success: false, error: safeTargetUrl.error };
+	}
+
+	const dispatcherResult = await createNotificationTargetDispatcher(safeTargetUrl);
+	if ("error" in dispatcherResult) {
+		return { success: false, error: dispatcherResult.error };
+	}
+
+	try {
+		const target = new URL(safeTargetUrl);
+		// Dispatcher.request does not follow redirects and resolves only through the pinned lookup above.
+		const response = await dispatcherResult.dispatcher.request({
+			origin: target.origin,
+			path: `${target.pathname}${target.search}`,
+			method: "POST",
+			headers,
+			body,
+			headersTimeout: 10_000,
+			bodyTimeout: 10_000,
+		});
+
+		if (response.statusCode >= 200 && response.statusCode < 300) {
+			await response.body.dump();
+			return { success: true };
+		}
+
+		const errorText = await response.body.text();
+		return { success: false, error: `HTTP ${response.statusCode}: ${errorText}` };
+	} finally {
+		await dispatcherResult.dispatcher.close();
+	}
 }
 
 export function sanitizeNotificationUrl(
@@ -453,6 +494,20 @@ const genericReservedQueryKeys = new Set([
 	"titlekey",
 ]);
 
+const genericForbiddenHeaderNames = new Set([
+	"connection",
+	"content-length",
+	"expect",
+	"host",
+	"keep-alive",
+	"proxy-authenticate",
+	"proxy-authorization",
+	"te",
+	"trailer",
+	"transfer-encoding",
+	"upgrade",
+]);
+
 function getGenericConfigValue(searchParams: URLSearchParams, name: string): string | null {
 	for (const [key, value] of searchParams) {
 		if (key.toLowerCase() === name) return value;
@@ -521,6 +576,9 @@ export function buildGenericNotificationRequest(
 				return { error: "Invalid Generic header name" };
 			}
 			const normalizedHeaderName = headerName.toLowerCase();
+			if (genericForbiddenHeaderNames.has(normalizedHeaderName)) {
+				return { error: `Generic header ${headerName} is not allowed` };
+			}
 			if (customHeaderNames.has(normalizedHeaderName)) continue;
 			customHeaderNames.add(normalizedHeaderName);
 			setGenericHeader(headers, headerName, value);

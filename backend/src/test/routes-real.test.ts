@@ -29,6 +29,11 @@ const { testClient, testDb, testDbPath, mockedEnv, nodemailerSendMail, fetchMock
 	};
 });
 
+const { requestMock, dispatcherCloseMock } = vi.hoisted(() => ({
+	requestMock: vi.fn(),
+	dispatcherCloseMock: vi.fn(),
+}));
+
 vi.mock("../db/client.js", () => ({
 	db: testDb,
 	migrationsReady: Promise.resolve(),
@@ -54,6 +59,13 @@ vi.mock("nodemailer", () => ({
 
 vi.mock("node:dns/promises", () => ({
 	lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
+
+vi.mock("undici", () => ({
+	Agent: class {
+		request = requestMock;
+		close = dispatcherCloseMock;
+	},
 }));
 
 const { settingsRoutes, sendShoutrrrNotification, loadUserSettings, getAllUserSettings } = await import(
@@ -152,6 +164,11 @@ describe("Real route coverage: settings/export/report", () => {
 	beforeEach(async () => {
 		vi.clearAllMocks();
 		vi.stubGlobal("fetch", fetchMock);
+		requestMock.mockResolvedValue({
+			statusCode: 204,
+			body: { dump: vi.fn().mockResolvedValue(undefined), text: vi.fn().mockResolvedValue("") },
+		});
+		dispatcherCloseMock.mockResolvedValue(undefined);
 		await clearTables();
 		await seedAnonymousUser();
 		delete process.env.SMTP_HOST;
@@ -594,8 +611,6 @@ describe("Real route coverage: settings/export/report", () => {
 	});
 
 	it("sendShoutrrrNotification resolves Generic properties case-insensitively", async () => {
-		fetchMock.mockResolvedValue({ ok: true });
-
 		const result = await sendShoutrrrNotification(
 			"generic://notify.example.com/message?token=gtfya123&Method=post&ContentType=application%2Fvnd.api%2Bjson&DisableTLS=y&Template=JSON&Title=Configured&TitleKey=subject&MessageKey=content",
 			"Title",
@@ -603,19 +618,20 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		const [targetUrl, requestInit] = fetchMock.mock.calls[0];
-		expect(targetUrl).toBe("http://notify.example.com/message?token=gtfya123");
+		const [requestInit] = requestMock.mock.calls[0];
 		expect(requestInit).toMatchObject({
+			origin: "http://notify.example.com",
+			path: "/message?token=gtfya123",
 			method: "POST",
 			headers: { "Content-Type": "application/vnd.api+json", Accept: "application/vnd.api+json" },
 			body: JSON.stringify({ subject: "Configured", content: "Body" }),
-			redirect: "error",
+			headersTimeout: 10_000,
+			bodyTimeout: 10_000,
 		});
+		expect(dispatcherCloseMock).toHaveBeenCalledOnce();
 	});
 
 	it("sendShoutrrrNotification reconstructs the reported lowercase Generic JSON target", async () => {
-		fetchMock.mockResolvedValue({ ok: true });
-
 		const result = await sendShoutrrrNotification(
 			"generic://notify.example.com/message?token=gtfya123&contenttype=application%2Fjson&template=json",
 			"Title",
@@ -623,21 +639,31 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		expect(fetchMock).toHaveBeenCalledWith(
-			"https://notify.example.com/message?token=gtfya123",
+		expect(requestMock).toHaveBeenCalledWith(
 			expect.objectContaining({
+				origin: "https://notify.example.com",
+				path: "/message?token=gtfya123",
 				method: "POST",
 				headers: { "Content-Type": "application/json", Accept: "application/json" },
 				body: JSON.stringify({ title: "Title", message: "Body" }),
-				redirect: "error",
-				dispatcher: expect.anything(),
 			})
 		);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("sendShoutrrrNotification reports Generic HTTP failures and closes its dispatcher", async () => {
+		requestMock.mockResolvedValueOnce({
+			statusCode: 502,
+			body: { dump: vi.fn(), text: vi.fn().mockResolvedValue("upstream unavailable") },
+		});
+
+		const result = await sendShoutrrrNotification("generic://notify.example.com/message", "Title", "Body");
+
+		expect(result).toEqual({ success: false, error: "HTTP 502: upstream unavailable" });
+		expect(dispatcherCloseMock).toHaveBeenCalledOnce();
 	});
 
 	it("sendShoutrrrNotification normalizes Generic headers and preserves forwarded query data", async () => {
-		fetchMock.mockResolvedValue({ ok: true });
-
 		const result = await sendShoutrrrNotification(
 			"generic://notify.example.com/message?__template=forwarded&template=json&__signature=abc&item=one&item=two&$context=mobile&$context=desktop&@authorization=Bearer%20token&@userAgent=MedAssist&@ContentType=application%2Fproblem%2Bjson&@accept=text%2Fplain&@xAPIKey=first&@xAPIKey=second",
 			"Title",
@@ -645,8 +671,9 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		const [targetUrl, requestInit] = fetchMock.mock.calls[0];
-		expect(targetUrl).toBe("https://notify.example.com/message?template=forwarded&__signature=abc&item=one&item=two");
+		const [requestInit] = requestMock.mock.calls[0];
+		expect(requestInit.origin).toBe("https://notify.example.com");
+		expect(requestInit.path).toBe("/message?template=forwarded&__signature=abc&item=one&item=two");
 		expect(requestInit.headers).toEqual({
 			Authorization: "Bearer token",
 			"User-Agent": "MedAssist",
@@ -655,7 +682,6 @@ describe("Real route coverage: settings/export/report", () => {
 			"X-A-P-I-Key": "first",
 		});
 		expect(JSON.parse(requestInit.body)).toEqual({ title: "Title", message: "Body", context: "mobile" });
-		expect(requestInit.redirect).toBe("error");
 	});
 
 	it("sendShoutrrrNotification rejects non-POST Generic methods before fetch", async () => {
@@ -669,9 +695,20 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it("sendShoutrrrNotification forwards requestmethod as an ordinary Generic query parameter", async () => {
-		fetchMock.mockResolvedValue({ ok: true });
+	it("sendShoutrrrNotification rejects Generic authority and framing headers", async () => {
+		for (const header of ["host", "contentLength", "transferEncoding", "proxyAuthorization"]) {
+			const result = await sendShoutrrrNotification(
+				`generic://notify.example.com/message?@${header}=unsafe`,
+				"Title",
+				"Body"
+			);
 
+			expect(result).toEqual({ success: false, error: expect.stringContaining("is not allowed") });
+		}
+		expect(requestMock).not.toHaveBeenCalled();
+	});
+
+	it("sendShoutrrrNotification forwards requestmethod as an ordinary Generic query parameter", async () => {
 		const result = await sendShoutrrrNotification(
 			"generic://notify.example.com/message?requestmethod=GET",
 			"Title",
@@ -679,13 +716,13 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		expect(fetchMock).toHaveBeenCalledWith(
-			"https://notify.example.com/message?requestmethod=GET",
+		expect(requestMock).toHaveBeenCalledWith(
 			expect.objectContaining({
+				origin: "https://notify.example.com",
+				path: "/message?requestmethod=GET",
 				method: "POST",
 				headers: { "Content-Type": "application/json", Accept: "application/json" },
 				body: "Body",
-				redirect: "error",
 			})
 		);
 	});

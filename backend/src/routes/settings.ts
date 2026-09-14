@@ -17,15 +17,14 @@ import { getSmtpConfig, sendEmailNotification } from "../services/notifications/
 import {
 	buildGenericNotificationRequest,
 	classifyTestEmailFailure,
-	createNotificationTargetDispatcher,
 	getAllUserSettingsFromDb,
 	getAvailableTimezones,
 	getDefaultSettings,
 	getNotificationProvider,
 	loadUserSettingsFromDb,
 	normalizeSettingsTimezone,
-	reconstructGenericNotificationTarget,
 	sanitizeNotificationUrl,
+	sendGenericNotificationRequest,
 	type UserSettings,
 	validateNotificationHostname,
 	validateNotificationTargetUrl,
@@ -762,34 +761,7 @@ export async function sendShoutrrrNotification(
 				return { success: false, error: genericRequest.error };
 			}
 
-			const safeGenericTargetUrl = reconstructGenericNotificationTarget(genericRequest.url);
-			if (typeof safeGenericTargetUrl !== "string") {
-				return { success: false, error: safeGenericTargetUrl.error };
-			}
-
-			const dispatcherResult = await createNotificationTargetDispatcher(safeGenericTargetUrl);
-			if ("error" in dispatcherResult) {
-				return { success: false, error: dispatcherResult.error };
-			}
-
-			try {
-				// DNS answers are validated and pinned by the dispatcher; redirects remain disabled.
-				const requestInit = {
-					method: "POST",
-					headers: genericRequest.headers,
-					body: genericRequest.body,
-					redirect: "error",
-					dispatcher: dispatcherResult.dispatcher,
-				} as RequestInit & { dispatcher: typeof dispatcherResult.dispatcher };
-
-				// codeql[js/request-forgery]
-				const response = await fetch(safeGenericTargetUrl, requestInit);
-				if (response.ok) return { success: true };
-				const errorText = await response.text();
-				return { success: false, error: `HTTP ${response.status}: ${errorText}` };
-			} finally {
-				await dispatcherResult.dispatcher.close();
-			}
+			return sendGenericNotificationRequest(genericRequest.url, genericRequest.headers, genericRequest.body);
 		}
 
 		// Validate and sanitize URL to prevent SSRF - this reconstructs the URL

@@ -179,5 +179,10 @@ describe("settings-service decomposition regression", () => {
 				})
 			).toBeNull();
 		}
+
+		lookupMock.mockRejectedValue(new Error("DNS lookup failed"));
+		expect(await validateNotificationTargetUrl("https://unresolvable.example/notify")).toBe(
+			"Notification target hostname could not be resolved"
+		);
 	});
 });

@@ -35,7 +35,7 @@
     "@libsql/client": "^0.18.0",
     "@medassist/shared": "file:../shared",
     "argon2": "^0.45.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.12.3",
     "fastify-plugin": "^6.0.0",

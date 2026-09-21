@@ -43,7 +43,7 @@
     "nodemailer": "^10.0.10",
     "openid-client": "^6.8.8",
     "sharp": "^0.35.4",
-    "undici": "^7.29.1",
+    "undici": "^8.10.2",
     "zod": "^4.6.5"
   },
   "devDependencies": {

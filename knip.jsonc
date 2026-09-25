@@ -1,0 +1,17 @@
+{
+  "workspaces": {
+    ".": {
+      "ignoreDependencies": ["husky", "lint-staged"],
+      "ignoreBinaries": ["husky"]
+    },
+    "backend": {
+      "ignoreDependencies": ["pino-pretty"]
+    },
+    "frontend": {
+      "entry": ["src/main.tsx", "e2e/*.setup.ts"],
+      "ignoreDependencies": ["@fontsource/ibm-plex-mono", "@fontsource/ibm-plex-sans"],
+      "ignoreBinaries": ["ffmpeg"]
+    },
+    "shared": {}
+  }
+}

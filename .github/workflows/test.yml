@@ -5,6 +5,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'README.md'
       - 'backend/**'
       - 'frontend/**'
       - 'shared/**'
@@ -236,10 +237,10 @@ jobs:
   e2e:
     name: Playwright E2E
     if: always()
-    needs: [backend-test, frontend-build]
+    needs: [changes, backend-test, frontend-build]
     uses: ./.github/workflows/e2e.yml
     with:
-      run_e2e: ${{ needs.backend-test.result == 'success' && needs.frontend-build.result == 'success' }}
+      run_e2e: ${{ needs.backend-test.result == 'success' && needs.frontend-build.result == 'success' && (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true') }}
     permissions:
       contents: read
       pull-requests: read

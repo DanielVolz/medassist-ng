@@ -95,6 +95,7 @@ Use the root-level commands for full-stack validation when a change spans backen
 
 ## Release Workflow Safeguards
 
+- README-only PRs emit the required backend, frontend, and Playwright statuses as successful no-op checks; package tests and browser suites run only for relevant source or workflow changes.
 - PR validation is enforced through `.github/workflows/test.yml`, `.github/workflows/e2e.yml`, and `.github/workflows/container-smoke.yml`.
 - Workflow syntax validation is enforced through `.github/workflows/workflow-validation.yml` with `actionlint` on PRs that change workflow files under `.github/workflows/**`.
 - CodeQL scans both `javascript-typescript` source code and GitHub Actions workflow changes under `.github/workflows/**` / `.github/actions/**`.

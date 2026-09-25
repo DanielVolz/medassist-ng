@@ -90,6 +90,21 @@ For explicit push, PR, merge, tag, or release requests, the normal agent's requi
 - Always clean up dead code from older or failed approaches before handoff. Do not leave unused fallback paths, duplicate logic, stale listeners, unreachable branches, commented-out implementations, or tests for behavior that is no longer part of the final fix.
 - Reuse existing UI patterns and components such as `ConfirmModal`, `MedicationAvatar`, and the existing style system.
 
+## Knip Audit
+
+- Run `npm run check:knip` when changing dependencies or cleaning up unused code; `knip.jsonc` covers root, backend, frontend, and shared. The full audit runs in PR CI.
+- Check each finding against imports, scripts, CSS, dynamically loaded plugins, tests, and public contracts before editing. An unused export may still be used inside its own file; remove only its `export` in that case.
+- Do not use `knip --fix` or blanket ignores for unreviewed findings. Re-run the relevant Knip report and package checks after cleanup; document any intentional residual findings.
+
+## MCP Tool Safety
+
+- Read `.vscode/mcp.json` for the intended workspace MCP servers when a task needs external tools; confirm runtime tool discovery before claiming a server is available. Other profile/session tools may exist outside this file.
+- Treat MCP integrations as read-only by default. Use the narrowest available permissions and only connect servers needed for the current task.
+- Do not invoke write-capable MCP actions without an explicit user request for that mutation. Existing specialist ownership and prohibited remote operations still apply; MCP is not a bypass for release or project workflows.
+- Inspect SQLite or other databases read-only unless the user explicitly requests a data change. Never use MCP to bypass application authorization or modify production data as a side effect of diagnosis.
+- Do not put credentials, tokens, private keys, or database contents in prompts, memory, committed configuration, or shared logs. Use local secret storage or environment variables for server credentials and avoid exposing sensitive tool output.
+- For CI use GitHub read tools; for browser verification follow the CI Triage and Authenticated UI Verification rules below.
+
 ## CI Triage
 
 - Do not open a local browser, Chrome, or a browser automation session to inspect GitHub Actions, pull-request checks, workflow failures, logs, or artifacts.

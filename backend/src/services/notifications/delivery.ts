@@ -37,7 +37,7 @@ export function getSmtpConfig(): {
 	return { host, user, pass, port, secure, from };
 }
 
-export function createSmtpTransport(smtp = getSmtpConfig()) {
+function createSmtpTransport(smtp = getSmtpConfig()) {
 	if (!smtp.host || !smtp.user) {
 		return null;
 	}

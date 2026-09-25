@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { shareTokens } from "../db/schema.js";
 
-export const SHARE_TOKEN_PATTERN = /^(?:[a-f0-9]{16}|[a-f0-9]{64})$/;
+const SHARE_TOKEN_PATTERN = /^(?:[a-f0-9]{16}|[a-f0-9]{64})$/;
 
 export type ShareTokenLookupReason = "invalid_format" | "not_found" | "expired" | "revoked" | "ok";
 

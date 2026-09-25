@@ -23,15 +23,15 @@ export type DoseUnit = "mg" | "g" | "mcg" | "ml" | "units" | "puffs" | "injectio
 export type ScheduleMode = "interval" | "weekdays";
 export type WeekdayCode = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
-export type MedicationForm = "tablet" | "capsule" | "topical" | "liquid";
-export type PillForm = "tablet" | "capsule";
-export type LifecycleCategory = "refill_when_empty" | "treatment_period";
-export type PackageAmountUnit = "ml" | "g";
-export type MedicationEnrichmentDoseUnit = DoseUnit | "IU" | "drops" | "puffs";
-export type MedicationEnrichmentMatchType = "brand" | "ingredient";
-export type MedicationEnrichmentGenericStatus = "generic" | "original" | "unknown";
-export type MedicationEnrichmentSearchSource = "ema" | "rxnorm" | "openfda";
-export type MedicationEnrichmentSource =
+type MedicationForm = "tablet" | "capsule" | "topical" | "liquid";
+type PillForm = "tablet" | "capsule";
+type LifecycleCategory = "refill_when_empty" | "treatment_period";
+type PackageAmountUnit = "ml" | "g";
+type MedicationEnrichmentDoseUnit = DoseUnit | "IU" | "drops" | "puffs";
+type MedicationEnrichmentMatchType = "brand" | "ingredient";
+type MedicationEnrichmentGenericStatus = "generic" | "original" | "unknown";
+type MedicationEnrichmentSearchSource = "ema" | "rxnorm" | "openfda";
+type MedicationEnrichmentSource =
 	| MedicationEnrichmentSearchSource
 	| "ema+rxnorm"
 	| "ema+openfda"
@@ -178,8 +178,8 @@ export type Medication = {
 };
 
 export type AsNeededQuantityUnit = "pills" | "ml" | "puffs" | "injections" | "application";
-export type AsNeededLifecycle = "active_no_schedule" | "active_scheduled" | "ended" | "obsolete";
-export type AsNeededEligibilityReason = "eligible" | "has_regular_schedule" | "ended" | "obsolete";
+type AsNeededLifecycle = "active_no_schedule" | "active_scheduled" | "ended" | "obsolete";
+type AsNeededEligibilityReason = "eligible" | "has_regular_schedule" | "ended" | "obsolete";
 
 export type AsNeededIntakeEvent = {
 	eventType: "as_needed";
@@ -353,7 +353,7 @@ export type BlisterStock = {
 };
 
 // Shared schedule types
-export type SharedMedication = {
+type SharedMedication = {
 	id: number;
 	name: string;
 	genericName?: string | null;
@@ -426,13 +426,6 @@ export type SharedMedicationOverviewItem = {
 	medicationStartDate: string | null;
 	prescriptionEnabled: boolean;
 	prescriptionRemainingRefills: number | null;
-};
-
-export type SharedMedicationOverviewResponse = {
-	takenBy: string;
-	sharedBy: string | null;
-	generatedAt: string;
-	medications: SharedMedicationOverviewItem[];
 };
 
 // =============================================================================

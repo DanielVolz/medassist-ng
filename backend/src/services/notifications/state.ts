@@ -28,10 +28,6 @@ export function saveReminderState(state: ReminderState): void {
 	writeFileSync(reminderStateFile, JSON.stringify(state, null, 2));
 }
 
-export function getReminderState(): ReminderState {
-	return loadReminderState();
-}
-
 export function updateReminderSentTime(
 	type: "stock" | "intake" | "prescription" = "stock",
 	channel: "email" | "push" | "both" = "email"

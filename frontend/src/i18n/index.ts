@@ -25,5 +25,3 @@ i18n
 			lookupLocalStorage: "medassist-ng-language",
 		},
 	});
-
-export default i18n;

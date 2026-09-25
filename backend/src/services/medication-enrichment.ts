@@ -23,15 +23,15 @@ const GERMAN_INGREDIENT_NORMALIZATION: Record<string, string> = {
 	paracetamol: "acetaminophen",
 };
 
-export type MedicationEnrichmentSearchSource = "ema" | "rxnorm" | "openfda";
-export type MedicationEnrichmentCombinedSource =
+type MedicationEnrichmentSearchSource = "ema" | "rxnorm" | "openfda";
+type MedicationEnrichmentCombinedSource =
 	| MedicationEnrichmentSearchSource
 	| "ema+rxnorm"
 	| "ema+openfda"
 	| "rxnorm+openfda"
 	| "ema+rxnorm+openfda";
 
-export type MedicationEnrichmentSearchResult = {
+type MedicationEnrichmentSearchResult = {
 	code: string;
 	name: string;
 	genericName: string | null;
@@ -44,13 +44,13 @@ export type MedicationEnrichmentSearchResult = {
 	packageOptions: MedicationEnrichmentPackageOption[];
 };
 
-export type MedicationEnrichmentStrengthOption = {
+type MedicationEnrichmentStrengthOption = {
 	label: string;
 	pillWeightMg: number | null;
 	doseUnit: "mg" | "g" | "mcg" | "ml" | "IU" | "units" | "drops" | "puffs" | null;
 };
 
-export type MedicationEnrichmentPackageOption = {
+type MedicationEnrichmentPackageOption = {
 	label: string;
 	description: string;
 	packageType: PackageType;

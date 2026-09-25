@@ -23,10 +23,19 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
+      - name: Verify badge token
+        env:
+          GH_TOKEN: ${{ secrets.BADGE_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]] || ! gh api "repos/$GITHUB_REPOSITORY" --silent; then
+            echo "::error::BADGE_TOKEN is missing, invalid, or cannot access this repository. Replace the Actions secret with an admin-owned token granting Contents read/write."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          token: ${{ secrets.BADGE_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.BADGE_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -107,5 +116,8 @@ jobs:
             # Rebase on latest main to avoid push rejection when concurrent
             # badge workflows or other [skip ci] commits land between checkout and push
             git pull --rebase origin main
-            git push
+            if ! git push; then
+              echo "::error::BADGE_TOKEN cannot push to main. Restore Contents read/write and confirm its owner can bypass the main-protection ruleset."
+              exit 1
+            fi
           fi

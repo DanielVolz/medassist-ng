@@ -99,6 +99,7 @@ For explicit push, PR, merge, tag, or release requests, the normal agent's requi
 ## MCP Tool Safety
 
 - Read `.vscode/mcp.json` for the intended workspace MCP servers when a task needs external tools; confirm runtime tool discovery before claiming a server is available. Other profile/session tools may exist outside this file.
+- The workspace GitHub MCP endpoint `/mcp/x/all` exposes all available GitHub toolsets, including write tools. Only `project-bot` and `release-manager` are explicitly granted `github/*`; tool availability is not authorization to mutate remote state.
 - Treat MCP integrations as read-only by default. Use the narrowest available permissions and only connect servers needed for the current task.
 - Do not invoke write-capable MCP actions without an explicit user request for that mutation. Existing specialist ownership and prohibited remote operations still apply; MCP is not a bypass for release or project workflows.
 - Inspect SQLite or other databases read-only unless the user explicitly requests a data change. Never use MCP to bypass application authorization or modify production data as a side effect of diagnosis.

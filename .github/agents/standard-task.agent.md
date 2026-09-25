@@ -4,6 +4,7 @@ description: Handles normal implementation work including bug fixes, focused mul
 model: "GPT-6 Sol"
 user-invocable: false
 disable-model-invocation: false
+tools: ['read', 'search', 'edit', 'execute']
 agents: []
 ---
 

@@ -2,10 +2,7 @@
   "servers": {
     "github": {
       "type": "http",
-      "url": "https://api.githubcopilot.com/mcp/readonly",
-      "headers": {
-        "X-MCP-Toolsets": "context,repos,issues,pull_requests,actions,projects,users"
-      }
+      "url": "https://api.githubcopilot.com/mcp/x/all"
     },
     "playwright": {
       "type": "stdio",

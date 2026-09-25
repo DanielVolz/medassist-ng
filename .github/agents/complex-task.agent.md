@@ -4,6 +4,7 @@ description: Handles high-risk or hard-to-diagnose work involving migrations, se
 model: "GPT-6 Sol"
 user-invocable: false
 disable-model-invocation: false
+tools: ['read', 'search', 'edit', 'execute']
 agents: []
 ---
 

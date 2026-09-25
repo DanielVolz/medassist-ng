@@ -4,6 +4,7 @@ description: Executes authorized MedAssist PR and release operations as a compac
 model: "GPT-6 Sol"
 user-invocable: false
 argument-hint: Describe the authorized shipping action and completed local validation.
+tools: ['read', 'search', 'edit', 'execute', 'github/*']
 agents: []
 ---
 

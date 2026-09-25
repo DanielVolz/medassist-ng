@@ -4,6 +4,7 @@ description: Handles deterministic, narrowly scoped tasks such as one-file docum
 model: "GPT-6 Luna"
 user-invocable: false
 disable-model-invocation: false
+tools: ['read', 'search', 'edit', 'execute']
 agents: []
 ---
 

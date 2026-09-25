@@ -4,7 +4,7 @@ description: Use as the default entry point for any MedAssist task; classifies c
 model: "GPT-6 Sol"
 user-invocable: true
 argument-hint: Describe the engineering outcome, constraints, and any known failing behavior.
-tools: ['agent', 'read', 'search', 'execute']
+tools: ['execute', 'read', 'agent', 'ms-azuretools.vscode-containers/containerToolsConfig', 'edit', 'search', 'browser', 'io.github.chromedevtools/chrome-devtools-mcp/*', 'playwright/*', 'pylance-mcp-server/*', 'context7/*', 'docker/*', 'playwright/*', 'sqlite/*']
 agents: ['model-router', 'fast-task', 'standard-task', 'complex-task', 'engineering-reviewer', 'testing-manager', 'release-manager', 'project-bot']
 ---
 

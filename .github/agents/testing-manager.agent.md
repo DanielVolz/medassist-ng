@@ -4,6 +4,7 @@ description: Routes MedAssist test design, local validation, and test-workflow C
 model: "GPT-6 Sol"
 user-invocable: false
 argument-hint: Describe the testing request or a failing test.yml/e2e.yml check.
+tools: ['read', 'search', 'edit', 'execute']
 agents: []
 ---
 

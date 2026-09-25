@@ -93,6 +93,28 @@ npm run build
 
 Use the root-level commands for full-stack validation when a change spans backend and frontend. Keep using the package-local commands when you are validating only one slice.
 
+The frontend `check` command type-checks application code, Vite, Vitest, and Playwright config files, and the separate E2E TypeScript project. To check only E2E types from the repository root, run:
+
+```bash
+cd frontend && npx tsc --noEmit -p e2e/tsconfig.json
+```
+
+## Knip Audit
+
+From the repository root, run the same full audit used by the PR CI Knip job across the root, backend, frontend, and shared packages:
+
+```bash
+npm run check:knip
+```
+
+To review only dependencies during local triage:
+
+```bash
+npm exec --yes --package=knip@6.38.0 -- knip --dependencies --reporter compact
+```
+
+Review each finding against imports, scripts, CSS, dynamic consumers, tests, and public contracts. An unused export may still be locally used: remove only the `export` keyword in that case. Remove declarations only after checking references and side effects; do not run `--fix` without review. Keep `knip.jsonc` exceptions narrow and rerun Knip and the affected package checks after changes. The Knip job fails on new findings in PRs that touch its source, dependency, or configuration paths.
+
 ## Release Workflow Safeguards
 
 - README-only PRs emit the required backend, frontend, and Playwright statuses as successful no-op checks; package tests and browser suites run only for relevant source or workflow changes.

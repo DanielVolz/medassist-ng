@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.3.12/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
 	"assist": { "actions": { "source": { "organizeImports": "on" } } },
 	"files": {
 		"includes": [
@@ -9,7 +9,8 @@
 			"frontend/src/**/*.tsx",
 			"frontend/src/**/*.css",
 			"frontend/e2e/**/*.ts",
-			"frontend/playwright.config.ts"
+			"frontend/*.config.ts",
+			"backend/*.config.ts"
 		]
 	},
 	"linter": {

@@ -24,7 +24,8 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			: {};
 	const baseURL = env.PLAYWRIGHT_BASE_URL || DEFAULT_E2E_BASE_URL;
 	const apiBaseURL = env.PLAYWRIGHT_API_BASE_URL || DEFAULT_E2E_API_BASE_URL;
-	const frontendPort = parseOptionalPort(env.PLAYWRIGHT_FRONTEND_PORT) ?? parseOptionalPort(new URL(baseURL).port) ?? 4174;
+	const frontendPort =
+		parseOptionalPort(env.PLAYWRIGHT_FRONTEND_PORT) ?? parseOptionalPort(new URL(baseURL).port) ?? 4174;
 	const backendPort = parseOptionalPort(new URL(apiBaseURL).port) ?? 4175;
 	const dataDir = env.PLAYWRIGHT_DATA_DIR || DEFAULT_E2E_DATA_DIR;
 	const excludeDomainSafety = env.PLAYWRIGHT_EXCLUDE_DOMAIN_SAFETY === "true";
@@ -102,7 +103,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 				},
 				testIgnore: /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/,
 				dependencies: ["setup"],
-			},
+			}
 		);
 	}
 

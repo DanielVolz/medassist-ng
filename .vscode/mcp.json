@@ -1,0 +1,40 @@
+{
+  "servers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/readonly",
+      "headers": {
+        "X-MCP-Toolsets": "context,repos,issues,pull_requests,actions,projects,users"
+      }
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.82"]
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@4.1.1"]
+    },
+    "docker": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@hypnosis/docker-mcp-server@2.0.1"]
+    },
+    "sqlite": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "db-mcp@5.0.1",
+        "--transport",
+        "stdio",
+        "--sqlite-native",
+        "${workspaceFolder}/data/medassist-ng.db",
+        "--tool-filter",
+        "read_query,list_tables,describe_table,-sqlite_execute_code"
+      ]
+    }
+  }
+}

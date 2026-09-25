@@ -79,7 +79,7 @@ function parseMedicationPeople(value: string): string[] {
 	}
 }
 
-export function getAsNeededLifecycle(
+function getAsNeededLifecycle(
 	medication: MedicationRow,
 	now = new Date(),
 	timezone?: string | null
@@ -248,7 +248,7 @@ export async function getActiveAsNeededStockEffectsMilli(
 	return new Map(rows.map((row) => [row.medicationId, Number(row.total ?? 0)]));
 }
 
-export async function getAsNeededAnchorIds(
+async function getAsNeededAnchorIds(
 	database: Database,
 	userId: number,
 	doseTrackingIds: number[]

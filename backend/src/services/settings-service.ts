@@ -359,7 +359,7 @@ function createPinnedLookup(addresses: LookupAddress[]): LookupFunction {
 	};
 }
 
-export async function createNotificationTargetDispatcher(
+async function createNotificationTargetDispatcher(
 	urlStr: string,
 	options: { allowLocalNtfyTarget?: boolean } = {}
 ): Promise<{ dispatcher: Agent } | { error: string }> {
@@ -464,7 +464,7 @@ export function sanitizeNotificationUrl(
 	}
 }
 
-export function reconstructGenericNotificationTarget(urlStr: string): string | { error: string } {
+function reconstructGenericNotificationTarget(urlStr: string): string | { error: string } {
 	try {
 		const parsed = new URL(urlStr);
 		if (["http:", "https:"].indexOf(parsed.protocol) === -1 || parsed.username || parsed.password || parsed.hash) {

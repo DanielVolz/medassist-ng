@@ -1,10 +1,9 @@
 import { pbkdf2Sync } from "node:crypto";
 import { and, count, eq, sql } from "drizzle-orm";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
 import { apiKeys, users } from "../db/schema.js";
 import { getSmtpConfig } from "../services/notifications/delivery.js";
-import { log } from "../utils/logger.js";
 import { env } from "./env.js";
 
 // =============================================================================
@@ -104,14 +103,6 @@ type SessionJwtPayload = {
 
 function hasCurrentCredentialVersion(user: typeof users.$inferSelect, credentialVersion: number | undefined): boolean {
 	return (credentialVersion ?? 0) === (user.credentialVersion ?? 0);
-}
-
-// =============================================================================
-// Request User Type (no roles - all users are equal)
-// =============================================================================
-export interface RequestUser {
-	id: number;
-	username: string;
 }
 
 const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -215,70 +206,6 @@ async function tryApiKeyAuth(request: FastifyRequest, reply: FastifyReply): Prom
 // =============================================================================
 
 /**
- * Optional auth - verifies JWT if present, but doesn't require it
- */
-export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply) {
-	if (!env.AUTH_ENABLED) {
-		return;
-	}
-
-	const bearerToken = getBearerToken(request);
-	if (bearerToken?.startsWith("ma_")) {
-		const keyHash = hashApiKeyToken(bearerToken);
-		const [keyRow] = await db
-			.select()
-			.from(apiKeys)
-			.where(and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isActive, true)));
-		if (!keyRow) {
-			log.debug("[Auth] optionalAuth API key verification failed: key not found");
-			return;
-		}
-		if (keyRow.expiresAt && keyRow.expiresAt.getTime() <= Date.now()) {
-			log.debug("[Auth] optionalAuth API key verification failed: key expired");
-			return;
-		}
-
-		const [userByKey] = await db.select().from(users).where(eq(users.id, keyRow.userId));
-		if (userByKey?.isActive) {
-			request.user = { id: userByKey.id, username: userByKey.username };
-			request.authContext = {
-				method: "api_key",
-				scope: keyRow.scope === "read" ? "read" : "write",
-				apiKeyId: keyRow.id,
-			};
-			log.debug("[Auth] optionalAuth authenticated via API key");
-			return;
-		}
-		log.debug("[Auth] optionalAuth API key verification failed: user inactive or missing");
-		return;
-	}
-
-	const token = request.cookies.access_token;
-	if (!token) {
-		return;
-	}
-
-	try {
-		const decoded = await request.jwtVerify<SessionJwtPayload>();
-		const [user] = await db.select().from(users).where(sql`${users.id} = ${decoded.sub}`);
-		if (user?.isActive && hasCurrentCredentialVersion(user, decoded.credentialVersion)) {
-			request.user = {
-				id: user.id,
-				username: user.username,
-			};
-			request.authContext = {
-				method: "session",
-				scope: "write",
-			};
-			log.debug("[Auth] optionalAuth authenticated via session token");
-		}
-	} catch (err: unknown) {
-		const errorMessage = err instanceof Error ? err.message : String(err);
-		log.debug(`[Auth] optionalAuth session verification failed: ${errorMessage}`);
-	}
-}
-
-/**
  * Required auth - requires valid JWT when auth is enabled
  */
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
@@ -353,13 +280,4 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 
 async function appJwtVerify(request: FastifyRequest, token: string): Promise<SessionJwtPayload> {
 	return request.server.jwt.verify<SessionJwtPayload>(token);
-}
-
-/**
- * Auth state endpoint plugin
- */
-export async function authPlugin(app: FastifyInstance) {
-	app.get("/auth/state", async () => {
-		return getAuthState();
-	});
 }

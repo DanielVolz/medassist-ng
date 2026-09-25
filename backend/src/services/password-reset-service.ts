@@ -9,11 +9,11 @@ import { type EmailDeliveryResult, sendEmailNotification } from "./notifications
 
 const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
 
-export function hashPasswordResetToken(token: string): string {
+function hashPasswordResetToken(token: string): string {
 	return createHash("sha256").update(token).digest("hex");
 }
 
-export function buildPasswordResetLink(token: string): string {
+function buildPasswordResetLink(token: string): string {
 	if (!env.PUBLIC_APP_URL) {
 		throw new Error("PASSWORD_RESET_PUBLIC_URL_REQUIRED");
 	}

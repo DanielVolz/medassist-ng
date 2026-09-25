@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { log } from "../utils/logger";
 import { settingsChanged } from "../utils/settings";
 
-export type AppLanguage = "en" | "de";
+type AppLanguage = "en" | "de";
 
 export interface Settings {
 	language: AppLanguage;
@@ -62,7 +62,7 @@ export interface Settings {
 	expiryWarningDays: number;
 }
 
-export type SettingsLoadError = "auth" | "forbidden" | "request" | null;
+type SettingsLoadError = "auth" | "forbidden" | "request" | null;
 
 const defaultSettings: Settings = {
 	language: "en",

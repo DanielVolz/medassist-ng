@@ -40,14 +40,6 @@ export const successResponseSchema = {
 	},
 } as const;
 
-export const messageResponseSchema = {
-	type: "object",
-	properties: {
-		success: { type: "boolean" },
-		message: { type: "string" },
-	},
-} as const;
-
 export type OpenApiRouteStandardsOptions = {
 	tag: string;
 	protectedByDefault: boolean;

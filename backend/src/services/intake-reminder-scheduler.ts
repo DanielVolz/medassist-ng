@@ -1052,8 +1052,6 @@ export async function checkAndSendIntakeRemindersForUser(
 	}
 }
 
-let intakeCheckInterval: NodeJS.Timeout | null = null;
-
 export function startIntakeReminderScheduler(logger: ServiceLogger): void {
 	logger.info(`[IntakeReminder] Starting intake reminder scheduler (checks every minute)...`);
 
@@ -1061,16 +1059,9 @@ export function startIntakeReminderScheduler(logger: ServiceLogger): void {
 	checkAndSendIntakeReminders(logger).catch((err) => logger.error("[IntakeReminder] Startup check failed", err));
 
 	// Then run every minute
-	intakeCheckInterval = setInterval(() => {
+	setInterval(() => {
 		checkAndSendIntakeReminders(logger).catch((err) => logger.error("[IntakeReminder] Scheduled check failed", err));
 	}, CHECK_INTERVAL_MS);
 
 	logger.info(`[IntakeReminder] Scheduler started - checking every minute for upcoming intakes`);
-}
-
-export function stopIntakeReminderScheduler(): void {
-	if (intakeCheckInterval) {
-		clearInterval(intakeCheckInterval);
-		intakeCheckInterval = null;
-	}
 }

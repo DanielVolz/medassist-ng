@@ -7,7 +7,7 @@ import { env } from "../plugins/env.js";
 import { parseStringListEnv } from "../utils/env-parsing.js";
 import { getNotificationActionLabels, type PushNotificationAction } from "./notifications/action-renderer.js";
 
-export type NotificationActionKind = "taken" | "skip" | "respond" | "view";
+type NotificationActionKind = "taken" | "skip" | "respond" | "view";
 
 type TokenKind = Exclude<NotificationActionKind, "view">;
 type ActiveTokenKind = "taken" | "skip" | "respond";
@@ -115,7 +115,7 @@ function createSequenceId(groupKey: string): string {
 	return `medassist-${createHash("sha256").update(groupKey, "utf8").digest("hex").slice(0, 32)}`;
 }
 
-export function createActionToken(): string {
+function createActionToken(): string {
 	return randomBytes(32).toString("hex");
 }
 

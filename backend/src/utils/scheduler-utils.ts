@@ -7,7 +7,7 @@ import { parseLocalDateTime } from "@medassist/shared";
 import { getDateLocale, type Language } from "../i18n/translations.js";
 import { isLiquidContainerPackageType, isTubePackageType } from "./package-profiles.js";
 
-export const CANONICAL_WEEKDAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+const CANONICAL_WEEKDAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
 export type Weekday = (typeof CANONICAL_WEEKDAY_ORDER)[number];
 export type IntakeScheduleMode = "interval" | "weekdays";
@@ -93,12 +93,12 @@ export function getDateOnlyTimestamp(date: Date): number {
 	return toDateOnly(date).getTime();
 }
 
-export function getWeekdayFromDate(date: Date): Weekday {
+function getWeekdayFromDate(date: Date): Weekday {
 	const weekday = CANONICAL_WEEKDAY_ORDER.find((entry) => weekdayToJavascriptDay[entry] === date.getDay());
 	return weekday ?? "mon";
 }
 
-export function getWeekdayFromStart(start: string): Weekday {
+function getWeekdayFromStart(start: string): Weekday {
 	const startDate = parseLocalDateTime(start);
 	if (Number.isNaN(startDate.getTime())) {
 		return "mon";
@@ -106,7 +106,7 @@ export function getWeekdayFromStart(start: string): Weekday {
 	return getWeekdayFromDate(startDate);
 }
 
-export function normalizeWeekdays(value: unknown, start: string): Weekday[] {
+function normalizeWeekdays(value: unknown, start: string): Weekday[] {
 	if (!Array.isArray(value)) {
 		return [getWeekdayFromStart(start)];
 	}
@@ -394,7 +394,7 @@ export function getTimezone(): string {
 	return process.env.TZ || "UTC";
 }
 
-export function isValidTimezone(value: string): boolean {
+function isValidTimezone(value: string): boolean {
 	try {
 		new Intl.DateTimeFormat("en-US", { timeZone: value });
 		return true;
@@ -613,13 +613,6 @@ export function normalizeMedicationSchedule(row: MedicationScheduleJsonFields): 
 
 export function normalizeMedicationIntakes(row: MedicationScheduleJsonFields): Intake[] {
 	return normalizeMedicationSchedule(row).intakes;
-}
-
-/**
- * Convert intakes to legacy blister format (for backward compatibility)
- */
-export function intakesToBlisters(intakes: Intake[]): Blister[] {
-	return intakes.map((i) => ({ usage: i.usage, every: i.every, start: i.start }));
 }
 
 /** Parse takenByJson to array of strings */

@@ -32,7 +32,7 @@ export type { ImportPreview } from "./useImportExport";
 // Types
 // =============================================================================
 
-export type DoseInfo = {
+type DoseInfo = {
 	id: string;
 	timeStr: string;
 	when: number;
@@ -49,7 +49,7 @@ export type DayMedEntry = {
 	lastWhen: number;
 };
 
-export type GroupedDay = {
+type GroupedDay = {
 	dateStr: string;
 	date: Date;
 	isPast: boolean;

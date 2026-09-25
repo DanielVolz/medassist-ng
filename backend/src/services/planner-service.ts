@@ -1,7 +1,7 @@
 import { getPlannerUnitKind, isAmountBasedPackageType } from "../utils/package-profiles.js";
 
 export { escapeHtml } from "../utils/html.js";
-export { getDeliveryError, type MailDeliveryInfo } from "./notifications/delivery-result.js";
+export { getDeliveryError } from "./notifications/delivery-result.js";
 
 export function isContainerPackage(packageType?: string): boolean {
 	return isAmountBasedPackageType(packageType);

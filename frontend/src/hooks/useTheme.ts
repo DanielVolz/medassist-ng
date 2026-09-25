@@ -4,8 +4,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-export type Theme = "light" | "dark";
-export type ThemePreference = "light" | "dark" | "system";
+type Theme = "light" | "dark";
+type ThemePreference = "light" | "dark" | "system";
 
 export interface UseThemeReturn {
 	/** The resolved theme applied to the DOM ("light" | "dark") */

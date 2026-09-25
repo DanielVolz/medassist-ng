@@ -24,7 +24,7 @@ function buildFastifyServiceLogger(app: FastifyInstance) {
 	};
 }
 
-export function startRuntimeSchedulers(
+function startRuntimeSchedulers(
 	app: FastifyInstance,
 	options: Pick<StartServerOptions, "medicationEnrichmentStartupRefreshEnabled"> = {}
 ): void {

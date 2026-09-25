@@ -42,7 +42,7 @@ import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "./no
 import { loadReminderState, saveReminderState, updateUserReminderSentTime } from "./notifications/state.js";
 import { formatPlannerQuantity } from "./planner-service.js";
 
-export { getReminderState, updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
+export { updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
 
 const REMINDER_HOUR = parseIntEnv(process.env.REMINDER_HOUR, { defaultValue: 6, min: 0, max: 23 });
 

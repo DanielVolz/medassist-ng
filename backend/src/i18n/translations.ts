@@ -433,7 +433,7 @@ export function getDateLocale(language: Language): string {
  * Get the app URL from the first CORS_ORIGINS entry.
  * Falls back to empty string if not set.
  */
-export function getAppUrl(): string {
+function getAppUrl(): string {
 	return parseStringListEnv(process.env.CORS_ORIGINS)[0] ?? "";
 }
 

@@ -91,7 +91,7 @@ const floatingLayerZIndex = 2600;
  * Semantic design tokens bridged from the legacy foundation.css `:root` / `[data-theme]` blocks.
  * Dark values are the defaults, light values are resolved via cssVariablesResolver.
  */
-export interface MedAssistThemeOther {
+interface MedAssistThemeOther {
 	fontUi: string;
 	fontData: string;
 	bgPrimary: string;

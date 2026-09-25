@@ -64,18 +64,6 @@ export function isNtfyNotificationUrl(urlStr: string): boolean {
 	}
 }
 
-export function getNotificationProvider(urlStr: string): string {
-	if (isNtfyNotificationUrl(urlStr)) {
-		return "ntfy";
-	}
-
-	try {
-		return new URL(urlStr).protocol.replace(":", "").toLowerCase();
-	} catch {
-		return "unknown";
-	}
-}
-
 export function getNotificationActionLabels(language: Language): {
 	taken: string;
 	skip: string;
@@ -99,7 +87,7 @@ export function getNotificationActionLabels(language: Language): {
 	};
 }
 
-export function buildNtfyActions(options: PushNotificationOptions): NtfyActionPayload[] {
+function buildNtfyActions(options: PushNotificationOptions): NtfyActionPayload[] {
 	const actions = options.actions ?? [];
 
 	return actions.map((action) => {
@@ -123,7 +111,7 @@ export function buildNtfyActions(options: PushNotificationOptions): NtfyActionPa
 	});
 }
 
-export function appendFallbackActionLinks(message: string, options: PushNotificationOptions): string {
+function appendFallbackActionLinks(message: string, options: PushNotificationOptions): string {
 	if (!options.respondUrl && !options.viewUrl) {
 		return message;
 	}

@@ -54,7 +54,6 @@ jobs:
               - 'shared/**'
               - 'package.json'
               - 'release-policy.json'
-              - 'scripts/**'
               - 'docker-compose.yml'
               - 'docker-compose.dev.yml'
               - '.github/workflows/container-smoke.yml'

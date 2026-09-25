@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import {
 	authFile,
 	createMedicationViaAPI,
@@ -21,7 +21,7 @@ test.describe("Schedule Timeline", () => {
 	const seededName = "Schedule Smoke Seed";
 	const startThreeDaysAgo = relativeLocalDateTime(-3, 8);
 
-	async function waitForSeededScheduleData(page: Parameters<Parameters<typeof test>[0]>[0]["page"]) {
+	async function waitForSeededScheduleData(page: Page) {
 		await expect
 			.poll(
 				async () => {

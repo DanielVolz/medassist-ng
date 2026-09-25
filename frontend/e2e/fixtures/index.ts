@@ -135,7 +135,7 @@ export const test = base.extend<object>({
  * Wait for the app to be fully loaded past any loading/initializing screens.
  * Retries with a page reload when the observable app shell does not render.
  */
-export async function waitForAppReady(page: Page): Promise<void> {
+async function waitForAppReady(page: Page): Promise<void> {
 	const appHeader = page.getByTestId("app-header");
 	for (let attempt = 0; attempt < 3; attempt++) {
 		try {
@@ -178,31 +178,6 @@ export async function expandDayBlock(dayBlock: Locator): Promise<void> {
 		await divider.click();
 		await expect(dayBlock).not.toHaveClass(/collapsed/, { timeout: 10000 });
 	}
-}
-
-/**
- * Click a navigation tab by its text.
- */
-export async function clickNavTab(page: Page, tabName: string): Promise<void> {
-	await page.getByTestId("main-nav").getByRole("button", { name: tabName }).click();
-}
-
-/**
- * Open the user dropdown menu (when auth is enabled).
- */
-export async function openUserMenu(page: Page): Promise<void> {
-	await page.getByTestId("user-menu-trigger").click();
-	await expect(page.getByTestId("user-menu-dropdown")).toBeVisible();
-}
-
-/**
- * Sign out via the user dropdown menu.
- */
-export async function signOut(page: Page): Promise<void> {
-	await openUserMenu(page);
-	await page.getByTestId("user-menu-signout").click();
-	// Should redirect to login page
-	await expect(page.locator(".auth-container")).toBeVisible({ timeout: 10000 });
 }
 
 // Re-export expect for convenience
@@ -555,8 +530,7 @@ export async function updateSettingsViaAPI(settings: Record<string, unknown>): P
 			if (token) continue;
 		}
 		if (currentRes.status === 429) {
-			await waitForRetryAfter(currentRes, attempt);
-			continue;
+			throw new Error("E2E server rate-limited reading settings; expected RATE_LIMIT_MAX to prevent this");
 		}
 		const current = currentRes.ok ? ((await currentRes.json()) as Record<string, unknown>) : {};
 		const payload = {
@@ -602,12 +576,11 @@ export async function updateSettingsViaAPI(settings: Record<string, unknown>): P
 			if (token) continue;
 		}
 		if (res.status === 429) {
-			await waitForRetryAfter(res, attempt);
-			continue;
+			throw new Error("E2E server rate-limited updating settings; expected RATE_LIMIT_MAX to prevent this");
 		}
 		if (res.ok) return;
 		const text = await res.text();
 		throw new Error(`Failed to update settings: ${res.status} ${text}`);
 	}
-	throw new Error(`Failed to update settings after ${maxAttempts} retries (rate limited)`);
+	throw new Error(`Failed to update settings after ${maxAttempts} attempts`);
 }

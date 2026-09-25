@@ -10,11 +10,12 @@
     "test:domain": "cd backend && npm run test:domain && cd ../frontend && npm run test:e2e:domain",
     "test:agent-harness": "node --test scripts/validate-agent-harness.test.mjs",
     "validate:agent-harness": "node scripts/validate-agent-harness.mjs",
+    "check:knip": "npm exec --yes --package=knip@6.38.0 -- knip --reporter compact",
     "test:release-preflight": "node scripts/test-release-preflight.mjs",
     "release:preflight": "node scripts/release-preflight.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.14",
+    "@biomejs/biome": "2.4.15",
     "husky": "^9.1.0",
     "lint-staged": "^17.5.1"
   },

@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import {
 	authFile,
 	createMedicationViaAPI,
@@ -9,7 +10,7 @@ import {
 	test,
 } from "./fixtures";
 
-async function requireUserMenu(page: Parameters<Parameters<typeof test>[0]>[0]["page"]) {
+async function requireUserMenu(page: Page) {
 	const userMenuButton = page.getByTestId("user-menu-trigger");
 	await expect(userMenuButton).toBeVisible();
 	return userMenuButton;

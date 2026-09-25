@@ -392,7 +392,7 @@ function validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage) 
   );
   requireTextPattern(
     ".github/workflows/test.yml",
-    /run:\s*npm run check[\s\S]*run:\s*npm run build/,
+    /run:[ \t]*npm run check[ \t]*\r?\n[\s\S]*run:\s*npm run build/,
     "run the frontend static check before the frontend build"
   );
   requireTextPattern(

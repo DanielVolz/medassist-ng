@@ -1,7 +1,7 @@
 ---
 name: standard-task
 description: Handles normal implementation work including bug fixes, focused multi-file changes, and routine refactors.
-model: "GPT-5.6 Terra"
+model: "GPT-6 Sol"
 user-invocable: false
 disable-model-invocation: false
 agents: []

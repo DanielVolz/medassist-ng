@@ -230,9 +230,9 @@ For implementation work, classify the change through `model-router` before deleg
 
 | Tier | Model | Use for | Required agent role |
 |---|---|---|---|
-| Fast | `GPT-5.6 Luna` (lowest cost/capability) | Targeted questions, read-only lookups, one-file copy or documentation edits, formatting, and deterministic commands | `fast-task` |
-| Standard | `GPT-5.6 Terra` (medium cost/capability) | Normal bug fixes, small multi-file changes, and routine refactors | `standard-task` |
-| Complex | `GPT-5.6 Sol` (highest cost/capability) | Data migrations, auth/security, production incidents, multi-domain behavior changes, architecture decisions, difficult root-cause analysis, or a scoped failure after one standard-tier attempt | `complex-task` |
+| Fast | `GPT-6 Luna` (lower-cost model) | Targeted questions, read-only lookups, one-file copy or documentation edits, formatting, and deterministic commands | `fast-task` |
+| Standard | `GPT-6 Sol` (medium reasoning) | Normal bug fixes, small multi-file changes, and routine refactors | `standard-task` |
+| Complex | `GPT-6 Sol` (high reasoning) | Data migrations, auth/security, production incidents, multi-domain behavior changes, architecture decisions, difficult root-cause analysis, or a scoped failure after one standard-tier attempt | `complex-task` |
 
 - Do not choose the complex tier merely because a task is broad, unfamiliar, or inconvenient. Split independent work first and keep each slice at the lowest viable tier.
 - Escalate exactly one tier when the current tier cannot establish a safe path, a focused check fails, or new evidence expands the scope. Record the evidence in the handoff; do not silently retry on an expensive model.

@@ -52,17 +52,13 @@ jobs:
               - 'shared/**'
               - 'package.json'
               - 'release-policy.json'
-              - 'scripts/**'
               - 'biome.json'
-              - '.github/workflows/test.yml'
             frontend:
               - 'frontend/**'
               - 'shared/**'
               - 'package.json'
               - 'release-policy.json'
-              - 'scripts/**'
               - 'biome.json'
-              - '.github/workflows/test.yml'
               - '.github/workflows/e2e.yml'
             agent-harness:
               - 'package.json'
@@ -80,7 +76,6 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'knip.jsonc'
-              - '.github/workflows/test.yml'
 
   knip:
     name: Knip

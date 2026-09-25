@@ -1,7 +1,7 @@
 ---
 name: testing-manager
 description: Routes MedAssist test design, local validation, and test-workflow CI triage while owning testing delivery.
-model: "GPT-5.6 Terra"
+model: "GPT-6 Sol"
 user-invocable: false
 argument-hint: Describe the testing request or a failing test.yml/e2e.yml check.
 agents: []

@@ -10,6 +10,8 @@ on:
       - 'frontend/**'
       - 'shared/**'
       - 'package.json'
+      - 'package-lock.json'
+      - 'knip.jsonc'
       - 'release-policy.json'
       - 'scripts/**'
       - 'biome.json'
@@ -39,6 +41,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       agent-harness: ${{ steps.filter.outputs.agent-harness }}
+      knip: ${{ steps.filter.outputs.knip }}
     steps:
       - uses: dorny/paths-filter@v4
         id: filter
@@ -70,6 +73,53 @@ jobs:
               - '.github/agents/**'
               - '.github/skills/**'
               - '.github/workflows/test.yml'
+            knip:
+              - 'backend/**'
+              - 'frontend/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'knip.jsonc'
+              - '.github/workflows/test.yml'
+
+  knip:
+    name: Knip
+    needs: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Skip Knip when unchanged
+        if: needs.changes.outputs.knip != 'true'
+        run: echo "No Knip-relevant changes detected; check passes without validation."
+
+      - name: Checkout repository
+        if: needs.changes.outputs.knip == 'true'
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        if: needs.changes.outputs.knip == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            shared/package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install workspace dependencies
+        if: needs.changes.outputs.knip == 'true'
+        run: |
+          npm ci --prefix shared
+          npm run build --prefix shared
+          npm ci --prefix backend
+          npm ci --prefix frontend
+
+      - name: Audit unused code and dependencies
+        if: needs.changes.outputs.knip == 'true'
+        run: npm run check:knip
 
   agent-harness:
     name: Agent Harness

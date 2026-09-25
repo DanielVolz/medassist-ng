@@ -243,7 +243,7 @@ test("release preflight rejects frontend CI without the static check before buil
   const fixtureRoot = copyFixture();
   try {
     const workflowPath = path.join(fixtureRoot, ".github/workflows/test.yml");
-    const workflow = readFileSync(workflowPath, "utf8").replace("run: npm run check", "run: npm run lint");
+    const workflow = readFileSync(workflowPath, "utf8").replace("run: npm run check\n", "run: npm run lint\n");
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(

@@ -1,7 +1,7 @@
 ---
 name: release-manager
 description: Executes authorized MedAssist PR and release operations as a compact, continuous state machine.
-model: "GPT-5.6 Sol"
+model: "GPT-6 Sol"
 user-invocable: false
 argument-hint: Describe the authorized shipping action and completed local validation.
 agents: []

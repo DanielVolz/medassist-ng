@@ -22,15 +22,15 @@ const ORCHESTRATOR_AGENTS = [
 ];
 const ALL_AGENTS = ["engineering-orchestrator", ...ORCHESTRATOR_AGENTS];
 const EXPECTED_AGENT_MODELS = {
-  "engineering-orchestrator": "GPT-5.6 Terra",
-  "model-router": "GPT-5.6 Luna",
-  "fast-task": "GPT-5.6 Luna",
-  "standard-task": "GPT-5.6 Terra",
-  "complex-task": "GPT-5.6 Sol",
-  "engineering-reviewer": "GPT-5.6 Sol",
-  "testing-manager": "GPT-5.6 Terra",
-  "release-manager": "GPT-5.6 Sol",
-  "project-bot": "GPT-5.6 Luna",
+  "engineering-orchestrator": "GPT-6 Sol",
+  "model-router": "GPT-6 Luna",
+  "fast-task": "GPT-6 Luna",
+  "standard-task": "GPT-6 Sol",
+  "complex-task": "GPT-6 Sol",
+  "engineering-reviewer": "GPT-6 Sol",
+  "testing-manager": "GPT-6 Sol",
+  "release-manager": "GPT-6 Sol",
+  "project-bot": "GPT-6 Luna",
 };
 
 function agentSource(name, attributes = {}, body = `# ${name}\n`) {
@@ -124,12 +124,12 @@ test("accepts a complete non-recursive harness with direct specialist routing", 
 test("rejects an agent assigned to the wrong model tier", async (testContext) => {
   const rootDir = await createValidFixture(testContext);
   await mutate(rootDir, ".github/agents/fast-task.agent.md", (source) =>
-    source.replace("model: GPT-5.6 Luna", "model: GPT-5.6 Sol"),
+    source.replace("model: GPT-6 Luna", "model: GPT-6 Sol"),
   );
 
   assertHasError(
     await validateAgentHarness({ rootDir }),
-    ".github/agents/fast-task.agent.md: model must be GPT-5.6 Luna",
+    ".github/agents/fast-task.agent.md: model must be GPT-6 Luna",
   );
 });
 

@@ -7,7 +7,12 @@
     "playwright": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@0.0.82"]
+      "args": ["-y", "@playwright/mcp@0.0.82", "--browser", "chrome", "--isolated", "--headless"]
+    },
+    "playwright-firefox": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.82", "--browser", "firefox", "--isolated", "--headless"]
     },
     "context7": {
       "type": "stdio",

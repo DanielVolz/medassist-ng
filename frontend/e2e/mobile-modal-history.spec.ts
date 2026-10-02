@@ -8,6 +8,7 @@ import {
 	navigateTo,
 	relativeLocalDateTime,
 	test,
+	updateSettingsViaAPI,
 } from "./fixtures";
 
 test.describe("Mobile modal browser back", () => {
@@ -82,7 +83,7 @@ test.describe("Mobile modal browser back", () => {
 		const uniqueSuffix = Date.now().toString(36);
 		const person = `Mobile Journal ${uniqueSuffix}`;
 		const medicationName = `Mobile Shared Journal ${uniqueSuffix}`;
-		const startTime = relativeLocalDateTime(0, 8);
+		const startTime = relativeLocalDateTime(0, 0);
 
 		await deleteAllMedicationsViaAPI();
 		await createMedicationViaAPI({
@@ -95,34 +96,37 @@ test.describe("Mobile modal browser back", () => {
 			intakes: [{ usage: 1, every: 1, start: startTime, intakeRemindersEnabled: false, takenBy: person }],
 		});
 
-		const shareToken = await createShareTokenViaAPI(person, 30, {
-			allowJournalNotes: true,
-			allowMarkTaken: true,
-		});
+		await updateSettingsViaAPI({ stockCalculationMode: "manual" });
+		try {
+			const shareToken = await createShareTokenViaAPI(person, 30, {
+				allowJournalNotes: true,
+				allowMarkTaken: true,
+			});
 
-		await page.goto(`/share/${shareToken.token}`);
-		await page.waitForLoadState("networkidle");
-		await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
-		await expect(page.locator(".med-name-text").filter({ hasText: medicationName }).first()).toBeVisible({
-			timeout: 15000,
-		});
+			await page.goto(`/share/${shareToken.token}`);
+			await page.waitForLoadState("networkidle");
+			await expect(page.locator(".shared-schedule-loading-skeleton")).toBeHidden({ timeout: 10000 });
+			await expect(page.locator(".med-name-text").filter({ hasText: medicationName }).first()).toBeVisible({
+				timeout: 15000,
+			});
 
-		await expandDayBlock(page.locator(".day-block.today"));
-		const doseItem = page.locator(".dose-item").first();
-		await expect(doseItem).toBeVisible({ timeout: 15000 });
-		await doseItem.getByRole("button", { name: /Take|Nehmen/i }).click();
+			const todayBlock = page.locator(".day-block.today");
+			await expandDayBlock(todayBlock);
+			const doseItem = todayBlock.locator(".dose-item").first();
+			await expect(doseItem).toBeVisible({ timeout: 15000 });
+			await doseItem.getByRole("button", { name: /Take|Nehmen/i }).click();
 
-		const noteButton = page
-			.locator(".dose-item")
-			.first()
-			.getByRole("button", { name: /Note|Notiz/i });
-		await expect(noteButton).toBeEnabled({ timeout: 10000 });
-		await noteButton.click();
+			const noteButton = doseItem.getByRole("button", { name: /Note|Notiz/i });
+			await expect(noteButton).toBeEnabled({ timeout: 10000 });
+			await noteButton.click();
 
-		const journalModal = page.locator(".journal-modal");
-		await expect(journalModal).toBeVisible({ timeout: 10000 });
-		await page.goBack();
-		await expect(journalModal).toBeHidden({ timeout: 10000 });
-		await expect(page.locator(".shared-schedule-container")).toBeVisible();
+			const journalModal = page.locator(".journal-modal");
+			await expect(journalModal).toBeVisible({ timeout: 10000 });
+			await page.goBack();
+			await expect(journalModal).toBeHidden({ timeout: 10000 });
+			await expect(page.locator(".shared-schedule-container")).toBeVisible();
+		} finally {
+			await updateSettingsViaAPI({ stockCalculationMode: "automatic" });
+		}
 	});
 });

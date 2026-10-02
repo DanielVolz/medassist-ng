@@ -4,12 +4,14 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 import de from "./de.json";
 import en from "./en.json";
+import esES from "./es-ES.json";
 import ptPT from "./pt-PT.json";
 
 const resources = {
 	"en-US": { translation: en },
 	"de-DE": { translation: de },
 	"pt-PT": { translation: ptPT },
+	"es-ES": { translation: esES },
 };
 
 i18n
@@ -18,7 +20,7 @@ i18n
 	.init({
 		resources,
 		fallbackLng: "en-US",
-		supportedLngs: ["en-US", "de-DE", "pt-PT"],
+		supportedLngs: ["en-US", "de-DE", "pt-PT", "es-ES"],
 		load: "currentOnly",
 		interpolation: {
 			escapeValue: false, // React already escapes

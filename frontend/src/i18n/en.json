@@ -568,7 +568,8 @@
       "select": "Select language",
       "english": "🇬🇧 English",
       "german": "🇩🇪 Deutsch",
-      "portuguese": "🇵🇹 Português"
+      "portuguese": "🇵🇹 Português",
+      "spanish": "🇪🇸 Español"
     },
     "timezone": {
       "select": "Timezone",

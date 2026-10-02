@@ -87,6 +87,14 @@ export function getNotificationActionLabels(language: Language): {
 			view: "Ver",
 		};
 	}
+	if (language === "es-ES") {
+		return {
+			taken: "Tomar",
+			skip: "Omitir",
+			respond: "Responder",
+			view: "Ver",
+		};
+	}
 
 	return {
 		taken: "Take",

@@ -124,6 +124,16 @@ export async function sendPasswordResetEmail(input: {
 			expiry: "Der Link ist 15 Minuten gueltig.",
 			securityNote: "Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.",
 		};
+	} else if (input.language === "es-ES") {
+		subject = "Restablecer tu contraseña de MedAssist-ng";
+		content = {
+			title: "MedAssist-ng - Restablecer contraseña",
+			description: "Has solicitado restablecer tu contraseña de MedAssist-ng.",
+			action: "Establece una nueva contraseña mediante este enlace:",
+			cta: "Establecer nueva contraseña",
+			expiry: "Este enlace es válido durante 15 minutos.",
+			securityNote: "Si no has solicitado este cambio, ignora este correo.",
+		};
 	}
 	const text = `${content.title}\n\n${content.description}\n\n${content.action}\n${resetLink}\n\n${content.expiry} ${content.securityNote}\n\n---\n${getFooterPlain(input.language)}`;
 	const escapedResetLink = escapeHtml(resetLink);

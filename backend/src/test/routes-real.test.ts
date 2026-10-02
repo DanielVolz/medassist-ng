@@ -396,6 +396,17 @@ describe("Real route coverage: settings/export/report", () => {
 		await testClient.execute("UPDATE user_settings SET language = 'de' WHERE user_id = 1");
 		const legacySettings = await app.inject({ method: "GET", url: "/settings" });
 		expect(legacySettings.json().language).toBe("de-DE");
+
+		const spanishResponse = await app.inject({
+			method: "PUT",
+			url: "/settings/language",
+			payload: { language: "es-ES" },
+		});
+		expect(spanishResponse.statusCode).toBe(200);
+		const spanishStored = await testClient.execute("SELECT language FROM user_settings WHERE user_id = 1");
+		expect(spanishStored.rows[0].language).toBe("es-ES");
+		const spanishSettings = await app.inject({ method: "GET", url: "/settings" });
+		expect(spanishSettings.json().language).toBe("es-ES");
 	});
 
 	it("POST /settings/test-email fails when SMTP is not configured", async () => {

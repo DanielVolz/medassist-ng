@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import de from "../i18n/de.json";
 import en from "../i18n/en.json";
+import es from "../i18n/es-ES.json";
 import ptPT from "../i18n/pt-PT.json";
 
 interface TranslationTree {
@@ -83,13 +84,27 @@ describe("frontend i18n parity", () => {
 		}
 	});
 
-	it("uses the same native language labels in all three catalogs", () => {
+	it("keeps the supplied Spanish catalog complete and compatible with English placeholders", () => {
+		const english = flattenTranslations(en);
+		const spanish = flattenTranslations(es);
+		expect([...spanish.keys()].sort()).toEqual([...english.keys()].sort());
+
+		for (const [key, value] of spanish) {
+			expect(value.trim(), `Empty Spanish translation for ${key}`).not.toBe("");
+			expect(interpolationKeys(value), `Spanish interpolation mismatch for ${key}`).toEqual(
+				interpolationKeys(english.get(key) ?? "")
+			);
+		}
+	});
+
+	it("uses the same native language labels in all four catalogs", () => {
 		const labels = {
 			"settings.language.english": "🇬🇧 English",
 			"settings.language.german": "🇩🇪 Deutsch",
 			"settings.language.portuguese": "🇵🇹 Português",
+			"settings.language.spanish": "🇪🇸 Español",
 		};
-		for (const catalog of [en, de, ptPT]) {
+		for (const catalog of [en, de, ptPT, es]) {
 			const translations = flattenTranslations(catalog);
 			for (const [key, value] of Object.entries(labels)) {
 				expect(translations.get(key)).toBe(value);

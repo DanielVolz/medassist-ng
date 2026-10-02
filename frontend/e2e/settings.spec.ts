@@ -34,7 +34,12 @@ test.describe("Settings Page", () => {
 		const languageSelect = page.getByTestId("settings-language-select").locator("select");
 		await expect(languageSelect).toBeVisible();
 
-		await expect(languageSelect.locator("option")).toHaveText(["🇬🇧 English", "🇩🇪 Deutsch", "🇵🇹 Português"]);
+		await expect(languageSelect.locator("option")).toHaveText([
+			"🇬🇧 English",
+			"🇩🇪 Deutsch",
+			"🇵🇹 Português",
+			"🇪🇸 Español",
+		]);
 	});
 
 	test.describe("mobile tooltip positioning", () => {
@@ -100,6 +105,23 @@ test.describe("Settings Page", () => {
 			await expect(languageSelect).toHaveValue(currentValue);
 		}
 		await expect(languageSelect).toHaveValue(currentValue);
+	});
+
+	test("should keep Spanish selected after reloading", async ({ page }) => {
+		await navigateTo(page, "/settings");
+		const languageSelect = page.getByTestId("settings-language-select").locator("select");
+		const previousLanguage = await languageSelect.inputValue();
+
+		try {
+			await languageSelect.selectOption("es-ES");
+			await expect(languageSelect).toHaveValue("es-ES");
+			await page.reload();
+			await expect(languageSelect).toHaveValue("es-ES");
+			await expect(page.getByRole("heading", { name: "Idioma" })).toBeVisible();
+		} finally {
+			await languageSelect.selectOption(previousLanguage);
+			await expect(languageSelect).toHaveValue(previousLanguage);
+		}
 	});
 
 	test("should show notification matrix", async ({ page }) => {

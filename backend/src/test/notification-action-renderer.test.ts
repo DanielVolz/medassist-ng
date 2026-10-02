@@ -157,7 +157,7 @@ describe("notification action renderer", () => {
 		]);
 	});
 
-	it("uses consistent action-form labels for English, German and Portuguese", () => {
+	it("uses consistent action-form labels for supported languages", () => {
 		expect(getNotificationActionLabels("en-US")).toEqual({
 			taken: "Take",
 			skip: "Skip",
@@ -173,6 +173,12 @@ describe("notification action renderer", () => {
 		expect(getNotificationActionLabels("pt-PT")).toEqual({
 			taken: "Tomar",
 			skip: "Ignorar",
+			respond: "Responder",
+			view: "Ver",
+		});
+		expect(getNotificationActionLabels("es-ES")).toEqual({
+			taken: "Tomar",
+			skip: "Omitir",
 			respond: "Responder",
 			view: "Ver",
 		});

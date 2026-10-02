@@ -838,6 +838,8 @@ export async function checkAndSendIntakeRemindersForUser(
 				title = `⚠️ Aviso: Toma da medicação ${counterStr}`;
 			} else if (language === "de-DE") {
 				title = `⚠️ Erinnerung: Medikamenteneinnahme ${counterStr}`;
+			} else if (language === "es-ES") {
+				title = `⚠️ Recordatorio: Toma de medicamento ${counterStr}`;
 			} else {
 				title = `⚠️ Reminder: Medication intake ${counterStr}`;
 			}

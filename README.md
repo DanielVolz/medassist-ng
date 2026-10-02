@@ -40,7 +40,7 @@
 
 # Features
 
-The interface and notifications are available in English, German, and Portuguese (Portugal). Select a language in Settings.
+The interface and notifications are available in English, German, Portuguese (Portugal), and Spanish. Select a language in Settings.
 
 <p align="center">
   <img src="docs/gifs/MedAssist-demo.gif" alt="MedAssist-ng Dashboard" width="100%" />

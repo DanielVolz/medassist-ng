@@ -1,4 +1,4 @@
-export const APP_LANGUAGES = ["en-US", "de-DE", "pt-PT"] as const;
+export const APP_LANGUAGES = ["en-US", "de-DE", "pt-PT", "es-ES"] as const;
 
 export const LEGACY_APP_LANGUAGE_MAP = {
 	en: "en-US",
@@ -20,6 +20,7 @@ export function normalizeAppLanguage(value: unknown): AppLanguage {
 		const primaryLanguage = value.split("-")[0]?.toLowerCase();
 		if (primaryLanguage === "de") return "de-DE";
 		if (primaryLanguage === "pt") return "pt-PT";
+		if (primaryLanguage === "es") return "es-ES";
 	}
 
 	return "en-US";

@@ -295,6 +295,7 @@ export function SettingsPage() {
 									{ value: "en-US", label: t("settings.language.english") },
 									{ value: "de-DE", label: t("settings.language.german") },
 									{ value: "pt-PT", label: t("settings.language.portuguese") },
+									{ value: "es-ES", label: t("settings.language.spanish") },
 								]}
 							/>
 						</label>

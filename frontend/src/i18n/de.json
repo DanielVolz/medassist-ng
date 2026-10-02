@@ -109,7 +109,7 @@
       "add": "Journal hinzufügen",
       "edit": "Journal bearbeiten",
       "note": "Notiz",
-      "noteTakenOnly": "Notizen funktionieren nur für genommene oder uebersprungene Dosen.",
+      "noteTakenOnly": "Notizen funktionieren nur für genommene oder übersprungene Dosen.",
       "history": "Journal-Verlauf",
       "historyShort": "Journal",
       "view": "Journal ansehen"
@@ -163,7 +163,7 @@
       "scheduledFor": "Geplant für",
       "takenAt": "Eingenommen um",
       "markedBy": "Markiert von",
-      "source": "Markiert ueber",
+      "source": "Markiert über",
       "sourceOwnerApp": "Haupt-App",
       "sourceSharedLink": "Geteilter Einnahme-Link",
       "sourceAutomaticReminder": "Automatische Erinnerungslogik",
@@ -180,7 +180,7 @@
       "eventReversed": "Diese Einnahme wurde storniert, während das Journal geöffnet war. Der aktuelle schreibgeschützte Eintrag wird angezeigt.",
       "readOnly": "Dieser Kontozugriff ist schreibgeschützt und kann Journal-Einträge nicht ändern.",
       "notFound": "Diese Einnahme ist nicht mehr verfügbar. Aktualisiere den Verlauf und versuche es erneut.",
-      "emptySharedNote": "Geteilte Links koennen Journal-Notizen nicht leeren. Gib eine Notiz ein oder schliesse den Dialog.",
+      "emptySharedNote": "Geteilte Links können Journal-Notizen nicht leeren. Gib eine Notiz ein oder schließe den Dialog.",
       "noEventSelected": "Es ist kein Journal-Eintrag ausgewählt."
     }
   },
@@ -313,7 +313,7 @@
     "badge": "Packungen + lose Tabletten",
     "sections": {
       "general": "Allgemein",
-      "stock": "Package",
+      "stock": "Packung",
       "prescription": "Rezept",
       "prescriptionAndRefill": "Rezept & Nachfüllen",
       "schedule": "Einnahme"
@@ -568,7 +568,8 @@
       "select": "Sprache auswählen",
       "english": "🇬🇧 English",
       "german": "🇩🇪 Deutsch",
-      "portuguese": "🇵🇹 Português"
+      "portuguese": "🇵🇹 Português",
+      "spanish": "🇪🇸 Español"
     },
     "timezone": {
       "select": "Zeitzone",
@@ -736,8 +737,8 @@
     "undoTake": "Nehmen rückgängig",
     "undoSkip": "Auslassen rückgängig",
     "actionBlocked": {
-      "futureTake": "Zukuenftige Einnahmen koennen noch nicht als eingenommen markiert werden.",
-      "futureSkip": "Zukuenftige Einnahmen koennen noch nicht uebersprungen werden."
+      "futureTake": "Zukünftige Einnahmen können noch nicht als eingenommen markiert werden.",
+      "futureSkip": "Zukünftige Einnahmen können noch nicht übersprungen werden."
     }
   },
   "auth": {
@@ -877,21 +878,21 @@
     "selectPerson": "Person auswählen",
     "selectPeriod": "Zeitraum auswählen",
     "selectExpiry": "Link-Ablauf",
-    "allowMarkTaken": "Diesem geteilten Link das Markieren und Zuruecknehmen von Einnahmen erlauben",
+    "allowMarkTaken": "Diesem geteilten Link das Markieren und Zurücknehmen von Einnahmen erlauben",
     "allowJournalNotes": "Diesem geteilten Link das Anzeigen und Bearbeiten von Journal-Notizen erlauben",
     "markTakenEnabled": "Dosisaktionen erlaubt",
     "readOnly": "Nur Lesen",
     "actionBlocked": {
-      "futureTake": "Zukuenftige Einnahmen koennen noch nicht als eingenommen markiert werden.",
-      "futureSkip": "Zukuenftige Einnahmen koennen noch nicht uebersprungen werden.",
+      "futureTake": "Zukünftige Einnahmen können noch nicht als eingenommen markiert werden.",
+      "futureSkip": "Zukünftige Einnahmen können noch nicht übersprungen werden.",
       "alreadyTakenMainApp": "Diese Einnahme wurde bereits in der Haupt-App als eingenommen markiert."
     },
     "journalNotesEnabled": "Journal anzeigen/bearbeiten erlaubt",
-    "expiryNever": "Laeuft nicht ab",
-    "neverExpiresWarning": "Links ohne Ablauf bleiben gueltig, bis du sie widerrufst oder neu generierst.",
-    "expiry7Days": "Laeuft in 7 Tagen ab",
-    "expiry30Days": "Laeuft in 30 Tagen ab",
-    "expiry90Days": "Laeuft in 90 Tagen ab",
+    "expiryNever": "Läuft nicht ab",
+    "neverExpiresWarning": "Links ohne Ablauf bleiben gültig, bis du sie widerrufst oder neu generierst.",
+    "expiry7Days": "Läuft in 7 Tagen ab",
+    "expiry30Days": "Läuft in 30 Tagen ab",
+    "expiry90Days": "Läuft in 90 Tagen ab",
     "generateLink": "Link generieren",
     "generating": "Wird generiert...",
     "generateAnother": "Weiteren Link generieren",
@@ -921,10 +922,10 @@
     "legacyNeverExpires": "Legacy ohne Ablauf",
     "revoke": "Widerrufen",
     "revoking": "Wird widerrufen...",
-    "revokeConfirm": "Den aktiven Teilen-Link fuer {{person}} widerrufen?",
+    "revokeConfirm": "Den aktiven Teilen-Link für {{person}} widerrufen?",
     "regenerate": "Neu generieren",
     "regenerating": "Wird neu generiert...",
-    "regenerateConfirm": "Den aktiven Teilen-Link fuer {{person}} neu generieren? Der aktuelle Link funktioniert danach nicht mehr.",
+    "regenerateConfirm": "Den aktiven Teilen-Link für {{person}} neu generieren? Der aktuelle Link funktioniert danach nicht mehr.",
     "noPeople": "Keine Medikamente mit 'Eingenommen von' zugewiesen. Füge zuerst eine Person zu einem Medikament hinzu.",
     "scheduleFor": "Zeitplan für",
     "period": "Zeitraum",

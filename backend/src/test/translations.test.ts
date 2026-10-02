@@ -29,6 +29,13 @@ describe("Translations Module", () => {
 			expect(translations.actionPage.respondTitle).toBe("Responder ao aviso");
 		});
 
+		it("provides Spanish notification and action page copy", () => {
+			const translations = getTranslations("es-ES");
+			expect(t(translations.stockReminder.subject, { count: 2, s: "s" })).toContain("2 medicamentos");
+			expect(translations.intakeReminder.repeatLast).toContain("último recordatorio");
+			expect(translations.actionPage.respondTitle).toBe("Responder al recordatorio");
+		});
+
 		it("should fallback to English for unknown language", () => {
 			const translations = getTranslations("fr" as Language);
 			expect(translations.common.pills).toBe("pills");
@@ -138,6 +145,10 @@ describe("Translations Module", () => {
 
 		it("should return 'de-DE' for German", () => {
 			expect(getDateLocale("de-DE")).toBe("de-DE");
+		});
+
+		it("should return 'es-ES' for Spanish", () => {
+			expect(getDateLocale("es-ES")).toBe("es-ES");
 		});
 
 		it("should return 'en-US' for unknown language", () => {

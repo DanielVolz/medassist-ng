@@ -27,6 +27,9 @@ describe("shared contracts", () => {
 		expect(normalizeAppLanguage("de-AT")).toBe("de-DE");
 		expect(normalizeAppLanguage("pt-PT")).toBe("pt-PT");
 		expect(normalizeAppLanguage("pt-BR")).toBe("pt-PT");
+		expect(normalizeAppLanguage("es")).toBe("es-ES");
+		expect(normalizeAppLanguage("es-ES")).toBe("es-ES");
+		expect(normalizeAppLanguage("es-MX")).toBe("es-ES");
 		expect(normalizeAppLanguage("unknown")).toBe("en-US");
 	});
 

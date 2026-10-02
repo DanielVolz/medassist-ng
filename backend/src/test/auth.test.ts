@@ -626,6 +626,30 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			expect(message?.text).toContain("---\n🤖 Sent from MedAssist-ng");
 		});
 
+		it("sends a Portuguese reset email for stored pt-PT language", async () => {
+			await registerRecoveryUser("resetpt", "resetpt@example.com");
+			await testClient.execute({
+				sql: "INSERT INTO user_settings (user_id, language) SELECT id, 'pt-PT' FROM users WHERE email = ?",
+				args: ["resetpt@example.com"],
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/auth/forgot-password",
+				payload: { emailOrUsername: "resetpt@example.com" },
+			});
+
+			expect(response.statusCode).toBe(200);
+			const message = sendEmailNotification.mock.calls[0]?.[0] as
+				| { subject?: string; text?: string; html?: string }
+				| undefined;
+			expect(message?.subject).toBe("Repor a palavra-passe do MedAssist-ng");
+			expect(message?.text).toContain("Esta ligação é válida durante 15 minutos.");
+			expect(message?.text).toContain("🤖 Enviado de MedAssist-ng");
+			expect(message?.html).toContain("Definir nova palavra-passe");
+			expect(message?.html).not.toContain("Set new password");
+		});
+
 		it("returns the generic response and removes the new token when SMTP delivery fails", async () => {
 			await registerRecoveryUser("smtpuser", "smtp@example.com");
 			sendEmailNotification.mockResolvedValueOnce({ success: false, error: "SMTP unavailable" });

@@ -1,3 +1,4 @@
+import { type AppLanguage, normalizeAppLanguage } from "@medassist/shared";
 import type { shareTokens } from "../db/schema.js";
 
 type SharePermissions = {
@@ -5,8 +6,8 @@ type SharePermissions = {
 	allowMarkTaken?: boolean | null;
 };
 
-export function getPublicShareLanguage(language: string | null | undefined): "en" | "de" {
-	return language === "de" ? "de" : "en";
+export function getPublicShareLanguage(language: string | null | undefined): AppLanguage {
+	return normalizeAppLanguage(language);
 }
 
 export function getPublicShareOwnerName(
@@ -33,7 +34,7 @@ export function getPublicShareContext(options: {
 }): {
 	takenBy: string;
 	sharedBy: string | null;
-	language: "en" | "de";
+	language: AppLanguage;
 	scheduleDays: number;
 	allowJournalNotes: boolean;
 	allowMarkTaken: boolean;

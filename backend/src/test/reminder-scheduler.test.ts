@@ -99,7 +99,7 @@ function createLogger() {
 function createSettings(overrides: Record<string, unknown> = {}) {
 	return {
 		userId: 42,
-		language: "en",
+		language: "en-US",
 		timezone: "Europe/Berlin",
 		reminderDaysBefore: 3,
 		lowStockDays: 7,
@@ -203,7 +203,7 @@ describe("reminder scheduler", () => {
 	it("sends an eligible German stock push and records the successful channel", async () => {
 		getAllUserSettingsMock.mockResolvedValue([
 			createSettings({
-				language: "de",
+				language: "de-DE",
 				shoutrrrEnabled: true,
 				shoutrrrUrl: "ntfy://ntfy.sh/medassist",
 				shoutrrrStockReminders: true,
@@ -216,7 +216,7 @@ describe("reminder scheduler", () => {
 
 		expect(buildStockReminderPushNotificationMock).toHaveBeenCalledWith(
 			expect.arrayContaining([expect.objectContaining({ name: "Aspirin", medsLeft: 0 })]),
-			"de"
+			"de-DE"
 		);
 		expect(sendPushNotificationMock).toHaveBeenCalledWith("ntfy://ntfy.sh/medassist", "stock title", "stock message");
 		expect(updateUserReminderSentTimeMock).toHaveBeenCalledWith(42, "stock", "push", "Aspirin");

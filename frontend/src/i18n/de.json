@@ -366,6 +366,8 @@
     "notes": "Notizen",
     "medicationImage": "Medikamentenbild",
     "removeImage": "Bild entfernen",
+    "chooseImage": "Bild auswählen",
+    "noImageSelected": "Kein Bild ausgewählt",
     "imageUploadErrors": {
       "tooLarge": "Das Bild ist zu groß. Die maximale Upload-Größe beträgt 10 MB.",
       "invalidType": "Ungültiger Dateityp. Erlaubte Formate: JPEG, PNG, WebP, GIF.",
@@ -563,7 +565,10 @@
     "loading": "Einstellungen werden geladen...",
     "language": {
       "title": "Sprache",
-      "select": "Sprache auswählen"
+      "select": "Sprache auswählen",
+      "english": "🇬🇧 English",
+      "german": "🇩🇪 Deutsch",
+      "portuguese": "🇵🇹 Português"
     },
     "timezone": {
       "select": "Zeitzone",

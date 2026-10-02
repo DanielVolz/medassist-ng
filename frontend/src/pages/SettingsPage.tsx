@@ -1,4 +1,5 @@
 /* biome-ignore-all lint/a11y/noLabelWithoutControl: settings rows use label-styled text with adjacent custom toggle controls */
+import { APP_LANGUAGES, type AppLanguage } from "@medassist/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
@@ -16,7 +17,7 @@ import { getSystemLocale, withFormattingTimezone } from "../utils/formatters";
 import classes from "./SettingsPage.module.css";
 import surfaceClasses from "./SettingsPageSurfaces.module.css";
 
-type SettingsLanguage = "en" | "de";
+type SettingsLanguage = AppLanguage;
 
 function sx(...classNames: Array<string | false | null | undefined>) {
 	return classNames.filter(Boolean).join(" ");
@@ -116,13 +117,14 @@ export function SettingsPage() {
 
 	const handleLanguageChange = useCallback(
 		(language: string) => {
-			if (language !== "en" && language !== "de") {
+			if (!APP_LANGUAGES.includes(language as AppLanguage)) {
 				return;
 			}
 
-			pendingLanguageRef.current = language;
-			setSettings((current) => ({ ...current, language }));
-			void i18n.changeLanguage(language);
+			const selectedLanguage = language as AppLanguage;
+			pendingLanguageRef.current = selectedLanguage;
+			setSettings((current) => ({ ...current, language: selectedLanguage }));
+			void i18n.changeLanguage(selectedLanguage);
 			flushLanguageSaveQueue();
 		},
 		[flushLanguageSaveQueue, i18n, setSettings]
@@ -290,8 +292,9 @@ export function SettingsPage() {
 								onChange={(e) => handleLanguageChange(e.currentTarget.value)}
 								classNames={{ root: classes.languageSelectRoot, input: classes.languageSelect }}
 								data={[
-									{ value: "en", label: "🇬🇧 English" },
-									{ value: "de", label: "🇩🇪 Deutsch" },
+									{ value: "en-US", label: t("settings.language.english") },
+									{ value: "de-DE", label: t("settings.language.german") },
+									{ value: "pt-PT", label: t("settings.language.portuguese") },
 								]}
 							/>
 						</label>

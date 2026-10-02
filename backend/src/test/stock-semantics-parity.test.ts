@@ -195,7 +195,7 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 		});
 
 		const usageRow = await getUsageRow(app, "2026-01-01T00:00:00.000Z", "2026-01-31T23:59:59.999Z", medName);
-		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "automatic");
+		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en-US", "automatic");
 		const schedulerRow = lowStock.find((r) => r.name === medName);
 
 		expect(schedulerRow).toBeDefined();
@@ -215,7 +215,7 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 		});
 
 		const usageRow = await getUsageRow(app, "2026-01-01T00:00:00.000Z", "2026-01-31T23:59:59.999Z", medName);
-		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "manual");
+		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en-US", "manual");
 		const schedulerRow = lowStock.find((r) => r.name === medName);
 
 		expect(schedulerRow).toBeDefined();
@@ -253,7 +253,7 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 		});
 
 		const usageRow = await getUsageRow(app, "2026-01-01T00:00:00.000Z", "2026-01-31T23:59:59.999Z", medName);
-		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "manual");
+		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en-US", "manual");
 		const schedulerRow = lowStock.find((r) => r.name === medName);
 
 		expect(schedulerRow).toBeDefined();
@@ -288,7 +288,7 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 		const rangeEnd = new Date(now);
 		rangeEnd.setDate(now.getDate() + 7);
 		const usageRow = await getUsageRow(app, rangeStart.toISOString(), rangeEnd.toISOString(), medName);
-		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "automatic");
+		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en-US", "automatic");
 		const schedulerRow = lowStock.find((r) => r.name === medName);
 
 		expect(schedulerRow).toBeDefined();
@@ -312,7 +312,7 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 		});
 
 		const usageRow = await getUsageRow(app, "2026-01-01T00:00:00.000Z", "2026-01-31T23:59:59.999Z", medName);
-		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "automatic");
+		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en-US", "automatic");
 		const schedulerRow = lowStock.find((r) => r.name === medName);
 
 		expect(schedulerRow).toBeDefined();
@@ -357,7 +357,7 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 		expect(response.statusCode).toBe(200);
 		expect(response.json().some((r: { medicationName: string }) => r.medicationName === "Obsolete Med")).toBe(false);
 
-		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "automatic");
+		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en-US", "automatic");
 		expect(lowStock.some((r) => r.name === "Obsolete Med")).toBe(false);
 	});
 
@@ -372,7 +372,7 @@ describe("Stock semantics parity (planner usage vs scheduler)", () => {
 			intakes: [{ usage: 1, every: 1, start: "2026-01-01T08:00:00" }],
 		});
 
-		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en", "automatic");
+		const lowStock = await getMedicationsNeedingReminderForTests(1, 7, 365, "en-US", "automatic");
 		expect(lowStock.some((r) => r.name === "Acetylsalicylic acid")).toBe(true);
 	});
 });

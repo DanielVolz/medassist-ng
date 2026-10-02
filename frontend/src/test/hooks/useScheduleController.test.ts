@@ -17,7 +17,7 @@ describe("useScheduleController", () => {
 		contextMock.value = {
 			meds: [{ id: 7, name: "Aspirin" }],
 			loading: false,
-			settings: { language: "en" },
+			settings: { language: "en-US" },
 			settingsLoading: false,
 			coverage: new Map([[7, 5]]),
 			coverageByMed: new Map([[7, 5]]),

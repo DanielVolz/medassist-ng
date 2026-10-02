@@ -34,8 +34,7 @@ test.describe("Settings Page", () => {
 		const languageSelect = page.getByTestId("settings-language-select").locator("select");
 		await expect(languageSelect).toBeVisible();
 
-		// Should have at least English and German
-		await expect(languageSelect.locator("option")).toHaveCount(2);
+		await expect(languageSelect.locator("option")).toHaveText(["🇬🇧 English", "🇩🇪 Deutsch", "🇵🇹 Português"]);
 	});
 
 	test.describe("mobile tooltip positioning", () => {
@@ -91,13 +90,15 @@ test.describe("Settings Page", () => {
 		const languageSelect = page.getByTestId("settings-language-select").locator("select");
 		const currentValue = await languageSelect.inputValue();
 
-		// Switch to the other language
-		const targetLang = currentValue === "en" ? "de" : "en";
-		await languageSelect.selectOption(targetLang);
-		await expect(languageSelect).toHaveValue(targetLang);
-
-		// Switch back to original
-		await languageSelect.selectOption(currentValue);
+		try {
+			await languageSelect.selectOption("pt-PT");
+			await expect(languageSelect).toHaveValue("pt-PT");
+			await page.reload();
+			await expect(languageSelect).toHaveValue("pt-PT");
+		} finally {
+			await languageSelect.selectOption(currentValue);
+			await expect(languageSelect).toHaveValue(currentValue);
+		}
 		await expect(languageSelect).toHaveValue(currentValue);
 	});
 

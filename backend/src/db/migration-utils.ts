@@ -1,6 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Client } from "@libsql/client";
+import { LEGACY_APP_LANGUAGE_MAP } from "@medassist/shared";
 import { sql } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
@@ -196,7 +197,7 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 			dose_ids_json TEXT NOT NULL,
 			title TEXT NOT NULL,
 			message TEXT NOT NULL,
-			language TEXT NOT NULL DEFAULT 'en',
+			language TEXT NOT NULL DEFAULT 'en-US',
 			scheduled_for INTEGER,
 			expires_at INTEGER NOT NULL,
 			resolved_action TEXT,
@@ -255,6 +256,19 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		} catch (e: unknown) {
 			if (!(e as Error).message?.includes("duplicate column")) {
 				errors.push((e as Error).message);
+			}
+		}
+	}
+
+	for (const table of ["user_settings", "notification_action_groups"]) {
+		for (const [legacy, canonical] of Object.entries(LEGACY_APP_LANGUAGE_MAP)) {
+			try {
+				await client.execute({
+					sql: `UPDATE ${table} SET language = ? WHERE language = ?`,
+					args: [canonical, legacy],
+				});
+			} catch (error: unknown) {
+				errors.push((error as Error).message);
 			}
 		}
 	}

@@ -1,3 +1,4 @@
+import { APP_LANGUAGE_INPUTS, normalizeAppLanguage } from "@medassist/shared";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
@@ -88,7 +89,7 @@ function envInt(key: string, defaultVal: number): number {
 }
 
 function getLanguage(language: string | null | undefined): Language {
-	return language === "de" ? "de" : "en";
+	return normalizeAppLanguage(language);
 }
 
 function buildInteractiveTestPushNotification(language: Language): { title: string; message: string } {
@@ -207,7 +208,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 				repeatRemindersEnabled: settings.repeatRemindersEnabled ?? false,
 				reminderRepeatIntervalMinutes: settings.reminderRepeatIntervalMinutes ?? 30,
 				maxNaggingReminders: settings.maxNaggingReminders ?? 5,
-				language: settings.language,
+				language: normalizeAppLanguage(settings.language),
 				stockCalculationMode: settings.stockCalculationMode ?? "automatic",
 				shareMedicationOverview: settings.shareMedicationOverview ?? false,
 				upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
@@ -274,7 +275,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 						repeatRemindersEnabled: { type: "boolean" },
 						reminderRepeatIntervalMinutes: { type: "number" },
 						maxNaggingReminders: { type: "number" },
-						language: { type: "string", enum: ["en", "de"] },
+						language: { type: "string", enum: [...APP_LANGUAGE_INPUTS] },
 						stockCalculationMode: { type: "string", enum: ["automatic", "manual"] },
 						shareMedicationOverview: { type: "boolean" },
 						upcomingTodayOnly: { type: "boolean" },
@@ -301,7 +302,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 						repeatRemindersEnabled: true,
 						reminderRepeatIntervalMinutes: 30,
 						maxNaggingReminders: 5,
-						language: "en",
+						language: "en-US",
 						stockCalculationMode: "automatic",
 						shareMedicationOverview: false,
 						upcomingTodayOnly: false,
@@ -353,7 +354,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 				lowStockDays: body.lowStockDays ?? 30,
 				normalStockDays: body.normalStockDays ?? 90,
 				highStockDays: body.highStockDays ?? 180,
-				language: body.language ?? "en",
+				language: normalizeAppLanguage(body.language),
 				stockCalculationMode: body.stockCalculationMode ?? "automatic",
 				shareMedicationOverview: body.shareMedicationOverview ?? false,
 				upcomingTodayOnly: body.upcomingTodayOnly ?? false,
@@ -387,10 +388,10 @@ export async function settingsRoutes(app: FastifyInstance) {
 					type: "object",
 					required: ["language"],
 					properties: {
-						language: { type: "string", enum: ["en", "de"] },
+						language: { type: "string", enum: [...APP_LANGUAGE_INPUTS] },
 					},
 					example: {
-						language: "de",
+						language: "de-DE",
 					},
 				},
 				response: {
@@ -404,19 +405,22 @@ export async function settingsRoutes(app: FastifyInstance) {
 			const userId = await getUserId(request, reply);
 			const { language } = request.body;
 
-			if (!language || !["en", "de"].includes(language)) {
+			if (!language || !APP_LANGUAGE_INPUTS.includes(language as (typeof APP_LANGUAGE_INPUTS)[number])) {
 				return reply.status(400).send({ error: "Invalid language" });
 			}
 
 			const existingSettings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
 
 			if (existingSettings.length > 0) {
-				await db.update(userSettings).set({ language, updatedAt: new Date() }).where(eq(userSettings.userId, userId));
+				await db
+					.update(userSettings)
+					.set({ language: normalizeAppLanguage(language), updatedAt: new Date() })
+					.where(eq(userSettings.userId, userId));
 			} else {
 				await db.insert(userSettings).values({
 					userId,
 					...getDefaultSettings(),
-					language,
+					language: normalizeAppLanguage(language),
 				});
 			}
 
@@ -572,6 +576,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 				});
 				const provider = getNotificationProvider(url);
 				const result = await sendShoutrrrNotification(url, title, message, {
+					language,
 					actions: actionContext?.actions,
 					respondUrl: actionContext?.respondUrl,
 					viewUrl: actionContext?.viewUrl,

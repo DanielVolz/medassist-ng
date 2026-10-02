@@ -4,6 +4,7 @@
 /* biome-ignore-all lint/style/noNestedTernary: rendering branches are intentionally explicit in schedule UI */
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: modal and helper callbacks are stable at runtime */
 
+import { APP_LANGUAGES, type AppLanguage, LEGACY_APP_LANGUAGES, normalizeAppLanguage } from "@medassist/shared";
 import { NotebookPen, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -73,9 +74,9 @@ function getExpectedSharedDoseMarker(doseId: string, sharedTakenBy: string | nul
 	return getDosePersonSuffix(doseId) ?? "all";
 }
 
-function getSharedLanguage(language: unknown): "en" | "de" | null {
-	if (language === "en" || language === "de") {
-		return language;
+function getSharedLanguage(language: unknown): AppLanguage | null {
+	if (APP_LANGUAGES.includes(language as AppLanguage) || LEGACY_APP_LANGUAGES.includes(language as "en" | "de")) {
+		return normalizeAppLanguage(language);
 	}
 
 	return null;

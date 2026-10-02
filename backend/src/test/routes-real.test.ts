@@ -184,7 +184,7 @@ describe("Real route coverage: settings/export/report", () => {
 		const response = await app.inject({ method: "GET", url: "/settings" });
 		expect(response.statusCode).toBe(200);
 		const body = response.json();
-		expect(body.language).toBe("en");
+		expect(body.language).toBe("en-US");
 		expect(body.upcomingTodayOnly).toBe(false);
 		expect(body.shareScheduleTodayOnly).toBe(false);
 	});
@@ -390,7 +390,12 @@ describe("Real route coverage: settings/export/report", () => {
 		const stored = await testClient.execute({
 			sql: "SELECT language FROM user_settings WHERE user_id = 1",
 		});
-		expect(stored.rows[0].language).toBe("en");
+		expect(stored.rows[0].language).toBe("en-US");
+		const settings = await app.inject({ method: "GET", url: "/settings" });
+		expect(settings.json().language).toBe("en-US");
+		await testClient.execute("UPDATE user_settings SET language = 'de' WHERE user_id = 1");
+		const legacySettings = await app.inject({ method: "GET", url: "/settings" });
+		expect(legacySettings.json().language).toBe("de-DE");
 	});
 
 	it("POST /settings/test-email fails when SMTP is not configured", async () => {
@@ -1111,7 +1116,7 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(body.doseHistory[0].takenSource).toBe("notification");
 		expect(body.refillHistory).toHaveLength(1);
 		expect(body.refillHistory[0].quantityAdded).toBe(23);
-		expect(body.settings.language).toBe("de");
+		expect(body.settings.language).toBe("de-DE");
 		expect(body.settings.timezone).toBe("Europe/Berlin");
 		expect(body.settings.upcomingTodayOnly).toBe(true);
 		expect(body.settings.shareScheduleTodayOnly).toBe(true);

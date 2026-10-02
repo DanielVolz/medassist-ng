@@ -108,7 +108,7 @@ describe("public share policy", () => {
 		).toEqual({
 			takenBy: "Ava",
 			sharedBy: "owner",
-			language: "de",
+			language: "de-DE",
 			scheduleDays: 14,
 			allowJournalNotes: true,
 			allowMarkTaken: false,
@@ -118,7 +118,8 @@ describe("public share policy", () => {
 	it("keeps public owner visibility nullable and applies legacy fallbacks", () => {
 		expect(getPublicShareOwnerName(undefined)).toBeNull();
 		expect(getPublicShareOwnerName(undefined, "the owner")).toBe("the owner");
-		expect(getPublicShareLanguage("fr")).toBe("en");
+		expect(getPublicShareLanguage("de")).toBe("de-DE");
+		expect(getPublicShareLanguage("fr")).toBe("en-US");
 		expect(getPublicSharePermissions({ allowJournalNotes: null, allowMarkTaken: null })).toEqual({
 			allowJournalNotes: false,
 			allowMarkTaken: true,

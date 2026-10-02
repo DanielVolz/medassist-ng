@@ -2,12 +2,11 @@
 // useSettings Hook - Settings state and operations
 // =============================================================================
 
+import { type AppLanguage, normalizeAppLanguage } from "@medassist/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { log } from "../utils/logger";
 import { settingsChanged } from "../utils/settings";
-
-type AppLanguage = "en" | "de";
 
 export interface Settings {
 	language: AppLanguage;
@@ -65,7 +64,7 @@ export interface Settings {
 type SettingsLoadError = "auth" | "forbidden" | "request" | null;
 
 const defaultSettings: Settings = {
-	language: "en",
+	language: "en-US",
 	timezone: "",
 	availableTimezones: [],
 	serverTimezone: "UTC",
@@ -132,7 +131,7 @@ const reminderMetadataKeys = [
 ] as const;
 
 function getSupportedLanguage(value: unknown): AppLanguage {
-	return value === "de" ? "de" : "en";
+	return normalizeAppLanguage(value);
 }
 
 function mergeReminderMetadata(prev: Settings, data: unknown): Settings {

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
+import { normalizeAppLanguage } from "@medassist/shared";
 import argon2, { type HashOptions } from "argon2";
 import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -515,7 +516,7 @@ export async function authRoutes(app: FastifyInstance) {
 				.select({ language: userSettings.language })
 				.from(userSettings)
 				.where(eq(userSettings.userId, user.id));
-			const language: Language = settings?.language === "de" ? "de" : "en";
+			const language: Language = normalizeAppLanguage(settings?.language);
 			const { token, tokenHash } = await createPasswordResetToken(user.id);
 			const delivery = await sendPasswordResetEmail({ email: user.email, token, language });
 

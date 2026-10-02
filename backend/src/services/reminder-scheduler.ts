@@ -477,7 +477,7 @@ ${lowStock.map((r) => `${r.name}: ${formatPlannerQuantity(r.packageType, r.medsL
 ---
 ${getFooterPlain(language)}${isRepeatDaily ? `\n\n${tr.stockReminder.repeatDailyNote}` : ""}`;
 
-	const pluralSuffix = language === "de" ? "e" : "s";
+	const pluralSuffix = language === "de-DE" ? "e" : "s";
 	const subjectPlural = lowStock.length === 1 ? "" : pluralSuffix;
 	const subject = t(tr.stockReminder.subject, { count: lowStock.length, s: subjectPlural, e: subjectPlural });
 

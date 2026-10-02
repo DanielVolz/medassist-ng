@@ -21,6 +21,7 @@ export type PushNotificationAction =
 	  };
 
 export type PushNotificationOptions = {
+	language?: Language;
 	actions?: PushNotificationAction[];
 	respondUrl?: string;
 	viewUrl?: string;
@@ -70,12 +71,20 @@ export function getNotificationActionLabels(language: Language): {
 	respond: string;
 	view: string;
 } {
-	if (language === "de") {
+	if (language === "de-DE") {
 		return {
 			taken: "Einnehmen",
 			skip: "Überspringen",
 			respond: "Antworten",
 			view: "Öffnen",
+		};
+	}
+	if (language === "pt-PT") {
+		return {
+			taken: "Tomar",
+			skip: "Ignorar",
+			respond: "Responder",
+			view: "Ver",
 		};
 	}
 
@@ -117,13 +126,14 @@ function appendFallbackActionLinks(message: string, options: PushNotificationOpt
 	}
 
 	const lines = [message.trimEnd()];
+	const labels = getNotificationActionLabels(options.language ?? "en-US");
 
 	if (options.respondUrl) {
-		lines.push("", "Respond:", options.respondUrl);
+		lines.push("", `${labels.respond}:`, options.respondUrl);
 	}
 
 	if (options.viewUrl) {
-		lines.push("", "View:", options.viewUrl);
+		lines.push("", `${labels.view}:`, options.viewUrl);
 	}
 
 	return lines.join("\n");

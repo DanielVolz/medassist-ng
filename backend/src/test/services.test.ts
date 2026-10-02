@@ -534,7 +534,7 @@ describe("Scheduler Utils - Depletion Calculation", () => {
 	describe("calculateDepletionInfo", () => {
 		it("should calculate days left correctly", () => {
 			const blisters: Blister[] = [{ usage: 1, every: 1, start: "2025-01-01T08:00" }];
-			const result = calculateDepletionInfo({ count: 30, blisters }, "en");
+			const result = calculateDepletionInfo({ count: 30, blisters }, "en-US");
 			expect(result.daysLeft).toBe(30);
 			expect(result.depletionDate).toBeTruthy();
 		});
@@ -544,32 +544,32 @@ describe("Scheduler Utils - Depletion Calculation", () => {
 				{ usage: 1, every: 1, start: "2025-01-01T08:00" },
 				{ usage: 1, every: 1, start: "2025-01-01T20:00" },
 			];
-			const result = calculateDepletionInfo({ count: 30, blisters }, "en");
+			const result = calculateDepletionInfo({ count: 30, blisters }, "en-US");
 			expect(result.daysLeft).toBe(15);
 		});
 
 		it("should return null when no blisters configured", () => {
-			const result = calculateDepletionInfo({ count: 30, blisters: [] }, "en");
+			const result = calculateDepletionInfo({ count: 30, blisters: [] }, "en-US");
 			expect(result.daysLeft).toBeNull();
 			expect(result.depletionDate).toBeNull();
 		});
 
 		it("should return null when usage is zero", () => {
 			const blisters: Blister[] = [{ usage: 0, every: 1, start: "2025-01-01T08:00" }];
-			const result = calculateDepletionInfo({ count: 30, blisters }, "en");
+			const result = calculateDepletionInfo({ count: 30, blisters }, "en-US");
 			expect(result.daysLeft).toBeNull();
 		});
 
 		it("should floor the days left", () => {
 			// 10 pills / 3 per day = 3.33... days -> floors to 3
 			const blisters: Blister[] = [{ usage: 3, every: 1, start: "2025-01-01T08:00" }];
-			const result = calculateDepletionInfo({ count: 10, blisters }, "en");
+			const result = calculateDepletionInfo({ count: 10, blisters }, "en-US");
 			expect(result.daysLeft).toBe(3);
 		});
 
 		it("should handle German language", () => {
 			const blisters: Blister[] = [{ usage: 1, every: 1, start: "2025-01-01T08:00" }];
-			const result = calculateDepletionInfo({ count: 10, blisters }, "de");
+			const result = calculateDepletionInfo({ count: 10, blisters }, "de-DE");
 			expect(result.depletionDate).toBeTruthy();
 			// German locale should be used
 		});

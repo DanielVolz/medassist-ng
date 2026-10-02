@@ -672,7 +672,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.lowStockDays).toBe(30);
 			expect(data.normalStockDays).toBe(90);
 			expect(data.highStockDays).toBe(180);
-			expect(data.language).toBe("en");
+			expect(data.language).toBe("en-US");
 			expect(data.stockCalculationMode).toBe("automatic");
 		});
 
@@ -714,7 +714,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(data.emailEnabled).toBe(true);
 			expect(data.notificationEmail).toBe("test@example.com");
 			expect(data.lowStockDays).toBe(14);
-			expect(data.language).toBe("de");
+			expect(data.language).toBe("de-DE");
 			expect(data.stockCalculationMode).toBe("manual");
 		});
 
@@ -846,7 +846,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(response.statusCode).toBe(200);
 
 			const getResponse = await app.inject({ method: "GET", url: "/settings" });
-			expect(getResponse.json().language).toBe("en");
+			expect(getResponse.json().language).toBe("en-US");
 		});
 	});
 

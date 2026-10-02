@@ -1,4 +1,5 @@
 import formbody from "@fastify/formbody";
+import { normalizeAppLanguage } from "@medassist/shared";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -39,7 +40,7 @@ const publicNotificationActionMethods = "GET,HEAD,POST,OPTIONS";
 const reminderFooterSeparator = "\n\n---\n";
 
 function getLanguage(language: string | null): Language {
-	return language === "de" ? "de" : "en";
+	return normalizeAppLanguage(language);
 }
 
 function wantsHtml(request: FastifyRequest): boolean {
@@ -60,44 +61,34 @@ function applyPublicNotificationCorsHeaders(
 }
 
 function getAlreadyProcessedText(language: Language, resolvedAction: NotificationMutationAction) {
+	const copy = getTranslations(language).actionPage;
 	if (resolvedAction === "taken") {
 		return {
-			bodyTitle: language === "de" ? "Bereits verarbeitet" : "Already processed",
-			bodyText:
-				language === "de"
-					? "Diese Einnahme ist bereits als genommen markiert. Wenn Sie das ändern möchten, öffnen Sie MedAssist und machen Sie die Einnahme dort rückgängig."
-					: "This dose is already marked as taken. If you need to change it, open MedAssist and undo it there.",
-			jsonMessage:
-				language === "de"
-					? "Diese Einnahme ist bereits als genommen markiert. Änderungen sind nur in MedAssist möglich."
-					: "This dose is already marked as taken. Changes can only be made in MedAssist.",
+			bodyTitle: copy.alreadyProcessedTitle,
+			bodyText: copy.alreadyTakenBody,
+			jsonMessage: copy.alreadyTakenJson,
 		};
 	}
 
 	return {
-		bodyTitle: language === "de" ? "Bereits verarbeitet" : "Already processed",
-		bodyText:
-			language === "de"
-				? "Diese Einnahme ist bereits als übersprungen markiert. Wenn Sie sie stattdessen als genommen markieren möchten, öffnen Sie MedAssist und machen Sie das dort."
-				: "This intake is already marked as skipped. If you want to mark it as taken instead, open MedAssist and do that there.",
-		jsonMessage:
-			language === "de"
-				? "Diese Einnahme ist bereits als übersprungen markiert. Änderungen sind nur in MedAssist möglich."
-				: "This intake is already marked as skipped. Changes can only be made in MedAssist.",
+		bodyTitle: copy.alreadyProcessedTitle,
+		bodyText: copy.alreadySkippedBody,
+		jsonMessage: copy.alreadySkippedJson,
 	};
 }
 
 function getActionRecordedText(language: Language, action: NotificationMutationAction) {
+	const copy = getTranslations(language).actionPage;
 	if (action === "taken") {
 		return {
-			bodyTitle: language === "de" ? "Aktion gespeichert" : "Action recorded",
-			bodyText: language === "de" ? "Die Einnahme wurde als genommen markiert." : "The dose was marked as taken.",
+			bodyTitle: copy.actionRecordedTitle,
+			bodyText: copy.doseTakenBody,
 		};
 	}
 
 	return {
-		bodyTitle: language === "de" ? "Aktion gespeichert" : "Action recorded",
-		bodyText: language === "de" ? "Die Einnahme wurde als übersprungen markiert." : "The intake was marked as skipped.",
+		bodyTitle: copy.actionRecordedTitle,
+		bodyText: copy.intakeSkippedBody,
 	};
 }
 
@@ -237,6 +228,7 @@ async function replaceNtfyNotificationSequence(options: {
 	const labels = getNotificationActionLabels(options.language);
 	const replacementMessage = buildReplacementReminderMessage(options.language, options.action, options.originalMessage);
 	const result = await sendPushNotification(settings.shoutrrrUrl, options.title, replacementMessage, {
+		language: options.language,
 		actions: options.viewUrl ? [{ kind: "view", label: labels.view, url: options.viewUrl, method: "GET" }] : undefined,
 		viewUrl: options.viewUrl ?? undefined,
 		clickUrl: options.viewUrl ?? undefined,
@@ -414,6 +406,7 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 
 			const language = getLanguage(record.group.language ?? null);
 			const labels = getNotificationActionLabels(language);
+			const copy = getTranslations(language).actionPage;
 			const resolvedAction = normalizeNotificationAction(record.group.resolvedAction);
 			let bodyTitle: string;
 			let bodyText: string;
@@ -423,25 +416,16 @@ export async function notificationActionRoutes(app: FastifyInstance) {
 				({ bodyTitle, bodyText } = getAlreadyProcessedText(language, resolvedAction));
 			} else {
 				if (record.token.kind === "taken") {
-					bodyTitle = language === "de" ? "Einnahme bestätigen" : "Confirm dose";
-					bodyText =
-						language === "de"
-							? "Bestätigen Sie, dass diese Einnahme als genommen markiert werden soll."
-							: "Confirm that this dose should be marked as taken.";
+					bodyTitle = copy.confirmDoseTitle;
+					bodyText = copy.confirmDoseText;
 					actionButtons = [{ label: labels.taken }];
 				} else if (record.token.kind === "skip" || record.token.kind === "dismiss") {
-					bodyTitle = language === "de" ? "Einnahme überspringen" : "Skip intake";
-					bodyText =
-						language === "de"
-							? "Bestätigen Sie, dass diese Einnahme als übersprungen markiert werden soll."
-							: "Confirm that this intake should be marked as skipped.";
+					bodyTitle = copy.skipIntakeTitle;
+					bodyText = copy.skipIntakeText;
 					actionButtons = [{ label: labels.skip }];
 				} else {
-					bodyTitle = language === "de" ? "Erinnerung beantworten" : "Respond to reminder";
-					bodyText =
-						language === "de"
-							? "Wählen Sie eine Aktion für diese Medikamentenerinnerung."
-							: "Choose an action for this medication reminder.";
+					bodyTitle = copy.respondTitle;
+					bodyText = copy.respondText;
 					actionButtons = [
 						{ label: labels.taken, formAction: "?action=taken" },
 						{ label: labels.skip, formAction: "?action=skip" },

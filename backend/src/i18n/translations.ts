@@ -1,8 +1,8 @@
 // Backend translations for notifications
-import { getRegionForTimezone } from "@medassist/shared";
+import { type AppLanguage, getRegionForTimezone, normalizeAppLanguage } from "@medassist/shared";
 import { parseStringListEnv } from "../utils/env-parsing.js";
 
-export type Language = "en" | "de";
+export type Language = AppLanguage;
 
 function getRegionFromTimezone(): string | undefined {
 	const tz = process.env.TZ;
@@ -50,6 +50,9 @@ type TranslationKeys = {
 		};
 		pills: string;
 		takenBy: string;
+		repeatLast: string;
+		repeatOne: string;
+		repeatMultiple: string;
 	};
 	// Push notifications
 	push: {
@@ -139,10 +142,26 @@ type TranslationKeys = {
 		soon: string;
 		footer: string;
 	};
+	actionPage: {
+		alreadyProcessedTitle: string;
+		alreadyTakenBody: string;
+		alreadyTakenJson: string;
+		alreadySkippedBody: string;
+		alreadySkippedJson: string;
+		actionRecordedTitle: string;
+		doseTakenBody: string;
+		intakeSkippedBody: string;
+		confirmDoseTitle: string;
+		confirmDoseText: string;
+		skipIntakeTitle: string;
+		skipIntakeText: string;
+		respondTitle: string;
+		respondText: string;
+	};
 };
 
 const translations: Record<Language, TranslationKeys> = {
-	en: {
+	"en-US": {
 		stockReminder: {
 			subject: "MedAssist-ng: ⚠️ {count} Medication{s} Running Critically Low",
 			title: "⚠️ MedAssist-ng: Automatic Reorder Reminder",
@@ -180,6 +199,9 @@ const translations: Record<Language, TranslationKeys> = {
 			},
 			pills: "pills",
 			takenBy: "for {name}",
+			repeatLast: "⚠️ This is the last reminder.",
+			repeatOne: "ℹ️ One more reminder will be sent in {minutes} minutes.",
+			repeatMultiple: "ℹ️ {count} more reminders will be sent every {minutes} minutes.",
 		},
 		push: {
 			stockTitle: "MedAssist-ng: 1 Medication Running Critically Low",
@@ -265,8 +287,26 @@ const translations: Record<Language, TranslationKeys> = {
 			soon: "soon",
 			footer: "🤖 Sent from MedAssist-ng",
 		},
+		actionPage: {
+			alreadyProcessedTitle: "Already processed",
+			alreadyTakenBody:
+				"This dose is already marked as taken. If you need to change it, open MedAssist and undo it there.",
+			alreadyTakenJson: "This dose is already marked as taken. Changes can only be made in MedAssist.",
+			alreadySkippedBody:
+				"This intake is already marked as skipped. If you want to mark it as taken instead, open MedAssist and do that there.",
+			alreadySkippedJson: "This intake is already marked as skipped. Changes can only be made in MedAssist.",
+			actionRecordedTitle: "Action recorded",
+			doseTakenBody: "The dose was marked as taken.",
+			intakeSkippedBody: "The intake was marked as skipped.",
+			confirmDoseTitle: "Confirm dose",
+			confirmDoseText: "Confirm that this dose should be marked as taken.",
+			skipIntakeTitle: "Skip intake",
+			skipIntakeText: "Confirm that this intake should be marked as skipped.",
+			respondTitle: "Respond to reminder",
+			respondText: "Choose an action for this medication reminder.",
+		},
 	},
-	de: {
+	"de-DE": {
 		stockReminder: {
 			subject: "MedAssist-ng: ⚠️ {count} Medikament{e} kritisch niedrig",
 			title: "⚠️ MedAssist-ng: Automatische Nachbestell-Erinnerung",
@@ -305,6 +345,9 @@ const translations: Record<Language, TranslationKeys> = {
 			},
 			pills: "Tabletten",
 			takenBy: "für {name}",
+			repeatLast: "⚠️ Dies ist die letzte Erinnerung.",
+			repeatOne: "ℹ️ Eine weitere Erinnerung wird in {minutes} Minuten gesendet.",
+			repeatMultiple: "ℹ️ {count} weitere Erinnerungen werden alle {minutes} Minuten gesendet.",
 		},
 		push: {
 			stockTitle: "MedAssist-ng: 1 Medikament kritisch niedrig",
@@ -392,11 +435,174 @@ const translations: Record<Language, TranslationKeys> = {
 			soon: "bald",
 			footer: "🤖 Gesendet von MedAssist-ng",
 		},
+		actionPage: {
+			alreadyProcessedTitle: "Bereits verarbeitet",
+			alreadyTakenBody:
+				"Diese Einnahme ist bereits als genommen markiert. Wenn Sie das ändern möchten, öffnen Sie MedAssist und machen Sie die Einnahme dort rückgängig.",
+			alreadyTakenJson: "Diese Einnahme ist bereits als genommen markiert. Änderungen sind nur in MedAssist möglich.",
+			alreadySkippedBody:
+				"Diese Einnahme ist bereits als übersprungen markiert. Wenn Sie sie stattdessen als genommen markieren möchten, öffnen Sie MedAssist und machen Sie das dort.",
+			alreadySkippedJson:
+				"Diese Einnahme ist bereits als übersprungen markiert. Änderungen sind nur in MedAssist möglich.",
+			actionRecordedTitle: "Aktion gespeichert",
+			doseTakenBody: "Die Einnahme wurde als genommen markiert.",
+			intakeSkippedBody: "Die Einnahme wurde als übersprungen markiert.",
+			confirmDoseTitle: "Einnahme bestätigen",
+			confirmDoseText: "Bestätigen Sie, dass diese Einnahme als genommen markiert werden soll.",
+			skipIntakeTitle: "Einnahme überspringen",
+			skipIntakeText: "Bestätigen Sie, dass diese Einnahme als übersprungen markiert werden soll.",
+			respondTitle: "Erinnerung beantworten",
+			respondText: "Wählen Sie eine Aktion für diese Medikamentenerinnerung.",
+		},
+	},
+	"pt-PT": {
+		stockReminder: {
+			subject: "MedAssist-ng: ⚠️ {count} medicamento{s} a acabar",
+			title: "⚠️ MedAssist-ng: Aviso Automático de Encomenda",
+			description: "Os seguintes medicamentos estão a acabar e é necessário encomendar mais:",
+			descriptionEmpty: "Os seguintes medicamentos acabaram e é necessário encomendar mais de imediato:",
+			descriptionMixed: "É necessário encomendar os seguintes medicamentos:",
+			alertSingle: "⚠️ 1 medicamento a acabar!",
+			alertMultiple: "⚠️ {count} medicamentos a acabar!",
+			alertEmptySingle: "🚨 1 medicamento acabou - encomende imediatamente!",
+			alertEmptyMultiple: "🚨 {count} medicamentos acabaram - encomende imediatamente!",
+			alertLowSingle: "⚠️ 1 medicamento a acabar",
+			alertLowMultiple: "⚠️ {count} medicamentos a acabar",
+			alertLowStockSingle: "⚠️ 1 medicamento com pouca quantidade",
+			alertLowStockMultiple: "⚠️ {count} medicamentos com pouca quantidade",
+			descriptionLow: "Os seguintes medicamentos estão a acabar e é necessário encomendar mais:",
+			tableHeaders: {
+				medication: "Medicamento",
+				pills: "Disponível",
+				days: "Dias",
+				runsOut: "Acaba",
+			},
+			now: "AGORA",
+			repeatDailyNote: "Está a receber este aviso diário porque 'Repetir Diariamente' está activo nas definições.",
+		},
+		intakeReminder: {
+			subject: "MedAssist-ng: Aviso de medicamento - {medications}",
+			title: "💊 MedAssist-ng - Aviso de toma",
+			description: "Daqui a {minutes} minutos é altura de tomar o medicamento:",
+			alertSingle: "💊 1 medicamento agendado",
+			alertMultiple: "💊 {count} medicamentos agendados",
+			tableHeaders: {
+				medication: "Medicamento",
+				dosage: "Dosagem",
+				time: "Hora",
+			},
+			pills: "comprimidos",
+			takenBy: "para {name}",
+			repeatLast: "⚠️ Este é o último aviso.",
+			repeatOne: "ℹ️ Será enviado mais um aviso dentro de {minutes} minutos.",
+			repeatMultiple: "ℹ️ Serão enviados mais {count} avisos, de {minutes} em {minutes} minutos.",
+		},
+		push: {
+			stockTitle: "MedAssist-ng: 1 medicamento a acabar",
+			stockTitleMultiple: "MedAssist-ng: {count} Medicamentos a Acabar",
+			intakeTitle: "💊 Aviso: Toma de medicamento em {minutes} min",
+			intakeTakenConfirmation: "✅ Esta toma foi assinalada como tomada.",
+			intakeSkippedConfirmation: "⏭️ Esta toma foi assinalada como ignorada.",
+			pillsLeft: "{count} comprimidos",
+			daysLeft: "{count} dias restantes",
+			pillsAt: "{count} comprimidos às {time}",
+			repeatDailyNote: "(Aviso diário ativado)",
+			empty: "Esgotado",
+			low: "Crítico",
+			critical: "Crítico",
+			lowStock: "Baixo",
+			reorderNow: "Repor agora!",
+			emptySection: "Esgotado (repor imediatamente)",
+			lowSection: "Existências muito baixas",
+			criticalSection: "Existências em estado crítico",
+			lowStockSection: "Poucas existências",
+		},
+		prescriptionReminder: {
+			subjectSingle: "MedAssist-ng: 🚨 Aviso de renovação da receita",
+			subjectMultiple: "MedAssist-ng: 🚨 {count} receitas precisam de ser renovadas em breve",
+			pushTitleLow: "💊 MedAssist-ng: restam poucas renovações em {count} receitas",
+			pushTitleEmpty: "💊 MedAssist-ng: {count} receitas precisam de ser renovadas agora",
+			pushEmpty: "receitas sem renovações",
+			pushEmptySingle: "receita sem renovações",
+			pushLow: "receitas com poucas renovações",
+			pushLowSingle: "receita com poucas renovações",
+			pushRenewNow: "Renovar agora!",
+			pushEmptySection: "Receitas sem renovações restantes",
+			pushLowSection: "Receitas quase sem renovações",
+			pushRefillsLeft: "restam {count} renovação(ões) nesta receita",
+			title: "⚠️ MedAssist-ng - Aviso de receita",
+			titleEmpty: "🚨 MedAssist-ng - Aviso de receita",
+			descriptionLow: "Algumas receitas têm poucas renovações restantes.",
+			descriptionEmpty: "Algumas receitas já não têm renovações. Contacte o seu médico para as renovar.",
+			alertLowSingle: "⚠️ Resta uma renovação nesta receita",
+			alertLowMultiple: "⚠️ Restam poucas renovações em {count} receitas",
+			alertEmptySingle: "🚨 Esta receita precisa de ser renovada agora",
+			alertEmptyMultiple: "🚨 {count} receitas precisam de ser renovadas agora",
+			line: "{name}: restam {refills} renovação(ões) nesta receita{expirySuffix}",
+			lineEmpty: "{name}: não restam renovações nesta receita{expirySuffix}",
+			expiresSuffix: ", válida até {date}",
+			repeatDailyNote: "Recebe este aviso diário porque a opção «Repetir diariamente» está ativada nas definições.",
+			tableHeaders: {
+				medication: "Medicamento",
+				refillsLeft: "Renovações restantes da receita",
+				reminderThreshold: "Limiar do aviso",
+				prescriptionExpires: "Validade da receita",
+			},
+		},
+		demandCalculator: {
+			subject: "MedAssist-ng: Resumo das existências ({from} - {until})",
+			title: "MedAssist-ng: Calculadora de necessidades",
+			description: "Resumo das existências de {from} a {until}",
+			summaryOutOfStock: "⚠️ {count} medicamento{s} ficarão sem existências durante este período.",
+			summaryAllOk: "✓ Há existências suficientes de todos os medicamentos para este período.",
+			tableHeaders: {
+				medication: "Medicação",
+				usage: "Utilização",
+				needed: "Lamelas necessárias",
+				prescriptionRefills: "Renovações da receita",
+				available: "Disponível",
+				status: "Estado",
+			},
+			statusEnough: "✓ Suficiente",
+			statusEmpty: "✗ Vazio",
+			prescriptionNotApplicable: "–",
+		},
+		common: {
+			pill: "comprimido",
+			pills: "comprimidos",
+			puffs: "inalações",
+			injections: "injecções",
+			units: "unidades",
+			ml: "ml",
+			blister: "lamela",
+			blisters: "lamelas",
+			day: "dia",
+			days: "dias",
+			soon: "em breve",
+			footer: "🤖 Enviado de MedAssist-ng",
+		},
+		actionPage: {
+			alreadyProcessedTitle: "Já processado",
+			alreadyTakenBody: "Esta toma já está assinalada como tomada. Para a alterar, abra o MedAssist e anule a toma.",
+			alreadyTakenJson: "Esta toma já está assinalada como tomada. Só pode fazer alterações no MedAssist.",
+			alreadySkippedBody:
+				"Esta toma já está assinalada como ignorada. Para a assinalar como tomada, abra o MedAssist e altere-a.",
+			alreadySkippedJson: "Esta toma já está assinalada como ignorada. Só pode fazer alterações no MedAssist.",
+			actionRecordedTitle: "Ação registada",
+			doseTakenBody: "A toma foi assinalada como tomada.",
+			intakeSkippedBody: "A toma foi assinalada como ignorada.",
+			confirmDoseTitle: "Confirmar toma",
+			confirmDoseText: "Confirme que pretende assinalar esta toma como tomada.",
+			skipIntakeTitle: "Ignorar toma",
+			skipIntakeText: "Confirme que pretende assinalar esta toma como ignorada.",
+			respondTitle: "Responder ao aviso",
+			respondText: "Escolha uma ação para este aviso de medicação.",
+		},
 	},
 };
 
 export function getTranslations(language: Language): TranslationKeys {
-	return translations[language] || translations.en;
+	return translations[normalizeAppLanguage(language)];
 }
 
 // Helper function to replace placeholders in strings
@@ -410,20 +616,23 @@ export function t(template: string, params: Record<string, string | number> = {}
 
 /**
  * Get locale for formatting based on language and timezone region.
- * Combines language (en/de) with region from timezone (DE/US/etc.)
- * Example: lang=en + TZ=Europe/Berlin → en-DE (English text, German format = 24h time)
+ * Combines the language with the timezone region where possible.
+ * Use the language subtag so app IDs do not produce tags such as pt-PT-DE.
  */
 export function getDateLocale(language: Language): string {
 	const region = getRegionFromTimezone();
 
 	if (region) {
-		return `${language}-${region}`;
+		const localeLanguage = language.split("-")[0];
+		return `${localeLanguage}-${region}`;
 	}
 
 	// Fallback: use language default
 	switch (language) {
-		case "de":
+		case "de-DE":
 			return "de-DE";
+		case "pt-PT":
+			return "pt-PT";
 		default:
 			return "en-US";
 	}

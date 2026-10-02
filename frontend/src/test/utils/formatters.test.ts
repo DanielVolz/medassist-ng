@@ -12,7 +12,9 @@ import {
 	formatNumber,
 	getBlisterStock,
 	getExpiryClass,
+	getSystemLocale,
 	pad2,
+	setDefaultFormattingTimezone,
 	toDateValue,
 	toInputValue,
 	toIsoString,
@@ -20,6 +22,26 @@ import {
 	toMonthValue,
 	toTimeValue,
 } from "../../utils/formatters";
+
+describe("getSystemLocale", () => {
+	it("combines a regional UI language with the timezone region", () => {
+		setDefaultFormattingTimezone("Europe/Berlin");
+		try {
+			expect(getSystemLocale("pt-PT")).toBe("pt-DE");
+		} finally {
+			setDefaultFormattingTimezone(null);
+		}
+	});
+
+	it("uses the selected language without a known timezone region", () => {
+		setDefaultFormattingTimezone("Etc/UTC");
+		try {
+			expect(getSystemLocale("pt-PT")).toBe("pt-PT");
+		} finally {
+			setDefaultFormattingTimezone(null);
+		}
+	});
+});
 
 describe("formatNumber", () => {
 	it('returns "—" for null', () => {

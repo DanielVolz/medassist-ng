@@ -44,6 +44,10 @@ Local Playwright runs start their own backend and frontend servers instead of re
 
 This keeps `npm --prefix frontend run test:e2e` from colliding with the Docker dev stack on `3000`/`5173` or mutating the normal local SQLite data. Override these defaults with `PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_API_BASE_URL`, `PLAYWRIGHT_FRONTEND_PORT`, or `PLAYWRIGHT_DATA_DIR` when an E2E run must target a specific external server.
 
+## Browser MCP Access
+
+The workspace MCP servers `playwright` (Chrome) and `playwright-firefox`, plus the global user Playwright and Chrome DevTools servers, default to headless, isolated browser sessions. Headless mode prevents visible windows and focus theft; use a headed session only when the task cannot be completed headlessly, and announce the visible browser launch to the user beforehand. Isolated sessions avoid profile lock collisions but do not persist across browser close or server restart; existing browser profiles are not deleted. After editing MCP configs, restart the existing modified servers through VS Code's `MCP: List Servers` command or reload VS Code for the new flags to take effect.
+
 ## Frontend Dev Server Behind a Proxy
 
 If the frontend dev server runs behind a reverse proxy or on a remote host, set these frontend-only environment variables before starting Vite:

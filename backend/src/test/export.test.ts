@@ -4,6 +4,7 @@
  */
 
 import { randomBytes } from "node:crypto";
+import { normalizeAppLanguage } from "@medassist/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
 	buildTestApp,
@@ -122,7 +123,7 @@ async function registerExportRoutes(ctx: TestContext) {
 				lowStockDays: s.low_stock_days ?? 30,
 				normalStockDays: s.normal_stock_days ?? 90,
 				highStockDays: s.high_stock_days ?? 180,
-				language: s.language ?? "en",
+				language: normalizeAppLanguage(s.language),
 				stockCalculationMode: s.stock_calculation_mode ?? "automatic",
 			};
 		}
@@ -260,7 +261,7 @@ async function registerExportRoutes(ctx: TestContext) {
 					s.lowStockDays ?? 30,
 					s.normalStockDays ?? 90,
 					s.highStockDays ?? 180,
-					s.language ?? "en",
+					normalizeAppLanguage(s.language),
 					s.stockCalculationMode ?? "automatic",
 				],
 			});
@@ -392,7 +393,7 @@ describe("Export/Import API", () => {
 			});
 		});
 
-		it("should export settings", async () => {
+		it("normalizes legacy database languages when exporting settings", async () => {
 			// Create settings
 			await ctx.client.execute({
 				sql: `INSERT INTO user_settings (
@@ -411,7 +412,7 @@ describe("Export/Import API", () => {
 			expect(data.settings).toBeDefined();
 			expect(data.settings.emailEnabled).toBe(true);
 			expect(data.settings.notificationEmail).toBe("test@example.com");
-			expect(data.settings.language).toBe("de");
+			expect(data.settings.language).toBe("de-DE");
 			expect(data.settings.lowStockDays).toBe(14);
 			expect(data.settings.shareStockStatus).toBeUndefined();
 		});
@@ -694,7 +695,7 @@ describe("Export/Import API", () => {
 			expect(doseId).toMatch(/^\d+-0-\d+$/);
 		});
 
-		it("should import settings", async () => {
+		it("normalizes legacy language IDs in imported settings", async () => {
 			const importData = {
 				version: "1.0",
 				exportedAt: new Date().toISOString(),
@@ -725,7 +726,7 @@ describe("Export/Import API", () => {
 			expect(settings.rows).toHaveLength(1);
 			expect(settings.rows[0].email_enabled).toBe(1);
 			expect(settings.rows[0].notification_email).toBe("imported@example.com");
-			expect(settings.rows[0].language).toBe("de");
+			expect(settings.rows[0].language).toBe("de-DE");
 			expect(settings.rows[0].low_stock_days).toBe(14);
 		});
 
@@ -862,7 +863,7 @@ describe("Export/Import API", () => {
 
 			expect(reExportData.settings.emailEnabled).toBe(true);
 			expect(reExportData.settings.notificationEmail).toBe("test@example.com");
-			expect(reExportData.settings.language).toBe("de");
+			expect(reExportData.settings.language).toBe("de-DE");
 
 			expect(reExportData.shareLinks).toHaveLength(1);
 			expect(reExportData.shareLinks[0].takenBy).toBe("Daniel");

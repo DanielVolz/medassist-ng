@@ -130,8 +130,8 @@ describe("useSettings", () => {
 			expect(result.current.settingsLoading).toBe(false);
 		});
 
-		expect(result.current.settings.language).toBe("de");
-		expect(i18n.changeLanguage).toHaveBeenCalledWith("de");
+		expect(result.current.settings.language).toBe("de-DE");
+		expect(i18n.changeLanguage).toHaveBeenCalledWith("de-DE");
 	});
 
 	it("tracks unsaved changes only for user-editable settings fields", async () => {

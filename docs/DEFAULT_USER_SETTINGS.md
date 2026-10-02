@@ -47,7 +47,7 @@ Scope and behavior:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEFAULT_LANGUAGE` | `en` | Default language (`en` or `de`). |
+| `DEFAULT_LANGUAGE` | `en-US` | Default app language (`en-US`, `de-DE`, or `pt-PT`); legacy `en` and `de` values are normalized. |
 | `DEFAULT_STOCK_CALCULATION_MODE` | `automatic` | Default stock mode (`automatic` or `manual`). |
 | `DEFAULT_SHARE_MEDICATION_OVERVIEW` | `false` | Show medication overview section on shared schedule links. |
 | `DEFAULT_UPCOMING_TODAY_ONLY` | `false` | Show only today's upcoming doses by default. |

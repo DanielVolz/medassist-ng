@@ -157,18 +157,24 @@ describe("notification action renderer", () => {
 		]);
 	});
 
-	it("uses consistent action-form labels for English and German", () => {
-		expect(getNotificationActionLabels("en")).toEqual({
+	it("uses consistent action-form labels for English, German and Portuguese", () => {
+		expect(getNotificationActionLabels("en-US")).toEqual({
 			taken: "Take",
 			skip: "Skip",
 			respond: "Respond",
 			view: "View",
 		});
-		expect(getNotificationActionLabels("de")).toEqual({
+		expect(getNotificationActionLabels("de-DE")).toEqual({
 			taken: "Einnehmen",
 			skip: "Überspringen",
 			respond: "Antworten",
 			view: "Öffnen",
+		});
+		expect(getNotificationActionLabels("pt-PT")).toEqual({
+			taken: "Tomar",
+			skip: "Ignorar",
+			respond: "Responder",
+			view: "Ver",
 		});
 	});
 
@@ -182,5 +188,16 @@ describe("notification action renderer", () => {
 		expect(result.message).toBe(
 			"Body\n\nRespond:\nhttps://app.example.com/api/notification-actions/respond-token\n\nView:\nhttps://app.example.com/?date=2026-01-05"
 		);
+	});
+
+	it("uses Portuguese labels for non-ntfy action links", () => {
+		const result = renderNotificationActionPayload("https://hooks.slack.com/services/a/b/c", "Body", {
+			language: "pt-PT",
+			respondUrl: "https://app.example.com/api/notification-actions/respond-token",
+			viewUrl: "https://app.example.com/?date=2026-01-05",
+		});
+		expect(result.message).toContain("\n\nResponder:\n");
+		expect(result.message).toContain("\n\nVer:\n");
+		expect(result.message).not.toContain("View:");
 	});
 });

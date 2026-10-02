@@ -95,25 +95,36 @@ export async function sendPasswordResetEmail(input: {
 	language: Language;
 }): Promise<EmailDeliveryResult> {
 	const resetLink = buildPasswordResetLink(input.token);
-	const isGerman = input.language === "de";
-	const subject = isGerman ? "MedAssist-ng Passwort zuruecksetzen" : "Reset your MedAssist-ng password";
-	const content = isGerman
-		? {
-				title: "MedAssist-ng - Passwort zuruecksetzen",
-				description: "Du hast eine Anfrage zum Zuruecksetzen deines MedAssist-ng Passworts erhalten.",
-				action: "Lege ueber diesen Link ein neues Passwort fest:",
-				cta: "Neues Passwort festlegen",
-				expiry: "Der Link ist 15 Minuten gueltig.",
-				securityNote: "Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.",
-			}
-		: {
-				title: "MedAssist-ng - Password reset",
-				description: "You requested a MedAssist-ng password reset.",
-				action: "Set a new password using this link:",
-				cta: "Set new password",
-				expiry: "This link is valid for 15 minutes.",
-				securityNote: "If you did not request this, ignore this email.",
-			};
+	let subject = "Reset your MedAssist-ng password";
+	let content = {
+		title: "MedAssist-ng - Password reset",
+		description: "You requested a MedAssist-ng password reset.",
+		action: "Set a new password using this link:",
+		cta: "Set new password",
+		expiry: "This link is valid for 15 minutes.",
+		securityNote: "If you did not request this, ignore this email.",
+	};
+	if (input.language === "pt-PT") {
+		subject = "Repor a palavra-passe do MedAssist-ng";
+		content = {
+			title: "MedAssist-ng - Repor palavra-passe",
+			description: "Recebeu um pedido para repor a sua palavra-passe do MedAssist-ng.",
+			action: "Defina uma nova palavra-passe através desta ligação:",
+			cta: "Definir nova palavra-passe",
+			expiry: "Esta ligação é válida durante 15 minutos.",
+			securityNote: "Se não fez este pedido, ignore este email.",
+		};
+	} else if (input.language === "de-DE") {
+		subject = "MedAssist-ng Passwort zuruecksetzen";
+		content = {
+			title: "MedAssist-ng - Passwort zuruecksetzen",
+			description: "Du hast eine Anfrage zum Zuruecksetzen deines MedAssist-ng Passworts erhalten.",
+			action: "Lege ueber diesen Link ein neues Passwort fest:",
+			cta: "Neues Passwort festlegen",
+			expiry: "Der Link ist 15 Minuten gueltig.",
+			securityNote: "Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.",
+		};
+	}
 	const text = `${content.title}\n\n${content.description}\n\n${content.action}\n${resetLink}\n\n${content.expiry} ${content.securityNote}\n\n---\n${getFooterPlain(input.language)}`;
 	const escapedResetLink = escapeHtml(resetLink);
 	const html = `

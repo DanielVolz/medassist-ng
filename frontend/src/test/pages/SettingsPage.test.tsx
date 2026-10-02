@@ -14,7 +14,7 @@ vi.mock("react-i18next", async () => {
 		useTranslation: () => ({
 			t: (key: string) => key,
 			i18n: {
-				language: "en",
+				language: "en-US",
 				changeLanguage: changeLanguageMock,
 			},
 		}),
@@ -42,7 +42,7 @@ const createMockContext = (overrides = {}) => ({
 		repeatRemindersEnabled: false,
 		reminderRepeatIntervalMinutes: 30,
 		maxNaggingReminders: 5,
-		language: "en",
+		language: "en-US",
 		timezone: "Europe/Berlin",
 		serverTimezone: "Europe/Berlin",
 		availableTimezones: ["Europe/Berlin", "UTC"],
@@ -227,8 +227,8 @@ describe("SettingsPage", () => {
 		renderPage();
 		const select = screen.getByTestId("settings-language-select").querySelector("select") as HTMLSelectElement | null;
 		expect(select).toBeInTheDocument();
-		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
-		expect(changeLanguageMock).toHaveBeenCalledWith("de");
+		fireEvent.change(select as HTMLSelectElement, { target: { value: "de-DE" } });
+		expect(changeLanguageMock).toHaveBeenCalledWith("de-DE");
 		expect(authFetchMock).toHaveBeenCalledWith("/api/settings/language", expect.objectContaining({ method: "PUT" }));
 	});
 
@@ -247,11 +247,11 @@ describe("SettingsPage", () => {
 		const select = screen.getByTestId("settings-language-select").querySelector("select") as HTMLSelectElement | null;
 		expect(select).toBeInTheDocument();
 
-		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
-		fireEvent.change(select as HTMLSelectElement, { target: { value: "en" } });
+		fireEvent.change(select as HTMLSelectElement, { target: { value: "de-DE" } });
+		fireEvent.change(select as HTMLSelectElement, { target: { value: "en-US" } });
 
 		expect(authFetchMock).toHaveBeenCalledTimes(1);
-		expect(JSON.parse((authFetchMock.mock.calls[0]?.[1]?.body as string) ?? "{}")).toEqual({ language: "de" });
+		expect(JSON.parse((authFetchMock.mock.calls[0]?.[1]?.body as string) ?? "{}")).toEqual({ language: "de-DE" });
 
 		await act(async () => {
 			resolveFirstSave({ ok: true } as Response);
@@ -261,9 +261,9 @@ describe("SettingsPage", () => {
 		await waitFor(() => {
 			expect(authFetchMock).toHaveBeenCalledTimes(2);
 		});
-		expect(JSON.parse((authFetchMock.mock.calls[1]?.[1]?.body as string) ?? "{}")).toEqual({ language: "en" });
-		expect(changeLanguageMock).toHaveBeenCalledWith("de");
-		expect(changeLanguageMock).toHaveBeenCalledWith("en");
+		expect(JSON.parse((authFetchMock.mock.calls[1]?.[1]?.body as string) ?? "{}")).toEqual({ language: "en-US" });
+		expect(changeLanguageMock).toHaveBeenCalledWith("de-DE");
+		expect(changeLanguageMock).toHaveBeenCalledWith("en-US");
 	});
 
 	it("reloads persisted settings when the final language save fails", async () => {
@@ -275,7 +275,7 @@ describe("SettingsPage", () => {
 		const select = screen.getByTestId("settings-language-select").querySelector("select") as HTMLSelectElement | null;
 		expect(select).toBeInTheDocument();
 
-		fireEvent.change(select as HTMLSelectElement, { target: { value: "de" } });
+		fireEvent.change(select as HTMLSelectElement, { target: { value: "de-DE" } });
 
 		await waitFor(() => {
 			expect(loadSettings).toHaveBeenCalledTimes(1);

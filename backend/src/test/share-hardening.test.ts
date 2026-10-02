@@ -215,9 +215,9 @@ describe("share link hardening", () => {
 		const overviewResponse = await app.inject({ method: "GET", url: "/share/abcdef0123456789/overview" });
 
 		expect(response.statusCode, response.body).toBe(200);
-		expect(response.json()).toMatchObject({ takenBy: "Daniel", language: "de" });
+		expect(response.json()).toMatchObject({ takenBy: "Daniel", language: "de-DE" });
 		expect(overviewResponse.statusCode, overviewResponse.body).toBe(200);
-		expect(overviewResponse.json()).toMatchObject({ takenBy: "Daniel", language: "de" });
+		expect(overviewResponse.json()).toMatchObject({ takenBy: "Daniel", language: "de-DE" });
 	});
 
 	it("scopes public share schedule and overview data to the selected person", async () => {
@@ -247,7 +247,7 @@ describe("share link hardening", () => {
 		const scheduleResponse = await app.inject({ method: "GET", url: "/share/abcdef0123456789" });
 		expect(scheduleResponse.statusCode, scheduleResponse.body).toBe(200);
 		const schedule = scheduleResponse.json();
-		expect(schedule.language).toBe("en");
+		expect(schedule.language).toBe("en-US");
 		expect(JSON.stringify(schedule)).not.toContain("Bob");
 		expect(schedule.medications).toHaveLength(1);
 		expect(schedule.medications[0].takenBy).toEqual(["Alice"]);
@@ -261,7 +261,7 @@ describe("share link hardening", () => {
 		const overviewResponse = await app.inject({ method: "GET", url: "/share/abcdef0123456789/overview" });
 		expect(overviewResponse.statusCode, overviewResponse.body).toBe(200);
 		const overview = overviewResponse.json();
-		expect(overview.language).toBe("en");
+		expect(overview.language).toBe("en-US");
 		expect(JSON.stringify(overview)).not.toContain("Bob");
 		expect(overview.medications[0].daysLeft).toBe(2);
 	});
@@ -331,9 +331,9 @@ describe("share link hardening", () => {
 		const overviewResponse = await app.inject({ method: "GET", url: `/share/${token}/overview` });
 
 		expect(response.statusCode, response.body).toBe(410);
-		expect(response.json()).toMatchObject({ takenBy: "Daniel", language: "de" });
+		expect(response.json()).toMatchObject({ takenBy: "Daniel", language: "de-DE" });
 		expect(overviewResponse.statusCode, overviewResponse.body).toBe(410);
-		expect(overviewResponse.json()).toMatchObject({ language: "de" });
+		expect(overviewResponse.json()).toMatchObject({ language: "de-DE" });
 	});
 
 	it("rejects revoked tokens for read and write", async () => {

@@ -100,7 +100,7 @@ async function runReminderCheck(settings: Record<string, unknown>, logger: Retur
 	await checkAndSendIntakeRemindersForUser(
 		{
 			userId: 11,
-			language: "en",
+			language: "en-US",
 			stockCalculationMode: "automatic",
 			emailEnabled: false,
 			notificationEmail: null,

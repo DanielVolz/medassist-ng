@@ -10,6 +10,7 @@ import {
 	isLiquidContainerPackageType,
 	isPackageAmountPackageType,
 	isTubePackageType,
+	normalizeAppLanguage,
 	normalizeIntakeMood,
 	normalizePackageType,
 	PACKAGE_PROFILES,
@@ -18,6 +19,17 @@ import {
 } from "./index.js";
 
 describe("shared contracts", () => {
+	it("normalizes legacy app languages without changing supported locales", () => {
+		expect(normalizeAppLanguage("en")).toBe("en-US");
+		expect(normalizeAppLanguage("de")).toBe("de-DE");
+		expect(normalizeAppLanguage("en-US")).toBe("en-US");
+		expect(normalizeAppLanguage("de-DE")).toBe("de-DE");
+		expect(normalizeAppLanguage("de-AT")).toBe("de-DE");
+		expect(normalizeAppLanguage("pt-PT")).toBe("pt-PT");
+		expect(normalizeAppLanguage("pt-BR")).toBe("pt-PT");
+		expect(normalizeAppLanguage("unknown")).toBe("en-US");
+	});
+
 	it("parses local date-times without applying a UTC offset", () => {
 		const value = parseLocalDateTime("2026-07-10T08:30:45");
 

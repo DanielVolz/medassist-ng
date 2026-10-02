@@ -366,6 +366,8 @@
     "notes": "Notes",
     "medicationImage": "Medication Image",
     "removeImage": "Remove Image",
+    "chooseImage": "Choose image",
+    "noImageSelected": "No image selected",
     "imageUploadErrors": {
       "tooLarge": "Image is too large. Maximum upload size is 10 MB.",
       "invalidType": "Invalid file type. Allowed formats: JPEG, PNG, WebP, GIF.",
@@ -563,7 +565,10 @@
     "loading": "Loading settings...",
     "language": {
       "title": "Language",
-      "select": "Select language"
+      "select": "Select language",
+      "english": "🇬🇧 English",
+      "german": "🇩🇪 Deutsch",
+      "portuguese": "🇵🇹 Português"
     },
     "timezone": {
       "select": "Timezone",

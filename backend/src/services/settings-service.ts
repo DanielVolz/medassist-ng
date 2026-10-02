@@ -1,6 +1,7 @@
 import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { isIP, type LookupFunction } from "node:net";
+import { normalizeAppLanguage } from "@medassist/shared";
 import { eq } from "drizzle-orm";
 import { Agent } from "undici";
 import { db } from "../db/client.js";
@@ -127,7 +128,7 @@ export function getDefaultSettings() {
 		lowStockDays: envInt("DEFAULT_LOW_STOCK_DAYS", 30),
 		normalStockDays: envInt("DEFAULT_NORMAL_STOCK_DAYS", 90),
 		highStockDays: envInt("DEFAULT_HIGH_STOCK_DAYS", 180),
-		language: (process.env.DEFAULT_LANGUAGE as "en" | "de") || "en",
+		language: normalizeAppLanguage(process.env.DEFAULT_LANGUAGE),
 		stockCalculationMode: (process.env.DEFAULT_STOCK_CALCULATION_MODE as "automatic" | "manual") || "automatic",
 		shareMedicationOverview: envBool("DEFAULT_SHARE_MEDICATION_OVERVIEW", false),
 		upcomingTodayOnly: envBool("DEFAULT_UPCOMING_TODAY_ONLY", false),
@@ -660,7 +661,7 @@ function serializeUserSettings(settings: typeof userSettings.$inferSelect): User
 		lowStockDays: settings.lowStockDays,
 		normalStockDays: settings.normalStockDays,
 		highStockDays: settings.highStockDays,
-		language: settings.language as Language,
+		language: normalizeAppLanguage(settings.language),
 		stockCalculationMode: (settings.stockCalculationMode as "automatic" | "manual") ?? "automatic",
 		shareMedicationOverview: settings.shareMedicationOverview ?? false,
 		upcomingTodayOnly: settings.upcomingTodayOnly ?? false,

@@ -1,8 +1,10 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { extname, isAbsolute, relative, resolve } from "node:path";
 import {
+	APP_LANGUAGE_INPUTS,
 	getAsNeededQuantityProfile,
 	INTAKE_MOODS,
+	normalizeAppLanguage,
 	normalizeAsNeededQuantityMilli,
 	normalizeIntakeMood,
 } from "@medassist/shared";
@@ -254,7 +256,7 @@ const settingsSchemaBase = z.object({
 	highStockDays: z.number().int().default(180),
 	expiryWarningDays: z.number().int().default(90),
 	// UI preferences
-	language: z.enum(["en", "de"]).default("en"),
+	language: z.enum(APP_LANGUAGE_INPUTS).default("en-US").transform(normalizeAppLanguage),
 	stockCalculationMode: z.enum(["automatic", "manual"]).default("automatic"),
 	shareMedicationOverview: z.boolean().default(false),
 	upcomingTodayOnly: z.boolean().default(false),
@@ -370,7 +372,7 @@ const importBodyOpenApiSchema = {
 		],
 		asNeededIntakes: [],
 		refillHistory: [{ packsAdded: 1, loosePillsAdded: 4, quantityAdded: 34, refillDate: "2026-03-10T12:00:00.000Z" }],
-		settings: { language: "en", stockCalculationMode: "automatic" },
+		settings: { language: "en-US", stockCalculationMode: "automatic" },
 		shareLinks: [{ takenBy: "Daniel", scheduleDays: 14 }],
 	},
 } as const;
@@ -1062,7 +1064,7 @@ export async function exportRoutes(app: FastifyInstance) {
 						normalStockDays: settings.normalStockDays,
 						highStockDays: settings.highStockDays,
 						expiryWarningDays: settings.expiryWarningDays,
-						language: settings.language,
+						language: normalizeAppLanguage(settings.language),
 						stockCalculationMode: settings.stockCalculationMode,
 						shareMedicationOverview: settings.shareMedicationOverview ?? false,
 						upcomingTodayOnly: settings.upcomingTodayOnly ?? false,
@@ -1605,7 +1607,7 @@ export async function exportRoutes(app: FastifyInstance) {
 							normalStockDays: importData.settings.normalStockDays ?? 90,
 							highStockDays: importData.settings.highStockDays ?? 180,
 							expiryWarningDays: importData.settings.expiryWarningDays ?? 90,
-							language: importData.settings.language ?? "en",
+							language: normalizeAppLanguage(importData.settings.language),
 							stockCalculationMode: importData.settings.stockCalculationMode ?? "automatic",
 							shareMedicationOverview: importData.settings.shareMedicationOverview ?? false,
 							upcomingTodayOnly: importData.settings.upcomingTodayOnly ?? false,

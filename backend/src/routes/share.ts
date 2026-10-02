@@ -1,3 +1,4 @@
+import { APP_LANGUAGES } from "@medassist/shared";
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -109,7 +110,7 @@ const shareReadResponseSchema = {
 	properties: {
 		takenBy: { type: "string" },
 		sharedBy: { type: "string" },
-		language: { type: "string", enum: ["en", "de"] },
+		language: { type: "string", enum: APP_LANGUAGES },
 		scheduleDays: { type: "integer" },
 		medications: { type: "array", items: { type: "object", additionalProperties: true } },
 		shareMedicationOverview: { type: "boolean" },
@@ -132,7 +133,7 @@ const shareExpiredResponseSchema = {
 		code: { type: "string" },
 		ownerUsername: { type: "string" },
 		takenBy: { type: "string" },
-		language: { type: "string", enum: ["en", "de"] },
+		language: { type: "string", enum: APP_LANGUAGES },
 		expiredAt: { type: "string", format: "date-time" },
 	},
 } as const;
@@ -141,7 +142,7 @@ const shareOverviewExpiredResponseSchema = {
 	type: "object",
 	properties: {
 		error: { type: "string" },
-		language: { type: "string", enum: ["en", "de"] },
+		language: { type: "string", enum: APP_LANGUAGES },
 		expiredAt: { type: "string", format: "date-time" },
 	},
 } as const;
@@ -151,7 +152,7 @@ const shareOverviewResponseSchema = {
 	properties: {
 		takenBy: { type: "string" },
 		sharedBy: { type: "string" },
-		language: { type: "string", enum: ["en", "de"] },
+		language: { type: "string", enum: APP_LANGUAGES },
 		generatedAt: { type: "string", format: "date-time" },
 		medications: { type: "array", items: { type: "object", additionalProperties: true } },
 	},
@@ -380,7 +381,7 @@ export async function shareRoutes(app: FastifyInstance) {
 				...getPublicShareContext({
 					share,
 					ownerUsername: owner?.username,
-					language: settings?.language,
+					language: getPublicShareLanguage(settings?.language),
 				}),
 				medications: medicationsWithBlisters,
 				shareMedicationOverview,

@@ -349,17 +349,11 @@ async function sendIntakeReminderEmail(
 	if (isRepeat && repeatIntervalMinutes && currentCount !== undefined && maxCount !== undefined) {
 		const remainingReminders = maxCount - currentCount;
 		if (remainingReminders <= 0) {
-			description = language === "de" ? "⚠️ Dies ist die letzte Erinnerung." : "⚠️ This is the last reminder.";
+			description = tr.intakeReminder.repeatLast;
 		} else if (remainingReminders === 1) {
-			description =
-				language === "de"
-					? `ℹ️ Eine weitere Erinnerung wird in ${repeatIntervalMinutes} Minuten gesendet.`
-					: `ℹ️ One more reminder will be sent in ${repeatIntervalMinutes} minutes.`;
+			description = t(tr.intakeReminder.repeatOne, { minutes: repeatIntervalMinutes });
 		} else {
-			description =
-				language === "de"
-					? `ℹ️ ${remainingReminders} weitere Erinnerungen werden alle ${repeatIntervalMinutes} Minuten gesendet.`
-					: `ℹ️ ${remainingReminders} more reminders will be sent every ${repeatIntervalMinutes} minutes.`;
+			description = t(tr.intakeReminder.repeatMultiple, { count: remainingReminders, minutes: repeatIntervalMinutes });
 		}
 	} else {
 		description = t(tr.intakeReminder.description, { minutes: REMINDER_MINUTES_BEFORE });
@@ -840,10 +834,13 @@ export async function checkAndSendIntakeRemindersForUser(
 		if (hasNaggingReminder && highestSendCount > 0) {
 			// Nagging reminder - show counter
 			const counterStr = `(${highestSendCount}/${maxReminderCount})`;
-			title =
-				language === "de"
-					? `⚠️ Erinnerung: Medikamenteneinnahme ${counterStr}`
-					: `⚠️ Reminder: Medication intake ${counterStr}`;
+			if (language === "pt-PT") {
+				title = `⚠️ Aviso: Toma da medicação ${counterStr}`;
+			} else if (language === "de-DE") {
+				title = `⚠️ Erinnerung: Medikamenteneinnahme ${counterStr}`;
+			} else {
+				title = `⚠️ Reminder: Medication intake ${counterStr}`;
+			}
 		} else {
 			// Advance reminder - no counter
 			title = t(tr.push.intakeTitle, { minutes: REMINDER_MINUTES_BEFORE });
@@ -855,19 +852,13 @@ export async function checkAndSendIntakeRemindersForUser(
 			const remainingReminders = maxReminderCount - highestSendCount;
 			if (remainingReminders <= 0) {
 				// Last reminder
-				repeatNote = language === "de" ? "\n\n⚠️ Dies ist die letzte Erinnerung." : "\n\n⚠️ This is the last reminder.";
+				repeatNote = `\n\n${tr.intakeReminder.repeatLast}`;
 			} else if (remainingReminders === 1) {
 				// One more reminder
-				repeatNote =
-					language === "de"
-						? `\n\nℹ️ Eine weitere Erinnerung wird in ${settings.reminderRepeatIntervalMinutes} Minuten gesendet.`
-						: `\n\nℹ️ One more reminder will be sent in ${settings.reminderRepeatIntervalMinutes} minutes.`;
+				repeatNote = `\n\n${t(tr.intakeReminder.repeatOne, { minutes: settings.reminderRepeatIntervalMinutes })}`;
 			} else {
 				// Multiple reminders remaining
-				repeatNote =
-					language === "de"
-						? `\n\nℹ️ ${remainingReminders} weitere Erinnerungen werden alle ${settings.reminderRepeatIntervalMinutes} Minuten gesendet.`
-						: `\n\nℹ️ ${remainingReminders} more reminders will be sent every ${settings.reminderRepeatIntervalMinutes} minutes.`;
+				repeatNote = `\n\n${t(tr.intakeReminder.repeatMultiple, { count: remainingReminders, minutes: settings.reminderRepeatIntervalMinutes })}`;
 			}
 		}
 
@@ -941,6 +932,7 @@ export async function checkAndSendIntakeRemindersForUser(
 		);
 
 		const result = await sendPushNotification(settings.shoutrrrUrl!, title, message, {
+			language,
 			actions: actionContext?.actions,
 			respondUrl: actionContext?.respondUrl,
 			viewUrl: actionContext?.viewUrl,

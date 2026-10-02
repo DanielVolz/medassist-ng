@@ -621,7 +621,7 @@ describe("SharedSchedule", () => {
 		renderSharedSchedule("/share/token-123");
 
 		await waitFor(() => {
-			expect(i18n.changeLanguage).toHaveBeenCalledWith("de");
+			expect(i18n.changeLanguage).toHaveBeenCalledWith("de-DE");
 		});
 	});
 

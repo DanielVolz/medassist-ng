@@ -113,7 +113,7 @@ export const userSettings = sqliteTable("user_settings", {
 	highStockDays: integer("high_stock_days").notNull().default(180),
 	expiryWarningDays: integer("expiry_warning_days").notNull().default(90),
 	// UI preferences
-	language: text("language", { length: 10 }).notNull().default("en"),
+	language: text("language", { length: 10 }).notNull().default("en-US"),
 	timezone: text("timezone", { length: 64 }).notNull().default(""),
 	// Stock calculation mode: "automatic" (schedule-based) or "manual" (only marked doses)
 	stockCalculationMode: text("stock_calculation_mode", { length: 20 }).notNull().default("automatic"),
@@ -232,7 +232,7 @@ export const notificationActionGroups = sqliteTable("notification_action_groups"
 	doseIdsJson: text("dose_ids_json").notNull(),
 	title: text("title", { length: 255 }).notNull(),
 	message: text("message").notNull(),
-	language: text("language", { length: 10 }).notNull().default("en"),
+	language: text("language", { length: 10 }).notNull().default("en-US"),
 	scheduledFor: integer("scheduled_for", { mode: "timestamp" }),
 	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
 	resolvedAction: text("resolved_action", { length: 20 }),

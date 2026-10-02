@@ -133,7 +133,7 @@ describe("Settings and API key security contracts", () => {
 		expect(response.json()).toEqual(
 			expect.objectContaining({
 				emailEnabled: false,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "automatic",
 			})
 		);

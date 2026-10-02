@@ -330,6 +330,32 @@ describe("Database Client Utilities", () => {
 			const result = await runAlterMigrations(client);
 			expect(result.success).toBe(true);
 		});
+
+		it("normalizes legacy app languages in persisted settings and notification actions", async () => {
+			await runAlterMigrations(client);
+			await client.execute("INSERT INTO users (id, username) VALUES (1, 'locale-migration-user')");
+			await client.execute({
+				sql: "INSERT INTO user_settings (user_id, language) VALUES (?, ?)",
+				args: [1, "de"],
+			});
+			await client.execute({
+				sql: `INSERT INTO notification_action_groups
+					(user_id, group_key, sequence_id, dose_ids_json, title, message, language, expires_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				args: [1, "locale-group", "locale-sequence", "[]", "Title", "Message", "en", 1],
+			});
+
+			const result = await runAlterMigrations(client);
+
+			expect(result.success).toBe(true);
+			expect(result.errors).toHaveLength(0);
+			const settings = await client.execute("SELECT language FROM user_settings WHERE user_id = 1");
+			const actions = await client.execute(
+				"SELECT language FROM notification_action_groups WHERE group_key = 'locale-group'"
+			);
+			expect(settings.rows[0].language).toBe("de-DE");
+			expect(actions.rows[0].language).toBe("en-US");
+		});
 	});
 
 	describe("ensureDefaultUser", () => {

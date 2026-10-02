@@ -178,7 +178,7 @@ describe("intake reminder scheduler action wiring", () => {
 		}
 	});
 
-	it("attaches action context to push notifications when PUBLIC_APP_URL is configured", async () => {
+	it("attaches Portuguese action context to push notifications when PUBLIC_APP_URL is configured", async () => {
 		mockedEnv.PUBLIC_APP_URL = "https://app.example.com";
 
 		const selectMock = vi.mocked(mockedDb.select);
@@ -233,7 +233,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 11,
-				language: "en",
+				language: "pt-PT",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,
@@ -250,16 +250,17 @@ describe("intake reminder scheduler action wiring", () => {
 			expect.objectContaining({
 				userId: 11,
 				publicAppUrl: "https://app.example.com",
-				language: "en",
+				language: "pt-PT",
 				actionMode: "full",
 				doseIds: [expect.stringMatching(/^7-0-/)],
 			})
 		);
 		expect(sendPushNotificationMock).toHaveBeenCalledWith(
 			"ntfy://ntfy.sh/medassist",
-			expect.any(String),
-			expect.any(String),
+			expect.stringContaining("Aviso: Toma de medicamento"),
+			expect.stringContaining("Enviado de MedAssist-ng"),
 			expect.objectContaining({
+				language: "pt-PT",
 				actions: [
 					{
 						kind: "taken",
@@ -356,7 +357,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 13,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,
@@ -373,7 +374,7 @@ describe("intake reminder scheduler action wiring", () => {
 			expect.objectContaining({
 				userId: 13,
 				publicAppUrl: "https://app.example.com",
-				language: "en",
+				language: "en-US",
 				actionMode: "view-only",
 				doseIds: [expect.stringMatching(/^7-0-/), expect.stringMatching(/^8-0-/)],
 			})
@@ -442,7 +443,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 12,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,
@@ -521,7 +522,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 15,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,
@@ -608,7 +609,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 16,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,
@@ -659,7 +660,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 18,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,
@@ -697,7 +698,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 19,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,
@@ -771,7 +772,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 17,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,
@@ -826,7 +827,7 @@ describe("intake reminder scheduler action wiring", () => {
 		await checkAndSendIntakeRemindersForUser(
 			{
 				userId: 14,
-				language: "en",
+				language: "en-US",
 				stockCalculationMode: "manual",
 				emailEnabled: false,
 				notificationEmail: null,

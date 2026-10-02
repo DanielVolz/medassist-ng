@@ -108,7 +108,7 @@ const mockT = (key: string, options?: Record<string, unknown>) => {
 };
 
 const mockI18n = {
-	language: "en",
+	language: "en-US",
 	changeLanguage: vi.fn(),
 };
 

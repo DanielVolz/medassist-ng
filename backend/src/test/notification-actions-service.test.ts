@@ -80,7 +80,7 @@ describe("notification-actions-service", () => {
 			doseIds: ["9-1-1736064000000", "9-0-1736064000000", "9-1-1736064000000"],
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 		});
 
 		expect(context).toMatchObject({
@@ -124,7 +124,7 @@ describe("notification-actions-service", () => {
 			doseIds: ["9-0-1736064000000", "10-0-1736064000000"],
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 			actionMode: "view-only",
 		});
 
@@ -158,7 +158,7 @@ describe("notification-actions-service", () => {
 			doseIds: ["9-0-1736064000000"],
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 		});
 		const second = await createNotificationActionContext({
 			userId,
@@ -167,7 +167,7 @@ describe("notification-actions-service", () => {
 			doseIds: ["9-0-1736064000000"],
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 		});
 
 		expect(second?.sequenceId).toBe(first?.sequenceId);
@@ -192,7 +192,7 @@ describe("notification-actions-service", () => {
 			doseIds,
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "de",
+			language: "de-DE",
 		});
 		const second = await createNotificationActionContext({
 			userId,
@@ -201,7 +201,7 @@ describe("notification-actions-service", () => {
 			doseIds,
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 		});
 
 		expect(first?.actions.find((action) => action.kind === "taken")?.label).toBe("Einnehmen");
@@ -217,7 +217,7 @@ describe("notification-actions-service", () => {
 			expect.objectContaining({
 				title: "Reminder",
 				message: "Take your medication now",
-				language: "en",
+				language: "en-US",
 				dose_ids_json: JSON.stringify(doseIds),
 			})
 		);
@@ -238,7 +238,7 @@ describe("notification-actions-service", () => {
 			doseIds,
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 		});
 
 		expect(first).toMatchObject({
@@ -269,7 +269,7 @@ describe("notification-actions-service", () => {
 			doseIds,
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 		});
 
 		expect(second).toMatchObject({
@@ -330,7 +330,7 @@ describe("notification-actions-service", () => {
 			doseIds: ["9-0-1736064000000"],
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 		});
 
 		expect(context).toMatchObject({
@@ -353,7 +353,7 @@ describe("notification-actions-service", () => {
 			doseIds: ["invalid-dose-id"],
 			scheduledFor,
 			publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-			language: "en",
+			language: "en-US",
 		});
 
 		expect(context?.viewUrl).toBe("https://app.example.com/dashboard?day=2026-01-05&dose=invalid-dose-id");

@@ -6,16 +6,27 @@ import { getDateLocale, getTranslations, type Language, t } from "../i18n/transl
 
 describe("Translations Module", () => {
 	describe("getTranslations", () => {
-		it("should return English translations for 'en'", () => {
-			const translations = getTranslations("en");
+		it("should return English translations for 'en-US'", () => {
+			const translations = getTranslations("en-US");
 			expect(translations.stockReminder.title).toContain("MedAssist-ng");
 			expect(translations.common.pills).toBe("pills");
 		});
 
-		it("should return German translations for 'de'", () => {
-			const translations = getTranslations("de");
+		it("should return German translations for 'de-DE'", () => {
+			const translations = getTranslations("de-DE");
 			expect(translations.stockReminder.title).toContain("MedAssist-ng");
 			expect(translations.common.pills).toBe("Tabletten");
+		});
+
+		it("should provide Portuguese repeat reminders and action page copy", () => {
+			const translations = getTranslations("pt-PT");
+			expect(t(translations.stockReminder.subject, { count: 1, s: "" })).toContain("1 medicamento a acabar");
+			expect(t(translations.stockReminder.subject, { count: 2, s: "s" })).toContain("2 medicamentos a acabar");
+			expect(translations.demandCalculator.tableHeaders.needed).toBe("Lamelas necessárias");
+			expect(translations.intakeReminder.repeatLast).toContain("último aviso");
+			expect(t(translations.intakeReminder.repeatOne, { minutes: 30 })).toContain("30 minutos");
+			expect(t(translations.intakeReminder.repeatMultiple, { count: 2, minutes: 30 })).toContain("2 avisos");
+			expect(translations.actionPage.respondTitle).toBe("Responder ao aviso");
 		});
 
 		it("should fallback to English for unknown language", () => {
@@ -24,7 +35,7 @@ describe("Translations Module", () => {
 		});
 
 		it("should have all required keys in English", () => {
-			const translations = getTranslations("en");
+			const translations = getTranslations("en-US");
 
 			// Stock reminder keys
 			expect(translations.stockReminder.subject).toBeDefined();
@@ -47,7 +58,7 @@ describe("Translations Module", () => {
 		});
 
 		it("should have all required keys in German", () => {
-			const translations = getTranslations("de");
+			const translations = getTranslations("de-DE");
 
 			// Stock reminder keys
 			expect(translations.stockReminder.subject).toBeDefined();
@@ -94,7 +105,7 @@ describe("Translations Module", () => {
 		});
 
 		it("should work with real translation strings", () => {
-			const translations = getTranslations("en");
+			const translations = getTranslations("en-US");
 
 			// Stock reminder subject
 			const subject = t(translations.stockReminder.subject, { count: 3, s: "s" });
@@ -110,7 +121,7 @@ describe("Translations Module", () => {
 		});
 
 		it("should work with German translations", () => {
-			const translations = getTranslations("de");
+			const translations = getTranslations("de-DE");
 
 			const subject = t(translations.stockReminder.subject, { count: 2, e: "e" });
 			expect(subject).toBe("MedAssist-ng: ⚠️ 2 Medikamente kritisch niedrig");
@@ -122,11 +133,11 @@ describe("Translations Module", () => {
 
 	describe("getDateLocale", () => {
 		it("should return 'en-US' for English", () => {
-			expect(getDateLocale("en")).toBe("en-US");
+			expect(getDateLocale("en-US")).toBe("en-US");
 		});
 
 		it("should return 'de-DE' for German", () => {
-			expect(getDateLocale("de")).toBe("de-DE");
+			expect(getDateLocale("de-DE")).toBe("de-DE");
 		});
 
 		it("should return 'en-US' for unknown language", () => {

@@ -1,3 +1,4 @@
+import { normalizeAppLanguage } from "@medassist/shared";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
@@ -217,7 +218,7 @@ export async function plannerRoutes(app: FastifyInstance) {
 						from: "2026-03-11",
 						until: "2026-04-11",
 						includeUntilStart: false,
-						language: "en",
+						language: "en-US",
 						rows: [
 							{
 								medicationId: 1,
@@ -296,7 +297,7 @@ export async function plannerRoutes(app: FastifyInstance) {
 			);
 
 			// Get locale from user settings or use the language passed in the body
-			const language: Language = (userSettings.language as Language) || bodyLanguage || "en";
+			const language: Language = normalizeAppLanguage(userSettings.language || bodyLanguage);
 			const locale = getDateLocale(language);
 			const tr = getTranslations(language);
 			const dc = tr.demandCalculator;
@@ -583,7 +584,7 @@ ${getFooterPlain(language)}`;
 					},
 					example: {
 						email: "daniel@example.com",
-						language: "en",
+						language: "en-US",
 						lowStock: [
 							{
 								name: "Ibuprofen 400",
@@ -656,7 +657,7 @@ ${getFooterPlain(language)}`;
 			);
 
 			// Get translations based on user language
-			const language = (userSettings.language as Language) || "en";
+			const language = normalizeAppLanguage(userSettings.language);
 			const tr = getTranslations(language);
 
 			const results: { email?: boolean; push?: boolean; errors: string[] } = { errors: [] };
@@ -949,7 +950,7 @@ ${getFooterPlain(language)}`;
 					},
 					example: {
 						email: "daniel@example.com",
-						language: "en",
+						language: "en-US",
 						prescriptionLow: [
 							{
 								name: "Ibuprofen 400",
@@ -993,7 +994,7 @@ ${getFooterPlain(language)}`;
 			const filteredMedicationNames = filteredPrescriptionLow.map((item) => item.name);
 
 			const userSettings = await loadUserSettings(userId);
-			const language = (userSettings.language as Language) || "en";
+			const language = normalizeAppLanguage(userSettings.language);
 			const tr = getTranslations(language);
 			request.log.info(
 				{

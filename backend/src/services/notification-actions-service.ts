@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { normalizeAppLanguage } from "@medassist/shared";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { notificationActionGroups, notificationActionTokens } from "../db/schema.js";
@@ -261,7 +262,7 @@ export async function createNotificationActionContext(input: {
 	}
 
 	const tokens = await createActionTokens(group.id);
-	const groupLanguage = (group.language as Language | null) ?? input.language;
+	const groupLanguage = normalizeAppLanguage(group.language ?? input.language);
 	const groupLabels = getNotificationActionLabels(groupLanguage);
 	const respondUrl = `${baseUrl}/api/notification-actions/${tokens.respond}`;
 	const resolvedViewUrl = buildViewUrl(baseUrl, group.scheduledFor ?? input.scheduledFor, uniqueDoseIds);
@@ -325,7 +326,7 @@ export async function createTestNotificationActionContext(input: {
 		.returning();
 
 	const tokens = await createActionTokens(group.id);
-	const groupLanguage = (group.language as Language | null) ?? input.language;
+	const groupLanguage = normalizeAppLanguage(group.language ?? input.language);
 	const groupLabels = getNotificationActionLabels(groupLanguage);
 	const respondUrl = `${baseUrl}/api/notification-actions/${tokens.respond}`;
 

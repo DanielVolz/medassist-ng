@@ -101,7 +101,7 @@ async function insertUserSettings(
 	});
 }
 
-async function seedContext(options: { userId: number; doseId: string }) {
+async function seedContext(options: { userId: number; doseId: string; language?: "en-US" | "pt-PT" }) {
 	const scheduledFor = new Date("2026-01-05T08:00:00.000Z");
 	const context = await createNotificationActionContext({
 		userId: options.userId,
@@ -110,7 +110,7 @@ async function seedContext(options: { userId: number; doseId: string }) {
 		doseIds: [options.doseId],
 		scheduledFor,
 		publicAppUrl: mockedEnv.PUBLIC_APP_URL,
-		language: "en",
+		language: options.language ?? "en-US",
 	});
 
 	return {
@@ -177,6 +177,40 @@ describe("notification action routes", () => {
 			      WHERE t.kind = 'respond'`,
 		});
 		expect(rows.rows).toEqual([expect.objectContaining({ resolved_action: null, used_at: null })]);
+	});
+
+	it("renders Portuguese action and already-processed responses from a stored token language", async () => {
+		const userId = await createUser("notification-route-pt");
+		const { respondToken, takenToken } = await seedContext({
+			userId,
+			doseId: "5-0-1736064000000",
+			language: "pt-PT",
+		});
+		const initial = await app.inject({
+			method: "GET",
+			url: `/notification-actions/${respondToken}`,
+			headers: { accept: "text/html" },
+		});
+		expect(initial.statusCode).toBe(200);
+		expect(initial.body).toContain('<html lang="pt-PT">');
+		expect(initial.body).toContain("Responder ao aviso");
+		expect(initial.body).toContain("Ignorar");
+
+		const recorded = await app.inject({
+			method: "POST",
+			url: `/notification-actions/${respondToken}`,
+			payload: { action: "skip" },
+			headers: { accept: "text/html" },
+		});
+		expect(recorded.statusCode).toBe(200);
+		expect(recorded.body).toContain("Ação registada");
+		expect(recorded.body).toContain("A toma foi assinalada como ignorada.");
+
+		const alreadyProcessed = await app.inject({ method: "POST", url: `/notification-actions/${takenToken}` });
+		expect(alreadyProcessed.json()).toMatchObject({
+			alreadyProcessed: true,
+			message: "Esta toma já está assinalada como ignorada. Só pode fazer alterações no MedAssist.",
+		});
 	});
 
 	it("returns the expected GET behavior for missing, non-respond, and expired tokens", async () => {

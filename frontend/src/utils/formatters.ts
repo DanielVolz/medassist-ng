@@ -103,11 +103,11 @@ export function getSystemLocale(appLanguage?: string): string {
 	const lang = appLanguage || navigator.language?.split("-")[0] || "en";
 
 	if (region) {
-		return `${lang}-${region}`;
+		return new Intl.Locale(lang, { region }).toString();
 	}
 
 	// Fallback: use browser language, or en-US as last resort
-	return navigator.language || "en-US";
+	return appLanguage || navigator.language || "en-US";
 }
 
 /**

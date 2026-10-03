@@ -1,7 +1,7 @@
 ---
 name: standard-task
 description: Handles normal implementation work including bug fixes, focused multi-file changes, and routine refactors.
-model: "GPT-6.1 Luna"
+model: "GPT-6 Luna"
 user-invocable: false
 disable-model-invocation: false
 tools: ['read', 'search', 'edit', 'execute']

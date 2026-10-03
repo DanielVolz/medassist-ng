@@ -231,8 +231,8 @@ For implementation work, classify the change through `model-router` before deleg
 
 | Tier | Model | Use for | Required agent role |
 |---|---|---|---|
-| Fast | `GPT-6.1 Luna` (low reasoning) | Targeted questions, read-only lookups, one-file copy or documentation edits, formatting, and deterministic commands | `fast-task` |
-| Standard | `GPT-6.1 Luna` (medium reasoning) | Normal bug fixes, small multi-file changes, and routine refactors | `standard-task` |
+| Fast | `GPT-6 Luna` (low reasoning) | Targeted questions, read-only lookups, one-file copy or documentation edits, formatting, and deterministic commands | `fast-task` |
+| Standard | `GPT-6 Luna` (medium reasoning) | Normal bug fixes, small multi-file changes, and routine refactors | `standard-task` |
 | Complex | `GPT-6.1 Sol` (high reasoning) | Data migrations, auth/security, production incidents, multi-domain behavior changes, architecture decisions, difficult root-cause analysis, or a scoped failure after one standard-tier attempt | `complex-task` |
 
 - Do not choose the complex tier merely because a task is broad, unfamiliar, or inconvenient. Split independent work first and keep each slice at the lowest viable tier.

@@ -22,15 +22,15 @@ const ORCHESTRATOR_AGENTS = [
 ];
 const ALL_AGENTS = ["engineering-orchestrator", ...ORCHESTRATOR_AGENTS];
 const EXPECTED_AGENT_MODELS = {
-  "engineering-orchestrator": "GPT-6.1 Luna",
-  "model-router": "GPT-6.1 Luna",
-  "fast-task": "GPT-6.1 Luna",
-  "standard-task": "GPT-6.1 Luna",
+  "engineering-orchestrator": "GPT-6 Luna",
+  "model-router": "GPT-6 Luna",
+  "fast-task": "GPT-6 Luna",
+  "standard-task": "GPT-6 Luna",
   "complex-task": "GPT-6.1 Sol",
   "engineering-reviewer": "GPT-6.1 Sol",
-  "testing-manager": "GPT-6.1 Luna",
-  "release-manager": "GPT-6.1 Luna",
-  "project-bot": "GPT-6.1 Luna",
+  "testing-manager": "GPT-6 Luna",
+  "release-manager": "GPT-6 Luna",
+  "project-bot": "GPT-6 Luna",
 };
 
 function agentSource(name, attributes = {}, body = `# ${name}\n`) {
@@ -124,24 +124,24 @@ test("accepts a complete non-recursive harness with direct specialist routing", 
 test("rejects an agent assigned to the wrong model tier", async (testContext) => {
   const rootDir = await createValidFixture(testContext);
   await mutate(rootDir, ".github/agents/fast-task.agent.md", (source) =>
-    source.replace("model: GPT-6.1 Luna", "model: GPT-6.1 Sol"),
+    source.replace("model: GPT-6 Luna", "model: GPT-6.1 Sol"),
   );
 
   assertHasError(
     await validateAgentHarness({ rootDir }),
-    ".github/agents/fast-task.agent.md: model must be GPT-6.1 Luna",
+    ".github/agents/fast-task.agent.md: model must be GPT-6 Luna",
   );
 });
 
 test("rejects a medium-reasoning worker assigned to Sol", async (testContext) => {
   const rootDir = await createValidFixture(testContext);
   await mutate(rootDir, ".github/agents/standard-task.agent.md", (source) =>
-    source.replace("model: GPT-6.1 Luna", "model: GPT-6.1 Sol"),
+    source.replace("model: GPT-6 Luna", "model: GPT-6.1 Sol"),
   );
 
   assertHasError(
     await validateAgentHarness({ rootDir }),
-    ".github/agents/standard-task.agent.md: model must be GPT-6.1 Luna",
+    ".github/agents/standard-task.agent.md: model must be GPT-6 Luna",
   );
 });
 

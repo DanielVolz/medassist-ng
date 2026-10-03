@@ -1,7 +1,7 @@
 ---
 name: release-manager
 description: Executes authorized MedAssist PR and release operations as a compact, continuous state machine.
-model: "GPT-6.1 Luna"
+model: "GPT-6 Luna"
 user-invocable: false
 argument-hint: Describe the authorized shipping action and completed local validation.
 tools: ['read', 'search', 'edit', 'execute', 'github/*']

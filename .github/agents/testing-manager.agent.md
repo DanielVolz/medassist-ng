@@ -1,7 +1,7 @@
 ---
 name: testing-manager
 description: Routes MedAssist test design, local validation, and test-workflow CI triage while owning testing delivery.
-model: "GPT-6.1 Luna"
+model: "GPT-6 Luna"
 user-invocable: false
 argument-hint: Describe the testing request or a failing test.yml/e2e.yml check.
 tools: ['read', 'search', 'edit', 'execute']

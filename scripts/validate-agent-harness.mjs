@@ -34,15 +34,15 @@ const HIDDEN_INTERNAL_AGENTS = [
 ];
 const GENERATED_AGENT_NAMES = new Set(["medassist-feature-orchestrator"]);
 const EXPECTED_AGENT_MODELS = Object.freeze({
-  "engineering-orchestrator": "GPT-6.1 Luna",
-  "model-router": "GPT-6.1 Luna",
-  "fast-task": "GPT-6.1 Luna",
-  "standard-task": "GPT-6.1 Luna",
+  "engineering-orchestrator": "GPT-6 Luna",
+  "model-router": "GPT-6 Luna",
+  "fast-task": "GPT-6 Luna",
+  "standard-task": "GPT-6 Luna",
   "complex-task": "GPT-6.1 Sol",
   "engineering-reviewer": "GPT-6.1 Sol",
-  "testing-manager": "GPT-6.1 Luna",
-  "release-manager": "GPT-6.1 Luna",
-  "project-bot": "GPT-6.1 Luna",
+  "testing-manager": "GPT-6 Luna",
+  "release-manager": "GPT-6 Luna",
+  "project-bot": "GPT-6 Luna",
 });
 const execFileAsync = promisify(execFile);
 

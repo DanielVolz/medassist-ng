@@ -1,7 +1,7 @@
 ---
 name: engineering-orchestrator
 description: Use as the default entry point for any MedAssist task; classifies complexity and routes work to the correct implementation tier or specialist.
-model: "GPT-6.1 Luna"
+model: "GPT-6 Luna"
 user-invocable: true
 argument-hint: Describe the engineering outcome, constraints, and any known failing behavior.
 tools: ['execute', 'read', 'agent', 'ms-azuretools.vscode-containers/containerToolsConfig', 'edit', 'search', 'browser', 'io.github.chromedevtools/chrome-devtools-mcp/*', 'playwright/*', 'pylance-mcp-server/*', 'context7/*', 'docker/*', 'playwright/*', 'sqlite/*']

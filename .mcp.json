@@ -1,0 +1,80 @@
+{
+	"mcpServers": {
+		"context7": {
+			"type": "local",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@upstash/context7-mcp@4.1.1"
+			],
+			"tools": [
+				"*"
+			]
+		},
+		"docker": {
+			"type": "local",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@hypnosis/docker-mcp-server@2.0.1"
+			],
+			"tools": [
+				"*"
+			]
+		},
+		"github": {
+			"type": "http",
+			"url": "https://api.githubcopilot.com/mcp/x/all",
+			"tools": [
+				"*"
+			]
+		},
+		"playwright": {
+			"type": "local",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@playwright/mcp@0.0.82",
+				"--browser",
+				"chrome",
+				"--isolated",
+				"--headless"
+			],
+			"tools": [
+				"*"
+			]
+		},
+		"playwright-firefox": {
+			"type": "local",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@playwright/mcp@0.0.82",
+				"--browser",
+				"firefox",
+				"--isolated",
+				"--headless"
+			],
+			"tools": [
+				"*"
+			]
+		},
+		"sqlite": {
+			"type": "local",
+			"command": "npx",
+			"args": [
+				"-y",
+				"db-mcp@5.0.1",
+				"--transport",
+				"stdio",
+				"--sqlite-native",
+				"${workspaceFolder}/data/medassist-ng.db",
+				"--tool-filter",
+				"read_query,list_tables,describe_table,-sqlite_execute_code"
+			],
+			"tools": [
+				"*"
+			]
+		}
+	}
+}

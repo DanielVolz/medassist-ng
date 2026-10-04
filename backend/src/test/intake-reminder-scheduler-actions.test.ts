@@ -633,6 +633,39 @@ describe("intake reminder scheduler action wiring", () => {
 		expect(updateUserReminderSentTime).not.toHaveBeenCalled();
 	});
 
+	it("keeps a failed intake push eligible for retry and persists only the successful retry", async () => {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			vi.mocked(mockedDb.select)
+				.mockImplementationOnce(() => mockSelectWhere([{ username: "retry-user" }]))
+				.mockImplementationOnce(() => mockSelectWhere([createReminderMedicationRow()]))
+				.mockImplementationOnce(() => mockSelectWhere([]));
+		}
+		sendPushNotificationMock
+			.mockResolvedValueOnce({ success: false, error: "provider unavailable" })
+			.mockResolvedValueOnce({ success: true });
+		const settings = {
+			userId: 18,
+			language: "en-US",
+			stockCalculationMode: "manual",
+			emailEnabled: false,
+			shoutrrrEnabled: true,
+			shoutrrrUrl: "ntfy://ntfy.sh/medassist",
+			shoutrrrIntakeReminders: true,
+			repeatRemindersEnabled: false,
+		};
+		const logger = createLogger();
+		await checkAndSendIntakeRemindersForUser(settings as never, logger);
+		expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("provider unavailable"));
+		expect(writeFileSyncMock).not.toHaveBeenCalled();
+		expect(updateUserReminderSentTime).not.toHaveBeenCalled();
+		await checkAndSendIntakeRemindersForUser(settings as never, logger);
+		expect(sendPushNotificationMock).toHaveBeenCalledTimes(2);
+		expect(writeFileSyncMock).toHaveBeenCalledOnce();
+		const persisted = JSON.parse(String(writeFileSyncMock.mock.calls[0][1]));
+		expect(Object.values(persisted.reminders)).toEqual([expect.objectContaining({ advanceSent: true, sendCount: 0 })]);
+		expect(updateUserReminderSentTime).toHaveBeenCalledWith(18, "intake", "push", "Calcium", undefined);
+	});
+
 	it("does not resend an already persisted advance reminder after restart", async () => {
 		const candidateTimeMs = new Date("2026-01-05T11:15:00.000Z").getTime();
 		existsSyncMock.mockReturnValue(true);

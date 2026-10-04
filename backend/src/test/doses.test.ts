@@ -171,7 +171,7 @@ async function insertDose(options: {
 	markedBy?: string | null;
 	dismissed?: boolean;
 	takenAt?: number | null;
-	takenSource?: "manual" | "automatic";
+	takenSource?: "manual" | "automatic" | "notification";
 }) {
 	await testClient.execute({
 		sql: `INSERT INTO dose_tracking (user_id, dose_id, marked_by, dismissed, taken_at, taken_source)
@@ -629,6 +629,68 @@ describe("Dose Tracking API", () => {
 	});
 
 	describe("single-dose skip routes", () => {
+		it.each([
+			"owner",
+			"shared",
+			"dismiss",
+		])("handles concurrent and repeated %s skips without duplicates or lost taken metadata", async (route) => {
+			const start = buildLocalDoseStart();
+			await insertMedication({ id: 6, userId, takenBy: ["Max"], start });
+			await _insertShareToken(userId, "aaaaaaaaaaaaaaaa", "Max");
+			const doseId = `6-0-${new Date(start).getTime()}-Max`;
+			const ownerPath = route === "dismiss" ? "/doses/dismiss" : "/doses/skip";
+			const request = {
+				method: "POST" as const,
+				url: route === "shared" ? "/share/aaaaaaaaaaaaaaaa/doses/skip" : ownerPath,
+				headers: { cookie: cookieHeader },
+				payload: route === "dismiss" ? { doseIds: [doseId] } : { doseId },
+			};
+			for (const taken of [false, true]) {
+				await testClient.execute("DELETE FROM dose_tracking");
+				if (taken) await insertDose({ userId, doseId, markedBy: "Max", takenAt: 123, takenSource: "notification" });
+				let arrivals = 0;
+				let release!: () => void;
+				const barrier = new Promise<void>((resolve) => {
+					release = resolve;
+				});
+				const execute = testClient.execute.bind(testClient);
+				const spy = vi.spyOn(testClient, "execute").mockImplementation(async (query: unknown) => {
+					const sql = typeof query === "string" ? query : (query as { sql: string }).sql;
+					const write = taken ? /^update "dose_tracking"/i : /^insert into "dose_tracking"/i;
+					if (write.test(sql) && arrivals < 2) {
+						if (++arrivals === 2) release();
+						await barrier;
+					}
+					return execute(query);
+				});
+				try {
+					const responses = await Promise.all([app.inject(request), app.inject(request)]);
+					expect(arrivals).toBe(2);
+					expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+					const changed = route === "dismiss" ? { success: true, dismissedCount: 1 } : { success: true };
+					const repeated =
+						route === "dismiss" ? { success: true, dismissedCount: 0 } : { success: true, message: "Already skipped" };
+					expect(responses.map((response) => response.json())).toEqual(expect.arrayContaining([changed, repeated]));
+					expect((await app.inject(request)).json()).toEqual(repeated);
+					const rows = await testClient.execute({
+						sql: "SELECT dismissed, taken_at, marked_by, taken_source FROM dose_tracking WHERE user_id = ? AND dose_id = ?",
+						args: [userId, doseId],
+					});
+					expect(rows.rows).toEqual([
+						{
+							dismissed: 1,
+							taken_at: taken ? 123 : 0,
+							marked_by: taken ? "Max" : null,
+							taken_source: taken ? "notification" : "manual",
+						},
+					]);
+				} finally {
+					release();
+					spy.mockRestore();
+				}
+			}
+		});
+
 		it("marks a single owner dose as skipped through the frontend route", async () => {
 			const doseId = "1-0-1735344000000";
 
@@ -718,6 +780,24 @@ describe("Dose Tracking API", () => {
 	});
 
 	describe("shared single-dose skip routes", () => {
+		it("keeps authentication, read-only, and shared visibility checks before skip writes", async () => {
+			const start = buildLocalDoseStart();
+			await insertMedication({ id: 6, userId, takenBy: ["Max"], start });
+			await _insertShareToken(userId, "aaaaaaaaaaaaaaaa", "Max", false, false);
+			await _insertShareToken(userId, "bbbbbbbbbbbbbbbb", "Other");
+			const payload = { doseId: `6-0-${new Date(start).getTime()}-Max` };
+			for (const [url, status] of [
+				["/doses/skip", 401],
+				["/share/aaaaaaaaaaaaaaaa/doses/skip", 403],
+				["/share/bbbbbbbbbbbbbbbb/doses/skip", 400],
+			] as const) {
+				const response = await app.inject({ method: "POST", url, payload });
+				expect(response.statusCode).toBe(status);
+			}
+			const rows = await testClient.execute("SELECT COUNT(*) AS count FROM dose_tracking");
+			expect(Number(rows.rows[0].count)).toBe(0);
+		});
+
 		it("marks and undoes a visible shared dose as skipped", async () => {
 			const start = buildLocalDoseStart();
 			await insertMedication({

@@ -1157,6 +1157,15 @@ export function startMedicationEnrichmentService(
 	}
 }
 
+export function stopMedicationEnrichmentService(): void {
+	if (refreshTimer !== null) {
+		clearInterval(refreshTimer);
+		refreshTimer = null;
+	}
+	schedulerStarted = false;
+	// Keep the catalog and shared refresh promise: in-flight/on-demand requests finish normally.
+}
+
 export async function searchMedicationEnrichment(
 	query: string,
 	limit: number

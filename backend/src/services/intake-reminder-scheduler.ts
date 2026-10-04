@@ -1046,16 +1046,43 @@ export async function checkAndSendIntakeRemindersForUser(
 	}
 }
 
+let schedulerInterval: ReturnType<typeof setInterval> | null = null;
+let checkInFlight = false;
+
+async function runScheduledCheck(logger: ServiceLogger, phase: "Startup" | "Scheduled"): Promise<void> {
+	if (checkInFlight) {
+		logger.info("[IntakeReminder] Skipping overlapping scheduler check; previous check still in flight");
+		return;
+	}
+	checkInFlight = true;
+	try {
+		await checkAndSendIntakeReminders(logger);
+	} catch (error) {
+		logger.error(`[IntakeReminder] ${phase} check failed`, error);
+	} finally {
+		checkInFlight = false;
+	}
+}
+
 export function startIntakeReminderScheduler(logger: ServiceLogger): void {
+	if (schedulerInterval !== null) {
+		logger.info("[IntakeReminder] Scheduler already started, skipping duplicate start call");
+		return;
+	}
 	logger.info(`[IntakeReminder] Starting intake reminder scheduler (checks every minute)...`);
 
-	// Run immediately on start
-	checkAndSendIntakeReminders(logger).catch((err) => logger.error("[IntakeReminder] Startup check failed", err));
-
-	// Then run every minute
-	setInterval(() => {
-		checkAndSendIntakeReminders(logger).catch((err) => logger.error("[IntakeReminder] Scheduled check failed", err));
+	schedulerInterval = setInterval(() => {
+		void runScheduledCheck(logger, "Scheduled");
 	}, CHECK_INTERVAL_MS);
+	void runScheduledCheck(logger, "Startup");
 
 	logger.info(`[IntakeReminder] Scheduler started - checking every minute for upcoming intakes`);
+}
+
+export function stopIntakeReminderScheduler(): void {
+	if (schedulerInterval !== null) {
+		clearInterval(schedulerInterval);
+		schedulerInterval = null;
+	}
+	// Let an active check finish and persist its result; restarting must not overlap it.
 }

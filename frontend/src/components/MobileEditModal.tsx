@@ -8,7 +8,11 @@ import { ActionIcon } from "@mantine/core";
 import { ArrowLeft, Bell, Minus, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MEDICATION_FORM_FIELD_LIMITS } from "../hooks/medicationFormModel";
+import {
+	getMedicationFormIssues,
+	hasMedicationWeekdaySelectionError,
+	MEDICATION_FORM_FIELD_LIMITS,
+} from "../hooks/medicationFormModel";
 import type {
 	DoseUnit,
 	FieldErrors,
@@ -38,7 +42,6 @@ import { deriveTotal } from "../utils";
 import {
 	getIntakeScheduleMode,
 	getWeekdayLabel,
-	hasSelectedWeekdays,
 	toggleWeekdaySelection,
 	WEEKDAY_CODES,
 } from "../utils/intake-schedule";
@@ -274,15 +277,8 @@ export function MobileEditModal({
 			})),
 		[t]
 	);
-	const hasWeekdaySelectionError = useCallback(
-		(intake: (typeof form.intakes)[number]) =>
-			getIntakeScheduleMode(intake) === "weekdays" && !hasSelectedWeekdays(intake.weekdays),
-		[]
-	);
-	const hasWeekdayScheduleError = useMemo(
-		() => form.intakes.some((intake) => hasWeekdaySelectionError(intake)),
-		[form.intakes, hasWeekdaySelectionError]
-	);
+	const hasWeekdaySelectionError = hasMedicationWeekdaySelectionError;
+	const formIssues = useMemo(() => getMedicationFormIssues(form, t), [form, t]);
 
 	// Reset tab when modal opens
 	useEffect(() => {
@@ -1191,7 +1187,7 @@ export function MobileEditModal({
 						<AppButton
 							type="submit"
 							disabled={saving || (!formChanged && (formSaved || !!editingId))}
-							tone={hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError ? "warning" : "primary"}
+							tone={formIssues.hasErrors || hasValidationErrors || dateConsistencyError ? "warning" : "primary"}
 						>
 							{formSaved && !formChanged ? t("common.saved") : t("common.save")}
 						</AppButton>

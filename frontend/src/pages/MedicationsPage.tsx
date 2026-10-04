@@ -19,7 +19,12 @@ import { MedicationListSection } from "../components/medications/MedicationListS
 import { RecordNowModal } from "../components/RecordNowModal";
 import { useAppContext, useUnsavedChanges } from "../context";
 import { useFeedback } from "../context/FeedbackContext";
-import { MEDICATION_FORM_FIELD_LIMITS } from "../hooks/medicationFormModel";
+import {
+	buildMedicationSubmitPayload,
+	getMedicationFormIssues,
+	hasMedicationWeekdaySelectionError,
+	MEDICATION_FORM_FIELD_LIMITS,
+} from "../hooks/medicationFormModel";
 import {
 	MEDICATION_ENRICHMENT_INITIAL_LIMIT,
 	MEDICATION_ENRICHMENT_LIMIT_STEP,
@@ -57,13 +62,12 @@ import {
 import { AppButton } from "../ui/primitives/AppButton";
 import { AppCheckbox } from "../ui/primitives/AppCheckbox";
 import { AppTooltip, AppTooltipIcon } from "../ui/primitives/AppTooltip";
-import { combineDateAndTime, formatNumber, toMonthEndDateValue } from "../utils/formatters";
+import { formatNumber } from "../utils/formatters";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import {
 	getIntakeScheduleMode,
 	getMedicationIntakes,
 	getWeekdayLabel,
-	hasSelectedWeekdays,
 	toggleWeekdaySelection,
 	WEEKDAY_CODES,
 } from "../utils/intake-schedule";
@@ -781,26 +785,8 @@ export function MedicationsPage() {
 	const decrementValueLabel = t("editStock.decreaseValue");
 	const incrementValueLabel = t("editStock.increaseValue");
 
-	const dateConsistencyError = useMemo(() => {
-		const medicationStartDate = form.medicationStartDate;
-		const medicationEndDate = form.medicationEndDate;
-		if (medicationStartDate && medicationEndDate && medicationEndDate < medicationStartDate) {
-			return t("form.validation.endDateBeforeStart", {
-				medicationStartDate,
-				medicationEndDate,
-			});
-		}
-
-		if (!medicationStartDate) return null;
-
-		const conflictingIntake = form.intakes.find((intake) => intake.startDate && intake.startDate < medicationStartDate);
-		if (!conflictingIntake?.startDate) return null;
-
-		return t("form.validation.startDateAfterIntake", {
-			medicationStartDate,
-			intakeDate: conflictingIntake.startDate,
-		});
-	}, [form.medicationStartDate, form.medicationEndDate, form.intakes, t]);
+	const formIssues = useMemo(() => getMedicationFormIssues(form, t), [form, t]);
+	const { dateConsistencyError } = formIssues;
 
 	const allowFractionalIntake = useMemo(() => {
 		if (isLiquidContainerPackageType(form.packageType)) return true;
@@ -859,15 +845,7 @@ export function MedicationsPage() {
 			})),
 		[t]
 	);
-	const hasWeekdaySelectionError = useCallback(
-		(intake: (typeof form.intakes)[number]) =>
-			getIntakeScheduleMode(intake) === "weekdays" && !hasSelectedWeekdays(intake.weekdays),
-		[]
-	);
-	const hasWeekdayScheduleError = useMemo(
-		() => form.intakes.some((intake) => hasWeekdaySelectionError(intake)),
-		[form.intakes, hasWeekdaySelectionError]
-	);
+	const hasWeekdaySelectionError = hasMedicationWeekdaySelectionError;
 
 	const getMedicationPackageTypeLabel = useCallback(
 		(med: Medication) => {
@@ -1134,7 +1112,7 @@ export function MedicationsPage() {
 	async function saveMedication(e: React.FormEvent) {
 		e.preventDefault();
 		if (readOnlyView) return;
-		if (hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError) {
+		if (getMedicationFormIssues(form, t).hasErrors) {
 			setShowNameValidation(true);
 			// Scroll to first visible error so the user sees what's wrong
 			const firstError = document.querySelector(".field-error");
@@ -1147,91 +1125,8 @@ export function MedicationsPage() {
 			return;
 		}
 		if (saving) return;
-		if (form.pillForm === "capsule" && form.intakes.some((i) => !Number.isInteger(Number(i.usage)))) {
-			setShowNameValidation(true);
-			return;
-		}
 		setSaving(true);
-
-		// Prepare intakes data with per-intake takenBy
-		const intakes = form.intakes.map((intake) => ({
-			usage: Number(intake.usage) || 1,
-			every: getIntakeScheduleMode(intake) === "weekdays" ? 1 : Number(intake.every) || 1,
-			start: combineDateAndTime(intake.startDate, intake.startTime),
-			scheduleMode: getIntakeScheduleMode(intake),
-			weekdays: getIntakeScheduleMode(intake) === "weekdays" ? [...(intake.weekdays ?? [])] : [],
-			intakeUnit: isLiquidContainerPackageType(form.packageType) ? intake.intakeUnit : null,
-			takenBy: intake.takenBy.trim() || null, // Empty string becomes null
-			intakeRemindersEnabled: intake.intakeRemindersEnabled,
-		}));
-
-		// Also prepare legacy blisters for backward compatibility
-		const blisters = intakes.map((i) => ({
-			usage: i.usage,
-			every: i.every,
-			start: i.start,
-		}));
-
-		const authorizedRefills = Number(form.prescriptionAuthorizedRefills || 0);
-		const remainingRefills = Math.min(Number(form.prescriptionRemainingRefills || 0), authorizedRefills);
-		const lowRefillThreshold = Math.min(Number(form.prescriptionLowRefillThreshold || 1), authorizedRefills);
-
-		let derivedMedicationForm: string;
-		if (isTubePackageType(form.packageType)) {
-			derivedMedicationForm =
-				form.medicationForm === "liquid" || form.medicationForm === "topical" ? form.medicationForm : "topical";
-		} else if (isLiquidContainerPackageType(form.packageType)) {
-			derivedMedicationForm = "liquid";
-		} else if (isDiscreteCountPackageType(form.packageType)) {
-			derivedMedicationForm = "tablet";
-		} else {
-			derivedMedicationForm = form.pillForm;
-		}
-
-		const tubeTotalAmount = isTubePackageType(form.packageType)
-			? (Number(form.packCount) || 0) * (Number(form.packageAmountValue ?? 0) || 0)
-			: null;
-
-		let packageAmountUnit = form.packageAmountUnit ?? "ml";
-		if (isTubePackageType(form.packageType)) {
-			packageAmountUnit = "g";
-		} else if (isLiquidContainerPackageType(form.packageType)) {
-			packageAmountUnit = "ml";
-		}
-
-		const body = {
-			name: form.name.trim(),
-			genericName: form.genericName.trim() || null,
-			takenBy: form.takenBy.length > 0 ? form.takenBy : [],
-			medicationForm: derivedMedicationForm,
-			pillForm: allowsPillFormSelection(form.packageType) ? form.pillForm : null,
-			lifecycleCategory: form.lifecycleCategory,
-			packageType: normalizePackageType(form.packageType),
-			packCount: isTubePackageType(form.packageType)
-				? Math.max(1, Number(form.packCount) || 1)
-				: Number(form.packCount) || 0,
-			blistersPerPack: isTubePackageType(form.packageType) ? 1 : Number(form.blistersPerPack) || 1,
-			pillsPerBlister: isTubePackageType(form.packageType) ? 1 : Number(form.pillsPerBlister) || 1,
-			packageAmountValue: Number(form.packageAmountValue ?? 0) || 0,
-			packageAmountUnit,
-			totalPills: isTubePackageType(form.packageType) ? tubeTotalAmount : Number(form.totalPills) || null,
-			looseTablets: isTubePackageType(form.packageType) ? tubeTotalAmount || 0 : Number(form.looseTablets) || 0,
-			pillWeightMg: Number(form.pillWeightMg) || null,
-			doseUnit: form.doseUnit,
-			medicationStartDate: form.medicationStartDate || null,
-			medicationEndDate: form.medicationEndDate || null,
-			autoMarkObsoleteAfterEndDate: form.autoMarkObsoleteAfterEndDate,
-			expiryDate: toMonthEndDateValue(form.expiryDate) || null,
-			notes: form.notes.trim() || null,
-			intakeRemindersEnabled: form.intakeRemindersEnabled,
-			prescriptionEnabled: form.prescriptionEnabled,
-			prescriptionAuthorizedRefills: form.prescriptionEnabled ? authorizedRefills : null,
-			prescriptionRemainingRefills: form.prescriptionEnabled ? remainingRefills : null,
-			prescriptionLowRefillThreshold: form.prescriptionEnabled ? lowRefillThreshold : 1,
-			prescriptionExpiryDate: form.prescriptionExpiryDate || null,
-			blisters: intakes.length > 0 ? blisters : undefined, // Omit the legacy field for an explicit empty schedule.
-			intakes, // New format with per-intake takenBy
-		};
+		const body = buildMedicationSubmitPayload(form);
 
 		try {
 			let url = "/api/medications";
@@ -1677,7 +1572,7 @@ export function MedicationsPage() {
 							<AppButton
 								type="submit"
 								disabled={saving || (!formChanged && (formSaved || !!editingId))}
-								tone={hasValidationErrors || dateConsistencyError || hasWeekdayScheduleError ? "warning" : "primary"}
+								tone={formIssues.hasErrors ? "warning" : "primary"}
 							>
 								{formSaved && !formChanged ? t("common.saved") : t("common.save")}
 							</AppButton>

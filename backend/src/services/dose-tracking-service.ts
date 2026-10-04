@@ -205,6 +205,32 @@ export async function markDoseTakenForUser(input: {
 	return { success: true, status: "marked" };
 }
 
+// Route skips preserve taken metadata; bulk service skips intentionally clear it.
+export async function markDoseSkippedForUser(input: {
+	userId: number;
+	doseId: string;
+}): Promise<"created" | "updated" | "already_skipped" | "invalid"> {
+	if (await isAsNeededAnchorDoseId(db, input.userId, input.doseId)) return "invalid";
+	const inserted = await db
+		.insert(doseTracking)
+		.values({ ...input, markedBy: null, takenAt: new Date(0), dismissed: true })
+		.onConflictDoNothing({ target: [doseTracking.userId, doseTracking.doseId] })
+		.returning({ id: doseTracking.id });
+	if (inserted.length > 0) return "created";
+	const updated = await db
+		.update(doseTracking)
+		.set({ dismissed: true })
+		.where(
+			and(
+				eq(doseTracking.userId, input.userId),
+				eq(doseTracking.doseId, input.doseId),
+				eq(doseTracking.dismissed, false)
+			)
+		)
+		.returning({ id: doseTracking.id });
+	return updated.length > 0 ? "updated" : "already_skipped";
+}
+
 export async function skipDosesForUser(input: { userId: number; doseIds: string[] }): Promise<SkipDosesResult> {
 	if ((await getAsNeededAnchorDoseIds(db, input.userId, input.doseIds)).size > 0) {
 		return { success: false, code: "INVALID_DOSE", message: "Invalid dose ID" };

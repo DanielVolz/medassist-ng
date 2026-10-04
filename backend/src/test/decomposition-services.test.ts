@@ -180,6 +180,12 @@ describe("settings-service decomposition regression", () => {
 			).toBeNull();
 		}
 
+		lookupMock.mockResolvedValue([
+			{ address: "93.184.216.34", family: 4 },
+			{ address: "10.0.0.1", family: 4 },
+		]);
+		expect(await validateNotificationTargetUrl("https://mixed.example/hook")).toContain("resolves to a private IP");
+
 		lookupMock.mockRejectedValue(new Error("DNS lookup failed"));
 		expect(await validateNotificationTargetUrl("https://unresolvable.example/notify")).toBe(
 			"Notification target hostname could not be resolved"

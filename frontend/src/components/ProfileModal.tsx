@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { AppModal } from "../ui/modal/AppModal";
+import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
+import { AppButton } from "../ui/primitives/AppButton";
 import { UserProfile } from "./Auth";
 import classes from "./ProfileModal.module.css";
 
@@ -33,7 +34,12 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 			title={t("auth.profile")}
 			withCloseButton
 		>
-			<UserProfile onClose={onClose} />
+			<UserProfile onClose={onClose} showFooter={false} />
+			<AppModalFooter>
+				<AppButton type="button" tone="secondary" onClick={onClose}>
+					{t("common.close", "Close")}
+				</AppButton>
+			</AppModalFooter>
 		</AppModal>
 	);
 }

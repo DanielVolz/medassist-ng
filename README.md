@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Backend_Tests-957%2F957-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
+  <img src="https://img.shields.io/badge/Backend_Tests-1017%2F1017-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
   <img src="https://img.shields.io/badge/Frontend_Tests-1170%2F1170-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
 </p>
 

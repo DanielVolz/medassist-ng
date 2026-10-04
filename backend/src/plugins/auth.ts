@@ -1,5 +1,5 @@
 import { pbkdf2Sync } from "node:crypto";
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../db/client.js";
 import { apiKeys, users } from "../db/schema.js";
@@ -195,7 +195,14 @@ async function tryApiKeyAuth(request: FastifyRequest, reply: FastifyReply): Prom
 		await db
 			.update(apiKeys)
 			.set({ lastUsedAt: now, updatedAt: now })
-			.where(and(eq(apiKeys.id, keyRow.id), eq(apiKeys.userId, user.id)));
+			.where(
+				and(
+					eq(apiKeys.id, keyRow.id),
+					eq(apiKeys.userId, user.id),
+					// Only the request whose usage snapshot is still current may write.
+					keyRow.lastUsedAt ? eq(apiKeys.lastUsedAt, keyRow.lastUsedAt) : isNull(apiKeys.lastUsedAt)
+				)
+			);
 	}
 
 	return true;

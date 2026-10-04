@@ -5,6 +5,7 @@
 import rateLimit from "@fastify/rate-limit";
 import type { Client } from "@libsql/client";
 import argon2 from "argon2";
+import { drizzle } from "drizzle-orm/libsql";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTestApp } from "./setup.js";
@@ -26,6 +27,19 @@ const { getSmtpConfig, sendEmailNotification, testClient, testDb, testDbDirector
 vi.mock("../db/client.js", () => ({
 	db: testDb,
 	migrationsReady: Promise.resolve(),
+	withImmediateWriteTransaction: async <T>(operation: (transactionDb: typeof testDb) => Promise<T>): Promise<T> => {
+		const transaction = await testClient.transaction("write");
+		try {
+			const result = await operation(drizzle(transaction as unknown as Client));
+			await transaction.commit();
+			return result;
+		} catch (error) {
+			if (!transaction.closed) await transaction.rollback();
+			throw error;
+		} finally {
+			transaction.close();
+		}
+	},
 }));
 
 vi.mock("../services/notifications/delivery.js", () => ({
@@ -56,6 +70,7 @@ vi.mock("../plugins/env.js", () => ({
 
 // Import real auth plugin and routes
 const { authRoutes } = await import("../routes/auth.js");
+const { createApp } = await import("../app/createApp.js");
 
 // =============================================================================
 // Test Setup
@@ -995,6 +1010,53 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 	// ---------------------------------------------------------------------------
 
 	describe("POST /auth/logout", () => {
+		it("sets production cookie attributes and clears both cookies with matching security flags", async () => {
+			const productionApp = await createApp({
+				authEnabled: true,
+				isProduction: true,
+				jwtSecret: "test-jwt-secret-12345",
+				refreshSecret: "test-refresh-secret-12345",
+				cookieSecret: "test-cookie-secret-12345",
+				imagesDir: testDbDirectory,
+				logLevel: "silent",
+			});
+
+			try {
+				await productionApp.ready();
+				const registration = await productionApp.inject({
+					method: "POST",
+					url: "/auth/register",
+					payload: { username: "production-cookie-user", email: "prod@example.com", password: "TestPassword123" },
+				});
+				expect(registration.statusCode).toBe(201);
+				const login = await productionApp.inject({
+					method: "POST",
+					url: "/auth/login",
+					payload: { username: "production-cookie-user", password: "TestPassword123" },
+				});
+				expect(login.statusCode).toBe(200);
+
+				const issuedCookies = login.headers["set-cookie"];
+				const setCookies = Array.isArray(issuedCookies) ? issuedCookies : [issuedCookies ?? ""];
+				for (const name of ["access_token", "refresh_token"]) {
+					const cookie = setCookies.find((value) => value.startsWith(`${name}=`));
+					expect(cookie ?? "").toMatch(/(?=.*;\s*HttpOnly)(?=.*;\s*Secure)(?=.*;\s*SameSite=Lax)(?=.*;\s*Path=\/)/i);
+				}
+
+				const logout = await productionApp.inject({ method: "POST", url: "/auth/logout" });
+				const clearedHeader = logout.headers["set-cookie"];
+				const clearedCookies = Array.isArray(clearedHeader) ? clearedHeader : [clearedHeader ?? ""];
+				for (const name of ["access_token", "refresh_token"]) {
+					const cookie = clearedCookies.find((value) => value.startsWith(`${name}=`));
+					expect(cookie ?? "").toMatch(
+						/(?=.*;\s*Max-Age=0)(?=.*;\s*HttpOnly)(?=.*;\s*Secure)(?=.*;\s*SameSite=Lax)(?=.*;\s*Path=\/)/i
+					);
+				}
+			} finally {
+				await productionApp.close();
+			}
+		});
+
 		it("should logout and clear cookies", async () => {
 			// Register and login first
 			await app.inject({
@@ -1277,6 +1339,21 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				payload: { currentPassword: "TestPassword123", email: "after@example.com" },
 			});
 			expect(update.statusCode).toBe(200);
+			expect(update.json()).toEqual({ ok: true, message: "Profile updated" });
+			expect(update.cookies).toHaveLength(0);
+
+			const profileSession = await app.inject({
+				method: "GET",
+				url: "/auth/me",
+				cookies: { access_token: getResponseCookieValue(login, "access_token") },
+			});
+			expect(profileSession.statusCode).toBe(200);
+			const refresh = await app.inject({
+				method: "POST",
+				url: "/auth/refresh",
+				cookies: { refresh_token: getResponseCookieValue(login, "refresh_token") },
+			});
+			expect(refresh.statusCode).toBe(200);
 
 			const newEmailLogin = await app.inject({
 				method: "POST",
@@ -1284,6 +1361,108 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				payload: { username: "AFTER@EXAMPLE.COM", password: "TestPassword123" },
 			});
 			expect(newEmailLogin.statusCode).toBe(200);
+		});
+
+		it.each([
+			["user update", "BEFORE UPDATE ON users"],
+			["refresh revocation", "BEFORE UPDATE ON refresh_tokens"],
+			["replacement insert", "BEFORE INSERT ON refresh_tokens"],
+		])("rolls back password and all sessions on %s failure", async (_failure, triggerEvent) => {
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: { username: "rollbackuser", email: "before@example.com", password: "TestPassword123" },
+			});
+			const sessions = [];
+			for (let index = 0; index < 2; index += 1) {
+				sessions.push(
+					await app.inject({
+						method: "POST",
+						url: "/auth/login",
+						payload: { username: "rollbackuser", password: "TestPassword123" },
+					})
+				);
+			}
+			const beforeUser = await testClient.execute("SELECT * FROM users");
+			const beforeSessions = await testClient.execute("SELECT * FROM refresh_tokens ORDER BY id");
+			await testClient.execute(
+				`CREATE TRIGGER fail_password_change ${triggerEvent} BEGIN SELECT RAISE(ABORT, 'injected write failure'); END`
+			);
+			try {
+				const response = await app.inject({
+					method: "PUT",
+					url: "/auth/me",
+					cookies: { access_token: getResponseCookieValue(sessions[0]!, "access_token") },
+					payload: {
+						currentPassword: "TestPassword123",
+						newPassword: "NewPassword456",
+						email: "after@example.com",
+					},
+				});
+				expect(response.statusCode).toBe(500);
+				expect(response.cookies).toHaveLength(0);
+				expect((await testClient.execute("SELECT * FROM users")).rows).toEqual(beforeUser.rows);
+				expect((await testClient.execute("SELECT * FROM refresh_tokens ORDER BY id")).rows).toEqual(
+					beforeSessions.rows
+				);
+			} finally {
+				await testClient.execute("DROP TRIGGER fail_password_change");
+			}
+
+			for (const session of sessions) {
+				const refresh = await app.inject({
+					method: "POST",
+					url: "/auth/refresh",
+					cookies: { refresh_token: getResponseCookieValue(session, "refresh_token") },
+				});
+				expect(refresh.statusCode).toBe(200);
+			}
+			for (const [password, status] of [
+				["TestPassword123", 200],
+				["NewPassword456", 401],
+			] as const) {
+				const login = await app.inject({
+					method: "POST",
+					url: "/auth/login",
+					payload: { username: "rollbackuser", password },
+				});
+				expect(login.statusCode).toBe(status);
+			}
+		});
+
+		it.each([
+			[{ newPassword: "NewPassword456" }, 400],
+			[{ currentPassword: "WrongPassword", newPassword: "NewPassword456" }, 401],
+			[{ currentPassword: "TestPassword123", newPassword: "short" }, 400],
+		])("preserves password and refresh session for invalid change %j", async (payload, status) => {
+			await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: { username: "invalidchange", email: "test@example.com", password: "TestPassword123" },
+			});
+			const session = await app.inject({
+				method: "POST",
+				url: "/auth/login",
+				payload: { username: "invalidchange", password: "TestPassword123" },
+			});
+			const beforeUser = await testClient.execute("SELECT * FROM users");
+			const beforeSessions = await testClient.execute("SELECT * FROM refresh_tokens ORDER BY id");
+			const response = await app.inject({
+				method: "PUT",
+				url: "/auth/me",
+				cookies: { access_token: getResponseCookieValue(session, "access_token") },
+				payload,
+			});
+			expect(response.statusCode).toBe(status);
+			expect(response.cookies).toHaveLength(0);
+			expect((await testClient.execute("SELECT * FROM users")).rows).toEqual(beforeUser.rows);
+			expect((await testClient.execute("SELECT * FROM refresh_tokens ORDER BY id")).rows).toEqual(beforeSessions.rows);
+			const refresh = await app.inject({
+				method: "POST",
+				url: "/auth/refresh",
+				cookies: { refresh_token: getResponseCookieValue(session, "refresh_token") },
+			});
+			expect(refresh.statusCode).toBe(200);
 		});
 
 		it("should update password with valid current password", async () => {

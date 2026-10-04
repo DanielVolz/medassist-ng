@@ -542,6 +542,26 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
+	it("sendShoutrrrNotification rejects internal hosts and private IPv4 boundary targets before fetch", async () => {
+		for (const host of [
+			"localhost.",
+			"api.local",
+			"api.internal",
+			"api.lan",
+			"metadata.google.internal",
+			"10.0.0.0",
+			"172.16.0.0",
+			"172.31.255.255",
+			"192.168.255.255",
+			"169.254.169.254",
+		]) {
+			const result = await sendShoutrrrNotification(`https://${host}/hook`, "Title", "Body");
+			expect(result.success, host).toBe(false);
+			expect(result.error, host).toContain("not allowed");
+		}
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	it("sendShoutrrrNotification allows explicit local ntfy targets and blocks redirects", async () => {
 		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-local-message-id" }) });
 

@@ -43,10 +43,14 @@ test.describe("Settings Page", () => {
 	});
 
 	test.describe("mobile tooltip positioning", () => {
-		test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+		// Firefox does not support Playwright's isMobile context emulation. Set
+		// the responsive viewport when the context is created and keep touch input.
+		test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
 		test("should keep the timezone info tooltip inside a mobile viewport", async ({ page }) => {
-			await page.setViewportSize({ width: 390, height: 844 });
+			await expect
+				.poll(() => page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight })))
+				.toEqual({ width: 390, height: 844 });
 			await navigateTo(page, "/settings");
 
 			const timezoneHint = /IANA timezone|IANA-Zeitzone/i;

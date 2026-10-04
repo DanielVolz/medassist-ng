@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 
 /** Storage state path for authenticated sessions */
-export const authFile = path.join(import.meta.dirname, "..", ".auth", "user.json");
+export const authFile = process.env.PLAYWRIGHT_AUTH_FILE || path.join(import.meta.dirname, "..", ".auth", "user.json");
 
 /**
  * Test user credentials for E2E tests.

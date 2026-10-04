@@ -4,6 +4,7 @@
  */
 
 import { existsSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import type { Client } from "@libsql/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -61,6 +62,7 @@ const { healthRoutes } = await import("../routes/health.js");
 const { refillRoutes } = await import("../routes/refills.js");
 const { reportRoutes } = await import("../routes/report.js");
 const { exportRoutes } = await import("../routes/export.js");
+const { createApp } = await import("../app/createApp.js");
 
 // =============================================================================
 // Test Setup
@@ -114,6 +116,7 @@ function visibleDoseTimestampMs(): number {
 
 describe("E2E Tests with Real Routes", () => {
 	let app: FastifyInstance;
+	let corsApp: FastifyInstance;
 	let userId: number;
 
 	beforeAll(async () => {
@@ -142,6 +145,65 @@ describe("E2E Tests with Real Routes", () => {
 		await app.register(exportRoutes);
 
 		await app.ready();
+
+		corsApp = await createApp({
+			authEnabled: false,
+			corsOrigins: ["https://allowed.example"],
+			jwtSecret: "test-jwt-secret",
+			refreshSecret: "test-refresh-secret",
+			cookieSecret: "test-cookie-secret",
+			imagesDir: tmpdir(),
+			logLevel: "silent",
+		});
+		await corsApp.ready();
+	});
+
+	// ---------------------------------------------------------------------------
+	// Production CORS plugin with an actual mutation route
+	// ---------------------------------------------------------------------------
+
+	describe("CORS on POST /share", () => {
+		it("matches origin allowlisting and handles an ordinary preflight", async () => {
+			await createMedication(testClient, userId, "CORS Mutation Med", ["Daniel"]);
+			const originCases = [
+				{ origin: "https://allowed.example", allowOrigin: "https://allowed.example" },
+				{ origin: "https://evil.example" },
+				{},
+				{ origin: "null" },
+			];
+
+			for (const [index, testCase] of originCases.entries()) {
+				const response = await corsApp.inject({
+					method: "POST",
+					url: "/share",
+					headers: testCase.origin ? { origin: testCase.origin } : {},
+					payload: { takenBy: "Daniel", scheduleDays: 30 + index },
+				});
+				expect(response.statusCode).toBe(200);
+				expect(response.headers["access-control-allow-origin"]).toBe(testCase.allowOrigin);
+				expect(response.json().reused).toBe(index !== 0);
+			}
+
+			const stored = await testClient.execute({
+				sql: "SELECT schedule_days FROM share_tokens WHERE user_id = ?",
+				args: [userId],
+			});
+			expect(Number(stored.rows[0].schedule_days)).toBe(33);
+
+			const preflight = await corsApp.inject({
+				method: "OPTIONS",
+				url: "/share",
+				headers: {
+					origin: "https://allowed.example",
+					"access-control-request-method": "POST",
+					"access-control-request-headers": "content-type",
+				},
+			});
+			expect(preflight.statusCode).toBe(204);
+			expect(preflight.headers["access-control-allow-origin"]).toBe("https://allowed.example");
+			expect(preflight.headers["access-control-allow-credentials"]).toBe("true");
+			expect(preflight.headers["access-control-allow-methods"]).toContain("POST");
+		});
 	});
 
 	// ---------------------------------------------------------------------------
@@ -246,6 +308,7 @@ describe("E2E Tests with Real Routes", () => {
 	});
 
 	afterAll(async () => {
+		await corsApp.close();
 		await app.close();
 		testClient.close();
 		for (const path of [testDbPath, `${testDbPath}-shm`, `${testDbPath}-wal`]) {
@@ -1443,6 +1506,73 @@ describe("E2E Tests with Real Routes", () => {
 			});
 
 			expect(publicResponse.statusCode).toBe(404);
+		});
+
+		it("rejects the old public URL after regenerating a share token", async () => {
+			await createMedication(testClient, userId, "Regenerated Share Med", ["Daniel"]);
+			const oldToken = "0123456789abcdef";
+			await createShareToken(testClient, userId, "Daniel", oldToken);
+
+			const regenerate = await app.inject({ method: "POST", url: `/share/${oldToken}/regenerate` });
+			expect(regenerate.statusCode).toBe(200);
+			const newToken = regenerate.json().token as string;
+
+			const oldLink = await app.inject({ method: "GET", url: `/share/${oldToken}` });
+			const newLink = await app.inject({ method: "GET", url: `/share/${newToken}` });
+			expect(oldLink.statusCode).toBe(404);
+			expect(newLink.statusCode).toBe(200);
+		});
+
+		it("limits shared journal visibility to the selected person", async () => {
+			const startMs = visibleDoseTimestampMs();
+			const scheduledFor = Math.floor(startMs / 1000);
+			const aliceMed = await createMedication(testClient, userId, "Alice Journal Med", ["Alice"]);
+			const bobMed = await createMedication(testClient, userId, "Bob Journal Med", ["Bob"]);
+			const aliceDose = `${aliceMed}-0-${startMs}-Alice`;
+			const bobDose = `${bobMed}-0-${startMs}-Bob`;
+			await testClient.execute({
+				sql: "INSERT INTO dose_tracking (user_id, dose_id, taken_at) VALUES (?, ?, ?), (?, ?, ?)",
+				args: [userId, aliceDose, scheduledFor, userId, bobDose, scheduledFor],
+			});
+			const token = "fedcba9876543210";
+			await testClient.execute({
+				sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days, allow_journal_notes) VALUES (?, ?, 'Alice', 30, 1)",
+				args: [userId, token],
+			});
+			await testClient.execute({
+				sql: `INSERT INTO intake_journal (user_id, dose_tracking_id, medication_id, scheduled_for, note, created_at, updated_at)
+				      VALUES (?, (SELECT id FROM dose_tracking WHERE dose_id = ?), ?, ?, ?, ?, ?),
+				             (?, (SELECT id FROM dose_tracking WHERE dose_id = ?), ?, ?, ?, ?, ?)`,
+				args: [
+					userId,
+					aliceDose,
+					aliceMed,
+					scheduledFor,
+					"Alice journal note",
+					scheduledFor,
+					scheduledFor,
+					userId,
+					bobDose,
+					bobMed,
+					scheduledFor,
+					"Bob private note",
+					scheduledFor,
+					scheduledFor,
+				],
+			});
+
+			const doses = await app.inject({ method: "GET", url: `/share/${token}/doses` });
+			expect(doses.statusCode).toBe(200);
+			expect(doses.json().doses).toHaveLength(1);
+			expect(doses.json().doses[0]).toMatchObject({ doseId: aliceDose, hasJournalNote: true });
+			expect(JSON.stringify(doses.json())).not.toContain("Bob");
+
+			const aliceEntry = await app.inject({ method: "GET", url: `/share/${token}/journal/event/${aliceDose}` });
+			expect(aliceEntry.statusCode, aliceEntry.body).toBe(200);
+			expect(aliceEntry.json().entry.note).toBe("Alice journal note");
+			const bobEntry = await app.inject({ method: "GET", url: `/share/${token}/journal/event/${bobDose}` });
+			expect(bobEntry.statusCode).toBe(400);
+			expect(bobEntry.body).not.toContain("Bob private note");
 		});
 
 		it("should create share token with custom scheduleDays", async () => {
@@ -2935,12 +3065,22 @@ describe("E2E Tests with Real Routes", () => {
 		});
 
 		it("should include sensitive settings when requested", async () => {
+			const medicationResponse = await app.inject({
+				method: "POST",
+				url: "/medications",
+				payload: {
+					name: "Sensitive Export Medication",
+					blisters: [{ usage: 1, every: 1, start: "2025-01-01T08:00:00.000Z" }],
+				},
+			});
+			expect(medicationResponse.statusCode).toBe(200);
+
 			await app.inject({
 				method: "PUT",
 				url: "/settings",
 				payload: {
 					emailEnabled: false,
-					notificationEmail: "",
+					notificationEmail: "private@example.com",
 					reminderDaysBefore: 7,
 					repeatDailyReminders: false,
 					lowStockDays: 30,
@@ -2966,6 +3106,24 @@ describe("E2E Tests with Real Routes", () => {
 				},
 			});
 
+			await testClient.execute({
+				sql: "INSERT INTO share_tokens (user_id, token, taken_by, schedule_days) VALUES (?, ?, ?, ?)",
+				args: [userId, "sensitive-export-token", "Daniel", 30],
+			});
+
+			for (const url of ["/export", "/export?includeSensitive=false"]) {
+				const response = await app.inject({ method: "GET", url });
+				expect(response.statusCode).toBe(200);
+				const data = response.json();
+				expect(data.medications.map((medication: { name: string }) => medication.name)).toContain(
+					"Sensitive Export Medication"
+				);
+				expect(data.settings).not.toHaveProperty("notificationEmail");
+				expect(data.settings).not.toHaveProperty("shoutrrrEnabled");
+				expect(data.settings).not.toHaveProperty("shoutrrrUrl");
+				expect(data.shareLinks).toEqual([]);
+			}
+
 			const response = await app.inject({
 				method: "GET",
 				url: "/export?includeSensitive=true",
@@ -2973,8 +3131,22 @@ describe("E2E Tests with Real Routes", () => {
 
 			expect(response.statusCode).toBe(200);
 			const data = response.json();
+			expect(data.medications.map((medication: { name: string }) => medication.name)).toContain(
+				"Sensitive Export Medication"
+			);
+			expect(data.settings.notificationEmail).toBe("private@example.com");
 			expect(data.settings.shoutrrrEnabled).toBe(true);
 			expect(data.settings.shoutrrrUrl).toBe("https://example.com/topic");
+			expect(data.shareLinks).toEqual([
+				{
+					takenBy: "Daniel",
+					scheduleDays: 30,
+					allowJournalNotes: false,
+					allowMarkTaken: true,
+					expiresAt: null,
+					regenerateToken: true,
+				},
+			]);
 		});
 
 		it("should gracefully export malformed date-like DB values", async () => {

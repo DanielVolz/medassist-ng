@@ -1023,6 +1023,8 @@
     "importSuccessDetails": "Imported: {{medications}} medications, {{doses}} scheduled doses, {{asNeededIntakes}} as-needed intake events, {{refills}} refills, {{shares}} share links",
     "importError": "Failed to import data",
     "invalidFile": "Invalid file format. Please select a valid MedAssist-ng export file.",
+    "fileTooLarge": "Import file is too large. Maximum size is 50 MiB.",
+    "invalidResponse": "Import failed: the server returned an invalid response.",
     "downloadFilename": "medassist-export"
   },
   "refill": {

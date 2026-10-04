@@ -966,7 +966,7 @@ function ResetPasswordForm({ token, onBack }: { token: string; onBack: () => voi
 // =============================================================================
 // User Profile Component
 // =============================================================================
-export function UserProfile({ onClose }: { onClose?: () => void }) {
+export function UserProfile({ onClose, showFooter = true }: { onClose?: () => void; showFooter?: boolean }) {
 	const { t } = useTranslation();
 	const { user, refreshUser, updateProfile, uploadAvatar, deleteAvatar, deleteAccount } = useAuth();
 	const [email, setEmail] = useState("");
@@ -1296,11 +1296,13 @@ export function UserProfile({ onClose }: { onClose?: () => void }) {
 				</AppButton>
 			</div>
 
-			<AppModalFooter>
-				<AppButton type="button" tone="secondary" onClick={onClose}>
-					{t("common.close", "Close")}
-				</AppButton>
-			</AppModalFooter>
+			{showFooter && (
+				<AppModalFooter>
+					<AppButton type="button" tone="secondary" onClick={onClose}>
+						{t("common.close", "Close")}
+					</AppButton>
+				</AppModalFooter>
+			)}
 
 			{/* Delete Confirmation Modal */}
 			{showDeleteConfirm && (

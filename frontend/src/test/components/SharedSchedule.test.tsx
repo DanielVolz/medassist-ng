@@ -549,6 +549,13 @@ describe("SharedSchedule", () => {
 				"/api/images/med-1-123.webp?shareToken=token-123"
 			);
 		});
+		fireEvent(window, new PopStateEvent("popstate"));
+		expect(screen.getAllByAltText("Ibuprofen")).toHaveLength(1);
+		fireEvent.click(screen.getByRole("button", { name: "Ibuprofen" }));
+		vi.spyOn(window.history, "back").mockImplementation(() => {});
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(screen.getAllByAltText("Ibuprofen")).toHaveLength(1);
+		expect(window.history.back).toHaveBeenCalledTimes(1);
 	});
 
 	it("renders not found state for missing share link", async () => {

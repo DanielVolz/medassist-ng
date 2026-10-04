@@ -214,13 +214,9 @@ export function SharedSchedule() {
 	// Helper functions for lightbox with history support (mobile back swipe)
 	function openLightbox(url: string, name: string) {
 		setLightboxImage({ url, name });
-		window.history.pushState({ modal: "lightbox" }, "");
 	}
-	function closeLightbox() {
-		if (lightboxImage) {
-			window.history.back();
-		}
-	}
+	const dismissLightbox = useCallback(() => setLightboxImage(null), []);
+	const { closeModal: closeLightbox } = useModalHistory(Boolean(lightboxImage), "lightbox", dismissLightbox);
 
 	// Close lightbox on Escape key
 	useEscapeKey(!!lightboxImage, closeLightbox);
@@ -325,17 +321,6 @@ export function SharedSchedule() {
 		},
 		[sharedJournalDoseId, t, token]
 	);
-
-	// Handle browser back button to close lightbox
-	useEffect(() => {
-		function handlePopState() {
-			if (lightboxImage) {
-				setLightboxImage(null);
-			}
-		}
-		window.addEventListener("popstate", handlePopState);
-		return () => window.removeEventListener("popstate", handlePopState);
-	}, [lightboxImage]);
 
 	// Load taken doses from server with polling for real-time sync
 	// Separates taken and dismissed doses (like main app's useDoses hook)

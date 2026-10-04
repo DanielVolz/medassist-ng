@@ -113,6 +113,15 @@ export function useRefill(): UseRefillReturn {
 		[authFetch]
 	);
 
+	const dismissRefillModal = useCallback(() => {
+		setShowRefillModal(false);
+	}, []);
+	const { closeModal: closeRefillModal } = useModalHistory(showRefillModal, "refill", dismissRefillModal);
+	const dismissEditStockModal = useCallback(() => {
+		setShowEditStockModal(false);
+	}, []);
+	const { closeModal: closeEditStockModal } = useModalHistory(showEditStockModal, "editStock", dismissEditStockModal);
+
 	// Submit a refill
 	const submitRefill = useCallback(
 		async (
@@ -153,10 +162,7 @@ export function useRefill(): UseRefillReturn {
 					setRefillPacks(1);
 					setRefillLoose(0);
 					setUsePrescriptionRefill(false);
-					// Close refill modal via history back for proper back-button support
-					if (showRefillModal) {
-						window.history.back();
-					}
+					closeRefillModal();
 					// Reload medications to get updated stock
 					loadMeds();
 					// Reload refill history
@@ -167,7 +173,7 @@ export function useRefill(): UseRefillReturn {
 			}
 			setRefillSaving(false);
 		},
-		[authFetch, refillPacks, refillLoose, showRefillModal, loadRefillHistory]
+		[authFetch, refillPacks, refillLoose, closeRefillModal, loadRefillHistory]
 	);
 
 	// Submit a stock correction - user says how many pills they have RIGHT NOW
@@ -291,10 +297,7 @@ export function useRefill(): UseRefillReturn {
 					body: JSON.stringify(patchBody),
 				});
 				if (res.ok) {
-					// Close edit stock modal via history back
-					if (showEditStockModal) {
-						window.history.back();
-					}
+					closeEditStockModal();
 					// Reload medications to get updated stock
 					loadMeds();
 				}
@@ -303,21 +306,13 @@ export function useRefill(): UseRefillReturn {
 			}
 			setEditStockSaving(false);
 		},
-		[authFetch, editStockFullBlisters, editStockPartialBlisterPills, editStockLoosePills, showEditStockModal]
+		[authFetch, editStockFullBlisters, editStockPartialBlisterPills, editStockLoosePills, closeEditStockModal]
 	);
 
 	const openRefillModal = useCallback(() => {
 		resetRefillForm();
 		setShowRefillModal(true);
 	}, [resetRefillForm]);
-
-	const dismissRefillModal = useCallback(() => {
-		setShowRefillModal(false);
-	}, []);
-
-	// History integration: pushes one entry on open, browser back (or closeModal)
-	// dismisses only this modal via the shared modal stack.
-	const { closeModal: closeRefillModal } = useModalHistory(showRefillModal, "refill", dismissRefillModal);
 
 	const openEditStockModal = useCallback((selectedMed: Medication, coverage: { all: Coverage[] }) => {
 		if (!selectedMed) return;
@@ -349,12 +344,6 @@ export function useRefill(): UseRefillReturn {
 		setEditStockLoosePills(isAmountPackage || isDiscreteCountPackage ? 0 : knownLoose);
 		setShowEditStockModal(true);
 	}, []);
-
-	const dismissEditStockModal = useCallback(() => {
-		setShowEditStockModal(false);
-	}, []);
-
-	const { closeModal: closeEditStockModal } = useModalHistory(showEditStockModal, "editStock", dismissEditStockModal);
 
 	useEffect(() => {
 		if (!showEditStockModal) {

@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useModalHistory } from "../../hooks/useModalHistory";
 import { useRefill } from "../../hooks/useRefill";
 import type { Coverage, Medication } from "../../types";
 
@@ -236,6 +237,33 @@ describe("useRefill", () => {
 		expect(authFetchMock).toHaveBeenNthCalledWith(2, "/api/medications/1/refills");
 		expect(mockSetForm).toHaveBeenCalled();
 		expect(mockLoadMeds).toHaveBeenCalled();
+	});
+
+	it.each([
+		"refill",
+		"stock",
+	])("dismisses successful %s saves without closing the underlying detail on popstate", async (kind) => {
+		const parentClose = vi.fn();
+		const { result } = renderHook(() => {
+			useModalHistory(true, "medDetail", parentClose);
+			return useRefill();
+		});
+		const med = createRefillMedication();
+		act(() => {
+			if (kind === "refill") result.current.openRefillModal();
+			else result.current.openEditStockModal(med, { all: [] });
+		});
+		await act(async () => {
+			if (kind === "refill") await result.current.submitRefill(1, null, vi.fn(), vi.fn());
+			else await result.current.submitStockCorrection(1, med, vi.fn());
+		});
+		expect(result.current.showRefillModal).toBe(false);
+		expect(result.current.showEditStockModal).toBe(false);
+		expect(window.history.back).toHaveBeenCalledTimes(1);
+		act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+		expect(parentClose).not.toHaveBeenCalled();
+		act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+		expect(parentClose).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not submit refill if both values are 0", async () => {
